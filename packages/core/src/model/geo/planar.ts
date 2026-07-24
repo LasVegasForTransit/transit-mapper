@@ -42,7 +42,7 @@ export function offsetPolyline(points: LngLat[], offsetM: number): LngLat[] {
   }
 
   const MITER_LIMIT = 3; // clamp sharp corners to 3× the offset distance
-  const out: LngLat[] = [];
+  const offsetLocal: [number, number][] = [];
   for (let i = 0; i < local.length; i++) {
     const nPrev = normals[Math.max(0, i - 1)];
     const nNext = normals[Math.min(normals.length - 1, i)];
@@ -62,9 +62,30 @@ export function offsetPolyline(points: LngLat[], offsetM: number): LngLat[] {
       mx *= scale;
       my *= scale;
     }
-    out.push(offsetMeters(origin, local[i][0] + mx * offsetM, local[i][1] + my * offsetM));
+    offsetLocal.push([local[i][0] + mx * offsetM, local[i][1] + my * offsetM]);
   }
-  return out;
+
+  // De-loop the inner corner. Offsetting a curve toward its centre of curvature
+  // by ≥ its radius folds the offset back on itself — a wide lane on a tight
+  // ramp/junction collapsing to a point (the "carriageway spike" artifact). A
+  // stack pass drops any vertex where the offset path reverses (>~107°): the
+  // whole collapsed run is removed and the lane pinches straight across the
+  // tight corner instead of looping. Straight / gently-curved offsets never
+  // reverse, so every vertex is kept — a no-op for the common case.
+  const kept: number[] = [0];
+  for (let i = 1; i < offsetLocal.length; i++) {
+    while (kept.length >= 2) {
+      const a = offsetLocal[kept[kept.length - 2]];
+      const b = offsetLocal[kept[kept.length - 1]];
+      const abx = b[0] - a[0], aby = b[1] - a[1];
+      const bcx = offsetLocal[i][0] - b[0], bcy = offsetLocal[i][1] - b[1];
+      const mag = Math.hypot(abx, aby) * Math.hypot(bcx, bcy);
+      if (mag > 0 && (abx * bcx + aby * bcy) / mag < -0.3) kept.pop();
+      else break;
+    }
+    kept.push(i);
+  }
+  return kept.map((i) => offsetMeters(origin, offsetLocal[i][0], offsetLocal[i][1]));
 }
 
 /** A closed polygon ring for a rectangle centered on `center`, `lengthM`

@@ -2495,6 +2495,26 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   const bent: LngLat[] = [[-115.2, 36.1], [-115.15, 36.1], [-115.15, 36.15]];
   const bentOff = offsetPolyline(bent, 5);
   check("offsetPolyline keeps the vertex count", bentOff.length === bent.length);
+
+  // A wide offset toward the inside of a TIGHT curve (offset > radius) used to
+  // fold back on itself — the "carriageway spike" where a wide road follows a
+  // freeway ramp / tight junction. The de-loop drops the collapsed run so the
+  // inner edge pinches straight across the corner instead of looping.
+  const R = 10 / 111320; // ~10 m radius quarter turn
+  const tightCurve: LngLat[] = [];
+  for (let a = 0; a <= 90; a += 9) {
+    const r = (a * Math.PI) / 180;
+    tightCurve.push([-115.15 + R * Math.cos(r), 36.13 + R * Math.sin(r)]);
+  }
+  const innerEdge = offsetPolyline(tightCurve, -12); // inward by MORE than the radius
+  let reversals = 0;
+  for (let i = 2; i < innerEdge.length; i++) {
+    const px = innerEdge[i - 1][0] - innerEdge[i - 2][0], py = innerEdge[i - 1][1] - innerEdge[i - 2][1];
+    const dx = innerEdge[i][0] - innerEdge[i - 1][0], dy = innerEdge[i][1] - innerEdge[i - 1][1];
+    const mag = Math.hypot(px, py) * Math.hypot(dx, dy);
+    if (mag > 0 && (px * dx + py * dy) / mag < -0.3) reversals++;
+  }
+  check("offsetPolyline de-loops a wide offset on a tight curve (no inner-corner spike)", reversals === 0);
 }
 
 // --- v6 migration: capacity+class → profile; round-trips ---
