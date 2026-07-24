@@ -323,24 +323,23 @@ export const LAYER_SPECS: LayerSpecification[] = [
     type: "circle",
     source: SRC_STATIONS,
     paint: {
-      // Zoom-scaled so an overview / full-system export doesn't drown in
-      // thousands of full-size rings (the "mess" at export scale) — and so all
-      // 3787 circles cost far less fill-rate at low/mid zoom, where every one is
-      // on screen. Interchanges stay a step larger than intermediate stops.
-      // Full size is reached at street zoom (z15), unchanged from before.
+      // Gently zoom-scaled with a REASONABLE FLOOR — dots stay clearly visible
+      // and clickable even zoomed out (min r4 intermediate / r5 interchange),
+      // just a touch smaller than full size, trimming some low-zoom fill-rate.
+      // Full size (r5/r7) returns at street zoom. Export bloat (thousands of
+      // stops in one frame) is handled separately, on the export map only
+      // (map/export/exportRenderer.ts), NOT by shrinking the live dots.
       "circle-radius": [
         "interpolate",
         ["linear"],
         ["zoom"],
-        10,
-        ["case", ["get", "interchange"], 2, 1],
-        13,
-        ["case", ["get", "interchange"], 4.5, 2.8],
-        15,
+        11,
+        ["case", ["get", "interchange"], 5, 4],
+        14,
         ["case", ["get", "interchange"], 7, 5],
       ],
       "circle-color": "#ffffff",
-      "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 10, 0.6, 13, 1.5, 15, 3],
+      "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 11, 2.2, 14, 3],
       "circle-stroke-color": ["case", ["get", "interchange"], "#111827", ["get", "color"]],
     },
   },

@@ -6,6 +6,7 @@ import { landmarksFeatureCollection } from "../landmarks";
 import {
   buildFeatures,
   LAYER_SPECS,
+  LYR_STATIONS,
   registerMapIcons,
   SRC_CONNECTORS,
   SRC_FACILITIES,
@@ -107,6 +108,24 @@ export function renderSystemForExport(system: TransitSystem, view: ViewOptions, 
           map.addSource(src, { type: "geojson", data: src === SRC_LANDMARKS ? landmarksFeatureCollection() : EMPTY_FC });
         }
         for (const spec of LAYER_SPECS) map.addLayer(spec);
+
+        // Export-only: a full-system export frames thousands of stops at once, so
+        // shrink station circles here (on the export map, NOT the live map) to
+        // keep dense networks legible instead of a mass of full-size rings. Still
+        // zoom-interpolated, so a small/sparse system (framed at a higher zoom)
+        // keeps readable dots. Live-map dots keep their reasonable floor.
+        if (map.getLayer(LYR_STATIONS)) {
+          map.setPaintProperty(LYR_STATIONS, "circle-radius", [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            10,
+            ["case", ["get", "interchange"], 2.2, 1.4],
+            14,
+            ["case", ["get", "interchange"], 5, 3.5],
+          ]);
+          map.setPaintProperty(LYR_STATIONS, "circle-stroke-width", ["interpolate", ["linear"], ["zoom"], 10, 0.7, 14, 2]);
+        }
 
         // Resize BEFORE fitBounds — fitBounds reads the current container size.
         map.resize();
