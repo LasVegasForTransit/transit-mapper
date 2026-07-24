@@ -184,6 +184,10 @@ export const LAYER_SPECS: LayerSpecification[] = [
     id: LYR_LANE_ARROWS,
     type: "symbol",
     source: SRC_LANE_ARROWS,
+    // Direction detail belongs to closer zooms — without this, one-way ways
+    // (now including every GTFS-imported route) would strew ▶ chevrons across
+    // the whole-network overview.
+    minzoom: 13,
     layout: {
       "symbol-placement": "line",
       "symbol-spacing": 90,

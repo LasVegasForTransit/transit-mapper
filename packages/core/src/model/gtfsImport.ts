@@ -6,7 +6,7 @@
 // function that touches the network.
 import { unzipSync, strFromU8 } from "fflate";
 import { shortId } from "./ids";
-import { defaultProfileFor } from "./profile";
+import { defaultProfileFor, makeOneWay } from "./profile";
 import { nearestOnPath, resolveWayPath } from "./geo";
 import type { LngLat, Pattern, Service, Station, Way } from "./system";
 
@@ -188,7 +188,13 @@ function piecesForRoutes(index: GtfsIndex, routeIds: string[], stationByStopId: 
         points,
         geometry: "straight",
         grade: "atGrade",
-        profile: defaultProfileFor(kind.wayTypeId),
+        // A GTFS shape is ONE direction of travel (a route's two directions are
+        // separate shapes, points ordered start→end by shape_pt_sequence), so
+        // model it as a one-way carriageway in that direction ("forward" = point
+        // order). Buses (road) get a lean 2-lane carriageway rather than the
+        // default 4-lane two-way road, so opposite-direction routes on a shared
+        // corridor read as thin directional carriageways instead of stacked roads.
+        profile: makeOneWay(defaultProfileFor(kind.wayTypeId, kind.wayTypeId === "road" ? 2 : undefined), "forward"),
         source: `gtfs:${shapeId}`,
       });
       patterns.push({ id: shortId(), wayIds: [wayId] });

@@ -2010,6 +2010,8 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("one shape becomes one way", pieces.ways.length === 1);
   check("the way carries a GTFS source marker", pieces.ways[0].source === "gtfs:S1");
   check("the way is typed road (bus route)", pieces.ways[0].typeId === "road");
+  // A GTFS shape is one direction of travel, so the bus way is a lean one-way carriageway.
+  check("the imported bus way is a one-way carriageway", isOneWay(pieces.ways[0].profile) && laneCapacity(pieces.ways[0].profile) === 2);
   check("one route becomes one service", pieces.services.length === 1);
   check("the service takes its short name and mode", pieces.services[0].name === "101" && pieces.services[0].modeId === "bus");
   check("the service has one pattern riding the shape's way", pieces.services[0].patterns.length === 1 && pieces.services[0].patterns[0].wayIds[0] === pieces.ways[0].id);
