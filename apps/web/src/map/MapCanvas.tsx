@@ -43,6 +43,7 @@ import { landmarksFeatureCollection } from "./landmarks";
 import { getMap, setMap } from "./mapRef";
 import { initLiveCamera, setLiveCamera } from "../camera/liveCamera";
 import { attachPerfHarness } from "../perf";
+import { servicesByWay } from "./layers/featureMemo";
 import { attachVehicleAnimation } from "../sim/vehicles";
 import type { Map as MLMap } from "maplibre-gl";
 
@@ -245,7 +246,19 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         // exact source `Way.points` are untouched. Kept modest; revisit if any
         // mid-zoom kinking shows.
         const heavy = src === SRC_WAYS || src === SRC_SERVICES;
-        map.addSource(src, heavy ? { type: "geojson", data: emptyFC, tolerance: 1 } : { type: "geojson", data: emptyFC });
+        // Stable feature ids for selection via setFeatureState (see
+        // applySelectionState): way/station/facility features key on `id`,
+        // service features on `serviceId` (a service's fan across its ways all
+        // light together). Lets selection flip feature-state instead of
+        // re-uploading these sources.
+        const promoteId =
+          src === SRC_SERVICES ? "serviceId" : src === SRC_WAYS || src === SRC_STATIONS || src === SRC_FACILITIES ? "id" : undefined;
+        map.addSource(src, {
+          type: "geojson",
+          data: emptyFC,
+          ...(heavy ? { tolerance: 1 } : {}),
+          ...(promoteId ? { promoteId } : {}),
+        });
       }
       // Static context, not system-derived — set once here rather than on
       // every pushData() like the sources above.
@@ -257,6 +270,39 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         map.addLayer(spec, anchor?.id);
       }
       return true;
+    };
+
+    // Selection halos (way/service/station/facility) are driven by MapLibre
+    // feature-state, not a `selected` feature property — so selecting an object
+    // flips a few setFeatureState calls instead of re-uploading the big static
+    // sources. setData() clears all feature-state, so this is re-applied at the
+    // end of every pushData too. (Node selection still rides the junctions
+    // filter, handled by a full rebuild in the subscription below.)
+    let appliedSelectionStates: Array<{ source: string; id: string }> = [];
+    const applySelectionState = () => {
+      for (const { source, id } of appliedSelectionStates) map.removeFeatureState({ source, id });
+      appliedSelectionStates = [];
+      const { system, selection } = store.getState();
+      const mark = (source: string, id: string) => {
+        map.setFeatureState({ source, id }, { selected: true });
+        appliedSelectionStates.push({ source, id });
+      };
+      if (selection?.kind === "way") {
+        mark(SRC_WAYS, selection.id);
+        // A selected way also lights the services riding it — most guideway
+        // types draw no bare line when served, so the service line is the only
+        // thing on screen to highlight for a way selection.
+        for (const svc of servicesByWay(system.services, viewRef.current.visibleModes).get(selection.id) ?? []) {
+          mark(SRC_SERVICES, svc.id);
+        }
+      } else if (selection?.kind === "service") {
+        mark(SRC_SERVICES, selection.id);
+      } else if (selection?.kind === "station") {
+        mark(SRC_STATIONS, selection.id);
+      } else if (selection?.kind === "facility") {
+        mark(SRC_FACILITIES, selection.id);
+      }
+      map.triggerRepaint();
     };
 
     const pushData = () => {
@@ -289,6 +335,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       (map.getSource(SRC_PLATFORMS) as GeoJSONSource | undefined)?.setData(fc.platforms);
       (map.getSource(SRC_FACILITIES) as GeoJSONSource | undefined)?.setData(fc.facilities);
       (map.getSource(SRC_PHYSICAL_HANDLES) as GeoJSONSource | undefined)?.setData(fc.physicalHandles);
+      // setData above cleared feature-state — re-apply the current selection.
+      applySelectionState();
     };
     pushDataRef.current = pushData;
 
@@ -305,6 +353,33 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       pushDataRaf = requestAnimationFrame(() => {
         pushDataRaf = null;
         pushData();
+      });
+    };
+
+    // Selection-only fast path (system unchanged): update halos via feature-state
+    // and refresh only the small handle sources — never re-tessellating the big
+    // static sources (ways/services/stations) just to move a selection glow.
+    let selectionRaf: number | null = null;
+    const scheduleSelectionUpdate = () => {
+      if (selectionRaf !== null) return;
+      selectionRaf = requestAnimationFrame(() => {
+        selectionRaf = null;
+        if (!map.getSource(SRC_WAYS)) return;
+        applySelectionState();
+        const { system, selection } = store.getState();
+        const renderSystem = viewRef.current.viewMode === "diagram" ? computeDiagramSystem(system) : system;
+        const laneDetail = laneDetailNow();
+        const b = map.getBounds();
+        const view: ViewOptions = {
+          ...viewRef.current,
+          laneDetail,
+          bounds: laneDetail ? [[b.getWest(), b.getSouth()], [b.getEast(), b.getNorth()]] : undefined,
+        };
+        // buildFeatures is cheap now (memoized — see featureMemo); we take only
+        // its handle outputs and skip setData on every big source.
+        const fc = buildFeatures(renderSystem, selection, handleWayIds(), view, physicalHandleStationId(), physicalHandleGroupId());
+        (map.getSource(SRC_HANDLES) as GeoJSONSource | undefined)?.setData(fc.handles);
+        (map.getSource(SRC_PHYSICAL_HANDLES) as GeoJSONSource | undefined)?.setData(fc.physicalHandles);
       });
     };
 
@@ -350,8 +425,16 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     ro.observe(containerRef.current);
 
     const unsub = store.subscribe((s, prev) => {
-      if (s.system !== prev.system || s.selection !== prev.selection || s.activeWayId !== prev.activeWayId) {
+      if (s.system !== prev.system) {
+        // Content changed — full rebuild (which re-applies selection state).
         if (map.getSource(SRC_SERVICES)) schedulePushData();
+      } else if ((s.selection !== prev.selection || s.activeWayId !== prev.activeWayId) && map.getSource(SRC_SERVICES)) {
+        // Only the selection/active way changed. Node selection rides the
+        // junctions `selected` filter, so it still needs a rebuild; everything
+        // else takes the feature-state fast path.
+        const involvesNode = s.selection?.kind === "node" || prev.selection?.kind === "node";
+        if (involvesNode) schedulePushData();
+        else scheduleSelectionUpdate();
       }
       // Route drafting (Network view snap-to-streets drawing): show the
       // committed legs as the standard dashed draw preview.
@@ -412,6 +495,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       ro.disconnect();
       unsub();
       if (pushDataRaf !== null) cancelAnimationFrame(pushDataRaf);
+      if (selectionRaf !== null) cancelAnimationFrame(selectionRaf);
       map.off("zoom", onZoom);
       map.off("moveend", onMoveEnd);
       detachInteractions?.();

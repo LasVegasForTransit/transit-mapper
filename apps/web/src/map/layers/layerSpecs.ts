@@ -234,12 +234,15 @@ export const LAYER_SPECS: LayerSpecification[] = [
     id: LYR_WAY_SELECTED,
     type: "line",
     source: SRC_WAYS,
-    filter: ["get", "selected"],
+    // Driven by feature-state (set on selection in MapCanvas), not a `selected`
+    // property — so selecting a way flips one setFeatureState call instead of
+    // re-uploading the whole (RTC-scale ~121k-waypoint) source. Invisible until
+    // its way is selected.
     layout: { "line-cap": "round", "line-join": "round" },
     paint: {
       "line-color": "#191a17",
       "line-width": ["+", ["get", "width"], 7],
-      "line-opacity": 0.18,
+      "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, 0],
       "line-offset": ["get", "offset"],
     },
   },
@@ -277,12 +280,13 @@ export const LAYER_SPECS: LayerSpecification[] = [
     id: LYR_SERVICE_SELECTED,
     type: "line",
     source: SRC_SERVICES,
-    filter: ["get", "selected"],
+    // feature-state driven (see LYR_WAY_SELECTED). Selecting a way also lights
+    // its rider services here — MapCanvas sets state on their serviceIds.
     layout: { "line-cap": "round", "line-join": "round" },
     paint: {
       "line-color": "#191a17",
       "line-width": ["+", ["get", "width"], 7],
-      "line-opacity": 0.18,
+      "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, 0],
       "line-offset": ["get", "offset"],
     },
   },
@@ -307,8 +311,12 @@ export const LAYER_SPECS: LayerSpecification[] = [
     id: LYR_STATION_SELECTED,
     type: "circle",
     source: SRC_STATIONS,
-    filter: ["get", "selected"],
-    paint: { "circle-radius": ["case", ["get", "interchange"], 12, 10], "circle-color": "#191a17", "circle-opacity": 0.18 },
+    // feature-state driven (see LYR_WAY_SELECTED).
+    paint: {
+      "circle-radius": ["case", ["get", "interchange"], 12, 10],
+      "circle-color": "#191a17",
+      "circle-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, 0],
+    },
   },
   {
     id: LYR_STATIONS,
@@ -472,8 +480,12 @@ export const LAYER_SPECS: LayerSpecification[] = [
     id: LYR_FACILITY_SELECTED,
     type: "circle",
     source: SRC_FACILITIES,
-    filter: ["get", "selected"],
-    paint: { "circle-radius": ["+", ["get", "radius"], 5], "circle-color": "#191a17", "circle-opacity": 0.18 },
+    // feature-state driven (see LYR_WAY_SELECTED).
+    paint: {
+      "circle-radius": ["+", ["get", "radius"], 5],
+      "circle-color": "#191a17",
+      "circle-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, 0],
+    },
   },
   {
     // Catalog-typed point facilities (entrances, bike docks, depots, …) —

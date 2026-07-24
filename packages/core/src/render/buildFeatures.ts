@@ -178,15 +178,17 @@ export function buildFeatures(
     for (const a of g.arrows) {
       laneArrows.push({ type: "Feature", properties: { id: way.id }, geometry: { type: "LineString", coordinates: a.path } });
     }
-    if (selection?.kind === "way" && selId === way.id) {
-      // The selection halo normally rides the fan features — emit one
-      // centerline stand-in so a lane-rendered way still glows when selected.
-      ways.push({
-        type: "Feature",
-        properties: { id: way.id, color: "#191a17", width: 10, dashed: false, offset: 0, selected: true, haloOnly: true },
-        geometry: { type: "LineString", coordinates: resolveWayPath(way) },
-      });
-    }
+    // A lane-rendered way has no fan feature to carry its selection halo, so
+    // emit one centerline stand-in per lane-detailed way. It's invisible unless
+    // selected: LYR_WAY_SELECTED is driven by feature-state (set on selection in
+    // MapCanvas), and LYR_WAYS_SOLID/DASHED filter haloOnly out. Emitted
+    // unconditionally (not only when selected) so the selection fast path can
+    // light it via feature-state without a full rebuild.
+    ways.push({
+      type: "Feature",
+      properties: { id: way.id, color: "#191a17", width: 10, dashed: false, offset: 0, haloOnly: true },
+      geometry: { type: "LineString", coordinates: resolveWayPath(way) },
+    });
   };
 
   // A way renders at lane detail when we're zoomed in enough (view.laneDetail),
