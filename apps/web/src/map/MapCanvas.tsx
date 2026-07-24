@@ -20,6 +20,13 @@ import {
   LYR_SERVICE_SELECTED,
   LYR_STATION_SELECTED,
   LYR_FACILITY_SELECTED,
+  LYR_WAYS_SOLID,
+  LYR_WAYS_DASHED,
+  LYR_SERVICES_SOLID,
+  LYR_SERVICES_ELEVATED,
+  LYR_SERVICES_UNDERGROUND,
+  LYR_STATIONS,
+  LYR_FACILITIES,
   registerMapIcons,
   SRC_ENDPOINT_HINT,
   SRC_FACILITIES,
@@ -284,8 +291,38 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // filter, handled by a full rebuild in the subscription below.)
     const HALO_LAYERS = [LYR_WAY_SELECTED, LYR_SERVICE_SELECTED, LYR_STATION_SELECTED, LYR_FACILITY_SELECTED];
     let appliedSelectionStates: Array<{ source: string; id: string }> = [];
+    // Whatever's under the cursor right now (feature-state `hover`), so the halo
+    // layers light a hover too, not only a selection.
+    let hovered: { source: string; id: string } | null = null;
+
+    // The halo layers are feature-state driven, so without a filter they'd
+    // redraw EVERY way/service/station at 0 opacity every frame (real fill-rate
+    // on the 121k-waypoint services source during a zoom). Keep them hidden
+    // unless something is actually selected OR hovered — the common idle case.
+    const updateHaloVisibility = () => {
+      const visible = appliedSelectionStates.length > 0 || hovered !== null;
+      for (const layer of HALO_LAYERS) {
+        if (map.getLayer(layer)) map.setLayoutProperty(layer, "visibility", visible ? "visible" : "none");
+      }
+    };
+
+    // #2 Focus a route: while a SERVICE is selected, dim every OTHER route line
+    // (the selected one keeps its feature-state `selected`, so it stays full) so
+    // you can trace one line across a dense network. Restored when unfocused.
+    const FOCUS_DIM = 0.12;
+    let routeFocusActive = false;
+    const setRouteFocus = (active: boolean) => {
+      if (active === routeFocusActive) return;
+      routeFocusActive = active;
+      const opacity = active ? ["case", ["boolean", ["feature-state", "selected"], false], 1, FOCUS_DIM] : 1;
+      for (const layer of [LYR_SERVICES_SOLID, LYR_SERVICES_UNDERGROUND]) {
+        if (map.getLayer(layer)) map.setPaintProperty(layer, "line-opacity", opacity as never);
+      }
+    };
+
     const applySelectionState = () => {
-      for (const { source, id } of appliedSelectionStates) map.removeFeatureState({ source, id });
+      // Clear only the `selected` key so a concurrent `hover` state survives.
+      for (const { source, id } of appliedSelectionStates) map.removeFeatureState({ source, id }, "selected");
       appliedSelectionStates = [];
       const { system, selection } = store.getState();
       const mark = (source: string, id: string) => {
@@ -307,16 +344,37 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       } else if (selection?.kind === "facility") {
         mark(SRC_FACILITIES, selection.id);
       }
-      // The halo layers are feature-state driven, so without a filter they'd
-      // otherwise redraw EVERY way/service/station at 0 opacity on every frame
-      // (real fill-rate on the 121k-waypoint services source during a zoom).
-      // Hide them outright when nothing halo-able is selected — the common case.
-      const visibility = appliedSelectionStates.length > 0 ? "visible" : "none";
-      for (const layer of HALO_LAYERS) {
-        if (map.getLayer(layer)) map.setLayoutProperty(layer, "visibility", visibility);
-      }
+      setRouteFocus(selection?.kind === "service");
+      updateHaloVisibility();
       map.triggerRepaint();
     };
+
+    // #1 Hover highlight: light whatever's under the cursor via feature-state
+    // (the same halo layers selection uses, at a fainter opacity). Additive and
+    // read-only — it queries features and flips feature-state + halo visibility,
+    // never touching the cursor or gestures (interactions.ts owns those). Skipped
+    // while the map is moving, so a pan/zoom never triggers hover work.
+    const HOVER_LAYERS = [LYR_WAYS_SOLID, LYR_WAYS_DASHED, LYR_SERVICES_SOLID, LYR_SERVICES_ELEVATED, LYR_SERVICES_UNDERGROUND, LYR_STATIONS, LYR_FACILITIES];
+    const setHover = (next: { source: string; id: string } | null) => {
+      if (hovered && (!next || hovered.source !== next.source || hovered.id !== next.id)) {
+        map.removeFeatureState(hovered, "hover");
+        hovered = null;
+      }
+      if (next && !hovered) {
+        map.setFeatureState(next, { hover: true });
+        hovered = next;
+      }
+      updateHaloVisibility();
+      map.triggerRepaint();
+    };
+    const onHoverMove = (e: maplibregl.MapMouseEvent) => {
+      if (map.isMoving()) return;
+      const layers = HOVER_LAYERS.filter((l) => map.getLayer(l));
+      const hit = layers.length ? map.queryRenderedFeatures(e.point, { layers })[0] : undefined;
+      setHover(hit && typeof hit.source === "string" && hit.id != null ? { source: hit.source, id: String(hit.id) } : null);
+    };
+    map.on("mousemove", onHoverMove);
+    map.on("mouseout", () => setHover(null));
 
     const pushData = () => {
       // Self-heal before pushing — a missing source would otherwise silently

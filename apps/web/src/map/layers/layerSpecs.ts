@@ -246,7 +246,7 @@ export const LAYER_SPECS: LayerSpecification[] = [
     paint: {
       "line-color": "#191a17",
       "line-width": ["+", ["get", "width"], 7],
-      "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, 0],
+      "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, ["boolean", ["feature-state", "hover"], false], 0.1, 0],
       "line-offset": ["get", "offset"],
     },
   },
@@ -290,7 +290,7 @@ export const LAYER_SPECS: LayerSpecification[] = [
     paint: {
       "line-color": "#191a17",
       "line-width": ["+", ["get", "width"], 7],
-      "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, 0],
+      "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, ["boolean", ["feature-state", "hover"], false], 0.1, 0],
       "line-offset": ["get", "offset"],
     },
   },
@@ -319,7 +319,7 @@ export const LAYER_SPECS: LayerSpecification[] = [
     paint: {
       "circle-radius": ["case", ["get", "interchange"], 12, 10],
       "circle-color": "#191a17",
-      "circle-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, 0],
+      "circle-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, ["boolean", ["feature-state", "hover"], false], 0.1, 0],
     },
   },
   {
@@ -502,7 +502,7 @@ export const LAYER_SPECS: LayerSpecification[] = [
     paint: {
       "circle-radius": ["+", ["get", "radius"], 5],
       "circle-color": "#191a17",
-      "circle-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, 0],
+      "circle-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, ["boolean", ["feature-state", "hover"], false], 0.1, 0],
     },
   },
   {
