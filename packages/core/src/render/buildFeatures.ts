@@ -1,7 +1,8 @@
 import type { FeatureCollection, Feature, LineString, Point, Polygon } from "geojson";
 import { wayType } from "@transitmapper/core/model/catalog";
 import { facilityRender, gradeFlags, laneRender, modeRender, showWayWhenServed, wayRender } from "../style/catalogStyle";
-import { INTERCHANGE_METERS, resolveWayPath, serviceWayIds, servedWayIds } from "../model/geo";
+import { resolveWayPath, wayById } from "../model/geo";
+import { nearWaysForStations, servicesByWay, visibleWaysFor } from "./featureMemo";
 import { directionalLanes, isOneWay, wayCapacity } from "../model/profile";
 import { wayIntersectsBounds, wayLaneGeometry } from "../geometry/streets";
 import { collectWayTrims, connectorCurves, junctionGeometry, type JunctionGeometry, type WayTrims } from "../geometry/junctions";
@@ -99,25 +100,16 @@ export function buildFeatures(
   // facilities hidden, capacity collapsed to one line) — only Infrastructure
   // wants the physical-planning detail.
   const network = view.viewMode !== "infrastructure";
-  // Built once, unconditionally (same order as work this function already
-  // does unconditionally elsewhere) — reused everywhere below that used to
-  // do a fresh `system.ways.find(...)` scan per lookup: the laneDetail
+  // Reuse the WeakMap-cached way-by-id index (keyed on system.ways' identity)
+  // instead of rebuilding a Map every call — reused below for the laneDetail
   // junction pass, the wayLabels loop, and the handle-ways loop.
-  const waysById = new Map(system.ways.map((w) => [w.id, w]));
+  const waysById = wayById(system.ways);
 
-  // services per way, in stable (creation) order — pre-filtered by visible
-  // mode. Deduplicated across a service's own patterns: two branches sharing
-  // a trunk way still count as ONE service on that way, so the trunk renders
-  // as a single line and only forks visually past the branch point.
-  const byWay = new Map<string, Service[]>();
-  for (const svc of system.services) {
-    if (!view.visibleModes.has(svc.modeId)) continue;
-    for (const wid of serviceWayIds(svc)) {
-      const arr = byWay.get(wid) ?? [];
-      arr.push(svc);
-      byWay.set(wid, arr);
-    }
-  }
+  // services per way, in stable (creation) order, pre-filtered by visible mode
+  // and deduplicated across a service's own patterns (two branches sharing a
+  // trunk way still count as ONE service there). Memoized on (services,
+  // visibleModes) so a selection/viewport rebuild reuses it — see featureMemo.
+  const byWay = servicesByWay(system.services, view.visibleModes);
 
   // A way's own infra line, fanned out into `way.capacity` parallel lanes/
   // tracks in the Infrastructure view — a real physical cross-section instead
@@ -320,14 +312,15 @@ export function buildFeatures(
     });
   }
 
-  const visibleWays = system.ways.filter((w) => view.visibleWayTypes.has(w.typeId));
-  const stations: Feature<Point>[] = system.stations.map((s) => {
+  const visibleWays = visibleWaysFor(system.ways, view.visibleWayTypes);
+  // The interchange scan (servedWayIds per station) is the single most expensive
+  // part of this function at RTC scale — memoized on (stations, visibleWays) so a
+  // selection/viewport rebuild reuses it instead of re-scanning ~3787 stations.
+  const nearWaysByStation = nearWaysForStations(system.stations, visibleWays);
+  const stations: Feature<Point>[] = system.stations.map((s, si) => {
     // `byWay` already maps a way to the (visible-mode) services riding it —
-    // built once above for the way-rendering loop, so reuse it here instead
-    // of re-deriving each service's way ids per station: on a large GTFS
-    // import (thousands of stations) that recomputation showed up as real,
-    // measured main-thread time, unlike this Map-lookup version.
-    const nearWays = servedWayIds(s.coord, visibleWays, INTERCHANGE_METERS);
+    // reuse it here instead of re-deriving each service's way ids per station.
+    const nearWays = nearWaysByStation[si];
     const servingServiceSet = new Set<Service>();
     for (const wid of nearWays) for (const sv of byWay.get(wid) ?? []) servingServiceSet.add(sv);
     const servingServices = [...servingServiceSet];
