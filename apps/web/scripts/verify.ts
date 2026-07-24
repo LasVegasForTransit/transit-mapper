@@ -80,7 +80,8 @@ import { anchorOnWay, routeBetween, routePath } from "@transitmapper/core/model/
 import { bearingDegrees, formatBearing, haversineMeters } from "@transitmapper/core/model/geo";
 import type { CrossSection, LngLat, Node, Service, TransitSystem, Way } from "@transitmapper/core/model/system";
 import { armRefKey, getComponent, laneRefKey, withComponent, withoutComponent } from "@transitmapper/core/model/components";
-import { buildTimetable, dwellStopsForPattern, effectiveVehicleKind, metersAtElapsed, VEHICLE_SPEED_MPS } from "../src/sim/vehicles";
+import { dwellStopsForPattern, effectiveVehicleKind } from "../src/sim/vehicles";
+import { buildTimetable, metersAtElapsed, VEHICLE_SPEED_MPS } from "@transitmapper/core/sim/timetable";
 import { generateToken, hashToken, sha256Base64Url, toBase64Url } from "@transitmapper/core/auth/tokens";
 import { parseCookies, serializeCookie } from "@transitmapper/core/auth/cookies";
 import { safeReturnTo } from "@transitmapper/core/auth/returnTo";

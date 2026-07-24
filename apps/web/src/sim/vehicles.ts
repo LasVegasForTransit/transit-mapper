@@ -14,8 +14,10 @@ import { vehicleFootprint } from "@transitmapper/core/model/catalog";
 import type { LngLat, Pattern, SchedulePeriod, Service, Station, TransitSystem, Way } from "@transitmapper/core/model/system";
 import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from "../map/layers";
 import { vehiclesDisabledForPerf } from "../perf";
+// Pure motion kernel (framework-free, WASM-portable) — this module is its rAF/
+// MapLibre host. See packages/core/src/sim/timetable.ts.
+import { buildTimetable, metersAtElapsed, VEHICLE_SPEED_MPS, type DwellStop, type Timetable } from "@transitmapper/core/sim/timetable";
 
-export const VEHICLE_SPEED_MPS = 11; // ~40 km/h — a plausible light-rail/tram running speed
 const MIN_PERIOD_MS = 6000; // a floor so even a very short line doesn't blur past instantly
 // A very short headway on a long line could otherwise imply dozens of
 // vehicles — capped so "every 5 min" reads as "frequent", not as a swarm.
@@ -74,12 +76,6 @@ function effectiveHeadwayMinutes(service: Service): number | undefined {
   return service.frequencyMinutes;
 }
 
-export interface DwellStop {
-  /** Arc-length distance from the pattern path's start, in meters. */
-  distMeters: number;
-  dwellMs: number;
-}
-
 // Stations grouped by their anchor way id, cached by the stations array's
 // own reference — safe because the store replaces `system.stations`
 // immutably on every mutation (same convention as geo.ts's wayPathCache),
@@ -123,18 +119,6 @@ export function dwellStopsForPattern(system: TransitSystem, pattern: Pattern, pa
     }
   }
   return stops.sort((a, b) => a.distMeters - b.distMeters);
-}
-
-export interface Timetable {
-  /** Total wall-clock ms to cover the path start→end, stops included. */
-  oneWayMs: number;
-  stops: DwellStop[];
-}
-
-export function buildTimetable(totalMeters: number, stops: DwellStop[], speedMps: number = VEHICLE_SPEED_MPS): Timetable {
-  const travelMs = (totalMeters / speedMps) * 1000;
-  const dwellMs = stops.reduce((sum, s) => sum + s.dwellMs, 0);
-  return { oneWayMs: travelMs + dwellMs, stops };
 }
 
 interface PatternGeometry {
@@ -223,24 +207,6 @@ function resolvePatternGeometry(system: TransitSystem, pattern: Pattern, speedMp
   };
   patternGeometryCache.set(pattern, geometry);
   return geometry;
-}
-
-/** Where a vehicle sits (meters from the path's start) after `elapsedMs` of
- *  ONE-DIRECTION travel from t=0, walking leg by leg through each stop's
- *  travel segment then its dwell pause. Elapsed time past the last stop
- *  covers the final leg into the path's end. */
-export function metersAtElapsed(totalMeters: number, timetable: Timetable, elapsedMs: number, speedMps: number = VEHICLE_SPEED_MPS): number {
-  let clock = 0;
-  let lastDist = 0;
-  for (const stop of timetable.stops) {
-    const legMs = ((stop.distMeters - lastDist) / speedMps) * 1000;
-    if (elapsedMs < clock + legMs) return lastDist + ((elapsedMs - clock) / 1000) * speedMps;
-    clock += legMs;
-    if (elapsedMs < clock + stop.dwellMs) return stop.distMeters; // dwelling — holds position
-    clock += stop.dwellMs;
-    lastDist = stop.distMeters;
-  }
-  return Math.min(totalMeters, lastDist + ((elapsedMs - clock) / 1000) * speedMps);
 }
 
 /**
