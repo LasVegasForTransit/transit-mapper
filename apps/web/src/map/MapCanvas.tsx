@@ -328,10 +328,16 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       const renderSystem = viewRef.current.viewMode === "diagram" ? computeDiagramSystem(system) : system;
       const laneDetail = laneDetailNow();
       const b = map.getBounds();
+      // Expand the lane-detail cull bounds by half a viewport on each side, so a
+      // way just off-screen is already lane-rendered when it scrolls in (no
+      // pop-in at the edges). Cheap because the refresh is debounced — this wider
+      // extent is only built once a pan/zoom settles, not every mouse-move.
+      const mLng = (b.getEast() - b.getWest()) * 0.5;
+      const mLat = (b.getNorth() - b.getSouth()) * 0.5;
       const view: ViewOptions = {
         ...viewRef.current,
         laneDetail,
-        bounds: laneDetail ? [[b.getWest(), b.getSouth()], [b.getEast(), b.getNorth()]] : undefined,
+        bounds: laneDetail ? [[b.getWest() - mLng, b.getSouth() - mLat], [b.getEast() + mLng, b.getNorth() + mLat]] : undefined,
       };
       const fc = buildFeatures(renderSystem, selection, handleWayIds(), view, physicalHandleStationId(), physicalHandleGroupId());
       (map.getSource(SRC_LANES) as GeoJSONSource | undefined)?.setData(fc.lanes);
@@ -394,6 +400,22 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         (map.getSource(SRC_HANDLES) as GeoJSONSource | undefined)?.setData(fc.handles);
         (map.getSource(SRC_PHYSICAL_HANDLES) as GeoJSONSource | undefined)?.setData(fc.physicalHandles);
       });
+    };
+
+    // Lane-detail geometry (SRC_LANES/JUNCTIONS/…) is viewport-scoped, so a pan
+    // or a zoom-threshold cross needs a rebuild. But panBy(duration:0) fires
+    // moveend once PER MOUSE-MOVE, and re-tessellating the heavy lane sources
+    // on every one made them flicker (setData briefly clears them) and lag the
+    // camera (jump/misalign) during an infrastructure-view drag. Debounce it:
+    // during the gesture MapLibre just pans the existing geometry (smooth,
+    // aligned), and we rebuild ONCE, ~after it settles.
+    let laneRefreshTimer: number | undefined;
+    const LANE_REFRESH_DEBOUNCE_MS = 130;
+    const scheduleLaneRefresh = () => {
+      window.clearTimeout(laneRefreshTimer);
+      laneRefreshTimer = window.setTimeout(() => {
+        if (map.getSource(SRC_LANES)) pushData();
+      }, LANE_REFRESH_DEBOUNCE_MS);
     };
 
     map.on("load", () => {
@@ -486,7 +508,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       const now = laneDetailNow();
       if (now !== wasLaneDetail) {
         wasLaneDetail = now;
-        if (map.getSource(SRC_LANES)) pushData();
+        scheduleLaneRefresh(); // debounced: swap fan⇄lane-detail after the zoom settles, not mid-zoom
       }
     };
     map.on("zoom", onZoom);
@@ -500,7 +522,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       // fires moveend per mousemove). Camera persistence is handled separately
       // and debounced (camera/cameraPersistence.ts).
       setLiveCamera({ center: [c.lng, c.lat], zoom: map.getZoom() });
-      if (laneDetailNow() && map.getSource(SRC_LANES)) pushData();
+      // Debounced — a lane-detail pan rebuilds once it settles, not per
+      // mouse-move (moveend fires per mouse-move from panBy(duration:0)).
+      if (laneDetailNow()) scheduleLaneRefresh();
     };
     map.on("moveend", onMoveEnd);
 
@@ -509,6 +533,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       unsub();
       if (pushDataRaf !== null) cancelAnimationFrame(pushDataRaf);
       if (selectionRaf !== null) cancelAnimationFrame(selectionRaf);
+      window.clearTimeout(laneRefreshTimer);
       map.off("zoom", onZoom);
       map.off("moveend", onMoveEnd);
       detachInteractions?.();
