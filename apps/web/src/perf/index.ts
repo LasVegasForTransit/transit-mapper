@@ -1,6 +1,6 @@
 import type { Map as MLMap } from "maplibre-gl";
 import { attachFrameMeter } from "./frameMeter";
-import { runPanBench, type PanBenchOptions } from "./panBench";
+import { runPanBench, runZoomBench, type PanBenchOptions, type ZoomBenchOptions } from "./panBench";
 import type { FrameStats } from "./frameStats";
 
 /** Runtime A/B toggles, flipped from the devtools console to attribute cost —
@@ -15,6 +15,7 @@ declare global {
     __perf?: DevPerfFlags;
     __frameStats?: () => FrameStats;
     __panBench?: (opts?: PanBenchOptions) => Promise<FrameStats>;
+    __zoomBench?: (opts?: ZoomBenchOptions) => Promise<FrameStats>;
   }
 }
 
@@ -30,10 +31,12 @@ export function attachPerfHarness(map: MLMap): () => void {
   const meter = attachFrameMeter(map);
   window.__frameStats = meter.stats;
   window.__panBench = (opts) => runPanBench(map, opts);
+  window.__zoomBench = (opts) => runZoomBench(map, opts);
   return () => {
     meter.detach();
     delete window.__frameStats;
     delete window.__panBench;
+    delete window.__zoomBench;
   };
 }
 

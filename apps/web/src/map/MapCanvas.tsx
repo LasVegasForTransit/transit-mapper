@@ -16,6 +16,10 @@ import {
   LAYER_SPECS,
   LYR_LANDMARKS,
   LYR_LANDMARK_LABELS,
+  LYR_WAY_SELECTED,
+  LYR_SERVICE_SELECTED,
+  LYR_STATION_SELECTED,
+  LYR_FACILITY_SELECTED,
   registerMapIcons,
   SRC_ENDPOINT_HINT,
   SRC_FACILITIES,
@@ -278,6 +282,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // sources. setData() clears all feature-state, so this is re-applied at the
     // end of every pushData too. (Node selection still rides the junctions
     // filter, handled by a full rebuild in the subscription below.)
+    const HALO_LAYERS = [LYR_WAY_SELECTED, LYR_SERVICE_SELECTED, LYR_STATION_SELECTED, LYR_FACILITY_SELECTED];
     let appliedSelectionStates: Array<{ source: string; id: string }> = [];
     const applySelectionState = () => {
       for (const { source, id } of appliedSelectionStates) map.removeFeatureState({ source, id });
@@ -301,6 +306,14 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         mark(SRC_STATIONS, selection.id);
       } else if (selection?.kind === "facility") {
         mark(SRC_FACILITIES, selection.id);
+      }
+      // The halo layers are feature-state driven, so without a filter they'd
+      // otherwise redraw EVERY way/service/station at 0 opacity on every frame
+      // (real fill-rate on the 121k-waypoint services source during a zoom).
+      // Hide them outright when nothing halo-able is selected — the common case.
+      const visibility = appliedSelectionStates.length > 0 ? "visible" : "none";
+      for (const layer of HALO_LAYERS) {
+        if (map.getLayer(layer)) map.setLayoutProperty(layer, "visibility", visibility);
       }
       map.triggerRepaint();
     };

@@ -323,9 +323,24 @@ export const LAYER_SPECS: LayerSpecification[] = [
     type: "circle",
     source: SRC_STATIONS,
     paint: {
-      "circle-radius": ["case", ["get", "interchange"], 7, 5],
+      // Zoom-scaled so an overview / full-system export doesn't drown in
+      // thousands of full-size rings (the "mess" at export scale) — and so all
+      // 3787 circles cost far less fill-rate at low/mid zoom, where every one is
+      // on screen. Interchanges stay a step larger than intermediate stops.
+      // Full size is reached at street zoom (z15), unchanged from before.
+      "circle-radius": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        10,
+        ["case", ["get", "interchange"], 2, 1],
+        13,
+        ["case", ["get", "interchange"], 4.5, 2.8],
+        15,
+        ["case", ["get", "interchange"], 7, 5],
+      ],
       "circle-color": "#ffffff",
-      "circle-stroke-width": 3,
+      "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 10, 0.6, 13, 1.5, 15, 3],
       "circle-stroke-color": ["case", ["get", "interchange"], "#111827", ["get", "color"]],
     },
   },

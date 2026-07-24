@@ -43,3 +43,44 @@ export async function runPanBench(map: MLMap, opts: PanBenchOptions = {}): Promi
   console.log(`[panBench] steps=${steps} dx=${dx} → ${formatFrameStats(stats)}`);
   return stats;
 }
+
+export interface ZoomBenchOptions {
+  /** Zoom increments in each direction (in, then back out). */
+  steps?: number;
+  /** Zoom-level delta per step. */
+  dz?: number;
+}
+
+/**
+ * Scripted zoom: ramp the zoom level in `steps` increments then back out, one
+ * per frame, measuring painted-frame time under the zoom load — the zoom
+ * counterpart to runPanBench. Zoom exercises symbol placement and fill-rate
+ * (all on-screen station circles / route lines redrawn every frame), which pan
+ * does not, so this isolates zoom cost specifically.
+ */
+export async function runZoomBench(map: MLMap, opts: ZoomBenchOptions = {}): Promise<FrameStats> {
+  const { steps = 60, dz = 0.06 } = opts;
+  const startZoom = map.getZoom();
+  const durations: number[] = [];
+  let last = performance.now();
+  const onRender = () => {
+    const now = performance.now();
+    durations.push(now - last);
+    last = now;
+  };
+  map.on("render", onRender);
+  last = performance.now();
+  for (let i = 1; i <= steps; i++) {
+    map.setZoom(startZoom + dz * i);
+    await nextFrame();
+  }
+  for (let i = steps - 1; i >= 0; i--) {
+    map.setZoom(startZoom + dz * i);
+    await nextFrame();
+  }
+  map.off("render", onRender);
+  const stats = summarizeFrames(durations.slice(2));
+  // eslint-disable-next-line no-console
+  console.log(`[zoomBench] steps=${steps} dz=${dz} (z${startZoom.toFixed(1)}→z${(startZoom + dz * steps).toFixed(1)}) → ${formatFrameStats(stats)}`);
+  return stats;
+}
