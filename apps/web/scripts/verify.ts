@@ -3342,12 +3342,15 @@ check("subway has no lane preference (its only way type has one lane kind, no am
   const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(["road"]) };
   const fc = buildFeatures(store.getState().system, null, [], { viewMode: "infrastructure", ...filters, laneDetail: true });
   check("lane detail emits the junction footprint", fc.junctions.features.length === 1);
-  check("lane detail emits connector guides", fc.connectors.features.length > 0);
+  // Connector guides are scoped to the SELECTED junction — otherwise a complex
+  // interchange renders as a star-burst of every junction's lane connectors.
+  check("connector guides are hidden for unselected junctions", fc.connectors.features.length === 0);
   const far = buildFeatures(store.getState().system, null, [], { viewMode: "infrastructure", ...filters });
   check("no junction polygons below lane-detail zoom", far.junctions.features.length === 0);
   const nodeId = store.getState().system.nodes[0].id;
   const sel = buildFeatures(store.getState().system, { kind: "node", id: nodeId }, [], { viewMode: "infrastructure", ...filters, laneDetail: true });
   check("a selected junction's footprint is flagged", sel.junctions.features.some((f) => f.properties?.selected === true));
+  check("a selected junction emits its connector guides", sel.connectors.features.length > 0);
 }
 
 // --- R4: street name labels + lane keyboard shortcuts ---

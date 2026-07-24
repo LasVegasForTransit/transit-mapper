@@ -230,12 +230,20 @@ export function buildFeatures(
           geometry: { type: "Polygon", coordinates: [closeRing(g.polygon)] },
         });
       }
-      for (const c of connectorCurves(node, waysById, wayTrims, system.turnRestrictions)) {
-        connectorFeatures.push({
-          type: "Feature",
-          properties: { nodeId: node.id },
-          geometry: { type: "LineString", coordinates: c.path },
-        });
+      // Per-lane turn guides are editing detail for ONE junction. Emitting them
+      // for every junction turns a complex interchange (dense OSM import) into a
+      // star-burst of dozens of lane-to-lane connectors converging on each node
+      // — so only draw them for the SELECTED node. The junction footprint +
+      // carriageway trims above still render for every junction (that's the
+      // paved road surface, not clutter).
+      if (selection?.kind === "node" && selId === node.id) {
+        for (const c of connectorCurves(node, waysById, wayTrims, system.turnRestrictions)) {
+          connectorFeatures.push({
+            type: "Feature",
+            properties: { nodeId: node.id },
+            geometry: { type: "LineString", coordinates: c.path },
+          });
+        }
       }
     }
   }
