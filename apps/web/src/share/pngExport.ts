@@ -1,8 +1,8 @@
 import type { Map as MLMap } from "maplibre-gl";
-import { systemBounds } from "@transitmapper/core/model/geo";
 import type { TransitSystem } from "@transitmapper/core/model/system";
 import type { ViewOptions } from "../map/layers";
 import { getMap } from "../map/mapRef";
+import { renderSystemForExport } from "../map/export/exportRenderer";
 import { legendEntriesFor, type LegendEntry } from "./exportLegend";
 import { scaleBarSpec } from "./exportScale";
 
@@ -132,24 +132,31 @@ export function exportPngFromMap(map: MLMap, opts: ComposeOptions, filename = "t
   map.triggerRepaint();
 }
 
-/** Quick-export path: temporarily fit the live app map to the whole system's
- *  extent, capture with title/legend, then restore the camera exactly where
- *  the user left it — so "Export PNG" from the quick menu shows the whole
- *  network (MTA-map style) rather than whatever happened to be on screen. */
+/** Quick-export path: render the whole system's extent on a dedicated OFFSCREEN
+ *  map (map/export/exportRenderer.ts), composite title/legend, and download —
+ *  so "Export PNG" from the quick menu shows the whole network (MTA-map style).
+ *  Rendering offscreen (rather than borrowing the live map) means the live map
+ *  no longer needs preserveDrawingBuffer, and export never disturbs the user's
+ *  camera. Fire-and-forget, mirroring the prior idle-callback behavior. */
 export function exportFullSystemPng(system: TransitSystem, view: ViewOptions, filename = "transit-system.png"): void {
-  const map = getMap();
-  if (!map) return;
-  const prev = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() };
-  const bounds = systemBounds(system);
-  if (bounds) map.fitBounds(bounds, { padding: 56, animate: false });
-  map.once("idle", () => {
-    downloadDataUrl(
-      composeCanvas(map.getCanvas(), map, { title: system.name || "Transit system", legend: legendEntriesFor(system, view) }).toDataURL(
-        "image/png",
-      ),
-      filename,
-    );
-    map.jumpTo(prev);
-  });
-  map.triggerRepaint();
+  // Match the live map's aspect when we can, so the framing feels familiar.
+  const live = getMap();
+  const container = live?.getContainer();
+  const size = container && container.clientWidth > 0 ? { width: container.clientWidth, height: container.clientHeight } : undefined;
+  renderSystemForExport(system, view, size ?? {})
+    .then((rendered) => {
+      try {
+        const composed = composeCanvas(rendered.canvas, rendered.map, {
+          title: system.name || "Transit system",
+          legend: legendEntriesFor(system, view),
+        });
+        downloadDataUrl(composed.toDataURL("image/png"), filename);
+      } finally {
+        rendered.dispose();
+      }
+    })
+    .catch((e) => {
+      // eslint-disable-next-line no-console
+      console.error("PNG export failed:", e);
+    });
 }

@@ -137,7 +137,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       style: BASEMAP_STYLE,
       center: initial.viewport.center,
       zoom: initial.viewport.zoom,
-      preserveDrawingBuffer: true, // needed for PNG export
+      // No preserveDrawingBuffer: PNG export renders on a dedicated offscreen
+      // map (map/export/exportRenderer.ts), so the live map no longer pays the
+      // always-on per-frame drawing-buffer copy that reading its canvas required.
       fadeDuration: 0, // no trailing label/icon fade animation after a pan/zoom — snappier, one fewer post-move repaint pass
       refreshExpiredTiles: false, // the basemap is static within a session; don't re-fetch/re-tessellate expired tiles
       dragPan: false, // SimCity-style: the map pans on right-drag / space-drag only
