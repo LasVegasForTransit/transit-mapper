@@ -124,7 +124,6 @@ export function buildFeatures(
   ) => {
     const lanes = network ? 1 : Math.max(1, wayCapacity(way));
     const laneWidth = lanes > 1 ? Math.max(1.5, width / lanes + 0.75) : width;
-    const selectedWay = selection?.kind === "way" && selId === way.id;
     for (let i = 0; i < lanes; i++) {
       ways.push({
         type: "Feature",
@@ -134,7 +133,6 @@ export function buildFeatures(
           width: laneWidth,
           dashed,
           offset: (i - (lanes - 1) / 2) * LANE_SPACING_PX,
-          selected: selectedWay,
         },
         geometry: { type: "LineString", coordinates: path },
       });
@@ -309,13 +307,6 @@ export function buildFeatures(
           underground,
           elevated,
           offset: (i - (n - 1) / 2) * BUNDLE_SPACING_PX,
-          // A selected WAY also lights up any service riding it — most
-          // guideway types (rail, monorail) never draw their own bare line
-          // when served (see showWayWhenServed/emitCrossSection above), so
-          // the service line is the ONLY thing on screen to highlight for a
-          // way selection there; for road/bike, this just adds to the
-          // way's own LYR_WAY_SELECTED glow rather than replacing it.
-          selected: (selection?.kind === "service" && selId === svc.id) || (selection?.kind === "way" && selId === way.id),
         },
         geometry: { type: "LineString", coordinates: path },
       });
@@ -348,7 +339,6 @@ export function buildFeatures(
         // LYR_STATION_LABELS in layerSpecs.ts). Keeps overview zooms from
         // resolving collisions over all ~3787 labels at once.
         major: interchange || s.majorStop === true,
-        selected: selection?.kind === "station" && selId === s.id,
         name: s.name ?? "",
       },
       geometry: { type: "Point", coordinates: s.coord },
@@ -459,7 +449,6 @@ export function buildFeatures(
             color: r.color,
             radius: r.radius,
             icon: iconName(r.icon, r.color),
-            selected: selection?.kind === "facility" && selId === f.id,
             name: f.name ?? "",
           },
           geometry: { type: "Point", coordinates: coord },
