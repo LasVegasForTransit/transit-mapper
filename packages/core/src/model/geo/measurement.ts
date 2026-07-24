@@ -59,6 +59,50 @@ export function bearingAtT(path: LngLat[], t: number, totalMeters?: number): num
   return bearingDegrees(seg.a, seg.b);
 }
 
+/** Prefix-sum of segment lengths, in meters: `cum[0] = 0`, `cum[i]` is the
+ *  summed length of the first `i` segments, and `cum[path.length - 1]` is the
+ *  whole path length. Precompute ONCE per path (same haversine metric as
+ *  pathLengthMeters, so it matches pointAtT exactly), then position lookups
+ *  become O(log n) binary searches instead of O(n) re-walks — see
+ *  pointAtDistance. Used by the vehicle sim, which resolves a position for
+ *  every vehicle every tick and must not re-walk a dense (hundreds of points)
+ *  path each time. */
+export function cumulativeLengths(path: LngLat[]): Float64Array {
+  const cum = new Float64Array(path.length);
+  for (let i = 1; i < path.length; i++) cum[i] = cum[i - 1] + haversineMeters(path[i - 1], path[i]);
+  return cum;
+}
+
+/** Coordinate at arc-length `distMeters` from a path's start, using a
+ *  precomputed cumulative-length table (see cumulativeLengths). Binary-searches
+ *  the table — O(log n), zero trig per call — then linearly interpolates within
+ *  the found segment; clamps to the path ends. The hot-path counterpart to
+ *  pointAtT for callers that already know the DISTANCE (e.g. the vehicle sim):
+ *  it skips both pointAtT's own full-path re-walk and its internal
+ *  pathLengthMeters call, and produces the identical coordinate. */
+export function pointAtDistance(path: LngLat[], cum: Float64Array, distMeters: number): LngLat {
+  const n = path.length;
+  if (n === 0) return [0, 0];
+  if (n === 1) return path[0];
+  const total = cum[n - 1];
+  if (total === 0) return path[0];
+  const target = Math.max(0, Math.min(total, distMeters));
+  // Largest index `lo` with cum[lo] <= target — segment lo..lo+1 holds target.
+  let lo = 0;
+  let hi = n - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (cum[mid] <= target) lo = mid;
+    else hi = mid - 1;
+  }
+  if (lo >= n - 1) return path[n - 1];
+  const segLen = cum[lo + 1] - cum[lo];
+  const f = segLen === 0 ? 0 : (target - cum[lo]) / segLen;
+  const a = path[lo];
+  const b = path[lo + 1];
+  return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+}
+
 export interface NearestOnPath {
   /** Normalized arc-length position [0,1] of the closest point. */
   t: number;

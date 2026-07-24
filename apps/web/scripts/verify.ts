@@ -13,6 +13,9 @@ import {
   nearestOnPath,
   nearestOpenEndpoint,
   pointAtT,
+  pointAtDistance,
+  cumulativeLengths,
+  pathLengthMeters,
   resolveWayPath,
   segmentGridStats,
   servedWayIds,
@@ -291,6 +294,29 @@ check("deleting a service keeps the other services", servicesOnWay(kc).length ==
   check(`curve barely overshoots (${overshoot.toFixed(3)})`, overshoot < 0.15);
   const near = nearestOnPath([[0, 0], [10, 0]] as LngLat[], [5, 1] as LngLat);
   check("nearestOnPath finds midpoint t≈0.5", !!near && Math.abs(near.t - 0.5) < 0.05);
+}
+
+// --- pointAtDistance (the vehicle sim's O(log n) position lookup) must produce
+// the SAME coordinate as pointAtT for the equivalent distance: it's a faster
+// path via precomputed arc lengths, not a different result. ---
+{
+  const path: LngLat[] = [[-115.2, 36.1], [-115.17, 36.13], [-115.1, 36.1], [-115.05, 36.2]];
+  const cum = cumulativeLengths(path);
+  const total = cum[cum.length - 1];
+  check("cumulativeLengths total matches pathLengthMeters", Math.abs(total - pathLengthMeters(path)) < 1e-6);
+  check("cumulativeLengths starts at 0 and is monotonic", cum[0] === 0 && cum.every((v, i) => i === 0 || v >= cum[i - 1]));
+  let maxDelta = 0;
+  for (let k = 0; k <= 20; k++) {
+    const t = k / 20;
+    const viaT = pointAtT(path, t);
+    const viaDist = pointAtDistance(path, cum, t * total);
+    maxDelta = Math.max(maxDelta, Math.abs(viaT[0] - viaDist[0]), Math.abs(viaT[1] - viaDist[1]));
+  }
+  check(`pointAtDistance matches pointAtT across the path (max Δ ${maxDelta.toExponential(1)})`, maxDelta < 1e-9);
+  const start = pointAtDistance(path, cum, -100);
+  const end = pointAtDistance(path, cum, total + 100);
+  check("pointAtDistance clamps before the start to the first point", start[0] === path[0][0] && start[1] === path[0][1]);
+  check("pointAtDistance clamps past the end to the last point", end[0] === path[path.length - 1][0] && end[1] === path[path.length - 1][1]);
 }
 
 // --- rounded-corner curve has strictly LOCAL support: moving a far-away

@@ -44,6 +44,7 @@ import {
   LYR_SERVICE_SELECTED,
   LYR_STATIONS,
   LYR_STATION_LABELS,
+  LYR_STATION_LABELS_MAJOR,
   LYR_STATION_SELECTED,
   LYR_VEHICLES,
   LYR_VEHICLES_INFRA_FILL,
@@ -354,24 +355,52 @@ export const LAYER_SPECS: LayerSpecification[] = [
     paint: { "line-color": VEHICLE_STROKE, "line-width": 1 },
   },
   {
-    // Named stations only (empty-name ones — a common work-in-progress
-    // state — stay unlabeled rather than showing a placeholder). Anchor
-    // varies (not a fixed offset) so MapLibre's own collision resolution can
-    // slide a label around its station when neighbors are dense, same idea
-    // as real transit-map label placement.
-    id: LYR_STATION_LABELS,
+    // MAJOR station labels — interchanges (derived) and hand-flagged major
+    // stops (Station.majorStop) — shown from a lower zoom than ordinary stops.
+    // Placed BEFORE the ordinary-stop layer so its labels win MapLibre's
+    // collision placement. minzoom skips its placement work entirely below the
+    // threshold; at the post-import whole-valley framing that removes ~all of
+    // the 3787-label symbol-collision cost that made panning drop frames.
+    // Two variable anchors (was four) — fewer per-label placement attempts.
+    id: LYR_STATION_LABELS_MAJOR,
     type: "symbol",
     source: SRC_STATIONS,
-    filter: ["!=", ["get", "name"], ""],
+    minzoom: 12,
+    filter: ["all", ["!=", ["get", "name"], ""], ["get", "major"]],
     layout: {
       "text-field": ["get", "name"],
       "text-font": ["case", ["get", "interchange"], ["literal", ["Noto Sans Bold"]], ["literal", ["Noto Sans Regular"]]],
       "text-size": 12,
-      "text-variable-anchor": ["top", "bottom", "right", "left"],
+      "text-variable-anchor": ["top", "bottom"],
       "text-radial-offset": 0.7,
       "text-justify": "auto",
       "text-allow-overlap": false,
       "text-optional": true,
+      // Interchanges outrank plain major stops when they compete for space.
+      "symbol-sort-key": ["case", ["get", "interchange"], 0, 1],
+    },
+    paint: { "text-color": "#191a17", "text-halo-color": "#ffffff", "text-halo-width": 1.4 },
+  },
+  {
+    // Ordinary station labels — every OTHER named stop (empty-name ones stay
+    // unlabeled). Only from z14+, where a neighborhood's worth of stops is on
+    // screen instead of the whole valley's worth colliding into unreadable
+    // soup. Anchor varies so collision can slide a label around its station.
+    id: LYR_STATION_LABELS,
+    type: "symbol",
+    source: SRC_STATIONS,
+    minzoom: 14,
+    filter: ["all", ["!=", ["get", "name"], ""], ["!", ["get", "major"]]],
+    layout: {
+      "text-field": ["get", "name"],
+      "text-font": ["literal", ["Noto Sans Regular"]],
+      "text-size": 12,
+      "text-variable-anchor": ["top", "bottom"],
+      "text-radial-offset": 0.7,
+      "text-justify": "auto",
+      "text-allow-overlap": false,
+      "text-optional": true,
+      "symbol-sort-key": 2,
     },
     paint: { "text-color": "#191a17", "text-halo-color": "#ffffff", "text-halo-width": 1.4 },
   },
@@ -463,6 +492,9 @@ export const LAYER_SPECS: LayerSpecification[] = [
     id: LYR_FACILITY_LABELS,
     type: "symbol",
     source: SRC_FACILITIES,
+    // Facility names are close-up infrastructure detail (depots, entrances) —
+    // no reason to place/collide them at overview zooms.
+    minzoom: 14,
     filter: ["!=", ["get", "name"], ""],
     layout: {
       "text-field": ["get", "name"],

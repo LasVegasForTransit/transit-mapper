@@ -503,6 +503,7 @@ function parseStation(s: unknown): Station {
     ...(footprint ? { footprint } : {}),
     ...(platforms ? { platforms } : {}),
     ...(typeof r.dwellSeconds === "number" ? { dwellSeconds: r.dwellSeconds } : {}),
+    ...(r.majorStop === true ? { majorStop: true } : {}),
   };
 }
 

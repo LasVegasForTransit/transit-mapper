@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useEditor } from "../editor/EditorProvider";
 import { getOrCreateShare, stopSharing } from "../share/api";
 import { getMyShare } from "../share/myShares";
+import { withLiveCamera } from "../camera/liveCamera";
 import { Icon } from "./Icon";
 import { Modal } from "./Modal";
 
@@ -26,7 +27,9 @@ export function ShareDialog({ onClose }: ShareDialogProps) {
 
   useEffect(() => {
     let cancelled = false;
-    getOrCreateShare(system)
+    // Fold in the live camera so the shared link opens where the user is now —
+    // interactive pan/zoom bypasses the store, so system.viewport lags it.
+    getOrCreateShare(withLiveCamera(system))
       .then((sharedUrl) => {
         if (cancelled) return;
         setUrl(sharedUrl);

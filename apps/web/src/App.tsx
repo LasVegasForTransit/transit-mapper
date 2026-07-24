@@ -14,6 +14,8 @@ import {
   saveToLibrary,
   setActiveId,
 } from "./storage/localStore";
+import { attachCameraPersistence } from "./camera/cameraPersistence";
+import { withLiveCamera } from "./camera/liveCamera";
 import { Icon } from "./ui/Icon";
 import { ImportProgressPill } from "./ui/ImportProgressPill";
 import { Inspector } from "./ui/Inspector";
@@ -155,7 +157,10 @@ export function App() {
       if (s.system.id !== prev.system.id) setActiveId(s.system.id);
       window.clearTimeout(saveTimer.current);
       const snapshot = s.system;
-      saveTimer.current = window.setTimeout(() => report(saveToLibrary(snapshot)), 400);
+      // Fold in the live camera at save time: interactive pan/zoom bypasses the
+      // domain store (camera/liveCamera.ts), so `snapshot.viewport` would
+      // otherwise be stale. This keeps "reload restores where I left off".
+      saveTimer.current = window.setTimeout(() => report(saveToLibrary(withLiveCamera(snapshot))), 400);
     });
     // The pending timer is part of this effect's state; leaving it to fire
     // into an unmounted tree is silent today but is still a leak.
@@ -164,6 +169,10 @@ export function App() {
       unsubscribe();
     };
   }, [store, report]);
+
+  // Live camera moves don't flow through the store (so they never trigger a
+  // rebuild), so persist them on their own debounced path.
+  useEffect(() => attachCameraPersistence(store), [store]);
 
   // Dev-only: expose the map for debugging (the store is exposed by EditorProvider).
   useEffect(() => {

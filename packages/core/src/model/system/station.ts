@@ -32,6 +32,15 @@ export interface Station {
    *  alighting time for the ambient vehicle animation (map/vehicles.ts).
    *  Undefined uses that module's own default. */
   dwellSeconds?: number;
+  /** Marks a station as a "major stop" for LABEL PRIORITY: its name shows at a
+   *  lower (more zoomed-out) zoom than an ordinary stop, alongside derived
+   *  interchanges. Interchange status is derived by proximity and can't be
+   *  hand-set, so this is the manual override for "this stop matters" (a
+   *  terminal, a timepoint) even when it isn't an interchange. The label
+   *  tiering in map/layers/layerSpecs.ts already respects it (via buildFeatures'
+   *  `major` property); the StationInspector control to toggle it is a
+   *  near-future follow-up. */
+  majorStop?: boolean;
 }
 
 /** A new, unanchored-unless-given station at `coord` — the one place a bare

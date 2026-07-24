@@ -333,12 +333,18 @@ export function buildFeatures(
     const servingServices = [...servingServiceSet];
     const anchorServices = s.anchor ? (byWay.get(s.anchor.wayId) ?? []) : [];
     const color = anchorServices[0]?.color ?? servingServices[0]?.color ?? NEUTRAL_STATION;
+    const interchange = servingServices.length > 1;
     return {
       type: "Feature",
       properties: {
         id: s.id,
         color,
-        interchange: servingServices.length > 1,
+        interchange,
+        // Label tier: interchanges (derived) and hand-flagged major stops label
+        // from a lower zoom than ordinary stops (see LYR_STATION_LABELS_MAJOR /
+        // LYR_STATION_LABELS in layerSpecs.ts). Keeps overview zooms from
+        // resolving collisions over all ~3787 labels at once.
+        major: interchange || s.majorStop === true,
         selected: selection?.kind === "station" && selId === s.id,
         name: s.name ?? "",
       },

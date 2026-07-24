@@ -2,6 +2,7 @@ import { createStore } from "zustand/vanilla";
 import { LANE_KINDS, PROFILE_PRESETS, laneKind, mode, modesForWayType, wayType, type Grade } from "@transitmapper/core/model/catalog";
 import { buildProfile, cloneProfile, combineProfiles, directionalLanes, flipProfile, makeOneWay, profileWidthM, separateProfiles, withLaneCount } from "@transitmapper/core/model/profile";
 import { modeRender } from "@transitmapper/core/style/catalogStyle";
+import { liveCamera } from "../camera/liveCamera";
 import { haversineMeters, nearestInsertionPoint, nearestOnPath, offsetPolyline, patternPath, pointAtT, pointInPolygon, resolveWayPath, snap, squareFootprint } from "@transitmapper/core/model/geo";
 import { anchorOnWay, routeBetween, type RouteAnchor, type RouteSpan } from "@transitmapper/core/model/routeGraph";
 import { wayCrossings } from "@transitmapper/core/model/validate";
@@ -1175,7 +1176,12 @@ export function createEditorStore() {
     },
 
     setName: (name) => set((s) => ({ system: touch({ ...s.system, name }) })),
-    // Camera position, not content — see the skipHistory comment above.
+    // Sets the PERSISTED (saved) camera on the document. NOT the live-move path:
+    // interactive pan/zoom goes through camera/liveCamera.ts, which deliberately
+    // does NOT touch `system` (a fresh system reference on every drag frame was
+    // the dominant RTC-scale pan cost — full buildFeatures rebuild + 13 setData +
+    // autosave). Do NOT wire this to the map's moveend. skipHistory: a camera
+    // change is never an undo step (see the skipHistory comment above).
     setViewport: (viewport) => {
       skipHistory = true;
       set((s) => ({ system: { ...s.system, viewport } }));
@@ -2207,7 +2213,7 @@ export function createEditorStore() {
       set((s) => {
         const group = s.system.groups.find((g) => g.id === groupId);
         if (!group || group.footprint) return s;
-        const center = s.system.viewport.center; // no single coord to anchor a plain group; center on the view
+        const center = liveCamera().center; // no single coord to anchor a plain group; center on the LIVE view (camera lives outside `system` now — see camera/liveCamera.ts)
         const footprint = squareFootprint(center, GROUP_FOOTPRINT_HALF_SIZE_M);
         return { system: touch({ ...s.system, groups: s.system.groups.map((g) => (g.id === groupId ? { ...g, footprint } : g)) }) };
       }),

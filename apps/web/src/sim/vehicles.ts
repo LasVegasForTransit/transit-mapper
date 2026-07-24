@@ -1,11 +1,19 @@
-import type { Feature, Point, Polygon } from "geojson";
+import type { Feature, FeatureCollection, Point, Polygon } from "geojson";
 import type { GeoJSONSource, Map as MLMap } from "maplibre-gl";
 import type { EditorStore } from "../editor/store";
-import { bearingAtT, nearestOnPath, pathLengthMeters, patternPath, pointAtT, rotatedRectPolygon } from "@transitmapper/core/model/geo";
+import {
+  bearingAtT,
+  cumulativeLengths,
+  nearestOnPath,
+  patternPath,
+  pointAtDistance,
+  rotatedRectPolygon,
+} from "@transitmapper/core/model/geo";
 import { patternLanePath } from "@transitmapper/core/geometry/vehicleLane";
 import { vehicleFootprint } from "@transitmapper/core/model/catalog";
 import type { LngLat, Pattern, SchedulePeriod, Service, Station, TransitSystem, Way } from "@transitmapper/core/model/system";
 import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from "../map/layers";
+import { vehiclesDisabledForPerf } from "../perf";
 
 export const VEHICLE_SPEED_MPS = 11; // ~40 km/h — a plausible light-rail/tram running speed
 const MIN_PERIOD_MS = 6000; // a floor so even a very short line doesn't blur past instantly
@@ -133,6 +141,14 @@ interface PatternGeometry {
   path: LngLat[];
   meters: number;
   timetable: Timetable;
+  /** Prefix-sum arc lengths for `path` (see cumulativeLengths) — precomputed
+   *  once here so the per-tick position lookup is an O(log n) binary search
+   *  (pointAtDistance) instead of re-walking the whole path every frame. */
+  cumLengths: Float64Array;
+  /** Axis-aligned bounds [minLng, minLat, maxLng, maxLat] of the full path.
+   *  Every possible vehicle position lies inside it, so a pattern whose bbox is
+   *  off-screen can be culled wholesale before computing any of its vehicles. */
+  bbox: [number, number, number, number];
 }
 
 // Keyed by the Pattern object's own reference, but a Pattern only holds
@@ -182,14 +198,24 @@ function resolvePatternGeometry(system: TransitSystem, pattern: Pattern, speedMp
     return cached;
   const path = modeId !== undefined ? patternLanePath(system.ways, pattern, modeId) : patternPath(system.ways, pattern);
   if (path.length < 2) return null;
-  const meters = pathLengthMeters(path);
+  const cumLengths = cumulativeLengths(path);
+  const meters = cumLengths[cumLengths.length - 1];
   if (meters === 0) return null;
+  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+  for (const [lng, lat] of path) {
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
   const stops = dwellStopsForPattern(system, pattern, path, meters);
   const timetable = buildTimetable(meters, stops, speedMps);
   const geometry: CachedPatternGeometry = {
     path,
     meters,
     timetable,
+    cumLengths,
+    bbox: [minLng, minLat, maxLng, maxLat],
     forWays: system.ways,
     forStations: system.stations,
     forSpeedMps: speedMps,
@@ -231,18 +257,79 @@ export function metersAtElapsed(totalMeters: number, timetable: Timetable, elaps
  * source push, so it never touches undo history or triggers a feature
  * rebuild.
  */
+// Ambient dots update at a FIXED cadence, decoupled from the render loop (a
+// classic fixed-timestep sim tick). 30 Hz is imperceptibly different from
+// 60/120 Hz for slow-moving dots, but it halves (at 60 Hz) or quarters (on the
+// M3's 120 Hz ProMotion) both the position math and the setData churn — so the
+// loop keeps running during a pan (per the UX call: agents stay live) without
+// competing for the frame budget the pan needs. rAF still drives it, so it also
+// auto-pauses while the tab is hidden.
+const VEHICLE_UPDATE_INTERVAL_MS = 1000 / 30;
+
+interface VehicleProps {
+  color: string;
+}
+type VehicleFeature = Feature<Point, VehicleProps>;
+
 export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: VehicleGate): () => void {
   let frame: number;
+  let lastUpdate = -Infinity;
+
+  // Reused across ticks so a frame allocates no vehicle features or coordinate
+  // arrays (GC pressure at RTC scale — hundreds of vehicles every tick). `pool`
+  // holds stable feature objects mutated in place; `collection.features` is
+  // trimmed to the count actually used this tick.
+  const pool: VehicleFeature[] = [];
+  const collection: FeatureCollection<Point, VehicleProps> = { type: "FeatureCollection", features: [] };
+
   const tick = () => {
     frame = requestAnimationFrame(tick);
+    const now = performance.now();
+    if (now - lastUpdate < VEHICLE_UPDATE_INTERVAL_MS) return; // fixed-timestep throttle
+    lastUpdate = now;
     const source = map.getSource(SRC_VEHICLES) as GeoJSONSource | undefined;
     const infraSource = map.getSource(SRC_VEHICLES_INFRA) as GeoJSONSource | undefined;
     if (!source && !infraSource) return;
+
+    // DEV A/B: `__perf.vehicles = false` clears the dots so the pan benchmark
+    // can measure the loop's share of the frame budget. No-op in production.
+    if (vehiclesDisabledForPerf()) {
+      if (collection.features.length !== 0) {
+        collection.features.length = 0;
+        source?.setData(collection);
+      }
+      infraSource?.setData({ type: "FeatureCollection", features: [] });
+      return;
+    }
+
     const { system } = store.getState();
-    const now = performance.now();
     const viewMode = gate.viewMode();
-    const features: Feature<Point>[] = [];
     const infraFeatures: Feature<Polygon>[] = [];
+
+    // Viewport cull bounds (read once/tick): the visible extent expanded by half
+    // a viewport on each side, so a vehicle whose route edge is just off-screen
+    // pops in with margin rather than at the bezel. Vegas is nowhere near the
+    // antimeridian, so plain axis-aligned bbox intersection is safe.
+    const vb = map.getBounds();
+    const spanLng = vb.getEast() - vb.getWest();
+    const spanLat = vb.getNorth() - vb.getSouth();
+    const cullW = vb.getWest() - spanLng * 0.5;
+    const cullE = vb.getEast() + spanLng * 0.5;
+    const cullS = vb.getSouth() - spanLat * 0.5;
+    const cullN = vb.getNorth() + spanLat * 0.5;
+
+    let used = 0;
+    const emit = (coord: LngLat, color: string) => {
+      const existing = pool[used];
+      if (existing) {
+        existing.properties.color = color;
+        existing.geometry.coordinates[0] = coord[0];
+        existing.geometry.coordinates[1] = coord[1];
+      } else {
+        pool[used] = { type: "Feature", properties: { color }, geometry: { type: "Point", coordinates: [coord[0], coord[1]] } };
+      }
+      used++;
+    };
 
     if (viewMode === "network" || viewMode === "infrastructure") {
       for (const service of system.services) {
@@ -252,7 +339,11 @@ export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: Veh
         for (const pattern of service.patterns) {
           const geometry = resolvePatternGeometry(system, pattern, speedMps, viewMode === "infrastructure" ? service.modeId : undefined);
           if (!geometry) continue;
-          const { path, meters, timetable } = geometry;
+          // Viewport cull: skip patterns whose whole path is off-screen — scales
+          // per-tick cost with ON-SCREEN patterns instead of all of them.
+          const bb = geometry.bbox;
+          if (bb[2] < cullW || bb[0] > cullE || bb[3] < cullS || bb[1] > cullN) continue;
+          const { path, meters, timetable, cumLengths } = geometry;
           // periodMs is the animation's own out-and-back cycle — floored so
           // even a short, stopless line doesn't blur past instantly.
           const periodMs = Math.max(MIN_PERIOD_MS, 2 * timetable.oneWayMs);
@@ -269,15 +360,13 @@ export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: Veh
             const distFromStart = outbound
               ? metersAtElapsed(meters, timetable, legElapsed)
               : meters - metersAtElapsed(meters, timetable, legElapsed);
-            const t = meters === 0 ? 0 : distFromStart / meters;
+            // Distance → coordinate is an O(log n) binary search over precomputed
+            // arc lengths, not a full-path re-walk (pointAtT).
             if (viewMode === "network") {
-              features.push({
-                type: "Feature",
-                properties: { color: service.color },
-                geometry: { type: "Point", coordinates: pointAtT(path, t, meters) },
-              });
+              emit(pointAtDistance(path, cumLengths, distFromStart), service.color);
             } else {
-              const center = pointAtT(path, t, meters);
+              const t = meters === 0 ? 0 : distFromStart / meters;
+              const center = pointAtDistance(path, cumLengths, distFromStart);
               const bearing = bearingAtT(path, t, meters);
               infraFeatures.push({
                 type: "Feature",
@@ -289,7 +378,10 @@ export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: Veh
         }
       }
     }
-    source?.setData({ type: "FeatureCollection", features });
+
+    if (collection.features.length !== used) collection.features.length = used;
+    for (let i = 0; i < used; i++) collection.features[i] = pool[i];
+    source?.setData(collection);
     infraSource?.setData({ type: "FeatureCollection", features: infraFeatures });
   };
   frame = requestAnimationFrame(tick);

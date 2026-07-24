@@ -41,6 +41,8 @@ import {
 } from "./layers";
 import { landmarksFeatureCollection } from "./landmarks";
 import { getMap, setMap } from "./mapRef";
+import { initLiveCamera, setLiveCamera } from "../camera/liveCamera";
+import { attachPerfHarness } from "../perf";
 import { attachVehicleAnimation } from "../sim/vehicles";
 import type { Map as MLMap } from "maplibre-gl";
 
@@ -126,6 +128,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   useEffect(() => {
     if (!containerRef.current) return;
     const initial = store.getState().system;
+    // Seed the live camera holder from the loaded system's saved viewport
+    // (camera/liveCamera.ts owns the LIVE camera from here on, not `system`).
+    initLiveCamera(initial.viewport);
 
     const map = new maplibregl.Map({
       container: containerRef.current,
@@ -133,6 +138,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       center: initial.viewport.center,
       zoom: initial.viewport.zoom,
       preserveDrawingBuffer: true, // needed for PNG export
+      fadeDuration: 0, // no trailing label/icon fade animation after a pan/zoom — snappier, one fewer post-move repaint pass
+      refreshExpiredTiles: false, // the basemap is static within a session; don't re-fetch/re-tessellate expired tiles
       dragPan: false, // SimCity-style: the map pans on right-drag / space-drag only
       dragRotate: false, // right-drag pans, never rotates
       doubleClickZoom: false, // double-click finishes a line instead
@@ -170,6 +177,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
 
     let detachInteractions: (() => void) | null = null;
     let detachVehicles: (() => void) | null = null;
+    let detachPerf: (() => void) | null = null;
     let lastSystemId = initial.id;
     const emptyFC = { type: "FeatureCollection" as const, features: [] };
 
@@ -226,7 +234,16 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     const ensureOverlay = (): boolean => {
       if (!map.getStyle()) return false;
       for (const src of ALL_SOURCES) {
-        if (!map.getSource(src)) map.addSource(src, { type: "geojson", data: emptyFC });
+        if (map.getSource(src)) continue;
+        // The two heavy static line sources (imported GTFS geometry — ~121k
+        // waypoints at RTC scale) get an explicit geojson-vt simplification
+        // tolerance so edge tiles emit fewer vertices as they build. Tolerance
+        // is in per-tile units, so it's ~lossless at high zoom (tiles cover
+        // little ground → almost nothing drops) — max-zoom fidelity and the
+        // exact source `Way.points` are untouched. Kept modest; revisit if any
+        // mid-zoom kinking shows.
+        const heavy = src === SRC_WAYS || src === SRC_SERVICES;
+        map.addSource(src, heavy ? { type: "geojson", data: emptyFC, tolerance: 1 } : { type: "geojson", data: emptyFC });
       }
       // Static context, not system-derived — set once here rather than on
       // every pushData() like the sources above.
@@ -323,6 +340,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         isVisible: (service) => viewRef.current.visibleModes.has(service.modeId),
         viewMode: () => viewRef.current.viewMode,
       });
+      detachPerf = attachPerfHarness(map); // DEV-only frame-time overlay + __panBench() + __perf toggles
       map.resize();
     });
 
@@ -346,6 +364,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       if (s.system.id !== lastSystemId) {
         lastSystemId = s.system.id;
         map.jumpTo({ center: s.system.viewport.center, zoom: s.system.viewport.zoom });
+        // The newly-loaded system's saved camera becomes the live camera.
+        initLiveCamera(s.system.viewport);
       }
       // Chrome-driven selection (Objects list, keyboard nav, Inspector jump
       // links, Issues) asks for this via selectAndFocus bumping the token —
@@ -375,7 +395,13 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
 
     const onMoveEnd = () => {
       const c = map.getCenter();
-      store.getState().setViewport({ center: [c.lng, c.lat], zoom: map.getZoom() });
+      // Record the move on the live camera holder — NOT the domain store. A pure
+      // pan/zoom must not mint a new `system` reference: that used to fire the
+      // subscription below → full-system buildFeatures + 13 setData + selector
+      // fan-out + autosave, once per coalesced drag frame (panBy(duration:0)
+      // fires moveend per mousemove). Camera persistence is handled separately
+      // and debounced (camera/cameraPersistence.ts).
+      setLiveCamera({ center: [c.lng, c.lat], zoom: map.getZoom() });
       if (laneDetailNow() && map.getSource(SRC_LANES)) pushData();
     };
     map.on("moveend", onMoveEnd);
@@ -388,6 +414,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       map.off("moveend", onMoveEnd);
       detachInteractions?.();
       detachVehicles?.();
+      detachPerf?.();
       pushDataRef.current = null;
       setMap(null);
       map.remove();
