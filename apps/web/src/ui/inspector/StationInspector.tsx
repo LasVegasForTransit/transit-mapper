@@ -23,6 +23,7 @@ export function StationInspector({ id }: StationInspectorProps) {
   const readOnly = useEditor((s) => s.readOnly);
   const setStationName = useEditor((s) => s.setStationName);
   const setStationDwellSeconds = useEditor((s) => s.setStationDwellSeconds);
+  const setStationMajorStop = useEditor((s) => s.setStationMajorStop);
   const deleteStation = useEditor((s) => s.deleteStation);
   const selectAndFocus = useEditor((s) => s.selectAndFocus);
   const focusNameToken = useEditor((s) => s.focusNameToken);
@@ -112,6 +113,17 @@ export function StationInspector({ id }: StationInspectorProps) {
             />
             <span className="freq-suffix">seconds</span>
           </div>
+
+          <label className="lp-row" style={{ marginTop: 12 }}>
+            <input
+              type="checkbox"
+              checked={station.majorStop === true}
+              disabled={readOnly}
+              onChange={(e) => setStationMajorStop(id, e.target.checked)}
+            />
+            Major stop
+          </label>
+          <p className="insp-sub">Labels this stop from a lower zoom (like an interchange), so key stops stay legible on a busy map.</p>
         </div>
       )}
 

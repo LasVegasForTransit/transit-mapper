@@ -378,6 +378,7 @@ export interface EditorState {
   /** How long a vehicle dwells here before departing, in seconds — undefined
    *  reverts to the animation's own default (see sim/vehicles.ts). */
   setStationDwellSeconds: (id: string, seconds: number | undefined) => void;
+  setStationMajorStop: (id: string, major: boolean) => void;
   deleteStation: (id: string) => void;
 
   // station footprints & platforms (infrastructure-view physical planning) —
@@ -2048,6 +2049,16 @@ export function createEditorStore() {
         system: touch({
           ...s.system,
           stations: s.system.stations.map((st) => (st.id === id ? { ...st, dwellSeconds: seconds } : st)),
+        }),
+      })),
+
+    // Undefined (not false) when off, so the flag round-trips out of the saved
+    // document cleanly (serialize only writes majorStop === true).
+    setStationMajorStop: (id, major) =>
+      set((s) => ({
+        system: touch({
+          ...s.system,
+          stations: s.system.stations.map((st) => (st.id === id ? { ...st, majorStop: major || undefined } : st)),
         }),
       })),
 
