@@ -6,7 +6,7 @@ your streets. It should take about ten minutes.
 
 You'll need the editor running (`npm run dev`, then open
 `http://localhost:5173`). A fresh browser starts you with an empty system
-framed on the Las Vegas Valley; pan and zoom anywhere you like — nothing is
+framed on the Las Vegas Valley; pan and zoom anywhere you like. Nothing is
 tied to Las Vegas.
 
 ## 1. Learn the camera
@@ -25,7 +25,7 @@ dimensions, and no transit line is created by drawing it.
 
 1. Click the **Road** tool (or press `R`).
 2. In the options row above the dock, pick a cross-section from the
-   **Cross-section** menu — "4-lane arterial" is a good start.
+   **Cross-section** menu. "4-lane arterial" is a good start.
 3. Click once to start the street, click again to place each bend, and
    press `Enter` (or double-click) to finish.
 4. Draw a second road crossing the first.
@@ -45,7 +45,7 @@ order, at its real width. Try making the street one-way (`O`), flipping it
 Still in the Infrastructure view:
 
 1. Click the **Track** tool (or press `T`). The chevron on the button picks
-   the track standard — heavy rail, light rail, or monorail.
+   the track standard: heavy rail, light rail, or monorail.
 2. Draw an alignment the same way you drew the roads.
 
 Like the roads, this is bare infrastructure: track on the ground, no service
@@ -68,8 +68,8 @@ Name the station in the inspector's header field.
 
 ## 5. Draw the line itself
 
-Switch to the **Network** view. This is the schematic: you draw *services*
-here — the colored lines people ride.
+Switch to the **Network** view. This is the schematic. You draw *services*
+here: the colored lines people ride.
 
 1. Click the **Line** tool. Its chevron picks the mode; choose Light rail.
 2. Press on your track and click along it. Because you started on existing
@@ -90,7 +90,7 @@ Still in the Network view:
 
 You now have a system: streets and track in the Infrastructure view, a rail
 line and a bus route in the Network view, and a station that exists in both
-worlds — a dot on the schematic, a parcel of land with structures in the
+worlds: a dot on the schematic, a parcel of land with structures in the
 physical view.
 
 ## Where to go next

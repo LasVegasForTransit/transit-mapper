@@ -52,8 +52,8 @@ Two ways to get a pair of one-way carriageways that are still one street:
   both stay under one street identity.
 - **Branch from an endpoint**: with the Road tool active, right-click near
   any road's open endpoint. A new one-way segment starts there, inheriting
-  the street's cross-section and name — the natural gesture for the point
-  where a street splits into a couplet.
+  the street's cross-section and name. This is the natural gesture for the
+  point where a street splits into a couplet.
 
 "Combine carriageways" (on either member) merges a pair back into one
 two-way road.
@@ -70,4 +70,4 @@ the street. Names label the map at close zoom.
 - Ctrl-click a control point to split a way there.
 - Junctions split ways automatically at crossings.
 - "Merge with connected way" (Alignment tab) joins two segments end-to-end
-  when a plain two-way joint connects them — the inverse of splitting.
+  when a plain two-way joint connects them. It's the inverse of splitting.

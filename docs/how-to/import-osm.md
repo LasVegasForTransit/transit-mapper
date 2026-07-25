@@ -7,7 +7,7 @@ from OpenStreetMap into your system and plan on top of it.
 
 1. Open the File menu and choose **Import real streets** (or open the Import
    dialog from wherever you are).
-2. Frame the map on the area you want first — the import covers the current
+2. Frame the map on the area you want first. The import covers the current
    viewport.
 3. Pick categories: Streets, Heavy rail, Light rail / tram, Bike
    infrastructure.
@@ -22,7 +22,7 @@ Imported ways are ordinary ways, identical to hand-drawn ones except for a
 provenance marker. OSM's road grades map onto the catalog's road classes
 (motorways come in as transitways, primary/secondary roads as arterials,
 residential streets as locals) and each way gets its type's default
-cross-section — OSM lane tagging is not yet read, so widen or re-profile
+cross-section. OSM lane tagging isn't read yet, so widen or re-profile
 specific streets yourself where it matters.
 
 Imported ways start as bare infrastructure carrying no service. From there
@@ -33,6 +33,6 @@ junctions, adopt them under existing sketches.
 
 - Import is additive; running it twice over the same area duplicates ways.
   Undo reverses an import in one step.
-- Imported ways arrive unjoined — crossings become real junctions when you
+- Imported ways arrive unjoined. Crossings become real junctions when you
   edit the ways involved, or you can leave them visual if you're only using
   the streets as context.

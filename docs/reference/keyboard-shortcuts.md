@@ -43,7 +43,7 @@ other `Ctrl`/`⌘` shortcuts pass through to the browser.
 
 ## Lanes
 
-These act on the way being drawn right now, or else the selected way —
+These act on the way being drawn right now, or else the selected way,
 whichever the cross-section editor is showing.
 
 | Key | Action |

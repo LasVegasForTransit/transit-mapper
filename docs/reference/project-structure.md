@@ -28,7 +28,7 @@ docs/            This documentation.
 ```
 
 `@transitmapper/core` is consumed straight from source (no build step) via
-subpath imports, e.g. `@transitmapper/core/model/catalog` — both `apps/web`
+subpath imports, e.g. `@transitmapper/core/model/catalog`. Both `apps/web`
 and `apps/worker` depend on it as a workspace package.
 
 ## packages/core/src/model/ — the domain
@@ -92,6 +92,6 @@ plus dialogs (export, import, share, schedule, systems) and primitives
 
 `pnpm verify` runs `apps/web/scripts/verify.ts`: hundreds of deterministic
 checks over the model, profile operations, migrations, junction geometry,
-routing, store actions, and layer emission — no browser required.
+routing, store actions, and layer emission. No browser required.
 `pnpm typecheck` covers `packages/core`, `apps/web`, and `apps/worker`. Both
 must pass before a PR. Each command fans out per-package via Turborepo.

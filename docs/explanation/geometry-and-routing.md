@@ -1,6 +1,6 @@
 # Geometry and routing
 
-How TransitMapper turns a small stored model — points, profiles, junctions —
+How TransitMapper turns a small stored model (points, profiles, junctions)
 into street-level geometry and routable networks. Everything on this page is
 derived at render or query time; none of it is saved.
 
@@ -20,8 +20,8 @@ ordering, flipping, and one-way logic had prior art to check against.
 
 This detail is expensive at scale, so it's gated: lane geometry is derived
 only in the Infrastructure view, above a zoom threshold, for ways
-intersecting the viewport — and memoized per way, so a drag invalidates one
-way rather than the world. Below the threshold, ways render as the cheap
+intersecting the viewport, and it's memoized per way, so a drag invalidates
+one way rather than the world. Below the threshold, ways render as the cheap
 lines the Network view always uses.
 
 ## Junction footprints
@@ -31,8 +31,8 @@ messily. `src/geometry/junctions.ts` computes, per arm, how far to trim the
 way back: sort the arms around the junction, intersect each arm's edge line
 with its neighbor's, and trim to the farthest intersection (capped so a
 tiny side street can't consume a long block). The trimmed arm ends are then
-connected into the junction's surface polygon. Two collinear arms — a
-segment boundary, not a real junction — get no polygon at all.
+connected into the junction's surface polygon. Two collinear arms (a
+segment boundary, not a real junction) get no polygon at all.
 
 Trim distances feed back into lane derivation, so lanes visibly stop at the
 junction edge. This trim-back approach follows the intersection algorithm
@@ -45,9 +45,10 @@ which outgoing lane. Defaults are derived by heuristic (through lanes pair
 up index-aligned from the right; the leftmost approach lane may also turn
 left, the rightmost also right; no U-turns), and the turn-lane editor
 stores explicit connectors only once a junction is customized. Turn arrows
-and the guide curves through the junction are both derived from connectors
-— stored turn arrows could contradict the graph; derived ones can't. The
-graph is also the foundation for future lane-level routing and simulation.
+and the guide curves through the junction come from the same connectors,
+since stored turn arrows could contradict the graph while derived ones
+can't. The graph is also the foundation for future lane-level routing and
+simulation.
 
 ## Routing
 
@@ -68,8 +69,8 @@ Dijkstra's algorithm, with two refinements:
 Committing a route *materializes* it: anchors that fall mid-way become real
 control points, ways are split there, and the service's patterns list the
 resulting ways in travel order. Materializing rather than storing fractional
-positions keeps the service model uniform — a routed service and a sketched
-one are the same shape.
+positions keeps the service model uniform: a routed service and a sketched
+one end up the same shape.
 
 Routing currently treats ways as bidirectional; honoring one-way profiles
 is the natural next step, since the profile already encodes direction.

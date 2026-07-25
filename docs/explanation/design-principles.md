@@ -1,73 +1,75 @@
 # Design principles
 
-The conventions here are enforced in review and encoded in the test suite;
-this page explains why they exist. The short version lives in
-[CONTRIBUTING.md](../../CONTRIBUTING.md).
+This page explains the reasoning behind decisions in the codebase, so
+that a new situation the code doesn't already cover can be handled the
+same way the existing code was. For the code-level reference, see
+[Catalogs](../reference/catalogs.md) and
+[Project structure](../reference/project-structure.md). For how to submit
+a change, see [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
-## Kinds are catalog data, never unions
+## New capabilities should be data, not code changes
 
-A transit tool's kinds never stop growing: someone always wants a gondola, a
-funicular, a queue-jump lane. If "way type" were a TypeScript union, each
-addition would touch every switch over that union — and each switch is a
-place to forget one. Instead every kind (way types, modes, lane kinds,
-facility types, grades) is a record in `src/model/catalog.ts` carrying its
-own behavior as data: which lane kinds a road allows, which way types a
-tram can run over, whether a facility is a point or an area. Code consumes
-catalog fields and never branches on catalog ids. Adding a kind is one
-entry plus its style.
+Supporting a new transit mode, lane type, or facility should mean adding
+an entry to a table, not changing how the editor behaves. If adding
+something new requires touching a switch statement or an if/else chain
+elsewhere in the code, the wrong thing was hardcoded.
 
-The test for whether a design honors this: could a hypothetical
-user-defined catalog entry work? If some behavior only exists for
-`typeId === "road"`, it couldn't.
+In practice: every mode, way type, lane kind, and facility type is a
+record in `src/model/catalog.ts`, and application code reads fields off
+those records instead of checking which one it got.
 
-## Style is separate from domain
+## What something looks like is a separate decision from what it is
 
-Domain modules say what a drive lane *is* (a travel lane, ~11 feet, counts
-toward capacity, directional). `src/style/catalogStyle.ts` says how it
-*looks* (asphalt gray, white dashes). Mixing them makes the model
-untestable without caring about colors and makes restyling a schema
-migration. The one deliberate exception: a service's `color` is domain,
-because "the red line" is an identity.
+A drive lane's identity (it's a travel lane, about 11 feet wide, counts
+toward capacity) shouldn't depend on how it's drawn (asphalt gray, white
+dashes), and vice versa. Keeping the two separate means the underlying
+model can be tested without caring about colors, and a visual restyle
+never needs a data migration.
 
-## The model stays pure
+In practice: domain data lives in `src/model/`, and how it renders lives
+in `src/style/catalogStyle.ts`. The one exception is a service's line
+color, which stays with the domain data because "the red line" is part of
+the line's identity, not just its paint.
 
-`src/model/` and `src/geometry/` are data-in/data-out. No DOM, no network,
-no store. That's what lets `npm run verify` exercise migrations, junction
-geometry, and routing as plain function calls, fast enough to run on every
-change, with nothing mocked.
+## The rules of the system should be checkable without a browser
 
-## Derive, don't store
+If figuring out whether the routing logic or the junction geometry is
+correct requires clicking around in the app, that logic is entangled
+with things that don't need to be there.
 
-Nothing drawable is persisted: lane polygons, junction footprints, turn
-arrows, capacity numbers are all computed from the model on demand (and
-memoized). Stored derived data can go stale; derived derived data can't.
-The same rule gives the schema its small surface — a way is points plus a
-profile, and everything else follows.
+In practice: `src/model/` and `src/geometry/` take data in and return
+data out, with no DOM, network, or store access, so `pnpm verify` can
+exercise migrations, junction geometry, and routing as plain function
+calls.
 
-## Menus versus modes
+## If it can be computed, it shouldn't also be stored
 
-The bottom dock is *modes*: one click starts doing the thing the button
-names — Road draws a road, Station draws a station. Variants of a mode
-(which track standard, which facility) live in the tool's flyout menu, and
-contextual settings (direction, grade, preset) in the options row above the
-dock. The dock is split into surfaces by what tools *produce*: selection,
-then path-drawing tools, then place-defining tools. The test: a button's
-label must describe what happens on the next click, and no capability may
-exist only inside an unrelated dropdown.
+A value that's stored and also derivable from other stored data will
+eventually drift out of sync with the thing it was derived from. Keeping
+only the source data avoids that entire category of bug.
 
-## Tools tell the truth
+In practice: lane polygons, junction footprints, turn arrows, and
+capacity numbers are all computed on demand from a way's points and
+profile, not saved alongside them.
 
-Corollaries that keep recurring: a tool that says it draws a thing must
-draw it (not place a proxy for it); labels use meaningful nouns from the
-domain (a station has a *boundary* and *structures*, not "markers" and
-"footprints"); and views enforce their own semantics (see
-[The three views](views.md)).
+## A control's label is a promise about what happens next
 
-## Shared identity is an entity
+If a button says it draws a road, clicking it should draw a road, not
+place a placeholder that needs a second step to become one. Variants and
+settings belong near the control they modify, not buried somewhere
+unrelated.
 
-"Decatur Avenue" isn't a property of one way — it's a `NamedWay` spanning
-however many ways the street has been split into. Modeling identity as its
-own entity is what lets a couplet's two carriageways, or a rail line's
-junction-split segments, stay one nameable thing. The noun for the identity
-("Street", "Line", "Trail") comes from the catalog, because the same
-mechanism serves every family.
+In practice: the bottom dock's buttons are modes (Road draws a road,
+Station draws a station); variants live in that tool's flyout menu, and
+contextual settings live in the options row above the dock.
+
+## Something people name in real life should be one thing in the model
+
+A street or a rail line often corresponds to several separate technical
+pieces underneath (segments split at every junction), but the person
+using the tool thinks of it as one named thing. The model should match
+that mental picture, not force people to think in terms of the pieces.
+
+In practice: a shared name (like "Decatur Avenue") is its own record, a
+`NamedWay`, that a street's segments all point back to, rather than being
+a property duplicated on each segment.

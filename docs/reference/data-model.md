@@ -2,12 +2,12 @@
 
 A saved document is one `TransitSystem` (defined in
 [`src/model/system.ts`](../../src/model/system.ts)): a regional, multimodal
-network. The model's central split is **infrastructure versus service** — a
+network. The model's central split is **infrastructure versus service**: a
 `Way` is the physical carrier, a `Service` is a colored route people ride,
 and many services can share one way.
 
 All kind fields (`typeId`, `modeId`, `kindId`, and so on) are string ids
-into the catalogs — see [Catalogs](catalogs.md). The schema is versioned
+into the catalogs; see [Catalogs](catalogs.md). The schema is versioned
 (currently v7) and migrated on load in `src/model/serialize.ts`, so older
 saves and shared snapshots keep working.
 
@@ -59,25 +59,26 @@ interface LaneSpec {
 }
 ```
 
-The profile is constant along a way. Where a street's section changes — a
-turn pocket appears, a lane drops — the way is split and the pieces share
+The profile is constant along a way. Where a street's section changes (a
+turn pocket appears, a lane drops), the way is split and the pieces share
 identity through a `NamedWay`. Capacity (a road's "lanes", a railway's
 "tracks") is **derived** from the profile (`src/model/profile.ts`), never
 stored.
 
 ## Node — junctions
 
-A `Node` is a coordinate shared by two or more ways' control points — real
+A `Node` is a coordinate shared by two or more ways' control points: real
 topology, not two paths that happen to cross visually. Every
 store mutation that inserts, deletes, or moves control points keeps `refs`
 (`{wayId, pointIndex}` pairs) in sync.
 
-- `control` — traffic control: `uncontrolled`, `signal`, `stop`,
+- `control` is traffic control: `uncontrolled`, `signal`, `stop`,
   `roundabout`.
-- `connectors` — the lane-connectivity graph: each `LaneConnector` says one
-  specific incoming lane continues into one specific outgoing lane. Stored
-  only once the user customizes turn lanes; otherwise derived by heuristic
-  on demand. Turn arrows are derived from connectors rather than stored.
+- `connectors` is the lane-connectivity graph: each `LaneConnector` says one
+  specific incoming lane continues into one specific outgoing lane. It's
+  stored only once the user customizes turn lanes; otherwise it's derived
+  by heuristic on demand. Turn arrows are derived from connectors rather
+  than stored.
 
 ## NamedWay — shared identity
 
@@ -93,7 +94,7 @@ from the way family's catalog noun.
 ## Service, Pattern, SchedulePeriod
 
 A `Service` is a colored route: `name`, `modeId` (mode catalog), `color`,
-and one or more `Pattern`s. Each pattern is an ordered list of `wayIds` —
+and one or more `Pattern`s. Each pattern is an ordered list of `wayIds`:
 a plain line has one pattern; two or more model branches sharing the
 service's identity ("via Airport").
 
@@ -123,5 +124,5 @@ A `Facility` is a catalog-typed feature that isn't a way or station: its
 `geometryKind` dictates.
 
 A `Group` bundles any members into one unit. With a `footprint` polygon (and
-optionally a `color`), it's a facility complex — a real physical site like a
+optionally a `color`), it's a facility complex, a real physical site like a
 transfer center; without one it's a plain logical grouping.

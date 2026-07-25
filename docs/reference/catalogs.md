@@ -1,7 +1,7 @@
 # Catalogs
 
-Every *kind* in TransitMapper — way types, service modes, lane kinds,
-facility types, grades, presets — is catalog **data** in
+Every *kind* in TransitMapper (way types, service modes, lane kinds,
+facility types, grades, presets) is catalog **data** in
 [`src/model/catalog.ts`](../../src/model/catalog.ts), not a union type baked
 into logic. Records in the data model reference catalog entries by string
 id. Adding a funicular or a queue-jump lane means adding a catalog entry.
@@ -43,7 +43,7 @@ Route).
 Elements of a cross-section. Each has a `role` (`travel`, `separator`,
 `edge`), a default width and width presets (stored in meters, presented in
 feet), whether it counts toward the way's headline capacity, and whether
-one-way/flip operations steer it (`directional` — drive lanes and tracks
+one-way/flip operations steer it (`directional`: drive lanes and tracks
 are; a one-way street's sidewalks stay bidirectional).
 
 `drive`, `bus`, `turnPocket`, `bike`, `sidewalk`, `parking`, `shoulder`,
@@ -52,8 +52,8 @@ lane).
 
 ## Profile presets (`PROFILE_PRESETS`)
 
-One-click cross-sections offered while drawing or editing — the turnkey
-path. Roads: 2-lane local, 3-lane with center turn, 4-lane arterial, 5-lane
+One-click cross-sections offered while drawing or editing. This is the
+turnkey path. Roads: 2-lane local, 3-lane with center turn, 4-lane arterial, 5-lane
 with center turn, divided boulevard, 3-lane one-way, transitway. Rail:
 single / double / quad track. Presets may also set the way's class (the
 boulevard preset makes an arterial).
@@ -85,8 +85,8 @@ same-grade crossings form junctions; different grades pass over each other.
 
 ## Facility types (`FACILITY_TYPES`)
 
-Each has a `geometryKind` that decides how the Facility tool works for it —
-`point` (click to place) or `area` (drawn to shape):
+Each has a `geometryKind`, either `point` (click to place) or `area` (drawn
+to shape), that decides how the Facility tool works for it:
 
 - Points: `entrance`, `bikeDock`, `elevator`.
 - Areas: `building`, `busBay`, `platform`, `parkingLot`, `depot`.
@@ -95,6 +95,6 @@ Each has a `geometryKind` that decides how the Facility tool works for it —
 
 Add the entry to the relevant record and order array in
 `src/model/catalog.ts`, add its rendering to `src/style/catalogStyle.ts`,
-and add a check to `scripts/verify.ts`. Nothing else should need to change —
-if adding an entry forces edits elsewhere, that's a bug in the code that
+and add a check to `scripts/verify.ts`. Nothing else should need to change.
+If adding an entry forces edits elsewhere, that's a bug in the code that
 forced it.

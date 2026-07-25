@@ -14,6 +14,8 @@ deepens.
 
 ## How-to guides
 
+- [Set up a local development environment](how-to/local-development.md) —
+  clone, install, run, and what to check before a pull request.
 - [Draw and edit roads](how-to/draw-roads.md) — presets, lanes, one-way
   streets, divided carriageways, street names.
 - [Work with intersections](how-to/edit-intersections.md) — automatic

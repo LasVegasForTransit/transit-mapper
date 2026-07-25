@@ -10,7 +10,7 @@ TransitMapper supports two workflows and a bridge between them:
 ## Run a service over existing ways
 
 In the **Network** view, start drawing a line (the way-drawing tool with a
-service-compatible mode selected) and begin **on existing infrastructure** —
+service-compatible mode selected) and begin **on existing infrastructure**:
 press within snapping distance of a way the mode can use (bus on roads, light
 rail on light-rail track or streets, and so on; compatibility comes from the
 mode catalog).
@@ -18,7 +18,7 @@ mode catalog).
 Instead of laying new geometry, each click extends a *route* through the
 network: the editor finds a path from your last point to the click through
 the junction graph, previews it, and follows the streets around corners. You
-only click at meaningful places — where the route turns, roughly one click
+only click at meaningful places: where the route turns, roughly one click
 per turn. `Enter` or double-click commits the whole thing as a new service;
 `Esc` abandons it.
 
@@ -26,7 +26,7 @@ Clicks in the middle of a block are fine: the route can enter and leave a
 way mid-segment, not only at junctions.
 
 If you start a line on empty ground instead, you get the freehand sketch
-behavior — new geometry with a service on it, the classic sketching flow.
+behavior: new geometry with a service on it, the classic sketching flow.
 
 ## Adopt infrastructure under a sketched line
 
