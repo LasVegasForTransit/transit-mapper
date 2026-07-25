@@ -44,6 +44,7 @@ import { LANE_KINDS, laneKind, PROFILE_PRESETS, profilePresetsForWayType, WAY_FA
 import {
   buildProfile,
   combineProfiles,
+  defaultLaneFor,
   defaultProfileFor,
   flipProfile,
   isOneWay,
@@ -159,6 +160,96 @@ check("road defaults to the arterial class", store.getState().system.ways[0].cla
 {
   const tramWayTypes = new Set(MODES.tram.wayTypeIds);
   check("tram is compatible with both dedicated light rail and street-running road", tramWayTypes.has("lightRail") && tramWayTypes.has("road"));
+}
+
+// --- defaultLaneFor: a service's default lane on a way (curb / bus lane / track) ---
+{
+  const twoWay = defaultProfileFor("road", 2);
+  const dir = directionalLanes(twoWay);
+  const lastFwd = [...dir].reverse().find((l) => l.direction === "forward" || l.direction === "both");
+  const firstBwd = dir.find((l) => l.direction === "backward" || l.direction === "both");
+  const fwd = defaultLaneFor(twoWay, "forward");
+  const bwd = defaultLaneFor(twoWay, "backward");
+  check("defaultLaneFor forward = rightmost (last) forward directional lane", fwd === lastFwd?.id);
+  check("defaultLaneFor backward = rightmost (first) backward directional lane", bwd === firstBwd?.id);
+  check("forward and backward defaults differ on a two-way road", !!fwd && fwd !== bwd);
+
+  // A one-way carriageway resolves a lane for its single travel direction.
+  const oneWay = makeOneWay(defaultProfileFor("road", 2), "forward");
+  check("one-way carriageway resolves its forward lane", !!defaultLaneFor(oneWay, "forward"));
+
+  // preferKindIds: a dedicated bus lane wins over a plain drive lane.
+  const withBus = buildProfile([
+    { kindId: "drive", direction: "forward" },
+    { kindId: "bus", direction: "forward" },
+  ]);
+  const busId = withBus.lanes.find((l) => l.kindId === "bus")!.id;
+  const driveId = withBus.lanes.find((l) => l.kindId === "drive")!.id;
+  check("defaultLaneFor prefers a bus lane for buses (preferKindIds=['bus','drive'])", defaultLaneFor(withBus, "forward", ["bus", "drive"]) === busId);
+  check("without a bus preference it takes the rightmost drive lane", defaultLaneFor(withBus, "forward", ["drive"]) === driveId);
+
+  // Rail: a two-track line resolves to the direction's track, never a road lane.
+  const rail = defaultProfileFor("heavyRail", 2);
+  const railFwd = defaultLaneFor(rail, "forward", ["track"]);
+  const railBwd = defaultLaneFor(rail, "backward", ["track"]);
+  check("rail forward/backward resolve to different tracks", !!railFwd && !!railBwd && railFwd !== railBwd);
+  check("rail default lane is a track", travelLanes(rail).find((l) => l.id === railFwd)?.kindId === "track");
+}
+
+// --- Pattern.lanes round-trips through serialize/parse ---
+{
+  fresh();
+  const w = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(w, [-115.2, 36.12]);
+  store.getState().addWayPoint(w, [-115.1, 36.12]);
+  store.getState().finishWay();
+  const svc = store.getState().system.services[0];
+  const laneId = defaultLaneFor(store.getState().system.ways[0].profile, "forward")!;
+  // Hand-build a pattern lane assignment and round-trip the whole system.
+  const withLanes = {
+    ...store.getState().system,
+    services: [{ ...svc, patterns: svc.patterns.map((p) => ({ ...p, lanes: { [w]: laneId } })) }],
+  };
+  const reparsed = parseSystem(JSON.parse(JSON.stringify(withLanes)));
+  check("Pattern.lanes survives a serialize/parse round-trip", reparsed.services[0].patterns[0].lanes?.[w] === laneId);
+  // A lane pinned to a way NOT in the pattern is dropped on parse.
+  const withStray = {
+    ...store.getState().system,
+    services: [{ ...svc, patterns: svc.patterns.map((p) => ({ ...p, lanes: { "ghost-way": laneId } })) }],
+  };
+  check("Pattern.lanes drops entries for ways not in the pattern", parseSystem(JSON.parse(JSON.stringify(withStray))).services[0].patterns[0].lanes === undefined);
+}
+
+// --- drawing a service along an existing way SHARES that infrastructure ---
+// The Network Way tool routes a new service over a nearby corridor instead of
+// laying a parallel way (Phase A share-by-default). Exercised here through the
+// same route-draft actions the pointer layer calls (startRouteDraft →
+// extendRouteDraft → commitRouteDraft).
+{
+  fresh();
+  store.getState().setDraftMode("bus");
+  const road = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(road, [-115.3, 36.1]);
+  store.getState().addWayPoint(road, [-115.2, 36.1]);
+  store.getState().addWayPoint(road, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const s1Id = store.getState().system.services[0].id;
+  const w = store.getState().system.ways.find((x) => x.id === road)!;
+  // Interior anchors (mid-corridor, as a real click would land) so the route
+  // genuinely traverses the existing way rather than a degenerate end sliver.
+  const from = anchorOnWay(w, [-115.28, 36.1])!;
+  const to = anchorOnWay(w, [-115.12, 36.1])!;
+  store.getState().startRouteDraft(from);
+  const extended = store.getState().extendRouteDraft(to);
+  const newId = store.getState().commitRouteDraft();
+  check("route-draft extends along the existing way", extended === true);
+  check("committing a routed draft adds a second service", !!newId && store.getState().system.services.length === 2);
+  // Re-fetch BOTH services from the post-commit store — materialization may
+  // have split the shared road and rebound the original service's way ids.
+  const s1 = store.getState().system.services.find((sv) => sv.id === s1Id)!;
+  const s2 = store.getState().system.services.find((sv) => sv.id === newId)!;
+  const shared = serviceWayIds(s1).some((wid) => serviceWayIds(s2).includes(wid));
+  check("a service drawn along an existing corridor SHARES its infrastructure", shared);
 }
 
 // --- a station snaps onto a way and follows it when reshaped ---

@@ -30,6 +30,10 @@ interface ScreenPoint {
 
 const HIT_PX = 9; // pixel tolerance for hit-testing features under the cursor
 const SNAP_PX = 18; // stations/way endpoints within this screen distance snap
+// Road-carrying modes (bus/BRT/street tram) snap to an existing corridor to
+// SHARE it from ~2.5× the base radius — a line drawn anywhere within a road's
+// width is "on that road". Rail must land on the track (implicit factor 1).
+const ROAD_SHARE_TOL_FACTOR = 2.5;
 const DRAG_PX = 4; // movement beyond this counts as a drag, not a click
 const FREEHAND_SAMPLE_PX = 16; // spacing between points sampled while freehand-drawing
 const STRAIGHT_TOLERANCE_RAD = (10 * Math.PI) / 180; // ~10°, how close to "straight ahead" counts
@@ -768,18 +772,26 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
   // any other point on another way still just snaps onto it, forming a
   // junction between two distinct ways (the correct behavior when they're
   // genuinely different infrastructure).
-  const startDraw = (e: MapMouseEvent) => {
+  // `forceSeparate` (Alt-draw) lays new, independent infrastructure even when
+  // an existing compatible corridor is right here — the "explicitly separated"
+  // escape hatch to the share-by-default behavior below (express/local tracks,
+  // a busway beside a road).
+  const startDraw = (e: MapMouseEvent, forceSeparate = false) => {
     const st = store.getState();
 
-    // Network view, pressing ON existing compatible infrastructure: draw by
-    // ROUTING along it (snap-to-streets) instead of laying new geometry.
-    // Clicks in empty space fall through to the normal new-way draw below;
-    // while a route draft is live, empty-space clicks are ignored (finish
-    // with Enter/double-click, back out with Escape).
-    if (opts.isNetworkMode() && !st.activeWayId) {
+    // Network view, pressing ON OR NEAR existing compatible infrastructure:
+    // draw by ROUTING along it (snap-to-streets) instead of laying new
+    // geometry — the default, since a line drawn along a corridor is expected
+    // to SHARE it. Road-carrying modes (bus/BRT/street tram) snap from a wider
+    // ~road-width margin; rail must land on the track. Alt (forceSeparate)
+    // opts out. Clicks in true empty space fall through to a new-way draw;
+    // while a route draft is live, empty-space clicks are ignored (finish with
+    // Enter/double-click, back out with Escape).
+    if (opts.isNetworkMode() && !st.activeWayId && !forceSeparate) {
       const allowed = new Set(mode(st.draftModeId).wayTypeIds);
       const candidates = st.system.ways.filter((w) => allowed.has(w.typeId));
-      const hit = snap(candidates, lngLatOf(e), SNAP_PX * metersPerPixel());
+      const shareTolPx = allowed.has("road") ? SNAP_PX * ROAD_SHARE_TOL_FACTOR : SNAP_PX;
+      const hit = snap(candidates, lngLatOf(e), shareTolPx * metersPerPixel());
       if (st.routeDraft) {
         suppressClick = true;
         if (hit) {
@@ -811,7 +823,9 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     let extendAtStart = activeExtendAtStart;
 
     if (!wayId) {
-      const resume = nearestOpenEndpoint(st.system.ways, startCoord, SNAP_PX * metersPerPixel(), st.draftWayTypeId);
+      // Alt-draw (forceSeparate) never resumes an existing way — it's the
+      // opt-out from attaching to what's already here.
+      const resume = forceSeparate ? null : nearestOpenEndpoint(st.system.ways, startCoord, SNAP_PX * metersPerPixel(), st.draftWayTypeId);
       if (resume) {
         wayId = resume.wayId;
         extendAtStart = resume.end === "start";
@@ -1024,6 +1038,10 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
       } else if (facility) {
         st.deleteFacility(facility.properties.id as string);
         suppressClick = true;
+      } else if (st.tool === "way" && opts.isNetworkMode() && !st.routeDraft && !st.activeWayId && !isDoubleClickFinish(oe.detail)) {
+        // Alt on empty space in the Way tool draws SEPARATE infrastructure,
+        // opting out of share-by-default corridor snapping (see startDraw).
+        startDraw(e, true);
       }
       return;
     }

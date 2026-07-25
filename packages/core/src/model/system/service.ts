@@ -9,6 +9,12 @@ export interface Pattern {
   wayIds: string[];
   /** Optional label for a specific branch/variant, e.g. "via Airport". */
   name?: string;
+  /** Which lane of a way this pattern rides, keyed by wayId → LaneSpec.id.
+   *  Missing/absent for a way → resolve the default at render time (the
+   *  rightmost travel lane in the direction of travel, or a dedicated bus
+   *  lane / the direction's track — see profile.ts `defaultLaneFor`). Kept
+   *  sparse: only ways the user (or import) pinned to a non-default lane. */
+  lanes?: Record<string, string>;
 }
 
 /** One named headway period within a service's full schedule — "Peak",

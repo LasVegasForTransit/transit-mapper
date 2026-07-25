@@ -371,13 +371,29 @@ function parseVehicleKinds(raw: unknown): VehicleKind[] {
  *  becomes its one pattern. A service with genuinely nothing (empty/missing
  *  both) parses to `patterns: []`, same "ghost record" shape a pre-v5
  *  `wayIds: []` service was — validateSystem flags it, parsing doesn't drop it. */
+/** A pattern's optional per-way lane assignment (wayId → LaneSpec.id). Kept
+ *  only for ways actually in this pattern, and only string values — unknown
+ *  or ill-typed entries are dropped. Omitted entirely when empty so a default-
+ *  lane pattern round-trips without a stray `lanes: {}`. */
+function parseLaneMap(raw: unknown, wayIds: string[]): Record<string, string> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const allowed = new Set(wayIds);
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === "string" && allowed.has(k)) out[k] = v;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function parsePatterns(raw: unknown, legacyWayIds: unknown): Pattern[] {
   if (Array.isArray(raw)) {
     return raw
       .map((p): Pattern | null => {
         const r = p as Record<string, unknown>;
         if (typeof r.id !== "string") return null;
-        return { id: r.id, wayIds: strings(r.wayIds), name: typeof r.name === "string" ? r.name : undefined };
+        const wayIds = strings(r.wayIds);
+        const lanes = parseLaneMap(r.lanes, wayIds);
+        return { id: r.id, wayIds, name: typeof r.name === "string" ? r.name : undefined, ...(lanes ? { lanes } : {}) };
       })
       .filter((p): p is Pattern => p !== null);
   }

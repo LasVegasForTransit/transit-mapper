@@ -133,6 +133,38 @@ export function directionalLanes(profile: CrossSection): LaneSpec[] {
   return profile.lanes.filter((l) => laneKind(l.kindId).directional);
 }
 
+/**
+ * The lane a service defaults to riding on a way with this `profile` when it
+ * travels `direction` (the direction its pattern traverses the way's points):
+ * a `preferKindIds` lane if one runs the way in that direction — a dedicated
+ * bus lane for buses, the direction's track for rail — else the RIGHTMOST
+ * directional (vehicular) lane in the direction of travel (buses hug the curb;
+ * a plain train takes its direction's only track). Sidewalks/medians/parking
+ * are non-directional and never chosen. Returns the LaneSpec.id, or null only
+ * for a lane-less profile.
+ *
+ * "Rightmost in direction": lanes are ordered left-to-right facing forward, so
+ * a forward traveler's curb lane is the LAST matching lane and a backward
+ * traveler's is the FIRST.
+ */
+export function defaultLaneFor(profile: CrossSection, direction: "forward" | "backward", preferKindIds: readonly string[] = []): string | null {
+  const matches = (d: LaneDirection): boolean => d === direction || d === "both";
+  const curb = (lanes: LaneSpec[]): LaneSpec | undefined =>
+    lanes.length === 0 ? undefined : direction === "forward" ? lanes[lanes.length - 1] : lanes[0];
+  const inDirection = directionalLanes(profile).filter((l) => matches(l.direction));
+  // A preferred kind (a dedicated bus lane, the mode's track) wins, in order.
+  for (const kindId of preferKindIds) {
+    const hit = curb(inDirection.filter((l) => l.kindId === kindId));
+    if (hit) return hit.id;
+  }
+  // Else the rightmost directional lane in the travel direction.
+  const dirLane = curb(inDirection);
+  if (dirLane) return dirLane.id;
+  // Degenerate profile (no directional lane matches): any travel lane, then
+  // any lane at all, so a service always resolves to something rather than null.
+  return travelLanes(profile)[0]?.id ?? profile.lanes[0]?.id ?? null;
+}
+
 const flipDirection = (d: LaneDirection): LaneDirection => (d === "forward" ? "backward" : d === "backward" ? "forward" : d);
 
 /** The same physical street described facing the other way — reverses lane
