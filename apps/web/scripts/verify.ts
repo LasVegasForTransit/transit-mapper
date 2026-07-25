@@ -65,6 +65,7 @@ import { bearingDegrees, formatBearing, haversineMeters, snap, squareFootprint }
 import type { CrossSection, LngLat, Node, Service, Way } from "@transitmapper/core/model/system";
 import { armRefKey, getComponent, laneRefKey, withComponent, withoutComponent } from "@transitmapper/core/model/components";
 import { buildTimetable, dwellStopsForPattern, metersAtElapsed, VEHICLE_SPEED_MPS } from "../src/sim/vehicles";
+import { generateToken, hashToken, sha256Base64Url, toBase64Url } from "@transitmapper/core/auth/tokens";
 
 let failures = 0;
 function check(name: string, cond: boolean) {
@@ -2711,6 +2712,33 @@ function buildGrid() {
   const guarded = store.getState().system.ways.find((way) => way.id === wB)!;
   check("straighten keeps a point that's a real junction", guarded.points.length === 3);
   check("the junction node is still intact after straightening", store.getState().system.nodes.some((n) => n.refs.some((r) => r.wayId === wB) && n.refs.some((r) => r.wayId === wC)));
+}
+
+{
+  const a = generateToken();
+  const b = generateToken();
+  check("generateToken returns a different value each call", a !== b);
+  check("generateToken is url-safe", /^[A-Za-z0-9_-]+$/.test(a));
+  check("generateToken defaults to 32 bytes (43 base64url chars)", a.length === 43);
+  check("generateToken honors a byte length", generateToken(16).length === 22);
+
+  check("toBase64Url strips padding", toBase64Url(new Uint8Array([1, 2])) === "AQI");
+  check("toBase64Url uses - and _ instead of + and /", toBase64Url(new Uint8Array([251, 255])) === "-_8");
+
+  // Known SHA-256 of "abc", the standard test vector.
+  const abc = await hashToken("abc");
+  check(
+    "hashToken returns lowercase hex sha-256",
+    abc === "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+  );
+  check("hashToken is stable for the same input", (await hashToken("abc")) === abc);
+  check("hashToken differs for different input", (await hashToken("abd")) !== abc);
+
+  // Same digest, base64url-encoded rather than hex.
+  check(
+    "sha256Base64Url encodes the raw digest, not the hex string",
+    (await sha256Base64Url("abc")) === "ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0",
+  );
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
