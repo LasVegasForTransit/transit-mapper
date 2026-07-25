@@ -7,7 +7,7 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "typecheck:run": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
     "fflate": "^0.8.2"

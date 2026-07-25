@@ -11,9 +11,9 @@
     "dev": "pnpm --filter @transitmapper/web dev",
     "preview": "pnpm --filter @transitmapper/web preview",
     "worker:dev": "pnpm --filter @transitmapper/worker dev",
-    "build": "turbo run build:run",
-    "typecheck": "turbo run typecheck:run",
-    "verify": "turbo run verify:run",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "verify": "turbo run verify",
     "deploy": "pnpm run build && pnpm --filter @transitmapper/worker deploy",
     "bootstrap": "tsx scripts/bootstrap/cold-start.ts"
   },
