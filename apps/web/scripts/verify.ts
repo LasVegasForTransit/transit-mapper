@@ -252,6 +252,34 @@ check("road defaults to the arterial class", store.getState().system.ways[0].cla
   check("a service drawn along an existing corridor SHARES its infrastructure", shared);
 }
 
+// --- continuity-aware bundle offsets: a through-line keeps ONE offset across a
+// shared stretch (no sideways jog where the shared segment begins/ends) ---
+{
+  fresh();
+  store.getState().setDraftMode("lightRail");
+  const A = store.getState().beginWay("lightRail", "straight");
+  store.getState().addWayPoint(A, [-115.3, 36.1]);
+  store.getState().addWayPoint(A, [-115.2, 36.1]);
+  store.getState().addWayPoint(A, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const aId = store.getState().system.services[0].id;
+  // Route a second service along A's middle → A splits into 3 ways, the new
+  // service rides only the shared middle (bundle sizes 1 / 2 / 1 along A).
+  const w = store.getState().system.ways.find((x) => x.id === A)!;
+  store.getState().startRouteDraft(anchorOnWay(w, [-115.27, 36.1])!);
+  store.getState().extendRouteDraft(anchorOnWay(w, [-115.13, 36.1])!);
+  const bId = store.getState().commitRouteDraft()!;
+
+  const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(["lightRail", "road"]) };
+  const net = buildFeatures(store.getState().system, null, [], { viewMode: "network", ...filters });
+  const aFeats = net.services.features.filter((f) => f.properties?.serviceId === aId);
+  const bFeats = net.services.features.filter((f) => f.properties?.serviceId === bId);
+  const aOffsets = new Set(aFeats.map((f) => f.properties?.offset));
+  check("the through-line spans several ways (a shared stretch was carved out)", aFeats.length >= 2);
+  check("a through-line keeps ONE constant offset across all its ways (no jog)", aOffsets.size === 1);
+  check("the joining service takes a different offset where they share", bFeats.length >= 1 && !aOffsets.has(bFeats[0].properties?.offset));
+}
+
 // --- a station snaps onto a way and follows it when reshaped ---
 fresh();
 const h = store.getState().beginWay("road", "straight");

@@ -29,6 +29,60 @@ const UNASSIGNED_FAMILIES = new Set(["guideway", "aerial", "water"]);
 const BUNDLE_SPACING_PX = 5; // perpendicular gap between parallel services
 const LANE_SPACING_PX = 3; // perpendicular gap between a way's own capacity lanes/tracks
 
+// Continuity-aware bundle offsets. Each service gets ONE constant offset slot
+// for its entire path — chosen greedily as the smallest-magnitude slot free on
+// EVERY way it rides — so a through-line keeps a single offset end to end (no
+// sideways "jog" where a shared stretch begins or ends, which is what made two
+// connected lines read as not intersecting) while services sharing a segment
+// still fan apart. Slot order 0, +1, -1, +2, -2… keeps a bundle roughly
+// centered; a lone service stays at 0 (centered), unchanged from before.
+// Deterministic (services processed in byWay's stable creation order) and
+// memoized on the byWay Map identity (itself memoized on system.services), so
+// selection/viewport rebuilds reuse it.
+const bundleSlotCache = new WeakMap<Map<string, Service[]>, Map<string, number>>();
+function bundleSlots(byWay: Map<string, Service[]>): Map<string, number> {
+  const cached = bundleSlotCache.get(byWay);
+  if (cached) return cached;
+  const serviceWays = new Map<string, string[]>();
+  const order: string[] = []; // stable: each service the first time it appears
+  for (const [wayId, svcs] of byWay) {
+    for (const s of svcs) {
+      let ws = serviceWays.get(s.id);
+      if (!ws) {
+        ws = [];
+        serviceWays.set(s.id, ws);
+        order.push(s.id);
+      }
+      ws.push(wayId);
+    }
+  }
+  const nthSlot = (k: number): number => (k === 0 ? 0 : k % 2 === 1 ? (k + 1) / 2 : -k / 2); // 0,+1,-1,+2,-2,…
+  const occupied = new Map<string, Set<number>>();
+  const slots = new Map<string, number>();
+  for (const sid of order) {
+    const ways = serviceWays.get(sid) ?? [];
+    let slot = 0;
+    for (let k = 0; ; k++) {
+      const cand = nthSlot(k);
+      if (ways.every((w) => !occupied.get(w)?.has(cand))) {
+        slot = cand;
+        break;
+      }
+    }
+    slots.set(sid, slot);
+    for (const w of ways) {
+      let set = occupied.get(w);
+      if (!set) {
+        set = new Set();
+        occupied.set(w, set);
+      }
+      set.add(slot);
+    }
+  }
+  bundleSlotCache.set(byWay, slots);
+  return slots;
+}
+
 export interface SystemFeatures {
   ways: FeatureCollection<LineString>;
   services: FeatureCollection<LineString>;
@@ -110,6 +164,9 @@ export function buildFeatures(
   // trunk way still count as ONE service there). Memoized on (services,
   // visibleModes) so a selection/viewport rebuild reuses it — see featureMemo.
   const byWay = servicesByWay(system.services, view.visibleModes);
+  // One stable offset slot per service, so a through-line never jogs sideways
+  // where it enters/leaves a shared stretch (see bundleSlots).
+  const slots = bundleSlots(byWay);
 
   // A way's own infra line, fanned out into `way.capacity` parallel lanes/
   // tracks in the Infrastructure view — a real physical cross-section instead
@@ -292,11 +349,10 @@ export function buildFeatures(
       });
     }
 
-    const n = bundle.length;
     // Network view is the clean schematic map — grade (tunnel/viaduct styling)
     // is physical-alignment detail that belongs to the Infrastructure view.
     const { underground, elevated } = network ? { underground: false, elevated: false } : gradeFlags(way.grade);
-    bundle.forEach((svc, i) => {
+    bundle.forEach((svc) => {
       services.push({
         type: "Feature",
         properties: {
@@ -306,7 +362,9 @@ export function buildFeatures(
           width: modeRender(svc.modeId).width,
           underground,
           elevated,
-          offset: (i - (n - 1) / 2) * BUNDLE_SPACING_PX,
+          // Constant across the service's whole path → no jog at shared-segment
+          // boundaries (see bundleSlots), instead of the per-way bundle index.
+          offset: (slots.get(svc.id) ?? 0) * BUNDLE_SPACING_PX,
         },
         geometry: { type: "LineString", coordinates: path },
       });
