@@ -30,10 +30,6 @@ interface ScreenPoint {
 
 const HIT_PX = 9; // pixel tolerance for hit-testing features under the cursor
 const SNAP_PX = 18; // stations/way endpoints within this screen distance snap
-// Road-carrying modes (bus/BRT/street tram) snap to an existing corridor to
-// SHARE it from ~2.5× the base radius — a line drawn anywhere within a road's
-// width is "on that road". Rail must land on the track (implicit factor 1).
-const ROAD_SHARE_TOL_FACTOR = 2.5;
 const DRAG_PX = 4; // movement beyond this counts as a drag, not a click
 const FREEHAND_SAMPLE_PX = 16; // spacing between points sampled while freehand-drawing
 const STRAIGHT_TOLERANCE_RAD = (10 * Math.PI) / 180; // ~10°, how close to "straight ahead" counts
@@ -201,8 +197,12 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
             return;
           }
         }
-        // Otherwise a plain right-click cancels/commits the current draw.
-        if (st.activeWayId) st.finishWay();
+        // Otherwise a plain right-click finishes the current draw — a live
+        // route draft (snap-to-streets) as well as a way draw, so right-click
+        // never leaves a draft hanging (a stuck draft would swallow every
+        // later press and read as "drawing is broken").
+        if (st.routeDraft) st.commitRouteDraft();
+        else if (st.activeWayId) st.finishWay();
         else st.select(null);
       }
     };
@@ -779,19 +779,17 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
   const startDraw = (e: MapMouseEvent, forceSeparate = false) => {
     const st = store.getState();
 
-    // Network view, pressing ON OR NEAR existing compatible infrastructure:
-    // draw by ROUTING along it (snap-to-streets) instead of laying new
-    // geometry — the default, since a line drawn along a corridor is expected
-    // to SHARE it. Road-carrying modes (bus/BRT/street tram) snap from a wider
-    // ~road-width margin; rail must land on the track. Alt (forceSeparate)
-    // opts out. Clicks in true empty space fall through to a new-way draw;
-    // while a route draft is live, empty-space clicks are ignored (finish with
-    // Enter/double-click, back out with Escape).
+    // Network view, pressing ON existing compatible infrastructure: draw by
+    // ROUTING along it (snap-to-streets) instead of laying new geometry, since
+    // a line drawn onto a corridor is expected to SHARE it. Alt (forceSeparate)
+    // opts out — lay separate parallel infrastructure instead. Clicks in empty
+    // space fall through to a new-way draw; while a route draft is live,
+    // empty-space clicks are ignored (finish with Enter/double-click, back out
+    // with Escape).
     if (opts.isNetworkMode() && !st.activeWayId && !forceSeparate) {
       const allowed = new Set(mode(st.draftModeId).wayTypeIds);
       const candidates = st.system.ways.filter((w) => allowed.has(w.typeId));
-      const shareTolPx = allowed.has("road") ? SNAP_PX * ROAD_SHARE_TOL_FACTOR : SNAP_PX;
-      const hit = snap(candidates, lngLatOf(e), shareTolPx * metersPerPixel());
+      const hit = snap(candidates, lngLatOf(e), SNAP_PX * metersPerPixel());
       if (st.routeDraft) {
         suppressClick = true;
         if (hit) {

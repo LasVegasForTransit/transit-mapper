@@ -368,7 +368,14 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       map.triggerRepaint();
     };
     const onHoverMove = (e: maplibregl.MapMouseEvent) => {
-      if (map.isMoving()) return;
+      // Skip while a pan is in flight (isMoving) OR while any mouse button is
+      // held — a held button means a DRAG is underway (dragging a handle/point,
+      // a station, a marquee…). The map isn't "moving" during a handle drag, so
+      // without the button check this ran a queryRenderedFeatures + feature-state
+      // + triggerRepaint on every raw mousemove throughout a drag, storming the
+      // main thread on top of the per-frame geometry rebuild (the "insane lag"
+      // when dragging a midpoint/junction). Hover is a no-button-held affordance.
+      if (map.isMoving() || e.originalEvent.buttons !== 0) return;
       const layers = HOVER_LAYERS.filter((l) => map.getLayer(l));
       const hit = layers.length ? map.queryRenderedFeatures(e.point, { layers })[0] : undefined;
       setHover(hit && typeof hit.source === "string" && hit.id != null ? { source: hit.source, id: String(hit.id) } : null);
