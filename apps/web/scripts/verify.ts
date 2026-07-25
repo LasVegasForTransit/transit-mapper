@@ -66,6 +66,7 @@ import type { CrossSection, LngLat, Node, Service, Way } from "@transitmapper/co
 import { armRefKey, getComponent, laneRefKey, withComponent, withoutComponent } from "@transitmapper/core/model/components";
 import { buildTimetable, dwellStopsForPattern, metersAtElapsed, VEHICLE_SPEED_MPS } from "../src/sim/vehicles";
 import { generateToken, hashToken, sha256Base64Url, toBase64Url } from "@transitmapper/core/auth/tokens";
+import { parseCookies, serializeCookie } from "@transitmapper/core/auth/cookies";
 
 let failures = 0;
 function check(name: string, cond: boolean) {
@@ -2714,6 +2715,7 @@ function buildGrid() {
   check("the junction node is still intact after straightening", store.getState().system.nodes.some((n) => n.refs.some((r) => r.wayId === wB) && n.refs.some((r) => r.wayId === wC)));
 }
 
+// --- tokens: generation, hashing, base64url ---
 {
   const a = generateToken();
   const b = generateToken();
@@ -2738,6 +2740,44 @@ function buildGrid() {
   check(
     "sha256Base64Url encodes the raw digest, not the hex string",
     (await sha256Base64Url("abc")) === "ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0",
+  );
+}
+
+// --- cookies: serialize and parse ---
+{
+  check(
+    "serializeCookie writes the attributes the session cookie needs",
+    serializeCookie("tm_session", "abc", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      path: "/",
+      maxAge: 60,
+    }) === "tm_session=abc; Path=/; Max-Age=60; HttpOnly; Secure; SameSite=Lax",
+  );
+  check(
+    "serializeCookie omits Secure when not asked for",
+    !serializeCookie("tm_session", "abc", { httpOnly: true, secure: false }).includes("Secure"),
+  );
+  check(
+    "serializeCookie with maxAge 0 expires the cookie",
+    serializeCookie("tm_session", "", { maxAge: 0, path: "/" }) === "tm_session=; Path=/; Max-Age=0",
+  );
+  check(
+    "serializeCookie encodes values that would break the header",
+    serializeCookie("a", "x;y").startsWith("a=x%3By"),
+  );
+
+  check("parseCookies handles a missing header", Object.keys(parseCookies(null)).length === 0);
+  check("parseCookies reads one pair", parseCookies("tm_session=abc").tm_session === "abc");
+  check(
+    "parseCookies reads several pairs regardless of spacing",
+    parseCookies("a=1;b=2;  c=3").c === "3",
+  );
+  check("parseCookies decodes encoded values", parseCookies("a=x%3By").a === "x;y");
+  check(
+    "parseCookies ignores malformed segments rather than throwing",
+    Object.keys(parseCookies("garbage; a=1")).length === 1,
   );
 }
 
