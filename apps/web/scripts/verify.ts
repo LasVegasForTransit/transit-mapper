@@ -67,6 +67,8 @@ import { armRefKey, getComponent, laneRefKey, withComponent, withoutComponent } 
 import { buildTimetable, dwellStopsForPattern, metersAtElapsed, VEHICLE_SPEED_MPS } from "../src/sim/vehicles";
 import { generateToken, hashToken, sha256Base64Url, toBase64Url } from "@transitmapper/core/auth/tokens";
 import { parseCookies, serializeCookie } from "@transitmapper/core/auth/cookies";
+import { safeReturnTo } from "@transitmapper/core/auth/returnTo";
+import { buildAuthorizeUrl } from "@transitmapper/core/auth/google";
 
 let failures = 0;
 function check(name: string, cond: boolean) {
@@ -2778,6 +2780,46 @@ function buildGrid() {
   check(
     "parseCookies ignores malformed segments rather than throwing",
     Object.keys(parseCookies("garbage; a=1")).length === 1,
+  );
+}
+
+// --- return-path validation and Google authorize URL ---
+{
+  check("safeReturnTo keeps a plain path", safeReturnTo("/s/abc123") === "/s/abc123");
+  check("safeReturnTo keeps a path with a query", safeReturnTo("/?view=network") === "/?view=network");
+  check("safeReturnTo falls back to / for null", safeReturnTo(null) === "/");
+  check("safeReturnTo falls back to / for empty", safeReturnTo("") === "/");
+  check("safeReturnTo rejects an absolute http url", safeReturnTo("https://evil.example") === "/");
+  check("safeReturnTo rejects a protocol-relative url", safeReturnTo("//evil.example") === "/");
+  check("safeReturnTo rejects a backslash protocol-relative url", safeReturnTo("/\\evil.example") === "/");
+  check("safeReturnTo rejects anything not starting with /", safeReturnTo("s/abc") === "/");
+  check("safeReturnTo rejects a javascript url", safeReturnTo("javascript:alert(1)") === "/");
+  check("safeReturnTo rejects embedded control characters", safeReturnTo("/a\nb") === "/");
+
+  const url = new URL(
+    buildAuthorizeUrl({
+      clientId: "cid",
+      redirectUri: "https://example.test/auth/google/callback",
+      state: "st",
+      codeChallenge: "cc",
+    }),
+  );
+  check("buildAuthorizeUrl targets Google", url.host === "accounts.google.com");
+  check("buildAuthorizeUrl asks for a code", url.searchParams.get("response_type") === "code");
+  check("buildAuthorizeUrl passes the client id", url.searchParams.get("client_id") === "cid");
+  check(
+    "buildAuthorizeUrl passes the redirect uri",
+    url.searchParams.get("redirect_uri") === "https://example.test/auth/google/callback",
+  );
+  check("buildAuthorizeUrl passes the state", url.searchParams.get("state") === "st");
+  check("buildAuthorizeUrl passes the code challenge", url.searchParams.get("code_challenge") === "cc");
+  check(
+    "buildAuthorizeUrl uses the S256 challenge method, never plain",
+    url.searchParams.get("code_challenge_method") === "S256",
+  );
+  check(
+    "buildAuthorizeUrl requests only identity scopes",
+    url.searchParams.get("scope") === "openid email profile",
   );
 }
 
