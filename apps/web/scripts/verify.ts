@@ -69,6 +69,8 @@ import { generateToken, hashToken, sha256Base64Url, toBase64Url } from "@transit
 import { parseCookies, serializeCookie } from "@transitmapper/core/auth/cookies";
 import { safeReturnTo } from "@transitmapper/core/auth/returnTo";
 import { buildAuthorizeUrl } from "@transitmapper/core/auth/google";
+import { ANONYMOUS_SHARE_TTL_MS, newShareOwnership } from "@transitmapper/core/share/ownership";
+import { claimOutcome, retainedShares } from "@transitmapper/core/share/claim";
 
 let failures = 0;
 function check(name: string, cond: boolean) {
@@ -2821,6 +2823,45 @@ function buildGrid() {
     "buildAuthorizeUrl requests only identity scopes",
     url.searchParams.get("scope") === "openid email profile",
   );
+}
+
+// --- share ownership and claim reducer ---
+{
+  const now = 1_700_000_000_000;
+
+  const owned = newShareOwnership("user_1", now);
+  check("an owned share has an owner", owned.ownerId === "user_1");
+  check("an owned share never expires", owned.expiresAt === null);
+
+  const anon = newShareOwnership(null, now);
+  check("an anonymous share has no owner", anon.ownerId === null);
+  check("an anonymous share expires seven days out", anon.expiresAt === now + ANONYMOUS_SHARE_TTL_MS);
+  check("the anonymous ttl is seven days", ANONYMOUS_SHARE_TTL_MS === 7 * 24 * 60 * 60 * 1000);
+
+  check("a 200 means the share was claimed", claimOutcome(200) === "claimed");
+  check("a 403 is permanent — the token is wrong or spent", claimOutcome(403) === "rejected");
+  check("a 409 is permanent — somebody already owns it", claimOutcome(409) === "rejected");
+  check("a 404 is permanent — the share expired and is gone", claimOutcome(404) === "rejected");
+  check("a 500 is worth retrying later", claimOutcome(500) === "retry");
+  check("a 429 is worth retrying later", claimOutcome(429) === "retry");
+
+  const held = [
+    { id: "a", claimToken: "ta" },
+    { id: "b", claimToken: "tb" },
+    { id: "c", claimToken: "tc" },
+    { id: "d", claimToken: "td" },
+  ];
+  const kept = retainedShares(held, [
+    { id: "a", status: 200 },
+    { id: "b", status: 403 },
+    { id: "c", status: 500 },
+  ]);
+  check("a claimed share is dropped from local storage", !kept.some((s) => s.id === "a"));
+  check("a rejected share is dropped, since retrying never helps", !kept.some((s) => s.id === "b"));
+  check("a share that failed transiently is kept for next time", kept.some((s) => s.id === "c"));
+  check("a share with no result at all is kept", kept.some((s) => s.id === "d"));
+  check("retainedShares keeps exactly the two it should", kept.length === 2);
+  check("retainedShares does not mutate its input", held.length === 4);
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
