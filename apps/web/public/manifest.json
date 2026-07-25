@@ -1,0 +1,14 @@
+{
+  "name": "TransitMapper",
+  "short_name": "TransitMapper",
+  "description": "Design regional transit systems on a real map.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f4f1",
+  "theme_color": "#191a17",
+  "icons": [
+    { "src": "/favicon-16x16.png", "sizes": "16x16", "type": "image/png" },
+    { "src": "/favicon-32x32.png", "sizes": "32x32", "type": "image/png" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

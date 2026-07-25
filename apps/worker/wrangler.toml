@@ -22,3 +22,9 @@ crons = ["0 0 * * *"]
 [[routes]]
 pattern = "map.lasvegasfortransit.org"
 custom_domain = true
+
+[vars]
+# Used to build absolute URLs (og:url, canonical) for share pages.
+# Override locally via a gitignored .dev.vars (SITE_URL=http://localhost:8787)
+# if you want locally-fetched tags to reflect the real local origin.
+SITE_URL = "https://map.lasvegasfortransit.org"
