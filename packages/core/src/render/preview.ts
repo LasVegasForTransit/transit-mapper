@@ -18,21 +18,6 @@ import { LVBT, LVBT_FONT_FAMILY } from "../style/lvbtBrand";
 export const PREVIEW_WIDTH = 1200;
 export const PREVIEW_HEIGHT = 630;
 
-/**
- * A rendered preview is cached at the edge for a day on the reasoning that a
- * share's contents never change. That's true of the *system*, but not of the
- * *renderer*: without this in the cache key, a design change keeps serving the
- * old picture to every already-cached share until its entry expires, per colo,
- * with no way to purge it. This makes the cache entry a function of both the
- * system and the code that drew it.
- *
- * Bump it when shipping a visible change to a renderer that is ALREADY LIVE.
- * Changing it while iterating pre-release accomplishes nothing — there are no
- * cache entries out there to miss — so it stays at 1 until the first deploy.
- * A stale image in local `wrangler dev` is that cache in .wrangler/state, and
- * the fix for that is deleting it, not spending a version.
- */
-export const PREVIEW_RENDERER_VERSION = "1";
 
 /**
  * The card is *composed* at half the size it's *rasterized* at, and resvg

@@ -6,8 +6,8 @@ import type {
   CreateShareResponse,
   GetShareResponse,
 } from "@transitmapper/core/share/contract";
-import { PREVIEW_HEIGHT, PREVIEW_RENDERER_VERSION, PREVIEW_WIDTH } from "@transitmapper/core/render/preview";
-import { renderPreviewPng } from "./preview";
+import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from "@transitmapper/core/render/preview";
+import { checkPreviewPng, MAX_PREVIEW_BYTES } from "@transitmapper/core/render/pngBytes";
 
 interface Env {
   DB: D1Database;
@@ -63,6 +63,36 @@ function escapeHtmlAttribute(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+/**
+ * Decodes and vets an uploaded preview card. Returns the bytes to store, or
+ * null to store nothing — a share without a card is fine, so anything
+ * suspicious is dropped rather than failing the whole share.
+ *
+ * These bytes came from a browser we don't control, so they get treated as
+ * hostile input: bounded before decoding, then required to actually be a PNG
+ * of exactly card size. That can't make the *pixels* trustworthy (only
+ * re-rendering server-side could, which is the thing we can't afford), so the
+ * route that serves them back is hardened too — see the preview route below.
+ */
+function acceptedPreview(raw: unknown): Uint8Array | null {
+  if (typeof raw !== "string" || raw.length === 0) return null;
+  // Base64 inflates by 4/3; bound the string before allocating anything so a
+  // huge payload is rejected without being decoded.
+  if (raw.length > Math.ceil(MAX_PREVIEW_BYTES * 4 / 3) + 4) return null;
+
+  let bytes: Uint8Array;
+  try {
+    const binary = atob(raw);
+    bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  } catch {
+    return null;
+  }
+
+  const check = checkPreviewPng(bytes, { width: PREVIEW_WIDTH, height: PREVIEW_HEIGHT });
+  return check.ok ? bytes : null;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -141,9 +171,11 @@ app.post("/api/systems", async (c) => {
   }
 
   let system;
+  let preview: Uint8Array | null = null;
   try {
-    const body = JSON.parse(raw) as { system?: unknown };
+    const body = JSON.parse(raw) as { system?: unknown; preview?: unknown };
     system = parseSystem(body.system);
+    preview = acceptedPreview(body.preview);
   } catch (e) {
     return c.json({ error: `Invalid system: ${(e as Error).message}` }, 400);
   }
@@ -152,9 +184,9 @@ app.post("/api/systems", async (c) => {
   const now = Date.now();
   const expiresAt = now + ANONYMOUS_SHARE_TTL_MS;
   await c.env.DB.prepare(
-    "INSERT INTO systems (id, name, data, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO systems (id, name, data, created_at, expires_at, preview) VALUES (?, ?, ?, ?, ?, ?)",
   )
-    .bind(id, system.name.slice(0, 200), JSON.stringify(system), now, expiresAt)
+    .bind(id, system.name.slice(0, 200), JSON.stringify(system), now, expiresAt, preview)
     .run();
 
   return c.json<CreateShareResponse>({ id });
@@ -238,44 +270,76 @@ app.get("/api/oembed", async (c) => {
 
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 
-// Per-system preview image. This is what an unfurled link actually shows, and
-// it's a plain immutable GET so crawlers that don't run JavaScript (all of
-// them) still get a real picture of the system. See preview.ts for why it's
-// a vector schematic rather than a screenshot of the map.
+// Headers for serving a stored preview. The bytes passed validation at upload
+// (PNG signature, IHDR, exact card dimensions) but that only proves the file
+// starts as a PNG — a polyglot can carry markup after a valid header, and the
+// pixels themselves are whatever the uploader chose. So the response is
+// pinned to being an inert image and nothing else:
+//
+// - `nosniff` stops a browser content-sniffing its way to treating the body
+//   as HTML, which would be stored XSS on our own origin.
+// - The CSP denies everything and sandboxes the response, so even if it were
+//   somehow navigated to as a document it can't run script or load anything.
+// - `noindex` keeps these out of image search, which removes most of the
+//   point of using this endpoint as free image hosting.
+const PREVIEW_RESPONSE_HEADERS: Record<string, string> = {
+  "content-type": "image/png",
+  "content-disposition": "inline",
+  "x-content-type-options": "nosniff",
+  "content-security-policy": "default-src 'none'; sandbox",
+  "x-robots-tag": "noindex",
+  // A share's image is fixed at creation and never updated, so it can be
+  // cached hard. Not `immutable`/a year, though: a share is *deleted* when it
+  // expires, and a day is short enough that a deleted system stops being
+  // served promptly while still absorbing the burst of crawler hits that
+  // follows someone pasting a link.
+  "cache-control": "public, max-age=86400",
+};
+
+// Per-system preview image: what an unfurled link actually shows, as a plain
+// GET, so crawlers that don't run JavaScript (all of them) still see the real
+// system. The card was drawn by the sharer's browser at creation time — a
+// free-plan Worker has 10ms of CPU per request and rasterizing one costs
+// closer to 65ms, so this route only hands back stored bytes.
 app.get("/s/:id/preview.png", async (c) => {
   const id = c.req.param("id");
   const cache = caches.default;
-
-  // Cached against the renderer version as well as the URL. The public URL is
-  // untouched — crawlers and meta tags never see this — but a change to how a
-  // preview is drawn now misses the old entries instead of silently serving
-  // last month's design until they age out, which there's no way to purge.
-  const cacheUrl = new URL(c.req.raw.url);
-  cacheUrl.searchParams.set("r", PREVIEW_RENDERER_VERSION);
-  const cacheKey = new Request(cacheUrl, { method: "GET" });
-
-  const cached = await cache.match(cacheKey);
+  const cached = await cache.match(c.req.raw);
   if (cached) return cached;
 
-  const share = await getActiveShare(c.env.DB, id);
-  if (!share) return c.json({ error: "Not found" }, 404);
+  const row = await c.env.DB.prepare(
+    "SELECT preview, expires_at FROM systems WHERE id = ?",
+  )
+    .bind(id)
+    .first<{ preview: ArrayBuffer | null; expires_at: number | null }>();
 
-  const png = await renderPreviewPng(share.system);
-  const response = new Response(png, {
-    headers: {
-      "content-type": "image/png",
-      // A share's contents never change, so the image only changes when the
-      // renderer does — which the cache key accounts for. Not `immutable`/a
-      // year, though: a share can be *deleted* when it expires, and a day is
-      // short enough that a deleted system stops being served promptly while
-      // still absorbing the burst of crawler hits that follows someone
-      // pasting a link.
-      "cache-control": "public, max-age=86400",
-    },
-  });
-  c.executionCtx.waitUntil(cache.put(cacheKey, response.clone()));
+  // Deliberately does NOT extend the share's life. This endpoint is hit by
+  // crawlers and by caches re-validating, which says nothing about whether a
+  // person still wants the share — the page view and the API read are what
+  // count for that.
+  const live = row && (row.expires_at === null || row.expires_at >= Date.now());
+
+  // No stored card (an API-created share, or a browser that couldn't
+  // rasterize) falls back to the site-wide image rather than 404ing, so the
+  // og:image on the share page is never a broken link.
+  if (!live || !row?.preview) {
+    return c.env.ASSETS.fetch(new Request(new URL("/og-image.png", c.req.raw.url), c.req.raw));
+  }
+
+  const response = new Response(row.preview, { headers: PREVIEW_RESPONSE_HEADERS });
+  c.executionCtx.waitUntil(cache.put(c.req.raw, response.clone()));
   return response;
 });
+
+/**
+ * Fetches the SPA shell. Requested as "/" rather than "/index.html" because
+ * the assets binding's html_handling normalizes the extension form and
+ * answers with a 307 — which, passed through, is what a browser follows
+ * instead of rendering the page.
+ */
+function fetchAppShell(c: Context<{ Bindings: Env }>): Promise<Response> {
+  return c.env.ASSETS.fetch(new Request(new URL("/", c.req.raw.url), c.req.raw));
+}
 
 // Inject real per-share Open Graph/Twitter meta tags into the SPA shell for
 // /s/:id, so pasting a share link into Slack/Discord/iMessage shows the
@@ -287,7 +351,7 @@ async function handleSharePage(c: Context<{ Bindings: Env }>) {
   // Fetch unconditionally so a missing/expired share falls through to
   // exactly what the plain catch-all below would have returned — this
   // route must never change the existing 404/SPA behavior.
-  const assetResponse = await c.env.ASSETS.fetch(c.req.raw);
+  const assetResponse = await fetchAppShell(c);
   const share = id ? await getActiveShare(c.env.DB, id) : null;
   if (!share) return assetResponse;
 
@@ -399,13 +463,18 @@ async function handleEmbedPage(c: Context<{ Bindings: Env }>) {
 app.get("/e/:id", handleEmbedPage);
 app.get("/e/:id/", handleEmbedPage);
 
-// Everything else is a static asset (with SPA fallback to index.html for
-// client routes), served by the assets binding. The editor is never framable:
-// it's a real application surface, and the embed route above is the one
-// deliberate exception.
+// Anything reaching here is a path with no matching asset — a client route
+// like /systems, or a genuinely missing file. Real assets never get this far:
+// they're served straight from the assets binding without invoking the Worker
+// at all, which is what keeps them free (see wrangler.toml).
+//
+// This is the SPA fallback, done here rather than by `not_found_handling`
+// because that would also swallow /s/:id before the Worker could inject its
+// meta tags. The editor is never framable — it's a real application surface,
+// and the embed route above is the one deliberate exception.
 app.all("*", async (c) => {
-  const asset = await c.env.ASSETS.fetch(c.req.raw);
-  const response = new Response(asset.body, asset);
+  const shell = await fetchAppShell(c);
+  const response = new Response(shell.body, shell);
   response.headers.set("content-security-policy", "frame-ancestors 'none'");
   return response;
 });

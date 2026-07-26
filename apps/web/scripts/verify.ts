@@ -32,6 +32,7 @@ import { fitBounds, metersPerPixel, projector } from "@transitmapper/core/render
 import { PREVIEW_FONT_FAMILY, PREVIEW_HEIGHT, PREVIEW_WIDTH, previewSvg } from "@transitmapper/core/render/preview";
 import { systemSvg } from "@transitmapper/core/render/svg";
 import { LVBT } from "@transitmapper/core/style/lvbtBrand";
+import { checkPreviewPng, MAX_PREVIEW_BYTES, pngDimensions } from "@transitmapper/core/render/pngBytes";
 import { validateSystem } from "@transitmapper/core/model/validate";
 import { estimateWayCapitalCost, formatUsdCompact } from "@transitmapper/core/model/cost";
 import { LANE_KINDS, PROFILE_PRESETS, profilePresetsForWayType, WAY_FAMILIES, WAY_TYPES } from "@transitmapper/core/model/catalog";
@@ -2689,6 +2690,59 @@ function buildGrid() {
   check("works across a magnitude boundary", niceScaleMeters(950) === 500);
   check("formatScaleMeters stays in meters under 1km", formatScaleMeters(500) === "500 m");
   check("formatScaleMeters switches to km at 1000", formatScaleMeters(2000) === "2 km");
+}
+
+// --- render/pngBytes: what an uploaded preview card has to survive ---
+{
+  // Share cards are rasterized by the sharer's browser and uploaded, because
+  // a free-plan Worker hasn't the CPU to draw one. These bytes are therefore
+  // untrusted input, and this is the gate they pass through.
+  const CARD = { width: PREVIEW_WIDTH, height: PREVIEW_HEIGHT };
+
+  // A minimal but structurally complete PNG: signature, IHDR, IEND. `trailing`
+  // appends bytes after IEND, which is exactly the shape of a polyglot.
+  const png = (w: number, h: number, trailing = 0): Uint8Array => {
+    const u32 = (n: number) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+    const bytes = new Uint8Array(8 + 25 + 12 + trailing);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+    bytes.set(u32(13), 8);
+    bytes.set([0x49, 0x48, 0x44, 0x52], 12); // "IHDR"
+    bytes.set(u32(w), 16);
+    bytes.set(u32(h), 20);
+    // 5 more IHDR bytes (bit depth, colour type, ...) + 4 CRC, left zeroed.
+    bytes.set(u32(0), 33); // IEND length
+    bytes.set([0x49, 0x45, 0x4e, 0x44], 37); // "IEND"
+    return bytes;
+  };
+
+  check("reads dimensions out of a PNG header", JSON.stringify(pngDimensions(png(1200, 630))) === JSON.stringify(CARD));
+  check("a correctly sized card is accepted", checkPreviewPng(png(1200, 630), CARD).ok);
+
+  // Each of these is a way the endpoint could otherwise become general-purpose
+  // file storage on our own domain.
+  check("empty bytes are rejected", !checkPreviewPng(new Uint8Array(0), CARD).ok);
+  check("a non-PNG is rejected", !checkPreviewPng(new Uint8Array([0x3c, 0x21, 0x64, 0x6f, 0x63, 0x74, 0x79, 0x70, 0x65, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), CARD).ok);
+  check("a truncated file is rejected", !checkPreviewPng(png(1200, 630).subarray(0, 20), CARD).ok);
+  check("a wrongly sized image is rejected", !checkPreviewPng(png(64, 64, 0), CARD).ok);
+  check("an oversized file is rejected", !checkPreviewPng(png(1200, 630, MAX_PREVIEW_BYTES), CARD).ok);
+
+  // A polyglot: a structurally valid PNG with a payload appended after IEND.
+  // Response headers already make it inert, but it shouldn't be stored at all.
+  const polyglot = png(1200, 630, 32);
+  polyglot.set([0x3c, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3e], 8 + 25 + 12); // "<script>"
+  check("a PNG with data appended after IEND is rejected", !checkPreviewPng(polyglot, CARD).ok);
+  check("a PNG with no IEND is rejected", !checkPreviewPng(png(1200, 630).subarray(0, 33), CARD).ok);
+
+  // A PNG signature with a different chunk where IHDR belongs is malformed,
+  // and is the shape a polyglot file would take.
+  const notIhdr = png(1200, 630);
+  notIhdr.set([0x74, 0x45, 0x58, 0x74], 12); // "tEXt"
+  check("a PNG signature with no IHDR is rejected", !checkPreviewPng(notIhdr, CARD).ok);
+
+  // Rejection reasons are returned to the uploader, so they must describe the
+  // upload rather than anything about the server.
+  const reason = checkPreviewPng(new Uint8Array(1), CARD).reason ?? "";
+  check("a rejection explains itself without leaking internals", reason.length > 0 && !/\/|internal|stack/i.test(reason));
 }
 
 // --- render/preview: the card the Worker rasterizes for link unfurls ---

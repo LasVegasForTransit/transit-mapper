@@ -1,13 +1,21 @@
 import { parseSystem } from "@transitmapper/core/model/serialize";
 import type { TransitSystem } from "@transitmapper/core/model/system";
-import type { CreateShareResponse, GetShareResponse } from "@transitmapper/core/share/contract";
+import type { CreateShareRequest, CreateShareResponse, GetShareResponse } from "@transitmapper/core/share/contract";
+import { renderPreviewPng, toBase64 } from "./previewImage";
 
-/** POST a system snapshot; returns the share id. */
+/** POST a system snapshot; returns the share id.
+ *
+ *  The social card is drawn here, in the browser, and sent along with the
+ *  system — the Worker can't afford to draw it (see share/previewImage.ts).
+ *  Best-effort: if rasterizing fails, the share is created without one rather
+ *  than failing outright. */
 export async function createShare(system: TransitSystem): Promise<string> {
+  const png = await renderPreviewPng(system);
+  const body: CreateShareRequest = { system, ...(png ? { preview: toBase64(png) } : {}) };
   const res = await fetch("/api/systems", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ system }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const msg = await res.text().catch(() => res.statusText);

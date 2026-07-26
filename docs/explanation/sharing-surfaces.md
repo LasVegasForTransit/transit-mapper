@@ -15,15 +15,15 @@ could only ever serve one static image for every system.
 `packages/core/src/render/` removes that dependency:
 
 - `buildFeatures.ts` turns a system into styled GeoJSON. Pure, and shared —
-  the editor map, the embed, image exports and server previews all call it,
+  the editor map, the embed, image exports and the share card all call it,
   so none of them can drift from the others.
 - `project.ts` is Web Mercator with the map taken out: the same 512px-tile,
   log2-zoom conventions MapLibre uses, plus a `fitBounds` that solves for a
-  camera without one. North-up and unpitched only; server output never tilts.
+  camera without one. North-up and unpitched only; a card never tilts.
 - `svg.ts` composes the finished drawing. It takes a `project` callback rather
-  than a map, which is the whole point: the browser passes MapLibre's own
-  bound `project()` so an export matches what the user framed on screen, and
-  the Worker passes the pure projector.
+  than a map, which is the whole point: an export passes MapLibre's own bound
+  `project()` so it matches what the user framed on screen, while a share card
+  passes the pure projector and needs no map at all.
 - `preview.ts` is a preset over `svg.ts` for share cards. It picks the framing
   and states how the result will be presented; it does not draw anything
   itself.
@@ -53,22 +53,94 @@ type. A downloaded file has nothing captioning it and keeps them.
 Neither input names an element to remove. Adding a "card mode" branch would
 be the thing to avoid here.
 
-## Preview images
+## Preview images, and why the browser draws them
 
-`GET /s/:id/preview.png` builds the SVG and rasterizes it with resvg
-(WebAssembly) because every link unfurler refuses SVG for `og:image`. The
-share page's `og:image` and `twitter:image` are rewritten to point at it.
+`GET /s/:id/preview.png` serves a stored PNG. It doesn't draw one.
 
-Two constraints worth knowing before changing this:
+The Worker used to rasterize on demand with resvg, and it can't: a free-plan
+Worker gets **10 ms of CPU per request**, and drawing a card measured around
+65 ms — roughly 7x over. Shrinking doesn't rescue it either; even a 400px card
+costs ~16 ms, and building the SVG alone is ~10 ms. Server-side rasterization
+is not a free-tier feature at any useful size.
 
-- **Fonts.** resvg has no system fonts inside a Worker, so the bundled subset
-  is the entire universe of glyphs a preview can draw — text in a non-latin
-  script renders as blank boxes. Only `woff2` works; resvg silently draws
-  nothing at all for plain `woff`.
-- **Caching.** The image is cached at the edge for a day. A share's contents
-  never change, but the *renderer* does, and there's no purge path — so the
-  cache key includes `PREVIEW_RENDERER_VERSION`. Bump it when shipping a
-  visible change to a renderer that's already live.
+So the sharer's browser draws the card instead, at share time, and uploads it
+alongside the system. A browser has no such CPU budget, is already holding the
+system, and only does this once per share. The Worker's job shrinks to handing
+bytes back, which is close to free. Removing resvg also took ~2.4 MB of wasm
+and a bundled font subset out of the Worker.
+
+Consequences worth knowing:
+
+- **A share may have no card.** A client that can't rasterize, or an API
+  caller with no browser, simply omits it. The route falls back to the
+  site-wide image rather than 404ing, so `og:image` is never a broken link.
+- **The card is a snapshot, like the system.** It's fixed at creation and
+  never regenerated, so a later change to the renderer doesn't alter existing
+  shares.
+
+## Treating the uploaded card as hostile
+
+Accepting an image from a client means accepting bytes we didn't produce. The
+honest framing: nothing short of re-rendering server-side can make the
+*pixels* trustworthy, and that's the thing we can't afford. What the design
+can do is stop the endpoint becoming general-purpose file hosting, and make
+whatever is stored inert.
+
+On the way in (`packages/core/src/render/pngBytes.ts`):
+
+- Bounded **before** decoding — the base64 length is checked first, so an
+  oversized payload is rejected without being allocated.
+- Must be a PNG: signature, then IHDR as the first chunk.
+- Must be exactly card-sized. An arbitrary image of another size is refused.
+- The chunk chain must be **clean** — IHDR first, IEND last, and not one byte
+  after it. This is what rejects polyglots: a file can carry a valid PNG
+  header and append markup or an archive, and any check that only reads the
+  header waves it through.
+
+Anything failing is dropped and the share is created without a card, rather
+than failing the share. Retrying wouldn't help, and a share is more valuable
+than its picture.
+
+On the way out, the response is pinned to being an inert image:
+`Content-Type: image/png` with `X-Content-Type-Options: nosniff` (so a browser
+can't sniff its way to treating the body as HTML, which would be stored XSS on
+our own origin), a `default-src 'none'; sandbox` CSP, and `X-Robots-Tag:
+noindex` (which removes most of the point of using this as free image
+hosting).
+
+The preview is accepted **only at share creation**. There is deliberately no
+route that updates an existing share's card — that would let anyone holding a
+share id replace someone else's.
+
+**Residual risk, stated plainly:** someone can store a genuine, correctly
+sized PNG of their choosing at a URL on this domain, tied to a share they
+created, which expires like any other. Bounding that further is a rate-limit
+problem, not a validation one — see below.
+
+## Staying inside the free tier
+
+Everything here is sized to run on Cloudflare's free plans, which is why the
+architecture looks the way it does. The two limits that actually bind:
+
+- **10 ms CPU per request** — the reason cards are drawn client-side.
+- **100,000 Worker requests/day** — and requests past it get a 429 rather
+  than falling back to serving the asset.
+
+That second one is why the Worker deliberately does not run first (see
+`wrangler.toml`). Static assets served without invoking it are free and
+unlimited; with `run_worker_first = true`, every JS chunk, stylesheet and
+favicon on every page load was a billed invocation. Only `/api/*`, share pages
+and embeds reach the Worker now — a homepage visit costs zero invocations.
+
+Everything else has ample headroom: D1 at 500 MB (a stored card is ~25 KB and
+capped at 120 KB), one or two Cache API calls against a limit of 50, a single
+subrequest against 50, and cron triggers included.
+
+**Before opening this up to real traffic**, add a Cloudflare rate-limiting
+rule on `POST /api/systems`. The free plan includes one such rule, and share
+creation is the only endpoint that writes attacker-controlled bytes to
+storage — the size cap bounds a single upload, but nothing in the Worker
+bounds how many a script can send.
 
 ## Embeds
 

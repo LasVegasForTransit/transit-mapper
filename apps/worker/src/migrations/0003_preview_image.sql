@@ -1,0 +1,13 @@
+-- The rendered social-preview card for a share, as PNG bytes.
+--
+-- Stored rather than rendered on demand because rasterizing a card costs far
+-- more CPU than a free-plan Worker gets per request (measured: ~65ms against
+-- a 10ms budget). The sharer's browser has no such limit, so it draws the
+-- card at share time and sends it here; the Worker only ever hands the bytes
+-- back, which is close to free.
+--
+-- Nullable: a share created through the API without a browser has no card,
+-- and the preview route falls back to the site-wide image for those.
+-- Typically ~25KB, well under D1's 2MB row ceiling; the route that writes it
+-- caps and validates the bytes before they reach this column.
+ALTER TABLE systems ADD COLUMN preview BLOB;

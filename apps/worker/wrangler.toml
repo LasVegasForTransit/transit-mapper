@@ -2,23 +2,30 @@ name = "transitmapper"
 main = "src/index.ts"
 compatibility_date = "2024-11-06"
 
-# Serve the built SPA. The Worker runs first and handles /api/*; every other
-# request is forwarded to the static assets (SPA fallback to index.html).
+# Serve the built SPA. The Worker handles /api/*, share pages and embeds;
+# everything else is a static asset (SPA fallback to index.html).
+#
+# The Worker deliberately does NOT run first. An asset served without invoking
+# it is free and unlimited; any request that reaches it is a billed
+# invocation against a 100k/day free allowance, and requests past that get a
+# 429 rather than falling back to serving the asset. With `run_worker_first =
+# true` every JS chunk, stylesheet and favicon on every page load was one of
+# those — roughly a dozen per visit, for no reason.
+#
+# So assets are matched first, and only what genuinely needs Worker logic
+# falls through: /api/*, and the client routes below. `not_found_handling` is
+# "none" rather than "single-page-application" precisely so that fall-through
+# happens — the SPA shell would otherwise be returned for /s/:id without the
+# Worker ever seeing it, and its per-share meta tags would never be injected.
+# The catch-all in src/index.ts serves the shell instead.
+#
+# (wrangler 4 can scope `run_worker_first` to a path list, which would express
+# this directly. This project is pinned to wrangler 3, where it's a boolean.)
 [assets]
 directory = "../web/dist"
 binding = "ASSETS"
-not_found_handling = "single-page-application"
-run_worker_first = true
+not_found_handling = "none"
 
-# Preview images are rasterized by resvg (wasm), which has no system fonts
-# inside a Worker — the Inter subset it draws titles and legends with is
-# imported as raw bytes, so it needs to bundle as a data module rather than
-# being parsed as code. `fallthrough` keeps wrangler's own built-in rules
-# (notably the .wasm one resvg itself relies on) in effect.
-[[rules]]
-type = "Data"
-globs = ["**/*.woff2"]
-fallthrough = true
 
 [[d1_databases]]
 binding = "DB"

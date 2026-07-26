@@ -20,7 +20,7 @@ apps/
       map/       MapLibre integration: layers, pointer interactions, canvas.
       ui/        React components. Thin: read the store, call actions.
       style/     How catalog kinds LOOK (colors, widths, dashes, icons).
-      share/     Export (PNG/SVG/JSON) and the share-API client.
+      share/     Export (PNG/SVG/JSON), the share card, the share-API client.
       storage/   Local persistence.
     scripts/     verify.ts — the test suite.
   worker/        Cloudflare Worker + D1 migrations for shared snapshots.
@@ -63,15 +63,16 @@ Both are pure and memoized; nothing here is stored. See
 ## packages/core/src/render/ — drawing a system without a map
 
 - `buildFeatures.ts` — the system-to-styled-GeoJSON projector. Shared by the
-  editor map, the embed, image exports and server-side previews, so none of
-  them can drift from the others.
+  editor map, the embed, image exports and the share card, so none of them can
+  drift from the others.
 - `project.ts` — Web Mercator projection and `fitBounds`, matching MapLibre's
-  conventions but needing no map. What the Worker projects through.
+  conventions but needing no map. What a card is projected through.
 - `svg.ts` — the vector composition (geometry plus title, legend, north arrow,
-  scale bar). Takes a `project` callback, so the browser can pass MapLibre's
-  and the Worker its own.
-- `preview.ts` — the share-card preset over `svg.ts`, plus the card size and
-  the renderer version that participates in edge-cache keys.
+  scale bar). Takes a `project` callback, so an export can pass MapLibre's own
+  while a card passes the map-free one.
+- `preview.ts` — the share-card preset over `svg.ts`, and the card size.
+- `pngBytes.ts` — validation for uploaded preview cards: size bound, PNG
+  signature, exact dimensions, and a clean IHDR-to-IEND chunk chain.
 - `legend.ts`, `scaleBar.ts`, `constants.ts`, `iconName.ts` — supporting
   pieces, all DOM-free.
 
@@ -96,8 +97,10 @@ See [Sharing surfaces](../explanation/sharing-surfaces.md).
 - `index.ts` — share create/fetch, the GTFS proxy, per-share preview images,
   oEmbed, the embed and share-page routes with their framing headers, and the
   nightly expiry sweep.
-- `preview.ts` — rasterizes a preview to PNG with resvg (WebAssembly) and the
-  bundled brand font subset.
+
+Preview cards are drawn by the browser (`apps/web/src/share/previewImage.ts`)
+and stored in D1, because a free-plan Worker hasn't the CPU to rasterize one.
+See [Sharing surfaces](../explanation/sharing-surfaces.md).
 
 ## apps/web/src/editor/ — mutation and input
 
