@@ -1,0 +1,28 @@
+# Response headers for assets served straight from Cloudflare, without the
+# Worker running. That is now most of the site — the Worker is scoped to
+# /api/*, /s/* and /e/* (see run_worker_first in apps/worker/wrangler.toml) —
+# so the editor's own HTML, JS and CSS never pass through Worker code and
+# can't be given headers there. This file is the only place to set them.
+#
+# Worker-generated responses ignore this file entirely; those set their own
+# headers in apps/worker/src/index.ts.
+
+/*
+  # The editor is an application surface, not something to be framed. The one
+  # deliberate exception is /e/:id, which the Worker serves with its own
+  # frame-ancestors and never reaches this file.
+  Content-Security-Policy: frame-ancestors 'none'
+  # Stop a browser second-guessing our content types.
+  X-Content-Type-Options: nosniff
+  # Send the origin to third parties, never the full path — a share id should
+  # not leak into another site's referer logs.
+  Referrer-Policy: strict-origin-when-cross-origin
+  # Nothing here needs a camera, a microphone or someone's location.
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
+  # Two years, subdomains included. Only meaningful over HTTPS, which is the
+  # only way this origin is served.
+  Strict-Transport-Security: max-age=63072000; includeSubDomains
+
+# Vite fingerprints these filenames, so a given URL's bytes never change.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

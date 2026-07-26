@@ -103,7 +103,38 @@ function acceptedPreview(raw: unknown): Uint8Array | null {
   return check.ok ? bytes : null;
 }
 
+// Security headers for HTML the Worker renders itself. Assets served straight
+// from Cloudflare get the equivalent from apps/web/public/_headers, which does
+// not apply to Worker responses.
+//
+// `noindex` is what keeps shared systems out of search results. It is
+// deliberately not `Disallow` in robots.txt: unfurlers honour robots and would
+// then refuse to fetch the page at all, leaving every pasted link with a blank
+// card. Fetchable but unindexed is exactly the combination wanted here.
+const HTML_SECURITY_HEADERS: Record<string, string> = {
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  "strict-transport-security": "max-age=63072000; includeSubDomains",
+  "x-robots-tag": "noindex",
+};
+
+function withHtmlSecurityHeaders(response: Response, frameAncestors: string): Response {
+  const out = new Response(response.body, response);
+  for (const [name, value] of Object.entries(HTML_SECURITY_HEADERS)) out.headers.set(name, value);
+  out.headers.set("content-security-policy", `frame-ancestors ${frameAncestors}`);
+  return out;
+}
+
 const app = new Hono<{ Bindings: Env }>();
+
+// Unhandled failures must not leak internals, and an /api client should get
+// JSON rather than a wall of text it can't parse.
+app.onError((err, c) => {
+  console.error("Unhandled error:", err);
+  return c.req.path.startsWith("/api/")
+    ? c.json({ error: "Internal error" }, 500)
+    : c.text("Something went wrong.", 500);
+});
 
 interface ShareRow {
   id: string;
@@ -237,16 +268,38 @@ app.get("/api/systems/:id", async (c) => {
 
 // Proxy RTC Southern Nevada's real GTFS feed — its own host doesn't send
 // CORS headers, so the browser can't fetch it directly; this endpoint (same
-// origin as the app) sidesteps that. Passed straight through, not cached —
-// the feed is ~6 MB and imported rarely, not worth a KV/R2 cache layer yet.
+// origin as the app) sidesteps that.
+//
+// Cached at the edge for a day. The feed is ~6 MB and an agency publishes a
+// new one every few weeks, so re-fetching per request was pure waste — and
+// worse, it was an amplifier: one request here meant 6 MB pulled from RTC's
+// servers, with nothing stopping a script from doing that in a loop. Now the
+// first request of the day pays for it and the rest are served from cache.
+const GTFS_FEED_URL = "https://developer.rtcsnv.com/transitData/google_transit.zip";
+const GTFS_CACHE_SECONDS = 86400;
+
 app.get("/api/gtfs/rtc", async (c) => {
-  const upstream = await fetch("https://developer.rtcsnv.com/transitData/google_transit.zip");
+  const cache = caches.default;
+  const cached = await cache.match(c.req.raw);
+  if (cached) return cached;
+
+  const upstream = await fetch(GTFS_FEED_URL, {
+    // Belt and braces: Cloudflare's own fetch cache keeps this from hitting
+    // RTC even when the response cache above has been evicted.
+    cf: { cacheEverything: true, cacheTtl: GTFS_CACHE_SECONDS },
+  });
   if (!upstream.ok || !upstream.body) {
     return c.json({ error: `RTC GTFS feed unavailable (${upstream.status})` }, 502);
   }
-  return new Response(upstream.body, {
-    headers: { "content-type": "application/zip" },
+
+  const response = new Response(upstream.body, {
+    headers: {
+      "content-type": "application/zip",
+      "cache-control": `public, max-age=${GTFS_CACHE_SECONDS}`,
+    },
   });
+  c.executionCtx.waitUntil(cache.put(c.req.raw, response.clone()));
+  return response;
 });
 
 // oEmbed discovery/consumption: a publisher (WordPress, Ghost, Discourse,
@@ -382,7 +435,13 @@ async function handleSharePage(c: Context<{ Bindings: Env }>) {
   // route must never change the existing 404/SPA behavior.
   const assetResponse = await fetchAppShell(c);
   const share = id ? await getActiveShare(c.env.DB, id) : null;
-  if (!share) return assetResponse;
+  if (!share) {
+    // The SPA still renders and explains itself, but the status has to say
+    // "gone". Answering 200 makes an expired share look like a real page to
+    // every crawler and link unfurler that sees it.
+    const missing = withHtmlSecurityHeaders(assetResponse, "'none'");
+    return new Response(missing.body, { status: 404, headers: missing.headers });
+  }
 
   // A visit to the share page counts as the share still being wanted.
   const touch = touchExpiry(c.env.DB, share);
@@ -460,9 +519,7 @@ async function handleSharePage(c: Context<{ Bindings: Env }>) {
 
   // A share page is the full editor loaded read-only, not an embed surface —
   // /e/:id is the one thing on this origin that's meant to be framed.
-  const response = new Response(transformed.body, transformed);
-  response.headers.set("content-security-policy", "frame-ancestors 'none'");
-  return response;
+  return withHtmlSecurityHeaders(transformed, "'none'");
 }
 
 app.get("/s/:id", handleSharePage);
@@ -483,8 +540,7 @@ async function handleEmbedPage(c: Context<{ Bindings: Env }>) {
   // The embed shows nothing a share link doesn't already show to anyone who
   // has it, and it carries no credentials or account state, so there's no
   // clickjacking surface to protect here.
-  const response = new Response(asset.body, asset);
-  response.headers.set("content-security-policy", "frame-ancestors *");
+  const response = withHtmlSecurityHeaders(asset, "*");
   response.headers.delete("x-frame-options");
   return response;
 }
@@ -501,9 +557,7 @@ app.get("/e/:id/", handleEmbedPage);
 // embed route above is the one deliberate exception.
 app.all("*", async (c) => {
   const shell = await fetchAppShell(c);
-  const response = new Response(shell.body, shell);
-  response.headers.set("content-security-policy", "frame-ancestors 'none'");
-  return response;
+  return withHtmlSecurityHeaders(shell, "'none'");
 });
 
 async function scheduled(_event: ScheduledEvent, env: Env): Promise<void> {

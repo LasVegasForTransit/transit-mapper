@@ -1,6 +1,14 @@
 name = "transitmapper"
 main = "src/index.ts"
-compatibility_date = "2024-11-06"
+compatibility_date = "2025-07-01"
+
+# Worker logs are off by default, which is a poor way to launch: the first
+# time something fails in production is the worst time to discover there's no
+# record of it. Sampling stays at 100% — traffic here is far too low for the
+# cost of keeping everything to matter.
+[observability]
+enabled = true
+head_sampling_rate = 1
 
 # Serve the built SPA. The Worker handles /api/*, share pages and embeds;
 # everything else is a static asset (SPA fallback to index.html).

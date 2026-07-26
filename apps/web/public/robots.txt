@@ -1,4 +1,16 @@
+# Share and embed pages are deliberately crawlable.
+#
+# They used to be blocked with `Disallow: /s/`, which was the wrong tool for
+# the intent. The goal is "don't put people's shared systems in search
+# results" — but Disallow stops a crawler fetching the page at all, and the
+# bots that build link previews honour it. That turns every pasted share link
+# into a blank card: the og: tags are right there and nothing is allowed to
+# read them.
+#
+# "Fetch this, but don't index it" is what noindex means. Both /s/ and /e/
+# send `X-Robots-Tag: noindex` (see apps/worker/src/index.ts), so unfurlers
+# can read the preview while search engines leave it out.
 User-agent: *
-Disallow: /s/
+Allow: /
 
 Sitemap: https://map.lasvegasfortransit.org/sitemap.xml
