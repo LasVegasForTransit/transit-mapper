@@ -54,7 +54,7 @@ import { landmarksFeatureCollection } from "./landmarks";
 import { getMap, setMap } from "./mapRef";
 import { initLiveCamera, setLiveCamera } from "../camera/liveCamera";
 import { attachPerfHarness } from "../perf";
-import { servicesByWay } from "./layers/featureMemo";
+import { servicesByWay } from "@transitmapper/core/render/featureMemo";
 import { attachVehicleAnimation } from "../sim/vehicles";
 import type { Map as MLMap } from "maplibre-gl";
 

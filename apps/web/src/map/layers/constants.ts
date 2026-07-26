@@ -76,3 +76,18 @@ export const LANE_DETAIL_MIN_ZOOM = 15;
 // width (see widthPxAtZ14, re-exported above); this expression scales that
 // exponentially (base 2 — exact for mercator) with zoom.
 export const LANE_WIDTH_EXPR = ["interpolate", ["exponential", 2], ["zoom"], 14, ["get", "w14"], 22, ["*", 256, ["get", "w14"]]];
+// Service line width. A service drawn on its lane (Infrastructure lane detail —
+// its feature carries `w14`) grows with zoom between a sensible min/max so it
+// reads as the route occupying the lane, never a thread or a blob; a schematic
+// service (no `w14`, Network view) keeps its fixed `width` at every zoom.
+// MapLibre forbids ["zoom"] nested inside min/max/case, so the clamp is
+// expressed as FLAT interpolate stops and the has-w14 branch lives in each
+// stop's zoom-free OUTPUT. `margin` (halo/casing) is added inside each stop for
+// the same reason. Below z15 → the z15 stop; above z21 → the z21 stop.
+const serviceWidthExpr = (margin: number) => {
+  const stop = (px: number) => (margin > 0 ? ["+", ["case", ["has", "w14"], px, ["get", "width"]], margin] : ["case", ["has", "w14"], px, ["get", "width"]]);
+  return ["interpolate", ["linear"], ["zoom"], 15, stop(2.5), 18, stop(7), 21, stop(15)];
+};
+export const SERVICE_WIDTH_EXPR = serviceWidthExpr(0);
+export const SELECT_HALO_WIDTH_EXPR = serviceWidthExpr(7);
+export const SERVICE_ELEVATED_WIDTH_EXPR = serviceWidthExpr(3.5);

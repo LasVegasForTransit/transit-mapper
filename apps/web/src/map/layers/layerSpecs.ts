@@ -14,6 +14,9 @@ import {
 } from "@transitmapper/core/style/catalogStyle";
 import {
   LANE_WIDTH_EXPR,
+  SERVICE_WIDTH_EXPR,
+  SELECT_HALO_WIDTH_EXPR,
+  SERVICE_ELEVATED_WIDTH_EXPR,
   LYR_CENTER_LINES,
   LYR_CONNECTORS,
   LYR_EDGE_LINES,
@@ -245,7 +248,7 @@ export const LAYER_SPECS: LayerSpecification[] = [
     layout: { "line-cap": "round", "line-join": "round" },
     paint: {
       "line-color": "#191a17",
-      "line-width": ["+", ["get", "width"], 7],
+      "line-width": SELECT_HALO_WIDTH_EXPR as never,
       "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, ["boolean", ["feature-state", "hover"], false], 0.1, 0],
       "line-offset": ["get", "offset"],
     },
@@ -278,7 +281,7 @@ export const LAYER_SPECS: LayerSpecification[] = [
     source: SRC_SERVICES,
     filter: ["get", "elevated"],
     layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-color": "#191a17", "line-width": ["+", ["get", "width"], 3.5], "line-opacity": 0.32, "line-offset": ["get", "offset"] },
+    paint: { "line-color": "#191a17", "line-width": SERVICE_ELEVATED_WIDTH_EXPR as never, "line-opacity": 0.32, "line-offset": ["get", "offset"] },
   },
   {
     id: LYR_SERVICE_SELECTED,
@@ -289,7 +292,7 @@ export const LAYER_SPECS: LayerSpecification[] = [
     layout: { "line-cap": "round", "line-join": "round" },
     paint: {
       "line-color": "#191a17",
-      "line-width": ["+", ["get", "width"], 7],
+      "line-width": SELECT_HALO_WIDTH_EXPR as never,
       "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, ["boolean", ["feature-state", "hover"], false], 0.1, 0],
       "line-offset": ["get", "offset"],
     },
@@ -300,7 +303,7 @@ export const LAYER_SPECS: LayerSpecification[] = [
     source: SRC_SERVICES,
     filter: ["!", ["get", "underground"]],
     layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-color": ["get", "color"], "line-width": ["get", "width"], "line-offset": ["get", "offset"] },
+    paint: { "line-color": ["get", "color"], "line-width": SERVICE_WIDTH_EXPR as never, "line-offset": ["get", "offset"] },
   },
   {
     // Underground ways render dashed, like a tunnel.
@@ -309,7 +312,7 @@ export const LAYER_SPECS: LayerSpecification[] = [
     source: SRC_SERVICES,
     filter: ["get", "underground"],
     layout: { "line-cap": "butt", "line-join": "round" },
-    paint: { "line-color": ["get", "color"], "line-width": ["get", "width"], "line-dasharray": [2.5, 2], "line-offset": ["get", "offset"] },
+    paint: { "line-color": ["get", "color"], "line-width": SERVICE_WIDTH_EXPR as never, "line-dasharray": [2.5, 2], "line-offset": ["get", "offset"] },
   },
   {
     id: LYR_STATION_SELECTED,

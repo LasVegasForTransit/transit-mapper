@@ -20,9 +20,12 @@ import {
   segmentGridStats,
   servedWayIds,
   serviceWayIds,
+  patternWayDirection,
+  serviceLaneOnWay,
   snap,
   MAX_GRID_CELLS,
   MAX_OVERSIZE_SEGMENTS,
+  wayById,
 } from "@transitmapper/core/model/geo";
 import { computeDiagramSystem } from "@transitmapper/core/model/diagramLayout";
 import { isDoubleClickFinish } from "../src/map/interactions";
@@ -60,7 +63,7 @@ import {
   withLaneCount,
 } from "@transitmapper/core/model/profile";
 import { offsetPolyline } from "@transitmapper/core/model/geo";
-import { trimPath, wayLaneGeometry } from "@transitmapper/core/geometry/streets";
+import { serviceLanePath, trimPath, wayLaneGeometry, wayIntersectsBounds } from "@transitmapper/core/geometry/streets";
 import { patternWayTraversals, selectVehicleLane, patternLanePath } from "@transitmapper/core/geometry/vehicleLane";
 import { bearingAtT, rotatedRectPolygon } from "@transitmapper/core/model/geo";
 import {
@@ -79,7 +82,7 @@ import { anchorOnWay, routeBetween, routePath } from "@transitmapper/core/model/
 // at the top of this file; naming them twice was a duplicate-identifier error
 // that only ran because tsx tolerates what tsc rejects.
 import { bearingDegrees, formatBearing, haversineMeters } from "@transitmapper/core/model/geo";
-import type { CrossSection, LngLat, Node, Service, TransitSystem, Way } from "@transitmapper/core/model/system";
+import type { CrossSection, LngLat, Node, Pattern, Service, TransitSystem, Way } from "@transitmapper/core/model/system";
 import { armRefKey, getComponent, laneRefKey, withComponent, withoutComponent } from "@transitmapper/core/model/components";
 import { dwellStopsForPattern, effectiveVehicleKind } from "../src/sim/vehicles";
 import { buildTimetable, metersAtElapsed, VEHICLE_SPEED_MPS } from "@transitmapper/core/sim/timetable";
@@ -278,6 +281,118 @@ check("road defaults to the arterial class", store.getState().system.ways[0].cla
   check("the through-line spans several ways (a shared stretch was carved out)", aFeats.length >= 2);
   check("a through-line keeps ONE constant offset across all its ways (no jog)", aOffsets.size === 1);
   check("the joining service takes a different offset where they share", bFeats.length >= 1 && !aOffsets.has(bFeats[0].properties?.offset));
+}
+
+// --- wayIntersectsBounds is segment-aware, so lane detail isn't culled when
+// you zoom into the MIDDLE of a long way (both its vertices off-screen) ---
+{
+  fresh();
+  const w = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(w, [-115.3, 36.1]);
+  store.getState().addWayPoint(w, [-115.0, 36.1]);
+  store.getState().finishWay();
+  const way = store.getState().system.ways.find((x) => x.id === w)!;
+  // A tiny viewport in the MIDDLE of the way — both endpoints far outside it.
+  check("segment crossing a mid-way viewport counts (both vertices outside)", wayIntersectsBounds(way, [[-115.151, 36.099], [-115.149, 36.101]], 0));
+  // A viewport nowhere near the alignment does not.
+  check("a viewport off the alignment does not count", !wayIntersectsBounds(way, [[-115.151, 36.5], [-115.149, 36.502]], 0));
+}
+
+// --- lane-accurate service rendering (Infrastructure view) ---
+// A committed pattern stores no travel direction, so patternWayDirection derives
+// it from geometry; serviceLaneOnWay resolves the curb/track lane; buildFeatures
+// draws the service on that lane in lane detail, on the centerline in Network.
+{
+  const P0: LngLat = [-115.2, 36.1], P1: LngLat = [-115.15, 36.1], P2: LngLat = [-115.1, 36.1];
+  const mkWay = (id: string, pts: LngLat[]): Way => ({ id, typeId: "road", points: pts, geometry: "straight", grade: "atGrade", profile: { lanes: [] } });
+  // wayA [P0,P1] exits into wayB [P1,P2] at wayA's LAST point → forward.
+  const fwd = new Map<string, Way>([["a", mkWay("a", [P0, P1])], ["b", mkWay("b", [P1, P2])]]);
+  check("patternWayDirection: exit at the way's last point → forward", patternWayDirection({ id: "p", wayIds: ["a", "b"] }, 0, fwd) === "forward");
+  // wayA points [P1,P0] → it exits into wayB at wayA's FIRST point → backward.
+  const bwd = new Map<string, Way>([["a", mkWay("a", [P1, P0])], ["b", mkWay("b", [P1, P2])]]);
+  check("patternWayDirection: exit at the way's first point → backward", patternWayDirection({ id: "p", wayIds: ["a", "b"] }, 0, bwd) === "backward");
+  check("patternWayDirection: a single-way pattern defaults to forward", patternWayDirection({ id: "p", wayIds: ["a"] }, 0, fwd) === "forward");
+}
+
+{
+  const road = defaultProfileFor("road", 2);
+  const roadMap = new Map<string, Way>([["w", { id: "w", typeId: "road", points: [[-115.2, 36.1], [-115.1, 36.1]], geometry: "straight", grade: "atGrade", profile: road }]]);
+  check("serviceLaneOnWay: a bus resolves the forward-curb travel lane", serviceLaneOnWay({ id: "p", wayIds: ["w"] }, 0, roadMap, "bus") === defaultLaneFor(road, "forward", ["bus", "drive"]));
+  const pinId = road.lanes[0].id;
+  check("serviceLaneOnWay: an explicit pattern.lanes pin overrides the default", serviceLaneOnWay({ id: "p", wayIds: ["w"], lanes: { w: pinId } }, 0, roadMap, "bus") === pinId);
+  const rail = defaultProfileFor("heavyRail", 2);
+  const railMap = new Map<string, Way>([["r", { id: "r", typeId: "heavyRail", points: [[-115.2, 36.1], [-115.1, 36.1]], geometry: "straight", grade: "atGrade", profile: rail }]]);
+  const railLane = serviceLaneOnWay({ id: "p", wayIds: ["r"] }, 0, railMap, "subway");
+  check("serviceLaneOnWay: rail resolves a track lane", travelLanes(rail).find((l) => l.id === railLane)?.kindId === "track");
+}
+
+{
+  fresh();
+  store.getState().setDraftMode("bus");
+  const road = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(road, [-115.2, 36.12]);
+  store.getState().addWayPoint(road, [-115.1, 36.12]);
+  store.getState().finishWay();
+  store.getState().setWayCapacity(road, 2);
+  const sys = store.getState().system;
+  const svcId = sys.services[0].id;
+  const center = resolveWayPath(sys.ways.find((w) => w.id === road)!);
+  const onCenterline = (coords: LngLat[]) => coords.length === center.length && coords.every((c, i) => c[0] === center[i][0] && c[1] === center[i][1]);
+  const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(["road"]) };
+
+  const infra = buildFeatures(sys, null, [], { viewMode: "infrastructure", laneDetail: true, ...filters });
+  const infraFeats = infra.services.features.filter((f) => f.properties?.serviceId === svcId);
+  check("lane detail: the bus service renders", infraFeats.length >= 1);
+  check("lane detail: the service carries no paint offset (geometry IS the lane)", infraFeats.every((f) => f.properties?.offset === 0));
+  check("lane detail: the service sits on a curb lane, NOT the way centerline", infraFeats.some((f) => !onCenterline(f.geometry.coordinates as LngLat[])));
+
+  const net = buildFeatures(sys, null, [], { viewMode: "network", ...filters });
+  const netFeats = net.services.features.filter((f) => f.properties?.serviceId === svcId);
+  check("network view: the service stays on the way centerline (schematic)", netFeats.length === 1 && onCenterline(netFeats[0].geometry.coordinates as LngLat[]));
+}
+
+// --- patternLanePath: the polyline a vehicle rides in Infrastructure view ---
+{
+  fresh();
+  store.getState().setDraftMode("bus");
+  const w = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(w, [-115.2, 36.1]);
+  store.getState().addWayPoint(w, [-115.15, 36.1]);
+  store.getState().addWayPoint(w, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const sys = store.getState().system;
+  const waysById2 = wayById(sys.ways);
+  const way = sys.ways[0];
+  const pattern = sys.services[0].patterns[0];
+  const lanePath = serviceLanePath(pattern, waysById2, "bus");
+  check("serviceLanePath resolves a path for a single-way bus pattern", !!lanePath && lanePath.length >= 2);
+  const expectedLaneId = serviceLaneOnWay(pattern, 0, waysById2, "bus")!;
+  const expectedLane = wayLaneGeometry(way).lanes.find((l) => l.laneId === expectedLaneId)!;
+  check("serviceLanePath matches the resolved curb lane's own path", JSON.stringify(lanePath) === JSON.stringify(expectedLane.path));
+  check("serviceLanePath is NOT the way centerline", JSON.stringify(lanePath) !== JSON.stringify(resolveWayPath(way)));
+
+  // A lane-less profile (no lanes at all) can't resolve — null, not a throw.
+  const laneless = { ...way, profile: { lanes: [] } };
+  const nullPath = serviceLanePath(pattern, new Map([[way.id, laneless]]), "bus");
+  check("serviceLanePath returns null for a lane-less profile", nullPath === null);
+
+  // Multi-way: two ways sharing a lane-detail-eligible profile stitch into one
+  // continuous path (no duplicated junction point, matching patternPath's own
+  // stitching convention).
+  fresh();
+  store.getState().setDraftMode("bus");
+  const a = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(a, [-115.3, 36.2]);
+  store.getState().addWayPoint(a, [-115.2, 36.2]);
+  store.getState().finishWay();
+  const b = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(b, [-115.2, 36.2]);
+  store.getState().addWayPoint(b, [-115.1, 36.2]);
+  store.getState().finishWay();
+  const multiPattern = { id: "mp", wayIds: [a, b] };
+  const multiWaysById = wayById(store.getState().system.ways);
+  const multiPath = serviceLanePath(multiPattern, multiWaysById, "bus");
+  check("serviceLanePath stitches a multi-way pattern into one continuous path", !!multiPath && multiPath.length >= 3);
 }
 
 // --- a station snaps onto a way and follows it when reshaped ---

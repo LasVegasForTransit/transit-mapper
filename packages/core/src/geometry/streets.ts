@@ -11,9 +11,9 @@
 // offset. See model/system.ts CrossSection and geo.ts offsetPolyline.
 
 import { laneKind } from "../model/catalog";
-import { offsetPolyline, resolveWayPath } from "../model/geo";
+import { offsetPolyline, resolveWayPath, serviceLaneOnWay } from "../model/geo";
 import { profileWidthM } from "../model/profile";
-import type { LaneDirection, LngLat, Way } from "../model/system";
+import type { LaneDirection, LngLat, Pattern, Way } from "../model/system";
 
 /** One lane's drawable geometry: its centerline, offset from the way's. */
 export interface LanePath {
@@ -153,6 +153,38 @@ export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLane
   return result;
 }
 
+/**
+ * The polyline a service actually rides along `pattern`'s full route — one
+ * stitched lane centerline per way (via serviceLaneOnWay/wayLaneGeometry),
+ * concatenated the same way patternPath stitches plain way centerlines (each
+ * way contributes its own resolved order; only the first point of every
+ * subsequent segment is dropped as the shared junction coordinate — no
+ * per-way reversal needed, since a lane path is just resolveWayPath offset
+ * sideways and inherits its way's exact point order). Untrimmed (junction
+ * carve-back is Infrastructure-view rendering detail this ambient-vehicle
+ * path doesn't need). Null if any way is missing or has no resolvable lane
+ * (a lane-less profile) — callers fall back to patternPath's centerline,
+ * matching buildFeatures' own per-way fallback.
+ *
+ * Named distinctly from geometry/vehicleLane.ts's patternLanePath — that one
+ * resolves the lane a service's VEHICLE dot/shape rides (mode-catalog
+ * preferredLaneKindIds); this one resolves the lane the SERVICE LINE itself
+ * renders on (serviceLaneOnWay's pattern.lanes pins + defaultLaneFor). Same
+ * problem, two independent call sites, not yet unified.
+ */
+export function serviceLanePath(pattern: Pattern, waysById: Map<string, Way>, modeId: string): LngLat[] | null {
+  const path: LngLat[] = [];
+  for (let i = 0; i < pattern.wayIds.length; i++) {
+    const way = waysById.get(pattern.wayIds[i]);
+    if (!way) return null;
+    const laneId = serviceLaneOnWay(pattern, i, waysById, modeId);
+    const lane = laneId ? wayLaneGeometry(way).lanes.find((l) => l.laneId === laneId) : undefined;
+    if (!lane || lane.path.length < 2) return null;
+    path.push(...(path.length ? lane.path.slice(1) : lane.path));
+  }
+  return path.length >= 2 ? path : null;
+}
+
 /** Quick bbox pre-check: does this way plausibly intersect the view? Padded
  *  by its own half-width so a wide road whose centerline sits just offscreen
  *  still renders. Cheap linear filter — fine for hand-drawn systems and a
@@ -160,8 +192,44 @@ export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLane
  *  signature if profiling ever demands it. */
 export function wayIntersectsBounds(way: Way, bounds: [LngLat, LngLat], padDeg = 0.002): boolean {
   const [[west, south], [east, north]] = bounds;
-  for (const [lng, lat] of way.points) {
-    if (lng >= west - padDeg && lng <= east + padDeg && lat >= south - padDeg && lat <= north + padDeg) return true;
+  const minX = west - padDeg, maxX = east + padDeg, minY = south - padDeg, maxY = north + padDeg;
+  const pts = way.points;
+  for (let i = 0; i < pts.length; i++) {
+    const [lng, lat] = pts[i];
+    // A control point inside the padded box — or a SEGMENT that cuts across it
+    // even though both its endpoints sit outside. Without the segment test, a
+    // long road/track whose vertices are far apart culled its own lane detail
+    // when you zoomed into its middle, even though it plainly crossed the view.
+    if (lng >= minX && lng <= maxX && lat >= minY && lat <= maxY) return true;
+    if (i > 0 && segmentIntersectsBox(pts[i - 1], pts[i], minX, minY, maxX, maxY)) return true;
   }
   return false;
+}
+
+/** Liang–Barsky segment ∩ axis-aligned box — true when a→b crosses the box,
+ *  including the case where both endpoints lie outside it. */
+function segmentIntersectsBox(a: LngLat, b: LngLat, minX: number, minY: number, maxX: number, maxY: number): boolean {
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  let t0 = 0, t1 = 1;
+  const edges: [number, number][] = [
+    [-dx, a[0] - minX],
+    [dx, maxX - a[0]],
+    [-dy, a[1] - minY],
+    [dy, maxY - a[1]],
+  ];
+  for (const [p, q] of edges) {
+    if (p === 0) {
+      if (q < 0) return false; // parallel to this edge and outside its slab
+      continue;
+    }
+    const r = q / p;
+    if (p < 0) {
+      if (r > t1) return false;
+      if (r > t0) t0 = r;
+    } else {
+      if (r < t0) return false;
+      if (r < t1) t1 = r;
+    }
+  }
+  return true;
 }

@@ -1,13 +1,13 @@
 import type { FeatureCollection, Feature, LineString, Point, Polygon } from "geojson";
 import { wayType } from "@transitmapper/core/model/catalog";
 import { facilityRender, gradeFlags, laneRender, modeRender, showWayWhenServed, wayRender } from "../style/catalogStyle";
-import { resolveWayPath, wayById } from "../model/geo";
+import { resolveWayPath, serviceLaneOnWay, wayById } from "../model/geo";
 import { nearWaysForStations, servicesByWay, visibleWaysFor } from "./featureMemo";
 import { directionalLanes, isOneWay, wayCapacity } from "../model/profile";
 import { wayIntersectsBounds, wayLaneGeometry } from "../geometry/streets";
 import { collectWayTrims, connectorCurves, junctionGeometry, type JunctionGeometry, type WayTrims } from "../geometry/junctions";
 import { iconName } from "./iconName";
-import type { LngLat, Service, TransitSystem } from "../model/system";
+import type { LngLat, Pattern, Service, TransitSystem } from "../model/system";
 import { HANDLE_ICON, widthPxAtZ14 } from "./constants";
 
 /** What the renderer needs to know about the current selection: which single
@@ -26,8 +26,10 @@ const NEUTRAL_STATION = "#4b5563";
 const UNASSIGNED_COLOR = "#b9b9b2";
 const UNASSIGNED_WIDTH = 2;
 const UNASSIGNED_FAMILIES = new Set(["guideway", "aerial", "water"]);
-const BUNDLE_SPACING_PX = 5; // perpendicular gap between parallel services
+const BUNDLE_SPACING_PX = 5; // perpendicular gap between parallel services (Network schematic bundle)
 const LANE_SPACING_PX = 3; // perpendicular gap between a way's own capacity lanes/tracks
+const WITHIN_LANE_SPACING_PX = 1.5; // gap between services sharing ONE lane in Infrastructure lane-detail
+const SERVICE_LANE_FRACTION = 0.6; // a service overlay fills ~60% of its lane's width (leaves the lane markings visible)
 
 // Continuity-aware bundle offsets. Each service gets ONE constant offset slot
 // for its entire path — chosen greedily as the smallest-magnitude slot free on
@@ -81,6 +83,41 @@ function bundleSlots(byWay: Map<string, Service[]>): Map<string, number> {
   }
   bundleSlotCache.set(byWay, slots);
   return slots;
+}
+
+/** One service's one pattern touching a way, at that pattern's wayIds index —
+ *  everything serviceLaneOnWay needs to resolve the lane, pre-indexed by way
+ *  so the lane-detail render (below) is O(1) per way instead of re-scanning
+ *  every rider service's full pattern list for every way it's ever on. Built
+ *  once per system.services (memoized on byWay's identity, same contract as
+ *  bundleSlots) — O(total pattern-way entries) regardless of how many ways
+ *  are actually in view. */
+interface WayPatternEntry {
+  svc: Service;
+  pattern: Pattern;
+  wayIdx: number;
+}
+const wayPatternIndexCache = new WeakMap<Map<string, Service[]>, Map<string, WayPatternEntry[]>>();
+function wayPatternIndex(byWay: Map<string, Service[]>): Map<string, WayPatternEntry[]> {
+  const cached = wayPatternIndexCache.get(byWay);
+  if (cached) return cached;
+  const seen = new Set<string>();
+  const index = new Map<string, WayPatternEntry[]>();
+  for (const svcs of byWay.values()) {
+    for (const svc of svcs) {
+      if (seen.has(svc.id)) continue;
+      seen.add(svc.id);
+      for (const pattern of svc.patterns) {
+        pattern.wayIds.forEach((wid, wayIdx) => {
+          let arr = index.get(wid);
+          if (!arr) index.set(wid, (arr = []));
+          arr.push({ svc, pattern, wayIdx });
+        });
+      }
+    }
+  }
+  wayPatternIndexCache.set(byWay, index);
+  return index;
 }
 
 export interface SystemFeatures {
@@ -352,23 +389,61 @@ export function buildFeatures(
     // Network view is the clean schematic map — grade (tunnel/viaduct styling)
     // is physical-alignment detail that belongs to the Infrastructure view.
     const { underground, elevated } = network ? { underground: false, elevated: false } : gradeFlags(way.grade);
-    bundle.forEach((svc) => {
-      services.push({
-        type: "Feature",
-        properties: {
-          serviceId: svc.id,
-          wayId: way.id,
-          color: svc.color,
-          width: modeRender(svc.modeId).width,
-          underground,
-          elevated,
-          // Constant across the service's whole path → no jog at shared-segment
-          // boundaries (see bundleSlots), instead of the per-way bundle index.
-          offset: (slots.get(svc.id) ?? 0) * BUNDLE_SPACING_PX,
-        },
-        geometry: { type: "LineString", coordinates: path },
-      });
+    const svcFeature = (svc: Service, coords: LngLat[], offset: number, w14?: number): Feature<LineString> => ({
+      type: "Feature",
+      // w14 present ⇒ a lane-detail overlay: the service layer grows it with
+      // zoom, clamped to a sensible min/max (SERVICE_WIDTH_EXPR); absent ⇒ the
+      // schematic fixed `width` is used (Network view).
+      properties: { serviceId: svc.id, wayId: way.id, color: svc.color, width: modeRender(svc.modeId).width, underground, elevated, offset, ...(w14 !== undefined ? { w14 } : {}) },
+      geometry: { type: "LineString", coordinates: coords },
     });
+    // Constant per-service offset on the CENTERLINE — no jog at shared-segment
+    // boundaries (see bundleSlots). This is the Network schematic and the
+    // lane-detail fallback when a lane can't be resolved.
+    const centerlineFeature = (svc: Service) => svcFeature(svc, path, (slots.get(svc.id) ?? 0) * BUNDLE_SPACING_PX);
+
+    if (laneDetail) {
+      // INFRASTRUCTURE lane detail: draw each service on the ACTUAL lane it
+      // uses — the curb lane for its travel direction, or its track — instead
+      // of the schematic centerline. wayLaneGeometry is memoized on the same
+      // trims emitLaneDetail already computed above, so this is a cache hit.
+      const trims = wayTrims.get(way.id) ?? { start: 0, end: 0 };
+      const laneById = new Map(wayLaneGeometry(way, trims.start, trims.end).lanes.map((l) => [l.laneId, l] as const));
+      const lat = way.points[0]?.[1] ?? 36;
+      // Which lane(s) each service rides here — it may traverse the way in more
+      // than one pattern/direction (both curbs). Group services by lane so
+      // services sharing a lane can fan slightly instead of overprinting.
+      // wayPatternIndex is pre-built once for the whole system — O(1) here,
+      // not a re-scan of every rider's full pattern list per way.
+      const byLane = new Map<string, Service[]>();
+      const resolved = new Set<string>();
+      for (const { svc, pattern, wayIdx } of wayPatternIndex(byWay).get(way.id) ?? []) {
+        const laneId = serviceLaneOnWay(pattern, wayIdx, waysById, svc.modeId);
+        if (!laneId || !laneById.has(laneId)) continue;
+        resolved.add(svc.id);
+        let arr = byLane.get(laneId);
+        if (!arr) byLane.set(laneId, (arr = []));
+        // A service can land on the SAME lane via two of its own patterns
+        // (rare) — don't double-emit it there.
+        if (!arr.some((s) => s.id === svc.id)) arr.push(svc);
+      }
+      // A bundle rider with no lane resolved anywhere on this way (a lane-less
+      // profile) falls back to the centerline.
+      bundle.forEach((svc) => {
+        if (!resolved.has(svc.id)) services.push(centerlineFeature(svc));
+      });
+      for (const [laneId, svcs] of byLane) {
+        const lane = laneById.get(laneId)!;
+        // w14 = the lane's overlay half-width in z14 px; today it only FLAGS a
+        // lane-detail overlay (the layer's zoom-clamped SERVICE_WIDTH_EXPR draws
+        // the band), but it carries the metric so a per-lane width can use it later.
+        const w14 = widthPxAtZ14(lane.widthM * SERVICE_LANE_FRACTION, lat);
+        const n = svcs.length; // lone service sits dead-centre on its lane
+        svcs.forEach((svc, i) => services.push(svcFeature(svc, lane.path, (i - (n - 1) / 2) * WITHIN_LANE_SPACING_PX, w14)));
+      }
+    } else {
+      bundle.forEach((svc) => services.push(centerlineFeature(svc)));
+    }
   }
 
   const visibleWays = visibleWaysFor(system.ways, view.visibleWayTypes);
