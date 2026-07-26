@@ -249,7 +249,10 @@ input { font: inherit; }
    of it in DOM order — a load error can only ever happen right after a
    shared link fails to fetch, so there's nothing it needs to share a slot
    with; it just sits above the view switch in that one card. */
-.load-error {
+/* App-level banner: a share that wouldn't open, a save that isn't happening.
+   Named for the slot rather than the message now that more than one thing
+   uses it (Workbench's `banner` prop). */
+.app-banner {
   background: var(--danger-soft); color: var(--danger);
   padding: 8px 12px; font-size: var(--fs-body-md); border-radius: 8px;
   border: 1px solid var(--border); box-shadow: var(--shadow);

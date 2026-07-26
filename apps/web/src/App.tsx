@@ -1,10 +1,20 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { MapCanvas } from "./map/MapCanvas";
 import { getMap } from "./map/mapRef";
 import { useEditor, useEditorStore } from "./editor/EditorProvider";
 import { createEmptySystem } from "@transitmapper/core/model/serialize";
 import { fetchShare } from "./share/api";
-import { getActiveId, listLibrary, loadSystemById, migrateLegacySingleSlot, saveToLibrary, setActiveId } from "./storage/localStore";
+import {
+  getActiveId,
+  listLibrary,
+  loadSystemById,
+  loadSystemEntry,
+  migrateLegacySingleSlot,
+  saveToLibrary,
+  setActiveId,
+  type SaveOutcome,
+} from "./storage/localStore";
 import { Icon } from "./ui/Icon";
 import { ImportProgressPill } from "./ui/ImportProgressPill";
 import { Inspector } from "./ui/Inspector";
@@ -34,12 +44,54 @@ const SystemsDialog = lazy(() => import("./ui/SystemsDialog").then((m) => ({ def
 
 const SHARE_PREFIX = "/s/";
 
+// The common case by far is a chunk whose filename changed under a tab that
+// was left open, so "reload" is the actual fix rather than a shrug.
+const dialogFailureNotice = "That dialog couldn’t be loaded. Your system is safe — reload the page and try again.";
+
+// Says what still works, because most of it does: the basemap is a backdrop
+// from a third-party host, and everything the user has drawn is ours.
+const basemapNotice = "The background map couldn’t be loaded, so the map behind your system is blank. Your system is unaffected and still saved.";
+
+// Deliberately says the damaged copy still exists. "Your work is gone" and
+// "your work is here but unreadable" call for very different reactions, and
+// only one of them is true.
+const corruptSystemNotice = "The system you had open couldn’t be read, so this is a new one. The damaged copy is still saved and hasn’t been deleted.";
+
+interface LazyDialogProps {
+  children: ReactNode;
+  /** Runs when the chunk fails to load, so the dialog that can't render stops
+   *  occupying the screen and the reason is reported somewhere visible. */
+  onFailure: () => void;
+}
+
+/**
+ * Every dialog is a separately-hashed `lazy()` chunk, which means every dialog
+ * is a network request that can fail — most reliably right after a deploy,
+ * when an already-open tab asks for a filename that no longer exists. A bare
+ * `Suspense` has no answer for a rejected import: the rejection propagates
+ * past it and unmounts the whole app, taking the user's unsaved system with
+ * it. The boundary is what turns that into a closed dialog and a sentence.
+ */
+function LazyDialog({ children, onFailure }: LazyDialogProps) {
+  return (
+    <ErrorBoundary label="dialog" onError={onFailure}>
+      <Suspense fallback={null}>{children}</Suspense>
+    </ErrorBoundary>
+  );
+}
+
 export function App() {
   const store = useEditorStore();
   const name = useEditor((s) => s.system.name);
   const { shortcutsOpen, closeShortcuts, uiHidden, toggleUi, activeDialog, closeDialog } = useUi();
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Anything worth telling the user that isn't the share-load error: a stored
+  // system that wouldn't parse, a dialog that failed to load.
+  const [notice, setNotice] = useState<string | null>(null);
+  // Whether the working copy is actually reaching disk. Anything other than
+  // "saved" means the editor is lying about being safe to close.
+  const [saveState, setSaveState] = useState<SaveOutcome>("saved");
 
   // Bootstrap: shared link → read-only load; otherwise local autosave or fresh.
   useEffect(() => {
@@ -57,8 +109,17 @@ export function App() {
     // to any saved system if the active-id pointer is stale; otherwise start
     // a brand-new one (and only then default the tool to Way, matching the
     // very first run's old behavior).
+    //
+    // A record that exists but won't parse is called out rather than skipped.
+    // Falling through to a fresh empty system is the right *recovery* — there
+    // is nothing else to show — but doing it silently means the user opens the
+    // app to a blank canvas and concludes their work is gone. The bytes are
+    // still in storage; saying so is the difference between a bug report we
+    // can act on and someone quietly leaving.
     const activeId = getActiveId();
-    let system = activeId ? loadSystemById(activeId) : null;
+    const active = activeId ? loadSystemEntry(activeId) : { status: "missing" as const };
+    let system = active.status === "ok" ? active.system : null;
+    if (active.status === "corrupt") setNotice(corruptSystemNotice);
     if (!system) system = migrateLegacySingleSlot();
     if (!system) {
       const entries = listLibrary();
@@ -69,7 +130,9 @@ export function App() {
       system = createEmptySystem();
       isBrandNew = true;
     }
-    saveToLibrary(system);
+    // The first save is the one that proves storage works at all — a browser
+    // in private mode fails here, before the user has typed anything.
+    setSaveState(saveToLibrary(system));
     setActiveId(system.id);
     store.getState().setSystem(system, { readOnly: false });
     if (isBrandNew) store.getState().setTool("way");
@@ -87,7 +150,7 @@ export function App() {
       if (s.system.id !== prev.system.id) setActiveId(s.system.id);
       window.clearTimeout(saveTimer.current);
       const snapshot = s.system;
-      saveTimer.current = window.setTimeout(() => saveToLibrary(snapshot), 400);
+      saveTimer.current = window.setTimeout(() => setSaveState(saveToLibrary(snapshot)), 400);
     });
   }, [store]);
 
@@ -116,15 +179,42 @@ export function App() {
   // shouldn't still claim this slot.
   const hasSupplementalContent = selection !== null || multiSelection.length > 0 || (tool !== "select" && !readOnly && viewMode !== "diagram");
 
-  const errorBanner = loadError && <div className="load-error">Couldn’t open shared system: {loadError}</div>;
+  const dialogFailed = () => {
+    closeDialog();
+    setNotice(dialogFailureNotice);
+  };
+
+  // Everything app-level and urgent goes through Workbench's one banner slot.
+  // A failing autosave outranks the others: the other two describe something
+  // that already happened, this one is still happening and gets worse the
+  // longer it goes unread.
+  const saveMessage =
+    saveState === "full"
+      ? "Your browser’s storage is full, so your work is no longer being saved. Export this system, or delete one you don’t need, to make room."
+      : saveState === "unavailable"
+        ? "This browser isn’t saving your work — storage is unavailable here, which private browsing windows often do. Export before closing the tab."
+        : null;
+  const banner = saveMessage ? (
+    <div className="app-banner" role="alert">
+      {saveMessage}
+    </div>
+  ) : loadError ? (
+    <div className="app-banner" role="alert">
+      Couldn’t open shared system: {loadError}
+    </div>
+  ) : notice ? (
+    <div className="app-banner" role="alert">
+      {notice}
+    </div>
+  ) : null;
 
   return (
     <div className="app">
-      {ready && <MapCanvas />}
+      {ready && <MapCanvas onBasemapUnavailable={() => setNotice(basemapNotice)} />}
       {chromeMounted && (
         <div data-ui-state={chromeClosing ? "closed" : "open"} className="app-chrome">
           <Workbench
-            loadError={errorBanner}
+            banner={banner}
             brand={<TopBarBrand />}
             menuPanel={<LinesPanel />}
             supplementalPanel={<Inspector />}
@@ -143,34 +233,34 @@ export function App() {
         </button>
       )}
       {shortcutsOpen && (
-        <Suspense fallback={null}>
+        <LazyDialog onFailure={() => { closeShortcuts(); setNotice(dialogFailureNotice); }}>
           <ShortcutsDialog onClose={closeShortcuts} />
-        </Suspense>
+        </LazyDialog>
       )}
       {activeDialog === "import" && (
-        <Suspense fallback={null}>
+        <LazyDialog onFailure={dialogFailed}>
           <ImportDialog onClose={closeDialog} />
-        </Suspense>
+        </LazyDialog>
       )}
       {activeDialog === "gtfs" && (
-        <Suspense fallback={null}>
+        <LazyDialog onFailure={dialogFailed}>
           <GtfsImportDialog onClose={closeDialog} />
-        </Suspense>
+        </LazyDialog>
       )}
       {activeDialog === "export" && (
-        <Suspense fallback={null}>
+        <LazyDialog onFailure={dialogFailed}>
           <ExportDialog onClose={closeDialog} />
-        </Suspense>
+        </LazyDialog>
       )}
       {activeDialog === "share" && (
-        <Suspense fallback={null}>
+        <LazyDialog onFailure={dialogFailed}>
           <ShareDialog onClose={closeDialog} />
-        </Suspense>
+        </LazyDialog>
       )}
       {activeDialog === "systems" && (
-        <Suspense fallback={null}>
+        <LazyDialog onFailure={dialogFailed}>
           <SystemsDialog onClose={closeDialog} />
-        </Suspense>
+        </LazyDialog>
       )}
     </div>
   );
