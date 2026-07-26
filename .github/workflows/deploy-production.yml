@@ -15,8 +15,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # CI itself doesn't run on main (it triggers on pull requests and on pushes
+  # to other branches), so before this existed a push to main went straight to
+  # production with nothing typechecked and no tests run. Calling the CI
+  # workflow rather than repeating its steps keeps one source of truth for
+  # what "validated" means.
+  validate:
+    name: Validate
+    uses: ./.github/workflows/ci.yml
+
   deploy:
     name: Build and deploy to Cloudflare Workers
+    needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Scopes secrets to the production environment + surfaces a deployment

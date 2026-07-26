@@ -9,10 +9,18 @@ import type {
 import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from "@transitmapper/core/render/preview";
 import { checkPreviewPng, MAX_PREVIEW_BYTES } from "@transitmapper/core/render/pngBytes";
 
+interface RateLimiter {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
+
 interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   SITE_URL: string;
+  /** Ceiling on share creation — see the unsafe.bindings block in
+   *  wrangler.toml for why this endpoint in particular has one. Optional
+   *  because `wrangler dev` doesn't provide it locally. */
+  SHARE_CREATE_LIMITER?: RateLimiter;
 }
 
 const MAX_BODY_BYTES = 1_000_000; // ~1 MB — generous for a hand-drawn system.
@@ -165,6 +173,27 @@ function touchExpiry(db: D1Database, share: ShareRow): Promise<unknown> | null {
 
 // Create an immutable snapshot of a system and return its share id.
 app.post("/api/systems", async (c) => {
+  // Keyed on the client IP Cloudflare attaches to the request, which a caller
+  // can't set themselves.
+  //
+  // The header is absent in local dev, and so is the binding, so the limiter
+  // is skipped there — but the two are checked separately on purpose. Missing
+  // header means "not behind Cloudflare", i.e. local. A *present* header with
+  // no binding means the deployed config lost its binding (easy to do: the
+  // wrangler 4 syntax for this is silently ignored by wrangler 3), and that
+  // must be loud rather than a silent loss of rate limiting in production.
+  const clientIp = c.req.header("cf-connecting-ip");
+  if (clientIp) {
+    if (!c.env.SHARE_CREATE_LIMITER) {
+      console.error("SHARE_CREATE_LIMITER binding missing — refusing to accept shares unlimited");
+      return c.json({ error: "Share creation is temporarily unavailable" }, 503);
+    }
+    const { success } = await c.env.SHARE_CREATE_LIMITER.limit({ key: clientIp });
+    if (!success) {
+      return c.json({ error: "Too many shares created. Try again in a minute." }, 429);
+    }
+  }
+
   const raw = await c.req.text();
   if (raw.length > MAX_BODY_BYTES) {
     return c.json({ error: "System too large" }, 413);
@@ -463,15 +492,13 @@ async function handleEmbedPage(c: Context<{ Bindings: Env }>) {
 app.get("/e/:id", handleEmbedPage);
 app.get("/e/:id/", handleEmbedPage);
 
-// Anything reaching here is a path with no matching asset — a client route
-// like /systems, or a genuinely missing file. Real assets never get this far:
-// they're served straight from the assets binding without invoking the Worker
-// at all, which is what keeps them free (see wrangler.toml).
+// Only the share and embed prefixes reach the Worker (see run_worker_first in
+// wrangler.toml), so this catches ids under them that matched no earlier
+// route. Assets and ordinary client routes never get here — they're served
+// straight from the assets binding, which also owns the SPA fallback again.
 //
-// This is the SPA fallback, done here rather than by `not_found_handling`
-// because that would also swallow /s/:id before the Worker could inject its
-// meta tags. The editor is never framable — it's a real application surface,
-// and the embed route above is the one deliberate exception.
+// The editor is never framable: it's a real application surface, and the
+// embed route above is the one deliberate exception.
 app.all("*", async (c) => {
   const shell = await fetchAppShell(c);
   const response = new Response(shell.body, shell);

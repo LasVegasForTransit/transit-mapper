@@ -12,20 +12,34 @@ compatibility_date = "2024-11-06"
 # true` every JS chunk, stylesheet and favicon on every page load was one of
 # those — roughly a dozen per visit, for no reason.
 #
-# So assets are matched first, and only what genuinely needs Worker logic
-# falls through: /api/*, and the client routes below. `not_found_handling` is
-# "none" rather than "single-page-application" precisely so that fall-through
-# happens — the SPA shell would otherwise be returned for /s/:id without the
-# Worker ever seeing it, and its per-share meta tags would never be injected.
-# The catch-all in src/index.ts serves the shell instead.
-#
-# (wrangler 4 can scope `run_worker_first` to a path list, which would express
-# this directly. This project is pinned to wrangler 3, where it's a boolean.)
+# Scoped to the paths that genuinely need Worker logic. Everything else —
+# every JS chunk, stylesheet and favicon — is served straight from assets,
+# free and without invoking anything.
 [assets]
 directory = "../web/dist"
 binding = "ASSETS"
-not_found_handling = "none"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/s/*", "/e/*"]
 
+
+# Share creation is the only endpoint that writes caller-supplied bytes to
+# storage (the preview card), so it's the one that needs a ceiling on how fast
+# a script can call it. Validation bounds a single upload; this bounds the
+# rate. D1's free allowance is 500MB and a card is capped at 120KB, so without
+# this a determined caller could fill the database in an afternoon.
+#
+# Deliberately a binding rather than a dashboard rate-limiting rule: it lives
+# with the code that needs it, it's reviewable in a diff, and it doesn't
+# depend on someone remembering to recreate a rule. `period` may only be 10 or
+# 60 seconds. 20 creates a minute is far above anything a person does by hand
+# and far below what a script needs to be a problem.
+[[ratelimits]]
+name = "SHARE_CREATE_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 20
+  period = 60
 
 [[d1_databases]]
 binding = "DB"
