@@ -27,6 +27,9 @@ deepens.
 - [Import streets from OpenStreetMap](how-to/import-osm.md).
 - [Share and export](how-to/share-and-export.md) — read-only links, forking,
   PNG export.
+- [Run TransitMapper in production](how-to/operations.md) — deploy, roll
+  back, apply a migration, restore the database, and what to do when the
+  Worker breaks.
 
 ## Reference
 

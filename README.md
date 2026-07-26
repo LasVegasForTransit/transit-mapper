@@ -26,7 +26,9 @@ is specific to one city or one transit agency.
 - Zoom out for a clean, simple transit map, or zoom into the physical
   street layout underneath it.
 - Everything saves automatically in your browser. Share a link to your
-  system, and anyone can view it or make their own copy.
+  system, and anyone can view it or make their own copy. Shared links last a
+  week from the last time someone opened them; permanent links are waiting on
+  accounts (see [ROADMAP.md](ROADMAP.md)).
 - Paste that link anywhere and the preview shows the actual system, or
   embed a live read-only map in a blog post with an iframe.
 
