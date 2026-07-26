@@ -46,5 +46,82 @@ jobs:
       - name: Setup Node + pnpm
         uses: ./.github/actions/setup-node-pnpm
 
+      # Schema first, then code. `wrangler deploy` does not apply migrations,
+      # so until now the two travelled on separate tracks with nothing
+      # ordering them: a release whose code read a column the database didn't
+      # have yet would deploy cleanly and then 500 on every share.
+      #
+      # Applying before deploying is the safe order for additive migrations
+      # (a new column the running code simply ignores). A destructive one is
+      # not safe in either order and needs to be split across two releases —
+      # see docs/how-to/operations.md.
+      - name: Apply D1 migrations
+        run: pnpm --filter @transitmapper/worker exec wrangler d1 migrations apply transitmapper --remote
+
       - name: Build and deploy
         run: pnpm run deploy
+
+      # A green deploy only proves the upload succeeded. It says nothing about
+      # whether the Worker is actually serving the routes it was built for —
+      # which is exactly how production spent four days serving a stale build
+      # where every share link, preview image and embed silently fell through
+      # to the SPA shell, with no failure anywhere to notice.
+      #
+      # Each check below is one of those symptoms, turned into an assertion.
+      - name: Smoke test production
+        env:
+          SITE: https://map.lasvegasfortransit.org
+        run: |
+          set -euo pipefail
+
+          # A share id that cannot exist, so these assert routing rather than data.
+          missing="zzzzzzzzzz"
+          failed=0
+
+          expect() {
+            local label="$1" url="$2" want="$3" actual="$4"
+            if [ "$actual" = "$want" ]; then
+              echo "  ok  $label"
+            else
+              echo "FAIL  $label — wanted '$want', got '$actual' ($url)"
+              failed=1
+            fi
+          }
+
+          status() { curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$1"; }
+          ctype() { curl -sS -o /dev/null -w '%{content_type}' --max-time 20 "$1" | cut -d';' -f1; }
+          header() { curl -sSI --max-time 20 "$1" | tr 'A-Z' 'a-z' | grep -c "^$2:" || true; }
+
+          # Give a fresh deployment a moment to become globally reachable
+          # before asserting anything about it.
+          for _ in 1 2 3 4 5; do
+            [ "$(status "$SITE/")" = "200" ] && break
+            sleep 5
+          done
+
+          # The Worker runs for /api — a JSON 404, not the SPA shell.
+          expect "the API answers unknown shares with JSON" "$SITE/api/systems/$missing" "application/json" "$(ctype "$SITE/api/systems/$missing")"
+          expect "the API answers unknown shares with 404" "$SITE/api/systems/$missing" "404" "$(status "$SITE/api/systems/$missing")"
+
+          # The Worker runs for /s — a missing share is 404, not a 200 SPA shell.
+          expect "a missing share page is 404, not the SPA shell" "$SITE/s/$missing" "404" "$(status "$SITE/s/$missing")"
+
+          # Preview images are images. Serving HTML here means every pasted
+          # link unfurls with a broken card.
+          expect "a preview image is a PNG" "$SITE/s/$missing/preview.png" "image/png" "$(ctype "$SITE/s/$missing/preview.png")"
+          expect "the site-wide OG image is a PNG" "$SITE/og-image.png" "image/png" "$(ctype "$SITE/og-image.png")"
+
+          # public/ actually shipped. Asserted on content type, not status:
+          # the SPA fallback answers 200 for everything, so a status check
+          # passes happily while the file itself is missing.
+          expect "the web manifest is JSON, not the SPA fallback" "$SITE/manifest.json" "application/json" "$(ctype "$SITE/manifest.json")"
+
+          # _headers applied. Without it the editor has no CSP and no HSTS.
+          expect "assets carry a Content-Security-Policy" "$SITE/" "1" "$(header "$SITE/" "content-security-policy")"
+          expect "assets carry HSTS" "$SITE/" "1" "$(header "$SITE/" "strict-transport-security")"
+
+          if [ "$failed" -ne 0 ]; then
+            echo "Smoke test failed — production is serving something other than this build."
+            exit 1
+          fi
+          echo "Smoke test passed."
