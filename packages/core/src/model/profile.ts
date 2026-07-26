@@ -43,6 +43,44 @@ function clampLaneCount(n: number): number {
   return Number.isFinite(n) ? Math.min(MAX_PRIMARY_LANES, Math.max(1, Math.round(n))) : 1;
 }
 
+/** Which of a way type's default edge lanes — the non-primary furniture that
+ *  brackets the travel lanes, sidewalks above all — to keep. Both default to
+ *  true; a caller that knows a side has no sidewalk drops that side rather
+ *  than inventing one. */
+export interface ProfileEdges {
+  leading?: boolean;
+  trailing?: boolean;
+}
+
+/**
+ * Wrap an explicit block of primary travel lanes in the way type's default
+ * leading/trailing non-primary lanes. For callers that know exactly which
+ * travel lanes they want and in what direction but shouldn't have to restate
+ * the furniture around them.
+ *
+ * Left-to-right order is the caller's: `primary[0]` is the leftmost travel
+ * lane facing forward. Backward lanes therefore come first under right-hand
+ * traffic, matching defaultProfileFor and withLaneCount.
+ */
+export function profileWithPrimaryLanes(typeId: string, primary: ProfileTemplateLane[], edges: ProfileEdges = {}): CrossSection {
+  const type = wayType(typeId);
+  const leading: ProfileTemplateLane[] = [];
+  const trailing: ProfileTemplateLane[] = [];
+  let seenPrimary = false;
+  for (const t of type.defaultProfile) {
+    if (t.kindId === type.primaryLaneKindId) {
+      seenPrimary = true;
+      continue;
+    }
+    (seenPrimary ? trailing : leading).push(t);
+  }
+  return buildProfile([
+    ...(edges.leading === false ? [] : leading),
+    ...primary,
+    ...(edges.trailing === false ? [] : trailing),
+  ]);
+}
+
 /**
  * The profile a way gets when only a legacy scalar capacity (+ class) is
  * known — the v5→v6 migration path, and the fallback for imported data.
@@ -57,18 +95,6 @@ export function defaultProfileFor(typeId: string, capacity?: number): CrossSecti
   const defaultPrimary = template.filter((t) => t.kindId === type.primaryLaneKindId).length;
   if (n === undefined || n === defaultPrimary) return buildProfile(template);
 
-  // Rebuild: keep the template's leading/trailing non-primary lanes, replace
-  // the primary block with n lanes split backward/forward.
-  const leading: ProfileTemplateLane[] = [];
-  const trailing: ProfileTemplateLane[] = [];
-  let seenPrimary = false;
-  for (const t of template) {
-    if (t.kindId === type.primaryLaneKindId) {
-      seenPrimary = true;
-      continue;
-    }
-    (seenPrimary ? trailing : leading).push(t);
-  }
   const primary: ProfileTemplateLane[] = [];
   if (n === 1) {
     primary.push({ kindId: type.primaryLaneKindId, direction: "both" });
@@ -78,7 +104,7 @@ export function defaultProfileFor(typeId: string, capacity?: number): CrossSecti
       primary.push({ kindId: type.primaryLaneKindId, direction: i < backward ? "backward" : "forward" });
     }
   }
-  return buildProfile([...leading, ...primary, ...trailing]);
+  return profileWithPrimaryLanes(typeId, primary);
 }
 
 /** Headline capacity — how many lanes/tracks of counting kinds the profile
