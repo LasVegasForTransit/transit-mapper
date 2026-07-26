@@ -57,7 +57,15 @@ function setBasemapVisible(map: MLMap, visible: boolean): void {
   }
 }
 
-export function MapCanvas() {
+export interface MapCanvasProps {
+  /** Called once if the basemap never loads. The editor still works without
+   *  it — every way, station and service is ours and draws regardless — but
+   *  the backdrop is blank, and a user who isn't told assumes the app broke
+   *  rather than that a third-party tile host is down. */
+  onBasemapUnavailable?: () => void;
+}
+
+export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const store = useEditorStore();
   const { openShortcuts, toggleUi } = useUi();
@@ -67,6 +75,12 @@ export function MapCanvas() {
   // view options from this ref rather than closing over React state, so a
   // separate effect can push view-only changes (Network⇄Infrastructure, a
   // filter toggle) without tearing down and recreating the whole map.
+  // Held in a ref, not read directly in the map effect: that effect builds the
+  // whole map, and listing a caller-supplied callback in its deps would tear
+  // the map down and rebuild it every time App re-renders with a fresh arrow.
+  const basemapFailureRef = useRef(onBasemapUnavailable);
+  basemapFailureRef.current = onBasemapUnavailable;
+
   const viewRef = useRef<ViewOptions>({ viewMode, visibleModes, visibleWayTypes });
   const pushDataRef = useRef<(() => void) | null>(null);
 
@@ -128,6 +142,30 @@ export function MapCanvas() {
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     setMap(map);
+
+    // MapLibre reports style/source/tile failures through this event rather
+    // than by throwing, so without a listener they are completely silent —
+    // the same reasoning embed/main.ts already applies, which called silent
+    // half-rendering the worst possible failure mode. It is worse here: the
+    // overlay's self-healing in ensureOverlay() will keep re-adding layers
+    // over a style that never loaded, hiding a persistent failure forever.
+    //
+    // BASEMAP_STYLE is a third-party host (openfreemap.org) with no SLA, so
+    // "the basemap is down" is a real operating condition, not a hypothetical.
+    // Only a failure *before the style loads* is worth telling the user about:
+    // once it's up, later errors are individual tiles timing out, which
+    // MapLibre retries and which nobody needs a message about.
+    let styleLoaded = false;
+    let reportedBasemapFailure = false;
+    map.on("style.load", () => {
+      styleLoaded = true;
+    });
+    map.on("error", (e) => {
+      console.error("[transitmapper]", e.error ?? e);
+      if (styleLoaded || reportedBasemapFailure) return;
+      reportedBasemapFailure = true;
+      basemapFailureRef.current?.();
+    });
 
     let detachInteractions: (() => void) | null = null;
     let detachVehicles: (() => void) | null = null;
