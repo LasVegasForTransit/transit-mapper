@@ -1156,6 +1156,27 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("imported way keeps its OSM source marker", store.getState().system.ways.find((w) => w.id === "osm-a")?.source === "osm:123");
 }
 
+// --- crossings at different grades are bridges, not missing junctions ---
+{
+  fresh();
+  const overpass: Way[] = [
+    { id: "surface", typeId: "road", points: [[-115.2, 36.1], [-115.1, 36.1]], geometry: "straight", grade: "atGrade", profile: defaultProfileFor("road") },
+    { id: "bridge", typeId: "road", points: [[-115.15, 36.05], [-115.15, 36.15]], geometry: "straight", grade: "elevated", profile: defaultProfileFor("road") },
+  ];
+  store.getState().importWays(overpass);
+  check(
+    "an elevated way crossing a surface street is not flagged",
+    !validateSystem(store.getState().system).some((i) => i.id.startsWith("crossing-")),
+  );
+
+  fresh();
+  store.getState().importWays(overpass.map((w) => ({ ...w, grade: "atGrade" as const })));
+  check(
+    "the same two ways at one grade are still flagged",
+    validateSystem(store.getState().system).some((i) => i.id.startsWith("crossing-")),
+  );
+}
+
 // --- parseGtfsCsv: comma-separated + quoted-field GTFS text ---
 {
   const rows = parseGtfsCsv('a,b,c\n1,"hello, world",3\n4,5,6\n');

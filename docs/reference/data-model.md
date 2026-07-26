@@ -80,6 +80,10 @@ store mutation that inserts, deletes, or moves control points keeps `refs`
   by heuristic on demand. Turn arrows are derived from connectors rather
   than stored.
 
+Two ways at different `grade`s never need a junction between them, and the
+crossing check in `src/model/validate.ts` skips such pairs — an elevated way
+over a surface street is a bridge, not a missing junction.
+
 ## NamedWay — shared identity
 
 ```ts

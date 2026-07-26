@@ -1,3 +1,4 @@
+import type { Grade } from "./catalog";
 import { serviceWayIds } from "./geo";
 import type { LngLat, TransitSystem, Way } from "./system";
 
@@ -105,6 +106,9 @@ const CROSS_CELL_DEG = 0.001;
 interface CrossSegment {
   wayId: string;
   typeId: string;
+  /** Vertical alignment, so two ways at different grades aren't reported as
+   *  needing a junction — see crossingIssuesForSegment. */
+  grade: Grade;
   a: LngLat;
   b: LngLat;
 }
@@ -166,7 +170,7 @@ function buildCrossGrid(ways: Way[]): CrossGrid {
   let cellsUsed = 0;
   for (const way of ways) {
     for (let i = 0; i < way.points.length - 1; i++) {
-      const seg: CrossSegment = { wayId: way.id, typeId: way.typeId, a: way.points[i], b: way.points[i + 1] };
+      const seg: CrossSegment = { wayId: way.id, typeId: way.typeId, grade: way.grade, a: way.points[i], b: way.points[i + 1] };
       all.push(seg);
       const { cx0, cx1, cy0, cy1 } = crossBboxCells(seg.a, seg.b);
       const span = (cx1 - cx0 + 1) * (cy1 - cy0 + 1);
@@ -201,6 +205,11 @@ function crossingIssuesForSegment(
     if (other.wayId === way.id) return;
     const key = pairKey(way.id, other.wayId);
     if (flagged.has(key) || joined.has(key)) return;
+    // Different grades don't meet: an elevated way passing over a surface
+    // street is a bridge, not a missing junction. Without this every
+    // overpass reads as an error the user can never resolve, since joining
+    // them would be wrong.
+    if (other.grade !== way.grade) return;
     if (!segmentsCross(a1, a2, other.a, other.b)) return;
     flagged.add(key);
     issues.push({
