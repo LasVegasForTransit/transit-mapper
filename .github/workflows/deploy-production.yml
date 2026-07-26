@@ -46,10 +46,18 @@ jobs:
       - name: Setup Node + pnpm
         uses: ./.github/actions/setup-node-pnpm
 
-      # Schema first, then code. `wrangler deploy` does not apply migrations,
-      # so until now the two travelled on separate tracks with nothing
-      # ordering them: a release whose code read a column the database didn't
-      # have yet would deploy cleanly and then 500 on every share.
+      # Built BEFORE the migration step, not as part of the deploy. The build
+      # is pure, local and fallible — a vite failure has nothing to do with
+      # the schema — and running it after the migration would leave production
+      # with a migrated database and the old code for a reason unrelated to
+      # either. Everything that can fail without consequence happens first.
+      - name: Build
+        run: pnpm run build
+
+      # Schema next. `wrangler deploy` does not apply migrations, so until now
+      # the two travelled on separate tracks with nothing ordering them: a
+      # release whose code read a column the database didn't have yet would
+      # deploy cleanly and then 500 on every share.
       #
       # Applying before deploying is the safe order for additive migrations
       # (a new column the running code simply ignores). A destructive one is
@@ -58,8 +66,8 @@ jobs:
       - name: Apply D1 migrations
         run: pnpm --filter @transitmapper/worker exec wrangler d1 migrations apply transitmapper --remote
 
-      - name: Build and deploy
-        run: pnpm run deploy
+      - name: Deploy
+        run: pnpm --filter @transitmapper/worker deploy
 
       # A green deploy only proves the upload succeeded. It says nothing about
       # whether the Worker is actually serving the routes it was built for —
@@ -90,14 +98,31 @@ jobs:
 
           status() { curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$1"; }
           ctype() { curl -sS -o /dev/null -w '%{content_type}' --max-time 20 "$1" | cut -d';' -f1; }
-          header() { curl -sSI --max-time 20 "$1" | tr 'A-Z' 'a-z' | grep -c "^$2:" || true; }
+          # Presence, not an exact count — a header duplicated by some future
+          # proxy rule shouldn't read as "the header is missing".
+          header() { [ "$(curl -sSI --max-time 20 "$1" | tr 'A-Z' 'a-z' | grep -c "^$2:" || true)" -ge 1 ] && echo 1 || echo 0; }
 
-          # Give a fresh deployment a moment to become globally reachable
-          # before asserting anything about it.
-          for _ in 1 2 3 4 5; do
-            [ "$(status "$SITE/")" = "200" ] && break
+          # What identifies THIS build: vite fingerprints the entry chunk, so
+          # the filename changes whenever the app does. Asserting the live
+          # site references the chunk we just built is the difference between
+          # "the routes look right" and "this is the build we made" — the
+          # stale deployment that prompted all of this had perfectly plausible
+          # route shapes, it was simply a different build.
+          entry=$(grep -oE '/assets/[A-Za-z0-9._-]+\.js' apps/web/dist/index.html | head -1)
+          if [ -z "$entry" ]; then
+            echo "FAIL  could not find an entry chunk in the local build — nothing to compare against"
+            exit 1
+          fi
+          echo "expecting entry chunk: $entry"
+
+          # Wait for the new build specifically, not merely for the site to
+          # answer. `/` has returned 200 throughout every outage this step
+          # exists to catch, so waiting on that would prove nothing.
+          for _ in 1 2 3 4 5 6; do
+            curl -sS --max-time 20 "$SITE/" | grep -qF "$entry" && break
             sleep 5
           done
+          expect "the live site serves the build we just made" "$SITE/" "1" "$(curl -sS --max-time 20 "$SITE/" | grep -cF "$entry" || true)"
 
           # The Worker runs for /api — a JSON 404, not the SPA shell.
           expect "the API answers unknown shares with JSON" "$SITE/api/systems/$missing" "application/json" "$(ctype "$SITE/api/systems/$missing")"
@@ -116,6 +141,13 @@ jobs:
           # passes happily while the file itself is missing.
           expect "the web manifest is JSON, not the SPA fallback" "$SITE/manifest.json" "application/json" "$(ctype "$SITE/manifest.json")"
 
+          # The Worker runs for /e too. Framing is the discriminator: the
+          # Worker serves embeds with `frame-ancestors *` (the one path on the
+          # origin any site may frame), while the asset fallback carries
+          # `frame-ancestors 'none'` from _headers. Getting 'none' here means
+          # the embed prefix never reached Worker code.
+          expect "the embed route reaches the Worker" "$SITE/e/$missing" "1" "$(curl -sSI --max-time 20 "$SITE/e/$missing" | tr 'A-Z' 'a-z' | grep -c 'frame-ancestors \*' || true)"
+
           # _headers applied. Without it the editor has no CSP and no HSTS.
           expect "assets carry a Content-Security-Policy" "$SITE/" "1" "$(header "$SITE/" "content-security-policy")"
           expect "assets carry HSTS" "$SITE/" "1" "$(header "$SITE/" "strict-transport-security")"
@@ -125,3 +157,13 @@ jobs:
             exit 1
           fi
           echo "Smoke test passed."
+
+      # The smoke test runs AFTER the upload, so a red job here does not mean
+      # "nothing shipped" — it means something shipped and is not serving
+      # correctly. That distinction decides whether you roll back or fix
+      # forward, and the person reading a failed run should not have to infer
+      # it from step ordering.
+      - name: Explain a failed smoke test
+        if: failure()
+        run: |
+          echo "::warning::If 'Smoke test production' failed, the Worker is ALREADY deployed — this step does not roll anything back. See docs/how-to/operations.md#roll-back."

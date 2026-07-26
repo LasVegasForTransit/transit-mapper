@@ -1,6 +1,6 @@
 # TransitMapper
 
-[![Deploy production](https://github.com/WillieCubed/transit-mapper/actions/workflows/deploy-production.yml/badge.svg)](https://map.lasvegasfortransit.org)
+[![Deploy production](https://github.com/WillieCubed/transit-mapper/actions/workflows/deploy-production.yml/badge.svg)](https://github.com/WillieCubed/transit-mapper/actions/workflows/deploy-production.yml)
 
 Design regional transit systems on a real map. Sketch lines the way you'd
 sketch them on a napkin, then build out the physical network underneath:

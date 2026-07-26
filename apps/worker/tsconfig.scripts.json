@@ -8,11 +8,19 @@
 //
 // Both type sets are listed here because the suite imports from `src`, so it
 // has to understand the Workers types the imported module is written against.
+// (`types` replaces rather than extends the base array, so omitting either
+// one breaks the half of the program that needs it.)
+//
+// `include` names only `scripts`: verify.ts imports `../src/index`, so
+// TypeScript pulls the Worker sources into the program anyway. Listing `src`
+// as well only compiled it a second time — and made this config, where Node's
+// globals are visible, look like the authority on `src`. `tsconfig.json` is;
+// it runs first in the same `&&` chain.
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "types": ["node", "@cloudflare/workers-types"],
     "noEmit": true
   },
-  "include": ["scripts", "src"]
+  "include": ["scripts"]
 }
