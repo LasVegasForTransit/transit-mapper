@@ -22,6 +22,28 @@ export function buildProfile(template: ProfileTemplateLane[]): CrossSection {
 }
 
 /**
+ * Ceiling on how many primary lanes a profile can be asked for.
+ *
+ * Every lane count here comes from somewhere untrusted: a scalar `capacity`
+ * in a document someone shared with us, an imported feed, a keyboard nudge.
+ * Both builders below turn that number into that many allocated lane objects,
+ * so without a ceiling the number *is* the allocation size — and `capacity`
+ * arrives straight from `JSON.parse`, where `1e999` is `Infinity` and the
+ * loop that consumes it never terminates. Clamping is what keeps a malformed
+ * document a rendering problem rather than a hung tab.
+ *
+ * 32 is far above anything real (the widest roads on earth are ~26 lanes) and
+ * far below anything that costs us something to build.
+ */
+export const MAX_PRIMARY_LANES = 32;
+
+/** Clamp an untrusted lane count into `[1, MAX_PRIMARY_LANES]`. NaN — which
+ *  survives `Math.round` — collapses to 1 rather than propagating. */
+function clampLaneCount(n: number): number {
+  return Number.isFinite(n) ? Math.min(MAX_PRIMARY_LANES, Math.max(1, Math.round(n))) : 1;
+}
+
+/**
  * The profile a way gets when only a legacy scalar capacity (+ class) is
  * known — the v5→v6 migration path, and the fallback for imported data.
  * Builds `capacity` primary travel lanes split evenly between directions
@@ -31,7 +53,7 @@ export function buildProfile(template: ProfileTemplateLane[]): CrossSection {
 export function defaultProfileFor(typeId: string, capacity?: number): CrossSection {
   const type = wayType(typeId);
   const template = type.defaultProfile;
-  const n = capacity === undefined ? undefined : Math.max(1, Math.round(capacity));
+  const n = capacity === undefined ? undefined : clampLaneCount(capacity);
   const defaultPrimary = template.filter((t) => t.kindId === type.primaryLaneKindId).length;
   if (n === undefined || n === defaultPrimary) return buildProfile(template);
 
@@ -137,7 +159,7 @@ export function makeTwoWay(profile: CrossSection, drivingSide: DrivingSide = "ri
  *  `drivingSide`, matching separateProfiles/makeTwoWay's convention. */
 export function withLaneCount(profile: CrossSection, typeId: string, count: number, drivingSide: DrivingSide = "right"): CrossSection {
   const primaryKindId = wayType(typeId).primaryLaneKindId;
-  const target = Math.max(1, Math.round(count));
+  const target = clampLaneCount(count);
   let lanes = [...profile.lanes];
   const primaries = () => lanes.filter((l) => l.kindId === primaryKindId);
   // Right-hand traffic: backward lanes cluster at the front (left) of the
