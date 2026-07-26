@@ -2,7 +2,7 @@
 // Run with: node scripts/verify.ts  (or: npm run verify)
 import { createEditorStore } from "../src/editor/store";
 import { parseSystem, forkSystem, createEmptySystem } from "@transitmapper/core/model/serialize";
-import { FACILITY_TYPE_ORDER, FACILITY_TYPES, MODE_ORDER, MODES, modesForWayType, wayType } from "@transitmapper/core/model/catalog";
+import { FACILITY_TYPE_ORDER, FACILITY_TYPES, MODE_ORDER, MODES, modesForWayType, wayType, WAY_TYPE_ORDER } from "@transitmapper/core/model/catalog";
 import {
   roundedCorners,
   squareFootprint,
@@ -28,6 +28,10 @@ import { buildOverpassQuery, classifyOsmWay, osmElementsToWays } from "@transitm
 import { classifyGtfsRouteType, gtfsFilesToBatchedPieces, gtfsFilesToSystemPieces, parseGtfsCsv } from "@transitmapper/core/model/gtfsImport";
 import { legendEntriesFor } from "../src/share/exportLegend";
 import { formatScaleMeters, niceScaleMeters } from "../src/share/exportScale";
+import { fitBounds, metersPerPixel, projector } from "@transitmapper/core/render/project";
+import { PREVIEW_FONT_FAMILY, PREVIEW_HEIGHT, PREVIEW_WIDTH, previewSvg } from "@transitmapper/core/render/preview";
+import { systemSvg } from "@transitmapper/core/render/svg";
+import { LVBT } from "@transitmapper/core/style/lvbtBrand";
 import { validateSystem } from "@transitmapper/core/model/validate";
 import { estimateWayCapitalCost, formatUsdCompact } from "@transitmapper/core/model/cost";
 import { LANE_KINDS, PROFILE_PRESETS, profilePresetsForWayType, WAY_FAMILIES, WAY_TYPES } from "@transitmapper/core/model/catalog";
@@ -2679,6 +2683,208 @@ function buildGrid() {
   check("works across a magnitude boundary", niceScaleMeters(950) === 500);
   check("formatScaleMeters stays in meters under 1km", formatScaleMeters(500) === "500 m");
   check("formatScaleMeters switches to km at 1000", formatScaleMeters(2000) === "2 km");
+}
+
+// --- render/preview: the card the Worker rasterizes for link unfurls ---
+{
+  fresh();
+  const line = store.getState().beginWay("lightRail", "straight");
+  store.getState().addWayPoint(line, [-115.22, 36.06]);
+  store.getState().addWayPoint(line, [-115.14, 36.16]);
+  store.getState().addWayPoint(line, [-115.12, 36.24]);
+  store.getState().finishWay();
+  const stationId = store.getState().addStation([-115.14, 36.16]);
+
+  const system = store.getState().system;
+  system.name = "Valley Rapid Transit";
+  const station = system.stations.find((s) => s.id === stationId);
+  if (station) station.name = "Downtown";
+  for (const svc of system.services) svc.name = "Resort Corridor";
+
+  const svg = previewSvg(system);
+  // Composed at half the raster size so the 2x scale-up doubles every font
+  // size and line weight relative to the finished card.
+  check("preview is composed at half Open Graph card size", svg.startsWith(`<svg xmlns="http://www.w3.org/2000/svg" width="${PREVIEW_WIDTH / 2}" height="${PREVIEW_HEIGHT / 2}"`));
+  check("preview draws the system's lines", svg.includes("<path"));
+  check("preview draws stations", svg.includes("<circle"));
+
+  // A social card is the network and nothing else. Two presentation facts
+  // produce that, and neither one names an element to remove: the surface
+  // captions itself (so the title and legend would just repeat the text Slack
+  // already shows), and at ~460px the smaller type falls under the legibility
+  // floor. There is no "card mode" anywhere in the renderer.
+  check("a social card carries no text at all", !/<text/.test(svg));
+  check("a social card doesn't repeat the system name", !svg.includes("Valley Rapid Transit"));
+  check("a social card doesn't repeat the line names", !svg.includes("Resort Corridor"));
+  check("a social card drops illegible station labels", !svg.includes("Downtown"));
+  check("a social card drops the scale bar and north arrow", !/\d+ (km|m)<\/text>/.test(svg) && !svg.includes(">N</text>"));
+
+  // Same composition, same code path, told it will be seen large and that
+  // nothing else is captioning it: the detail comes back. This is what makes
+  // it one renderer rather than two.
+  const bigSvg = previewSvg(system, { displayWidth: 1200, captionedExternally: false });
+  check("a large uncaptioned preview keeps station labels", bigSvg.includes("Downtown"));
+  check("a large uncaptioned preview keeps its title", bigSvg.includes("Valley Rapid Transit"));
+  check("a large uncaptioned preview keeps its legend", bigSvg.includes("Resort Corridor"));
+  check("a large uncaptioned preview keeps the scale bar", /\d+ (km|m)<\/text>/.test(bigSvg));
+  check("a large uncaptioned preview keeps the north arrow", bigSvg.includes(">N</text>"));
+
+  // Size and captioning are independent: a big drawing that something else is
+  // captioning still skips the caption, but keeps the detail it can show.
+  const bigCaptioned = previewSvg(system, { displayWidth: 1200 });
+  check("captioning is independent of size", !bigCaptioned.includes("Valley Rapid Transit") && bigCaptioned.includes("Downtown"));
+  // Geometry paths are the ones with fill="none"; the north arrow is a filled
+  // path, so counting every <path> would compare furniture too.
+  const geometryPaths = (s: string) => (s.match(/<path [^>]*fill="none"/g) ?? []).length;
+  check("both sizes draw exactly the same geometry", geometryPaths(bigSvg) === geometryPaths(svg) && geometryPaths(svg) > 0);
+
+  // A legend must never outgrow the drawing it captions. Twenty lines used to
+  // produce a panel taller than the card, running off the top edge.
+  const manyLines = Array.from({ length: 20 }, (_, i) => ({ color: "#e8562a", label: `Line ${i + 1}` }));
+  const cardHeight = PREVIEW_HEIGHT / 2;
+  const crowded = systemSvg(system, { viewMode: "network", visibleModes: new Set(MODE_ORDER), visibleWayTypes: new Set(WAY_TYPE_ORDER) }, projector(fitBounds(systemBounds(system)!, { width: PREVIEW_WIDTH / 2, height: cardHeight, padding: 28 })), {
+    title: system.name,
+    legend: manyLines,
+    width: PREVIEW_WIDTH / 2,
+    height: cardHeight,
+  });
+  // Both the title and the legend draw a translucent backing panel; the
+  // legend's is the lower one, so take the largest y.
+  const panelTops = [...crowded.matchAll(/<rect x="0" y="([\d.]+)" width="\d+" height="[\d.]+" fill="rgba/g)].map((m) => Number(m[1]));
+  const panelTop = Math.max(...panelTops);
+  check("a long legend stays inside the drawing", panelTop > 0 && panelTop >= cardHeight * (1 - 0.56));
+  check("a long legend says how many it left out", /\+\d+ more/.test(crowded));
+  check("a short legend is never truncated", !/\+\d+ more/.test(svg));
+
+  // The export path (share/svgExport.ts) calls systemSvg with no displayWidth
+  // at all, which must keep meaning "assume it's viewed at the size it was
+  // drawn" — full detail, exactly as before any of this existed.
+  const exportBounds = systemBounds(system)!;
+  const exportViewport = fitBounds(exportBounds, { width: 1200, height: 630, padding: 56 });
+  const exportSvg = systemSvg(system, { viewMode: "network", visibleModes: new Set(MODE_ORDER), visibleWayTypes: new Set(WAY_TYPE_ORDER) }, projector(exportViewport), {
+    title: system.name,
+    legend: [{ color: "#e8562a", label: "Resort Corridor" }],
+    width: 1200,
+    height: 630,
+    scaleBar: { widthPx: 100, label: "5 km" },
+  });
+  check("an export keeps station labels when no display size is given", exportSvg.includes("Downtown"));
+  check("an export keeps its scale bar and north arrow", exportSvg.includes("5 km") && exportSvg.includes(">N</text>"));
+
+  // resvg inside a Worker has no system fonts, so wherever a server-rendered
+  // drawing does have text, the markup must name the one font that actually
+  // gets bundled — "system-ui" would silently render every label as nothing.
+  // Checked against the variant that has text, since a card has none.
+  check("a server-rendered drawing names the bundled font", bigSvg.includes(`font-family="${PREVIEW_FONT_FAMILY}"`));
+  check("a server-rendered drawing never asks for a system font", !bigSvg.includes("system-ui"));
+  // Literals on purpose: these pin the brand decision, so drifting back to a
+  // hand-picked near-white or the editor's own typeface fails loudly.
+  // Source of truth is lasvegasfortransit.org/brand.
+  check("the bundled font is the brand face", PREVIEW_FONT_FAMILY === "Public Sans");
+  check("the card ground is the brand surface", svg.includes(`fill="${LVBT.light.surface}"`) && LVBT.light.surface === "#F7F4EC");
+  check("the card rule is the brand outline", svg.includes(`stroke="${LVBT.light.outline}"`) && LVBT.light.outline === "#0F1115");
+  // The framed area is a raised surface on the base one — two brand tokens,
+  // not one. Flattening them back together is a regression, not a tidy-up.
+  check("the framed panel uses the raised-surface token", svg.includes(`fill="${LVBT.light.surfaceContainer}"`) && LVBT.light.surfaceContainer === "#EFE9DB");
+  check("the panel and the ground are different tokens", LVBT.light.surfaceContainer !== LVBT.light.surface);
+
+  // Pure white and the editor's cool ink have no business in anything that
+  // leaves the app carrying the org's name.
+  check("no pure white leaks into a share card", !/#ffffff|#FFFFFF/.test(svg));
+  check("no non-brand ink leaks into a share card", !/#191a17|#111827/i.test(svg));
+
+  // A share's name is unauthenticated user text and this markup is assembled
+  // by hand, so escaping is the only thing standing between a system name and
+  // broken (or injected) SVG.
+  // Checked where the name is actually drawn — a social card never draws it,
+  // so testing escaping there would pass for the wrong reason.
+  fresh();
+  const hostile = store.getState().system;
+  hostile.name = `</text><script>alert(1)</script>`;
+  const hostileSvg = previewSvg(hostile, { captionedExternally: false, displayWidth: 1200 });
+  check("the drawn title carries the hostile name at all", hostileSvg.includes("alert(1)"));
+  check("a system name can't inject markup into a drawing", !hostileSvg.includes("<script>"));
+  check("a hostile system name is escaped, not dropped", hostileSvg.includes("&lt;script&gt;"));
+
+  // An empty system has no extent to frame; it must still produce a card
+  // rather than dividing by zero on its own bounds.
+  fresh();
+  const empty = store.getState().system;
+  empty.name = "Nothing yet";
+  check("an empty system still renders a card", previewSvg(empty).startsWith("<svg"));
+  check("an empty system's name survives where one is drawn", previewSvg(empty, { captionedExternally: false }).includes("Nothing yet"));
+}
+
+// --- render/project: the map-free projection the Worker draws through ---
+{
+  const near = (a: number, b: number, tol = 1e-6) => Math.abs(a - b) < tol;
+
+  const vp = { center: [-115.14, 36.17] as LngLat, zoom: 12, width: 1200, height: 630 };
+  const project = projector(vp);
+
+  const middle = project(vp.center);
+  check("the viewport center projects to the center pixel", near(middle.x, 600, 1e-9) && near(middle.y, 315, 1e-9));
+
+  const east = project([-115.0, 36.17]);
+  check("longitude east of center moves right", east.x > middle.x);
+  check("a pure longitude change doesn't move vertically", near(east.y, middle.y, 1e-9));
+
+  const north = project([-115.14, 36.3]);
+  check("latitude north of center moves UP the screen", north.y < middle.y);
+
+  // Zooming in one level doubles the pixel distance between two fixed points —
+  // this is what "zoom is a log2 scale factor" has to mean for the Worker's
+  // framing to match MapLibre's.
+  const dxAt12 = project([-115.0, 36.17]).x - middle.x;
+  const dxAt13 = projector({ ...vp, zoom: 13 })([-115.0, 36.17]).x - projector({ ...vp, zoom: 13 })(vp.center).x;
+  check("one zoom level doubles projected distance", near(dxAt13 / dxAt12, 2, 1e-9));
+
+  // fitBounds is what frames a stored system with no map to ask.
+  const bounds: [LngLat, LngLat] = [
+    [-115.3, 36.0],
+    [-115.0, 36.3],
+  ];
+  const fitted = fitBounds(bounds, { width: 1200, height: 630, padding: 40 });
+  const fit = projector(fitted);
+  const sw = fit(bounds[0]);
+  const ne = fit(bounds[1]);
+  check("fitBounds keeps the whole extent inside the viewport", sw.x >= 0 && ne.x <= 1200 && ne.y >= 0 && sw.y <= 630);
+  check("fitBounds respects the padding on the tight axis", ne.y >= 39.9 && sw.y <= 590.1);
+  check("fitBounds centers the extent horizontally", near((sw.x + ne.x) / 2, 600, 0.5));
+  check("fitBounds centers the extent vertically", near((sw.y + ne.y) / 2, 315, 0.5));
+
+  // A one-station system has zero extent, which would otherwise fit at
+  // infinite zoom — maxZoom is the only thing standing between that and a
+  // divide-by-zero framing bug.
+  const degenerate = fitBounds(
+    [
+      [-115.14, 36.17],
+      [-115.14, 36.17],
+    ],
+    { width: 1200, height: 630, padding: 40, maxZoom: 14 },
+  );
+  check("a zero-extent system falls back to maxZoom", degenerate.zoom === 14);
+  check("a zero-extent system centers on its single point", near(degenerate.center[0], -115.14, 1e-9));
+
+  // A system that's wide but flat must be constrained by width, not height.
+  const wide = fitBounds(
+    [
+      [-116.0, 36.16],
+      [-114.0, 36.18],
+    ],
+    { width: 1200, height: 630, padding: 40 },
+  );
+  const wideProject = projector(wide);
+  const left = wideProject([-116.0, 36.16]);
+  check("a wide flat system is framed by its width", left.x >= 39.9 && left.x <= 40.1);
+
+  check("metersPerPixel shrinks as zoom grows", metersPerPixel({ ...vp, zoom: 13 }) < metersPerPixel(vp));
+  // Zoom 0 at the equator is the textbook ~156.5 km per pixel on 256px tiles,
+  // or ~78.3 km on the 512px tiles MapLibre uses.
+  check(
+    "metersPerPixel matches the known zoom-0 equator value",
+    near(metersPerPixel({ center: [0, 0], zoom: 0, width: 1, height: 1 }), 40075016.686 / 512, 1e-6),
+  );
 }
 
 // --- store: straightenWay ---

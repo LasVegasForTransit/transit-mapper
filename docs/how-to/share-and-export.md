@@ -11,6 +11,36 @@ Sharing requires the backend (a Cloudflare Worker with a D1 database). In
 local development without a worker running, sharing is unavailable; the rest
 of the editor works fine.
 
+An anonymous share link lasts seven days, and every view pushes that back
+another seven. A link people are still opening stays alive; one nobody opens
+expires. Permanent shares are waiting on accounts.
+
+## Paste a link somewhere
+
+Paste a share link into Slack, Discord, iMessage, or anywhere else that
+unfurls links, and you get a real picture of the system — its lines,
+stations, name, and legend — not a generic site-wide card. The image is drawn
+on the server from the system data itself, so it works for crawlers that
+never run JavaScript.
+
+You can also fetch it directly at `/s/<id>/preview.png` if you want the image
+for a slide or a document.
+
+## Embed a map in a page
+
+Any share link can be embedded as a live, read-only map:
+
+```html
+<iframe src="https://map.lasvegasfortransit.org/e/<id>" width="800" height="500" style="border:0"></iframe>
+```
+
+Readers can pan and zoom, and click through to the full system. The embed is
+its own lightweight page — it loads the map, not the editor.
+
+Publishing platforms that support [oEmbed](https://oembed.com) (WordPress,
+Ghost, Discourse, and others) can build that iframe themselves: paste the
+plain share link and they'll discover the embed automatically.
+
 ## Export an image
 
 The **Export** button exports the current view straight to **PNG**; the

@@ -1,14 +1,21 @@
 import type { FeatureCollection, Feature, LineString, Point, Polygon } from "geojson";
 import { wayType } from "@transitmapper/core/model/catalog";
-import { facilityRender, gradeFlags, laneRender, modeRender, showWayWhenServed, wayRender } from "../../style/catalogStyle";
-import { INTERCHANGE_METERS, resolveWayPath, serviceWayIds, servedWayIds } from "@transitmapper/core/model/geo";
-import { directionalLanes, isOneWay, wayCapacity } from "@transitmapper/core/model/profile";
-import { wayIntersectsBounds, wayLaneGeometry } from "@transitmapper/core/geometry/streets";
-import { collectWayTrims, connectorCurves, junctionGeometry, type JunctionGeometry, type WayTrims } from "@transitmapper/core/geometry/junctions";
-import { iconName } from "../icons";
-import type { Selection } from "../../editor/store";
-import type { LngLat, Service, TransitSystem } from "@transitmapper/core/model/system";
+import { facilityRender, gradeFlags, laneRender, modeRender, showWayWhenServed, wayRender } from "../style/catalogStyle";
+import { INTERCHANGE_METERS, resolveWayPath, serviceWayIds, servedWayIds } from "../model/geo";
+import { directionalLanes, isOneWay, wayCapacity } from "../model/profile";
+import { wayIntersectsBounds, wayLaneGeometry } from "../geometry/streets";
+import { collectWayTrims, connectorCurves, junctionGeometry, type JunctionGeometry, type WayTrims } from "../geometry/junctions";
+import { iconName } from "./iconName";
+import type { LngLat, Service, TransitSystem } from "../model/system";
 import { HANDLE_ICON, widthPxAtZ14 } from "./constants";
+
+/** What the renderer needs to know about the current selection: which single
+ *  object is highlighted, if any. Deliberately structural rather than an
+ *  import of the editor's own `Selection` union — selection is an editor
+ *  concept, and a rendering module in core has no business knowing the full
+ *  vocabulary of things the editor can select. The editor's `Selection`
+ *  satisfies this shape as-is, so call sites pass it unchanged. */
+export type Highlight = { kind: string; id: string } | null;
 
 const NEUTRAL_STATION = "#4b5563";
 // A dedicated-guideway/aerial/water way with no service riding it yet reads as
@@ -77,7 +84,7 @@ export interface ViewOptions {
  *  also shows bare/unassigned infrastructure and grade styling). */
 export function buildFeatures(
   system: TransitSystem,
-  selection: Selection,
+  selection: Highlight,
   handleWayIds: string[],
   view: ViewOptions,
   /** The station whose footprint/platform vertices should render as

@@ -3,12 +3,16 @@
 // stays pure domain data. The map layer builder, the editor store (default draft
 // colors), and UI swatches/pickers all read this. The model's type/domain
 // modules (system.ts, catalog.ts, geo.ts) never do — LINE_COLORS lives in
-// @transitmapper/core's catalog.ts instead of here because serialize.ts's
-// createEmptySystem needs a default palette and a domain package can't reach
-// into a UI app's style module; re-exported here so existing style-module
-// consumers don't need to know that.
-import type { Grade } from "@transitmapper/core/model/catalog";
-export { LINE_COLORS } from "@transitmapper/core/model/catalog";
+// catalog.ts instead of here because serialize.ts's createEmptySystem needs a
+// default palette and a domain module has no business importing a style one;
+// re-exported here so existing style-module consumers don't need to know that.
+//
+// This lives in core (rather than the web app, where it started) so the Worker
+// can draw a shared system for preview images and embeds with exactly the
+// styling the editor uses. It stays a separate style/ module for the same
+// reason it always was: rendering concerns never belong in model/.
+import type { Grade } from "../model/catalog";
+export { LINE_COLORS } from "../model/catalog";
 
 export interface RenderStyle {
   color: string;

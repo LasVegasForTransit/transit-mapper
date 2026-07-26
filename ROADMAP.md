@@ -22,6 +22,11 @@ work doesn't get pulled forward ahead of earlier work without a deliberate reaso
   an agency's actual GTFS feed as a comparison baseline.
 - **Share and fork.** Publish a read-only link to any system; anyone can view it and fork their own
   editable copy.
+- **Links that look like something.** Paste a share link into Slack, Discord, or iMessage and the
+  preview shows the actual system — drawn on the server from the system's own data, so it works
+  even for crawlers that never run JavaScript.
+- **Embeddable maps.** Drop a live, read-only map into a blog post with an iframe, or just paste
+  the link on a platform that speaks oEmbed and let it build the embed for you.
 - **A production home.** TransitMapper runs in production on its own domain, with automatic deploys
   on every change.
 
@@ -29,9 +34,6 @@ work doesn't get pulled forward ahead of earlier work without a deliberate reaso
 
 This phase makes a shared TransitMapper link work well anywhere it's pasted, and rounds out the sandbox.
 
-- **Rich link previews.** Paste a share link into Slack, Discord, or iMessage and see a real preview
-  of the system, not a blank card.
-- **Embeddable maps.** Drop a live, read-only TransitMapper view directly into a blog post or article.
 - **An installable app.** Add TransitMapper to your home screen like a native app.
 - **Direction-aware routing.** Services respect one-way lanes instead of routing against traffic.
 - **Junction visuals.** Rounded curb returns and painted approach arrows at intersections.
@@ -53,7 +55,9 @@ This is where sketching starts turning into real planning and advocacy work.
 ## Phase 3: Accounts & Collaboration
 
 - **Accounts.** Sign in with Google or GitHub.
-- **Permanent shares.** Signed-in shares never expire, unlike anonymous share links today.
+- **Permanent shares.** Signed-in shares never expire. Anonymous ones last seven days from their
+  last view, which keeps an embedded map alive as long as people are reading it — but a system
+  worth keeping shouldn't depend on someone happening to open it.
 - **Real-time collaboration.** Multiple people editing one system together.
 
 ## How to help

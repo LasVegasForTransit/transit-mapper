@@ -1,11 +1,8 @@
-import { iconName } from "../icons";
-
-// Reshape/physical handles are always this one color+glyph (a solid square —
-// the standard vector-editor "this is a control point" shape) regardless of
-// what they're attached to, so they read as one consistent tool affordance
-// and never as a real object like a station or facility.
-export const HANDLE_INK = "#191a17";
-export const HANDLE_ICON = iconName("square", HANDLE_INK);
+// The handle glyph constants and the metric-to-pixel width helper moved to
+// core (render/constants.ts) when buildFeatures did — the Worker stamps the
+// same values onto features when it draws a system without a map. Re-exported
+// here so every existing import of this module keeps working unchanged.
+export { HANDLE_ICON, HANDLE_INK, widthPxAtZ14 } from "@transitmapper/core/render/constants";
 
 export const SRC_WAYS = "tm-ways";
 export const SRC_SERVICES = "tm-services";
@@ -71,11 +68,7 @@ export const LYR_LANDMARK_LABELS = "tm-landmark-labels";
 // geometry at all (the LOD gate that keeps big imports fast).
 export const LANE_DETAIL_MIN_ZOOM = 15;
 
-// meters-per-pixel at zoom 14 on a 512px-tile web-mercator map; lane widths
-// are stored in meters, so each feature carries its z14 pixel width and the
-// layer scales it exponentially (base 2 — exact for mercator) with zoom.
-const MPP_Z14_EQUATOR = 40075016.686 / (512 * 2 ** 14);
-export function widthPxAtZ14(widthM: number, lat: number): number {
-  return widthM / (MPP_Z14_EQUATOR * Math.cos((lat * Math.PI) / 180));
-}
+// Lane widths are stored in meters and carried on each feature as a z14 pixel
+// width (see widthPxAtZ14, re-exported above); this expression scales that
+// exponentially (base 2 — exact for mercator) with zoom.
 export const LANE_WIDTH_EXPR = ["interpolate", ["exponential", 2], ["zoom"], 14, ["get", "w14"], 22, ["*", 256, ["get", "w14"]]];

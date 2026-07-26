@@ -11,7 +11,7 @@ import { flipProfile, isOneWay, makeOneWay, makeTwoWay, profileWidthM } from "@t
 import { shortId } from "@transitmapper/core/model/ids";
 import { getComponent, laneRefKey } from "@transitmapper/core/model/components";
 import type { CrossSection, LaneDirection, LaneSpec } from "@transitmapper/core/model/system";
-import { laneRender } from "../style/catalogStyle";
+import { laneRender } from "@transitmapper/core/style/catalogStyle";
 import { Icon } from "./Icon";
 
 const FT = 0.3048;

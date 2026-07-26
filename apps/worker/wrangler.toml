@@ -10,6 +10,16 @@ binding = "ASSETS"
 not_found_handling = "single-page-application"
 run_worker_first = true
 
+# Preview images are rasterized by resvg (wasm), which has no system fonts
+# inside a Worker — the Inter subset it draws titles and legends with is
+# imported as raw bytes, so it needs to bundle as a data module rather than
+# being parsed as code. `fallthrough` keeps wrangler's own built-in rules
+# (notably the .wasm one resvg itself relies on) in effect.
+[[rules]]
+type = "Data"
+globs = ["**/*.woff2"]
+fallthrough = true
+
 [[d1_databases]]
 binding = "DB"
 database_name = "transitmapper"

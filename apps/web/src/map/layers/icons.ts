@@ -1,6 +1,6 @@
 import type { Map as MLMap } from "maplibre-gl";
 import { FACILITY_TYPE_ORDER } from "@transitmapper/core/model/catalog";
-import { facilityRender } from "../../style/catalogStyle";
+import { facilityRender } from "@transitmapper/core/style/catalogStyle";
 import { ensureIcon } from "../icons";
 import { HANDLE_INK } from "./constants";
 

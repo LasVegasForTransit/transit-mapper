@@ -6,6 +6,8 @@ import type {
   CreateShareResponse,
   GetShareResponse,
 } from "@transitmapper/core/share/contract";
+import { PREVIEW_HEIGHT, PREVIEW_RENDERER_VERSION, PREVIEW_WIDTH } from "@transitmapper/core/render/preview";
+import { renderPreviewPng } from "./preview";
 
 interface Env {
   DB: D1Database;
@@ -16,17 +18,72 @@ interface Env {
 const MAX_BODY_BYTES = 1_000_000; // ~1 MB — generous for a hand-drawn system.
 const ANONYMOUS_SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days.
 
+// The iframe size we ask for when a consumer doesn't constrain us — wide
+// enough for a regional system to read, short enough to sit inside an article
+// without taking over the page.
+const EMBED_DEFAULT_WIDTH = 800;
+const EMBED_DEFAULT_HEIGHT = 500;
+
+/** Share ids are lowercase alphanumerics from shortId; anything else in an
+ *  id-shaped position is someone probing, not a real link. */
+const SHARE_ID_PATTERN = /^[0-9a-z]{1,32}$/;
+
+/**
+ * Pulls the share id out of a share or embed URL, but only for our own
+ * origin. Scoping to SITE_URL is what stops this from being an open oEmbed
+ * endpoint that will describe (and lend our provider name to) arbitrary URLs.
+ */
+function shareIdFromUrl(target: string, siteUrl: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(target);
+  } catch {
+    return null;
+  }
+  if (url.origin !== new URL(siteUrl).origin) return null;
+
+  const match = /^\/(?:s|e)\/([^/]+)\/?$/.exec(url.pathname);
+  const id = match?.[1];
+  return id && SHARE_ID_PATTERN.test(id) ? id : null;
+}
+
+function positiveInt(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/** For interpolating user-supplied text into the oEmbed `html` payload. That
+ *  string is raw markup by definition — HTMLRewriter can't escape it for us
+ *  the way it does for the share page's meta tags. */
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const app = new Hono<{ Bindings: Env }>();
 
 interface ShareRow {
   id: string;
   system: TransitSystem;
   createdAt: number;
+  /** Epoch ms, or null for a share that never expires. */
+  expiresAt: number | null;
 }
 
 // Look up a share by id, treating an expired-but-not-yet-swept row as if it
 // doesn't exist (and deleting it on the spot) — shared by the JSON API and
 // the /s/:id HTML route so the expiry rule only lives in one place.
+//
+// A live share also has its clock pushed forward on the way out (see
+// touchExpiry): a share people are still looking at is a share still worth
+// keeping. That matters now that a share can be embedded in someone else's
+// blog post, where a fixed 7-days-from-creation expiry would turn the embed
+// into a 404 a week after publication.
 async function getActiveShare(db: D1Database, id: string): Promise<ShareRow | null> {
   const row = await db
     .prepare("SELECT id, data, created_at, expires_at FROM systems WHERE id = ?")
@@ -40,7 +97,40 @@ async function getActiveShare(db: D1Database, id: string): Promise<ShareRow | nu
     return null;
   }
 
-  return { id: row.id, system: JSON.parse(row.data), createdAt: row.created_at };
+  return {
+    id: row.id,
+    system: JSON.parse(row.data),
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+  };
+}
+
+// How far the stored expiry must have drifted from "a full TTL from now"
+// before a view is worth a write. Without this every read of a popular share
+// becomes a D1 write; with it, a share is touched at most once a day no
+// matter how often it's viewed, and still never gets within six days of
+// expiring while anyone is looking at it.
+const EXPIRY_TOUCH_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 1 day.
+
+/**
+ * Slides a share's expiry forward on view. Fire-and-forget: the caller's
+ * response must not wait on it, and a share that fails to be touched simply
+ * expires on its original schedule.
+ *
+ * This is an interim answer to "shares people still use shouldn't vanish."
+ * The real answer is ownership — a signed-in user's shares get expires_at =
+ * NULL and never expire — which is why the schema already treats NULL as
+ * "never expires" and why this deliberately skips those rows.
+ */
+function touchExpiry(db: D1Database, share: ShareRow): Promise<unknown> | null {
+  if (share.expiresAt === null) return null; // account-owned: already permanent.
+  const target = Date.now() + ANONYMOUS_SHARE_TTL_MS;
+  if (target - share.expiresAt < EXPIRY_TOUCH_THRESHOLD_MS) return null;
+  return db
+    .prepare("UPDATE systems SET expires_at = ? WHERE id = ?")
+    .bind(target, share.id)
+    .run()
+    .catch(() => undefined);
 }
 
 // Create an immutable snapshot of a system and return its share id.
@@ -70,12 +160,18 @@ app.post("/api/systems", async (c) => {
   return c.json<CreateShareResponse>({ id });
 });
 
-// Fetch a shared system snapshot.
+// Fetch a shared system snapshot. This is the request an embedded map makes,
+// so it's the one that keeps a share alive while it's still being read.
 app.get("/api/systems/:id", async (c) => {
   const share = await getActiveShare(c.env.DB, c.req.param("id"));
   if (!share) return c.json({ error: "Not found" }, 404);
 
-  return c.json<GetShareResponse>(share);
+  const touch = touchExpiry(c.env.DB, share);
+  if (touch) c.executionCtx.waitUntil(touch);
+
+  // Built field by field rather than returning the row: expiresAt is internal
+  // bookkeeping, not part of the published wire format.
+  return c.json<GetShareResponse>({ id: share.id, system: share.system, createdAt: share.createdAt });
 });
 
 // Proxy RTC Southern Nevada's real GTFS feed — its own host doesn't send
@@ -92,13 +188,99 @@ app.get("/api/gtfs/rtc", async (c) => {
   });
 });
 
+// oEmbed discovery/consumption: a publisher (WordPress, Ghost, Discourse,
+// Notion) that finds the <link rel="alternate"> on a share page fetches this
+// to learn how to embed it, and pastes back the iframe we hand them.
+// Deliberately unauthenticated and cacheable — it exposes nothing the share
+// page doesn't already.
+app.get("/api/oembed", async (c) => {
+  const target = c.req.query("url");
+  const format = c.req.query("format") ?? "json";
+  // The spec allows an xml format; we only speak json, and 501 is what it
+  // says to return for a format we can't produce.
+  if (format !== "json") return c.json({ error: "Only json format is supported" }, 501);
+  if (!target) return c.json({ error: "Missing url parameter" }, 400);
+
+  const id = shareIdFromUrl(target, c.env.SITE_URL);
+  if (!id) return c.json({ error: "Not an embeddable TransitMapper URL" }, 404);
+
+  const share = await getActiveShare(c.env.DB, id);
+  if (!share) return c.json({ error: "Not found" }, 404);
+
+  // maxwidth/maxheight are the consumer telling us how much room it has; we
+  // ask for our preferred size and shrink to fit whatever they allow.
+  const maxWidth = positiveInt(c.req.query("maxwidth"));
+  const maxHeight = positiveInt(c.req.query("maxheight"));
+  const width = Math.min(EMBED_DEFAULT_WIDTH, maxWidth ?? EMBED_DEFAULT_WIDTH);
+  const height = Math.min(EMBED_DEFAULT_HEIGHT, maxHeight ?? EMBED_DEFAULT_HEIGHT);
+
+  const embedUrl = `${c.env.SITE_URL}/e/${id}`;
+  return c.json(
+    {
+      version: "1.0",
+      type: "rich",
+      provider_name: "TransitMapper",
+      provider_url: c.env.SITE_URL,
+      title: share.system.name || "Transit system",
+      width,
+      height,
+      thumbnail_url: `${c.env.SITE_URL}/s/${id}/preview.png`,
+      thumbnail_width: PREVIEW_WIDTH,
+      thumbnail_height: PREVIEW_HEIGHT,
+      // Attribute values are quoted and the id is [A-Za-z0-9] by construction
+      // (shortId), so there's nothing here that could break out of the markup.
+      html: `<iframe src="${embedUrl}" width="${width}" height="${height}" style="border:0" loading="lazy" allowfullscreen title="${escapeHtmlAttribute(share.system.name || "Transit system")}"></iframe>`,
+    },
+    200,
+    { "cache-control": "public, max-age=3600" },
+  );
+});
+
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
+
+// Per-system preview image. This is what an unfurled link actually shows, and
+// it's a plain immutable GET so crawlers that don't run JavaScript (all of
+// them) still get a real picture of the system. See preview.ts for why it's
+// a vector schematic rather than a screenshot of the map.
+app.get("/s/:id/preview.png", async (c) => {
+  const id = c.req.param("id");
+  const cache = caches.default;
+
+  // Cached against the renderer version as well as the URL. The public URL is
+  // untouched — crawlers and meta tags never see this — but a change to how a
+  // preview is drawn now misses the old entries instead of silently serving
+  // last month's design until they age out, which there's no way to purge.
+  const cacheUrl = new URL(c.req.raw.url);
+  cacheUrl.searchParams.set("r", PREVIEW_RENDERER_VERSION);
+  const cacheKey = new Request(cacheUrl, { method: "GET" });
+
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  const share = await getActiveShare(c.env.DB, id);
+  if (!share) return c.json({ error: "Not found" }, 404);
+
+  const png = await renderPreviewPng(share.system);
+  const response = new Response(png, {
+    headers: {
+      "content-type": "image/png",
+      // A share's contents never change, so the image only changes when the
+      // renderer does — which the cache key accounts for. Not `immutable`/a
+      // year, though: a share can be *deleted* when it expires, and a day is
+      // short enough that a deleted system stops being served promptly while
+      // still absorbing the burst of crawler hits that follows someone
+      // pasting a link.
+      "cache-control": "public, max-age=86400",
+    },
+  });
+  c.executionCtx.waitUntil(cache.put(cacheKey, response.clone()));
+  return response;
+});
 
 // Inject real per-share Open Graph/Twitter meta tags into the SPA shell for
 // /s/:id, so pasting a share link into Slack/Discord/iMessage shows the
-// system's actual name instead of the generic site-wide card. og:image stays
-// the static default — a per-system preview image needs a server-side map
-// renderer that doesn't exist yet (tracked separately).
+// system's actual name instead of the generic site-wide card, and the
+// system's actual map instead of the generic site-wide image.
 async function handleSharePage(c: Context<{ Bindings: Env }>) {
   const id = c.req.param("id");
 
@@ -109,15 +291,21 @@ async function handleSharePage(c: Context<{ Bindings: Env }>) {
   const share = id ? await getActiveShare(c.env.DB, id) : null;
   if (!share) return assetResponse;
 
+  // A visit to the share page counts as the share still being wanted.
+  const touch = touchExpiry(c.env.DB, share);
+  if (touch) c.executionCtx.waitUntil(touch);
+
   const title = share.system.name || "TransitMapper";
   const description = `${share.system.stations.length} stations, ${share.system.services.length} lines`;
-  const shareUrl = `${c.env.SITE_URL}${new URL(c.req.raw.url).pathname}`;
+  const shareUrl = `${c.env.SITE_URL}/s/${share.id}`;
+  const previewUrl = `${c.env.SITE_URL}/s/${share.id}/preview.png`;
+  const oembedUrl = `${c.env.SITE_URL}/api/oembed?url=${encodeURIComponent(shareUrl)}&format=json`;
 
   // `system.name` is unauthenticated, user-supplied text with no character
   // sanitization at write time — using HTMLRewriter's element API (rather
   // than string/template concatenation into raw HTML) is what keeps this
   // safe, since it escapes values for their context automatically.
-  return new HTMLRewriter()
+  const transformed = new HTMLRewriter()
     .on("title", {
       element(el) {
         el.setInnerContent(`${title} · TransitMapper`, { html: false });
@@ -148,20 +336,79 @@ async function handleSharePage(c: Context<{ Bindings: Env }>) {
         el.setAttribute("content", description);
       },
     })
+    .on('meta[property="og:image"]', {
+      element(el) {
+        el.setAttribute("content", previewUrl);
+      },
+    })
+    .on('meta[name="twitter:image"]', {
+      element(el) {
+        el.setAttribute("content", previewUrl);
+      },
+    })
     .on('link[rel="canonical"]', {
       element(el) {
         el.setAttribute("href", shareUrl);
       },
     })
+    // oEmbed discovery is appended rather than rewritten in place: the shell
+    // carries no placeholder for it, and only share pages are embeddable —
+    // the homepage has nothing to advertise. `oembedUrl` is entirely
+    // Worker-built (SITE_URL plus an encoded id), so there's no user text in
+    // this markup.
+    .on("head", {
+      element(el) {
+        el.append(`<link rel="alternate" type="application/json+oembed" href="${oembedUrl}" title="TransitMapper oEmbed">`, {
+          html: true,
+        });
+      },
+    })
     .transform(assetResponse);
+
+  // A share page is the full editor loaded read-only, not an embed surface —
+  // /e/:id is the one thing on this origin that's meant to be framed.
+  const response = new Response(transformed.body, transformed);
+  response.headers.set("content-security-policy", "frame-ancestors 'none'");
+  return response;
 }
 
 app.get("/s/:id", handleSharePage);
 app.get("/s/:id/", handleSharePage);
 
+// The embeddable read-only map. Served from its own built entry (embed.html)
+// rather than the SPA shell, so an iframe in someone's article downloads the
+// map and not the editor. The path doesn't reach the assets binding on its
+// own — SPA fallback would hand back index.html — so it's rewritten here.
+async function handleEmbedPage(c: Context<{ Bindings: Env }>) {
+  // "/embed", not "/embed.html": the assets binding's default html_handling
+  // redirects the extension form, and a 307 is not what an iframe should get.
+  const embedRequest = new Request(new URL("/embed", c.req.raw.url), c.req.raw);
+  const asset = await c.env.ASSETS.fetch(embedRequest);
+
+  // Framing is opt-in, per-path. This is the ONLY route on the origin that
+  // any site may frame; the lockdown for everything else is applied below.
+  // The embed shows nothing a share link doesn't already show to anyone who
+  // has it, and it carries no credentials or account state, so there's no
+  // clickjacking surface to protect here.
+  const response = new Response(asset.body, asset);
+  response.headers.set("content-security-policy", "frame-ancestors *");
+  response.headers.delete("x-frame-options");
+  return response;
+}
+
+app.get("/e/:id", handleEmbedPage);
+app.get("/e/:id/", handleEmbedPage);
+
 // Everything else is a static asset (with SPA fallback to index.html for
-// client routes), served by the assets binding.
-app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
+// client routes), served by the assets binding. The editor is never framable:
+// it's a real application surface, and the embed route above is the one
+// deliberate exception.
+app.all("*", async (c) => {
+  const asset = await c.env.ASSETS.fetch(c.req.raw);
+  const response = new Response(asset.body, asset);
+  response.headers.set("content-security-policy", "frame-ancestors 'none'");
+  return response;
+});
 
 async function scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
   await env.DB.prepare(

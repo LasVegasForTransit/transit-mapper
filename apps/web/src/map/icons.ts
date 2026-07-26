@@ -1,4 +1,5 @@
 import type { Map as MLMap } from "maplibre-gl";
+import { iconName } from "@transitmapper/core/render/iconName";
 import { PATHS } from "../ui/Icon";
 
 // On-map pictograms, rasterized at runtime from the same 24x24 stroke-path
@@ -28,10 +29,10 @@ function rasterize(pathD: string, color: string, fill: boolean): Uint8ClampedArr
   return ctx.getImageData(0, 0, ICON_PX, ICON_PX).data;
 }
 
-/** Deterministic registered-image name for a (glyph, color) pair. */
-export function iconName(pathKey: string, color: string): string {
-  return `tm-icon-${pathKey}-${color}`;
-}
+// iconName itself lives in core (render/iconName.ts) — buildFeatures runs
+// there now and needs to name images without a DOM to rasterize them into.
+// Re-exported here so this module stays the one place the app asks about icons.
+export { iconName };
 
 export interface EnsureIconOptions {
   fill?: boolean;

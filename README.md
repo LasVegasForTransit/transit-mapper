@@ -27,6 +27,8 @@ is specific to one city or one transit agency.
   street layout underneath it.
 - Everything saves automatically in your browser. Share a link to your
   system, and anyone can view it or make their own copy.
+- Paste that link anywhere and the preview shows the actual system, or
+  embed a live read-only map in a blog post with an iframe.
 
 ## Quick start
 

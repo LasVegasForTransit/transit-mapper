@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TransitMapper</title>
+    <!-- An embed is someone else's page showing our content; it should never
+         itself be indexed or unfurled as a destination. The share page at
+         /s/:id is the canonical, linkable version. -->
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style>
+      /* Self-contained: no Tailwind, no app stylesheet. An embed's whole
+         point is to be small, and it has exactly three elements.
+         Colours and type are the org's brand tokens, not the editor's own
+         palette — an embed lives in someone else's article under the org's
+         name. See packages/core/src/style/lvbtBrand.ts. */
+      :root {
+        --lvbt-surface: #F7F4EC;
+        --lvbt-on-surface: #0F1115;
+        --lvbt-on-surface-variant: #4A4E57;
+        --lvbt-outline: #0F1115;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--lvbt-surface);
+        font-family: "Public Sans", system-ui, sans-serif;
+        color: var(--lvbt-on-surface);
+      }
+      #map {
+        position: absolute;
+        inset: 0;
+      }
+      #embed-credit {
+        position: absolute;
+        left: 8px;
+        bottom: 8px;
+        z-index: 1;
+        padding: 4px 8px;
+        border-radius: 4px;
+        background: rgba(247, 244, 236, 0.92);
+        border: 1px solid var(--lvbt-outline);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--lvbt-on-surface);
+        text-decoration: none;
+      }
+      #embed-credit:hover {
+        text-decoration: underline;
+      }
+      #embed-status {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        color: var(--lvbt-on-surface-variant);
+      }
+      /* An id rule beats the user agent's `[hidden] { display: none }`, so
+         setting the attribute alone would leave "Loading map…" on screen
+         forever once the map arrives. */
+      #embed-status[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <p id="embed-status">Loading map…</p>
+    <a id="embed-credit" href="/" target="_blank" rel="noopener">Open in TransitMapper</a>
+    <script type="module" src="/src/embed/main.ts"></script>
+  </body>
+</html>

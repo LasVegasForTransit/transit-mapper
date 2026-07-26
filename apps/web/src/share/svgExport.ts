@@ -1,18 +1,16 @@
-import type { Feature, LineString, Point } from "geojson";
 import type { Map as MLMap } from "maplibre-gl";
-import type { Selection } from "../editor/store";
-import { buildFeatures, type ViewOptions } from "../map/layers";
+import { systemSvg } from "@transitmapper/core/render/svg";
+import type { ViewOptions } from "../map/layers";
 import { getMap } from "../map/mapRef";
 import { systemBounds } from "@transitmapper/core/model/geo";
 import type { LngLat, TransitSystem } from "@transitmapper/core/model/system";
 import { legendEntriesFor, type LegendEntry } from "./exportLegend";
 import { scaleBarSpec } from "./exportScale";
 
-const INK = "#191a17";
-const PAD = 20;
-const TITLE_SIZE = 22;
-const SWATCH = 14;
-const ROW_H = 22;
+// The browser half of SVG export. The composition itself lives in core
+// (render/svg.ts) — this supplies the things only a live map knows: how big
+// the viewport is, how to project a coordinate, which way is north, and what
+// a pixel measures on the ground.
 
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -25,137 +23,27 @@ function downloadBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-function titleMarkup(title: string, width: number): string {
-  if (!title.trim()) return "";
-  // Rough width estimate (no DOM measurement available for a detached SVG
-  // string) — generous enough that the backing panel never clips real titles.
-  const w = Math.min(width, title.length * TITLE_SIZE * 0.62 + PAD * 2);
-  return (
-    `<rect x="0" y="0" width="${w.toFixed(0)}" height="${(TITLE_SIZE * 1.9).toFixed(0)}" fill="rgba(255,255,255,0.88)"/>` +
-    `<text x="${PAD}" y="${(TITLE_SIZE * 1.15).toFixed(0)}" font-family="system-ui,sans-serif" font-size="${TITLE_SIZE}" font-weight="700" fill="${INK}">${escapeXml(title)}</text>`
-  );
-}
-
-function legendMarkup(legend: LegendEntry[], width: number, height: number): string {
-  if (legend.length === 0) return "";
-  const panelH = legend.length * ROW_H + PAD;
-  const maxChars = Math.max(...legend.map((e) => e.label.length));
-  const panelW = Math.min(width, SWATCH + 10 + maxChars * 7.5 + PAD * 2);
-  const top = height - panelH;
-  const rows = legend
-    .map((e, i) => {
-      const y = top + PAD / 2 + i * ROW_H;
-      return (
-        `<rect x="${PAD}" y="${(y + (ROW_H - SWATCH) / 2).toFixed(1)}" width="${SWATCH}" height="${SWATCH}" fill="${e.color}"/>` +
-        `<text x="${PAD + SWATCH + 10}" y="${(y + ROW_H / 2 + 4).toFixed(1)}" font-family="system-ui,sans-serif" font-size="13" font-weight="500" fill="${INK}">${escapeXml(e.label)}</text>`
-      );
-    })
-    .join("");
-  return `<rect x="0" y="${top.toFixed(1)}" width="${panelW.toFixed(0)}" height="${panelH}" fill="rgba(255,255,255,0.88)"/>${rows}`;
-}
-
-function scaleBarMarkup(map: MLMap, width: number, height: number): string {
-  const maxWidthPx = Math.min(140, width * 0.3);
-  const { widthPx, label } = scaleBarSpec(map, maxWidthPx);
-  const x0 = width - PAD - widthPx;
-  const y = height - PAD - 6;
-  const tick = 5;
-  return (
-    `<g stroke="${INK}" stroke-width="2">` +
-    `<line x1="${x0.toFixed(1)}" y1="${y}" x2="${(x0 + widthPx).toFixed(1)}" y2="${y}"/>` +
-    `<line x1="${x0.toFixed(1)}" y1="${y - tick}" x2="${x0.toFixed(1)}" y2="${(y + tick).toFixed(1)}"/>` +
-    `<line x1="${(x0 + widthPx).toFixed(1)}" y1="${y - tick}" x2="${(x0 + widthPx).toFixed(1)}" y2="${(y + tick).toFixed(1)}"/>` +
-    `</g>` +
-    `<text x="${(x0 + widthPx / 2).toFixed(1)}" y="${(y - tick - 4).toFixed(1)}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" font-weight="600" fill="${INK}">${label}</text>`
-  );
-}
-
-function northArrowMarkup(map: MLMap, width: number): string {
-  const cx = width - PAD - 10;
-  const cy = PAD + 18;
-  const rotate = map.getBearing();
-  return (
-    `<g transform="rotate(${(-rotate).toFixed(1)} ${cx} ${cy})">` +
-    `<path d="M${cx},${cy - 12} L${cx + 6},${cy + 8} L${cx},${cy + 3.5} L${cx - 6},${cy + 8} Z" fill="${INK}"/>` +
-    `<text x="${cx}" y="${cy + 22}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" font-weight="700" fill="${INK}">N</text>` +
-    `</g>`
-  );
-}
-
-function escapeXml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
 export interface SvgComposeOptions {
   title: string;
   legend: LegendEntry[];
 }
 
-/**
- * Vector export of the schematic: ways/services as paths, stations as
- * circles, facilities as colored dots (a simplified stand-in for their
- * on-map pictograms — PNG export is what captures full icon fidelity), plus
- * a title and line-color legend so the export reads as a finished map on its
- * own, not just an extracted line drawing. Projected through the *given*
- * map's own project() — pass the export dialog's own preview map instance
- * (already framed to the whole system) rather than always reading the live
- * app map, so the SVG matches whatever framing the user chose.
- */
+/** Vector export of the schematic, projected through the *given* map's own
+ *  project() — pass the export dialog's own preview map instance (already
+ *  framed to the whole system) rather than always reading the live app map,
+ *  so the SVG matches whatever framing the user chose. */
 export function svgMarkup(system: TransitSystem, view: ViewOptions, map: MLMap, opts: SvgComposeOptions): string {
   const container = map.getContainer();
   const width = container.clientWidth;
   const height = container.clientHeight;
-  const project = (lnglat: LngLat) => map.project(lnglat as [number, number]);
-
-  const selection: Selection = null;
-  const fc = buildFeatures(system, selection, [], view);
-  const parts: string[] = [];
-
-  const pathD = (coords: LngLat[]) =>
-    coords.map((c, i) => `${i === 0 ? "M" : "L"}${project(c).x.toFixed(1)},${project(c).y.toFixed(1)}`).join(" ");
-
-  for (const f of fc.ways.features as Feature<LineString>[]) {
-    const p = f.properties as { color: string; width: number; dashed?: boolean };
-    parts.push(
-      `<path d="${pathD(f.geometry.coordinates as LngLat[])}" fill="none" stroke="${p.color}" stroke-width="${p.width}" stroke-linecap="round" stroke-linejoin="round"${p.dashed ? ' stroke-dasharray="4,4"' : ""} opacity="0.85"/>`,
-    );
-  }
-  for (const f of fc.services.features as Feature<LineString>[]) {
-    const p = f.properties as { color: string; width: number; underground?: boolean };
-    parts.push(
-      `<path d="${pathD(f.geometry.coordinates as LngLat[])}" fill="none" stroke="${p.color}" stroke-width="${p.width}" stroke-linecap="round" stroke-linejoin="round"${p.underground ? ' stroke-dasharray="5,4"' : ""}/>`,
-    );
-  }
-  for (const f of fc.stations.features as Feature<Point>[]) {
-    const p = f.properties as { color: string; interchange?: boolean; name?: string };
-    const { x, y } = project(f.geometry.coordinates as LngLat);
-    const r = p.interchange ? 7 : 5;
-    parts.push(
-      `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="#ffffff" stroke="${p.interchange ? "#111827" : p.color}" stroke-width="3"/>`,
-    );
-    if (p.name) {
-      parts.push(
-        `<text x="${x.toFixed(1)}" y="${(y - r - 6).toFixed(1)}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="${p.interchange ? 700 : 500}" fill="${INK}">${escapeXml(p.name)}</text>`,
-      );
-    }
-  }
-  for (const f of fc.facilities.features as Feature<Point>[]) {
-    const p = f.properties as { color: string; radius: number; name?: string };
-    const { x, y } = project(f.geometry.coordinates as LngLat);
-    parts.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${p.radius}" fill="${p.color}" stroke="#ffffff" stroke-width="1.5"/>`);
-    if (p.name) {
-      parts.push(
-        `<text x="${x.toFixed(1)}" y="${(y + p.radius + 13).toFixed(1)}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="${INK}">${escapeXml(p.name)}</text>`,
-      );
-    }
-  }
-
-  parts.push(titleMarkup(opts.title, width));
-  parts.push(legendMarkup(opts.legend, width, height));
-  parts.push(northArrowMarkup(map, width));
-  parts.push(scaleBarMarkup(map, width, height));
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#ffffff"/>${parts.join("")}</svg>`;
+  return systemSvg(system, view, (lngLat: LngLat) => map.project(lngLat as [number, number]), {
+    title: opts.title,
+    legend: opts.legend,
+    width,
+    height,
+    bearing: map.getBearing(),
+    scaleBar: scaleBarSpec(map, Math.min(140, width * 0.3)),
+  });
 }
 
 /** Export from an already-framed map (e.g. the export dialog's own preview

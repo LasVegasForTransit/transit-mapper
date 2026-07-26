@@ -9,7 +9,7 @@ import {
   PLATFORM_FILL,
   PLATFORM_FILL_OPACITY,
   PLATFORM_STROKE,
-} from "../../style/catalogStyle";
+} from "@transitmapper/core/style/catalogStyle";
 import {
   LANE_WIDTH_EXPR,
   LYR_CENTER_LINES,

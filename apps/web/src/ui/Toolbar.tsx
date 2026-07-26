@@ -10,7 +10,7 @@ import {
   wayTypesByFamily,
   type WayFamily,
 } from "@transitmapper/core/model/catalog";
-import { facilityRender } from "../style/catalogStyle";
+import { facilityRender } from "@transitmapper/core/style/catalogStyle";
 import { DropdownMenu, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "./DropdownMenu";
 import { Icon } from "./Icon";
 import { useView } from "./ViewProvider";

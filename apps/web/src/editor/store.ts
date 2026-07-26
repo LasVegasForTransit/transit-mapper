@@ -1,7 +1,7 @@
 import { createStore } from "zustand/vanilla";
 import { LANE_KINDS, PROFILE_PRESETS, laneKind, mode, modesForWayType, wayType, type Grade } from "@transitmapper/core/model/catalog";
 import { buildProfile, cloneProfile, combineProfiles, directionalLanes, flipProfile, makeOneWay, profileWidthM, separateProfiles, withLaneCount } from "@transitmapper/core/model/profile";
-import { modeRender } from "../style/catalogStyle";
+import { modeRender } from "@transitmapper/core/style/catalogStyle";
 import { haversineMeters, nearestInsertionPoint, nearestOnPath, offsetPolyline, patternPath, pointAtT, pointInPolygon, resolveWayPath, snap, squareFootprint } from "@transitmapper/core/model/geo";
 import { anchorOnWay, routeBetween, type RouteAnchor, type RouteSpan } from "@transitmapper/core/model/routeGraph";
 import { wayCrossings } from "@transitmapper/core/model/validate";
