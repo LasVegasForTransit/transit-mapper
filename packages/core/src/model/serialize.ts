@@ -48,6 +48,25 @@ export function createEmptySystem(now = Date.now()): TransitSystem {
   };
 }
 
+/**
+ * Finiteness is not enough here — the range matters, and it matters for
+ * availability rather than correctness.
+ *
+ * Consumers bucket segments into a fixed-size degree grid by iterating every
+ * cell a segment's bounding box spans (`geo/snapIndex.ts`'s `buildSegmentGrid`
+ * at 0.003°, `validate.ts`'s `buildCrossGrid` at 0.001°). That loop is bounded
+ * by the *coordinate magnitude*, not by the number of points: a single way
+ * running from lng -1e6 to 1e6 is a finite, well-formed-looking pair of
+ * numbers that asks those grids for ~10^8 cells and hangs the tab. It fires
+ * during the first render, so a shared link or an embed carrying one takes the
+ * viewer's page down before they can do anything about it.
+ *
+ * `snapIndex.ts` already clamps the longitude *radius* for exactly this
+ * reason; this is the same guard applied at the point where untrusted
+ * coordinates enter the model, which is the only place it can be applied once.
+ * Out-of-range points are dropped like any other malformed value (`coords`
+ * filters), consistent with how the rest of this file treats bad input.
+ */
 function isLngLat(v: unknown): v is LngLat {
   return (
     Array.isArray(v) &&
@@ -55,7 +74,11 @@ function isLngLat(v: unknown): v is LngLat {
     typeof v[0] === "number" &&
     typeof v[1] === "number" &&
     Number.isFinite(v[0]) &&
-    Number.isFinite(v[1])
+    Number.isFinite(v[1]) &&
+    v[0] >= -180 &&
+    v[0] <= 180 &&
+    v[1] >= -90 &&
+    v[1] <= 90
   );
 }
 

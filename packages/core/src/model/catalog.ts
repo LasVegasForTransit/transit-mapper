@@ -151,7 +151,9 @@ export const LANE_KINDS: Record<string, LaneKindDef> = {
 };
 
 export function laneKind(id: string): LaneKindDef {
-  return LANE_KINDS[id] ?? LANE_KINDS.drive;
+  // Own-property lookup, not `??` — see the accessor block near the bottom of
+  // this file for why an inherited member reaching a caller is not theoretical.
+  return Object.hasOwn(LANE_KINDS, id) ? LANE_KINDS[id] : LANE_KINDS.drive;
 }
 
 // ---- Way types -------------------------------------------------------------
@@ -571,22 +573,39 @@ export const FACILITY_TYPES: Record<string, FacilityType> = {
 export const FACILITY_TYPE_ORDER: string[] = ["entrance", "bikeDock", "elevator", "building", "busBay", "platform", "parkingLot", "depot"];
 
 export function facilityType(id: string): FacilityType {
-  return FACILITY_TYPES[id] ?? FACILITY_TYPES.entrance;
+  return Object.hasOwn(FACILITY_TYPES, id) ? FACILITY_TYPES[id] : FACILITY_TYPES.entrance;
 }
 
-// ---- Accessors (tolerant of unknown ids, so bad data never crashes) --------
+// ---- Accessors -------------------------------------------------------------
+//
+// Tolerant of unknown ids, so bad data never crashes — but `X[id] ?? fallback`
+// was not enough to deliver that. `??` only fires on null/undefined, and a
+// plain object lookup finds inherited members: `WAY_TYPES["constructor"]` is
+// the `Object` function, not undefined, so it was returned as though it were a
+// way type. Callers then read `.defaultProfile` off it and threw inside
+// `parseSystem`, or worse read `.defaultWidthM` off `Object.prototype.toString`
+// and got `undefined`, which became a `NaN` width and a way that silently
+// rendered as nothing.
+//
+// Ids reach here straight from `JSON.parse` of a shared document, so this is
+// hostile input, not merely unknown input. `Object.hasOwn` is the check that
+// makes "unknown id" mean what the fallbacks assume it means.
+function fromCatalog<T>(table: Record<string, T>, id: string, fallback: T): T {
+  return Object.hasOwn(table, id) ? table[id] : fallback;
+}
+
 export function wayType(id: string): WayType {
-  return WAY_TYPES[id] ?? WAY_TYPES.lightRail;
+  return fromCatalog(WAY_TYPES, id, WAY_TYPES.lightRail);
 }
 
 export function mode(id: string): Mode {
-  return MODES[id] ?? MODES.bus;
+  return fromCatalog(MODES, id, MODES.bus);
 }
 
 /** Facility class within a way type, or undefined if none/unknown. */
 export function facilityClass(typeId: string, classId: string | undefined): FacilityClass | undefined {
   if (!classId) return undefined;
-  return WAY_TYPES[typeId]?.classes.find((c) => c.id === classId);
+  return Object.hasOwn(WAY_TYPES, typeId) ? WAY_TYPES[typeId].classes.find((c) => c.id === classId) : undefined;
 }
 
 // Default colors offered when seeding a new system's line palette. Lives here
