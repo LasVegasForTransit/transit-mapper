@@ -49,41 +49,55 @@ export function createEmptySystem(now = Date.now()): TransitSystem {
 }
 
 /**
- * Finiteness is not enough here — the range matters, and it matters for
- * availability rather than correctness.
+ * Finiteness is not enough — a coordinate also has to be on Earth.
  *
- * Consumers bucket segments into a fixed-size degree grid by iterating every
- * cell a segment's bounding box spans (`geo/snapIndex.ts`'s `buildSegmentGrid`
- * at 0.003°, `validate.ts`'s `buildCrossGrid` at 0.001°). That loop is bounded
- * by the *coordinate magnitude*, not by the number of points: a single way
- * running from lng -1e6 to 1e6 is a finite, well-formed-looking pair of
- * numbers that asks those grids for ~10^8 cells and hangs the tab. It fires
- * during the first render, so a shared link or an embed carrying one takes the
- * viewer's page down before they can do anything about it.
+ * This is hygiene, NOT a denial-of-service mitigation, and it is worth being
+ * precise about that because an earlier version of this comment claimed
+ * otherwise. The spatial grids in `geo/snapIndex.ts` and `validate.ts` cost
+ * one Map insert per cell a segment's bounding box spans, and that cost is
+ * driven by how far apart two points are — which range-checking barely
+ * constrains. A way from [-180,-90] to [180,90] is entirely in range and asks
+ * the snap grid for ~7.2 billion cells. Measured before it was fixed: ±5°
+ * froze for 4.2 seconds, ±10° crashed on V8's Map size limit.
  *
- * `snapIndex.ts` already clamps the longitude *radius* for exactly this
- * reason; this is the same guard applied at the point where untrusted
- * coordinates enter the model, which is the only place it can be applied once.
- * Out-of-range points are dropped like any other malformed value (`coords`
- * filters), consistent with how the rest of this file treats bad input.
+ * The amplification is in the expansion, so the bound lives there too — see
+ * MAX_SEGMENT_CELLS in geo/snapIndex.ts and MAX_CROSS_SEGMENT_CELLS in
+ * validate.ts. What this check does is keep nonsense out of the model:
+ * longitude is wrapped into range rather than dropped, because MapLibre hands
+ * back unwrapped values like 184 when the user pans into an adjacent world
+ * copy, and dropping those would silently delete an interior vertex and
+ * change the shape of the user's way.
  */
+function wrapLng(lng: number): number {
+  return (((lng + 180) % 360) + 360) % 360 - 180;
+}
+
+/** Validates and normalizes a coordinate, or null if it isn't one. Longitude
+ *  is cyclic, so out-of-range names a real place by another number and gets
+ *  wrapped; latitude has no such meaning — past a pole is nonsense, not a
+ *  lap — so it is rejected. See the note above wrapLng for why this is not
+ *  the denial-of-service fix it might look like. */
+function normalizedLngLat(v: unknown): LngLat | null {
+  if (!Array.isArray(v) || v.length !== 2) return null;
+  const [lng, lat] = v;
+  if (typeof lng !== "number" || typeof lat !== "number") return null;
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+  if (lat < -90 || lat > 90) return null;
+  return [wrapLng(lng), lat];
+}
+
 function isLngLat(v: unknown): v is LngLat {
-  return (
-    Array.isArray(v) &&
-    v.length === 2 &&
-    typeof v[0] === "number" &&
-    typeof v[1] === "number" &&
-    Number.isFinite(v[0]) &&
-    Number.isFinite(v[1]) &&
-    v[0] >= -180 &&
-    v[0] <= 180 &&
-    v[1] >= -90 &&
-    v[1] <= 90
-  );
+  return normalizedLngLat(v) !== null;
 }
 
 function coords(v: unknown): LngLat[] {
-  return Array.isArray(v) ? (v.filter(isLngLat) as LngLat[]) : [];
+  if (!Array.isArray(v)) return [];
+  const out: LngLat[] = [];
+  for (const item of v) {
+    const point = normalizedLngLat(item);
+    if (point) out.push(point);
+  }
+  return out;
 }
 
 const GEOMETRIES = new Set(["straight", "curved", "freeform"]);
@@ -195,7 +209,8 @@ function parseNodes(raw: unknown[], ways: Way[]): Node[] {
   const nodes: Node[] = [];
   for (const n of raw) {
     const r = n as Record<string, unknown>;
-    if (typeof r.id !== "string" || !isLngLat(r.coord) || !Array.isArray(r.refs)) continue;
+    const nodeCoord = normalizedLngLat(r.coord);
+    if (typeof r.id !== "string" || !nodeCoord || !Array.isArray(r.refs)) continue;
     const refs: WayPointRef[] = (r.refs as unknown[])
       .map((ref) => ref as Record<string, unknown>)
       .filter((ref) => typeof ref.wayId === "string" && typeof ref.pointIndex === "number")
@@ -210,7 +225,7 @@ function parseNodes(raw: unknown[], ways: Way[]): Node[] {
     const connectors = parseConnectors(r.connectors, ways, refs);
     nodes.push({
       id: r.id,
-      coord: r.coord,
+      coord: nodeCoord,
       refs,
       ...(control ? { control } : {}),
       ...(connectors ? { connectors } : {}),
@@ -412,7 +427,7 @@ function parseV3(o: Record<string, unknown>): TransitSystem {
   const facilities = rawFacilities.map((f) => {
     const r = f as Record<string, unknown>;
     if (typeof r.id !== "string" || typeof r.typeId !== "string") throw new Error("Bad facility");
-    const geometry = isLngLat(r.geometry) ? r.geometry : coords(r.geometry);
+    const geometry = normalizedLngLat(r.geometry) ?? coords(r.geometry);
     return { id: r.id, typeId: r.typeId, name: typeof r.name === "string" ? r.name : undefined, geometry };
   });
 
@@ -437,7 +452,8 @@ function parseV3(o: Record<string, unknown>): TransitSystem {
 
 function parseStation(s: unknown): Station {
   const r = s as Record<string, unknown>;
-  if (typeof r.id !== "string" || !isLngLat(r.coord)) throw new Error("Bad station");
+  const stationCoord = normalizedLngLat(r.coord);
+  if (typeof r.id !== "string" || !stationCoord) throw new Error("Bad station");
   // wayId (v3), corridorId (v2), lineId (v1) all name the same anchor target.
   const a = r.anchor as Record<string, unknown> | undefined;
   const anchorId =
@@ -453,7 +469,7 @@ function parseStation(s: unknown): Station {
   return {
     id: r.id,
     name: typeof r.name === "string" ? r.name : undefined,
-    coord: r.coord,
+    coord: stationCoord,
     ...(anchor ? { anchor } : {}),
     ...(footprint ? { footprint } : {}),
     ...(platforms ? { platforms } : {}),
@@ -516,7 +532,8 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
     const legacyStationCoord = new Map<string, LngLat>();
     for (const s of rawStations) {
       const r = s as Record<string, unknown>;
-      if (typeof r.id === "string" && isLngLat(r.coord)) legacyStationCoord.set(r.id, r.coord);
+      const legacyCoord = normalizedLngLat(r.coord);
+      if (typeof r.id === "string" && legacyCoord) legacyStationCoord.set(r.id, legacyCoord);
     }
     for (const l of rawLines) {
       const r = l as Record<string, unknown>;
