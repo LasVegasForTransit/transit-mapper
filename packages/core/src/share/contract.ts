@@ -8,6 +8,10 @@ export interface CreateShareRequest {
 
 export interface CreateShareResponse {
   id: string;
+  /** One-time secret returned only for anonymous shares. The browser keeps
+   *  it so the share can be adopted on sign-in; the server stores only its
+   *  hash. Absent when the share already has an owner. */
+  claimToken?: string;
 }
 
 export interface GetShareResponse {

@@ -34,6 +34,13 @@ work doesn't get pulled forward ahead of earlier work without a deliberate reaso
 
 This phase makes a shared TransitMapper link work well anywhere it's pasted, and rounds out the sandbox.
 
+- **Accounts.** Sign in with Google. Moved up from Phase 3: anonymous share links expire after a
+  week, and an embedded map that 404s a week after publication is worse than no embed at all. Rich
+  previews and embeddable maps have both shipped now, and they're worth little without this.
+- **Permanent shares.** A signed-in person's share links never expire, and links they published
+  before signing in can be adopted without changing their URLs. Anonymous links currently last a
+  week from their last view, which keeps a map alive while people are reading it — but a system
+  worth keeping shouldn't depend on someone happening to open it.
 - **An installable app.** Add TransitMapper to your home screen like a native app.
 - **Direction-aware routing.** Services respect one-way lanes instead of routing against traffic.
 - **Junction visuals.** Rounded curb returns and painted approach arrows at intersections.
@@ -52,12 +59,8 @@ This is where sketching starts turning into real planning and advocacy work.
 - **Snap-to-streets routing.** Sketch a line freely and have it settle onto the real street and
   track network automatically.
 
-## Phase 3: Accounts & Collaboration
+## Phase 3: Collaboration
 
-- **Accounts.** Sign in with Google or GitHub.
-- **Permanent shares.** Signed-in shares never expire. Anonymous ones last seven days from their
-  last view, which keeps an embedded map alive as long as people are reading it — but a system
-  worth keeping shouldn't depend on someone happening to open it.
 - **Real-time collaboration.** Multiple people editing one system together.
 
 ## How to help

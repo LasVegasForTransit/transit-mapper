@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build:run": "tsc -b && vite build",
+    "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck:run": "tsc -b --noEmit",
-    "verify:run": "tsx scripts/verify.ts"
+    "typecheck": "tsc -b --noEmit",
+    "verify": "tsx scripts/verify.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.20",

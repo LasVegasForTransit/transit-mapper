@@ -1,16 +1,16 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "tasks": {
-    "build:run": {
-      "dependsOn": ["^build:run"],
+    "build": {
+      "dependsOn": ["^build"],
       "outputs": ["dist/**", "*.tsbuildinfo"]
     },
-    "typecheck:run": {
-      "dependsOn": ["^typecheck:run"],
+    "typecheck": {
+      "dependsOn": ["^typecheck"],
       "outputs": ["*.tsbuildinfo"]
     },
-    "verify:run": {
-      "dependsOn": ["^typecheck:run"],
+    "verify": {
+      "dependsOn": ["^typecheck"],
       "outputs": []
     }
   }

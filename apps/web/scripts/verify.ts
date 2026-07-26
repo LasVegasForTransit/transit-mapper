@@ -69,6 +69,12 @@ import { bearingDegrees, formatBearing, haversineMeters, snap, squareFootprint }
 import type { CrossSection, LngLat, Node, Service, Way } from "@transitmapper/core/model/system";
 import { armRefKey, getComponent, laneRefKey, withComponent, withoutComponent } from "@transitmapper/core/model/components";
 import { buildTimetable, dwellStopsForPattern, metersAtElapsed, VEHICLE_SPEED_MPS } from "../src/sim/vehicles";
+import { generateToken, hashToken, sha256Base64Url, toBase64Url } from "@transitmapper/core/auth/tokens";
+import { parseCookies, serializeCookie } from "@transitmapper/core/auth/cookies";
+import { safeReturnTo } from "@transitmapper/core/auth/returnTo";
+import { buildAuthorizeUrl } from "@transitmapper/core/auth/google";
+import { ANONYMOUS_SHARE_TTL_MS, newShareOwnership } from "@transitmapper/core/share/ownership";
+import { claimOutcome, retainedShares } from "@transitmapper/core/share/claim";
 
 let failures = 0;
 function check(name: string, cond: boolean) {
@@ -2917,6 +2923,151 @@ function buildGrid() {
   const guarded = store.getState().system.ways.find((way) => way.id === wB)!;
   check("straighten keeps a point that's a real junction", guarded.points.length === 3);
   check("the junction node is still intact after straightening", store.getState().system.nodes.some((n) => n.refs.some((r) => r.wayId === wB) && n.refs.some((r) => r.wayId === wC)));
+}
+
+// --- tokens: generation, hashing, base64url ---
+{
+  const a = generateToken();
+  const b = generateToken();
+  check("generateToken returns a different value each call", a !== b);
+  check("generateToken is url-safe", /^[A-Za-z0-9_-]+$/.test(a));
+  check("generateToken defaults to 32 bytes (43 base64url chars)", a.length === 43);
+  check("generateToken honors a byte length", generateToken(16).length === 22);
+
+  check("toBase64Url strips padding", toBase64Url(new Uint8Array([1, 2])) === "AQI");
+  check("toBase64Url uses - and _ instead of + and /", toBase64Url(new Uint8Array([251, 255])) === "-_8");
+
+  // Known SHA-256 of "abc", the standard test vector.
+  const abc = await hashToken("abc");
+  check(
+    "hashToken returns lowercase hex sha-256",
+    abc === "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+  );
+  check("hashToken is stable for the same input", (await hashToken("abc")) === abc);
+  check("hashToken differs for different input", (await hashToken("abd")) !== abc);
+
+  // Same digest, base64url-encoded rather than hex.
+  check(
+    "sha256Base64Url encodes the raw digest, not the hex string",
+    (await sha256Base64Url("abc")) === "ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0",
+  );
+}
+
+// --- cookies: serialize and parse ---
+{
+  check(
+    "serializeCookie writes the attributes the session cookie needs",
+    serializeCookie("tm_session", "abc", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      path: "/",
+      maxAge: 60,
+    }) === "tm_session=abc; Path=/; Max-Age=60; HttpOnly; Secure; SameSite=Lax",
+  );
+  check(
+    "serializeCookie omits Secure when not asked for",
+    !serializeCookie("tm_session", "abc", { httpOnly: true, secure: false }).includes("Secure"),
+  );
+  check(
+    "serializeCookie with maxAge 0 expires the cookie",
+    serializeCookie("tm_session", "", { maxAge: 0, path: "/" }) === "tm_session=; Path=/; Max-Age=0",
+  );
+  check(
+    "serializeCookie encodes values that would break the header",
+    serializeCookie("a", "x;y").startsWith("a=x%3By"),
+  );
+
+  check("parseCookies handles a missing header", Object.keys(parseCookies(null)).length === 0);
+  check("parseCookies reads one pair", parseCookies("tm_session=abc").tm_session === "abc");
+  check(
+    "parseCookies reads several pairs regardless of spacing",
+    parseCookies("a=1;b=2;  c=3").c === "3",
+  );
+  check("parseCookies decodes encoded values", parseCookies("a=x%3By").a === "x;y");
+  check(
+    "parseCookies ignores malformed segments rather than throwing",
+    Object.keys(parseCookies("garbage; a=1")).length === 1,
+  );
+}
+
+// --- return-path validation and Google authorize URL ---
+{
+  check("safeReturnTo keeps a plain path", safeReturnTo("/s/abc123") === "/s/abc123");
+  check("safeReturnTo keeps a path with a query", safeReturnTo("/?view=network") === "/?view=network");
+  check("safeReturnTo falls back to / for null", safeReturnTo(null) === "/");
+  check("safeReturnTo falls back to / for empty", safeReturnTo("") === "/");
+  check("safeReturnTo rejects an absolute http url", safeReturnTo("https://evil.example") === "/");
+  check("safeReturnTo rejects a protocol-relative url", safeReturnTo("//evil.example") === "/");
+  check("safeReturnTo rejects a backslash protocol-relative url", safeReturnTo("/\\evil.example") === "/");
+  check("safeReturnTo rejects anything not starting with /", safeReturnTo("s/abc") === "/");
+  check("safeReturnTo rejects a javascript url", safeReturnTo("javascript:alert(1)") === "/");
+  check("safeReturnTo rejects embedded control characters", safeReturnTo("/a\nb") === "/");
+
+  const url = new URL(
+    buildAuthorizeUrl({
+      clientId: "cid",
+      redirectUri: "https://example.test/auth/google/callback",
+      state: "st",
+      codeChallenge: "cc",
+    }),
+  );
+  check("buildAuthorizeUrl targets Google", url.host === "accounts.google.com");
+  check("buildAuthorizeUrl asks for a code", url.searchParams.get("response_type") === "code");
+  check("buildAuthorizeUrl passes the client id", url.searchParams.get("client_id") === "cid");
+  check(
+    "buildAuthorizeUrl passes the redirect uri",
+    url.searchParams.get("redirect_uri") === "https://example.test/auth/google/callback",
+  );
+  check("buildAuthorizeUrl passes the state", url.searchParams.get("state") === "st");
+  check("buildAuthorizeUrl passes the code challenge", url.searchParams.get("code_challenge") === "cc");
+  check(
+    "buildAuthorizeUrl uses the S256 challenge method, never plain",
+    url.searchParams.get("code_challenge_method") === "S256",
+  );
+  check(
+    "buildAuthorizeUrl requests only identity scopes",
+    url.searchParams.get("scope") === "openid email profile",
+  );
+}
+
+// --- share ownership and claim reducer ---
+{
+  const now = 1_700_000_000_000;
+
+  const owned = newShareOwnership("user_1", now);
+  check("an owned share has an owner", owned.ownerId === "user_1");
+  check("an owned share never expires", owned.expiresAt === null);
+
+  const anon = newShareOwnership(null, now);
+  check("an anonymous share has no owner", anon.ownerId === null);
+  check("an anonymous share expires seven days out", anon.expiresAt === now + ANONYMOUS_SHARE_TTL_MS);
+  check("the anonymous ttl is seven days", ANONYMOUS_SHARE_TTL_MS === 7 * 24 * 60 * 60 * 1000);
+
+  check("a 200 means the share was claimed", claimOutcome(200) === "claimed");
+  check("a 403 is permanent — the token is wrong or spent", claimOutcome(403) === "rejected");
+  check("a 409 is permanent — somebody already owns it", claimOutcome(409) === "rejected");
+  check("a 404 is permanent — the share expired and is gone", claimOutcome(404) === "rejected");
+  check("a 500 is worth retrying later", claimOutcome(500) === "retry");
+  check("a 429 is worth retrying later", claimOutcome(429) === "retry");
+
+  const held = [
+    { id: "a", claimToken: "ta" },
+    { id: "b", claimToken: "tb" },
+    { id: "c", claimToken: "tc" },
+    { id: "d", claimToken: "td" },
+  ];
+  const kept = retainedShares(held, [
+    { id: "a", status: 200 },
+    { id: "b", status: 403 },
+    { id: "c", status: 500 },
+  ]);
+  check("a claimed share is dropped from local storage", !kept.some((s) => s.id === "a"));
+  check("a rejected share is dropped, since retrying never helps", !kept.some((s) => s.id === "b"));
+  check("a share that failed transiently is kept for next time", kept.some((s) => s.id === "c"));
+  check("a share with no result at all is kept", kept.some((s) => s.id === "d"));
+  check("retainedShares keeps exactly the two it should", kept.length === 2);
+  check("retainedShares does not mutate its input", held.length === 4);
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
