@@ -10,6 +10,7 @@ import {
   wayLengthMeters,
   INTERCHANGE_METERS,
   metersFromOrigin,
+  offsetMeters,
   nearestOnPath,
   nearestOpenEndpoint,
   pointAtT,
@@ -20,8 +21,10 @@ import {
   segmentGridStats,
   servedWayIds,
   serviceWayIds,
+  patternPath,
   patternWayDirection,
   serviceLaneOnWay,
+  detectShapeRuns,
   snap,
   MAX_GRID_CELLS,
   MAX_OVERSIZE_SEGMENTS,
@@ -3798,6 +3801,108 @@ function buildGrid() {
   check("orphaned sketch geometry was removed", after.ways.every((w) => !sketchWayIds.has(w.id)));
   const station = after.stations.find((s2) => s2.id === st1)!;
   check("the station followed onto an adopted way", !!station.anchor && adopted.patterns[0].wayIds.includes(station.anchor.wayId));
+}
+
+// --- detectShapeRuns: import-time corridor conflation's interior-stretch matcher ---
+{
+  const origin: LngLat = [-115.2, 36.1];
+  const mkWay = (id: string, pts: LngLat[]): Way => ({ id, typeId: "road", points: pts, geometry: "straight", grade: "atGrade", profile: { lanes: [] } });
+
+  // A — parallel-then-diverging (the trunk-and-branch case): a shape that
+  // hugs an existing way for 200m then turns away should conflate only the
+  // shared stretch, leaving the diverging tail fresh.
+  {
+    const W = mkWay("W", [offsetMeters(origin, 0, 0), offsetMeters(origin, 400, 0)]);
+    const path = [offsetMeters(origin, 0, 5), offsetMeters(origin, 200, 5), offsetMeters(origin, 200, 50)];
+    const runs = detectShapeRuns(path, [W]);
+    check("parallel-then-diverging: exactly 2 runs", runs.length === 2);
+    check("parallel-then-diverging: first run is on the existing way", "onWayId" in runs[0] && runs[0].onWayId === "W" && runs[0].fromIdx === 0 && runs[0].toIdx === 1);
+    check("parallel-then-diverging: second run is fresh (the diverging tail)", "fresh" in runs[1] && runs[1].fromIdx === 1 && runs[1].toIdx === 2);
+  }
+
+  // B — brief coincidental crossing: a mostly-unrelated path that happens to
+  // run parallel to an existing way for a sub-tolerance 15m jog right where
+  // it crosses should NOT conflate — the whole path stays fresh.
+  {
+    const V = mkWay("V", [offsetMeters(origin, 300, -100), offsetMeters(origin, 300, 300)]);
+    const path = [
+      offsetMeters(origin, 0, 0), // approaches heading east — 90° off V's heading, rejected regardless of proximity
+      offsetMeters(origin, 300, 0), // lands ~on V, but the segment INTO it was heading-rejected
+      offsetMeters(origin, 300, 15), // a 15m jog running parallel to V (< MIN_RUN_M) — a coincidental blip
+      offsetMeters(origin, 600, 300), // diverges away again — heading-rejected
+    ];
+    const runs = detectShapeRuns(path, [V]);
+    check("brief coincidental crossing: collapses to a single fresh run", runs.length === 1 && "fresh" in runs[0] && runs[0].fromIdx === 0 && runs[0].toIdx === 3);
+  }
+
+  // C — multi-way run: existing infrastructure that itself splits mid-corridor
+  // (two ways sharing a coincident endpoint) sub-divides the matched run with
+  // no special-casing, then a short fresh tail past the end.
+  {
+    const A = mkWay("A", [offsetMeters(origin, 0, 0), offsetMeters(origin, 200, 0)]);
+    const B = mkWay("B", [offsetMeters(origin, 200, 0), offsetMeters(origin, 400, 0)]);
+    const path = [offsetMeters(origin, 0, 3), offsetMeters(origin, 200, 3), offsetMeters(origin, 400, 3), offsetMeters(origin, 400, 40)];
+    const runs = detectShapeRuns(path, [A, B]);
+    check("multi-way run: exactly 3 runs", runs.length === 3);
+    check("multi-way run: first run on way A", "onWayId" in runs[0] && runs[0].onWayId === "A");
+    check("multi-way run: second run on way B", "onWayId" in runs[1] && runs[1].onWayId === "B");
+    check("multi-way run: third run is the fresh tail", "fresh" in runs[2]);
+  }
+}
+
+// --- reconcileImportedServices: a shorter shuttle conflates onto a longer
+// trunk's already-imported way instead of keeping duplicate overlapping
+// geometry (the store-level orchestrator over detectShapeRuns) ---
+{
+  fresh();
+  const origin: LngLat = [-115.2, 36.1];
+  store.getState().setDraftMode("bus");
+
+  // Trunk: a long solo-way pattern, as a freshly-imported GTFS shape would be.
+  const trunk = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(trunk, offsetMeters(origin, 0, 0));
+  store.getState().addWayPoint(trunk, offsetMeters(origin, 400, 0));
+  store.getState().finishWay();
+  const trunkSvc = store.getState().system.services.find((sv) => sv.patterns.some((p) => p.wayIds.includes(trunk)))!;
+
+  // Shuttle: another solo-way pattern, a strict corridor subset of the trunk
+  // (offset 3m, spanning only the middle 200m) — diverges at both ends by
+  // simply not covering the trunk's outer stretches, the exact "shares a
+  // trunk, doesn't share termini" shape this feature targets.
+  const shuttle = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(shuttle, offsetMeters(origin, 100, 3));
+  store.getState().addWayPoint(shuttle, offsetMeters(origin, 300, 3));
+  store.getState().finishWay();
+  const shuttleSvc = store.getState().system.services.find((sv) => sv.patterns.some((p) => p.wayIds.includes(shuttle)))!;
+
+  const before = store.getState().system;
+  check("trunk and shuttle each start on their own solo way", before.ways.length === 2 && before.services.length === 2);
+
+  const reconciled = store.getState().reconcileImportedServices([trunkSvc.id, shuttleSvc.id]);
+  const after = store.getState().system;
+  check("exactly one pattern (the shuttle) needed reconciling", reconciled === 1);
+
+  // The trunk's original way gets SPLIT to carve out the shared middle
+  // sub-range (splitWay correctly extends every rider's pattern — including
+  // the trunk's own — to cover all the resulting pieces, so its route is
+  // never silently shortened): assert continuity, not an unchanged wayIds
+  // array. The original trunk wayId survives as (at least) the front piece,
+  // and the trunk's full route still spans its original ~400m end to end.
+  const trunkAfter = after.services.find((sv) => sv.id === trunkSvc.id)!;
+  check("the trunk's original way id survives as (part of) its route", trunkAfter.patterns[0].wayIds.includes(trunk));
+  check(
+    "the trunk's route is still continuous end-to-end (splitting didn't drop any of it)",
+    Math.abs(pathLengthMeters(patternPath(after.ways, trunkAfter.patterns[0])) - 400) < 1,
+  );
+
+  const shuttleAfter = after.services.find((sv) => sv.id === shuttleSvc.id)!;
+  check("the shuttle no longer rides its own original solo way", !shuttleAfter.patterns[0].wayIds.includes(shuttle));
+  check("the shuttle's original solo way was removed, not left as a duplicate", !after.ways.some((w) => w.id === shuttle));
+  check(
+    "the shuttle's new way(s) lie on the trunk's alignment (y≈0), not its own original 3m offset",
+    shuttleAfter.patterns[0].wayIds.every((wid) => after.ways.find((w) => w.id === wid)!.points.every((p) => Math.abs(metersFromOrigin(origin, p)[1]) < 1)),
+  );
+  check("no whole duplicate alignment was created — at most 2 net new ways from splitting the trunk", after.ways.length <= before.ways.length + 2);
 }
 
 // --- facility tool: place-on-click semantics (complex is a variant, not a

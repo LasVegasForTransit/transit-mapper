@@ -17,6 +17,7 @@ interface GtfsImportDialogProps {
  *  modal — see streamRtcGtfsBatches for why it's batched at all. */
 export function GtfsImportDialog({ onClose }: GtfsImportDialogProps) {
   const importGtfs = useEditor((s) => s.importGtfs);
+  const reconcileImportedServices = useEditor((s) => s.reconcileImportedServices);
   const { setImportProgress } = useImportProgress();
 
   const run = () => {
@@ -24,11 +25,20 @@ export function GtfsImportDialog({ onClose }: GtfsImportDialogProps) {
     (async () => {
       try {
         let routesTotal = 0;
+        const importedServiceIds: string[] = [];
         for await (const { pieces, routesDone, routesTotal: total } of streamRtcGtfsBatches()) {
           importGtfs(pieces);
+          importedServiceIds.push(...pieces.services.map((s) => s.id));
           routesTotal = total;
           setImportProgress({ label: "Importing RTC system", done: routesDone, total, state: "loading" });
         }
+        // Corridor conflation: many of these routes share the same physical
+        // streets — run once, over everything just imported, rather than per
+        // batch, so routes sharing a trunk corridor conflate onto shared
+        // infrastructure even when they land in different batches (batching
+        // is by route order for progressive UI, not by geography).
+        setImportProgress({ label: "Merging shared infrastructure…", done: routesTotal, total: routesTotal, state: "loading" });
+        reconcileImportedServices(importedServiceIds);
         setImportProgress({ label: `Imported RTC's ${routesTotal} routes`, done: routesTotal, total: routesTotal, state: "done" });
       } catch (e) {
         setImportProgress({ label: e instanceof Error ? e.message : "RTC import failed.", done: 0, total: 0, state: "error" });

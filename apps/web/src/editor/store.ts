@@ -1,9 +1,9 @@
 import { createStore } from "zustand/vanilla";
 import { LANE_KINDS, PROFILE_PRESETS, laneKind, mode, modesForWayType, wayType, type Grade } from "@transitmapper/core/model/catalog";
-import { buildProfile, cloneProfile, combineProfiles, directionalLanes, flipProfile, makeOneWay, profileWidthM, separateProfiles, withLaneCount } from "@transitmapper/core/model/profile";
+import { buildProfile, cloneProfile, combineProfiles, defaultProfileFor, directionalLanes, flipProfile, makeOneWay, profileWidthM, separateProfiles, withLaneCount } from "@transitmapper/core/model/profile";
 import { modeRender } from "@transitmapper/core/style/catalogStyle";
 import { liveCamera } from "../camera/liveCamera";
-import { haversineMeters, nearestInsertionPoint, nearestOnPath, offsetPolyline, patternPath, pointAtT, pointInPolygon, resolveWayPath, snap, squareFootprint } from "@transitmapper/core/model/geo";
+import { detectShapeRuns, haversineMeters, nearestInsertionPoint, nearestOnPath, offsetPolyline, pathLengthMeters, patternPath, pointAtT, pointInPolygon, resolveWayPath, snap, squareFootprint, type ShapeRun } from "@transitmapper/core/model/geo";
 import { anchorOnWay, routeBetween, type RouteAnchor, type RouteSpan } from "@transitmapper/core/model/routeGraph";
 import { wayCrossings } from "@transitmapper/core/model/validate";
 import { shortId } from "@transitmapper/core/model/ids";
@@ -324,6 +324,14 @@ export interface EditorState {
    *  stations, and deletes the now-orphaned sketch ways. Returns how many
    *  patterns were rebound. */
   adoptExistingInfrastructure: (serviceId: string) => number;
+  /** Import-time corridor conflation: for each given service's pattern(s),
+   *  detects interior stretches that run along already-existing compatible
+   *  infrastructure (including ways an earlier pattern in THIS call already
+   *  materialized) and rebinds them to share it, deleting the now-redundant
+   *  solo way it replaces. Processes longest-pattern-first so a long trunk
+   *  route seeds the canonical shared way. Returns how many patterns were
+   *  reconciled onto shared infrastructure. */
+  reconcileImportedServices: (serviceIds: string[]) => number;
 
   // services (colored routes over ways). Returns null when the way's type has
   // no compatible service modes (e.g. bike infrastructure carries no service).
@@ -1012,6 +1020,44 @@ function materializeRouteSpans(system: TransitSystem, spansIn: RouteSpan[]): { s
     wayIds.push(spanWayId);
   }
   return { system: sys, wayIds };
+}
+
+/**
+ * Realize one detected corridor-conflation run (see
+ * model/geo/corridorConflation.ts's detectShapeRuns) as real infrastructure.
+ * An `OnWayRun`'s two anchors land on the SAME existing way — routeBetween's
+ * dedicated same-way fast path (a direct arc-length slice, no Dijkstra/bias)
+ * — then materializeRouteSpans realizes it (splits, wires real junctions),
+ * exactly like adoptExistingInfrastructure's own pipeline. A `FreshRun` mints
+ * a new way over just that sub-range, matching gtfsImport.ts's own one-way
+ * carriageway construction — a small, deliberate duplication that keeps
+ * gtfsImport.ts's pure, tested transform untouched.
+ */
+function materializeShapeRun(system: TransitSystem, run: ShapeRun, path: LngLat[], wayTypeId: string): { system: TransitSystem; wayIds: string[] } | null {
+  const startCoord = path[run.fromIdx];
+  const endCoord = path[run.toIdx];
+  if (!startCoord || !endCoord) return null;
+  if ("fresh" in run) {
+    const points = path.slice(run.fromIdx, run.toIdx + 1);
+    if (points.length < 2) return null;
+    const wayId = shortId();
+    const way: Way = {
+      id: wayId,
+      typeId: wayTypeId,
+      points,
+      geometry: "straight",
+      grade: "atGrade",
+      profile: makeOneWay(defaultProfileFor(wayTypeId, wayTypeId === "road" ? 2 : undefined), "forward"),
+    };
+    return { system: { ...system, ways: [...system.ways, way] }, wayIds: [wayId] };
+  }
+  const way = system.ways.find((w) => w.id === run.onWayId);
+  if (!way) return null;
+  const from = anchorOnWay(way, startCoord);
+  const to = anchorOnWay(way, endCoord);
+  if (!from || !to) return null;
+  const res = routeBetween(system, from, to, { allowedTypeIds: new Set([way.typeId]) });
+  return res ? materializeRouteSpans(system, res.spans) : null;
 }
 
 /**
@@ -1906,6 +1952,82 @@ export function createEditorStore() {
 
       if (rebound > 0) set({ system: touch(sys) });
       return rebound;
+    },
+
+    reconcileImportedServices: (serviceIds) => {
+      const st = get();
+      let sys = st.system;
+
+      // Flatten to (service, pattern) targets and process LONGEST-first, so a
+      // long trunk route seeds the canonical shared way and shorter
+      // branches/shuttles conflate onto it rather than the reverse.
+      const targets: { serviceId: string; patternId: string; length: number }[] = [];
+      for (const serviceId of serviceIds) {
+        const service = sys.services.find((sv) => sv.id === serviceId);
+        if (!service) continue;
+        for (const pattern of service.patterns) {
+          targets.push({ serviceId, patternId: pattern.id, length: pathLengthMeters(patternPath(sys.ways, pattern)) });
+        }
+      }
+      targets.sort((a, b) => b.length - a.length);
+
+      let reconciled = 0;
+      for (const target of targets) {
+        // Re-fetch from the CURRENT (possibly already-grown) system — a later
+        // target must see ways an earlier one in this same pass just created.
+        const service = sys.services.find((sv) => sv.id === target.serviceId);
+        const pattern = service?.patterns.find((p) => p.id === target.patternId);
+        if (!service || !pattern) continue;
+        const oldWayIds = [...new Set(pattern.wayIds)];
+        const path = patternPath(sys.ways, pattern);
+        if (path.length < 2) continue;
+        const wayTypeId = sys.ways.find((w) => w.id === oldWayIds[0])?.typeId;
+        if (!wayTypeId) continue;
+
+        const allowed = new Set(mode(service.modeId).wayTypeIds);
+        const exclude = new Set(oldWayIds);
+        const candidates = sys.ways.filter((w) => allowed.has(w.typeId) && !exclude.has(w.id));
+        const runs = detectShapeRuns(path, candidates);
+        // A single run covering the whole shape with nothing matched — leave
+        // the pattern on its own way unchanged.
+        if (runs.length === 1 && "fresh" in runs[0]) continue;
+
+        const newWayIds: string[] = [];
+        let ok = true;
+        for (const run of runs) {
+          const mat = materializeShapeRun(sys, run, path, wayTypeId);
+          if (!mat) {
+            ok = false;
+            break;
+          }
+          sys = mat.system;
+          newWayIds.push(...mat.wayIds);
+        }
+        if (!ok || newWayIds.length === 0) continue;
+
+        sys = {
+          ...sys,
+          services: sys.services.map((sv) =>
+            sv.id === target.serviceId
+              ? { ...sv, patterns: sv.patterns.map((p) => (p.id === target.patternId ? { ...p, wayIds: newWayIds } : p)) }
+              : sv,
+          ),
+        };
+
+        // Unlike adoptExistingInfrastructure's cleanup (which protects a
+        // user's hand-drawn sketch via its `source` check), a superseded
+        // GTFS-shape-way exists solely to have seeded this reconciliation and
+        // is always safe to remove once no pattern rides it anymore.
+        for (const oldId of oldWayIds) {
+          if (newWayIds.includes(oldId)) continue;
+          const stillRidden = sys.services.some((sv) => sv.patterns.some((p) => p.wayIds.includes(oldId)));
+          if (!stillRidden) sys = removeWay(sys, oldId);
+        }
+        reconciled++;
+      }
+
+      if (reconciled > 0) set({ system: touch(sys) });
+      return reconciled;
     },
 
     addServiceToWay: (wayId) => {

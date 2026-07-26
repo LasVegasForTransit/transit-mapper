@@ -260,7 +260,7 @@ export function segmentGridStats(ways: Way[]): SegmentGridStats {
 // already maintain for servedWayIds — no exact distance computed here (that
 // happens once, per candidate, in snap()'s own nearestOnPath call below),
 // just cheap cell-bucket membership.
-function candidateWayIdsNear(coord: LngLat, ways: Way[], maxMeters: number): Set<string> {
+export function candidateWayIdsNear(coord: LngLat, ways: Way[], maxMeters: number): Set<string> {
   const grid = gridFor(ways);
   const cellRadiusLat = Math.ceil(maxMeters / 111_320 / CELL_DEG) + 1;
   const cellRadiusLng = lngCellRadius(maxMeters, coord[1]);
