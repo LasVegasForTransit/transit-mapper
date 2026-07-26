@@ -45,6 +45,8 @@ deepens.
   kinds, style/domain separation, menus versus modes.
 - [Geometry and routing](explanation/geometry-and-routing.md) — how lane
   offsets, junction footprints, and the route graph are derived.
+- [Sharing surfaces](explanation/sharing-surfaces.md) — drawing a system
+  without a map, and how preview images, embeds and oEmbed fit together.
 
 Design documents for larger pieces of work live in
 [`superpowers/specs/`](superpowers/specs/).

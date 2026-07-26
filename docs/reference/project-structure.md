@@ -60,6 +60,45 @@ and `apps/worker` depend on it as a workspace package.
 Both are pure and memoized; nothing here is stored. See
 [Geometry and routing](../explanation/geometry-and-routing.md).
 
+## packages/core/src/render/ — drawing a system without a map
+
+- `buildFeatures.ts` — the system-to-styled-GeoJSON projector. Shared by the
+  editor map, the embed, image exports and server-side previews, so none of
+  them can drift from the others.
+- `project.ts` — Web Mercator projection and `fitBounds`, matching MapLibre's
+  conventions but needing no map. What the Worker projects through.
+- `svg.ts` — the vector composition (geometry plus title, legend, north arrow,
+  scale bar). Takes a `project` callback, so the browser can pass MapLibre's
+  and the Worker its own.
+- `preview.ts` — the share-card preset over `svg.ts`, plus the card size and
+  the renderer version that participates in edge-cache keys.
+- `legend.ts`, `scaleBar.ts`, `constants.ts`, `iconName.ts` — supporting
+  pieces, all DOM-free.
+
+## packages/core/src/style/ — how things are drawn
+
+- `catalogStyle.ts` — the only place catalog entries' visual properties
+  (color, width, dashed) live; `model/catalog.ts` stays pure domain data.
+- `lvbtBrand.ts` — the org's brand tokens and typeface, transcribed from
+  lasvegasfortransit.org/brand for anything rendered for the outside world.
+
+See [Sharing surfaces](../explanation/sharing-surfaces.md).
+
+## apps/web/src/embed/ — the embeddable map
+
+- `main.ts` — a second Vite entry (`embed.html`, served at `/e/:id`) that
+  mounts MapLibre and the feature builder and nothing else: no React, no
+  editor store. Kept deliberately small because it loads inside someone
+  else's page.
+
+## apps/worker/src/ — the Worker
+
+- `index.ts` — share create/fetch, the GTFS proxy, per-share preview images,
+  oEmbed, the embed and share-page routes with their framing headers, and the
+  nightly expiry sweep.
+- `preview.ts` — rasterizes a preview to PNG with resvg (WebAssembly) and the
+  bundled brand font subset.
+
 ## apps/web/src/editor/ — mutation and input
 
 - `store.ts` — the single zustand store. Every change to the system goes
