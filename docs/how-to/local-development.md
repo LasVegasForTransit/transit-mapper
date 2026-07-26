@@ -1,6 +1,8 @@
 # Set up a local development environment
 
-Requirements: Node 20+ and [pnpm](https://pnpm.io).
+Requirements: Node 24+ and [pnpm](https://pnpm.io). (`package.json` sets
+`engines.node` to `>=24`, and CI runs on 24 — an older Node fails in ways that
+don't obviously point at the version.)
 
 ```sh
 git clone git@github.com:WillieCubed/transit-mapper.git

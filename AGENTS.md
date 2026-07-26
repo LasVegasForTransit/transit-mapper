@@ -42,11 +42,18 @@ only be checked by clicking through the app, move it down into
 
 ## Add a test by adding a `check()` call
 
-Put it in `apps/web/scripts/verify.ts`, next to related checks. There is no
-test framework here — no `describe`/`it`, assertion library, watch mode, or
-discovery. Name the check as a sentence stating the rule it enforces
-("deleting a way removes its service"); that name is the entire failure
-message.
+Put it next to related checks in whichever suite owns the code:
+`apps/web/scripts/verify.ts` for the model, store and UI logic;
+`apps/worker/scripts/verify.ts` for request handling — URL scoping, uploaded
+bytes, escaping. There is currently no test framework — no `describe`/`it`,
+assertion library, watch mode, or discovery. Name the check as a sentence
+stating the rule it enforces ("deleting a way removes its service"); that
+name is the entire failure message.
+
+Both suites are typechecked through their package's `tsconfig.scripts.json`,
+which is separate from the main config because the suites are Node programs
+and the code they test is not. A test that doesn't compile isn't testing what
+it claims to.
 
 ## Name a new package's scripts to match the turbo tasks
 

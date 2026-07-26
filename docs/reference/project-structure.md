@@ -13,6 +13,8 @@ packages/
       model/     Pure domain: types, catalogs, geometry math, routing.
       geometry/  Pure derived geometry: lane offsets, junction footprints.
       share/     contract.ts — the wire shapes both the app and worker use.
+                 claim.ts/ownership.ts are accounts groundwork (see below).
+      auth/      Accounts groundwork: NOT WIRED UP (see below).
 apps/
   web/           The Vite React SPA.
     src/
@@ -24,8 +26,25 @@ apps/
       storage/   Local persistence.
     scripts/     verify.ts — the test suite.
   worker/        Cloudflare Worker + D1 migrations for shared snapshots.
+    scripts/     verify.ts — the Worker's own suite (URL scoping, uploads).
 docs/            This documentation.
 ```
+
+### `packages/core/src/auth/` is built but not connected
+
+`auth/` (Google OAuth URL building, PKCE, token hashing, cookie
+serialization, return-path validation) and `share/claim.ts` +
+`share/ownership.ts` are the first slice of the accounts feature on the
+[roadmap](../../ROADMAP.md). They are complete, pure, and covered by
+`apps/web/scripts/verify.ts` — and **nothing imports them but that test
+file.** There are no auth routes in the Worker, no users or sessions table,
+and no owner column on `systems`.
+
+This matters when reading nearby code, because several places already talk
+about accounts as though they exist: `touchExpiry` in the Worker skips rows
+with `expires_at IS NULL` "because they're account-owned", and migration
+`0002` reserves that null for the same reason. Those are deliberate
+preparation, not a feature you've failed to find. Today every share expires.
 
 `@transitmapper/core` is consumed straight from source (no build step) via
 subpath imports, e.g. `@transitmapper/core/model/catalog`. Both `apps/web`
