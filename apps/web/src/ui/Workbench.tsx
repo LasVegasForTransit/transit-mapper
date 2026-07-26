@@ -5,12 +5,6 @@ import { IconButton } from "./IconButton";
 import { Panel } from "./Panel";
 
 export interface WorkbenchProps {
-  /** The one place anything app-level and urgent gets said — a share that
-   *  wouldn't open, an autosave that isn't happening. Renamed from
-   *  `loadError` when saving gained a failure to report: this is a slot, and
-   *  naming it after the first thing that used it made the second one look
-   *  like it needed a surface of its own. The caller decides what goes here. */
-  banner: ReactNode;
   /** File menu / system name / Hide-UI toggle. Docks into the menu panel's
    *  own header on desktop; mobile has nowhere else for it to live, since
    *  the menu panel itself becomes a bottom sheet there, so it renders in
@@ -65,7 +59,7 @@ export interface WorkbenchProps {
  * with the chrome hidden, not fade with it. So the map renders as this
  * component's own sibling in App.tsx, unaffected by whatever this does.
  */
-export function Workbench({ banner, brand, menuPanel, supplementalPanel, hasSupplementalContent, primaryToolbar, viewSwitcher, modeToolbar, importStatus }: WorkbenchProps) {
+export function Workbench({ brand, menuPanel, supplementalPanel, hasSupplementalContent, primaryToolbar, viewSwitcher, modeToolbar, importStatus }: WorkbenchProps) {
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const clearSelection = useEditor((s) => s.select);
   const backToSelectTool = useEditor((s) => s.setTool);
@@ -147,20 +141,6 @@ export function Workbench({ banner, brand, menuPanel, supplementalPanel, hasSupp
             {viewSwitcher}
           </div>
         </div>
-
-        {/* ---- app banner: its own centered row below the top chrome.
-            It used to sit inside the view-switch pill, which is sized for
-            three short words — a real sentence stretched that pill outward
-            until it covered the brand card. Both the brand and the actions
-            cluster live at top-0, so anything long belongs on the row under
-            them. Deliberately NOT md:-gated the way the rest of this row is:
-            a failing autosave is exactly as urgent on a phone, and gating it
-            meant the one message that matters most was invisible there. ---- */}
-        {banner && (
-          <div className="pointer-events-none absolute inset-x-0 top-[136px] flex justify-center px-3 md:top-[68px]">
-            <div className="pointer-events-auto w-full max-w-[560px]">{banner}</div>
-          </div>
-        )}
 
         {/* ---- tool dock: same flex-centering as the view switch above.
             The fade-while-expanded below is a MOBILE-only concern (so the

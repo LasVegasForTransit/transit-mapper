@@ -258,6 +258,18 @@ input { font: inherit; }
   border: 1px solid var(--border); box-shadow: var(--shadow);
 }
 
+/* Only the dismissible variant is a flex row; the sticky ones are plain text
+   so their wrapping is unchanged. */
+.app-banner-dismissible {
+  display: flex; align-items: flex-start; gap: 8px;
+}
+
+.app-banner-dismiss {
+  flex: none; margin-top: 1px; padding: 2px; border-radius: 4px;
+  color: inherit; opacity: 0.7; cursor: pointer;
+}
+.app-banner-dismiss:hover { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); }
+
 /* ---- tool dock — independent of the side panels, never stacked under one
    so it doesn't read as part of the objects list. Workbench.tsx positions
    this wrapper (desktop: a real grid cell; mobile: absolute + fades out

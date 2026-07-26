@@ -49,9 +49,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render() {
     if (!this.state.failed) return this.props.children;
+    // Deliberately does not promise the work is saved. This component cannot
+    // know that — a save may have failed, or the last 400ms of edits may
+    // never have been written — and a change set about not lying to people
+    // regarding durability is the wrong place to start guessing.
     return (
       <div className="app-banner" role="alert">
-        This {this.props.label} couldn’t be opened. Your system is still here and still saved — reloading the page usually fixes it.
+        This {this.props.label} couldn’t be opened. Reloading the page usually fixes it; your last saved system is still in this browser.
       </div>
     );
   }

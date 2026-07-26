@@ -5,10 +5,12 @@ import {
   deleteFromLibrary,
   listLibrary,
   loadSystemById,
+  loadSystemEntry,
   saveToLibrary,
   setActiveId,
   type LibraryEntry,
 } from "../storage/localStore";
+import { useSaveStatus } from "./SaveStatusProvider";
 import { blurOnEnter } from "./formUtils";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
@@ -27,17 +29,24 @@ function relativeTime(ts: number): string {
 
 interface SystemsDialogProps {
   onClose: () => void;
+  /** Reports a stored system that exists but won't parse, so the app can say
+   *  so — the row stays in the list and its bytes stay on disk. */
+  onCorrupt: () => void;
 }
 
 /** Replaces the old single-slot autosave with a real library: every saved
  *  system its own row, switch between them without losing anything, rename/
  *  duplicate/delete in place. See storage/localStore.ts for the storage
  *  shape this reads and writes. */
-export function SystemsDialog({ onClose }: SystemsDialogProps) {
+export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
   const currentId = useEditor((s) => s.system.id);
   const currentName = useEditor((s) => s.system.name);
   const setName = useEditor((s) => s.setName);
   const setSystem = useEditor((s) => s.setSystem);
+  // Every write below goes through this. Without it a rename or duplicate
+  // that hits a full quota simply doesn't happen, and the row silently snaps
+  // back to its old value with no explanation anywhere.
+  const { report } = useSaveStatus();
   const [entries, setEntries] = useState<LibraryEntry[]>(() => listLibrary());
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
@@ -45,8 +54,15 @@ export function SystemsDialog({ onClose }: SystemsDialogProps) {
 
   const open = (id: string) => {
     if (id === currentId) return;
-    const system = loadSystemById(id);
-    if (!system) return;
+    // A row whose bytes won't parse is listed, clickable, and used to do
+    // absolutely nothing when clicked — forever, with no message.
+    const result = loadSystemEntry(id);
+    if (result.status === "corrupt") {
+      onCorrupt();
+      return;
+    }
+    if (result.status !== "ok") return;
+    const system = result.system;
     setActiveId(id);
     setSystem(system, { readOnly: false });
     onClose();
@@ -59,20 +75,20 @@ export function SystemsDialog({ onClose }: SystemsDialogProps) {
     }
     const system = loadSystemById(entry.id);
     if (!system) return;
-    saveToLibrary({ ...system, name, updatedAt: Date.now() });
+    report(saveToLibrary({ ...system, name, updatedAt: Date.now() }));
     refresh();
   };
 
   const duplicate = (entry: LibraryEntry) => {
     const system = loadSystemById(entry.id);
     if (!system) return;
-    saveToLibrary(forkSystem(system));
+    report(saveToLibrary(forkSystem(system)));
     refresh();
   };
 
   const startNew = () => {
     const system = createEmptySystem();
-    saveToLibrary(system);
+    report(saveToLibrary(system));
     setActiveId(system.id);
     setSystem(system, { readOnly: false });
     onClose();
@@ -84,7 +100,7 @@ export function SystemsDialog({ onClose }: SystemsDialogProps) {
       const remaining = listLibrary();
       const next = remaining.length > 0 ? loadSystemById(remaining[0].id) : createEmptySystem();
       if (next) {
-        if (remaining.length === 0) saveToLibrary(next);
+        if (remaining.length === 0) report(saveToLibrary(next));
         setActiveId(next.id);
         setSystem(next, { readOnly: false });
       }
