@@ -12,7 +12,6 @@ import {
   metersFromOrigin,
   nearestOnPath,
   nearestOpenEndpoint,
-  patternPath,
   pointAtT,
   resolveWayPath,
   servedWayIds,
@@ -24,7 +23,7 @@ import { isDoubleClickFinish } from "../src/map/interactions";
 import { KEY_BINDINGS, matchesKey, resolveBinding, type KeyContext } from "../src/editor/keymap";
 import { buildFeatures, HANDLE_ICON, LAYER_SPECS } from "../src/map/layers";
 import { LANDMARKS, landmarksFeatureCollection } from "../src/map/landmarks";
-import { buildOverpassQuery, classifyOsmWay, osmElementsToWays } from "@transitmapper/core/model/import";
+import { buildOverpassQuery, classifyOsmWay, osmElementsToWays, type OsmWayElement } from "@transitmapper/core/model/import";
 import { classifyGtfsRouteType, gtfsFilesToBatchedPieces, gtfsFilesToSystemPieces, parseGtfsCsv } from "@transitmapper/core/model/gtfsImport";
 import { legendEntriesFor } from "../src/share/exportLegend";
 import { formatScaleMeters, niceScaleMeters } from "../src/share/exportScale";
@@ -44,6 +43,7 @@ import {
   isOneWay,
   laneCapacity,
   makeOneWay,
+  MAX_PRIMARY_LANES,
   makeTwoWay,
   profileWidthM,
   separateProfiles,
@@ -66,7 +66,10 @@ import {
 } from "@transitmapper/core/geometry/junctions";
 import { wayCrossings } from "@transitmapper/core/model/validate";
 import { anchorOnWay, routeBetween, routePath } from "@transitmapper/core/model/routeGraph";
-import { bearingDegrees, formatBearing, haversineMeters, snap, squareFootprint } from "@transitmapper/core/model/geo";
+// `snap` and `squareFootprint` come from the same module in the import block
+// at the top of this file; naming them twice was a duplicate-identifier error
+// that only ran because tsx tolerates what tsc rejects.
+import { bearingDegrees, formatBearing, haversineMeters } from "@transitmapper/core/model/geo";
 import type { CrossSection, LngLat, Node, Service, Way } from "@transitmapper/core/model/system";
 import { armRefKey, getComponent, laneRefKey, withComponent, withoutComponent } from "@transitmapper/core/model/components";
 import { buildTimetable, dwellStopsForPattern, metersAtElapsed, VEHICLE_SPEED_MPS } from "../src/sim/vehicles";
@@ -547,7 +550,7 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   fresh();
   const a = store.getState().addStation([-115.2, 36.1]);
   const b = store.getState().addStation([-115.2001, 36.1001]);
-  const groupId = store.getState().createGroup([a, b], "Transfer complex");
+  store.getState().createGroup([a, b], "Transfer complex");
   check("a plain group has no footprint", store.getState().system.groups[0].footprint === undefined);
 }
 
@@ -1114,7 +1117,10 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("buildOverpassQuery embeds the bounding box", query.includes("36,-115.3,36.2,-115"));
   check("buildOverpassQuery only includes requested categories", query.includes("highway") && query.includes("light_rail") && !query.includes('"railway"~"^(rail|subway)$"'));
 
-  const elements = [
+  // Annotated rather than inferred: mixing tag shapes across the array makes
+  // tsc widen each `tags` to a union with optional-undefined members, which
+  // doesn't satisfy OsmWayElement's Record<string, string>.
+  const elements: OsmWayElement[] = [
     { type: "way", id: 1, tags: { highway: "residential" }, geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.11, lon: -115.19 }] },
     { type: "way", id: 2, tags: { railway: "tram" }, geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.12, lon: -115.18 }] },
     { type: "way", id: 3, tags: { building: "yes" }, geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.11, lon: -115.19 }] }, // filtered out
@@ -2509,7 +2515,10 @@ function buildGrid() {
   check("drawn station carries its footprint", st1.footprint === fp);
   check("drawn station anchors onto the way it straddles", st1.anchor?.wayId === r);
   check("drawn station's coord sits on the way", Math.abs(st1.coord[1] - 36.1) < 1e-6);
-  check("drawn station is selected for immediate platform work", store.getState().selection?.kind === "station" && store.getState().selection.id === sid);
+  // Read the selection once: two separate getState() calls can't be narrowed
+  // together, and the second was reading through a possibly-null value.
+  const drawnSelection = store.getState().selection;
+  check("drawn station is selected for immediate platform work", drawnSelection?.kind === "station" && drawnSelection.id === sid);
 
   // A footprint in empty desert: still a station, just free-standing.
   const fp2 = squareFootprint([-115.4, 36.3], 25);
@@ -2920,7 +2929,11 @@ function buildGrid() {
   // The framed area is a raised surface on the base one — two brand tokens,
   // not one. Flattening them back together is a regression, not a tidy-up.
   check("the framed panel uses the raised-surface token", svg.includes(`fill="${LVBT.light.surfaceContainer}"`) && LVBT.light.surfaceContainer === "#EFE9DB");
-  check("the panel and the ground are different tokens", LVBT.light.surfaceContainer !== LVBT.light.surface);
+  // Compared as plain strings on purpose. The tokens are `const`-typed, so
+  // tsc can see the two literals differ and flags the comparison as pointless
+  // — but the point is to fail if someone later edits one token to equal the
+  // other, which is a runtime question about the brand, not a type question.
+  check("the panel and the ground are different tokens", (LVBT.light.surfaceContainer as string) !== (LVBT.light.surface as string));
 
   // Pure white and the editor's cool ink have no business in anything that
   // leaves the app carrying the org's name.
@@ -3196,6 +3209,69 @@ function buildGrid() {
   check("a share with no result at all is kept", kept.some((s) => s.id === "d"));
   check("retainedShares keeps exactly the two it should", kept.length === 2);
   check("retainedShares does not mutate its input", held.length === 4);
+}
+
+// --- hostile input: parseSystem must survive values a person never types ---
+//
+// Every check above round-trips a document the store itself produced, which is
+// exactly why two denial-of-service bugs lived here undetected: a `capacity` of
+// `1e999` (which `JSON.parse` turns into `Infinity`) drove an unbounded lane
+// loop, and an out-of-range coordinate made the segment grids iterate ~10^8
+// cells. Both hung the tab on first render — including the public embed, so a
+// stranger's shared link could take down the reader's page.
+//
+// These documents are the shapes an attacker or a corrupted file produces, not
+// the shapes the editor produces. If one of these ever hangs the suite rather
+// than failing it, that is the bug reappearing.
+{
+  const base = {
+    version: 5, id: "h", name: "h", viewport: { center: [-115, 36], zoom: 10 }, createdAt: 1, updatedAt: 1,
+    services: [], stations: [], facilities: [], groups: [],
+  };
+  const wayWith = (extra: Record<string, unknown>) => ({
+    ...base,
+    ways: [{ id: "w", typeId: "road", points: [[-115.2, 36.1], [-115.1, 36.1]], geometry: "straight", grade: "atGrade", ...extra }],
+  });
+
+  // Capacity: the value that was `Infinity` by the time it reached the loop.
+  for (const [label, capacity] of [
+    ["infinite", JSON.parse('{"v":1e999}').v as number],
+    ["negative infinite", JSON.parse('{"v":-1e999}').v as number],
+    ["a billion", 1e9],
+    ["not a number", JSON.parse('{"v":null}').v as number],
+  ] as const) {
+    const parsed = parseSystem(wayWith({ capacity, classId: "arterial" }));
+    check(`a ${label} capacity parses without hanging`, parsed.ways.length === 1);
+    check(`a ${label} capacity is clamped to at most MAX_PRIMARY_LANES`, wayCapacity(parsed.ways[0]) <= MAX_PRIMARY_LANES);
+    check(`a ${label} capacity still yields at least one lane`, wayCapacity(parsed.ways[0]) >= 1);
+  }
+  check("a capacity at the ceiling is kept exactly", wayCapacity(parseSystem(wayWith({ capacity: MAX_PRIMARY_LANES })).ways[0]) === MAX_PRIMARY_LANES);
+  check("an ordinary capacity is untouched by the clamp", wayCapacity(parseSystem(wayWith({ capacity: 4 })).ways[0]) === 4);
+
+  // withLaneCount is the same loop reached from the keyboard rather than a file.
+  check("withLaneCount refuses to build more than MAX_PRIMARY_LANES", laneCapacity(withLaneCount(defaultProfileFor("road", 2), "road", 1e9)) <= MAX_PRIMARY_LANES);
+  check("withLaneCount survives an infinite count", laneCapacity(withLaneCount(defaultProfileFor("road", 2), "road", JSON.parse('{"v":1e999}').v)) <= MAX_PRIMARY_LANES);
+
+  // Coordinates: finite but far outside the world, which is what made the
+  // 0.001°-cell grids in validate.ts and snapIndex.ts iterate unboundedly.
+  for (const [label, points] of [
+    ["far outside the world", [[-1e6, 0], [1e6, 0]]],
+    ["past the antimeridian", [[-181, 36.1], [181, 36.1]]],
+    ["past the poles", [[-115.2, -91], [-115.1, 91]]],
+  ] as const) {
+    const parsed = parseSystem(wayWith({ points }));
+    check(`points ${label} are dropped rather than kept`, parsed.ways.every((w) => w.points.every(([lng, lat]) => lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90)));
+  }
+  check("an in-range coordinate survives the range check", parseSystem(wayWith({ points: [[-115.2, 36.1], [-115.1, 36.1]] })).ways[0].points.length === 2);
+  check("the world's corners are in range, not off the edge", parseSystem(wayWith({ points: [[-180, -90], [180, 90]] })).ways[0].points.length === 2);
+
+  // Prototype keys in id-shaped positions: `X[id] ?? fallback` does not guard
+  // against inherited members, so these used to resolve to Object.prototype's.
+  for (const typeId of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+    const parsed = parseSystem(wayWith({ typeId, capacity: 2 }));
+    check(`a way typed "${typeId}" parses to a real way`, parsed.ways.length === 1);
+    check(`a way typed "${typeId}" gets lanes with real widths`, parsed.ways[0].profile.lanes.every((l) => typeof l.widthM === "number" && Number.isFinite(l.widthM)));
+  }
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);

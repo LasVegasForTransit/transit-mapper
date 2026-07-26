@@ -1,0 +1,18 @@
+// Typechecks the Worker's test suite in `scripts/`.
+//
+// Separate from tsconfig.json for the same reason apps/web splits its own:
+// `src` is Workers-runtime code typed against @cloudflare/workers-types, and
+// the suite is a Node program. Pulling Node's globals into `src` would let a
+// Worker source file reference something the Workers runtime doesn't have and
+// still compile — the opposite of what the main config is for.
+//
+// Both type sets are listed here because the suite imports from `src`, so it
+// has to understand the Workers types the imported module is written against.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "@cloudflare/workers-types"],
+    "noEmit": true
+  },
+  "include": ["scripts", "src"]
+}
