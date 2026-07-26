@@ -79,6 +79,10 @@ import { safeReturnTo } from "@transitmapper/core/auth/returnTo";
 import { buildAuthorizeUrl } from "@transitmapper/core/auth/google";
 import { ANONYMOUS_SHARE_TTL_MS, newShareOwnership } from "@transitmapper/core/share/ownership";
 import { claimOutcome, retainedShares } from "@transitmapper/core/share/claim";
+// Imported for the storage block at the end of this file. localStore only
+// touches `localStorage` inside its functions, never at module scope, so the
+// fake can be installed after the import rather than before it.
+import { listLibrary, loadSystemEntry, migrateLegacySingleSlot, saveToLibrary } from "../src/storage/localStore";
 
 let failures = 0;
 function check(name: string, cond: boolean) {
@@ -3228,6 +3232,9 @@ function buildGrid() {
     version: 5, id: "h", name: "h", viewport: { center: [-115, 36], zoom: 10 }, createdAt: 1, updatedAt: 1,
     services: [], stations: [], facilities: [], groups: [],
   };
+  // Mirrors serialize.ts's wrapLng, so the expectation is derived rather than
+  // copied from whatever the implementation happened to print.
+  const wrapExpected = (lng: number) => ((((lng + 180) % 360) + 360) % 360) - 180;
   const wayWith = (extra: Record<string, unknown>) => ({
     ...base,
     ways: [{ id: "w", typeId: "road", points: [[-115.2, 36.1], [-115.1, 36.1]], geometry: "straight", grade: "atGrade", ...extra }],
@@ -3252,18 +3259,54 @@ function buildGrid() {
   check("withLaneCount refuses to build more than MAX_PRIMARY_LANES", laneCapacity(withLaneCount(defaultProfileFor("road", 2), "road", 1e9)) <= MAX_PRIMARY_LANES);
   check("withLaneCount survives an infinite count", laneCapacity(withLaneCount(defaultProfileFor("road", 2), "road", JSON.parse('{"v":1e999}').v)) <= MAX_PRIMARY_LANES);
 
-  // Coordinates: finite but far outside the world, which is what made the
-  // 0.001°-cell grids in validate.ts and snapIndex.ts iterate unboundedly.
-  for (const [label, points] of [
-    ["far outside the world", [[-1e6, 0], [1e6, 0]]],
-    ["past the antimeridian", [[-181, 36.1], [181, 36.1]]],
-    ["past the poles", [[-115.2, -91], [-115.1, 91]]],
+  // Coordinates. Longitude wraps rather than being dropped: MapLibre hands
+  // back unwrapped values when the user pans into an adjacent world copy, and
+  // dropping an interior point silently changes the shape of a way.
+  for (const [label, lng, expected] of [
+    ["just past the antimeridian", 181, -179],
+    ["far past the antimeridian", 1e6, wrapExpected(1e6)],
+    ["exactly at the antimeridian", 180, -180],
   ] as const) {
-    const parsed = parseSystem(wayWith({ points }));
-    check(`points ${label} are dropped rather than kept`, parsed.ways.every((w) => w.points.every(([lng, lat]) => lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90)));
+    const parsed = parseSystem(wayWith({ points: [[lng, 36.1], [-115.1, 36.1]] }));
+    check(`a longitude ${label} is kept, not dropped`, parsed.ways[0].points.length === 2);
+    check(`a longitude ${label} is wrapped onto the globe`, Math.abs(parsed.ways[0].points[0][0] - expected) < 1e-9);
   }
-  check("an in-range coordinate survives the range check", parseSystem(wayWith({ points: [[-115.2, 36.1], [-115.1, 36.1]] })).ways[0].points.length === 2);
-  check("the world's corners are in range, not off the edge", parseSystem(wayWith({ points: [[-180, -90], [180, 90]] })).ways[0].points.length === 2);
+  // Latitude has no wrap-around meaning, so past a pole really is nonsense.
+  check("a latitude past the pole is dropped", parseSystem(wayWith({ points: [[-115.2, 91], [-115.1, 36.1]] })).ways[0].points.length === 1);
+  check("an ordinary coordinate is untouched", parseSystem(wayWith({ points: [[-115.2, 36.1], [-115.1, 36.1]] })).ways[0].points.length === 2);
+
+  // The actual denial-of-service guard. Indexing cost is the area of a
+  // segment's bounding box in grid cells, which is driven by how far apart
+  // its endpoints are and NOT by how much data there is — so range-checking
+  // coordinates does not bound it. Before MAX_SEGMENT_CELLS, a ±5° way froze
+  // for 4.2s and ±10° crashed on V8's Map size limit; the world-spanning case
+  // asks for ~7.2 billion cells. This is a time assertion on purpose: it is
+  // the only shape of check that would have caught the original bug.
+  for (const [label, lng, lat] of [
+    ["spanning five degrees", 5, 2.5],
+    ["spanning ten degrees", 10, 5],
+    ["spanning the whole world", 180, 90],
+  ] as const) {
+    const wide = parseSystem(wayWith({ points: [[-lng, -lat], [lng, lat]] }));
+    const started = performance.now();
+    let threw = false;
+    try {
+      servedWayIds([0, 0], wide.ways, 100);
+    } catch {
+      threw = true;
+    }
+    const elapsed = performance.now() - started;
+    check(`a way ${label} indexes without throwing`, !threw);
+    check(`a way ${label} indexes in well under a second (${Math.round(elapsed)}ms)`, elapsed < 500);
+  }
+
+  // Held-aside segments must still be found, or the bound would be a silent
+  // correctness regression rather than a fix.
+  {
+    const wide = parseSystem(wayWith({ points: [[-50, 0], [50, 0]] }));
+    check("an oversize way is still reported as serving a point on it", servedWayIds([0, 0], wide.ways, 100).includes("w"));
+    check("an oversize way is not reported for a point far off it", servedWayIds([0, 45], wide.ways, 100).length === 0);
+  }
 
   // Prototype keys in id-shaped positions: `X[id] ?? fallback` does not guard
   // against inherited members, so these used to resolve to Object.prototype's.
@@ -3272,6 +3315,80 @@ function buildGrid() {
     check(`a way typed "${typeId}" parses to a real way`, parsed.ways.length === 1);
     check(`a way typed "${typeId}" gets lanes with real widths`, parsed.ways[0].profile.lanes.every((l) => typeof l.widthM === "number" && Number.isFinite(l.widthM)));
   }
+}
+
+// --- local storage: the module where a bug means permanent data loss ---
+//
+// storage/localStore.ts had no coverage at all, which is the wrong file to
+// leave untested: the editor's only copy of a person's work is the one it
+// writes here. All of it is reachable from Node with a fake Storage, so the
+// absence of a DOM was never the reason.
+{
+  interface FakeStorageOptions {
+    /** Throw on the next write, the way a full quota does. */
+    failWrites?: "quota" | "denied" | null;
+  }
+  class FakeStorage {
+    map = new Map<string, string>();
+    options: FakeStorageOptions = { failWrites: null };
+    get length() { return this.map.size; }
+    key(i: number) { return [...this.map.keys()][i] ?? null; }
+    getItem(k: string) { return this.map.has(k) ? this.map.get(k)! : null; }
+    removeItem(k: string) { this.map.delete(k); }
+    clear() { this.map.clear(); }
+    setItem(k: string, v: string) {
+      if (this.options.failWrites === "quota") throw new DOMException("full", "QuotaExceededError");
+      if (this.options.failWrites === "denied") throw new DOMException("nope", "SecurityError");
+      this.map.set(k, v);
+    }
+  }
+  const storage = new FakeStorage();
+  (globalThis as unknown as { localStorage: FakeStorage }).localStorage = storage;
+  const reset = () => { storage.map.clear(); storage.options.failWrites = null; };
+
+  const sys = (over: Partial<ReturnType<typeof createEmptySystem>> = {}) => ({ ...createEmptySystem(), ...over });
+
+  // Outcomes are reported, not swallowed.
+  reset();
+  check("a successful save reports saved", saveToLibrary(sys({ id: "a", name: "A" })) === "saved");
+  storage.options.failWrites = "quota";
+  check("a save that hits the quota reports full", saveToLibrary(sys({ id: "b" })) === "full");
+  storage.options.failWrites = "denied";
+  check("a save into unavailable storage says so, rather than 'make room'", saveToLibrary(sys({ id: "c" })) === "unavailable");
+  storage.options.failWrites = null;
+
+  // A saved system comes back; the three load states are distinguishable.
+  reset();
+  saveToLibrary(sys({ id: "a", name: "Alpha" }));
+  check("a saved system loads back", loadSystemEntry("a").status === "ok");
+  check("an id that was never saved reads as missing, not corrupt", loadSystemEntry("nope").status === "missing");
+  storage.map.set("transitmapper:system:broken", "{ not json");
+  check("bytes that won't parse read as corrupt, not missing", loadSystemEntry("broken").status === "corrupt");
+  check("a corrupt record is not deleted by reading it", storage.getItem("transitmapper:system:broken") !== null);
+
+  // The legacy migration must not drop the old key until the copy is safe.
+  reset();
+  storage.map.set("transitmapper:system", JSON.stringify(sys({ id: "legacy", name: "Legacy" })));
+  storage.options.failWrites = "quota";
+  const rescued = migrateLegacySingleSlot();
+  check("a legacy system is still returned when its rescue copy can't be written", rescued?.id === "legacy");
+  check("a failed rescue leaves the legacy key in place — it is the only copy", storage.getItem("transitmapper:system") !== null);
+  storage.options.failWrites = null;
+  migrateLegacySingleSlot();
+  check("a successful rescue removes the legacy key", storage.getItem("transitmapper:system") === null);
+  check("a successful rescue leaves the system in the library", listLibrary().some((e) => e.id === "legacy"));
+
+  // A system written without its index entry is still reachable.
+  reset();
+  saveToLibrary(sys({ id: "a", name: "Alpha" }));
+  storage.map.delete("transitmapper:library");
+  check("a system with no index entry is recovered into the library", listLibrary().some((e) => e.id === "a"));
+  check("a recovered system keeps its real name", listLibrary().find((e) => e.id === "a")?.name === "Alpha");
+  check("a recovered system is loadable", loadSystemEntry("a").status === "ok");
+  reset();
+  storage.map.set("transitmapper:system:junk", "{ not json");
+  check("an unparseable orphan is still listed, so it can be deleted", listLibrary().some((e) => e.id === "junk"));
+  check("the library does not invent entries when storage is empty", (reset(), listLibrary().length === 0));
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);

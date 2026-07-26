@@ -13,7 +13,6 @@ import {
   migrateLegacySingleSlot,
   saveToLibrary,
   setActiveId,
-  type SaveOutcome,
 } from "./storage/localStore";
 import { Icon } from "./ui/Icon";
 import { ImportProgressPill } from "./ui/ImportProgressPill";
@@ -22,6 +21,7 @@ import { LinesPanel } from "./ui/LinesPanel";
 import { Toolbar } from "./ui/Toolbar";
 import { TopBarActions, TopBarBrand, ViewSwitch } from "./ui/TopBar";
 import { useDelayedUnmount } from "./ui/useDelayedUnmount";
+import { useSaveStatus } from "./ui/SaveStatusProvider";
 import { useUi } from "./ui/UiProvider";
 import { useView } from "./ui/ViewProvider";
 import { Workbench } from "./ui/Workbench";
@@ -57,6 +57,10 @@ const basemapNotice = "The background map couldn’t be loaded, so the map behin
 // only one of them is true.
 const corruptSystemNotice = "The system you had open couldn’t be read, so this is a new one. The damaged copy is still saved and hasn’t been deleted.";
 
+// Same condition reached deliberately rather than at startup — the user
+// clicked a row and deserves to know why nothing happened.
+const corruptOpenNotice = "That system couldn’t be read, so it can’t be opened. Its data is still saved and hasn’t been deleted.";
+
 interface LazyDialogProps {
   children: ReactNode;
   /** Runs when the chunk fails to load, so the dialog that can't render stops
@@ -89,9 +93,10 @@ export function App() {
   // Anything worth telling the user that isn't the share-load error: a stored
   // system that wouldn't parse, a dialog that failed to load.
   const [notice, setNotice] = useState<string | null>(null);
-  // Whether the working copy is actually reaching disk. Anything other than
-  // "saved" means the editor is lying about being safe to close.
-  const [saveState, setSaveState] = useState<SaveOutcome>("saved");
+  // Whether the working copy is actually reaching disk. Held in a provider
+  // rather than here because writes happen in dialogs too, and a failure
+  // there is exactly as silent and exactly as costly.
+  const { outcome: saveState, report } = useSaveStatus();
 
   // Bootstrap: shared link → read-only load; otherwise local autosave or fresh.
   useEffect(() => {
@@ -132,27 +137,33 @@ export function App() {
     }
     // The first save is the one that proves storage works at all — a browser
     // in private mode fails here, before the user has typed anything.
-    setSaveState(saveToLibrary(system));
+    report(saveToLibrary(system));
     setActiveId(system.id);
     store.getState().setSystem(system, { readOnly: false });
     if (isBrandNew) store.getState().setTool("way");
     setReady(true);
-  }, [store]);
+  }, [store, report]);
 
   // Autosave the working copy into its own library entry (never a read-only
   // shared view). Switching to a different system's id updates the active
   // pointer immediately — no reason to debounce that, only the content save.
   const saveTimer = useRef<number | undefined>(undefined);
   useEffect(() => {
-    return store.subscribe((s, prev) => {
+    const unsubscribe = store.subscribe((s, prev) => {
       if (s.readOnly) return;
       if (s.system === prev.system) return;
       if (s.system.id !== prev.system.id) setActiveId(s.system.id);
       window.clearTimeout(saveTimer.current);
       const snapshot = s.system;
-      saveTimer.current = window.setTimeout(() => setSaveState(saveToLibrary(snapshot)), 400);
+      saveTimer.current = window.setTimeout(() => report(saveToLibrary(snapshot)), 400);
     });
-  }, [store]);
+    // The pending timer is part of this effect's state; leaving it to fire
+    // into an unmounted tree is silent today but is still a leak.
+    return () => {
+      window.clearTimeout(saveTimer.current);
+      unsubscribe();
+    };
+  }, [store, report]);
 
   // Dev-only: expose the map for debugging (the store is exposed by EditorProvider).
   useEffect(() => {
@@ -203,18 +214,40 @@ export function App() {
       Couldn’t open shared system: {loadError}
     </div>
   ) : notice ? (
-    <div className="app-banner" role="alert">
-      {notice}
+    // Dismissible, unlike the two above. Those describe a condition that is
+    // still true — a share that won't load, a save that isn't happening — and
+    // clearing them would be a lie. A notice describes something that already
+    // happened and has been read, and it sits over a canvas whose entire
+    // interaction model is clicking on it, so it must be possible to get rid
+    // of it.
+    <div className="app-banner app-banner-dismissible" role="status">
+      <span>{notice}</span>
+      <button type="button" className="app-banner-dismiss" onClick={() => setNotice(null)} aria-label="Dismiss">
+        <Icon name="x" size={14} />
+      </button>
     </div>
   ) : null;
 
   return (
     <div className="app">
       {ready && <MapCanvas onBasemapUnavailable={() => setNotice(basemapNotice)} />}
+      {/* Outside the chrome on purpose. This used to live in a Workbench
+          slot, which meant hiding the UI with `\` also hid a failing
+          autosave — the one message that must never be gated by a
+          presentation toggle. Offsets clear the top bar when it's there and
+          sit near the top edge when it isn't. */}
+      {banner && (
+        <div
+          className={`pointer-events-none absolute inset-x-0 z-20 flex justify-center px-3 ${
+            uiHidden ? "top-3" : "top-[136px] md:top-[68px]"
+          }`}
+        >
+          <div className="pointer-events-auto w-full max-w-[560px]">{banner}</div>
+        </div>
+      )}
       {chromeMounted && (
         <div data-ui-state={chromeClosing ? "closed" : "open"} className="app-chrome">
           <Workbench
-            banner={banner}
             brand={<TopBarBrand />}
             menuPanel={<LinesPanel />}
             supplementalPanel={<Inspector />}
@@ -259,7 +292,7 @@ export function App() {
       )}
       {activeDialog === "systems" && (
         <LazyDialog onFailure={dialogFailed}>
-          <SystemsDialog onClose={closeDialog} />
+          <SystemsDialog onClose={closeDialog} onCorrupt={() => setNotice(corruptOpenNotice)} />
         </LazyDialog>
       )}
     </div>

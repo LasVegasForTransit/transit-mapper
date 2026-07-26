@@ -9,7 +9,8 @@ import type { TransitSystem } from "@transitmapper/core/model/system";
 const LEGACY_KEY = "transitmapper:system"; // pre-library single slot
 const LIBRARY_INDEX_KEY = "transitmapper:library";
 const ACTIVE_ID_KEY = "transitmapper:activeId";
-const systemKey = (id: string) => `transitmapper:system:${id}`;
+const SYSTEM_KEY_PREFIX = "transitmapper:system:";
+const systemKey = (id: string) => `${SYSTEM_KEY_PREFIX}${id}`;
 
 export interface LibraryEntry {
   id: string;
@@ -17,18 +18,64 @@ export interface LibraryEntry {
   updatedAt: number;
 }
 
+/**
+ * Systems present in storage that the index doesn't mention.
+ *
+ * A save writes the system and then the index, so a failure between the two
+ * (quota, most likely) leaves bytes under a key nothing points at. Deleting
+ * them would be the obvious repair and the wrong one: for the system the user
+ * currently has open, `activeId` still points at that key, so the work is
+ * intact and reachable on the next load — deleting it would destroy the one
+ * thing this module exists to protect.
+ *
+ * So the index heals toward storage rather than storage being trimmed to
+ * match the index. An orphan reappears in the library, where it can be opened
+ * or deleted deliberately, instead of sitting invisible and consuming the
+ * quota the user is being told to free.
+ */
+function orphanedEntries(known: Set<string>): LibraryEntry[] {
+  const found: LibraryEntry[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      // LEGACY_KEY has no trailing colon, so it can't match this prefix.
+      if (!key || !key.startsWith(SYSTEM_KEY_PREFIX)) continue;
+      const id = key.slice(SYSTEM_KEY_PREFIX.length);
+      if (known.has(id)) continue;
+      // Only orphans are parsed — the normal path never pays for this.
+      try {
+        const stored = JSON.parse(localStorage.getItem(key) ?? "");
+        found.push({
+          id,
+          name: typeof stored?.name === "string" ? stored.name : "Recovered system",
+          updatedAt: typeof stored?.updatedAt === "number" ? stored.updatedAt : 0,
+        });
+      } catch {
+        // Unparseable, but still real and still taking up space. Listing it
+        // is what makes it deletable; loadSystemEntry reports it as corrupt.
+        found.push({ id, name: "Damaged system", updatedAt: 0 });
+      }
+    }
+  } catch {
+    return found;
+  }
+  return found;
+}
+
 function readIndex(): LibraryEntry[] {
+  let entries: LibraryEntry[] = [];
   try {
     const raw = localStorage.getItem(LIBRARY_INDEX_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (e): e is LibraryEntry => !!e && typeof e.id === "string" && typeof e.name === "string" && typeof e.updatedAt === "number",
-    );
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(parsed)) {
+      entries = parsed.filter(
+        (e): e is LibraryEntry => !!e && typeof e.id === "string" && typeof e.name === "string" && typeof e.updatedAt === "number",
+      );
+    }
   } catch {
-    return [];
+    entries = [];
   }
+  return [...entries, ...orphanedEntries(new Set(entries.map((e) => e.id)))];
 }
 
 /**

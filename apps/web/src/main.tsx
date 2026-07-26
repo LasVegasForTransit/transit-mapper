@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { EditorProvider } from "./editor/EditorProvider";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
+import { SaveStatusProvider } from "./ui/SaveStatusProvider";
 import { UiProvider } from "./ui/UiProvider";
 import { ViewProvider } from "./ui/ViewProvider";
 
@@ -17,9 +18,11 @@ createRoot(document.getElementById("root")!).render(
     <ErrorBoundary label="editor">
       <EditorProvider>
         <UiProvider>
-          <ViewProvider>
-            <App />
-          </ViewProvider>
+          <SaveStatusProvider>
+            <ViewProvider>
+              <App />
+            </ViewProvider>
+          </SaveStatusProvider>
         </UiProvider>
       </EditorProvider>
     </ErrorBoundary>
