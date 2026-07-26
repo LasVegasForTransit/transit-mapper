@@ -110,8 +110,41 @@ function lngCellRadius(maxMeters: number, latDeg: number): number {
   return Math.ceil(maxMeters / metersPerDegLng / CELL_DEG) + 1;
 }
 
-function buildSegmentGrid(ways: Way[]): Map<string, GridSegment[]> {
-  const grid = new Map<string, GridSegment[]>();
+/**
+ * Most cells a single segment may be expanded into before it is held aside
+ * instead.
+ *
+ * The cost of indexing a segment is the area of its bounding box in cells,
+ * which is driven by coordinate magnitude and not by how much data there is.
+ * At CELL_DEG a segment spanning 10° of longitude and 5° of latitude asks for
+ * ~5.5 million cells; the whole world asks for 7.2 billion and exceeds V8's
+ * Map size limit outright. Measured on this tree, before this bound: ±5°
+ * froze for 4.2 seconds and ±10° crashed after 13.
+ *
+ * That is reachable from any two-point way with ordinary in-range
+ * coordinates, so validating coordinates cannot fix it — the amplification is
+ * here, in the expansion, and so is the fix. It is not only a hostile-input
+ * concern: a long-distance GTFS shape or a way drawn across a continent is
+ * legitimate data that hits the same wall.
+ *
+ * 4096 cells is a ~0.2° box, far larger than any segment real editing
+ * produces and small enough that a few thousand of them cost nothing.
+ */
+const MAX_SEGMENT_CELLS = 4096;
+
+interface SegmentGrid {
+  cells: Map<string, GridSegment[]>;
+  /**
+   * Segments too large to expand. Every query scans these in full, so results
+   * stay exact — this bounds the index, it doesn't approximate it. The list
+   * is bounded by segment count, which the document size already bounds.
+   */
+  oversize: GridSegment[];
+}
+
+function buildSegmentGrid(ways: Way[]): SegmentGrid {
+  const cells = new Map<string, GridSegment[]>();
+  const oversize: GridSegment[] = [];
   for (const way of ways) {
     const path = resolveWayPath(way);
     for (let i = 1; i < path.length; i++) {
@@ -122,20 +155,26 @@ function buildSegmentGrid(ways: Way[]): Map<string, GridSegment[]> {
       const cy0 = Math.floor(Math.min(a[1], b[1]) / CELL_DEG);
       const cy1 = Math.floor(Math.max(a[1], b[1]) / CELL_DEG);
       const seg: GridSegment = { wayId: way.id, a, b };
+      // Counted before expanding, not while: the point is never to run the
+      // loop at all for a segment that would blow the index up.
+      if ((cx1 - cx0 + 1) * (cy1 - cy0 + 1) > MAX_SEGMENT_CELLS) {
+        oversize.push(seg);
+        continue;
+      }
       for (let cx = cx0; cx <= cx1; cx++) {
         for (let cy = cy0; cy <= cy1; cy++) {
           const key = cellKey(cx, cy);
-          const bucket = grid.get(key);
+          const bucket = cells.get(key);
           if (bucket) bucket.push(seg);
-          else grid.set(key, [seg]);
+          else cells.set(key, [seg]);
         }
       }
     }
   }
-  return grid;
+  return { cells, oversize };
 }
 
-const segmentGridCache = new WeakMap<Way[], Map<string, GridSegment[]>>();
+const segmentGridCache = new WeakMap<Way[], SegmentGrid>();
 
 // Candidate way IDs for snap(): every way with a segment inside coord's
 // cell-radius, reusing the same grid buildSegmentGrid/segmentGridCache
@@ -155,11 +194,14 @@ function candidateWayIdsNear(coord: LngLat, ways: Way[], maxMeters: number): Set
   const ids = new Set<string>();
   for (let dx = -cellRadiusLng; dx <= cellRadiusLng; dx++) {
     for (let dy = -cellRadiusLat; dy <= cellRadiusLat; dy++) {
-      const bucket = grid.get(cellKey(cx + dx, cy + dy));
+      const bucket = grid.cells.get(cellKey(cx + dx, cy + dy));
       if (!bucket) continue;
       for (const seg of bucket) ids.add(seg.wayId);
     }
   }
+  // Segments held out of the grid are candidates for every query — that's what
+  // keeps this exact rather than merely fast.
+  for (const seg of grid.oversize) ids.add(seg.wayId);
   return ids;
 }
 
@@ -175,18 +217,22 @@ export function servedWayIds(coord: LngLat, ways: Way[], maxMeters: number): str
   const cx = Math.floor(coord[0] / CELL_DEG);
   const cy = Math.floor(coord[1] / CELL_DEG);
   const bestByWay = new Map<string, number>();
+  const consider = (seg: GridSegment) => {
+    const { point } = projectOnSegment(coord, seg.a, seg.b);
+    const d = haversineMeters(coord, point);
+    const prev = bestByWay.get(seg.wayId);
+    if (prev === undefined || d < prev) bestByWay.set(seg.wayId, d);
+  };
   for (let dx = -cellRadiusLng; dx <= cellRadiusLng; dx++) {
     for (let dy = -cellRadiusLat; dy <= cellRadiusLat; dy++) {
-      const bucket = grid.get(cellKey(cx + dx, cy + dy));
+      const bucket = grid.cells.get(cellKey(cx + dx, cy + dy));
       if (!bucket) continue;
-      for (const seg of bucket) {
-        const { point } = projectOnSegment(coord, seg.a, seg.b);
-        const d = haversineMeters(coord, point);
-        const prev = bestByWay.get(seg.wayId);
-        if (prev === undefined || d < prev) bestByWay.set(seg.wayId, d);
-      }
+      for (const seg of bucket) consider(seg);
     }
   }
+  // Held-aside segments are measured exactly like any other candidate, so a
+  // way that legitimately spans a continent still reports the right distance.
+  for (const seg of grid.oversize) consider(seg);
   const ids: string[] = [];
   for (const [wayId, d] of bestByWay) if (d <= maxMeters) ids.push(wayId);
   return ids;

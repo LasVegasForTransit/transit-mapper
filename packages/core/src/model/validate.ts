@@ -122,57 +122,104 @@ function crossBboxCells(a: LngLat, b: LngLat): { cx0: number; cx1: number; cy0: 
   };
 }
 
-function buildCrossGrid(ways: Way[]): Map<string, CrossSegment[]> {
-  const grid = new Map<string, CrossSegment[]>();
+/**
+ * Most cells one segment may occupy before it is held aside instead. See
+ * MAX_SEGMENT_CELLS in geo/snapIndex.ts for the full reasoning; the short
+ * version is that a segment's indexing cost is the area of its bounding box
+ * in cells, which depends on how far apart its endpoints are and not on how
+ * much data there is. CROSS_CELL_DEG is 3× finer than the snap grid, so the
+ * same span costs 9× more here.
+ */
+const MAX_CROSS_SEGMENT_CELLS = 4096;
+
+interface CrossGrid {
+  cells: Map<string, CrossSegment[]>;
+  /** Segments too wide to expand; every query must consider these. */
+  oversize: CrossSegment[];
+  /** Every segment, for when the *query* segment is itself too wide to walk
+   *  cell by cell. Holding the references costs nothing — they are the same
+   *  objects already in `cells`. */
+  all: CrossSegment[];
+}
+
+function cellSpan(a: LngLat, b: LngLat): number {
+  const { cx0, cx1, cy0, cy1 } = crossBboxCells(a, b);
+  return (cx1 - cx0 + 1) * (cy1 - cy0 + 1);
+}
+
+function buildCrossGrid(ways: Way[]): CrossGrid {
+  const cells = new Map<string, CrossSegment[]>();
+  const oversize: CrossSegment[] = [];
+  const all: CrossSegment[] = [];
   for (const way of ways) {
     for (let i = 0; i < way.points.length - 1; i++) {
       const seg: CrossSegment = { wayId: way.id, typeId: way.typeId, a: way.points[i], b: way.points[i + 1] };
+      all.push(seg);
       const { cx0, cx1, cy0, cy1 } = crossBboxCells(seg.a, seg.b);
+      if ((cx1 - cx0 + 1) * (cy1 - cy0 + 1) > MAX_CROSS_SEGMENT_CELLS) {
+        oversize.push(seg);
+        continue;
+      }
       for (let cx = cx0; cx <= cx1; cx++) {
         for (let cy = cy0; cy <= cy1; cy++) {
           const key = crossCellKey(cx, cy);
-          const bucket = grid.get(key);
+          const bucket = cells.get(key);
           if (bucket) bucket.push(seg);
-          else grid.set(key, [seg]);
+          else cells.set(key, [seg]);
         }
       }
     }
   }
-  return grid;
+  return { cells, oversize, all };
 }
 
 function crossingIssuesForSegment(
   way: Way,
   a1: LngLat,
   a2: LngLat,
-  grid: Map<string, CrossSegment[]>,
+  grid: CrossGrid,
   joined: Set<string>,
   flagged: Set<string>,
 ): Issue[] {
   const issues: Issue[] = [];
+  const consider = (other: CrossSegment) => {
+    if (other.wayId === way.id) return;
+    const key = pairKey(way.id, other.wayId);
+    if (flagged.has(key) || joined.has(key)) return;
+    if (!segmentsCross(a1, a2, other.a, other.b)) return;
+    flagged.add(key);
+    issues.push({
+      id: `crossing-${key}`,
+      message: `A ${way.typeId} way crosses a ${other.typeId} way without joining — check whether they should share a junction.`,
+      target: { kind: "way", id: way.id },
+    });
+  };
+
+  // The query side amplifies exactly like the build side did: walking the
+  // cells a segment spans is only cheap while that span is small. A segment
+  // too wide to walk checks every segment instead — O(n) rather than O(cells),
+  // and n is bounded by the document while the cell count is bounded by
+  // nothing.
+  if (cellSpan(a1, a2) > MAX_CROSS_SEGMENT_CELLS) {
+    for (const other of grid.all) consider(other);
+    return issues;
+  }
+
   const { cx0, cx1, cy0, cy1 } = crossBboxCells(a1, a2);
   for (let cx = cx0; cx <= cx1; cx++) {
     for (let cy = cy0; cy <= cy1; cy++) {
-      const bucket = grid.get(crossCellKey(cx, cy));
+      const bucket = grid.cells.get(crossCellKey(cx, cy));
       if (!bucket) continue;
-      for (const other of bucket) {
-        if (other.wayId === way.id) continue;
-        const key = pairKey(way.id, other.wayId);
-        if (flagged.has(key) || joined.has(key)) continue;
-        if (!segmentsCross(a1, a2, other.a, other.b)) continue;
-        flagged.add(key);
-        issues.push({
-          id: `crossing-${key}`,
-          message: `A ${way.typeId} way crosses a ${other.typeId} way without joining — check whether they should share a junction.`,
-          target: { kind: "way", id: way.id },
-        });
-      }
+      for (const other of bucket) consider(other);
     }
   }
+  // Segments held out of the grid are in no cell, so a normal query would
+  // never see them. Checking them here is what keeps the result exact.
+  for (const other of grid.oversize) consider(other);
   return issues;
 }
 
-function crossingIssuesForWay(way: Way, grid: Map<string, CrossSegment[]>, joined: Set<string>, flagged: Set<string>): Issue[] {
+function crossingIssuesForWay(way: Way, grid: CrossGrid, joined: Set<string>, flagged: Set<string>): Issue[] {
   const issues: Issue[] = [];
   for (let i = 0; i < way.points.length - 1; i++) {
     issues.push(...crossingIssuesForSegment(way, way.points[i], way.points[i + 1], grid, joined, flagged));
