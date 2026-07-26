@@ -18,5 +18,8 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client"]
   },
+  // Browser sources only. The test suite in `scripts/` is a Node program and
+  // is typechecked by tsconfig.scripts.json instead — see that file for why
+  // the two can't share one config, and why it isn't simply left out.
   "include": ["src"]
 }

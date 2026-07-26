@@ -17,7 +17,7 @@ interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   SITE_URL: string;
-  /** Ceiling on share creation — see the unsafe.bindings block in
+  /** Ceiling on share creation — see the `[[ratelimits]]` block in
    *  wrangler.toml for why this endpoint in particular has one. Optional
    *  because `wrangler dev` doesn't provide it locally. */
   SHARE_CREATE_LIMITER?: RateLimiter;
@@ -34,14 +34,14 @@ const EMBED_DEFAULT_HEIGHT = 500;
 
 /** Share ids are lowercase alphanumerics from shortId; anything else in an
  *  id-shaped position is someone probing, not a real link. */
-const SHARE_ID_PATTERN = /^[0-9a-z]{1,32}$/;
+export const SHARE_ID_PATTERN = /^[0-9a-z]{1,32}$/;
 
 /**
  * Pulls the share id out of a share or embed URL, but only for our own
  * origin. Scoping to SITE_URL is what stops this from being an open oEmbed
  * endpoint that will describe (and lend our provider name to) arbitrary URLs.
  */
-function shareIdFromUrl(target: string, siteUrl: string): string | null {
+export function shareIdFromUrl(target: string, siteUrl: string): string | null {
   let url: URL;
   try {
     url = new URL(target);
@@ -55,7 +55,7 @@ function shareIdFromUrl(target: string, siteUrl: string): string | null {
   return id && SHARE_ID_PATTERN.test(id) ? id : null;
 }
 
-function positiveInt(raw: string | undefined): number | null {
+export function positiveInt(raw: string | undefined): number | null {
   if (!raw) return null;
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : null;
@@ -64,7 +64,7 @@ function positiveInt(raw: string | undefined): number | null {
 /** For interpolating user-supplied text into the oEmbed `html` payload. That
  *  string is raw markup by definition — HTMLRewriter can't escape it for us
  *  the way it does for the share page's meta tags. */
-function escapeHtmlAttribute(value: string): string {
+export function escapeHtmlAttribute(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -84,7 +84,7 @@ function escapeHtmlAttribute(value: string): string {
  * re-rendering server-side could, which is the thing we can't afford), so the
  * route that serves them back is hardened too — see the preview route below.
  */
-function acceptedPreview(raw: unknown): Uint8Array | null {
+export function acceptedPreview(raw: unknown): Uint8Array | null {
   if (typeof raw !== "string" || raw.length === 0) return null;
   // Base64 inflates by 4/3; bound the string before allocating anything so a
   // huge payload is rejected without being decoded.
@@ -154,6 +154,12 @@ interface ShareRow {
 // blog post, where a fixed 7-days-from-creation expiry would turn the embed
 // into a 404 a week after publication.
 async function getActiveShare(db: D1Database, id: string): Promise<ShareRow | null> {
+  // Ids that can't have come from shortId() are someone probing. Rejecting
+  // them here rather than querying keeps junk out of the Worker's response
+  // cache on /s/:id/preview.png, where every distinct id would otherwise earn
+  // its own entry.
+  if (!SHARE_ID_PATTERN.test(id)) return null;
+
   const row = await db
     .prepare("SELECT id, data, created_at, expires_at FROM systems WHERE id = ?")
     .bind(id)
@@ -166,9 +172,21 @@ async function getActiveShare(db: D1Database, id: string): Promise<ShareRow | nu
     return null;
   }
 
+  // A row whose JSON won't parse is treated as a share that isn't there.
+  // Letting the throw escape turns one damaged row into a 500 on the share
+  // page, the API read AND the oEmbed endpoint — a 404 is both truthful (we
+  // cannot produce this system) and survivable for everything around it.
+  let system: TransitSystem;
+  try {
+    system = JSON.parse(row.data);
+  } catch {
+    console.error(`Share ${id} has unparseable data`);
+    return null;
+  }
+
   return {
     id: row.id,
-    system: JSON.parse(row.data),
+    system,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
   };
@@ -225,8 +243,23 @@ app.post("/api/systems", async (c) => {
     }
   }
 
+  // Checked before reading the body, not after. `await c.req.text()` buffers
+  // the whole request into memory, so a check that runs afterwards has already
+  // paid the cost it was meant to avoid — the caller controls the size and we
+  // would allocate all of it first.
+  //
+  // The header is a claim by the caller, so the buffered length is still
+  // checked below; this just refuses the obvious cases without reading them.
+  // That second check counts bytes rather than `raw.length`, which is UTF-16
+  // code units — a body of multi-byte characters measures up to three times
+  // smaller that way and slipped past the limit entirely.
+  const declaredLength = Number(c.req.header("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+    return c.json({ error: "System too large" }, 413);
+  }
+
   const raw = await c.req.text();
-  if (raw.length > MAX_BODY_BYTES) {
+  if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
     return c.json({ error: "System too large" }, 413);
   }
 
@@ -385,11 +418,17 @@ const PREVIEW_RESPONSE_HEADERS: Record<string, string> = {
 // closer to 65ms, so this route only hands back stored bytes.
 app.get("/s/:id/preview.png", async (c) => {
   const id = c.req.param("id");
+  // This route builds its own query rather than going through
+  // getActiveShare, so it needs the same id check — without it every probe
+  // for a nonexistent share takes a database round trip and, worse, earns a
+  // cache entry keyed on whatever the caller typed.
+  const validId = SHARE_ID_PATTERN.test(id);
+
   const cache = caches.default;
   const cached = await cache.match(c.req.raw);
   if (cached) return cached;
 
-  const row = await c.env.DB.prepare(
+  const row = !validId ? null : await c.env.DB.prepare(
     "SELECT preview, expires_at FROM systems WHERE id = ?",
   )
     .bind(id)

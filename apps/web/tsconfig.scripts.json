@@ -1,0 +1,21 @@
+// Typechecks the test suite in `scripts/` — which nothing did until now.
+//
+// `tsconfig.json` includes only `src`, so `pnpm typecheck` never looked at
+// verify.ts: the single file that asserts how the whole model behaves was the
+// single file the compiler ignored. It had already drifted into duplicate
+// imports and a dead comparison, neither of which failed anything, because
+// tsx runs what tsc would have rejected.
+//
+// A separate config rather than adding "scripts" to the main include: these
+// are a Node program and the app is browser code. Sharing one config means
+// `types: ["node"]` applies to `src` too, which quietly changes what globals
+// like `setTimeout` resolve to in application code. Keeping the two type
+// environments apart is the point, so the suite gets its own.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["scripts"]
+}
