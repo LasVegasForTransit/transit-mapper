@@ -132,6 +132,14 @@ function crossBboxCells(a: LngLat, b: LngLat): { cx0: number; cx1: number; cy0: 
  */
 const MAX_CROSS_SEGMENT_CELLS = 4096;
 
+/** Aggregate and held-aside ceilings, for the reasons spelled out against
+ *  MAX_GRID_CELLS and MAX_OVERSIZE_SEGMENTS in geo/snapIndex.ts: capping one
+ *  segment does not cap a grid, and an unbounded held-aside list turns every
+ *  query back into a full scan. This grid's cells are 3× finer per axis, so
+ *  genuine data uses more of the budget here. */
+const MAX_CROSS_GRID_CELLS = 2_000_000;
+const MAX_CROSS_OVERSIZE_SEGMENTS = 512;
+
 interface CrossGrid {
   cells: Map<string, CrossSegment[]>;
   /** Segments too wide to expand; every query must consider these. */
@@ -140,6 +148,10 @@ interface CrossGrid {
    *  cell by cell. Holding the references costs nothing — they are the same
    *  objects already in `cells`. */
   all: CrossSegment[];
+  /** Remaining full-scan allowances. Mutable, and deliberately shared across
+   *  one whole pass so the cost is bounded per document rather than per
+   *  segment. See crossingIssuesForSegment. */
+  wideScansLeft: number;
 }
 
 function cellSpan(a: LngLat, b: LngLat): number {
@@ -151,15 +163,18 @@ function buildCrossGrid(ways: Way[]): CrossGrid {
   const cells = new Map<string, CrossSegment[]>();
   const oversize: CrossSegment[] = [];
   const all: CrossSegment[] = [];
+  let cellsUsed = 0;
   for (const way of ways) {
     for (let i = 0; i < way.points.length - 1; i++) {
       const seg: CrossSegment = { wayId: way.id, typeId: way.typeId, a: way.points[i], b: way.points[i + 1] };
       all.push(seg);
       const { cx0, cx1, cy0, cy1 } = crossBboxCells(seg.a, seg.b);
-      if ((cx1 - cx0 + 1) * (cy1 - cy0 + 1) > MAX_CROSS_SEGMENT_CELLS) {
-        oversize.push(seg);
+      const span = (cx1 - cx0 + 1) * (cy1 - cy0 + 1);
+      if (span > MAX_CROSS_SEGMENT_CELLS || cellsUsed + span > MAX_CROSS_GRID_CELLS) {
+        if (oversize.length < MAX_CROSS_OVERSIZE_SEGMENTS) oversize.push(seg);
         continue;
       }
+      cellsUsed += span;
       for (let cx = cx0; cx <= cx1; cx++) {
         for (let cy = cy0; cy <= cy1; cy++) {
           const key = crossCellKey(cx, cy);
@@ -170,7 +185,7 @@ function buildCrossGrid(ways: Way[]): CrossGrid {
       }
     }
   }
-  return { cells, oversize, all };
+  return { cells, oversize, all, wideScansLeft: MAX_CROSS_OVERSIZE_SEGMENTS };
 }
 
 function crossingIssuesForSegment(
@@ -197,11 +212,23 @@ function crossingIssuesForSegment(
 
   // The query side amplifies exactly like the build side did: walking the
   // cells a segment spans is only cheap while that span is small. A segment
-  // too wide to walk checks every segment instead — O(n) rather than O(cells),
-  // and n is bounded by the document while the cell count is bounded by
-  // nothing.
+  // too wide to walk checks every segment instead — O(n) rather than
+  // O(cells).
+  //
+  // But O(n) per wide segment is O(n²) when everything is wide, which is a
+  // document away. `wideScansLeft` bounds how many segments may buy that
+  // fallback; past it, a wide segment is compared only against the other
+  // held-aside ones. Crossings involving it can then be missed, which is a
+  // real loss — the issues list is advisory, and a wrong entry in it is worth
+  // far less than a pegged core. A genuine system has a handful of wide
+  // segments at most and never reaches this.
   if (cellSpan(a1, a2) > MAX_CROSS_SEGMENT_CELLS) {
-    for (const other of grid.all) consider(other);
+    if (grid.wideScansLeft > 0) {
+      grid.wideScansLeft--;
+      for (const other of grid.all) consider(other);
+    } else {
+      for (const other of grid.oversize) consider(other);
+    }
     return issues;
   }
 

@@ -132,12 +132,46 @@ function lngCellRadius(maxMeters: number, latDeg: number): number {
  */
 const MAX_SEGMENT_CELLS = 4096;
 
+/**
+ * Ceiling on cells across the WHOLE grid, not one segment.
+ *
+ * The per-segment cap above is necessary and not sufficient, which an earlier
+ * version of this file got wrong: N segments each sitting just under the cap
+ * multiply out to N×4096 cells, and nothing bounded N. Measured with that
+ * version in place, a 0.10 MB document of segments all just inside the
+ * per-segment limit took 4.5 seconds and 690 MB — the same freeze the cap was
+ * added to prevent, reassembled out of individually-legal pieces.
+ *
+ * Real data sits far below this: RTC Southern Nevada's whole feed is ~120,000
+ * short street-following segments spanning a cell or two each, so a few
+ * hundred thousand cells. Two million is generous headroom for anything
+ * genuine and still a hard stop for anything constructed.
+ */
+const MAX_GRID_CELLS = 2_000_000;
+
+/**
+ * Ceiling on segments held aside.
+ *
+ * Every query scans this list in full, so its length is a per-query cost paid
+ * once per station on the render path. Unbounded, it reintroduces exactly the
+ * O(stations × segments) quadratic this grid exists to remove — measured at
+ * ~2 seconds of blocking work for a 0.29 MB document, on the embed path,
+ * from a document a stranger supplied.
+ *
+ * Past this point segments stop being indexed at all. That is a real loss of
+ * function — a way beyond the limit won't be found by snapping or counted as
+ * serving a station — chosen deliberately over freezing the page. It takes a
+ * document with hundreds of continent-spanning segments to reach, which no
+ * amount of ordinary editing or importing produces.
+ */
+const MAX_OVERSIZE_SEGMENTS = 512;
+
 interface SegmentGrid {
   cells: Map<string, GridSegment[]>;
   /**
    * Segments too large to expand. Every query scans these in full, so results
-   * stay exact — this bounds the index, it doesn't approximate it. The list
-   * is bounded by segment count, which the document size already bounds.
+   * stay exact for everything that makes it in — this bounds the index rather
+   * than approximating it, up to MAX_OVERSIZE_SEGMENTS.
    */
   oversize: GridSegment[];
 }
@@ -145,6 +179,7 @@ interface SegmentGrid {
 function buildSegmentGrid(ways: Way[]): SegmentGrid {
   const cells = new Map<string, GridSegment[]>();
   const oversize: GridSegment[] = [];
+  let cellsUsed = 0;
   for (const way of ways) {
     const path = resolveWayPath(way);
     for (let i = 1; i < path.length; i++) {
@@ -156,11 +191,13 @@ function buildSegmentGrid(ways: Way[]): SegmentGrid {
       const cy1 = Math.floor(Math.max(a[1], b[1]) / CELL_DEG);
       const seg: GridSegment = { wayId: way.id, a, b };
       // Counted before expanding, not while: the point is never to run the
-      // loop at all for a segment that would blow the index up.
-      if ((cx1 - cx0 + 1) * (cy1 - cy0 + 1) > MAX_SEGMENT_CELLS) {
-        oversize.push(seg);
+      // loop at all for a segment the index can't afford.
+      const span = (cx1 - cx0 + 1) * (cy1 - cy0 + 1);
+      if (span > MAX_SEGMENT_CELLS || cellsUsed + span > MAX_GRID_CELLS) {
+        if (oversize.length < MAX_OVERSIZE_SEGMENTS) oversize.push(seg);
         continue;
       }
+      cellsUsed += span;
       for (let cx = cx0; cx <= cx1; cx++) {
         for (let cy = cy0; cy <= cy1; cy++) {
           const key = cellKey(cx, cy);

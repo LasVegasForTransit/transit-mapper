@@ -95,7 +95,10 @@ export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
   };
 
   const confirmDelete = (id: string) => {
-    deleteFromLibrary(id);
+    // Reported like any other write: a delete is how the user is told to free
+    // space when storage is full, so it failing silently would leave them
+    // following advice that quietly does nothing.
+    report(deleteFromLibrary(id));
     if (id === currentId) {
       const remaining = listLibrary();
       const next = remaining.length > 0 ? loadSystemById(remaining[0].id) : createEmptySystem();

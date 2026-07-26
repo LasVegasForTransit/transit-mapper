@@ -61,12 +61,22 @@ export function createEmptySystem(now = Date.now()): TransitSystem {
  * froze for 4.2 seconds, ±10° crashed on V8's Map size limit.
  *
  * The amplification is in the expansion, so the bound lives there too — see
- * MAX_SEGMENT_CELLS in geo/snapIndex.ts and MAX_CROSS_SEGMENT_CELLS in
- * validate.ts. What this check does is keep nonsense out of the model:
- * longitude is wrapped into range rather than dropped, because MapLibre hands
- * back unwrapped values like 184 when the user pans into an adjacent world
- * copy, and dropping those would silently delete an interior vertex and
- * change the shape of the user's way.
+ * MAX_GRID_CELLS in geo/snapIndex.ts and MAX_CROSS_GRID_CELLS in validate.ts.
+ * What this check does is keep nonsense out of the model.
+ *
+ * Longitude is wrapped rather than dropped, because MapLibre hands back
+ * unwrapped values like 184 once the user pans into an adjacent world copy,
+ * and dropping a point mid-array silently deletes an interior vertex and
+ * changes the shape of the way.
+ *
+ * Known limitation, stated rather than papered over: wrapping happens here,
+ * on parse, and nothing wraps coordinates as they arrive from the map. A way
+ * drawn ACROSS the antimeridian (178° to 184°) is held in memory as drawn and
+ * renders correctly, but reloads as 178° to -176° — the same two places, now
+ * joined the long way round. Fixing it properly means normalizing at input
+ * and splitting segments at the meridian, which is a real piece of work and
+ * not one Las Vegas needs. The bounds above keep such a segment cheap; they
+ * do not make it draw correctly.
  */
 function wrapLng(lng: number): number {
   return (((lng + 180) % 360) + 360) % 360 - 180;
@@ -84,10 +94,6 @@ function normalizedLngLat(v: unknown): LngLat | null {
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
   if (lat < -90 || lat > 90) return null;
   return [wrapLng(lng), lat];
-}
-
-function isLngLat(v: unknown): v is LngLat {
-  return normalizedLngLat(v) !== null;
 }
 
 function coords(v: unknown): LngLat[] {
@@ -584,10 +590,11 @@ function finish(
   parts: Pick<TransitSystem, "ways" | "services" | "stations" | "facilities" | "groups" | "nodes" | "namedWays">,
 ): TransitSystem {
   const vp = o.viewport as Record<string, unknown> | undefined;
-  const viewport =
-    vp && isLngLat(vp.center) && typeof vp.zoom === "number"
-      ? { center: vp.center, zoom: vp.zoom }
-      : { ...DEFAULT_VIEWPORT };
+  // Normalized, not merely validated. A predicate that answers "is this a
+  // coordinate?" while handing back the caller's original value is a guard
+  // that lies: it would accept a centre of [1e9, 45] and store it verbatim.
+  const center = vp ? normalizedLngLat(vp.center) : null;
+  const viewport = center && typeof vp?.zoom === "number" ? { center, zoom: vp.zoom } : { ...DEFAULT_VIEWPORT };
 
   const palette = Array.isArray(o.palette) && o.palette.every((c) => typeof c === "string")
     ? (o.palette as string[])

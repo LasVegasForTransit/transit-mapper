@@ -62,20 +62,24 @@ function orphanedEntries(known: Set<string>): LibraryEntry[] {
   return found;
 }
 
+/**
+ * The index as stored. Deliberately does NOT reconcile against storage —
+ * `saveToLibrary` calls this on every autosave, and scanning every
+ * localStorage key (and parsing any orphan found) is not something to put on
+ * the path that runs after every edit. Recovery belongs where a human is
+ * looking; see listLibrary.
+ */
 function readIndex(): LibraryEntry[] {
-  let entries: LibraryEntry[] = [];
   try {
     const raw = localStorage.getItem(LIBRARY_INDEX_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    if (Array.isArray(parsed)) {
-      entries = parsed.filter(
-        (e): e is LibraryEntry => !!e && typeof e.id === "string" && typeof e.name === "string" && typeof e.updatedAt === "number",
-      );
-    }
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (e): e is LibraryEntry => !!e && typeof e.id === "string" && typeof e.name === "string" && typeof e.updatedAt === "number",
+    );
   } catch {
-    entries = [];
+    return [];
   }
-  return [...entries, ...orphanedEntries(new Set(entries.map((e) => e.id)))];
 }
 
 /**
@@ -115,9 +119,19 @@ function writeIndex(entries: LibraryEntry[]): SaveOutcome {
   }
 }
 
-/** Every saved system, most recently updated first. */
+/**
+ * Every saved system, most recently updated first — including any the index
+ * has lost track of.
+ *
+ * Reconciliation happens here rather than in readIndex because this is the
+ * one caller a person is waiting on (the "My systems" dialog), while
+ * readIndex runs on every autosave. An orphan is worth a full scan when
+ * someone is looking at the list, and not worth it 400ms after every edit.
+ */
 export function listLibrary(): LibraryEntry[] {
-  return readIndex().sort((a, b) => b.updatedAt - a.updatedAt);
+  const entries = readIndex();
+  const recovered = orphanedEntries(new Set(entries.map((e) => e.id)));
+  return [...entries, ...recovered].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 /**
@@ -173,13 +187,23 @@ export function saveToLibrary(system: TransitSystem): SaveOutcome {
   return writeIndex([...readIndex().filter((e) => e.id !== system.id), { id: system.id, name: system.name, updatedAt: system.updatedAt }]);
 }
 
-export function deleteFromLibrary(id: string): void {
+/**
+ * Removes the system, then its index entry — in that order, and only if the
+ * first succeeded.
+ *
+ * The order matters now that listLibrary recovers orphans. Dropping the index
+ * entry while the bytes survive would make the row reappear on the next
+ * listing, so a delete that failed would look like a delete that undid
+ * itself. Keeping the two consistent means a failure leaves the row exactly
+ * as it was, which is at least honest.
+ */
+export function deleteFromLibrary(id: string): SaveOutcome {
   try {
     localStorage.removeItem(systemKey(id));
-  } catch {
-    // ignore
+  } catch (e) {
+    return outcomeFor(e);
   }
-  writeIndex(readIndex().filter((e) => e.id !== id));
+  return writeIndex(readIndex().filter((e) => e.id !== id));
 }
 
 export function getActiveId(): string | null {
