@@ -82,7 +82,7 @@ import { claimOutcome, retainedShares } from "@transitmapper/core/share/claim";
 // Imported for the storage block at the end of this file. localStore only
 // touches `localStorage` inside its functions, never at module scope, so the
 // fake can be installed after the import rather than before it.
-import { listLibrary, loadSystemEntry, migrateLegacySingleSlot, saveToLibrary } from "../src/storage/localStore";
+import { deleteFromLibrary, listLibrary, loadSystemEntry, migrateLegacySingleSlot, saveToLibrary } from "../src/storage/localStore";
 
 let failures = 0;
 function check(name: string, cond: boolean) {
@@ -3285,19 +3285,39 @@ function buildGrid() {
   for (const [label, lng, lat] of [
     ["spanning five degrees", 5, 2.5],
     ["spanning ten degrees", 10, 5],
+    // Built as a Way directly rather than through parseSystem: the parser
+    // wraps 180 to -180, which collapses the longitude span to nothing and
+    // makes this case pass whether or not the bound exists.
     ["spanning the whole world", 180, 90],
   ] as const) {
-    const wide = parseSystem(wayWith({ points: [[-lng, -lat], [lng, lat]] }));
+    const wide = label.includes("whole world")
+      ? [{ ...parseSystem(wayWith({ points: [[-1, -1], [1, 1]] })).ways[0], points: [[-lng, -lat], [lng, lat]] as [number, number][] }]
+      : parseSystem(wayWith({ points: [[-lng, -lat], [lng, lat]] })).ways;
     const started = performance.now();
     let threw = false;
     try {
-      servedWayIds([0, 0], wide.ways, 100);
+      servedWayIds([0, 0], wide, 100);
     } catch {
       threw = true;
     }
     const elapsed = performance.now() - started;
     check(`a way ${label} indexes without throwing`, !threw);
     check(`a way ${label} indexes in well under a second (${Math.round(elapsed)}ms)`, elapsed < 500);
+  }
+
+  // One wide segment is not the attack — many are. Capping a single
+  // segment's expansion leaves N segments each just under the cap, which
+  // multiply out to exactly the blowup the cap was added to stop. Measured
+  // without the aggregate bound: 0.10 MB of such segments took 4.5 seconds
+  // and 690 MB. This is the check that distinguishes the two bounds.
+  {
+    const pts: [number, number][] = [];
+    for (let i = 0; i < 10_001; i++) pts.push(i % 2 === 0 ? [0, 0] : [0.189, 0.189]);
+    const many = parseSystem({ ...base, ways: [{ id: "w", typeId: "road", points: pts, geometry: "straight", grade: "atGrade" }] });
+    const started = performance.now();
+    servedWayIds([0, 0], many.ways, 90);
+    const elapsed = performance.now() - started;
+    check(`ten thousand individually-legal wide segments still index quickly (${Math.round(elapsed)}ms)`, elapsed < 2000);
   }
 
   // Held-aside segments must still be found, or the bound would be a silent
@@ -3389,6 +3409,24 @@ function buildGrid() {
   storage.map.set("transitmapper:system:junk", "{ not json");
   check("an unparseable orphan is still listed, so it can be deleted", listLibrary().some((e) => e.id === "junk"));
   check("the library does not invent entries when storage is empty", (reset(), listLibrary().length === 0));
+
+  // Recovery must not fight deletion: the bytes go first, so a deleted system
+  // has nothing left for the orphan scan to find and resurrect.
+  reset();
+  saveToLibrary(sys({ id: "gone", name: "Gone" }));
+  check("deleting reports success", deleteFromLibrary("gone") === "saved");
+  check("a deleted system does not come back as an orphan", !listLibrary().some((e) => e.id === "gone"));
+  check("a deleted system is really gone from storage", loadSystemEntry("gone").status === "missing");
+
+  // A delete that can't write leaves the row alone rather than half-removing
+  // it — otherwise the entry would vanish while the bytes stayed, and the
+  // next listing would resurrect it, looking like a delete that undid itself.
+  reset();
+  saveToLibrary(sys({ id: "stuck", name: "Stuck" }));
+  storage.options.failWrites = "quota";
+  check("a delete that can't update the index reports the failure", deleteFromLibrary("stuck") !== "saved");
+  storage.options.failWrites = null;
+  check("a failed delete leaves the system listed rather than half-removed", listLibrary().some((e) => e.id === "stuck"));
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);

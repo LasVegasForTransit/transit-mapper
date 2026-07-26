@@ -195,7 +195,7 @@ export function App() {
     setNotice(dialogFailureNotice);
   };
 
-  // Everything app-level and urgent goes through Workbench's one banner slot.
+  // Everything app-level and urgent goes through the one banner below.
   // A failing autosave outranks the others: the other two describe something
   // that already happened, this one is still happening and gets worse the
   // longer it goes unread.
