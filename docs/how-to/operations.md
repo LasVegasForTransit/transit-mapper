@@ -13,8 +13,21 @@ handling `/api/*`, `/s/*` and `/e/*` itself, with one D1 database (also
 
 Deploys are automatic: pushing to `main` runs
 [`deploy-production.yml`](../../.github/workflows/deploy-production.yml),
-which runs the full CI checks, applies any pending D1 migrations, deploys the
-Worker, and then smoke-tests the live site.
+which runs the full CI checks, builds, applies any pending D1 migrations,
+deploys the Worker, and then smoke-tests the live site.
+
+Because nothing applied migrations automatically before this workflow existed,
+the first automated deploy after it lands applies whatever backlog production
+has accumulated — so check the backlog is what you expect *before* merging a
+change to this workflow, not after:
+
+```bash
+pnpm --filter @transitmapper/worker exec wrangler d1 migrations list transitmapper --remote
+```
+
+`0002_share_expiry.sql` begins with `DELETE FROM systems`, which is harmless
+only because it has already run. Confirm that before trusting the automation
+with it.
 
 You should not normally need to deploy by hand. If you do:
 
@@ -32,13 +45,16 @@ Check which step failed before anything else — the three fail for unrelated
 reasons.
 
 - **Validate** — a real test or type failure. Fix it on a branch.
-- **Apply D1 migrations** or **Build and deploy** with
+- **Apply D1 migrations** or **Deploy** with
   `Authentication error [code: 10000]` — the `CLOUDFLARE_API_TOKEN` secret in
   the repository's `production` environment lacks a permission. It needs
   `Account · Workers Scripts · Edit`, `Account · D1 · Edit`, and
-  `Zone · Workers Routes · Edit`. This exact failure kept every deploy red
-  for four days while the site quietly served a months-old build, which is
-  why the smoke test below exists.
+  `Zone · Workers Routes · Edit`. (That environment also needs a
+  `CLOUDFLARE_ACCOUNT_ID` **variable** — not a secret — which is easy to miss
+  when recreating it, because nothing complains until a deploy runs.) This
+  exact failure kept every deploy red for four days while the site quietly
+  served a build from before the sharing surfaces existed, which is why the
+  smoke test below exists.
 - **Smoke test production** — the deploy uploaded something, but the live
   site isn't serving the routes this build defines. Do not retry blindly; see
   "Roll back" and read what the failing assertion actually checked.
@@ -46,14 +62,15 @@ reasons.
 ## Roll back
 
 Cloudflare keeps previous Worker versions. List them, then promote a known
-good one:
+good one. Note that `rollback` takes a **version** id, not a deployment id —
+`wrangler versions list` is the command that prints the right one:
 
 ```bash
-pnpm --filter @transitmapper/worker exec wrangler deployments list
+pnpm --filter @transitmapper/worker exec wrangler versions list
 ```
 
 ```bash
-pnpm --filter @transitmapper/worker exec wrangler rollback [deployment-id]
+pnpm --filter @transitmapper/worker exec wrangler rollback <version-id>
 ```
 
 A rollback moves **code only**. Migrations are not reversed, which is the
@@ -128,8 +145,9 @@ and every share link, preview image and embed is silently broken.
 Stated plainly so nobody assumes otherwise:
 
 - **No alerting.** See above.
-- **No staging environment.** `wrangler.toml` has no `[env.*]` blocks, so
-  `wrangler dev --remote` and a manual `pnpm run deploy` both act on
-  production. There is nowhere to rehearse a migration.
+- **No staging environment.** `wrangler.toml` has no `[env.*]` blocks and no
+  `preview_database_id`, so `wrangler dev --remote` runs your local code
+  against the **production** D1, and a manual `pnpm run deploy` publishes
+  straight to the live Worker. There is nowhere to rehearse a migration.
 - **No error reporting service.** `console.error` in the Worker goes to the
   log stream and nowhere else.

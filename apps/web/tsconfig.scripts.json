@@ -6,15 +6,23 @@
 // imports and a dead comparison, neither of which failed anything, because
 // tsx runs what tsc would have rejected.
 //
-// A separate config rather than adding "scripts" to the main include: these
-// are a Node program and the app is browser code. Sharing one config means
-// `types: ["node"]` applies to `src` too, which quietly changes what globals
-// like `setTimeout` resolve to in application code. Keeping the two type
-// environments apart is the point, so the suite gets its own.
+// A separate config rather than adding "scripts" to the main include: the
+// suite is a Node program and the app is browser code, and `tsconfig.json`
+// must keep describing the browser accurately — it is what stops a `src` file
+// compiling against a global the browser doesn't have.
+//
+// `vite/client` is listed alongside `node` because `types` REPLACES the base
+// config's array rather than extending it. The suite imports application code
+// directly (`../src/editor/store` and friends), and `src` uses
+// `import.meta.env`, which only `vite/client` types — so dropping it means the
+// first check that happens to reach `App.tsx` or `EditorProvider.tsx` fails
+// with an error pointing at perfectly good application code, from a config
+// nobody touched. It passes today only because the import graph doesn't reach
+// them yet, which is not a property worth relying on.
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["node"],
+    "types": ["node", "vite/client"],
     "noEmit": true
   },
   "include": ["scripts"]
