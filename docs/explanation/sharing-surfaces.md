@@ -136,11 +136,17 @@ Everything else has ample headroom: D1 at 500 MB (a stored card is ~25 KB and
 capped at 120 KB), one or two Cache API calls against a limit of 50, a single
 subrequest against 50, and cron triggers included.
 
-**Before opening this up to real traffic**, add a Cloudflare rate-limiting
-rule on `POST /api/systems`. The free plan includes one such rule, and share
-creation is the only endpoint that writes attacker-controlled bytes to
-storage — the size cap bounds a single upload, but nothing in the Worker
-bounds how many a script can send.
+Share creation is rate limited to 20 per minute per client IP, via the
+`[[ratelimits]]` binding in `wrangler.toml`. It's the only endpoint that
+writes caller-supplied bytes to storage, and the size cap bounds a single
+upload without bounding how many arrive. A binding rather than a dashboard
+rule so it lives with the code it protects, shows up in review, and survives
+someone rebuilding the zone.
+
+The limiter is skipped when there's no `cf-connecting-ip` header, which means
+local development. If that header *is* present and the binding is missing —
+the deployed config lost it — the endpoint returns 503 rather than quietly
+accepting unlimited writes.
 
 ## Embeds
 
