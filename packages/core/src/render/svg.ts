@@ -124,6 +124,93 @@ const DEFAULT_FONT_FAMILY = LVBT_FONT_STACK;
 // Anything that can't clear it is better left out than drawn illegibly.
 const MIN_LEGIBLE_PX = 10;
 
+// Label placement with collision avoidance.
+//
+// MapLibre resolves overlapping labels on the live map; this composition never
+// had an equivalent, so a dense system printed station names straight through
+// each other — "North Las Vegas" crossing "South Strip" — which reads as a
+// rendering fault rather than a busy map. Cartographers solve this the same
+// way: try a label in a few positions around its anchor, and if none of them
+// are clear, leave it off. A missing name is recoverable; an unreadable pile
+// of them makes the ones underneath unreadable too.
+//
+// There's no DOM here to measure text with, so widths are estimated from
+// character count. That's approximate, and deliberately generous: over-
+// estimating drops a borderline label, which is the safer failure.
+
+/** Rough advance width per character, as a fraction of font size. Measured
+ *  against Public Sans's mixed-case average; generous rather than tight. */
+const CHAR_WIDTH_RATIO = 0.58;
+
+interface LabelBox {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/** Where a label sits relative to its anchor, in preference order: directly
+ *  above (the cartographic default), then below, then out to either side. */
+type LabelPlacement = "above" | "below" | "right" | "left";
+const PLACEMENTS: LabelPlacement[] = ["above", "below", "right", "left"];
+
+interface PlacedLabel {
+  x: number;
+  y: number;
+  anchor: "middle" | "start" | "end";
+  box: LabelBox;
+}
+
+function overlaps(a: LabelBox, b: LabelBox): boolean {
+  return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+}
+
+/**
+ * Finds a free spot for one label, or returns null if every candidate
+ * position collides with something already placed. `clearance` is the radius
+ * of the marker the label belongs to, so text never sits on its own dot.
+ */
+function placeLabel(
+  text: string,
+  size: number,
+  cx: number,
+  cy: number,
+  clearance: number,
+  taken: LabelBox[],
+): PlacedLabel | null {
+  const w = text.length * size * CHAR_WIDTH_RATIO;
+  const h = size;
+  const gap = clearance + 6;
+
+  for (const placement of PLACEMENTS) {
+    let x = cx;
+    let y = cy;
+    let anchor: PlacedLabel["anchor"] = "middle";
+    let box: LabelBox;
+
+    if (placement === "above") {
+      y = cy - gap;
+      box = { left: cx - w / 2, right: cx + w / 2, top: y - h, bottom: y + h * 0.25 };
+    } else if (placement === "below") {
+      y = cy + gap + h * 0.8;
+      box = { left: cx - w / 2, right: cx + w / 2, top: y - h, bottom: y + h * 0.25 };
+    } else if (placement === "right") {
+      x = cx + gap;
+      y = cy + h * 0.35;
+      anchor = "start";
+      box = { left: x, right: x + w, top: y - h, bottom: y + h * 0.25 };
+    } else {
+      x = cx - gap;
+      y = cy + h * 0.35;
+      anchor = "end";
+      box = { left: x - w, right: x, top: y - h, bottom: y + h * 0.25 };
+    }
+
+    if (!taken.some((other) => overlaps(box, other))) return { x, y, anchor, box };
+  }
+  return null;
+}
+
 function escapeXml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -252,6 +339,26 @@ export function systemSvg(
       `<path d="${pathD(f.geometry.coordinates as LngLat[])}" fill="none" stroke="${p.color}" stroke-width="${p.width}" stroke-linecap="round" stroke-linejoin="round"${p.underground ? ' stroke-dasharray="5,4"' : ""}/>`,
     );
   }
+  // Markers are drawn as they're encountered, but their labels are collected
+  // and placed afterwards, together, so collision avoidance can consider all
+  // of them at once. Every marker is also registered as an obstacle, so no
+  // name ends up sitting on someone else's dot.
+  interface LabelCandidate {
+    text: string;
+    size: number;
+    weight: number;
+    cx: number;
+    cy: number;
+    clearance: number;
+    /** Placed first, so it wins contested space. An interchange is the label a
+     *  reader most needs; a facility name is the one they least need. */
+    priority: number;
+  }
+  const candidates: LabelCandidate[] = [];
+  const obstacles: LabelBox[] = [];
+  const markerObstacle = (x: number, y: number, r: number) =>
+    obstacles.push({ left: x - r, right: x + r, top: y - r, bottom: y + r });
+
   for (const f of fc.stations.features as Feature<Point>[]) {
     const p = f.properties as { color: string; interchange?: boolean; name?: string };
     const { x, y } = project(f.geometry.coordinates as LngLat);
@@ -259,21 +366,38 @@ export function systemSvg(
     parts.push(
       `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${PAPER}" stroke="${p.interchange ? INK : p.color}" stroke-width="3"/>`,
     );
+    markerObstacle(x, y, r);
     if (p.name && legible(STATION_LABEL_SIZE)) {
-      parts.push(
-        `<text x="${x.toFixed(1)}" y="${(y - r - 6).toFixed(1)}" text-anchor="middle" font-family="${fontFamily}" font-size="${STATION_LABEL_SIZE}" font-weight="${p.interchange ? 700 : 500}" fill="${INK}">${escapeXml(p.name)}</text>`,
-      );
+      candidates.push({
+        text: p.name,
+        size: STATION_LABEL_SIZE,
+        weight: p.interchange ? 700 : 500,
+        cx: x,
+        cy: y,
+        clearance: r,
+        priority: p.interchange ? 2 : 1,
+      });
     }
   }
   for (const f of fc.facilities.features as Feature<Point>[]) {
     const p = f.properties as { color: string; radius: number; name?: string };
     const { x, y } = project(f.geometry.coordinates as LngLat);
     parts.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${p.radius}" fill="${p.color}" stroke="${PAPER}" stroke-width="1.5"/>`);
+    markerObstacle(x, y, p.radius);
     if (p.name && legible(FURNITURE_TEXT_SIZE)) {
-      parts.push(
-        `<text x="${x.toFixed(1)}" y="${(y + p.radius + 13).toFixed(1)}" text-anchor="middle" font-family="${fontFamily}" font-size="${FURNITURE_TEXT_SIZE}" fill="${INK}">${escapeXml(p.name)}</text>`,
-      );
+      candidates.push({ text: p.name, size: FURNITURE_TEXT_SIZE, weight: 400, cx: x, cy: y, clearance: p.radius, priority: 0 });
     }
+  }
+
+  // Sorted by priority, ties keeping document order, so the same system always
+  // produces the same drawing.
+  for (const label of [...candidates].sort((a, b) => b.priority - a.priority)) {
+    const placed = placeLabel(label.text, label.size, label.cx, label.cy, label.clearance, obstacles);
+    if (!placed) continue; // nowhere clear — absent beats printed through a neighbour
+    obstacles.push(placed.box);
+    parts.push(
+      `<text x="${placed.x.toFixed(1)}" y="${placed.y.toFixed(1)}" text-anchor="${placed.anchor}" font-family="${fontFamily}" font-size="${label.size}" font-weight="${label.weight}" fill="${INK}">${escapeXml(label.text)}</text>`,
+    );
   }
 
   // The title and legend are the caption. Drawn only when nothing else is

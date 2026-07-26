@@ -18,10 +18,14 @@ expires. Permanent shares are waiting on accounts.
 ## Paste a link somewhere
 
 Paste a share link into Slack, Discord, iMessage, or anywhere else that
-unfurls links, and you get a real picture of the system — its lines,
-stations, name, and legend — not a generic site-wide card. The image is drawn
-on the server from the system data itself, so it works for crawlers that
-never run JavaScript.
+unfurls links, and you get a real picture of the system — its lines and
+stations — not a generic site-wide card. The card is drawn once, when you
+create the link, and served afterwards as a plain image, so it works for
+crawlers that never run JavaScript.
+
+The picture is the network on its own. The system's name and size come from
+the link preview's own text, which every client shows beside the image, so
+the card doesn't repeat them.
 
 You can also fetch it directly at `/s/<id>/preview.png` if you want the image
 for a slide or a document.

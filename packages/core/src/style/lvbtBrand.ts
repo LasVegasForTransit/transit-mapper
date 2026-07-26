@@ -47,6 +47,14 @@ export const LVBT = {
  *  resolve it against bundled font data rather than system fonts. */
 export const LVBT_FONT_FAMILY = "Public Sans";
 
-/** With web-safe fallbacks, for contexts that render in a browser. */
-export const LVBT_FONT_STACK = `"${LVBT_FONT_FAMILY}", system-ui, sans-serif`;
+/**
+ * With web-safe fallbacks, for contexts that render in a browser.
+ *
+ * Quoted with apostrophes, not double quotes. This string gets interpolated
+ * into `font-family="…"` in generated SVG, and a double-quoted family name
+ * inside a double-quoted attribute closes the attribute early and produces
+ * malformed markup. CSS accepts either quoting style, so the apostrophes cost
+ * nothing and the value stays safe to embed.
+ */
+export const LVBT_FONT_STACK = `'${LVBT_FONT_FAMILY}', system-ui, sans-serif`;
 

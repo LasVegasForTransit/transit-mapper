@@ -23,8 +23,8 @@ work doesn't get pulled forward ahead of earlier work without a deliberate reaso
 - **Share and fork.** Publish a read-only link to any system; anyone can view it and fork their own
   editable copy.
 - **Links that look like something.** Paste a share link into Slack, Discord, or iMessage and the
-  preview shows the actual system — drawn on the server from the system's own data, so it works
-  even for crawlers that never run JavaScript.
+  preview shows the actual system. The card is drawn when the link is created and served as a
+  plain image, so it works even for crawlers that never run JavaScript.
 - **Embeddable maps.** Drop a live, read-only map into a blog post with an iframe, or just paste
   the link on a platform that speaks oEmbed and let it build the embed for you.
 - **A production home.** TransitMapper runs in production on its own domain, with automatic deploys

@@ -2692,6 +2692,80 @@ function buildGrid() {
   check("formatScaleMeters switches to km at 1000", formatScaleMeters(2000) === "2 km");
 }
 
+// --- render/svg: station labels must not print through each other ---
+{
+  // A deliberately cramped system: many named stations packed close enough
+  // that naive placement overlapped them (it used to print "North Las Vegas"
+  // straight through "South Strip").
+  fresh();
+  const ids: string[] = [];
+  for (let i = 0; i < 14; i++) {
+    const way = store.getState().beginWay("lightRail", "straight");
+    store.getState().addWayPoint(way, [-115.2 + i * 0.004, 36.1]);
+    store.getState().addWayPoint(way, [-115.2 + i * 0.004, 36.13]);
+    store.getState().finishWay();
+    ids.push(store.getState().addStation([-115.2 + i * 0.004, 36.11 + (i % 3) * 0.002]));
+  }
+  const crowded = store.getState().system;
+  crowded.name = "Crowded";
+  ids.forEach((id, i) => {
+    const st = crowded.stations.find((s) => s.id === id);
+    if (st) st.name = `Really Quite Long Station Name ${i}`;
+  });
+
+  const view = { viewMode: "network" as const, visibleModes: new Set(MODE_ORDER), visibleWayTypes: new Set(WAY_TYPE_ORDER) };
+  const vp = fitBounds(systemBounds(crowded)!, { width: 1200, height: 630, padding: 56 });
+  const dense = systemSvg(crowded, view, projector(vp), { title: crowded.name, legend: [], width: 1200, height: 630 });
+
+  // Reconstruct each drawn label's box from the markup and check no two of
+  // them intersect. Boxes are approximated the same way the renderer does.
+  interface Box { left: number; right: number; top: number; bottom: number }
+  const boxes: Box[] = [];
+  for (const m of dense.matchAll(/<text x="([\d.-]+)" y="([\d.-]+)" text-anchor="(middle|start|end)" font-family="[^"]*" font-size="(\d+)"[^>]*>([^<]+)<\/text>/g)) {
+    const x = Number(m[1]), y = Number(m[2]), anchor = m[3], size = Number(m[4]);
+    const w = m[5].length * size * 0.58;
+    const left = anchor === "middle" ? x - w / 2 : anchor === "start" ? x : x - w;
+    boxes.push({ left, right: left + w, top: y - size, bottom: y + size * 0.25 });
+  }
+  const intersects = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  let collisions = 0;
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) if (intersects(boxes[i], boxes[j])) collisions++;
+  }
+  check("a crowded map still draws some station labels", boxes.length > 0);
+  check("no two drawn labels overlap", collisions === 0);
+  // Dropping labels is the mechanism, so a crowded map is expected to show
+  // fewer than it has stations — but not to give up entirely.
+  check("crowding drops labels rather than all or nothing", boxes.length < ids.length && boxes.length >= 2);
+
+  // With room to breathe, every name should still make it.
+  fresh();
+  const roomy = store.getState().system;
+  const sparse: string[] = [];
+  for (let i = 0; i < 4; i++) {
+    const way = store.getState().beginWay("lightRail", "straight");
+    store.getState().addWayPoint(way, [-115.4 + i * 0.3, 36.0]);
+    store.getState().addWayPoint(way, [-115.4 + i * 0.3, 36.4]);
+    store.getState().finishWay();
+    sparse.push(store.getState().addStation([-115.4 + i * 0.3, 36.2]));
+  }
+  const spaced = store.getState().system;
+  sparse.forEach((id, i) => {
+    const st = spaced.stations.find((s) => s.id === id);
+    if (st) st.name = `Stop ${i}`;
+  });
+  const vp2 = fitBounds(systemBounds(spaced)!, { width: 1200, height: 630, padding: 56 });
+  const roomySvg = systemSvg(spaced, view, projector(vp2), { title: "", legend: [], width: 1200, height: 630 });
+  check("a sparse map keeps every station label", sparse.every((_, i) => roomySvg.includes(`Stop ${i}`)));
+
+  // The brand font stack is interpolated into font-family="..."; if the family
+  // name is double-quoted it closes the attribute early and the whole document
+  // is malformed. Apostrophes are what keep it embeddable.
+  check("no attribute is broken by a quoted font name", !/font-family=""/.test(roomySvg));
+  check("every text element is well formed", (roomySvg.match(/<text /g) ?? []).length === (roomySvg.match(/<\/text>/g) ?? []).length);
+  void roomy;
+}
+
 // --- render/pngBytes: what an uploaded preview card has to survive ---
 {
   // Share cards are rasterized by the sharer's browser and uploaded, because
