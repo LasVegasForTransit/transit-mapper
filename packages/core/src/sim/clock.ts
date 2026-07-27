@@ -12,6 +12,7 @@
 // apps/web/src/sim/simClock.ts is the host that owns the mutable number and
 // advances it from real elapsed time.
 
+import type { Service } from '../model/system/service';
 import type { ScheduleDayScope } from '../model/system/valueTypes';
 
 export const MS_PER_MINUTE = 60_000;
@@ -175,4 +176,65 @@ export function isWithinSpan(nowMin: number, startMin: number, endMin: number): 
   if (startMin === endMin) return true; // a zero-length span reads as all day
   if (startMin < endMin) return nowMin >= startMin && nowMin < endMin;
   return nowMin >= startMin || nowMin < endMin;
+}
+
+/** What a service is running right now. `headwayMinutes` is absent when the
+ *  service is running but has never had a frequency set — which is every
+ *  GTFS-imported route, since import brings in no timing. */
+export interface ActiveSchedule {
+  headwayMinutes?: number;
+  /** The SchedulePeriod this came from, when it came from one — so the UI can
+   *  say "every 8 min (Peak)" rather than just a number. */
+  label?: string;
+}
+
+/**
+ * Is this service running at this moment, and how often?
+ *
+ * `null` means it isn't running — outside its span of service, or (with a
+ * scenario pinned) it has no period by that name. The caller draws nothing.
+ *
+ * Resolution order, matching how the data is documented to layer:
+ *
+ * 1. A detailed `schedule` supersedes the flat fields. The first period whose
+ *    day scope and span both cover now wins.
+ * 2. Otherwise `frequencyMinutes`, bounded by `spanStart`/`spanEnd`.
+ * 3. A service with nothing set at all runs all day with no stated frequency.
+ *    That has always been its behavior and this must not change it.
+ *
+ * `pinnedLabel` is the sandbox mode: pin "Peak" and every service runs its
+ * peak configuration whatever the clock says, for comparing service levels
+ * without waiting for the right hour. A pinned scenario ignores spans by
+ * design — that's the whole point of pinning one.
+ */
+export function activeSchedule(
+  service: Service,
+  nowMin: number,
+  dayScope: ScheduleDayScope,
+  pinnedLabel?: string,
+): ActiveSchedule | null {
+  const periods = service.schedule;
+  if (periods && periods.length > 0) {
+    if (pinnedLabel !== undefined) {
+      const pinned = periods.find((p) => p.label.toLowerCase() === pinnedLabel.toLowerCase());
+      // A service with a schedule but no period by that name genuinely does
+      // not run in that scenario (a weekday-only express under "Weekend").
+      return pinned ? { headwayMinutes: pinned.frequencyMinutes, label: pinned.label } : null;
+    }
+    for (const period of periods) {
+      if (period.days !== 'daily' && period.days !== dayScope) continue;
+      const start = parseHhMm(period.spanStart);
+      const end = parseHhMm(period.spanEnd);
+      if (start === null || end === null) continue; // unparseable span: skip, don't guess
+      if (isWithinSpan(nowMin, start, end))
+        return { headwayMinutes: period.frequencyMinutes, label: period.label };
+    }
+    return null;
+  }
+
+  const start = service.spanStart !== undefined ? parseHhMm(service.spanStart) : null;
+  const end = service.spanEnd !== undefined ? parseHhMm(service.spanEnd) : null;
+  const spanned = start !== null && end !== null;
+  if (pinnedLabel === undefined && spanned && !isWithinSpan(nowMin, start, end)) return null;
+  return { headwayMinutes: service.frequencyMinutes };
 }

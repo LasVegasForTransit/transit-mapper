@@ -128,6 +128,30 @@ Two deliberate behaviors:
 Day names and times of day come from `Intl`, so the clock reads the way the
 reader writes times — 24-hour or 12-hour, in their own language.
 
+## What's running right now
+
+A line only runs when its schedule says it does. At 03:00 a route with a
+06:00–23:00 span shows no vehicles, because at 03:00 it isn't running — which
+is what a span of service means.
+
+The rules, in the order they apply:
+
+1. A detailed `schedule` supersedes the flat fields. The first period whose day
+   scope and span both cover the current simulated time wins, and its headway
+   is what the line runs. An hour no period covers is an hour with no service.
+2. Otherwise `frequencyMinutes`, bounded by `spanStart`/`spanEnd`.
+3. A service with nothing set at all runs all day at no stated frequency — one
+   vehicle. That is every GTFS-imported route, since import brings in no
+   timing, and it is deliberately unchanged.
+
+The simulated week is Monday-to-Sunday, which is the shortest cycle that can
+express the weekday/weekend split `ScheduleDayScope` models. Nothing here
+models dates, months, or holidays.
+
+Two practical notes. The clock starts at Monday 08:00 so a fresh map isn't
+empty. And a service that isn't running is skipped before its geometry is
+resolved, so a system half-asleep at 23:30 does roughly half the work.
+
 ## Where the state lives
 
 Three kinds, kept apart on purpose.

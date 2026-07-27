@@ -170,6 +170,7 @@ import {
   VEHICLE_SPEED_MPS,
 } from '@transitmapper/core/sim/timetable';
 import {
+  activeSchedule,
   advanceSimMs,
   dayOfWeek,
   dayScopeAt,
@@ -9493,6 +9494,65 @@ function buildGrid() {
   check("a span's start minute belongs to it", isWithinSpan(6 * 60, 6 * 60, 23 * 60));
   check('a span crossing midnight is still running at 00:30', isWithinSpan(30, 23 * 60, 60));
   check('a span crossing midnight is not running at midday', !isWithinSpan(12 * 60, 23 * 60, 60));
+}
+
+// --- what's running right now (activeSchedule) ---
+// Span of service and schedule periods were fully modeled, editable, and
+// round-tripped through serialize.ts, and read by nothing. These are the rules
+// that make them mean something on the map.
+{
+  const base: Service = { id: "as1", name: "Route", modeId: "bus", color: "#333", patterns: [] };
+  const at = (hhmm: string) => parseHhMm(hhmm)!;
+
+  // A service with nothing set at all runs all day. This is every
+  // GTFS-imported route, and changing it would silently empty an imported map.
+  const bare = activeSchedule(base, at("03:00"), "weekday");
+  check("a service with no schedule at all runs at any hour", bare !== null);
+  check("…and states no headway, so it runs a single vehicle", bare?.headwayMinutes === undefined);
+
+  // The flat fields: a headway bounded by a span.
+  const simple: Service = { ...base, frequencyMinutes: 10, spanStart: "06:00", spanEnd: "23:00" };
+  check("a service inside its span runs at its stated headway", activeSchedule(simple, at("08:00"), "weekday")?.headwayMinutes === 10);
+  check("a service outside its span runs no vehicles", activeSchedule(simple, at("03:00"), "weekday") === null);
+  check("a span's first minute is already service", activeSchedule(simple, at("06:00"), "weekday") !== null);
+  check("a span's last minute is already over", activeSchedule(simple, at("23:00"), "weekday") === null);
+
+  const owl: Service = { ...base, frequencyMinutes: 30, spanStart: "22:00", spanEnd: "02:00" };
+  check("a span crossing midnight is still running at 00:30", activeSchedule(owl, 30, "weekday") !== null);
+  check("a span crossing midnight is not running at midday", activeSchedule(owl, at("12:00"), "weekday") === null);
+
+  // A detailed schedule supersedes the flat fields, period by period.
+  const scheduled: Service = {
+    ...base,
+    frequencyMinutes: 10,
+    spanStart: "06:00",
+    spanEnd: "23:00",
+    schedule: [
+      { id: "p1", label: "Peak", days: "weekday", spanStart: "06:00", spanEnd: "09:00", frequencyMinutes: 5 },
+      { id: "p2", label: "Midday", days: "weekday", spanStart: "09:00", spanEnd: "15:00", frequencyMinutes: 15 },
+      { id: "p3", label: "Weekend", days: "weekend", spanStart: "08:00", spanEnd: "20:00", frequencyMinutes: 30 },
+    ],
+  };
+  check("a schedule period's headway supersedes the flat frequency", activeSchedule(scheduled, at("07:00"), "weekday")?.headwayMinutes === 5);
+  check("the period is named, so the UI can say which one is running", activeSchedule(scheduled, at("07:00"), "weekday")?.label === "Peak");
+  check("a period's headway takes over at the minute it starts", activeSchedule(scheduled, at("09:00"), "weekday")?.headwayMinutes === 15);
+  check("an hour no period covers runs nothing, even inside the flat span", activeSchedule(scheduled, at("16:00"), "weekday") === null);
+  check("a weekday-only period doesn't run at the weekend", activeSchedule(scheduled, at("07:00"), "weekend") === null);
+  check("a weekend period runs at the weekend", activeSchedule(scheduled, at("10:00"), "weekend")?.headwayMinutes === 30);
+  check("a weekend period doesn't run on a weekday", activeSchedule(scheduled, at("10:00"), "weekday")?.label !== "Weekend");
+
+  const daily: Service = {
+    ...base,
+    schedule: [{ id: "d1", label: "All day", days: "daily", spanStart: "05:00", spanEnd: "01:00", frequencyMinutes: 12 }],
+  };
+  check("a daily period runs on weekdays", activeSchedule(daily, at("10:00"), "weekday")?.headwayMinutes === 12);
+  check("a daily period runs at the weekend too", activeSchedule(daily, at("10:00"), "weekend")?.headwayMinutes === 12);
+
+  const malformed: Service = {
+    ...base,
+    schedule: [{ id: "m1", label: "Broken", days: "daily", spanStart: "nope", spanEnd: "also nope", frequencyMinutes: 12 }],
+  };
+  check("a period with an unparseable span is skipped rather than guessed at", activeSchedule(malformed, at("10:00"), "weekday") === null);
 }
 
 // --- the SimClock instance (apps/web/src/sim/simClock.ts) ---
