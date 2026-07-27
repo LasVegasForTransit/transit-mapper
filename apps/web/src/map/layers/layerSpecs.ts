@@ -9,6 +9,8 @@ import {
   PLATFORM_FILL,
   PLATFORM_FILL_OPACITY,
   PLATFORM_STROKE,
+  VEHICLE_FILL_OPACITY,
+  VEHICLE_STROKE,
 } from "@transitmapper/core/style/catalogStyle";
 import {
   LANE_WIDTH_EXPR,
@@ -44,6 +46,8 @@ import {
   LYR_STATION_LABELS,
   LYR_STATION_SELECTED,
   LYR_VEHICLES,
+  LYR_VEHICLES_INFRA_FILL,
+  LYR_VEHICLES_INFRA_STROKE,
   LYR_WAYS_DASHED,
   LYR_WAYS_SOLID,
   LYR_WAY_ENDPOINTS,
@@ -66,6 +70,7 @@ import {
   SRC_SERVICES,
   SRC_STATIONS,
   SRC_VEHICLES,
+  SRC_VEHICLES_INFRA,
   SRC_WAYS,
   SRC_WAY_LABELS,
 } from "./constants";
@@ -328,6 +333,25 @@ export const LAYER_SPECS: LayerSpecification[] = [
       "circle-stroke-width": 2,
       "circle-stroke-color": "#ffffff",
     },
+  },
+  {
+    // Infrastructure-view vehicles: a real rotated-rectangle polygon per
+    // vehicle, true-to-scale and riding its actual physical lane (see
+    // sim/vehicles.ts + geometry/vehicleLane.ts) — the same class of
+    // feature as a station footprint/platform (LYR_FOOTPRINTS_FILL/
+    // LYR_PLATFORMS_FILL above), not a raster icon. Filled with the
+    // vehicle's own route color, unlike the monochrome footprint fill,
+    // since a vehicle belongs to one service.
+    id: LYR_VEHICLES_INFRA_FILL,
+    type: "fill",
+    source: SRC_VEHICLES_INFRA,
+    paint: { "fill-color": ["get", "color"], "fill-opacity": VEHICLE_FILL_OPACITY },
+  },
+  {
+    id: LYR_VEHICLES_INFRA_STROKE,
+    type: "line",
+    source: SRC_VEHICLES_INFRA,
+    paint: { "line-color": VEHICLE_STROKE, "line-width": 1 },
   },
   {
     // Named stations only (empty-name ones — a common work-in-progress

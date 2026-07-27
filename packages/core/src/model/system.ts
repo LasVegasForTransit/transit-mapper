@@ -14,4 +14,5 @@ export * from "./system/service";
 export * from "./system/station";
 export * from "./system/facility";
 export * from "./system/group";
+export * from "./system/vehicleKind";
 export * from "./system/document";

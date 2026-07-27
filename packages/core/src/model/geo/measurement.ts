@@ -1,5 +1,5 @@
 import type { LngLat, Way } from "../system";
-import { haversineMeters, toRad } from "./spherical";
+import { bearingDegrees, haversineMeters, toRad } from "./spherical";
 import { resolveWayPath } from "./wayPath";
 
 /** Total length of a polyline, in meters. */
@@ -13,25 +13,50 @@ export function wayLengthMeters(way: Way): number {
   return pathLengthMeters(resolveWayPath(way));
 }
 
-/** Coordinate at normalized arc-length t ∈ [0,1] along a polyline. */
-export function pointAtT(path: LngLat[], t: number): LngLat {
-  if (path.length === 0) return [0, 0];
-  if (path.length === 1) return path[0];
-  const total = pathLengthMeters(path);
-  if (total === 0) return path[0];
+/** The segment straddling normalized arc-length t ∈ [0,1] along a polyline,
+ *  plus the interpolation fraction within it — the shared walk behind both
+ *  pointAtT and bearingAtT. `totalMeters`, when the caller already has it
+ *  (e.g. a cached pattern geometry), skips a redundant O(n) haversine sum;
+ *  otherwise it's computed here. */
+function segmentAtT(path: LngLat[], t: number, totalMeters?: number): { a: LngLat; b: LngLat; f: number } | null {
+  if (path.length < 2) return null;
+  const total = totalMeters ?? pathLengthMeters(path);
+  if (total === 0) return null;
   const target = Math.max(0, Math.min(1, t)) * total;
   let acc = 0;
   for (let i = 1; i < path.length; i++) {
     const seg = haversineMeters(path[i - 1], path[i]);
-    if (acc + seg >= target) {
+    if (acc + seg >= target || i === path.length - 1) {
       const f = seg === 0 ? 0 : (target - acc) / seg;
-      const a = path[i - 1];
-      const b = path[i];
-      return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+      return { a: path[i - 1], b: path[i], f };
     }
     acc += seg;
   }
-  return path[path.length - 1];
+  return null; // unreachable — the loop always returns on its final iteration
+}
+
+/** Coordinate at normalized arc-length t ∈ [0,1] along a polyline. Pass
+ *  `totalMeters` when the caller already has it cached, to skip
+ *  recomputing pathLengthMeters. */
+export function pointAtT(path: LngLat[], t: number, totalMeters?: number): LngLat {
+  if (path.length === 0) return [0, 0];
+  if (path.length === 1) return path[0];
+  const seg = segmentAtT(path, t, totalMeters);
+  if (!seg) return path[0];
+  return [seg.a[0] + (seg.b[0] - seg.a[0]) * seg.f, seg.a[1] + (seg.b[1] - seg.a[1]) * seg.f];
+}
+
+/** Compass bearing in degrees (0 = north, clockwise) of a polyline's
+ *  direction of travel at normalized arc-length position t ∈ [0,1] — the
+ *  segment straddling t, or the path's last segment past its end. Used to
+ *  rotate a vehicle's rendered footprint to face its direction of travel.
+ *  Reuses the same great-circle bearingDegrees the way-drawing bearing
+ *  readout already uses, rather than a separate flat approximation. Pass
+ *  `totalMeters` when the caller already has it cached. */
+export function bearingAtT(path: LngLat[], t: number, totalMeters?: number): number {
+  const seg = segmentAtT(path, t, totalMeters);
+  if (!seg) return 0;
+  return bearingDegrees(seg.a, seg.b);
 }
 
 export interface NearestOnPath {

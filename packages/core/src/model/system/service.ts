@@ -33,6 +33,9 @@ export interface Service {
   name: string;
   /** Mode catalog id: "subway" | "bus" | "tram" | "gondola" | … */
   modeId: string;
+  /** A specific VehicleKind (system.vehicleKinds) this service runs —
+   *  unset (the common case) uses the mode's plain default size/speed. */
+  vehicleKindId?: string;
   /** Hex color, e.g. "#e4572e". */
   color: string;
   patterns: Pattern[];

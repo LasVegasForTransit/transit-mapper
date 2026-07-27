@@ -1,8 +1,11 @@
+import type { Feature, Point, Polygon } from "geojson";
 import type { GeoJSONSource, Map as MLMap } from "maplibre-gl";
 import type { EditorStore } from "../editor/store";
-import { nearestOnPath, pathLengthMeters, patternPath, pointAtT } from "@transitmapper/core/model/geo";
+import { bearingAtT, nearestOnPath, pathLengthMeters, patternPath, pointAtT, rotatedRectPolygon } from "@transitmapper/core/model/geo";
+import { patternLanePath } from "@transitmapper/core/geometry/vehicleLane";
+import { vehicleFootprint } from "@transitmapper/core/model/catalog";
 import type { LngLat, Pattern, SchedulePeriod, Service, Station, TransitSystem, Way } from "@transitmapper/core/model/system";
-import { SRC_VEHICLES } from "../map/layers";
+import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from "../map/layers";
 
 export const VEHICLE_SPEED_MPS = 11; // ~40 km/h — a plausible light-rail/tram running speed
 const MIN_PERIOD_MS = 6000; // a floor so even a very short line doesn't blur past instantly
@@ -14,10 +17,28 @@ const MAX_VEHICLES_PER_PATTERN = 6;
 const DEFAULT_DWELL_SECONDS = 20;
 
 export interface VehicleGate {
-  /** Whether this service's vehicles should currently render — Network view
-   *  only, and hidden along with everything else when its mode is filtered
-   *  out (see ui/ViewProvider). */
+  /** Whether this service's vehicles should render at all right now — the
+   *  mode filter only (see ui/ViewProvider). View-mode gating (which
+   *  source/shape renders, or nothing at all in Diagram view) is handled
+   *  internally by attachVehicleAnimation using `viewMode` below. */
   isVisible: (service: Service) => boolean;
+  /** Current view mode: vehicles render as a small dot in Network, a real
+   *  true-scale footprint polygon riding its actual lane in Infrastructure,
+   *  and not at all in Diagram. */
+  viewMode: () => "network" | "infrastructure" | "diagram";
+}
+
+/** Which real vehicle a service's animation/rendering should use: its
+ *  assigned VehicleKind if it has one and it still exists, else the
+ *  mode's plain default (vehicleFootprint) at the app's ambient default
+ *  speed — the exact behavior every service had before vehicle kinds
+ *  existed, so an unassigned service is never affected by this feature. */
+export function effectiveVehicleKind(system: TransitSystem, service: Service): { widthM: number; lengthM: number; speedMps: number } {
+  const kind = service.vehicleKindId ? system.vehicleKinds.find((k) => k.id === service.vehicleKindId) : undefined;
+  if (kind) {
+    return { widthM: kind.widthM, lengthM: kind.lengthM, speedMps: kind.topSpeedKmh !== undefined ? kind.topSpeedKmh / 3.6 : VEHICLE_SPEED_MPS };
+  }
+  return { ...vehicleFootprint(service.modeId), speedMps: VEHICLE_SPEED_MPS };
 }
 
 /** The headway vehicle count/spacing is computed against — a detailed
@@ -102,8 +123,8 @@ export interface Timetable {
   stops: DwellStop[];
 }
 
-export function buildTimetable(totalMeters: number, stops: DwellStop[]): Timetable {
-  const travelMs = (totalMeters / VEHICLE_SPEED_MPS) * 1000;
+export function buildTimetable(totalMeters: number, stops: DwellStop[], speedMps: number = VEHICLE_SPEED_MPS): Timetable {
+  const travelMs = (totalMeters / speedMps) * 1000;
   const dwellMs = stops.reduce((sum, s) => sum + s.dwellMs, 0);
   return { oneWayMs: travelMs + dwellMs, stops };
 }
@@ -139,19 +160,41 @@ interface PatternGeometry {
 interface CachedPatternGeometry extends PatternGeometry {
   forWays: Way[];
   forStations: Station[];
+  forSpeedMps: number;
+  // undefined = Network view's raw centerline (patternPath); a mode id =
+  // Infrastructure view's lane-aware path (patternLanePath) for that mode.
+  // One cache slot per Pattern is enough — only one view is ever ticking at
+  // a time, so a Pattern never needs both variants live simultaneously;
+  // switching views just costs one recompute, same as any other edit.
+  forModeId: string | undefined;
 }
 const patternGeometryCache = new WeakMap<Pattern, CachedPatternGeometry>();
 
-function resolvePatternGeometry(system: TransitSystem, pattern: Pattern): PatternGeometry | null {
+function resolvePatternGeometry(system: TransitSystem, pattern: Pattern, speedMps: number, modeId?: string): PatternGeometry | null {
   const cached = patternGeometryCache.get(pattern);
-  if (cached && cached.forWays === system.ways && cached.forStations === system.stations) return cached;
-  const path = patternPath(system.ways, pattern);
+  if (
+    cached &&
+    cached.forWays === system.ways &&
+    cached.forStations === system.stations &&
+    cached.forSpeedMps === speedMps &&
+    cached.forModeId === modeId
+  )
+    return cached;
+  const path = modeId !== undefined ? patternLanePath(system.ways, pattern, modeId) : patternPath(system.ways, pattern);
   if (path.length < 2) return null;
   const meters = pathLengthMeters(path);
   if (meters === 0) return null;
   const stops = dwellStopsForPattern(system, pattern, path, meters);
-  const timetable = buildTimetable(meters, stops);
-  const geometry: CachedPatternGeometry = { path, meters, timetable, forWays: system.ways, forStations: system.stations };
+  const timetable = buildTimetable(meters, stops, speedMps);
+  const geometry: CachedPatternGeometry = {
+    path,
+    meters,
+    timetable,
+    forWays: system.ways,
+    forStations: system.stations,
+    forSpeedMps: speedMps,
+    forModeId: modeId,
+  };
   patternGeometryCache.set(pattern, geometry);
   return geometry;
 }
@@ -160,18 +203,18 @@ function resolvePatternGeometry(system: TransitSystem, pattern: Pattern): Patter
  *  ONE-DIRECTION travel from t=0, walking leg by leg through each stop's
  *  travel segment then its dwell pause. Elapsed time past the last stop
  *  covers the final leg into the path's end. */
-export function metersAtElapsed(totalMeters: number, timetable: Timetable, elapsedMs: number): number {
+export function metersAtElapsed(totalMeters: number, timetable: Timetable, elapsedMs: number, speedMps: number = VEHICLE_SPEED_MPS): number {
   let clock = 0;
   let lastDist = 0;
   for (const stop of timetable.stops) {
-    const legMs = ((stop.distMeters - lastDist) / VEHICLE_SPEED_MPS) * 1000;
-    if (elapsedMs < clock + legMs) return lastDist + ((elapsedMs - clock) / 1000) * VEHICLE_SPEED_MPS;
+    const legMs = ((stop.distMeters - lastDist) / speedMps) * 1000;
+    if (elapsedMs < clock + legMs) return lastDist + ((elapsedMs - clock) / 1000) * speedMps;
     clock += legMs;
     if (elapsedMs < clock + stop.dwellMs) return stop.distMeters; // dwelling — holds position
     clock += stop.dwellMs;
     lastDist = stop.distMeters;
   }
-  return Math.min(totalMeters, lastDist + ((elapsedMs - clock) / 1000) * VEHICLE_SPEED_MPS);
+  return Math.min(totalMeters, lastDist + ((elapsedMs - clock) / 1000) * speedMps);
 }
 
 /**
@@ -193,43 +236,61 @@ export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: Veh
   const tick = () => {
     frame = requestAnimationFrame(tick);
     const source = map.getSource(SRC_VEHICLES) as GeoJSONSource | undefined;
-    if (!source) return;
+    const infraSource = map.getSource(SRC_VEHICLES_INFRA) as GeoJSONSource | undefined;
+    if (!source && !infraSource) return;
     const { system } = store.getState();
     const now = performance.now();
-    const features = [];
-    for (const service of system.services) {
-      if (!gate.isVisible(service)) continue;
-      const headwayMinutes = effectiveHeadwayMinutes(service);
-      for (const pattern of service.patterns) {
-        const geometry = resolvePatternGeometry(system, pattern);
-        if (!geometry) continue;
-        const { path, meters, timetable } = geometry;
-        // periodMs is the animation's own out-and-back cycle — floored so
-        // even a short, stopless line doesn't blur past instantly.
-        const periodMs = Math.max(MIN_PERIOD_MS, 2 * timetable.oneWayMs);
-        const roundTripMinutes = (2 * timetable.oneWayMs) / 60000;
-        const count = headwayMinutes ? Math.min(MAX_VEHICLES_PER_PATTERN, Math.max(1, Math.floor(roundTripMinutes / headwayMinutes))) : 1;
-        for (let i = 0; i < count; i++) {
-          const phase = (now / periodMs + i / count) % 1;
-          const elapsedMs = phase * periodMs;
-          // First half of the cycle: outbound (start→end). Second half:
-          // the same timetable mirrored, since dwell points are the same
-          // physical stations regardless of direction of travel.
-          const outbound = elapsedMs <= timetable.oneWayMs;
-          const legElapsed = outbound ? elapsedMs : elapsedMs - timetable.oneWayMs;
-          const distFromStart = outbound
-            ? metersAtElapsed(meters, timetable, legElapsed)
-            : meters - metersAtElapsed(meters, timetable, legElapsed);
-          const t = meters === 0 ? 0 : distFromStart / meters;
-          features.push({
-            type: "Feature" as const,
-            properties: { color: service.color },
-            geometry: { type: "Point" as const, coordinates: pointAtT(path, t) },
-          });
+    const viewMode = gate.viewMode();
+    const features: Feature<Point>[] = [];
+    const infraFeatures: Feature<Polygon>[] = [];
+
+    if (viewMode === "network" || viewMode === "infrastructure") {
+      for (const service of system.services) {
+        if (!gate.isVisible(service)) continue;
+        const headwayMinutes = effectiveHeadwayMinutes(service);
+        const { widthM, lengthM, speedMps } = effectiveVehicleKind(system, service);
+        for (const pattern of service.patterns) {
+          const geometry = resolvePatternGeometry(system, pattern, speedMps, viewMode === "infrastructure" ? service.modeId : undefined);
+          if (!geometry) continue;
+          const { path, meters, timetable } = geometry;
+          // periodMs is the animation's own out-and-back cycle — floored so
+          // even a short, stopless line doesn't blur past instantly.
+          const periodMs = Math.max(MIN_PERIOD_MS, 2 * timetable.oneWayMs);
+          const roundTripMinutes = (2 * timetable.oneWayMs) / 60000;
+          const count = headwayMinutes ? Math.min(MAX_VEHICLES_PER_PATTERN, Math.max(1, Math.floor(roundTripMinutes / headwayMinutes))) : 1;
+          for (let i = 0; i < count; i++) {
+            const phase = (now / periodMs + i / count) % 1;
+            const elapsedMs = phase * periodMs;
+            // First half of the cycle: outbound (start→end). Second half:
+            // the same timetable mirrored, since dwell points are the same
+            // physical stations regardless of direction of travel.
+            const outbound = elapsedMs <= timetable.oneWayMs;
+            const legElapsed = outbound ? elapsedMs : elapsedMs - timetable.oneWayMs;
+            const distFromStart = outbound
+              ? metersAtElapsed(meters, timetable, legElapsed)
+              : meters - metersAtElapsed(meters, timetable, legElapsed);
+            const t = meters === 0 ? 0 : distFromStart / meters;
+            if (viewMode === "network") {
+              features.push({
+                type: "Feature",
+                properties: { color: service.color },
+                geometry: { type: "Point", coordinates: pointAtT(path, t, meters) },
+              });
+            } else {
+              const center = pointAtT(path, t, meters);
+              const bearing = bearingAtT(path, t, meters);
+              infraFeatures.push({
+                type: "Feature",
+                properties: { color: service.color },
+                geometry: { type: "Polygon", coordinates: [rotatedRectPolygon(center, bearing, widthM, lengthM)] },
+              });
+            }
+          }
         }
       }
     }
-    source.setData({ type: "FeatureCollection", features });
+    source?.setData({ type: "FeatureCollection", features });
+    infraSource?.setData({ type: "FeatureCollection", features: infraFeatures });
   };
   frame = requestAnimationFrame(tick);
   return () => cancelAnimationFrame(frame);

@@ -123,6 +123,16 @@ export function modeRender(modeId: string): RenderStyle {
   return MODE_RENDER[modeId] ?? MODE_RENDER.bus;
 }
 
+// ---- Vehicle paint (Infrastructure view) ------------------------------------
+// A mode's real-world SIZE is domain data (model/catalog.ts's
+// Mode.defaultFootprintM / vehicleFootprint) — this is only the paint: a
+// vehicle's fill is its own route color (the `color` GeoJSON property,
+// same value the Network-view dot already uses) — unlike a footprint or
+// platform, a vehicle belongs to exactly one service, so it gets that
+// service's color rather than the shared monochrome ink fill.
+export const VEHICLE_STROKE = "#191a17";
+export const VEHICLE_FILL_OPACITY = 0.92;
+
 // ---- Grade ------------------------------------------------------------------
 // Grade drives HOW a line renders (dashed tunnel, elevated casing) — the
 // grade catalog itself (labels) stays in model/catalog.ts; this is just the

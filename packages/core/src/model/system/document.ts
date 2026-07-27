@@ -6,11 +6,12 @@ import type { ApproachControl, Node, TurnRestriction } from "./node";
 import type { Service } from "./service";
 import type { Station } from "./station";
 import type { DrivingSide, Viewport } from "./valueTypes";
+import type { VehicleKind } from "./vehicleKind";
 import type { Way } from "./way";
 
 export interface TransitSystem {
   /** Schema version, for migrations. */
-  version: 8;
+  version: 9;
   id: string;
   name: string;
   description?: string;
@@ -27,6 +28,10 @@ export interface TransitSystem {
   nodes: Node[];
   /** Shared identities across ways ("Decatur Avenue"). See NamedWay. */
   namedWays: NamedWay[];
+  /** Custom vehicle kinds available in this system — a service's
+   *  `vehicleKindId` points at one; unset uses the mode's plain default.
+   *  See VehicleKind. */
+  vehicleKinds: VehicleKind[];
   /** Common colors for this system — offered in the color popover. */
   palette: string[];
   /** Which side of the road forward traffic keeps to — see DrivingSide. */

@@ -67,6 +67,21 @@ export function offsetPolyline(points: LngLat[], offsetM: number): LngLat[] {
   return out;
 }
 
+/** A closed polygon ring for a rectangle centered on `center`, `lengthM`
+ *  long along `bearingDeg` (compass degrees, 0 = north, clockwise) and
+ *  `widthM` wide perpendicular to that — a vehicle's true-scale
+ *  real-world footprint, rotated to face its direction of travel. */
+export function rotatedRectPolygon(center: LngLat, bearingDeg: number, widthM: number, lengthM: number): LngLat[] {
+  const rad = (bearingDeg * Math.PI) / 180;
+  const fwd: [number, number] = [Math.sin(rad), Math.cos(rad)];
+  const right: [number, number] = [Math.cos(rad), -Math.sin(rad)];
+  const hl = lengthM / 2;
+  const hw = widthM / 2;
+  const corner = (f: number, r: number): LngLat => offsetMeters(center, fwd[0] * f + right[0] * r, fwd[1] * f + right[1] * r);
+  const ring: LngLat[] = [corner(hl, -hw), corner(hl, hw), corner(-hl, hw), corner(-hl, -hw)];
+  return [...ring, ring[0]];
+}
+
 /** Ray-casting point-in-polygon (ring open or closed) — e.g. "does this
  *  structure sit on this station's land?". */
 export function pointInPolygon(point: LngLat, ring: LngLat[]): boolean {

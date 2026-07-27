@@ -26,6 +26,7 @@ import type {
   Station,
   StationAnchor,
   TransitSystem,
+  VehicleKind,
   Viewport,
   Way,
 } from "@transitmapper/core/model/system";
@@ -331,6 +332,12 @@ export interface EditorState {
    *  row-level edit. undefined/[] reverts the service to its plain
    *  frequencyMinutes/spanStart/spanEnd pair. */
   setServiceSchedule: (id: string, periods: SchedulePeriod[] | undefined) => void;
+  /** Replaces the system's whole vehicle-kind list in one shot — same
+   *  live-commit convention as setServiceSchedule; VehicleKindsDialog owns
+   *  add/edit/delete locally. */
+  setVehicleKinds: (kinds: VehicleKind[]) => void;
+  /** Assigns (or clears, with undefined) which VehicleKind a service runs. */
+  setServiceVehicleKind: (id: string, vehicleKindId: string | undefined) => void;
   deleteService: (id: string) => void;
   /** Arm the Way tool so the next line drawn attaches as a new PATTERN
    *  (branch) on this service instead of spawning its own service. */
@@ -1837,6 +1844,12 @@ export function createEditorStore() {
           ...s.system,
           services: s.system.services.map((sv) => (sv.id === id ? { ...sv, schedule: periods && periods.length > 0 ? periods : undefined } : sv)),
         }),
+      })),
+
+    setVehicleKinds: (kinds) => set((s) => ({ system: touch({ ...s.system, vehicleKinds: kinds }) })),
+    setServiceVehicleKind: (id, vehicleKindId) =>
+      set((s) => ({
+        system: touch({ ...s.system, services: s.system.services.map((sv) => (sv.id === id ? { ...sv, vehicleKindId } : sv)) }),
       })),
 
     deleteService: (id) =>

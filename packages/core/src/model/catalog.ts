@@ -481,29 +481,80 @@ export function profilePresetsForWayType(typeId: string): ProfilePreset[] {
 // can run over — so the mode picker for a way type shows only compatible modes,
 // and a service can span any way of a compatible type.
 
+/** A mode's approximate true-world footprint, in meters — the physical fact
+ *  a vehicle is sized from, not a paint property (that's RenderStyle, in
+ *  style/catalogStyle.ts). Drives the rotated-rectangle polygon Infrastructure
+ *  view renders, and is the fallback a VehicleKind assignment overrides. */
+export interface VehicleFootprint {
+  widthM: number;
+  lengthM: number;
+}
+
 export interface Mode {
   id: string;
   label: string;
   /** Way types this mode is compatible with. */
   wayTypeIds: string[];
+  /** Lane kinds this mode prefers when a way offers more than one lane
+   *  going its direction — e.g. a bus prefers a dedicated bus lane over a
+   *  general drive lane when one exists. Checked in order; first kind
+   *  with any match wins. Falls back to any direction-matching lane when
+   *  unset or none of the preferred kinds are present on this way. See
+   *  geometry/vehicleLane.ts's selectVehicleLane. */
+  preferredLaneKindIds?: string[];
+  /** Approximate true-world size, in meters — rail-family modes share
+   *  dimensions with their nearest real-world equivalent; exact figures
+   *  aren't load-bearing (a per-system custom VehicleKind, when assigned,
+   *  overrides this entirely). */
+  defaultFootprintM: VehicleFootprint;
 }
 
 export const MODES: Record<string, Mode> = {
   // Heavy rail: subway and commuter rail are operationally different services
   // but ride the same track standard, so both are compatible with heavyRail.
-  subway: { id: "subway", label: "Subway / metro", wayTypeIds: ["heavyRail"] },
-  commuterRail: { id: "commuterRail", label: "Commuter rail", wayTypeIds: ["heavyRail"] },
+  subway: { id: "subway", label: "Subway / metro", wayTypeIds: ["heavyRail"], defaultFootprintM: { widthM: 2.65, lengthM: 22 } },
+  commuterRail: { id: "commuterRail", label: "Commuter rail", wayTypeIds: ["heavyRail"], defaultFootprintM: { widthM: 2.9, lengthM: 25 } },
   // Light rail & trams share the light-rail track standard — trams typically
   // run shorter, city-center alignments and more often street-run in a road's
   // right-of-way, which is why both also list "road" as compatible.
-  lightRail: { id: "lightRail", label: "Light rail", wayTypeIds: ["lightRail", "road"] },
-  tram: { id: "tram", label: "Tram / streetcar", wayTypeIds: ["lightRail", "road"] },
-  monorail: { id: "monorail", label: "Monorail", wayTypeIds: ["monorail"] },
-  brt: { id: "brt", label: "BRT", wayTypeIds: ["road"] },
-  bus: { id: "bus", label: "Bus", wayTypeIds: ["road"] },
-  gondola: { id: "gondola", label: "Gondola / aerial", wayTypeIds: ["aerial"] },
-  ferry: { id: "ferry", label: "Ferry", wayTypeIds: ["water"] },
+  lightRail: {
+    id: "lightRail",
+    label: "Light rail",
+    wayTypeIds: ["lightRail", "road"],
+    preferredLaneKindIds: ["track", "drive"],
+    defaultFootprintM: { widthM: 2.65, lengthM: 27 },
+  },
+  tram: {
+    id: "tram",
+    label: "Tram / streetcar",
+    wayTypeIds: ["lightRail", "road"],
+    preferredLaneKindIds: ["track", "drive"],
+    defaultFootprintM: { widthM: 2.4, lengthM: 18 },
+  },
+  monorail: { id: "monorail", label: "Monorail", wayTypeIds: ["monorail"], defaultFootprintM: { widthM: 3, lengthM: 12 } },
+  brt: {
+    id: "brt",
+    label: "BRT",
+    wayTypeIds: ["road"],
+    preferredLaneKindIds: ["bus", "drive"],
+    defaultFootprintM: { widthM: 2.6, lengthM: 12 },
+  },
+  bus: {
+    id: "bus",
+    label: "Bus",
+    wayTypeIds: ["road"],
+    preferredLaneKindIds: ["bus", "drive"],
+    defaultFootprintM: { widthM: 2.6, lengthM: 12 },
+  },
+  gondola: { id: "gondola", label: "Gondola / aerial", wayTypeIds: ["aerial"], defaultFootprintM: { widthM: 2, lengthM: 3 } },
+  ferry: { id: "ferry", label: "Ferry", wayTypeIds: ["water"], defaultFootprintM: { widthM: 6, lengthM: 20 } },
 };
+
+/** A mode's approximate true-world footprint — falls back to the bus
+ *  footprint for an unknown mode id, same convention as mode(). */
+export function vehicleFootprint(modeId: string): VehicleFootprint {
+  return mode(modeId).defaultFootprintM;
+}
 
 export const MODE_ORDER: string[] = [
   "subway",

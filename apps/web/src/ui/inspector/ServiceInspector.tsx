@@ -14,6 +14,7 @@ import { GEOMETRY_OPTIONS, GradeChips, EmptyInspector, ServicesOnWay, Stat } fro
 // Opened only via the "Edit full schedule" link, never on initial render —
 // same lazy-loading rationale as the app-level dialogs in App.tsx.
 const ScheduleDialog = lazy(() => import("../ScheduleDialog").then((m) => ({ default: m.ScheduleDialog })));
+const VehicleKindsDialog = lazy(() => import("../VehicleKindsDialog").then((m) => ({ default: m.VehicleKindsDialog })));
 
 // Turnkey presets so setting up a working schedule is a click, not typing —
 // matches store.ts's DEFAULT_FREQUENCY_MINUTES/DEFAULT_SPAN_* (a fresh
@@ -88,6 +89,9 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   const setServiceFrequency = useEditor((s) => s.setServiceFrequency);
   const setServiceSpan = useEditor((s) => s.setServiceSpan);
   const setServiceSchedule = useEditor((s) => s.setServiceSchedule);
+  const vehicleKinds = useEditor((s) => s.system.vehicleKinds);
+  const setServiceVehicleKind = useEditor((s) => s.setServiceVehicleKind);
+  const setVehicleKinds = useEditor((s) => s.setVehicleKinds);
   const setWayGeometry = useEditor((s) => s.setWayGeometry);
   const setWayGrade = useEditor((s) => s.setWayGrade);
   const deleteService = useEditor((s) => s.deleteService);
@@ -100,6 +104,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   const mergeServiceInto = useEditor((s) => s.mergeServiceInto);
   const adoptExistingInfrastructure = useEditor((s) => s.adoptExistingInfrastructure);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [vehicleKindsOpen, setVehicleKindsOpen] = useState(false);
   const [tab, setTab] = useState<string>("line");
   // Derived once at mount (this component remounts on service switch — see
   // its key={id} call site) from whether the CURRENT value already matches
@@ -155,6 +160,32 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
             ))}
           </div>
 
+          <label className="field-label" htmlFor="vehicle-kind-select">
+            Vehicle
+          </label>
+          <select
+            id="vehicle-kind-select"
+            className="opt-select"
+            style={{ width: "100%", marginBottom: 4 }}
+            disabled={readOnly}
+            value={service.vehicleKindId ?? ""}
+            onChange={(e) => setServiceVehicleKind(id, e.target.value || undefined)}
+          >
+            <option value="">Default {MODES[service.modeId]?.label ?? "vehicle"}</option>
+            {vehicleKinds
+              .filter((k) => k.modeId === service.modeId)
+              .map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.label}
+                </option>
+              ))}
+          </select>
+          {!readOnly && (
+            <button type="button" className="link-btn" style={{ display: "block", marginBottom: 12 }} onClick={() => setVehicleKindsOpen(true)}>
+              Manage vehicle kinds…
+            </button>
+          )}
+
           <div className="insp-field">
             <ColorField value={service.color} palette={palette} disabled={readOnly} onChange={(c) => setServiceColor(id, c)} onAddToPalette={addPaletteColor} />
           </div>
@@ -191,6 +222,18 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
             readOnly={readOnly}
             onSave={(periods) => setServiceSchedule(id, periods)}
             onClose={() => setScheduleOpen(false)}
+          />
+        </Suspense>
+      )}
+
+      {vehicleKindsOpen && (
+        <Suspense fallback={null}>
+          <VehicleKindsDialog
+            modeId={service.modeId}
+            vehicleKinds={vehicleKinds}
+            readOnly={readOnly}
+            onSave={setVehicleKinds}
+            onClose={() => setVehicleKindsOpen(false)}
           />
         </Suspense>
       )}

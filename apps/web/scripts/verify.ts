@@ -2,7 +2,7 @@
 // Run with: node scripts/verify.ts  (or: npm run verify)
 import { createEditorStore } from "../src/editor/store";
 import { parseSystem, forkSystem, createEmptySystem } from "@transitmapper/core/model/serialize";
-import { FACILITY_TYPE_ORDER, FACILITY_TYPES, MODE_ORDER, MODES, modesForWayType, wayType, WAY_TYPE_ORDER } from "@transitmapper/core/model/catalog";
+import { FACILITY_TYPE_ORDER, FACILITY_TYPES, MODE_ORDER, MODES, modesForWayType, vehicleFootprint, wayType, WAY_TYPE_ORDER } from "@transitmapper/core/model/catalog";
 import {
   roundedCorners,
   squareFootprint,
@@ -57,6 +57,8 @@ import {
 } from "@transitmapper/core/model/profile";
 import { offsetPolyline } from "@transitmapper/core/model/geo";
 import { trimPath, wayLaneGeometry } from "@transitmapper/core/geometry/streets";
+import { patternWayTraversals, selectVehicleLane, patternLanePath } from "@transitmapper/core/geometry/vehicleLane";
+import { bearingAtT, rotatedRectPolygon } from "@transitmapper/core/model/geo";
 import {
   classifyTurn,
   collectWayTrims,
@@ -73,9 +75,9 @@ import { anchorOnWay, routeBetween, routePath } from "@transitmapper/core/model/
 // at the top of this file; naming them twice was a duplicate-identifier error
 // that only ran because tsx tolerates what tsc rejects.
 import { bearingDegrees, formatBearing, haversineMeters } from "@transitmapper/core/model/geo";
-import type { CrossSection, LngLat, Node, Service, Way } from "@transitmapper/core/model/system";
+import type { CrossSection, LngLat, Node, Service, TransitSystem, Way } from "@transitmapper/core/model/system";
 import { armRefKey, getComponent, laneRefKey, withComponent, withoutComponent } from "@transitmapper/core/model/components";
-import { buildTimetable, dwellStopsForPattern, metersAtElapsed, VEHICLE_SPEED_MPS } from "../src/sim/vehicles";
+import { buildTimetable, dwellStopsForPattern, effectiveVehicleKind, metersAtElapsed, VEHICLE_SPEED_MPS } from "../src/sim/vehicles";
 import { generateToken, hashToken, sha256Base64Url, toBase64Url } from "@transitmapper/core/auth/tokens";
 import { parseCookies, serializeCookie } from "@transitmapper/core/auth/cookies";
 import { safeReturnTo } from "@transitmapper/core/auth/returnTo";
@@ -1712,6 +1714,63 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("connectors naming unknown lanes are dropped", !parsedNode?.connectors?.some((c) => c.from.laneId === "nope"));
 }
 
+// --- vehicle catalogs: serialize migration ---
+{
+  const legacy = parseSystem({
+    version: 8,
+    id: "v8sys",
+    name: "V8",
+    viewport: { center: [-115.17, 36.11], zoom: 12 },
+    createdAt: 1,
+    updatedAt: 1,
+    ways: [],
+    services: [],
+    stations: [],
+    facilities: [],
+    groups: [],
+    nodes: [],
+    namedWays: [],
+    palette: [],
+    drivingSide: "right",
+    turnRestrictions: {},
+    medians: {},
+    approachControls: {},
+  });
+  check("a v8 system migrates with an empty vehicleKinds list", Array.isArray(legacy.vehicleKinds) && legacy.vehicleKinds.length === 0);
+  check("a v8 system migrates to the current version", legacy.version === 9);
+
+  const withKinds = parseSystem({
+    ...legacy,
+    vehicleKinds: [
+      { id: "vk1", modeId: "bus", label: "Articulated bus", widthM: 2.6, lengthM: 18, topSpeedKmh: 60 },
+      { id: "vk-bad", modeId: "bus" }, // missing widthM/lengthM — dropped, not thrown
+    ],
+  });
+  check("a well-formed vehicle kind round-trips", withKinds.vehicleKinds.length === 1 && withKinds.vehicleKinds[0].label === "Articulated bus");
+
+  check("createEmptySystem starts with an empty vehicle-kind list", createEmptySystem().vehicleKinds.length === 0);
+}
+
+// --- vehicle catalogs: store actions ---
+{
+  fresh();
+  const wayId = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(wayId, [-115.2, 36.1]);
+  store.getState().addWayPoint(wayId, [-115.19, 36.1]);
+  store.getState().finishWay();
+  store.getState().setDraftMode("bus");
+  const serviceId = store.getState().addServiceToWay(wayId)!;
+
+  store.getState().setVehicleKinds([{ id: "vk1", modeId: "bus", label: "Test bus", widthM: 2.6, lengthM: 12 }]);
+  check("setVehicleKinds replaces the system's whole list", store.getState().system.vehicleKinds.length === 1);
+
+  store.getState().setServiceVehicleKind(serviceId, "vk1");
+  check("setServiceVehicleKind assigns a kind to a service", store.getState().system.services.find((s) => s.id === serviceId)?.vehicleKindId === "vk1");
+
+  store.getState().setServiceVehicleKind(serviceId, undefined);
+  check("setServiceVehicleKind(undefined) clears the assignment", store.getState().system.services.find((s) => s.id === serviceId)?.vehicleKindId === undefined);
+}
+
 // --- store: profile editing, presets ---
 {
   fresh();
@@ -1955,6 +2014,111 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("backward lanes' arrow paths are reversed to travel direction", backArrows.every((a) => a.path[0][0] > a.path[a.path.length - 1][0]));
   check("bidirectional lanes emit no arrows", g.arrows.every((a) => a.direction !== "both"));
 }
+
+// --- Vehicles in Infrastructure view: direction detection, lane selection,
+// lane-aware pattern path (geometry/vehicleLane.ts) ---
+{
+  // Two ways end-to-start, end-to-start — the natural "keep going forward"
+  // case: way B's stored points already run the direction of travel.
+  const wayA: Way = {
+    id: "va", typeId: "road", geometry: "straight", grade: "atGrade",
+    points: [[-115.2, 36.1], [-115.19, 36.1]],
+    profile: { lanes: [] },
+  };
+  const wayB: Way = {
+    id: "vb", typeId: "road", geometry: "straight", grade: "atGrade",
+    points: [[-115.19, 36.1], [-115.18, 36.1]],
+    profile: { lanes: [] },
+  };
+  const traversals = patternWayTraversals([wayA, wayB], { id: "p1", wayIds: ["va", "vb"] });
+  check("first way in a pattern defaults to forward", traversals[0].forward === true);
+  check("a way continuing in its own stored order is forward", traversals[1].forward === true);
+
+  // way C's own points run the OPPOSITE direction of travel (start where
+  // way A ends up, at the far end) — traversing it means walking it backward.
+  const wayC: Way = {
+    id: "vc", typeId: "road", geometry: "straight", grade: "atGrade",
+    points: [[-115.18, 36.1], [-115.19, 36.1]],
+    profile: { lanes: [] },
+  };
+  const reversedTraversals = patternWayTraversals([wayA, wayC], { id: "p2", wayIds: ["va", "vc"] });
+  check("a way stored opposite the direction of travel is detected as backward", reversedTraversals[1].forward === false);
+
+  // A 4-lane road: sidewalk, 2 backward drive, 1 forward bus, 1 forward
+  // drive, sidewalk — built directly as a profile so the test doesn't
+  // depend on catalog defaults changing later.
+  const road: Way = {
+    id: "vroad", typeId: "road", geometry: "straight", grade: "atGrade",
+    points: [[-115.2, 36.1], [-115.19, 36.1]],
+    profile: {
+      lanes: [
+        { id: "sw1", kindId: "sidewalk", widthM: 2, direction: "both" },
+        { id: "d1", kindId: "drive", widthM: 3.3, direction: "backward" },
+        { id: "d2", kindId: "drive", widthM: 3.3, direction: "backward" },
+        { id: "b1", kindId: "bus", widthM: 3.6, direction: "forward" },
+        { id: "d3", kindId: "drive", widthM: 3.3, direction: "forward" },
+        { id: "sw2", kindId: "sidewalk", widthM: 2, direction: "both" },
+      ],
+    },
+  };
+  const busLane = selectVehicleLane(road, true, "bus");
+  check("a bus prefers the dedicated bus lane over a general drive lane", busLane?.kindId === "bus");
+
+  const brtLane = selectVehicleLane(road, true, "brt");
+  check("BRT also prefers the bus lane (shares bus's preference list)", brtLane?.kindId === "bus");
+
+  const carModeLane = selectVehicleLane(road, true, "subway"); // subway has no preferredLaneKindIds
+  check("a mode with no lane preference falls back to whichever direction-matching lane is nearest centerline (here, the bus lane at offset 1.65m beats the drive lane at 5.1m)", carModeLane?.kindId === "bus");
+
+  const backwardLane = selectVehicleLane(road, false, "bus");
+  check("no bus lane going backward on this road — falls back to a backward drive lane", backwardLane?.kindId === "drive");
+  check("the backward fallback is the one closest to centerline, not the outer one", backwardLane?.laneId === "d2");
+
+  const noProfileWay: Way = { id: "vempty", typeId: "road", geometry: "straight", grade: "atGrade", points: [[-115.2, 36.1], [-115.19, 36.1]], profile: { lanes: [] } };
+  check("a way with no profile at all returns no lane (caller falls back to centerline)", selectVehicleLane(noProfileWay, true, "bus") === null);
+
+  const lpWayA: Way = {
+    id: "lp-a", typeId: "road", geometry: "straight", grade: "atGrade",
+    points: [[-115.2, 36.1], [-115.19, 36.1]],
+    profile: { lanes: [{ id: "a-d1", kindId: "drive", widthM: 3.3, direction: "forward" }, { id: "a-d2", kindId: "drive", widthM: 3.3, direction: "backward" }] },
+  };
+  const lpWayB: Way = {
+    id: "lp-b", typeId: "road", geometry: "straight", grade: "atGrade",
+    points: [[-115.19, 36.1], [-115.18, 36.1]],
+    profile: { lanes: [{ id: "b-d1", kindId: "drive", widthM: 3.3, direction: "forward" }, { id: "b-d2", kindId: "drive", widthM: 3.3, direction: "backward" }] },
+  };
+  const lpPath = patternLanePath([lpWayA, lpWayB], { id: "lp1", wayIds: ["lp-a", "lp-b"] }, "bus");
+  check("patternLanePath produces a continuous path across both ways", lpPath.length >= 2);
+  check(
+    "patternLanePath's endpoints roughly track the ways' own endpoints (offset by lane width, not miles)",
+    Math.abs(lpPath[0][1] - 36.1) < 0.001 && Math.abs(lpPath[lpPath.length - 1][1] - 36.1) < 0.001,
+  );
+}
+
+// --- Vehicles in Infrastructure view: bearing + rotated-rectangle footprint ---
+{
+  const dueNorth: LngLat[] = [[-115.2, 36.1], [-115.2, 36.11]];
+  check("bearingAtT reads ~0° (north) for a due-north path", Math.abs(bearingAtT(dueNorth, 0.5)) < 1 || Math.abs(bearingAtT(dueNorth, 0.5) - 360) < 1);
+
+  const dueEast: LngLat[] = [[-115.2, 36.1], [-115.19, 36.1]];
+  check("bearingAtT reads ~90° (east) for a due-east path", Math.abs(bearingAtT(dueEast, 0.5) - 90) < 1);
+
+  check("bearingAtT on a too-short path returns 0 rather than throwing", bearingAtT([[-115.2, 36.1]], 0.5) === 0);
+
+  const center: LngLat = [-115.2, 36.1];
+  const ring = rotatedRectPolygon(center, 0, 3, 10); // facing due north
+  check("rotatedRectPolygon returns a closed ring (5 points, first === last)", ring.length === 5 && ring[0][0] === ring[4][0] && ring[0][1] === ring[4][1]);
+
+  const [dx, dy] = metersFromOrigin(center, ring[0]);
+  check("facing north, a corner sits ~half-length north/south and ~half-width east/west of center", Math.abs(Math.abs(dy) - 5) < 0.1 && Math.abs(Math.abs(dx) - 1.5) < 0.1);
+
+  check("a light rail vehicle is longer than a bus (real mode differentiation from size alone)", vehicleFootprint("lightRail").lengthM > vehicleFootprint("bus").lengthM);
+  check("an unknown mode falls back to the bus footprint", vehicleFootprint("nonexistent-mode").lengthM === vehicleFootprint("bus").lengthM);
+  check("every catalog mode has a default vehicle footprint", MODE_ORDER.every((id) => MODES[id].defaultFootprintM.widthM > 0));
+}
+
+check("bus mode prefers a dedicated bus lane over a general drive lane", MODES.bus.preferredLaneKindIds?.[0] === "bus");
+check("subway has no lane preference (its only way type has one lane kind, no ambiguity)", MODES.subway.preferredLaneKindIds === undefined);
 
 // --- R2: lane-detail rendering emission (LOD + viewport scoping) ---
 {
@@ -2600,7 +2764,35 @@ function buildGrid() {
   check("mid-dwell holds position at the stop", metersAtElapsed(totalMeters, oneStop, halfwayMs + 10000) === 550);
   check("travel resumes after the dwell ends", metersAtElapsed(totalMeters, oneStop, halfwayMs + 20000 + 10000) === 660);
   check("the full one-way time reaches the path's end", metersAtElapsed(totalMeters, oneStop, oneStop.oneWayMs) === totalMeters);
+}
 
+// --- vehicle catalogs: effectiveVehicleKind resolution ---
+{
+  const busService: Service = { id: "evk-bus", name: "Bus", modeId: "bus", color: "#2ea44f", patterns: [] };
+  const sysNoKinds: TransitSystem = { ...createEmptySystem(), vehicleKinds: [] };
+
+  const unassigned = effectiveVehicleKind(sysNoKinds, busService);
+  const busDefault = vehicleFootprint("bus");
+  check("an unassigned service resolves to its mode's plain default size", unassigned.widthM === busDefault.widthM && unassigned.lengthM === busDefault.lengthM);
+  check("an unassigned service resolves to the app's default speed", unassigned.speedMps === VEHICLE_SPEED_MPS);
+
+  const sysWithKind: TransitSystem = {
+    ...sysNoKinds,
+    vehicleKinds: [{ id: "evk1", modeId: "bus", label: "Articulated", widthM: 2.6, lengthM: 18, topSpeedKmh: 72 }],
+  };
+  const assigned = effectiveVehicleKind(sysWithKind, { ...busService, vehicleKindId: "evk1" });
+  check("an assigned service uses its vehicle kind's own dimensions", assigned.widthM === 2.6 && assigned.lengthM === 18);
+  check("an assigned service's top speed converts km/h to m/s", Math.abs(assigned.speedMps - 20) < 1e-9);
+
+  const kindNoSpeed: TransitSystem = { ...sysNoKinds, vehicleKinds: [{ id: "evk2", modeId: "bus", label: "No speed set", widthM: 3, lengthM: 20 }] };
+  const assignedNoSpeed = effectiveVehicleKind(kindNoSpeed, { ...busService, vehicleKindId: "evk2" });
+  check("an assigned kind with no topSpeedKmh falls back to the app's default speed", assignedNoSpeed.speedMps === VEHICLE_SPEED_MPS);
+
+  const danglingRef = effectiveVehicleKind(sysNoKinds, { ...busService, vehicleKindId: "does-not-exist" });
+  check("a vehicleKindId pointing at a deleted kind falls back to the mode default, not a crash", danglingRef.widthM === busDefault.widthM);
+}
+
+{
   // dwellStopsForPattern: only stations anchored to the pattern's OWN ways
   // count, ordered by arc-length along the resolved path (not by way index
   // or station-array order).

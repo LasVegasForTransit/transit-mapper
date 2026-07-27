@@ -33,6 +33,7 @@ import {
   SRC_PREVIEW,
   SRC_SERVICES,
   SRC_VEHICLES,
+  SRC_VEHICLES_INFRA,
   SRC_WAYS,
   SRC_WAY_LABELS,
   SRC_STATIONS,
@@ -209,7 +210,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     const ALL_SOURCES = [
       SRC_WAYS, SRC_SERVICES, SRC_STATIONS, SRC_HANDLES, SRC_PREVIEW,
       SRC_ENDPOINT_HINT, SRC_MARQUEE, SRC_FOOTPRINTS, SRC_PLATFORMS,
-      SRC_FACILITIES, SRC_PHYSICAL_HANDLES, SRC_VEHICLES, SRC_LANES,
+      SRC_FACILITIES, SRC_PHYSICAL_HANDLES, SRC_VEHICLES, SRC_VEHICLES_INFRA, SRC_LANES,
       SRC_LANE_MARKINGS, SRC_LANE_ARROWS, SRC_JUNCTIONS, SRC_CONNECTORS,
       SRC_WAY_LABELS,
     ];
@@ -319,7 +320,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         },
       });
       detachVehicles = attachVehicleAnimation(map, store, {
-        isVisible: (service) => viewRef.current.viewMode === "network" && viewRef.current.visibleModes.has(service.modeId),
+        isVisible: (service) => viewRef.current.visibleModes.has(service.modeId),
+        viewMode: () => viewRef.current.viewMode,
       });
       map.resize();
     });

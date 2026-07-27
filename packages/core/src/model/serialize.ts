@@ -21,13 +21,14 @@ import {
   type Station,
   type TransitSystem,
   type TurnRestriction,
+  type VehicleKind,
   type Way,
   type WayPointRef,
 } from "./system";
 
 export function createEmptySystem(now = Date.now()): TransitSystem {
   return {
-    version: 8, // v8 adds drivingSide + turnRestrictions/medians/approachControls (see model/components.ts)
+    version: 9, // v9 adds vehicleKinds (see model/system/vehicleKind.ts)
     id: shortId(),
     name: "Untitled system",
     viewport: { ...DEFAULT_VIEWPORT },
@@ -40,6 +41,7 @@ export function createEmptySystem(now = Date.now()): TransitSystem {
     groups: [],
     nodes: [],
     namedWays: [],
+    vehicleKinds: [],
     palette: [...LINE_COLORS],
     drivingSide: "right",
     turnRestrictions: {},
@@ -344,6 +346,26 @@ function parseNamedWays(raw: unknown, ways: Way[]): NamedWay[] {
   return named;
 }
 
+function parseVehicleKinds(raw: unknown): VehicleKind[] {
+  if (!Array.isArray(raw)) return [];
+  const out: VehicleKind[] = [];
+  for (const v of raw) {
+    const r = v as Record<string, unknown>;
+    if (typeof r.id !== "string" || typeof r.modeId !== "string" || typeof r.label !== "string") continue;
+    if (typeof r.widthM !== "number" || typeof r.lengthM !== "number") continue;
+    out.push({
+      id: r.id,
+      modeId: r.modeId,
+      label: r.label,
+      widthM: r.widthM,
+      lengthM: r.lengthM,
+      capacityPax: typeof r.capacityPax === "number" ? r.capacityPax : undefined,
+      topSpeedKmh: typeof r.topSpeedKmh === "number" ? r.topSpeedKmh : undefined,
+    });
+  }
+  return out;
+}
+
 /** v5 stores a service's own `patterns` array (one path per branch); pre-v5
  *  systems stored a single flat `wayIds` directly on the service — that
  *  becomes its one pattern. A service with genuinely nothing (empty/missing
@@ -421,6 +443,7 @@ function parseV3(o: Record<string, unknown>): TransitSystem {
       modeId: typeof r.modeId === "string" ? r.modeId : "bus",
       color: typeof r.color === "string" ? r.color : "#2ea44f",
       patterns: parsePatterns(r.patterns, r.wayIds),
+      vehicleKindId: typeof r.vehicleKindId === "string" ? r.vehicleKindId : undefined,
       frequencyMinutes: typeof r.frequencyMinutes === "number" ? r.frequencyMinutes : undefined,
       spanStart: typeof r.spanStart === "string" ? r.spanStart : undefined,
       spanEnd: typeof r.spanEnd === "string" ? r.spanEnd : undefined,
@@ -602,7 +625,7 @@ function finish(
 
   const now = Date.now();
   return {
-    version: 8,
+    version: 9,
     id: typeof o.id === "string" ? o.id : shortId(),
     name: typeof o.name === "string" ? o.name : "Untitled system",
     description: typeof o.description === "string" ? o.description : undefined,
@@ -610,6 +633,7 @@ function finish(
     createdAt: typeof o.createdAt === "number" ? o.createdAt : now,
     updatedAt: typeof o.updatedAt === "number" ? o.updatedAt : now,
     ...parts,
+    vehicleKinds: parseVehicleKinds(o.vehicleKinds),
     palette,
     drivingSide: drivingSideOf(o.drivingSide),
     turnRestrictions: parseTurnRestrictions(o.turnRestrictions, parts.ways),
