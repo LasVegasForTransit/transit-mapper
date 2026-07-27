@@ -1238,6 +1238,41 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("osmElementsToNetwork applies the tag-derived profile", isOneWay(osmElementsToNetwork(tagged).ways[0].profile));
 }
 
+// --- P4: OSM import reads on-street parking ---
+{
+  const kinds = (p: ReturnType<typeof profileFromOsmTags>) => p.lanes.map((l) => l.kindId).join(",");
+  const base = { highway: "residential", lanes: "2" };
+
+  check("no parking tag means no parking lane", !kinds(profileFromOsmTags("road", "local", base)).includes("parking"));
+  check(
+    "the older parking:lane scheme is read",
+    kinds(profileFromOsmTags("road", "local", { ...base, "parking:lane:both": "parallel" })) === "sidewalk,parking,drive,drive,parking,sidewalk",
+  );
+  check(
+    "the newer parking:<side> scheme is read too",
+    kinds(profileFromOsmTags("road", "local", { ...base, "parking:right": "lane" })) === "sidewalk,drive,drive,parking,sidewalk",
+  );
+  check("parking:lane:both=no adds nothing", !kinds(profileFromOsmTags("road", "local", { ...base, "parking:lane:both": "no" })).includes("parking"));
+  check(
+    "no_stopping is not parking",
+    !kinds(profileFromOsmTags("road", "local", { ...base, "parking:lane:left": "no_stopping" })).includes("parking"),
+  );
+  check(
+    "parking is stationary, so it has no direction",
+    profileFromOsmTags("road", "local", { ...base, "parking:lane:both": "parallel" }).lanes.filter((l) => l.kindId === "parking").every((l) => l.direction === "none"),
+  );
+  check(
+    "parking does not consume a travel lane",
+    profileFromOsmTags("road", "local", { ...base, "parking:lane:both": "parallel" }).lanes.filter((l) => l.kindId === "drive").length === 2,
+  );
+  // Kerb outwards-in: parking is outboard of a bus lane on the same side.
+  check(
+    "parking sits outboard of a bus lane on the same side",
+    kinds(profileFromOsmTags("road", "arterial", { ...base, "parking:lane:right": "parallel", "busway:right": "lane" })) ===
+      "sidewalk,drive,drive,bus,parking,sidewalk",
+  );
+}
+
 // --- P4: OSM import reads bus lanes ---
 {
   const kinds = (p: ReturnType<typeof profileFromOsmTags>) => p.lanes.map((l) => l.kindId).join(",");

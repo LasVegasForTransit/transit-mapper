@@ -253,6 +253,12 @@ function osmSidePresence(
  *  lane, just running against the general direction. */
 const BUSWAY_PRESENT = new Set(["lane", "opposite_lane", "share_busway", "opposite_share_busway"]);
 
+/** Parking values that mean cars are actually stored at that kerb. OSM has
+ *  two live schemes — the older `parking:lane:<side>=parallel` and the newer
+ *  `parking:<side>=lane` — so both are read; everything else in the
+ *  vocabulary (`no`, `no_stopping`, `separate`, …) means no parking lane. */
+const PARKING_PRESENT = new Set(["parallel", "diagonal", "perpendicular", "marked", "yes", "lane", "street_side", "on_street"]);
+
 /**
  * The lanes that sit outboard of the travel lanes on each side, ordered
  * from the kerb inwards. OSM tags these as side-of-the-road attributes
@@ -266,6 +272,12 @@ function osmSideLanes(tags: Record<string, string>, oneway: "forward" | "backwar
   // carries backward traffic unless the whole way is one-way.
   const leftDirection: LaneDirection = oneway ?? "backward";
   const rightDirection: LaneDirection = oneway ?? "forward";
+
+  // Kerb outwards-in: parking sits outboard of a bus lane.
+  const parkingOld = osmSidePresence(tags, "parking:lane", (v) => PARKING_PRESENT.has(v));
+  const parkingNew = osmSidePresence(tags, "parking", (v) => PARKING_PRESENT.has(v));
+  if (parkingOld.left || parkingNew.left) left.push({ kindId: "parking", direction: "none" });
+  if (parkingOld.right || parkingNew.right) right.push({ kindId: "parking", direction: "none" });
 
   const bus = osmSidePresence(tags, "busway", (v) => BUSWAY_PRESENT.has(v));
   if (bus.left) left.push({ kindId: "bus", direction: leftDirection });

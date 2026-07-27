@@ -40,6 +40,8 @@ defaulted from its type:
 - `busway` (and `busway:left` / `busway:right`) adds a bus lane at that kerb.
   These are additional to the `lanes` count, not carved out of it, which is
   how OSM tags them.
+- `parking:lane:<side>` and the newer `parking:<side>` add an on-street
+  parking lane at that kerb, outboard of any bus lane.
 
 Where OSM says nothing, the way's class supplies a lane count — a local
 street comes in narrower than an arterial. Rail and bike ways keep their
