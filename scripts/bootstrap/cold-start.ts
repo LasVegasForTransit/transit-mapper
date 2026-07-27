@@ -3,57 +3,99 @@
  * TransitMapper Bootstrap CLI
  *
  * Usage:
- *   pnpm bootstrap
+ *   pnpm bootstrap    — set the project up, creating what does not exist
+ *   pnpm preflight    — report what is wrong, change nothing
  *
- * Phases (in order), scoped down to what transitmapper actually needs
- * today:
- *   auth               — confirm gh + wrangler are logged in
- *   cloudflare-verify   — confirm the D1 database and custom domain route
- *                         from apps/worker/wrangler.toml actually exist
- *   ci-secrets          — set CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID
- *                         on the "production" GitHub Environment
+ * Phases run in order, and the order is deliberate: everything local and
+ * reversible happens before anything is created in someone's Cloudflare
+ * account, so a broken toolchain cannot leave a half-built account behind.
  *
- * No resumable state file and no install/workspace/env/repo/domain phases
- * yet — add them once there's a concrete need (e.g. a second contributor
- * needs local dev tool checks). This same phase-array pattern (a plain
- * array of { id, title, run } run in sequence, `note()`-driven UX via
- * @clack/prompts) is also used by the org's other Cloudflare-deployed
- * project, github.com/LasVegansForTransit/website, in its own
- * scripts/bootstrap/ — kept consistent across projects intentionally
- * rather than each repo inventing its own onboarding-CLI shape.
+ *   workspace   — Node and pnpm versions, install, and `pnpm check`
+ *   auth        — confirm gh and wrangler are logged in
+ *   provision   — create the D1 database if it does not exist, write its id
+ *                 into wrangler.toml, and apply migrations
+ *   ci-secrets  — CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID on the
+ *                 "production" GitHub Environment
+ *
+ * The same phase-array pattern — a plain array of { id, title, run }, with
+ * `note()`-driven UX via @clack/prompts — is used by the org's other
+ * Cloudflare-deployed project, LasVegasForTransit/website. Kept consistent
+ * across repositories on purpose rather than each inventing its own shape.
+ *
+ * There is still no resumable state file. Every phase is idempotent and
+ * cheap to re-run, so resuming means running it again; a state file would be
+ * one more thing that can be wrong.
  */
-import { intro, outro } from '@clack/prompts';
+import { intro, outro, note } from '@clack/prompts';
 import { runAuthPhase } from './phases/auth.js';
 import { runCloudflareVerifyPhase } from './phases/cloudflare-verify.js';
 import { runCiSecretsPhase } from './phases/ci-secrets.js';
+import { runProvisionPhase } from './phases/provision.js';
+import { runWorkspacePhase } from './phases/workspace.js';
+
+interface PhaseContext {
+  /** Report problems, create and write nothing. */
+  doctor: boolean;
+}
 
 interface Phase {
   id: string;
   title: string;
-  run: () => Promise<{ success: boolean }>;
+  run: (context: PhaseContext) => Promise<{ success: boolean }>;
 }
 
 const PHASES: readonly Phase[] = [
-  { id: 'auth', title: 'CLI authentication', run: runAuthPhase },
-  { id: 'cloudflare-verify', title: 'Cloudflare deployment config', run: runCloudflareVerifyPhase },
+  { id: 'workspace', title: 'Workspace', run: runWorkspacePhase },
+  { id: 'auth', title: 'CLI authentication', run: () => runAuthPhase() },
+  { id: 'provision', title: 'Cloudflare resources', run: runProvisionPhase },
+  {
+    id: 'cloudflare-verify',
+    title: 'Deployment configuration',
+    run: () => runCloudflareVerifyPhase(),
+  },
   { id: 'ci-secrets', title: 'CI secrets', run: runCiSecretsPhase },
 ];
 
 async function main(): Promise<void> {
-  intro('TransitMapper bootstrap');
+  const doctor = process.argv.includes('--doctor');
+
+  intro(doctor ? 'TransitMapper preflight' : 'TransitMapper bootstrap');
+
+  if (doctor) {
+    note(
+      [
+        'Reporting only. Nothing is installed, created, or written.',
+        'Run `pnpm bootstrap` to fix what this finds.',
+      ].join('\n'),
+      'Read-only',
+    );
+  }
+
+  const failed: string[] = [];
 
   for (const phase of PHASES) {
-    const result = await phase.run();
-    if (!result.success) {
+    // In doctor mode every phase runs, because a report that stops at the
+    // first problem hides the other three. A real run stops, because later
+    // phases assume the earlier ones succeeded.
+    const result = await phase.run({ doctor });
+    if (result.success) continue;
+
+    failed.push(phase.title);
+    if (!doctor) {
       outro(`Stopped at "${phase.title}" — fix the issue above and re-run \`pnpm bootstrap\`.`);
       process.exit(1);
     }
   }
 
-  outro('Bootstrap complete.');
+  if (failed.length > 0) {
+    outro(`${failed.length} problem(s): ${failed.join(', ')}. Run \`pnpm bootstrap\` to fix.`);
+    process.exit(1);
+  }
+
+  outro(doctor ? 'Everything checks out.' : 'Bootstrap complete.');
 }
 
-main().catch((err) => {
+main().catch((err: unknown) => {
   console.error(err);
   process.exit(1);
 });

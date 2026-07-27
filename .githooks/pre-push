@@ -24,7 +24,7 @@ if [ "$(git rev-list --count "${BASE}..HEAD" 2>/dev/null || echo 0)" -eq 0 ]; th
 fi
 
 step 1 "Checking the local environment"
-if ! pnpm --silent preflight; then
+if ! pnpm --silent check:env; then
   fail "the installed tree disagrees with the lockfile"
   echo ""
   cmd "pnpm install --frozen-lockfile"
