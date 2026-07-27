@@ -7835,6 +7835,22 @@ function buildGrid() {
     "the full one-way time reaches the path's end",
     metersAtElapsed(totalMeters, oneStop, oneStop.oneWayMs) === totalMeters,
   );
+
+  // A timetable BUILT at a custom speed must be WALKED at that same speed.
+  // vehicles.ts used to build with the vehicle kind's speed but integrate at
+  // the module default, so a fast kind ran out of path partway through its leg
+  // and sat clamped at the terminal, and a slow one never arrived at all.
+  const fastSpeed = 22; // twice VEHICLE_SPEED_MPS
+  const fast = buildTimetable(totalMeters, [{ distMeters: 550, dwellMs: 20000 }], fastSpeed);
+  check('a faster vehicle kind covers the same path in less time', fast.oneWayMs < oneStop.oneWayMs);
+  check(
+    'a faster vehicle kind covers more ground in the same elapsed time',
+    metersAtElapsed(totalMeters, fast, 10000, fastSpeed) === 220,
+  );
+  check(
+    "walking a timetable at the speed it was built with lands exactly on the path's end",
+    metersAtElapsed(totalMeters, fast, fast.oneWayMs, fastSpeed) === totalMeters,
+  );
 }
 
 // --- vehicle catalogs: effectiveVehicleKind resolution ---

@@ -386,9 +386,15 @@ export function attachVehicleAnimation(
             // physical stations regardless of direction of travel.
             const outbound = elapsedMs <= timetable.oneWayMs;
             const legElapsed = outbound ? elapsedMs : elapsedMs - timetable.oneWayMs;
+            // `speedMps` is load-bearing here, not decorative: the timetable
+            // above was BUILT at this vehicle kind's own speed, so integrating
+            // the position at the module default instead would have the two
+            // disagree — a faster kind would reach the end early and sit
+            // clamped at the terminal for the rest of the leg, a slower one
+            // would never arrive before the direction flipped.
             const distFromStart = outbound
-              ? metersAtElapsed(meters, timetable, legElapsed)
-              : meters - metersAtElapsed(meters, timetable, legElapsed);
+              ? metersAtElapsed(meters, timetable, legElapsed, speedMps)
+              : meters - metersAtElapsed(meters, timetable, legElapsed, speedMps);
             // Distance → coordinate is an O(log n) binary search over precomputed
             // arc lengths, not a full-path re-walk (pointAtT).
             if (viewMode === 'network') {
