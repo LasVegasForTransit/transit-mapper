@@ -1,0 +1,24 @@
+import { RuleTester } from 'eslint';
+import tsParser from '@typescript-eslint/parser';
+import { describe, it } from 'vitest';
+import { {{camelCase name}} } from './{{name}}.ts';
+
+RuleTester.describe = describe;
+RuleTester.it = it;
+
+// The TypeScript parser, not espree — the code these rules guard is
+// TypeScript, and espree cannot parse a type annotation at all.
+const ruleTester = new RuleTester({
+  languageOptions: { parser: tsParser, ecmaVersion: 2022, sourceType: 'module' },
+});
+
+ruleTester.run('{{name}}', {{camelCase name}}, {
+  // Near-misses belong here, and they are the more important half. A false
+  // positive teaches people to reach for eslint-disable, and the next real
+  // violation leaves with it.
+  valid: [{ code: 'export const ok = 1;' }],
+
+  invalid: [
+    // { code: '...', errors: [{ messageId: 'violation' }] },
+  ],
+});

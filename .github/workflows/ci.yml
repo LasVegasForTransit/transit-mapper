@@ -43,5 +43,13 @@ jobs:
       - name: Verify
         run: pnpm verify
 
+      # A generator exists so scaffolding is right by construction. This runs
+      # them and checks the output still passes, so one cannot rot into
+      # emitting code that fails the very checks it was meant to satisfy. Not
+      # in \`pnpm check\`: it generates into the working tree, which is rude to
+      # do underneath uncommitted work but fine on a disposable runner.
+      - name: Generators emit conformant code
+        run: pnpm check:generators
+
       - name: Dependency audit
         run: pnpm audit --prod --audit-level=high

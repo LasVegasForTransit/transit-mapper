@@ -1,0 +1,8 @@
+import { describe, expect, it } from 'vitest';
+import { placeholder } from './index.ts';
+
+describe('{{name}}', () => {
+  it('is wired up', () => {
+    expect(placeholder()).toBe('{{name}}');
+  });
+});
