@@ -55,12 +55,12 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
     setError("");
     try {
       const b = map.getBounds();
-      const ways = await importOsmWays(
+      const network = await importOsmWays(
         { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() },
         [...categories],
       );
-      importWays(ways);
-      setCount(ways.length);
+      importWays(network);
+      setCount(network.ways.length);
       setStatus("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed.");

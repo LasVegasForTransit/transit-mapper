@@ -42,7 +42,7 @@ class hierarchy.
 | `grade` | `underground`, `atGrade`, or `elevated`. |
 | `profile` | The cross-section (below). |
 | `classId` | Facility class within the type (arterial vs. local, …). |
-| `source` | Provenance marker, e.g. `"osm"` for imported ways. |
+| `source` | Provenance marker, e.g. `"osm:<wayId>"` for imported ways. |
 
 ### CrossSection and LaneSpec
 
@@ -79,6 +79,15 @@ store mutation that inserts, deletes, or moves control points keeps `refs`
   stored only once the user customizes turn lanes; otherwise it's derived
   by heuristic on demand. Turn arrows are derived from connectors rather
   than stored.
+
+Nodes are built three ways, all producing the same record. Editing forms
+them as a side effect of drawing, splitting, and joining
+(`src/editor/store.ts`). Loading a document that predates stored nodes
+derives them from coordinate coincidence (`deriveNodesFromWays` in
+`src/model/serialize.ts`). OSM import derives them from OSM's node ids
+(`src/model/import.ts`), which is exact — two imported ways join exactly
+when OSM says they share a node, so co-located but unconnected
+infrastructure (a tram in a street, a bridge over a road) stays separate.
 
 Two ways at different `grade`s never need a junction between them, and the
 crossing check in `src/model/validate.ts` skips such pairs — an elevated way

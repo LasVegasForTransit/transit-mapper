@@ -7,7 +7,7 @@
 //  - importOsmWays, the one function that actually calls the network.
 import { shortId } from "./ids";
 import { defaultProfileFor } from "./profile";
-import type { LngLat, Way } from "./system";
+import type { LngLat, Node, Way, WayPointRef } from "./system";
 
 export interface ImportBBox {
   west: number;
@@ -63,6 +63,22 @@ export interface OsmWayElement {
   id: number;
   tags?: Record<string, string>;
   geometry?: { lat: number; lon: number }[];
+  /** The way's OSM node ids, index-aligned with `geometry`. Overpass returns
+   *  this alongside the coordinates for `out geom;` (which is `out body
+   *  geom;` — `body` carries the node ids, `geom` resolves them to
+   *  coordinates), and it is what makes junction derivation exact rather
+   *  than a coordinate-proximity guess. Optional so a response without it
+   *  still imports ways, just unconnected — see osmElementsToNetwork. */
+  nodes?: number[];
+}
+
+/** An import's ways plus the junctions between them. Returned together
+ *  because ways alone are only half the imported data: OSM's node identity
+ *  is the topology, and dropping it silently yields a network that looks
+ *  right and routes wrong. */
+export interface ImportedNetwork {
+  ways: Way[];
+  nodes: Node[];
 }
 
 /**
@@ -82,17 +98,35 @@ export function classifyOsmWay(tags: Record<string, string> | undefined): { type
   return null;
 }
 
-/** Turn parsed Overpass `elements` into Ways, each tagged with its OSM source
- *  (`osm:<wayId>`) so an imported way is always distinguishable from a
- *  hand-drawn one. Elements that aren't a recognized category are skipped. */
-export function osmElementsToWays(elements: OsmWayElement[]): Way[] {
+/**
+ * Turn parsed Overpass `elements` into Ways plus the junctions between them.
+ *
+ * Each Way is tagged with its OSM source (`osm:<wayId>`) so an imported way
+ * is always distinguishable from a hand-drawn one. Elements that aren't a
+ * recognized category are skipped, and their node ids never enter the map —
+ * so a street meeting an unimported footpath yields no junction, correctly.
+ *
+ * Junctions come from OSM node *identity*, not coordinate proximity. Two
+ * ways share a Node exactly when OSM says they share a node, which means no
+ * tolerance to tune and — the case that actually bites this app, since it
+ * imports several categories at once — a tram line drawn down the middle of
+ * a street never gets welded to the roadway it merely overlaps. Structurally
+ * this mirrors serialize.ts's deriveNodesFromWays (group refs by a key, emit
+ * a Node where a key has 2+); only the key differs, an OSM node id instead
+ * of a rounded coordinate.
+ */
+export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork {
   const ways: Way[] = [];
+  // OSM node id -> every (way, control point) that node landed on.
+  const refsByOsmNode = new Map<number, WayPointRef[]>();
+  const coordByOsmNode = new Map<number, LngLat>();
+
   for (const el of elements) {
     if (el.type !== "way" || !el.geometry || el.geometry.length < 2) continue;
     const kind = classifyOsmWay(el.tags);
     if (!kind) continue;
     const points: LngLat[] = el.geometry.map((g) => [g.lon, g.lat]);
-    ways.push({
+    const way: Way = {
       id: shortId(),
       typeId: kind.typeId,
       points,
@@ -101,16 +135,44 @@ export function osmElementsToWays(elements: OsmWayElement[]): Way[] {
       profile: defaultProfileFor(kind.typeId),
       classId: kind.classId,
       source: `osm:${el.id}`,
+    };
+    ways.push(way);
+
+    // Index alignment is the whole mechanism: el.nodes[i] is the OSM node at
+    // el.geometry[i], which became way.points[i]. A response where those
+    // lengths disagree can't be aligned, so it contributes geometry but no
+    // refs rather than mismatched ones.
+    if (!el.nodes || el.nodes.length !== points.length) continue;
+    el.nodes.forEach((osmNodeId, i) => {
+      const refs = refsByOsmNode.get(osmNodeId);
+      if (refs) refs.push({ wayId: way.id, pointIndex: i });
+      else refsByOsmNode.set(osmNodeId, [{ wayId: way.id, pointIndex: i }]);
+      coordByOsmNode.set(osmNodeId, points[i]);
     });
   }
-  return ways;
+
+  // Only shared nodes are junctions. A Node per vertex would be both wrong
+  // (a bend in one street is not a junction) and enormous.
+  const nodes: Node[] = [];
+  for (const [osmNodeId, refs] of refsByOsmNode) {
+    if (refs.length < 2) continue;
+    nodes.push({ id: shortId(), coord: coordByOsmNode.get(osmNodeId)!, refs });
+  }
+  return { ways, nodes };
+}
+
+/** The ways of an import, without its junctions — kept for callers that only
+ *  need the geometry. Prefer osmElementsToNetwork, which also returns the
+ *  topology OSM gave us. */
+export function osmElementsToWays(elements: OsmWayElement[]): Way[] {
+  return osmElementsToNetwork(elements).ways;
 }
 
 /** Fetch OSM ways for the given categories within a bounding box from the
- *  public Overpass API and convert them to catalog-typed Ways. The only
- *  function here that touches the network. */
-export async function importOsmWays(bbox: ImportBBox, categories: ImportCategory[]): Promise<Way[]> {
-  if (categories.length === 0) return [];
+ *  public Overpass API and convert them to catalog-typed Ways plus the
+ *  junctions between them. The only function here that touches the network. */
+export async function importOsmWays(bbox: ImportBBox, categories: ImportCategory[]): Promise<ImportedNetwork> {
+  if (categories.length === 0) return { ways: [], nodes: [] };
   const query = buildOverpassQuery(bbox, categories);
   const res = await fetch("https://overpass-api.de/api/interpreter", {
     method: "POST",
@@ -119,5 +181,5 @@ export async function importOsmWays(bbox: ImportBBox, categories: ImportCategory
   });
   if (!res.ok) throw new Error(`OSM import failed (${res.status}).`);
   const data = (await res.json()) as { elements?: OsmWayElement[] };
-  return osmElementsToWays(data.elements ?? []);
+  return osmElementsToNetwork(data.elements ?? []);
 }

@@ -25,14 +25,27 @@ residential streets as locals) and each way gets its type's default
 cross-section. OSM lane tagging isn't read yet, so widen or re-profile
 specific streets yourself where it matters.
 
+The street grid arrives **connected**: where OSM says two ways meet, they
+come in sharing a real junction, so you can route services across an
+imported network immediately rather than joining every intersection by hand.
+Junctions come from OSM's own node identity, not from coordinates that
+happen to line up, which means overlapping-but-separate infrastructure stays
+separate — a tram line drawn down the middle of a street does not get welded
+to the roadway, and a bridge does not get welded to the road beneath it.
+
 Imported ways start as bare infrastructure carrying no service. From there
-the normal tools apply: route services over them, edit their lanes, form
+the normal tools apply: route services over them, edit their lanes, adjust
 junctions, adopt them under existing sketches.
 
 ## Practical notes
 
 - Import is additive; running it twice over the same area duplicates ways.
   Undo reverses an import in one step.
-- Imported ways arrive unjoined. Crossings become real junctions when you
-  edit the ways involved, or you can leave them visual if you're only using
-  the streets as context.
+- Junctions are formed **within** an import, not against what's already on
+  the map. If you import over streets you drew yourself, the two networks sit
+  side by side without joining; connect them with the usual editing tools.
+- A way clipped by the edge of the viewport keeps only the junctions inside
+  it. Its continuation lives outside the box you imported, so re-importing a
+  wider area is how you pick up the rest.
+- Crossings that stay unjoined are usually correct: OSM records a bridge or
+  tunnel as genuinely not meeting the road it passes over.

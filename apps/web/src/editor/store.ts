@@ -9,6 +9,7 @@ import { shortId } from "@transitmapper/core/model/ids";
 import { createEmptySystem } from "@transitmapper/core/model/serialize";
 import { armRefKey, getComponent, laneRefKey, withComponent, withoutComponent } from "@transitmapper/core/model/components";
 import { createFacility, createGroup as createGroupEntity, createStation } from "@transitmapper/core/model/system";
+import type { ImportedNetwork } from "@transitmapper/core/model/import";
 import type {
   CrossSection,
   DrivingSide,
@@ -233,10 +234,13 @@ export interface EditorState {
   /** Splits a way in two at control point `index`, each half keeping the
    *  original's type/grade/class/capacity — see splitWay's doc comment. */
   splitWayAt: (wayId: string, index: number) => void;
-  /** Append externally-produced ways (P4: OSM import) as bare infrastructure —
-   *  no service is auto-created, since imported streets/rail are real physical
-   *  context to draw services over, not a route in themselves. */
-  importWays: (ways: Way[]) => void;
+  /** Append an OSM import's ways and the junctions between them as bare
+   *  infrastructure — no service is auto-created, since imported streets/rail
+   *  are real physical context to draw services over, not a route in
+   *  themselves. The nodes come from OSM's own node identity (see
+   *  model/import.ts), so an imported grid arrives connected and routable
+   *  rather than as loose segments. */
+  importWays: (network: ImportedNetwork) => void;
   /** Append a GTFS import's ways/services/stations (P4 follow-on: RTC's real
    *  system as a comparison baseline) — unlike importWays, this DOES create
    *  services/stations, since a GTFS feed is already a real rideable
@@ -1437,8 +1441,13 @@ export function createEditorStore() {
 
     splitWayAt: (wayId, index) => set((s) => ({ system: splitWay(s.system, wayId, index) })),
 
-    importWays: (ways) =>
-      set((s) => ({ system: touch({ ...s.system, ways: [...s.system.ways, ...ways] }) })),
+    // Safe to append without renumbering refs: every id is a fresh shortId()
+    // and every ref points at a way created in this same import, so no
+    // existing node's refs are disturbed (cf. shiftNodeRefsFor* above).
+    importWays: ({ ways, nodes }) =>
+      set((s) => ({
+        system: touch({ ...s.system, ways: [...s.system.ways, ...ways], nodes: [...s.system.nodes, ...nodes] }),
+      })),
 
     importGtfs: (pieces) =>
       set((s) => ({

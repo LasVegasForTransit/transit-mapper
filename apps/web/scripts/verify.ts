@@ -26,7 +26,7 @@ import { isDoubleClickFinish } from "../src/map/interactions";
 import { KEY_BINDINGS, matchesKey, resolveBinding, type KeyContext } from "../src/editor/keymap";
 import { buildFeatures, HANDLE_ICON, LAYER_SPECS } from "../src/map/layers";
 import { LANDMARKS, landmarksFeatureCollection } from "../src/map/landmarks";
-import { buildOverpassQuery, classifyOsmWay, osmElementsToWays, type OsmWayElement } from "@transitmapper/core/model/import";
+import { buildOverpassQuery, classifyOsmWay, osmElementsToNetwork, osmElementsToWays, type OsmWayElement } from "@transitmapper/core/model/import";
 import { classifyGtfsRouteType, gtfsFilesToBatchedPieces, gtfsFilesToSystemPieces, parseGtfsCsv } from "@transitmapper/core/model/gtfsImport";
 import { legendEntriesFor } from "../src/share/exportLegend";
 import { formatScaleMeters, niceScaleMeters } from "../src/share/exportScale";
@@ -1025,10 +1025,13 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   fresh();
   const wX = "vx";
   const wY = "vy";
-  store.getState().importWays([
-    { id: wX, typeId: "lightRail", points: [[-115.2, 36.1], [-115.1, 36.1]], geometry: "straight", grade: "atGrade", profile: defaultProfileFor("lightRail") },
-    { id: wY, typeId: "lightRail", points: [[-115.15, 36.05], [-115.15, 36.15]], geometry: "straight", grade: "atGrade", profile: defaultProfileFor("lightRail") },
-  ]);
+  store.getState().importWays({
+    ways: [
+      { id: wX, typeId: "lightRail", points: [[-115.2, 36.1], [-115.1, 36.1]], geometry: "straight", grade: "atGrade", profile: defaultProfileFor("lightRail") },
+      { id: wY, typeId: "lightRail", points: [[-115.15, 36.05], [-115.15, 36.15]], geometry: "straight", grade: "atGrade", profile: defaultProfileFor("lightRail") },
+    ],
+    nodes: [],
+  });
   issues = validateSystem(store.getState().system);
   check("flags two ways that cross without joining", issues.some((i) => i.id.startsWith("crossing-")));
 
@@ -1142,6 +1145,115 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("osmElementsToWays preserves [lon,lat] → LngLat point order", ways[0].points[0][0] === -115.2 && ways[0].points[0][1] === 36.1);
   check("osmElementsToWays assigns the residential road its local class", ways[0].typeId === "road" && ways[0].classId === "local");
   check("osmElementsToWays defaults capacity from the way type's catalog default", wayCapacity(ways[1]) === wayType("lightRail").defaultCapacity);
+  check("osmElementsToWays yields no junctions when elements carry no node ids", osmElementsToNetwork(elements).nodes.length === 0);
+}
+
+// --- P4: OSM import derives junctions from node identity, not coordinates ---
+{
+  // Two streets crossing at OSM node 500, which is each way's middle point.
+  const crossing: OsmWayElement[] = [
+    {
+      type: "way", id: 1, tags: { highway: "residential" }, nodes: [100, 500, 101],
+      geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.15 }, { lat: 36.1, lon: -115.1 }],
+    },
+    {
+      type: "way", id: 2, tags: { highway: "residential" }, nodes: [200, 500, 201],
+      geometry: [{ lat: 36.05, lon: -115.15 }, { lat: 36.1, lon: -115.15 }, { lat: 36.15, lon: -115.15 }],
+    },
+  ];
+  const net = osmElementsToNetwork(crossing);
+  check("osmElementsToNetwork returns both ways", net.ways.length === 2);
+  check("a node id shared by two ways becomes exactly one junction", net.nodes.length === 1);
+  check("the junction carries one ref per way", net.nodes[0].refs.length === 2);
+  check(
+    "each ref points at the shared node's own control point index",
+    net.nodes[0].refs.every((r) => r.pointIndex === 1),
+  );
+  check(
+    "the junction's refs name the imported ways",
+    net.nodes[0].refs.every((r) => net.ways.some((w) => w.id === r.wayId)),
+  );
+  check("the junction sits at the shared coordinate", net.nodes[0].coord[0] === -115.15 && net.nodes[0].coord[1] === 36.1);
+
+  // Five ways meeting at one node is one junction with five refs, not ten
+  // pairwise ones — a real Flamingo Rd sample had a node of degree 5.
+  const fanOut: OsmWayElement[] = [1, 2, 3, 4, 5].map((n) => ({
+    type: "way", id: n, tags: { highway: "residential" }, nodes: [900, 900 + n],
+    geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.1 + n / 100, lon: -115.15 }],
+  }));
+  const fan = osmElementsToNetwork(fanOut);
+  check("five ways at one node produce a single junction", fan.nodes.length === 1);
+  check("that junction has five refs", fan.nodes[0].refs.length === 5);
+
+  // The case coordinate matching gets wrong: a tram drawn down a street.
+  // Identical coordinates, different node ids — they overlap, they do not join.
+  const coLocated: OsmWayElement[] = [
+    {
+      type: "way", id: 1, tags: { highway: "residential" }, nodes: [100, 101],
+      geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.1 }],
+    },
+    {
+      type: "way", id: 2, tags: { railway: "tram" }, nodes: [200, 201],
+      geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.1 }],
+    },
+  ];
+  check("identical coordinates with different node ids produce no junction", osmElementsToNetwork(coLocated).nodes.length === 0);
+
+  // A closed way (roundabout, loop road) repeats its first node id last, so
+  // that node has two refs from ONE way. It stays a junction deliberately:
+  // routeGraph keys vertices by "wayId:pointIndex" through node identity, so
+  // sharing the node is what makes the loop actually close in the graph, and
+  // it keeps the two ends moving together when either is dragged.
+  const closedWay: OsmWayElement[] = [
+    {
+      type: "way", id: 1, tags: { highway: "residential" }, nodes: [100, 101, 102, 100],
+      geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.1005, lon: -115.15 }, { lat: 36.1005, lon: -115.1495 }, { lat: 36.1, lon: -115.15 }],
+    },
+  ];
+  const closedNet = osmElementsToNetwork(closedWay);
+  check("a closed way's repeated node still forms a junction", closedNet.nodes.length === 1);
+  check("that junction links the way's first and last point", closedNet.nodes[0].refs.map((r) => r.pointIndex).sort().join(",") === "0,3");
+  check("it is one way meeting itself, not two ways", new Set(closedNet.nodes[0].refs.map((r) => r.wayId)).size === 1);
+
+  // Unshared node ids are ordinary vertices, not junctions.
+  const disjoint: OsmWayElement[] = [
+    {
+      type: "way", id: 1, tags: { highway: "residential" }, nodes: [100, 101, 102],
+      geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.15 }, { lat: 36.1, lon: -115.1 }],
+    },
+  ];
+  check("a lone way's own vertices produce no junctions", osmElementsToNetwork(disjoint).nodes.length === 0);
+
+  // A node shared with a skipped element isn't a junction: the footpath was
+  // never imported, so there's nothing on the other side of it.
+  const withSkipped: OsmWayElement[] = [
+    {
+      type: "way", id: 1, tags: { highway: "residential" }, nodes: [100, 500],
+      geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.15 }],
+    },
+    {
+      type: "way", id: 2, tags: { highway: "footway" }, nodes: [500, 201],
+      geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.2, lon: -115.15 }],
+    },
+  ];
+  const skipped = osmElementsToNetwork(withSkipped);
+  check("an unimported element's shared node forms no junction", skipped.ways.length === 1 && skipped.nodes.length === 0);
+
+  // Misaligned nodes/geometry can't be indexed against each other, so the way
+  // imports without refs rather than with wrong ones.
+  const misaligned: OsmWayElement[] = [
+    {
+      type: "way", id: 1, tags: { highway: "residential" }, nodes: [100, 500],
+      geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.15 }],
+    },
+    {
+      type: "way", id: 2, tags: { highway: "residential" }, nodes: [500], // one id, two points
+      geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.2, lon: -115.15 }],
+    },
+  ];
+  const bad = osmElementsToNetwork(misaligned);
+  check("a nodes/geometry length mismatch still imports the way", bad.ways.length === 2);
+  check("a nodes/geometry length mismatch contributes no refs", bad.nodes.length === 0);
 }
 
 // --- P4: importWays store action appends bare infrastructure, no auto-service ---
@@ -1149,11 +1261,26 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   fresh();
   const imported: Way[] = [
     { id: "osm-a", typeId: "road", points: [[-115.2, 36.1], [-115.1, 36.1]], geometry: "straight", grade: "atGrade", profile: defaultProfileFor("road"), classId: "local", source: "osm:123" },
+    { id: "osm-b", typeId: "road", points: [[-115.1, 36.1], [-115.1, 36.2]], geometry: "straight", grade: "atGrade", profile: defaultProfileFor("road"), classId: "local", source: "osm:124" },
   ];
-  store.getState().importWays(imported);
+  store.getState().importWays({
+    ways: imported,
+    nodes: [{ id: "osm-j", coord: [-115.1, 36.1], refs: [{ wayId: "osm-a", pointIndex: 1 }, { wayId: "osm-b", pointIndex: 0 }] }],
+  });
   check("importWays appends the way", store.getState().system.ways.some((w) => w.id === "osm-a"));
   check("importWays creates no service for it (bare infrastructure)", store.getState().system.services.length === 0);
   check("imported way keeps its OSM source marker", store.getState().system.ways.find((w) => w.id === "osm-a")?.source === "osm:123");
+  check("importWays appends the import's junctions too", store.getState().system.nodes.some((n) => n.id === "osm-j"));
+  check(
+    "the appended junction still links both imported ways",
+    store.getState().system.nodes.find((n) => n.id === "osm-j")?.refs.length === 2,
+  );
+  // An imported grid arrives connected, so validate() sees a junction rather
+  // than an unjoined crossing — the whole point of carrying nodes through.
+  check(
+    "an imported junction is not flagged as an unjoined crossing",
+    !validateSystem(store.getState().system).some((i) => i.id.startsWith("crossing-")),
+  );
 }
 
 // --- crossings at different grades are bridges, not missing junctions ---
@@ -1163,14 +1290,14 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
     { id: "surface", typeId: "road", points: [[-115.2, 36.1], [-115.1, 36.1]], geometry: "straight", grade: "atGrade", profile: defaultProfileFor("road") },
     { id: "bridge", typeId: "road", points: [[-115.15, 36.05], [-115.15, 36.15]], geometry: "straight", grade: "elevated", profile: defaultProfileFor("road") },
   ];
-  store.getState().importWays(overpass);
+  store.getState().importWays({ ways: overpass, nodes: [] });
   check(
     "an elevated way crossing a surface street is not flagged",
     !validateSystem(store.getState().system).some((i) => i.id.startsWith("crossing-")),
   );
 
   fresh();
-  store.getState().importWays(overpass.map((w) => ({ ...w, grade: "atGrade" as const })));
+  store.getState().importWays({ ways: overpass.map((w) => ({ ...w, grade: "atGrade" as const })), nodes: [] });
   check(
     "the same two ways at one grade are still flagged",
     validateSystem(store.getState().system).some((i) => i.id.startsWith("crossing-")),
