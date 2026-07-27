@@ -44,11 +44,15 @@ const SERVICE_LAYERS = [LYR_SERVICES_SOLID, LYR_SERVICES_UNDERGROUND];
 const WAY_LAYERS = [LYR_WAYS_SOLID, LYR_WAYS_DASHED, LYR_LANE_SURFACES];
 
 // Coalesces a fast-firing callback to at most once per animation frame,
-// keeping only the latest call's arguments. Every drag handler below writes
-// to the store on "mousemove", which fires far faster than the map can
-// actually repaint (each write triggers a full feature rebuild) — without
-// this, dragging a point re-rebuilds the entire system once per raw mouse
-// event instead of once per painted frame.
+// keeping only the latest call's arguments. Raw "mousemove" fires far faster
+// than the map can actually repaint. Drag handlers that write to the store
+// need this so a moved point doesn't re-rebuild the entire system once per
+// raw mouse event instead of once per painted frame; drag handlers that only
+// update the rubber-band SRC_PREVIEW source need it too — an un-throttled
+// setData still round-trips through the source's worker on every event, and
+// on a large system that backs up badly (see startDraw/startExtendDrag/the
+// facility+station-land+structure rectangle drags below, all of which route
+// their preview writes through this).
 function rafThrottle<A extends unknown[]>(fn: (...args: A) => void) {
   let frame: number | null = null;
   let pending: A | null = null;
@@ -177,12 +181,32 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     let last = e.point;
     let moved = false;
     canvas.style.cursor = "grabbing";
+    // Accumulate raw deltas and issue one panBy per animation frame (same
+    // idiom as startGroupDrag's nudge accumulator below) — panBy re-renders
+    // every layer in the whole style, so calling it once per raw mousemove
+    // (which can fire far faster than the map can paint) starved MapLibre's
+    // own render/tile pipeline badly enough to blank the map mid-drag, not
+    // just lag it.
+    let pendingDx = 0;
+    let pendingDy = 0;
+    let frame: number | null = null;
+    const flush = () => {
+      frame = null;
+      if (pendingDx === 0 && pendingDy === 0) return;
+      map.panBy([pendingDx, pendingDy], { duration: 0 });
+      pendingDx = 0;
+      pendingDy = 0;
+    };
     const onMove = (ev: MapMouseEvent) => {
       if (Math.hypot(ev.point.x - last.x, ev.point.y - last.y) > 1) moved = true;
-      map.panBy([last.x - ev.point.x, last.y - ev.point.y], { duration: 0 });
+      pendingDx += last.x - ev.point.x;
+      pendingDy += last.y - ev.point.y;
       last = ev.point;
+      if (frame === null) frame = requestAnimationFrame(flush);
     };
     const onUp = (ev: MapMouseEvent) => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      flush();
       map.off("mousemove", onMove);
       canvas.style.cursor = cursorFor();
       if (rightButton && !moved) {
@@ -253,12 +277,16 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     const wayId = feature.properties.wayId as string;
     const atStart = (feature.properties.index as number) === 0;
     let dragged = false;
+    const previewThrottle = rafThrottle((c: LngLat) => {
+      const from = wayEndpoint(wayId, atStart);
+      if (from) setPreview([from, c]);
+    });
     const onMove = (ev: MapMouseEvent) => {
       dragged = true;
-      const from = wayEndpoint(wayId, atStart);
-      if (from) setPreview([from, lngLatOf(ev)]);
+      previewThrottle.call(lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
+      previewThrottle.cancel();
       endGesture();
       map.off("mousemove", onMove);
       setPreview(null);
@@ -274,6 +302,7 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     map.on("mousemove", onMove);
     map.once("mouseup", onUp);
     beginGesture(() => {
+      previewThrottle.cancel();
       map.off("mousemove", onMove);
       map.off("mouseup", onUp);
       setPreview(null); // nothing committed yet — cancel just drops the drag
@@ -379,11 +408,13 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
 
     const startPt = e.point;
     let dragged = false;
+    const previewThrottle = rafThrottle((c: LngLat) => setPreview(closedForPreview(rectCorners(startCoord, c))));
     const onMove = (ev: MapMouseEvent) => {
       if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
-      if (dragged) setPreview(closedForPreview(rectCorners(startCoord, lngLatOf(ev))));
+      if (dragged) previewThrottle.call(lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
+      previewThrottle.cancel();
       map.off("mousemove", onMove);
       if (dragged) {
         const corners = rectCorners(startCoord, lngLatOf(ev));
@@ -432,11 +463,13 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
 
     const startPt = e.point;
     let dragged = false;
+    const previewThrottle = rafThrottle((c: LngLat) => setPreview(closedForPreview(rectCorners(startCoord, c))));
     const onMove = (ev: MapMouseEvent) => {
       if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
-      if (dragged) setPreview(closedForPreview(rectCorners(startCoord, lngLatOf(ev))));
+      if (dragged) previewThrottle.call(lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
+      previewThrottle.cancel();
       map.off("mousemove", onMove);
       if (dragged) {
         setPreview(null);
@@ -465,11 +498,13 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     const startCoord = lngLatOf(e);
     const startPt = e.point;
     let dragged = false;
+    const previewThrottle = rafThrottle((c: LngLat) => setPreview(closedForPreview(rectCorners(startCoord, c))));
     const onMove = (ev: MapMouseEvent) => {
       if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
-      if (dragged) setPreview(closedForPreview(rectCorners(startCoord, lngLatOf(ev))));
+      if (dragged) previewThrottle.call(lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
+      previewThrottle.cancel();
       map.off("mousemove", onMove);
       if (dragged) {
         setPreview(null);
@@ -654,11 +689,13 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     suppressClick = true;
     const startPt = e.point;
     let dragged = false;
+    const marqueeThrottle = rafThrottle((pt: ScreenPoint) => setMarquee(startPt, pt));
     const onMove = (ev: MapMouseEvent) => {
       dragged = true;
-      setMarquee(startPt, ev.point);
+      marqueeThrottle.call(ev.point);
     };
     const onUp = (ev: MapMouseEvent) => {
+      marqueeThrottle.cancel();
       map.off("mousemove", onMove);
       clearMarquee();
       if (!dragged) return; // a Shift-click on empty space stays a no-op
@@ -842,12 +879,16 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     const committedWayId = wayId;
     let dragged = false;
 
+    const previewThrottle = rafThrottle((c: LngLat) => {
+      const last = wayEndpoint(committedWayId, extendAtStart);
+      if (last) setPreview([last, c]);
+    });
     const onMove = (ev: MapMouseEvent) => {
       if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
-      const last = wayEndpoint(committedWayId, extendAtStart);
-      if (last) setPreview([last, lngLatOf(ev)]);
+      previewThrottle.call(lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
+      previewThrottle.cancel();
       endGesture();
       map.off("mousemove", onMove);
       // Seed-only click just grabbed the start (fresh or resumed); every
@@ -861,6 +902,7 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     map.on("mousemove", onMove);
     map.once("mouseup", onUp);
     beginGesture(() => {
+      previewThrottle.cancel();
       map.off("mousemove", onMove);
       map.off("mouseup", onUp);
       setPreview(null);
