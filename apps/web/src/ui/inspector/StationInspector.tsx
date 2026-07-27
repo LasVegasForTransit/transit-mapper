@@ -1,10 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEditor } from '../../editor/EditorProvider';
-import { INTERCHANGE_METERS, servedWayIds, serviceWayIds } from '@transitmapper/core/model/geo';
+import type { Service } from '@transitmapper/core/model/system';
+import {
+  activeSchedule,
+  dayScopeAt,
+  formatSimClock,
+  minutesOfDay,
+} from '@transitmapper/core/sim/clock';
+import {
+  combinedHeadwayMinutes,
+  servicesAtStation,
+  typicalWaitMinutes,
+} from '@transitmapper/core/sim/frequency';
 import { InspectorTabs, type InspectorTab } from '../InspectorTabs';
 import { Panel } from '../Panel';
 import { blurOnEnter } from '../formUtils';
 import { Icon } from '../Icon';
+import { useSim } from '../SimProvider';
+import { useSimTime } from '../useSimTime';
 import { useView } from '../ViewProvider';
 import { EmptyInspector, Stat } from './shared';
 
@@ -53,8 +66,7 @@ export function StationInspector({ id }: StationInspectorProps) {
   }, [focusNameToken]);
 
   if (!station) return <EmptyInspector />;
-  const nearWays = new Set(servedWayIds(station.coord, ways, INTERCHANGE_METERS));
-  const served = services.filter((sv) => serviceWayIds(sv).some((w) => nearWays.has(w)));
+  const served = servicesAtStation(ways, services, station);
 
   const tabs: InspectorTab[] = [
     { id: 'stop', label: 'Stop' },
@@ -106,11 +118,14 @@ export function StationInspector({ id }: StationInspectorProps) {
             ))}
           </div>
 
+          {served.length > 0 && <CombinedService served={served} />}
+
           <label className="field-label" htmlFor="dwell-input">
             Dwell time
           </label>
           <p className="insp-sub">
-            How long a vehicle waits here before departing, in the ambient animation.
+            How long a vehicle waits here before departing. Counts toward the round trip, so a
+            longer dwell means more vehicles to hold the headway.
           </p>
           <div className="freq-row">
             <input
@@ -344,4 +359,59 @@ function StationGrouping({ stationId, readOnly }: StationGroupingProps) {
       )}
     </>
   );
+}
+
+interface CombinedServiceProps {
+  served: Service[];
+}
+
+/**
+ * How often something turns up here, counting every route together.
+ *
+ * The "Served by" list above says which routes call here; this says what that
+ * amounts to. Two 10-minute routes down the same corridor are a 5-minute
+ * service to anyone standing here, and that is the whole point of drawing
+ * overlapping lines — but until this readout the editor never said it.
+ *
+ * Resolved against the simulated clock, so it agrees with what the map is
+ * doing: a route outside its span isn't counted, because it isn't there.
+ */
+function CombinedService({ served }: CombinedServiceProps) {
+  const simMs = useSimTime();
+  const { pinnedPeriod } = useSim();
+  const when = pinnedPeriod ? `“${pinnedPeriod}”` : formatSimClock(simMs);
+
+  const running = served
+    .map((service) => activeSchedule(service, minutesOfDay(simMs), dayScopeAt(simMs), pinnedPeriod))
+    .filter((active) => active !== null);
+  const headways = running
+    .map((active) => active.headwayMinutes)
+    .filter((h): h is number => h !== undefined);
+  const combined = combinedHeadwayMinutes(headways);
+  const routes = running.length === 1 ? '1 route' : `${running.length} routes`;
+
+  if (running.length === 0)
+    return <p className="panel-hint">Nothing serves this stop at {when}.</p>;
+  if (combined === null)
+    return (
+      <p className="panel-hint">
+        At {when}: {routes}, with no frequency set.
+      </p>
+    );
+  return (
+    <p className="panel-hint">
+      At {when}: {routes} · a vehicle about every {formatMinutes(combined)} · about{' '}
+      {formatMinutes(typicalWaitMinutes(combined))} of waiting.
+      {headways.length > 1
+        ? ` Combining ${headways.map((h) => `${h} min`).join(' + ')}, assuming they aren’t timed against each other and any of them will do.`
+        : ''}
+    </p>
+  );
+}
+
+/** Round to something a person would say out loud: whole minutes above ten,
+ *  one decimal below, since "every 3.3 min" is meaningful and "every 12.4 min"
+ *  is false precision. */
+function formatMinutes(minutes: number): string {
+  return minutes >= 10 ? `${Math.round(minutes)} min` : `${Math.round(minutes * 10) / 10} min`;
 }

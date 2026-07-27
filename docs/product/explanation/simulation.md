@@ -173,6 +173,28 @@ Two practical notes. The clock starts at Monday 08:00 so a fresh map isn't
 empty. And a service that isn't running is skipped before its geometry is
 resolved, so a system half-asleep at 23:30 does roughly half the work.
 
+## Routes that share a stop
+
+Two services down the same corridor are evaluated **independently** — each
+resolves its own schedule, plan and runs, and neither knows the other exists.
+Their vehicles already ride distinct lanes and draw at distinct offsets, so
+nothing needs coordinating.
+
+What they add up to is a separate question, and the most useful number the
+tool produces from overlapping lines: two 10-minute routes are a **5-minute**
+service to anyone standing between them. Frequencies add; headways don't.
+
+That's computed as analysis over the same schedule data the animation resolves
+against (`packages/core/src/sim/frequency.ts`), not measured off the animation
+— so it's exact, instant, and readable in the Station inspector without
+watching the map. The two are independent routes to the same number, which
+makes each a check on the other.
+
+The typical-wait figure assumes riders turn up without consulting a timetable
+and that the routes aren't deliberately timed against each other. Both hold
+for frequent, turn-up-and-go service, and the inspector says so rather than
+leaving it implied.
+
 ## Where the state lives
 
 Three kinds, kept apart on purpose.
@@ -204,6 +226,7 @@ about four updates a second.
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------- |
 | `packages/core/src/sim/clock.ts`     | the speed ladder, time-of-day and weekday math, span math. Pure.                                          |
 | `packages/core/src/sim/fleet.ts`     | fleet size, cycle time, layover, and where run _i_ is. Pure.                                              |
+| `packages/core/src/sim/frequency.ts` | which services call at a stop, and their combined frequency. Pure.                                        |
 | `packages/core/src/sim/timetable.ts` | travel and dwell along one pattern. Pure.                                                                 |
 | `apps/web/src/sim/simClock.ts`       | the `SimClock` instance: the mutable number and its subscribers.                                          |
 | `apps/web/src/sim/vehicles.ts`       | the 30 Hz animation host — advances the clock, asks core where everything is, pushes GeoJSON to MapLibre. |

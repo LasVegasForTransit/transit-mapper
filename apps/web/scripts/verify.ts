@@ -153,6 +153,7 @@ import type {
   LngLat,
   Node,
   Service,
+  Station,
   TransitSystem,
   Way,
 } from '@transitmapper/core/model/system';
@@ -190,6 +191,12 @@ import {
   weekdayLabel,
 } from '@transitmapper/core/sim/clock';
 import { planService, runStateAt } from '@transitmapper/core/sim/fleet';
+import {
+  combinedHeadwayMinutes,
+  servicesAtStation,
+  typicalWaitMinutes,
+  vehiclesPerHour,
+} from '@transitmapper/core/sim/frequency';
 import { createSimClock } from '../src/sim/simClock';
 import {
   generateToken,
@@ -9502,72 +9509,271 @@ function buildGrid() {
 // round-tripped through serialize.ts, and read by nothing. These are the rules
 // that make them mean something on the map.
 {
-  const base: Service = { id: "as1", name: "Route", modeId: "bus", color: "#333", patterns: [] };
+  const base: Service = { id: 'as1', name: 'Route', modeId: 'bus', color: '#333', patterns: [] };
   const at = (hhmm: string) => parseHhMm(hhmm)!;
 
   // A service with nothing set at all runs all day. This is every
   // GTFS-imported route, and changing it would silently empty an imported map.
-  const bare = activeSchedule(base, at("03:00"), "weekday");
-  check("a service with no schedule at all runs at any hour", bare !== null);
-  check("…and states no headway, so it runs a single vehicle", bare?.headwayMinutes === undefined);
+  const bare = activeSchedule(base, at('03:00'), 'weekday');
+  check('a service with no schedule at all runs at any hour', bare !== null);
+  check('…and states no headway, so it runs a single vehicle', bare?.headwayMinutes === undefined);
 
   // The flat fields: a headway bounded by a span.
-  const simple: Service = { ...base, frequencyMinutes: 10, spanStart: "06:00", spanEnd: "23:00" };
-  check("a service inside its span runs at its stated headway", activeSchedule(simple, at("08:00"), "weekday")?.headwayMinutes === 10);
-  check("a service outside its span runs no vehicles", activeSchedule(simple, at("03:00"), "weekday") === null);
-  check("a span's first minute is already service", activeSchedule(simple, at("06:00"), "weekday") !== null);
-  check("a span's last minute is already over", activeSchedule(simple, at("23:00"), "weekday") === null);
+  const simple: Service = { ...base, frequencyMinutes: 10, spanStart: '06:00', spanEnd: '23:00' };
+  check(
+    'a service inside its span runs at its stated headway',
+    activeSchedule(simple, at('08:00'), 'weekday')?.headwayMinutes === 10,
+  );
+  check(
+    'a service outside its span runs no vehicles',
+    activeSchedule(simple, at('03:00'), 'weekday') === null,
+  );
+  check(
+    "a span's first minute is already service",
+    activeSchedule(simple, at('06:00'), 'weekday') !== null,
+  );
+  check(
+    "a span's last minute is already over",
+    activeSchedule(simple, at('23:00'), 'weekday') === null,
+  );
 
-  const owl: Service = { ...base, frequencyMinutes: 30, spanStart: "22:00", spanEnd: "02:00" };
-  check("a span crossing midnight is still running at 00:30", activeSchedule(owl, 30, "weekday") !== null);
-  check("a span crossing midnight is not running at midday", activeSchedule(owl, at("12:00"), "weekday") === null);
+  const owl: Service = { ...base, frequencyMinutes: 30, spanStart: '22:00', spanEnd: '02:00' };
+  check(
+    'a span crossing midnight is still running at 00:30',
+    activeSchedule(owl, 30, 'weekday') !== null,
+  );
+  check(
+    'a span crossing midnight is not running at midday',
+    activeSchedule(owl, at('12:00'), 'weekday') === null,
+  );
 
   // A detailed schedule supersedes the flat fields, period by period.
   const scheduled: Service = {
     ...base,
     frequencyMinutes: 10,
-    spanStart: "06:00",
-    spanEnd: "23:00",
+    spanStart: '06:00',
+    spanEnd: '23:00',
     schedule: [
-      { id: "p1", label: "Peak", days: "weekday", spanStart: "06:00", spanEnd: "09:00", frequencyMinutes: 5 },
-      { id: "p2", label: "Midday", days: "weekday", spanStart: "09:00", spanEnd: "15:00", frequencyMinutes: 15 },
-      { id: "p3", label: "Weekend", days: "weekend", spanStart: "08:00", spanEnd: "20:00", frequencyMinutes: 30 },
+      {
+        id: 'p1',
+        label: 'Peak',
+        days: 'weekday',
+        spanStart: '06:00',
+        spanEnd: '09:00',
+        frequencyMinutes: 5,
+      },
+      {
+        id: 'p2',
+        label: 'Midday',
+        days: 'weekday',
+        spanStart: '09:00',
+        spanEnd: '15:00',
+        frequencyMinutes: 15,
+      },
+      {
+        id: 'p3',
+        label: 'Weekend',
+        days: 'weekend',
+        spanStart: '08:00',
+        spanEnd: '20:00',
+        frequencyMinutes: 30,
+      },
     ],
   };
-  check("a schedule period's headway supersedes the flat frequency", activeSchedule(scheduled, at("07:00"), "weekday")?.headwayMinutes === 5);
-  check("the period is named, so the UI can say which one is running", activeSchedule(scheduled, at("07:00"), "weekday")?.label === "Peak");
-  check("a period's headway takes over at the minute it starts", activeSchedule(scheduled, at("09:00"), "weekday")?.headwayMinutes === 15);
-  check("an hour no period covers runs nothing, even inside the flat span", activeSchedule(scheduled, at("16:00"), "weekday") === null);
-  check("a weekday-only period doesn't run at the weekend", activeSchedule(scheduled, at("07:00"), "weekend") === null);
-  check("a weekend period runs at the weekend", activeSchedule(scheduled, at("10:00"), "weekend")?.headwayMinutes === 30);
-  check("a weekend period doesn't run on a weekday", activeSchedule(scheduled, at("10:00"), "weekday")?.label !== "Weekend");
+  check(
+    "a schedule period's headway supersedes the flat frequency",
+    activeSchedule(scheduled, at('07:00'), 'weekday')?.headwayMinutes === 5,
+  );
+  check(
+    'the period is named, so the UI can say which one is running',
+    activeSchedule(scheduled, at('07:00'), 'weekday')?.label === 'Peak',
+  );
+  check(
+    "a period's headway takes over at the minute it starts",
+    activeSchedule(scheduled, at('09:00'), 'weekday')?.headwayMinutes === 15,
+  );
+  check(
+    'an hour no period covers runs nothing, even inside the flat span',
+    activeSchedule(scheduled, at('16:00'), 'weekday') === null,
+  );
+  check(
+    "a weekday-only period doesn't run at the weekend",
+    activeSchedule(scheduled, at('07:00'), 'weekend') === null,
+  );
+  check(
+    'a weekend period runs at the weekend',
+    activeSchedule(scheduled, at('10:00'), 'weekend')?.headwayMinutes === 30,
+  );
+  check(
+    "a weekend period doesn't run on a weekday",
+    activeSchedule(scheduled, at('10:00'), 'weekday')?.label !== 'Weekend',
+  );
 
   const daily: Service = {
     ...base,
-    schedule: [{ id: "d1", label: "All day", days: "daily", spanStart: "05:00", spanEnd: "01:00", frequencyMinutes: 12 }],
+    schedule: [
+      {
+        id: 'd1',
+        label: 'All day',
+        days: 'daily',
+        spanStart: '05:00',
+        spanEnd: '01:00',
+        frequencyMinutes: 12,
+      },
+    ],
   };
-  check("a daily period runs on weekdays", activeSchedule(daily, at("10:00"), "weekday")?.headwayMinutes === 12);
-  check("a daily period runs at the weekend too", activeSchedule(daily, at("10:00"), "weekend")?.headwayMinutes === 12);
+  check(
+    'a daily period runs on weekdays',
+    activeSchedule(daily, at('10:00'), 'weekday')?.headwayMinutes === 12,
+  );
+  check(
+    'a daily period runs at the weekend too',
+    activeSchedule(daily, at('10:00'), 'weekend')?.headwayMinutes === 12,
+  );
 
   const malformed: Service = {
     ...base,
-    schedule: [{ id: "m1", label: "Broken", days: "daily", spanStart: "nope", spanEnd: "also nope", frequencyMinutes: 12 }],
+    schedule: [
+      {
+        id: 'm1',
+        label: 'Broken',
+        days: 'daily',
+        spanStart: 'nope',
+        spanEnd: 'also nope',
+        frequencyMinutes: 12,
+      },
+    ],
   };
-  check("a period with an unparseable span is skipped rather than guessed at", activeSchedule(malformed, at("10:00"), "weekday") === null);
+  check(
+    'a period with an unparseable span is skipped rather than guessed at',
+    activeSchedule(malformed, at('10:00'), 'weekday') === null,
+  );
 
   // Pinning a scenario: show one service configuration whatever the clock says.
-  check("a pinned period overrides the clock's own period", activeSchedule(scheduled, at("14:00"), "weekday", "Peak")?.headwayMinutes === 5);
-  check("a pinned period runs at an hour nothing would otherwise run", activeSchedule(scheduled, at("03:00"), "weekday", "Peak")?.headwayMinutes === 5);
-  check("pinning ignores the day of the week too", activeSchedule(scheduled, at("14:00"), "weekend", "Peak")?.headwayMinutes === 5);
-  check("pinning matches a period name case-insensitively", activeSchedule(scheduled, at("14:00"), "weekday", "peak")?.headwayMinutes === 5);
-  check("a service with no period by that name doesn't run in that scenario", activeSchedule(scheduled, at("14:00"), "weekday", "Owl") === null);
-  check("a service with no detailed schedule runs its flat headway in any scenario", activeSchedule(simple, at("03:00"), "weekday", "Peak")?.headwayMinutes === 10);
+  check(
+    "a pinned period overrides the clock's own period",
+    activeSchedule(scheduled, at('14:00'), 'weekday', 'Peak')?.headwayMinutes === 5,
+  );
+  check(
+    'a pinned period runs at an hour nothing would otherwise run',
+    activeSchedule(scheduled, at('03:00'), 'weekday', 'Peak')?.headwayMinutes === 5,
+  );
+  check(
+    'pinning ignores the day of the week too',
+    activeSchedule(scheduled, at('14:00'), 'weekend', 'Peak')?.headwayMinutes === 5,
+  );
+  check(
+    'pinning matches a period name case-insensitively',
+    activeSchedule(scheduled, at('14:00'), 'weekday', 'peak')?.headwayMinutes === 5,
+  );
+  check(
+    "a service with no period by that name doesn't run in that scenario",
+    activeSchedule(scheduled, at('14:00'), 'weekday', 'Owl') === null,
+  );
+  check(
+    'a service with no detailed schedule runs its flat headway in any scenario',
+    activeSchedule(simple, at('03:00'), 'weekday', 'Peak')?.headwayMinutes === 10,
+  );
 
   // The scenarios on offer are derived from the periods themselves.
-  const labels = schedulePeriodLabels([scheduled, daily, { ...base, id: "as2" }]);
-  check("scenario names are collected from every service's periods", labels.join("|") === "Peak|Midday|Weekend|All day");
-  check("a system with no detailed schedules offers no scenarios", schedulePeriodLabels([simple, base]).length === 0);
-  check("the same period name on two services is one scenario", schedulePeriodLabels([scheduled, { ...scheduled, id: "as3" }]).length === 3);
+  const labels = schedulePeriodLabels([scheduled, daily, { ...base, id: 'as2' }]);
+  check(
+    "scenario names are collected from every service's periods",
+    labels.join('|') === 'Peak|Midday|Weekend|All day',
+  );
+  check(
+    'a system with no detailed schedules offers no scenarios',
+    schedulePeriodLabels([simple, base]).length === 0,
+  );
+  check(
+    'the same period name on two services is one scenario',
+    schedulePeriodLabels([scheduled, { ...scheduled, id: 'as3' }]).length === 3,
+  );
+}
+
+// --- combined frequency where routes share a stop (core/sim/frequency.ts) ---
+// Frequencies add, headways don't. This is the number that makes overlapping
+// lines worth drawing, and nothing in the editor used to state it.
+{
+  check(
+    'two ten-minute routes at one stop give a five-minute combined headway',
+    combinedHeadwayMinutes([10, 10]) === 5,
+  );
+  check(
+    'three ten-minute routes give a three-and-a-third-minute headway',
+    Math.abs(combinedHeadwayMinutes([10, 10, 10])! - 10 / 3) < 1e-9,
+  );
+  check(
+    "a stop served by one route reports that route's own headway",
+    combinedHeadwayMinutes([12]) === 12,
+  );
+  check(
+    'an infrequent route barely improves a frequent one',
+    Math.abs(combinedHeadwayMinutes([10, 60])! - 60 / 7) < 1e-9,
+  );
+  check(
+    'combining is never worse than the best single route',
+    combinedHeadwayMinutes([10, 60])! <= 10,
+  );
+  check(
+    'a stop with no frequencies reports nothing rather than infinity',
+    combinedHeadwayMinutes([]) === null,
+  );
+  check(
+    'a nonsense headway is ignored rather than dividing by zero',
+    combinedHeadwayMinutes([0, 10]) === 10,
+  );
+
+  check('a ten-minute headway is six vehicles an hour', vehiclesPerHour([10]) === 6);
+  check('vehicles per hour add across routes', vehiclesPerHour([10, 15]) === 10);
+  check('turning up at random means waiting half the headway', typicalWaitMinutes(10) === 5);
+
+  // servicesAtStation: the same proximity rule the inspector's "Served by"
+  // list uses, moved into core so it's testable and stated once.
+  {
+    const sys = createEmptySystem();
+    const road = (id: string, pts: LngLat[]): Way => ({
+      id,
+      typeId: 'road',
+      points: pts,
+      geometry: 'straight',
+      grade: 'atGrade',
+      profile: defaultProfileFor('road'),
+    });
+    const way = road('fq-near', [
+      [-115.24, 36.1],
+      [-115.17, 36.1],
+    ]);
+    const otherWay = road('fq-far', [
+      [-115.24, 36.5],
+      [-115.17, 36.5],
+    ]);
+    sys.ways = [way, otherWay];
+    sys.services = [
+      {
+        id: 'sv-on',
+        name: 'On it',
+        modeId: 'bus',
+        color: '#111',
+        patterns: [{ id: 'pa', wayIds: [way.id] }],
+      },
+      {
+        id: 'sv-off',
+        name: 'Miles away',
+        modeId: 'bus',
+        color: '#222',
+        patterns: [{ id: 'pb', wayIds: [otherWay.id] }],
+      },
+    ];
+    const stop: Station = { id: 'st-here', coord: [-115.2, 36.1] };
+    const here = servicesAtStation(sys.ways, sys.services, stop);
+    check('a service running past a stop serves it', here.length === 1 && here[0].id === 'sv-on');
+    const nowhere = servicesAtStation(sys.ways, sys.services, {
+      id: 'st-far',
+      coord: [-115.2, 36.3],
+    });
+    check('a stop nowhere near any line is served by nothing', nowhere.length === 0);
+  }
 }
 
 // --- the SimClock instance (apps/web/src/sim/simClock.ts) ---
