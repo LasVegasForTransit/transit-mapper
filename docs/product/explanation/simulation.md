@@ -238,6 +238,28 @@ The line between the last two groups is the one that matters: `packages/core`
 decides _what the answer is_ and the app decides _when to ask_. That is why the
 simulator can be tested without a browser.
 
+## Cost, and what hasn't been measured
+
+The simulation resolves on a fixed 30 Hz tick, decoupled from the render loop,
+and skips whole patterns whose path is off-screen. Two things keep it cheap:
+
+- A service that isn't running is skipped before its geometry is resolved.
+- Schedule resolution — walking each service's periods and parsing their spans
+  — is redone only when the simulated **minute** changes, not every frame.
+
+At agency scale the honest position is this: **an imported GTFS feed costs the
+same as it did before any of this landed**, because import brings in no timing,
+so every pattern plans exactly one vehicle. That relationship is pinned by a
+check in the verify suite rather than left as an assumption.
+
+It is also the thing to watch. The moment headways are derived from a real feed
+(the natural next step), hundreds of patterns stop running one vehicle each and
+start running as many as their headway implies. **That change must not land
+without a before/after measurement** — `__panBench` / `__zoomBench` with
+`__perf.vehicles` toggled, on a real machine with the tab focused. A headless
+browser parks `requestAnimationFrame`, so those numbers cannot be taken there,
+and none have been taken for this work.
+
 ## Driving the clock during development
 
 In a development build, `window.__sim` drives the clock directly — useful

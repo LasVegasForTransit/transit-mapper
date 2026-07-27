@@ -8,14 +8,14 @@ and many services can share one way.
 
 All kind fields (`typeId`, `modeId`, `kindId`, and so on) are string ids
 into the catalogs; see [Catalogs](catalogs.md). The schema is versioned
-(currently v7) and migrated on load in `src/model/serialize.ts`, so older
+(currently v9) and migrated on load in `packages/core/src/model/serialize.ts`, so older
 saves and shared snapshots keep working.
 
 ## TransitSystem
 
 | Field                       | Meaning                                                         |
 | --------------------------- | --------------------------------------------------------------- |
-| `version`                   | Schema version (7).                                             |
+| `version`                   | Schema version (9).                                             |
 | `id`, `name`, `description` | Identity.                                                       |
 | `viewport`                  | Saved camera (`center`, `zoom`).                                |
 | `ways`                      | Physical infrastructure.                                        |
@@ -25,6 +25,7 @@ saves and shared snapshots keep working.
 | `groups`                    | Bundles of members; a facility complex when it has a footprint. |
 | `nodes`                     | Junctions — coordinates shared by 2+ ways.                      |
 | `namedWays`                 | Shared identities across ways ("Decatur Avenue").               |
+| `vehicleKinds`              | User-defined vehicle types a service can run.                   |
 | `palette`                   | The system's saved colors.                                      |
 
 ## Way — physical infrastructure
@@ -62,7 +63,7 @@ interface LaneSpec {
 The profile is constant along a way. Where a street's section changes (a
 turn pocket appears, a lane drops), the way is split and the pieces share
 identity through a `NamedWay`. Capacity (a road's "lanes", a railway's
-"tracks") is **derived** from the profile (`src/model/profile.ts`), never
+"tracks") is **derived** from the profile (`packages/core/src/model/profile.ts`), never
 stored.
 
 ## Node — junctions
@@ -82,10 +83,10 @@ store mutation that inserts, deletes, or moves control points keeps `refs`
 
 Nodes are built three ways, all producing the same record. Editing forms
 them as a side effect of drawing, splitting, and joining
-(`src/editor/store.ts`). Loading a document that predates stored nodes
+(`apps/web/src/editor/store.ts`). Loading a document that predates stored nodes
 derives them from coordinate coincidence (`deriveNodesFromWays` in
-`src/model/serialize.ts`). OSM import derives them from OSM's node ids
-(`src/model/import.ts`), which is exact — two imported ways join exactly
+`packages/core/src/model/serialize.ts`). OSM import derives them from OSM's node ids
+(`packages/core/src/model/import.ts`), which is exact — two imported ways join exactly
 when OSM says they share a node, so co-located but unconnected
 infrastructure (a tram in a street, a bridge over a road) stays separate.
 An import also sets `control` where OSM records a signal, stop, or
@@ -97,7 +98,7 @@ replacing a cross-section cannot leave an invisible entry behind for a later
 lane to inherit.
 
 Two ways at different `grade`s never need a junction between them, and the
-crossing check in `src/model/validate.ts` skips such pairs — an elevated way
+crossing check in `packages/core/src/model/validate.ts` skips such pairs — an elevated way
 over a surface street is a bridge, not a missing junction.
 
 ## NamedWay — shared identity
@@ -122,7 +123,8 @@ and one or more `Pattern`s. Each pattern is an ordered list of `wayIds`:
 a plain line has one pattern; two or more model branches sharing the
 service's identity ("via Airport").
 
-Scheduling stays at the level of headways rather than timetables:
+Scheduling stays at the level of headways rather than timetables. These are
+what the simulation runs on — see [The simulation](../explanation/simulation.md):
 
 - Quick fields: `frequencyMinutes` (peak headway), `spanStart`/`spanEnd`
   (24-hour `"HH:MM"`).
@@ -132,13 +134,14 @@ Scheduling stays at the level of headways rather than timetables:
 
 ## Station
 
-| Field          | Meaning                                                                                                                    |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `coord`        | Network-node position, snapped onto its way.                                                                               |
-| `anchor`       | `{wayId, t}` — normalized arc-length position along the way; how a station follows its way when the alignment is reshaped. |
-| `footprint`    | The station's land: a boundary polygon drawn in the Infrastructure view.                                                   |
-| `platforms`    | Platform polygons inside the station (`edges: 1` side, `2` island).                                                        |
-| `dwellSeconds` | Vehicle dwell time for the ambient animation.                                                                              |
+| Field          | Meaning                                                                                                                                   |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `coord`        | Network-node position, snapped onto its way.                                                                                              |
+| `anchor`       | `{wayId, t}` — normalized arc-length position along the way; how a station follows its way when the alignment is reshaped.                |
+| `footprint`    | The station's land: a boundary polygon drawn in the Infrastructure view.                                                                  |
+| `platforms`    | Platform polygons inside the station (`edges: 1` side, `2` island).                                                                       |
+| `dwellSeconds` | How long a vehicle waits here. Counts toward the round trip, so it feeds fleet size — see [The simulation](../explanation/simulation.md). |
+| `majorStop`    | Label this stop from a lower zoom, like an interchange.                                                                                   |
 
 ## Facility and Group
 
