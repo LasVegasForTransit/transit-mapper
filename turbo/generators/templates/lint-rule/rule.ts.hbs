@@ -1,0 +1,35 @@
+import type { Rule } from 'eslint';
+
+/**
+ * {{description}}
+ *
+ * Say here why the compiler cannot express this. A rule duplicating something
+ * the type system already catches is a rule to delete.
+ */
+export const {{camelCase name}}: Rule.RuleModule = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description: '{{description}}',
+      // This anchor must resolve. Add the matching section to
+      // docs/development/explanation/enforcement-model.md.
+      url: 'https://github.com/LasVegasForTransit/transit-mapper/blob/main/docs/development/explanation/enforcement-model.md#{{name}}',
+    },
+    schema: [],
+    messages: {
+      // Say what to do instead, not only what is wrong.
+      violation: 'TODO: what was found, and what to do about it.',
+    },
+  },
+
+  create(context) {
+    return {
+      // Where a rule is about globals, prefer scope analysis over an
+      // Identifier visitor — see core-runtime-purity for why property keys
+      // and shadowed names otherwise each need special-casing.
+      Program() {
+        void context;
+      },
+    };
+  },
+};

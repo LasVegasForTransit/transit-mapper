@@ -12,6 +12,7 @@ allowBuilds:
 # drift onto different versions of the same library without it showing up as a
 # change to this file.
 catalog:
+  '@turbo/gen': '^2.10.7'
   '@typescript-eslint/parser': '^8.65.0'
   '@cloudflare/vitest-pool-workers': '^0.18.8'
   vitest: '^4.1.10'

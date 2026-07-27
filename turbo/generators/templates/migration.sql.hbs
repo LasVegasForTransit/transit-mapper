@@ -1,0 +1,10 @@
+-- {{name}}
+--
+-- Append-only from the moment this is committed. Wrangler records applied
+-- migrations by name and never re-runs one it has seen, so editing this file
+-- later applies to nothing that already exists and in full to anything
+-- created afterwards. `pnpm check` fails if this file is ever modified.
+--
+-- Prefer additive changes. A column dropped or renamed here is not safe
+-- against the previously deployed Worker, which is still serving traffic
+-- while a deploy rolls forward.

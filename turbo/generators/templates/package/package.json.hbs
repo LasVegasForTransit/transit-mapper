@@ -1,0 +1,17 @@
+{
+  "name": "@transitmapper/{{name}}",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -b --noEmit",
+    "lint": "eslint .",
+    "verify": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "catalog:"
+  }
+}
