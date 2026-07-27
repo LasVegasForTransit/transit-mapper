@@ -200,12 +200,20 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
   others, and a small index holds just id, name and timestamp so the list
   renders without loading every system in full.
 
-## apps/web/src/sim/ — moving vehicles
+## apps/web/src/sim/ — the running simulation
 
-- `vehicles.ts` — animates vehicles along service patterns on the map. It
-  reads the editor store and writes a GeoJSON source directly rather than
-  going through React, because it updates every frame and reconciliation at
-  that rate is the thing that would make it stutter.
+- `simClock.ts` — the `SimClock`: simulated time, and the only value in the
+  app that changes 30 times a second. Created by `ui/SimProvider.tsx` and
+  injected, never a module-level singleton.
+- `vehicles.ts` — the animation host. Advances the clock, asks
+  `packages/core/src/sim/` where every vehicle is, and writes a GeoJSON source
+  directly rather than going through React, because it updates every frame and
+  reconciliation at that rate is the thing that would make it stutter.
+- `devHandle.ts` — `window.__sim`, a development-only clock driver.
+
+The pure half lives in `packages/core/src/sim/` (`clock.ts`, `timetable.ts`),
+so the whole simulator is reachable from `pnpm verify` with no browser. See
+[The simulation](../../product/explanation/simulation.md).
 
 ## apps/web/src/embed/ — the embeddable map
 

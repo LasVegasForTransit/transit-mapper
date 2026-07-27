@@ -22,6 +22,7 @@ import type {
 } from '@transitmapper/core/model/system';
 import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from '../map/layers';
 import { vehiclesDisabledForPerf } from '../perf';
+import type { SimClock } from './simClock';
 // Pure motion kernel (framework-free, WASM-portable) — this module is its rAF/
 // MapLibre host. See packages/core/src/sim/timetable.ts.
 import {
@@ -274,6 +275,11 @@ function resolvePatternGeometry(
 // auto-pauses while the tab is hidden.
 const VEHICLE_UPDATE_INTERVAL_MS = 1000 / 30;
 
+// The most real time one tick may hand the simulated clock. Covers a dropped
+// frame or two without noticeably slowing the clock, while capping what a
+// hidden tab (rAF suspended, then one enormous delta on return) can advance.
+const MAX_TICK_ADVANCE_MS = 250;
+
 interface VehicleProps {
   color: string;
 }
@@ -282,6 +288,7 @@ type VehicleFeature = Feature<Point, VehicleProps>;
 export function attachVehicleAnimation(
   map: MLMap,
   store: EditorStore,
+  clock: SimClock,
   gate: VehicleGate,
 ): () => void {
   let frame: number;
@@ -299,9 +306,18 @@ export function attachVehicleAnimation(
 
   const tick = () => {
     frame = requestAnimationFrame(tick);
-    const now = performance.now();
-    if (now - lastUpdate < VEHICLE_UPDATE_INTERVAL_MS) return; // fixed-timestep throttle
-    lastUpdate = now;
+    const realNow = performance.now();
+    const sinceLast = realNow - lastUpdate;
+    if (sinceLast < VEHICLE_UPDATE_INTERVAL_MS) return; // fixed-timestep throttle
+    lastUpdate = realNow;
+    // Real elapsed time drives the simulated clock — but clamped, because rAF
+    // stops entirely while the tab is hidden, so `sinceLast` on the first tick
+    // back can be minutes. At 4x that would silently skip most of a simulated
+    // day the moment someone returned to the tab. The simulation advances
+    // while it's being watched; it doesn't run in the background and present
+    // a fait accompli. (The very first tick's delta is Infinity, and is
+    // clamped by the same rule.)
+    const simMs = clock.advance(Math.min(sinceLast, MAX_TICK_ADVANCE_MS));
     const source = map.getSource(SRC_VEHICLES) as GeoJSONSource | undefined;
     const infraSource = map.getSource(SRC_VEHICLES_INFRA) as GeoJSONSource | undefined;
     if (!source && !infraSource) return;
@@ -379,7 +395,12 @@ export function attachVehicleAnimation(
               )
             : 1;
           for (let i = 0; i < count; i++) {
-            const phase = (now / periodMs + i / count) % 1;
+            // Phased against SIMULATED time, so the speed control and pause
+            // work — and so a vehicle's position depends only on what time it
+            // is in the simulation, not on how long this tab has been open.
+            // periodMs is already in simulated ms: it comes from distance over
+            // speed, which is how long the trip actually takes.
+            const phase = (simMs / periodMs + i / count) % 1;
             const elapsedMs = phase * periodMs;
             // First half of the cycle: outbound (start→end). Second half:
             // the same timetable mirrored, since dwell points are the same

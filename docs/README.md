@@ -48,6 +48,8 @@ deepens.
   kinds, style/domain separation, menus versus modes.
 - [Geometry and routing](product/explanation/geometry-and-routing.md) — how lane
   offsets, junction footprints, and the route graph are derived.
+- [The simulation](product/explanation/simulation.md) — the simulated clock, why the
+  simulator holds no state, and what that buys and costs.
 - [Sharing surfaces](product/explanation/sharing-surfaces.md) — drawing a system
   without a map, and how preview images, embeds and oEmbed fit together.
 

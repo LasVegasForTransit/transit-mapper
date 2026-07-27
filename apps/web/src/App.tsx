@@ -21,6 +21,7 @@ import { Icon } from './ui/Icon';
 import { ImportProgressPill } from './ui/ImportProgressPill';
 import { Inspector } from './ui/Inspector';
 import { LinesPanel } from './ui/LinesPanel';
+import { SimControls, SimControlsCompact } from './ui/SimControls';
 import { Toolbar } from './ui/Toolbar';
 import { TopBarActions, TopBarBrand, ViewSwitch } from './ui/TopBar';
 import { useDelayedUnmount } from './ui/useDelayedUnmount';
@@ -336,6 +337,8 @@ export function App() {
             hasSupplementalContent={hasSupplementalContent}
             primaryToolbar={<TopBarActions />}
             viewSwitcher={<ViewSwitch />}
+            simControls={<SimControls />}
+            simControlsCompact={<SimControlsCompact />}
             modeToolbar={<Toolbar />}
             importStatus={<ImportProgressPill />}
           />

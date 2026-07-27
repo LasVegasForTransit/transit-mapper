@@ -53,6 +53,15 @@ whichever the cross-section editor is showing.
 | `O`       | Toggle one-way ⇄ two-way; with only the drawing tool armed, arms one-way for the next draw |
 | `1`–`9`   | Apply that numbered cross-section preset (or arm it as the drawing default)                |
 
+## Simulation
+
+See [The simulation](../explanation/simulation.md).
+
+| Key       | Action                                          |
+| --------- | ----------------------------------------------- |
+| `K`       | Run / pause the simulated clock                 |
+| `,` / `.` | One step slower / faster along the speed ladder |
+
 ## Other
 
 | Key | Action                            |

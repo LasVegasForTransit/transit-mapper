@@ -39,6 +39,12 @@ export const PATHS: Record<string, string> = {
   clock: 'M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v5l3.5 2',
   boundary: 'M4 15L6 7L13 3L20 6L19 16L11 19Z',
   lock: 'M6 11h12v9H6zM8 11V7a4 4 0 018 0v4',
+  // Transport controls. Drawn as closed outlines rather than solid glyphs so
+  // they read at the same weight as every other icon here — these sit in a row
+  // with the view switch, and a filled triangle next to hairline strokes reads
+  // as a different icon set.
+  play: 'M8 5.5l10 6.5-10 6.5z',
+  pause: 'M9 5.5v13M15 5.5v13',
 };
 
 interface IconProps {
