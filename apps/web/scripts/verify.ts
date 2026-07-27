@@ -1238,6 +1238,40 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("osmElementsToNetwork applies the tag-derived profile", isOneWay(osmElementsToNetwork(tagged).ways[0].profile));
 }
 
+// --- P4: OSM import reads bike lanes tagged on the roadway ---
+{
+  const kinds = (p: ReturnType<typeof profileFromOsmTags>) => p.lanes.map((l) => l.kindId).join(",");
+  const base = { highway: "secondary", lanes: "2" };
+
+  check("no cycleway tag means no bike lane", !kinds(profileFromOsmTags("road", "arterial", base)).includes("bike"));
+  check(
+    "cycleway=lane puts a bike lane at both kerbs",
+    kinds(profileFromOsmTags("road", "arterial", { ...base, cycleway: "lane" })) === "sidewalk,bike,drive,drive,bike,sidewalk",
+  );
+  check(
+    "cycleway:right=track is read as a bike lane too",
+    kinds(profileFromOsmTags("road", "arterial", { ...base, "cycleway:right": "track" })) === "sidewalk,drive,drive,bike,sidewalk",
+  );
+  // The cycleway is its own way in OSM, and imports as one — drawing a lane
+  // here as well would render the same bike infrastructure twice.
+  check("cycleway=separate adds no lane", !kinds(profileFromOsmTags("road", "arterial", { ...base, cycleway: "separate" })).includes("bike"));
+  check("cycleway=no adds no lane", !kinds(profileFromOsmTags("road", "arterial", { ...base, cycleway: "no" })).includes("bike"));
+  check(
+    "share_busway is bikes in the bus lane, not a lane of its own",
+    !kinds(profileFromOsmTags("road", "arterial", { ...base, cycleway: "share_busway" })).includes("bike"),
+  );
+  check(
+    "a bike lane does not consume a travel lane",
+    profileFromOsmTags("road", "arterial", { ...base, cycleway: "lane" }).lanes.filter((l) => l.kindId === "drive").length === 2,
+  );
+  // Kerb outwards-in: parking, then bike, then bus, then the travel lanes.
+  check(
+    "the kerb-inwards order is parking, bike, bus",
+    kinds(profileFromOsmTags("road", "arterial", { ...base, "parking:lane:right": "parallel", "cycleway:right": "lane", "busway:right": "lane" })) ===
+      "sidewalk,drive,drive,bus,bike,parking,sidewalk",
+  );
+}
+
 // --- P4: OSM import reads on-street parking ---
 {
   const kinds = (p: ReturnType<typeof profileFromOsmTags>) => p.lanes.map((l) => l.kindId).join(",");

@@ -259,6 +259,13 @@ const BUSWAY_PRESENT = new Set(["lane", "opposite_lane", "share_busway", "opposi
  *  vocabulary (`no`, `no_stopping`, `separate`, …) means no parking lane. */
 const PARKING_PRESENT = new Set(["parallel", "diagonal", "perpendicular", "marked", "yes", "lane", "street_side", "on_street"]);
 
+/** `cycleway` values that mean a bike lane runs along this roadway. A
+ *  mapper who instead drew the cycleway as its own way tags `separate` or
+ *  `no` here, and that separate way imports on its own — reading those as a
+ *  lane would draw the same bike lane twice. `share_busway` is deliberately
+ *  absent: that is bikes in the bus lane, not a lane of its own. */
+const CYCLEWAY_PRESENT = new Set(["lane", "track", "opposite_lane", "opposite_track", "sidepath"]);
+
 /**
  * The lanes that sit outboard of the travel lanes on each side, ordered
  * from the kerb inwards. OSM tags these as side-of-the-road attributes
@@ -278,6 +285,10 @@ function osmSideLanes(tags: Record<string, string>, oneway: "forward" | "backwar
   const parkingNew = osmSidePresence(tags, "parking", (v) => PARKING_PRESENT.has(v));
   if (parkingOld.left || parkingNew.left) left.push({ kindId: "parking", direction: "none" });
   if (parkingOld.right || parkingNew.right) right.push({ kindId: "parking", direction: "none" });
+
+  const bike = osmSidePresence(tags, "cycleway", (v) => CYCLEWAY_PRESENT.has(v));
+  if (bike.left) left.push({ kindId: "bike", direction: leftDirection });
+  if (bike.right) right.push({ kindId: "bike", direction: rightDirection });
 
   const bus = osmSidePresence(tags, "busway", (v) => BUSWAY_PRESENT.has(v));
   if (bus.left) left.push({ kindId: "bus", direction: leftDirection });

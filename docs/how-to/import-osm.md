@@ -42,6 +42,12 @@ defaulted from its type:
   how OSM tags them.
 - `parking:lane:<side>` and the newer `parking:<side>` add an on-street
   parking lane at that kerb, outboard of any bus lane.
+- `cycleway` (and `cycleway:left` / `cycleway:right`) adds a bike lane for
+  the case where OSM tags the lane on the roadway instead of drawing it as
+  its own way. `separate` means it *is* drawn separately and imports on its
+  own, so no lane is added here.
+
+Kerb inwards, a side reads: sidewalk, parking, bike, bus, then travel lanes.
 
 Where OSM says nothing, the way's class supplies a lane count — a local
 street comes in narrower than an arterial. Rail and bike ways keep their
