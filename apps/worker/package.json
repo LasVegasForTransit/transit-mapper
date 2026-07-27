@@ -17,10 +17,11 @@
     "hono": "catalog:"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "catalog:",
-    "tsx": "catalog:",
-    "wrangler": "catalog:",
     "@cloudflare/vitest-pool-workers": "catalog:",
-    "vitest": "catalog:"
+    "@cloudflare/workers-types": "catalog:",
+    "@transitmapper/tsconfig": "workspace:*",
+    "tsx": "catalog:",
+    "vitest": "catalog:",
+    "wrangler": "catalog:"
   }
 }

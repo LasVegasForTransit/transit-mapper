@@ -1,7 +1,7 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
-import { VitePWA } from "vite-plugin-pwa";
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   plugins: [
@@ -12,7 +12,7 @@ export default defineConfig({
       // version is available" banner the user acts on, not a version swapped
       // out from under them. See @transitmapper/pwa-updater's useAppUpdate for
       // the React side (used from App.tsx).
-      registerType: "prompt",
+      registerType: 'prompt',
       // Registration happens by hand, only from App.tsx (via
       // virtual:pwa-register/react) — never auto-injected, which would
       // otherwise land in embed.html too (see the two-entry note below).
@@ -20,7 +20,7 @@ export default defineConfig({
       // manifest.json below is already hand-written and linked from
       // index.html; don't let the plugin generate or inject its own.
       manifest: false,
-      strategies: "generateSW",
+      strategies: 'generateSW',
       workbox: {
         // Precache ONLY the editor's own entry. The default globPatterns
         // would glob this whole dist/ output, including embed.html and its
@@ -28,8 +28,8 @@ export default defineConfig({
         // two-entry build below exists to avoid. index.html's own hashed
         // script src already changes on every deploy, which is all Workbox
         // needs to detect a new build; nothing else needs precaching for that.
-        globPatterns: ["index.html"],
-        globIgnores: ["embed.html", "**/embed-*"],
+        globPatterns: ['index.html'],
+        globIgnores: ['embed.html', '**/embed-*'],
         directoryIndex: null,
         // generateSW registers an offline navigateFallback to the precached
         // document automatically (confirmed against the actual build output —
@@ -47,11 +47,11 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      "/api": "http://localhost:8787",
+      '/api': 'http://localhost:8787',
     },
   },
   build: {
-    outDir: "dist",
+    outDir: 'dist',
     sourcemap: true,
     rollupOptions: {
       // Two entries, not one. embed.html is the read-only map that gets
@@ -59,8 +59,8 @@ export default defineConfig({
       // no bundle with the editor, so an embed downloads MapLibre and the
       // feature builder and none of the editing UI.
       input: {
-        main: "index.html",
-        embed: "embed.html",
+        main: 'index.html',
+        embed: 'embed.html',
       },
     },
   },

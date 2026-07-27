@@ -15,6 +15,7 @@
     "fflate": "catalog:"
   },
   "devDependencies": {
+    "@transitmapper/tsconfig": "workspace:*",
     "@types/geojson": "catalog:",
     "vitest": "catalog:"
   }
