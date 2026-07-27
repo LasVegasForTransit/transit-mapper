@@ -5,9 +5,10 @@
 //  - pure, network-free transforms (classifyOsmWay, osmElementsToWays,
 //    buildOverpassQuery) that fixture-based tests can exercise directly;
 //  - importOsmWays, the one function that actually calls the network.
+import { wayType, type ProfileTemplateLane } from "./catalog";
 import { shortId } from "./ids";
-import { defaultProfileFor } from "./profile";
-import type { LngLat, Node, Way, WayPointRef } from "./system";
+import { defaultProfileFor, profileWithPrimaryLanes, MAX_PRIMARY_LANES, type ProfileEdges } from "./profile";
+import type { CrossSection, LngLat, Node, Way, WayPointRef } from "./system";
 
 export interface ImportBBox {
   west: number;
@@ -57,6 +58,207 @@ const ROAD_CLASS_BY_HIGHWAY: Record<string, string> = {
   unclassified: "local",
   living_street: "local",
 };
+
+// How many travel lanes a road of each class has when OSM doesn't say. The
+// catalog's road type has one defaultProfile for every class, so without this
+// a residential street imports as wide as an arterial — the single biggest
+// source of implausible-looking imports. These are two-way totals; a one-way
+// way is treated as one carriageway of such a street (see osmLaneCounts).
+const ROAD_LANES_BY_CLASS: Record<string, number> = {
+  transitway: 4,
+  arterial: 4,
+  collector: 2,
+  local: 2,
+};
+
+// OSM turn:lanes values that mean "you cannot continue straight from this
+// lane" — the ones that map onto the catalog's turnPocket kind. Combination
+// values containing `through` (e.g. "through;right") stay ordinary travel
+// lanes: they still carry through traffic, which is what turnPocket denies.
+// merge_to_* is deliberately absent — a merging lane is a travel lane.
+const TURN_ONLY_VALUES = new Set(["left", "right", "slight_left", "slight_right", "sharp_left", "sharp_right", "reverse"]);
+
+/** A single `turn:lanes` entry (values within one lane are `;`-separated). */
+function isTurnOnlyLane(entry: string): boolean {
+  const values = entry.split(";").map((v) => v.trim()).filter(Boolean);
+  // An empty entry ("left||right") means "unspecified", not "turn only".
+  if (values.length === 0) return false;
+  return values.every((v) => TURN_ONLY_VALUES.has(v));
+}
+
+/** Parse an OSM lane-count tag. Anything non-numeric, negative, or absurd is
+ *  treated as absent — these values are user-entered free text. */
+function osmLaneCount(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  const n = Number(raw.trim());
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.min(MAX_PRIMARY_LANES, Math.round(n));
+}
+
+/** Which way traffic runs relative to the way's point order, or null for a
+ *  two-way street. `-1`/`reverse` mean the way is drawn against its traffic. */
+function osmOneway(tags: Record<string, string>): "forward" | "backward" | null {
+  const v = tags.oneway;
+  if (v === "yes" || v === "true" || v === "1") return "forward";
+  if (v === "-1" || v === "reverse") return "backward";
+  return null;
+}
+
+interface OsmLaneCounts {
+  backward: number;
+  forward: number;
+  /** A shared centre turn lane (`lanes:both_ways`), between the directions. */
+  centerTurn: boolean;
+}
+
+/**
+ * Hold a split to MAX_PRIMARY_LANES *in total*.
+ *
+ * osmLaneCount clamps each tag on its own, which is not the same guarantee:
+ * `lanes:forward=999` plus `lanes:backward=999` clamps to 32 apiece and then
+ * allocates 64 lanes, defeating the ceiling that exists precisely because
+ * these numbers come from untrusted free text and become the allocation size
+ * (see MAX_PRIMARY_LANES in profile.ts). Scaled proportionally rather than
+ * truncated on one side, so an over-large split stays the shape OSM
+ * described; a direction that had any lanes keeps at least one.
+ */
+function clampLaneSplit({ backward, forward, centerTurn }: OsmLaneCounts): OsmLaneCounts {
+  const centre = centerTurn ? 1 : 0;
+  if (backward + forward + centre <= MAX_PRIMARY_LANES) return { backward, forward, centerTurn };
+  const budget = MAX_PRIMARY_LANES - centre;
+  const scale = budget / (backward + forward);
+  const scaled = (n: number): number => (n > 0 ? Math.max(1, Math.round(n * scale)) : 0);
+  const b = Math.min(scaled(backward), budget);
+  return { backward: b, forward: Math.min(scaled(forward), budget - b), centerTurn };
+}
+
+/**
+ * How many travel lanes run each way, from OSM's lane tags.
+ *
+ * `lanes` counts every marked through-traffic lane including a shared centre
+ * turn lane, so the centre lane is subtracted before splitting. When only a
+ * total is known the split follows defaultProfileFor's convention (the extra
+ * lane of an odd count runs forward). When OSM says nothing, the way's class
+ * supplies a total — halved for a one-way way, which is normally one
+ * carriageway of a street that wide.
+ */
+function osmLaneCounts(tags: Record<string, string>, classId: string | undefined): OsmLaneCounts {
+  return clampLaneSplit(rawOsmLaneCounts(tags, classId));
+}
+
+function rawOsmLaneCounts(tags: Record<string, string>, classId: string | undefined): OsmLaneCounts {
+  const oneway = osmOneway(tags);
+  const centerTurn = (osmLaneCount(tags["lanes:both_ways"]) ?? 0) > 0 && oneway === null;
+  const forwardTag = osmLaneCount(tags["lanes:forward"]);
+  const backwardTag = osmLaneCount(tags["lanes:backward"]);
+  const totalTag = osmLaneCount(tags.lanes);
+
+  if (oneway) {
+    // On a one-way way every lane runs the same direction, so a directional
+    // tag is just a restatement of the total; take whichever OSM gave us.
+    const n = totalTag ?? (oneway === "forward" ? forwardTag : backwardTag) ?? Math.ceil(classLanes(classId) / 2);
+    const lanes = Math.max(1, n);
+    return oneway === "forward" ? { backward: 0, forward: lanes, centerTurn: false } : { backward: lanes, forward: 0, centerTurn: false };
+  }
+
+  if (forwardTag !== undefined || backwardTag !== undefined) {
+    // A directional tag on one side only implies the rest of `lanes` runs the
+    // other way; with no total, assume the tagged side is matched.
+    const remaining = totalTag === undefined ? undefined : Math.max(0, totalTag - (centerTurn ? 1 : 0));
+    const forward = forwardTag ?? (remaining !== undefined && backwardTag !== undefined ? Math.max(0, remaining - backwardTag) : backwardTag!);
+    const backward = backwardTag ?? (remaining !== undefined && forwardTag !== undefined ? Math.max(0, remaining - forwardTag) : forwardTag!);
+    return { backward, forward, centerTurn };
+  }
+
+  const total = Math.max(1, (totalTag ?? classLanes(classId)) - (centerTurn ? 1 : 0));
+  if (total === 1) return { backward: 0, forward: 0, centerTurn };
+  const backward = Math.floor(total / 2);
+  return { backward, forward: total - backward, centerTurn };
+}
+
+function classLanes(classId: string | undefined): number {
+  return (classId && ROAD_LANES_BY_CLASS[classId]) || wayType("road").defaultCapacity;
+}
+
+/**
+ * Assign each lane of one direction its catalog kind, applying `turn:lanes`
+ * when it lines up. Entries are listed left-to-right *as the driver sees
+ * them*, so for backward lanes — stored left-to-right facing forward — the
+ * list maps on reversed. A count that doesn't match the lanes we have is
+ * ignored outright rather than truncated or padded: misaligned turn data
+ * would silently put the pocket in the wrong place, and in real OSM the
+ * mismatch usually means the tag describes a different segment.
+ */
+function laneKindsForDirection(count: number, turns: string | undefined, reversed: boolean): string[] {
+  const kinds = new Array<string>(count).fill("drive");
+  if (!turns) return kinds;
+  const entries = turns.split("|");
+  if (entries.length !== count) return kinds;
+  entries.forEach((entry, i) => {
+    if (isTurnOnlyLane(entry)) kinds[reversed ? count - 1 - i : i] = "turnPocket";
+  });
+  return kinds;
+}
+
+/** Whether the way carries a sidewalk on each side, from OSM's sidewalk
+ *  tags. `separate` means the footway is mapped as its own way, so drawing
+ *  one here too would double it. Untagged keeps the catalog default. */
+function osmSidewalks(tags: Record<string, string>): ProfileEdges {
+  const has = (v: string | undefined): boolean | undefined =>
+    v === undefined ? undefined : v !== "no" && v !== "none" && v !== "separate";
+  const both = tags.sidewalk;
+  const fromBoth =
+    both === undefined
+      ? { left: undefined, right: undefined }
+      : both === "both"
+        ? { left: true, right: true }
+        : both === "left"
+          ? { left: true, right: false }
+          : both === "right"
+            ? { left: false, right: true }
+            : { left: has(both), right: has(both) };
+  const left = has(tags["sidewalk:left"]) ?? fromBoth.left;
+  const right = has(tags["sidewalk:right"]) ?? fromBoth.right;
+  // Left-to-right facing forward: leading edge is the left side.
+  return { leading: left, trailing: right };
+}
+
+/**
+ * The cross-section an imported way starts with, read from OSM's own lane
+ * tagging rather than defaulted from the way type.
+ *
+ * Only roads are read this way. `lanes`/`oneway`/`turn:lanes` are road
+ * vocabulary; rail and bike ways keep their catalog defaults, where a single
+ * bidirectional track or path is already right.
+ *
+ * Lane order assumes right-hand traffic, matching defaultProfileFor and
+ * withLaneCount — backward lanes sit to the left. A left-hand-traffic import
+ * comes in mirrored and needs flipping.
+ */
+export function profileFromOsmTags(typeId: string, classId: string | undefined, tags: Record<string, string> | undefined): CrossSection {
+  if (typeId !== "road" || !tags) return defaultProfileFor(typeId);
+
+  const oneway = osmOneway(tags);
+  const { backward, forward, centerTurn } = osmLaneCounts(tags, classId);
+
+  // A two-way street with a single lane is one shared bidirectional lane, not
+  // a zero-lane one — matching defaultProfileFor's capacity-1 case.
+  if (!oneway && backward === 0 && forward === 0) {
+    const lanes: ProfileTemplateLane[] = [{ kindId: "drive", direction: "both" }];
+    if (centerTurn) lanes.push({ kindId: "turnPocket", direction: "both" });
+    return profileWithPrimaryLanes(typeId, lanes, osmSidewalks(tags));
+  }
+
+  const forwardTurns = tags["turn:lanes:forward"] ?? (oneway === "forward" ? tags["turn:lanes"] : undefined);
+  const backwardTurns = tags["turn:lanes:backward"] ?? (oneway === "backward" ? tags["turn:lanes"] : undefined);
+
+  const primary: ProfileTemplateLane[] = [
+    ...laneKindsForDirection(backward, backwardTurns, true).map((kindId) => ({ kindId, direction: "backward" as const })),
+    ...(centerTurn ? [{ kindId: "turnPocket", direction: "both" as const }] : []),
+    ...laneKindsForDirection(forward, forwardTurns, false).map((kindId) => ({ kindId, direction: "forward" as const })),
+  ];
+  return profileWithPrimaryLanes(typeId, primary, osmSidewalks(tags));
+}
 
 export interface OsmWayElement {
   type: string;
@@ -132,7 +334,7 @@ export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork
       points,
       geometry: "straight",
       grade: "atGrade",
-      profile: defaultProfileFor(kind.typeId),
+      profile: profileFromOsmTags(kind.typeId, kind.classId, el.tags),
       classId: kind.classId,
       source: `osm:${el.id}`,
     };

@@ -26,7 +26,7 @@ import { isDoubleClickFinish } from "../src/map/interactions";
 import { KEY_BINDINGS, matchesKey, resolveBinding, type KeyContext } from "../src/editor/keymap";
 import { buildFeatures, HANDLE_ICON, LAYER_SPECS } from "../src/map/layers";
 import { LANDMARKS, landmarksFeatureCollection } from "../src/map/landmarks";
-import { buildOverpassQuery, classifyOsmWay, osmElementsToNetwork, osmElementsToWays, type OsmWayElement } from "@transitmapper/core/model/import";
+import { buildOverpassQuery, classifyOsmWay, osmElementsToNetwork, osmElementsToWays, profileFromOsmTags, type OsmWayElement } from "@transitmapper/core/model/import";
 import { classifyGtfsRouteType, gtfsFilesToBatchedPieces, gtfsFilesToSystemPieces, parseGtfsCsv } from "@transitmapper/core/model/gtfsImport";
 import { legendEntriesFor } from "../src/share/exportLegend";
 import { formatScaleMeters, niceScaleMeters } from "../src/share/exportScale";
@@ -37,7 +37,7 @@ import { LVBT } from "@transitmapper/core/style/lvbtBrand";
 import { checkPreviewPng, MAX_PREVIEW_BYTES, pngDimensions } from "@transitmapper/core/render/pngBytes";
 import { validateSystem } from "@transitmapper/core/model/validate";
 import { estimateWayCapitalCost, formatUsdCompact } from "@transitmapper/core/model/cost";
-import { LANE_KINDS, PROFILE_PRESETS, profilePresetsForWayType, WAY_FAMILIES, WAY_TYPES } from "@transitmapper/core/model/catalog";
+import { LANE_KINDS, laneKind, PROFILE_PRESETS, profilePresetsForWayType, WAY_FAMILIES, WAY_TYPES } from "@transitmapper/core/model/catalog";
 import {
   buildProfile,
   combineProfiles,
@@ -1146,6 +1146,95 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("osmElementsToWays assigns the residential road its local class", ways[0].typeId === "road" && ways[0].classId === "local");
   check("osmElementsToWays defaults capacity from the way type's catalog default", wayCapacity(ways[1]) === wayType("lightRail").defaultCapacity);
   check("osmElementsToWays yields no junctions when elements carry no node ids", osmElementsToNetwork(elements).nodes.length === 0);
+}
+
+// --- P4: OSM import reads OSM's own lane tagging, not the type default ---
+{
+  const lanesOf = (p: ReturnType<typeof profileFromOsmTags>) => p.lanes.filter((l) => laneKind(l.kindId).role === "travel" && l.kindId !== "sidewalk");
+  const dirs = (p: ReturnType<typeof profileFromOsmTags>) => lanesOf(p).map((l) => l.direction).join(",");
+  const kinds = (p: ReturnType<typeof profileFromOsmTags>) => lanesOf(p).map((l) => l.kindId).join(",");
+
+  // The complaint that motivated this: a one-way carriageway imported as a
+  // two-way street, so a divided road drew two yellow centre lines.
+  const oneWay = profileFromOsmTags("road", "arterial", { highway: "primary", oneway: "yes", lanes: "3" });
+  check("oneway=yes imports as a one-way profile", isOneWay(oneWay));
+  check("oneway=yes honours the lanes count", lanesOf(oneWay).length === 3);
+  check("oneway=yes runs every lane forward", dirs(oneWay) === "forward,forward,forward");
+
+  const reverseOneWay = profileFromOsmTags("road", "arterial", { highway: "primary", oneway: "-1", lanes: "2" });
+  check("oneway=-1 runs against the way's direction", dirs(reverseOneWay) === "backward,backward");
+
+  // A two-way street splits per OSM, not evenly, when OSM says so.
+  const split = profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "5", "lanes:forward": "3", "lanes:backward": "2" });
+  check("lanes:forward/backward drive the split", dirs(split) === "backward,backward,forward,forward,forward");
+
+  const inferred = profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "4", "lanes:backward": "1" });
+  check("a directional tag on one side infers the other from lanes", dirs(inferred) === "backward,forward,forward,forward");
+
+  // lanes counts the shared centre lane, so it must not also become a travel lane.
+  const centre = profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "5", "lanes:both_ways": "1" });
+  check("lanes:both_ways becomes a centre turn pocket", kinds(centre) === "drive,drive,turnPocket,drive,drive");
+
+  // turn:lanes, left-to-right as the driver sees them.
+  const turns = profileFromOsmTags("road", "arterial", { highway: "primary", oneway: "yes", lanes: "4", "turn:lanes": "left|through|through|right" });
+  check("turn:lanes marks turn-only lanes as pockets", kinds(turns) === "turnPocket,drive,drive,turnPocket");
+
+  const combo = profileFromOsmTags("road", "arterial", { highway: "primary", oneway: "yes", lanes: "2", "turn:lanes": "through;right|right" });
+  check("a through;right lane stays a travel lane", kinds(combo) === "drive,turnPocket");
+
+  const mismatched = profileFromOsmTags("road", "arterial", { highway: "primary", oneway: "yes", lanes: "3", "turn:lanes": "left|through" });
+  check("a turn:lanes count that doesn't match the lanes is ignored", kinds(mismatched) === "drive,drive,drive");
+
+  // Backward lanes are stored left-to-right facing forward, so the driver's
+  // left is the rightmost of them — the entry order maps on reversed.
+  const backTurns = profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "4", "lanes:forward": "2", "lanes:backward": "2", "turn:lanes:backward": "left|through" });
+  check("turn:lanes:backward maps on reversed", kinds(backTurns) === "drive,turnPocket,drive,drive");
+
+  // Class-aware fallback: without a lanes tag a local street is not an arterial.
+  const local = profileFromOsmTags("road", "local", { highway: "residential" });
+  const arterial = profileFromOsmTags("road", "arterial", { highway: "primary" });
+  check("an untagged local street falls back to two lanes", lanesOf(local).length === 2);
+  check("an untagged arterial still falls back to four", lanesOf(arterial).length === 4);
+  check("an untagged one-way street takes one carriageway's worth", lanesOf(profileFromOsmTags("road", "arterial", { highway: "primary", oneway: "yes" })).length === 2);
+
+  // Sidewalks OSM says aren't there shouldn't be invented.
+  const sw = (p: ReturnType<typeof profileFromOsmTags>) => p.lanes.filter((l) => l.kindId === "sidewalk").length;
+  check("the catalog's sidewalks stay when OSM is silent", sw(profileFromOsmTags("road", "arterial", { highway: "primary" })) === 2);
+  check("sidewalk:left=no drops one side", sw(profileFromOsmTags("road", "arterial", { highway: "primary", "sidewalk:left": "no" })) === 1);
+  check("sidewalk=no drops both", sw(profileFromOsmTags("road", "arterial", { highway: "primary", sidewalk: "no" })) === 0);
+  check("sidewalk:right=separate drops the side mapped elsewhere", sw(profileFromOsmTags("road", "arterial", { highway: "primary", "sidewalk:right": "separate" })) === 1);
+
+  // Hostile / malformed values fall back rather than allocating.
+  check("a non-numeric lanes tag falls back to the class default", lanesOf(profileFromOsmTags("road", "local", { highway: "residential", lanes: "lots" })).length === 2);
+  check("an absurd lanes tag is clamped", lanesOf(profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "1e999" })).length <= MAX_PRIMARY_LANES);
+  // Each tag clamps on its own, so the TOTAL is what needs holding: two
+  // clamped directional tags used to allocate 64 lanes between them.
+  const bothAbsurd = profileFromOsmTags("road", "arterial", { highway: "primary", "lanes:forward": "999", "lanes:backward": "999" });
+  check("two absurd directional tags are clamped in total, not each", lanesOf(bothAbsurd).length <= MAX_PRIMARY_LANES);
+  check("clamping an over-large split keeps both directions", new Set(lanesOf(bothAbsurd).map((l) => l.direction)).size === 2);
+  const absurdWithCentre = profileFromOsmTags("road", "arterial", { highway: "primary", "lanes:forward": "999", "lanes:backward": "999", "lanes:both_ways": "1" });
+  check("the centre turn lane counts against the ceiling too", absurdWithCentre.lanes.filter((l) => l.kindId !== "sidewalk").length <= MAX_PRIMARY_LANES);
+  check("clamping preserves a lopsided split's shape", (() => {
+    const p = lanesOf(profileFromOsmTags("road", "arterial", { highway: "primary", "lanes:forward": "30", "lanes:backward": "10" }));
+    const f = p.filter((l) => l.direction === "forward").length;
+    const b = p.filter((l) => l.direction === "backward").length;
+    return p.length <= MAX_PRIMARY_LANES && f > b && b >= 1;
+  })());
+
+  // Rail and bike keep their catalog defaults — lanes is road vocabulary.
+  check(
+    "a tram way ignores road lane tags",
+    profileFromOsmTags("lightRail", undefined, { railway: "tram", lanes: "4" }).lanes.length === defaultProfileFor("lightRail").lanes.length,
+  );
+
+  // And the whole thing flows through the real import path.
+  const tagged: OsmWayElement[] = [
+    {
+      type: "way", id: 1, tags: { highway: "primary", oneway: "yes", lanes: "3" }, nodes: [1, 2],
+      geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.1 }],
+    },
+  ];
+  check("osmElementsToNetwork applies the tag-derived profile", isOneWay(osmElementsToNetwork(tagged).ways[0].profile));
 }
 
 // --- P4: OSM import derives junctions from node identity, not coordinates ---

@@ -64,9 +64,9 @@ is a parsing change, not a geometry algorithm.
   ([snapIndex.ts:57](../../../packages/core/src/model/geo/snapIndex.ts),
   [store.ts:614](../../../apps/web/src/editor/store.ts)). It is deferred; see
   "Deferred work."
-- **Lane profiles from OSM tags.** `lanes`, `lanes:forward/backward`,
-  `oneway`, and `turn:lanes` are not read; imported ways keep
-  `defaultProfileFor(typeId)`. See "Deferred work."
+- **Lane profiles from OSM tags.** Not part of the junction work — but built
+  straight after it, once a real import showed every road arriving as the
+  same four-lane two-way default. See "Follow-on: lane profiles."
 - **Traffic control from OSM.** `highway=traffic_signals` and `highway=stop`
   live on OSM *nodes*, and this query returns ways only, so no `control` is
   set on derived junctions. They import as uncontrolled.
@@ -268,11 +268,74 @@ current system, then `joinWayPointToWay` per match — with its own tolerance
 question, and it does not block the blank-slate import case that this spec
 makes correct.
 
-**Lane profiles from OSM tags.** `lanes` and `lanes:forward/backward` map
-cleanly onto `defaultProfileFor(typeId, capacity)`, which already exists and
-already clamps hostile input. `oneway` maps onto `makeOneWay`. `turn:lanes`
-maps onto the existing `turnPocket` lane kind — but only where the tag is
-present and its `|`-separated entry count matches the lane count, and in
-practice turn lanes are tagged on short intersection-approach segments
-rather than whole streets. Worth doing after junctions, and worth scoping to
-`lanes`/`oneway` first.
+**Lane profiles from OSM tags.** ~~Deferred.~~ Built immediately after this
+change — see "Follow-on: lane profiles" below.
+
+## Follow-on: lane profiles from OSM tags
+
+Junctions alone were not enough to make an import look like a real street.
+Every road still arrived as `defaultProfileFor("road")` — four lanes, two-way,
+sidewalks both sides — because the catalog's road type has one
+`defaultProfile` shared by all four classes and `defaultProfileFor` takes no
+class. On the Strip, where nearly every arterial is a pair of one-way
+carriageways, that drew two four-lane two-way streets with a centre line
+each where there should have been two one-way carriageways.
+
+### What is read
+
+`profileFromOsmTags(typeId, classId, tags)` in `import.ts` replaces the flat
+default for roads only — `lanes` and `turn:lanes` are road vocabulary, and
+rail and bike ways are already right with a single bidirectional lane.
+
+| tag | effect |
+|---|---|
+| `oneway=yes\|true\|1` | every lane runs forward |
+| `oneway=-1\|reverse` | every lane runs backward |
+| `lanes` | total travel lanes, centre turn lane included |
+| `lanes:forward` / `lanes:backward` | the split; one side implies the other from `lanes` |
+| `lanes:both_ways` | a shared centre `turnPocket` |
+| `turn:lanes` (+`:forward`/`:backward`) | turn-only lanes become `turnPocket` |
+| `sidewalk`, `sidewalk:left`, `sidewalk:right` | which edges keep a sidewalk |
+
+Where OSM says nothing, the class supplies a total (`ROAD_LANES_BY_CLASS`:
+transitway and arterial 4, collector and local 2), halved for a one-way way
+on the reasoning that it is one carriageway of a street that wide.
+
+### Decisions worth keeping
+
+- **A lane that can still go straight is not a pocket.** `through;right`
+  stays a travel lane; `turnPocket` means a lane you cannot continue from.
+  `merge_to_left`/`merge_to_right` are travel lanes too.
+- **A mismatched `turn:lanes` is ignored, not truncated.** Padding or
+  truncating would silently put a pocket in the wrong lane, and in real data
+  a mismatch usually means the tag describes a different segment.
+- **`turn:lanes:backward` maps on reversed.** Lanes are stored left-to-right
+  facing forward, but OSM lists turns left-to-right as the *driver* sees
+  them, so for backward lanes the two orders are opposites.
+- **`sidewalk=separate` drops the sidewalk.** It means OSM maps the footway
+  as its own way; drawing one here as well would double it.
+- **Untrusted counts are clamped** to `MAX_PRIMARY_LANES` before any array is
+  allocated, since `lanes` is user-entered free text and reaches us straight
+  from `JSON.parse`. The clamp is on the **total**, not per tag: clamping
+  each tag alone still let `lanes:forward=999` plus `lanes:backward=999`
+  allocate 64 lanes, which is the ceiling's whole purpose defeated. An
+  over-large split is scaled proportionally rather than truncated on one
+  side, so 30/10 becomes 24/8 rather than 32/0.
+
+`profileWithPrimaryLanes(typeId, primary, edges)` was extracted in
+`profile.ts` to hold the "wrap a block of travel lanes in the type's edge
+lanes" logic that `defaultProfileFor` already had inline; both use it now.
+
+### Measured, same viewport
+
+44 roads imported around Flamingo and Las Vegas Boulevard: 40 one-way and 4
+two-way (was 44 two-way), 15 carrying turn pockets (was 0), travel-lane
+counts spread 1–5 (was 44 ways at exactly 4), and 34 with no sidewalk where
+OSM maps the footway separately (was 44 with two each).
+
+### Still not read
+
+Bus lanes (`busway`, `lanes:bus`), on-street parking (`parking:lane:*`),
+cycleways tagged as a modifier on the roadway rather than their own way
+(`cycleway:right=lane`), and `width`. Lane order assumes right-hand traffic,
+matching `defaultProfileFor`; a left-hand-traffic import comes in mirrored.

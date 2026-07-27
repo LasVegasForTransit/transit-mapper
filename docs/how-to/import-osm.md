@@ -19,11 +19,28 @@ be slow or get rate-limited, so start with a neighborhood, not a metro).
 ## What you get
 
 Imported ways are ordinary ways, identical to hand-drawn ones except for a
-provenance marker. OSM's road grades map onto the catalog's road classes
-(motorways come in as transitways, primary/secondary roads as arterials,
-residential streets as locals) and each way gets its type's default
-cross-section. OSM lane tagging isn't read yet, so widen or re-profile
-specific streets yourself where it matters.
+provenance marker. OSM's road grades map onto the catalog's road classes:
+motorways come in as transitways, primary/secondary roads as arterials,
+residential streets as locals.
+
+Each road's cross-section is read from OSM's own lane tagging rather than
+defaulted from its type:
+
+- `oneway` decides whether the street is one-way, so a divided road's two
+  carriageways come in as two one-way streets instead of two two-way ones.
+- `lanes`, `lanes:forward`, and `lanes:backward` set how many travel lanes
+  run each way.
+- `lanes:both_ways` becomes a shared centre turn lane.
+- `turn:lanes` marks turn-only lanes as turn pockets, when its lane count
+  matches. A lane that can also go straight (`through;right`) stays an
+  ordinary travel lane.
+- `sidewalk`, `sidewalk:left`, and `sidewalk:right` decide which sides get a
+  sidewalk. `separate` means OSM maps the footway as its own way, so none is
+  drawn here.
+
+Where OSM says nothing, the way's class supplies a lane count — a local
+street comes in narrower than an arterial. Rail and bike ways keep their
+catalog defaults; `lanes` and `turn:lanes` are road vocabulary.
 
 The street grid arrives **connected**: where OSM says two ways meet, they
 come in sharing a real junction, so you can route services across an
@@ -49,3 +66,5 @@ junctions, adopt them under existing sketches.
   wider area is how you pick up the rest.
 - Crossings that stay unjoined are usually correct: OSM records a bridge or
   tunnel as genuinely not meeting the road it passes over.
+- Lane order assumes right-hand traffic. A left-hand-traffic import comes in
+  mirrored and needs flipping.
