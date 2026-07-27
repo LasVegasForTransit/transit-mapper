@@ -148,6 +148,27 @@ The simulated week is Monday-to-Sunday, which is the shortest cycle that can
 express the weekday/weekend split `ScheduleDayScope` models. Nothing here
 models dates, months, or holidays.
 
+### Pinning a scenario
+
+Following the clock answers "what does the network look like now". The other
+question — "what does peak look like next to midday" — shouldn't require
+waiting for the right hour. So a schedule period can be **pinned**: every line
+then runs that period's configuration whatever the clock says, spans and day
+scopes included.
+
+The scenarios on offer are the period names found across the system's own
+services, the way the layer filters come from the catalogs. A system whose
+periods are "Rush" and "Quiet" offers exactly those, and one that has never
+had a schedule edited offers none — the control doesn't appear at all.
+
+A line with no period by the pinned name doesn't run in that scenario, which
+is the honest answer for a weekday-only express under "Weekend". A line with
+no detailed schedule runs its flat headway in every scenario.
+
+The clock keeps ticking while a scenario is pinned — vehicles still need a
+time base to move against — it just isn't deciding service levels any more,
+and the readout dims to say so.
+
 Two practical notes. The clock starts at Monday 08:00 so a fresh map isn't
 empty. And a service that isn't running is skipped before its geometry is
 resolved, so a system half-asleep at 23:30 does roughly half the work.

@@ -113,8 +113,9 @@ export function ScheduleDialog({
       className="schedule-modal"
     >
       <p className="panel-hint">
-        Each period is its own days + time window + headway. Vehicle animation on the map uses
-        whichever period runs most frequently.
+        Each period is its own days + time window + headway. The map runs whichever period covers
+        the current simulated time — outside every period, this line doesn&rsquo;t run at all. Pin a
+        period in the simulation controls to see it at any hour.
       </p>
 
       {periods.length === 0 ? (

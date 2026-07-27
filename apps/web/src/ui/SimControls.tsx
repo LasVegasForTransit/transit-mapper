@@ -1,5 +1,8 @@
-import { formatSimClock, SIM_SPEEDS } from '@transitmapper/core/sim/clock';
+import { useMemo } from 'react';
+import { formatSimClock, schedulePeriodLabels, SIM_SPEEDS } from '@transitmapper/core/sim/clock';
+import { useEditor } from '../editor/EditorProvider';
 import { IconButton } from './IconButton';
+import { Popover } from './Popover';
 import { useSim } from './SimProvider';
 import { useSimTime } from './useSimTime';
 
@@ -36,6 +39,7 @@ export function SimControls() {
         ))}
       </div>
       <SimClockReadout />
+      <ScenarioPicker />
     </div>
   );
 }
@@ -64,7 +68,73 @@ export function SimControlsCompact() {
         ))}
       </select>
       <SimClockReadout />
+      <ScenarioPicker />
     </div>
+  );
+}
+
+/**
+ * Pin a schedule period, or follow the clock.
+ *
+ * Behind a popover rather than inline: this card already holds the view
+ * switch, four speed buttons and a clock, and at 1280px an inline select
+ * pushed it into the actions card in the top-right corner. It's also an
+ * occasional control — you pin a scenario to compare two service levels,
+ * then leave it alone — so a trigger that reads "pinned" at a glance is
+ * enough on the bar itself.
+ *
+ * Renders nothing at all until some service actually has named periods. Most
+ * systems use one flat headway, and a picker offering a single choice is
+ * clutter. The options come from the periods themselves (see
+ * schedulePeriodLabels), the way layer filters come from the catalogs.
+ */
+function ScenarioPicker() {
+  const services = useEditor((s) => s.system.services);
+  const { pinnedPeriod, setPinnedPeriod } = useSim();
+  // The selector returns the stable services array; deriving the label list
+  // inside it would mint a new array on every store read and trip zustand's
+  // "getSnapshot should be cached" loop.
+  const labels = useMemo(() => schedulePeriodLabels(services), [services]);
+  if (labels.length === 0) return null;
+  return (
+    <Popover
+      trigger={
+        <IconButton
+          icon="clock"
+          size={17}
+          label="Service scenario"
+          active={pinnedPeriod !== undefined}
+        />
+      }
+    >
+      <div className="sim-scenario-popover">
+        <span className="panel-section-label">Service scenario</span>
+        <p className="panel-hint">
+          Show every line at one point in its schedule, whatever the clock says.
+        </p>
+        <div className="chip-row" role="group" aria-label="Service scenario">
+          <button
+            type="button"
+            className={`chip ${pinnedPeriod === undefined ? 'active' : ''}`}
+            aria-pressed={pinnedPeriod === undefined}
+            onClick={() => setPinnedPeriod(undefined)}
+          >
+            Live clock
+          </button>
+          {labels.map((label) => (
+            <button
+              key={label}
+              type="button"
+              className={`chip ${pinnedPeriod === label ? 'active' : ''}`}
+              aria-pressed={pinnedPeriod === label}
+              onClick={() => setPinnedPeriod(label)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </Popover>
   );
 }
 
@@ -92,5 +162,20 @@ function SimPlayPause({ paused, onToggle }: SimPlayPauseProps) {
  */
 function SimClockReadout() {
   const simMs = useSimTime();
-  return <span className="sim-clock">{formatSimClock(simMs)}</span>;
+  const { pinnedPeriod } = useSim();
+  // With a scenario pinned the clock still runs — vehicles need a time base to
+  // move against — but it is no longer deciding which headway applies. Saying
+  // so quietly beats letting someone wonder why 03:00 looks like rush hour.
+  return (
+    <span
+      className={`sim-clock ${pinnedPeriod ? 'sim-clock-overridden' : ''}`}
+      title={
+        pinnedPeriod
+          ? `Service pinned to “${pinnedPeriod}” — the clock still runs, but isn't choosing headways`
+          : undefined
+      }
+    >
+      {formatSimClock(simMs)}
+    </span>
+  );
 }

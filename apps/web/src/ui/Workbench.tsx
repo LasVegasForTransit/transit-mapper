@@ -172,7 +172,7 @@ export function Workbench({
             this one would read as a floating strip of unrelated chrome, and
             each would drift off center as the other changed width. ---- */}
         <div className="pointer-events-none absolute inset-x-0 top-0 hidden md:flex md:justify-center">
-          <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2 shadow-[var(--shadow)]">
+          <div className="top-center-dock pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2 shadow-[var(--shadow)]">
             {viewSwitcher}
             <span className="top-center-divider" aria-hidden="true" />
             {simControls}

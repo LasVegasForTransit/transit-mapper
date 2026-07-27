@@ -189,6 +189,27 @@ export interface ActiveSchedule {
 }
 
 /**
+ * Every schedule period name in this system, in the order they're first met.
+ *
+ * These are the scenarios that can be pinned. They're derived rather than
+ * listed anywhere, the same way the layer filters come from the catalogs: a
+ * system that has never had a schedule edited has none, and one whose periods
+ * are called "Rush" and "Quiet" offers exactly those. Matching is
+ * case-insensitive, so "Peak" and "peak" on two services are one scenario.
+ */
+export function schedulePeriodLabels(services: Service[]): string[] {
+  const byKey = new Map<string, string>();
+  for (const service of services) {
+    for (const period of service.schedule ?? []) {
+      const label = period.label.trim();
+      const key = label.toLowerCase();
+      if (label && !byKey.has(key)) byKey.set(key, label);
+    }
+  }
+  return [...byKey.values()];
+}
+
+/**
  * Is this service running at this moment, and how often?
  *
  * `null` means it isn't running — outside its span of service, or (with a

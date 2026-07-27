@@ -2,13 +2,27 @@ import { lazy, Suspense, useState } from 'react';
 import { useEditor } from '../../editor/EditorProvider';
 import { MODE_ORDER, MODES, modesForWayType } from '@transitmapper/core/model/catalog';
 import { formatKm, wayLengthMeters } from '@transitmapper/core/model/geo';
-import type { Pattern, ScheduleDayScope, Station, Way } from '@transitmapper/core/model/system';
+import type {
+  Pattern,
+  ScheduleDayScope,
+  Service,
+  Station,
+  Way,
+} from '@transitmapper/core/model/system';
+import {
+  activeSchedule,
+  dayScopeAt,
+  formatSimClock,
+  minutesOfDay,
+} from '@transitmapper/core/sim/clock';
 import { ColorField } from '../ColorField';
 import { InspectorTabs, type InspectorTab } from '../InspectorTabs';
 import { Panel } from '../Panel';
 import { blurOnEnter } from '../formUtils';
 import { Icon } from '../Icon';
 import { IconButton } from '../IconButton';
+import { useSim } from '../SimProvider';
+import { useSimTime } from '../useSimTime';
 import { GEOMETRY_OPTIONS, GradeChips, EmptyInspector, ServicesOnWay, Stat } from './shared';
 
 // Opened only via the "Edit full schedule" link, never on initial render —
@@ -298,6 +312,16 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   );
 
   function renderScheduleSection() {
+    if (!service) return null;
+    return (
+      <>
+        <RunningNow service={service} />
+        {renderScheduleFields()}
+      </>
+    );
+  }
+
+  function renderScheduleFields() {
     if (!service) return null;
     return hasFullSchedule ? (
       <>
@@ -637,4 +661,36 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
       </>
     );
   }
+}
+
+interface RunningNowProps {
+  service: Service;
+}
+
+/**
+ * What this line is doing at the current simulated moment.
+ *
+ * The schedule fields below say what a line is *configured* to do; this says
+ * what it's actually doing right now, so the editor and the map can't quietly
+ * disagree. It's also the answer to "why aren't there any vehicles on my
+ * line" — usually because it's 03:00.
+ */
+function RunningNow({ service }: RunningNowProps) {
+  const simMs = useSimTime();
+  const { pinnedPeriod } = useSim();
+  const active = activeSchedule(service, minutesOfDay(simMs), dayScopeAt(simMs), pinnedPeriod);
+  const when = pinnedPeriod ? `“${pinnedPeriod}”` : formatSimClock(simMs);
+
+  if (!active) return <p className="panel-hint">Not running at {when}.</p>;
+  if (active.headwayMinutes === undefined)
+    return <p className="panel-hint">Running at {when}, with no frequency set yet.</p>;
+  // Naming the period is only informative when the clock chose it. With one
+  // pinned, `when` is already that name, and "At “Peak”: every 10 min (Peak)"
+  // just says it twice.
+  const period = !pinnedPeriod && active.label ? ` (${active.label})` : '';
+  return (
+    <p className="panel-hint">
+      At {when}: every {active.headwayMinutes} min{period}.
+    </p>
+  );
 }
