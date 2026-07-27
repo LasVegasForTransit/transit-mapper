@@ -44,7 +44,7 @@ expansion, and an unbounded preview upload.
 Every deploy is a Cloudflare Worker with a D1 database. There is no
 long-lived server and no shell. The full inventory of secrets, what each can
 do if leaked, and how to rotate it is in
-[secrets](docs/development/reference/secrets.md).
+[secrets](docs/security/reference/secrets.md).
 
 Three separate mechanisms exist to stop a secret reaching the repository, and
 they are described there too.

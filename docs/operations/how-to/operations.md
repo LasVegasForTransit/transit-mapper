@@ -12,7 +12,7 @@ handling `/api/*`, `/s/*` and `/e/*` itself, with one D1 database (also
 ## Deploy
 
 Deploys are automatic: pushing to `main` runs
-[`deploy-production.yml`](../../.github/workflows/deploy-production.yml),
+[`deploy-production.yml`](../../../.github/workflows/deploy-production.yml),
 which runs the full CI checks, builds, applies any pending D1 migrations,
 deploys the Worker, and then smoke-tests the live site.
 

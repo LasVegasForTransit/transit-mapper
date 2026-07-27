@@ -4,8 +4,8 @@ This page explains the reasoning behind decisions in the codebase, so
 that a new situation the code doesn't already cover can be handled the
 same way the existing code was. For the code-level reference, see
 [Catalogs](../reference/catalogs.md) and
-[Project structure](../reference/project-structure.md). For how to submit
-a change, see [CONTRIBUTING.md](../../CONTRIBUTING.md).
+[Project structure](../../development/reference/project-structure.md). For how to submit
+a change, see [CONTRIBUTING.md](../../../CONTRIBUTING.md).
 
 ## New capabilities should be data, not code changes
 

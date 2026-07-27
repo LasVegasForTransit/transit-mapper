@@ -506,7 +506,7 @@ which makes this the org's first and therefore the shared baseline."
 **Files:**
 
 - Modify: `turbo.json`, `package.json`, `apps/web/package.json`, `apps/worker/package.json`, `packages/core/package.json`
-- Modify: `README.md`, `AGENTS.md`, `docs/how-to/local-development.md`, `.github/workflows/ci.yml`
+- Modify: `README.md`, `AGENTS.md`, `docs/development/how-to/local-development.md`, `.github/workflows/ci.yml`
 
 **Interfaces:**
 
@@ -596,7 +596,7 @@ Expected: non-zero exit naming the file.
 
 - [ ] **Step 8: Update every reference to `verify`**
 
-Search and replace across `README.md`, `AGENTS.md`, `docs/how-to/local-development.md`, and `.github/workflows/ci.yml`. `pnpm typecheck && pnpm verify` becomes `pnpm check` everywhere it appears as the pull-request bar.
+Search and replace across `README.md`, `AGENTS.md`, `docs/development/how-to/local-development.md`, and `.github/workflows/ci.yml`. `pnpm typecheck && pnpm verify` becomes `pnpm check` everywhere it appears as the pull-request bar.
 
 Run: `grep -rn "pnpm verify\|pnpm run verify" --include='*.md' --include='*.yml' --include='*.json' . | grep -v node_modules`
 Expected: no results.

@@ -58,7 +58,7 @@ but the editor runs fully without it.
 
 Docs live in [`docs/`](docs/README.md):
 
-- [Getting started tutorial](docs/tutorials/getting-started.md) — build your
+- [Getting started tutorial](docs/product/tutorials/getting-started.md) — build your
   first system in ten minutes.
 - [How-to guides](docs/README.md#how-to-guides) — draw roads, design
   stations, route services, import OSM data.

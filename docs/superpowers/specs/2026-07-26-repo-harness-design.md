@@ -445,7 +445,7 @@ subdirectory. Two are not: `local-development.md` goes to
 source tree, not the app — goes to `development/reference/`, where the
 required-documents list already expects it.
 
-One page is a genuine judgment call. `explanation/design-principles.md`
+One page is a genuine judgment call. `product/explanation/design-principles.md`
 covers catalog-driven kinds and style/domain separation, which reads as
 product explanation, but `AGENTS.md` points contributors at it as "the
 reasoning behind the domain model." It is classified when it is moved, and
@@ -515,7 +515,7 @@ heading writes that down.
 
 Structure that is not checked drifts, and this repository already
 demonstrates it. There are four broken links today: `docs/README.md`
-advertises a `how-to/operations.md` covering deploy, rollback, migrations
+advertises a `operations/how-to/operations.md` covering deploy, rollback, migrations
 and database restore that was never written, and three reference pages
 point at `../../src/model/`, a path that stopped existing when the
 monorepo split moved those files under `packages/core/`.

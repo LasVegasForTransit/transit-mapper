@@ -35,7 +35,7 @@ docs/            This documentation.
 `auth/` (Google OAuth URL building, PKCE, token hashing, cookie
 serialization, return-path validation) and `share/claim.ts` +
 `share/ownership.ts` are the first slice of the accounts feature on the
-[roadmap](../../ROADMAP.md). They are complete, pure, and covered by
+[roadmap](../../../ROADMAP.md). They are complete, pure, and covered by
 `apps/web/scripts/verify.ts` — and **nothing imports them but that test
 file.** There are no auth routes in the Worker, no users or sessions table,
 and no owner column on `systems`.
@@ -52,8 +52,8 @@ and `apps/worker` depend on it as a workspace package.
 
 ## packages/core/src/model/ — the domain
 
-- `system.ts` — every record in a saved document ([Data model](data-model.md)).
-- `catalog.ts` — every kind ([Catalogs](catalogs.md)).
+- `system.ts` — every record in a saved document ([Data model](../../product/reference/data-model.md)).
+- `catalog.ts` — every kind ([Catalogs](../../product/reference/catalogs.md)).
 - `profile.ts` — pure cross-section operations: build/flip/one-way/derive
   capacity, separate/combine carriageway profiles.
 - `geo.ts` — geographic math: projections, distances, polyline offsetting,
@@ -77,7 +77,7 @@ and `apps/worker` depend on it as a workspace package.
   default lane connectors, connector curves.
 
 Both are pure and memoized; nothing here is stored. See
-[Geometry and routing](../explanation/geometry-and-routing.md).
+[Geometry and routing](../../product/explanation/geometry-and-routing.md).
 
 ## packages/core/src/render/ — drawing a system without a map
 
@@ -102,7 +102,7 @@ Both are pure and memoized; nothing here is stored. See
 - `lvbtBrand.ts` — the org's brand tokens and typeface, transcribed from
   lasvegasfortransit.org/brand for anything rendered for the outside world.
 
-See [Sharing surfaces](../explanation/sharing-surfaces.md).
+See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 
 ## packages/core/src/share/ — what a share is
 
@@ -131,7 +131,7 @@ Everything that turns a system into something that leaves the app.
   an export, kept separate from the renderer so they can be tested without
   one.
 
-See [Sharing surfaces](../explanation/sharing-surfaces.md).
+See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 
 ## apps/web/src/storage/ — the local library
 
@@ -163,7 +163,7 @@ See [Sharing surfaces](../explanation/sharing-surfaces.md).
 
 Preview cards are drawn by the browser (`apps/web/src/share/previewImage.ts`)
 and stored in D1, because a free-plan Worker hasn't the CPU to rasterize one.
-See [Sharing surfaces](../explanation/sharing-surfaces.md).
+See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 
 ## apps/web/src/editor/ — mutation and input
 
@@ -171,7 +171,7 @@ See [Sharing surfaces](../explanation/sharing-surfaces.md).
   through an action here; undo checkpoints, junction bookkeeping, station
   re-anchoring, and NamedWay upkeep all live in the actions.
 - `keymap.ts` — the declarative keyboard table
-  ([Keyboard shortcuts](keyboard-shortcuts.md)).
+  ([Keyboard shortcuts](../../product/reference/keyboard-shortcuts.md)).
 
 ## apps/web/src/map/ — MapLibre
 

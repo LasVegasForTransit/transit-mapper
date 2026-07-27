@@ -46,5 +46,5 @@ project has outgoing references, which this repository has hit before.
 ## Then write it down
 
 `check:structure` fails if a new source directory has no section in
-[project structure](../../reference/project-structure.md). Adding one is
+[project structure](../../development/reference/project-structure.md). Adding one is
 part of adding the package, not a follow-up.
