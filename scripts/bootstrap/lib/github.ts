@@ -90,14 +90,36 @@ interface RulesetBody {
   readonly rules?: readonly RuleShape[];
 }
 
-/** Comparable form of the fields this tooling declares. Fields GitHub adds
- *  on its own — ids, timestamps, links — are excluded, since they differ on
- *  every fetch and say nothing about whether the standard is met. */
-function comparable(body: RulesetBody): string {
-  const rules = (body.rules ?? [])
-    .map((r) => ({ type: r.type, parameters: r.parameters ?? {} }))
-    .sort((a, b) => a.type.localeCompare(b.type));
-  return JSON.stringify({ enforcement: body.enforcement, rules });
+/**
+ * Parameters the standard declares that the live rule does not match.
+ *
+ * Only declared keys are compared. GitHub populates parameters the standard
+ * never mentions — a `pull_request` rule comes back carrying
+ * `required_reviewers: []`, a `required_status_checks` rule carries
+ * `do_not_enforce_on_create: false` — and comparing whole objects reports
+ * those as drift on a repository that is configured exactly right. A check
+ * that fires on a correct repository is worse than no check: it is read once,
+ * disbelieved, and then ignored when it finally means something.
+ *
+ * The trade is that a field the standard does not name is a field this does
+ * not police. That is the same statement as the standard being the standard.
+ */
+function parameterDifferences(actual: RuleShape, desired: RuleShape): string[] {
+  const live = actual.parameters ?? {};
+  const want = desired.parameters ?? {};
+  const differences: string[] = [];
+  for (const [key, value] of Object.entries(want)) {
+    // JSON comparison because values include arrays (allowed merge methods,
+    // required checks) where element order is meaningful and set semantics
+    // would hide a reordering that GitHub itself treats as a change.
+    if (JSON.stringify(live[key]) !== JSON.stringify(value)) {
+      differences.push(
+        `rule "${desired.type}": ${key} is ${JSON.stringify(live[key])}, ` +
+          `standard requires ${JSON.stringify(value)}`,
+      );
+    }
+  }
+  return differences;
 }
 
 export interface RulesetDrift {
@@ -128,13 +150,14 @@ export function rulesetDrift(id: number, desired: RulesetBody): RulesetDrift {
     );
   }
 
-  const currentTypes = new Set((current.rules ?? []).map((r) => r.type));
+  const byType = new Map((current.rules ?? []).map((r) => [r.type, r]));
   for (const rule of desired.rules ?? []) {
-    if (!currentTypes.has(rule.type)) differences.push(`rule "${rule.type}" is absent`);
-  }
-
-  if (differences.length === 0 && comparable(current) !== comparable(desired)) {
-    differences.push('rule parameters differ from the standard');
+    const live = byType.get(rule.type);
+    if (!live) {
+      differences.push(`rule "${rule.type}" is absent`);
+      continue;
+    }
+    differences.push(...parameterDifferences(live, rule));
   }
 
   return { differences };
