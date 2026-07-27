@@ -7,6 +7,7 @@
 import { unzipSync, strFromU8 } from 'fflate';
 import { shortId } from './ids';
 import { defaultProfileFor, makeOneWay } from './profile';
+import { wayType } from './catalog';
 import { nearestOnPath, resolveWayPath } from './geo';
 import type { LngLat, Pattern, Service, Station, Way } from './system';
 
@@ -212,7 +213,7 @@ function piecesForRoutes(
         // default 4-lane two-way road, so opposite-direction routes on a shared
         // corridor read as thin directional carriageways instead of stacked roads.
         profile: makeOneWay(
-          defaultProfileFor(kind.wayTypeId, kind.wayTypeId === 'road' ? 2 : undefined),
+          defaultProfileFor(kind.wayTypeId, wayType(kind.wayTypeId).importedCapacity),
           'forward',
         ),
         source: `gtfs:${shapeId}`,

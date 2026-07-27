@@ -5,6 +5,8 @@ import { parseSystem, forkSystem, createEmptySystem } from '@transitmapper/core/
 import {
   FACILITY_TYPE_ORDER,
   FACILITY_TYPES,
+  INITIAL_DRAFT,
+  mode,
   MODE_ORDER,
   MODES,
   modesForWayType,
@@ -47,7 +49,14 @@ import {
   isDoubleClickFinish,
 } from '../src/map/interactions';
 import { KEY_BINDINGS, matchesKey, resolveBinding, type KeyContext } from '../src/editor/keymap';
-import { buildFeatures, HANDLE_ICON, LAYER_SPECS, SRC_PREVIEW } from '../src/map/layers';
+import {
+  buildFeatures,
+  buildHandles,
+  buildPhysicalHandles,
+  HANDLE_ICON,
+  LAYER_SPECS,
+  SRC_PREVIEW,
+} from '../src/map/layers';
 import { LANDMARKS, landmarksFeatureCollection } from '../src/map/landmarks';
 import {
   buildOverpassQuery,
@@ -1525,6 +1534,36 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     "but its handles don't, without physicalHandleGroupId",
     infraGroupUnselected.physicalHandles.features.length === 0,
   );
+
+  // Same contract as buildHandles: the selection fast path calls this builder
+  // directly, so it must agree with the full build feature-for-feature —
+  // including emission ORDER, since a reordered collection is a needless
+  // re-upload even when it renders identically.
+  {
+    const sysP = store.getState().system;
+    check(
+      'buildPhysicalHandles alone emits exactly what the full build emits for a station',
+      JSON.stringify(
+        buildPhysicalHandles(
+          sysP.stations.find((s) => s.id === stId),
+          null,
+        ),
+      ) === JSON.stringify(infra.physicalHandles.features),
+    );
+    check(
+      'buildPhysicalHandles alone emits exactly what the full build emits for a group',
+      JSON.stringify(
+        buildPhysicalHandles(
+          null,
+          sysP.groups.find((g) => g.id === groupId),
+        ),
+      ) === JSON.stringify(infraWithGroup.physicalHandles.features),
+    );
+    check(
+      'buildPhysicalHandles with nothing selected emits nothing',
+      buildPhysicalHandles(null, null).length === 0,
+    );
+  }
 }
 
 // --- P3: v3 serialize round-trips footprints, platforms, facilities, groups ---
@@ -4152,13 +4191,15 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 
   fresh();
-  store.getState().importWays({
-    ways: overpass.map((w) => ({ ...w, grade: 'atGrade' as const })),
-    nodes: [],
-    namedWays: [],
-    medians: [],
-    turnRestrictions: [],
-  });
+  store
+    .getState()
+    .importWays({
+      ways: overpass.map((w) => ({ ...w, grade: 'atGrade' as const })),
+      nodes: [],
+      namedWays: [],
+      medians: [],
+      turnRestrictions: [],
+    });
   check(
     'the same two ways at one grade are still flagged',
     validateSystem(store.getState().system).some((i) => i.id.startsWith('crossing-')),
@@ -4554,6 +4595,24 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     withHandles.handles.features.every((f) => f.properties?.icon === HANDLE_ICON),
   );
 
+  // The selection fast path (map/MapCanvas.tsx) drives this builder DIRECTLY
+  // rather than running the full fourteen-collection build and discarding
+  // twelve of its outputs. Sound only while the two agree feature-for-feature,
+  // so pin it: otherwise clicking an object could render different handles
+  // than a full rebuild does.
+  {
+    const standalone = buildHandles(wayById(store.getState().system.ways), [road]);
+    check(
+      'buildHandles alone emits exactly what the full build emits',
+      JSON.stringify({ type: 'FeatureCollection', features: standalone }) ===
+        JSON.stringify(withHandles.handles),
+    );
+    check(
+      'buildHandles emits one handle per control point',
+      standalone.length === store.getState().system.ways.find((w) => w.id === road)!.points.length,
+    );
+  }
+
   const iconsSeen = new Set<string>();
   for (const typeId of FACILITY_TYPE_ORDER) {
     store.getState().addFacility(typeId, [-115.15, 36.1]);
@@ -4801,6 +4860,49 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check('a plain single click (detail 1) still starts a draw press', !isDoubleClickFinish(1));
   check("the double-click's second press (detail 2) is skipped", isDoubleClickFinish(2));
   check("even a rapid triple-click's third press stays skipped", isDoubleClickFinish(3));
+}
+
+// --- The catalog, not the code around it, decides catalog-level facts ------
+// These invariants are what let placing/importing code read a value straight
+// off the catalog instead of carrying its own fallback for a missing one.
+{
+  const areaTypes = FACILITY_TYPE_ORDER.map((id) => FACILITY_TYPES[id]).filter(
+    (t) => t.geometryKind === 'area',
+  );
+  check('there are area facility types to check', areaTypes.length > 0);
+  check(
+    'every area facility type declares the size it is click-placed at',
+    areaTypes.every((t) => typeof t.defaultHalfExtentM === 'number' && t.defaultHalfExtentM > 0),
+  );
+  check(
+    'point facility types declare no footprint size, since they have no footprint',
+    FACILITY_TYPE_ORDER.map((id) => FACILITY_TYPES[id])
+      .filter((t) => t.geometryKind === 'point')
+      .every((t) => t.defaultHalfExtentM === null),
+  );
+
+  // The starting selection must name things that actually exist, and must not
+  // silently fall through the catalog accessors' unknown-id tolerance.
+  check('the initial draft mode is a real mode', MODE_ORDER.includes(INITIAL_DRAFT.modeId));
+  check(
+    'the initial draft way type is a real way type',
+    WAY_TYPE_ORDER.includes(INITIAL_DRAFT.wayTypeId),
+  );
+  check(
+    'the initial draft way type is one the initial mode can run on',
+    mode(INITIAL_DRAFT.modeId).wayTypeIds.includes(INITIAL_DRAFT.wayTypeId),
+  );
+
+  // importedCapacity is optional by design (unset = "assume nothing, use the
+  // type's own profile"), but where set it has to be a usable lane count.
+  check(
+    'any declared imported capacity is a positive whole number',
+    WAY_TYPE_ORDER.map((id) => WAY_TYPES[id]).every(
+      (t) =>
+        t.importedCapacity === undefined ||
+        (Number.isInteger(t.importedCapacity) && t.importedCapacity > 0),
+    ),
+  );
 }
 
 // --- Draw assists are measured on screen, and stay as strong as they look --
@@ -6228,9 +6330,11 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     store.getState().system.nodes[0].connectors?.length === 1,
   );
   // Deleting a referenced lane prunes its connectors.
-  store.getState().setWayProfile(armA.id, {
-    lanes: armA.profile.lanes.filter((l) => l.id !== armA.profile.lanes[1].id),
-  });
+  store
+    .getState()
+    .setWayProfile(armA.id, {
+      lanes: armA.profile.lanes.filter((l) => l.id !== armA.profile.lanes[1].id),
+    });
   check(
     'removing a lane prunes connectors that referenced it',
     !store.getState().system.nodes[0].connectors,
@@ -6256,12 +6360,14 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   store.getState().formCrossingJunctions(b);
   const arms = store.getState().system.ways;
   const nodeId = store.getState().system.nodes[0].id;
-  store.getState().setNodeConnectors(nodeId, [
-    {
-      from: { wayId: arms[0].id, laneId: arms[0].profile.lanes[1].id },
-      to: { wayId: arms[1].id, laneId: arms[1].profile.lanes[1].id },
-    },
-  ]);
+  store
+    .getState()
+    .setNodeConnectors(nodeId, [
+      {
+        from: { wayId: arms[0].id, laneId: arms[0].profile.lanes[1].id },
+        to: { wayId: arms[1].id, laneId: arms[1].profile.lanes[1].id },
+      },
+    ]);
   store.getState().nameWay(arms[0].id, 'Sahara Ave');
   store.getState().deleteWay(arms[0].id);
   const sys = store.getState().system;
