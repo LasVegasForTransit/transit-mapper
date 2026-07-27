@@ -30,73 +30,47 @@ CPU limit`.
 
 ### `development/explanation/architecture.md`
 
-One document per repository that lets a competent stranger find the right
-place to make a change, and know what that change must not break.
-
-Its readers, in order: a new contributor with a specific task, a returning
-maintainer who has forgotten a boundary, a reviewer deciding whether a diff
-belongs where it landed. It is not a system description for management, an
-API reference, or a record of history.
-
-Every section passes one admission test. Omitting it would cause a competent
-newcomer either to put code in the wrong place, or to break something the
-compiler and the test suite will not catch. Nothing else is admitted.
+[arc42](https://arc42.org/overview), complete. All twelve sections, in
+order, with the official names.
 
 #### Sections
 
-Fixed order. R is required in every repository; C is conditional on the
-stated trigger.
+| Section                      | Contents                                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------------------- |
+| 1. Introduction and Goals    | Requirements overview, three to five prioritised quality goals, stakeholder table        |
+| 2. Architecture Constraints  | Technical, organizational, and convention constraints that restrict design               |
+| 3. Context and Scope         | Business context and technical context: partners, channels, and what is out of scope     |
+| 4. Solution Strategy         | The decisions that shape everything else, mapped to the quality goals they serve         |
+| 5. Building Block View       | Static decomposition, level 1 then level 2 per building block                            |
+| 6. Runtime View              | Scenarios showing building blocks interacting                                            |
+| 7. Deployment View           | Infrastructure, environments, and the mapping of software onto them                      |
+| 8. Crosscutting Concepts     | Concepts spanning multiple building blocks: domain model, persistence, security, testing |
+| 9. Architecture Decisions    | Decisions expensive enough to record, each naming what was rejected                      |
+| 10. Quality Requirements     | A quality tree, and scenarios making each goal falsifiable                               |
+| 11. Risks and Technical Debt | Known risks and debt, with current status                                                |
+| 12. Glossary                 | Domain and technical terms used when discussing the system                               |
 
-| Section          |     | What the reader does with it                                     |
-| ---------------- | --- | ---------------------------------------------------------------- |
-| Context          | R   | Decides whether this repository is where the change belongs      |
-| Domain model     | R   | Reads any identifier and knows what it means                     |
-| Code map         | R   | Given "I need to change X", opens the right package              |
-| Runtime topology | C   | Learns which runtime constraints apply to the code being touched |
-| Flows            | R   | Traces one operation end to end; knows where to break first      |
-| Invariants       | R   | Learns what the change must not break, and what catches it       |
-| Decisions        | R   | Stops re-proposing an alternative already rejected               |
-| Trust boundary   | C   | Learns which code treats its input as hostile                    |
-| Failure modes    | C   | Learns which dependencies are allowed to be load-bearing         |
-| Absences         | C   | Stops hunting for code that is not there                         |
+The heading set is closed. Those twelve are the only `##` headings
+permitted, spelled exactly, in that order. An unrecognised heading fails the
+check.
 
-Triggers for the conditional sections:
+Every section is required. A section with nothing to record is a finding
+about the project rather than licence to drop the heading: an empty Risks
+and Technical Debt means nobody has looked, and an empty Glossary means the
+vocabulary is undocumented.
 
-- **Runtime topology** — when build units and run units differ: more than one
-  deployable, or one build unit running in more than one runtime. Omitted
-  when every package maps to one process in one runtime.
-- **Trust boundary** — when the repository processes input authored by
-  someone other than the person running it.
-- **Failure modes** — when dependencies can fail independently at runtime.
-- **Absences** — only when one exists. Never write "none".
-
-A pure library has six sections and often fits on one screen. That is
-correct rather than deficient.
-
-#### Budgets
-
-Bloat is a failing check rather than a matter of taste.
-
-| Limit            | Value                                |
-| ---------------- | ------------------------------------ |
-| Whole document   | 1,500 words soft, 2,500 hard         |
-| Code map entries | 12                                   |
-| Decisions        | 8, each naming what was rejected     |
-| Diagrams         | 2, Mermaid, container level or above |
-
-The heading set is closed. Those ten are the only `##` headings permitted,
-spelled exactly, in that order. An unrecognised heading fails the check,
-which is what keeps filler out: there is nowhere to put it.
+A word limit of 5,000 catches runaway. The closed heading set, not the
+limit, is what keeps filler out.
 
 #### Naming
 
 The document must survive a rename that changes no behaviour.
 
-| Tier           | Applies to                                                                               |
-| -------------- | ---------------------------------------------------------------------------------------- |
-| Name freely    | Domain concepts, workspace package and deployable names, wire nouns, technologies        |
-| Name sparingly | Top-level source directories, and a single entry-point file where the file is the module |
-| Never name     | Paths inside a package, functions, variables, config keys, versions, exact measurements  |
+| Tier           | Applies to                                                                              |
+| -------------- | --------------------------------------------------------------------------------------- |
+| Name freely    | Domain concepts, workspace package and deployable names, wire nouns, technologies       |
+| Name sparingly | Top-level source directories, and an entry-point file where the file is the module      |
+| Never name     | Paths inside a package, functions, variables, config keys, versions, exact measurements |
 
 Name things so a reader can find them by symbol search. Do not link to
 source files: links go stale, names do not.
@@ -106,19 +80,17 @@ sentence is at the wrong altitude.
 
 #### Excluded
 
-| Excluded                               | Reason                                                                                           |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Directory tree or file inventory       | Derivable from the source tree and stale at the first rename. It belongs in project-structure.md |
-| Class or module diagrams               | An IDE generates them on demand                                                                  |
-| A diagram per scenario                 | Flows covers the two to four paths that matter                                                   |
-| API lists, schema columns, config keys | Reference material with a different half-life                                                    |
-| Setup, build, and test instructions    | README and CONTRIBUTING                                                                          |
-| Roadmap and planned work               | The fastest-rotting content in any repository                                                    |
-| History of what was used before        | The decision log, with superseded records kept                                                   |
-| Quality goals and risk registers       | Unfalsifiable. A real constraint appears as an invariant                                         |
-| Stakeholder tables                     | Ceremony. The stakeholder is a contributor                                                       |
-| Dependency inventories                 | The lockfile is the truth                                                                        |
-| Exact benchmark numbers                | Orders of magnitude only, and only where a limit forced a decision                               |
+Content belonging to another document, regardless of which arc42 section it
+might seem to fit:
+
+| Excluded                              | Belongs in                              |
+| ------------------------------------- | --------------------------------------- |
+| Directory tree or file inventory      | `project-structure.md`                  |
+| Setup, build, and test instructions   | `README.md` and `CONTRIBUTING.md`       |
+| Operational procedure and runbooks    | `operations.md`                         |
+| Secret inventories and rotation       | `secrets.md`                            |
+| API endpoint lists and schema columns | Reference documentation beside the code |
+| Roadmap and planned work              | `ROADMAP.md` and the issue tracker      |
 
 ### `development/reference/project-structure.md`
 
