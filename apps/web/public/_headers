@@ -26,3 +26,17 @@
 # Vite fingerprints these filenames, so a given URL's bytes never change.
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# The service worker script itself — fixed filename, so it must always be
+# revalidated. Browsers already re-check a SW at most every 24h regardless of
+# headers, but there's no reason to let an edge cache add its own staleness on
+# top of that: the whole point of this file existing is prompt update
+# detection (see src/pwa/useAppUpdate.ts), so the one file the browser polls
+# to notice a new version must never itself get stuck stale.
+/sw.js
+  Cache-Control: no-cache
+
+# vite-plugin-pwa's Workbox runtime — content-hashed like /assets/*, so it's
+# just as safe to cache forever; only sw.js's own fixed name needs no-cache.
+/workbox-*.js
+  Cache-Control: public, max-age=31536000, immutable

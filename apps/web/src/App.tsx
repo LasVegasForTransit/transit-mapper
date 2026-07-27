@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { MapCanvas } from './map/MapCanvas';
 import { getMap } from './map/mapRef';
 import { useEditor, useEditorStore } from './editor/EditorProvider';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
+import type { TransitSystem } from '@transitmapper/core/model/system';
 import { fetchShare } from './share/api';
 import {
   getActiveId,
@@ -27,6 +28,7 @@ import { useSaveStatus } from './ui/SaveStatusProvider';
 import { useUi } from './ui/UiProvider';
 import { useView } from './ui/ViewProvider';
 import { Workbench } from './ui/Workbench';
+import { useAppUpdate } from '@transitmapper/pwa-updater/useAppUpdate';
 import './ui/app.css';
 
 // Lazy-loaded: pulls in fflate + the GTFS parsing pipeline (packages/core's
@@ -166,20 +168,25 @@ export function App() {
   // shared view). Switching to a different system's id updates the active
   // pointer immediately — no reason to debounce that, only the content save.
   const saveTimer = useRef<number | undefined>(undefined);
+  // Mirrors whatever saveTimer is currently waiting to write, so a caller
+  // outside this effect (see flushPendingSave) can force that write early
+  // without needing its own copy of the debounce logic.
+  const pendingSave = useRef<TransitSystem | null>(null);
   useEffect(() => {
     const unsubscribe = store.subscribe((s, prev) => {
       if (s.readOnly) return;
       if (s.system === prev.system) return;
       if (s.system.id !== prev.system.id) setActiveId(s.system.id);
       window.clearTimeout(saveTimer.current);
-      const snapshot = s.system;
-      // Fold in the live camera at save time: interactive pan/zoom bypasses the
-      // domain store (camera/liveCamera.ts), so `snapshot.viewport` would
-      // otherwise be stale. This keeps "reload restores where I left off".
-      saveTimer.current = window.setTimeout(
-        () => report(saveToLibrary(withLiveCamera(snapshot))),
-        400,
-      );
+      pendingSave.current = s.system;
+      saveTimer.current = window.setTimeout(() => {
+        // Fold in the live camera at save time: interactive pan/zoom bypasses
+        // the domain store (camera/liveCamera.ts), so `pendingSave.current`'s
+        // viewport would otherwise be stale. Keeps "reload restores where I
+        // left off".
+        report(saveToLibrary(withLiveCamera(pendingSave.current!)));
+        pendingSave.current = null;
+      }, 400);
     });
     // The pending timer is part of this effect's state; leaving it to fire
     // into an unmounted tree is silent today but is still a leak.
@@ -189,9 +196,23 @@ export function App() {
     };
   }, [store, report]);
 
+  // Forces a debounced autosave write early instead of waiting out its 400ms
+  // timer — used before an update-triggered reload (see useAppUpdate below),
+  // so a new-version reload never drops the last few seconds of an edit.
+  const flushPendingSave = useCallback(() => {
+    if (pendingSave.current === null) return;
+    window.clearTimeout(saveTimer.current);
+    report(saveToLibrary(withLiveCamera(pendingSave.current)));
+    pendingSave.current = null;
+  }, [report]);
+
   // Live camera moves don't flow through the store (so they never trigger a
   // rebuild), so persist them on their own debounced path.
   useEffect(() => attachCameraPersistence(store), [store]);
+
+  // Service worker registration + update lifecycle — never wired into
+  // embed's own entry point (see vite.config.ts).
+  const { needRefresh, offlineReady, dismissOfflineReady, reload } = useAppUpdate(flushPendingSave);
 
   // Dev-only: expose the map for debugging (the store is exposed by EditorProvider).
   useEffect(() => {
@@ -243,6 +264,31 @@ export function App() {
   ) : loadError ? (
     <div className="app-banner" role="alert">
       Couldn’t open shared system: {loadError}
+    </div>
+  ) : needRefresh ? (
+    // Not dismissible — reloading is the only way to clear it, and it isn't
+    // an error, so it deliberately doesn't borrow app-banner's danger tone.
+    <div className="app-banner app-banner-update app-banner-action" role="status">
+      <span>A new version of TransitMapper is available.</span>
+      <button type="button" className="ghost-btn" onClick={reload}>
+        Reload
+      </button>
+    </div>
+  ) : offlineReady ? (
+    // Good news, not a problem — same neutral tone as the update banner
+    // above, not app-banner-dismissible's danger one. Centered (app-banner-
+    // action), not flex-start: that alignment exists for the longer, wrapped
+    // messages notice below carries, and looks visibly off on this one-liner.
+    <div className="app-banner app-banner-update app-banner-action" role="status">
+      <span>TransitMapper is now available offline.</span>
+      <button
+        type="button"
+        className="app-banner-dismiss"
+        onClick={dismissOfflineReady}
+        aria-label="Dismiss"
+      >
+        <Icon name="x" size={14} />
+      </button>
     </div>
   ) : notice ? (
     // Dismissible, unlike the two above. Those describe a condition that is

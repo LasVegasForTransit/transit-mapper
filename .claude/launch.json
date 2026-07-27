@@ -12,6 +12,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@transitmapper/worker", "dev", "--port", "8787"],
       "port": 8787
+    },
+    {
+      "name": "transitmapper-preview",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@transitmapper/web", "run", "preview", "--port", "4173", "--strictPort"],
+      "port": 4173
     }
   ]
 }

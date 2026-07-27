@@ -1,0 +1,22 @@
+{
+  "name": "@transitmapper/pwa-updater",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -b --noEmit",
+    "lint": "eslint .",
+    "verify": "vitest run --passWithNoTests"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "vite-plugin-pwa": "catalog:",
+    "vitest": "catalog:"
+  }
+}
