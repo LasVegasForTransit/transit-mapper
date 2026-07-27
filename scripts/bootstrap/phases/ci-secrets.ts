@@ -1,6 +1,6 @@
 import { log, note } from '@clack/prompts';
 import { runCommand, shellEscape, tryOpenInBrowser } from '../lib/shell.js';
-import { promptConfirm, promptSecret } from '../lib/ui.js';
+import { printToolTable, promptConfirm, promptSecret } from '../lib/ui.js';
 import type { PhaseResult } from './auth.js';
 
 const GITHUB_ENVIRONMENT = 'production';
@@ -73,7 +73,9 @@ function parseAccountIds(stdout: string): string[] {
  * general subprocess environment (see the denylist in lib/shell.ts) or any
  * on-disk file.
  */
-export async function runCiSecretsPhase(): Promise<PhaseResult> {
+export async function runCiSecretsPhase(
+  options: { doctor: boolean } = { doctor: false },
+): Promise<PhaseResult> {
   const whoami = runCommand('wrangler whoami');
   if (!whoami.ok) {
     log.error('`wrangler whoami` failed — make sure the auth phase succeeded first.');
@@ -87,6 +89,27 @@ export async function runCiSecretsPhase(): Promise<PhaseResult> {
   }
   const accountId = accountIds[0]!;
   log.info(`Using Cloudflare account id ${accountId} (from \`wrangler whoami\`).`);
+
+  // Doctor mode reports and returns. Prompting would make `pnpm preflight`
+  // interactive, which defeats running it in a script or a fresh shell to
+  // find out what is wrong.
+  if (options.doctor) {
+    const existing = runCommand(
+      `gh secret list --env ${GITHUB_ENVIRONMENT} --json name --jq '.[].name'`,
+    );
+    const names = existing.ok ? existing.stdout : '';
+    const missing = ['CLOUDFLARE_API_TOKEN'].filter((n) => !names.includes(n));
+    printToolTable('CI secrets', [
+      missing.length === 0
+        ? { label: 'CLOUDFLARE_API_TOKEN', status: 'ready', detail: GITHUB_ENVIRONMENT }
+        : {
+            label: 'CLOUDFLARE_API_TOKEN',
+            status: 'failed',
+            detail: `not set on the "${GITHUB_ENVIRONMENT}" environment — run \`pnpm bootstrap\``,
+          },
+    ]);
+    return { success: missing.length === 0 };
+  }
 
   const proceed = await promptConfirm(
     `Set CI secrets on the "${GITHUB_ENVIRONMENT}" GitHub Environment now?`,

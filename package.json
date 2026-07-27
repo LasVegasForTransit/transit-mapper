@@ -16,7 +16,7 @@
     "verify": "turbo run verify",
     "deploy": "pnpm run build && pnpm --filter @transitmapper/worker run deploy",
     "bootstrap": "tsx scripts/bootstrap/cold-start.ts",
-    "preflight": "tsx scripts/doctor.ts",
+    "preflight": "tsx scripts/bootstrap/cold-start.ts --doctor",
     "postinstall": "tsx scripts/record-install.ts",
     "prepare": "git config --local core.hooksPath .githooks 2>/dev/null || true",
     "lint": "eslint .",
@@ -31,7 +31,8 @@
     "check:migrations": "tsx scripts/check-migrations-append-only.ts",
     "check:structure": "tsx scripts/check-project-structure.ts",
     "gen": "turbo gen",
-    "check:generators": "tsx scripts/check-generators.ts"
+    "check:generators": "tsx scripts/check-generators.ts",
+    "check:env": "tsx scripts/doctor.ts"
   },
   "devDependencies": {
     "@clack/prompts": "catalog:",
