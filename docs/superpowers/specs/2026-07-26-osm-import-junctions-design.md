@@ -396,3 +396,33 @@ junction with any signalized approach is signalized.
 
 Roundabouts come from the way tag `junction=roundabout`, not a node tag, and
 apply to the junctions along the circulatory way.
+
+## Follow-on: Overpass endpoint fallback
+
+Overpass returned 504 repeatedly during this work, surfacing as "import
+failed". The import now tries a second public server before giving up.
+
+Two things learned the hard way. A mirror that answers `curl` is useless if
+it omits CORS headers — `overpass.osm.jp` was in the list until a browser
+check showed it failing preflight, and both remaining endpoints were verified
+from a browser rather than a terminal. And Overpass's *error* responses often
+drop the CORS headers its successful ones carry, so an overloaded server
+reaches the app as a thrown `TypeError` with no status: the retry loop treats
+a thrown fetch as "try the next mirror", and the failure message says only
+that no server answered rather than claiming the network is down.
+
+### Measured end to end
+
+139 ways over the same viewport: 13 named identities covering most of them,
+111 junctions of which 20 signals and 2 stops, 1 elevated way and 1
+underground, and 0 unjoined crossings — down from 4, all of which were the
+same bridge now correctly imported as elevated.
+
+### Still not read
+
+Bus lanes (`busway`, `lanes:bus`), on-street parking (`parking:lane:*`),
+cycleways tagged as a modifier on the roadway rather than their own way
+(`cycleway:right=lane`), `width`, and `maxspeed` (which has no field in the
+model at all). Per-approach control is not carried: `highway=stop` sets the
+whole junction. Turn restriction relations are not fetched. Lane order
+assumes right-hand traffic; a left-hand-traffic import comes in mirrored.

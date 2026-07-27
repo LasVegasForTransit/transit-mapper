@@ -84,6 +84,10 @@ junctions, adopt them under existing sketches.
   tunnel as genuinely not meeting the road it passes over.
 - Lane order assumes right-hand traffic. A left-hand-traffic import comes in
   mirrored and needs flipping.
+- Overpass is a free shared service that is often busy. The import tries
+  more than one public server before giving up, so a slow import is usually
+  it falling through to a second one rather than anything being wrong. If it
+  does fail, it's nearly always transient — try again.
 - A stop sign sets the control for the whole junction. OSM records which
   approach the sign faces; the import doesn't carry that through, so set
   per-approach control by hand where it matters.

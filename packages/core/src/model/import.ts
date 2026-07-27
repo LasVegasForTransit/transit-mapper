@@ -538,6 +538,32 @@ export function osmElementsToWays(elements: OsmWayElement[]): Way[] {
   return osmElementsToNetwork(elements).ways;
 }
 
+/**
+ * Public Overpass endpoints, tried in order. These are free, shared, and
+ * routinely busy — a 504 or 429 from the first one says nothing about the
+ * query, only that this instance is loaded right now, so falling through to
+ * a mirror turns the most common failure into a slower success instead of an
+ * error the user can only respond to by clicking Import again.
+ *
+ * Both were checked from a browser, which is the constraint that matters: an
+ * Overpass mirror that works from curl is useless here if it doesn't send
+ * CORS headers. `overpass.osm.jp` is deliberately absent for that reason —
+ * it answers curl but fails the browser's preflight.
+ */
+const OVERPASS_ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+
+/**
+ * Statuses worth trying another endpoint for: overload and rate limiting,
+ * not a malformed query (400), which every mirror would reject alike.
+ *
+ * In a browser this is a partial signal at best. Overpass's own error pages
+ * often omit the CORS headers its successful responses carry, so an overload
+ * reaches us as a thrown TypeError with no status at all. That's why the
+ * loop treats a thrown fetch as "try the next mirror" rather than as a fatal
+ * network error.
+ */
+const OVERPASS_RETRYABLE = new Set([429, 502, 503, 504]);
+
 /** Fetch OSM ways for the given categories within a bounding box from the
  *  public Overpass API and convert them to catalog-typed Ways plus the
  *  junctions and street identities between them. The only function here that
@@ -545,12 +571,25 @@ export function osmElementsToWays(elements: OsmWayElement[]): Way[] {
 export async function importOsmWays(bbox: ImportBBox, categories: ImportCategory[]): Promise<ImportedNetwork> {
   if (categories.length === 0) return { ways: [], nodes: [], namedWays: [] };
   const query = buildOverpassQuery(bbox, categories);
-  const res = await fetch("https://overpass-api.de/api/interpreter", {
-    method: "POST",
-    headers: { "content-type": "text/plain" },
-    body: query,
-  });
-  if (!res.ok) throw new Error(`OSM import failed (${res.status}).`);
-  const data = (await res.json()) as { elements?: OsmWayElement[] };
-  return osmElementsToNetwork(data.elements ?? []);
+
+  let lastError = "";
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    let res: Response;
+    try {
+      res = await fetch(endpoint, { method: "POST", headers: { "content-type": "text/plain" }, body: query });
+    } catch {
+      // No status to read: offline, or — far more often — a busy Overpass
+      // whose error page dropped the CORS headers. Both look identical from
+      // here, so the message stays honest about not knowing which.
+      lastError = "no OpenStreetMap server answered";
+      continue;
+    }
+    if (res.ok) {
+      const data = (await res.json()) as { elements?: OsmWayElement[] };
+      return osmElementsToNetwork(data.elements ?? []);
+    }
+    if (!OVERPASS_RETRYABLE.has(res.status)) throw new Error(`OSM import failed (${res.status}).`);
+    lastError = `every OpenStreetMap server is busy (${res.status})`;
+  }
+  throw new Error(`OSM import failed — ${lastError}. Try again in a moment.`);
 }
