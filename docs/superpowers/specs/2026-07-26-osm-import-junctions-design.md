@@ -1,5 +1,11 @@
 # OSM import builds real junctions
 
+> **Status.** This began as the design for junction derivation alone. Each
+> section below the first "Deferred work" heading is a follow-on written as
+> that work landed, in order, so an earlier section's "not read yet" may have
+> been answered by a later one. "Still not read", at the end, is the only
+> outstanding list.
+
 ## Context
 
 OSM import ([packages/core/src/model/import.ts](../../../packages/core/src/model/import.ts))
@@ -71,7 +77,9 @@ is a parsing change, not a geometry algorithm.
   returns ways only, so junctions import uncontrolled. Added afterwards, and
   the naive version of it turned out to do nothing at all — see "Follow-on:
   grade and traffic control."
-- Turn restrictions, which OSM stores as relations. Not fetched at all.
+- **Turn restrictions**, which OSM stores as relations. Not part of the
+  junction work either; built later — see "Follow-on: turn-restriction
+  relations."
 
 ## Architecture
 
@@ -338,12 +346,11 @@ two-way (was 44 two-way), 15 carrying turn pockets (was 0), travel-lane
 counts spread 1–5 (was 44 ways at exactly 4), and 34 with no sidewalk where
 OSM maps the footway separately (was 44 with two each).
 
-### Still not read
+### Not read at this point
 
-Bus lanes (`busway`, `lanes:bus`), on-street parking (`parking:lane:*`),
-cycleways tagged as a modifier on the roadway rather than their own way
-(`cycleway:right=lane`), and `width`. Lane order assumes right-hand traffic,
-matching `defaultProfileFor`; a left-hand-traffic import comes in mirrored.
+Bus lanes, on-street parking, cycleways tagged as a modifier on the roadway,
+`width`, and left-hand traffic. All but `width` were built in later follow-ons
+below; see "Still not read" at the end of this document for the current list.
 
 ## Follow-on: street names → NamedWay
 
@@ -419,13 +426,11 @@ that no server answered rather than claiming the network is down.
 underground, and 0 unjoined crossings — down from 4, all of which were the
 same bridge now correctly imported as elevated.
 
-### Still not read
+### Not read at this point
 
-Bus lanes (`busway`, `lanes:bus`), on-street parking (`parking:lane:*`),
-cycleways tagged as a modifier on the roadway rather than their own way
-(`cycleway:right=lane`), `width`, and `maxspeed` (which has no field in the
-model at all). Per-approach control is not carried: `highway=stop` sets the
-whole junction. 
+Bus lanes, on-street parking, roadway-modifier cycleways, `width`, `maxspeed`,
+and per-approach control. See "Still not read" at the end for what is
+genuinely outstanding now. 
 
 ## Follow-on: left-hand traffic
 
@@ -569,3 +574,23 @@ Measured over the same 2 km box: 106 relations fetched, 49 of them via-node,
 71 restrictions applied — 45 on drive lanes and 26 on turn pockets, none on a
 bike lane — with no key naming a missing lane and no target naming a missing
 way.
+
+## Still not read
+
+The current list, superseding every earlier one:
+
+- `width` — no per-way width field exists; width is derived from the lanes,
+  and a way-level value that can disagree with their sum is a modelling
+  hazard rather than a missing feature.
+- `maxspeed` — no speed field on `Way` at all, so this is a data-model
+  change before it is an import one.
+- **Per-approach control.** `highway=stop` sets the whole junction;
+  `ApproachControl` exists but the import cannot tell which arm a sign faces.
+- **Via-way turn restrictions**, and the `except` qualifier on the ones that
+  are read.
+- **Snapping an import onto hand-drawn ways.** Joining a *previous import*
+  is handled exactly by node identity (see "Follow-on: re-importing"); welding
+  to hand-drawn geometry still needs a proximity tolerance and is not built.
+- **`turn:lanes` whose entry count disagrees with the lane count** is ignored
+  rather than approximated, so turn pockets often do not materialise on real
+  data. Deliberate: a pocket in the wrong lane is worse than none.
