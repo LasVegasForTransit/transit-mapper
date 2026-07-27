@@ -9,7 +9,7 @@ import { wayType, type Grade, type ProfileTemplateLane } from "./catalog";
 import { haversineMeters } from "./geo";
 import { shortId } from "./ids";
 import { defaultProfileFor, profileWithPrimaryLanes, MAX_PRIMARY_LANES, type ProfileEdges } from "./profile";
-import type { CrossSection, DrivingSide, LngLat, NamedWay, Node, NodeControl, Way, WayPointRef } from "./system";
+import type { CrossSection, DrivingSide, LaneDirection, LngLat, NamedWay, Node, NodeControl, Way, WayPointRef } from "./system";
 
 export interface ImportBBox {
   west: number;
@@ -230,6 +230,50 @@ function osmSidewalks(tags: Record<string, string>): ProfileEdges {
   return { leading: left, trailing: right };
 }
 
+/** Whether a side-of-the-road feature is present on each side, from OSM's
+ *  `key` / `key:both` / `key:left` / `key:right` family. A side-specific tag
+ *  wins over the both-sides one; absent means absent, since these tags are
+ *  only sporadically mapped and inventing a lane from silence would widen
+ *  every street that simply hasn't been surveyed. */
+function osmSidePresence(
+  tags: Record<string, string>,
+  prefix: string,
+  present: (value: string) => boolean,
+): { left: boolean; right: boolean } {
+  const read = (key: string): boolean | undefined => {
+    const v = tags[key];
+    return v === undefined ? undefined : present(v);
+  };
+  const both = read(prefix) ?? read(`${prefix}:both`);
+  return { left: read(`${prefix}:left`) ?? both ?? false, right: read(`${prefix}:right`) ?? both ?? false };
+}
+
+/** OSM `busway` values that mean a bus lane physically exists on that side.
+ *  `opposite_lane` is a contraflow bus lane on a one-way street — still a
+ *  lane, just running against the general direction. */
+const BUSWAY_PRESENT = new Set(["lane", "opposite_lane", "share_busway", "opposite_share_busway"]);
+
+/**
+ * The lanes that sit outboard of the travel lanes on each side, ordered
+ * from the kerb inwards. OSM tags these as side-of-the-road attributes
+ * rather than entries in `lanes`, so they are additional to the lane count,
+ * not carved out of it.
+ */
+function osmSideLanes(tags: Record<string, string>, oneway: "forward" | "backward" | null): { left: ProfileTemplateLane[]; right: ProfileTemplateLane[] } {
+  const left: ProfileTemplateLane[] = [];
+  const right: ProfileTemplateLane[] = [];
+  // Built right-hand-traffic first, like the travel lanes: the left kerb
+  // carries backward traffic unless the whole way is one-way.
+  const leftDirection: LaneDirection = oneway ?? "backward";
+  const rightDirection: LaneDirection = oneway ?? "forward";
+
+  const bus = osmSidePresence(tags, "busway", (v) => BUSWAY_PRESENT.has(v));
+  if (bus.left) left.push({ kindId: "bus", direction: leftDirection });
+  if (bus.right) right.push({ kindId: "bus", direction: rightDirection });
+
+  return { left, right };
+}
+
 /**
  * The cross-section an imported way starts with, read from OSM's own lane
  * tagging rather than defaulted from the way type.
@@ -261,19 +305,24 @@ export function profileFromOsmTags(
 
   // A two-way street with a single lane is one shared bidirectional lane, not
   // a zero-lane one — matching defaultProfileFor's capacity-1 case.
+  const side = osmSideLanes(tags, oneway);
+
   if (!oneway && backward === 0 && forward === 0) {
     const lanes: ProfileTemplateLane[] = [{ kindId: "drive", direction: "both" }];
     if (centerTurn) lanes.push({ kindId: "turnPocket", direction: "both" });
-    return mirrored(profileWithPrimaryLanes(typeId, lanes, osmSidewalks(tags)));
+    // Right-side lanes read kerb-inwards, so they reverse into left-to-right.
+    return mirrored(profileWithPrimaryLanes(typeId, [...side.left, ...lanes, ...[...side.right].reverse()], osmSidewalks(tags)));
   }
 
   const forwardTurns = tags["turn:lanes:forward"] ?? (oneway === "forward" ? tags["turn:lanes"] : undefined);
   const backwardTurns = tags["turn:lanes:backward"] ?? (oneway === "backward" ? tags["turn:lanes"] : undefined);
 
   const primary: ProfileTemplateLane[] = [
+    ...side.left,
     ...laneKindsForDirection(backward, backwardTurns, true).map((kindId) => ({ kindId, direction: "backward" as const })),
     ...(centerTurn ? [{ kindId: "turnPocket", direction: "both" as const }] : []),
     ...laneKindsForDirection(forward, forwardTurns, false).map((kindId) => ({ kindId, direction: "forward" as const })),
+    ...[...side.right].reverse(),
   ];
   return mirrored(profileWithPrimaryLanes(typeId, primary, osmSidewalks(tags)));
 }

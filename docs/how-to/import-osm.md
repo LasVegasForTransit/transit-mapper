@@ -37,6 +37,9 @@ defaulted from its type:
 - `sidewalk`, `sidewalk:left`, and `sidewalk:right` decide which sides get a
   sidewalk. `separate` means OSM maps the footway as its own way, so none is
   drawn here.
+- `busway` (and `busway:left` / `busway:right`) adds a bus lane at that kerb.
+  These are additional to the `lanes` count, not carved out of it, which is
+  how OSM tags them.
 
 Where OSM says nothing, the way's class supplies a lane count — a local
 street comes in narrower than an arterial. Rail and bike ways keep their

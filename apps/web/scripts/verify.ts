@@ -1238,6 +1238,44 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("osmElementsToNetwork applies the tag-derived profile", isOneWay(osmElementsToNetwork(tagged).ways[0].profile));
 }
 
+// --- P4: OSM import reads bus lanes ---
+{
+  const kinds = (p: ReturnType<typeof profileFromOsmTags>) => p.lanes.map((l) => l.kindId).join(",");
+  const dirOf = (p: ReturnType<typeof profileFromOsmTags>, kindId: string) => p.lanes.filter((l) => l.kindId === kindId).map((l) => l.direction).join(",");
+
+  check("no busway tag means no bus lane", !kinds(profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "2" })).includes("bus"));
+  check(
+    "busway=lane puts a bus lane on both kerbs",
+    kinds(profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "2", busway: "lane" })) === "sidewalk,bus,drive,drive,bus,sidewalk",
+  );
+  check(
+    "busway:right=lane puts one on the right only",
+    kinds(profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "2", "busway:right": "lane" })) === "sidewalk,drive,drive,bus,sidewalk",
+  );
+  check(
+    "a side-specific tag beats the both-sides one",
+    kinds(profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "2", busway: "lane", "busway:left": "no" })) === "sidewalk,drive,drive,bus,sidewalk",
+  );
+  check("busway=no adds nothing", !kinds(profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "2", busway: "no" })).includes("bus"));
+  check(
+    "a bus lane runs with the traffic beside it",
+    dirOf(profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "2", busway: "lane" }), "bus") === "backward,forward",
+  );
+  check(
+    "on a one-way street both bus lanes run the way's direction",
+    dirOf(profileFromOsmTags("road", "arterial", { highway: "primary", oneway: "yes", lanes: "2", busway: "lane" }), "bus") === "forward,forward",
+  );
+  // Bus lanes are additional to `lanes`, not carved out of it.
+  check(
+    "a bus lane does not consume a travel lane",
+    profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "4", busway: "lane" }).lanes.filter((l) => l.kindId === "drive").length === 4,
+  );
+  check(
+    "bus lanes mirror with the rest of the cross-section under LHT",
+    kinds(profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "2", "busway:right": "lane" }, "left")) === "sidewalk,bus,drive,drive,sidewalk",
+  );
+}
+
 // --- P4: OSM import mirrors lane order for left-hand traffic ---
 {
   const kinds = (p: ReturnType<typeof profileFromOsmTags>) => p.lanes.map((l) => `${l.kindId}:${l.direction}`).join(",");
