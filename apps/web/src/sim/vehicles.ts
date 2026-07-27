@@ -27,16 +27,19 @@ import type { SimClock } from './simClock';
 // MapLibre host. See packages/core/src/sim/timetable.ts.
 import {
   buildTimetable,
-  metersAtElapsed,
   VEHICLE_SPEED_MPS,
   type DwellStop,
   type Timetable,
 } from '@transitmapper/core/sim/timetable';
+import { planService, runStateAt } from '@transitmapper/core/sim/fleet';
 
-const MIN_PERIOD_MS = 6000; // a floor so even a very short line doesn't blur past instantly
-// A very short headway on a long line could otherwise imply dozens of
-// vehicles — capped so "every 5 min" reads as "frequent", not as a swarm.
-const MAX_VEHICLES_PER_PATTERN = 6;
+// How many of a pattern's vehicles get DRAWN. Not a claim about how many it
+// runs — the plan's fleet can exceed this, and the cap only limits what's on
+// screen (see the comment at its use). A frequent line on a long alignment can
+// legitimately need dozens of vehicles; drawing all of them at RTC scale is a
+// per-frame cost with no visual payoff at the zoom levels a whole system is
+// viewed at.
+const MAX_VEHICLES_PER_PATTERN = 12;
 // Doors open, board/alight, doors close — a plausible light-rail/bus dwell
 // when a station doesn't specify its own (Station.dwellSeconds).
 const DEFAULT_DWELL_SECONDS = 20;
@@ -384,38 +387,34 @@ export function attachVehicleAnimation(
           const bb = geometry.bbox;
           if (bb[2] < cullW || bb[0] > cullE || bb[3] < cullS || bb[1] > cullN) continue;
           const { path, meters, timetable, cumLengths } = geometry;
-          // periodMs is the animation's own out-and-back cycle — floored so
-          // even a short, stopless line doesn't blur past instantly.
-          const periodMs = Math.max(MIN_PERIOD_MS, 2 * timetable.oneWayMs);
-          const roundTripMinutes = (2 * timetable.oneWayMs) / 60000;
-          const count = headwayMinutes
-            ? Math.min(
-                MAX_VEHICLES_PER_PATTERN,
-                Math.max(1, Math.floor(roundTripMinutes / headwayMinutes)),
-              )
-            : 1;
-          for (let i = 0; i < count; i++) {
-            // Phased against SIMULATED time, so the speed control and pause
+          // The cycle is built FROM the headway (see core/sim/fleet.ts), so
+          // vehicles pass every stop exactly one headway apart instead of
+          // approximately. Fleet size falls out of it.
+          const plan = planService(
+            2 * timetable.oneWayMs,
+            headwayMinutes === undefined ? undefined : headwayMinutes * 60_000,
+          );
+          // A rendering cap, NOT a modeling one: the plan keeps its true cycle
+          // and headway, and we simply draw the first N runs. Clamping the
+          // fleet itself would shorten the cycle below the round trip, which
+          // no vehicle could actually run. Frequent service on a long line
+          // therefore shows gaps at this cap rather than wrong spacing.
+          const shown = Math.min(plan.fleet, MAX_VEHICLES_PER_PATTERN);
+          for (let i = 0; i < shown; i++) {
+            // Resolved against SIMULATED time, so the speed control and pause
             // work — and so a vehicle's position depends only on what time it
             // is in the simulation, not on how long this tab has been open.
-            // periodMs is already in simulated ms: it comes from distance over
-            // speed, which is how long the trip actually takes.
-            const phase = (simMs / periodMs + i / count) % 1;
-            const elapsedMs = phase * periodMs;
-            // First half of the cycle: outbound (start→end). Second half:
-            // the same timetable mirrored, since dwell points are the same
-            // physical stations regardless of direction of travel.
-            const outbound = elapsedMs <= timetable.oneWayMs;
-            const legElapsed = outbound ? elapsedMs : elapsedMs - timetable.oneWayMs;
-            // `speedMps` is load-bearing here, not decorative: the timetable
-            // above was BUILT at this vehicle kind's own speed, so integrating
-            // the position at the module default instead would have the two
-            // disagree — a faster kind would reach the end early and sit
-            // clamped at the terminal for the rest of the leg, a slower one
-            // would never arrive before the direction flipped.
-            const distFromStart = outbound
-              ? metersAtElapsed(meters, timetable, legElapsed, speedMps)
-              : meters - metersAtElapsed(meters, timetable, legElapsed, speedMps);
+            // `speedMps` is load-bearing, not decorative: the timetable was
+            // BUILT at this vehicle kind's own speed, so walking it at the
+            // module default instead would have the two disagree.
+            const { distMeters: distFromStart } = runStateAt(
+              simMs,
+              timetable,
+              meters,
+              plan,
+              i,
+              speedMps,
+            );
             // Distance → coordinate is an O(log n) binary search over precomputed
             // arc lengths, not a full-path re-walk (pointAtT).
             if (viewMode === 'network') {

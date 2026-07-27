@@ -59,6 +59,44 @@ A run has no id and no memory. "Vehicle 3 of the main pattern" is a coordinate,
 not an object — two consecutive frames are unrelated calculations that happen
 to agree.
 
+## Why "every 10 minutes" is exactly true
+
+Set a line's headway to 10 minutes and its stops are served every 10 minutes —
+not approximately, exactly. That comes from building the cycle **from** the
+headway rather than the other way round, which is also how an agency sizes a
+line:
+
+```
+fleet   = ⌈(round trip + minimum layover) ÷ headway⌉
+cycle   = fleet × headway          ← a whole number of headways
+layover = (cycle − round trip) ÷ 2 ← the slack, spent at each terminal
+run i departs i headways after run 0
+```
+
+Because the cycle is an exact multiple of the headway, run _i+1_ is always one
+headway behind run _i_ — including across the wrap from the last run back to
+the first, which is the seam that spacing vehicles evenly around a loop gets
+wrong.
+
+The leftover time isn't a fudge factor. It's recovery time: a vehicle sitting
+at the end of the line before starting back, which is what actually happens.
+Every line gets at least two minutes of it, and longer lines get more.
+
+Some consequences worth expecting:
+
+- **Adding stations grows the fleet.** More stops means a longer round trip,
+  which means more vehicles to hold the same headway.
+- **A headway longer than the round trip is fine.** One vehicle, waiting a
+  long time at the terminal — an hourly service on a 25-minute loop.
+- **A service with no headway set runs a single vehicle.** That is every
+  GTFS-imported route today, since import brings in no timing.
+
+The map draws at most twelve vehicles per pattern. That is a **rendering** cap,
+not a modeling one: the plan keeps its true fleet and headway and only the
+first twelve are drawn, so very frequent service on a long line shows gaps
+rather than wrong spacing. Clamping the fleet itself would shorten the cycle
+below the round trip, which no vehicle could run.
+
 ## The clock
 
 One number — milliseconds since Monday 00:00 — is the simulation's entire
@@ -120,6 +158,7 @@ about four updates a second.
 |                                      |                                                                                                           |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------- |
 | `packages/core/src/sim/clock.ts`     | the speed ladder, time-of-day and weekday math, span math. Pure.                                          |
+| `packages/core/src/sim/fleet.ts`     | fleet size, cycle time, layover, and where run _i_ is. Pure.                                              |
 | `packages/core/src/sim/timetable.ts` | travel and dwell along one pattern. Pure.                                                                 |
 | `apps/web/src/sim/simClock.ts`       | the `SimClock` instance: the mutable number and its subscribers.                                          |
 | `apps/web/src/sim/vehicles.ts`       | the 30 Hz animation host — advances the clock, asks core where everything is, pushes GeoJSON to MapLibre. |
