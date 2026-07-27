@@ -187,6 +187,7 @@ import {
   stepSimSpeed,
   weekdayLabel,
 } from '@transitmapper/core/sim/clock';
+import { planService, runStateAt } from '@transitmapper/core/sim/fleet';
 import { createSimClock } from '../src/sim/simClock';
 import {
   generateToken,
@@ -9243,6 +9244,147 @@ function buildGrid() {
   check(
     'a failed delete leaves the system listed rather than half-removed',
     listLibrary().some((e) => e.id === 'stuck'),
+  );
+}
+
+// --- fleet sizing and the run cycle (core/sim/fleet.ts) ---
+// The point of this module: a line set to "every 10 minutes" must actually
+// serve its stops every 10 minutes. These checks are that promise.
+{
+  const speed = VEHICLE_SPEED_MPS; // 11 m/s
+  const totalMeters = 11_000; // 11 km one way
+  const oneWayMs = (totalMeters / speed) * 1000; // 1,000,000 ms
+  const roundTripMs = 2 * oneWayMs;
+  const headwayMs = 10 * 60_000;
+  const timetable = buildTimetable(totalMeters, [], speed);
+  const plan = planService(roundTripMs, headwayMs);
+
+  // Round trip 2,000,000 ms + a 100,000 ms minimum layover = 2,100,000, which
+  // is 3.5 headways — so four vehicles, and a 40-minute cycle.
+  check('fleet size is the round trip plus layover over the headway, rounded up', plan.fleet === 4);
+  check('cycle time is a whole number of headways', plan.cycleMs === plan.fleet * headwayMs);
+  check(
+    'the cycle is never shorter than the round trip a vehicle has to run',
+    plan.cycleMs >= roundTripMs,
+  );
+  check(
+    'the slack between the round trip and the cycle is split between the two terminals',
+    plan.layoverMs === (plan.cycleMs - roundTripMs) / 2,
+  );
+
+  // THE check. A stop 4.4 km along the line is reached 400,000 ms into an
+  // outbound run; run i departs i headways later, so it should be there at
+  // exactly that time — which makes successive vehicles exactly one headway
+  // apart at that stop.
+  const stopMeters = 4_400;
+  const reachedAtMs = (stopMeters / speed) * 1000;
+  let everyRunOnTime = true;
+  for (let i = 0; i < plan.fleet; i++) {
+    const state = runStateAt(i * headwayMs + reachedAtMs, timetable, totalMeters, plan, i, speed);
+    if (Math.abs(state.distMeters - stopMeters) > 1e-6 || state.phase !== 'outbound')
+      everyRunOnTime = false;
+  }
+  check('a ten-minute headway puts a vehicle at each stop every ten minutes', everyRunOnTime);
+
+  // The wrap is where even spacing gets it wrong: after the last vehicle, the
+  // next one along is the first vehicle again, and it must arrive one headway
+  // later — not after whatever is left of the cycle.
+  const afterLast = runStateAt(
+    plan.fleet * headwayMs + reachedAtMs,
+    timetable,
+    totalMeters,
+    plan,
+    0,
+    speed,
+  );
+  check(
+    'the headway holds across the wrap from the last vehicle back to the first',
+    Math.abs(afterLast.distMeters - stopMeters) < 1e-6,
+  );
+
+  // The rest of the cycle.
+  const atFarTerminal = runStateAt(
+    oneWayMs + plan.layoverMs / 2,
+    timetable,
+    totalMeters,
+    plan,
+    0,
+    speed,
+  );
+  check(
+    'a vehicle waits out its layover at the far terminal',
+    atFarTerminal.phase === 'layover' && atFarTerminal.distMeters === totalMeters,
+  );
+  const returning = runStateAt(
+    oneWayMs + plan.layoverMs + reachedAtMs,
+    timetable,
+    totalMeters,
+    plan,
+    0,
+    speed,
+  );
+  check(
+    'the return leg passes the same stop from the other direction',
+    returning.phase === 'inbound' &&
+      Math.abs(returning.distMeters - (totalMeters - stopMeters)) < 1e-6,
+  );
+  const backHome = runStateAt(
+    plan.cycleMs - plan.layoverMs / 2,
+    timetable,
+    totalMeters,
+    plan,
+    0,
+    speed,
+  );
+  check(
+    'a vehicle finishes its cycle waiting at the terminal it started from',
+    backHome.phase === 'layover' && backHome.distMeters === 0,
+  );
+  const wrapped = runStateAt(plan.cycleMs + reachedAtMs, timetable, totalMeters, plan, 0, speed);
+  check('the cycle repeats exactly', Math.abs(wrapped.distMeters - stopMeters) < 1e-6);
+  check(
+    "a run's position doesn't depend on how many cycles have passed",
+    runStateAt(-plan.cycleMs + reachedAtMs, timetable, totalMeters, plan, 0, speed).distMeters ===
+      wrapped.distMeters,
+  );
+
+  // Dwelling at intermediate stops still counts toward the round trip, so the
+  // fleet grows when stations are added to a line — which is the real-world
+  // behavior (more stops, slower trip, more vehicles to hold the headway).
+  const withStops = buildTimetable(
+    totalMeters,
+    [
+      { distMeters: 4_400, dwellMs: 30_000 },
+      { distMeters: 8_000, dwellMs: 30_000 },
+    ],
+    speed,
+  );
+  const slowerPlan = planService(2 * withStops.oneWayMs, headwayMs);
+  check('adding stops lengthens the round trip', withStops.oneWayMs > oneWayMs);
+  check(
+    'a slower round trip at the same headway needs at least as many vehicles',
+    slowerPlan.fleet >= plan.fleet,
+  );
+  check(
+    'the headway is still exact once stops are involved',
+    slowerPlan.cycleMs === slowerPlan.fleet * headwayMs,
+  );
+
+  // Degenerate cases have defined answers.
+  const infrequent = planService(600_000, 60 * 60_000); // 10-minute loop, hourly service
+  check(
+    'a headway longer than the round trip runs one vehicle, waiting at the terminal',
+    infrequent.fleet === 1,
+  );
+  check(
+    "that one vehicle's cycle is the headway, not the round trip",
+    infrequent.cycleMs === 60 * 60_000,
+  );
+  const unscheduled = planService(600_000);
+  check('a service with no headway set runs a single vehicle', unscheduled.fleet === 1);
+  check(
+    'even a short line gets a real layover rather than turning on a dime',
+    planService(60_000, 60_000).layoverMs > 0,
   );
 }
 
