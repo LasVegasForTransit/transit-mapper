@@ -425,7 +425,7 @@ Bus lanes (`busway`, `lanes:bus`), on-street parking (`parking:lane:*`),
 cycleways tagged as a modifier on the roadway rather than their own way
 (`cycleway:right=lane`), `width`, and `maxspeed` (which has no field in the
 model at all). Per-approach control is not carried: `highway=stop` sets the
-whole junction. Turn restriction relations are not fetched.
+whole junction. 
 
 ## Follow-on: left-hand traffic
 
@@ -535,3 +535,37 @@ identities, 106 of them carrying a captured median, every one an
 Boulevard, Flamingo, Koval, Spring Mountain). 29 identities kept more than
 two members, which is the honest outcome for streets OSM has split into
 segments that do not line up across the median.
+
+## Follow-on: turn-restriction relations
+
+OSM records a turn ban as a `type=restriction` relation naming a `from` way, a
+`via` node and a `to` way. This model expresses the same thing per lane, as
+the set of ways a lane may still feed, so a ban becomes every arm at the via
+junction except the forbidden one; `only_*` is the inverse and yields just the
+named arm.
+
+Three deliberate limits, each of which would otherwise produce a ban the sign
+never meant:
+
+- **Via-node only.** A via-*way* restriction describes a movement through a
+  whole link, which has no expression in a per-lane target set at a single
+  junction.
+- **The vocabulary is checked.** `no_*`/`only_*` values are matched against a
+  known set, so a typo (they occur in real data) is ignored rather than
+  applied as a real ban.
+- **Only lanes that could make the turn.** Restrictions land on drive, bus and
+  turn-pocket lanes on the approach. Without that filter a ban lands on
+  whichever lane is outermost, which on a street with a kerbside cycleway is
+  the bike lane — so a no-right-turn for cars would forbid only the bicycle.
+
+A relation naming a way the import skipped is dropped whole, since the
+remaining arms would not describe the real junction.
+
+`touch()`'s lane-component pruning covers these for free: a restriction whose
+lane stops existing is dropped, so an imported ban cannot outlive the profile
+it describes.
+
+Measured over the same 2 km box: 106 relations fetched, 49 of them via-node,
+71 restrictions applied — 45 on drive lanes and 26 on turn pockets, none on a
+bike lane — with no key naming a missing lane and no target naming a missing
+way.

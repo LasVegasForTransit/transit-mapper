@@ -1033,6 +1033,7 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
     nodes: [],
     namedWays: [],
     medians: [],
+    turnRestrictions: [],
   });
   issues = validateSystem(store.getState().system);
   check("flags two ways that cross without joining", issues.some((i) => i.id.startsWith("crossing-")));
@@ -1646,6 +1647,95 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("the store reports added/skipped", second.added === 0 && second.skipped === 2);
 }
 
+// --- P4: OSM import reads turn-restriction relations ---
+{
+  // A crossroads: `from` runs west->east into the junction, three arms leave.
+  const junction = (restriction: string): OsmWayElement[] => [
+    { type: "way", id: 1, tags: { highway: "primary" }, nodes: [10, 500], geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.15 }] },
+    { type: "way", id: 2, tags: { highway: "primary" }, nodes: [500, 11], geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.1, lon: -115.1 }] },
+    { type: "way", id: 3, tags: { highway: "primary" }, nodes: [500, 12], geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.11, lon: -115.15 }] },
+    { type: "way", id: 4, tags: { highway: "primary" }, nodes: [500, 13], geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.09, lon: -115.15 }] },
+    {
+      type: "relation", id: 99, tags: { type: "restriction", restriction },
+      members: [
+        { type: "way", ref: 1, role: "from" },
+        { type: "node", ref: 500, role: "via" },
+        { type: "way", ref: 3, role: "to" },
+      ],
+    },
+  ];
+
+  const banned = osmElementsToNetwork(junction("no_left_turn"));
+  const fromWay = banned.ways.find((w) => w.source === "osm:1")!;
+  const toWay = banned.ways.find((w) => w.source === "osm:3")!;
+  const straightOn = banned.ways.find((w) => w.source === "osm:2")!;
+  check("a no_* restriction produces a turn restriction", banned.turnRestrictions.length > 0);
+  check("keyed against the approaching way's lanes", banned.turnRestrictions.every((t) => t.key.startsWith(`${fromWay.id}:`)));
+  check("the banned way is not an allowed target", banned.turnRestrictions.every((t) => !t.restriction.allowedTargets.includes(toWay.id)));
+  check("the other arms still are", banned.turnRestrictions.every((t) => t.restriction.allowedTargets.includes(straightOn.id)));
+
+  const only = osmElementsToNetwork(junction("only_straight_on"));
+  check("an only_* restriction permits just the named arm", only.turnRestrictions.every((t) => t.restriction.allowedTargets.length === 1));
+  check("and that arm is the one named", only.turnRestrictions.every((t) => t.restriction.allowedTargets[0] === toWay.id || t.restriction.allowedTargets[0] === only.ways.find((w) => w.source === "osm:3")!.id));
+
+  // Vocabulary is checked: a typo must not be applied as a real ban.
+  check("an unrecognised restriction value is ignored", osmElementsToNetwork(junction("no_lu_turn")).turnRestrictions.length === 0);
+
+  // A via-WAY restriction has no per-lane expression at one junction.
+  const viaWay: OsmWayElement[] = [
+    ...junction("no_left_turn").slice(0, 4),
+    {
+      type: "relation", id: 98, tags: { type: "restriction", restriction: "no_left_turn" },
+      members: [
+        { type: "way", ref: 1, role: "from" },
+        { type: "way", ref: 2, role: "via" },
+        { type: "way", ref: 3, role: "to" },
+      ],
+    },
+  ];
+  check("a via-way restriction is skipped", osmElementsToNetwork(viaWay).turnRestrictions.length === 0);
+
+  // A relation naming a way the import skipped can't be applied safely.
+  const missingArm: OsmWayElement[] = [
+    ...junction("no_left_turn").slice(0, 4),
+    {
+      type: "relation", id: 97, tags: { type: "restriction", restriction: "no_left_turn" },
+      members: [
+        { type: "way", ref: 1, role: "from" },
+        { type: "node", ref: 500, role: "via" },
+        { type: "way", ref: 42, role: "to" },
+      ],
+    },
+  ];
+  check("a restriction naming an unimported way is skipped", osmElementsToNetwork(missingArm).turnRestrictions.length === 0);
+
+  // The ban must land on lanes that could make the turn, not on a kerbside
+  // bike lane that happens to be outermost.
+  const withBike = junction("no_right_turn").map((el) =>
+    el.type === "way" && el.id === 1 ? { ...el, tags: { ...el.tags, "cycleway:right": "lane" } } : el,
+  );
+  const bikeNet = osmElementsToNetwork(withBike);
+  const bikeFrom = bikeNet.ways.find((w) => w.source === "osm:1")!;
+  const bikeLaneIds = new Set(bikeFrom.profile.lanes.filter((l) => l.kindId === "bike").map((l) => l.id));
+  check("the approach has a bike lane", bikeLaneIds.size === 1);
+  check("but no ban is placed on it", bikeNet.turnRestrictions.every((t) => !bikeLaneIds.has(t.key.split(":")[1])));
+
+  check("the query asks for restriction relations when importing streets", buildOverpassQuery({ west: -115.3, south: 36, east: -115, north: 36.2 }, ["road"]).includes('"type"="restriction"'));
+
+  // End to end through the store.
+  fresh();
+  store.getState().importWays(osmElementsToNetwork(junction("no_left_turn")));
+  check("the store records the imported turn restrictions", Object.keys(store.getState().system.turnRestrictions).length > 0);
+  const storedFrom = store.getState().system.ways.find((w) => w.source === "osm:1")!;
+  check(
+    "each stored key names a lane that exists",
+    Object.keys(store.getState().system.turnRestrictions).every((k) => storedFrom.profile.lanes.some((l) => laneRefKey(storedFrom.id, l.id) === k)),
+  );
+  // And deleting the approach takes them with it, via touch()'s pruning.
+  store.getState().deleteWay(storedFrom.id);
+  check("deleting the approach drops its imported restrictions", Object.keys(store.getState().system.turnRestrictions).length === 0);
+}
+
 // --- P4: OSM import pairs the carriageways of a divided street ---
 {
   // Two one-way ways, same name, running opposite ways about 22 m apart.
@@ -1825,6 +1915,7 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
     nodes: [{ id: "osm-j", coord: [-115.1, 36.1], refs: [{ wayId: "osm-a", pointIndex: 1 }, { wayId: "osm-b", pointIndex: 0 }] }],
     namedWays: [{ id: "osm-n", name: "Imported Avenue", wayIds: ["osm-a", "osm-b"] }],
     medians: [],
+    turnRestrictions: [],
   });
   check("importWays appends the way", store.getState().system.ways.some((w) => w.id === "osm-a"));
   check("importWays creates no service for it (bare infrastructure)", store.getState().system.services.length === 0);
@@ -1849,14 +1940,14 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
     { id: "surface", typeId: "road", points: [[-115.2, 36.1], [-115.1, 36.1]], geometry: "straight", grade: "atGrade", profile: defaultProfileFor("road") },
     { id: "bridge", typeId: "road", points: [[-115.15, 36.05], [-115.15, 36.15]], geometry: "straight", grade: "elevated", profile: defaultProfileFor("road") },
   ];
-  store.getState().importWays({ ways: overpass, nodes: [], namedWays: [], medians: [] });
+  store.getState().importWays({ ways: overpass, nodes: [], namedWays: [], medians: [], turnRestrictions: [] });
   check(
     "an elevated way crossing a surface street is not flagged",
     !validateSystem(store.getState().system).some((i) => i.id.startsWith("crossing-")),
   );
 
   fresh();
-  store.getState().importWays({ ways: overpass.map((w) => ({ ...w, grade: "atGrade" as const })), nodes: [], namedWays: [], medians: [] });
+  store.getState().importWays({ ways: overpass.map((w) => ({ ...w, grade: "atGrade" as const })), nodes: [], namedWays: [], medians: [], turnRestrictions: [] });
   check(
     "the same two ways at one grade are still flagged",
     validateSystem(store.getState().system).some((i) => i.id.startsWith("crossing-")),

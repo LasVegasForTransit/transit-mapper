@@ -1466,7 +1466,7 @@ export function createEditorStore() {
         state.namedWays,
         state.nodes,
       );
-      const { ways, nodes, namedWays, medians } = network;
+      const { ways, nodes, namedWays, medians, turnRestrictions } = network;
       const additionsById = new Map(identityAdditions.map((a) => [a.id, a.wayIds]));
       const armsById = new Map(junctionAdditions.map((a) => [a.id, a.refs]));
       set((s) => ({
@@ -1494,6 +1494,9 @@ export function createEditorStore() {
           // A carriageway pair arrives with the median it is separated by, so
           // Combine restores the real gap rather than a generic default.
           medians: medians.reduce((acc, m) => withComponent(acc, m.id, m.median), s.system.medians),
+          // Turn bans OSM records as relations. touch() prunes any whose lane
+          // stops existing, so these can't outlive the profile they describe.
+          turnRestrictions: turnRestrictions.reduce((acc, t) => withComponent(acc, t.key, t.restriction), s.system.turnRestrictions),
         }),
       }));
       return { added: ways.length, skipped: duplicateWays };

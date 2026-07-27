@@ -80,6 +80,13 @@ direction, all carrying the same `name`, and those become a single shared
 identity — so the objects list reads "West Flamingo Road 1…12" instead of
 "Road 1…12", and renaming the street renames all of it.
 
+**Turn bans** come in too. OSM records these as relations naming a street you
+turn from, the junction, and the street you'd turn into; each becomes a
+restriction on the approaching lanes saying which arms they may still feed.
+Only bans pivoting on a single junction are read — one describing a movement
+through a whole link has no per-lane expression — and a ban only lands on
+lanes that could make the turn, never on a kerbside bike lane.
+
 Ways arrive at their real **grade**: `bridge` comes in elevated, `tunnel`
 underground, and a way with only a `layer` follows its sign. Two ways at
 different grades are never reported as needing a junction between them.
@@ -120,6 +127,9 @@ junctions, adopt them under existing sketches.
   more than one public server before giving up, so a slow import is usually
   it falling through to a second one rather than anything being wrong. If it
   does fail, it's nearly always transient — try again.
+- A turn ban is skipped when it names a street the import didn't bring in
+  (a service road, a link road), since the remaining arms wouldn't describe
+  the real junction.
 - A stop sign sets the control for the whole junction. OSM records which
   approach the sign faces; the import doesn't carry that through, so set
   per-approach control by hand where it matters.

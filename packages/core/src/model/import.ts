@@ -9,7 +9,7 @@ import { wayType, type Grade, type ProfileTemplateLane } from "./catalog";
 import { haversineMeters, nearestOnPath } from "./geo";
 import { shortId } from "./ids";
 import { defaultProfileFor, profileWidthM, profileWithPrimaryLanes, MAX_PRIMARY_LANES, type ProfileEdges } from "./profile";
-import type { CrossSection, DrivingSide, LaneDirection, LngLat, Median, NamedWay, Node, NodeControl, Way, WayPointRef } from "./system";
+import type { CrossSection, DrivingSide, LaneDirection, LngLat, Median, NamedWay, Node, NodeControl, TurnRestriction, Way, WayPointRef } from "./system";
 
 export interface ImportBBox {
   west: number;
@@ -45,10 +45,16 @@ const CATEGORY_QUERY: Record<ImportCategory, string> = {
 // roads, the one category whose junctions this app controls.
 const CONTROL_NODE_QUERY = `node["highway"~"^(traffic_signals|stop)$"](bbox);`;
 
+// Turn bans are relations, not tags on either way, so they need their own
+// clause. `>>` pulls in each relation's member ways, which may reach outside
+// the box — without them a ban names ways the import never saw.
+const RESTRICTION_QUERY = `relation["type"="restriction"](bbox);`;
+
 /** Build an Overpass QL query for the given categories within a bounding box. */
 export function buildOverpassQuery(bbox: ImportBBox, categories: ImportCategory[]): string {
   const bboxStr = `${bbox.south},${bbox.west},${bbox.north},${bbox.east}`;
-  const parts = [...categories.map((c) => CATEGORY_QUERY[c]), ...(categories.includes("road") ? [CONTROL_NODE_QUERY] : [])];
+  const wantsRoads = categories.includes("road");
+  const parts = [...categories.map((c) => CATEGORY_QUERY[c]), ...(wantsRoads ? [CONTROL_NODE_QUERY, RESTRICTION_QUERY] : [])];
   const clauses = parts.map((q) => q.replace(/\(bbox\)/g, `(${bboxStr})`)).join("\n  ");
   return `[out:json][timeout:25];\n(\n  ${clauses}\n);\nout geom;`;
 }
@@ -518,7 +524,16 @@ export interface OsmWayElement {
    *  than a coordinate-proximity guess. Optional so a response without it
    *  still imports ways, just unconnected — see osmElementsToNetwork. */
   nodes?: number[];
+  /** Relation members, for `type=restriction` relations. */
+  members?: { type: string; ref: number; role: string }[];
 }
+
+/** OSM restriction values this import understands. `no_*` forbids one
+ *  movement; `only_*` permits one and forbids the rest. Anything outside this
+ *  vocabulary — including typos, which do occur — is ignored rather than
+ *  guessed at. */
+const NO_RESTRICTIONS = new Set(["no_left_turn", "no_right_turn", "no_straight_on", "no_u_turn", "no_entry", "no_exit"]);
+const ONLY_RESTRICTIONS = new Set(["only_left_turn", "only_right_turn", "only_straight_on", "only_u_turn"]);
 
 /** An import's ways, the junctions between them, and the street identities
  *  spanning them. Returned together because ways alone are only half the
@@ -531,6 +546,8 @@ export interface ImportedNetwork {
   /** Captured medians for the identities that are a carriageway pair, keyed
    *  by NamedWay id — the same component separateCarriageways writes. */
   medians: { id: string; median: Median }[];
+  /** Turn bans from OSM restriction relations, keyed by laneRefKey. */
+  turnRestrictions: { key: string; restriction: TurnRestriction }[];
 }
 
 /**
@@ -635,6 +652,65 @@ function junctionAlongWay(
  * a Node where a key has 2+); only the key differs, an OSM node id instead
  * of a rounded coordinate.
  */
+/**
+ * Turn bans from OSM `type=restriction` relations.
+ *
+ * A relation names a `from` way, a `via` node, and a `to` way. This model
+ * expresses the same thing per lane, as the set of ways a lane may still
+ * feed, so a ban becomes: every arm at the via junction except the forbidden
+ * one. `only_*` is the inverse and yields just the named target.
+ *
+ * Only via-NODE restrictions are read. A via-WAY restriction describes a
+ * movement through a whole link (a slip road), which has no expression in a
+ * per-lane allowedTargets set at a single junction, and guessing one would
+ * ban movements the sign never mentions.
+ *
+ * The ban lands only on lanes that can actually drive the movement — drive
+ * and bus lanes on the approach. Without that filter it lands on whichever
+ * lane is outermost, which on a street with a kerbside cycleway is the bike
+ * lane, so a no-right-turn for cars would forbid only the bicycle.
+ */
+function turnRestrictionsFrom(
+  elements: OsmWayElement[],
+  wayByOsmId: Map<number, Way>,
+  armsByOsmNode: Map<number, Set<string>>,
+  osmNodeOfWayPoint: Map<string, number>,
+): { key: string; restriction: TurnRestriction }[] {
+  const out: { key: string; restriction: TurnRestriction }[] = [];
+  for (const el of elements) {
+    if (el.type !== "relation" || !el.members || el.tags?.type !== "restriction") continue;
+    const value = el.tags.restriction;
+    const isOnly = value !== undefined && ONLY_RESTRICTIONS.has(value);
+    if (!value || (!isOnly && !NO_RESTRICTIONS.has(value))) continue;
+
+    const from = el.members.find((m) => m.role === "from" && m.type === "way");
+    const to = el.members.find((m) => m.role === "to" && m.type === "way");
+    const via = el.members.find((m) => m.role === "via");
+    if (!from || !to || !via || via.type !== "node") continue;
+
+    const fromWay = wayByOsmId.get(from.ref);
+    const toWay = wayByOsmId.get(to.ref);
+    const arms = armsByOsmNode.get(via.ref);
+    // Every part must have survived the import: a ban naming a way we skipped
+    // (a service road, a link road) would otherwise permit-list around a gap.
+    if (!fromWay || !toWay || !arms || !arms.has(fromWay.id) || !arms.has(toWay.id)) continue;
+
+    const others = [...arms].filter((id) => id !== fromWay.id);
+    const allowedTargets = isOnly ? [toWay.id] : others.filter((id) => id !== toWay.id);
+
+    // Only the approach lanes that reach this junction, and only ones that
+    // could make the turn.
+    for (const lane of fromWay.profile.lanes) {
+      if (lane.kindId !== "drive" && lane.kindId !== "bus" && lane.kindId !== "turnPocket") continue;
+      if (lane.direction !== "forward" && lane.direction !== "backward" && lane.direction !== "both") continue;
+      const endIndex = lane.direction === "backward" ? 0 : fromWay.points.length - 1;
+      if (osmNodeOfWayPoint.get(`${fromWay.id}:${endIndex}`) !== via.ref) continue;
+      out.push({ key: `${fromWay.id}:${lane.id}`, restriction: { allowedTargets } });
+    }
+  }
+  return out;
+}
+
 export function osmElementsToNetwork(elements: OsmWayElement[], drivingSide: DrivingSide = "right"): ImportedNetwork {
   const ways: Way[] = [];
   // OSM node id -> every (way, control point) that node landed on.
@@ -647,6 +723,11 @@ export function osmElementsToNetwork(elements: OsmWayElement[], drivingSide: Dri
   // Each imported way's OSM node ids, kept so a stop-line control node can be
   // walked along its own way to the junction it governs.
   const osmNodesByWayId = new Map<string, { way: Way; osmNodes: number[] }>();
+  // For turn restrictions: which imported way each OSM way became, which ways
+  // meet each OSM node, and which OSM node each way-end sits on.
+  const wayByOsmId = new Map<number, Way>();
+  const armsByOsmNode = new Map<number, Set<string>>();
+  const osmNodeOfWayPoint = new Map<string, number>();
 
   for (const el of elements) {
     // A control node is matched to its junction by id alone — its own
@@ -672,6 +753,7 @@ export function osmElementsToNetwork(elements: OsmWayElement[], drivingSide: Dri
       source: `osm:${el.id}`,
     };
     ways.push(way);
+    wayByOsmId.set(el.id, way);
     const name = el.tags?.name?.trim();
     if (name) nameByWayId.set(way.id, name);
 
@@ -689,6 +771,10 @@ export function osmElementsToNetwork(elements: OsmWayElement[], drivingSide: Dri
       if (refs) refs.push({ wayId: way.id, pointIndex: i });
       else refsByOsmNode.set(osmNodeId, [{ wayId: way.id, pointIndex: i }]);
       coordByOsmNode.set(osmNodeId, points[i]);
+      osmNodeOfWayPoint.set(`${way.id}:${i}`, osmNodeId);
+      const arms = armsByOsmNode.get(osmNodeId);
+      if (arms) arms.add(way.id);
+      else armsByOsmNode.set(osmNodeId, new Set([way.id]));
       if (isRoundabout) roundaboutOsmNodes.add(osmNodeId);
     });
   }
@@ -725,7 +811,13 @@ export function osmElementsToNetwork(elements: OsmWayElement[], drivingSide: Dri
     nodes.push({ id: shortId(), coord: coordByOsmNode.get(osmNodeId)!, refs, ...(control ? { control } : {}) });
   }
   const named = namedWaysFor(ways, nameByWayId);
-  return { ways, nodes, namedWays: named.namedWays, medians: named.medians };
+  return {
+    ways,
+    nodes,
+    namedWays: named.namedWays,
+    medians: named.medians,
+    turnRestrictions: turnRestrictionsFrom(elements, wayByOsmId, armsByOsmNode, osmNodeOfWayPoint),
+  };
 }
 
 /** The ways of an import, without its junctions — kept for callers that only
@@ -901,7 +993,15 @@ export function withoutAlreadyImported(
 
   const keptIds = new Set(namedWays.map((n) => n.id));
   return {
-    network: { ways: keptWays, nodes, namedWays, medians: network.medians.filter((m) => keptIds.has(m.id)) },
+    network: {
+      ways: keptWays,
+      nodes,
+      namedWays,
+      medians: network.medians.filter((m) => keptIds.has(m.id)),
+      // A restriction on a way this import didn't keep is already recorded
+      // against the copy that is present.
+      turnRestrictions: network.turnRestrictions.filter((t) => keptWayIds.has(t.key.slice(0, t.key.indexOf(":")))),
+    },
     duplicateWays,
     identityAdditions,
     junctionAdditions,
@@ -917,7 +1017,7 @@ export async function importOsmWays(
   categories: ImportCategory[],
   drivingSide: DrivingSide = "right",
 ): Promise<ImportedNetwork> {
-  if (categories.length === 0) return { ways: [], nodes: [], namedWays: [], medians: [] };
+  if (categories.length === 0) return { ways: [], nodes: [], namedWays: [], medians: [], turnRestrictions: [] };
   const query = buildOverpassQuery(bbox, categories);
 
   let lastError = "";
