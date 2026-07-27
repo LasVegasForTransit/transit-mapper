@@ -118,7 +118,17 @@ jobs:
             # Wait for the new build specifically, not merely for the site to
             # answer. `/` has returned 200 throughout every outage this step
             # exists to catch, so waiting on that would prove nothing.
-            for _ in 1 2 3 4 5 6; do
+            #
+            # 24 tries / 5s apart = up to 2 minutes. The deploy step above only
+            # proves the upload succeeded — Cloudflare's asset propagation to
+            # every edge PoP is a separate, best-effort process that can lag
+            # behind that by more than the ~30s six tries used to allow, which
+            # produced a false "FAIL" here for a deploy that was actually fine
+            # (confirmed serving the right chunk within ~2 minutes, unassisted).
+            # A genuinely stale/broken deploy won't self-correct no matter how
+            # long this waits, so widening the window costs nothing but time on
+            # the rare slow-propagation case, and saves a false alarm.
+            for _ in $(seq 1 24); do
               curl -sS --max-time 20 "$SITE/" | grep -qF "$entry" && break
               sleep 5
             done
