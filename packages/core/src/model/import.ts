@@ -8,7 +8,7 @@
 import { wayType, type ProfileTemplateLane } from "./catalog";
 import { shortId } from "./ids";
 import { defaultProfileFor, profileWithPrimaryLanes, MAX_PRIMARY_LANES, type ProfileEdges } from "./profile";
-import type { CrossSection, LngLat, Node, Way, WayPointRef } from "./system";
+import type { CrossSection, LngLat, NamedWay, Node, Way, WayPointRef } from "./system";
 
 export interface ImportBBox {
   west: number;
@@ -260,6 +260,35 @@ export function profileFromOsmTags(typeId: string, classId: string | undefined, 
   return profileWithPrimaryLanes(typeId, primary, osmSidewalks(tags));
 }
 
+/**
+ * Group imported ways that are one named facility into NamedWays — OSM
+ * splits a street into a way per block, per junction, and per direction, all
+ * carrying the same `name`, which is exactly the identity NamedWay exists to
+ * hold ("Decatur Avenue"). Without this an import reads as "Road 1 … Road
+ * 439" in the UI.
+ *
+ * Keyed by name *and* way type: a street and the tram line running along it
+ * often share a name in OSM but are not one facility. A name matching only
+ * one way gets no NamedWay — the identity would add nothing over the way.
+ */
+function namedWaysFor(ways: Way[], nameByWayId: Map<string, string>): NamedWay[] {
+  const groups = new Map<string, { name: string; wayIds: string[] }>();
+  for (const way of ways) {
+    const name = nameByWayId.get(way.id);
+    if (!name) continue;
+    const key = `${way.typeId} ${name}`;
+    const group = groups.get(key);
+    if (group) group.wayIds.push(way.id);
+    else groups.set(key, { name, wayIds: [way.id] });
+  }
+  const named: NamedWay[] = [];
+  for (const { name, wayIds } of groups.values()) {
+    if (wayIds.length < 2) continue;
+    named.push({ id: shortId(), name, wayIds });
+  }
+  return named;
+}
+
 export interface OsmWayElement {
   type: string;
   id: number;
@@ -274,13 +303,14 @@ export interface OsmWayElement {
   nodes?: number[];
 }
 
-/** An import's ways plus the junctions between them. Returned together
- *  because ways alone are only half the imported data: OSM's node identity
- *  is the topology, and dropping it silently yields a network that looks
- *  right and routes wrong. */
+/** An import's ways, the junctions between them, and the street identities
+ *  spanning them. Returned together because ways alone are only half the
+ *  imported data: OSM's node identity is the topology, and dropping it
+ *  silently yields a network that looks right and routes wrong. */
 export interface ImportedNetwork {
   ways: Way[];
   nodes: Node[];
+  namedWays: NamedWay[];
 }
 
 /**
@@ -322,6 +352,7 @@ export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork
   // OSM node id -> every (way, control point) that node landed on.
   const refsByOsmNode = new Map<number, WayPointRef[]>();
   const coordByOsmNode = new Map<number, LngLat>();
+  const nameByWayId = new Map<string, string>();
 
   for (const el of elements) {
     if (el.type !== "way" || !el.geometry || el.geometry.length < 2) continue;
@@ -339,6 +370,8 @@ export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork
       source: `osm:${el.id}`,
     };
     ways.push(way);
+    const name = el.tags?.name?.trim();
+    if (name) nameByWayId.set(way.id, name);
 
     // Index alignment is the whole mechanism: el.nodes[i] is the OSM node at
     // el.geometry[i], which became way.points[i]. A response where those
@@ -360,7 +393,7 @@ export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork
     if (refs.length < 2) continue;
     nodes.push({ id: shortId(), coord: coordByOsmNode.get(osmNodeId)!, refs });
   }
-  return { ways, nodes };
+  return { ways, nodes, namedWays: namedWaysFor(ways, nameByWayId) };
 }
 
 /** The ways of an import, without its junctions — kept for callers that only
@@ -372,9 +405,10 @@ export function osmElementsToWays(elements: OsmWayElement[]): Way[] {
 
 /** Fetch OSM ways for the given categories within a bounding box from the
  *  public Overpass API and convert them to catalog-typed Ways plus the
- *  junctions between them. The only function here that touches the network. */
+ *  junctions and street identities between them. The only function here that
+ *  touches the network. */
 export async function importOsmWays(bbox: ImportBBox, categories: ImportCategory[]): Promise<ImportedNetwork> {
-  if (categories.length === 0) return { ways: [], nodes: [] };
+  if (categories.length === 0) return { ways: [], nodes: [], namedWays: [] };
   const query = buildOverpassQuery(bbox, categories);
   const res = await fetch("https://overpass-api.de/api/interpreter", {
     method: "POST",

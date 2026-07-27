@@ -50,6 +50,11 @@ happen to line up, which means overlapping-but-separate infrastructure stays
 separate — a tram line drawn down the middle of a street does not get welded
 to the roadway, and a bridge does not get welded to the road beneath it.
 
+Streets arrive **named**. OSM splits one street into a way per block and per
+direction, all carrying the same `name`, and those become a single shared
+identity — so the objects list reads "West Flamingo Road 1…12" instead of
+"Road 1…12", and renaming the street renames all of it.
+
 Imported ways start as bare infrastructure carrying no service. From there
 the normal tools apply: route services over them, edit their lanes, adjust
 junctions, adopt them under existing sketches.

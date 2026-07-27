@@ -1031,6 +1031,7 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
       { id: wY, typeId: "lightRail", points: [[-115.15, 36.05], [-115.15, 36.15]], geometry: "straight", grade: "atGrade", profile: defaultProfileFor("lightRail") },
     ],
     nodes: [],
+    namedWays: [],
   });
   issues = validateSystem(store.getState().system);
   check("flags two ways that cross without joining", issues.some((i) => i.id.startsWith("crossing-")));
@@ -1237,6 +1238,33 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("osmElementsToNetwork applies the tag-derived profile", isOneWay(osmElementsToNetwork(tagged).ways[0].profile));
 }
 
+// --- P4: OSM import gives imported streets their real names ---
+{
+  // OSM splits one street into many ways sharing a name — exactly NamedWay.
+  const named: OsmWayElement[] = [
+    { type: "way", id: 1, tags: { highway: "primary", name: "West Flamingo Road" }, nodes: [1, 2], geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.15 }] },
+    { type: "way", id: 2, tags: { highway: "primary", name: "West Flamingo Road" }, nodes: [2, 3], geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.1, lon: -115.1 }] },
+    { type: "way", id: 3, tags: { highway: "residential", name: "Audrie Street" }, nodes: [4, 5], geometry: [{ lat: 36.2, lon: -115.2 }, { lat: 36.2, lon: -115.1 }] },
+    { type: "way", id: 4, tags: { highway: "residential" }, nodes: [6, 7], geometry: [{ lat: 36.3, lon: -115.2 }, { lat: 36.3, lon: -115.1 }] },
+  ];
+  const namedNet = osmElementsToNetwork(named);
+  check("ways sharing a name become one NamedWay", namedNet.namedWays.length === 1);
+  check("the NamedWay takes OSM's name", namedNet.namedWays[0].name === "West Flamingo Road");
+  check("the NamedWay spans both of that street's ways", namedNet.namedWays[0].wayIds.length === 2);
+  check("a name on a single way needs no shared identity", !namedNet.namedWays.some((n) => n.name === "Audrie Street"));
+
+  // A street and a tram line can share a name without being one facility.
+  const sameName: OsmWayElement[] = [
+    { type: "way", id: 1, tags: { highway: "primary", name: "Main Street" }, nodes: [1, 2], geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.1 }] },
+    { type: "way", id: 2, tags: { railway: "tram", name: "Main Street" }, nodes: [3, 4], geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.1 }] },
+  ];
+  check("a road and a tram sharing a name stay separate identities", osmElementsToNetwork(sameName).namedWays.length === 0);
+
+  fresh();
+  store.getState().importWays(osmElementsToNetwork(named));
+  check("importWays appends the import's street identities", store.getState().system.namedWays.length === 1);
+}
+
 // --- P4: OSM import derives junctions from node identity, not coordinates ---
 {
   // Two streets crossing at OSM node 500, which is each way's middle point.
@@ -1355,6 +1383,7 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   store.getState().importWays({
     ways: imported,
     nodes: [{ id: "osm-j", coord: [-115.1, 36.1], refs: [{ wayId: "osm-a", pointIndex: 1 }, { wayId: "osm-b", pointIndex: 0 }] }],
+    namedWays: [{ id: "osm-n", name: "Imported Avenue", wayIds: ["osm-a", "osm-b"] }],
   });
   check("importWays appends the way", store.getState().system.ways.some((w) => w.id === "osm-a"));
   check("importWays creates no service for it (bare infrastructure)", store.getState().system.services.length === 0);
@@ -1379,14 +1408,14 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
     { id: "surface", typeId: "road", points: [[-115.2, 36.1], [-115.1, 36.1]], geometry: "straight", grade: "atGrade", profile: defaultProfileFor("road") },
     { id: "bridge", typeId: "road", points: [[-115.15, 36.05], [-115.15, 36.15]], geometry: "straight", grade: "elevated", profile: defaultProfileFor("road") },
   ];
-  store.getState().importWays({ ways: overpass, nodes: [] });
+  store.getState().importWays({ ways: overpass, nodes: [], namedWays: [] });
   check(
     "an elevated way crossing a surface street is not flagged",
     !validateSystem(store.getState().system).some((i) => i.id.startsWith("crossing-")),
   );
 
   fresh();
-  store.getState().importWays({ ways: overpass.map((w) => ({ ...w, grade: "atGrade" as const })), nodes: [] });
+  store.getState().importWays({ ways: overpass.map((w) => ({ ...w, grade: "atGrade" as const })), nodes: [], namedWays: [] });
   check(
     "the same two ways at one grade are still flagged",
     validateSystem(store.getState().system).some((i) => i.id.startsWith("crossing-")),

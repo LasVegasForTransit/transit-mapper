@@ -53,6 +53,7 @@ export function LinesPanel() {
   const services = useEditor((s) => s.system.services);
   const stations = useEditor((s) => s.system.stations);
   const ways = useEditor((s) => s.system.ways);
+  const namedWays = useEditor((s) => s.system.namedWays);
   const facilities = useEditor((s) => s.system.facilities);
   const groups = useEditor((s) => s.system.groups);
   const selection = useEditor((s) => s.selection);
@@ -73,6 +74,19 @@ export function LinesPanel() {
   const stationsExpanded = expanded.has("stations");
   const facilitiesExpanded = expanded.has("facilities");
   const groupsExpanded = expanded.has("groups");
+
+  // A way that belongs to a NamedWay is listed under that name rather than
+  // "Road 12" — the whole point of the identity, and what makes an OSM
+  // import readable (its ways arrive carrying real street names). Segments of
+  // one street are numbered within it, since a listbox of a dozen rows all
+  // reading "West Flamingo Road" is no more navigable than the ordinals were.
+  const nameByWayId = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const identity of namedWays) {
+      identity.wayIds.forEach((id, i) => out.set(id, identity.wayIds.length > 1 ? `${identity.name} ${i + 1}` : identity.name));
+    }
+    return out;
+  }, [namedWays]);
 
   const servicesShown = useMemo(() => capped(services, servicesExpanded), [services, servicesExpanded]);
   const stationsShown = useMemo(() => capped(stations, stationsExpanded), [stations, stationsExpanded]);
@@ -152,7 +166,7 @@ export function LinesPanel() {
                 onClick={() => selectAndFocus({ kind: "way", id: w.id })}
               >
                 <span className="dot ring" />
-                <span className="list-name">{WAY_TYPES[group.typeId].label} {i + 1}</span>
+                <span className="list-name">{nameByWayId.get(w.id) ?? `${WAY_TYPES[group.typeId].label} ${i + 1}`}</span>
               </button>
             );
           })}

@@ -95,6 +95,9 @@ export interface ImportedNetwork {
 export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork
 ```
 
+(`ImportedNetwork` gained a third field, `namedWays`, in the follow-on
+below. The reasoning for returning the pieces together is unchanged.)
+
 It supersedes `osmElementsToWays` as the entry point, and works in two
 phases:
 
@@ -339,3 +342,20 @@ Bus lanes (`busway`, `lanes:bus`), on-street parking (`parking:lane:*`),
 cycleways tagged as a modifier on the roadway rather than their own way
 (`cycleway:right=lane`), and `width`. Lane order assumes right-hand traffic,
 matching `defaultProfileFor`; a left-hand-traffic import comes in mirrored.
+
+## Follow-on: street names → NamedWay
+
+OSM splits a street into a way per block and per direction, all carrying the
+same `name` — exactly the identity `NamedWay` exists to hold, and unused by
+the import until now. Ways are grouped by name *and* way type, since a street
+and the tram line along it often share a name in OSM without being one
+facility. A name matching a single way gets no NamedWay; the identity would
+add nothing over the way itself.
+
+Creating the records was not enough to show them. `LinesPanel` labelled every
+row `${type.label} ${i + 1}` with no reference to `namedWays`, so the objects
+list still read "Road 1 … Road 439" after the import was already producing 12
+identities. The label now prefers the identity's name, numbering segments
+within a street — a dozen rows all reading "West Flamingo Road" is no more
+navigable than the ordinals were. `WayInspector` and `NodeInspector` already
+consumed `namedWays`, so those needed nothing.
