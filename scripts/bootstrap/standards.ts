@@ -21,7 +21,19 @@ export const BRANCH_RULESET = {
     {
       type: 'pull_request',
       parameters: {
-        required_approving_review_count: 1,
+        // Zero, not one, and this is the difference between a guardrail and
+        // a locked door. GitHub does not let anyone approve their own pull
+        // request, and a repository whose only collaborator is its
+        // maintainer has nobody else to ask — so requiring one approval
+        // means nothing can ever reach the default branch again, including
+        // the change that would relax the rule.
+        //
+        // What survives at zero is the part that does the work: a change
+        // still has to arrive as a pull request, and the required status
+        // check below still has to pass before it merges. The review count
+        // goes to 1 the day a second maintainer exists, which is the same
+        // day it starts being satisfiable.
+        required_approving_review_count: 0,
         dismiss_stale_reviews_on_push: true,
         require_code_owner_review: false,
         require_last_push_approval: false,
