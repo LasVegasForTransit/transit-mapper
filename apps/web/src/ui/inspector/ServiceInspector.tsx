@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { useEditor } from '../../editor/EditorProvider';
 import { MODE_ORDER, MODES, modesForWayType } from '@transitmapper/core/model/catalog';
 import { formatKm, wayLengthMeters } from '@transitmapper/core/model/geo';
@@ -15,6 +15,7 @@ import {
   formatSimClock,
   minutesOfDay,
 } from '@transitmapper/core/sim/clock';
+import { serviceStats } from '@transitmapper/core/sim/serviceStats';
 import { ColorField } from '../ColorField';
 import { InspectorTabs, type InspectorTab } from '../InspectorTabs';
 import { Panel } from '../Panel';
@@ -23,7 +24,14 @@ import { Icon } from '../Icon';
 import { IconButton } from '../IconButton';
 import { useSim } from '../SimProvider';
 import { useSimTime } from '../useSimTime';
-import { GEOMETRY_OPTIONS, GradeChips, EmptyInspector, ServicesOnWay, Stat } from './shared';
+import {
+  GEOMETRY_OPTIONS,
+  GradeChips,
+  EmptyInspector,
+  formatMinutes,
+  ServicesOnWay,
+  Stat,
+} from './shared';
 
 // Opened only via the "Edit full schedule" link, never on initial render —
 // same lazy-loading rationale as the app-level dialogs in App.tsx.
@@ -315,7 +323,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
     if (!service) return null;
     return (
       <>
-        <RunningNow service={service} />
+        <ServiceLoad service={service} />
         {renderScheduleFields()}
       </>
     );
@@ -663,34 +671,71 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   }
 }
 
-interface RunningNowProps {
+interface ServiceLoadProps {
   service: Service;
 }
 
 /**
- * What this line is doing at the current simulated moment.
+ * What this line is doing right now, and what running it costs.
  *
- * The schedule fields below say what a line is *configured* to do; this says
- * what it's actually doing right now, so the editor and the map can't quietly
- * disagree. It's also the answer to "why aren't there any vehicles on my
- * line" — usually because it's 03:00.
+ * The schedule fields below say what a line is *configured* to do. This says
+ * what that amounts to — and, crucially, shows the chain between them. Stops
+ * and dwell lengthen the round trip; the round trip and the headway decide how
+ * many vehicles it takes. All three used to be computed on every animation
+ * frame and thrown away, so adding a station silently added a train and
+ * nothing in the editor said so.
+ *
+ * Everything here comes from core/sim, the same functions the map resolves
+ * against, so these numbers cannot drift from what's moving on screen.
  */
-function RunningNow({ service }: RunningNowProps) {
+function ServiceLoad({ service }: ServiceLoadProps) {
   const simMs = useSimTime();
   const { pinnedPeriod } = useSim();
+  // Narrow selectors, matching the rest of this file — `system` is a fresh
+  // reference on every mutation, including drag frames of an unrelated way.
+  const ways = useEditor((s) => s.system.ways);
+  const stations = useEditor((s) => s.system.stations);
+  const vehicleKinds = useEditor((s) => s.system.vehicleKinds);
+
   const active = activeSchedule(service, minutesOfDay(simMs), dayScopeAt(simMs), pinnedPeriod);
+  const stats = useMemo(
+    () => serviceStats(ways, stations, vehicleKinds, service, active?.headwayMinutes),
+    [ways, stations, vehicleKinds, service, active?.headwayMinutes],
+  );
   const when = pinnedPeriod ? `“${pinnedPeriod}”` : formatSimClock(simMs);
 
-  if (!active) return <p className="panel-hint">Not running at {when}.</p>;
-  if (active.headwayMinutes === undefined)
-    return <p className="panel-hint">Running at {when}, with no frequency set yet.</p>;
-  // Naming the period is only informative when the clock chose it. With one
-  // pinned, `when` is already that name, and "At “Peak”: every 10 min (Peak)"
-  // just says it twice.
-  const period = !pinnedPeriod && active.label ? ` (${active.label})` : '';
+  if (!stats)
+    return (
+      <p className="panel-hint">
+        Draw this line over some infrastructure to see what running it takes.
+      </p>
+    );
+
+  const roundTrip = formatMinutes(stats.longestRoundTripMs / 60_000);
+  const stops = stats.patterns.reduce((most, p) => Math.max(most, p.stopCount), 0);
+  const dwell = stats.patterns.reduce((most, p) => Math.max(most, p.dwellMs), 0) / 60_000;
+
   return (
-    <p className="panel-hint">
-      At {when}: every {active.headwayMinutes} min{period}.
-    </p>
+    <>
+      {/* Two numbers, not three: a 280px panel gives each stat cell about
+          85px, and a third one wrapped both its label and its value onto two
+          lines. Round trip and fleet are the headline figures; layover is
+          detail, so it goes in the sentence. */}
+      <div className="stats">
+        <Stat label="Round trip" value={roundTrip} />
+        {active && <Stat label="Vehicles" value={String(stats.fleet)} />}
+      </div>
+      <p className="panel-hint">
+        {!active
+          ? `Not running at ${when}. A round trip takes ${roundTrip}.`
+          : active.headwayMinutes === undefined
+            ? `Running at ${when} with no frequency set, so it runs a single vehicle around a ${roundTrip} round trip.`
+            : `At ${when} it runs every ${active.headwayMinutes} min${!pinnedPeriod && active.label ? ` (${active.label})` : ''}. ` +
+              `${stops === 0 ? 'With no stops' : `${stops} stop${stops === 1 ? '' : 's'} and ${formatMinutes(dwell)} of dwell`}, a round trip takes ` +
+              `${roundTrip}, so holding that headway needs ${stats.fleet} vehicle${stats.fleet === 1 ? '' : 's'}` +
+              `${stats.patterns.length > 1 ? ` across ${stats.patterns.length} branches` : ''}, ` +
+              `each waiting ${formatMinutes(stats.layoverMs / 60_000)} at either end.`}
+      </p>
+    </>
   );
 }
