@@ -17,6 +17,7 @@
     "@radix-ui/react-popover": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@transitmapper/core": "workspace:*",
+    "@transitmapper/pwa-updater": "workspace:*",
     "maplibre-gl": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
@@ -30,6 +31,8 @@
     "@vitejs/plugin-react": "catalog:",
     "tsx": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:"
+    "vite-plugin-pwa": "catalog:",
+    "vitest": "catalog:",
+    "workbox-window": "catalog:"
   }
 }

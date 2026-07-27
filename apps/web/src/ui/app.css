@@ -449,6 +449,13 @@ input {
   background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
+/* A new-version prompt is routine, not a problem — it gets the app's own
+   accent tone instead of .app-banner's default danger one. Same flex-row
+   layout as .app-banner-dismissible, but for a text+button pairing (the
+   Reload action) rather than text+dismiss-icon. */
+.app-banner-update { background: var(--accent-soft); color: var(--accent); }
+.app-banner-action { display: flex; align-items: center; gap: 8px; }
+
 /* ---- tool dock — independent of the side panels, never stacked under one
    so it doesn't read as part of the objects list. Workbench.tsx positions
    this wrapper (desktop: a real grid cell; mobile: absolute + fades out
