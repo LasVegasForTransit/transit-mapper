@@ -14,7 +14,7 @@ import { vehicleFootprint } from '@transitmapper/core/model/catalog';
 import type {
   LngLat,
   Pattern,
-  SchedulePeriod,
+  ScheduleDayScope,
   Service,
   Station,
   TransitSystem,
@@ -32,6 +32,12 @@ import {
   type Timetable,
 } from '@transitmapper/core/sim/timetable';
 import { planService, runStateAt } from '@transitmapper/core/sim/fleet';
+import {
+  activeSchedule,
+  dayScopeAt,
+  minutesOfDay,
+  type ActiveSchedule,
+} from '@transitmapper/core/sim/clock';
 
 // How many of a pattern's vehicles get DRAWN. Not a claim about how many it
 // runs — the plan's fleet can exceed this, and the cap only limits what's on
@@ -78,29 +84,37 @@ export function effectiveVehicleKind(
   return { ...vehicleFootprint(service.modeId), speedMps: VEHICLE_SPEED_MPS };
 }
 
-/** The headway vehicle count/spacing is computed against — a detailed
- *  schedule (see system.ts's SchedulePeriod) supersedes the plain
- *  frequencyMinutes field when present; its BUSIEST (lowest-headway) period
- *  wins, since this is ambient decoration ("what does this line look like
- *  at its busiest"), not a simulation with a notion of current time of day.
- *  Undefined (nothing set at all) keeps today's original one-vehicle
- *  behavior — see the `?? 1` count below. */
-// Same WeakMap-on-array-reference pattern as stationsByWayCache/
-// patternGeometryCache below — this runs every animation frame per visible
-// service, and `service.schedule` only gets a new reference when the
-// schedule itself actually changes.
-const headwayCache = new WeakMap<SchedulePeriod[], number>();
+/**
+ * What every service is running at one moment, keyed by service id — `null`
+ * for a service that isn't running then.
+ *
+ * Resolving a schedule means walking each service's periods and parsing their
+ * "HH:MM" spans, which would be wasteful thirty times a second: the answer
+ * cannot change until the simulated MINUTE does. So the whole table is
+ * rebuilt only when the minute (or day scope, or pinned scenario, or the
+ * services themselves) actually changes — at 4x that's about every 250ms
+ * instead of every frame, and at realtime about once a minute.
+ */
+class ScheduleResolver {
+  private key = '';
+  private forServices: Service[] | null = null;
+  private table = new Map<string, ActiveSchedule | null>();
 
-function effectiveHeadwayMinutes(service: Service): number | undefined {
-  if (service.schedule && service.schedule.length > 0) {
-    let headway = headwayCache.get(service.schedule);
-    if (headway === undefined) {
-      headway = Math.min(...service.schedule.map((p) => p.frequencyMinutes));
-      headwayCache.set(service.schedule, headway);
-    }
-    return headway;
+  resolve(
+    services: Service[],
+    nowMin: number,
+    dayScope: ScheduleDayScope,
+    pinnedLabel: string | undefined,
+  ): Map<string, ActiveSchedule | null> {
+    const key = `${nowMin}|${dayScope}|${pinnedLabel ?? ''}`;
+    if (key === this.key && services === this.forServices) return this.table;
+    this.key = key;
+    this.forServices = services;
+    this.table = new Map();
+    for (const service of services)
+      this.table.set(service.id, activeSchedule(service, nowMin, dayScope, pinnedLabel));
+    return this.table;
   }
-  return service.frequencyMinutes;
 }
 
 // Stations grouped by their anchor way id, cached by the stations array's
@@ -296,6 +310,7 @@ export function attachVehicleAnimation(
 ): () => void {
   let frame: number;
   let lastUpdate = -Infinity;
+  const schedules = new ScheduleResolver();
 
   // Reused across ticks so a frame allocates no vehicle features or coordinate
   // arrays (GC pressure at RTC scale — hundreds of vehicles every tick). `pool`
@@ -370,9 +385,22 @@ export function attachVehicleAnimation(
     };
 
     if (viewMode === 'network' || viewMode === 'infrastructure') {
+      // What's running at this simulated moment. Resolved once for the whole
+      // system rather than per service per pattern, and reused across frames
+      // until the simulated minute changes.
+      const running = schedules.resolve(
+        system.services,
+        minutesOfDay(simMs),
+        dayScopeAt(simMs),
+        undefined,
+      );
       for (const service of system.services) {
         if (!gate.isVisible(service)) continue;
-        const headwayMinutes = effectiveHeadwayMinutes(service);
+        // A service outside its span of service isn't running, so it costs
+        // nothing — this check comes before geometry resolution on purpose.
+        const active = running.get(service.id);
+        if (!active) continue;
+        const headwayMinutes = active.headwayMinutes;
         const { widthM, lengthM, speedMps } = effectiveVehicleKind(system, service);
         for (const pattern of service.patterns) {
           const geometry = resolvePatternGeometry(
