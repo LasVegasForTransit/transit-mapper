@@ -104,6 +104,50 @@ Both are pure and memoized; nothing here is stored. See
 
 See [Sharing surfaces](../explanation/sharing-surfaces.md).
 
+## packages/core/src/share/ — what a share is
+
+- `contract.ts` — the request and response shapes of the share API,
+  imported by both the React client and the Worker so the wire format lives
+  in one place rather than twice.
+- `ownership.ts` — the single place that decides a new share's owner and
+  expiry. The two are always written together: a share with an owner has
+  `expires_at` NULL, one without has a timestamp. Splitting that decision
+  across call sites is how the two drift apart.
+- `claim.ts` — decides what the browser keeps after trying to claim the
+  anonymous shares it created. Pure, so the test suite can cover it: getting
+  it wrong either loses a claimable share forever or retries a hopeless one
+  on every page load.
+
+## apps/web/src/share/ — exporting and publishing
+
+Everything that turns a system into something that leaves the app.
+
+- `api.ts` — talking to the Worker's share endpoints.
+- `previewImage.ts` — draws the social card in the browser at share time.
+  It lives here rather than in the Worker because a free-plan Worker has
+  10ms of CPU per request and rasterizing a card measured ~65ms.
+- `svgExport.ts`, `pngExport.ts`, `jsonExport.ts` — the download formats.
+- `exportLegend.ts`, `exportScale.ts` — the legend and scale bar drawn onto
+  an export, kept separate from the renderer so they can be tested without
+  one.
+
+See [Sharing surfaces](../explanation/sharing-surfaces.md).
+
+## apps/web/src/storage/ — the local library
+
+- `localStore.ts` — a library of saved systems in `localStorage`, replacing
+  a single-slot autosave where "New system" silently overwrote the only one
+  there was. Each system has its own key so switching never touches the
+  others, and a small index holds just id, name and timestamp so the list
+  renders without loading every system in full.
+
+## apps/web/src/sim/ — moving vehicles
+
+- `vehicles.ts` — animates vehicles along service patterns on the map. It
+  reads the editor store and writes a GeoJSON source directly rather than
+  going through React, because it updates every frame and reconciliation at
+  that rate is the thing that would make it stutter.
+
 ## apps/web/src/embed/ — the embeddable map
 
 - `main.ts` — a second Vite entry (`embed.html`, served at `/e/:id`) that
