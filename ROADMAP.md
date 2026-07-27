@@ -20,6 +20,10 @@ work doesn't get pulled forward ahead of earlier work without a deliberate reaso
   turn lanes.
 - **Real-world data.** Import streets from OpenStreetMap and draw your system over them, or pull in
   an agency's actual GTFS feed as a comparison baseline.
+- **A running simulation.** A simulated clock you can pause and speed up, with vehicles that run at
+  the headways and spans your schedules actually specify. Set a line to every ten minutes and its
+  stops are served every ten minutes; overlap two of them and the shared stop reports what they
+  add up to.
 - **Share and fork.** Publish a read-only link to any system; anyone can view it and fork their own
   editable copy.
 - **Links that look like something.** Paste a share link into Slack, Discord, or iMessage and the
@@ -54,7 +58,13 @@ This phase makes a shared TransitMapper link work well anywhere it's pasted, and
 
 This is where sketching starts turning into real planning and advocacy work.
 
-- **Ridership sketching.** Estimate how many people a proposed line might actually serve.
+- **Ridership sketching.** Estimate how many people a proposed line might actually serve. This is
+  the point where the simulation has to start remembering what happened — crowding and bunching
+  are consequences of history, and today's simulator deliberately keeps none. See
+  [The simulation](docs/product/explanation/simulation.md).
+- **Real service levels from imported feeds.** GTFS import currently brings in geometry and names
+  but no timing, so an imported agency's routes animate as a single vehicle rather than at their
+  real frequencies.
 - **Travel-time comparisons.** See how a proposed system changes trip times across the region.
 - **Snap-to-streets routing.** Sketch a line freely and have it settle onto the real street and
   track network automatically.

@@ -46,6 +46,21 @@ import {
 // per-frame cost with no visual payoff at the zoom levels a whole system is
 // viewed at.
 const MAX_VEHICLES_PER_PATTERN = 12;
+
+// Which patterns have already been reported as drawing fewer vehicles than
+// they run, so the notice below fires once per pattern rather than 30 times a
+// second. Reset never — a session's worth of one-line notices is the point.
+const clampedFleetsReported = new Set<string>();
+
+/** Say so when the map is showing fewer vehicles than the line actually runs.
+ *  A cap that silently drops vehicles reads as "the headway is wrong"; a cap
+ *  that says what it dropped reads as a cap. DEV only — in production this is
+ *  a rendering detail, not something to put in a user's console. */
+function noteClampedFleet(patternId: string, serviceName: string, fleet: number): void {
+  if (!import.meta.env.DEV || clampedFleetsReported.has(patternId)) return;
+  clampedFleetsReported.add(patternId);
+  console.info(`[sim] ${serviceName}: running ${fleet} vehicles, drawing ${MAX_VEHICLES_PER_PATTERN}. Headway and spacing are unaffected; the map shows gaps.`);
+}
 // Doors open, board/alight, doors close — a plausible light-rail/bus dwell
 // when a station doesn't specify its own (Station.dwellSeconds).
 const DEFAULT_DWELL_SECONDS = 20;
@@ -432,6 +447,7 @@ export function attachVehicleAnimation(
           // no vehicle could actually run. Frequent service on a long line
           // therefore shows gaps at this cap rather than wrong spacing.
           const shown = Math.min(plan.fleet, MAX_VEHICLES_PER_PATTERN);
+          if (shown < plan.fleet) noteClampedFleet(pattern.id, service.name, plan.fleet);
           for (let i = 0; i < shown; i++) {
             // Resolved against SIMULATED time, so the speed control and pause
             // work — and so a vehicle's position depends only on what time it

@@ -4319,6 +4319,28 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     'two shapes on the same route become two patterns',
     shared.services[0].patterns.length === 2,
   );
+
+  // Import brings in no timing at all, which is what keeps an agency-scale
+  // feed cheap to animate: with no headway, every pattern plans exactly one
+  // vehicle. This pins that relationship, because the day someone derives
+  // headways from stop_times is the day fleet counts across hundreds of
+  // patterns stop being one apiece — and that needs measuring first.
+  const imported = pieces.services[0];
+  check(
+    'an imported service carries no headway or span',
+    imported.frequencyMinutes === undefined &&
+      imported.spanStart === undefined &&
+      imported.schedule === undefined,
+  );
+  check(
+    'an imported service is always running, since it has no span to be outside of',
+    activeSchedule(imported, 3 * 60, 'weekday') !== null,
+  );
+  check(
+    'an imported service plans a single vehicle per pattern',
+    planService(2 * 600_000, activeSchedule(imported, 3 * 60, 'weekday')?.headwayMinutes).fleet ===
+      1,
+  );
 }
 
 // --- gtfsFilesToBatchedPieces: batching sums to the same result, even a stop shared across batches ---
