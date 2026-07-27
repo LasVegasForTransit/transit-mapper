@@ -147,7 +147,7 @@ const MAX_SEGMENT_CELLS = 4096;
  * hundred thousand cells. Two million is generous headroom for anything
  * genuine and still a hard stop for anything constructed.
  */
-const MAX_GRID_CELLS = 2_000_000;
+export const MAX_GRID_CELLS = 2_000_000;
 
 /**
  * Ceiling on segments held aside.
@@ -164,7 +164,7 @@ const MAX_GRID_CELLS = 2_000_000;
  * document with hundreds of continent-spanning segments to reach, which no
  * amount of ordinary editing or importing produces.
  */
-const MAX_OVERSIZE_SEGMENTS = 512;
+export const MAX_OVERSIZE_SEGMENTS = 512;
 
 interface SegmentGrid {
   cells: Map<string, GridSegment[]>;
@@ -213,17 +213,55 @@ function buildSegmentGrid(ways: Way[]): SegmentGrid {
 
 const segmentGridCache = new WeakMap<Way[], SegmentGrid>();
 
+function gridFor(ways: Way[]): SegmentGrid {
+  let grid = segmentGridCache.get(ways);
+  if (!grid) {
+    grid = buildSegmentGrid(ways);
+    segmentGridCache.set(ways, grid);
+  }
+  return grid;
+}
+
+/** What indexing a ways array actually cost. See `segmentGridStats`. */
+export interface SegmentGridStats {
+  /** Grid cells occupied. */
+  cells: number;
+  /**
+   * Segment-in-cell entries: one per cell each indexed segment was expanded
+   * into. This is the grid's real memory footprint and the work a build does,
+   * and it is what MAX_GRID_CELLS bounds.
+   */
+  entries: number;
+  /** Segments held out of the grid, which every query then scans in full. */
+  oversize: number;
+}
+
+/**
+ * The size of the index built for `ways` — measured from the finished grid,
+ * not read back off the counters that enforce the bounds.
+ *
+ * This exists so the bounds above can be asserted directly. They are guards
+ * against an O(n) blowup, and the blowup's visible symptom is elapsed time,
+ * but timing a build is a measurement of the machine as much as of the code:
+ * on a loaded laptop the same build has been seen to take 366ms and 3972ms.
+ * These counts are what actually went wrong in the cases the bounds were
+ * added for — millions of cells expanded from a handful of segments — and
+ * they are identical on every run.
+ */
+export function segmentGridStats(ways: Way[]): SegmentGridStats {
+  const grid = gridFor(ways);
+  let entries = 0;
+  for (const bucket of grid.cells.values()) entries += bucket.length;
+  return { cells: grid.cells.size, entries, oversize: grid.oversize.length };
+}
+
 // Candidate way IDs for snap(): every way with a segment inside coord's
 // cell-radius, reusing the same grid buildSegmentGrid/segmentGridCache
 // already maintain for servedWayIds — no exact distance computed here (that
 // happens once, per candidate, in snap()'s own nearestOnPath call below),
 // just cheap cell-bucket membership.
 function candidateWayIdsNear(coord: LngLat, ways: Way[], maxMeters: number): Set<string> {
-  let grid = segmentGridCache.get(ways);
-  if (!grid) {
-    grid = buildSegmentGrid(ways);
-    segmentGridCache.set(ways, grid);
-  }
+  const grid = gridFor(ways);
   const cellRadiusLat = Math.ceil(maxMeters / 111_320 / CELL_DEG) + 1;
   const cellRadiusLng = lngCellRadius(maxMeters, coord[1]);
   const cx = Math.floor(coord[0] / CELL_DEG);
@@ -244,11 +282,7 @@ function candidateWayIdsNear(coord: LngLat, ways: Way[], maxMeters: number): Set
 
 /** IDs of every way whose path passes within maxMeters of a coordinate. */
 export function servedWayIds(coord: LngLat, ways: Way[], maxMeters: number): string[] {
-  let grid = segmentGridCache.get(ways);
-  if (!grid) {
-    grid = buildSegmentGrid(ways);
-    segmentGridCache.set(ways, grid);
-  }
+  const grid = gridFor(ways);
   const cellRadiusLat = Math.ceil(maxMeters / 111_320 / CELL_DEG) + 1; // +1 cell of margin for anything straddling a boundary
   const cellRadiusLng = lngCellRadius(maxMeters, coord[1]);
   const cx = Math.floor(coord[0] / CELL_DEG);

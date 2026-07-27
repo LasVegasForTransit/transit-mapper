@@ -14,9 +14,12 @@ import {
   nearestOpenEndpoint,
   pointAtT,
   resolveWayPath,
+  segmentGridStats,
   servedWayIds,
   serviceWayIds,
   snap,
+  MAX_GRID_CELLS,
+  MAX_OVERSIZE_SEGMENTS,
 } from "@transitmapper/core/model/geo";
 import { computeDiagramSystem } from "@transitmapper/core/model/diagramLayout";
 import { isDoubleClickFinish } from "../src/map/interactions";
@@ -3280,8 +3283,14 @@ function buildGrid() {
   // its endpoints are and NOT by how much data there is — so range-checking
   // coordinates does not bound it. Before MAX_SEGMENT_CELLS, a ±5° way froze
   // for 4.2s and ±10° crashed on V8's Map size limit; the world-spanning case
-  // asks for ~7.2 billion cells. This is a time assertion on purpose: it is
-  // the only shape of check that would have caught the original bug.
+  // asks for ~7.2 billion cells.
+  //
+  // Asserted on the size of the index rather than on how long building it
+  // took. The symptom was elapsed time, but a stopwatch here measures the
+  // machine too — this assertion in its original form swung between 366ms and
+  // 3972ms across consecutive runs on identical code, purely from load, and
+  // failed the suite at random. The cell counts are what actually went wrong,
+  // and they are the same on every machine on every run.
   for (const [label, lng, lat] of [
     ["spanning five degrees", 5, 2.5],
     ["spanning ten degrees", 10, 5],
@@ -3293,16 +3302,18 @@ function buildGrid() {
     const wide = label.includes("whole world")
       ? [{ ...parseSystem(wayWith({ points: [[-1, -1], [1, 1]] })).ways[0], points: [[-lng, -lat], [lng, lat]] as [number, number][] }]
       : parseSystem(wayWith({ points: [[-lng, -lat], [lng, lat]] })).ways;
-    const started = performance.now();
     let threw = false;
     try {
       servedWayIds([0, 0], wide, 100);
     } catch {
       threw = true;
     }
-    const elapsed = performance.now() - started;
     check(`a way ${label} indexes without throwing`, !threw);
-    check(`a way ${label} indexes in well under a second (${Math.round(elapsed)}ms)`, elapsed < 500);
+    // Held aside, not expanded: one segment in, nothing in the grid. Without
+    // MAX_SEGMENT_CELLS these are the millions-of-cells expansions that froze.
+    const stats = segmentGridStats(wide);
+    check(`a way ${label} is held aside rather than expanded`, stats.oversize === 1);
+    check(`a way ${label} costs the grid nothing (${stats.entries} entries)`, stats.entries === 0);
   }
 
   // One wide segment is not the attack — many are. Capping a single
@@ -3314,10 +3325,18 @@ function buildGrid() {
     const pts: [number, number][] = [];
     for (let i = 0; i < 10_001; i++) pts.push(i % 2 === 0 ? [0, 0] : [0.189, 0.189]);
     const many = parseSystem({ ...base, ways: [{ id: "w", typeId: "road", points: pts, geometry: "straight", grade: "atGrade" }] });
-    const started = performance.now();
     servedWayIds([0, 0], many.ways, 90);
-    const elapsed = performance.now() - started;
-    check(`ten thousand individually-legal wide segments still index quickly (${Math.round(elapsed)}ms)`, elapsed < 2000);
+    const stats = segmentGridStats(many.ways);
+    // Each of the 10,000 segments is under MAX_SEGMENT_CELLS on its own, so
+    // the per-segment cap lets every one of them through: this is ~41 million
+    // entries with only that cap in place, and it is the aggregate bound and
+    // nothing else that holds the number below.
+    check(`ten thousand individually-legal wide segments stay under the grid bound (${stats.entries} entries)`, stats.entries <= MAX_GRID_CELLS);
+    // Overflow goes to the held-aside list, which every query scans in full —
+    // so that list needs its own ceiling or the quadratic comes back there.
+    check(`the overflow from those segments stays bounded (${stats.oversize} held aside)`, stats.oversize <= MAX_OVERSIZE_SEGMENTS);
+    // The bound must not have been reached by silently indexing nothing.
+    check("those segments are still indexed", stats.entries > 0 && servedWayIds([0, 0], many.ways, 90).includes("w"));
   }
 
   // Held-aside segments must still be found, or the bound would be a silent
