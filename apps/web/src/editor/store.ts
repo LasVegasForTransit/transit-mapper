@@ -1625,6 +1625,13 @@ export function createEditorStore() {
         const x = s.system.ways.find((w) => w.id === nw.wayIds[0]);
         const y = s.system.ways.find((w) => w.id === nw.wayIds[1]);
         if (!x || !y || x.typeId !== y.typeId || x.points.length < 2 || y.points.length < 2) return s;
+        // combineProfiles assumes one one-way half per direction; joining two
+        // two-way ways would produce a four-directional street. `<= 1` rather
+        // than isOneWay so the zero-directional-lane half separateProfiles can
+        // produce still round-trips. The inspector shows the same rule as a
+        // disabled button — see WayInspector's canCombine.
+        const oneDirectionOnly = (w: Way) => new Set(directionalLanes(w.profile).map((l) => l.direction)).size <= 1;
+        if (!oneDirectionOnly(x) || !oneDirectionOnly(y)) return s;
 
         // The forward carriageway's alignment survives as the combined
         // centerline (symmetric with separateCarriageways, which kept the

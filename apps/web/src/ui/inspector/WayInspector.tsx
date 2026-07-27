@@ -4,7 +4,7 @@ import { GRADES, LANE_KINDS, WAY_FAMILIES, wayType } from "@transitmapper/core/m
 import { estimateWayCapitalCost, formatUsdCompact } from "@transitmapper/core/model/cost";
 import { bearingDegrees, formatBearing, formatKm, wayLengthMeters } from "@transitmapper/core/model/geo";
 import { getComponent } from "@transitmapper/core/model/components";
-import { isOneWay, wayCapacity } from "@transitmapper/core/model/profile";
+import { directionalLanes, isOneWay, wayCapacity } from "@transitmapper/core/model/profile";
 import { CrossSectionEditor } from "../CrossSectionEditor";
 import { InspectorTabs, type InspectorTab } from "../InspectorTabs";
 import { Panel } from "../Panel";
@@ -67,6 +67,20 @@ export function WayInspector({ id }: WayInspectorProps) {
   const deleteWay = useEditor((s) => s.deleteWay);
   const nameWay = useEditor((s) => s.nameWay);
   const namedWay = useEditor((s) => s.system.namedWays.find((n) => n.wayIds.includes(id)));
+  // A median is only ever captured by separating, so its presence is the
+  // durable record that this street is a separated pair — unlike the member
+  // count, which any split changes.
+  const hasCapturedMedian = useEditor((s) => (namedWay ? getComponent(s.system.medians, namedWay.id) !== undefined : false));
+  // combineProfiles assumes one one-way half per direction; joining two
+  // two-way ways would produce a four-directional street.
+  const carriagewaysAreOneWay = useEditor((s) =>
+    namedWay?.wayIds.length === 2 &&
+    namedWay.wayIds.every((wid) => {
+      const w = s.system.ways.find((x) => x.id === wid);
+      return !!w && new Set(directionalLanes(w.profile).map((l) => l.direction)).size <= 1;
+    }),
+  );
+  const canCombine = namedWay?.wayIds.length === 2 && carriagewaysAreOneWay;
   const separateCarriageways = useEditor((s) => s.separateCarriageways);
   const combineCarriageways = useEditor((s) => s.combineCarriageways);
   const mergeWaysAction = useEditor((s) => s.mergeWays);
@@ -141,10 +155,22 @@ export function WayInspector({ id }: WayInspectorProps) {
                   Separate carriageways
                 </button>
               )}
-              {namedWay && namedWay.wayIds.length === 2 && (
+              {namedWay && (namedWay.wayIds.length === 2 || hasCapturedMedian) && (
+                // Shown whenever this street was ever separated, disabled with
+                // its reason rather than vanishing: a button that disappears
+                // when a cross street splits a carriageway — which is an
+                // ordinary edit — leaves nothing to diagnose. See
+                // combineCarriageways for the matching guard.
                 <button
                   className="ghost-btn"
-                  title="Merge the two one-way carriageways back into one two-way street"
+                  disabled={!canCombine}
+                  title={
+                    namedWay.wayIds.length !== 2
+                      ? `This street is ${namedWay.wayIds.length} segments; combining works on a two-carriageway street. Merge the split segments first.`
+                      : !carriagewaysAreOneWay
+                        ? "Both halves must be one-way to combine into a two-way street."
+                        : "Merge the two one-way carriageways back into one two-way street"
+                  }
                   onClick={() => combineCarriageways(namedWay.id)}
                 >
                   Combine carriageways
@@ -152,7 +178,12 @@ export function WayInspector({ id }: WayInspectorProps) {
               )}
             </div>
           )}
-          {namedWay && namedWay.wayIds.length === 2 && <MedianField namedWayId={namedWay.id} readOnly={readOnly} />}
+          {namedWay && (namedWay.wayIds.length === 2 || hasCapturedMedian) && (
+            // Gated on the captured component, not the member count: the
+            // median is a property of the street and must stay editable after
+            // a cross street splits a carriageway, as MedianField promises.
+            <MedianField namedWayId={namedWay.id} readOnly={readOnly} />
+          )}
           {!readOnly && <p className="insp-sub">Shortcuts: [ ] lanes · D flip · O one-way · 1–9 presets</p>}
         </div>
       )}

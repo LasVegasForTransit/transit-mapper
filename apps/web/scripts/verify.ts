@@ -2516,6 +2516,50 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("the survivor is two-way again", !isOneWay(survivor.profile));
 }
 
+// --- the carriageway affordances survive an ordinary edit ---
+{
+  fresh();
+  const r = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(r, [-115.2, 36.1]);
+  store.getState().addWayPoint(r, [-115.15, 36.1]);
+  store.getState().addWayPoint(r, [-115.1, 36.1]);
+  store.getState().finishWay();
+  store.getState().applyProfilePreset(r, "roadArterial4");
+  const other = store.getState().separateCarriageways(r)!;
+  const nwId = store.getState().system.namedWays.find((n) => n.wayIds.includes(r))!.id;
+  check("separating captures a median", getComponent(store.getState().system.medians, nwId) !== undefined);
+
+  // Splitting one carriageway is an ordinary edit — a cross street does it
+  // automatically. The identity grows past two members, which used to hide
+  // both the Combine button and the median field for good.
+  store.getState().splitWayAt(other, 1);
+  check("a split takes the identity past two members", store.getState().system.namedWays.find((n) => n.id === nwId)!.wayIds.length > 2);
+  check(
+    "but the captured median is still there to edit",
+    getComponent(store.getState().system.medians, nwId) !== undefined,
+  );
+  store.getState().setMedianWidth(nwId, 7);
+  check("and it is still editable", getComponent(store.getState().system.medians, nwId)?.widthM === 7);
+
+  // combineCarriageways refuses two two-way ways under one identity, so the
+  // UI's disabled state and the action agree.
+  fresh();
+  const a = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(a, [-115.2, 36.1]);
+  store.getState().addWayPoint(a, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const b = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(b, [-115.2, 36.11]);
+  store.getState().addWayPoint(b, [-115.1, 36.11]);
+  store.getState().finishWay();
+  store.getState().nameWay(a, "Twin Street");
+  store.getState().nameWay(b, "Twin Street");
+  const twin = store.getState().system.namedWays.find((n) => n.name === "Twin Street")!;
+  const waysBefore = store.getState().system.ways.length;
+  store.getState().combineCarriageways(twin.id);
+  check("combining refuses two two-way ways sharing an identity", store.getState().system.ways.length === waysBefore);
+}
+
 // --- store: auto-junctions where ways cross (the SimCity moment) ---
 {
   fresh();
