@@ -65,8 +65,9 @@ const CHECKS: Check[] = [
   },
   {
     command: 'check:documents',
-    fails: 'a required document is missing, or lacks a required section, or has them out of order',
-    fix: 'add the section — see docs/development/reference/document-standards.md',
+    fails:
+      'a required document is missing, lacks a required section, has them out of order, or uses a stock phrase',
+    fix: 'add the section or cut the phrase — see docs/development/reference/document-standards.md',
   },
   {
     command: 'check:reference',

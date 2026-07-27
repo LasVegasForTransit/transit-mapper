@@ -4,13 +4,19 @@ Structured to [arc42](https://arc42.org/overview).
 
 ## 1. Introduction and Goals
 
-TransitMapper is a browser editor for regional transit systems. A user draws
-streets and rail with real lane cross-sections, places stations, routes
-services over that infrastructure, and publishes a read-only snapshot at a
+TransitMapper is a browser editor for regional transit systems. You draw
+streets and rail with real lane cross-sections, place stations, route
+services over that infrastructure, and publish a read-only snapshot at a
 public link.
 
-It was built for Las Vegans for Better Transit to model a better network for
-the Las Vegas Valley. Nothing in it is specific to one city or agency.
+Las Vegans for Better Transit built it to model a better network for the Las
+Vegas Valley. Nothing in it is specific to one city or agency.
+
+Transit advocacy produces proposals nobody can evaluate. A line drawn on a
+screenshot says nothing about whether the street is wide enough, where the
+vehicle turns, or what happens at the intersection. The tools that answer
+those questions are professional GIS packages, priced and shaped for agency
+staff. TransitMapper answers them and can still be handed to a volunteer.
 
 ### Requirements overview
 
@@ -19,19 +25,28 @@ the Las Vegas Valley. Nothing in it is specific to one city or agency.
 | Draw infrastructure | Streets and rail with lane counts, medians, one-way traffic, divided carriageways |
 | Derive junctions    | Intersections form where alignments cross, with computed turn lanes               |
 | Route services      | Bus, rail, and other modes traverse sequences of ways                             |
-| Design stations     | Land, platforms, structures, and bus bays rather than a point                     |
+| Design stations     | Land, platforms, structures, and bus bays instead of a point                      |
 | Import real data    | Streets from OpenStreetMap, existing networks from agency GTFS                    |
 | Publish             | A read-only link that unfurls with a preview and embeds in a page                 |
 
 ### Quality goals
 
-| Priority | Goal                                           | Motivation                                                                                                                             |
-| -------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 1        | Usability by non-engineers                     | The intended authors are transit advocates and planners, not developers. A tool requiring training is a tool nobody uses.              |
-| 2        | Editing availability independent of any server | The organization cannot promise indefinite hosting. Work must survive the service being withdrawn.                                     |
-| 3        | Correctness of derived geometry                | Junction and lane geometry is computed, not drawn. If it is wrong the output misleads, and a plan that misleads is worse than no plan. |
-| 4        | Operating cost near zero                       | A volunteer nonprofit funds this. A design with a per-user cost does not survive contact with a budget.                                |
-| 5        | Contributor onboarding                         | The contributor pool is small and intermittent. Someone returning after two months must find their way without help.                   |
+Ordered. Where two conflict, the higher-numbered goal yields.
+
+| Priority | Goal                                           | Motivation                                                      |
+| -------- | ---------------------------------------------- | --------------------------------------------------------------- |
+| 1        | Usability by non-engineers                     | The intended authors are advocates and planners, not developers |
+| 2        | Editing availability independent of any server | The organization cannot promise indefinite hosting              |
+| 3        | Correctness of derived geometry                | A plan that misleads is worse than no plan                      |
+| 4        | Operating cost near zero                       | A volunteer nonprofit funds this                                |
+| 5        | Contributor onboarding                         | The contributor pool is small and intermittent                  |
+
+The order settles arguments. Usability beats correctness, so the editor
+accepts a half-drawn network and shows what is wrong instead of refusing
+input until it validates. Availability beats cost, so documents live in the
+browser even though a server would be easier to build. Cost beats
+onboarding, so the Worker stays small enough to be awkward to read, and we
+document the awkwardness rather than spend money removing it.
 
 ### Stakeholders
 
@@ -43,35 +58,65 @@ the Las Vegas Valley. Nothing in it is specific to one city or agency.
 | Contributor      | Find where a change belongs; know what it must not break |
 | The organization | Run indefinitely on a volunteer budget                   |
 
+The advocate and the planner want opposite things, and that shapes most of
+the interface. The advocate wants a line between two neighbourhoods in under
+a minute. The planner wants to know how many lanes that line consumes and
+what it does to the cross-street. TransitMapper derives the detail instead
+of demanding it: you draw a centreline, the cross-section starts from a
+preset, and you open the preset when you care.
+
 ## 2. Architecture Constraints
 
 ### Technical
 
-| Constraint                                  | Consequence                                                                                                                                                              |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Cloudflare free tier                        | Per-request CPU in the tens of milliseconds, a daily invocation allowance, and a bounded database. Server-side rasterisation and per-request heavy compute are excluded. |
-| Browser storage for working documents       | Capacity is finite and user-clearable. The library holds documents, not history.                                                                                         |
-| `packages/core` runs in browser and workerd | No browser-only global may appear in it. The type system cannot express this, so a lint rule does.                                                                       |
-| TypeScript 6, not 7                         | `typescript-eslint` cannot load under TypeScript 7 and there is no released support. The compiler is pinned until it lands.                                              |
-| No accounts                                 | Every published link is public and unauthenticated. Nothing may depend on knowing who is asking.                                                                         |
+The deployment target is the Cloudflare free tier, and it shapes the design
+more than anything else. Compute is metered per request in the tens of
+milliseconds, invocations are capped daily, and the database has a hard size
+ceiling. Nothing that needs sustained server-side computation can run here.
+Image rendering is the visible case: it happens in the browser because it
+cannot happen in the Worker.
+
+The domain package runs in two runtimes: the browser for editing, workerd
+for publishing. It can therefore use nothing that only one of them provides.
+The compiler cannot catch a violation, because the package needs typings
+both runtimes share and those ship alongside browser-only ones. A lint rule
+catches it.
+
+TypeScript is pinned to version 6. Version 7 is released and faster, but
+`typescript-eslint` refuses to load against it, so upgrading would turn
+linting off.
+
+There are no accounts. Every published link is public, and nothing in the
+system can depend on knowing who is asking.
+
+Working documents live in browser storage. It is small, and the user can
+clear it at any moment.
 
 ### Organizational
 
-| Constraint                               | Consequence                                                                                       |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Volunteer maintenance, intermittent      | Anything requiring routine manual attention will not receive it. Checks must be automatic.        |
-| Small contributor pool, mixed experience | Conventions are enforced by tooling rather than carried by reviewers.                             |
-| Public repository                        | Design assumes the code, the configuration, and the infrastructure layout are readable by anyone. |
+Maintenance is volunteer and intermittent. Anything needing regular manual
+attention will not get it, so every convention that matters is a command
+that fails, not a rule someone remembers.
+
+Contributors range from first-timers to transit advocates who write some
+TypeScript, and there may be no reviewer free when one of them opens a pull
+request. The tooling has to carry what a reviewer would.
+
+The repository is public. Anyone can read the code, the configuration, and
+the shape of the infrastructure, and the design assumes they will.
 
 ### Conventions
 
-Documented and enforced in [the enforcement model](enforcement-model.md).
-The bar is `pnpm check`, which runs formatting, lint, typecheck, tests, and
-the repository's own invariants.
+The bar is `pnpm check`: formatting, lint, typecheck, tests, and the
+repository's own invariants. It runs without a browser or a network, and CI
+runs the same command. See [the enforcement model](enforcement-model.md).
 
 ## 3. Context and Scope
 
 ### Business context
+
+Authors describe a network. Viewers read it. Two external sources supply
+data, both optional and both read-only.
 
 | Partner             | Input                      | Output                                     |
 | ------------------- | -------------------------- | ------------------------------------------ |
@@ -92,6 +137,11 @@ flowchart LR
   tm --> gtfs[(Agency GTFS)]
 ```
 
+The link unfurler is not a viewer. It is a crawler, it does not run
+JavaScript, and it needs the title and preview in the first HTML response.
+That one requirement is why a Worker serves share pages at all. Without it,
+the single-page application could handle every route.
+
 ### Technical context
 
 | Channel                      | Protocol        | Carries                                  |
@@ -110,17 +160,33 @@ documents are on the roadmap and absent today.
 
 ## 4. Solution Strategy
 
-| Goal                            | Approach                                                                                                                                             |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Usability by non-engineers      | Direct manipulation on a map. Infrastructure is drawn, not specified in forms. Junction geometry is derived so the author never places one.          |
-| Editing availability            | Local-first. The browser holds the document; the server holds published copies only. No network call is on the editing path.                         |
-| Correctness of derived geometry | The derivation is pure and lives in `packages/core`, so it is exercised by tests as plain function calls without a browser.                          |
-| Operating cost                  | Static assets bypass the Worker. Preview images are rendered client-side. The Worker is invoked only for publishing, share pages, and embeds.        |
-| Contributor onboarding          | Kinds are catalog data rather than branches in code, so adding a mode does not require reading the editor. Conventions are enforced by `pnpm check`. |
+The first two quality goals decide most of the architecture.
 
-Top-level decomposition is three packages: a pure domain core, a browser
-editor, and an edge publishing service. The core is imported by both
-applications and depends on neither.
+The editor has to work without a server, so the document lives in the
+browser and the server holds only published copies. Nothing on the editing
+path touches the network, so nothing on the editing path can fail. That
+forces the next decision: with no server in the loop there is nowhere
+central to validate a system, so the rules about what a transit system is
+have to run in the browser. Those rules are the domain package.
+
+The server applies the same rules when it stores a snapshot, so both
+applications import that one package. Two implementations of the same
+geometry would drift apart, and the first symptom would be a published
+preview that does not match what the author drew.
+
+Cost has to stay near zero, so the Worker runs as rarely as possible. Static
+assets skip it entirely. The browser renders the preview image and uploads
+it. That leaves the Worker two jobs, storing a snapshot and serving one, and
+both are cheap.
+
+Contributors come and go, so the parts people extend most often are data. A
+new transit mode is a catalog record. A new lane type is a catalog record.
+Neither requires understanding the editor.
+
+Ways store a centreline and a cross-section, and lanes, junctions, and turn
+geometry are computed from those on demand. The document stays small, the
+geometry tests as plain functions, and stored data can never disagree with
+what it was derived from.
 
 ## 5. Building Block View
 
@@ -144,14 +210,28 @@ flowchart TD
   core -.-> worker
 ```
 
-| Building block           | Responsibility                                                                              |
-| ------------------------ | ------------------------------------------------------------------------------------------- |
-| `packages/core`          | Every rule about what a transit system is and how it is drawn. Data in, data out.           |
-| `apps/web`               | Interaction state, map rendering, and the single store all mutation passes through.         |
-| `apps/worker`            | Accepting, storing, and serving snapshots. The only component reading bytes from strangers. |
-| `packages/eslint-plugin` | Repository-specific lint rules, one per invariant the compiler cannot express.              |
+The split is by purity, not by feature. `packages/core` holds everything
+expressible as a function from data to data, `apps/web` holds everything
+needing a browser, and `apps/worker` holds everything needing a server.
+Station design therefore spans all three, and that is deliberate: the
+alternative files a feature's logic beside its UI, and logic that sits
+beside UI can only be tested through the UI.
+
+| Building block           | Responsibility                                                          | Does not contain                      |
+| ------------------------ | ----------------------------------------------------------------------- | ------------------------------------- |
+| `packages/core`          | Every rule about what a transit system is and how it is drawn           | Storage, transport, interaction state |
+| `apps/web`               | Interaction state, map rendering, the store all mutation passes through | Domain rules                          |
+| `apps/worker`            | Accepting, storing, and serving snapshots                               | Domain rules; a second parser         |
+| `packages/eslint-plugin` | Lint rules for invariants the compiler cannot express                   | Anything specific to one app          |
+
+The core depends on neither application. Neither application depends on the
+other. That direction is the only structural rule, and it is what keeps the
+core testable on its own.
 
 ### Level 2 — `packages/core`
+
+The layering runs model, then geometry and routing, then rendering. Each
+layer depends only on the ones above it.
 
 | Block    | Responsibility                                                                  |
 | -------- | ------------------------------------------------------------------------------- |
@@ -159,8 +239,11 @@ flowchart TD
 | Geometry | Lane polylines, junction footprints, and turn geometry derived from centrelines |
 | Routing  | The graph over ways and junctions that services traverse                        |
 | Render   | System to styled output, shared by the map, exports, embeds, and previews       |
-| Style    | Visual properties of catalog kinds, kept separate from domain data              |
+| Style    | Visual properties of catalog kinds, kept out of the domain data                 |
 | Share    | The wire contract, snapshot ownership, and claim logic                          |
+
+Render produces styled output without a map. That is what lets a published
+preview be drawn where there is no MapLibre and no DOM.
 
 ### Level 2 — `apps/web`
 
@@ -173,6 +256,11 @@ flowchart TD
 | Storage | The local document library                                                |
 | Sim     | Vehicle animation along service patterns                                  |
 
+Map and Sim sit outside React on purpose. Both update every frame, and
+reconciling a React tree that often is the difference between a map that
+pans smoothly and one that stutters. They read the store and write to
+MapLibre sources directly.
+
 ## 6. Runtime View
 
 ### Editing
@@ -180,7 +268,13 @@ flowchart TD
 A pointer gesture becomes a store action. The store calls the core to
 re-derive geometry and routing for the affected ways and their neighbours,
 the map re-renders from the result, and the document is written to
-`localStorage`. No network call occurs.
+`localStorage`.
+
+Neighbours are the part people miss. Editing one way moves the junctions at
+both its ends, and that retrims every other way meeting those junctions. An
+edit is never local to the thing edited.
+
+No network call happens anywhere in this flow.
 
 ### Publishing
 
@@ -196,21 +290,28 @@ sequenceDiagram
   W-->>E: snapshot id
 ```
 
-The Worker validates by parsing with the same parser the editor uses, rather
-than a second implementation. The snapshot is a copy; later edits do not
-reach it.
+The Worker validates by parsing the submitted document with the editor's own
+parser. A second, looser validator would accept documents the editor cannot
+open. A stricter one would reject documents the editor produces.
+
+A snapshot is a copy. Later edits to the source never reach it, and no code
+path would carry them.
 
 ### Viewing a share
 
 The Worker reads the snapshot and returns the application shell with title
-and preview injected, so a link unfurler sees content without executing
-JavaScript. The application then renders the snapshot read-only. The read
-extends the expiry, so a link in active use does not lapse.
+and preview injected into the initial HTML, so an unfurler sees content
+without running JavaScript. The application then renders the snapshot
+read-only.
+
+Reading extends the expiry, so a link people keep opening stays alive and
+one nobody opens lapses.
 
 ### Expiry
 
-A scheduled trigger deletes snapshots past their expiry. Snapshots marked as
-owned are exempt; nothing marks them today.
+A daily trigger deletes snapshots past their expiry. Owned snapshots are
+exempt, but nothing marks a snapshot as owned yet, so today every snapshot
+eventually expires.
 
 ## 7. Deployment View
 
@@ -231,15 +332,25 @@ flowchart TD
   cron --> w
 ```
 
-| Element           | Detail                                                                                    |
-| ----------------- | ----------------------------------------------------------------------------------------- |
-| Static assets     | Served without invoking the Worker, which keeps them off the metered invocation allowance |
-| Worker            | Invoked only for API paths, share pages, and embeds                                       |
-| D1                | One database holding snapshot rows, with migrations applied by the deploy pipeline        |
-| Scheduled trigger | Daily expiry sweep                                                                        |
+There is one environment. A merge to the default branch runs the checks,
+applies pending database migrations, deploys the Worker, and smoke-tests the
+result.
 
-One environment, production, deployed on merge to the default branch.
-Operational procedure is in [operations](../../operations/how-to/operations.md).
+| Element           | Detail                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| Static assets     | Served without invoking the Worker, keeping them off the metered invocation allowance |
+| Worker            | Invoked only for API paths, share pages, and embeds                                   |
+| D1                | One database of snapshot rows, migrated by the deploy pipeline                        |
+| Scheduled trigger | Daily expiry sweep                                                                    |
+
+The split between assets and Worker matters. Route every request through the
+Worker and the daily invocation allowance goes on files that need no logic,
+and running out takes down every path at once instead of one feature.
+
+Migrations apply before the Worker deploys, and rolling back does not undo
+them. Every migration has to be safe against the Worker still running, which
+means additive. Procedure is in
+[operations](../../operations/how-to/operations.md).
 
 ## 8. Crosscutting Concepts
 
@@ -248,6 +359,9 @@ Operational procedure is in [operations](../../operations/how-to/operations.md).
 A **Way** is infrastructure: an alignment with a lane cross-section. A
 **Service** is a route running over ways. One way carries many services; one
 service traverses many ways.
+
+Keep them separate and you can widen a street without touching the routes on
+it, or delete a route without deleting the street.
 
 | Type       | Meaning                                    |
 | ---------- | ------------------------------------------ |
@@ -262,84 +376,89 @@ service traverses many ways.
 ### Kinds as data
 
 Modes, way types, lane kinds, and facility classes are catalog records read
-at runtime. Application code reads fields off a record rather than testing
-which one it received.
+at runtime. Code reads fields off a record; it does not check which record it
+received. A branch on a specific mode is a defect, because it hardcodes
+something the next mode will have to work around.
 
 ### Derived state
 
-Ways store a centreline and a cross-section. Lane polylines, junction
-footprints, and turn geometry are computed. Nothing derived is persisted.
+Nothing derived is persisted. The document holds centrelines and
+cross-sections. Everything visible about lanes and junctions is computed when
+needed and memoised in memory.
 
 ### Domain and appearance separated
 
 That a lane is a travel lane of a given width is domain data. That it draws
-grey with white dashes is style. A restyle never requires a data migration.
-A service's line colour is the exception, because "the red line" is part of
-its identity.
+grey with white dashes is style. Keeping them apart means a restyle never
+needs a data migration. Service colour is the exception: the red line is
+called the red line, so its colour is identity, not paint.
 
 ### Persistence and versioning
 
-Snapshots outlive the code that wrote them, so serialisation is versioned
-and reads forward across versions.
+Snapshots outlive the code that wrote them. Serialisation is versioned and
+reads forward, so a link shared months ago still opens.
 
 ### Security
 
-Stored text is unauthenticated and unsanitised at rest. It reaches markup
-through an escaping API rather than string construction. Uploaded preview
-bytes are size-capped, structurally validated, and served inert. Publishing
-is rate-limited per client address.
+Stored text arrives from anyone and is not sanitised on the way in. It
+reaches markup through an escaping API, and no code builds markup by
+concatenation. Uploaded preview bytes are size-capped, structurally
+validated, and served inert. Publishing is rate-limited per client address,
+being the only path that writes caller-supplied bytes to storage.
 
 ### Testing
 
-The domain core is pure, so its rules are exercised as function calls
-without a browser. The Worker is tested in a real runtime against a real
-database with production migrations applied.
+The core is pure, so its rules are tested as function calls with no browser.
+The Worker is tested in a real workerd against a real database with the
+production migrations applied, because its failures are SQL and request
+handling and a mock has neither.
 
 ## 9. Architecture Decisions
 
 ### Infrastructure separated from service
 
 Chosen: ways and services are distinct records; a service references ways.
-Rejected: a route as a self-contained polyline. A real network runs many
-routes over shared streets, and independent geometry desynchronises on the
-first street edit.
+Rejected: a route as a self-contained polyline. Real networks run many routes
+over shared streets, and giving each route its own geometry breaks all of
+them on the first street edit.
 
 ### Kinds in a catalog
 
 Chosen: modes and types are records read at runtime. Rejected: union types
-with per-kind branching. The project must absorb modes nobody anticipated
-without an editor rewrite.
+with per-kind branching. The project has to absorb modes nobody planned for,
+such as gondolas, ferries, and bus rapid transit, without rewriting the
+editor each time.
 
 ### Geometry derived on demand
 
 Chosen: store centrelines and cross-sections; compute the rest. Rejected:
-storing lane polylines and junction shapes. Two representations of one truth
-diverge on the first edit, and junctions depend on every connecting way.
+storing lane polylines and junction shapes. Two copies of one truth drift on
+the first edit, and a junction depends on every way that meets it.
 
 ### Local-first documents
 
 Chosen: the browser holds work in progress. Rejected: server-authoritative
-documents. The editor must work for someone who never publishes and must not
-lose work if the service is withdrawn.
+documents. The editor has to work for someone who never publishes, and must
+not lose work if the service is withdrawn.
 
 ### Snapshots rather than synchronisation
 
 Chosen: publishing copies the document. Rejected: live documents shared by
-link. A live document behind a public, unauthenticated link is editable by
-anyone holding it.
+link. Anyone holding a public link could edit a live document, and stopping
+that needs the accounts this project does not have.
 
 ### One core across both runtimes
 
 Chosen: editor and Worker import the same core. Rejected: a separate
-server-side model. The published preview and the editor's map must draw
-identically, and two implementations diverge.
+server-side model. The published preview and the editor's map have to draw
+the same thing, and two implementations will not.
 
 ### Client-side preview rendering
 
 Chosen: the browser renders the preview and uploads it. Rejected: rendering
-in the Worker. The per-request CPU budget is an order of magnitude below
-what rasterisation costs. The consequence is that preview bytes are
-caller-supplied and must be validated.
+in the Worker. The per-request CPU budget is an order of magnitude below what
+rasterising costs. The cost is accepted deliberately: preview bytes now come
+from the caller and get treated as hostile.
 
 ## 10. Quality Requirements
 
@@ -361,6 +480,9 @@ flowchart LR
 
 ### Scenarios
 
+Every scenario can be shown false. Where nothing verifies one, section 11
+says so.
+
 | Quality         | Scenario                                                    | Expected                                                             |
 | --------------- | ----------------------------------------------------------- | -------------------------------------------------------------------- |
 | Usability       | An advocate with no GIS experience draws a two-line network | Completed without documentation                                      |
@@ -373,30 +495,38 @@ flowchart LR
 | Maintainability | A new transit mode is added                                 | One catalog record, no conditional edited                            |
 | Maintainability | A contributor returns after two months                      | `pnpm check` states the bar; a failure names its fix                 |
 
+No automated check covers the usability scenario. It is the only one that can
+fail without turning a build red.
+
 ## 11. Risks and Technical Debt
 
-| Item                                                  | Effect                                                                                                                                                          | Status                                                           |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Wall-clock performance assertion                      | A spatial-grid bound is asserted in elapsed milliseconds, measured between 178ms and 3,229ms for identical code. It can fail for reasons unrelated to the code. | Mitigated by running tests serially; needs a deterministic proxy |
-| Single maintainer                                     | Review, deployment, and credentials rest with one person                                                                                                        | Open                                                             |
-| Unwired account code                                  | Identity, sessions, and ownership are implemented and imported by nothing. It reads as dead code and is not.                                                    | Documented in §12 and in the code map                            |
-| TypeScript pinned to 6                                | The toolchain cannot move to 7 until `typescript-eslint` supports it                                                                                            | Blocked upstream                                                 |
-| Merge queue unavailable                               | The repository is owned by a personal account, so concurrent merges are not tested against the merged result                                                    | Unblocked by transferring to the organization                    |
-| Browser storage as the only home for unpublished work | Clearing site data loses documents, with no recovery path                                                                                                       | Accepted; publishing is the backup                               |
-| Two test suites                                       | A sequential `check()` script and Vitest coexist. The former resists being split.                                                                               | Accepted; new tests go to Vitest                                 |
+| Item                                                  | Effect                                                                                                          | Status                                                           |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Wall-clock performance assertion                      | A spatial-grid bound is asserted in elapsed milliseconds, measured between 178ms and 3,229ms for identical code | Mitigated by running tests serially; needs a deterministic proxy |
+| Single maintainer                                     | Review, deployment, and credentials rest with one person                                                        | Open                                                             |
+| Unwired account code                                  | Identity, sessions, and ownership are implemented and imported by nothing; it reads as dead code and is not     | Documented in section 12 and the code map                        |
+| TypeScript pinned to 6                                | The toolchain cannot move to 7 until `typescript-eslint` supports it                                            | Blocked upstream                                                 |
+| Merge queue unavailable                               | A personal account owns the repository, so concurrent merges are never tested against the merged result         | Unblocked by transferring to the organization                    |
+| Browser storage as the only home for unpublished work | Clearing site data loses documents, with no recovery path                                                       | Accepted; publishing is the backup                               |
+| Two test suites                                       | A sequential `check()` script and Vitest coexist; the former resists being split                                | Accepted; new tests go to Vitest                                 |
+| Usability unverified                                  | The first quality goal has no automated check and no usability testing behind it                                | Open                                                             |
+
+Watch the first and last entries. A flaky assertion teaches people to re-run
+a build instead of reading it, and an unverified top-priority goal is a
+claim, not a property.
 
 ## 12. Glossary
 
-| Term          | Definition                                                                                                    |
-| ------------- | ------------------------------------------------------------------------------------------------------------- |
-| Catalog       | The table of kinds — modes, way types, lane kinds, facility classes — read at runtime rather than branched on |
-| Cross-section | The lane-by-lane composition of a way: travel lanes, medians, direction                                       |
-| Facility      | A structure within a station, such as a platform or a bus bay                                                 |
-| Group         | Several stations treated as one interchange                                                                   |
-| Junction      | Derived geometry where ways meet; a `Node` in the model                                                       |
-| Mode          | A means of transport: subway, light rail, bus, tram, ferry, gondola                                           |
-| Service       | A route traversing a sequence of ways                                                                         |
-| Snapshot      | A published copy of a system, stored server-side with an expiry                                               |
-| Station       | A boarding place with land and structures, not a point                                                        |
-| System        | One document: a whole regional network                                                                        |
-| Way           | A physical alignment — street or track — and its cross-section                                                |
+| Term          | Definition                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------ |
+| Catalog       | The table of kinds — modes, way types, lane kinds, facility classes — read at runtime instead of branched on |
+| Cross-section | The lane-by-lane composition of a way: travel lanes, medians, direction                                      |
+| Facility      | A structure within a station, such as a platform or a bus bay                                                |
+| Group         | Several stations treated as one interchange                                                                  |
+| Junction      | Derived geometry where ways meet; a `Node` in the model                                                      |
+| Mode          | A means of transport: subway, light rail, bus, tram, ferry, gondola                                          |
+| Service       | A route traversing a sequence of ways                                                                        |
+| Snapshot      | A published copy of a system, stored server-side with an expiry                                              |
+| Station       | A boarding place with land and structures, not a point                                                       |
+| System        | One document: a whole regional network                                                                       |
+| Way           | A physical alignment — street or track — and its cross-section                                               |
