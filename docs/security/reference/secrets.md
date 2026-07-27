@@ -7,7 +7,7 @@ The list is short on purpose, and keeping it short is the point. Track 10
 of the harness spec adds the automation described at the bottom; this page
 is accurate as of today either way.
 
-## The inventory
+## Inventory
 
 | Secret                  | Lives in                        | Blast radius if leaked                                               |
 | ----------------------- | ------------------------------- | -------------------------------------------------------------------- |
@@ -22,7 +22,7 @@ Accounts will add exactly one, `GOOGLE_CLIENT_SECRET`, as a Wrangler
 secret. That design deliberately owns no signing key of its own — it uses
 PKCE with cookie-held verifiers — so one secret is the whole cost.
 
-## If one leaks
+## Rotation
 
 Assume anything written down is burned. Rotating is cheap; deciding
 whether it was really exposed is not.
@@ -36,7 +36,7 @@ whether it was really exposed is not.
    it was committed and pushed, treat it as public regardless of what you
    do to the history afterwards.
 
-## What stops a secret being committed
+## Prevention
 
 Three nets, because the first two can be skipped:
 

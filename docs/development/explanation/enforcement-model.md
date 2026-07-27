@@ -3,7 +3,7 @@
 Written for a person. If you have just been stopped by a check and want to
 know why it exists, this is the page.
 
-## The problem it solves
+## Purpose
 
 This repository used to state about a dozen rules in `AGENTS.md` — use
 named interfaces, keep `packages/core` runtime-pure, never edit an applied
@@ -16,7 +16,7 @@ stops being followed.
 
 So the work is converting rules into commands that fail.
 
-## One command
+## Bar
 
 ```bash
 pnpm check
@@ -30,7 +30,7 @@ The point of it being one command is that a red CI run maps to exactly one
 thing to run locally. You should never have to work out which of six tools
 is unhappy.
 
-## Four layers, and why the local ones are allowed to be skipped
+## Layers
 
 | Layer          | What runs                             | Blocks on                   |
 | -------------- | ------------------------------------- | --------------------------- |
@@ -46,7 +46,7 @@ would train people to work around them.
 
 **Layer 3 is the guarantee.** Nothing merges red.
 
-## Where a rule should live
+## Placement
 
 > Repository tooling checks artifacts. Agent configuration constrains
 > actions.
@@ -64,7 +64,7 @@ The test: delete `.claude/` and `pnpm check` must accept exactly the same
 trees. CI proves this on every pull request for free, because CI has no
 agent configuration at all.
 
-## The custom rules
+## Rules
 
 ### core-runtime-purity
 
