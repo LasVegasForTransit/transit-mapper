@@ -97,7 +97,11 @@ function ScenarioPicker() {
   const labels = useMemo(() => schedulePeriodLabels(services), [services]);
   if (labels.length === 0) return null;
   return (
+    // The class goes on Popover (its Radix Content), not on an inner div:
+    // Content is what carries `data-state`, so that's the only element the
+    // open/close animation can key off.
     <Popover
+      className="sim-scenario-popover"
       trigger={
         <IconButton
           icon="clock"
@@ -107,7 +111,7 @@ function ScenarioPicker() {
         />
       }
     >
-      <div className="sim-scenario-popover">
+      <>
         <span className="panel-section-label">Service scenario</span>
         <p className="panel-hint">
           Show every line at one point in its schedule, whatever the clock says.
@@ -133,7 +137,7 @@ function ScenarioPicker() {
             </button>
           ))}
         </div>
-      </div>
+      </>
     </Popover>
   );
 }
