@@ -1,0 +1,14 @@
+# Review routing. Every pull request needs one approval, so this decides who
+# is asked rather than whether anyone is — see the workflow section of the
+# harness spec.
+#
+# Update the default once a maintainers team exists: `* @lvbt-team`.
+* @williecubed
+
+# Paths where a mistake is expensive or irreversible. These are called out
+# separately so that when the default owner changes, the deliberate review of
+# migrations, deployment config and CI does not silently move with it.
+/apps/worker/src/migrations/ @williecubed
+/apps/worker/wrangler.toml   @williecubed
+/.github/                    @williecubed
+/.githooks/                  @williecubed
