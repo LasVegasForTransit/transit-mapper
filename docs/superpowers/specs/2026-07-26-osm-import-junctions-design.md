@@ -509,3 +509,29 @@ The function now takes the system's existing nodes and matches an incoming
 junction to an existing one by a shared `(wayId, pointIndex)` arm — exact, and
 needing no coordinate comparison. A match yields a `junctionAdditions` entry
 the store merges into the existing `Node` instead of appending a rival.
+
+## Follow-on: pairing a divided street's carriageways
+
+OSM draws a divided street as two one-way ways. Grouping every same-named way
+into one identity made the whole street a single N-member `NamedWay`, which
+the carriageway tools cannot act on — they work on exactly two.
+
+Same-named one-way ways are now matched into carriageway pairs, and each pair
+becomes its own two-member identity; whatever has no partner keeps the
+ordinary whole-street identity. The median is captured from the geometry:
+their mean separation less the half-widths each occupies, stored only when
+that gap is positive, so Combine restores the real median rather than a
+default.
+
+Matching is **mutual best match** — a pair forms only if each way is also the
+other's nearest antiparallel candidate within 45 m. That is what stops a
+frontage road or slip lane, which is same-named and parallel and one-way,
+from claiming a carriageway that has a better partner. Two-way ways are never
+candidates, and same-direction ways are never a pair.
+
+Measured over a 2 km box across the Strip: 492 ways produced 126 two-member
+identities, 106 of them carrying a captured median, every one an
+`oneway=yes` x `oneway=yes` pair on a genuinely divided arterial (Las Vegas
+Boulevard, Flamingo, Koval, Spring Mountain). 29 identities kept more than
+two members, which is the honest outcome for streets OSM has split into
+segments that do not line up across the median.

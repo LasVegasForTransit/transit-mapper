@@ -68,6 +68,13 @@ puts a signal on the approach at the stop line rather than on the
 intersection itself, so a control node found shortly before a junction along
 its own way is taken to govern that junction.
 
+A **divided street** arrives as its two carriageways under one identity, with
+the median between them measured and captured — so the Combine carriageways
+button works on it straight away, and combining restores the real gap rather
+than a generic default. Pairing is mutual: two carriageways only pair if each
+is the other's best match, so a frontage road running alongside can't claim
+one. Segments with no partner keep the ordinary whole-street identity.
+
 Streets arrive **named**. OSM splits one street into a way per block and per
 direction, all carrying the same `name`, and those become a single shared
 identity — so the objects list reads "West Flamingo Road 1…12" instead of

@@ -6,10 +6,10 @@
 //    buildOverpassQuery) that fixture-based tests can exercise directly;
 //  - importOsmWays, the one function that actually calls the network.
 import { wayType, type Grade, type ProfileTemplateLane } from "./catalog";
-import { haversineMeters } from "./geo";
+import { haversineMeters, nearestOnPath } from "./geo";
 import { shortId } from "./ids";
-import { defaultProfileFor, profileWithPrimaryLanes, MAX_PRIMARY_LANES, type ProfileEdges } from "./profile";
-import type { CrossSection, DrivingSide, LaneDirection, LngLat, NamedWay, Node, NodeControl, Way, WayPointRef } from "./system";
+import { defaultProfileFor, profileWidthM, profileWithPrimaryLanes, MAX_PRIMARY_LANES, type ProfileEdges } from "./profile";
+import type { CrossSection, DrivingSide, LaneDirection, LngLat, Median, NamedWay, Node, NodeControl, Way, WayPointRef } from "./system";
 
 export interface ImportBBox {
   west: number;
@@ -385,6 +385,83 @@ export function gradeFromOsmTags(tags: Record<string, string> | undefined): Grad
 }
 
 /**
+ * How far apart two carriageways of one street may sit, centreline to
+ * centreline. Real divided arterials run roughly 12-19 m apart; 45 m is
+ * generous enough for a boulevard with a wide planted median while still
+ * rejecting the next street over.
+ */
+const MAX_CARRIAGEWAY_SEPARATION_M = 45;
+
+/** How antiparallel two carriageways must run: cos of the angle between
+ *  their travel directions, so -0.7 is within ~45 deg of exactly opposite. */
+const MAX_CARRIAGEWAY_ALIGNMENT = -0.7;
+
+/** The direction a one-way way's traffic travels, as a unit vector in
+ *  degrees space — good enough for comparing two nearby ways' headings. */
+function travelVector(way: Way): [number, number] | null {
+  const dirs = new Set(way.profile.lanes.filter((l) => l.direction === "forward" || l.direction === "backward").map((l) => l.direction));
+  if (dirs.size !== 1) return null;
+  const first = way.points[0];
+  const last = way.points[way.points.length - 1];
+  const [dx, dy] = dirs.has("forward") ? [last[0] - first[0], last[1] - first[1]] : [first[0] - last[0], first[1] - last[1]];
+  const len = Math.hypot(dx, dy);
+  return len === 0 ? null : [dx / len, dy / len];
+}
+
+/** Mean distance from one way's points to the other's path, in metres —
+ *  the lateral gap between two roughly parallel carriageways. */
+function meanSeparationM(a: Way, b: Way): number {
+  let total = 0;
+  let n = 0;
+  for (const p of a.points) {
+    const on = nearestOnPath(b.points, p);
+    if (on) {
+      total += on.distMeters;
+      n++;
+    }
+  }
+  return n === 0 ? Infinity : total / n;
+}
+
+/**
+ * Detect which same-named one-way ways are the two carriageways of one
+ * divided street, so each pair becomes its own two-member NamedWay — the
+ * shape `combineCarriageways` needs — with the median it is physically
+ * separated by captured alongside it.
+ *
+ * Pairing is mutual-best-match: each way's partner must also choose it, so a
+ * frontage road or a slip lane running alongside a boulevard cannot claim a
+ * carriageway that has a better match. Ways with no partner keep the ordinary
+ * whole-street identity, which is why a street OSM has split into many
+ * unaligned segments simply doesn't produce pairs rather than producing wrong
+ * ones.
+ */
+function carriagewayPairs(ways: Way[]): [Way, Way][] {
+  const oriented = ways.map((w) => ({ way: w, dir: travelVector(w) })).filter((o): o is { way: Way; dir: [number, number] } => o.dir !== null);
+  const best = new Map<string, { partner: Way; separation: number }>();
+  for (const a of oriented) {
+    for (const b of oriented) {
+      if (a.way.id === b.way.id) continue;
+      if (a.dir[0] * b.dir[0] + a.dir[1] * b.dir[1] > MAX_CARRIAGEWAY_ALIGNMENT) continue;
+      const separation = meanSeparationM(a.way, b.way);
+      if (separation > MAX_CARRIAGEWAY_SEPARATION_M) continue;
+      const current = best.get(a.way.id);
+      if (!current || separation < current.separation) best.set(a.way.id, { partner: b.way, separation });
+    }
+  }
+  const pairs: [Way, Way][] = [];
+  const taken = new Set<string>();
+  for (const [id, { partner }] of best) {
+    if (taken.has(id) || taken.has(partner.id)) continue;
+    if (best.get(partner.id)?.partner.id !== id) continue; // must be mutual
+    taken.add(id);
+    taken.add(partner.id);
+    pairs.push([ways.find((w) => w.id === id)!, partner]);
+  }
+  return pairs;
+}
+
+/**
  * Group imported ways that are one named facility into NamedWays — OSM
  * splits a street into a way per block, per junction, and per direction, all
  * carrying the same `name`, which is exactly the identity NamedWay exists to
@@ -395,22 +472,38 @@ export function gradeFromOsmTags(tags: Record<string, string> | undefined): Grad
  * often share a name in OSM but are not one facility. A name matching only
  * one way gets no NamedWay — the identity would add nothing over the way.
  */
-function namedWaysFor(ways: Way[], nameByWayId: Map<string, string>): NamedWay[] {
-  const groups = new Map<string, { name: string; wayIds: string[] }>();
+function namedWaysFor(ways: Way[], nameByWayId: Map<string, string>): { namedWays: NamedWay[]; medians: { id: string; median: Median }[] } {
+  const groups = new Map<string, { name: string; ways: Way[] }>();
   for (const way of ways) {
     const name = nameByWayId.get(way.id);
     if (!name) continue;
-    const key = `${way.typeId} ${name}`;
+    const key = `${way.typeId}\u0000${name}`;
     const group = groups.get(key);
-    if (group) group.wayIds.push(way.id);
-    else groups.set(key, { name, wayIds: [way.id] });
+    if (group) group.ways.push(way);
+    else groups.set(key, { name, ways: [way] });
   }
-  const named: NamedWay[] = [];
-  for (const { name, wayIds } of groups.values()) {
-    if (wayIds.length < 2) continue;
-    named.push({ id: shortId(), name, wayIds });
+
+  const namedWays: NamedWay[] = [];
+  const medians: { id: string; median: Median }[] = [];
+  for (const { name, ways: group } of groups.values()) {
+    // A divided street's two carriageways become their own identity, so the
+    // combine/separate tooling — which works on exactly two members — can act
+    // on them. Whatever is left over keeps the ordinary whole-street identity.
+    const pairs = carriagewayPairs(group);
+    const paired = new Set(pairs.flat().map((w) => w.id));
+    for (const [a, b] of pairs) {
+      const id = shortId();
+      namedWays.push({ id, name, wayIds: [a.id, b.id] });
+      // The gap between the carriageways IS the median: their separation less
+      // the half-widths they each occupy. A non-positive result means the two
+      // ribbons already touch, so there is no median to capture.
+      const gap = meanSeparationM(a, b) - profileWidthM(a.profile) / 2 - profileWidthM(b.profile) / 2;
+      if (gap > 0) medians.push({ id, median: { widthM: gap, kindId: "median" } });
+    }
+    const rest = group.filter((w) => !paired.has(w.id));
+    if (rest.length >= 2) namedWays.push({ id: shortId(), name, wayIds: rest.map((w) => w.id) });
   }
-  return named;
+  return { namedWays, medians };
 }
 
 export interface OsmWayElement {
@@ -435,6 +528,9 @@ export interface ImportedNetwork {
   ways: Way[];
   nodes: Node[];
   namedWays: NamedWay[];
+  /** Captured medians for the identities that are a carriageway pair, keyed
+   *  by NamedWay id — the same component separateCarriageways writes. */
+  medians: { id: string; median: Median }[];
 }
 
 /**
@@ -628,7 +724,8 @@ export function osmElementsToNetwork(elements: OsmWayElement[], drivingSide: Dri
     const control = controlByJunction.get(osmNodeId);
     nodes.push({ id: shortId(), coord: coordByOsmNode.get(osmNodeId)!, refs, ...(control ? { control } : {}) });
   }
-  return { ways, nodes, namedWays: namedWaysFor(ways, nameByWayId) };
+  const named = namedWaysFor(ways, nameByWayId);
+  return { ways, nodes, namedWays: named.namedWays, medians: named.medians };
 }
 
 /** The ways of an import, without its junctions — kept for callers that only
@@ -802,7 +899,13 @@ export function withoutAlreadyImported(
     namedWays.push({ ...identity, wayIds });
   }
 
-  return { network: { ways: keptWays, nodes, namedWays }, duplicateWays, identityAdditions, junctionAdditions };
+  const keptIds = new Set(namedWays.map((n) => n.id));
+  return {
+    network: { ways: keptWays, nodes, namedWays, medians: network.medians.filter((m) => keptIds.has(m.id)) },
+    duplicateWays,
+    identityAdditions,
+    junctionAdditions,
+  };
 }
 
 /** Fetch OSM ways for the given categories within a bounding box from the
@@ -814,7 +917,7 @@ export async function importOsmWays(
   categories: ImportCategory[],
   drivingSide: DrivingSide = "right",
 ): Promise<ImportedNetwork> {
-  if (categories.length === 0) return { ways: [], nodes: [], namedWays: [] };
+  if (categories.length === 0) return { ways: [], nodes: [], namedWays: [], medians: [] };
   const query = buildOverpassQuery(bbox, categories);
 
   let lastError = "";

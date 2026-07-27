@@ -240,8 +240,10 @@ export interface EditorState {
    *  draw services over, not a route in themselves. The nodes come from OSM's
    *  own node identity (see model/import.ts), so an imported grid arrives
    *  connected and routable rather than as loose segments. Ways this system
-   *  already imported are skipped rather than duplicated; returns what was
-   *  added vs. skipped so the caller can say which happened. */
+   *  already imported are skipped rather than duplicated. A divided street
+   *  arrives as a two-member identity with its median captured, ready for the
+   *  carriageway tools. Returns what was added vs. skipped so the caller can
+   *  say which happened. */
   importWays: (network: ImportedNetwork) => { added: number; skipped: number };
   /** Append a GTFS import's ways/services/stations (P4 follow-on: RTC's real
    *  system as a comparison baseline) — unlike importWays, this DOES create
@@ -1464,7 +1466,7 @@ export function createEditorStore() {
         state.namedWays,
         state.nodes,
       );
-      const { ways, nodes, namedWays } = network;
+      const { ways, nodes, namedWays, medians } = network;
       const additionsById = new Map(identityAdditions.map((a) => [a.id, a.wayIds]));
       const armsById = new Map(junctionAdditions.map((a) => [a.id, a.refs]));
       set((s) => ({
@@ -1489,6 +1491,9 @@ export function createEditorStore() {
             }),
             ...namedWays,
           ],
+          // A carriageway pair arrives with the median it is separated by, so
+          // Combine restores the real gap rather than a generic default.
+          medians: medians.reduce((acc, m) => withComponent(acc, m.id, m.median), s.system.medians),
         }),
       }));
       return { added: ways.length, skipped: duplicateWays };

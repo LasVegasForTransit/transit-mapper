@@ -1032,6 +1032,7 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
     ],
     nodes: [],
     namedWays: [],
+    medians: [],
   });
   issues = validateSystem(store.getState().system);
   check("flags two ways that cross without joining", issues.some((i) => i.id.startsWith("crossing-")));
@@ -1645,6 +1646,65 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("the store reports added/skipped", second.added === 0 && second.skipped === 2);
 }
 
+// --- P4: OSM import pairs the carriageways of a divided street ---
+{
+  // Two one-way ways, same name, running opposite ways about 22 m apart.
+  const divided: OsmWayElement[] = [
+    { type: "way", id: 1, tags: { highway: "primary", name: "Grand Boulevard", oneway: "yes", lanes: "2" }, nodes: [10, 11], geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.1 }] },
+    { type: "way", id: 2, tags: { highway: "primary", name: "Grand Boulevard", oneway: "yes", lanes: "2" }, nodes: [20, 21], geometry: [{ lat: 36.1002, lon: -115.1 }, { lat: 36.1002, lon: -115.2 }] },
+  ];
+  const net = osmElementsToNetwork(divided);
+  check("a divided street pairs into one identity", net.namedWays.length === 1);
+  check("the pair has exactly the two carriageways", net.namedWays[0].wayIds.length === 2);
+  check("which is the shape the combine tool needs", net.namedWays[0].name === "Grand Boulevard");
+  check("and the median between them is captured", net.medians.length === 1 && net.medians[0].id === net.namedWays[0].id);
+  check("the captured median has a positive width", net.medians[0].median.widthM > 0);
+
+  // Same street, same direction: not a carriageway pair.
+  const sameWay: OsmWayElement[] = [
+    divided[0],
+    { type: "way", id: 2, tags: { highway: "primary", name: "Grand Boulevard", oneway: "yes", lanes: "2" }, nodes: [20, 21], geometry: [{ lat: 36.1002, lon: -115.2 }, { lat: 36.1002, lon: -115.1 }] },
+  ];
+  const parallelSame = osmElementsToNetwork(sameWay);
+  check("two same-direction one-ways are not a carriageway pair", parallelSame.medians.length === 0);
+  check("they keep the ordinary whole-street identity", parallelSame.namedWays.length === 1 && parallelSame.namedWays[0].wayIds.length === 2);
+
+  // Too far apart to be one street's carriageways.
+  const farApart: OsmWayElement[] = [
+    divided[0],
+    { type: "way", id: 2, tags: { highway: "primary", name: "Grand Boulevard", oneway: "yes", lanes: "2" }, nodes: [20, 21], geometry: [{ lat: 36.11, lon: -115.1 }, { lat: 36.11, lon: -115.2 }] },
+  ];
+  check("opposite one-ways a block apart are not paired", osmElementsToNetwork(farApart).medians.length === 0);
+
+  // Two-way streets are never carriageways.
+  const twoWay: OsmWayElement[] = [
+    { type: "way", id: 1, tags: { highway: "primary", name: "Plain Street", lanes: "2" }, nodes: [10, 11], geometry: [{ lat: 36.2, lon: -115.2 }, { lat: 36.2, lon: -115.1 }] },
+    { type: "way", id: 2, tags: { highway: "primary", name: "Plain Street", lanes: "2" }, nodes: [20, 21], geometry: [{ lat: 36.2002, lon: -115.1 }, { lat: 36.2002, lon: -115.2 }] },
+  ];
+  check("two-way ways are never paired as carriageways", osmElementsToNetwork(twoWay).medians.length === 0);
+
+  // A frontage road alongside the pair must not steal a carriageway: pairing
+  // is mutual-best-match, so the two true carriageways choose each other.
+  const withFrontage: OsmWayElement[] = [
+    ...divided,
+    { type: "way", id: 3, tags: { highway: "service", name: "Grand Boulevard", oneway: "yes", lanes: "1" }, nodes: [30, 31], geometry: [{ lat: 36.1004, lon: -115.2 }, { lat: 36.1004, lon: -115.1 }] },
+  ];
+  const fronted = osmElementsToNetwork(withFrontage);
+  check("a frontage road does not break the true pair", fronted.namedWays.some((n) => n.wayIds.length === 2));
+
+  // End to end: the store gets a two-member identity with its median, which
+  // is exactly what the Combine affordance requires.
+  fresh();
+  store.getState().importWays(osmElementsToNetwork(divided));
+  const nw = store.getState().system.namedWays[0];
+  check("the store receives a two-carriageway identity", nw.wayIds.length === 2);
+  check("with its median stored against it", getComponent(store.getState().system.medians, nw.id) !== undefined);
+  store.getState().combineCarriageways(nw.id);
+  const after = store.getState().system;
+  check("so the divided street combines into one two-way street", after.ways.length === 1);
+  check("carrying a median lane from the captured gap", after.ways[0].profile.lanes.some((l) => l.kindId === "median"));
+}
+
 // --- P4: OSM import derives junctions from node identity, not coordinates ---
 {
   // Two streets crossing at OSM node 500, which is each way's middle point.
@@ -1764,6 +1824,7 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
     ways: imported,
     nodes: [{ id: "osm-j", coord: [-115.1, 36.1], refs: [{ wayId: "osm-a", pointIndex: 1 }, { wayId: "osm-b", pointIndex: 0 }] }],
     namedWays: [{ id: "osm-n", name: "Imported Avenue", wayIds: ["osm-a", "osm-b"] }],
+    medians: [],
   });
   check("importWays appends the way", store.getState().system.ways.some((w) => w.id === "osm-a"));
   check("importWays creates no service for it (bare infrastructure)", store.getState().system.services.length === 0);
@@ -1788,14 +1849,14 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
     { id: "surface", typeId: "road", points: [[-115.2, 36.1], [-115.1, 36.1]], geometry: "straight", grade: "atGrade", profile: defaultProfileFor("road") },
     { id: "bridge", typeId: "road", points: [[-115.15, 36.05], [-115.15, 36.15]], geometry: "straight", grade: "elevated", profile: defaultProfileFor("road") },
   ];
-  store.getState().importWays({ ways: overpass, nodes: [], namedWays: [] });
+  store.getState().importWays({ ways: overpass, nodes: [], namedWays: [], medians: [] });
   check(
     "an elevated way crossing a surface street is not flagged",
     !validateSystem(store.getState().system).some((i) => i.id.startsWith("crossing-")),
   );
 
   fresh();
-  store.getState().importWays({ ways: overpass.map((w) => ({ ...w, grade: "atGrade" as const })), nodes: [], namedWays: [] });
+  store.getState().importWays({ ways: overpass.map((w) => ({ ...w, grade: "atGrade" as const })), nodes: [], namedWays: [], medians: [] });
   check(
     "the same two ways at one grade are still flagged",
     validateSystem(store.getState().system).some((i) => i.id.startsWith("crossing-")),
