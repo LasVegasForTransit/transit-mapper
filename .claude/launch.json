@@ -16,7 +16,15 @@
     {
       "name": "transitmapper-preview",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@transitmapper/web", "run", "preview", "--port", "4173", "--strictPort"],
+      "runtimeArgs": [
+        "--filter",
+        "@transitmapper/web",
+        "run",
+        "preview",
+        "--port",
+        "4173",
+        "--strictPort"
+      ],
       "port": 4173
     }
   ]

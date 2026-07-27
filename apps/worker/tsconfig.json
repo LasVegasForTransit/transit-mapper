@@ -1,17 +1,7 @@
 {
+  "extends": "@transitmapper/tsconfig/base.json",
   "compilerOptions": {
-    "target": "ES2022",
     "lib": ["ES2022"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "skipLibCheck": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "moduleDetection": "force",
-    "noEmit": true,
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
     // vitest-pool-workers/types declares the `cloudflare:test` module the
     // workerd tests import.
     "types": ["@cloudflare/workers-types", "@cloudflare/vitest-pool-workers/types"]

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from "react";
-import { useRegisterSW } from "virtual:pwa-register/react";
+import { useCallback, useEffect, useRef } from 'react';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 
 // How often an already-registered tab checks for a new deploy. Workbox's own
 // update check only fires on navigation/reload, which a long-lived app tab
@@ -42,11 +42,11 @@ export function useAppUpdate(flushPendingSave: () => void): AppUpdate {
       updateInterval.current = window.setInterval(() => {
         // Skip a hidden tab's check — nothing productive can come of racing
         // a reload prompt against a tab nobody is looking at right now.
-        if (document.visibilityState === "visible") void registration.update();
+        if (document.visibilityState === 'visible') void registration.update();
       }, UPDATE_CHECK_INTERVAL_MS);
     },
     onRegisterError(error) {
-      console.error("[transitmapper] service worker registration failed", error);
+      console.error('[transitmapper] service worker registration failed', error);
     },
   });
 

@@ -14,10 +14,37 @@
  * instead of by coincidence.
  */
 import { execFileSync } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
+
+const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
+
+/**
+ * Whether a package ships code at all.
+ *
+ * A package of pure configuration — `packages/tsconfig` holds only JSON — has
+ * nothing to lint, typecheck, or run. Demanding the three scripts anyway gets
+ * answered with three scripts that do nothing, and the reasoning that keeps
+ * `build` off the required list applies unchanged: a task written to satisfy
+ * a check is a lie, and the next reader cannot tell it from a real one.
+ *
+ * Detected rather than declared. A field in package.json saying "the contract
+ * does not apply to me" would be reached for by any package that found the
+ * contract inconvenient; adding one source file here re-imposes it with no
+ * decision required.
+ */
+async function shipsCode(path: string): Promise<boolean> {
+  const entries = await readdir(resolve(ROOT, path), { recursive: true, withFileTypes: true });
+  return entries.some(
+    (e) =>
+      e.isFile() &&
+      !e.parentPath.includes('node_modules') &&
+      !e.parentPath.includes('dist') &&
+      SOURCE_EXTENSIONS.some((ext) => e.name.endsWith(ext)),
+  );
+}
 
 /**
  * Tasks every package must define. `build` is deliberately absent: a
@@ -92,7 +119,7 @@ async function main(): Promise<void> {
   }
 
   for (const { name, path, manifest } of manifests) {
-    if (path !== '.') {
+    if (path !== '.' && (await shipsCode(path))) {
       const scripts = manifest.scripts ?? {};
       for (const task of REQUIRED_TASKS) {
         if (!scripts[task]) {
