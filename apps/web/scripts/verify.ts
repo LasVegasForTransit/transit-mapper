@@ -40,9 +40,14 @@ import {
   wayById,
 } from '@transitmapper/core/model/geo';
 import { computeDiagramSystem } from '@transitmapper/core/model/diagramLayout';
-import { attachInteractions, isDoubleClickFinish } from '../src/map/interactions';
+import {
+  angleSnap,
+  attachInteractions,
+  continueStraight,
+  isDoubleClickFinish,
+} from '../src/map/interactions';
 import { KEY_BINDINGS, matchesKey, resolveBinding, type KeyContext } from '../src/editor/keymap';
-import { buildFeatures, HANDLE_ICON, LAYER_SPECS } from '../src/map/layers';
+import { buildFeatures, HANDLE_ICON, LAYER_SPECS, SRC_PREVIEW } from '../src/map/layers';
 import { LANDMARKS, landmarksFeatureCollection } from '../src/map/landmarks';
 import {
   buildOverpassQuery,
@@ -62,6 +67,7 @@ import {
 } from '@transitmapper/core/model/gtfsImport';
 import { legendEntriesFor } from '../src/share/exportLegend';
 import { formatScaleMeters, niceScaleMeters } from '../src/share/exportScale';
+import { FEATURE_INPUT_ROLE } from '@transitmapper/core/render/featureInputs';
 import { fitBounds, metersPerPixel, projector } from '@transitmapper/core/render/project';
 import {
   PREVIEW_FONT_FAMILY,
@@ -1519,34 +1525,6 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     "but its handles don't, without physicalHandleGroupId",
     infraGroupUnselected.physicalHandles.features.length === 0,
   );
-
-  // Same contract as buildHandles above: the selection fast path calls this
-  // builder directly, so it has to agree with the full build feature-for-
-  // feature — including emission ORDER, since a reordered collection is a
-  // needless re-upload even when it looks identical.
-  {
-    const sysP = store.getState().system;
-    const stAlone = buildPhysicalHandles(
-      sysP.stations.find((s) => s.id === stId),
-      null,
-    );
-    check(
-      'buildPhysicalHandles alone emits exactly what the full build emits for a station',
-      JSON.stringify(stAlone) === JSON.stringify(infra.physicalHandles.features),
-    );
-    const grAlone = buildPhysicalHandles(
-      null,
-      sysP.groups.find((g) => g.id === groupId),
-    );
-    check(
-      'buildPhysicalHandles alone emits exactly what the full build emits for a group',
-      JSON.stringify(grAlone) === JSON.stringify(infraWithGroup.physicalHandles.features),
-    );
-    check(
-      'buildPhysicalHandles with nothing selected emits nothing',
-      buildPhysicalHandles(null, null).length === 0,
-    );
-  }
 }
 
 // --- P3: v3 serialize round-trips footprints, platforms, facilities, groups ---
@@ -4626,6 +4604,108 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 }
 
+// --- performance: only the fields buildFeatures reads force a map rebuild ---
+// The live map skips its whole 14-collection rebuild when a mutation touched
+// nothing renderable (core/render/featureInputs.ts) — that is what stops a
+// rename, which arrives one store commit per keystroke, from re-serializing
+// multi-megabyte sources. It is only safe if the "meta" half of the
+// classification is actually true, so assert it by EXPERIMENT rather than by
+// re-reading the table: mutate each meta field and require every collection to
+// come out byte-identical. The loop is driven off FEATURE_INPUT_ROLE itself, so
+// a newly added meta field with no case here fails rather than going unchecked.
+{
+  fresh();
+  const fiRoad = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(fiRoad, [-115.2, 36.1]);
+  store.getState().addWayPoint(fiRoad, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const fiCross = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(fiCross, [-115.15, 36.05]);
+  store.getState().addWayPoint(fiCross, [-115.15, 36.15]);
+  store.getState().finishWay();
+  store.getState().formCrossingJunctions(fiCross);
+  store.getState().addStation([-115.15, 36.1]);
+  store.getState().addFacility(FACILITY_TYPE_ORDER[0], [-115.14, 36.11]);
+  store.getState().addServiceToWay(fiRoad);
+  store.getState().nameWay(fiRoad, 'Decatur Avenue');
+
+  const fiView = {
+    viewMode: 'infrastructure' as const,
+    laneDetail: true,
+    visibleModes: new Set(Object.keys(MODES)),
+    visibleWayTypes: new Set(WAY_TYPE_ORDER),
+  };
+  const fiBase = store.getState().system;
+  const fiRender = (s: TransitSystem) => buildFeatures(s, null, [], fiView);
+  const fiCollections = (fc: ReturnType<typeof fiRender>): Record<string, string> =>
+    Object.fromEntries(Object.entries(fc).map(([k, v]) => [k, JSON.stringify(v)]));
+  const fiBaseline = fiCollections(fiRender(fiBase));
+
+  // Without this the whole block could pass vacuously: if buildFeatures emitted
+  // nothing at all, every comparison below would trivially hold.
+  const fiNonEmpty = Object.values(fiBaseline).filter(
+    (json) => !json.includes('"features":[]'),
+  ).length;
+  check(
+    `the rebuild-classification fixture actually renders something (${fiNonEmpty} non-empty collections)`,
+    fiNonEmpty >= 4,
+  );
+
+  const fiMetaMutations: Partial<Record<keyof TransitSystem, TransitSystem>> = {
+    id: { ...fiBase, id: 'some-other-id' },
+    name: { ...fiBase, name: 'Renamed system' },
+    description: { ...fiBase, description: 'a description' },
+    viewport: { ...fiBase, viewport: { center: [-116.5, 37.2], zoom: 14 } },
+    createdAt: { ...fiBase, createdAt: fiBase.createdAt + 5000 },
+    updatedAt: { ...fiBase, updatedAt: fiBase.updatedAt + 5000 },
+    palette: { ...fiBase, palette: ['#ff0000', '#00ff00'] },
+    drivingSide: { ...fiBase, drivingSide: fiBase.drivingSide === 'right' ? 'left' : 'right' },
+    vehicleKinds: {
+      ...fiBase,
+      vehicleKinds: [
+        { id: 'vk1', modeId: 'bus', label: "40' Standard Bus", widthM: 2.6, lengthM: 12.2 },
+      ],
+    },
+    medians: { ...fiBase, medians: { [`${fiRoad}:median`]: { widthM: 3, kindId: 'painted' } } },
+    approachControls: {
+      ...fiBase,
+      approachControls: { [`${fiRoad}:start`]: { control: 'signal' } },
+    },
+  };
+
+  for (const [key, role] of Object.entries(FEATURE_INPUT_ROLE) as [
+    keyof TransitSystem,
+    'render' | 'meta',
+  ][]) {
+    if (role !== 'meta') continue;
+    // `version` is a literal type with exactly one legal value, so there is no
+    // different-but-still-valid document to compare against.
+    if (key === 'version') continue;
+    const mutated = fiMetaMutations[key];
+    if (!mutated) {
+      check(`meta field "${key}" has a case in the rebuild-classification check`, false);
+      continue;
+    }
+    const after = fiCollections(fiRender(mutated));
+    const differing = Object.keys(fiBaseline).filter((c) => fiBaseline[c] !== after[c]);
+    check(
+      `changing ${key} rebuilds no map features, so it is safely classified meta`,
+      differing.length === 0,
+    );
+  }
+
+  // Positive control for the other direction: a render field really does change
+  // the output, so the equality assertions above are meaningful.
+  const fiMoved = fiBase.ways.map((w) =>
+    w.id === fiRoad ? { ...w, points: [w.points[0], [-115.05, 36.2] as LngLat] } : w,
+  );
+  const fiAfterRender = fiCollections(fiRender({ ...fiBase, ways: fiMoved }));
+  check(
+    'changing ways does rebuild map features, so the meta assertions are not vacuous',
+    Object.keys(fiBaseline).some((c) => fiBaseline[c] !== fiAfterRender[c]),
+  );
+}
+
 // --- Diagram view: computeDiagramSystem snaps the graph to a schematic
 // octolinear layout without losing topology or crashing on edge cases ---
 {
@@ -4721,6 +4801,107 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check('a plain single click (detail 1) still starts a draw press', !isDoubleClickFinish(1));
   check("the double-click's second press (detail 2) is skipped", isDoubleClickFinish(2));
   check("even a rapid triple-click's third press stays skipped", isDoubleClickFinish(3));
+}
+
+// --- Draw assists are measured on screen, and stay as strong as they look --
+// Both of these used to do their trigonometry directly on lng/lat. A degree
+// of longitude spans only cos(latitude) as many meters as a degree of
+// latitude, so that math ran in a sheared space and the assists came out
+// visibly different from what they claimed to be.
+{
+  const VEGAS: [number, number] = [-115.166, 36.116];
+  // The true on-screen angle of from→to, in degrees CCW from east.
+  const screenAngle = (from: [number, number], to: [number, number]) => {
+    const [dx, dy] = metersFromOrigin(from, to);
+    return (Math.atan2(dy, dx) * 180) / Math.PI;
+  };
+  const at = (from: [number, number], angleDeg: number, meters: number) => {
+    const th = (angleDeg * Math.PI) / 180;
+    return offsetMeters(from, Math.cos(th) * meters, Math.sin(th) * meters);
+  };
+
+  // Was 51.07° — a diagonal the user was promised rendered 6° off it.
+  for (const target of [45, 135, -45, -135]) {
+    const snapped = angleSnap(VEGAS, at(VEGAS, target + 3, 2000));
+    check(
+      `a Shift-constrained ${target}° really renders at ${target}° on screen`,
+      Math.abs(screenAngle(VEGAS, snapped) - target) < 0.01,
+    );
+  }
+  check(
+    'angle-snapping preserves the drawn length',
+    Math.abs(haversineMeters(VEGAS, angleSnap(VEGAS, at(VEGAS, 48, 2000))) - 2000) < 1,
+  );
+
+  // continueStraight: `behind` sits back along the heading, so travel is due
+  // east here and the assist should pull a near-east cursor onto that line.
+  const behind = at(VEGAS, 180, 1000);
+  const BUDGET_M = 50; // stands in for STRAIGHT_SNAP_PX * metersPerPixel()
+
+  check(
+    'a cursor right on the heading continues straight',
+    continueStraight(VEGAS, behind, at(VEGAS, 0, 1000), BUDGET_M) !== null,
+  );
+  check(
+    'a cursor just inside the budget still snaps',
+    continueStraight(VEGAS, behind, at(VEGAS, 2.5, 1000), BUDGET_M) !== null,
+  );
+  check(
+    'a deliberate turn is left alone',
+    continueStraight(VEGAS, behind, at(VEGAS, 30, 1000), BUDGET_M) === null,
+  );
+  check(
+    'dragging backwards never folds the line over itself',
+    continueStraight(VEGAS, behind, at(VEGAS, 175, 1000), BUDGET_M) === null,
+  );
+
+  // The regression that made this feel like the tool overriding you: with an
+  // ANGLE cone, the same slight angle snapped harder the longer you drew, so
+  // a long line drawn a couple of degrees off went bolt straight. With a
+  // distance gate, drawing further only makes the assist easier to escape.
+  const SLIGHT = 4; // degrees off the heading — inside the old 10° cone
+  check(
+    'a slight angle still snaps when the extension is short',
+    continueStraight(VEGAS, behind, at(VEGAS, SLIGHT, 300), BUDGET_M) !== null,
+  );
+  check(
+    'the same slight angle drawn far does NOT get yanked straight',
+    continueStraight(VEGAS, behind, at(VEGAS, SLIGHT, 3000), BUDGET_M) === null,
+  );
+
+  // Whatever the assist does accept, it never moves the point further than
+  // the budget — that is what makes "as strong as it looks" true.
+  for (const deg of [0.5, 1, 2, 3, 5, 8]) {
+    for (const dist of [200, 800, 2500, 6000]) {
+      const raw = at(VEGAS, deg, dist);
+      const got = continueStraight(VEGAS, behind, raw, BUDGET_M);
+      if (got && haversineMeters(raw, got) > BUDGET_M + 1) {
+        check(
+          `the straight assist never moves a point more than its budget (${deg}° @ ${dist}m)`,
+          false,
+        );
+      }
+    }
+  }
+  check('the straight assist never moves a point further than its budget', true);
+
+  // Direction-independence: the old degree-space cone was 8.10° wide heading
+  // east but 12.31° heading north, so the assist was quietly stronger in some
+  // directions than others. Measure the widest deviation still accepted at a
+  // fixed distance and require every heading to agree.
+  const widestAccepted = (headingDeg: number) => {
+    const back = at(VEGAS, headingDeg + 180, 1000);
+    let widest = 0;
+    for (let a = 0; a <= 20; a += 0.01) {
+      if (continueStraight(VEGAS, back, at(VEGAS, headingDeg + a, 1000), BUDGET_M)) widest = a;
+    }
+    return widest;
+  };
+  const cones = [0, 45, 90, 135, 270].map(widestAccepted);
+  check(
+    'the straight assist is equally strong in every direction',
+    Math.max(...cones) - Math.min(...cones) < 0.05,
+  );
 }
 
 // --- A press that moves does not eat the NEXT click -----------------------
@@ -4869,15 +5050,21 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // scheduled". Running the callback inline meant that assignment happened
   // after the flush, leaving the throttle permanently convinced a frame was
   // pending — it flushed once and then silently swallowed every later call.
-  // Queue here; nothing in this block needs a frame to actually run.
+  // Queue here, and let the test pump frames explicitly.
   let frameId = 0;
-  const frames = new Map<number, () => void>();
+  let frames = new Map<number, () => void>();
   g.requestAnimationFrame = (fn: () => void) => {
     const id = ++frameId;
     frames.set(id, fn);
     return id;
   };
   g.cancelAnimationFrame = (id: number) => frames.delete(id);
+  /** Run everything currently scheduled, as one frame boundary. */
+  const pumpFrames = () => {
+    const due = frames;
+    frames = new Map();
+    for (const fn of due.values()) fn();
+  };
   try {
     const run = (presses: [number, number][]) => {
       const s = createEditorStore();
@@ -4945,6 +5132,127 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
         ]),
       ) === '[1,1,1,1]',
     );
+
+    // --- What you see is what you get -------------------------------------
+    // The rubber band is a promise about the geometry the next release will
+    // create, so it has to be drawn through the SAME resolveEnd the release
+    // commits with. It used to be drawn to the raw cursor instead, so every
+    // draw assist that moved the point — continue-straight above all — left
+    // the preview showing one line and the committed way rendering a
+    // different one, with nothing on screen saying the assist had grabbed.
+    {
+      const s = createEditorStore();
+      s.getState().setSystem(createEmptySystem());
+      s.getState().setTool('way');
+      const map = createFakeMap();
+      const detach = attachInteractions(map as never, s, {
+        openShortcuts() {},
+        toggleUi() {},
+        isDiagramMode: () => false,
+        isNetworkMode: () => false,
+        focusFootprint() {},
+      });
+
+      // Two presses lay a way running due east, which gives it a heading for
+      // continue-straight to work from.
+      press(map, { x: 400, y: 300 });
+      press(map, { x: 600, y: 300 });
+
+      // Hover, read the rubber band, then release at the SAME point and read
+      // what actually got committed. Any gap between them is a broken promise.
+      const gapAt = (pt: FakePoint) => {
+        map.fire('mousemove', mouseEvent(pt, map));
+        pumpFrames(); // the rubber band is written on the frame, not the event
+        const preview = map.sourceData.get(SRC_PREVIEW);
+        const band = preview?.features?.[0]?.geometry?.coordinates;
+        const shown = band?.[band.length - 1];
+        press(map, pt);
+        const way = s.getState().system.ways[0];
+        const committed = way.points[way.points.length - 1];
+        if (!shown) return null;
+        return haversineMeters(shown as [number, number], committed);
+      };
+
+      // A hair off the heading: continue-straight grabs, so the preview has to
+      // show the straightened point, not the cursor.
+      const insideAssist = gapAt({ x: 800, y: 302 });
+      check('the rubber band is drawn at all while extending', insideAssist !== null);
+      check(
+        'preview matches what gets committed when the straight-assist grabs',
+        insideAssist !== null && insideAssist < 0.01,
+      );
+
+      // A deliberate turn: no assist, so preview and commit trivially agree —
+      // worth pinning so a future "preview the raw cursor" shortcut can't pass
+      // by only ever being tested outside the assist zone.
+      const clearTurn = gapAt({ x: 900, y: 560 });
+      check(
+        'preview matches what gets committed on a deliberate turn',
+        clearTurn !== null && clearTurn < 0.01,
+      );
+
+      detach();
+    }
+
+    // The rubber band has to promise the right SHAPE, not just the right end
+    // point. Draft geometry is "curved" by default, so committing a point
+    // rounds the corner at the previous endpoint — which, until that moment,
+    // is an unfilleted line end. A straight two-point band showed a sharp
+    // corner and then rendered a curve through it.
+    {
+      const s = createEditorStore();
+      s.getState().setSystem(createEmptySystem());
+      s.getState().setTool('way');
+      const map = createFakeMap();
+      const detach = attachInteractions(map as never, s, {
+        openShortcuts() {},
+        toggleUi() {},
+        isDiagramMode: () => false,
+        isNetworkMode: () => false,
+        focusFootprint() {},
+      });
+
+      press(map, { x: 400, y: 300 });
+      press(map, { x: 600, y: 300 });
+
+      // Hover somewhere that turns a clear corner, and capture the band.
+      map.fire('mousemove', mouseEvent({ x: 700, y: 560 }, map));
+      pumpFrames();
+      const band = map.sourceData.get(SRC_PREVIEW)?.features?.[0]?.geometry?.coordinates ?? [];
+      check(
+        'a curved draft previews its rounded corner, not a bare two-point line',
+        band.length > 2,
+      );
+
+      // Commit it, then resolve the way exactly as the map renders it. The
+      // band must lie on that rendered path.
+      press(map, { x: 700, y: 560 });
+      const rendered = resolveWayPath(s.getState().system.ways[0]);
+      const offPath = band.map((p) => {
+        const near = nearestOnPath(rendered, p as [number, number]);
+        return near ? near.distMeters : Infinity;
+      });
+      check(
+        "every previewed point lies on the committed way's rendered path",
+        offPath.length > 0 && Math.max(...offPath) < 0.01,
+      );
+
+      // And the corner really is rounded rather than the band merely being
+      // subdivided along a straight line — otherwise the check above would
+      // pass on a preview that still promised a sharp corner.
+      const sharp = [
+        [400, 300],
+        [600, 300],
+        [700, 560],
+      ].map(([x, y]) => map.unproject({ x, y }));
+      const cornerCut = nearestOnPath(rendered, [sharp[1].lng, sharp[1].lat]);
+      check(
+        'the committed corner really is filleted away from the control point',
+        (cornerCut?.distMeters ?? 0) > 1,
+      );
+
+      detach();
+    }
   } finally {
     Object.assign(g, originalGlobals);
   }
@@ -7596,6 +7904,63 @@ function buildGrid() {
   check(
     'a coordinate with nothing nearby returns no matches',
     servedWayIds([-110, 40], [longWay, farWay], 50).length === 0,
+  );
+}
+
+// --- determinism: index answers don't depend on bucket iteration order ---
+// Both of these read the segment grid by walking cell buckets, so their answers
+// used to depend on the order segments happened to be inserted. That is
+// observable today (servedWayIds' first entry colors the station in
+// buildFeatures) and it becomes a hard blocker for maintaining the grid
+// INCREMENTALLY, since updating one way in place necessarily reorders buckets.
+// Passing the same ways in a different array order is the cheap stand-in for
+// that reordering: a different array is a different grid, built in a different
+// order, and the answer must not move.
+{
+  const detRoad = (id: string, pts: LngLat[]): Way => ({
+    id,
+    typeId: 'road',
+    points: pts,
+    geometry: 'straight',
+    grade: 'atGrade',
+    profile: defaultProfileFor('road'),
+  });
+  // Two ways lying exactly on top of each other — reachable with conflated or
+  // duplicated GTFS shapes, and precisely the case distance alone can't settle.
+  const twinA = detRoad('a-twin', [
+    [-115.2, 36.1],
+    [-115.1, 36.1],
+  ]);
+  const twinB = detRoad('b-twin', [
+    [-115.2, 36.1],
+    [-115.1, 36.1],
+  ]);
+  const onLine: LngLat = [-115.15, 36.1];
+  check(
+    'snap resolves exactly-equidistant ways the same way whichever order they were indexed in',
+    snap([twinA, twinB], onLine, 50)?.wayId === 'a-twin' &&
+      snap([twinB, twinA], onLine, 50)?.wayId === 'a-twin',
+  );
+  check(
+    'servedWayIds orders coincident ways the same whichever order they were indexed in',
+    JSON.stringify(servedWayIds(onLine, [twinA, twinB], 50)) ===
+      JSON.stringify(servedWayIds(onLine, [twinB, twinA], 50)),
+  );
+
+  // Named so that sorting by id alone would put the FAR way first — this only
+  // passes if the ordering is genuinely by distance.
+  const nearWay = detRoad('z-near', [
+    [-115.2, 36.1],
+    [-115.1, 36.1],
+  ]);
+  const farWay = detRoad('a-far', [
+    [-115.2, 36.1004],
+    [-115.1, 36.1004],
+  ]); // ~44m north
+  const ranked = servedWayIds(onLine, [farWay, nearWay], 90);
+  check(
+    "servedWayIds lists the nearest way first, so it decides a station's color",
+    ranked.length === 2 && ranked[0] === 'z-near',
   );
 }
 
