@@ -161,6 +161,85 @@ function closeRing(points: LngLat[]): LngLat[] {
   return first[0] === last[0] && first[1] === last[1] ? points : [...points, first];
 }
 
+/** Draggable control points for the ways currently showing handles.
+ *
+ *  Split out of buildFeatures because it is the ONLY thing (with
+ *  buildPhysicalHandles) that a selection change actually alters. Selecting an
+ *  object used to run the entire fourteen-collection build — allocating a
+ *  feature and a Set for all ~3,787 stations at RTC scale — and then throw
+ *  twelve of the collections away. Its inputs are exactly its parameters, so a
+ *  caller can drive it directly and pay only for what changed.
+ *
+ *  A way's first/last control point is marked `endpoint`: it renders and
+ *  behaves differently from an interior reshape handle (see LYR_WAY_ENDPOINTS)
+ *  — dragging it extends the way with a new point instead of moving it. */
+export function buildHandles(
+  waysById: Map<string, TransitSystem['ways'][number]>,
+  handleWayIds: string[],
+): Feature<Point>[] {
+  const handles: Feature<Point>[] = [];
+  for (const wid of handleWayIds) {
+    const way = waysById.get(wid);
+    way?.points.forEach((p, i) => {
+      const endpoint = i === 0 || i === way.points.length - 1;
+      handles.push({
+        type: 'Feature',
+        properties: { wayId: wid, index: i, endpoint, icon: HANDLE_ICON },
+        geometry: { type: 'Point', coordinates: p },
+      });
+    });
+  }
+  return handles;
+}
+
+/** Footprint/platform vertices of the one station and/or group being edited.
+ *
+ *  Takes the RESOLVED records rather than their ids on purpose: a footprint
+ *  drag changes the geometry while the id stays put, so anything keyed on the
+ *  id alone would serve a stale shape — the exact failure a memo layer must not
+ *  have. Resolving also makes this O(1) in the number of stations, where the
+ *  inline version scanned every station to find the one match. */
+export function buildPhysicalHandles(
+  station: TransitSystem['stations'][number] | null | undefined,
+  group: TransitSystem['groups'][number] | null | undefined,
+): Feature<Point>[] {
+  const physicalHandles: Feature<Point>[] = [];
+  if (station) {
+    station.footprint?.forEach((p, i) => {
+      physicalHandles.push({
+        type: 'Feature',
+        properties: { kind: 'footprint', stationId: station.id, index: i, icon: HANDLE_ICON },
+        geometry: { type: 'Point', coordinates: p },
+      });
+    });
+    for (const pf of station.platforms ?? []) {
+      pf.points.forEach((p, i) => {
+        physicalHandles.push({
+          type: 'Feature',
+          properties: {
+            kind: 'platform',
+            stationId: station.id,
+            platformId: pf.id,
+            index: i,
+            icon: HANDLE_ICON,
+          },
+          geometry: { type: 'Point', coordinates: p },
+        });
+      });
+    }
+  }
+  if (group) {
+    group.footprint?.forEach((p, i) => {
+      physicalHandles.push({
+        type: 'Feature',
+        properties: { kind: 'groupFootprint', groupId: group.id, index: i, icon: HANDLE_ICON },
+        geometry: { type: 'Point', coordinates: p },
+      });
+    });
+  }
+  return physicalHandles;
+}
+
 export interface ViewOptions {
   /** Network = stylized, service-focused, grade hidden. Infrastructure =
    *  physical, catalog-styled, grade shown (real cross-sections are P2).
@@ -537,27 +616,13 @@ export function buildFeatures(
     };
   });
 
-  // A way's first/last control point is marked `endpoint` — it renders and
-  // behaves differently from an interior reshape handle (see LYR_WAY_ENDPOINTS):
-  // dragging it extends the way with a new point instead of moving it in place.
-  const handles: Feature<Point>[] = [];
-  for (const wid of handleWayIds) {
-    const way = waysById.get(wid);
-    way?.points.forEach((p, i) => {
-      const endpoint = i === 0 || i === way.points.length - 1;
-      handles.push({
-        type: 'Feature',
-        properties: { wayId: wid, index: i, endpoint, icon: HANDLE_ICON },
-        geometry: { type: 'Point', coordinates: p },
-      });
-    });
-  }
+  const handles = buildHandles(waysById, handleWayIds);
 
   // Physical planning detail (footprints, platforms, facilities) belongs to
   // the Infrastructure view — Network stays the clean schematic map.
   const footprints: Feature<Polygon>[] = [];
   const platforms: Feature<Polygon>[] = [];
-  const physicalHandles: Feature<Point>[] = [];
+  let physicalHandles: Feature<Point>[] = [];
   if (!network) {
     for (const st of system.stations) {
       if (st.footprint) {
@@ -574,30 +639,6 @@ export function buildFeatures(
           geometry: { type: 'Polygon', coordinates: [closeRing(pf.points)] },
         });
       }
-      if (st.id === physicalHandleStationId) {
-        st.footprint?.forEach((p, i) => {
-          physicalHandles.push({
-            type: 'Feature',
-            properties: { kind: 'footprint', stationId: st.id, index: i, icon: HANDLE_ICON },
-            geometry: { type: 'Point', coordinates: p },
-          });
-        });
-        for (const pf of st.platforms ?? []) {
-          pf.points.forEach((p, i) => {
-            physicalHandles.push({
-              type: 'Feature',
-              properties: {
-                kind: 'platform',
-                stationId: st.id,
-                platformId: pf.id,
-                index: i,
-                icon: HANDLE_ICON,
-              },
-              geometry: { type: 'Point', coordinates: p },
-            });
-          });
-        }
-      }
     }
 
     // Group footprints (facility complexes) share the same footprint
@@ -612,16 +653,17 @@ export function buildFeatures(
           geometry: { type: 'Polygon', coordinates: [closeRing(g.footprint)] },
         });
       }
-      if (g.id === physicalHandleGroupId) {
-        g.footprint?.forEach((p, i) => {
-          physicalHandles.push({
-            type: 'Feature',
-            properties: { kind: 'groupFootprint', groupId: g.id, index: i, icon: HANDLE_ICON },
-            geometry: { type: 'Point', coordinates: p },
-          });
-        });
-      }
     }
+
+    // Resolved here rather than inside the loops above: the emission order is
+    // station handles then group handles either way, and looking the two
+    // records up directly keeps this independent of how many stations exist.
+    physicalHandles = buildPhysicalHandles(
+      physicalHandleStationId
+        ? system.stations.find((s) => s.id === physicalHandleStationId)
+        : null,
+      physicalHandleGroupId ? system.groups.find((g) => g.id === physicalHandleGroupId) : null,
+    );
   }
 
   // NamedWay (street/line/trail) name labels along every member way — the

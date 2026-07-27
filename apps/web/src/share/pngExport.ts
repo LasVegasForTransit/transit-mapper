@@ -3,6 +3,7 @@ import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { ViewOptions } from '../map/layers';
 import { getMap } from '../map/mapRef';
 import { renderSystemForExport } from '../map/export/exportRenderer';
+import { singleFlight } from './singleFlight';
 import { legendEntriesFor, type LegendEntry } from './exportLegend';
 import { scaleBarSpec } from './exportScale';
 
@@ -161,15 +162,24 @@ export function exportFullSystemPng(
   view: ViewOptions,
   filename = 'transit-system.png',
 ): void {
-  // Match the live map's aspect when we can, so the framing feels familiar.
-  const live = getMap();
-  const container = live?.getContainer();
-  const size =
-    container && container.clientWidth > 0
-      ? { width: container.clientWidth, height: container.clientHeight }
-      : undefined;
-  renderSystemForExport(system, view, size ?? {})
-    .then((rendered) => {
+  fullSystemPngFlight.call(system, view, filename);
+}
+
+// Gated so a held "c" cannot stack offscreen WebGL contexts — see
+// share/singleFlight.ts for why the extra presses are coalesced rather than
+// dropped. Module-level, so the keyboard shortcut and the Export button share
+// one gate instead of racing each other.
+const fullSystemPngFlight = singleFlight(
+  async (system: TransitSystem, view: ViewOptions, filename: string): Promise<void> => {
+    // Match the live map's aspect when we can, so the framing feels familiar.
+    const live = getMap();
+    const container = live?.getContainer();
+    const size =
+      container && container.clientWidth > 0
+        ? { width: container.clientWidth, height: container.clientHeight }
+        : undefined;
+    try {
+      const rendered = await renderSystemForExport(system, view, size ?? {});
       try {
         const composed = composeCanvas(rendered.canvas, rendered.map, {
           title: system.name || 'Transit system',
@@ -179,8 +189,9 @@ export function exportFullSystemPng(
       } finally {
         rendered.dispose();
       }
-    })
-    .catch((e) => {
+    } catch (e) {
+      // eslint-disable-next-line no-console
       console.error('PNG export failed:', e);
-    });
-}
+    }
+  },
+);

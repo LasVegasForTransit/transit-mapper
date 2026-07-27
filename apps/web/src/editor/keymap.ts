@@ -48,6 +48,14 @@ export interface KeyBinding {
   /** Only meaningful alongside mod: true — distinguishes Redo (Ctrl+Shift+Z)
    *  from Undo (Ctrl+Z); plain bindings ignore Shift entirely (unchanged). */
   shift?: boolean;
+  /** Whether OS key auto-repeat should keep firing this command while the key
+   *  is held. Opt-in, because repeat is the exception: holding a key delivers
+   *  ~30 keydowns a second, which is right for nudging the camera but wrong
+   *  for anything that starts real work — holding "c" used to spawn one
+   *  offscreen WebGL map per repeat, blowing the browser's live-context cap
+   *  and blanking the editor's own map. Non-repeatable bindings still
+   *  preventDefault on repeats, so a held key can't leak to the browser. */
+  repeatable?: boolean;
 }
 
 const PAN_STEP_PX = 120;
@@ -183,36 +191,42 @@ export const KEY_BINDINGS: KeyBinding[] = [
     group: 'Camera',
     keys: ['ArrowUp'],
     description: 'Pan up',
+    repeatable: true,
     run: (c) => panBy(c, 0, -PAN_STEP_PX),
   },
   {
     group: 'Camera',
     keys: ['ArrowDown'],
     description: 'Pan down',
+    repeatable: true,
     run: (c) => panBy(c, 0, PAN_STEP_PX),
   },
   {
     group: 'Camera',
     keys: ['ArrowLeft'],
     description: 'Pan left',
+    repeatable: true,
     run: (c) => panBy(c, -PAN_STEP_PX, 0),
   },
   {
     group: 'Camera',
     keys: ['ArrowRight'],
     description: 'Pan right',
+    repeatable: true,
     run: (c) => panBy(c, PAN_STEP_PX, 0),
   },
   {
     group: 'Camera',
     keys: ['z', '+', '=', 'PageUp'],
     description: 'Zoom in',
+    repeatable: true,
     run: (c) => zoom(c, ZOOM_STEP),
   },
   {
     group: 'Camera',
     keys: ['x', '-', '_', 'PageDown'],
     description: 'Zoom out',
+    repeatable: true,
     run: (c) => zoom(c, -ZOOM_STEP),
   },
 
@@ -234,6 +248,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     group: 'Edit',
     keys: ['z'],
     description: 'Undo',
+    repeatable: true,
     mod: true,
     when: (c) => editable(c) && c.editor.getState().canUndo,
     run: (c) => c.editor.getState().undo(),
@@ -242,6 +257,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     group: 'Edit',
     keys: ['z'],
     description: 'Redo',
+    repeatable: true,
     mod: true,
     shift: true,
     when: (c) => editable(c) && c.editor.getState().canRedo,
@@ -251,6 +267,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     group: 'Edit',
     keys: ['y'],
     description: 'Redo',
+    repeatable: true,
     mod: true,
     when: (c) => editable(c) && c.editor.getState().canRedo,
     run: (c) => c.editor.getState().redo(),
@@ -276,6 +293,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     group: 'Lanes',
     keys: ['['],
     description: 'Remove a lane',
+    repeatable: true,
     when: hasLaneTarget,
     run: (c) => stepLanes(c, -1),
   },
@@ -283,6 +301,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     group: 'Lanes',
     keys: [']'],
     description: 'Add a lane',
+    repeatable: true,
     when: hasLaneTarget,
     run: (c) => stepLanes(c, 1),
   },
@@ -401,7 +420,10 @@ export function attachKeyboard(ctx: KeyContext, bindings: KeyBinding[] = KEY_BIN
     }
     const binding = resolveBinding(bindings, e, ctx);
     if (!binding) return;
+    // preventDefault before the repeat check, so a key held down keeps being
+    // swallowed rather than leaking to the browser part-way through the hold.
     e.preventDefault();
+    if (e.repeat && !binding.repeatable) return;
     binding.run(ctx);
   };
   const onUp = (e: KeyboardEvent) => {

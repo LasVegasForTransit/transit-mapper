@@ -70,7 +70,16 @@ export function snap(
     if (typeId && way.typeId !== typeId) continue;
     const near = nearestOnPath(resolveWayPath(way), coord);
     if (!near || near.distMeters > maxMeters) continue;
-    if (best === null || near.distMeters < best.distMeters) {
+    // Ties break on id rather than on which candidate the grid yielded first.
+    // Exactly-equidistant ways are reachable with real data — conflated or
+    // duplicated GTFS shapes lie on top of each other — and without this the
+    // way you snap to depends on the index's iteration order, which an
+    // incremental grid update is free to change.
+    const better =
+      best === null ||
+      near.distMeters < best.distMeters ||
+      (near.distMeters === best.distMeters && way.id < best.wayId);
+    if (better) {
       best = { wayId: way.id, t: near.t, coord: near.coord, distMeters: near.distMeters };
     }
   }
@@ -310,9 +319,21 @@ export function servedWayIds(coord: LngLat, ways: Way[], maxMeters: number): str
   // Held-aside segments are measured exactly like any other candidate, so a
   // way that legitimately spans a continent still reports the right distance.
   for (const seg of grid.oversize) consider(seg);
-  const ids: string[] = [];
-  for (const [wayId, d] of bestByWay) if (d <= maxMeters) ids.push(wayId);
-  return ids;
+  // Nearest first, ties broken by id — NOT grid-scan order.
+  //
+  // This order is observable: buildFeatures colors a station from the first
+  // service riding the first way in this list, so returning ids in whatever
+  // order the cell buckets happened to be walked in meant a station's color
+  // was a function of the index's internal layout. That was already latent,
+  // and it becomes a live flicker the moment the grid is maintained
+  // incrementally (updating a way in place necessarily changes bucket order),
+  // so the ordering has to be pinned to something intrinsic first.
+  // "The nearest way's service colors the station" is also simply the more
+  // defensible rule than "whichever the scan reached first".
+  const ranked: { wayId: string; d: number }[] = [];
+  for (const [wayId, d] of bestByWay) if (d <= maxMeters) ranked.push({ wayId, d });
+  ranked.sort((x, y) => x.d - y.d || (x.wayId < y.wayId ? -1 : x.wayId > y.wayId ? 1 : 0));
+  return ranked.map((r) => r.wayId);
 }
 
 // A station within this distance of a way's path counts as served by it, so a

@@ -1307,10 +1307,26 @@ export function createEditorStore() {
   // the system snapshot from right before it started, pushed as ONE history
   // entry when the gesture ends, instead of once per intermediate set() call.
   let checkpointBefore: TransitSystem | null = null;
+  // How many begin/commit pairs are currently open. Only the OUTERMOST pair
+  // records anything, so checkpoints nest instead of fighting.
+  //
+  // Needed because the natural way to make a composite action one undo step is
+  // to bracket it — but a composite action can also be invoked from inside a
+  // pointer gesture that already has a checkpoint open. Without a depth count
+  // the inner commit closed the OUTER gesture's checkpoint, and every
+  // subsequent frame of that gesture recorded its own history entry, which is
+  // the per-frame history flooding checkpoints exist to prevent.
+  let checkpointDepth = 0;
 
   function resetHistory() {
     past = [];
     future = [];
+    // Loading a different system while a checkpoint is open (an import landing
+    // mid-gesture, say) would otherwise leave the depth stranded above zero,
+    // and every later commit would decrement toward a checkpoint that belongs
+    // to a document no longer loaded — silently suppressing undo from then on.
+    checkpointBefore = null;
+    checkpointDepth = 0;
   }
 
   const editor = createStore<EditorState>()((set, get) => ({
@@ -1389,11 +1405,15 @@ export function createEditorStore() {
     },
 
     beginHistoryCheckpoint: () => {
-      if (checkpointBefore !== null) return; // defensive: already mid-checkpoint
+      checkpointDepth++;
+      if (checkpointDepth > 1) return; // nested — rides the outermost snapshot
       checkpointBefore = get().system;
     },
 
     commitHistoryCheckpoint: () => {
+      if (checkpointDepth === 0) return; // commit with no matching begin
+      checkpointDepth--;
+      if (checkpointDepth > 0) return; // still inside an outer checkpoint
       const before = checkpointBefore;
       checkpointBefore = null;
       if (before === null) return;
