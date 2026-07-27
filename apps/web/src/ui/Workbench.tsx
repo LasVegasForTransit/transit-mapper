@@ -30,13 +30,14 @@ export interface WorkbenchProps {
    *  transient action, so it's its own slot rather than folded into
    *  primaryToolbar (desktop only has room to show this distinction). */
   viewSwitcher: ReactNode;
-  /** Play/pause, simulation speed, and the simulated clock. Persistent state
-   *  of the canvas like `viewSwitcher`, so it shares that card rather than
-   *  getting a fourth corner of chrome — see the top-center overlay below. */
+  /** Play/pause, simulation speed, and the simulated clock — the full
+   *  four-button ladder. Docks above the tool dock in the bottom centered
+   *  column, the only centered space wide enough for it. */
   simControls: ReactNode;
-  /** The same controls at phone width, where four speed buttons and a clock
-   *  can't sit beside a view switch. Rendered in the mobile top-left card
-   *  instead; which one shows is this component's decision, not the caller's. */
+  /** The same controls with the speed ladder collapsed into a select, for
+   *  every width where the full ladder would reach under a docked card.
+   *  Which of the two shows, and where, is this component's decision — the
+   *  caller hands over both and never learns which was used. */
   simControlsCompact: ReactNode;
   /** Select/Way/Station/Facility — the drawing-tool palette. */
   modeToolbar: ReactNode;
@@ -161,21 +162,21 @@ export function Workbench({
           </div>
         )}
 
-        {/* ---- the view switch and the simulation controls: a full-width flex
-            row centers them on the map at every width via justify-content, not
-            a grid track (whose "center" only lines up with the real center
-            when both side columns happen to match width) or a
-            left-50%/translate hack.
+        {/* ---- the view switch: a full-width flex row centers it on the map
+            at every width via justify-content, not a grid track (whose
+            "center" only lines up with the real center when both side columns
+            happen to match width) or a left-50%/translate hack.
 
-            Both live in ONE card because both are persistent state of the
-            canvas — what you're looking at, and when. A second card beside
-            this one would read as a floating strip of unrelated chrome, and
-            each would drift off center as the other changed width. ---- */}
+            Centering on the map rather than on the leftover track means
+            nothing structurally stops this row growing into the cards either
+            side of it, so whatever sits here has to STAY SMALL. The
+            simulation controls briefly lived here too and made the card
+            622px wide against 538px of free space at 1280 — measured, and
+            not fixable by any amount of centering arithmetic. They're in the
+            bottom column now. ---- */}
         <div className="pointer-events-none absolute inset-x-0 top-0 hidden md:flex md:justify-center">
-          <div className="top-center-dock pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2 shadow-[var(--shadow)]">
+          <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2 shadow-[var(--shadow)]">
             {viewSwitcher}
-            <span className="top-center-divider" aria-hidden="true" />
-            {simControls}
           </div>
         </div>
 
@@ -190,6 +191,22 @@ export function Workbench({
             regression is why they're called out instead of assumed. ---- */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 pb-14 md:pb-0">
           {importStatus && <div className="pointer-events-auto">{importStatus}</div>}
+          {/* Transport controls, above the tool dock — the centered column
+              with the most room, and where a game puts play/pause and speed.
+
+              Two renderings, because this column centers on the whole map:
+              the full ladder is ~430px, and below about 1024px half of that
+              reaches back under the Objects panel. So the wide layout gets
+              the four speed buttons and everything narrower gets the same
+              compact select the phone layout uses. At phone width this
+              column is already carrying the dock and the sheet, so the
+              compact controls ride in the top-left card instead (above). */}
+          <div className="pointer-events-auto hidden items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2 shadow-[var(--shadow)] md:flex lg:hidden">
+            {simControlsCompact}
+          </div>
+          <div className="pointer-events-auto hidden items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2 shadow-[var(--shadow)] lg:flex">
+            {simControls}
+          </div>
           <div
             className={`transition-opacity duration-150 md:pointer-events-auto md:opacity-100 ${
               sheetExpanded ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'

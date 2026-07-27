@@ -251,7 +251,7 @@ about four updates a second.
 | `apps/web/src/sim/vehicles.ts`       | the 30 Hz animation host — advances the clock, asks core where everything is, pushes GeoJSON to MapLibre. |
 | `apps/web/src/sim/devHandle.ts`      | `window.__sim`, a development-only handle for driving the clock by hand.                                  |
 | `apps/web/src/ui/SimProvider.tsx`    | speed and paused state, and ownership of the clock instance.                                              |
-| `apps/web/src/ui/SimControls.tsx`    | the transport controls, beside the view switch.                                                           |
+| `apps/web/src/ui/SimControls.tsx`    | the transport controls, above the tool dock.                                                              |
 
 The line between the last two groups is the one that matters: `packages/core`
 decides _what the answer is_ and the app decides _when to ask_. That is why the
