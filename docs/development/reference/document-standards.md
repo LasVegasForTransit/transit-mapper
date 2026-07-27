@@ -20,11 +20,29 @@ record is omitted, not retitled.
 ### Prose
 
 Sentences are complete, declarative, and specific. A section does not open
-by restating its heading, and reference documents do not address the
-reader.
+by restating its heading, and reference documents do not address the reader.
 
 Numbers carry units and provenance: `10ms CPU limit per request`, not `a low
 CPU limit`.
+
+Write plainly. Say the thing, in the shortest sentence that still says it.
+
+| Rule              | Instead of                                             | Write                               |
+| ----------------- | ------------------------------------------------------ | ----------------------------------- |
+| Active voice      | `A junction is formed where ways cross`                | `A junction forms where ways cross` |
+| No hedging        | `This is arguably the main constraint`                 | `This is the main constraint`       |
+| Ordinary words    | `leverage`, `utilize`, `facilitate`                    | `use`, `use`, `let`                 |
+| No fake formality | `It is important to note that migrations are additive` | `Migrations are additive`           |
+| Cut filler        | `In order to keep costs low, we`                       | `To keep costs low, we`             |
+| Plain structure   | `The reason it works is that the core is pure`         | `It works because the core is pure` |
+| No stock metaphor | `the load-bearing detail`, `at its core`               | Name the detail                     |
+
+Vary the construction. A page where every other sentence turns on `rather
+than` or an em-dash reads as filler even when each sentence is true. If a
+phrase appears three times on one page, two of them are habit.
+
+`check:documents` rejects a fixed list of stock phrases. It catches the
+obvious ones only; the rest is on the author and the reviewer.
 
 ## Required documents
 
