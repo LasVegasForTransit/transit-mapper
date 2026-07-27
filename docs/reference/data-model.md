@@ -88,6 +88,8 @@ derives them from coordinate coincidence (`deriveNodesFromWays` in
 (`src/model/import.ts`), which is exact — two imported ways join exactly
 when OSM says they share a node, so co-located but unconnected
 infrastructure (a tram in a street, a bridge over a road) stays separate.
+An import also sets `control` where OSM records a signal, stop, or
+roundabout; everything else arrives uncontrolled.
 
 Two ways at different `grade`s never need a junction between them, and the
 crossing check in `src/model/validate.ts` skips such pairs — an elevated way

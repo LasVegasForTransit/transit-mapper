@@ -50,10 +50,21 @@ happen to line up, which means overlapping-but-separate infrastructure stays
 separate — a tram line drawn down the middle of a street does not get welded
 to the roadway, and a bridge does not get welded to the road beneath it.
 
+Junctions arrive **controlled** where OSM records it. `highway=traffic_signals`
+becomes a signal and `highway=stop` a stop sign; a way tagged
+`junction=roundabout` makes the junctions along it roundabouts. OSM usually
+puts a signal on the approach at the stop line rather than on the
+intersection itself, so a control node found shortly before a junction along
+its own way is taken to govern that junction.
+
 Streets arrive **named**. OSM splits one street into a way per block and per
 direction, all carrying the same `name`, and those become a single shared
 identity — so the objects list reads "West Flamingo Road 1…12" instead of
 "Road 1…12", and renaming the street renames all of it.
+
+Ways arrive at their real **grade**: `bridge` comes in elevated, `tunnel`
+underground, and a way with only a `layer` follows its sign. Two ways at
+different grades are never reported as needing a junction between them.
 
 Imported ways start as bare infrastructure carrying no service. From there
 the normal tools apply: route services over them, edit their lanes, adjust
@@ -73,3 +84,6 @@ junctions, adopt them under existing sketches.
   tunnel as genuinely not meeting the road it passes over.
 - Lane order assumes right-hand traffic. A left-hand-traffic import comes in
   mirrored and needs flipping.
+- A stop sign sets the control for the whole junction. OSM records which
+  approach the sign faces; the import doesn't carry that through, so set
+  per-approach control by hand where it matters.

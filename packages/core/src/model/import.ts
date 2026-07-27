@@ -5,10 +5,11 @@
 //  - pure, network-free transforms (classifyOsmWay, osmElementsToWays,
 //    buildOverpassQuery) that fixture-based tests can exercise directly;
 //  - importOsmWays, the one function that actually calls the network.
-import { wayType, type ProfileTemplateLane } from "./catalog";
+import { wayType, type Grade, type ProfileTemplateLane } from "./catalog";
+import { haversineMeters } from "./geo";
 import { shortId } from "./ids";
 import { defaultProfileFor, profileWithPrimaryLanes, MAX_PRIMARY_LANES, type ProfileEdges } from "./profile";
-import type { CrossSection, LngLat, NamedWay, Node, Way, WayPointRef } from "./system";
+import type { CrossSection, LngLat, NamedWay, Node, NodeControl, Way, WayPointRef } from "./system";
 
 export interface ImportBBox {
   west: number;
@@ -39,10 +40,16 @@ const CATEGORY_QUERY: Record<ImportCategory, string> = {
   bike: `way["highway"="cycleway"](bbox);`,
 };
 
+// Junction control lives on OSM *nodes*, so it needs its own clause — the
+// way clauses above return node ids but never node tags. Fetched only with
+// roads, the one category whose junctions this app controls.
+const CONTROL_NODE_QUERY = `node["highway"~"^(traffic_signals|stop)$"](bbox);`;
+
 /** Build an Overpass QL query for the given categories within a bounding box. */
 export function buildOverpassQuery(bbox: ImportBBox, categories: ImportCategory[]): string {
   const bboxStr = `${bbox.south},${bbox.west},${bbox.north},${bbox.east}`;
-  const clauses = categories.map((c) => CATEGORY_QUERY[c].replace(/\(bbox\)/g, `(${bboxStr})`)).join("\n  ");
+  const parts = [...categories.map((c) => CATEGORY_QUERY[c]), ...(categories.includes("road") ? [CONTROL_NODE_QUERY] : [])];
+  const clauses = parts.map((q) => q.replace(/\(bbox\)/g, `(${bboxStr})`)).join("\n  ");
   return `[out:json][timeout:25];\n(\n  ${clauses}\n);\nout geom;`;
 }
 
@@ -261,6 +268,23 @@ export function profileFromOsmTags(typeId: string, classId: string | undefined, 
 }
 
 /**
+ * Vertical alignment from OSM's grade-separation tagging. `tunnel`/`bridge`
+ * are the explicit signals; `layer` is the fallback for ways that record
+ * only their stacking order. This is what keeps a freeway overpass from
+ * reading as a missing junction with the street beneath it — the crossing
+ * check skips pairs at different grades (see validate.ts).
+ */
+export function gradeFromOsmTags(tags: Record<string, string> | undefined): Grade {
+  if (!tags) return "atGrade";
+  const no = (v: string | undefined): boolean => v === undefined || v === "no";
+  if (!no(tags.tunnel)) return "underground";
+  if (!no(tags.bridge)) return "elevated";
+  const layer = Number(tags.layer);
+  if (Number.isFinite(layer) && layer !== 0) return layer < 0 ? "underground" : "elevated";
+  return "atGrade";
+}
+
+/**
  * Group imported ways that are one named facility into NamedWays — OSM
  * splits a street into a way per block, per junction, and per direction, all
  * carrying the same `name`, which is exactly the identity NamedWay exists to
@@ -330,6 +354,74 @@ export function classifyOsmWay(tags: Record<string, string> | undefined): { type
   return null;
 }
 
+/** OSM node tags that map onto the catalog's junction controls. `stop` is
+ *  approximate: OSM puts `highway=stop` on the specific approach that must
+ *  stop, while Node.control describes the whole junction (ApproachControl
+ *  holds per-arm control, but the import can't tell which arm the sign
+ *  faces). */
+function controlFromOsmNodeTags(tags: Record<string, string> | undefined): NodeControl | undefined {
+  const highway = tags?.highway;
+  if (highway === "traffic_signals") return "signal";
+  if (highway === "stop") return "stop";
+  return undefined;
+}
+
+/** Which control wins when a junction is described more than once — a
+ *  signalized roundabout is a signal, and a junction with any signalized
+ *  approach is signalized regardless of what the other arms say. */
+const CONTROL_RANK: Record<NodeControl, number> = { signal: 3, stop: 2, roundabout: 1, uncontrolled: 0 };
+
+/**
+ * How far back from a junction a stop line may sit and still be that
+ * junction's control.
+ *
+ * OSM almost never puts `highway=traffic_signals` on the shared junction
+ * node: it goes on the approach way at the stop line. Measured over the
+ * streets around Flamingo and Las Vegas Boulevard, none of 37 control nodes
+ * were on a junction node and the ones that were on an imported way sat a
+ * median of 15 m from theirs (p90 55 m). 40 m claims 25 of 28 while
+ * excluding a 229 m outlier that plainly governs something else.
+ *
+ * The search follows the way the sign sits on rather than taking the nearest
+ * junction by straight-line distance, which matters here specifically: two
+ * carriageways of one boulevard run about 15–20 m apart, the same order as
+ * this distance, so a straight-line match would routinely signalize the
+ * junction on the opposite carriageway.
+ */
+const CONTROL_STOPLINE_METERS = 40;
+
+/**
+ * The junction a stop-line control node governs: the nearest junction along
+ * its own way, in either direction, within CONTROL_STOPLINE_METERS. Walking
+ * the way rather than searching by straight-line distance is what keeps a
+ * signal off the parallel carriageway a few metres away.
+ */
+function junctionAlongWay(
+  entry: { way: Way; osmNodes: number[] },
+  startIndex: number,
+  isJunction: (osmNodeId: number) => boolean,
+): number | undefined {
+  let best: number | undefined;
+  let bestDistance = Infinity;
+  for (const step of [1, -1]) {
+    let distance = 0;
+    for (let i = startIndex; ; i += step) {
+      const next = i + step;
+      if (next < 0 || next >= entry.osmNodes.length) break;
+      distance += haversineMeters(entry.way.points[i], entry.way.points[next]);
+      if (distance > CONTROL_STOPLINE_METERS) break;
+      if (isJunction(entry.osmNodes[next])) {
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = entry.osmNodes[next];
+        }
+        break;
+      }
+    }
+  }
+  return best;
+}
+
 /**
  * Turn parsed Overpass `elements` into Ways plus the junctions between them.
  *
@@ -353,8 +445,22 @@ export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork
   const refsByOsmNode = new Map<number, WayPointRef[]>();
   const coordByOsmNode = new Map<number, LngLat>();
   const nameByWayId = new Map<string, string>();
+  // Junction control, from standalone node elements and from roundabout ways.
+  const controlByOsmNode = new Map<number, NodeControl>();
+  const roundaboutOsmNodes = new Set<number>();
+  // Each imported way's OSM node ids, kept so a stop-line control node can be
+  // walked along its own way to the junction it governs.
+  const osmNodesByWayId = new Map<string, { way: Way; osmNodes: number[] }>();
 
   for (const el of elements) {
+    // A control node is matched to its junction by id alone — its own
+    // coordinates are never needed, since the ways already carry the
+    // coordinate for every node id they pass through.
+    if (el.type === "node") {
+      const control = controlFromOsmNodeTags(el.tags);
+      if (control) controlByOsmNode.set(el.id, control);
+      continue;
+    }
     if (el.type !== "way" || !el.geometry || el.geometry.length < 2) continue;
     const kind = classifyOsmWay(el.tags);
     if (!kind) continue;
@@ -364,7 +470,7 @@ export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork
       typeId: kind.typeId,
       points,
       geometry: "straight",
-      grade: "atGrade",
+      grade: gradeFromOsmTags(el.tags),
       profile: profileFromOsmTags(kind.typeId, kind.classId, el.tags),
       classId: kind.classId,
       source: `osm:${el.id}`,
@@ -378,20 +484,49 @@ export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork
     // lengths disagree can't be aligned, so it contributes geometry but no
     // refs rather than mismatched ones.
     if (!el.nodes || el.nodes.length !== points.length) continue;
+    osmNodesByWayId.set(way.id, { way, osmNodes: el.nodes });
+    // A roundabout is a way in OSM, not a node, so its junctions inherit the
+    // control from the circulatory way they sit on.
+    const isRoundabout = el.tags?.junction === "roundabout";
     el.nodes.forEach((osmNodeId, i) => {
       const refs = refsByOsmNode.get(osmNodeId);
       if (refs) refs.push({ wayId: way.id, pointIndex: i });
       else refsByOsmNode.set(osmNodeId, [{ wayId: way.id, pointIndex: i }]);
       coordByOsmNode.set(osmNodeId, points[i]);
+      if (isRoundabout) roundaboutOsmNodes.add(osmNodeId);
     });
   }
 
   // Only shared nodes are junctions. A Node per vertex would be both wrong
   // (a bend in one street is not a junction) and enormous.
+  const isJunction = (osmNodeId: number): boolean => (refsByOsmNode.get(osmNodeId)?.length ?? 0) >= 2;
+
+  // Resolve every control claim onto a junction, strongest claim winning.
+  const controlByJunction = new Map<number, NodeControl>();
+  const claim = (osmNodeId: number, control: NodeControl): void => {
+    const current = controlByJunction.get(osmNodeId);
+    if (!current || CONTROL_RANK[control] > CONTROL_RANK[current]) controlByJunction.set(osmNodeId, control);
+  };
+  for (const osmNodeId of roundaboutOsmNodes) if (isJunction(osmNodeId)) claim(osmNodeId, "roundabout");
+  for (const [osmNodeId, control] of controlByOsmNode) {
+    if (isJunction(osmNodeId)) {
+      claim(osmNodeId, control);
+      continue;
+    }
+    // The usual case: a stop line partway along one approach. Walk that way
+    // to the junction it governs — see CONTROL_STOPLINE_METERS.
+    const ref = refsByOsmNode.get(osmNodeId)?.[0];
+    const entry = ref && osmNodesByWayId.get(ref.wayId);
+    if (!ref || !entry) continue;
+    const governed = junctionAlongWay(entry, ref.pointIndex, isJunction);
+    if (governed !== undefined) claim(governed, control);
+  }
+
   const nodes: Node[] = [];
   for (const [osmNodeId, refs] of refsByOsmNode) {
     if (refs.length < 2) continue;
-    nodes.push({ id: shortId(), coord: coordByOsmNode.get(osmNodeId)!, refs });
+    const control = controlByJunction.get(osmNodeId);
+    nodes.push({ id: shortId(), coord: coordByOsmNode.get(osmNodeId)!, refs, ...(control ? { control } : {}) });
   }
   return { ways, nodes, namedWays: namedWaysFor(ways, nameByWayId) };
 }

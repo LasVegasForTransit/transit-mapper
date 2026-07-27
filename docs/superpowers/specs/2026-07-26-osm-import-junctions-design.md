@@ -67,9 +67,10 @@ is a parsing change, not a geometry algorithm.
 - **Lane profiles from OSM tags.** Not part of the junction work — but built
   straight after it, once a real import showed every road arriving as the
   same four-lane two-way default. See "Follow-on: lane profiles."
-- **Traffic control from OSM.** `highway=traffic_signals` and `highway=stop`
-  live on OSM *nodes*, and this query returns ways only, so no `control` is
-  set on derived junctions. They import as uncontrolled.
+- **Traffic control from OSM.** Not part of the junction work: this query
+  returns ways only, so junctions import uncontrolled. Added afterwards, and
+  the naive version of it turned out to do nothing at all — see "Follow-on:
+  grade and traffic control."
 - Turn restrictions, which OSM stores as relations. Not fetched at all.
 
 ## Architecture
@@ -359,3 +360,39 @@ identities. The label now prefers the identity's name, numbering segments
 within a street — a dozen rows all reading "West Flamingo Road" is no more
 navigable than the ordinals were. `WayInspector` and `NodeInspector` already
 consumed `namedWays`, so those needed nothing.
+
+## Follow-on: grade and traffic control
+
+### Grade, and the crossing check that ignored it
+
+`bridge`/`tunnel` are the explicit signals and `layer` the fallback, mapping
+onto the existing `Grade`. Everything imported at `atGrade` before this.
+
+The more valuable half was a pre-existing defect this exposed:
+`findCrossingsWithoutJoining` never read `Way.grade`, so **any** elevated way
+over a surface street — hand-drawn or imported — was reported as needing a
+junction the user could not correctly create. `CrossSegment` now carries
+`grade` and pairs at different grades are skipped.
+
+### Traffic control, and why the obvious mapping did nothing
+
+`NodeControl` already had `signal`/`stop`/`roundabout`, and OSM tags all
+three. The first implementation matched control nodes to junctions by node
+id — and applied **zero** controls to real data.
+
+Measured over the same viewport: of 37 control nodes, **none** sat on a
+shared junction node. OSM puts `highway=traffic_signals` on the approach way
+at the stop line, a median of 15 m short of the junction (p90 55 m), so the
+node has one ref, is never a junction, and the mapping silently no-ops.
+
+Control nodes are now walked along their own way to the nearest junction
+within `CONTROL_STOPLINE_METERS` (40 m — claims 25 of 28 while excluding a
+229 m outlier). The walk follows the way rather than taking the nearest
+junction by straight-line distance, which matters precisely here: the two
+carriageways of a boulevard sit 15–20 m apart, the same order as the stop-line
+distance, so a straight-line match would routinely signalize the junction on
+the opposite carriageway. Claims are ranked (signal > stop > roundabout) so a
+junction with any signalized approach is signalized.
+
+Roundabouts come from the way tag `junction=roundabout`, not a node tag, and
+apply to the junctions along the circulatory way.

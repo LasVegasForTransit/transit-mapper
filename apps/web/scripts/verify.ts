@@ -26,7 +26,7 @@ import { isDoubleClickFinish } from "../src/map/interactions";
 import { KEY_BINDINGS, matchesKey, resolveBinding, type KeyContext } from "../src/editor/keymap";
 import { buildFeatures, HANDLE_ICON, LAYER_SPECS } from "../src/map/layers";
 import { LANDMARKS, landmarksFeatureCollection } from "../src/map/landmarks";
-import { buildOverpassQuery, classifyOsmWay, osmElementsToNetwork, osmElementsToWays, profileFromOsmTags, type OsmWayElement } from "@transitmapper/core/model/import";
+import { buildOverpassQuery, classifyOsmWay, gradeFromOsmTags, osmElementsToNetwork, osmElementsToWays, profileFromOsmTags, type OsmWayElement } from "@transitmapper/core/model/import";
 import { classifyGtfsRouteType, gtfsFilesToBatchedPieces, gtfsFilesToSystemPieces, parseGtfsCsv } from "@transitmapper/core/model/gtfsImport";
 import { legendEntriesFor } from "../src/share/exportLegend";
 import { formatScaleMeters, niceScaleMeters } from "../src/share/exportScale";
@@ -1236,6 +1236,95 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
     },
   ];
   check("osmElementsToNetwork applies the tag-derived profile", isOneWay(osmElementsToNetwork(tagged).ways[0].profile));
+}
+
+// --- P4: OSM import reads grade and junction control ---
+{
+  check("no grade tags means at grade", gradeFromOsmTags({ highway: "primary" }) === "atGrade");
+  check("bridge=yes is elevated", gradeFromOsmTags({ bridge: "yes" }) === "elevated");
+  check("tunnel=yes is underground", gradeFromOsmTags({ tunnel: "yes" }) === "underground");
+  check("bridge=no is not a bridge", gradeFromOsmTags({ bridge: "no" }) === "atGrade");
+  check("a positive layer alone is elevated", gradeFromOsmTags({ layer: "2" }) === "elevated");
+  check("a negative layer alone is underground", gradeFromOsmTags({ layer: "-1" }) === "underground");
+  check("layer=0 is at grade", gradeFromOsmTags({ layer: "0" }) === "atGrade");
+  check("tunnel wins over a positive layer", gradeFromOsmTags({ tunnel: "yes", layer: "1" }) === "underground");
+
+  // Junction control comes from OSM node elements, matched by node id.
+  const controlled: OsmWayElement[] = [
+    { type: "way", id: 1, tags: { highway: "primary" }, nodes: [10, 500], geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.15 }] },
+    { type: "way", id: 2, tags: { highway: "primary" }, nodes: [500, 11], geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.1, lon: -115.1 }] },
+    { type: "node", id: 500, tags: { highway: "traffic_signals" } },
+  ];
+  const controlledNet = osmElementsToNetwork(controlled);
+  check("a traffic_signals node controls its junction", controlledNet.nodes[0]?.control === "signal");
+  check("a control node is not itself imported as a way", controlledNet.ways.length === 2);
+
+  const stopTagged: OsmWayElement[] = [
+    ...controlled.slice(0, 2),
+    { type: "node", id: 500, tags: { highway: "stop" } },
+  ];
+  check("a stop node controls its junction", osmElementsToNetwork(stopTagged).nodes[0]?.control === "stop");
+
+  const uncontrolled: OsmWayElement[] = controlled.slice(0, 2);
+  check("a junction with no control node stays uncontrolled", osmElementsToNetwork(uncontrolled).nodes[0]?.control === undefined);
+
+  // junction=roundabout is a way tag, so its junctions inherit it.
+  const roundabout: OsmWayElement[] = [
+    { type: "way", id: 1, tags: { highway: "primary", junction: "roundabout" }, nodes: [500, 501], geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.101, lon: -115.15 }] },
+    { type: "way", id: 2, tags: { highway: "primary" }, nodes: [500, 11], geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.1, lon: -115.1 }] },
+  ];
+  check("a roundabout way marks its junctions as roundabouts", osmElementsToNetwork(roundabout).nodes[0]?.control === "roundabout");
+
+  const signalledRoundabout: OsmWayElement[] = [
+    ...roundabout,
+    { type: "node", id: 500, tags: { highway: "traffic_signals" } },
+  ];
+  check("an explicit signal beats the roundabout inferred from the way", osmElementsToNetwork(signalledRoundabout).nodes[0]?.control === "signal");
+
+  // The case real OSM data actually produces: the signal sits at the stop
+  // line partway along one approach, not on the shared junction node. ~35m
+  // west of the junction at -115.15.
+  const stopLine: OsmWayElement[] = [
+    {
+      type: "way", id: 1, tags: { highway: "primary" }, nodes: [10, 900, 500],
+      geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.1504 }, { lat: 36.1, lon: -115.15 }],
+    },
+    { type: "way", id: 2, tags: { highway: "primary" }, nodes: [500, 11], geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.1, lon: -115.1 }] },
+    { type: "node", id: 900, tags: { highway: "traffic_signals" } },
+  ];
+  const stopLineNet = osmElementsToNetwork(stopLine);
+  check("a stop-line signal controls the junction it approaches", stopLineNet.nodes[0]?.control === "signal");
+  check("the stop-line node itself is not a junction", stopLineNet.nodes.length === 1);
+
+  // Too far back to be this junction's stop line (~900m).
+  const distant: OsmWayElement[] = [
+    {
+      type: "way", id: 1, tags: { highway: "primary" }, nodes: [10, 900, 500],
+      geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.16 }, { lat: 36.1, lon: -115.15 }],
+    },
+    { type: "way", id: 2, tags: { highway: "primary" }, nodes: [500, 11], geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.1, lon: -115.1 }] },
+    { type: "node", id: 900, tags: { highway: "traffic_signals" } },
+  ];
+  check("a signal far from any junction controls nothing", osmElementsToNetwork(distant).nodes[0]?.control === undefined);
+
+  // A signal on one carriageway must not reach the parallel one ~17m away,
+  // which is why the search walks the way instead of measuring straight-line.
+  const parallel: OsmWayElement[] = [
+    {
+      type: "way", id: 1, tags: { highway: "primary", oneway: "yes" }, nodes: [10, 900],
+      geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.1504 }],
+    },
+    { type: "way", id: 2, tags: { highway: "primary", oneway: "yes" }, nodes: [20, 500], geometry: [{ lat: 36.10015, lon: -115.2 }, { lat: 36.10015, lon: -115.15 }] },
+    { type: "way", id: 3, tags: { highway: "primary" }, nodes: [500, 21], geometry: [{ lat: 36.10015, lon: -115.15 }, { lat: 36.101, lon: -115.15 }] },
+    { type: "node", id: 900, tags: { highway: "traffic_signals" } },
+  ];
+  check(
+    "a signal does not reach a junction on the neighbouring carriageway",
+    osmElementsToNetwork(parallel).nodes.every((n) => n.control === undefined),
+  );
+
+  check("the query asks for control nodes when importing streets", buildOverpassQuery({ west: -115.3, south: 36, east: -115, north: 36.2 }, ["road"]).includes("traffic_signals"));
+  check("the query leaves control nodes out when streets aren't wanted", !buildOverpassQuery({ west: -115.3, south: 36, east: -115, north: 36.2 }, ["heavyRail"]).includes("traffic_signals"));
 }
 
 // --- P4: OSM import gives imported streets their real names ---
