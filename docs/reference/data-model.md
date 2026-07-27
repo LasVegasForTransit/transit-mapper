@@ -91,6 +91,11 @@ infrastructure (a tram in a street, a bridge over a road) stays separate.
 An import also sets `control` where OSM records a signal, stop, or
 roundabout; everything else arrives uncontrolled.
 
+Lane-keyed components (turn restrictions) are pruned to the lanes that
+actually exist on every system update, so deleting a way, merging two, or
+replacing a cross-section cannot leave an invisible entry behind for a later
+lane to inherit.
+
 Two ways at different `grade`s never need a junction between them, and the
 crossing check in `src/model/validate.ts` skips such pairs — an elevated way
 over a surface street is a bridge, not a missing junction.

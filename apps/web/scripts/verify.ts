@@ -2516,6 +2516,42 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("the survivor is two-way again", !isOneWay(survivor.profile));
 }
 
+// --- lane-keyed components don't outlive their lanes ---
+{
+  fresh();
+  const w = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(w, [-115.2, 36.1]);
+  store.getState().addWayPoint(w, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const laneId = store.getState().system.ways.find((x) => x.id === w)!.profile.lanes.find((l) => l.kindId === "drive")!.id;
+  store.getState().setTurnRestriction(w, laneId, []);
+  check("a turn restriction is stored against the lane", Object.keys(store.getState().system.turnRestrictions).length === 1);
+
+  // Deleting the way takes its lanes with it.
+  store.getState().deleteWay(w);
+  check("deleting the way drops its turn restrictions", Object.keys(store.getState().system.turnRestrictions).length === 0);
+
+  // Replacing the cross-section mints fresh lane ids, so the old key is dead.
+  fresh();
+  const v = store.getState().beginWay("road", "straight");
+  store.getState().addWayPoint(v, [-115.2, 36.1]);
+  store.getState().addWayPoint(v, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const vLane = store.getState().system.ways.find((x) => x.id === v)!.profile.lanes.find((l) => l.kindId === "drive")!.id;
+  store.getState().setTurnRestriction(v, vLane, []);
+  store.getState().applyProfilePreset(v, "roadArterial4");
+  check(
+    "applying a preset drops restrictions on the lanes it replaced",
+    !Object.keys(store.getState().system.turnRestrictions).includes(laneRefKey(v, vLane)),
+  );
+
+  // A live restriction is left alone.
+  const liveLane = store.getState().system.ways.find((x) => x.id === v)!.profile.lanes.find((l) => l.kindId === "drive")!.id;
+  store.getState().setTurnRestriction(v, liveLane, []);
+  store.getState().setWayGrade(v, "elevated");
+  check("an unrelated edit leaves a live restriction alone", Object.keys(store.getState().system.turnRestrictions).length === 1);
+}
+
 // --- the carriageway affordances survive an ordinary edit ---
 {
   fresh();

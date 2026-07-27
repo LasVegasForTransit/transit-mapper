@@ -7,7 +7,7 @@ import { anchorOnWay, routeBetween, type RouteAnchor, type RouteSpan } from "@tr
 import { wayCrossings } from "@transitmapper/core/model/validate";
 import { shortId } from "@transitmapper/core/model/ids";
 import { createEmptySystem } from "@transitmapper/core/model/serialize";
-import { armRefKey, getComponent, laneRefKey, withComponent, withoutComponent } from "@transitmapper/core/model/components";
+import { armRefKey, getComponent, laneRefKey, prunedToLiveLanes, withComponent, withoutComponent } from "@transitmapper/core/model/components";
 import { createFacility, createGroup as createGroupEntity, createStation } from "@transitmapper/core/model/system";
 import { withoutAlreadyImported, type ImportedNetwork } from "@transitmapper/core/model/import";
 import type {
@@ -430,7 +430,17 @@ function centroidOf(ring: LngLat[]): LngLat {
 }
 
 function touch(system: TransitSystem): TransitSystem {
-  return { ...system, updatedAt: Date.now() };
+  // Lane-keyed components are pruned here rather than in each action that
+  // can invalidate one, because the list of those actions is long and open:
+  // deleting a way, merging two, applying a preset, stepping the lane count,
+  // separating carriageways. Missing one leaves an invisible entry that a
+  // later lane reusing the id silently inherits, and that survives a save.
+  // Free when nothing is restricted, which is the overwhelming common case —
+  // prunedToLiveLanes returns the same reference when every key is live, so
+  // this also preserves the reference-equality that commitHistoryCheckpoint's
+  // no-op detection depends on.
+  const turnRestrictions = prunedToLiveLanes(system.turnRestrictions, system.ways);
+  return { ...system, turnRestrictions, updatedAt: Date.now() };
 }
 
 // Field-wise content equality for commitHistoryCheckpoint's no-op detection.

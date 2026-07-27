@@ -36,3 +36,24 @@ export function laneRefKey(wayId: string, laneId: string): EntityId {
 export function armRefKey(wayId: string, end: "start" | "end"): EntityId {
   return `${wayId}:${end}`;
 }
+
+/**
+ * Drop every component whose key names a lane that no longer exists.
+ *
+ * Lane-keyed components (TurnRestriction) outlive the lanes they describe:
+ * deleting a way, merging two, or applying a preset all leave keys behind,
+ * because `laneRefKey` names a way and a lane and nothing checks either is
+ * still real. The entries are invisible — no UI lists them — but a later lane
+ * that happens to reuse an id inherits a restriction nobody set, and
+ * serialize keeps them across a save because it only validates ids it can
+ * see. Rebuilding against the live lanes is cheap and has no false positives.
+ */
+export function prunedToLiveLanes<T>(map: ComponentMap<T>, ways: { id: string; profile: { lanes: { id: string }[] } }[]): ComponentMap<T> {
+  const live = new Set<string>();
+  for (const way of ways) for (const lane of way.profile.lanes) live.add(laneRefKey(way.id, lane.id));
+  const keys = Object.keys(map);
+  if (keys.every((k) => live.has(k))) return map;
+  const next: ComponentMap<T> = {};
+  for (const k of keys) if (live.has(k)) next[k] = map[k];
+  return next;
+}
