@@ -1,7 +1,7 @@
 # How this repository enforces its own rules
 
-Written for a person. If you have just been stopped by a check and want to
-know why it exists, this is the page.
+This page explains why each check exists, for someone a check has just
+stopped.
 
 ## Purpose
 
@@ -26,9 +26,8 @@ Formatting, lint, typecheck, tests, the workspace contract, and the
 generated-types staleness check. That is the entire bar. `pnpm check --fix`
 repairs everything a machine can.
 
-The point of it being one command is that a red CI run maps to exactly one
-thing to run locally. You should never have to work out which of six tools
-is unhappy.
+One command means a red CI run maps to one local command. The output names
+the tool that failed and the command that resolves it.
 
 ## Layers
 
@@ -72,11 +71,10 @@ agent configuration at all.
 browser-only global compiles cleanly and then throws in production, in
 whichever runtime nobody exercised.
 
-The compiler cannot catch this, and that is the whole reason the rule
-exists. Core's tsconfig pulls in the `DOM` lib deliberately, to get the
-ambient `fetch`, `crypto` and `structuredClone` typings that _both_
-runtimes provide — which means it also gets `window` and `document`, which
-only one provides.
+The compiler cannot catch this. Core's tsconfig includes the `DOM` lib to
+obtain the ambient `fetch`, `crypto`, and `structuredClone` typings that
+both runtimes provide, and that inclusion also admits `window` and
+`document`.
 
 **If it fires:** move the code that needs the global into `apps/web`, or
 pass the value in as an argument so core stays a pure function of its
