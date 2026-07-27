@@ -629,6 +629,34 @@ input {
   box-shadow: 0 1px 2px rgba(25, 26, 23, 0.12);
 }
 
+/* ---- simulation transport controls (SimControls) ---- */
+.sim-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Tabular figures and a floor on the width so the row can't twitch sideways
+   as the digits change — this text updates several times a second, right next
+   to buttons people are aiming at. */
+.sim-clock {
+  font-family: var(--mono);
+  font-size: var(--fs-label-lg);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  min-width: 8ch;
+  text-align: center;
+  white-space: nowrap;
+}
+/* A hairline between the view switch and the simulation controls: they share
+   one card because both are persistent canvas state, but they're two separate
+   groups of controls and shouldn't read as one long strip of buttons. */
+.top-center-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: var(--border);
+}
+
 /* ---- panels: floating, collapsible overlays over the full-bleed map ---- */
 .panel {
   width: var(--panel-w);

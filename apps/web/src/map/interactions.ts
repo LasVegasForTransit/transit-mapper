@@ -1,6 +1,6 @@
 import type { Map as MLMap, MapMouseEvent, MapGeoJSONFeature, GeoJSONSource } from 'maplibre-gl';
 import type { EditorStore, MultiSelectItem } from '../editor/store';
-import { attachKeyboard } from '../editor/keymap';
+import { attachKeyboard, type SimCommands } from '../editor/keymap';
 import {
   metersFromOrigin,
   nearestOpenEndpoint,
@@ -98,6 +98,9 @@ function rafThrottle<A extends unknown[]>(fn: (...args: A) => void) {
 export interface AttachInteractionsOptions {
   openShortcuts: () => void;
   toggleUi: () => void;
+  /** Run/pause and speed-step the simulated clock, for the keymap's transport
+   *  shortcuts — see keymap.ts's SimCommands. */
+  sim: SimCommands;
   /** True while the Diagram view is active — a schematic, read-only
    *  projection (see model/diagramLayout.ts). Gated exactly like `readOnly`
    *  below: pan/zoom still work, nothing else does, since every coordinate
@@ -1528,6 +1531,7 @@ export function attachInteractions(
     editor: store,
     openShortcuts: opts.openShortcuts,
     toggleUi: opts.toggleUi,
+    sim: opts.sim,
     setPanKeyHeld: (held) => {
       spaceHeld = held;
       canvas.style.cursor = held ? 'grab' : cursorFor();

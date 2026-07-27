@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import maplibregl, { type GeoJSONSource } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEditorStore } from '../editor/EditorProvider';
+import type { SimCommands } from '../editor/keymap';
+import { useSim, useSimClock } from '../ui/SimProvider';
 import { useUi } from '../ui/UiProvider';
 import { useView } from '../ui/ViewProvider';
 import { BASEMAP_STYLE } from './basemap';
@@ -58,6 +60,7 @@ import { getMap, setMap } from './mapRef';
 import { initLiveCamera, setLiveCamera } from '../camera/liveCamera';
 import { attachPerfHarness } from '../perf';
 import { servicesByWay } from '@transitmapper/core/render/featureMemo';
+import { attachSimDevHandle } from '../sim/devHandle';
 import { attachVehicleAnimation } from '../sim/vehicles';
 import type { Map as MLMap } from 'maplibre-gl';
 
@@ -88,6 +91,12 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   const store = useEditorStore();
   const { openShortcuts, toggleUi } = useUi();
   const { viewMode, setViewMode, visibleModes, visibleWayTypes, showLandmarks } = useView();
+  // Created once by SimProvider and injected into the animation loop below,
+  // the same way the editor store is — the loop is imperative and lives
+  // outside React, so it is handed what it needs rather than reaching for an
+  // ambient one.
+  const simClock = useSimClock();
+  const { togglePaused, stepSpeed } = useSim();
 
   // The map-setup effect below runs once (mount-only); it reads the latest
   // view options from this ref rather than closing over React state, so a
@@ -98,6 +107,16 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   // the map down and rebuild it every time App re-renders with a fresh arrow.
   const basemapFailureRef = useRef(onBasemapUnavailable);
   basemapFailureRef.current = onBasemapUnavailable;
+
+  // Same reasoning as basemapFailureRef: the keymap needs to run these, but
+  // naming them in the map effect's deps would tear down and rebuild the
+  // entire map if their identity ever changed.
+  const simCommandsRef = useRef<SimCommands>({ togglePaused, stepSpeed });
+  simCommandsRef.current = { togglePaused, stepSpeed };
+  const simCommands = useRef<SimCommands>({
+    togglePaused: () => simCommandsRef.current.togglePaused(),
+    stepSpeed: (direction) => simCommandsRef.current.stepSpeed(direction),
+  }).current;
 
   const viewRef = useRef<ViewOptions>({ viewMode, visibleModes, visibleWayTypes });
   const schedulePushDataRef = useRef<(() => void) | null>(null);
@@ -208,6 +227,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     let detachInteractions: (() => void) | null = null;
     let detachVehicles: (() => void) | null = null;
     let detachPerf: (() => void) | null = null;
+    let detachSimDev: (() => void) | null = null;
     let lastSystemId = initial.id;
     const emptyFC = { type: 'FeatureCollection' as const, features: [] };
 
@@ -590,6 +610,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       detachInteractions = attachInteractions(map, store, {
         openShortcuts,
         toggleUi,
+        sim: simCommands,
         isDiagramMode: () => viewRef.current.viewMode === 'diagram',
         isNetworkMode: () => viewRef.current.viewMode === 'network',
         // Footprints only render in the Infrastructure view — switch there
@@ -616,11 +637,12 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           );
         },
       });
-      detachVehicles = attachVehicleAnimation(map, store, {
+      detachVehicles = attachVehicleAnimation(map, store, simClock, {
         isVisible: (service) => viewRef.current.visibleModes.has(service.modeId),
         viewMode: () => viewRef.current.viewMode,
       });
       detachPerf = attachPerfHarness(map); // DEV-only frame-time overlay + __panBench() + __perf toggles
+      detachSimDev = attachSimDevHandle(simClock); // DEV-only __sim.setTime()/__sim.step() clock driver
       map.resize();
     });
 
@@ -724,6 +746,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       detachInteractions?.();
       detachVehicles?.();
       detachPerf?.();
+      detachSimDev?.();
       schedulePushDataRef.current = null;
       setMap(null);
       map.remove();
@@ -732,8 +755,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // those keep their identity for the life of the component. Naming it here
     // therefore cannot retrigger this effect — which matters, because this
     // effect's cleanup calls map.remove(), so a retrigger would tear down and
-    // rebuild the whole MapLibre map.
-  }, [store, openShortcuts, toggleUi, setViewMode]);
+    // rebuild the whole MapLibre map. simClock is stable for the same kind of
+    // reason: SimProvider holds one instance in a ref for the session. Both
+    // are listed because the effect genuinely closes over them.
+  }, [store, openShortcuts, toggleUi, setViewMode, simClock]);
 
   return <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />;
 }

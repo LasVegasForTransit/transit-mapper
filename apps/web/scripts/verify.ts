@@ -170,6 +170,25 @@ import {
   VEHICLE_SPEED_MPS,
 } from '@transitmapper/core/sim/timetable';
 import {
+  advanceSimMs,
+  dayOfWeek,
+  dayScopeAt,
+  DEFAULT_SIM_SPEED_ID,
+  DEFAULT_SIM_START_MS,
+  formatSimClock,
+  formatTimeOfDay,
+  isWithinSpan,
+  minutesOfDay,
+  MS_PER_DAY,
+  MS_PER_MINUTE,
+  parseHhMm,
+  SIM_SPEEDS,
+  simSpeed,
+  stepSimSpeed,
+  weekdayLabel,
+} from '@transitmapper/core/sim/clock';
+import { createSimClock } from '../src/sim/simClock';
+import {
   generateToken,
   hashToken,
   sha256Base64Url,
@@ -5174,6 +5193,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       const detach = attachInteractions(map as never, s, {
         openShortcuts() {},
         toggleUi() {},
+        sim: { togglePaused() {}, stepSpeed() {} },
         isDiagramMode: () => false,
         isNetworkMode: () => true,
         focusFootprint() {},
@@ -5248,6 +5268,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       const detach = attachInteractions(map as never, s, {
         openShortcuts() {},
         toggleUi() {},
+        sim: { togglePaused() {}, stepSpeed() {} },
         isDiagramMode: () => false,
         isNetworkMode: () => false,
         focusFootprint() {},
@@ -5307,6 +5328,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       const detach = attachInteractions(map as never, s, {
         openShortcuts() {},
         toggleUi() {},
+        sim: { togglePaused() {}, stepSpeed() {} },
         isDiagramMode: () => false,
         isNetworkMode: () => false,
         focusFootprint() {},
@@ -7842,7 +7864,10 @@ function buildGrid() {
   // and sat clamped at the terminal, and a slow one never arrived at all.
   const fastSpeed = 22; // twice VEHICLE_SPEED_MPS
   const fast = buildTimetable(totalMeters, [{ distMeters: 550, dwellMs: 20000 }], fastSpeed);
-  check('a faster vehicle kind covers the same path in less time', fast.oneWayMs < oneStop.oneWayMs);
+  check(
+    'a faster vehicle kind covers the same path in less time',
+    fast.oneWayMs < oneStop.oneWayMs,
+  );
   check(
     'a faster vehicle kind covers more ground in the same elapsed time',
     metersAtElapsed(totalMeters, fast, 10000, fastSpeed) === 220,
@@ -9219,6 +9244,160 @@ function buildGrid() {
     'a failed delete leaves the system listed rather than half-removed',
     listLibrary().some((e) => e.id === 'stuck'),
   );
+}
+
+// --- the simulated clock (core/sim/clock.ts) ---
+// The whole simulator resolves against this one number, so the calendar math
+// below is load-bearing for every later rule about what is running when.
+{
+  // The speed ladder, against the two properties it was designed around.
+  check(
+    'the default speed runs one simulated minute per real second',
+    simSpeed(DEFAULT_SIM_SPEED_ID).simPerReal === 60,
+  );
+  check(
+    'the speed ladder only ever gets faster',
+    SIM_SPEEDS.every((s, i) => i === 0 || s.simPerReal > SIM_SPEEDS[i - 1].simPerReal),
+  );
+  const fastestRealMs = MS_PER_DAY / SIM_SPEEDS[SIM_SPEEDS.length - 1].simPerReal;
+  check(
+    'the fastest speed simulates a whole day inside ten real minutes',
+    fastestRealMs <= 10 * 60_000,
+  );
+  check('realtime is real time', SIM_SPEEDS[0].simPerReal === 1);
+  check(
+    'an unknown speed id falls back to a usable speed rather than crashing',
+    simSpeed('nonsense').simPerReal > 0,
+  );
+
+  check('stepping the speed up moves one rung', stepSimSpeed('1x', 1) === '2x');
+  check('stepping the speed down moves one rung', stepSimSpeed('2x', -1) === '1x');
+  check(
+    "the slowest speed can't step below itself",
+    stepSimSpeed(SIM_SPEEDS[0].id, -1) === SIM_SPEEDS[0].id,
+  );
+  check(
+    "the fastest speed can't wrap around to the slowest",
+    stepSimSpeed(SIM_SPEEDS[SIM_SPEEDS.length - 1].id, 1) === SIM_SPEEDS[SIM_SPEEDS.length - 1].id,
+  );
+
+  // Advancing.
+  check(
+    'one real second at 1x advances one simulated minute',
+    advanceSimMs(0, 1000, 60) === MS_PER_MINUTE,
+  );
+  check('a zero speed holds the clock', advanceSimMs(5000, 1000, 0) === 5000);
+  check('the clock never runs backwards', advanceSimMs(5000, -1000, 60) === 5000);
+
+  // Time of day and the week. simMs 0 is Monday 00:00.
+  check(
+    'the clock starts mid-morning, not at midnight on an empty map',
+    minutesOfDay(DEFAULT_SIM_START_MS) === 8 * 60,
+  );
+  check('minutes of day wrap at midnight', minutesOfDay(MS_PER_DAY + 90 * MS_PER_MINUTE) === 90);
+  check('day zero is Monday', dayOfWeek(0) === 0);
+  check('the week wraps after seven days', dayOfWeek(7 * MS_PER_DAY) === 0);
+  check(
+    'Monday through Friday are weekdays',
+    [0, 1, 2, 3, 4].every((d) => dayScopeAt(d * MS_PER_DAY) === 'weekday'),
+  );
+  check(
+    'Saturday and Sunday are the weekend',
+    [5, 6].every((d) => dayScopeAt(d * MS_PER_DAY) === 'weekend'),
+  );
+
+  // Day names and times come from Intl, not a hardcoded English table.
+  check(
+    'weekday names are localized, not one hardcoded language',
+    weekdayLabel(0, 'en-US') !== weekdayLabel(0, 'fr-FR'),
+  );
+  check(
+    'a locale that writes 24-hour time gets 24-hour time',
+    formatTimeOfDay(17 * 60 + 5, 'en-GB') === '17:05',
+  );
+  check(
+    'a locale that writes 12-hour time gets 12-hour time',
+    formatTimeOfDay(17 * 60 + 5, 'en-US').includes('05:05'),
+  );
+  check(
+    "the hour is padded so the readout can't change width",
+    formatTimeOfDay(9 * 60, 'en-GB').length === formatTimeOfDay(10 * 60, 'en-GB').length,
+  );
+  check(
+    'the clock reads as a day plus a time',
+    formatSimClock(DEFAULT_SIM_START_MS, 'en-GB') === 'Mon 08:00',
+  );
+  check(
+    'the same weekday a week later reads the same',
+    formatSimClock(0, 'en-GB') === formatSimClock(7 * MS_PER_DAY, 'en-GB'),
+  );
+
+  // "HH:MM" spans, as typed into the schedule editor.
+  check('a span time parses to minutes since midnight', parseHhMm('06:30') === 390);
+  check('a single-digit hour still parses', parseHhMm('6:30') === 390);
+  check(
+    'a malformed span time is rejected rather than read as midnight',
+    parseHhMm('nope') === null,
+  );
+  check('an impossible hour is rejected', parseHhMm('25:00') === null);
+  check('an impossible minute is rejected', parseHhMm('06:75') === null);
+
+  check('a time inside a span counts as running', isWithinSpan(8 * 60, 6 * 60, 23 * 60));
+  check('a time before a span starts does not', !isWithinSpan(5 * 60, 6 * 60, 23 * 60));
+  check(
+    "a span's end minute belongs to the next period, not this one",
+    !isWithinSpan(23 * 60, 6 * 60, 23 * 60),
+  );
+  check("a span's start minute belongs to it", isWithinSpan(6 * 60, 6 * 60, 23 * 60));
+  check('a span crossing midnight is still running at 00:30', isWithinSpan(30, 23 * 60, 60));
+  check('a span crossing midnight is not running at midday', !isWithinSpan(12 * 60, 23 * 60, 60));
+}
+
+// --- the SimClock instance (apps/web/src/sim/simClock.ts) ---
+{
+  const clock = createSimClock({ startMs: 0 });
+  check('a new clock starts where it was told to', clock.now() === 0);
+  clock.advance(1000);
+  check(
+    'advancing a running clock at the default speed adds a simulated minute',
+    clock.now() === MS_PER_MINUTE,
+  );
+
+  clock.setSettings({ speedId: '2x', paused: false });
+  clock.advance(1000);
+  check(
+    'a faster speed advances the clock further per real second',
+    clock.now() === 3 * MS_PER_MINUTE,
+  );
+
+  clock.setSettings({ speedId: '2x', paused: true });
+  const heldAt = clock.now();
+  clock.advance(5000);
+  check('a paused clock holds', clock.now() === heldAt);
+
+  // Pausing must FREEZE the simulation, not hide it — vehicle position is a
+  // function of this number, so a paused clock leaves every vehicle exactly
+  // where it was rather than clearing the map.
+  let seen: number | null = null;
+  const unsubscribe = clock.subscribe((simMs) => {
+    seen = simMs;
+  });
+  clock.advance(1000);
+  check('a paused clock notifies nobody', seen === null);
+
+  clock.setTime(9 * MS_PER_MINUTE);
+  check('the clock can be jumped to a specific time', clock.now() === 9 * MS_PER_MINUTE);
+  check('a jump notifies subscribers even while paused', seen === 9 * MS_PER_MINUTE);
+
+  unsubscribe();
+  clock.setTime(0);
+  check('unsubscribing stops the notifications', seen === 9 * MS_PER_MINUTE);
+
+  // Two instances, no shared state — the clock is created and injected, not
+  // reached for, so a second one can't disturb the first.
+  const other = createSimClock({ startMs: 12 * MS_PER_MINUTE });
+  other.advance(1000);
+  check('two clocks keep their own time', clock.now() === 0 && other.now() === 13 * MS_PER_MINUTE);
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

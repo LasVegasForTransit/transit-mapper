@@ -30,6 +30,16 @@ export interface KeyContext {
   openShortcuts: () => void;
   /** Show/hide all floating chrome, leaving just the map. */
   toggleUi: () => void;
+  /** Run/pause the simulated clock, and move one step along its speed
+   *  ladder. Injected as plain callbacks (rather than the SimClock itself)
+   *  because these change the user's SETTINGS, which live in React — the
+   *  clock is only their consumer. */
+  sim: SimCommands;
+}
+
+export interface SimCommands {
+  togglePaused: () => void;
+  stepSpeed: (direction: -1 | 1) => void;
 }
 
 export interface KeyBinding {
@@ -358,6 +368,28 @@ export const KEY_BINDINGS: KeyBinding[] = [
       else s.setDraftPreset(preset.id);
     },
   })),
+
+  // Transport controls. `k` is the video-player convention for play/pause;
+  // space, the other one, is already the pan modifier and is far too easy to
+  // hit while dragging the map.
+  {
+    group: 'Simulation',
+    keys: ['k'],
+    description: 'Run / pause the simulation',
+    run: (c) => c.sim.togglePaused(),
+  },
+  {
+    group: 'Simulation',
+    keys: [','],
+    description: 'Slow the simulation down',
+    run: (c) => c.sim.stepSpeed(-1),
+  },
+  {
+    group: 'Simulation',
+    keys: ['.'],
+    description: 'Speed the simulation up',
+    run: (c) => c.sim.stepSpeed(1),
+  },
 
   {
     group: 'Help',

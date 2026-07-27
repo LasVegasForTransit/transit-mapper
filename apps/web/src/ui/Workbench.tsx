@@ -30,6 +30,14 @@ export interface WorkbenchProps {
    *  transient action, so it's its own slot rather than folded into
    *  primaryToolbar (desktop only has room to show this distinction). */
   viewSwitcher: ReactNode;
+  /** Play/pause, simulation speed, and the simulated clock. Persistent state
+   *  of the canvas like `viewSwitcher`, so it shares that card rather than
+   *  getting a fourth corner of chrome — see the top-center overlay below. */
+  simControls: ReactNode;
+  /** The same controls at phone width, where four speed buttons and a clock
+   *  can't sit beside a view switch. Rendered in the mobile top-left card
+   *  instead; which one shows is this component's decision, not the caller's. */
+  simControlsCompact: ReactNode;
   /** Select/Way/Station/Facility — the drawing-tool palette. */
   modeToolbar: ReactNode;
   /** A background import's live status (ImportProgressPill) — stacked
@@ -66,6 +74,8 @@ export function Workbench({
   hasSupplementalContent,
   primaryToolbar,
   viewSwitcher,
+  simControls,
+  simControlsCompact,
   modeToolbar,
   importStatus,
 }: WorkbenchProps) {
@@ -110,6 +120,7 @@ export function Workbench({
             <div className="mobile-topleft">
               <div className="mobile-topleft-row">{brand}</div>
               {viewSwitcher}
+              {simControlsCompact}
             </div>
           </div>
           <div className="actions-collapsed pointer-events-auto flex shrink-0 flex-col items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-1 shadow-[var(--shadow)]">
@@ -150,13 +161,21 @@ export function Workbench({
           </div>
         )}
 
-        {/* ---- the view switch: a full-width flex row centers it on the
-            map at every width via justify-content, not a grid track (whose
-            "center" only lines up with the real center when both side
-            columns happen to match width) or a left-50%/translate hack. ---- */}
+        {/* ---- the view switch and the simulation controls: a full-width flex
+            row centers them on the map at every width via justify-content, not
+            a grid track (whose "center" only lines up with the real center
+            when both side columns happen to match width) or a
+            left-50%/translate hack.
+
+            Both live in ONE card because both are persistent state of the
+            canvas — what you're looking at, and when. A second card beside
+            this one would read as a floating strip of unrelated chrome, and
+            each would drift off center as the other changed width. ---- */}
         <div className="pointer-events-none absolute inset-x-0 top-0 hidden md:flex md:justify-center">
           <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2 shadow-[var(--shadow)]">
             {viewSwitcher}
+            <span className="top-center-divider" aria-hidden="true" />
+            {simControls}
           </div>
         </div>
 

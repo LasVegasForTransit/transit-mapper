@@ -4,6 +4,7 @@ import { App } from './App';
 import { EditorProvider } from './editor/EditorProvider';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { SaveStatusProvider } from './ui/SaveStatusProvider';
+import { SimProvider } from './ui/SimProvider';
 import { UiProvider } from './ui/UiProvider';
 import { ViewProvider } from './ui/ViewProvider';
 
@@ -20,7 +21,9 @@ createRoot(document.getElementById('root')!).render(
         <UiProvider>
           <SaveStatusProvider>
             <ViewProvider>
-              <App />
+              <SimProvider>
+                <App />
+              </SimProvider>
             </ViewProvider>
           </SaveStatusProvider>
         </UiProvider>
