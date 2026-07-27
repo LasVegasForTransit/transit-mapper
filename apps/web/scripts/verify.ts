@@ -85,7 +85,7 @@ import { anchorOnWay, routeBetween, routePath } from "@transitmapper/core/model/
 // at the top of this file; naming them twice was a duplicate-identifier error
 // that only ran because tsx tolerates what tsc rejects.
 import { bearingDegrees, formatBearing, haversineMeters } from "@transitmapper/core/model/geo";
-import type { CrossSection, LngLat, Node, Pattern, Service, TransitSystem, Way } from "@transitmapper/core/model/system";
+import type { CrossSection, LngLat, Node, Service, TransitSystem, Way } from "@transitmapper/core/model/system";
 import { armRefKey, getComponent, laneRefKey, withComponent, withoutComponent } from "@transitmapper/core/model/components";
 import { dwellStopsForPattern, effectiveVehicleKind } from "../src/sim/vehicles";
 import { buildTimetable, metersAtElapsed, VEHICLE_SPEED_MPS } from "@transitmapper/core/sim/timetable";
