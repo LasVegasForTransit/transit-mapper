@@ -42,7 +42,7 @@ Three nets, because the first two can be skipped:
 
 | Net | Where                  | Bypassable                           |
 | --- | ---------------------- | ------------------------------------ |
-| 1   | `.githooks/pre-commit` | yes — `--no-verify`, by design       |
+| 1   | `.githooks/pre-commit` | yes, via `--no-verify`               |
 | 2   | CI, `Scan for secrets` | no, but only once a branch is pushed |
 | 3   | GitHub push protection | no, blocks at the remote             |
 

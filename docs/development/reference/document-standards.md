@@ -8,8 +8,8 @@ missing or lacks a required top-level section.
 
 ### Headings
 
-Noun phrases naming their contents. Not questions, not sentences, not
-claims. `Runtimes`, not `Why core must run in two runtimes`.
+A heading is a noun phrase naming its contents. `Runtimes` is a heading;
+`Why core must run in two runtimes` is a sentence.
 
 Nest. A section covering several things gets one `###` per thing, rather
 than paragraphs separated by transitions.
@@ -19,8 +19,9 @@ record is omitted, not retitled.
 
 ### Prose
 
-Declarative and specific. No preamble, no restatement of the heading, no
-address to the reader.
+Sentences are complete, declarative, and specific. A section does not open
+by restating its heading, and reference documents do not address the
+reader.
 
 Numbers carry units and provenance: `10ms CPU limit per request`, not `a low
 CPU limit`.

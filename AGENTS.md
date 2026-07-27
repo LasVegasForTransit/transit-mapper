@@ -2,8 +2,7 @@
 
 What this project is and how it is laid out lives in [`docs/`](docs/README.md).
 The reasoning behind the domain model is in
-[Design principles](docs/product/explanation/design-principles.md). This file is the
-short version of what to do and why.
+[Design principles](docs/product/explanation/design-principles.md).
 
 ## The bar
 
@@ -11,15 +10,15 @@ short version of what to do and why.
 pnpm check
 ```
 
-Formatting, lint, typecheck, tests, and the repository's own invariants.
-That is the whole bar, and it runs without a browser or a network.
+The command runs formatting, lint, typecheck, tests, and the repository's
+own invariants. It requires no browser and no network.
 
 ```bash
 pnpm check --fix
 ```
 
-repairs everything a machine can. When a check fails it names the command
-that fixes it — you should never have to work out which tool is unhappy.
+The `--fix` form repairs everything a machine can. A failing check names
+the command that resolves it.
 
 If new logic can only be checked by clicking through the app, move it down
 into `packages/core` where the test suite can reach it.
@@ -48,8 +47,7 @@ says **nothing**, the rule holds only because you follow it.
 | Parameter and prop types are named interfaces, even single-use ones        | `interface ShareDialogProps { onClose: () => void }`, not an inline object type                                          | **nothing**                     |
 | Selection-dependent controls go in the right-hand inspector                | one dynamic surface, not several                                                                                         | **nothing**                     |
 
-The `HTMLRewriter` row is deliberately unenforced rather than merely
-unwritten. The two places the Worker builds markup by interpolation are both
+The `HTMLRewriter` row is unenforced by choice. The two places the Worker builds markup by interpolation are both
 correct, and telling a safe interpolation from an unsafe one needs value
 provenance a linter does not have — so a rule there would report only false
 positives, which teaches people to disable rules.
@@ -115,8 +113,9 @@ Deploying, rolling back, and restoring the database:
 
 Core is typechecked standalone against the browser and the Workers runtime.
 Its tsconfig includes the `DOM` lib only to pick up ambient `fetch`,
-`crypto`, and `structuredClone`, which both runtimes provide — which is
-exactly why the lint rule exists to catch the ones only the browser has.
+`crypto`, and `structuredClone`, which both runtimes provide. That
+inclusion also admits the browser-only globals, and the lint rule rejects
+those.
 
 ## Agent configuration
 

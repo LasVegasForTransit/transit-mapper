@@ -14,6 +14,8 @@
  *   auth        — confirm gh and wrangler are logged in
  *   provision   — create the D1 database if it does not exist, write its id
  *                 into wrangler.toml, and apply migrations
+ *   repo-config — apply the organization's governance standard to the
+ *                 GitHub repository: branch ruleset, secret scanning
  *   ci-secrets  — CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID on the
  *                 "production" GitHub Environment
  *
@@ -32,6 +34,7 @@ import { runCloudflareVerifyPhase } from './phases/cloudflare-verify.js';
 import { runCiSecretsPhase } from './phases/ci-secrets.js';
 import { runProvisionPhase } from './phases/provision.js';
 import { runWorkspacePhase } from './phases/workspace.js';
+import { runRepoConfigPhase } from './phases/repo-config.js';
 
 interface PhaseContext {
   /** Report problems, create and write nothing. */
@@ -53,6 +56,7 @@ const PHASES: readonly Phase[] = [
     title: 'Deployment configuration',
     run: () => runCloudflareVerifyPhase(),
   },
+  { id: 'repo-config', title: 'Repository governance', run: runRepoConfigPhase },
   { id: 'ci-secrets', title: 'CI secrets', run: runCiSecretsPhase },
 ];
 

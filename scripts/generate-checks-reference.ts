@@ -108,6 +108,11 @@ const ELSEWHERE: Check[] = [
     fix: 'remove it, then rotate it — assume it is burned',
   },
   {
+    command: 'pnpm preflight',
+    fails: 'the toolchain, Cloudflare resources, or GitHub governance differ from the standard',
+    fix: 'pnpm bootstrap',
+  },
+  {
     command: 'commit-msg hook',
     fails: 'the subject is not a conventional commit, or exceeds 72 characters',
     fix: 'reword the commit',

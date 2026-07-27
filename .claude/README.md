@@ -7,7 +7,7 @@ agent-agnostic. The rule for what belongs here:
 > actions.**
 
 If a human doing the same thing would be caught by `pnpm check`, it belongs
-in repository tooling — always. Agent configuration is for the cases where
+in repository tooling. Agent configuration covers the cases where
 the harm happens before any artifact exists, so there is nothing for a check
 to inspect.
 
