@@ -25,7 +25,7 @@
     "format:check": "prettier --check .",
     "typecheck:scripts": "tsc -p scripts/tsconfig.json --noEmit",
     "check:contract": "tsx scripts/check-workspace-contract.ts",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck:scripts && pnpm check:contract && pnpm check:docs && pnpm check:migrations && pnpm check:structure && pnpm check:reference && turbo run lint typecheck check:types && turbo run verify --concurrency=1",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck:scripts && pnpm check:contract && pnpm check:docs && pnpm check:migrations && pnpm check:structure && pnpm check:documents && pnpm check:reference && turbo run lint typecheck check:types && turbo run verify --concurrency=1",
     "check:fix": "pnpm format && pnpm lint:fix && pnpm run check",
     "check:docs": "tsx scripts/check-docs-links.ts",
     "check:migrations": "tsx scripts/check-migrations-append-only.ts",
@@ -34,7 +34,8 @@
     "check:generators": "tsx scripts/check-generators.ts",
     "check:env": "tsx scripts/doctor.ts",
     "gen:checks": "tsx scripts/generate-checks-reference.ts",
-    "check:reference": "tsx scripts/generate-checks-reference.ts --check"
+    "check:reference": "tsx scripts/generate-checks-reference.ts --check",
+    "check:documents": "tsx scripts/check-document-standards.ts"
   },
   "devDependencies": {
     "@clack/prompts": "catalog:",

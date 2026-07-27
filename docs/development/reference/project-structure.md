@@ -6,6 +6,8 @@ domain-model package both depend on. The layering rule that organizes
 everything: **model → store → rendering/UI**, with purity increasing toward
 the model.
 
+## Tree
+
 ```
 packages/
   core/          The shared domain model — no DOM, no store, no React.

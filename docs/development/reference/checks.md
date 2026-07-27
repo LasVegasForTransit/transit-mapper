@@ -19,6 +19,8 @@ pnpm check --fix  # everything a machine can repair
 | `check:docs`        | a relative link or anchor in docs/ does not resolve                                           | `correct the link, or write the page it points at`                            |
 | `check:migrations`  | a migration that already exists was edited, renamed or deleted                                | `restore the file and add a new migration with the change`                    |
 | `check:structure`   | a source directory has no section in project-structure.md, or a described one is gone         | `write the section, or remove the stale entry`                                |
+| `check:documents`   | a required document is missing, or lacks a required section, or has them out of order         | `add the section — see docs/development/reference/document-standards.md`      |
+| `check:reference`   | this page no longer matches the registry it is generated from                                 | `pnpm gen:checks`                                                             |
 | `check:types`       | worker-configuration.d.ts no longer matches wrangler.toml                                     | `pnpm --filter @transitmapper/worker types`                                   |
 | `typecheck`         | TypeScript rejects the code in any package                                                    | `fix the type error`                                                          |
 | `verify`            | a test fails                                                                                  | `fix the code, or the test if the test was wrong`                             |

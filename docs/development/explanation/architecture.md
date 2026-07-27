@@ -1,115 +1,221 @@
 # Architecture
 
-What the pieces are, how they talk to each other, and which boundaries are
-load-bearing. [Project structure](../reference/project-structure.md) says
-where things live; this says why the shape is what it is.
+## Context
 
-## Three packages, one rule
+TransitMapper is a browser-based editor for regional transit systems. A
+system is a document: created, edited, and stored locally, and optionally
+published as a read-only snapshot that anyone with the link can view or
+copy.
 
+Nobody signs in. There is no account, no collaboration, and no server-side
+notion of "your systems".
+
+```mermaid
+flowchart LR
+  author([Author])
+  viewer([Viewer])
+  embedder([Third-party page])
+
+  subgraph client [Browser]
+    editor[Editor]
+    local[(Local library)]
+  end
+
+  subgraph edge [Edge]
+    worker[Publishing service]
+    db[(Snapshot store)]
+  end
+
+  osm[(OpenStreetMap)]
+  gtfs[(Transit agency GTFS)]
+
+  author --> editor
+  editor <--> local
+  editor -- publish --> worker
+  editor -. import .-> osm
+  editor -. import .-> gtfs
+  worker <--> db
+  viewer -- share link --> worker
+  embedder -- iframe --> worker
 ```
-packages/core   →   apps/web
-                →   apps/worker
-```
 
-**Core depends on nothing in the apps, and both apps depend on core.** That
-is the only structural rule, and everything else follows from it.
+External dependencies are read-only and optional. Losing OpenStreetMap or a
+GTFS feed removes an import path; it does not affect editing.
 
-Core is the domain: the data model, the geometry, the routing graph, the
-renderer, the share contract. It is consumed straight from source — there is
-no build step — through subpath imports like
-`@transitmapper/core/model/catalog`.
+## Components
 
-The layering inside is **model → store → rendering and UI**, with purity
-increasing toward the model. A function in `model/` takes data and returns
-data. A component in `apps/web/src/ui/` reads the store and calls an action,
-and holds no domain logic at all.
+### Domain core
 
-## Why core must run in two runtimes
+The data model, geometry derivation, routing graph, renderer, and the
+published-snapshot format. Pure: no DOM, no store, no framework.
 
-The editor runs in a browser. The Worker runs in workerd. Core runs in both,
-because the same code that draws a system in the editor also draws the share
-card that the Worker serves.
+Owns every rule about what a transit system is and how it is drawn. Owns no
+storage, no transport, and no interaction state.
 
-This is the constraint that shapes core most. A browser-only global compiles
-cleanly and then throws in production, in whichever runtime nobody
-exercised — and the compiler cannot catch it, because core's tsconfig
-includes the `DOM` lib deliberately to pick up the ambient `fetch`, `crypto`
-and `structuredClone` that _both_ runtimes provide. That necessarily brings
-`window` and `document` along with it.
+### Editor
 
-So it is a lint rule instead: `core-runtime-purity`. It exists precisely
-because the type system cannot express the thing that matters.
+The single-page application. Holds interaction state, renders the map, and
+routes every document mutation through one store.
 
-## The editor: one store, everything through it
+Owns no domain rules — it asks the core. Owns no server state.
 
-`apps/web/src/editor/store.ts` is a single zustand store, and **every**
-change to a system goes through an action on it. Undo checkpoints, junction
-bookkeeping, station re-anchoring and NamedWay upkeep all live in those
-actions rather than in the components that trigger them.
+### Publishing service
 
-The map layer is deliberately not React. `apps/web/src/map/` keeps MapLibre
-sources in sync with the store imperatively, and `sim/vehicles.ts` writes a
-GeoJSON source directly, because both update at frame rate and
-reconciliation at that rate is what would make it stutter.
+An edge worker with an attached database. Accepts a snapshot, serves it
+back, and renders link previews and embeds.
 
-## The Worker: the only code that reads bytes from strangers
+Owns snapshot lifetime. Owns no domain rules: it stores what it is given and
+validates it against the core's parser rather than its own.
 
-`apps/worker/src/index.ts` handles share creation and retrieval, the GTFS
-proxy, preview images, oEmbed, and the share and embed pages.
+## Flows
 
-Everything security-relevant about this project is in that one file, which
-is why it is the one with tests running in real workerd against a real D1
-rather than against mocks.
+### Editing
 
-Two decisions there are worth knowing because they look odd otherwise:
+Entirely local. The editor mutates the store, the store asks the core to
+derive geometry and routes, and the result is written to the local library.
+No network, no backend, no failure mode involving either.
 
-- **The Worker does not run first.** `run_worker_first` is scoped to
-  `/api/*`, `/s/*` and `/e/*`. An asset served without invoking the Worker
-  is free and unlimited; every request that reaches it is billed against a
-  100k/day allowance, and requests past that get a 429 rather than falling
-  back. A homepage visit costs zero invocations.
-- **Preview cards are drawn in the browser**, not the Worker, and uploaded
-  with the share. A free-plan Worker gets 10ms of CPU per request and
-  rasterizing a card measured ~65ms. The Worker validates the uploaded bytes
-  and hands them back; it never trusts them as markup.
+### Publishing
 
-## Storage, and what it means for the data model
+1. The author requests a share.
+2. The browser renders the link-preview image locally.
+3. The editor sends the system and the image to the publishing service.
+4. The service validates both, assigns an identifier, and stores a snapshot
+   with an expiry.
+5. The author receives a link.
 
-There are two stores, and they are not mirrors of each other.
+The snapshot is a copy. Editing the system afterwards does not change what
+was published.
 
-`localStorage` holds the working library — every system the person has made,
-each under its own key so switching between them never touches the others,
-with a small index of id, name and timestamp so the list renders without
-loading everything.
+### Viewing a share
 
-D1 holds _snapshots_. A share is a copy taken at a moment, not a live
-document. Nothing syncs back. That is why a share can expire and the
-original survives, and why `serialize.ts` carries versioned migrations: a
-snapshot taken months ago must still parse.
+1. A viewer opens the link.
+2. The service reads the snapshot, and returns the application shell with
+   the snapshot's metadata injected for link unfurling.
+3. The application loads and renders the snapshot read-only.
+4. Reading extends the snapshot's expiry, so a link in active use does not
+   lapse.
 
-## Where the seams are
+### Embedding
 
-These are the boundaries worth preserving, in the sense that crossing them
-is how the design erodes:
+A separate, minimal entry point renders the map alone — no editor, no
+framework — because it loads inside a third party's page.
 
-| Boundary                                                                  | What it protects                                                     |
-| ------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| core has no DOM, no store, no React                                       | core stays runnable in both runtimes and testable without either     |
-| all mutation goes through store actions                                   | undo, junction upkeep and re-anchoring cannot be bypassed            |
-| `catalogStyle.ts` holds visual properties, `catalog.ts` holds domain data | adding a mode does not mean touching the renderer                    |
-| `buildFeatures.ts` is the only system-to-GeoJSON projector                | the editor, the embed, exports and the share card cannot drift apart |
-| the Worker never concatenates stored values into HTML                     | user-supplied names cannot become markup                             |
+### Expiry
 
-## What is built but not connected
+A scheduled sweep deletes snapshots past their expiry. Snapshots marked as
+owned are exempt; nothing currently marks them.
 
-`packages/core/src/auth/` and `share/claim.ts` and `share/ownership.ts` are
-the first slice of accounts: OAuth URL building, PKCE, token hashing, cookie
-serialization, return-path validation. They are complete, pure, and covered
-by tests — and **nothing imports them but the tests.**
+## Decisions
 
-There are no auth routes, no users or sessions table, and no owner column.
-This matters when reading nearby code, because several places already talk
-about accounts as though they exist: `touchExpiry` skips rows with
-`expires_at IS NULL` "because they're account-owned", and migration `0002`
-reserves that null for the same reason. Those are deliberate preparation,
-not a feature you have failed to find.
+### Local-first documents
+
+**Chosen:** the browser is authoritative for work in progress. The backend
+holds only published copies.
+
+**Rejected:** server-authoritative documents with the editor as a client.
+
+**Constraint:** the project must be usable by someone who never publishes
+anything, and must not lose a user's work when the backend is unavailable or
+retired. A nonprofit cannot promise indefinite hosting; it can promise that
+losing the service does not lose the work.
+
+### Snapshots, not synchronisation
+
+**Chosen:** publishing copies the document. Nothing propagates back.
+
+**Rejected:** live documents shared by link.
+
+**Constraint:** shared links are public and unauthenticated. A live document
+behind a public link is a document anyone can edit; making that safe
+requires the accounts and permissions the project does not have.
+
+### Rendering previews in the browser
+
+**Chosen:** the client renders the link-preview image and uploads it.
+
+**Rejected:** rendering it in the edge worker on demand.
+
+**Constraint:** the edge runtime's per-request compute budget is an order of
+magnitude below what rasterisation costs. The consequence is accepted
+deliberately: preview bytes are attacker-supplied, so they are validated
+structurally and served inert.
+
+### Static assets bypass the worker
+
+**Chosen:** only the API, share, and embed paths invoke the worker.
+
+**Rejected:** routing every request through it.
+
+**Constraint:** worker invocations are metered and assets are not. Routing
+everything through it spends the invocation budget on files that never
+needed logic, and exhausting it degrades the whole site rather than one
+feature.
+
+### One domain core across both runtimes
+
+**Chosen:** the editor and the publishing service import the same core.
+
+**Rejected:** a separate server-side model.
+
+**Constraint:** the published preview and the editor's map must not diverge.
+Two implementations of the same rules diverge on a timescale of months. The
+cost is that the core must run in both runtimes, which the type system
+cannot enforce and a lint rule does.
+
+## Trust boundary
+
+Everything reaching the publishing service is untrusted. It is the only
+component that processes input from unauthenticated callers, and the only
+one with tests exercising a real runtime and a real database rather than
+mocks.
+
+Three kinds of input cross it:
+
+| Input                     | Constraint                                                                        |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| A submitted system        | Size-capped, then parsed by the core's parser rather than trusted as-is           |
+| A submitted preview image | Size-capped, structurally validated, served with a policy that prevents execution |
+| A snapshot identifier     | Opaque; parameterised at the query layer                                          |
+
+Stored text is unauthenticated and unsanitised at rest. It reaches markup
+only through an escaping API, never string construction.
+
+Publishing is rate-limited per client address, because it is the one path
+that writes caller-supplied bytes to storage.
+
+## Failure modes
+
+| Failure                           | Effect                                                        |
+| --------------------------------- | ------------------------------------------------------------- |
+| Publishing service unavailable    | Editing unaffected. Publishing and viewing shares fail.       |
+| Snapshot store unavailable        | Editing unaffected. Existing links error.                     |
+| Invocation budget exhausted       | Static assets still served. API, shares, and embeds rejected. |
+| OpenStreetMap or GTFS unavailable | Import unavailable. Everything else unaffected.               |
+| Browser storage full or cleared   | Unpublished work is lost. Published snapshots survive.        |
+
+The pattern is deliberate: no backend failure can prevent someone editing,
+and no client failure can affect anyone else.
+
+## Invariants
+
+| Invariant                                               | Property preserved                                      |
+| ------------------------------------------------------- | ------------------------------------------------------- |
+| The domain core references no DOM, store, or framework  | It runs in both runtimes and is testable without either |
+| All document mutation passes through store actions      | Undo and derived-state upkeep cannot be bypassed        |
+| Visual properties are separate from domain data         | Adding a transit mode does not modify the renderer      |
+| One projector converts a system to renderable output    | Editor, embed, exports, and previews cannot diverge     |
+| Stored values reach markup only through an escaping API | User-supplied text cannot become executable markup      |
+| Snapshots are read through a versioned parser           | An old snapshot stays readable after the format changes |
+
+## Unwired code
+
+Identity, sessions, and snapshot ownership are implemented in the domain
+core, tested, and imported by nothing.
+
+There are no authentication routes, no user or session storage, and no owner
+attribute on a snapshot.
+
+Adjacent code anticipates it: the expiry sweep already exempts snapshots
+marked as owned, and the schema reserves the field that would mark them.
+These are preparatory. Every snapshot currently expires.

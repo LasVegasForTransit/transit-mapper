@@ -64,6 +64,16 @@ const CHECKS: Check[] = [
     fix: 'write the section, or remove the stale entry',
   },
   {
+    command: 'check:documents',
+    fails: 'a required document is missing, or lacks a required section, or has them out of order',
+    fix: 'add the section — see docs/development/reference/document-standards.md',
+  },
+  {
+    command: 'check:reference',
+    fails: 'this page no longer matches the registry it is generated from',
+    fix: 'pnpm gen:checks',
+  },
+  {
     command: 'check:types',
     fails: 'worker-configuration.d.ts no longer matches wrangler.toml',
     fix: 'pnpm --filter @transitmapper/worker types',

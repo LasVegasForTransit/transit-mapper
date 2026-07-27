@@ -78,7 +78,7 @@ reason for the migration rule below — if the previous version can't run
 against the current schema, rolling back doesn't help and you need a
 fix-forward deploy instead.
 
-## Apply and check migrations
+## Migrations
 
 The deploy workflow applies migrations before deploying code, so an ordinary
 release needs nothing from you. To check what production is running:
@@ -98,7 +98,7 @@ rewrites a column is not safe in either order, because both versions are live
 during a deploy. Split it across two releases — first ship code that no longer
 depends on the column, then ship the migration that drops it.
 
-## Restore the database
+## Restore
 
 D1 has Time Travel: it keeps a restorable history without any backup job.
 
@@ -114,7 +114,7 @@ Worth knowing before you need it: the `systems` table holds shared snapshots
 only. Nobody's working copy lives there — that's in their own browser's
 localStorage — so losing this table costs shared links, not people's systems.
 
-## When something breaks in production
+## Incidents
 
 Worker logs are on at 100% sampling:
 
@@ -140,7 +140,7 @@ The first should print a CSP header; the second should print `404` and
 `text/html`. A `200` on the second means the Worker isn't running for `/s/*`
 and every share link, preview image and embed is silently broken.
 
-## What isn't set up yet
+## Not yet configured
 
 Stated plainly so nobody assumes otherwise:
 
