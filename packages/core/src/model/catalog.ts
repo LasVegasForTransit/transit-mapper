@@ -224,6 +224,18 @@ export interface WayType {
   primaryLaneKindId: string;
   /** Cross-section a new way of this type starts with. */
   defaultProfile: ProfileTemplateLane[];
+  /**
+   * Capacity to assume for a way SYNTHESIZED from an imported service trace,
+   * where the real cross-section is unknown — as opposed to `defaultProfile`,
+   * which is what someone gets when they deliberately draw one.
+   *
+   * Declared here because it is a judgement about the world ("a street we
+   * only know carries a bus is probably two lanes, not the four a drawn road
+   * starts with"), and the importer that needs it has no business making that
+   * call itself. Left unset means "no reason to assume anything" — the type's
+   * own defaultProfile stands.
+   */
+  importedCapacity?: number;
 }
 
 export const WAY_TYPES: Record<string, WayType> = {
@@ -275,6 +287,9 @@ export const WAY_TYPES: Record<string, WayType> = {
     family: 'roadway',
     capacityLabel: 'lanes',
     defaultCapacity: 4,
+    // A street we only know because a bus route traces it: assume the modest
+    // two-lane case rather than the four a deliberately-drawn road starts with.
+    importedCapacity: 2,
     defaultClassId: 'arterial',
     classes: [
       { id: 'transitway', label: 'Transitway' },
@@ -371,6 +386,24 @@ export const WAY_TYPE_ORDER: string[] = [
   'aerial',
   'water',
 ];
+
+/**
+ * What the drawing tools are armed with before the user has chosen anything.
+ *
+ * Declared here, in the catalog, because "which mode a blank document starts
+ * on" is a product decision about the catalog's contents — not something the
+ * editor store should settle by naming an id inline. It deliberately is NOT
+ * derived from WAY_TYPE_ORDER[0] either: that order is a display ordering,
+ * and quietly reusing it as the starting selection would couple two unrelated
+ * decisions, so that reordering the toolbar silently changed what a new
+ * document draws.
+ */
+export const INITIAL_DRAFT = {
+  modeId: 'lightRail',
+  wayTypeId: 'lightRail',
+  geometry: 'curved',
+  grade: 'atGrade',
+} as const;
 
 // ---- Profile presets --------------------------------------------------------
 // One-click cross-sections offered when drawing or editing a way — "pick a
@@ -684,22 +717,37 @@ export interface FacilityType {
   id: string;
   label: string;
   geometryKind: FacilityGeometryKind;
+  /**
+   * Half-width, in meters, of the square an AREA facility is created as when
+   * it's click-placed rather than drawn to shape. Null for point kinds, which
+   * have no footprint to size.
+   *
+   * Required rather than optional so adding a facility type forces the
+   * question to be answered here, in the catalog, instead of being answered
+   * by whatever code happens to place one. Enforced by a check in verify.ts.
+   */
+  defaultHalfExtentM: number | null;
 }
 
+// The click-placed extents below all carry the single 15m half-extent every
+// area facility was hardcoded to before these moved into the catalog, so
+// placement is unchanged. They are per-type now so they CAN diverge — a
+// platform and a depot have no business being the same size — but retuning
+// them is a deliberate design pass, not a side effect of relocating them.
 export const FACILITY_TYPES: Record<string, FacilityType> = {
-  entrance: { id: 'entrance', label: 'Entrance', geometryKind: 'point' },
-  bikeDock: { id: 'bikeDock', label: 'Bike dock', geometryKind: 'point' },
-  elevator: { id: 'elevator', label: 'Elevator', geometryKind: 'point' },
+  entrance: { id: 'entrance', label: 'Entrance', geometryKind: 'point', defaultHalfExtentM: null },
+  bikeDock: { id: 'bikeDock', label: 'Bike dock', geometryKind: 'point', defaultHalfExtentM: null },
+  elevator: { id: 'elevator', label: 'Elevator', geometryKind: 'point', defaultHalfExtentM: null },
   // A station building / terminal / headhouse — the general-purpose drawn
   // structure that sits on station land alongside platforms and bus bays.
-  building: { id: 'building', label: 'Building', geometryKind: 'area' },
-  parkingLot: { id: 'parkingLot', label: 'Parking', geometryKind: 'area' },
-  depot: { id: 'depot', label: 'Depot / yard', geometryKind: 'area' },
+  building: { id: 'building', label: 'Building', geometryKind: 'area', defaultHalfExtentM: 15 },
+  parkingLot: { id: 'parkingLot', label: 'Parking', geometryKind: 'area', defaultHalfExtentM: 15 },
+  depot: { id: 'depot', label: 'Depot / yard', geometryKind: 'area', defaultHalfExtentM: 15 },
   // A bus's curbside stopping bay and a boarding platform (rail/tram/BRT
   // alike) both have a real footprint — placed inside a facility boundary
   // the same way a station's platforms sit inside its own footprint.
-  busBay: { id: 'busBay', label: 'Bus bay', geometryKind: 'area' },
-  platform: { id: 'platform', label: 'Platform', geometryKind: 'area' },
+  busBay: { id: 'busBay', label: 'Bus bay', geometryKind: 'area', defaultHalfExtentM: 15 },
+  platform: { id: 'platform', label: 'Platform', geometryKind: 'area', defaultHalfExtentM: 15 },
 };
 
 export const FACILITY_TYPE_ORDER: string[] = [

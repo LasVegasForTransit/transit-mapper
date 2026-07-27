@@ -45,10 +45,6 @@ const FREEHAND_SAMPLE_PX = 16; // spacing between points sampled while freehand-
 // angle was the wrong unit for this.
 const STRAIGHT_SNAP_PX = 10;
 
-// A newly click-placed AREA facility (parking, depot, bus bay…) starts as a
-// ~30m square to drag into shape — same affordance as station footprints.
-const AREA_FACILITY_HALF_M = 15;
-
 const SERVICE_LAYERS = [LYR_SERVICES_SOLID, LYR_SERVICES_UNDERGROUND];
 // Lane surfaces stand in for the fan at lane-detail zooms — they carry the
 // same `id` property, so way hit-testing works in both rendering modes.
@@ -1424,9 +1420,13 @@ export function attachInteractions(
           st.placeFacilityInGroup(st.placingFacilityForGroupId, st.draftFacilityTypeId, coord);
         } else if (!st.draftFacilityComplexMode) {
           const kind = facilityType(st.draftFacilityTypeId);
+          // Size comes from the facility type itself (catalog), not from this
+          // layer: how big a depot is when you drop one is a fact about
+          // depots, and placing code has no standing to decide it.
+          const half = kind.defaultHalfExtentM;
           st.addFacility(
             st.draftFacilityTypeId,
-            kind.geometryKind === 'area' ? squareFootprint(coord, AREA_FACILITY_HALF_M) : coord,
+            kind.geometryKind === 'area' && half !== null ? squareFootprint(coord, half) : coord,
           );
         }
         break;

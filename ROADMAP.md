@@ -63,6 +63,56 @@ This is where sketching starts turning into real planning and advocacy work.
 
 - **Real-time collaboration.** Multiple people editing one system together.
 
+## Engineering: every default belongs to the user layer
+
+The model is catalog-driven so that adding a mode means adding a catalog entry. That promise only
+holds if the code between the user and the data stops making decisions of its own. An intermediate
+step — an importer, a store action, a placement handler — should never be the thing that decides
+what kind of infrastructure something is, how big it is, or when it runs. Where a value is a fact
+about the world it belongs in the catalog; where it's a choice, it belongs to the person making it.
+
+A first pass moved three of these into the catalog: the starting draft selection (`INITIAL_DRAFT`),
+the size a click-placed area facility gets (`FacilityType.defaultHalfExtentM`), and the lane count
+assumed for a street known only from an imported route trace (`WayType.importedCapacity`). The rest
+is still outstanding, roughly in order of how badly it misleads people.
+
+- **Importers must not guess a mode.** `DEFAULT_ROUTE_KIND` in `model/gtfsImport.ts` files any
+  unrecognized GTFS `route_type` as a bus on a road, and `model/import.ts` does the same for OSM ways
+  that don't match its tag rules. A feed that trips this produces a map that looks authoritative and
+  is wrong, with nothing on screen saying so. Surface the unrecognized types and let the import
+  dialog resolve them, or take the fallback as a required argument from that dialog — but don't let
+  the parser pick.
+- **Timetables must not be invented.** `DEFAULT_FREQUENCY_MINUTES`, `DEFAULT_SPAN_START`, and
+  `DEFAULT_SPAN_END` in `editor/store.ts` fabricate a 10-minute headway running 06:00–23:00 for every
+  new service. Nobody asked for that, and it's the number a reader will quote back. Either a mode
+  declares a plausible starting service in the catalog, or a service starts with no schedule and says
+  so.
+- **Synthesized geometry inherits real decisions.** `materializeShapeRun` still hardcodes
+  `geometry: "straight"` and `grade: "atGrade"` for ways it builds from an imported trace — the same
+  class of problem `importedCapacity` just fixed, in the same function.
+- **Catalog accessors shouldn't substitute.** `facilityType()` returns the entrance type for any id
+  it doesn't recognize, and the other accessors have matching fallbacks. That tolerance exists so bad
+  data can't crash the app, which is right, but it currently does it by silently becoming a different
+  thing. Make the substitution visible to the caller instead of indistinguishable from a real hit.
+- **Ban the pattern, don't just fix the instances.** Add an ESLint rule to `packages/eslint-plugin`
+  that fails on catalog id string literals (`"lightRail"`, `"road"`, `"bus"`, …) outside the catalog
+  itself. Every item above was introduced by someone reasonably typing an id where they needed one;
+  a rule is the only thing that stops the next one.
+- **Hardcoded id switches.** `geo/serviceLane.ts` switches on mode ids to pick lane kinds, and
+  `model/import.ts` hardcodes `IMPORT_CATEGORY_ORDER` and its road/rail/bike category mapping. Both
+  should be declared on the catalog entries they describe.
+- **Input tuning should be declared, then adjustable.** `HIT_PX`, `SNAP_PX`, `DRAG_PX`,
+  `STRAIGHT_SNAP_PX`, and `FREEHAND_SAMPLE_PX` are scattered literals in `map/interactions.ts`.
+  Collect them into one declared input-tuning config, then let people change them: pointer precision
+  varies enormously between a trackpad, a mouse, and a hand that shakes, and a fixed 4-pixel drag
+  threshold is an accessibility decision made on someone else's behalf.
+- **Presentation sizes come from whoever asked for the picture.** `exportRenderer.ts` falls back to
+  1600×1000 and `DEFAULT_VIEWPORT` decides where a document opens. Both should come from the export
+  dialog and the document respectively.
+- **Retune the facility extents.** They're per-type in the catalog now but all still carry the single
+  15m half-extent they inherited. A platform and a depot should not be the same size; that's a design
+  pass, not a refactor.
+
 ## How to help
 
 TransitMapper is open source, and contributions are welcome. See

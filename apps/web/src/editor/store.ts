@@ -1,5 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 import {
+  INITIAL_DRAFT,
   LANE_KINDS,
   PROFILE_PRESETS,
   laneKind,
@@ -1214,7 +1215,7 @@ function materializeShapeRun(
       geometry: 'straight',
       grade: 'atGrade',
       profile: makeOneWay(
-        defaultProfileFor(wayTypeId, wayTypeId === 'road' ? 2 : undefined),
+        defaultProfileFor(wayTypeId, wayType(wayTypeId).importedCapacity),
         'forward',
       ),
     };
@@ -1321,12 +1322,12 @@ export function createEditorStore() {
     focusNameStationId: null,
     multiSelection: [],
     activeWayId: null,
-    draftWayTypeId: 'lightRail',
-    draftModeId: 'lightRail',
-    draftGeometry: 'curved',
-    draftColor: modeRender('lightRail').color,
-    draftGrade: 'atGrade',
-    draftClassId: wayType('lightRail').defaultClassId,
+    draftWayTypeId: INITIAL_DRAFT.wayTypeId,
+    draftModeId: INITIAL_DRAFT.modeId,
+    draftGeometry: INITIAL_DRAFT.geometry,
+    draftColor: modeRender(INITIAL_DRAFT.modeId).color,
+    draftGrade: INITIAL_DRAFT.grade,
+    draftClassId: wayType(INITIAL_DRAFT.wayTypeId).defaultClassId,
     draftPresetId: null,
     draftServiceEnabled: true,
     routeDraft: null,
