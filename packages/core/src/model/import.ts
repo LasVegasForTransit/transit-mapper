@@ -9,7 +9,7 @@ import { wayType, type Grade, type ProfileTemplateLane } from "./catalog";
 import { haversineMeters } from "./geo";
 import { shortId } from "./ids";
 import { defaultProfileFor, profileWithPrimaryLanes, MAX_PRIMARY_LANES, type ProfileEdges } from "./profile";
-import type { CrossSection, LngLat, NamedWay, Node, NodeControl, Way, WayPointRef } from "./system";
+import type { CrossSection, DrivingSide, LngLat, NamedWay, Node, NodeControl, Way, WayPointRef } from "./system";
 
 export interface ImportBBox {
   west: number;
@@ -238,11 +238,22 @@ function osmSidewalks(tags: Record<string, string>): ProfileEdges {
  * vocabulary; rail and bike ways keep their catalog defaults, where a single
  * bidirectional track or path is already right.
  *
- * Lane order assumes right-hand traffic, matching defaultProfileFor and
- * withLaneCount — backward lanes sit to the left. A left-hand-traffic import
- * comes in mirrored and needs flipping.
+ * Lanes are built right-hand-traffic first — backward lanes to the left,
+ * matching defaultProfileFor and withLaneCount — then mirrored wholesale for
+ * a left-hand-traffic system. Mirroring is a plain reversal of the
+ * left-to-right order with each lane's direction left alone: under LHT
+ * forward traffic keeps to the left, which is the same cross-section seen
+ * from the other side. That also carries the asymmetric parts (a turn pocket,
+ * a sidewalk on one side only) to the correct side for free.
  */
-export function profileFromOsmTags(typeId: string, classId: string | undefined, tags: Record<string, string> | undefined): CrossSection {
+export function profileFromOsmTags(
+  typeId: string,
+  classId: string | undefined,
+  tags: Record<string, string> | undefined,
+  drivingSide: DrivingSide = "right",
+): CrossSection {
+  const mirrored = (profile: CrossSection): CrossSection =>
+    drivingSide === "left" ? { lanes: [...profile.lanes].reverse() } : profile;
   if (typeId !== "road" || !tags) return defaultProfileFor(typeId);
 
   const oneway = osmOneway(tags);
@@ -253,7 +264,7 @@ export function profileFromOsmTags(typeId: string, classId: string | undefined, 
   if (!oneway && backward === 0 && forward === 0) {
     const lanes: ProfileTemplateLane[] = [{ kindId: "drive", direction: "both" }];
     if (centerTurn) lanes.push({ kindId: "turnPocket", direction: "both" });
-    return profileWithPrimaryLanes(typeId, lanes, osmSidewalks(tags));
+    return mirrored(profileWithPrimaryLanes(typeId, lanes, osmSidewalks(tags)));
   }
 
   const forwardTurns = tags["turn:lanes:forward"] ?? (oneway === "forward" ? tags["turn:lanes"] : undefined);
@@ -264,7 +275,7 @@ export function profileFromOsmTags(typeId: string, classId: string | undefined, 
     ...(centerTurn ? [{ kindId: "turnPocket", direction: "both" as const }] : []),
     ...laneKindsForDirection(forward, forwardTurns, false).map((kindId) => ({ kindId, direction: "forward" as const })),
   ];
-  return profileWithPrimaryLanes(typeId, primary, osmSidewalks(tags));
+  return mirrored(profileWithPrimaryLanes(typeId, primary, osmSidewalks(tags)));
 }
 
 /**
@@ -439,7 +450,7 @@ function junctionAlongWay(
  * a Node where a key has 2+); only the key differs, an OSM node id instead
  * of a rounded coordinate.
  */
-export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork {
+export function osmElementsToNetwork(elements: OsmWayElement[], drivingSide: DrivingSide = "right"): ImportedNetwork {
   const ways: Way[] = [];
   // OSM node id -> every (way, control point) that node landed on.
   const refsByOsmNode = new Map<number, WayPointRef[]>();
@@ -471,7 +482,7 @@ export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork
       points,
       geometry: "straight",
       grade: gradeFromOsmTags(el.tags),
-      profile: profileFromOsmTags(kind.typeId, kind.classId, el.tags),
+      profile: profileFromOsmTags(kind.typeId, kind.classId, el.tags, drivingSide),
       classId: kind.classId,
       source: `osm:${el.id}`,
     };
@@ -534,8 +545,8 @@ export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork
 /** The ways of an import, without its junctions — kept for callers that only
  *  need the geometry. Prefer osmElementsToNetwork, which also returns the
  *  topology OSM gave us. */
-export function osmElementsToWays(elements: OsmWayElement[]): Way[] {
-  return osmElementsToNetwork(elements).ways;
+export function osmElementsToWays(elements: OsmWayElement[], drivingSide: DrivingSide = "right"): Way[] {
+  return osmElementsToNetwork(elements, drivingSide).ways;
 }
 
 /**
@@ -568,7 +579,11 @@ const OVERPASS_RETRYABLE = new Set([429, 502, 503, 504]);
  *  public Overpass API and convert them to catalog-typed Ways plus the
  *  junctions and street identities between them. The only function here that
  *  touches the network. */
-export async function importOsmWays(bbox: ImportBBox, categories: ImportCategory[]): Promise<ImportedNetwork> {
+export async function importOsmWays(
+  bbox: ImportBBox,
+  categories: ImportCategory[],
+  drivingSide: DrivingSide = "right",
+): Promise<ImportedNetwork> {
   if (categories.length === 0) return { ways: [], nodes: [], namedWays: [] };
   const query = buildOverpassQuery(bbox, categories);
 
@@ -586,7 +601,7 @@ export async function importOsmWays(bbox: ImportBBox, categories: ImportCategory
     }
     if (res.ok) {
       const data = (await res.json()) as { elements?: OsmWayElement[] };
-      return osmElementsToNetwork(data.elements ?? []);
+      return osmElementsToNetwork(data.elements ?? [], drivingSide);
     }
     if (!OVERPASS_RETRYABLE.has(res.status)) throw new Error(`OSM import failed (${res.status}).`);
     lastError = `every OpenStreetMap server is busy (${res.status})`;

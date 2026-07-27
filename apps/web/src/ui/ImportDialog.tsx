@@ -15,6 +15,7 @@ interface ImportDialogProps {
 
 export function ImportDialog({ onClose }: ImportDialogProps) {
   const importWays = useEditor((s) => s.importWays);
+  const drivingSide = useEditor((s) => s.system.drivingSide);
   const [categories, setCategories] = useState<Set<ImportCategory>>(() => new Set(["road", "bike"]));
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [count, setCount] = useState(0);
@@ -58,6 +59,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
       const network = await importOsmWays(
         { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() },
         [...categories],
+        drivingSide,
       );
       importWays(network);
       setCount(network.ways.length);

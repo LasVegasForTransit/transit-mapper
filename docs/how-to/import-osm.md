@@ -82,8 +82,10 @@ junctions, adopt them under existing sketches.
   wider area is how you pick up the rest.
 - Crossings that stay unjoined are usually correct: OSM records a bridge or
   tunnel as genuinely not meeting the road it passes over.
-- Lane order assumes right-hand traffic. A left-hand-traffic import comes in
-  mirrored and needs flipping.
+- Lane order follows the system's driving side, so switching a system to
+  left-hand traffic before importing gives streets with forward traffic on
+  the left. Changing the setting afterwards doesn't re-mirror ways already
+  imported.
 - Overpass is a free shared service that is often busy. The import tries
   more than one public server before giving up, so a slow import is usually
   it falling through to a second one rather than anything being wrong. If it

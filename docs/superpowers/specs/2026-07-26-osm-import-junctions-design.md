@@ -424,5 +424,21 @@ Bus lanes (`busway`, `lanes:bus`), on-street parking (`parking:lane:*`),
 cycleways tagged as a modifier on the roadway rather than their own way
 (`cycleway:right=lane`), `width`, and `maxspeed` (which has no field in the
 model at all). Per-approach control is not carried: `highway=stop` sets the
-whole junction. Turn restriction relations are not fetched. Lane order
-assumes right-hand traffic; a left-hand-traffic import comes in mirrored.
+whole junction. Turn restriction relations are not fetched.
+
+## Follow-on: left-hand traffic
+
+`profileFromOsmTags` built every cross-section right-hand-traffic first and
+stopped there, so a system set to left-hand traffic imported streets mirrored
+— forward traffic on the wrong side of every road. The system already had a
+`drivingSide`; the import simply never asked for it.
+
+It is threaded from `ImportDialog` through `importOsmWays` and
+`osmElementsToNetwork` into `profileFromOsmTags`, which mirrors the finished
+profile by reversing its left-to-right order and leaving each lane's
+direction alone. That is the same cross-section seen from the other side, and
+it carries the asymmetric parts — a turn pocket, a sidewalk on one side only
+— to the correct side without special cases.
+
+Changing the setting later does not re-mirror ways already imported; that
+would be a bulk mutation of the user's existing work, not a setting change.

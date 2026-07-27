@@ -1238,6 +1238,39 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("osmElementsToNetwork applies the tag-derived profile", isOneWay(osmElementsToNetwork(tagged).ways[0].profile));
 }
 
+// --- P4: OSM import mirrors lane order for left-hand traffic ---
+{
+  const kinds = (p: ReturnType<typeof profileFromOsmTags>) => p.lanes.map((l) => `${l.kindId}:${l.direction}`).join(",");
+  const tags = { highway: "primary", lanes: "4" };
+  const right = profileFromOsmTags("road", "arterial", tags, "right");
+  const left = profileFromOsmTags("road", "arterial", tags, "left");
+
+  check("right-hand traffic keeps backward lanes on the left", kinds(right).startsWith("sidewalk:both,drive:backward"));
+  check("left-hand traffic puts forward lanes on the left", kinds(left).startsWith("sidewalk:both,drive:forward"));
+  check("mirroring reverses the cross-section rather than changing it", kinds(left) === kinds(right).split(",").reverse().join(","));
+  check("mirroring leaves each lane's own direction alone", left.lanes.filter((l) => l.direction === "forward").length === right.lanes.filter((l) => l.direction === "forward").length);
+  check("right-hand traffic is still the default", kinds(profileFromOsmTags("road", "arterial", tags)) === kinds(right));
+
+  // Asymmetric parts must land on the correct side too.
+  const oneSidewalk = { highway: "primary", lanes: "2", "sidewalk:left": "no" };
+  const swRight = profileFromOsmTags("road", "arterial", oneSidewalk, "right");
+  const swLeft = profileFromOsmTags("road", "arterial", oneSidewalk, "left");
+  check("a missing left sidewalk is missing on the left under RHT", swRight.lanes[0].kindId !== "sidewalk");
+  check("that same side becomes the right-hand edge under LHT", swLeft.lanes[swLeft.lanes.length - 1].kindId !== "sidewalk");
+
+  const turns = { highway: "primary", oneway: "yes", lanes: "3", "turn:lanes": "left|through|through" };
+  const tRight = profileFromOsmTags("road", "arterial", turns, "right");
+  const tLeft = profileFromOsmTags("road", "arterial", turns, "left");
+  const pocketAt = (p: ReturnType<typeof profileFromOsmTags>) => p.lanes.findIndex((l) => l.kindId === "turnPocket");
+  check("a turn pocket mirrors to the other side under LHT", pocketAt(tLeft) === tLeft.lanes.length - 1 - pocketAt(tRight));
+
+  // And it flows through the real entry point.
+  const el: OsmWayElement[] = [
+    { type: "way", id: 1, tags: { highway: "primary", lanes: "4" }, nodes: [1, 2], geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.1 }] },
+  ];
+  check("osmElementsToNetwork honours the driving side", kinds(osmElementsToNetwork(el, "left").ways[0].profile) === kinds(left));
+}
+
 // --- P4: OSM import reads grade and junction control ---
 {
   check("no grade tags means at grade", gradeFromOsmTags({ highway: "primary" }) === "atGrade");
