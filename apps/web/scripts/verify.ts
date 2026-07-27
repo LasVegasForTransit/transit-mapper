@@ -1565,6 +1565,31 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("an edited way is still recognised as a duplicate", afterEdit.duplicateWays === 1);
   check("but no junction is placed on its shifted indices", afterEdit.network.nodes.length === 0);
 
+  // A junction the system already has must GAIN the new arm, not acquire a
+  // rival Node at the same coordinate. Two Nodes there is not cosmetic:
+  // cascadeMove finds only the first, so dragging the junction strands the
+  // other's arms, and setNodeControl reaches only one of them.
+  const withBike: OsmWayElement[] = [
+    ...area,
+    { type: "way", id: 4, tags: { highway: "cycleway" }, nodes: [500, 40], geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.11, lon: -115.15 }] },
+  ];
+  const widened = withoutAlreadyImported(osmElementsToNetwork(withBike), first.network.ways, first.network.namedWays, first.network.nodes);
+  check("widening the categories adds no rival junction", widened.network.nodes.length === 0);
+  check("the existing junction gains the new arm instead", widened.junctionAdditions.length === 1 && widened.junctionAdditions[0].refs.length === 1);
+  check("the arm names the newly imported way", widened.junctionAdditions[0].refs[0].wayId === widened.network.ways[0].id);
+
+  fresh();
+  store.getState().importWays(osmElementsToNetwork(area));
+  const beforeNodes = store.getState().system.nodes.length;
+  store.getState().importWays(osmElementsToNetwork(withBike));
+  const shared = store.getState().system.nodes.filter((n) => n.coord[0] === -115.15 && n.coord[1] === 36.1);
+  check("the store keeps one junction at the shared coordinate", beforeNodes === 1 && shared.length === 1);
+  check("and it now has three arms", shared[0].refs.length === 3);
+  check(
+    "every arm names a way that exists",
+    shared[0].refs.every((r) => store.getState().system.ways.some((w) => w.id === r.wayId)),
+  );
+
   // Street identities follow the same rule as junctions.
   const namedArea: OsmWayElement[] = [
     { type: "way", id: 1, tags: { highway: "primary", name: "Main Street" }, nodes: [10, 500], geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.15 }] },

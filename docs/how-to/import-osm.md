@@ -86,6 +86,8 @@ junctions, adopt them under existing sketches.
 - Import is additive but not duplicative: a street this system already
   imported is skipped, and the dialog says how many it skipped. Undo reverses
   an import in one step.
+- Importing again with more categories ticked adds the new infrastructure to
+  the junctions you already have rather than laying a second set on top.
 - Importing a neighbouring area joins it to what you already have. Overpass
   returns a street whole whenever any of it falls in the box, so the shared
   boundary streets are recognised and the junction at the seam is formed

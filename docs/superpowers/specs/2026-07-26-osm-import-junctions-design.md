@@ -490,3 +490,22 @@ name still stays its own identity.
 "imported 0 ways" from "all 149 of these were already here" — the same
 outcome, but only one of them is a mistake worth telling someone about.
 
+## Follow-on: a junction the system already has
+
+`withoutAlreadyImported` re-pointed a duplicate way's refs onto the copy
+already present, but decided whether to emit a `Node` by asking only whether
+the junction touched a kept way. A junction that gains ONE new arm — import
+Streets, then import again with Bike ticked, and a cycleway ends at an
+existing road-road junction — satisfied that and produced a second `Node` at
+the same coordinate.
+
+Two Nodes there is not cosmetic. `cascadeMove` finds only the first match, so
+dragging the junction moves that Node's arms and strands the other's; the
+stranded Node keeps claiming the ways are joined at a coordinate they have
+left. `setNodeControl` likewise reaches only one, and the renderer draws two
+overlapping junction polygons.
+
+The function now takes the system's existing nodes and matches an incoming
+junction to an existing one by a shared `(wayId, pointIndex)` arm — exact, and
+needing no coordinate comparison. A match yields a `junctionAdditions` entry
+the store merges into the existing `Node` instead of appending a rival.

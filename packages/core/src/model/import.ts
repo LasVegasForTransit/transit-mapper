@@ -676,6 +676,10 @@ export interface DedupedImport {
    *  than a second identity being created alongside them. Apply these to the
    *  system's own namedWays before appending `network.namedWays`. */
   identityAdditions: { id: string; wayIds: string[] }[];
+  /** Existing junctions that gain an arm from this import, for the same
+   *  reason — a junction the system already has must not be duplicated when
+   *  a new way joins it. */
+  junctionAdditions: { id: string; refs: WayPointRef[] }[];
 }
 
 /**
@@ -705,6 +709,7 @@ export function withoutAlreadyImported(
   network: ImportedNetwork,
   existingWays: Way[],
   existingNamedWays: NamedWay[] = [],
+  existingNodes: Node[] = [],
 ): DedupedImport {
   const existingBySource = new Map<string, Way>();
   for (const way of existingWays) if (way.source) existingBySource.set(way.source, way);
@@ -731,7 +736,15 @@ export function withoutAlreadyImported(
   const resolve = (wayId: string): string | undefined =>
     keptWayIds.has(wayId) ? wayId : rePointTo.get(wayId);
 
+  // Which existing junction, if any, an incoming one already is — matched by
+  // a shared (way, point) arm, which is exact and needs no coordinates.
+  const existingNodeByArm = new Map<string, Node>();
+  for (const node of existingNodes) {
+    for (const ref of node.refs) existingNodeByArm.set(`${ref.wayId}:${ref.pointIndex}`, node);
+  }
+
   const nodes: Node[] = [];
+  const junctionAdditions: { id: string; refs: WayPointRef[] }[] = [];
   for (const node of network.nodes) {
     const refs: WayPointRef[] = [];
     for (const ref of node.refs) {
@@ -740,9 +753,20 @@ export function withoutAlreadyImported(
     }
     if (refs.length < 2) continue;
 
-    // Every arm already in the system means this junction came in with the
-    // earlier import and is already recorded; only a junction touching
-    // something new is new.
+    // A junction the system already has must gain the new arm, not a rival
+    // Node at the same coordinate. Two Nodes there is not cosmetic: cascadeMove
+    // finds only the first, so dragging the junction moves one Node's arms and
+    // strands the other's, and setNodeControl reaches only one of them.
+    const existing = refs.map((r) => existingNodeByArm.get(`${r.wayId}:${r.pointIndex}`)).find((n) => n !== undefined);
+    if (existing) {
+      const known = new Set(existing.refs.map((r) => `${r.wayId}:${r.pointIndex}`));
+      const additions = refs.filter((r) => !known.has(`${r.wayId}:${r.pointIndex}`));
+      if (additions.length > 0) junctionAdditions.push({ id: existing.id, refs: additions });
+      continue;
+    }
+
+    // Every arm already in the system, and no existing junction recognises
+    // any of them: nothing new to record.
     if (!refs.some((r) => keptWayIds.has(r.wayId))) continue;
     nodes.push({ ...node, refs });
   }
@@ -778,7 +802,7 @@ export function withoutAlreadyImported(
     namedWays.push({ ...identity, wayIds });
   }
 
-  return { network: { ways: keptWays, nodes, namedWays }, duplicateWays, identityAdditions };
+  return { network: { ways: keptWays, nodes, namedWays }, duplicateWays, identityAdditions, junctionAdditions };
 }
 
 /** Fetch OSM ways for the given categories within a bounding box from the
