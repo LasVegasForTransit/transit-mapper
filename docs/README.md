@@ -51,5 +51,26 @@ deepens.
 - [Sharing surfaces](explanation/sharing-surfaces.md) — drawing a system
   without a map, and how preview images, embeds and oEmbed fit together.
 
+## Developing TransitMapper
+
+For people changing the code rather than using the app.
+
+- [Run the checks](development/how-to/run-the-checks.md) — what `pnpm check`
+  does, and the fix for each failure.
+- [Write a test](development/how-to/write-a-test.md) — the two suites, and
+  which one new work belongs in.
+- [Add a package](development/how-to/add-a-package.md) — the generator, and
+  what the workspace contract requires.
+- [Add a migration](development/how-to/add-a-migration.md) — numbering, the
+  append-only rule, and writing one that is safe to roll back past.
+- [Add a lint rule](development/how-to/add-a-lint-rule.md) — authoring one,
+  testing the near-misses, and when not to write one at all.
+- [Commit messages](development/reference/commit-messages.md) — the standard
+  the commit-msg hook enforces.
+- [Secrets](development/reference/secrets.md) — every secret, its blast
+  radius, and how to rotate it.
+- [The enforcement model](development/explanation/enforcement-model.md) —
+  why the harness is shaped this way.
+
 Design documents for larger pieces of work live in
 [`superpowers/specs/`](superpowers/specs/).
