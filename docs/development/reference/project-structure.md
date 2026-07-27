@@ -14,6 +14,7 @@ packages/
     src/
       model/     Pure domain: types, catalogs, geometry math, routing.
       geometry/  Pure derived geometry: lane offsets, junction footprints.
+      sim/       Pure vehicle-motion kernel. No DOM; the host lives in web.
       share/     contract.ts — the wire shapes both the app and worker use.
                  claim.ts/ownership.ts are accounts groundwork (see below).
       auth/      Accounts groundwork: NOT WIRED UP (see below).
@@ -22,10 +23,12 @@ apps/
     src/
       editor/    The zustand store (all mutation) and the keyboard system.
       map/       MapLibre integration: layers, pointer interactions, canvas.
+      camera/    Live map camera, held outside the domain system object.
       ui/        React components. Thin: read the store, call actions.
       style/     How catalog kinds LOOK (colors, widths, dashes, icons).
       share/     Export (PNG/SVG/JSON), the share card, the share-API client.
       storage/   Local persistence.
+      perf/      DEV-only frame instrumentation. Never ships enabled.
     scripts/     verify.ts — the test suite.
   worker/        Cloudflare Worker + D1 migrations for shared snapshots.
     scripts/     verify.ts — the Worker's own suite (URL scoping, uploads).
@@ -80,6 +83,19 @@ and `apps/worker` depend on it as a workspace package.
 
 Both are pure and memoized; nothing here is stored. See
 [Geometry and routing](../../product/explanation/geometry-and-routing.md).
+
+## packages/core/src/sim/ — the vehicle-motion kernel
+
+- `timetable.ts` — builds a service's timetable from path length and dwell
+  stops, and answers where a vehicle sits after a given elapsed time. Plain
+  numbers in, plain numbers out: no DOM, no MapLibre, no store, and no
+  allocation beyond the return value.
+
+The animation is split across two packages on purpose. This half is the
+arithmetic and lives here so it can be tested directly and ported to
+WebAssembly later without dragging a browser dependency along; the
+requestAnimationFrame and MapLibre host that drives it is
+`apps/web/src/sim/vehicles.ts`.
 
 ## packages/core/src/render/ — drawing a system without a map
 
@@ -183,9 +199,43 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
   snapping, route drafting, station-land drawing.
 - `MapCanvas.tsx` — the map component; keeps sources in sync with the store
   and heals overlay layers if the style reloads.
-- `vehicles.ts` — the ambient vehicle animation.
-- `basemap.ts`, `icons.ts`, `mapRef.ts`, `selectionFocus.ts` — supporting
-  pieces.
+- `layers/` — the layer specifications and icons `layers.ts` assembles.
+- `export/` — rendering the map to an image off-screen.
+- `basemap.ts`, `icons.ts`, `landmarks.ts`, `mapRef.ts`,
+  `selectionFocus.ts` — supporting pieces.
+
+## apps/web/src/camera/ — where the map is looking
+
+- `liveCamera.ts` — the live map camera, held in a module-level holder
+  outside the domain `system`. There is one map per session, and the value
+  mirrors that map, so a store or a context would buy nothing.
+- `cameraPersistence.ts` — folds the live camera into the saved library
+  entry on a debounce, and does not touch `updatedAt`.
+
+The camera is presentation state, not domain data, and separating the two
+is a performance decision as much as a modelling one. While the camera
+lived in `system`, every pan minted a new `system` reference, which made a
+drag frame look like a content edit to the renderer subscription, every
+mounted selector, and autosave alike. Moving it out cost the saved-viewport
+behaviour, which `cameraPersistence.ts` restores deliberately rather than
+by making the camera reactive again.
+
+## apps/web/src/perf/ — measuring frames
+
+- `frameStats.ts` — summarises frame durations. Reports the median rather
+  than the mean, plus p95, worst, and the fraction of frames over the 60Hz
+  and 30Hz budgets.
+- `frameMeter.ts` — samples painted-frame intervals from MapLibre's render
+  event, because the map paints on demand and a plain animation-frame
+  counter keeps ticking when nothing is drawn.
+- `panBench.ts` — a scripted pan and zoom in the same shape as a real drag.
+  Deterministic input is what makes two runs comparable, so "feels
+  smoother" becomes a number.
+- `index.ts` — wires the above to `window.__panBench`, `window.__perf` and
+  friends for use from devtools.
+
+None of this ships enabled. The only caller guards on the DEV flag and
+`index.ts` no-ops again on its own.
 
 ## apps/web/src/ui/ — components
 
