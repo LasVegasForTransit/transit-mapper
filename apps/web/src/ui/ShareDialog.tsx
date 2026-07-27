@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useEditor } from "../editor/EditorProvider";
-import { createShare } from "../share/api";
+import { getOrCreateShare, stopSharing } from "../share/api";
+import { getMyShare } from "../share/myShares";
 import { Icon } from "./Icon";
 import { Modal } from "./Modal";
 
@@ -8,19 +9,28 @@ interface ShareDialogProps {
   onClose: () => void;
 }
 
+type Status = "loading" | "done" | "error" | "stopped";
+
+/** Google Docs-style: one link per document, always the same one. Opening
+ *  this dialog again — changed or not — never produces a second URL; see
+ *  share/api.ts#getOrCreateShare for how that's guaranteed. */
 export function ShareDialog({ onClose }: ShareDialogProps) {
   const system = useEditor((s) => s.system);
-  const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
+  const [status, setStatus] = useState<Status>("loading");
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  // Only a share this browser holds the edit token for can be stopped — a
+  // dedup hit onto someone else's row isn't ours to revoke.
+  const [revocable, setRevocable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    createShare(system)
-      .then((id) => {
+    getOrCreateShare(system)
+      .then((sharedUrl) => {
         if (cancelled) return;
-        setUrl(`${window.location.origin}/s/${id}`);
+        setUrl(sharedUrl);
+        setRevocable(getMyShare(system.id) !== null);
         setStatus("done");
       })
       .catch((e: Error) => {
@@ -45,18 +55,29 @@ export function ShareDialog({ onClose }: ShareDialogProps) {
     }
   };
 
+  const stop = async () => {
+    try {
+      await stopSharing(system.id);
+      setStatus("stopped");
+    } catch (e) {
+      setError((e as Error).message);
+      setStatus("error");
+    }
+  };
+
   return (
     <Modal title="Share this system" description="Create a shareable, read-only link to this system." onClose={onClose}>
-      {status === "loading" && <p className="panel-hint">Creating a shareable snapshot…</p>}
+      {status === "loading" && <p className="panel-hint">Creating a shareable link…</p>}
 
-      {status === "error" && (
-        <p className="error-text">Couldn’t create the link. {error}</p>
-      )}
+      {status === "error" && <p className="error-text">Something went wrong. {error}</p>}
+
+      {status === "stopped" && <p className="panel-hint">This link no longer works. Share again to create a new one.</p>}
 
       {status === "done" && (
         <>
           <p className="panel-hint">
-            Anyone with this link can view the system and fork their own copy.
+            Anyone with this link can view the system and fork their own copy. Sharing again from this
+            browser updates this same link instead of creating a new one.
           </p>
           <div className="share-row">
             <input className="share-url" value={url} readOnly onFocus={(e) => e.target.select()} />
@@ -64,6 +85,11 @@ export function ShareDialog({ onClose }: ShareDialogProps) {
               <Icon name="copy" size={18} /> {copied ? "Copied" : "Copy"}
             </button>
           </div>
+          {revocable && (
+            <button type="button" className="ghost-btn" style={{ marginTop: 8 }} onClick={stop}>
+              Stop sharing
+            </button>
+          )}
         </>
       )}
     </Modal>

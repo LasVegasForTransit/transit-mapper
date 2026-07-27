@@ -10,6 +10,8 @@ import {
   setActiveId,
   type LibraryEntry,
 } from "../storage/localStore";
+import { getMyShare } from "../share/myShares";
+import { stopSharing } from "../share/api";
 import { useSaveStatus } from "./SaveStatusProvider";
 import { blurOnEnter } from "./formUtils";
 import { Icon } from "./Icon";
@@ -94,6 +96,17 @@ export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
     onClose();
   };
 
+  const revokeShare = async (id: string) => {
+    try {
+      await stopSharing(id);
+    } catch {
+      // Best-effort: if the request failed the server-side share is still
+      // live, but the local record is what the icon below reflects either
+      // way — surfacing a toast here isn't worth it for a secondary action.
+    }
+    refresh();
+  };
+
   const confirmDelete = (id: string) => {
     // Reported like any other write: a delete is how the user is told to free
     // space when storage is full, so it failing silently would leave them
@@ -140,6 +153,15 @@ export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
                 onKeyDown={blurOnEnter}
               />
               <span className="systems-meta">{isActive ? "Current" : relativeTime(entry.updatedAt)}</span>
+              {getMyShare(entry.id) && (
+                <IconButton
+                  icon="share"
+                  size={16}
+                  active
+                  label="Shared — stop sharing"
+                  onClick={() => revokeShare(entry.id)}
+                />
+              )}
               <IconButton icon="copy" size={16} label="Duplicate" onClick={() => duplicate(entry)} />
               {isConfirming ? (
                 <span className="systems-confirm">

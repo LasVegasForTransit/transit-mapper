@@ -209,7 +209,7 @@ const EXPIRY_TOUCH_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 1 day.
  * NULL and never expire — which is why the schema already treats NULL as
  * "never expires" and why this deliberately skips those rows.
  */
-function touchExpiry(db: D1Database, share: ShareRow): Promise<unknown> | null {
+function touchExpiry(db: D1Database, share: Pick<ShareRow, "id" | "expiresAt">): Promise<unknown> | null {
   if (share.expiresAt === null) return null; // account-owned: already permanent.
   const target = Date.now() + ANONYMOUS_SHARE_TTL_MS;
   if (target - share.expiresAt < EXPIRY_TOUCH_THRESHOLD_MS) return null;
@@ -218,6 +218,33 @@ function touchExpiry(db: D1Database, share: ShareRow): Promise<unknown> | null {
     .bind(target, share.id)
     .run()
     .catch(() => undefined);
+}
+
+// Used both for the dedup content hash (so two requests only collide when
+// they'd have written byte-identical rows) and for edit tokens (so the DB
+// never holds the raw secret a browser presents to prove it owns a share).
+async function sha256Hex(data: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(data));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// The secret returned once, at creation, to the browser that made a share.
+// Presenting it on PATCH/DELETE is what proves "the device that created this
+// share" without any account system — see edit_token_hash in the schema.
+function randomEditToken(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(24)))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// Deletes the cached preview.png entry for a share so a stale card doesn't
+// keep being served for up to a day after the content underneath it changes.
+// Cache keys are full requests, so this has to reconstruct the same URL the
+// preview route itself is fetched at.
+function purgePreviewCache(c: Context<{ Bindings: Env }>, id: string): Promise<unknown> {
+  return caches.default.delete(new Request(`${c.env.SITE_URL}/s/${id}/preview.png`)).catch(() => undefined);
 }
 
 // Create an immutable snapshot of a system and return its share id.
@@ -273,16 +300,45 @@ app.post("/api/systems", async (c) => {
     return c.json({ error: `Invalid system: ${(e as Error).message}` }, 400);
   }
 
-  const id = shortId(10);
   const now = Date.now();
-  const expiresAt = now + ANONYMOUS_SHARE_TTL_MS;
-  await c.env.DB.prepare(
-    "INSERT INTO systems (id, name, data, created_at, expires_at, preview) VALUES (?, ?, ?, ?, ?, ?)",
+  const data = JSON.stringify(system);
+  const hash = await sha256Hex(data);
+
+  // Reuse an existing share for byte-identical content rather than minting a
+  // new row and a new URL every time the dialog is opened on an unchanged
+  // system. A hit that's already expired is swept here, same as a normal read
+  // would, rather than reused.
+  //
+  // Deliberately does NOT return an editToken for a reused row: this caller
+  // never proved ownership of it (that's the whole point of the token), so
+  // handing one out here would let anyone who can reproduce a share's exact
+  // content take over editing it.
+  const existing = await c.env.DB.prepare(
+    "SELECT id, expires_at FROM systems WHERE content_hash = ? ORDER BY created_at DESC LIMIT 1",
   )
-    .bind(id, system.name.slice(0, 200), JSON.stringify(system), now, expiresAt, preview)
+    .bind(hash)
+    .first<{ id: string; expires_at: number | null }>();
+
+  if (existing) {
+    if (existing.expires_at === null || existing.expires_at >= now) {
+      const touch = touchExpiry(c.env.DB, { id: existing.id, expiresAt: existing.expires_at });
+      if (touch) c.executionCtx.waitUntil(touch);
+      return c.json<CreateShareResponse>({ id: existing.id });
+    }
+    await c.env.DB.prepare("DELETE FROM systems WHERE id = ?").bind(existing.id).run();
+  }
+
+  const id = shortId(10);
+  const expiresAt = now + ANONYMOUS_SHARE_TTL_MS;
+  const editToken = randomEditToken();
+  const editTokenHash = await sha256Hex(editToken);
+  await c.env.DB.prepare(
+    "INSERT INTO systems (id, name, data, created_at, expires_at, preview, content_hash, edit_token_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+  )
+    .bind(id, system.name.slice(0, 200), data, now, expiresAt, preview, hash, editTokenHash)
     .run();
 
-  return c.json<CreateShareResponse>({ id });
+  return c.json<CreateShareResponse>({ id, editToken });
 });
 
 // Fetch a shared system snapshot. This is the request an embedded map makes,
@@ -297,6 +353,96 @@ app.get("/api/systems/:id", async (c) => {
   // Built field by field rather than returning the row: expiresAt is internal
   // bookkeeping, not part of the published wire format.
   return c.json<GetShareResponse>({ id: share.id, system: share.system, createdAt: share.createdAt });
+});
+
+// Updates a share's content in place, so re-sharing an edited system keeps
+// the same URL instead of accumulating a new one every time. Gated on the
+// edit token handed out at creation — the WHERE clause does the auth check
+// and the write in one statement, so there's no separate check-then-write
+// race to get wrong.
+app.patch("/api/systems/:id", async (c) => {
+  const id = c.req.param("id");
+  if (!SHARE_ID_PATTERN.test(id)) return c.json({ error: "Not found" }, 404);
+
+  const editToken = c.req.header("x-edit-token");
+  if (!editToken) return c.json({ error: "Missing edit token" }, 403);
+
+  // Same limiter as create: this writes caller-supplied bytes too.
+  const clientIp = c.req.header("cf-connecting-ip");
+  if (clientIp) {
+    if (!c.env.SHARE_CREATE_LIMITER) {
+      console.error("SHARE_CREATE_LIMITER binding missing — refusing to accept edits unlimited");
+      return c.json({ error: "Share editing is temporarily unavailable" }, 503);
+    }
+    const { success } = await c.env.SHARE_CREATE_LIMITER.limit({ key: clientIp });
+    if (!success) return c.json({ error: "Too many edits. Try again in a minute." }, 429);
+  }
+
+  const declaredLength = Number(c.req.header("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+    return c.json({ error: "System too large" }, 413);
+  }
+  const raw = await c.req.text();
+  if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
+    return c.json({ error: "System too large" }, 413);
+  }
+
+  let system;
+  let preview: Uint8Array | null = null;
+  try {
+    const body = JSON.parse(raw) as { system?: unknown; preview?: unknown };
+    system = parseSystem(body.system);
+    preview = acceptedPreview(body.preview);
+  } catch (e) {
+    return c.json({ error: `Invalid system: ${(e as Error).message}` }, 400);
+  }
+
+  const data = JSON.stringify(system);
+  const hash = await sha256Hex(data);
+  const tokenHash = await sha256Hex(editToken);
+  // An edit is a deliberate write, not a passive view, so it always slides
+  // expiry forward a full TTL rather than going through touchExpiry's
+  // once-a-day threshold (that threshold exists to stop *reads* from turning
+  // into writes; this is already a write).
+  const expiresAt = Date.now() + ANONYMOUS_SHARE_TTL_MS;
+
+  const result = await c.env.DB.prepare(
+    `UPDATE systems
+     SET name = ?, data = ?, content_hash = ?, preview = ?,
+         expires_at = CASE WHEN expires_at IS NULL THEN NULL ELSE ? END
+     WHERE id = ? AND edit_token_hash = ?`,
+  )
+    .bind(system.name.slice(0, 200), data, hash, preview, expiresAt, id, tokenHash)
+    .run();
+
+  if (result.meta.changes === 0) {
+    return c.json({ error: "Not authorized to edit this share" }, 403);
+  }
+
+  c.executionCtx.waitUntil(purgePreviewCache(c, id));
+  return c.json<CreateShareResponse>({ id });
+});
+
+// Revokes a share early rather than waiting for its TTL. Same auth shape as
+// PATCH: the token proves the caller's browser created this share.
+app.delete("/api/systems/:id", async (c) => {
+  const id = c.req.param("id");
+  if (!SHARE_ID_PATTERN.test(id)) return c.json({ error: "Not found" }, 404);
+
+  const editToken = c.req.header("x-edit-token");
+  if (!editToken) return c.json({ error: "Missing edit token" }, 403);
+
+  const tokenHash = await sha256Hex(editToken);
+  const result = await c.env.DB.prepare("DELETE FROM systems WHERE id = ? AND edit_token_hash = ?")
+    .bind(id, tokenHash)
+    .run();
+
+  if (result.meta.changes === 0) {
+    return c.json({ error: "Not authorized to revoke this share" }, 403);
+  }
+
+  c.executionCtx.waitUntil(purgePreviewCache(c, id));
+  return c.body(null, 204);
 });
 
 // Proxy RTC Southern Nevada's real GTFS feed — its own host doesn't send

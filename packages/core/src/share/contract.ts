@@ -10,9 +10,9 @@ export interface CreateShareRequest {
    * Optional: a client that can't rasterize, or an API caller with no
    * browser, simply omits it and the share falls back to the site-wide image.
    *
-   * Accepted only here, at creation. There is deliberately no route that
-   * updates an existing share's preview — that would let anyone holding a
-   * share id replace someone else's card.
+   * A PATCH can replace this too, but only by presenting the edit token
+   * handed out at creation — holding the share id alone is not enough to
+   * replace someone else's card.
    */
   preview?: string;
 }
@@ -23,7 +23,21 @@ export interface CreateShareResponse {
    *  it so the share can be adopted on sign-in; the server stores only its
    *  hash. Absent when the share already has an owner. */
   claimToken?: string;
+  /**
+   * One-time secret proving this browser created the share, needed to PATCH
+   * or DELETE it later. The server stores only its hash. Present only when
+   * this request actually inserted a new row — a request that got deduped
+   * onto an existing share (see CreateShareRequest) never proved ownership
+   * of that row, so it gets the id back but not a token for it.
+   */
+  editToken?: string;
 }
+
+/** Body for PATCH /api/systems/:id. Same shape as creation: the whole
+ *  snapshot is replaced in place, there's no partial-update concept. The
+ *  edit token goes in the `x-edit-token` header, not the body, so it never
+ *  ends up serialized next to the content it authorizes changing. */
+export type UpdateShareRequest = CreateShareRequest;
 
 export interface GetShareResponse {
   id: string;
