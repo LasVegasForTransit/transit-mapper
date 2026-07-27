@@ -9,46 +9,46 @@ deepens.
 
 ## Tutorials
 
-- [Getting started](tutorials/getting-started.md) — from an empty map to a
+- [Getting started](product/tutorials/getting-started.md) — from an empty map to a
   small working system: streets, a rail line, stations, and a bus route.
 
 ## How-to guides
 
-- [Set up a local development environment](how-to/local-development.md) —
+- [Set up a local development environment](development/how-to/local-development.md) —
   clone, install, run, and what to check before a pull request.
-- [Draw and edit roads](how-to/draw-roads.md) — presets, lanes, one-way
+- [Draw and edit roads](product/how-to/draw-roads.md) — presets, lanes, one-way
   streets, divided carriageways, street names.
-- [Work with intersections](how-to/edit-intersections.md) — automatic
+- [Work with intersections](product/how-to/edit-intersections.md) — automatic
   junctions, turn lanes, signals, grade separation.
-- [Design stations](how-to/design-stations.md) — station land, buildings,
+- [Design stations](product/how-to/design-stations.md) — station land, buildings,
   platforms, bus bays, complexes.
-- [Route services over infrastructure](how-to/route-services.md) —
+- [Route services over infrastructure](product/how-to/route-services.md) —
   snap-to-streets drawing, adopting existing ways under a sketch.
-- [Import streets from OpenStreetMap](how-to/import-osm.md).
-- [Share and export](how-to/share-and-export.md) — read-only links, forking,
+- [Import streets from OpenStreetMap](product/how-to/import-osm.md).
+- [Share and export](product/how-to/share-and-export.md) — read-only links, forking,
   PNG export.
-- [Run TransitMapper in production](how-to/operations.md) — deploy, roll
+- [Run TransitMapper in production](operations/how-to/operations.md) — deploy, roll
   back, apply a migration, restore the database, and what to do when the
   Worker breaks.
 
 ## Reference
 
-- [Data model](reference/data-model.md) — every record in a saved system.
-- [Catalogs](reference/catalogs.md) — way types, modes, lane kinds,
+- [Data model](product/reference/data-model.md) — every record in a saved system.
+- [Catalogs](product/reference/catalogs.md) — way types, modes, lane kinds,
   facility types, presets, and how to extend them.
-- [Keyboard shortcuts](reference/keyboard-shortcuts.md).
-- [Project structure](reference/project-structure.md) — what lives where in
+- [Keyboard shortcuts](product/reference/keyboard-shortcuts.md).
+- [Project structure](development/reference/project-structure.md) — what lives where in
   the source tree.
 
 ## Explanation
 
-- [The three views](explanation/views.md) — Network, Infrastructure,
+- [The three views](product/explanation/views.md) — Network, Infrastructure,
   Diagram, and why "the Infrastructure view is 2D" is a hard rule.
-- [Design principles](explanation/design-principles.md) — catalog-driven
+- [Design principles](product/explanation/design-principles.md) — catalog-driven
   kinds, style/domain separation, menus versus modes.
-- [Geometry and routing](explanation/geometry-and-routing.md) — how lane
+- [Geometry and routing](product/explanation/geometry-and-routing.md) — how lane
   offsets, junction footprints, and the route graph are derived.
-- [Sharing surfaces](explanation/sharing-surfaces.md) — drawing a system
+- [Sharing surfaces](product/explanation/sharing-surfaces.md) — drawing a system
   without a map, and how preview images, embeds and oEmbed fit together.
 
 ## Developing TransitMapper
@@ -67,8 +67,12 @@ For people changing the code rather than using the app.
   testing the near-misses, and when not to write one at all.
 - [Commit messages](development/reference/commit-messages.md) — the standard
   the commit-msg hook enforces.
-- [Secrets](development/reference/secrets.md) — every secret, its blast
+- [Secrets](security/reference/secrets.md) — every secret, its blast
   radius, and how to rotate it.
+- [Architecture](development/explanation/architecture.md) — what the pieces
+  are and which boundaries are load-bearing.
+- [Checks](development/reference/checks.md) — every check, what makes it
+  fail, and the command that fixes it.
 - [The enforcement model](development/explanation/enforcement-model.md) —
   why the harness is shaped this way.
 

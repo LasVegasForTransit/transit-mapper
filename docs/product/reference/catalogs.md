@@ -2,7 +2,7 @@
 
 Every _kind_ in TransitMapper (way types, service modes, lane kinds,
 facility types, grades, presets) is catalog **data** in
-[`src/model/catalog.ts`](../../packages/core/src/model/catalog.ts), not a union type baked
+[`src/model/catalog.ts`](../../../packages/core/src/model/catalog.ts), not a union type baked
 into logic. Records in the data model reference catalog entries by string
 id. Adding a funicular or a queue-jump lane means adding a catalog entry.
 

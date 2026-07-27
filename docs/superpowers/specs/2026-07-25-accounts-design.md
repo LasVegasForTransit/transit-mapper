@@ -363,10 +363,10 @@ Required as part of the implementation, not afterward.
 - `docs/how-to/accounts.md`, new. How to sign in, what permanence means, and
   the point people will get wrong: systems still live in the browser, and
   signing in is not a backup.
-- `docs/how-to/share-and-export.md`, updated for expiry and permanence.
-- `docs/reference/project-structure.md`, updated for `apps/worker/src/auth/`
+- `docs/product/how-to/share-and-export.md`, updated for expiry and permanence.
+- `docs/development/reference/project-structure.md`, updated for `apps/worker/src/auth/`
   and `apps/web/src/auth/`.
-- `docs/how-to/local-development.md`, updated for the Google credentials and
+- `docs/development/how-to/local-development.md`, updated for the Google credentials and
   the fact that sign-in is optional locally.
 - `ROADMAP.md`, updated for the reordering described below.
 

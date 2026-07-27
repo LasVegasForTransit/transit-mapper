@@ -2,7 +2,7 @@
 
 What this project is and how it is laid out lives in [`docs/`](docs/README.md).
 The reasoning behind the domain model is in
-[Design principles](docs/explanation/design-principles.md). This file is the
+[Design principles](docs/product/explanation/design-principles.md). This file is the
 short version of what to do and why.
 
 ## The bar
@@ -42,7 +42,7 @@ says **nothing**, the rule holds only because you follow it.
 | Relative links in `docs/` resolve                                          | three had been broken since the monorepo split, and nothing noticed                                                      | `check:docs`                    |
 | `worker-configuration.d.ts` matches `wrangler.toml`                        | it is generated and committed, so it can describe a deployment that no longer exists                                     | `check:types`                   |
 | Commit subjects are conventional, ≤72 chars                                | see [commit messages](docs/development/reference/commit-messages.md)                                                     | `commit-msg` hook               |
-| No secret reaches a commit                                                 | see [secrets](docs/development/reference/secrets.md)                                                                     | pre-commit, CI, push protection |
+| No secret reaches a commit                                                 | see [secrets](docs/security/reference/secrets.md)                                                                        | pre-commit, CI, push protection |
 | Stored values are injected with `HTMLRewriter`, never string concatenation | `system.name` is unauthenticated text with no sanitization at write time                                                 | **nothing** — see below         |
 | `/api` paths name a resource; the verb is the HTTP method                  | `DELETE /api/session`, not `POST /api/auth/signout`                                                                      | **nothing**                     |
 | Parameter and prop types are named interfaces, even single-use ones        | `interface ShareDialogProps { onClose: () => void }`, not an inline object type                                          | **nothing**                     |
@@ -63,7 +63,7 @@ some TypeScript.
 **Architecture first.** When a change adds a subsystem, introduces a table,
 adds a request path through the Worker, or changes how existing pieces
 communicate, write down how it works and why, and record where it lives in
-[Project structure](docs/reference/project-structure.md). Do this for the
+[Project structure](docs/development/reference/project-structure.md). Do this for the
 pieces with no visible UI too — schema, sessions, routing, background jobs,
 and the boundaries between `packages/core`, `apps/web`, and `apps/worker`.
 Do not leave a subsystem whose design can only be recovered by reading every
@@ -109,7 +109,7 @@ For anonymous data during a schema change, follow `0002` and delete it
 rather than writing a complicated backfill.
 
 Deploying, rolling back, and restoring the database:
-[operations](docs/how-to/operations.md).
+[operations](docs/operations/how-to/operations.md).
 
 ## Keep `packages/core` runnable in both runtimes
 

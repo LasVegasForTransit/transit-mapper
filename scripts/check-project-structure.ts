@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Every source directory is described in docs/reference/project-structure.md,
+ * Every source directory is described in docs/development/reference/project-structure.md,
  * and every directory that document describes still exists.
  *
  * AGENTS.md asks that a change adding a subsystem write down how it works and
@@ -18,7 +18,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const DOC = resolve(ROOT, 'docs/reference/project-structure.md');
+const DOC = resolve(ROOT, 'docs/development/reference/project-structure.md');
 
 /** Workspace roots whose immediate `src/` children are subsystems. */
 const SOURCE_ROOTS = ['apps/web/src', 'apps/worker/src', 'packages/core/src'];

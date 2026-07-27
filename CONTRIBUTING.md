@@ -21,7 +21,7 @@ raising, raise it anyway.
 
 ## Submitting a pull request
 
-See [Set up a local development environment](docs/how-to/local-development.md)
+See [Set up a local development environment](docs/development/how-to/local-development.md)
 to get the project running and know what to run before opening a pull
 request. Keep each pull request focused on one change, and if it affects
 how something looks or behaves in the editor, say how you checked it in
