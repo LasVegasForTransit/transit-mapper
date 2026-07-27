@@ -470,6 +470,13 @@ the indices no longer mean what OSM meant by them, and a junction on the
 wrong vertex of someone's edited street is worse than one they add back
 themselves.
 
+A street that straddles two imports joins the identity it already has rather
+than gaining a second one. Without that, the shared boundary way sat in two
+`NamedWay`s at once: renaming the street through one left the other stale,
+and the member count that gates the carriageway tools counted the way twice.
+The merge is keyed on way type plus name, so a tram line sharing a street's
+name still stays its own identity.
+
 `importWays` returns `{added, skipped}` so the dialog can distinguish
 "imported 0 ways" from "all 149 of these were already here" — the same
 outcome, but only one of them is a mistake worth telling someone about.

@@ -655,6 +655,10 @@ export interface DedupedImport {
   network: ImportedNetwork;
   /** Ways skipped because that OSM way is already in the system. */
   duplicateWays: number;
+  /** Existing street identities that gain members from this import, rather
+   *  than a second identity being created alongside them. Apply these to the
+   *  system's own namedWays before appending `network.namedWays`. */
+  identityAdditions: { id: string; wayIds: string[] }[];
 }
 
 /**
@@ -680,7 +684,11 @@ export interface DedupedImport {
  * junction placed on the wrong vertex of someone's edited street is worse
  * than a junction they can add back themselves.
  */
-export function withoutAlreadyImported(network: ImportedNetwork, existingWays: Way[]): DedupedImport {
+export function withoutAlreadyImported(
+  network: ImportedNetwork,
+  existingWays: Way[],
+  existingNamedWays: NamedWay[] = [],
+): DedupedImport {
   const existingBySource = new Map<string, Way>();
   for (const way of existingWays) if (way.source) existingBySource.set(way.source, way);
 
@@ -721,16 +729,38 @@ export function withoutAlreadyImported(network: ImportedNetwork, existingWays: W
     nodes.push({ ...node, refs });
   }
 
+  // A street that straddles two imports must end up in ONE identity. Without
+  // this, the overlapping-import case creates a second "West Flamingo Road"
+  // and puts the shared boundary way in both — the way is then renamed by one
+  // identity and not the other, and the member count that gates the
+  // carriageway tools counts it twice.
+  const typeOfWay = new Map<string, string>();
+  for (const w of existingWays) typeOfWay.set(w.id, w.typeId);
+  for (const w of keptWays) typeOfWay.set(w.id, w.typeId);
+  const identityKey = (name: string, wayIds: string[]): string => `${typeOfWay.get(wayIds[0]) ?? ""}\u0000${name}`;
+  const existingByKey = new Map<string, NamedWay>();
+  for (const identity of existingNamedWays) {
+    if (identity.wayIds.length > 0) existingByKey.set(identityKey(identity.name, identity.wayIds), identity);
+  }
+
   const namedWays: NamedWay[] = [];
+  const identityAdditions: { id: string; wayIds: string[] }[] = [];
   for (const identity of network.namedWays) {
     const wayIds = identity.wayIds.map(resolve).filter((id): id is string => id !== undefined);
+    if (wayIds.length < 2) continue;
+    const existing = existingByKey.get(identityKey(identity.name, wayIds));
+    if (existing) {
+      const additions = wayIds.filter((id) => !existing.wayIds.includes(id));
+      if (additions.length > 0) identityAdditions.push({ id: existing.id, wayIds: additions });
+      continue;
+    }
     // Same reasoning as junctions: an identity spanning only ways that were
     // already here was already created when they were.
-    if (wayIds.length < 2 || !wayIds.some((id) => keptWayIds.has(id))) continue;
+    if (!wayIds.some((id) => keptWayIds.has(id))) continue;
     namedWays.push({ ...identity, wayIds });
   }
 
-  return { network: { ways: keptWays, nodes, namedWays }, duplicateWays };
+  return { network: { ways: keptWays, nodes, namedWays }, duplicateWays, identityAdditions };
 }
 
 /** Fetch OSM ways for the given categories within a bounding box from the

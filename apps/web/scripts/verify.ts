@@ -1543,8 +1543,37 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("a first import keeps its street identity", namedFirst.network.namedWays.length === 1);
   check(
     "re-importing adds no duplicate identity",
-    withoutAlreadyImported(osmElementsToNetwork(namedArea), namedFirst.network.ways).network.namedWays.length === 0,
+    withoutAlreadyImported(osmElementsToNetwork(namedArea), namedFirst.network.ways, namedFirst.network.namedWays).network.namedWays.length === 0,
   );
+
+  // A street continuing into a neighbouring import must end up in ONE
+  // identity: a second one would rename half the street and would double-count
+  // the shared way in the member count the carriageway tools gate on.
+  const namedNeighbour: OsmWayElement[] = [
+    namedArea[1],
+    { type: "way", id: 3, tags: { highway: "primary", name: "Main Street" }, nodes: [11, 12], geometry: [{ lat: 36.1, lon: -115.1 }, { lat: 36.1, lon: -115.05 }] },
+  ];
+  const extended = withoutAlreadyImported(osmElementsToNetwork(namedNeighbour), namedFirst.network.ways, namedFirst.network.namedWays);
+  check("a street continuing into the next import creates no second identity", extended.network.namedWays.length === 0);
+  check("it extends the identity it already has", extended.identityAdditions.length === 1 && extended.identityAdditions[0].id === namedFirst.network.namedWays[0].id);
+  check("only the genuinely new way is added to it", extended.identityAdditions[0].wayIds.length === 1);
+
+  // Same name, different way type, is still a different facility.
+  const tramNamed: OsmWayElement[] = [
+    { type: "way", id: 8, tags: { railway: "tram", name: "Main Street" }, nodes: [80, 81], geometry: [{ lat: 36.3, lon: -115.2 }, { lat: 36.3, lon: -115.15 }] },
+    { type: "way", id: 9, tags: { railway: "tram", name: "Main Street" }, nodes: [81, 82], geometry: [{ lat: 36.3, lon: -115.15 }, { lat: 36.3, lon: -115.1 }] },
+  ];
+  const tram = withoutAlreadyImported(osmElementsToNetwork(tramNamed), namedFirst.network.ways, namedFirst.network.namedWays);
+  check("a same-named tram line does not join the road's identity", tram.network.namedWays.length === 1 && tram.identityAdditions.length === 0);
+
+  // And the store applies the merge, so no way ends up in two identities.
+  fresh();
+  store.getState().importWays(osmElementsToNetwork(namedArea));
+  store.getState().importWays(osmElementsToNetwork(namedNeighbour));
+  const memberships = new Map<string, number>();
+  for (const n of store.getState().system.namedWays) for (const id of n.wayIds) memberships.set(id, (memberships.get(id) ?? 0) + 1);
+  check("overlapping imports leave every way in at most one identity", [...memberships.values()].every((n) => n === 1));
+  check("and the street is one identity spanning all three ways", store.getState().system.namedWays.length === 1 && store.getState().system.namedWays[0].wayIds.length === 3);
 
   // Hand-drawn ways have no source and must never be mistaken for imports.
   const handDrawn: Way[] = [

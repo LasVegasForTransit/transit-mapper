@@ -1447,14 +1447,24 @@ export function createEditorStore() {
     // and every ref points at a way created in this same import, so no
     // existing node's refs are disturbed (cf. shiftNodeRefsFor* above).
     importWays: (incoming) => {
-      const { network, duplicateWays } = withoutAlreadyImported(incoming, get().system.ways);
+      const state = get().system;
+      const { network, duplicateWays, identityAdditions } = withoutAlreadyImported(incoming, state.ways, state.namedWays);
       const { ways, nodes, namedWays } = network;
+      const additionsById = new Map(identityAdditions.map((a) => [a.id, a.wayIds]));
       set((s) => ({
         system: touch({
           ...s.system,
           ways: [...s.system.ways, ...ways],
           nodes: [...s.system.nodes, ...nodes],
-          namedWays: [...s.system.namedWays, ...namedWays],
+          namedWays: [
+            // A street continuing into this import joins the identity it
+            // already has rather than gaining a second one.
+            ...s.system.namedWays.map((n) => {
+              const additions = additionsById.get(n.id);
+              return additions ? { ...n, wayIds: [...n.wayIds, ...additions] } : n;
+            }),
+            ...namedWays,
+          ],
         }),
       }));
       return { added: ways.length, skipped: duplicateWays };
