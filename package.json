@@ -25,8 +25,9 @@
     "format:check": "prettier --check .",
     "typecheck:scripts": "tsc -p scripts/tsconfig.json --noEmit",
     "check:contract": "tsx scripts/check-workspace-contract.ts",
-    "check": "pnpm format:check && pnpm typecheck:scripts && pnpm check:contract && turbo run lint typecheck check:types && turbo run verify --concurrency=1",
-    "check:fix": "pnpm format && pnpm lint:fix && pnpm run check"
+    "check": "pnpm format:check && pnpm typecheck:scripts && pnpm check:contract && pnpm check:docs && turbo run lint typecheck check:types && turbo run verify --concurrency=1",
+    "check:fix": "pnpm format && pnpm lint:fix && pnpm run check",
+    "check:docs": "tsx scripts/check-docs-links.ts"
   },
   "devDependencies": {
     "@clack/prompts": "catalog:",

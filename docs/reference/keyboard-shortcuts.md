@@ -5,7 +5,7 @@ does is also reachable by mouse. Shortcuts don't fire while you're typing
 in a text field.
 
 The single source of truth is `KEY_BINDINGS` in
-[`src/editor/keymap.ts`](../../src/editor/keymap.ts); this page mirrors it.
+[`src/editor/keymap.ts`](../../apps/web/src/editor/keymap.ts); this page mirrors it.
 
 ## Tools
 
