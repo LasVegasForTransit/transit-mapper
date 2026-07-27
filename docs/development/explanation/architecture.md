@@ -2,203 +2,167 @@
 
 ## Context
 
-TransitMapper is a browser-based editor for regional transit systems. A user
-draws streets, rail, stations, and the bus and train routes that run over
-them, then optionally publishes a read-only snapshot at a public link.
+A browser editor for regional transit systems. A user draws streets, rail,
+stations, and the routes running over them, then optionally publishes a
+read-only snapshot at a public link.
 
-There are no accounts. A system lives in the browser that made it, and
-publishing produces a copy rather than a shared document.
+There are no accounts. A system lives in the browser that made it.
+Publishing produces a copy, not a shared document.
+
+Ridership modelling, schedule optimisation, and agency data hosting are out
+of scope. OpenStreetMap and GTFS feeds are read-only import sources.
 
 ```mermaid
 flowchart LR
-  author([Author])
-  viewer([Viewer])
-
+  author([Author]) --> editor
   subgraph browser [Browser]
-    editor["apps/web<br/>editor"]
-    local[("localStorage<br/>library")]
+    editor["apps/web"] <--> local[("localStorage")]
   end
-
   subgraph edge [Cloudflare]
-    worker["apps/worker<br/>publishing"]
-    d1[("D1<br/>snapshots")]
+    worker["apps/worker"] <--> d1[("D1")]
   end
-
-  core["packages/core<br/>domain model"]
-
-  author --> editor
-  editor <--> local
   editor -- publish --> worker
-  worker <--> d1
-  viewer -- share link --> worker
-  core -.imported by.-> editor
+  viewer([Viewer]) -- share link --> worker
+  core["packages/core"] -.imported by.-> editor
   core -.imported by.-> worker
 ```
 
 ## Domain model
 
-Everything else follows from one distinction.
+A **Way** is infrastructure: a street or rail alignment with a lane
+cross-section. A **Service** is a route running over ways. One way carries
+many services; one service traverses many ways.
 
-A **Way** is infrastructure: a physical street or rail alignment, with a
-cross-section describing its lanes. A **Service** is a route that runs over
-ways: a bus line, a subway line. One way carries many services, and one
-service traverses many ways.
+| Type       | Meaning                                    |
+| ---------- | ------------------------------------------ |
+| `System`   | One document: a regional network           |
+| `Way`      | A physical alignment and its cross-section |
+| `Service`  | A route traversing a sequence of ways      |
+| `Node`     | A junction where ways meet                 |
+| `Station`  | A boarding place, with land and structures |
+| `Facility` | A structure within a station               |
+| `Group`    | Stations treated as one interchange        |
 
-Conflating the two is the modelling mistake this project exists to avoid. A
-bus route is not a road. Deleting a bus route should not delete the street,
-and widening a street should not disturb the routes on it.
+Modes, way types, lane kinds, and facility classes are catalog records read
+at runtime, not variants in code.
 
-The remaining record types support that split:
+Ways store a centreline and a cross-section. Lane polylines, junction
+footprints, and turn geometry are computed from those.
 
-| Type       | Meaning                                         |
-| ---------- | ----------------------------------------------- |
-| `System`   | One document: a whole regional network          |
-| `Way`      | A physical alignment and its lane cross-section |
-| `Service`  | A route traversing a sequence of ways           |
-| `Node`     | A junction where ways meet                      |
-| `Station`  | A place people board, with land and structures  |
-| `Facility` | A structure within a station                    |
-| `Group`    | Several stations treated as one interchange     |
+## Code map
 
-Three properties of the model matter more than the types themselves.
+### `packages/core`
 
-**Kinds are data, not code.** Every transit mode, way type, lane kind, and
-facility class is a record in the catalog. Supporting light rail is a table
-entry. If adding a mode requires editing a conditional anywhere, something
-was hardcoded that should not have been.
+Record types, catalog, geometry derivation, routing graph, renderer,
+snapshot format. Data in, data out.
 
-**Geometry is derived, never stored.** A way stores its centreline and its
-cross-section. Lane polylines, junction footprints, and turn geometry are
-computed from those. Storing them would mean two sources of truth that
-disagree after the first edit.
+Owns every rule about what a transit system is. Owns no storage, no
+transport, no interaction state.
 
-**Appearance is separate from identity.** That a lane is 11 feet wide and
-carries traffic is domain data. That it draws as grey asphalt is style. The
-two are separate so a restyle never requires a data migration.
+### `apps/web`
 
-## Components
+The editor: MapLibre for the map, React for panels, one store through which
+every mutation passes. Undo, junction upkeep, and station re-anchoring live
+in store actions, so no component can mutate around them.
 
-### `packages/core` — the domain
+Owns no domain rules.
 
-The record types, the catalog, geometry derivation, the routing graph, the
-renderer, and the snapshot format. It takes data and returns data: no DOM,
-no store, no framework, no network.
+### `apps/worker`
 
-Every rule about what a transit system is lives here, which is why it can be
-tested as plain function calls without a browser.
+Publishing: accepts a snapshot, serves it back, renders link previews and
+embeds. Validates submitted systems with the core's parser rather than a
+second implementation.
 
-### `apps/web` — the editor
+The only component reading bytes from strangers.
 
-The single-page application: MapLibre for the map, React for the panels,
-and one store through which every document mutation passes. Undo,
-junction upkeep, and station re-anchoring live in the store's actions, so no
-component can mutate around them.
+### `packages/eslint-plugin`
 
-It holds no domain rules. It asks `packages/core`.
+Repository-specific lint rules, one per invariant the compiler cannot
+express.
 
-### `apps/worker` — publishing
+## Runtime topology
 
-A Cloudflare Worker with a D1 database. It accepts a snapshot, serves it
-back, and renders link previews and embeds. It validates a submitted system
-by parsing it with the core's own parser rather than a second
-implementation.
+`packages/core` compiles into both the browser bundle and the Worker.
 
-This is the only component that reads bytes from strangers.
+The Worker runs on workerd with a per-request CPU budget in the tens of
+milliseconds, and a metered daily invocation allowance. Static assets are
+served without invoking it.
+
+The editor runs in the browser with no server dependency.
 
 ## Flows
 
 ### Editing
 
-Entirely local. A pointer gesture becomes a store action, the store calls
-the core to re-derive geometry and routing, and the result renders and is
-written to `localStorage`. Nothing leaves the machine.
+A pointer gesture becomes a store action, the store calls the core to
+re-derive geometry and routing, and the result renders and is written to
+`localStorage`. Nothing leaves the machine.
 
 ### Publishing
 
-1. The browser renders the link-preview image.
-2. The editor sends the system and that image to the worker.
-3. The worker validates both, assigns an id, and stores a snapshot with an
-   expiry.
-4. The author receives a link.
+The browser renders the preview image, then sends the system and image to
+the Worker. The Worker re-parses the system with the core's parser, assigns
+an id, and writes a row with an expiry. The author receives a link.
 
 The snapshot is a copy. Later edits do not reach it.
 
 ### Viewing a share
 
-The worker reads the snapshot and returns the application shell with the
-snapshot's title and preview injected, so link unfurlers see real content
-without running JavaScript. The application then renders it read-only.
-Reading extends the expiry, so a link in use does not lapse.
+The Worker reads the snapshot and returns the application shell with title
+and preview injected, so link unfurlers see content without running
+JavaScript. Reading extends the expiry.
 
-### Embedding
+## Invariants
 
-A second, smaller entry point renders the map with no editor and no React,
-because it loads inside a third party's page.
+| Invariant                                               | Property preserved                                      | Enforced by |
+| ------------------------------------------------------- | ------------------------------------------------------- | ----------- |
+| `packages/core` references no DOM, store, or framework  | It runs in both runtimes and is testable without either | `lint`      |
+| Kinds are catalog records, never branches in code       | A new mode is data, not a code change                   | nothing     |
+| Derived geometry is computed, never stored              | One source of truth survives an edit                    | nothing     |
+| Appearance is separate from domain data                 | A restyle never requires a data migration               | nothing     |
+| All mutation passes through store actions               | Undo and derived-state upkeep cannot be bypassed        | nothing     |
+| One projector converts a system to renderable output    | Editor, embed, exports, previews cannot diverge         | nothing     |
+| Stored values reach markup only through an escaping API | User text cannot become executable markup               | nothing     |
+| Snapshots are read through a versioned parser           | An old snapshot stays readable after a format change    | tests       |
 
 ## Decisions
 
 ### Infrastructure separated from service
 
-**Chosen:** ways and services are distinct records; a service references
-ways.
+Chosen: ways and services are distinct records; a service references ways.
+Rejected: a route as a self-contained polyline. A real network has many
+routes over shared streets, and independent geometry desynchronises on the
+first street edit.
 
-**Rejected:** a route as a self-contained polyline.
+### Kinds in a catalog
 
-**Constraint:** a real network has many routes over shared streets. Routes
-as independent geometry means editing a street silently desynchronises every
-route on it.
-
-### Kinds in a catalog rather than in code
-
-**Chosen:** modes, way types, lane kinds, and facility classes are records
-read at runtime.
-
-**Rejected:** union types with per-kind branching.
-
-**Constraint:** the project must support modes nobody anticipated —
-gondolas, ferries, bus rapid transit — without an editor rewrite each time.
+Chosen: modes and types are records read at runtime. Rejected: union types
+with per-kind branching. The project must absorb modes nobody anticipated
+without an editor rewrite.
 
 ### Geometry derived on demand
 
-**Chosen:** store centrelines and cross-sections; compute everything else.
-
-**Rejected:** storing lane polylines and junction shapes.
-
-**Constraint:** derived geometry that is also stored is two truths that
-diverge on the first edit, and every edit touches its neighbours because
-junctions depend on all connecting ways.
+Chosen: store centrelines and cross-sections. Rejected: storing lane
+polylines and junction shapes. Two representations of the same truth diverge
+on the first edit, and junctions depend on every connecting way.
 
 ### Local-first documents
 
-**Chosen:** the browser holds work in progress; the server holds published
-copies.
-
-**Rejected:** server-authoritative documents.
-
-**Constraint:** the editor must work for someone who never publishes, and
-must not lose work if the service is withdrawn. A volunteer project cannot
-promise indefinite hosting.
+Chosen: the browser holds work in progress. Rejected: server-authoritative
+documents. The editor must work for someone who never publishes, and must
+not lose work if the service is withdrawn.
 
 ### Snapshots rather than synchronisation
 
-**Chosen:** publishing copies the document; changes do not propagate back.
-
-**Rejected:** live documents shared by link.
-
-**Constraint:** share links are public and unauthenticated. A live document
-behind a public link is editable by anyone holding it, which needs the
-accounts this project does not have.
+Chosen: publishing copies. Rejected: live documents shared by link. A live
+document behind a public, unauthenticated link is editable by anyone holding
+it.
 
 ### One core across both runtimes
 
-**Chosen:** the editor and the worker import the same `packages/core`.
-
-**Rejected:** a separate server-side model.
-
-**Constraint:** the published preview and the editor's map must draw
-identically. Two implementations diverge. The cost is that the core must run
-in a browser and in workerd, which the type system cannot enforce and a lint
-rule does.
+Chosen: editor and Worker import the same core. Rejected: a separate
+server-side model. The published preview and the editor's map must draw
+identically, and two implementations diverge.
 
 ## Trust boundary
 
@@ -209,13 +173,10 @@ callers.
 | ------------------------- | ------------------------------------------------- |
 | A submitted system        | Size-capped, then parsed by the core's parser     |
 | A submitted preview image | Size-capped, structurally validated, served inert |
-| A snapshot id             | Opaque, and parameterised at the query layer      |
+| A snapshot id             | Opaque, parameterised at the query layer          |
 
-Stored text is unauthenticated and unsanitised at rest. It reaches markup
-through an escaping API rather than string construction.
-
-Publishing is rate-limited per client address, because it is the only path
-writing caller-supplied bytes to storage.
+Stored text is unsanitised at rest and reaches markup through an escaping
+API. Publishing is rate-limited per client address.
 
 ## Failure modes
 
@@ -227,28 +188,11 @@ writing caller-supplied bytes to storage.
 | OpenStreetMap or GTFS unavailable | Import unavailable. Editing works.                  |
 | Browser storage cleared           | Unpublished work is lost. Snapshots survive.        |
 
-No server failure prevents editing. No client failure affects another user.
-
-## Invariants
-
-| Invariant                                               | Property preserved                                      |
-| ------------------------------------------------------- | ------------------------------------------------------- |
-| `packages/core` references no DOM, store, or framework  | It runs in both runtimes and is testable without either |
-| All document mutation passes through store actions      | Undo and derived-state upkeep cannot be bypassed        |
-| Kinds are catalog records, never branches in code       | A new transit mode is data, not a code change           |
-| Derived geometry is computed, never stored              | One source of truth survives an edit                    |
-| Appearance is separate from domain data                 | A restyle never requires a data migration               |
-| One projector converts a system to renderable output    | Editor, embed, exports, and previews cannot diverge     |
-| Stored values reach markup only through an escaping API | User-supplied text cannot become executable markup      |
-| Snapshots are read through a versioned parser           | An old snapshot stays readable after the format changes |
-
-## Unwired code
+## Absences
 
 Identity, sessions, and snapshot ownership are implemented in
-`packages/core` and covered by tests. No production code imports them.
-
-There are no authentication routes, no user or session storage, and no owner
-attribute on a snapshot.
+`packages/core` and tested. Nothing imports them. There are no
+authentication routes, no session storage, and no owner column.
 
 The expiry sweep already exempts snapshots marked as owned, and the schema
 reserves the field that would mark them. Every snapshot currently expires.
