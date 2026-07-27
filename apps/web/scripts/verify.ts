@@ -2479,6 +2479,43 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   check("combining restores the edited median width, not a generic default", combined.ways[0].profile.lanes.find((l) => l.kindId === "median")?.widthM === 6);
 }
 
+// --- combining carriageways carries the discarded half's anchors across ---
+{
+  // The realistic shape: a divided street imported from OSM as two one-way
+  // carriageways under one name, with a cross street meeting one of them.
+  // (Drawing a crossing instead would split the carriageway, which is its own
+  // bug — see the identity-member checks below.)
+  fresh();
+  const divided: OsmWayElement[] = [
+    { type: "way", id: 1, tags: { highway: "primary", name: "Grand Boulevard", oneway: "yes", lanes: "2" }, nodes: [10, 11, 12], geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.15 }, { lat: 36.1, lon: -115.1 }] },
+    { type: "way", id: 2, tags: { highway: "primary", name: "Grand Boulevard", oneway: "-1", lanes: "2" }, nodes: [20, 21, 22], geometry: [{ lat: 36.1002, lon: -115.2 }, { lat: 36.1002, lon: -115.15 }, { lat: 36.1002, lon: -115.1 }] },
+    { type: "way", id: 3, tags: { highway: "residential", name: "Cross Street" }, nodes: [21, 30], geometry: [{ lat: 36.1002, lon: -115.15 }, { lat: 36.11, lon: -115.15 }] },
+  ];
+  store.getState().importWays(osmElementsToNetwork(divided));
+  const sys = store.getState().system;
+  const carriageways = sys.ways.filter((w) => w.source === "osm:1" || w.source === "osm:2");
+  const cross = sys.ways.find((w) => w.source === "osm:3")!;
+  const nw = sys.namedWays.find((n) => n.name === "Grand Boulevard")!;
+  check("the divided street imports as one identity of two carriageways", nw.wayIds.length === 2);
+  check("both carriageways import one-way", carriageways.every((w) => isOneWay(w.profile)));
+  const nodesBefore = sys.nodes.length;
+  check("the cross street shares a junction with one carriageway", nodesBefore === 1);
+
+  const discarded = carriageways.find((w) => !isOneWay(w.profile) || directionalLanes(w.profile).every((l) => l.direction === "backward"))!;
+  const stId = store.getState().addStation(discarded.points[0], { wayId: discarded.id, t: 0 });
+
+  store.getState().combineCarriageways(nw.id);
+  const after = store.getState().system;
+  const survivor = after.ways.find((w) => w.id !== cross.id)!;
+  check("combining leaves one carriageway", after.ways.filter((w) => w.id !== cross.id).length === 1);
+  check("combining keeps a station anchored to the discarded carriageway", after.stations.length === 1);
+  check("and re-anchors it onto the surviving centerline", after.stations.find((st) => st.id === stId)?.anchor?.wayId === survivor.id);
+  check("combining keeps the junction the cross street made", after.nodes.length === nodesBefore);
+  check("and re-points its ref onto the surviving way", after.nodes.every((n) => n.refs.every((ref) => ref.wayId !== discarded.id)));
+  check("so the cross street is still joined to the street", after.nodes.some((n) => n.refs.some((ref) => ref.wayId === cross.id)));
+  check("the survivor is two-way again", !isOneWay(survivor.profile));
+}
+
 // --- store: auto-junctions where ways cross (the SimCity moment) ---
 {
   fresh();

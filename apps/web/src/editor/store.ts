@@ -1646,7 +1646,45 @@ export function createEditorStore() {
         const median = getComponent(s.system.medians, namedWayId);
         const combined = combineProfiles(backHalf, keeper.profile, median?.widthM, median?.kindId, s.system.drivingSide);
 
-        let system = removeWay(s.system, other.id);
+        // Everything anchored to the discarded carriageway belongs to the
+        // street, not to the half that happened to lose the coin flip.
+        // removeWay deletes stations anchored to it and drops its junction
+        // refs (severing whatever met it), so carry both across first — the
+        // same rescue mergeWays performs when it collapses two ways into one.
+        const keeperPath = resolveWayPath(keeper);
+        const stations = s.system.stations.map((st) => {
+          if (st.anchor?.wayId !== other.id) return st;
+          const on = nearestOnPath(keeperPath, st.coord);
+          return on ? { ...st, anchor: { wayId: keeper.id, t: on.t } } : st;
+        });
+
+        // A carriageway pair from separateCarriageways is index-aligned
+        // (offsetPolyline moves each point), so ref index k on `other` is
+        // index k on the keeper. Two independently drawn one-ways need not
+        // be, so fall back to the keeper's nearest control point.
+        const nearestIndex = (coord: LngLat): number => {
+          let best = 0;
+          let bestD = Infinity;
+          keeper.points.forEach((p, i) => {
+            const d = haversineMeters(p, coord);
+            if (d < bestD) {
+              bestD = d;
+              best = i;
+            }
+          });
+          return best;
+        };
+        const aligned = keeper.points.length === other.points.length;
+        const mapIndex = (k: number): number => (aligned ? k : nearestIndex(other.points[k]));
+        const nodes = s.system.nodes
+          .map((n) => {
+            const refs = n.refs.map((r) => (r.wayId === other.id ? { wayId: keeper.id, pointIndex: mapIndex(r.pointIndex) } : r));
+            const seen = new Set<string>();
+            return { ...n, refs: refs.filter((r) => (seen.has(`${r.wayId}:${r.pointIndex}`) ? false : (seen.add(`${r.wayId}:${r.pointIndex}`), true))) };
+          })
+          .filter((n) => n.refs.length >= 2);
+
+        let system = removeWay({ ...s.system, stations, nodes }, other.id);
         system = { ...system, ways: system.ways.map((w) => (w.id === keeper.id ? { ...w, profile: combined } : w)) };
         return {
           system: touch(system),
