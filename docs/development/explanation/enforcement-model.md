@@ -31,12 +31,13 @@ the tool that failed and the command that resolves it.
 
 ## Layers
 
-| Layer          | What runs                             | Blocks on                   |
-| -------------- | ------------------------------------- | --------------------------- |
-| 0 — agent      | format-on-edit hook in `.claude/`     | nothing                     |
-| 1 — pre-commit | `lint-staged`, plus a secret scan     | nothing a machine can fix   |
-| 2 — pre-push   | `pnpm check`                          | everything                  |
-| 3 — CI         | `pnpm check`, plus a full secret scan | everything, authoritatively |
+| Layer          | What runs                              | Blocks on                   |
+| -------------- | -------------------------------------- | --------------------------- |
+| 0 — agent      | format-on-edit hook in `.claude/`      | nothing                     |
+| 1 — pre-commit | `lint-staged`, plus a secret scan      | nothing a machine can fix   |
+| 2 — pre-push   | `pnpm check`                           | everything                  |
+| 3 — CI         | `pnpm check`, plus a full secret scan  | everything, authoritatively |
+| 4 — the branch | a GitHub ruleset on the default branch | a merge that skipped CI     |
 
 Layers 0 to 2 are conveniences and they are bypassable on purpose.
 `--no-verify` exists, and a hook that is slow or that scolds gets bypassed
@@ -44,6 +45,22 @@ Layers 0 to 2 are conveniences and they are bypassable on purpose.
 would train people to work around them.
 
 **Layer 3 is the guarantee.** Nothing merges red.
+
+Layer 4 is what makes that sentence true. CI reporting a failure stops
+nothing on its own; the ruleset is what refuses the merge. It requires a
+pull request, requires the `Validate` check to pass, and forbids deleting
+or force-pushing the branch. `scripts/bootstrap/standards.ts` holds it as
+data, and `pnpm bootstrap` reports drift or applies it.
+
+### Required approvals
+
+The ruleset asks for zero approving reviews, which is deliberate and
+temporary. Nobody can approve their own pull request, so on a repository
+with one collaborator a required approval blocks every merge, including
+the one that would relax the requirement. Zero keeps the two rules that
+work without a second person: a change arrives as a pull request, and it
+does not merge until `Validate` passes. The count goes to 1 when a second
+maintainer exists.
 
 ## Placement
 
