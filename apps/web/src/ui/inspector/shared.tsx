@@ -112,3 +112,10 @@ export function Stat({ label, value }: StatProps) {
     </div>
   );
 }
+
+/** Round a duration in minutes to something a person would say out loud:
+ *  whole minutes above ten, one decimal below, since "every 3.3 min" is
+ *  meaningful and "a 33.4 min round trip" is false precision. */
+export function formatMinutes(minutes: number): string {
+  return minutes >= 10 ? `${Math.round(minutes)} min` : `${Math.round(minutes * 10) / 10} min`;
+}

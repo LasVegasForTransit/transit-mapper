@@ -19,7 +19,7 @@ import { Icon } from '../Icon';
 import { useSim } from '../SimProvider';
 import { useSimTime } from '../useSimTime';
 import { useView } from '../ViewProvider';
-import { EmptyInspector, Stat } from './shared';
+import { EmptyInspector, formatMinutes, Stat } from './shared';
 
 export interface StationInspectorProps {
   id: string;
@@ -407,11 +407,4 @@ function CombinedService({ served }: CombinedServiceProps) {
         : ''}
     </p>
   );
-}
-
-/** Round to something a person would say out loud: whole minutes above ten,
- *  one decimal below, since "every 3.3 min" is meaningful and "every 12.4 min"
- *  is false precision. */
-function formatMinutes(minutes: number): string {
-  return minutes >= 10 ? `${Math.round(minutes)} min` : `${Math.round(minutes * 10) / 10} min`;
 }

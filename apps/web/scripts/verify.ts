@@ -155,6 +155,7 @@ import type {
   Service,
   Station,
   TransitSystem,
+  VehicleKind,
   Way,
 } from '@transitmapper/core/model/system';
 import {
@@ -164,7 +165,13 @@ import {
   withComponent,
   withoutComponent,
 } from '@transitmapper/core/model/components';
-import { dwellStopsForPattern, effectiveVehicleKind } from '../src/sim/vehicles';
+import {
+  DEFAULT_DWELL_SECONDS,
+  dwellStopsForPattern,
+  effectiveVehicleKind,
+  patternStats,
+  serviceStats,
+} from '@transitmapper/core/sim/serviceStats';
 import {
   buildTimetable,
   metersAtElapsed,
@@ -7921,7 +7928,7 @@ function buildGrid() {
   };
   const sysNoKinds: TransitSystem = { ...createEmptySystem(), vehicleKinds: [] };
 
-  const unassigned = effectiveVehicleKind(sysNoKinds, busService);
+  const unassigned = effectiveVehicleKind(sysNoKinds.vehicleKinds, busService);
   const busDefault = vehicleFootprint('bus');
   check(
     "an unassigned service resolves to its mode's plain default size",
@@ -7945,7 +7952,10 @@ function buildGrid() {
       },
     ],
   };
-  const assigned = effectiveVehicleKind(sysWithKind, { ...busService, vehicleKindId: 'evk1' });
+  const assigned = effectiveVehicleKind(sysWithKind.vehicleKinds, {
+    ...busService,
+    vehicleKindId: 'evk1',
+  });
   check(
     "an assigned service uses its vehicle kind's own dimensions",
     assigned.widthM === 2.6 && assigned.lengthM === 18,
@@ -7959,7 +7969,7 @@ function buildGrid() {
     ...sysNoKinds,
     vehicleKinds: [{ id: 'evk2', modeId: 'bus', label: 'No speed set', widthM: 3, lengthM: 20 }],
   };
-  const assignedNoSpeed = effectiveVehicleKind(kindNoSpeed, {
+  const assignedNoSpeed = effectiveVehicleKind(kindNoSpeed.vehicleKinds, {
     ...busService,
     vehicleKindId: 'evk2',
   });
@@ -7968,7 +7978,7 @@ function buildGrid() {
     assignedNoSpeed.speedMps === VEHICLE_SPEED_MPS,
   );
 
-  const danglingRef = effectiveVehicleKind(sysNoKinds, {
+  const danglingRef = effectiveVehicleKind(sysNoKinds.vehicleKinds, {
     ...busService,
     vehicleKindId: 'does-not-exist',
   });
@@ -7996,7 +8006,7 @@ function buildGrid() {
   ];
   const pathMeters = haversineMeters(path[0], path[1]);
   const pattern = { id: 'p1', wayIds: ['w1'] };
-  const stops = dwellStopsForPattern(sys, pattern, path, pathMeters);
+  const stops = dwellStopsForPattern(sys.stations, pattern, path, pathMeters);
   check("only stations anchored to the pattern's ways become stops", stops.length === 3);
   check(
     'stops are ordered by distance along the path, not input order',
@@ -9416,6 +9426,122 @@ function buildGrid() {
   check(
     'even a short line gets a real layover rather than turning on a dime',
     planService(60_000, 60_000).layoverMs > 0,
+  );
+}
+
+// --- what a line amounts to (core/sim/serviceStats.ts) ---
+// The chain the editor used to hide: stops and dwell lengthen the round trip,
+// the round trip and the headway decide the fleet. These checks pin each link,
+// because the inspector now states all three and must not drift from the map.
+{
+  const straight = (id: string, lng2: number): Way => ({
+    id,
+    typeId: 'guideway',
+    points: [
+      [-115.3, 36.2],
+      [lng2, 36.2],
+    ],
+    geometry: 'straight',
+    grade: 'atGrade',
+    profile: defaultProfileFor('guideway'),
+  });
+  const ways = [straight('ss-w', -115.2)]; // ~8.97 km at this latitude
+  const svc: Service = {
+    id: 'ss-1',
+    name: 'Green',
+    modeId: 'lightRail',
+    color: '#0a0',
+    patterns: [{ id: 'ss-p', wayIds: ['ss-w'] }],
+    frequencyMinutes: 10,
+  };
+
+  const bare = serviceStats(ways, [], [], svc, 10)!;
+  check(
+    "a service's round trip is out and back",
+    Math.abs(bare.longestRoundTripMs - 2 * bare.patterns[0].oneWayMs) < 1e-9,
+  );
+  check('a stopless line spends no time dwelling', bare.patterns[0].dwellMs === 0);
+  check('a line reports the fleet its headway needs', bare.fleet === bare.patterns[0].plan!.fleet);
+  check('a line reports recovery time at its terminals', bare.layoverMs > 0);
+
+  // Stops lengthen the round trip. That is the coupling the dwell field
+  // claims and the inspector now shows.
+  const stations: Station[] = [
+    { id: 'ss-a', coord: [-115.27, 36.2], anchor: { wayId: 'ss-w', t: 0.1 } },
+    { id: 'ss-b', coord: [-115.25, 36.2], anchor: { wayId: 'ss-w', t: 0.5 } },
+  ];
+  const stopped = serviceStats(ways, stations, [], svc, 10)!;
+  check('stations on a line become stops', stopped.patterns[0].stopCount === 2);
+  check('stops make the round trip longer', stopped.longestRoundTripMs > bare.longestRoundTripMs);
+  check(
+    'a longer dwell makes it longer still',
+    serviceStats(
+      ways,
+      stations.map((s) => ({ ...s, dwellSeconds: 300 })),
+      [],
+      svc,
+      10,
+    )!.longestRoundTripMs > stopped.longestRoundTripMs,
+  );
+  check(
+    'dwell time is counted as time standing still, not travelling',
+    stopped.patterns[0].dwellMs === 2 * DEFAULT_DWELL_SECONDS * 1000,
+  );
+
+  // A faster vehicle shortens it, and can therefore need fewer vehicles.
+  const kinds: VehicleKind[] = [
+    {
+      id: 'ss-fast',
+      modeId: 'lightRail',
+      label: 'Express',
+      widthM: 2.6,
+      lengthM: 30,
+      topSpeedKmh: 120,
+    },
+  ];
+  const fast = serviceStats(ways, stations, kinds, { ...svc, vehicleKindId: 'ss-fast' }, 10)!;
+  check(
+    'a faster vehicle kind shortens the round trip',
+    fast.longestRoundTripMs < stopped.longestRoundTripMs,
+  );
+  check('a shorter round trip never needs more vehicles', fast.fleet <= stopped.fleet);
+
+  // Headway is the other input to fleet size.
+  const frequent = serviceStats(ways, stations, [], svc, 5)!;
+  check(
+    'halving the headway at least doubles the fleet',
+    frequent.fleet >= 2 * stopped.fleet - 1 && frequent.fleet > stopped.fleet,
+  );
+  check(
+    'a service with no headway set runs one vehicle',
+    serviceStats(ways, stations, [], svc, undefined)!.fleet === 1,
+  );
+
+  // A branch runs its own vehicles on top of the trunk's.
+  const branched: Service = {
+    ...svc,
+    patterns: [
+      { id: 'ss-p', wayIds: ['ss-w'] },
+      { id: 'ss-p2', wayIds: ['ss-w'] },
+    ],
+  };
+  check(
+    'each branch runs its own fleet',
+    serviceStats(ways, stations, [], branched, 10)!.fleet === 2 * stopped.fleet,
+  );
+
+  check(
+    'a line whose ways resolve to no path reports nothing rather than zeroes',
+    serviceStats([], [], [], svc, 10) === null,
+  );
+
+  // The map and the inspector must agree by construction: same stops, same
+  // timetable, same plan.
+  const viaPattern = patternStats(ways, stations, svc.patterns[0], VEHICLE_SPEED_MPS, 10)!;
+  check(
+    'per-pattern and per-service measurements agree',
+    viaPattern.roundTripMs === stopped.longestRoundTripMs &&
+      viaPattern.plan!.fleet === stopped.fleet,
   );
 }
 

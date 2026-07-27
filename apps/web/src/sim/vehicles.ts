@@ -4,13 +4,11 @@ import type { EditorStore } from '../editor/store';
 import {
   bearingAtT,
   cumulativeLengths,
-  nearestOnPath,
   patternPath,
   pointAtDistance,
   rotatedRectPolygon,
 } from '@transitmapper/core/model/geo';
 import { patternLanePath } from '@transitmapper/core/geometry/vehicleLane';
-import { vehicleFootprint } from '@transitmapper/core/model/catalog';
 import type {
   LngLat,
   Pattern,
@@ -25,12 +23,12 @@ import { vehiclesDisabledForPerf } from '../perf';
 import type { SimClock } from './simClock';
 // Pure motion kernel (framework-free, WASM-portable) — this module is its rAF/
 // MapLibre host. See packages/core/src/sim/timetable.ts.
-import {
-  buildTimetable,
-  VEHICLE_SPEED_MPS,
-  type DwellStop,
-  type Timetable,
-} from '@transitmapper/core/sim/timetable';
+import { buildTimetable, type Timetable } from '@transitmapper/core/sim/timetable';
+// Stop-finding and vehicle resolution are shared with the Service inspector,
+// so the numbers a planner reads and the ones the map runs can't drift apart.
+// (The lane-aware Infrastructure path means this file still builds its own
+// timetable rather than calling patternStats, which measures the centerline.)
+import { dwellStopsForPattern, effectiveVehicleKind } from '@transitmapper/core/sim/serviceStats';
 import { planService, runStateAt } from '@transitmapper/core/sim/fleet';
 import {
   activeSchedule,
@@ -59,12 +57,10 @@ const clampedFleetsReported = new Set<string>();
 function noteClampedFleet(patternId: string, serviceName: string, fleet: number): void {
   if (!import.meta.env.DEV || clampedFleetsReported.has(patternId)) return;
   clampedFleetsReported.add(patternId);
-  console.info(`[sim] ${serviceName}: running ${fleet} vehicles, drawing ${MAX_VEHICLES_PER_PATTERN}. Headway and spacing are unaffected; the map shows gaps.`);
+  console.info(
+    `[sim] ${serviceName}: running ${fleet} vehicles, drawing ${MAX_VEHICLES_PER_PATTERN}. Headway and spacing are unaffected; the map shows gaps.`,
+  );
 }
-// Doors open, board/alight, doors close — a plausible light-rail/bus dwell
-// when a station doesn't specify its own (Station.dwellSeconds).
-const DEFAULT_DWELL_SECONDS = 20;
-
 export interface VehicleGate {
   /** Whether this service's vehicles should render at all right now — the
    *  mode filter only (see ui/ViewProvider). View-mode gating (which
@@ -79,28 +75,6 @@ export interface VehicleGate {
    *  service then runs that period's configuration regardless of the clock.
    *  Undefined means follow the clock. */
   pinnedPeriod: () => string | undefined;
-}
-
-/** Which real vehicle a service's animation/rendering should use: its
- *  assigned VehicleKind if it has one and it still exists, else the
- *  mode's plain default (vehicleFootprint) at the app's ambient default
- *  speed — the exact behavior every service had before vehicle kinds
- *  existed, so an unassigned service is never affected by this feature. */
-export function effectiveVehicleKind(
-  system: TransitSystem,
-  service: Service,
-): { widthM: number; lengthM: number; speedMps: number } {
-  const kind = service.vehicleKindId
-    ? system.vehicleKinds.find((k) => k.id === service.vehicleKindId)
-    : undefined;
-  if (kind) {
-    return {
-      widthM: kind.widthM,
-      lengthM: kind.lengthM,
-      speedMps: kind.topSpeedKmh !== undefined ? kind.topSpeedKmh / 3.6 : VEHICLE_SPEED_MPS,
-    };
-  }
-  return { ...vehicleFootprint(service.modeId), speedMps: VEHICLE_SPEED_MPS };
 }
 
 /**
@@ -134,59 +108,6 @@ class ScheduleResolver {
       this.table.set(service.id, activeSchedule(service, nowMin, dayScope, pinnedLabel));
     return this.table;
   }
-}
-
-// Stations grouped by their anchor way id, cached by the stations array's
-// own reference — safe because the store replaces `system.stations`
-// immutably on every mutation (same convention as geo.ts's wayPathCache),
-// so a stale index is simply never looked up again. Without this,
-// dwellStopsForPattern did a full linear scan of every station in the
-// system for every pattern on every animation frame — fine for a few dozen
-// hand-drawn stations, but for a real GTFS import (thousands of stations,
-// hundreds of patterns) that's hundreds of thousands of comparisons
-// *per frame*, continuously, for as long as the tab stays open — confirmed
-// live against RTC Southern Nevada's real feed as a sustained freeze, not
-// just a one-time slow render.
-const stationsByWayCache = new WeakMap<Station[], Map<string, Station[]>>();
-
-function stationsByWay(stations: Station[]): Map<string, Station[]> {
-  let index = stationsByWayCache.get(stations);
-  if (index) return index;
-  index = new Map();
-  for (const st of stations) {
-    if (!st.anchor) continue;
-    const arr = index.get(st.anchor.wayId);
-    if (arr) arr.push(st);
-    else index.set(st.anchor.wayId, [st]);
-  }
-  stationsByWayCache.set(stations, index);
-  return index;
-}
-
-/** Every station actually anchored to one of this pattern's ways (the same
- *  "is this a stop on this branch" test the Route tab's stop-sequence list
- *  uses), positioned by arc-length along the pattern's full resolved path
- *  (via nearestOnPath) rather than by way-index — the more useful measure
- *  here, since the animation walks the path by distance, not by way. */
-export function dwellStopsForPattern(
-  system: TransitSystem,
-  pattern: Pattern,
-  path: LngLat[],
-  totalMeters: number,
-): DwellStop[] {
-  const byWay = stationsByWay(system.stations);
-  const stops: DwellStop[] = [];
-  for (const wayId of pattern.wayIds) {
-    for (const st of byWay.get(wayId) ?? []) {
-      const near = nearestOnPath(path, st.coord);
-      if (!near) continue;
-      stops.push({
-        distMeters: near.t * totalMeters,
-        dwellMs: (st.dwellSeconds ?? DEFAULT_DWELL_SECONDS) * 1000,
-      });
-    }
-  }
-  return stops.sort((a, b) => a.distMeters - b.distMeters);
 }
 
 interface PatternGeometry {
@@ -271,7 +192,7 @@ function resolvePatternGeometry(
     if (lat < minLat) minLat = lat;
     if (lat > maxLat) maxLat = lat;
   }
-  const stops = dwellStopsForPattern(system, pattern, path, meters);
+  const stops = dwellStopsForPattern(system.stations, pattern, path, meters);
   const timetable = buildTimetable(meters, stops, speedMps);
   const geometry: CachedPatternGeometry = {
     path,
@@ -289,18 +210,18 @@ function resolvePatternGeometry(
 }
 
 /**
- * Ambient delight, not simulation: one or more dots per PATTERN (a branch
- * has its own, same as its own trunk-sharing sibling) running back and
- * forth along its route at a plausible constant speed, pausing to dwell at
- * each station along the way (Station.dwellSeconds, or DEFAULT_DWELL_SECONDS
- * when unset) — the moment this stops being a bare speed/distance triangle
- * wave and starts reading as a train that actually stops for people. How
- * MANY dots is headway-driven — a 5-minute line visibly runs more vehicles
- * than a 30-minute one, so the number typed into the Inspector actually
- * shows up on the map instead of being inert. Bypasses the store entirely —
- * like interactions.ts's rubber-band preview, this is a pure rAF → GeoJSON
- * source push, so it never touches undo history or triggers a feature
- * rebuild.
+ * The simulation's rendering host: one dot (Network) or true-scale footprint
+ * (Infrastructure) per RUN, resolved from the simulated clock every tick.
+ *
+ * A pattern is the unit — a branch runs its own vehicles, same as its
+ * trunk-sharing sibling. How many, and where each one is, comes from
+ * core/sim: the schedule says whether the line is running and at what
+ * headway, the fleet math turns that into a cycle, and the timetable walks
+ * the path stopping at each station on the way.
+ *
+ * Bypasses the store entirely — like interactions.ts's rubber-band preview,
+ * this is a pure rAF → GeoJSON source push, so it never touches undo history
+ * or triggers a feature rebuild.
  */
 // Ambient dots update at a FIXED cadence, decoupled from the render loop (a
 // classic fixed-timestep sim tick). 30 Hz is imperceptibly different from
@@ -420,7 +341,7 @@ export function attachVehicleAnimation(
         const active = running.get(service.id);
         if (!active) continue;
         const headwayMinutes = active.headwayMinutes;
-        const { widthM, lengthM, speedMps } = effectiveVehicleKind(system, service);
+        const { widthM, lengthM, speedMps } = effectiveVehicleKind(system.vehicleKinds, service);
         for (const pattern of service.patterns) {
           const geometry = resolvePatternGeometry(
             system,

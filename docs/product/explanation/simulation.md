@@ -97,6 +97,25 @@ first twelve are drawn, so very frequent service on a long line shows gaps
 rather than wrong spacing. Clamping the fleet itself would shorten the cycle
 below the round trip, which no vehicle could run.
 
+## Seeing the chain
+
+The inspector states all three links, live against the simulated clock, so
+none of it has to be taken on trust:
+
+> **Round trip** 22 min · **Vehicles** 3
+>
+> At Mon 08:00 AM it runs every 10 min (Peak). 2 stops and 10 min of dwell, a
+> round trip takes 22 min, so holding that headway needs 3 vehicles, each
+> waiting 4.1 min at either end.
+
+Change any input and the numbers move: add a station, raise its dwell, assign
+a faster vehicle kind, or edit the headway. That's the point — before this,
+adding a station silently added a train.
+
+The inspector and the map resolve through the same functions in
+`packages/core/src/sim/serviceStats.ts`, so the figure a planner reads and the
+fleet the map runs cannot drift apart.
+
 ## The clock
 
 One number — milliseconds since Monday 00:00 — is the simulation's entire
