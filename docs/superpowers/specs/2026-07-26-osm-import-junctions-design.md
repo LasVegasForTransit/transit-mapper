@@ -435,11 +435,20 @@ stopped there, so a system set to left-hand traffic imported streets mirrored
 `drivingSide`; the import simply never asked for it.
 
 It is threaded from `ImportDialog` through `importOsmWays` and
-`osmElementsToNetwork` into `profileFromOsmTags`, which mirrors the finished
-profile by reversing its left-to-right order and leaving each lane's
-direction alone. That is the same cross-section seen from the other side, and
-it carries the asymmetric parts — a turn pocket, a sidewalk on one side only
-— to the correct side without special cases.
+`osmElementsToNetwork` into `profileFromOsmTags`.
+
+The first implementation mirrored the finished profile — reversed its
+left-to-right order — which was wrong, and wrong in a way the tests then
+enshrined. OSM's `:left`/`:right` suffixes and `turn:lanes` ordering are
+defined against the *way's* forward direction in every country, so reversing
+moved every tagged side to the wrong kerb. A one-way street is the decisive
+case: all its lanes run one way, so there is no arrangement to mirror, yet a
+London street tagged `busway:left` came out with its bus lane at the offside
+kerb.
+
+Only the travel-lane halves swap: the forward block sits on the right under
+right-hand traffic and on the left under left-hand. Kerb lanes stay where the
+tags put them, and a kerb lane's own direction follows the traffic beside it.
 
 Changing the setting later does not re-mirror ways already imported; that
 would be a bulk mutation of the user's existing work, not a setting change.
@@ -480,3 +489,4 @@ name still stays its own identity.
 `importWays` returns `{added, skipped}` so the dialog can distinguish
 "imported 0 ways" from "all 149 of these were already here" — the same
 outcome, but only one of them is a mistake worth telling someone about.
+

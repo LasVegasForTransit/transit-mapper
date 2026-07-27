@@ -272,13 +272,20 @@ const CYCLEWAY_PRESENT = new Set(["lane", "track", "opposite_lane", "opposite_tr
  * rather than entries in `lanes`, so they are additional to the lane count,
  * not carved out of it.
  */
-function osmSideLanes(tags: Record<string, string>, oneway: "forward" | "backward" | null): { left: ProfileTemplateLane[]; right: ProfileTemplateLane[] } {
+function osmSideLanes(
+  tags: Record<string, string>,
+  oneway: "forward" | "backward" | null,
+  drivingSide: DrivingSide,
+): { left: ProfileTemplateLane[]; right: ProfileTemplateLane[] } {
   const left: ProfileTemplateLane[] = [];
   const right: ProfileTemplateLane[] = [];
-  // Built right-hand-traffic first, like the travel lanes: the left kerb
-  // carries backward traffic unless the whole way is one-way.
-  const leftDirection: LaneDirection = oneway ?? "backward";
-  const rightDirection: LaneDirection = oneway ?? "forward";
+  // A kerb lane runs with the traffic beside it, which is the only thing here
+  // that depends on the driving side: on a two-way street the left kerb
+  // carries backward traffic under right-hand traffic and forward under
+  // left-hand. Which kerb each lane sits at does NOT depend on it — see
+  // profileFromOsmTags.
+  const leftDirection: LaneDirection = oneway ?? (drivingSide === "left" ? "forward" : "backward");
+  const rightDirection: LaneDirection = oneway ?? (drivingSide === "left" ? "backward" : "forward");
 
   // Kerb outwards-in: parking sits outboard of a bus lane.
   const parkingOld = osmSidePresence(tags, "parking:lane", (v) => PARKING_PRESENT.has(v));
@@ -305,13 +312,17 @@ function osmSideLanes(tags: Record<string, string>, oneway: "forward" | "backwar
  * vocabulary; rail and bike ways keep their catalog defaults, where a single
  * bidirectional track or path is already right.
  *
- * Lanes are built right-hand-traffic first — backward lanes to the left,
- * matching defaultProfileFor and withLaneCount — then mirrored wholesale for
- * a left-hand-traffic system. Mirroring is a plain reversal of the
- * left-to-right order with each lane's direction left alone: under LHT
- * forward traffic keeps to the left, which is the same cross-section seen
- * from the other side. That also carries the asymmetric parts (a turn pocket,
- * a sidewalk on one side only) to the correct side for free.
+ * Lanes are ordered left-to-right facing the way's own forward direction.
+ * That frame is fixed by the way, not by the country, and OSM's `:left` /
+ * `:right` suffixes and `turn:lanes` ordering are defined against the same
+ * forward direction everywhere — so a sidewalk, bike lane, bus lane, parking
+ * lane or turn pocket read from tags sits at the side OSM named, under either
+ * driving side.
+ *
+ * The one thing that does depend on driving side is which half of a two-way
+ * street carries forward traffic: the right half under right-hand traffic,
+ * the left half under left-hand. Only the travel-lane blocks swap; the kerbs
+ * stay where the tags put them.
  */
 export function profileFromOsmTags(
   typeId: string,
@@ -319,8 +330,6 @@ export function profileFromOsmTags(
   tags: Record<string, string> | undefined,
   drivingSide: DrivingSide = "right",
 ): CrossSection {
-  const mirrored = (profile: CrossSection): CrossSection =>
-    drivingSide === "left" ? { lanes: [...profile.lanes].reverse() } : profile;
   if (typeId !== "road" || !tags) return defaultProfileFor(typeId);
 
   const oneway = osmOneway(tags);
@@ -328,26 +337,34 @@ export function profileFromOsmTags(
 
   // A two-way street with a single lane is one shared bidirectional lane, not
   // a zero-lane one — matching defaultProfileFor's capacity-1 case.
-  const side = osmSideLanes(tags, oneway);
+  const side = osmSideLanes(tags, oneway, drivingSide);
 
   if (!oneway && backward === 0 && forward === 0) {
     const lanes: ProfileTemplateLane[] = [{ kindId: "drive", direction: "both" }];
     if (centerTurn) lanes.push({ kindId: "turnPocket", direction: "both" });
     // Right-side lanes read kerb-inwards, so they reverse into left-to-right.
-    return mirrored(profileWithPrimaryLanes(typeId, [...side.left, ...lanes, ...[...side.right].reverse()], osmSidewalks(tags)));
+    return profileWithPrimaryLanes(typeId, [...side.left, ...lanes, ...[...side.right].reverse()], osmSidewalks(tags));
   }
 
   const forwardTurns = tags["turn:lanes:forward"] ?? (oneway === "forward" ? tags["turn:lanes"] : undefined);
   const backwardTurns = tags["turn:lanes:backward"] ?? (oneway === "backward" ? tags["turn:lanes"] : undefined);
 
+  // `turn:lanes` lists lanes left-to-right as the DRIVER sees them, so the
+  // backward block maps on reversed — it is travelling the other way. That
+  // follows from the lane's own direction and is the same under either
+  // driving side.
+  const backwardLanes = laneKindsForDirection(backward, backwardTurns, true).map((kindId) => ({ kindId, direction: "backward" as const }));
+  const forwardLanes = laneKindsForDirection(forward, forwardTurns, false).map((kindId) => ({ kindId, direction: "forward" as const }));
+  const [nearLeftKerb, nearRightKerb] = drivingSide === "left" ? [forwardLanes, backwardLanes] : [backwardLanes, forwardLanes];
+
   const primary: ProfileTemplateLane[] = [
     ...side.left,
-    ...laneKindsForDirection(backward, backwardTurns, true).map((kindId) => ({ kindId, direction: "backward" as const })),
+    ...nearLeftKerb,
     ...(centerTurn ? [{ kindId: "turnPocket", direction: "both" as const }] : []),
-    ...laneKindsForDirection(forward, forwardTurns, false).map((kindId) => ({ kindId, direction: "forward" as const })),
+    ...nearRightKerb,
     ...[...side.right].reverse(),
   ];
-  return mirrored(profileWithPrimaryLanes(typeId, primary, osmSidewalks(tags)));
+  return profileWithPrimaryLanes(typeId, primary, osmSidewalks(tags));
 }
 
 /**
@@ -722,6 +739,7 @@ export function withoutAlreadyImported(
       if (wayId) refs.push({ ...ref, wayId });
     }
     if (refs.length < 2) continue;
+
     // Every arm already in the system means this junction came in with the
     // earlier import and is already recorded; only a junction touching
     // something new is new.

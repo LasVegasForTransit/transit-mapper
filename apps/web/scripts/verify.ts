@@ -1339,37 +1339,68 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
     "a bus lane does not consume a travel lane",
     profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "4", busway: "lane" }).lanes.filter((l) => l.kindId === "drive").length === 4,
   );
+  // busway:right names the way's right-hand side in every country, so the
+  // lane stays at that kerb; only the two travel lanes swap direction order.
   check(
-    "bus lanes mirror with the rest of the cross-section under LHT",
-    kinds(profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "2", "busway:right": "lane" }, "left")) === "sidewalk,bus,drive,drive,sidewalk",
+    "a bus lane keeps its tagged kerb under left-hand traffic",
+    kinds(profileFromOsmTags("road", "arterial", { highway: "primary", lanes: "2", "busway:right": "lane" }, "left")) === "sidewalk,drive,drive,bus,sidewalk",
   );
 }
 
-// --- P4: OSM import mirrors lane order for left-hand traffic ---
+// --- P4: OSM import places lanes for the system's driving side ---
 {
   const kinds = (p: ReturnType<typeof profileFromOsmTags>) => p.lanes.map((l) => `${l.kindId}:${l.direction}`).join(",");
   const tags = { highway: "primary", lanes: "4" };
   const right = profileFromOsmTags("road", "arterial", tags, "right");
   const left = profileFromOsmTags("road", "arterial", tags, "left");
 
-  check("right-hand traffic keeps backward lanes on the left", kinds(right).startsWith("sidewalk:both,drive:backward"));
-  check("left-hand traffic puts forward lanes on the left", kinds(left).startsWith("sidewalk:both,drive:forward"));
-  check("mirroring reverses the cross-section rather than changing it", kinds(left) === kinds(right).split(",").reverse().join(","));
-  check("mirroring leaves each lane's own direction alone", left.lanes.filter((l) => l.direction === "forward").length === right.lanes.filter((l) => l.direction === "forward").length);
+  check("right-hand traffic keeps backward lanes on the left", kinds(right) === "sidewalk:both,drive:backward,drive:backward,drive:forward,drive:forward,sidewalk:both");
+  check("left-hand traffic puts forward lanes on the left", kinds(left) === "sidewalk:both,drive:forward,drive:forward,drive:backward,drive:backward,sidewalk:both");
   check("right-hand traffic is still the default", kinds(profileFromOsmTags("road", "arterial", tags)) === kinds(right));
 
-  // Asymmetric parts must land on the correct side too.
+  // OSM's :left/:right are relative to the WAY's forward direction in every
+  // country, so a tagged side must not move with the driving side. A one-way
+  // street is the decisive case: every lane runs the same way, so there is no
+  // direction arrangement to swap, and anything that moves has been misplaced.
+  const oneWayBus = { highway: "primary", oneway: "yes", lanes: "3", "busway:left": "lane" };
+  check(
+    "a tagged kerb lane stays on that kerb under left-hand traffic",
+    kinds(profileFromOsmTags("road", "arterial", oneWayBus, "left")) === kinds(profileFromOsmTags("road", "arterial", oneWayBus, "right")),
+  );
+  check(
+    "and it really is the left kerb",
+    profileFromOsmTags("road", "arterial", oneWayBus, "left").lanes[1].kindId === "bus",
+  );
+
   const oneSidewalk = { highway: "primary", lanes: "2", "sidewalk:left": "no" };
   const swRight = profileFromOsmTags("road", "arterial", oneSidewalk, "right");
   const swLeft = profileFromOsmTags("road", "arterial", oneSidewalk, "left");
-  check("a missing left sidewalk is missing on the left under RHT", swRight.lanes[0].kindId !== "sidewalk");
-  check("that same side becomes the right-hand edge under LHT", swLeft.lanes[swLeft.lanes.length - 1].kindId !== "sidewalk");
+  check("sidewalk:left=no drops the left sidewalk under RHT", swRight.lanes[0].kindId !== "sidewalk" && swRight.lanes[swRight.lanes.length - 1].kindId === "sidewalk");
+  check("and drops the same one under LHT", swLeft.lanes[0].kindId !== "sidewalk" && swLeft.lanes[swLeft.lanes.length - 1].kindId === "sidewalk");
 
+  for (const [tag, kind] of [["cycleway:left", "bike"], ["parking:lane:left", "parallel"], ["busway:left", "lane"]] as const) {
+    const t = { highway: "primary", lanes: "2", [tag]: kind === "parallel" ? "parallel" : kind === "bike" ? "lane" : "lane" } as Record<string, string>;
+    check(
+      `${tag} lands on the same physical side under either driving side`,
+      kinds(profileFromOsmTags("road", "arterial", t, "left")).split(",").findIndex((x) => !x.startsWith("sidewalk") && !x.startsWith("drive")) ===
+        kinds(profileFromOsmTags("road", "arterial", t, "right")).split(",").findIndex((x) => !x.startsWith("sidewalk") && !x.startsWith("drive")),
+    );
+  }
+
+  // turn:lanes is likewise ordered by the driver's own direction of travel.
   const turns = { highway: "primary", oneway: "yes", lanes: "3", "turn:lanes": "left|through|through" };
-  const tRight = profileFromOsmTags("road", "arterial", turns, "right");
-  const tLeft = profileFromOsmTags("road", "arterial", turns, "left");
-  const pocketAt = (p: ReturnType<typeof profileFromOsmTags>) => p.lanes.findIndex((l) => l.kindId === "turnPocket");
-  check("a turn pocket mirrors to the other side under LHT", pocketAt(tLeft) === tLeft.lanes.length - 1 - pocketAt(tRight));
+  const pocketAt = (side: "left" | "right") => profileFromOsmTags("road", "arterial", turns, side).lanes.findIndex((l) => l.kindId === "turnPocket");
+  check("a one-way street's turn pocket does not move with the driving side", pocketAt("left") === pocketAt("right"));
+  check("and it is the driver's leftmost lane", pocketAt("right") === 1);
+
+  // A two-way street's blocks DO swap, and each block keeps its own ordering.
+  const twoWayTurns = { highway: "primary", lanes: "4", "lanes:forward": "2", "lanes:backward": "2", "turn:lanes:forward": "left|through" };
+  const twRight = profileFromOsmTags("road", "arterial", twoWayTurns, "right");
+  const twLeft = profileFromOsmTags("road", "arterial", twoWayTurns, "left");
+  const fwdPocket = (p: ReturnType<typeof profileFromOsmTags>) => p.lanes.findIndex((l) => l.kindId === "turnPocket");
+  check("under RHT the forward block sits on the right", twRight.lanes[3].direction === "forward");
+  check("under LHT the forward block sits on the left", twLeft.lanes[1].direction === "forward");
+  check("the forward block's turn pocket stays its own leftmost lane", twRight.lanes[fwdPocket(twRight)].direction === "forward" && twLeft.lanes[fwdPocket(twLeft)].direction === "forward");
 
   // And it flows through the real entry point.
   const el: OsmWayElement[] = [
