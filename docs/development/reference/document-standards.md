@@ -30,32 +30,45 @@ CPU limit`.
 
 ### `development/explanation/architecture.md`
 
-Evergreen. It describes the shape of the system and survives refactors,
-renames, and hosting changes.
+The document a new contributor reads first. It explains what the system is,
+what its parts are called, and why it is shaped the way it is. Someone who
+has read it can open any directory and know what they are looking at.
 
-It contains no file names, no measurements, no configuration keys, and no
-function names. Those belong to `project-structure.md`, `operations.md`, and
-the code, and each invalidates this document the moment it changes.
+Evergreen, meaning it survives refactors and renames. That constrains which
+names it uses rather than forbidding names outright:
 
-The test: renaming every file in the repository leaves this document true.
+| Include                                             | Exclude                                |
+| --------------------------------------------------- | -------------------------------------- |
+| Workspace package names                             | Paths to individual files              |
+| Domain type and concept names                       | Function and variable names            |
+| The technologies a component is built on            | Version numbers and configuration keys |
+| Orders of magnitude, where a limit drove a decision | Exact measurements                     |
 
-| Section        | Contents                                                                                   |
-| -------------- | ------------------------------------------------------------------------------------------ |
-| Context        | The system, its users, and the external systems it depends on. Diagram.                    |
-| Components     | `###` per component: responsibility, and what it does not own                              |
-| Flows          | `###` per end-to-end path, as a sequence                                                   |
-| Decisions      | `###` per decision: what was chosen, what was rejected, and the constraint that decided it |
-| Trust boundary | Where untrusted input enters, and what constrains it                                       |
-| Failure modes  | Table: what fails, what degrades, what stays up                                            |
-| Invariants     | Table: invariant, and the property it preserves                                            |
-| Unwired code   | Complete but unimported capability, and what is absent                                     |
+Both halves matter. A document naming no packages and no domain concepts
+cannot be mapped onto the repository, and explains nothing to the person it
+exists for. A document naming files stops being true at the next rename.
 
-Components and flows describe the system as built. Decisions record why it
-is that system rather than a different one, including options rejected — a
-document that only describes the outcome cannot stop the rejected option
-being proposed again next quarter.
+| Section        | Contents                                                                 |
+| -------------- | ------------------------------------------------------------------------ |
+| Context        | The system, its users, its external dependencies. Diagram.               |
+| Domain model   | The core abstractions and the distinction the design turns on            |
+| Components     | `###` per component, titled with its package name                        |
+| Flows          | `###` per end-to-end path, as a sequence                                 |
+| Decisions      | `###` per decision: chosen, rejected, and the constraint that decided it |
+| Trust boundary | Where untrusted input enters, and what constrains it                     |
+| Failure modes  | Table: what fails, what degrades, what stays up                          |
+| Invariants     | Table: invariant, and the property it preserves                          |
+| Unwired code   | Complete but unimported capability, and what is absent                   |
 
-Diagrams are Mermaid, so they render in the browser and diff as text.
+Domain model comes second because the vocabulary is a prerequisite for
+everything after it. A reader who does not know what the nouns mean cannot
+follow the components that manipulate them.
+
+Decisions record why this system rather than a different one, including
+what was rejected. A document holding only the outcome cannot stop the
+rejected option being proposed again.
+
+Diagrams are Mermaid, so they render in a browser and diff as text.
 
 ### `development/reference/project-structure.md`
 
