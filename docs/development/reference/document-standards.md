@@ -30,45 +30,95 @@ CPU limit`.
 
 ### `development/explanation/architecture.md`
 
-The document a new contributor reads first. It explains what the system is,
-what its parts are called, and why it is shaped the way it is. Someone who
-has read it can open any directory and know what they are looking at.
+One document per repository that lets a competent stranger find the right
+place to make a change, and know what that change must not break.
 
-Evergreen, meaning it survives refactors and renames. That constrains which
-names it uses rather than forbidding names outright:
+Its readers, in order: a new contributor with a specific task, a returning
+maintainer who has forgotten a boundary, a reviewer deciding whether a diff
+belongs where it landed. It is not a system description for management, an
+API reference, or a record of history.
 
-| Include                                             | Exclude                                |
-| --------------------------------------------------- | -------------------------------------- |
-| Workspace package names                             | Paths to individual files              |
-| Domain type and concept names                       | Function and variable names            |
-| The technologies a component is built on            | Version numbers and configuration keys |
-| Orders of magnitude, where a limit drove a decision | Exact measurements                     |
+Every section passes one admission test. Omitting it would cause a competent
+newcomer either to put code in the wrong place, or to break something the
+compiler and the test suite will not catch. Nothing else is admitted.
 
-Both halves matter. A document naming no packages and no domain concepts
-cannot be mapped onto the repository, and explains nothing to the person it
-exists for. A document naming files stops being true at the next rename.
+#### Sections
 
-| Section        | Contents                                                                 |
-| -------------- | ------------------------------------------------------------------------ |
-| Context        | The system, its users, its external dependencies. Diagram.               |
-| Domain model   | The core abstractions and the distinction the design turns on            |
-| Components     | `###` per component, titled with its package name                        |
-| Flows          | `###` per end-to-end path, as a sequence                                 |
-| Decisions      | `###` per decision: chosen, rejected, and the constraint that decided it |
-| Trust boundary | Where untrusted input enters, and what constrains it                     |
-| Failure modes  | Table: what fails, what degrades, what stays up                          |
-| Invariants     | Table: invariant, and the property it preserves                          |
-| Unwired code   | Complete but unimported capability, and what is absent                   |
+Fixed order. R is required in every repository; C is conditional on the
+stated trigger.
 
-Domain model comes second because the vocabulary is a prerequisite for
-everything after it. A reader who does not know what the nouns mean cannot
-follow the components that manipulate them.
+| Section          |     | What the reader does with it                                     |
+| ---------------- | --- | ---------------------------------------------------------------- |
+| Context          | R   | Decides whether this repository is where the change belongs      |
+| Domain model     | R   | Reads any identifier and knows what it means                     |
+| Code map         | R   | Given "I need to change X", opens the right package              |
+| Runtime topology | C   | Learns which runtime constraints apply to the code being touched |
+| Flows            | R   | Traces one operation end to end; knows where to break first      |
+| Invariants       | R   | Learns what the change must not break, and what catches it       |
+| Decisions        | R   | Stops re-proposing an alternative already rejected               |
+| Trust boundary   | C   | Learns which code treats its input as hostile                    |
+| Failure modes    | C   | Learns which dependencies are allowed to be load-bearing         |
+| Absences         | C   | Stops hunting for code that is not there                         |
 
-Decisions record why this system rather than a different one, including
-what was rejected. A document holding only the outcome cannot stop the
-rejected option being proposed again.
+Triggers for the conditional sections:
 
-Diagrams are Mermaid, so they render in a browser and diff as text.
+- **Runtime topology** — when build units and run units differ: more than one
+  deployable, or one build unit running in more than one runtime. Omitted
+  when every package maps to one process in one runtime.
+- **Trust boundary** — when the repository processes input authored by
+  someone other than the person running it.
+- **Failure modes** — when dependencies can fail independently at runtime.
+- **Absences** — only when one exists. Never write "none".
+
+A pure library has six sections and often fits on one screen. That is
+correct rather than deficient.
+
+#### Budgets
+
+Bloat is a failing check rather than a matter of taste.
+
+| Limit            | Value                                |
+| ---------------- | ------------------------------------ |
+| Whole document   | 1,500 words soft, 2,500 hard         |
+| Code map entries | 12                                   |
+| Decisions        | 8, each naming what was rejected     |
+| Diagrams         | 2, Mermaid, container level or above |
+
+The heading set is closed. Those ten are the only `##` headings permitted,
+spelled exactly, in that order. An unrecognised heading fails the check,
+which is what keeps filler out: there is nowhere to put it.
+
+#### Naming
+
+The document must survive a rename that changes no behaviour.
+
+| Tier           | Applies to                                                                               |
+| -------------- | ---------------------------------------------------------------------------------------- |
+| Name freely    | Domain concepts, workspace package and deployable names, wire nouns, technologies        |
+| Name sparingly | Top-level source directories, and a single entry-point file where the file is the module |
+| Never name     | Paths inside a package, functions, variables, config keys, versions, exact measurements  |
+
+Name things so a reader can find them by symbol search. Do not link to
+source files: links go stale, names do not.
+
+The test: if a behaviour-preserving rename would falsify a sentence, that
+sentence is at the wrong altitude.
+
+#### Excluded
+
+| Excluded                               | Reason                                                                                           |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Directory tree or file inventory       | Derivable from the source tree and stale at the first rename. It belongs in project-structure.md |
+| Class or module diagrams               | An IDE generates them on demand                                                                  |
+| A diagram per scenario                 | Flows covers the two to four paths that matter                                                   |
+| API lists, schema columns, config keys | Reference material with a different half-life                                                    |
+| Setup, build, and test instructions    | README and CONTRIBUTING                                                                          |
+| Roadmap and planned work               | The fastest-rotting content in any repository                                                    |
+| History of what was used before        | The decision log, with superseded records kept                                                   |
+| Quality goals and risk registers       | Unfalsifiable. A real constraint appears as an invariant                                         |
+| Stakeholder tables                     | Ceremony. The stakeholder is a contributor                                                       |
+| Dependency inventories                 | The lockfile is the truth                                                                        |
+| Exact benchmark numbers                | Orders of magnitude only, and only where a limit forced a decision                               |
 
 ### `development/reference/project-structure.md`
 
