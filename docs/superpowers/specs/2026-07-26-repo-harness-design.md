@@ -1,5 +1,52 @@
 # A repository harness for a small team
 
+## Status
+
+Recorded 2026-07-26, after implementation. This document is a design record
+and is not rewritten as the work lands — but a reader needs to know which
+parts describe the repository and which describe an intention, and three
+findings in Context turned out to be stale before the work started.
+
+**Shipped.** Tracks 1, 2 (in part), 3, 4, 6, 7, 8 and 10. `pnpm check` is
+the single gate and runs formatting, root and per-package lint, typecheck,
+the workspace contract, documentation links, migration append-only, project
+structure, the generated checks reference, generated Worker types, and both
+test suites. Four enforcement layers, three secret nets, a version catalog,
+one custom lint rule, three generators, the domain documentation layout, and
+a bootstrap that provisions rather than only verifying.
+
+**Not shipped.** Track 5's repository governance — the organization
+transfer, rulesets, merge queue and preview deployments — because all of it
+is GitHub configuration rather than anything in this tree. Track 9's
+template extraction, which the Sequencing section already gates on the
+harness surviving contact; it has not yet run in CI even once.
+
+**Corrections to Context.** Three findings were true of the branch point and
+already fixed on `main` by the time the work landed, which was discovered
+only during the rebase:
+
+- D1 migrations _are_ applied by the deploy pipeline (`2a39058`).
+- `scripts/` in both apps _is_ typechecked, through `tsconfig.scripts.json`.
+- `apps/worker` _does_ have tests, in `apps/worker/scripts/verify.ts`.
+
+Main's version of each was kept and the corresponding work here discarded.
+The general lesson is recorded rather than buried: this branch ran for a
+long time without checking `HEAD..main`, and reported findings to its reader
+that had stopped being true.
+
+Two further corrections, both from running the thing rather than reading it.
+The 28 typecheck errors were nine; the other eighteen were artefacts of
+measuring through a config that disables automatic `@types` resolution. And
+the suite has 682 static `check(` call sites but executes 741 assertions
+across 738 distinct names, so the codemod guard specified below as a count
+would have passed while a looped case collapsed into a single test.
+
+**Deliberately not built.** A lint rule for the `HTMLRewriter` convention.
+The two places the Worker builds markup by interpolation are both correct,
+and separating a safe interpolation from an unsafe one needs value
+provenance a linter does not have. `AGENTS.md` records that row as
+unenforced rather than leaving it looking merely unwritten.
+
 ## Development principles
 
 Every decision in this document cites one of these. A proposal that can't
