@@ -2,7 +2,9 @@ import type { Map as MLMap, MapMouseEvent, MapGeoJSONFeature, GeoJSONSource } fr
 import type { EditorStore, MultiSelectItem } from '../editor/store';
 import { attachKeyboard } from '../editor/keymap';
 import {
+  metersFromOrigin,
   nearestOpenEndpoint,
+  offsetMeters,
   resolveWayPath,
   snap,
   squareFootprint,
@@ -37,7 +39,11 @@ const HIT_PX = 9; // pixel tolerance for hit-testing features under the cursor
 const SNAP_PX = 18; // stations/way endpoints within this screen distance snap
 const DRAG_PX = 4; // movement beyond this counts as a drag, not a click
 const FREEHAND_SAMPLE_PX = 16; // spacing between points sampled while freehand-drawing
-const STRAIGHT_TOLERANCE_RAD = (10 * Math.PI) / 180; // ~10°, how close to "straight ahead" counts
+// How far off the way's existing heading the cursor may sit and still be
+// snapped into continuing straight. A SCREEN distance, not an angle, so the
+// snap's strength is what it looks like — see continueStraight for why an
+// angle was the wrong unit for this.
+const STRAIGHT_SNAP_PX = 10;
 
 // A newly click-placed AREA facility (parking, depot, bus bay…) starts as a
 // ~30m square to drag into shape — same affordance as station footprints.
@@ -312,13 +318,13 @@ export function attachInteractions(
     const wayId = feature.properties.wayId as string;
     const atStart = (feature.properties.index as number) === 0;
     let dragged = false;
-    const previewThrottle = rafThrottle((c: LngLat) => {
-      const from = wayEndpoint(wayId, atStart);
-      if (from) setPreview([from, c]);
+    // Same resolveEnd the release below commits with — see previewEnd.
+    const previewThrottle = rafThrottle((raw: LngLat, shiftKey: boolean) => {
+      previewEnd(wayId, atStart, raw, shiftKey);
     });
     const onMove = (ev: MapMouseEvent) => {
       dragged = true;
-      previewThrottle.call(lngLatOf(ev));
+      previewThrottle.call(lngLatOf(ev), ev.originalEvent.shiftKey);
     };
     const onUp = (ev: MapMouseEvent) => {
       previewThrottle.cancel();
@@ -983,13 +989,14 @@ export function attachInteractions(
     const committedWayId = wayId;
     let dragged = false;
 
-    const previewThrottle = rafThrottle((c: LngLat) => {
-      const last = wayEndpoint(committedWayId, extendAtStart);
-      if (last) setPreview([last, c]);
+    // resolveEnd runs inside the throttle, not per raw mousemove: it queries
+    // the snap index, and that's frame-rate work, not event-rate work.
+    const previewThrottle = rafThrottle((raw: LngLat, shiftKey: boolean) => {
+      previewEnd(committedWayId, extendAtStart, raw, shiftKey);
     });
     const onMove = (ev: MapMouseEvent) => {
       if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
-      previewThrottle.call(lngLatOf(ev));
+      previewThrottle.call(lngLatOf(ev), ev.originalEvent.shiftKey);
     };
     const onUp = (ev: MapMouseEvent) => {
       previewThrottle.cancel();
@@ -1054,7 +1061,12 @@ export function attachInteractions(
     if (otherWay) return { coord: otherWay.coord, snapWayId: otherWay.wayId };
     const heading = wayHeadingAnchor(wayId, atStart);
     if (endpoint && heading) {
-      const straight = continueStraight(endpoint, heading, raw);
+      const straight = continueStraight(
+        endpoint,
+        heading,
+        raw,
+        STRAIGHT_SNAP_PX * metersPerPixel(),
+      );
       if (straight) return { coord: straight };
     }
     return { coord: raw };
@@ -1071,6 +1083,35 @@ export function attachInteractions(
     if (end.snapWayId) store.getState().joinWayPointToWay(wayId, index, end.snapWayId, end.coord);
   };
 
+  /**
+   * Draw the rubber band to where a release would ACTUALLY put the node —
+   * through the very same resolveEnd the mouseup path commits with, never the
+   * raw cursor.
+   *
+   * What you see is what you get: the preview is a promise about the geometry
+   * you're about to create, so any assist that moves the point (continue-
+   * straight, 45° constrain, snapping onto another way) has to be visible
+   * while you're still deciding. Previewing the raw cursor instead meant the
+   * band showed one line and the committed way rendered as a different one,
+   * with no way to tell in advance that the assist had grabbed.
+   */
+  const previewEnd = (wayId: string, atStart: boolean, raw: LngLat, shiftKey: boolean): void => {
+    const way = store.getState().system.ways.find((w) => w.id === wayId);
+    if (!way || way.points.length === 0) return;
+    const coord = resolveEnd(wayId, atStart, raw, shiftKey).coord;
+    // Preview the way's RESOLVED shape, not a straight line to the new point.
+    // The draft geometry is "curved" by default, so committing rounds the
+    // corner at the current endpoint — a vertex that, until this point is
+    // added, is an unfilleted line end. A straight rubber band promised a
+    // sharp corner and then rendered a curve through it.
+    //
+    // Only the last two committed points are needed: roundedCorners has
+    // strictly local support (see wayPath.ts), so the fillet computed here at
+    // the current endpoint is identical to the one the committed way renders.
+    const points = atStart ? [coord, ...way.points.slice(0, 2)] : [...way.points.slice(-2), coord];
+    setPreview(resolveWayPath({ ...way, points }));
+  };
+
   // Rubber-band preview from the last node to the cursor while drawing; when
   // not yet drawing, a ring over any open endpoint within snap range warns
   // that pressing there resumes/extends THAT way instead of starting a new
@@ -1085,8 +1126,7 @@ export function attachInteractions(
   const onHoverMoveImpl = (ev: MapMouseEvent) => {
     const st = store.getState();
     if (st.tool === 'way' && st.activeWayId) {
-      const last = wayEndpoint(st.activeWayId, activeExtendAtStart);
-      if (last) setPreview([last, lngLatOf(ev)]);
+      previewEnd(st.activeWayId, activeExtendAtStart, lngLatOf(ev), ev.originalEvent.shiftKey);
       setEndpointHint(null);
       return;
     }
@@ -1685,38 +1725,62 @@ function distToSegment(p: ScreenPoint, a: ScreenPoint, b: ScreenPoint): number {
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
-/** Snap the vector from→to to the nearest 45° increment (rough, city-scale). */
-function angleSnap(from: LngLat, to: LngLat): LngLat {
-  const dx = to[0] - from[0];
-  const dy = to[1] - from[1];
+/**
+ * Snap the vector from→to to the nearest 45° increment, as seen on screen.
+ *
+ * Measured in local meters rather than in raw degrees. A degree of longitude
+ * spans only cos(latitude) as many meters as a degree of latitude, so doing
+ * this trigonometry straight on lng/lat works in a sheared space: at Las
+ * Vegas's ~36°N the old version's "45°" came out as 51.07° on screen, and a
+ * line the user was promised would be diagonal rendered visibly off it.
+ */
+export function angleSnap(from: LngLat, to: LngLat): LngLat {
+  const [dx, dy] = metersFromOrigin(from, to);
   const step = Math.PI / 4;
   const ang = Math.round(Math.atan2(dy, dx) / step) * step;
   const len = Math.hypot(dx, dy);
-  return [from[0] + Math.cos(ang) * len, from[1] + Math.sin(ang) * len];
+  return offsetMeters(from, Math.cos(ang) * len, Math.sin(ang) * len);
 }
 
 /**
  * Project `raw` onto the ray starting at `endpoint` heading away from
- * `behind` (the way's existing direction of travel) — but only when `raw`
- * already lands close to that heading (within STRAIGHT_TOLERANCE_RAD).
- * Outside that tolerance, returns null so the caller falls back to the raw
- * cursor position: this is a snap, not a hard constraint, so a deliberate
- * turn is never fought.
+ * `behind` (the way's existing direction of travel) — but only while `raw`
+ * sits within `maxDeviationMeters` of that ray. Outside it, returns null so
+ * the caller falls back to the raw cursor: this is a snap, not a hard
+ * constraint, so a deliberate turn is never fought.
+ *
+ * Gated on PERPENDICULAR DISTANCE, not on an angle, and that difference is
+ * the whole point. An angle cone has no fixed width in the space the user is
+ * actually working in: at a fixed 9° inside the old 10° cone, extending 200m
+ * pulled the new point 31m sideways, but extending 2km pulled it 313m — the
+ * further you drew, the harder it yanked, so drawing a long line at a slight
+ * angle snapped bolt straight and felt like the tool overriding you. A
+ * distance gate keeps the snap exactly as strong as it looks: the caller
+ * passes a pixel budget converted to meters, so the cursor has to be within
+ * that many pixels of the guide no matter how long the line or how far out
+ * the zoom.
+ *
+ * Also computed in local meters instead of raw degrees. Because a degree of
+ * longitude is only cos(latitude) as long as a degree of latitude, the old
+ * degree-space cone measured 8.10° wide heading east but 12.31° heading
+ * north — the assist was quietly stronger in some directions than others.
  */
-function continueStraight(endpoint: LngLat, behind: LngLat, raw: LngLat): LngLat | null {
-  const dx = endpoint[0] - behind[0];
-  const dy = endpoint[1] - behind[1];
-  const dirLen = Math.hypot(dx, dy);
-  if (dirLen < 1e-12) return null;
-  const nx = dx / dirLen;
-  const ny = dy / dirLen;
-  const rx = raw[0] - endpoint[0];
-  const ry = raw[1] - endpoint[1];
-  const rawLen = Math.hypot(rx, ry);
-  if (rawLen < 1e-9) return null;
-  const cos = Math.max(-1, Math.min(1, (rx * nx + ry * ny) / rawLen));
-  if (Math.acos(cos) > STRAIGHT_TOLERANCE_RAD) return null;
-  const projected = rx * nx + ry * ny;
-  if (projected <= 0) return null; // only continue forward, never fold back over itself
-  return [endpoint[0] + nx * projected, endpoint[1] + ny * projected];
+export function continueStraight(
+  endpoint: LngLat,
+  behind: LngLat,
+  raw: LngLat,
+  maxDeviationMeters: number,
+): LngLat | null {
+  // Vector endpoint→behind, so the way's direction of travel is its negation.
+  const [bx, by] = metersFromOrigin(endpoint, behind);
+  const dirLen = Math.hypot(bx, by);
+  if (dirLen < 1e-6) return null;
+  const nx = -bx / dirLen;
+  const ny = -by / dirLen;
+  const [rx, ry] = metersFromOrigin(endpoint, raw);
+  const along = rx * nx + ry * ny;
+  if (along <= 0) return null; // only continue forward, never fold back over itself
+  const perpendicular = Math.abs(rx * ny - ry * nx);
+  if (perpendicular > maxDeviationMeters) return null;
+  return offsetMeters(endpoint, nx * along, ny * along);
 }
