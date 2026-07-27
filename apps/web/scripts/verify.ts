@@ -173,6 +173,7 @@ import {
   activeSchedule,
   advanceSimMs,
   dayOfWeek,
+  schedulePeriodLabels,
   dayScopeAt,
   DEFAULT_SIM_SPEED_ID,
   DEFAULT_SIM_START_MS,
@@ -9553,6 +9554,20 @@ function buildGrid() {
     schedule: [{ id: "m1", label: "Broken", days: "daily", spanStart: "nope", spanEnd: "also nope", frequencyMinutes: 12 }],
   };
   check("a period with an unparseable span is skipped rather than guessed at", activeSchedule(malformed, at("10:00"), "weekday") === null);
+
+  // Pinning a scenario: show one service configuration whatever the clock says.
+  check("a pinned period overrides the clock's own period", activeSchedule(scheduled, at("14:00"), "weekday", "Peak")?.headwayMinutes === 5);
+  check("a pinned period runs at an hour nothing would otherwise run", activeSchedule(scheduled, at("03:00"), "weekday", "Peak")?.headwayMinutes === 5);
+  check("pinning ignores the day of the week too", activeSchedule(scheduled, at("14:00"), "weekend", "Peak")?.headwayMinutes === 5);
+  check("pinning matches a period name case-insensitively", activeSchedule(scheduled, at("14:00"), "weekday", "peak")?.headwayMinutes === 5);
+  check("a service with no period by that name doesn't run in that scenario", activeSchedule(scheduled, at("14:00"), "weekday", "Owl") === null);
+  check("a service with no detailed schedule runs its flat headway in any scenario", activeSchedule(simple, at("03:00"), "weekday", "Peak")?.headwayMinutes === 10);
+
+  // The scenarios on offer are derived from the periods themselves.
+  const labels = schedulePeriodLabels([scheduled, daily, { ...base, id: "as2" }]);
+  check("scenario names are collected from every service's periods", labels.join("|") === "Peak|Midday|Weekend|All day");
+  check("a system with no detailed schedules offers no scenarios", schedulePeriodLabels([simple, base]).length === 0);
+  check("the same period name on two services is one scenario", schedulePeriodLabels([scheduled, { ...scheduled, id: "as3" }]).length === 3);
 }
 
 // --- the SimClock instance (apps/web/src/sim/simClock.ts) ---

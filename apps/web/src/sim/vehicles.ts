@@ -60,6 +60,10 @@ export interface VehicleGate {
    *  true-scale footprint polygon riding its actual lane in Infrastructure,
    *  and not at all in Diagram. */
   viewMode: () => 'network' | 'infrastructure' | 'diagram';
+  /** The schedule period pinned in the simulation controls, if any — every
+   *  service then runs that period's configuration regardless of the clock.
+   *  Undefined means follow the clock. */
+  pinnedPeriod: () => string | undefined;
 }
 
 /** Which real vehicle a service's animation/rendering should use: its
@@ -392,7 +396,7 @@ export function attachVehicleAnimation(
         system.services,
         minutesOfDay(simMs),
         dayScopeAt(simMs),
-        undefined,
+        gate.pinnedPeriod(),
       );
       for (const service of system.services) {
         if (!gate.isVisible(service)) continue;

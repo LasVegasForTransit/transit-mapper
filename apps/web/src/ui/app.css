@@ -647,6 +647,11 @@ input {
   text-align: center;
   white-space: nowrap;
 }
+/* A pinned scenario overrides the clock for scheduling purposes; the time is
+   still true and still moving, it just isn't what's deciding service levels. */
+.sim-clock-overridden { color: var(--text-faint); }
+.sim-scenario-popover { width: 280px; max-width: calc(100vw - 28px); padding: 12px; }
+.sim-scenario-popover .panel-hint { margin: 4px 0 10px; }
 /* A hairline between the view switch and the simulation controls: they share
    one card because both are persistent canvas state, but they're two separate
    groups of controls and shouldn't read as one long strip of buttons. */
@@ -656,6 +661,20 @@ input {
   margin: 2px 2px;
   background: var(--border);
 }
+
+/* The top-center card is centered on the MAP, not on a grid track (see
+   Workbench.tsx for why), which means nothing structurally stops it growing
+   sideways into the Objects panel on the left or the actions card on the
+   right — and once the simulation controls joined the view switch in it, at
+   around 1100px it did exactly that, clipping the Export button.
+
+   So it's bounded to the width actually free between those two cards, and
+   wraps to a second row rather than overlapping them. The left card is
+   exactly --panel-w; the right one is variable, and this assumes it is no
+   wider, which holds for its realistic button count. A wrapped second row
+   isn't as tidy as one, but a control you can't click because another card
+   is sitting on top of it is worse. */
+.top-center-dock { max-width: calc(100vw - 2 * (var(--panel-w) + 3 * var(--overlay-gap))); }
 
 /* ---- panels: floating, collapsible overlays over the full-bleed map ---- */
 .panel {

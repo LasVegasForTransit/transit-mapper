@@ -96,7 +96,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   // outside React, so it is handed what it needs rather than reaching for an
   // ambient one.
   const simClock = useSimClock();
-  const { togglePaused, stepSpeed } = useSim();
+  const { togglePaused, stepSpeed, pinnedPeriod } = useSim();
 
   // The map-setup effect below runs once (mount-only); it reads the latest
   // view options from this ref rather than closing over React state, so a
@@ -117,6 +117,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     togglePaused: () => simCommandsRef.current.togglePaused(),
     stepSpeed: (direction) => simCommandsRef.current.stepSpeed(direction),
   }).current;
+
+  // Read live by the animation loop each tick, for the same reason.
+  const pinnedPeriodRef = useRef<string | undefined>(pinnedPeriod);
+  pinnedPeriodRef.current = pinnedPeriod;
 
   const viewRef = useRef<ViewOptions>({ viewMode, visibleModes, visibleWayTypes });
   const schedulePushDataRef = useRef<(() => void) | null>(null);
@@ -640,6 +644,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       detachVehicles = attachVehicleAnimation(map, store, simClock, {
         isVisible: (service) => viewRef.current.visibleModes.has(service.modeId),
         viewMode: () => viewRef.current.viewMode,
+        pinnedPeriod: () => pinnedPeriodRef.current,
       });
       detachPerf = attachPerfHarness(map); // DEV-only frame-time overlay + __panBench() + __perf toggles
       detachSimDev = attachSimDevHandle(simClock); // DEV-only __sim.setTime()/__sim.step() clock driver
@@ -755,10 +760,12 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // those keep their identity for the life of the component. Naming it here
     // therefore cannot retrigger this effect — which matters, because this
     // effect's cleanup calls map.remove(), so a retrigger would tear down and
-    // rebuild the whole MapLibre map. simClock is stable for the same kind of
-    // reason: SimProvider holds one instance in a ref for the session. Both
-    // are listed because the effect genuinely closes over them.
-  }, [store, openShortcuts, toggleUi, setViewMode, simClock]);
+    // rebuild the whole MapLibre map. simClock and simCommands are stable for
+    // the same kind of reason: SimProvider holds one clock instance for the
+    // session, and simCommands is a ref-held façade whose identity never
+    // changes (it reads the live handlers through simCommandsRef). All are
+    // listed because the effect genuinely closes over them.
+  }, [store, openShortcuts, toggleUi, setViewMode, simClock, simCommands]);
 
   return <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />;
 }

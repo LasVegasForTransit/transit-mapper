@@ -33,6 +33,16 @@ interface SimState {
   paused: boolean;
   setPaused: (paused: boolean) => void;
   togglePaused: () => void;
+  /** A schedule period pinned by name ("Peak", "Weekend"…), or undefined to
+   *  follow the clock.
+   *
+   *  This is the sandbox mode: pin a period and every service runs that
+   *  period's configuration whatever time it is, so two service levels can be
+   *  compared side by side without waiting for the right hour to come round.
+   *  The clock keeps running underneath — vehicles still need a time base to
+   *  move against — it just no longer decides which headway applies. */
+  pinnedPeriod: string | undefined;
+  setPinnedPeriod: (label: string | undefined) => void;
 }
 
 const SimContext = createContext<SimState | null>(null);
@@ -55,6 +65,7 @@ interface SimProviderProps {
 export function SimProvider({ children }: SimProviderProps) {
   const [speedId, setSpeedId] = useState(DEFAULT_SIM_SPEED_ID);
   const [paused, setPaused] = useState(prefersReducedMotion);
+  const [pinnedPeriod, setPinnedPeriod] = useState<string | undefined>(undefined);
   const clockRef = useRef<SimClock | null>(null);
   clockRef.current ??= createSimClock({ speedId, paused });
 
@@ -72,8 +83,17 @@ export function SimProvider({ children }: SimProviderProps) {
   const togglePaused = useCallback(() => setPaused((p) => !p), []);
 
   const value = useMemo<SimState>(
-    () => ({ speedId, setSpeedId, stepSpeed, paused, setPaused, togglePaused }),
-    [speedId, stepSpeed, paused, togglePaused],
+    () => ({
+      speedId,
+      setSpeedId,
+      stepSpeed,
+      paused,
+      setPaused,
+      togglePaused,
+      pinnedPeriod,
+      setPinnedPeriod,
+    }),
+    [speedId, stepSpeed, paused, togglePaused, pinnedPeriod],
   );
   return (
     <SimClockContext.Provider value={clockRef.current}>
