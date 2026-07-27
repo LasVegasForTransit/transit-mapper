@@ -87,6 +87,20 @@ export function trimPath(path: LngLat[], fromM: number, toM: number): LngLat[] {
 // independently of the way object when a NEIGHBOR way's profile widens).
 const cache = new WeakMap<Way, Map<string, WayLaneGeometry>>();
 
+// The outer WeakMap is keyed per way OBJECT, so entries die with the way. The
+// inner map is keyed by a FORMATTED FLOAT, which is an unbounded key space: a
+// drag that reshapes a neighbor way changes this way's trim by a fraction of a
+// metre per frame, minting a new key every frame and never reusing it. Left
+// uncapped, one drag gestures grows this map by one full lane geometry per
+// frame for as long as the gesture lasts.
+//
+// Two slots is the smallest cap that keeps the real hit rate: a way has one
+// current trim pair, and the second slot absorbs the transient while a
+// neighbour widens (and the alternation between the two viewport extents
+// pushData and the selection path each compute). Map preserves insertion
+// order, so the oldest key is simply the first one.
+const MAX_TRIMS_PER_WAY = 2;
+
 /** Derive (memoized) the full lane-level geometry for one way, with its
  *  ends optionally trimmed back where they meet junction footprints. */
 export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLaneGeometry {
@@ -98,6 +112,11 @@ export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLane
   const key = `${trimStartM.toFixed(2)}:${trimEndM.toFixed(2)}`;
   const cached = byTrim.get(key);
   if (cached) return cached;
+  while (byTrim.size >= MAX_TRIMS_PER_WAY) {
+    const oldest = byTrim.keys().next();
+    if (oldest.done) break;
+    byTrim.delete(oldest.value);
+  }
 
   const center = trimPath(resolveWayPath(way), trimStartM, trimEndM);
   const lanes: LanePath[] = [];

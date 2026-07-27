@@ -7,11 +7,14 @@ import { useView } from '../ui/ViewProvider';
 import { BASEMAP_STYLE } from './basemap';
 import { attachInteractions } from './interactions';
 import { computeDiagramSystem } from '@transitmapper/core/model/diagramLayout';
-import { serviceWayIds, systemBounds } from '@transitmapper/core/model/geo';
+import { featureInputsChanged } from '@transitmapper/core/render/featureInputs';
+import { serviceWayIds, systemBounds, wayById } from '@transitmapper/core/model/geo';
 import { routePath } from '@transitmapper/core/model/routeGraph';
 import { selectionFocus } from './selectionFocus';
 import {
   buildFeatures,
+  buildHandles,
+  buildPhysicalHandles,
   LANE_DETAIL_MIN_ZOOM,
   LAYER_SPECS,
   LYR_LANDMARKS,
@@ -97,12 +100,16 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   basemapFailureRef.current = onBasemapUnavailable;
 
   const viewRef = useRef<ViewOptions>({ viewMode, visibleModes, visibleWayTypes });
-  const pushDataRef = useRef<(() => void) | null>(null);
+  const schedulePushDataRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const prevMode = viewRef.current.viewMode;
     viewRef.current = { viewMode, visibleModes, visibleWayTypes };
-    pushDataRef.current?.();
+    // Scheduled rather than called inline: a synchronous 14-collection build
+    // here blocks the React commit that the user's own click just triggered,
+    // which is the most visible place in the app to spend a frame. The rAF
+    // still lands before paint, so the switch is seen in the same frame.
+    schedulePushDataRef.current?.();
     const map = getMap();
     // NOT map.isStyleLoaded() — that reports false while tiles for the
     // current viewport are still streaming in, which is unrelated to
@@ -113,17 +120,6 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     if (!map || !map.getStyle()) return;
     if (viewMode === 'diagram' || prevMode === 'diagram')
       setBasemapVisible(map, viewMode !== 'diagram');
-    // Landmarks are real-world reference points; Diagram's schematic
-    // coordinates aren't real geography, so they'd land somewhere meaningless.
-    const landmarksVisible = showLandmarks && viewMode !== 'diagram';
-    if (map.getLayer(LYR_LANDMARKS)) {
-      map.setLayoutProperty(LYR_LANDMARKS, 'visibility', landmarksVisible ? 'visible' : 'none');
-      map.setLayoutProperty(
-        LYR_LANDMARK_LABELS,
-        'visibility',
-        landmarksVisible ? 'visible' : 'none',
-      );
-    }
     // Entering Diagram reframes the camera to the schematic layout's own
     // extent — its coordinates are a distorted projection of the real ones,
     // so whatever framing suited Network/Infrastructure may no longer show
@@ -140,7 +136,22 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // reaches the screen the moment a view mode changes, not just on the
     // next incidental interaction.
     map.triggerRepaint();
-  }, [viewMode, visibleModes, visibleWayTypes, showLandmarks, store]);
+  }, [viewMode, visibleModes, visibleWayTypes, store]);
+
+  // Landmarks are a pure layer-visibility toggle. buildFeatures never reads
+  // showLandmarks, so this deliberately does NOT live in the effect above:
+  // there, every toggle ran a full synchronous rebuild that produced
+  // byte-identical data for all fourteen sources.
+  useEffect(() => {
+    const map = getMap();
+    if (!map || !map.getStyle() || !map.getLayer(LYR_LANDMARKS)) return;
+    // Landmarks are real-world reference points; Diagram's schematic
+    // coordinates aren't real geography, so they'd land somewhere meaningless.
+    const visibility = showLandmarks && viewMode !== 'diagram' ? 'visible' : 'none';
+    map.setLayoutProperty(LYR_LANDMARKS, 'visibility', visibility);
+    map.setLayoutProperty(LYR_LANDMARK_LABELS, 'visibility', visibility);
+    map.triggerRepaint();
+  }, [showLandmarks, viewMode]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -485,7 +496,6 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       // setData above cleared feature-state — re-apply the current selection.
       applySelectionState();
     };
-    pushDataRef.current = pushData;
 
     // Coalesce rebuilds to at most one per animation frame. A bulk import
     // (streamRtcGtfsBatches) merges many batches in quick succession — each
@@ -502,6 +512,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         pushData();
       });
     };
+    schedulePushDataRef.current = schedulePushData;
 
     // Selection-only fast path (system unchanged): update halos via feature-state
     // and refresh only the small handle sources — never re-tessellating the big
@@ -513,35 +524,37 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         selectionRaf = null;
         if (!map.getSource(SRC_WAYS)) return;
         applySelectionState();
-        const { system, selection } = store.getState();
+        const { system } = store.getState();
         const renderSystem =
           viewRef.current.viewMode === 'diagram' ? computeDiagramSystem(system) : system;
-        const laneDetail = laneDetailNow();
-        const b = map.getBounds();
-        const view: ViewOptions = {
-          ...viewRef.current,
-          laneDetail,
-          bounds: laneDetail
-            ? [
-                [b.getWest(), b.getSouth()],
-                [b.getEast(), b.getNorth()],
-              ]
-            : undefined,
-        };
-        // buildFeatures is cheap now (memoized — see featureMemo); we take only
-        // its handle outputs and skip setData on every big source.
-        const fc = buildFeatures(
-          renderSystem,
-          selection,
-          handleWayIds(),
-          view,
-          physicalHandleStationId(),
-          physicalHandleGroupId(),
-        );
-        (map.getSource(SRC_HANDLES) as GeoJSONSource | undefined)?.setData(fc.handles);
-        (map.getSource(SRC_PHYSICAL_HANDLES) as GeoJSONSource | undefined)?.setData(
-          fc.physicalHandles,
-        );
+        // Only the two handle sources depend on the selection, so build just
+        // those. This used to run the whole fourteen-collection buildFeatures
+        // and throw twelve of its outputs away — which at RTC scale meant
+        // allocating a Set and a Feature for all ~3,787 stations, plus a full
+        // pass over every way, every time the user clicked something.
+        //
+        // It also computed its own viewport bounds, narrower than the ones
+        // pushData uses; the two then asked wayLaneGeometry for different trim
+        // keys and evicted each other's cached lane geometry on every click.
+        // Not recomputing bounds here removes that thrash outright.
+        const physStation = physicalHandleStationId();
+        const physGroup = physicalHandleGroupId();
+        // Physical handles are Infrastructure-only, matching buildFeatures'
+        // own `network` gate.
+        const infrastructure = viewRef.current.viewMode === 'infrastructure';
+        (map.getSource(SRC_HANDLES) as GeoJSONSource | undefined)?.setData({
+          type: 'FeatureCollection',
+          features: buildHandles(wayById(renderSystem.ways), handleWayIds()),
+        });
+        (map.getSource(SRC_PHYSICAL_HANDLES) as GeoJSONSource | undefined)?.setData({
+          type: 'FeatureCollection',
+          features: infrastructure
+            ? buildPhysicalHandles(
+                physStation ? renderSystem.stations.find((s) => s.id === physStation) : null,
+                physGroup ? renderSystem.groups.find((g) => g.id === physGroup) : null,
+              )
+            : [],
+        });
       });
     };
 
@@ -615,7 +628,12 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     ro.observe(containerRef.current);
 
     const unsub = store.subscribe((s, prev) => {
-      if (s.system !== prev.system) {
+      // Gated on what buildFeatures actually READS, not on the `system`
+      // reference. Renaming the system, panning (setViewport), or picking a
+      // palette color all mint a new `system` while producing byte-identical
+      // features — and renames arrive one per keystroke. See
+      // core/render/featureInputs.ts for the classification and its guarantees.
+      if (featureInputsChanged(prev.system, s.system)) {
         // Content changed — full rebuild (which re-applies selection state).
         if (map.getSource(SRC_SERVICES)) schedulePushData();
       } else if (
@@ -706,16 +724,11 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       detachInteractions?.();
       detachVehicles?.();
       detachPerf?.();
-      pushDataRef.current = null;
+      schedulePushDataRef.current = null;
       setMap(null);
       map.remove();
     };
-    // setViewMode is a useState setter from ViewProvider, and React guarantees
-    // those keep their identity for the life of the component. Naming it here
-    // therefore cannot retrigger this effect — which matters, because this
-    // effect's cleanup calls map.remove(), so a retrigger would tear down and
-    // rebuild the whole MapLibre map.
-  }, [store, openShortcuts, toggleUi, setViewMode]);
+  }, [store, openShortcuts, toggleUi]);
 
   return <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />;
 }
