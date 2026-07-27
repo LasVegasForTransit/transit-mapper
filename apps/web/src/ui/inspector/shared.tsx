@@ -1,9 +1,14 @@
-import { useEditor } from "../../editor/EditorProvider";
-import { GRADE_ORDER, GRADES, modesForWayType, type Grade } from "@transitmapper/core/model/catalog";
-import { serviceWayIds } from "@transitmapper/core/model/geo";
-import type { LineGeometry } from "@transitmapper/core/model/system";
-import { Icon } from "../Icon";
-import { Panel } from "../Panel";
+import { useEditor } from '../../editor/EditorProvider';
+import {
+  GRADE_ORDER,
+  GRADES,
+  modesForWayType,
+  type Grade,
+} from '@transitmapper/core/model/catalog';
+import { serviceWayIds } from '@transitmapper/core/model/geo';
+import type { LineGeometry } from '@transitmapper/core/model/system';
+import { Icon } from '../Icon';
+import { Panel } from '../Panel';
 
 // Building blocks shared by 2+ of the per-selection-kind inspector files —
 // each is used across ServiceInspector/WayInspector/StationInspector/
@@ -11,9 +16,9 @@ import { Panel } from "../Panel";
 // it more than the others.
 
 export const GEOMETRY_OPTIONS: [LineGeometry, string][] = [
-  ["straight", "Straight"],
-  ["curved", "Curved"],
-  ["freeform", "Freeform"],
+  ['straight', 'Straight'],
+  ['curved', 'Curved'],
+  ['freeform', 'Freeform'],
 ];
 
 export interface GradeChipsProps {
@@ -25,10 +30,18 @@ export interface GradeChipsProps {
 export function GradeChips({ value, disabled, onChange }: GradeChipsProps) {
   return (
     <>
-      <label className="field-label" id="grade-chips-label">Grade</label>
+      <label className="field-label" id="grade-chips-label">
+        Grade
+      </label>
       <div className="chip-row" role="group" aria-labelledby="grade-chips-label">
         {GRADE_ORDER.map((g) => (
-          <button key={g} className={`chip ${value === g ? "active" : ""}`} aria-pressed={value === g} disabled={disabled} onClick={() => onChange(g)}>
+          <button
+            key={g}
+            className={`chip ${value === g ? 'active' : ''}`}
+            aria-pressed={value === g}
+            disabled={disabled}
+            onClick={() => onChange(g)}
+          >
             {GRADES[g].label}
           </button>
         ))}
@@ -70,8 +83,8 @@ export function ServicesOnWay({ wayId, activeServiceId, readOnly }: ServicesOnWa
         {services.map((sv) => (
           <button
             key={sv.id}
-            className={`svc-chip ${sv.id === activeServiceId ? "active" : ""}`}
-            onClick={() => selectAndFocus({ kind: "service", id: sv.id })}
+            className={`svc-chip ${sv.id === activeServiceId ? 'active' : ''}`}
+            onClick={() => selectAndFocus({ kind: 'service', id: sv.id })}
           >
             <span className="dot sm" style={{ background: sv.color }} /> {sv.name}
           </button>

@@ -1,5 +1,5 @@
-import type { LngLat, Pattern, Service, Way } from "../system";
-import { resolveWayPath, wayById } from "./wayPath";
+import type { LngLat, Pattern, Service, Way } from '../system';
+import { resolveWayPath, wayById } from './wayPath';
 
 /** Every way a service touches across ALL its patterns, deduplicated — the
  *  right unit for "does this way carry this service" (rendering bundle/

@@ -5,11 +5,29 @@
 //  - pure, network-free transforms (classifyOsmWay, osmElementsToWays,
 //    buildOverpassQuery) that fixture-based tests can exercise directly;
 //  - importOsmWays, the one function that actually calls the network.
-import { wayType, type Grade, type ProfileTemplateLane } from "./catalog";
-import { haversineMeters, nearestOnPath } from "./geo";
-import { shortId } from "./ids";
-import { defaultProfileFor, profileWidthM, profileWithPrimaryLanes, MAX_PRIMARY_LANES, type ProfileEdges } from "./profile";
-import type { CrossSection, DrivingSide, LaneDirection, LngLat, Median, NamedWay, Node, NodeControl, TurnRestriction, Way, WayPointRef } from "./system";
+import { wayType, type Grade, type ProfileTemplateLane } from './catalog';
+import { haversineMeters, nearestOnPath } from './geo';
+import { shortId } from './ids';
+import {
+  defaultProfileFor,
+  profileWidthM,
+  profileWithPrimaryLanes,
+  MAX_PRIMARY_LANES,
+  type ProfileEdges,
+} from './profile';
+import type {
+  CrossSection,
+  DrivingSide,
+  LaneDirection,
+  LngLat,
+  Median,
+  NamedWay,
+  Node,
+  NodeControl,
+  TurnRestriction,
+  Way,
+  WayPointRef,
+} from './system';
 
 export interface ImportBBox {
   west: number;
@@ -20,15 +38,15 @@ export interface ImportBBox {
 
 // Which OSM tagging categories are importable — data-driven, so adding one is
 // a catalog entry here, not new branching logic elsewhere.
-export type ImportCategory = "road" | "heavyRail" | "lightRail" | "bike";
+export type ImportCategory = 'road' | 'heavyRail' | 'lightRail' | 'bike';
 
-export const IMPORT_CATEGORY_ORDER: ImportCategory[] = ["road", "heavyRail", "lightRail", "bike"];
+export const IMPORT_CATEGORY_ORDER: ImportCategory[] = ['road', 'heavyRail', 'lightRail', 'bike'];
 
 export const IMPORT_CATEGORY_LABELS: Record<ImportCategory, string> = {
-  road: "Streets",
-  heavyRail: "Heavy rail",
-  lightRail: "Light rail / tram",
-  bike: "Bike infrastructure",
+  road: 'Streets',
+  heavyRail: 'Heavy rail',
+  lightRail: 'Light rail / tram',
+  bike: 'Bike infrastructure',
 };
 
 // The Overpass QL clause selecting each category's OSM ways. `(bbox)` is
@@ -53,23 +71,26 @@ const RESTRICTION_QUERY = `relation["type"="restriction"](bbox);`;
 /** Build an Overpass QL query for the given categories within a bounding box. */
 export function buildOverpassQuery(bbox: ImportBBox, categories: ImportCategory[]): string {
   const bboxStr = `${bbox.south},${bbox.west},${bbox.north},${bbox.east}`;
-  const wantsRoads = categories.includes("road");
-  const parts = [...categories.map((c) => CATEGORY_QUERY[c]), ...(wantsRoads ? [CONTROL_NODE_QUERY, RESTRICTION_QUERY] : [])];
-  const clauses = parts.map((q) => q.replace(/\(bbox\)/g, `(${bboxStr})`)).join("\n  ");
+  const wantsRoads = categories.includes('road');
+  const parts = [
+    ...categories.map((c) => CATEGORY_QUERY[c]),
+    ...(wantsRoads ? [CONTROL_NODE_QUERY, RESTRICTION_QUERY] : []),
+  ];
+  const clauses = parts.map((q) => q.replace(/\(bbox\)/g, `(${bboxStr})`)).join('\n  ');
   return `[out:json][timeout:25];\n(\n  ${clauses}\n);\nout geom;`;
 }
 
 // v3's own road classes stand in for OSM's `highway` hierarchy — a rough but
 // reasonable default; the user can always change a way's class after import.
 const ROAD_CLASS_BY_HIGHWAY: Record<string, string> = {
-  motorway: "transitway",
-  trunk: "arterial",
-  primary: "arterial",
-  secondary: "arterial",
-  tertiary: "collector",
-  residential: "local",
-  unclassified: "local",
-  living_street: "local",
+  motorway: 'transitway',
+  trunk: 'arterial',
+  primary: 'arterial',
+  secondary: 'arterial',
+  tertiary: 'collector',
+  residential: 'local',
+  unclassified: 'local',
+  living_street: 'local',
 };
 
 // How many travel lanes a road of each class has when OSM doesn't say. The
@@ -89,11 +110,22 @@ const ROAD_LANES_BY_CLASS: Record<string, number> = {
 // values containing `through` (e.g. "through;right") stay ordinary travel
 // lanes: they still carry through traffic, which is what turnPocket denies.
 // merge_to_* is deliberately absent — a merging lane is a travel lane.
-const TURN_ONLY_VALUES = new Set(["left", "right", "slight_left", "slight_right", "sharp_left", "sharp_right", "reverse"]);
+const TURN_ONLY_VALUES = new Set([
+  'left',
+  'right',
+  'slight_left',
+  'slight_right',
+  'sharp_left',
+  'sharp_right',
+  'reverse',
+]);
 
 /** A single `turn:lanes` entry (values within one lane are `;`-separated). */
 function isTurnOnlyLane(entry: string): boolean {
-  const values = entry.split(";").map((v) => v.trim()).filter(Boolean);
+  const values = entry
+    .split(';')
+    .map((v) => v.trim())
+    .filter(Boolean);
   // An empty entry ("left||right") means "unspecified", not "turn only".
   if (values.length === 0) return false;
   return values.every((v) => TURN_ONLY_VALUES.has(v));
@@ -110,10 +142,10 @@ function osmLaneCount(raw: string | undefined): number | undefined {
 
 /** Which way traffic runs relative to the way's point order, or null for a
  *  two-way street. `-1`/`reverse` mean the way is drawn against its traffic. */
-function osmOneway(tags: Record<string, string>): "forward" | "backward" | null {
+function osmOneway(tags: Record<string, string>): 'forward' | 'backward' | null {
   const v = tags.oneway;
-  if (v === "yes" || v === "true" || v === "1") return "forward";
-  if (v === "-1" || v === "reverse") return "backward";
+  if (v === 'yes' || v === 'true' || v === '1') return 'forward';
+  if (v === '-1' || v === 'reverse') return 'backward';
   return null;
 }
 
@@ -159,27 +191,44 @@ function osmLaneCounts(tags: Record<string, string>, classId: string | undefined
   return clampLaneSplit(rawOsmLaneCounts(tags, classId));
 }
 
-function rawOsmLaneCounts(tags: Record<string, string>, classId: string | undefined): OsmLaneCounts {
+function rawOsmLaneCounts(
+  tags: Record<string, string>,
+  classId: string | undefined,
+): OsmLaneCounts {
   const oneway = osmOneway(tags);
-  const centerTurn = (osmLaneCount(tags["lanes:both_ways"]) ?? 0) > 0 && oneway === null;
-  const forwardTag = osmLaneCount(tags["lanes:forward"]);
-  const backwardTag = osmLaneCount(tags["lanes:backward"]);
+  const centerTurn = (osmLaneCount(tags['lanes:both_ways']) ?? 0) > 0 && oneway === null;
+  const forwardTag = osmLaneCount(tags['lanes:forward']);
+  const backwardTag = osmLaneCount(tags['lanes:backward']);
   const totalTag = osmLaneCount(tags.lanes);
 
   if (oneway) {
     // On a one-way way every lane runs the same direction, so a directional
     // tag is just a restatement of the total; take whichever OSM gave us.
-    const n = totalTag ?? (oneway === "forward" ? forwardTag : backwardTag) ?? Math.ceil(classLanes(classId) / 2);
+    const n =
+      totalTag ??
+      (oneway === 'forward' ? forwardTag : backwardTag) ??
+      Math.ceil(classLanes(classId) / 2);
     const lanes = Math.max(1, n);
-    return oneway === "forward" ? { backward: 0, forward: lanes, centerTurn: false } : { backward: lanes, forward: 0, centerTurn: false };
+    return oneway === 'forward'
+      ? { backward: 0, forward: lanes, centerTurn: false }
+      : { backward: lanes, forward: 0, centerTurn: false };
   }
 
   if (forwardTag !== undefined || backwardTag !== undefined) {
     // A directional tag on one side only implies the rest of `lanes` runs the
     // other way; with no total, assume the tagged side is matched.
-    const remaining = totalTag === undefined ? undefined : Math.max(0, totalTag - (centerTurn ? 1 : 0));
-    const forward = forwardTag ?? (remaining !== undefined && backwardTag !== undefined ? Math.max(0, remaining - backwardTag) : backwardTag!);
-    const backward = backwardTag ?? (remaining !== undefined && forwardTag !== undefined ? Math.max(0, remaining - forwardTag) : forwardTag!);
+    const remaining =
+      totalTag === undefined ? undefined : Math.max(0, totalTag - (centerTurn ? 1 : 0));
+    const forward =
+      forwardTag ??
+      (remaining !== undefined && backwardTag !== undefined
+        ? Math.max(0, remaining - backwardTag)
+        : backwardTag!);
+    const backward =
+      backwardTag ??
+      (remaining !== undefined && forwardTag !== undefined
+        ? Math.max(0, remaining - forwardTag)
+        : forwardTag!);
     return { backward, forward, centerTurn };
   }
 
@@ -190,7 +239,7 @@ function rawOsmLaneCounts(tags: Record<string, string>, classId: string | undefi
 }
 
 function classLanes(classId: string | undefined): number {
-  return (classId && ROAD_LANES_BY_CLASS[classId]) || wayType("road").defaultCapacity;
+  return (classId && ROAD_LANES_BY_CLASS[classId]) || wayType('road').defaultCapacity;
 }
 
 /**
@@ -202,13 +251,17 @@ function classLanes(classId: string | undefined): number {
  * would silently put the pocket in the wrong place, and in real OSM the
  * mismatch usually means the tag describes a different segment.
  */
-function laneKindsForDirection(count: number, turns: string | undefined, reversed: boolean): string[] {
-  const kinds = new Array<string>(count).fill("drive");
+function laneKindsForDirection(
+  count: number,
+  turns: string | undefined,
+  reversed: boolean,
+): string[] {
+  const kinds = new Array<string>(count).fill('drive');
   if (!turns) return kinds;
-  const entries = turns.split("|");
+  const entries = turns.split('|');
   if (entries.length !== count) return kinds;
   entries.forEach((entry, i) => {
-    if (isTurnOnlyLane(entry)) kinds[reversed ? count - 1 - i : i] = "turnPocket";
+    if (isTurnOnlyLane(entry)) kinds[reversed ? count - 1 - i : i] = 'turnPocket';
   });
   return kinds;
 }
@@ -218,20 +271,20 @@ function laneKindsForDirection(count: number, turns: string | undefined, reverse
  *  one here too would double it. Untagged keeps the catalog default. */
 function osmSidewalks(tags: Record<string, string>): ProfileEdges {
   const has = (v: string | undefined): boolean | undefined =>
-    v === undefined ? undefined : v !== "no" && v !== "none" && v !== "separate";
+    v === undefined ? undefined : v !== 'no' && v !== 'none' && v !== 'separate';
   const both = tags.sidewalk;
   const fromBoth =
     both === undefined
       ? { left: undefined, right: undefined }
-      : both === "both"
+      : both === 'both'
         ? { left: true, right: true }
-        : both === "left"
+        : both === 'left'
           ? { left: true, right: false }
-          : both === "right"
+          : both === 'right'
             ? { left: false, right: true }
             : { left: has(both), right: has(both) };
-  const left = has(tags["sidewalk:left"]) ?? fromBoth.left;
-  const right = has(tags["sidewalk:right"]) ?? fromBoth.right;
+  const left = has(tags['sidewalk:left']) ?? fromBoth.left;
+  const right = has(tags['sidewalk:right']) ?? fromBoth.right;
   // Left-to-right facing forward: leading edge is the left side.
   return { leading: left, trailing: right };
 }
@@ -251,26 +304,38 @@ function osmSidePresence(
     return v === undefined ? undefined : present(v);
   };
   const both = read(prefix) ?? read(`${prefix}:both`);
-  return { left: read(`${prefix}:left`) ?? both ?? false, right: read(`${prefix}:right`) ?? both ?? false };
+  return {
+    left: read(`${prefix}:left`) ?? both ?? false,
+    right: read(`${prefix}:right`) ?? both ?? false,
+  };
 }
 
 /** OSM `busway` values that mean a bus lane physically exists on that side.
  *  `opposite_lane` is a contraflow bus lane on a one-way street — still a
  *  lane, just running against the general direction. */
-const BUSWAY_PRESENT = new Set(["lane", "opposite_lane", "share_busway", "opposite_share_busway"]);
+const BUSWAY_PRESENT = new Set(['lane', 'opposite_lane', 'share_busway', 'opposite_share_busway']);
 
 /** Parking values that mean cars are actually stored at that kerb. OSM has
  *  two live schemes — the older `parking:lane:<side>=parallel` and the newer
  *  `parking:<side>=lane` — so both are read; everything else in the
  *  vocabulary (`no`, `no_stopping`, `separate`, …) means no parking lane. */
-const PARKING_PRESENT = new Set(["parallel", "diagonal", "perpendicular", "marked", "yes", "lane", "street_side", "on_street"]);
+const PARKING_PRESENT = new Set([
+  'parallel',
+  'diagonal',
+  'perpendicular',
+  'marked',
+  'yes',
+  'lane',
+  'street_side',
+  'on_street',
+]);
 
 /** `cycleway` values that mean a bike lane runs along this roadway. A
  *  mapper who instead drew the cycleway as its own way tags `separate` or
  *  `no` here, and that separate way imports on its own — reading those as a
  *  lane would draw the same bike lane twice. `share_busway` is deliberately
  *  absent: that is bikes in the bus lane, not a lane of its own. */
-const CYCLEWAY_PRESENT = new Set(["lane", "track", "opposite_lane", "opposite_track", "sidepath"]);
+const CYCLEWAY_PRESENT = new Set(['lane', 'track', 'opposite_lane', 'opposite_track', 'sidepath']);
 
 /**
  * The lanes that sit outboard of the travel lanes on each side, ordered
@@ -280,7 +345,7 @@ const CYCLEWAY_PRESENT = new Set(["lane", "track", "opposite_lane", "opposite_tr
  */
 function osmSideLanes(
   tags: Record<string, string>,
-  oneway: "forward" | "backward" | null,
+  oneway: 'forward' | 'backward' | null,
   drivingSide: DrivingSide,
 ): { left: ProfileTemplateLane[]; right: ProfileTemplateLane[] } {
   const left: ProfileTemplateLane[] = [];
@@ -290,22 +355,22 @@ function osmSideLanes(
   // carries backward traffic under right-hand traffic and forward under
   // left-hand. Which kerb each lane sits at does NOT depend on it — see
   // profileFromOsmTags.
-  const leftDirection: LaneDirection = oneway ?? (drivingSide === "left" ? "forward" : "backward");
-  const rightDirection: LaneDirection = oneway ?? (drivingSide === "left" ? "backward" : "forward");
+  const leftDirection: LaneDirection = oneway ?? (drivingSide === 'left' ? 'forward' : 'backward');
+  const rightDirection: LaneDirection = oneway ?? (drivingSide === 'left' ? 'backward' : 'forward');
 
   // Kerb outwards-in: parking sits outboard of a bus lane.
-  const parkingOld = osmSidePresence(tags, "parking:lane", (v) => PARKING_PRESENT.has(v));
-  const parkingNew = osmSidePresence(tags, "parking", (v) => PARKING_PRESENT.has(v));
-  if (parkingOld.left || parkingNew.left) left.push({ kindId: "parking", direction: "none" });
-  if (parkingOld.right || parkingNew.right) right.push({ kindId: "parking", direction: "none" });
+  const parkingOld = osmSidePresence(tags, 'parking:lane', (v) => PARKING_PRESENT.has(v));
+  const parkingNew = osmSidePresence(tags, 'parking', (v) => PARKING_PRESENT.has(v));
+  if (parkingOld.left || parkingNew.left) left.push({ kindId: 'parking', direction: 'none' });
+  if (parkingOld.right || parkingNew.right) right.push({ kindId: 'parking', direction: 'none' });
 
-  const bike = osmSidePresence(tags, "cycleway", (v) => CYCLEWAY_PRESENT.has(v));
-  if (bike.left) left.push({ kindId: "bike", direction: leftDirection });
-  if (bike.right) right.push({ kindId: "bike", direction: rightDirection });
+  const bike = osmSidePresence(tags, 'cycleway', (v) => CYCLEWAY_PRESENT.has(v));
+  if (bike.left) left.push({ kindId: 'bike', direction: leftDirection });
+  if (bike.right) right.push({ kindId: 'bike', direction: rightDirection });
 
-  const bus = osmSidePresence(tags, "busway", (v) => BUSWAY_PRESENT.has(v));
-  if (bus.left) left.push({ kindId: "bus", direction: leftDirection });
-  if (bus.right) right.push({ kindId: "bus", direction: rightDirection });
+  const bus = osmSidePresence(tags, 'busway', (v) => BUSWAY_PRESENT.has(v));
+  if (bus.left) left.push({ kindId: 'bus', direction: leftDirection });
+  if (bus.right) right.push({ kindId: 'bus', direction: rightDirection });
 
   return { left, right };
 }
@@ -334,9 +399,9 @@ export function profileFromOsmTags(
   typeId: string,
   classId: string | undefined,
   tags: Record<string, string> | undefined,
-  drivingSide: DrivingSide = "right",
+  drivingSide: DrivingSide = 'right',
 ): CrossSection {
-  if (typeId !== "road" || !tags) return defaultProfileFor(typeId);
+  if (typeId !== 'road' || !tags) return defaultProfileFor(typeId);
 
   const oneway = osmOneway(tags);
   const { backward, forward, centerTurn } = osmLaneCounts(tags, classId);
@@ -346,27 +411,40 @@ export function profileFromOsmTags(
   const side = osmSideLanes(tags, oneway, drivingSide);
 
   if (!oneway && backward === 0 && forward === 0) {
-    const lanes: ProfileTemplateLane[] = [{ kindId: "drive", direction: "both" }];
-    if (centerTurn) lanes.push({ kindId: "turnPocket", direction: "both" });
+    const lanes: ProfileTemplateLane[] = [{ kindId: 'drive', direction: 'both' }];
+    if (centerTurn) lanes.push({ kindId: 'turnPocket', direction: 'both' });
     // Right-side lanes read kerb-inwards, so they reverse into left-to-right.
-    return profileWithPrimaryLanes(typeId, [...side.left, ...lanes, ...[...side.right].reverse()], osmSidewalks(tags));
+    return profileWithPrimaryLanes(
+      typeId,
+      [...side.left, ...lanes, ...[...side.right].reverse()],
+      osmSidewalks(tags),
+    );
   }
 
-  const forwardTurns = tags["turn:lanes:forward"] ?? (oneway === "forward" ? tags["turn:lanes"] : undefined);
-  const backwardTurns = tags["turn:lanes:backward"] ?? (oneway === "backward" ? tags["turn:lanes"] : undefined);
+  const forwardTurns =
+    tags['turn:lanes:forward'] ?? (oneway === 'forward' ? tags['turn:lanes'] : undefined);
+  const backwardTurns =
+    tags['turn:lanes:backward'] ?? (oneway === 'backward' ? tags['turn:lanes'] : undefined);
 
   // `turn:lanes` lists lanes left-to-right as the DRIVER sees them, so the
   // backward block maps on reversed — it is travelling the other way. That
   // follows from the lane's own direction and is the same under either
   // driving side.
-  const backwardLanes = laneKindsForDirection(backward, backwardTurns, true).map((kindId) => ({ kindId, direction: "backward" as const }));
-  const forwardLanes = laneKindsForDirection(forward, forwardTurns, false).map((kindId) => ({ kindId, direction: "forward" as const }));
-  const [nearLeftKerb, nearRightKerb] = drivingSide === "left" ? [forwardLanes, backwardLanes] : [backwardLanes, forwardLanes];
+  const backwardLanes = laneKindsForDirection(backward, backwardTurns, true).map((kindId) => ({
+    kindId,
+    direction: 'backward' as const,
+  }));
+  const forwardLanes = laneKindsForDirection(forward, forwardTurns, false).map((kindId) => ({
+    kindId,
+    direction: 'forward' as const,
+  }));
+  const [nearLeftKerb, nearRightKerb] =
+    drivingSide === 'left' ? [forwardLanes, backwardLanes] : [backwardLanes, forwardLanes];
 
   const primary: ProfileTemplateLane[] = [
     ...side.left,
     ...nearLeftKerb,
-    ...(centerTurn ? [{ kindId: "turnPocket", direction: "both" as const }] : []),
+    ...(centerTurn ? [{ kindId: 'turnPocket', direction: 'both' as const }] : []),
     ...nearRightKerb,
     ...[...side.right].reverse(),
   ];
@@ -381,13 +459,13 @@ export function profileFromOsmTags(
  * check skips pairs at different grades (see validate.ts).
  */
 export function gradeFromOsmTags(tags: Record<string, string> | undefined): Grade {
-  if (!tags) return "atGrade";
-  const no = (v: string | undefined): boolean => v === undefined || v === "no";
-  if (!no(tags.tunnel)) return "underground";
-  if (!no(tags.bridge)) return "elevated";
+  if (!tags) return 'atGrade';
+  const no = (v: string | undefined): boolean => v === undefined || v === 'no';
+  if (!no(tags.tunnel)) return 'underground';
+  if (!no(tags.bridge)) return 'elevated';
   const layer = Number(tags.layer);
-  if (Number.isFinite(layer) && layer !== 0) return layer < 0 ? "underground" : "elevated";
-  return "atGrade";
+  if (Number.isFinite(layer) && layer !== 0) return layer < 0 ? 'underground' : 'elevated';
+  return 'atGrade';
 }
 
 /**
@@ -405,11 +483,17 @@ const MAX_CARRIAGEWAY_ALIGNMENT = -0.7;
 /** The direction a one-way way's traffic travels, as a unit vector in
  *  degrees space — good enough for comparing two nearby ways' headings. */
 function travelVector(way: Way): [number, number] | null {
-  const dirs = new Set(way.profile.lanes.filter((l) => l.direction === "forward" || l.direction === "backward").map((l) => l.direction));
+  const dirs = new Set(
+    way.profile.lanes
+      .filter((l) => l.direction === 'forward' || l.direction === 'backward')
+      .map((l) => l.direction),
+  );
   if (dirs.size !== 1) return null;
   const first = way.points[0];
   const last = way.points[way.points.length - 1];
-  const [dx, dy] = dirs.has("forward") ? [last[0] - first[0], last[1] - first[1]] : [first[0] - last[0], first[1] - last[1]];
+  const [dx, dy] = dirs.has('forward')
+    ? [last[0] - first[0], last[1] - first[1]]
+    : [first[0] - last[0], first[1] - last[1]];
   const len = Math.hypot(dx, dy);
   return len === 0 ? null : [dx / len, dy / len];
 }
@@ -443,7 +527,9 @@ function meanSeparationM(a: Way, b: Way): number {
  * ones.
  */
 function carriagewayPairs(ways: Way[]): [Way, Way][] {
-  const oriented = ways.map((w) => ({ way: w, dir: travelVector(w) })).filter((o): o is { way: Way; dir: [number, number] } => o.dir !== null);
+  const oriented = ways
+    .map((w) => ({ way: w, dir: travelVector(w) }))
+    .filter((o): o is { way: Way; dir: [number, number] } => o.dir !== null);
   const best = new Map<string, { partner: Way; separation: number }>();
   for (const a of oriented) {
     for (const b of oriented) {
@@ -452,7 +538,8 @@ function carriagewayPairs(ways: Way[]): [Way, Way][] {
       const separation = meanSeparationM(a.way, b.way);
       if (separation > MAX_CARRIAGEWAY_SEPARATION_M) continue;
       const current = best.get(a.way.id);
-      if (!current || separation < current.separation) best.set(a.way.id, { partner: b.way, separation });
+      if (!current || separation < current.separation)
+        best.set(a.way.id, { partner: b.way, separation });
     }
   }
   const pairs: [Way, Way][] = [];
@@ -478,7 +565,10 @@ function carriagewayPairs(ways: Way[]): [Way, Way][] {
  * often share a name in OSM but are not one facility. A name matching only
  * one way gets no NamedWay — the identity would add nothing over the way.
  */
-function namedWaysFor(ways: Way[], nameByWayId: Map<string, string>): { namedWays: NamedWay[]; medians: { id: string; median: Median }[] } {
+function namedWaysFor(
+  ways: Way[],
+  nameByWayId: Map<string, string>,
+): { namedWays: NamedWay[]; medians: { id: string; median: Median }[] } {
   const groups = new Map<string, { name: string; ways: Way[] }>();
   for (const way of ways) {
     const name = nameByWayId.get(way.id);
@@ -503,8 +593,9 @@ function namedWaysFor(ways: Way[], nameByWayId: Map<string, string>): { namedWay
       // The gap between the carriageways IS the median: their separation less
       // the half-widths they each occupy. A non-positive result means the two
       // ribbons already touch, so there is no median to capture.
-      const gap = meanSeparationM(a, b) - profileWidthM(a.profile) / 2 - profileWidthM(b.profile) / 2;
-      if (gap > 0) medians.push({ id, median: { widthM: gap, kindId: "median" } });
+      const gap =
+        meanSeparationM(a, b) - profileWidthM(a.profile) / 2 - profileWidthM(b.profile) / 2;
+      if (gap > 0) medians.push({ id, median: { widthM: gap, kindId: 'median' } });
     }
     const rest = group.filter((w) => !paired.has(w.id));
     if (rest.length >= 2) namedWays.push({ id: shortId(), name, wayIds: rest.map((w) => w.id) });
@@ -532,8 +623,20 @@ export interface OsmWayElement {
  *  movement; `only_*` permits one and forbids the rest. Anything outside this
  *  vocabulary — including typos, which do occur — is ignored rather than
  *  guessed at. */
-const NO_RESTRICTIONS = new Set(["no_left_turn", "no_right_turn", "no_straight_on", "no_u_turn", "no_entry", "no_exit"]);
-const ONLY_RESTRICTIONS = new Set(["only_left_turn", "only_right_turn", "only_straight_on", "only_u_turn"]);
+const NO_RESTRICTIONS = new Set([
+  'no_left_turn',
+  'no_right_turn',
+  'no_straight_on',
+  'no_u_turn',
+  'no_entry',
+  'no_exit',
+]);
+const ONLY_RESTRICTIONS = new Set([
+  'only_left_turn',
+  'only_right_turn',
+  'only_straight_on',
+  'only_u_turn',
+]);
 
 /** An import's ways, the junctions between them, and the street identities
  *  spanning them. Returned together because ways alone are only half the
@@ -556,14 +659,17 @@ export interface ImportedNetwork {
  * meets our catalog — pure and network-free, so fixture data can test it
  * directly without hitting Overpass.
  */
-export function classifyOsmWay(tags: Record<string, string> | undefined): { typeId: string; classId?: string } | null {
+export function classifyOsmWay(
+  tags: Record<string, string> | undefined,
+): { typeId: string; classId?: string } | null {
   if (!tags) return null;
   const railway = tags.railway;
-  if (railway === "rail" || railway === "subway") return { typeId: "heavyRail" };
-  if (railway === "light_rail" || railway === "tram") return { typeId: "lightRail" };
+  if (railway === 'rail' || railway === 'subway') return { typeId: 'heavyRail' };
+  if (railway === 'light_rail' || railway === 'tram') return { typeId: 'lightRail' };
   const highway = tags.highway;
-  if (highway === "cycleway") return { typeId: "bike", classId: "path" };
-  if (highway && ROAD_CLASS_BY_HIGHWAY[highway]) return { typeId: "road", classId: ROAD_CLASS_BY_HIGHWAY[highway] };
+  if (highway === 'cycleway') return { typeId: 'bike', classId: 'path' };
+  if (highway && ROAD_CLASS_BY_HIGHWAY[highway])
+    return { typeId: 'road', classId: ROAD_CLASS_BY_HIGHWAY[highway] };
   return null;
 }
 
@@ -574,15 +680,20 @@ export function classifyOsmWay(tags: Record<string, string> | undefined): { type
  *  faces). */
 function controlFromOsmNodeTags(tags: Record<string, string> | undefined): NodeControl | undefined {
   const highway = tags?.highway;
-  if (highway === "traffic_signals") return "signal";
-  if (highway === "stop") return "stop";
+  if (highway === 'traffic_signals') return 'signal';
+  if (highway === 'stop') return 'stop';
   return undefined;
 }
 
 /** Which control wins when a junction is described more than once — a
  *  signalized roundabout is a signal, and a junction with any signalized
  *  approach is signalized regardless of what the other arms say. */
-const CONTROL_RANK: Record<NodeControl, number> = { signal: 3, stop: 2, roundabout: 1, uncontrolled: 0 };
+const CONTROL_RANK: Record<NodeControl, number> = {
+  signal: 3,
+  stop: 2,
+  roundabout: 1,
+  uncontrolled: 0,
+};
 
 /**
  * How far back from a junction a stop line may sit and still be that
@@ -678,15 +789,15 @@ function turnRestrictionsFrom(
 ): { key: string; restriction: TurnRestriction }[] {
   const out: { key: string; restriction: TurnRestriction }[] = [];
   for (const el of elements) {
-    if (el.type !== "relation" || !el.members || el.tags?.type !== "restriction") continue;
+    if (el.type !== 'relation' || !el.members || el.tags?.type !== 'restriction') continue;
     const value = el.tags.restriction;
     const isOnly = value !== undefined && ONLY_RESTRICTIONS.has(value);
     if (!value || (!isOnly && !NO_RESTRICTIONS.has(value))) continue;
 
-    const from = el.members.find((m) => m.role === "from" && m.type === "way");
-    const to = el.members.find((m) => m.role === "to" && m.type === "way");
-    const via = el.members.find((m) => m.role === "via");
-    if (!from || !to || !via || via.type !== "node") continue;
+    const from = el.members.find((m) => m.role === 'from' && m.type === 'way');
+    const to = el.members.find((m) => m.role === 'to' && m.type === 'way');
+    const via = el.members.find((m) => m.role === 'via');
+    if (!from || !to || !via || via.type !== 'node') continue;
 
     const fromWay = wayByOsmId.get(from.ref);
     const toWay = wayByOsmId.get(to.ref);
@@ -701,9 +812,15 @@ function turnRestrictionsFrom(
     // Only the approach lanes that reach this junction, and only ones that
     // could make the turn.
     for (const lane of fromWay.profile.lanes) {
-      if (lane.kindId !== "drive" && lane.kindId !== "bus" && lane.kindId !== "turnPocket") continue;
-      if (lane.direction !== "forward" && lane.direction !== "backward" && lane.direction !== "both") continue;
-      const endIndex = lane.direction === "backward" ? 0 : fromWay.points.length - 1;
+      if (lane.kindId !== 'drive' && lane.kindId !== 'bus' && lane.kindId !== 'turnPocket')
+        continue;
+      if (
+        lane.direction !== 'forward' &&
+        lane.direction !== 'backward' &&
+        lane.direction !== 'both'
+      )
+        continue;
+      const endIndex = lane.direction === 'backward' ? 0 : fromWay.points.length - 1;
       if (osmNodeOfWayPoint.get(`${fromWay.id}:${endIndex}`) !== via.ref) continue;
       out.push({ key: `${fromWay.id}:${lane.id}`, restriction: { allowedTargets } });
     }
@@ -711,7 +828,10 @@ function turnRestrictionsFrom(
   return out;
 }
 
-export function osmElementsToNetwork(elements: OsmWayElement[], drivingSide: DrivingSide = "right"): ImportedNetwork {
+export function osmElementsToNetwork(
+  elements: OsmWayElement[],
+  drivingSide: DrivingSide = 'right',
+): ImportedNetwork {
   const ways: Way[] = [];
   // OSM node id -> every (way, control point) that node landed on.
   const refsByOsmNode = new Map<number, WayPointRef[]>();
@@ -733,12 +853,12 @@ export function osmElementsToNetwork(elements: OsmWayElement[], drivingSide: Dri
     // A control node is matched to its junction by id alone — its own
     // coordinates are never needed, since the ways already carry the
     // coordinate for every node id they pass through.
-    if (el.type === "node") {
+    if (el.type === 'node') {
       const control = controlFromOsmNodeTags(el.tags);
       if (control) controlByOsmNode.set(el.id, control);
       continue;
     }
-    if (el.type !== "way" || !el.geometry || el.geometry.length < 2) continue;
+    if (el.type !== 'way' || !el.geometry || el.geometry.length < 2) continue;
     const kind = classifyOsmWay(el.tags);
     if (!kind) continue;
     const points: LngLat[] = el.geometry.map((g) => [g.lon, g.lat]);
@@ -746,7 +866,7 @@ export function osmElementsToNetwork(elements: OsmWayElement[], drivingSide: Dri
       id: shortId(),
       typeId: kind.typeId,
       points,
-      geometry: "straight",
+      geometry: 'straight',
       grade: gradeFromOsmTags(el.tags),
       profile: profileFromOsmTags(kind.typeId, kind.classId, el.tags, drivingSide),
       classId: kind.classId,
@@ -765,7 +885,7 @@ export function osmElementsToNetwork(elements: OsmWayElement[], drivingSide: Dri
     osmNodesByWayId.set(way.id, { way, osmNodes: el.nodes });
     // A roundabout is a way in OSM, not a node, so its junctions inherit the
     // control from the circulatory way they sit on.
-    const isRoundabout = el.tags?.junction === "roundabout";
+    const isRoundabout = el.tags?.junction === 'roundabout';
     el.nodes.forEach((osmNodeId, i) => {
       const refs = refsByOsmNode.get(osmNodeId);
       if (refs) refs.push({ wayId: way.id, pointIndex: i });
@@ -781,15 +901,18 @@ export function osmElementsToNetwork(elements: OsmWayElement[], drivingSide: Dri
 
   // Only shared nodes are junctions. A Node per vertex would be both wrong
   // (a bend in one street is not a junction) and enormous.
-  const isJunction = (osmNodeId: number): boolean => (refsByOsmNode.get(osmNodeId)?.length ?? 0) >= 2;
+  const isJunction = (osmNodeId: number): boolean =>
+    (refsByOsmNode.get(osmNodeId)?.length ?? 0) >= 2;
 
   // Resolve every control claim onto a junction, strongest claim winning.
   const controlByJunction = new Map<number, NodeControl>();
   const claim = (osmNodeId: number, control: NodeControl): void => {
     const current = controlByJunction.get(osmNodeId);
-    if (!current || CONTROL_RANK[control] > CONTROL_RANK[current]) controlByJunction.set(osmNodeId, control);
+    if (!current || CONTROL_RANK[control] > CONTROL_RANK[current])
+      controlByJunction.set(osmNodeId, control);
   };
-  for (const osmNodeId of roundaboutOsmNodes) if (isJunction(osmNodeId)) claim(osmNodeId, "roundabout");
+  for (const osmNodeId of roundaboutOsmNodes)
+    if (isJunction(osmNodeId)) claim(osmNodeId, 'roundabout');
   for (const [osmNodeId, control] of controlByOsmNode) {
     if (isJunction(osmNodeId)) {
       claim(osmNodeId, control);
@@ -808,7 +931,12 @@ export function osmElementsToNetwork(elements: OsmWayElement[], drivingSide: Dri
   for (const [osmNodeId, refs] of refsByOsmNode) {
     if (refs.length < 2) continue;
     const control = controlByJunction.get(osmNodeId);
-    nodes.push({ id: shortId(), coord: coordByOsmNode.get(osmNodeId)!, refs, ...(control ? { control } : {}) });
+    nodes.push({
+      id: shortId(),
+      coord: coordByOsmNode.get(osmNodeId)!,
+      refs,
+      ...(control ? { control } : {}),
+    });
   }
   const named = namedWaysFor(ways, nameByWayId);
   return {
@@ -823,7 +951,10 @@ export function osmElementsToNetwork(elements: OsmWayElement[], drivingSide: Dri
 /** The ways of an import, without its junctions — kept for callers that only
  *  need the geometry. Prefer osmElementsToNetwork, which also returns the
  *  topology OSM gave us. */
-export function osmElementsToWays(elements: OsmWayElement[], drivingSide: DrivingSide = "right"): Way[] {
+export function osmElementsToWays(
+  elements: OsmWayElement[],
+  drivingSide: DrivingSide = 'right',
+): Way[] {
   return osmElementsToNetwork(elements, drivingSide).ways;
 }
 
@@ -839,7 +970,10 @@ export function osmElementsToWays(elements: OsmWayElement[], drivingSide: Drivin
  * CORS headers. `overpass.osm.jp` is deliberately absent for that reason —
  * it answers curl but fails the browser's preflight.
  */
-const OVERPASS_ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
 
 /**
  * Statuses worth trying another endpoint for: overload and rate limiting,
@@ -946,7 +1080,9 @@ export function withoutAlreadyImported(
     // Node at the same coordinate. Two Nodes there is not cosmetic: cascadeMove
     // finds only the first, so dragging the junction moves one Node's arms and
     // strands the other's, and setNodeControl reaches only one of them.
-    const existing = refs.map((r) => existingNodeByArm.get(`${r.wayId}:${r.pointIndex}`)).find((n) => n !== undefined);
+    const existing = refs
+      .map((r) => existingNodeByArm.get(`${r.wayId}:${r.pointIndex}`))
+      .find((n) => n !== undefined);
     if (existing) {
       const known = new Set(existing.refs.map((r) => `${r.wayId}:${r.pointIndex}`));
       const additions = refs.filter((r) => !known.has(`${r.wayId}:${r.pointIndex}`));
@@ -968,10 +1104,12 @@ export function withoutAlreadyImported(
   const typeOfWay = new Map<string, string>();
   for (const w of existingWays) typeOfWay.set(w.id, w.typeId);
   for (const w of keptWays) typeOfWay.set(w.id, w.typeId);
-  const identityKey = (name: string, wayIds: string[]): string => `${typeOfWay.get(wayIds[0]) ?? ""}\u0000${name}`;
+  const identityKey = (name: string, wayIds: string[]): string =>
+    `${typeOfWay.get(wayIds[0]) ?? ''}\u0000${name}`;
   const existingByKey = new Map<string, NamedWay>();
   for (const identity of existingNamedWays) {
-    if (identity.wayIds.length > 0) existingByKey.set(identityKey(identity.name, identity.wayIds), identity);
+    if (identity.wayIds.length > 0)
+      existingByKey.set(identityKey(identity.name, identity.wayIds), identity);
   }
 
   const namedWays: NamedWay[] = [];
@@ -1000,7 +1138,9 @@ export function withoutAlreadyImported(
       medians: network.medians.filter((m) => keptIds.has(m.id)),
       // A restriction on a way this import didn't keep is already recorded
       // against the copy that is present.
-      turnRestrictions: network.turnRestrictions.filter((t) => keptWayIds.has(t.key.slice(0, t.key.indexOf(":")))),
+      turnRestrictions: network.turnRestrictions.filter((t) =>
+        keptWayIds.has(t.key.slice(0, t.key.indexOf(':'))),
+      ),
     },
     duplicateWays,
     identityAdditions,
@@ -1015,21 +1155,26 @@ export function withoutAlreadyImported(
 export async function importOsmWays(
   bbox: ImportBBox,
   categories: ImportCategory[],
-  drivingSide: DrivingSide = "right",
+  drivingSide: DrivingSide = 'right',
 ): Promise<ImportedNetwork> {
-  if (categories.length === 0) return { ways: [], nodes: [], namedWays: [], medians: [], turnRestrictions: [] };
+  if (categories.length === 0)
+    return { ways: [], nodes: [], namedWays: [], medians: [], turnRestrictions: [] };
   const query = buildOverpassQuery(bbox, categories);
 
-  let lastError = "";
+  let lastError = '';
   for (const endpoint of OVERPASS_ENDPOINTS) {
     let res: Response;
     try {
-      res = await fetch(endpoint, { method: "POST", headers: { "content-type": "text/plain" }, body: query });
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'text/plain' },
+        body: query,
+      });
     } catch {
       // No status to read: offline, or — far more often — a busy Overpass
       // whose error page dropped the CORS headers. Both look identical from
       // here, so the message stays honest about not knowing which.
-      lastError = "no OpenStreetMap server answered";
+      lastError = 'no OpenStreetMap server answered';
       continue;
     }
     if (res.ok) {

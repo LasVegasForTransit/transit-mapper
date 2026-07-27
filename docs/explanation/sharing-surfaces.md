@@ -38,7 +38,7 @@ at card size and then rendered by a chat client into a column a third as wide.
 Type sized for the first is illegible mush in the second.
 
 Rather than a flag per element, `systemSvg` takes one number — how wide the
-drawing will actually be *seen* — and every optional element derives from it.
+drawing will actually be _seen_ — and every optional element derives from it.
 Anything that would land under about ten displayed pixels isn't drawn, on the
 grounds that unreadable text is worse than absent text. That single rule is
 why a share card carries no station labels, scale bar or north arrow while a
@@ -82,7 +82,7 @@ Consequences worth knowing:
 
 Accepting an image from a client means accepting bytes we didn't produce. The
 honest framing: nothing short of re-rendering server-side can make the
-*pixels* trustworthy, and that's the thing we can't afford. What the design
+_pixels_ trustworthy, and that's the thing we can't afford. What the design
 can do is stop the endpoint becoming general-purpose file hosting, and make
 whatever is stored inert.
 
@@ -144,7 +144,7 @@ rule so it lives with the code it protects, shows up in review, and survives
 someone rebuilding the zone.
 
 The limiter is skipped when there's no `cf-connecting-ip` header, which means
-local development. If that header *is* present and the binding is missing —
+local development. If that header _is_ present and the binding is missing —
 the deployed config lost it — the endpoint returns 503 rather than quietly
 accepting unlimited writes.
 
@@ -182,5 +182,5 @@ Las Vegans for Better Transit brand rather than the editor's own chrome:
 Public Sans, the brand's paper and raised-surface tones, ink rules. The values
 are transcribed once in `packages/core/src/style/lvbtBrand.ts` from the brand
 page and read from there; nothing downstream restates a hex code. Note this is
-deliberately *not* the same palette as the editor UI, which remains a cooler
+deliberately _not_ the same palette as the editor UI, which remains a cooler
 ink-on-white system with its own typeface.

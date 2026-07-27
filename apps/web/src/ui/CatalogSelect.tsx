@@ -1,5 +1,5 @@
-import { DropdownMenu, DropdownMenuItem } from "./DropdownMenu";
-import { Icon } from "./Icon";
+import { DropdownMenu, DropdownMenuItem } from './DropdownMenu';
+import { Icon } from './Icon';
 
 interface CatalogSelectOption {
   id: string;
@@ -38,7 +38,7 @@ export function CatalogSelect({ label, value, options, onChange, disabled }: Cat
               <span className="cs-trigger-swatch" style={{ background: current?.color }} />
               <span>{current?.label ?? value}</span>
             </span>
-            <Icon name="chevronDown" size={14} style={{ opacity: 0.6, flex: "none" }} />
+            <Icon name="chevronDown" size={14} style={{ opacity: 0.6, flex: 'none' }} />
           </button>
         }
       >

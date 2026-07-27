@@ -1,5 +1,5 @@
-import { shortId } from "../ids";
-import type { LngLat } from "./valueTypes";
+import { shortId } from '../ids';
+import type { LngLat } from './valueTypes';
 
 /** A catalog-typed point/area feature: bike dock, entrance, depot, … */
 export interface Facility {

@@ -1,10 +1,15 @@
-import { useMemo, useState } from "react";
-import { useEditor } from "../editor/EditorProvider";
-import type { Selection } from "../editor/store";
-import { FACILITY_TYPES, MODES, WAY_TYPE_ORDER, WAY_TYPES } from "@transitmapper/core/model/catalog";
-import { useListboxKeyboardNav } from "./useListboxKeyboardNav";
+import { useMemo, useState } from 'react';
+import { useEditor } from '../editor/EditorProvider';
+import type { Selection } from '../editor/store';
+import {
+  FACILITY_TYPES,
+  MODES,
+  WAY_TYPE_ORDER,
+  WAY_TYPES,
+} from '@transitmapper/core/model/catalog';
+import { useListboxKeyboardNav } from './useListboxKeyboardNav';
 
-function rowKey(kind: NonNullable<Selection>["kind"], id: string): string {
+function rowKey(kind: NonNullable<Selection>['kind'], id: string): string {
   return `${kind}:${id}`;
 }
 
@@ -34,7 +39,12 @@ interface ShowMoreRowProps {
 function ShowMoreRow({ hiddenCount, onClick }: ShowMoreRowProps) {
   if (hiddenCount === 0) return null;
   return (
-    <button type="button" className="link-btn" style={{ display: "block", margin: "4px 8px" }} onClick={onClick}>
+    <button
+      type="button"
+      className="link-btn"
+      style={{ display: 'block', margin: '4px 8px' }}
+      onClick={onClick}
+    >
       Show {hiddenCount} more…
     </button>
   );
@@ -69,11 +79,11 @@ export function LinesPanel() {
   // "Show more" is clicked on a real GTFS import, `waysShown.visible` can be
   // the full multi-thousand-entry array — without this, waysByType's filter
   // re-ran that full scan on every unrelated selection click.
-  const servicesExpanded = expanded.has("services");
-  const waysExpanded = expanded.has("ways");
-  const stationsExpanded = expanded.has("stations");
-  const facilitiesExpanded = expanded.has("facilities");
-  const groupsExpanded = expanded.has("groups");
+  const servicesExpanded = expanded.has('services');
+  const waysExpanded = expanded.has('ways');
+  const stationsExpanded = expanded.has('stations');
+  const facilitiesExpanded = expanded.has('facilities');
+  const groupsExpanded = expanded.has('groups');
 
   // A way that belongs to a NamedWay is listed under that name rather than
   // "Road 12" — the whole point of the identity, and what makes an OSM
@@ -83,14 +93,25 @@ export function LinesPanel() {
   const nameByWayId = useMemo(() => {
     const out = new Map<string, string>();
     for (const identity of namedWays) {
-      identity.wayIds.forEach((id, i) => out.set(id, identity.wayIds.length > 1 ? `${identity.name} ${i + 1}` : identity.name));
+      identity.wayIds.forEach((id, i) =>
+        out.set(id, identity.wayIds.length > 1 ? `${identity.name} ${i + 1}` : identity.name),
+      );
     }
     return out;
   }, [namedWays]);
 
-  const servicesShown = useMemo(() => capped(services, servicesExpanded), [services, servicesExpanded]);
-  const stationsShown = useMemo(() => capped(stations, stationsExpanded), [stations, stationsExpanded]);
-  const facilitiesShown = useMemo(() => capped(facilities, facilitiesExpanded), [facilities, facilitiesExpanded]);
+  const servicesShown = useMemo(
+    () => capped(services, servicesExpanded),
+    [services, servicesExpanded],
+  );
+  const stationsShown = useMemo(
+    () => capped(stations, stationsExpanded),
+    [stations, stationsExpanded],
+  );
+  const facilitiesShown = useMemo(
+    () => capped(facilities, facilitiesExpanded),
+    [facilities, facilitiesExpanded],
+  );
   const groupsShown = useMemo(() => capped(groups, groupsExpanded), [groups, groupsExpanded]);
 
   // Grouped by type BEFORE capping, not after — capping the flat `ways` array
@@ -100,9 +121,10 @@ export function LinesPanel() {
   // its label rendered as long as any of its share of the LIST_CAP budget
   // survives.
   const waysByType = useMemo(() => {
-    const grouped = WAY_TYPE_ORDER.map((typeId) => ({ typeId, ways: ways.filter((w) => w.typeId === typeId) })).filter(
-      (g) => g.ways.length > 0,
-    );
+    const grouped = WAY_TYPE_ORDER.map((typeId) => ({
+      typeId,
+      ways: ways.filter((w) => w.typeId === typeId),
+    })).filter((g) => g.ways.length > 0);
     if (waysExpanded) return grouped;
     let remaining = LIST_CAP;
     const out: typeof grouped = [];
@@ -118,29 +140,43 @@ export function LinesPanel() {
   // Roving tabindex: Tab should land on exactly one row — whichever is
   // currently selected, or the very first row overall if nothing here is.
   const selectedKey = selection ? rowKey(selection.kind, selection.id) : null;
-  const firstKey =
-    services[0] ? rowKey("service", services[0].id)
-    : waysByType[0]?.ways[0] ? rowKey("way", waysByType[0].ways[0].id)
-    : stations[0] ? rowKey("station", stations[0].id)
-    : facilities[0] ? rowKey("facility", facilities[0].id)
-    : groups[0] ? rowKey("group", groups[0].id)
-    : null;
+  const firstKey = services[0]
+    ? rowKey('service', services[0].id)
+    : waysByType[0]?.ways[0]
+      ? rowKey('way', waysByType[0].ways[0].id)
+      : stations[0]
+        ? rowKey('station', stations[0].id)
+        : facilities[0]
+          ? rowKey('facility', facilities[0].id)
+          : groups[0]
+            ? rowKey('group', groups[0].id)
+            : null;
   const rovingKey = selectedKey ?? firstKey;
 
   return (
-    <div className="panel-body" ref={containerRef} role="listbox" aria-label="Objects" onKeyDown={onKeyDown}>
+    <div
+      className="panel-body"
+      ref={containerRef}
+      role="listbox"
+      aria-label="Objects"
+      onKeyDown={onKeyDown}
+    >
       <div className="panel-section-label">Services</div>
-      {services.length === 0 && <p className="panel-hint">Way tool: drag or click to lay infrastructure; it starts one service you can recolor.</p>}
+      {services.length === 0 && (
+        <p className="panel-hint">
+          Way tool: drag or click to lay infrastructure; it starts one service you can recolor.
+        </p>
+      )}
       {servicesShown.visible.map((sv) => {
-        const active = selection?.kind === "service" && selection.id === sv.id;
+        const active = selection?.kind === 'service' && selection.id === sv.id;
         return (
           <button
             key={sv.id}
             role="option"
             aria-selected={active}
-            tabIndex={rowKey("service", sv.id) === rovingKey ? 0 : -1}
-            className={`list-row ${active ? "active" : ""}`}
-            onClick={() => selectAndFocus({ kind: "service", id: sv.id })}
+            tabIndex={rowKey('service', sv.id) === rovingKey ? 0 : -1}
+            className={`list-row ${active ? 'active' : ''}`}
+            onClick={() => selectAndFocus({ kind: 'service', id: sv.id })}
           >
             <span className="dot" style={{ background: sv.color }} />
             <span className="list-name">{sv.name}</span>
@@ -148,89 +184,120 @@ export function LinesPanel() {
           </button>
         );
       })}
-      <ShowMoreRow hiddenCount={servicesShown.hiddenCount} onClick={() => expandSection("services")} />
+      <ShowMoreRow
+        hiddenCount={servicesShown.hiddenCount}
+        onClick={() => expandSection('services')}
+      />
 
-      {waysByType.length > 0 && <div className="panel-section-label" style={{ marginTop: 16 }}>Infrastructure</div>}
+      {waysByType.length > 0 && (
+        <div className="panel-section-label" style={{ marginTop: 16 }}>
+          Infrastructure
+        </div>
+      )}
       {waysByType.map((group) => (
         <div key={group.typeId}>
           <div className="panel-group-label">{WAY_TYPES[group.typeId].label}</div>
           {group.ways.map((w, i) => {
-            const active = selection?.kind === "way" && selection.id === w.id;
+            const active = selection?.kind === 'way' && selection.id === w.id;
             return (
               <button
                 key={w.id}
                 role="option"
                 aria-selected={active}
-                tabIndex={rowKey("way", w.id) === rovingKey ? 0 : -1}
-                className={`list-row ${active ? "active" : ""}`}
-                onClick={() => selectAndFocus({ kind: "way", id: w.id })}
+                tabIndex={rowKey('way', w.id) === rovingKey ? 0 : -1}
+                className={`list-row ${active ? 'active' : ''}`}
+                onClick={() => selectAndFocus({ kind: 'way', id: w.id })}
               >
                 <span className="dot ring" />
-                <span className="list-name">{nameByWayId.get(w.id) ?? `${WAY_TYPES[group.typeId].label} ${i + 1}`}</span>
+                <span className="list-name">
+                  {nameByWayId.get(w.id) ?? `${WAY_TYPES[group.typeId].label} ${i + 1}`}
+                </span>
               </button>
             );
           })}
         </div>
       ))}
-      <ShowMoreRow hiddenCount={waysHiddenCount} onClick={() => expandSection("ways")} />
+      <ShowMoreRow hiddenCount={waysHiddenCount} onClick={() => expandSection('ways')} />
 
-      {stations.length > 0 && <div className="panel-section-label" style={{ marginTop: 16 }}>Stations</div>}
+      {stations.length > 0 && (
+        <div className="panel-section-label" style={{ marginTop: 16 }}>
+          Stations
+        </div>
+      )}
       {stationsShown.visible.map((st, i) => {
-        const active = selection?.kind === "station" && selection.id === st.id;
+        const active = selection?.kind === 'station' && selection.id === st.id;
         return (
           <button
             key={st.id}
             role="option"
             aria-selected={active}
-            tabIndex={rowKey("station", st.id) === rovingKey ? 0 : -1}
-            className={`list-row ${active ? "active" : ""}`}
-            onClick={() => selectAndFocus({ kind: "station", id: st.id })}
+            tabIndex={rowKey('station', st.id) === rovingKey ? 0 : -1}
+            className={`list-row ${active ? 'active' : ''}`}
+            onClick={() => selectAndFocus({ kind: 'station', id: st.id })}
           >
             <span className="dot ring" />
             <span className="list-name">{st.name || `Station ${i + 1}`}</span>
           </button>
         );
       })}
-      <ShowMoreRow hiddenCount={stationsShown.hiddenCount} onClick={() => expandSection("stations")} />
+      <ShowMoreRow
+        hiddenCount={stationsShown.hiddenCount}
+        onClick={() => expandSection('stations')}
+      />
 
-      {facilities.length > 0 && <div className="panel-section-label" style={{ marginTop: 16 }}>Facilities</div>}
+      {facilities.length > 0 && (
+        <div className="panel-section-label" style={{ marginTop: 16 }}>
+          Facilities
+        </div>
+      )}
       {facilitiesShown.visible.map((f) => {
-        const active = selection?.kind === "facility" && selection.id === f.id;
+        const active = selection?.kind === 'facility' && selection.id === f.id;
         return (
           <button
             key={f.id}
             role="option"
             aria-selected={active}
-            tabIndex={rowKey("facility", f.id) === rovingKey ? 0 : -1}
-            className={`list-row ${active ? "active" : ""}`}
-            onClick={() => selectAndFocus({ kind: "facility", id: f.id })}
+            tabIndex={rowKey('facility', f.id) === rovingKey ? 0 : -1}
+            className={`list-row ${active ? 'active' : ''}`}
+            onClick={() => selectAndFocus({ kind: 'facility', id: f.id })}
           >
             <span className="dot ring" />
-            <span className="list-name">{f.name || FACILITY_TYPES[f.typeId]?.label || f.typeId}</span>
+            <span className="list-name">
+              {f.name || FACILITY_TYPES[f.typeId]?.label || f.typeId}
+            </span>
           </button>
         );
       })}
-      <ShowMoreRow hiddenCount={facilitiesShown.hiddenCount} onClick={() => expandSection("facilities")} />
+      <ShowMoreRow
+        hiddenCount={facilitiesShown.hiddenCount}
+        onClick={() => expandSection('facilities')}
+      />
 
-      {groups.length > 0 && <div className="panel-section-label" style={{ marginTop: 16 }}>Groups</div>}
+      {groups.length > 0 && (
+        <div className="panel-section-label" style={{ marginTop: 16 }}>
+          Groups
+        </div>
+      )}
       {groupsShown.visible.map((g) => {
-        const active = selection?.kind === "group" && selection.id === g.id;
+        const active = selection?.kind === 'group' && selection.id === g.id;
         return (
           <button
             key={g.id}
             role="option"
             aria-selected={active}
-            tabIndex={rowKey("group", g.id) === rovingKey ? 0 : -1}
-            className={`list-row ${active ? "active" : ""}`}
-            onClick={() => selectAndFocus({ kind: "group", id: g.id })}
+            tabIndex={rowKey('group', g.id) === rovingKey ? 0 : -1}
+            className={`list-row ${active ? 'active' : ''}`}
+            onClick={() => selectAndFocus({ kind: 'group', id: g.id })}
           >
             <span className="dot ring" />
-            <span className="list-name">{g.name || (g.footprint ? "Facility complex" : "Group")}</span>
+            <span className="list-name">
+              {g.name || (g.footprint ? 'Facility complex' : 'Group')}
+            </span>
             <span className="list-tag">{g.memberIds.length}</span>
           </button>
         );
       })}
-      <ShowMoreRow hiddenCount={groupsShown.hiddenCount} onClick={() => expandSection("groups")} />
+      <ShowMoreRow hiddenCount={groupsShown.hiddenCount} onClick={() => expandSection('groups')} />
     </div>
   );
 }

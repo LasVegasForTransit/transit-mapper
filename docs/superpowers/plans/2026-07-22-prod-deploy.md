@@ -17,6 +17,7 @@
 ### Task 1: Composite action — `setup-node-pnpm`
 
 **Files:**
+
 - Create: `/Users/williecubed/Projects/LasVegansForTransit/transitmapper/.github/actions/setup-node-pnpm/action.yml`
 - Modify: `/Users/williecubed/Projects/LasVegansForTransit/transitmapper/package.json` (add `engines.node`)
 
@@ -104,6 +105,7 @@ git commit -m "Add engines.node and setup-node-pnpm composite action"
 ### Task 2: CI workflow
 
 **Files:**
+
 - Create: `/Users/williecubed/Projects/LasVegansForTransit/transitmapper/.github/workflows/ci.yml`
 
 - [ ] **Step 1: Create the workflow**
@@ -171,6 +173,7 @@ git commit -m "Add CI workflow (typecheck + dependency audit)"
 ### Task 3: `wrangler.toml` custom domain route
 
 **Files:**
+
 - Modify: `/Users/williecubed/Projects/LasVegansForTransit/transitmapper/apps/worker/wrangler.toml`
 
 - [ ] **Step 1: Add the route**
@@ -255,6 +258,7 @@ git commit -m "Add custom domain route for map.lasvegasfortransit.org"
 ### Task 4: Deploy workflow
 
 **Files:**
+
 - Create: `/Users/williecubed/Projects/LasVegansForTransit/transitmapper/.github/workflows/deploy-production.yml`
 
 - [ ] **Step 1: Create the workflow**
@@ -380,6 +384,7 @@ account-level one), then add one more row: `Account · D1 · Edit`.
 
 Repo → Settings → Environments → New environment, name it `production`.
 Inside that environment:
+
 - Add secret `CLOUDFLARE_API_TOKEN` = the token from Step 3.
 - Add variable (not secret) `CLOUDFLARE_ACCOUNT_ID` = the account id (found
   on the Cloudflare dashboard's right sidebar on any account page).

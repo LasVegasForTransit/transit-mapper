@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
-import { ErrorBoundary } from "./ui/ErrorBoundary";
-import { MapCanvas } from "./map/MapCanvas";
-import { getMap } from "./map/mapRef";
-import { useEditor, useEditorStore } from "./editor/EditorProvider";
-import { createEmptySystem } from "@transitmapper/core/model/serialize";
-import { fetchShare } from "./share/api";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ErrorBoundary } from './ui/ErrorBoundary';
+import { MapCanvas } from './map/MapCanvas';
+import { getMap } from './map/mapRef';
+import { useEditor, useEditorStore } from './editor/EditorProvider';
+import { createEmptySystem } from '@transitmapper/core/model/serialize';
+import { fetchShare } from './share/api';
 import {
   getActiveId,
   listLibrary,
@@ -13,55 +13,71 @@ import {
   migrateLegacySingleSlot,
   saveToLibrary,
   setActiveId,
-} from "./storage/localStore";
-import { attachCameraPersistence } from "./camera/cameraPersistence";
-import { withLiveCamera } from "./camera/liveCamera";
-import { Icon } from "./ui/Icon";
-import { ImportProgressPill } from "./ui/ImportProgressPill";
-import { Inspector } from "./ui/Inspector";
-import { LinesPanel } from "./ui/LinesPanel";
-import { Toolbar } from "./ui/Toolbar";
-import { TopBarActions, TopBarBrand, ViewSwitch } from "./ui/TopBar";
-import { useDelayedUnmount } from "./ui/useDelayedUnmount";
-import { useSaveStatus } from "./ui/SaveStatusProvider";
-import { useUi } from "./ui/UiProvider";
-import { useView } from "./ui/ViewProvider";
-import { Workbench } from "./ui/Workbench";
-import "./ui/app.css";
+} from './storage/localStore';
+import { attachCameraPersistence } from './camera/cameraPersistence';
+import { withLiveCamera } from './camera/liveCamera';
+import { Icon } from './ui/Icon';
+import { ImportProgressPill } from './ui/ImportProgressPill';
+import { Inspector } from './ui/Inspector';
+import { LinesPanel } from './ui/LinesPanel';
+import { Toolbar } from './ui/Toolbar';
+import { TopBarActions, TopBarBrand, ViewSwitch } from './ui/TopBar';
+import { useDelayedUnmount } from './ui/useDelayedUnmount';
+import { useSaveStatus } from './ui/SaveStatusProvider';
+import { useUi } from './ui/UiProvider';
+import { useView } from './ui/ViewProvider';
+import { Workbench } from './ui/Workbench';
+import './ui/app.css';
 
 // Lazy-loaded: pulls in fflate + the GTFS parsing pipeline (packages/core's
 // model/gtfsImport.ts), used nowhere else in the app's eager import graph —
 // no reason to ship that in the main bundle for the common case where this
 // dialog is never opened. App already renders it conditionally below, the
 // shape React.lazy wants.
-const GtfsImportDialog = lazy(() => import("./ui/GtfsImportDialog").then((m) => ({ default: m.GtfsImportDialog })));
+const GtfsImportDialog = lazy(() =>
+  import('./ui/GtfsImportDialog').then((m) => ({ default: m.GtfsImportDialog })),
+);
 // Same reasoning applied to every other dialog gated behind an explicit user
 // action (activeDialog === "..."/shortcutsOpen) rather than rendered on
 // initial paint — none of these need to be in the first-paint bundle either.
-const ExportDialog = lazy(() => import("./ui/ExportDialog").then((m) => ({ default: m.ExportDialog })));
-const ImportDialog = lazy(() => import("./ui/ImportDialog").then((m) => ({ default: m.ImportDialog })));
-const ShareDialog = lazy(() => import("./ui/ShareDialog").then((m) => ({ default: m.ShareDialog })));
-const ShortcutsDialog = lazy(() => import("./ui/ShortcutsDialog").then((m) => ({ default: m.ShortcutsDialog })));
-const SystemsDialog = lazy(() => import("./ui/SystemsDialog").then((m) => ({ default: m.SystemsDialog })));
+const ExportDialog = lazy(() =>
+  import('./ui/ExportDialog').then((m) => ({ default: m.ExportDialog })),
+);
+const ImportDialog = lazy(() =>
+  import('./ui/ImportDialog').then((m) => ({ default: m.ImportDialog })),
+);
+const ShareDialog = lazy(() =>
+  import('./ui/ShareDialog').then((m) => ({ default: m.ShareDialog })),
+);
+const ShortcutsDialog = lazy(() =>
+  import('./ui/ShortcutsDialog').then((m) => ({ default: m.ShortcutsDialog })),
+);
+const SystemsDialog = lazy(() =>
+  import('./ui/SystemsDialog').then((m) => ({ default: m.SystemsDialog })),
+);
 
-const SHARE_PREFIX = "/s/";
+const SHARE_PREFIX = '/s/';
 
 // The common case by far is a chunk whose filename changed under a tab that
 // was left open, so "reload" is the actual fix rather than a shrug.
-const dialogFailureNotice = "That dialog couldn’t be loaded. Your system is safe — reload the page and try again.";
+const dialogFailureNotice =
+  'That dialog couldn’t be loaded. Your system is safe — reload the page and try again.';
 
 // Says what still works, because most of it does: the basemap is a backdrop
 // from a third-party host, and everything the user has drawn is ours.
-const basemapNotice = "The background map couldn’t be loaded, so the map behind your system is blank. Your system is unaffected and still saved.";
+const basemapNotice =
+  'The background map couldn’t be loaded, so the map behind your system is blank. Your system is unaffected and still saved.';
 
 // Deliberately says the damaged copy still exists. "Your work is gone" and
 // "your work is here but unreadable" call for very different reactions, and
 // only one of them is true.
-const corruptSystemNotice = "The system you had open couldn’t be read, so this is a new one. The damaged copy is still saved and hasn’t been deleted.";
+const corruptSystemNotice =
+  'The system you had open couldn’t be read, so this is a new one. The damaged copy is still saved and hasn’t been deleted.';
 
 // Same condition reached deliberately rather than at startup — the user
 // clicked a row and deserves to know why nothing happened.
-const corruptOpenNotice = "That system couldn’t be read, so it can’t be opened. Its data is still saved and hasn’t been deleted.";
+const corruptOpenNotice =
+  'That system couldn’t be read, so it can’t be opened. Its data is still saved and hasn’t been deleted.';
 
 interface LazyDialogProps {
   children: ReactNode;
@@ -104,7 +120,7 @@ export function App() {
   useEffect(() => {
     const path = window.location.pathname;
     if (path.startsWith(SHARE_PREFIX)) {
-      const id = path.slice(SHARE_PREFIX.length).replace(/\/$/, "");
+      const id = path.slice(SHARE_PREFIX.length).replace(/\/$/, '');
       fetchShare(id)
         .then((system) => store.getState().setSystem(system, { readOnly: true }))
         .catch((e: Error) => setLoadError(e.message))
@@ -124,9 +140,9 @@ export function App() {
     // still in storage; saying so is the difference between a bug report we
     // can act on and someone quietly leaving.
     const activeId = getActiveId();
-    const active = activeId ? loadSystemEntry(activeId) : { status: "missing" as const };
-    let system = active.status === "ok" ? active.system : null;
-    if (active.status === "corrupt") setNotice(corruptSystemNotice);
+    const active = activeId ? loadSystemEntry(activeId) : { status: 'missing' as const };
+    let system = active.status === 'ok' ? active.system : null;
+    if (active.status === 'corrupt') setNotice(corruptSystemNotice);
     if (!system) system = migrateLegacySingleSlot();
     if (!system) {
       const entries = listLibrary();
@@ -142,7 +158,7 @@ export function App() {
     report(saveToLibrary(system));
     setActiveId(system.id);
     store.getState().setSystem(system, { readOnly: false });
-    if (isBrandNew) store.getState().setTool("way");
+    if (isBrandNew) store.getState().setTool('way');
     setReady(true);
   }, [store, report]);
 
@@ -160,7 +176,10 @@ export function App() {
       // Fold in the live camera at save time: interactive pan/zoom bypasses the
       // domain store (camera/liveCamera.ts), so `snapshot.viewport` would
       // otherwise be stale. This keeps "reload restores where I left off".
-      saveTimer.current = window.setTimeout(() => report(saveToLibrary(withLiveCamera(snapshot))), 400);
+      saveTimer.current = window.setTimeout(
+        () => report(saveToLibrary(withLiveCamera(snapshot))),
+        400,
+      );
     });
     // The pending timer is part of this effect's state; leaving it to fire
     // into an unmounted tree is silent today but is still a leak.
@@ -197,7 +216,10 @@ export function App() {
   // latter. Diagram/read-only both disable drawing tools outright (see
   // Toolbar's own `locked`), so an armed tool from before switching there
   // shouldn't still claim this slot.
-  const hasSupplementalContent = selection !== null || multiSelection.length > 0 || (tool !== "select" && !readOnly && viewMode !== "diagram");
+  const hasSupplementalContent =
+    selection !== null ||
+    multiSelection.length > 0 ||
+    (tool !== 'select' && !readOnly && viewMode !== 'diagram');
 
   const dialogFailed = () => {
     closeDialog();
@@ -209,10 +231,10 @@ export function App() {
   // that already happened, this one is still happening and gets worse the
   // longer it goes unread.
   const saveMessage =
-    saveState === "full"
-      ? "Your browser’s storage is full, so your work is no longer being saved. Export this system, or delete one you don’t need, to make room."
-      : saveState === "unavailable"
-        ? "This browser isn’t saving your work — storage is unavailable here, which private browsing windows often do. Export before closing the tab."
+    saveState === 'full'
+      ? 'Your browser’s storage is full, so your work is no longer being saved. Export this system, or delete one you don’t need, to make room.'
+      : saveState === 'unavailable'
+        ? 'This browser isn’t saving your work — storage is unavailable here, which private browsing windows often do. Export before closing the tab.'
         : null;
   const banner = saveMessage ? (
     <div className="app-banner" role="alert">
@@ -231,7 +253,12 @@ export function App() {
     // of it.
     <div className="app-banner app-banner-dismissible" role="status">
       <span>{notice}</span>
-      <button type="button" className="app-banner-dismiss" onClick={() => setNotice(null)} aria-label="Dismiss">
+      <button
+        type="button"
+        className="app-banner-dismiss"
+        onClick={() => setNotice(null)}
+        aria-label="Dismiss"
+      >
         <Icon name="x" size={14} />
       </button>
     </div>
@@ -248,14 +275,14 @@ export function App() {
       {banner && (
         <div
           className={`pointer-events-none absolute inset-x-0 z-20 flex justify-center px-3 ${
-            uiHidden ? "top-3" : "top-[136px] md:top-[68px]"
+            uiHidden ? 'top-3' : 'top-[136px] md:top-[68px]'
           }`}
         >
           <div className="pointer-events-auto w-full max-w-[560px]">{banner}</div>
         </div>
       )}
       {chromeMounted && (
-        <div data-ui-state={chromeClosing ? "closed" : "open"} className="app-chrome">
+        <div data-ui-state={chromeClosing ? 'closed' : 'open'} className="app-chrome">
           <Workbench
             brand={<TopBarBrand />}
             menuPanel={<LinesPanel />}
@@ -269,37 +296,48 @@ export function App() {
         </div>
       )}
       {!chromeMounted && uiHidden && (
-        <button type="button" className="ui-restore" onClick={toggleUi} title="Show UI (\\)" aria-label={`Show UI — ${name}`}>
+        <button
+          type="button"
+          className="ui-restore"
+          onClick={toggleUi}
+          title="Show UI (\\)"
+          aria-label={`Show UI — ${name}`}
+        >
           <Icon name="sidebar" size={16} />
           <span className="ui-restore-name">{name}</span>
         </button>
       )}
       {shortcutsOpen && (
-        <LazyDialog onFailure={() => { closeShortcuts(); setNotice(dialogFailureNotice); }}>
+        <LazyDialog
+          onFailure={() => {
+            closeShortcuts();
+            setNotice(dialogFailureNotice);
+          }}
+        >
           <ShortcutsDialog onClose={closeShortcuts} />
         </LazyDialog>
       )}
-      {activeDialog === "import" && (
+      {activeDialog === 'import' && (
         <LazyDialog onFailure={dialogFailed}>
           <ImportDialog onClose={closeDialog} />
         </LazyDialog>
       )}
-      {activeDialog === "gtfs" && (
+      {activeDialog === 'gtfs' && (
         <LazyDialog onFailure={dialogFailed}>
           <GtfsImportDialog onClose={closeDialog} />
         </LazyDialog>
       )}
-      {activeDialog === "export" && (
+      {activeDialog === 'export' && (
         <LazyDialog onFailure={dialogFailed}>
           <ExportDialog onClose={closeDialog} />
         </LazyDialog>
       )}
-      {activeDialog === "share" && (
+      {activeDialog === 'share' && (
         <LazyDialog onFailure={dialogFailed}>
           <ShareDialog onClose={closeDialog} />
         </LazyDialog>
       )}
-      {activeDialog === "systems" && (
+      {activeDialog === 'systems' && (
         <LazyDialog onFailure={dialogFailed}>
           <SystemsDialog onClose={closeDialog} onCorrupt={() => setNotice(corruptOpenNotice)} />
         </LazyDialog>

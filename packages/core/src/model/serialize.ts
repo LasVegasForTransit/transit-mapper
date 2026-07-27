@@ -1,7 +1,7 @@
-import { shortId } from "./ids";
-import { LINE_COLORS, laneKind } from "./catalog";
-import { defaultProfileFor } from "./profile";
-import type { ComponentMap } from "./components";
+import { shortId } from './ids';
+import { LINE_COLORS, laneKind } from './catalog';
+import { defaultProfileFor } from './profile';
+import type { ComponentMap } from './components';
 import {
   DEFAULT_VIEWPORT,
   type ApproachControl,
@@ -24,13 +24,13 @@ import {
   type VehicleKind,
   type Way,
   type WayPointRef,
-} from "./system";
+} from './system';
 
 export function createEmptySystem(now = Date.now()): TransitSystem {
   return {
     version: 9, // v9 adds vehicleKinds (see model/system/vehicleKind.ts)
     id: shortId(),
-    name: "Untitled system",
+    name: 'Untitled system',
     viewport: { ...DEFAULT_VIEWPORT },
     createdAt: now,
     updatedAt: now,
@@ -43,7 +43,7 @@ export function createEmptySystem(now = Date.now()): TransitSystem {
     namedWays: [],
     vehicleKinds: [],
     palette: [...LINE_COLORS],
-    drivingSide: "right",
+    drivingSide: 'right',
     turnRestrictions: {},
     medians: {},
     approachControls: {},
@@ -81,7 +81,7 @@ export function createEmptySystem(now = Date.now()): TransitSystem {
  * do not make it draw correctly.
  */
 function wrapLng(lng: number): number {
-  return (((lng + 180) % 360) + 360) % 360 - 180;
+  return ((((lng + 180) % 360) + 360) % 360) - 180;
 }
 
 /** Validates and normalizes a coordinate, or null if it isn't one. Longitude
@@ -92,7 +92,7 @@ function wrapLng(lng: number): number {
 function normalizedLngLat(v: unknown): LngLat | null {
   if (!Array.isArray(v) || v.length !== 2) return null;
   const [lng, lat] = v;
-  if (typeof lng !== "number" || typeof lat !== "number") return null;
+  if (typeof lng !== 'number' || typeof lat !== 'number') return null;
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
   if (lat < -90 || lat > 90) return null;
   return [wrapLng(lng), lat];
@@ -108,12 +108,15 @@ function coords(v: unknown): LngLat[] {
   return out;
 }
 
-const GEOMETRIES = new Set(["straight", "curved", "freeform"]);
-const GRADES = new Set(["underground", "atGrade", "elevated"]);
-const strings = (v: unknown): string[] => (Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : []);
+const GEOMETRIES = new Set(['straight', 'curved', 'freeform']);
+const GRADES = new Set(['underground', 'atGrade', 'elevated']);
+const strings = (v: unknown): string[] =>
+  Array.isArray(v) ? (v.filter((x) => typeof x === 'string') as string[]) : [];
 
-const geometryOf = (v: unknown) => (typeof v === "string" && GEOMETRIES.has(v) ? v : "straight") as Way["geometry"];
-const gradeOf = (v: unknown) => (typeof v === "string" && GRADES.has(v) ? v : "atGrade") as Way["grade"];
+const geometryOf = (v: unknown) =>
+  (typeof v === 'string' && GEOMETRIES.has(v) ? v : 'straight') as Way['geometry'];
+const gradeOf = (v: unknown) =>
+  (typeof v === 'string' && GRADES.has(v) ? v : 'atGrade') as Way['grade'];
 
 // v2 had one flat "corridor" concept with no way-type distinction; the way
 // type a migrated corridor gets is inferred from the mode of a service riding
@@ -121,13 +124,13 @@ const gradeOf = (v: unknown) => (typeof v === "string" && GRADES.has(v) ? v : "a
 // types in v3 — see model/catalog.ts). Falls back to "lightRail" when no
 // service (or an unrecognized mode) claims the corridor.
 const LEGACY_MODE_WAY_TYPE: Record<string, string> = {
-  subway: "heavyRail",
-  commuterRail: "heavyRail",
-  lightRail: "lightRail",
-  tram: "lightRail",
-  monorail: "monorail",
-  brt: "road",
-  bus: "road",
+  subway: 'heavyRail',
+  commuterRail: 'heavyRail',
+  lightRail: 'lightRail',
+  tram: 'lightRail',
+  monorail: 'monorail',
+  brt: 'road',
+  bus: 'road',
 };
 
 /**
@@ -141,37 +144,39 @@ const LEGACY_MODE_WAY_TYPE: Record<string, string> = {
  *    (typed from its own mode) plus one service running over it.
  */
 export function parseSystem(input: unknown): TransitSystem {
-  if (!input || typeof input !== "object") throw new Error("System is not an object");
+  if (!input || typeof input !== 'object') throw new Error('System is not an object');
   const o = input as Record<string, unknown>;
 
-  if (Array.isArray(o.ways) || (typeof o.version === "number" && o.version >= 3)) return parseV3(o);
+  if (Array.isArray(o.ways) || (typeof o.version === 'number' && o.version >= 3)) return parseV3(o);
   return migrateFromV2(o);
 }
 
-const LANE_DIRECTIONS = new Set(["forward", "backward", "both", "none"]);
-const NODE_CONTROLS = new Set(["uncontrolled", "signal", "stop", "roundabout"]);
+const LANE_DIRECTIONS = new Set(['forward', 'backward', 'both', 'none']);
+const NODE_CONTROLS = new Set(['uncontrolled', 'signal', 'stop', 'roundabout']);
 
 /** Parse a stored cross-section (v6+); null when absent/invalid so the
  *  caller can fall back to a capacity-derived default profile. Unknown lane
  *  kinds are kept only if they parse structurally — laneKind() tolerates
  *  unknown ids at render time. */
 function parseProfile(raw: unknown): CrossSection | null {
-  if (!raw || typeof raw !== "object") return null;
+  if (!raw || typeof raw !== 'object') return null;
   const lanesRaw = (raw as Record<string, unknown>).lanes;
   if (!Array.isArray(lanesRaw)) return null;
   const lanes: LaneSpec[] = [];
   for (const l of lanesRaw) {
     const r = l as Record<string, unknown>;
-    if (typeof r.kindId !== "string") continue;
+    if (typeof r.kindId !== 'string') continue;
     const widthM =
-      typeof r.widthM === "number" && Number.isFinite(r.widthM) && r.widthM > 0
+      typeof r.widthM === 'number' && Number.isFinite(r.widthM) && r.widthM > 0
         ? r.widthM
         : laneKind(r.kindId).defaultWidthM;
     lanes.push({
-      id: typeof r.id === "string" ? r.id : shortId(),
+      id: typeof r.id === 'string' ? r.id : shortId(),
       kindId: r.kindId,
       widthM,
-      direction: (typeof r.direction === "string" && LANE_DIRECTIONS.has(r.direction) ? r.direction : "both") as LaneSpec["direction"],
+      direction: (typeof r.direction === 'string' && LANE_DIRECTIONS.has(r.direction)
+        ? r.direction
+        : 'both') as LaneSpec['direction'],
     });
   }
   return lanes.length > 0 ? { lanes } : null;
@@ -218,10 +223,10 @@ function parseNodes(raw: unknown[], ways: Way[]): Node[] {
   for (const n of raw) {
     const r = n as Record<string, unknown>;
     const nodeCoord = normalizedLngLat(r.coord);
-    if (typeof r.id !== "string" || !nodeCoord || !Array.isArray(r.refs)) continue;
+    if (typeof r.id !== 'string' || !nodeCoord || !Array.isArray(r.refs)) continue;
     const refs: WayPointRef[] = (r.refs as unknown[])
       .map((ref) => ref as Record<string, unknown>)
-      .filter((ref) => typeof ref.wayId === "string" && typeof ref.pointIndex === "number")
+      .filter((ref) => typeof ref.wayId === 'string' && typeof ref.pointIndex === 'number')
       .map((ref) => ({ wayId: ref.wayId as string, pointIndex: ref.pointIndex as number }))
       .filter((ref) => {
         const count = wayPointCounts.get(ref.wayId);
@@ -229,7 +234,9 @@ function parseNodes(raw: unknown[], ways: Way[]): Node[] {
       });
     if (refs.length < 2) continue;
     const control =
-      typeof r.control === "string" && NODE_CONTROLS.has(r.control) ? (r.control as NodeControl) : undefined;
+      typeof r.control === 'string' && NODE_CONTROLS.has(r.control)
+        ? (r.control as NodeControl)
+        : undefined;
     const connectors = parseConnectors(r.connectors, ways, refs);
     nodes.push({
       id: r.id,
@@ -246,15 +253,19 @@ function parseNodes(raw: unknown[], ways: Way[]): Node[] {
  *  is part of this junction and a lane present in that way's profile. Returns
  *  undefined when nothing valid remains (junction reverts to heuristic
  *  connectors). */
-function parseConnectors(raw: unknown, ways: Way[], refs: WayPointRef[]): LaneConnector[] | undefined {
+function parseConnectors(
+  raw: unknown,
+  ways: Way[],
+  refs: WayPointRef[],
+): LaneConnector[] | undefined {
   if (!Array.isArray(raw)) return undefined;
   const junctionWayIds = new Set(refs.map((ref) => ref.wayId));
   const laneIdsByWay = new Map(ways.map((w) => [w.id, new Set(w.profile.lanes.map((l) => l.id))]));
   const validEnd = (v: unknown): v is { wayId: string; laneId: string } => {
     const e = v as Record<string, unknown> | undefined;
     return (
-      typeof e?.wayId === "string" &&
-      typeof e?.laneId === "string" &&
+      typeof e?.wayId === 'string' &&
+      typeof e?.laneId === 'string' &&
       junctionWayIds.has(e.wayId) &&
       (laneIdsByWay.get(e.wayId)?.has(e.laneId) ?? false)
     );
@@ -264,28 +275,35 @@ function parseConnectors(raw: unknown, ways: Way[], refs: WayPointRef[]): LaneCo
     const r = c as Record<string, unknown>;
     if (validEnd(r.from) && validEnd(r.to)) {
       connectors.push({
-        from: { wayId: (r.from as { wayId: string; laneId: string }).wayId, laneId: (r.from as { wayId: string; laneId: string }).laneId },
-        to: { wayId: (r.to as { wayId: string; laneId: string }).wayId, laneId: (r.to as { wayId: string; laneId: string }).laneId },
+        from: {
+          wayId: (r.from as { wayId: string; laneId: string }).wayId,
+          laneId: (r.from as { wayId: string; laneId: string }).laneId,
+        },
+        to: {
+          wayId: (r.to as { wayId: string; laneId: string }).wayId,
+          laneId: (r.to as { wayId: string; laneId: string }).laneId,
+        },
       });
     }
   }
   return connectors.length > 0 ? connectors : undefined;
 }
 
-const DRIVING_SIDES = new Set(["left", "right"]);
-const drivingSideOf = (v: unknown): DrivingSide => (typeof v === "string" && DRIVING_SIDES.has(v) ? (v as DrivingSide) : "right");
+const DRIVING_SIDES = new Set(['left', 'right']);
+const drivingSideOf = (v: unknown): DrivingSide =>
+  typeof v === 'string' && DRIVING_SIDES.has(v) ? (v as DrivingSide) : 'right';
 
 /** Validate stored per-lane turn restrictions (v8+) — drops entries whose
  *  key doesn't name a lane that still exists, and any listed target that no
  *  longer exists. Malformed keys/entries are dropped rather than defaulted;
  *  a restriction the parser can't trust is worse than a missing one. */
 function parseTurnRestrictions(raw: unknown, ways: Way[]): ComponentMap<TurnRestriction> {
-  if (!raw || typeof raw !== "object") return {};
+  if (!raw || typeof raw !== 'object') return {};
   const wayIds = new Set(ways.map((w) => w.id));
   const laneIdsByWay = new Map(ways.map((w) => [w.id, new Set(w.profile.lanes.map((l) => l.id))]));
   const out: ComponentMap<TurnRestriction> = {};
   for (const [key, v] of Object.entries(raw as Record<string, unknown>)) {
-    const sep = key.indexOf(":");
+    const sep = key.indexOf(':');
     if (sep < 0) continue;
     const wayId = key.slice(0, sep);
     const laneId = key.slice(sep + 1);
@@ -299,14 +317,14 @@ function parseTurnRestrictions(raw: unknown, ways: Way[]): ComponentMap<TurnRest
 /** Validate stored medians (v8+) — drops entries whose NamedWay no longer
  *  exists or whose shape is invalid. */
 function parseMedians(raw: unknown, namedWays: NamedWay[]): ComponentMap<Median> {
-  if (!raw || typeof raw !== "object") return {};
+  if (!raw || typeof raw !== 'object') return {};
   const ids = new Set(namedWays.map((n) => n.id));
   const out: ComponentMap<Median> = {};
   for (const [key, v] of Object.entries(raw as Record<string, unknown>)) {
     if (!ids.has(key)) continue;
     const r = v as Record<string, unknown>;
-    if (typeof r.widthM !== "number" || !Number.isFinite(r.widthM) || r.widthM <= 0) continue;
-    if (typeof r.kindId !== "string") continue;
+    if (typeof r.widthM !== 'number' || !Number.isFinite(r.widthM) || r.widthM <= 0) continue;
+    if (typeof r.kindId !== 'string') continue;
     out[key] = { widthM: r.widthM, kindId: r.kindId };
   }
   return out;
@@ -315,17 +333,17 @@ function parseMedians(raw: unknown, namedWays: NamedWay[]): ComponentMap<Median>
 /** Validate stored per-approach control overrides (v8+) — drops entries
  *  whose way no longer exists or whose control value isn't recognized. */
 function parseApproachControls(raw: unknown, ways: Way[]): ComponentMap<ApproachControl> {
-  if (!raw || typeof raw !== "object") return {};
+  if (!raw || typeof raw !== 'object') return {};
   const wayIds = new Set(ways.map((w) => w.id));
   const out: ComponentMap<ApproachControl> = {};
   for (const [key, v] of Object.entries(raw as Record<string, unknown>)) {
-    const sep = key.lastIndexOf(":");
+    const sep = key.lastIndexOf(':');
     if (sep < 0) continue;
     const wayId = key.slice(0, sep);
     const end = key.slice(sep + 1);
-    if (!wayIds.has(wayId) || (end !== "start" && end !== "end")) continue;
+    if (!wayIds.has(wayId) || (end !== 'start' && end !== 'end')) continue;
     const r = v as Record<string, unknown>;
-    if (typeof r.control !== "string" || !NODE_CONTROLS.has(r.control)) continue;
+    if (typeof r.control !== 'string' || !NODE_CONTROLS.has(r.control)) continue;
     out[key] = { control: r.control as NodeControl };
   }
   return out;
@@ -339,7 +357,7 @@ function parseNamedWays(raw: unknown, ways: Way[]): NamedWay[] {
   const named: NamedWay[] = [];
   for (const n of raw) {
     const r = n as Record<string, unknown>;
-    if (typeof r.id !== "string" || typeof r.name !== "string") continue;
+    if (typeof r.id !== 'string' || typeof r.name !== 'string') continue;
     const memberIds = strings(r.wayIds).filter((id) => wayIds.has(id));
     if (memberIds.length > 0) named.push({ id: r.id, name: r.name, wayIds: memberIds });
   }
@@ -351,16 +369,17 @@ function parseVehicleKinds(raw: unknown): VehicleKind[] {
   const out: VehicleKind[] = [];
   for (const v of raw) {
     const r = v as Record<string, unknown>;
-    if (typeof r.id !== "string" || typeof r.modeId !== "string" || typeof r.label !== "string") continue;
-    if (typeof r.widthM !== "number" || typeof r.lengthM !== "number") continue;
+    if (typeof r.id !== 'string' || typeof r.modeId !== 'string' || typeof r.label !== 'string')
+      continue;
+    if (typeof r.widthM !== 'number' || typeof r.lengthM !== 'number') continue;
     out.push({
       id: r.id,
       modeId: r.modeId,
       label: r.label,
       widthM: r.widthM,
       lengthM: r.lengthM,
-      capacityPax: typeof r.capacityPax === "number" ? r.capacityPax : undefined,
-      topSpeedKmh: typeof r.topSpeedKmh === "number" ? r.topSpeedKmh : undefined,
+      capacityPax: typeof r.capacityPax === 'number' ? r.capacityPax : undefined,
+      topSpeedKmh: typeof r.topSpeedKmh === 'number' ? r.topSpeedKmh : undefined,
     });
   }
   return out;
@@ -376,11 +395,11 @@ function parseVehicleKinds(raw: unknown): VehicleKind[] {
  *  or ill-typed entries are dropped. Omitted entirely when empty so a default-
  *  lane pattern round-trips without a stray `lanes: {}`. */
 function parseLaneMap(raw: unknown, wayIds: string[]): Record<string, string> | undefined {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
   const allowed = new Set(wayIds);
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof v === "string" && allowed.has(k)) out[k] = v;
+    if (typeof v === 'string' && allowed.has(k)) out[k] = v;
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }
@@ -390,10 +409,15 @@ function parsePatterns(raw: unknown, legacyWayIds: unknown): Pattern[] {
     return raw
       .map((p): Pattern | null => {
         const r = p as Record<string, unknown>;
-        if (typeof r.id !== "string") return null;
+        if (typeof r.id !== 'string') return null;
         const wayIds = strings(r.wayIds);
         const lanes = parseLaneMap(r.lanes, wayIds);
-        return { id: r.id, wayIds, name: typeof r.name === "string" ? r.name : undefined, ...(lanes ? { lanes } : {}) };
+        return {
+          id: r.id,
+          wayIds,
+          name: typeof r.name === 'string' ? r.name : undefined,
+          ...(lanes ? { lanes } : {}),
+        };
       })
       .filter((p): p is Pattern => p !== null);
   }
@@ -401,7 +425,7 @@ function parsePatterns(raw: unknown, legacyWayIds: unknown): Pattern[] {
   return wayIds.length > 0 ? [{ id: shortId(), wayIds }] : [];
 }
 
-const SCHEDULE_DAY_SCOPES = new Set(["daily", "weekday", "weekend"]);
+const SCHEDULE_DAY_SCOPES = new Set(['daily', 'weekday', 'weekend']);
 
 /** v7+ stores a service's optional detailed `schedule` (see system.ts's
  *  SchedulePeriod comment); absent on anything older, which just keeps
@@ -413,11 +437,21 @@ function parseSchedule(raw: unknown): SchedulePeriod[] | undefined {
   const periods = raw
     .map((p): SchedulePeriod | null => {
       const r = p as Record<string, unknown>;
-      if (typeof r.id !== "string" || typeof r.label !== "string") return null;
-      if (typeof r.spanStart !== "string" || typeof r.spanEnd !== "string") return null;
-      if (typeof r.frequencyMinutes !== "number" || r.frequencyMinutes <= 0) return null;
-      const days = typeof r.days === "string" && SCHEDULE_DAY_SCOPES.has(r.days) ? (r.days as ScheduleDayScope) : "daily";
-      return { id: r.id, label: r.label, days, spanStart: r.spanStart, spanEnd: r.spanEnd, frequencyMinutes: r.frequencyMinutes };
+      if (typeof r.id !== 'string' || typeof r.label !== 'string') return null;
+      if (typeof r.spanStart !== 'string' || typeof r.spanEnd !== 'string') return null;
+      if (typeof r.frequencyMinutes !== 'number' || r.frequencyMinutes <= 0) return null;
+      const days =
+        typeof r.days === 'string' && SCHEDULE_DAY_SCOPES.has(r.days)
+          ? (r.days as ScheduleDayScope)
+          : 'daily';
+      return {
+        id: r.id,
+        label: r.label,
+        days,
+        spanStart: r.spanStart,
+        spanEnd: r.spanEnd,
+        frequencyMinutes: r.frequencyMinutes,
+      };
     })
     .filter((p): p is SchedulePeriod => p !== null);
   return periods.length > 0 ? periods : undefined;
@@ -432,12 +466,13 @@ function parseV3(o: Record<string, unknown>): TransitSystem {
 
   const ways: Way[] = rawWays.map((w) => {
     const r = w as Record<string, unknown>;
-    if (typeof r.id !== "string") throw new Error("Bad way");
-    const typeId = typeof r.typeId === "string" ? r.typeId : "rail";
+    if (typeof r.id !== 'string') throw new Error('Bad way');
+    const typeId = typeof r.typeId === 'string' ? r.typeId : 'rail';
     // v6 stores the cross-section; v3–v5 stored a scalar capacity — migrate
     // it into an equivalent default profile (lane split per profile.ts).
     const profile =
-      parseProfile(r.profile) ?? defaultProfileFor(typeId, typeof r.capacity === "number" ? r.capacity : undefined);
+      parseProfile(r.profile) ??
+      defaultProfileFor(typeId, typeof r.capacity === 'number' ? r.capacity : undefined);
     return {
       id: r.id,
       typeId,
@@ -445,24 +480,24 @@ function parseV3(o: Record<string, unknown>): TransitSystem {
       geometry: geometryOf(r.geometry),
       grade: gradeOf(r.grade),
       profile,
-      classId: typeof r.classId === "string" ? r.classId : undefined,
-      source: typeof r.source === "string" ? r.source : undefined,
+      classId: typeof r.classId === 'string' ? r.classId : undefined,
+      source: typeof r.source === 'string' ? r.source : undefined,
     };
   });
 
   const services: Service[] = rawServices.map((s) => {
     const r = s as Record<string, unknown>;
-    if (typeof r.id !== "string") throw new Error("Bad service");
+    if (typeof r.id !== 'string') throw new Error('Bad service');
     return {
       id: r.id,
-      name: typeof r.name === "string" ? r.name : "Service",
-      modeId: typeof r.modeId === "string" ? r.modeId : "bus",
-      color: typeof r.color === "string" ? r.color : "#2ea44f",
+      name: typeof r.name === 'string' ? r.name : 'Service',
+      modeId: typeof r.modeId === 'string' ? r.modeId : 'bus',
+      color: typeof r.color === 'string' ? r.color : '#2ea44f',
       patterns: parsePatterns(r.patterns, r.wayIds),
-      vehicleKindId: typeof r.vehicleKindId === "string" ? r.vehicleKindId : undefined,
-      frequencyMinutes: typeof r.frequencyMinutes === "number" ? r.frequencyMinutes : undefined,
-      spanStart: typeof r.spanStart === "string" ? r.spanStart : undefined,
-      spanEnd: typeof r.spanEnd === "string" ? r.spanEnd : undefined,
+      vehicleKindId: typeof r.vehicleKindId === 'string' ? r.vehicleKindId : undefined,
+      frequencyMinutes: typeof r.frequencyMinutes === 'number' ? r.frequencyMinutes : undefined,
+      spanStart: typeof r.spanStart === 'string' ? r.spanStart : undefined,
+      spanEnd: typeof r.spanEnd === 'string' ? r.spanEnd : undefined,
       schedule: parseSchedule(r.schedule),
     };
   });
@@ -471,25 +506,32 @@ function parseV3(o: Record<string, unknown>): TransitSystem {
 
   const facilities = rawFacilities.map((f) => {
     const r = f as Record<string, unknown>;
-    if (typeof r.id !== "string" || typeof r.typeId !== "string") throw new Error("Bad facility");
+    if (typeof r.id !== 'string' || typeof r.typeId !== 'string') throw new Error('Bad facility');
     const geometry = normalizedLngLat(r.geometry) ?? coords(r.geometry);
-    return { id: r.id, typeId: r.typeId, name: typeof r.name === "string" ? r.name : undefined, geometry };
+    return {
+      id: r.id,
+      typeId: r.typeId,
+      name: typeof r.name === 'string' ? r.name : undefined,
+      geometry,
+    };
   });
 
   const groups = rawGroups.map((g) => {
     const r = g as Record<string, unknown>;
-    if (typeof r.id !== "string") throw new Error("Bad group");
+    if (typeof r.id !== 'string') throw new Error('Bad group');
     const footprint = Array.isArray(r.footprint) ? coords(r.footprint) : undefined;
     return {
       id: r.id,
-      name: typeof r.name === "string" ? r.name : undefined,
+      name: typeof r.name === 'string' ? r.name : undefined,
       memberIds: strings(r.memberIds),
       ...(footprint && footprint.length > 0 ? { footprint } : {}),
-      color: typeof r.color === "string" ? r.color : undefined,
+      color: typeof r.color === 'string' ? r.color : undefined,
     };
   });
 
-  const nodes: Node[] = Array.isArray(o.nodes) ? parseNodes(o.nodes, ways) : deriveNodesFromWays(ways);
+  const nodes: Node[] = Array.isArray(o.nodes)
+    ? parseNodes(o.nodes, ways)
+    : deriveNodesFromWays(ways);
   const namedWays = parseNamedWays(o.namedWays, ways);
 
   return finish(o, { ways, services, stations, facilities, groups, nodes, namedWays });
@@ -498,27 +540,37 @@ function parseV3(o: Record<string, unknown>): TransitSystem {
 function parseStation(s: unknown): Station {
   const r = s as Record<string, unknown>;
   const stationCoord = normalizedLngLat(r.coord);
-  if (typeof r.id !== "string" || !stationCoord) throw new Error("Bad station");
+  if (typeof r.id !== 'string' || !stationCoord) throw new Error('Bad station');
   // wayId (v3), corridorId (v2), lineId (v1) all name the same anchor target.
   const a = r.anchor as Record<string, unknown> | undefined;
   const anchorId =
-    typeof a?.wayId === "string" ? a.wayId : typeof a?.corridorId === "string" ? a.corridorId : typeof a?.lineId === "string" ? a.lineId : undefined;
-  const anchor = anchorId && typeof a?.t === "number" ? { wayId: anchorId, t: a.t } : undefined;
+    typeof a?.wayId === 'string'
+      ? a.wayId
+      : typeof a?.corridorId === 'string'
+        ? a.corridorId
+        : typeof a?.lineId === 'string'
+          ? a.lineId
+          : undefined;
+  const anchor = anchorId && typeof a?.t === 'number' ? { wayId: anchorId, t: a.t } : undefined;
   const footprint = Array.isArray(r.footprint) ? coords(r.footprint) : undefined;
   const platforms = Array.isArray(r.platforms)
     ? (r.platforms as unknown[]).map((p) => {
         const pr = p as Record<string, unknown>;
-        return { id: typeof pr.id === "string" ? pr.id : shortId(), points: coords(pr.points), edges: typeof pr.edges === "number" ? pr.edges : undefined };
+        return {
+          id: typeof pr.id === 'string' ? pr.id : shortId(),
+          points: coords(pr.points),
+          edges: typeof pr.edges === 'number' ? pr.edges : undefined,
+        };
       })
     : undefined;
   return {
     id: r.id,
-    name: typeof r.name === "string" ? r.name : undefined,
+    name: typeof r.name === 'string' ? r.name : undefined,
     coord: stationCoord,
     ...(anchor ? { anchor } : {}),
     ...(footprint ? { footprint } : {}),
     ...(platforms ? { platforms } : {}),
-    ...(typeof r.dwellSeconds === "number" ? { dwellSeconds: r.dwellSeconds } : {}),
+    ...(typeof r.dwellSeconds === 'number' ? { dwellSeconds: r.dwellSeconds } : {}),
     ...(r.majorStop === true ? { majorStop: true } : {}),
   };
 }
@@ -527,16 +579,20 @@ function parseStation(s: unknown): Station {
 function wayTypeForLegacyCorridor(corridorId: string, rawServices: unknown[]): string {
   for (const s of rawServices) {
     const r = s as Record<string, unknown>;
-    if (typeof r.mode === "string" && Array.isArray(r.corridorIds) && r.corridorIds.includes(corridorId)) {
+    if (
+      typeof r.mode === 'string' &&
+      Array.isArray(r.corridorIds) &&
+      r.corridorIds.includes(corridorId)
+    ) {
       const typeId = LEGACY_MODE_WAY_TYPE[r.mode];
       if (typeId) return typeId;
     }
   }
-  return "lightRail";
+  return 'lightRail';
 }
 
 // v2 road classes become the "road" way type's facility classes 1:1.
-const ROAD_CLASS_IDS = new Set(["arterial", "collector", "local", "transitway"]);
+const ROAD_CLASS_IDS = new Set(['arterial', 'collector', 'local', 'transitway']);
 
 function migrateFromV2(o: Record<string, unknown>): TransitSystem {
   const rawStations = Array.isArray(o.stations) ? o.stations : [];
@@ -551,7 +607,7 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
   if (rawCorridors.length > 0 || rawServices.length > 0) {
     for (const c of rawCorridors) {
       const r = c as Record<string, unknown>;
-      if (typeof r.id !== "string") throw new Error("Bad corridor");
+      if (typeof r.id !== 'string') throw new Error('Bad corridor');
       const typeId = wayTypeForLegacyCorridor(r.id, rawServices);
       ways.push({
         id: r.id,
@@ -564,12 +620,12 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
     }
     for (const s of rawServices) {
       const r = s as Record<string, unknown>;
-      if (typeof r.id !== "string") throw new Error("Bad service");
+      if (typeof r.id !== 'string') throw new Error('Bad service');
       services.push({
         id: r.id,
-        name: typeof r.name === "string" ? r.name : "Service",
-        modeId: typeof r.mode === "string" ? r.mode : "bus",
-        color: typeof r.color === "string" ? r.color : "#2ea44f",
+        name: typeof r.name === 'string' ? r.name : 'Service',
+        modeId: typeof r.mode === 'string' ? r.mode : 'bus',
+        color: typeof r.color === 'string' ? r.color : '#2ea44f',
         patterns: parsePatterns(undefined, r.corridorIds),
       });
     }
@@ -579,11 +635,11 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
     for (const s of rawStations) {
       const r = s as Record<string, unknown>;
       const legacyCoord = normalizedLngLat(r.coord);
-      if (typeof r.id === "string" && legacyCoord) legacyStationCoord.set(r.id, legacyCoord);
+      if (typeof r.id === 'string' && legacyCoord) legacyStationCoord.set(r.id, legacyCoord);
     }
     for (const l of rawLines) {
       const r = l as Record<string, unknown>;
-      if (typeof r.id !== "string") continue;
+      if (typeof r.id !== 'string') continue;
       let points = coords(r.points);
       if (points.length === 0 && Array.isArray(r.shape)) points = coords(r.shape);
       if (points.length === 0 && Array.isArray(r.stationIds)) {
@@ -591,13 +647,20 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
           .map((id) => legacyStationCoord.get(id))
           .filter((c): c is LngLat => !!c);
       }
-      const typeId = (typeof r.mode === "string" && LEGACY_MODE_WAY_TYPE[r.mode]) || "lightRail";
-      ways.push({ id: r.id, typeId, points, geometry: geometryOf(r.geometry), grade: gradeOf(r.grade), profile: defaultProfileFor(typeId) });
+      const typeId = (typeof r.mode === 'string' && LEGACY_MODE_WAY_TYPE[r.mode]) || 'lightRail';
+      ways.push({
+        id: r.id,
+        typeId,
+        points,
+        geometry: geometryOf(r.geometry),
+        grade: gradeOf(r.grade),
+        profile: defaultProfileFor(typeId),
+      });
       services.push({
         id: shortId(),
-        name: typeof r.name === "string" ? r.name : "Service",
-        modeId: typeof r.mode === "string" ? r.mode : "bus",
-        color: typeof r.color === "string" ? r.color : "#2ea44f",
+        name: typeof r.name === 'string' ? r.name : 'Service',
+        modeId: typeof r.mode === 'string' ? r.mode : 'bus',
+        color: typeof r.color === 'string' ? r.color : '#2ea44f',
         patterns: [{ id: shortId(), wayIds: [r.id] }],
       });
     }
@@ -606,15 +669,16 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
   // v2 roads become "road" ways carrying no service (bare infrastructure).
   for (const rd of rawRoads) {
     const r = rd as Record<string, unknown>;
-    if (typeof r.id !== "string" || !Array.isArray(r.coords)) throw new Error("Bad road");
-    const classId = typeof r.class === "string" && ROAD_CLASS_IDS.has(r.class) ? r.class : "arterial";
+    if (typeof r.id !== 'string' || !Array.isArray(r.coords)) throw new Error('Bad road');
+    const classId =
+      typeof r.class === 'string' && ROAD_CLASS_IDS.has(r.class) ? r.class : 'arterial';
     ways.push({
       id: r.id,
-      typeId: "road",
+      typeId: 'road',
       points: coords(r.coords),
-      geometry: "straight",
-      grade: "atGrade",
-      profile: defaultProfileFor("road"),
+      geometry: 'straight',
+      grade: 'atGrade',
+      profile: defaultProfileFor('road'),
       classId,
     });
   }
@@ -622,33 +686,46 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
   // parseStation already resolves v2's corridorId / v1's lineId onto wayId.
   const stations: Station[] = rawStations.map((s) => parseStation(s));
 
-  return finish(o, { ways, services, stations, facilities: [], groups: [], nodes: deriveNodesFromWays(ways), namedWays: [] });
+  return finish(o, {
+    ways,
+    services,
+    stations,
+    facilities: [],
+    groups: [],
+    nodes: deriveNodesFromWays(ways),
+    namedWays: [],
+  });
 }
 
 function finish(
   o: Record<string, unknown>,
-  parts: Pick<TransitSystem, "ways" | "services" | "stations" | "facilities" | "groups" | "nodes" | "namedWays">,
+  parts: Pick<
+    TransitSystem,
+    'ways' | 'services' | 'stations' | 'facilities' | 'groups' | 'nodes' | 'namedWays'
+  >,
 ): TransitSystem {
   const vp = o.viewport as Record<string, unknown> | undefined;
   // Normalized, not merely validated. A predicate that answers "is this a
   // coordinate?" while handing back the caller's original value is a guard
   // that lies: it would accept a centre of [1e9, 45] and store it verbatim.
   const center = vp ? normalizedLngLat(vp.center) : null;
-  const viewport = center && typeof vp?.zoom === "number" ? { center, zoom: vp.zoom } : { ...DEFAULT_VIEWPORT };
+  const viewport =
+    center && typeof vp?.zoom === 'number' ? { center, zoom: vp.zoom } : { ...DEFAULT_VIEWPORT };
 
-  const palette = Array.isArray(o.palette) && o.palette.every((c) => typeof c === "string")
-    ? (o.palette as string[])
-    : [...LINE_COLORS];
+  const palette =
+    Array.isArray(o.palette) && o.palette.every((c) => typeof c === 'string')
+      ? (o.palette as string[])
+      : [...LINE_COLORS];
 
   const now = Date.now();
   return {
     version: 9,
-    id: typeof o.id === "string" ? o.id : shortId(),
-    name: typeof o.name === "string" ? o.name : "Untitled system",
-    description: typeof o.description === "string" ? o.description : undefined,
+    id: typeof o.id === 'string' ? o.id : shortId(),
+    name: typeof o.name === 'string' ? o.name : 'Untitled system',
+    description: typeof o.description === 'string' ? o.description : undefined,
     viewport,
-    createdAt: typeof o.createdAt === "number" ? o.createdAt : now,
-    updatedAt: typeof o.updatedAt === "number" ? o.updatedAt : now,
+    createdAt: typeof o.createdAt === 'number' ? o.createdAt : now,
+    updatedAt: typeof o.updatedAt === 'number' ? o.updatedAt : now,
     ...parts,
     vehicleKinds: parseVehicleKinds(o.vehicleKinds),
     palette,

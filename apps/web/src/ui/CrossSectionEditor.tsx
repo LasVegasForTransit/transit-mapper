@@ -4,21 +4,37 @@
 // presets in feet, direction) and whole-profile operations (presets, flip,
 // one-way ⇄ two-way). All edits go through the store's setWayProfile /
 // applyProfilePreset, so undo/redo and connector pruning come for free.
-import { useState } from "react";
-import { useEditor } from "../editor/EditorProvider";
-import { LANE_KINDS, laneKind, profilePresetsForWayType, wayType } from "@transitmapper/core/model/catalog";
-import { flipProfile, isOneWay, makeOneWay, makeTwoWay, profileWidthM } from "@transitmapper/core/model/profile";
-import { shortId } from "@transitmapper/core/model/ids";
-import { getComponent, laneRefKey } from "@transitmapper/core/model/components";
-import type { CrossSection, LaneDirection, LaneSpec } from "@transitmapper/core/model/system";
-import { laneRender } from "@transitmapper/core/style/catalogStyle";
-import { Icon } from "./Icon";
+import { useState } from 'react';
+import { useEditor } from '../editor/EditorProvider';
+import {
+  LANE_KINDS,
+  laneKind,
+  profilePresetsForWayType,
+  wayType,
+} from '@transitmapper/core/model/catalog';
+import {
+  flipProfile,
+  isOneWay,
+  makeOneWay,
+  makeTwoWay,
+  profileWidthM,
+} from '@transitmapper/core/model/profile';
+import { shortId } from '@transitmapper/core/model/ids';
+import { getComponent, laneRefKey } from '@transitmapper/core/model/components';
+import type { CrossSection, LaneDirection, LaneSpec } from '@transitmapper/core/model/system';
+import { laneRender } from '@transitmapper/core/style/catalogStyle';
+import { Icon } from './Icon';
 
 const FT = 0.3048;
 const ftLabel = (m: number) => `${Math.round(m / FT)}′`;
 
-const DIRECTION_GLYPH: Record<LaneDirection, string> = { forward: "↑", backward: "↓", both: "⇅", none: "·" };
-const DIRECTION_CYCLE: LaneDirection[] = ["forward", "backward", "both"];
+const DIRECTION_GLYPH: Record<LaneDirection, string> = {
+  forward: '↑',
+  backward: '↓',
+  both: '⇅',
+  none: '·',
+};
+const DIRECTION_CYCLE: LaneDirection[] = ['forward', 'backward', 'both'];
 
 export interface CrossSectionEditorProps {
   wayId: string;
@@ -51,7 +67,7 @@ export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps)
       id: shortId(),
       kindId,
       widthM: selected?.widthM ?? laneKind(kindId).defaultWidthM,
-      direction: selected?.direction ?? "forward",
+      direction: selected?.direction ?? 'forward',
     };
     const at = selectedIndex >= 0 ? selectedIndex + 1 : profile.lanes.length;
     update([...profile.lanes.slice(0, at), lane, ...profile.lanes.slice(at)]);
@@ -88,7 +104,7 @@ export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps)
       {!readOnly && presets.length > 0 && (
         <select
           className="opt-select"
-          style={{ width: "100%", marginBottom: 6 }}
+          style={{ width: '100%', marginBottom: 6 }}
           aria-label="Apply a cross-section preset"
           value=""
           onChange={(e) => {
@@ -113,15 +129,17 @@ export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps)
           return (
             <button
               key={l.id}
-              className={`xs-lane ${selected?.id === l.id ? "active" : ""}`}
+              className={`xs-lane ${selected?.id === l.id ? 'active' : ''}`}
               style={{ flexGrow: l.widthM, background: laneRender(l.kindId).color }}
               role="option"
               aria-selected={selected?.id === l.id}
-              title={`${kind.label} · ${ftLabel(l.widthM)}${restricted ? " · turn-restricted (edit at the junction)" : ""}`}
+              title={`${kind.label} · ${ftLabel(l.widthM)}${restricted ? ' · turn-restricted (edit at the junction)' : ''}`}
               disabled={readOnly}
               onClick={() => setSelectedLaneId(selected?.id === l.id ? null : l.id)}
             >
-              <span className="xs-lane-glyph">{kind.directional ? DIRECTION_GLYPH[l.direction] : ""}</span>
+              <span className="xs-lane-glyph">
+                {kind.directional ? DIRECTION_GLYPH[l.direction] : ''}
+              </span>
               <span className="xs-lane-width">
                 {ftLabel(l.widthM)}
                 {restricted && <Icon name="lock" size={10} style={{ marginLeft: 2 }} />}
@@ -131,7 +149,8 @@ export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps)
         })}
       </div>
       <div className="xs-total">
-        {profile.lanes.length} lanes · {ftLabel(profileWidthM(profile))} ({profileWidthM(profile).toFixed(1)} m) total
+        {profile.lanes.length} lanes · {ftLabel(profileWidthM(profile))} (
+        {profileWidthM(profile).toFixed(1)} m) total
       </div>
 
       {!readOnly && selected && selectedKind && (
@@ -158,16 +177,26 @@ export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps)
             {selectedKind.widthPresetsM.map((w) => (
               <button
                 key={w}
-                className={`chip ${Math.abs(selected.widthM - w) < 0.01 ? "active" : ""}`}
+                className={`chip ${Math.abs(selected.widthM - w) < 0.01 ? 'active' : ''}`}
                 onClick={() => updateLane(selected.id, { widthM: w })}
               >
                 {ftLabel(w)}
               </button>
             ))}
-            <button className="chip" title="Narrower (1 ft)" onClick={() => updateLane(selected.id, { widthM: Math.max(FT, selected.widthM - FT) })}>
+            <button
+              className="chip"
+              title="Narrower (1 ft)"
+              onClick={() =>
+                updateLane(selected.id, { widthM: Math.max(FT, selected.widthM - FT) })
+              }
+            >
               −
             </button>
-            <button className="chip" title="Wider (1 ft)" onClick={() => updateLane(selected.id, { widthM: selected.widthM + FT })}>
+            <button
+              className="chip"
+              title="Wider (1 ft)"
+              onClick={() => updateLane(selected.id, { widthM: selected.widthM + FT })}
+            >
               +
             </button>
           </div>
@@ -178,14 +207,29 @@ export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps)
                 {DIRECTION_GLYPH[selected.direction]} Direction
               </button>
             )}
-            <button className="ghost-btn" disabled={selectedIndex <= 0} onClick={() => moveLane(-1)} title="Move left">
+            <button
+              className="ghost-btn"
+              disabled={selectedIndex <= 0}
+              onClick={() => moveLane(-1)}
+              title="Move left"
+            >
               ⟵
             </button>
-            <button className="ghost-btn" disabled={selectedIndex >= profile.lanes.length - 1} onClick={() => moveLane(1)} title="Move right">
+            <button
+              className="ghost-btn"
+              disabled={selectedIndex >= profile.lanes.length - 1}
+              onClick={() => moveLane(1)}
+              title="Move right"
+            >
               ⟶
             </button>
-            <button className="ghost-btn" disabled={profile.lanes.length <= 1} onClick={removeLane} title="Delete lane">
-              <Icon name="plus" size={13} style={{ transform: "rotate(45deg)" }} />
+            <button
+              className="ghost-btn"
+              disabled={profile.lanes.length <= 1}
+              onClick={removeLane}
+              title="Delete lane"
+            >
+              <Icon name="plus" size={13} style={{ transform: 'rotate(45deg)' }} />
             </button>
           </div>
         </div>
@@ -196,14 +240,24 @@ export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps)
           <button className="ghost-btn" onClick={addLane}>
             <Icon name="plus" size={13} /> Add lane
           </button>
-          <button className="ghost-btn" onClick={() => setProfile(flipProfile(profile))} title="Reverse the whole cross-section">
+          <button
+            className="ghost-btn"
+            onClick={() => setProfile(flipProfile(profile))}
+            title="Reverse the whole cross-section"
+          >
             Flip
           </button>
           <button
             className="ghost-btn"
-            onClick={() => setProfile(isOneWay(profile) ? makeTwoWay(profile, drivingSide) : makeOneWay(profile, "forward"))}
+            onClick={() =>
+              setProfile(
+                isOneWay(profile)
+                  ? makeTwoWay(profile, drivingSide)
+                  : makeOneWay(profile, 'forward'),
+              )
+            }
           >
-            {isOneWay(profile) ? "Make two-way" : "Make one-way"}
+            {isOneWay(profile) ? 'Make two-way' : 'Make one-way'}
           </button>
         </div>
       )}

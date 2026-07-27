@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * Keeps a piece of UI mounted for `exitMs` after `active` goes false, so a
@@ -12,7 +12,10 @@ import { useEffect, useRef, useState } from "react";
  * a CSS class/data-attribute off of; `mounted` stays true until `exitMs`
  * later, when the caller should actually stop rendering.
  */
-export function useDelayedUnmount(active: boolean, exitMs: number): { mounted: boolean; closing: boolean } {
+export function useDelayedUnmount(
+  active: boolean,
+  exitMs: number,
+): { mounted: boolean; closing: boolean } {
   const [mounted, setMounted] = useState(active);
   const [closing, setClosing] = useState(false);
   const everActive = useRef(active);

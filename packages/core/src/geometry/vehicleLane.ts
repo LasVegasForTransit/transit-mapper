@@ -6,10 +6,10 @@
 // needs wayLaneGeometry (geometry/streets.ts), which itself depends on
 // model/ — a model/ file reaching back into geometry/ would be circular.
 
-import { haversineMeters, resolveWayPath, wayById } from "../model/geo";
-import { mode } from "../model/catalog";
-import type { LaneDirection, LngLat, Pattern, Way } from "../model/system";
-import { wayLaneGeometry, type LanePath } from "./streets";
+import { haversineMeters, resolveWayPath, wayById } from '../model/geo';
+import { mode } from '../model/catalog';
+import type { LaneDirection, LngLat, Pattern, Way } from '../model/system';
+import { wayLaneGeometry, type LanePath } from './streets';
 
 /** One way in a pattern's sequence, with which direction (relative to the
  *  way's own stored point order) the pattern travels it. Nothing in the
@@ -34,7 +34,8 @@ export function patternWayTraversals(ways: Way[], pattern: Pattern): WayTraversa
     if (raw.length < 2) continue;
     const start = raw[0];
     const end = raw[raw.length - 1];
-    const forward: boolean = prevEnd === null || haversineMeters(prevEnd, start) <= haversineMeters(prevEnd, end);
+    const forward: boolean =
+      prevEnd === null || haversineMeters(prevEnd, start) <= haversineMeters(prevEnd, end);
     out.push({ way, forward });
     prevEnd = forward ? end : start;
   }
@@ -61,8 +62,10 @@ function orientedLanePath(lane: LanePath, forward: boolean): LngLat[] {
  */
 export function selectVehicleLane(way: Way, forward: boolean, modeId: string): LanePath | null {
   const geometry = wayLaneGeometry(way);
-  const direction: LaneDirection = forward ? "forward" : "backward";
-  const candidates = geometry.lanes.filter((l) => l.direction === direction || l.direction === "both");
+  const direction: LaneDirection = forward ? 'forward' : 'backward';
+  const candidates = geometry.lanes.filter(
+    (l) => l.direction === direction || l.direction === 'both',
+  );
   if (candidates.length === 0) return null;
 
   const preferredKindIds = mode(modeId).preferredLaneKindIds ?? [];

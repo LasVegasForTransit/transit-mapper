@@ -7,9 +7,9 @@
 
 /** Base64url with padding stripped, per RFC 4648 §5. */
 export function toBase64Url(bytes: Uint8Array): string {
-  let binary = "";
+  let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 /** A cryptographically random, URL-safe token. 32 bytes is 256 bits. */
@@ -20,14 +20,14 @@ export function generateToken(byteLength = 32): string {
 }
 
 async function sha256(input: string): Promise<Uint8Array> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
   return new Uint8Array(digest);
 }
 
 /** Lowercase hex SHA-256. This is what gets stored; raw tokens never are. */
 export async function hashToken(token: string): Promise<string> {
   const bytes = await sha256(token);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /** Base64url SHA-256, the encoding PKCE requires for a code challenge. */

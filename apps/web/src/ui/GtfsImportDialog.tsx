@@ -1,8 +1,8 @@
-import { useEditor } from "../editor/EditorProvider";
-import { streamRtcGtfsBatches } from "@transitmapper/core/model/gtfsImport";
-import { Icon } from "./Icon";
-import { Modal } from "./Modal";
-import { useImportProgress } from "./UiProvider";
+import { useEditor } from '../editor/EditorProvider';
+import { streamRtcGtfsBatches } from '@transitmapper/core/model/gtfsImport';
+import { Icon } from './Icon';
+import { Modal } from './Modal';
+import { useImportProgress } from './UiProvider';
 
 interface GtfsImportDialogProps {
   onClose: () => void;
@@ -30,18 +30,38 @@ export function GtfsImportDialog({ onClose }: GtfsImportDialogProps) {
           importGtfs(pieces);
           importedServiceIds.push(...pieces.services.map((s) => s.id));
           routesTotal = total;
-          setImportProgress({ label: "Importing RTC system", done: routesDone, total, state: "loading" });
+          setImportProgress({
+            label: 'Importing RTC system',
+            done: routesDone,
+            total,
+            state: 'loading',
+          });
         }
         // Corridor conflation: many of these routes share the same physical
         // streets — run once, over everything just imported, rather than per
         // batch, so routes sharing a trunk corridor conflate onto shared
         // infrastructure even when they land in different batches (batching
         // is by route order for progressive UI, not by geography).
-        setImportProgress({ label: "Merging shared infrastructure…", done: routesTotal, total: routesTotal, state: "loading" });
+        setImportProgress({
+          label: 'Merging shared infrastructure…',
+          done: routesTotal,
+          total: routesTotal,
+          state: 'loading',
+        });
         reconcileImportedServices(importedServiceIds);
-        setImportProgress({ label: `Imported RTC's ${routesTotal} routes`, done: routesTotal, total: routesTotal, state: "done" });
+        setImportProgress({
+          label: `Imported RTC's ${routesTotal} routes`,
+          done: routesTotal,
+          total: routesTotal,
+          state: 'done',
+        });
       } catch (e) {
-        setImportProgress({ label: e instanceof Error ? e.message : "RTC import failed.", done: 0, total: 0, state: "error" });
+        setImportProgress({
+          label: e instanceof Error ? e.message : 'RTC import failed.',
+          done: 0,
+          total: 0,
+          state: 'error',
+        });
       } finally {
         setTimeout(() => setImportProgress(null), 4000);
       }
@@ -56,7 +76,7 @@ export function GtfsImportDialog({ onClose }: GtfsImportDialogProps) {
       footer={
         <button
           className="primary-btn"
-          style={{ marginTop: 16, width: "100%", justifyContent: "center" }}
+          style={{ marginTop: 16, width: '100%', justifyContent: 'center' }}
           onClick={run}
         >
           <Icon name="download" size={18} /> Import into this system

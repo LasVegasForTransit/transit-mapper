@@ -1,25 +1,25 @@
-import { useEditor, useEditorStore } from "../editor/EditorProvider";
-import { forkSystem } from "@transitmapper/core/model/serialize";
-import { blurOnEnter } from "./formUtils";
-import { DropdownMenu, DropdownMenuItem } from "./DropdownMenu";
-import { DrivingSidePopover } from "./DrivingSidePopover";
-import { ExportSplitButton } from "./ExportSplitButton";
-import { FileMenu } from "./FileMenu";
-import { IconButton } from "./IconButton";
-import { IssuesPopover } from "./IssuesPopover";
-import { LayersPopover } from "./LayersPopover";
-import { useUi } from "./UiProvider";
-import { useView, type ViewMode } from "./ViewProvider";
-import { Icon } from "./Icon";
+import { useEditor, useEditorStore } from '../editor/EditorProvider';
+import { forkSystem } from '@transitmapper/core/model/serialize';
+import { blurOnEnter } from './formUtils';
+import { DropdownMenu, DropdownMenuItem } from './DropdownMenu';
+import { DrivingSidePopover } from './DrivingSidePopover';
+import { ExportSplitButton } from './ExportSplitButton';
+import { FileMenu } from './FileMenu';
+import { IconButton } from './IconButton';
+import { IssuesPopover } from './IssuesPopover';
+import { LayersPopover } from './LayersPopover';
+import { useUi } from './UiProvider';
+import { useView, type ViewMode } from './ViewProvider';
+import { Icon } from './Icon';
 
 const VIEW_MODES: { mode: ViewMode; label: string }[] = [
-  { mode: "network", label: "Network" },
-  { mode: "infrastructure", label: "Infrastructure" },
-  { mode: "diagram", label: "Diagram" },
+  { mode: 'network', label: 'Network' },
+  { mode: 'infrastructure', label: 'Infrastructure' },
+  { mode: 'diagram', label: 'Diagram' },
 ];
 
-const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
-const MOD_LABEL = IS_MAC ? "⌘" : "Ctrl";
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
+const MOD_LABEL = IS_MAC ? '⌘' : 'Ctrl';
 
 /** Persistent state of the canvas, not a transient action — kept visually
  *  distinct from TopBarActions' button cluster. Desktop: Workbench's own
@@ -32,7 +32,7 @@ export function ViewSwitch() {
       {VIEW_MODES.map((v) => (
         <button
           key={v.mode}
-          className={`seg ${viewMode === v.mode ? "active" : ""}`}
+          className={`seg ${viewMode === v.mode ? 'active' : ''}`}
           aria-pressed={viewMode === v.mode}
           onClick={() => setViewMode(v.mode)}
         >
@@ -63,12 +63,18 @@ export function TopBarBrand() {
         <FileMenu />
       )}
       <span className="brand-hide-ui">
-        <IconButton icon="sidebar" size={17} label={"Hide UI (\\)"} onClick={toggleUi} />
+        <IconButton icon="sidebar" size={17} label={'Hide UI (\\)'} onClick={toggleUi} />
       </span>
       {readOnly ? (
         <span className="ro-name">{name}</span>
       ) : (
-        <input className="system-name" value={name} aria-label="System name" onChange={(e) => setName(e.target.value)} onKeyDown={blurOnEnter} />
+        <input
+          className="system-name"
+          value={name}
+          aria-label="System name"
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={blurOnEnter}
+        />
       )}
     </>
   );
@@ -97,7 +103,7 @@ export function TopBarActions() {
     const forked = forkSystem(store.getState().system);
     setSystem(forked, { readOnly: false });
     // Drop the /s/:id path so edits are clearly local.
-    window.history.replaceState(null, "", "/");
+    window.history.replaceState(null, '', '/');
   };
 
   return (
@@ -127,15 +133,25 @@ export function TopBarActions() {
         </>
       ) : (
         <>
-          <IconButton icon="undo" onClick={undo} disabled={!canUndo} label={`Undo (${MOD_LABEL}+Z)`} />
+          <IconButton
+            icon="undo"
+            onClick={undo}
+            disabled={!canUndo}
+            label={`Undo (${MOD_LABEL}+Z)`}
+          />
           <span className="act-secondary">
-            <IconButton icon="redo" onClick={redo} disabled={!canRedo} label={`Redo (${MOD_LABEL}+Shift+Z)`} />
+            <IconButton
+              icon="redo"
+              onClick={redo}
+              disabled={!canRedo}
+              label={`Redo (${MOD_LABEL}+Shift+Z)`}
+            />
           </span>
           <span className="act-secondary">
             <ExportSplitButton />
           </span>
           <span className="act-secondary">
-            <button className="primary-btn" onClick={() => openDialog("share")} title="Share">
+            <button className="primary-btn" onClick={() => openDialog('share')} title="Share">
               <Icon name="share" size={18} /> <span className="btn-label">Share</span>
             </button>
           </span>
@@ -150,8 +166,10 @@ export function TopBarActions() {
           }
         >
           {!readOnly && <DropdownMenuItem onSelect={redo}>Redo</DropdownMenuItem>}
-          <DropdownMenuItem onSelect={() => openDialog("export")}>Export…</DropdownMenuItem>
-          {!readOnly && <DropdownMenuItem onSelect={() => openDialog("share")}>Share…</DropdownMenuItem>}
+          <DropdownMenuItem onSelect={() => openDialog('export')}>Export…</DropdownMenuItem>
+          {!readOnly && (
+            <DropdownMenuItem onSelect={() => openDialog('share')}>Share…</DropdownMenuItem>
+          )}
           <DropdownMenuItem onSelect={toggleUi}>Hide UI</DropdownMenuItem>
         </DropdownMenu>
       </span>

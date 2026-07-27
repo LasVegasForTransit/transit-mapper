@@ -1,4 +1,4 @@
-import { useEditor } from "../editor/EditorProvider";
+import { useEditor } from '../editor/EditorProvider';
 import {
   FACILITY_TYPE_ORDER,
   FACILITY_TYPES,
@@ -9,19 +9,24 @@ import {
   wayType,
   wayTypesByFamily,
   type WayFamily,
-} from "@transitmapper/core/model/catalog";
-import { facilityRender } from "@transitmapper/core/style/catalogStyle";
-import { DropdownMenu, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "./DropdownMenu";
-import { Icon } from "./Icon";
-import { useView } from "./ViewProvider";
+} from '@transitmapper/core/model/catalog';
+import { facilityRender } from '@transitmapper/core/style/catalogStyle';
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from './DropdownMenu';
+import { Icon } from './Icon';
+import { useView } from './ViewProvider';
 
 // One dock icon per way family; unknown families fall back to the plain line.
 const FAMILY_TOOL_ICON: Record<WayFamily, string> = {
-  guideway: "line",
-  roadway: "road",
-  path: "bike",
-  aerial: "geoCurved",
-  water: "geoFreeform",
+  guideway: 'line',
+  roadway: 'road',
+  path: 'bike',
+  aerial: 'geoCurved',
+  water: 'geoFreeform',
 };
 
 // Sticky per-family variant: pressing the Track tool again gives you the
@@ -57,9 +62,9 @@ export function Toolbar() {
   // on it can be dragged or clicked back into a real edit (see
   // map/interactions.ts's isDiagramMode gating), so drawing/editing tools are
   // disabled here too, same treatment as a read-only shared view.
-  const locked = readOnly || viewMode === "diagram";
-  const network = viewMode === "network";
-  const activeFamily = tool === "way" ? wayType(draftWayTypeId).family : null;
+  const locked = readOnly || viewMode === 'diagram';
+  const network = viewMode === 'network';
+  const activeFamily = tool === 'way' ? wayType(draftWayTypeId).family : null;
 
   const activateFamily = (family: WayFamily, typeId?: string) => {
     const fallback = wayTypesByFamily().find((e) => e.family === family)?.typeIds[0];
@@ -67,7 +72,7 @@ export function Toolbar() {
     if (!resolved) return;
     lastTypeByFamily[family] = resolved;
     setDraftWayType(resolved);
-    setTool("way");
+    setTool('way');
   };
 
   return (
@@ -75,95 +80,102 @@ export function Toolbar() {
       <div className="tool-row">
         {/* Cluster 1: selection — neither a path nor a place. */}
         <div className="tool-cluster" role="toolbar" aria-label="Select">
-          <ToolButton icon="cursor" label="Select" hotkey="V" active={tool === "select"} disabled={false} onClick={() => setTool("select")} />
+          <ToolButton
+            icon="cursor"
+            label="Select"
+            hotkey="V"
+            active={tool === 'select'}
+            disabled={false}
+            onClick={() => setTool('select')}
+          />
         </div>
 
         {/* Cluster 2: PATHS — linear infrastructure (or lines in Network). */}
         <div className="tool-cluster" role="toolbar" aria-label="Draw paths">
-        {network ? (
-          // Network view: you draw LINES (services). One tool; its variants
-          // are the modes.
-          <ToolButton
-            icon="line"
-            label={MODES[draftModeId]?.label ?? "Line"}
-            hotkey="L"
-            active={tool === "way"}
-            disabled={locked}
-            onClick={() => setTool("way")}
-            menu={[
-              {
-                entries: MODE_ORDER.map((id) => ({
-                  id,
-                  label: MODES[id].label,
-                  checked: draftModeId === id,
-                  onSelect: () => {
-                    setDraftMode(id);
-                    setTool("way");
-                  },
-                })),
-              },
-            ]}
-          />
-        ) : (
-          // Infrastructure view: one drawing tool per way family — click
-          // Road and you're drawing a road. The chevron menu picks the
-          // variant (track standard, path kind, or a road cross-section).
-          wayTypesByFamily().map(({ family, typeIds }) => {
-            const info = WAY_FAMILIES[family];
-            const isActive = tool === "way" && activeFamily === family;
-            const presets = family === "roadway" ? profilePresetsForWayType(typeIds[0]) : [];
-            const menu =
-              typeIds.length > 1
-                ? [
-                    {
-                      entries: typeIds.map((id) => ({
-                        id,
-                        label: wayType(id).label,
-                        checked: draftWayTypeId === id,
-                        onSelect: () => activateFamily(family, id),
-                      })),
+          {network ? (
+            // Network view: you draw LINES (services). One tool; its variants
+            // are the modes.
+            <ToolButton
+              icon="line"
+              label={MODES[draftModeId]?.label ?? 'Line'}
+              hotkey="L"
+              active={tool === 'way'}
+              disabled={locked}
+              onClick={() => setTool('way')}
+              menu={[
+                {
+                  entries: MODE_ORDER.map((id) => ({
+                    id,
+                    label: MODES[id].label,
+                    checked: draftModeId === id,
+                    onSelect: () => {
+                      setDraftMode(id);
+                      setTool('way');
                     },
-                  ]
-                : presets.length > 0
+                  })),
+                },
+              ]}
+            />
+          ) : (
+            // Infrastructure view: one drawing tool per way family — click
+            // Road and you're drawing a road. The chevron menu picks the
+            // variant (track standard, path kind, or a road cross-section).
+            wayTypesByFamily().map(({ family, typeIds }) => {
+              const info = WAY_FAMILIES[family];
+              const isActive = tool === 'way' && activeFamily === family;
+              const presets = family === 'roadway' ? profilePresetsForWayType(typeIds[0]) : [];
+              const menu =
+                typeIds.length > 1
                   ? [
                       {
-                        label: "Cross-section",
-                        entries: [
-                          {
-                            id: "",
-                            label: "Default",
-                            checked: false,
-                            onSelect: () => {
-                              activateFamily(family, typeIds[0]);
-                              setDraftPreset(null);
-                            },
-                          },
-                          ...presets.map((p) => ({
-                            id: p.id,
-                            label: p.label,
-                            checked: false,
-                            onSelect: () => {
-                              activateFamily(family, typeIds[0]);
-                              setDraftPreset(p.id);
-                            },
-                          })),
-                        ],
+                        entries: typeIds.map((id) => ({
+                          id,
+                          label: wayType(id).label,
+                          checked: draftWayTypeId === id,
+                          onSelect: () => activateFamily(family, id),
+                        })),
                       },
                     ]
-                  : undefined;
-            return (
-              <ToolButton
-                key={family}
-                icon={FAMILY_TOOL_ICON[family] ?? "line"}
-                label={info.toolLabel}
-                active={isActive}
-                disabled={locked}
-                onClick={() => activateFamily(family)}
-                menu={menu}
-              />
-            );
-          })
-        )}
+                  : presets.length > 0
+                    ? [
+                        {
+                          label: 'Cross-section',
+                          entries: [
+                            {
+                              id: '',
+                              label: 'Default',
+                              checked: false,
+                              onSelect: () => {
+                                activateFamily(family, typeIds[0]);
+                                setDraftPreset(null);
+                              },
+                            },
+                            ...presets.map((p) => ({
+                              id: p.id,
+                              label: p.label,
+                              checked: false,
+                              onSelect: () => {
+                                activateFamily(family, typeIds[0]);
+                                setDraftPreset(p.id);
+                              },
+                            })),
+                          ],
+                        },
+                      ]
+                    : undefined;
+              return (
+                <ToolButton
+                  key={family}
+                  icon={FAMILY_TOOL_ICON[family] ?? 'line'}
+                  label={info.toolLabel}
+                  active={isActive}
+                  disabled={locked}
+                  onClick={() => activateFamily(family)}
+                  menu={menu}
+                />
+              );
+            })
+          )}
         </div>
 
         {/* Cluster 3: PLACES — region/building-like things with real
@@ -179,61 +191,76 @@ export function Toolbar() {
             only) — same width as .tool-btn-caret's own footprint — so the
             pair reads as centered rather than lopsided toward the caret. */}
         <div className="tool-cluster" role="toolbar" aria-label="Places">
-        {!network && <span className="tool-caret-spacer" aria-hidden="true" />}
-        <ToolButton icon={network ? "station" : "boundary"} label="Station" hotkey="S" active={tool === "station"} disabled={locked} onClick={() => setTool("station")} />
-        {!network && (
-          // The Facility tool wears its current variant and places it on
-          // click; "Complex" (draw a site boundary to build inside) is one
-          // more variant, never a hidden default.
+          {!network && <span className="tool-caret-spacer" aria-hidden="true" />}
           <ToolButton
-            icon={draftFacilityComplexMode ? "boundary" : (facilityRender(draftFacilityTypeId).icon ?? "plus")}
-            label="Facility"
-            hotkey="F"
-            active={tool === "facility"}
+            icon={network ? 'station' : 'boundary'}
+            label="Station"
+            hotkey="S"
+            active={tool === 'station'}
             disabled={locked}
-            onClick={() => setTool("facility")}
-            menu={[
-              {
-                label: "Access points (placed)",
-                entries: FACILITY_TYPE_ORDER.filter((id) => FACILITY_TYPES[id].geometryKind === "point").map((id) => ({
-                  id,
-                  label: FACILITY_TYPES[id].label,
-                  checked: !draftFacilityComplexMode && draftFacilityTypeId === id,
-                  onSelect: () => {
-                    setDraftFacilityType(id);
-                    setTool("facility");
-                  },
-                })),
-              },
-              {
-                label: "Structures (drawn to shape)",
-                entries: FACILITY_TYPE_ORDER.filter((id) => FACILITY_TYPES[id].geometryKind === "area").map((id) => ({
-                  id,
-                  label: FACILITY_TYPES[id].label,
-                  checked: !draftFacilityComplexMode && draftFacilityTypeId === id,
-                  onSelect: () => {
-                    setDraftFacilityType(id);
-                    setTool("facility");
-                  },
-                })),
-              },
-              {
-                label: "Land",
-                entries: [
-                  {
-                    id: "complex",
-                    label: "Site boundary (a complex\u2019s land)",
-                    checked: draftFacilityComplexMode,
-                    onSelect: () => {
-                      setDraftFacilityComplexMode(true);
-                      setTool("facility");
-                    },
-                  },
-                ],
-              },
-            ]}
+            onClick={() => setTool('station')}
           />
-        )}
+          {!network && (
+            // The Facility tool wears its current variant and places it on
+            // click; "Complex" (draw a site boundary to build inside) is one
+            // more variant, never a hidden default.
+            <ToolButton
+              icon={
+                draftFacilityComplexMode
+                  ? 'boundary'
+                  : (facilityRender(draftFacilityTypeId).icon ?? 'plus')
+              }
+              label="Facility"
+              hotkey="F"
+              active={tool === 'facility'}
+              disabled={locked}
+              onClick={() => setTool('facility')}
+              menu={[
+                {
+                  label: 'Access points (placed)',
+                  entries: FACILITY_TYPE_ORDER.filter(
+                    (id) => FACILITY_TYPES[id].geometryKind === 'point',
+                  ).map((id) => ({
+                    id,
+                    label: FACILITY_TYPES[id].label,
+                    checked: !draftFacilityComplexMode && draftFacilityTypeId === id,
+                    onSelect: () => {
+                      setDraftFacilityType(id);
+                      setTool('facility');
+                    },
+                  })),
+                },
+                {
+                  label: 'Structures (drawn to shape)',
+                  entries: FACILITY_TYPE_ORDER.filter(
+                    (id) => FACILITY_TYPES[id].geometryKind === 'area',
+                  ).map((id) => ({
+                    id,
+                    label: FACILITY_TYPES[id].label,
+                    checked: !draftFacilityComplexMode && draftFacilityTypeId === id,
+                    onSelect: () => {
+                      setDraftFacilityType(id);
+                      setTool('facility');
+                    },
+                  })),
+                },
+                {
+                  label: 'Land',
+                  entries: [
+                    {
+                      id: 'complex',
+                      label: 'Site boundary (a complex\u2019s land)',
+                      checked: draftFacilityComplexMode,
+                      onSelect: () => {
+                        setDraftFacilityComplexMode(true);
+                        setTool('facility');
+                      },
+                    },
+                  ],
+                },
+              ]}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -273,9 +300,9 @@ function ToolButton({ icon, label, hotkey, active, disabled, onClick, menu }: To
   // add its own width when there's one to show (see .tool-btn-caret below).
   const hasMenu = !!menu && menu.length > 0;
   return (
-    <div className={`tool-btn-group ${active ? "active" : ""}`}>
+    <div className={`tool-btn-group ${active ? 'active' : ''}`}>
       <button
-        className={`tool-btn size-14 ${active ? "active" : ""}`}
+        className={`tool-btn size-14 ${active ? 'active' : ''}`}
         disabled={disabled}
         aria-pressed={active}
         title={hotkey ? `${label} (${hotkey})` : label}
@@ -288,7 +315,12 @@ function ToolButton({ icon, label, hotkey, active, disabled, onClick, menu }: To
         <DropdownMenu
           align="center"
           trigger={
-            <button className="tool-btn-caret" disabled={disabled} aria-label={`${label} options`} title={`${label} options`}>
+            <button
+              className="tool-btn-caret"
+              disabled={disabled}
+              aria-label={`${label} options`}
+              title={`${label} options`}
+            >
               <Icon name="chevronDown" size={12} />
             </button>
           }
@@ -298,9 +330,13 @@ function ToolButton({ icon, label, hotkey, active, disabled, onClick, menu }: To
               {si > 0 && <DropdownMenuSeparator />}
               {section.label && <DropdownMenuLabel>{section.label}</DropdownMenuLabel>}
               {section.entries.map((entry) => (
-                <DropdownMenuItem key={entry.id || "default"} onSelect={entry.onSelect}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                    {entry.checked ? <Icon name="check" size={14} /> : <span style={{ width: 14 }} />}
+                <DropdownMenuItem key={entry.id || 'default'} onSelect={entry.onSelect}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    {entry.checked ? (
+                      <Icon name="check" size={14} />
+                    ) : (
+                      <span style={{ width: 14 }} />
+                    )}
                     {entry.label}
                   </span>
                 </DropdownMenuItem>
@@ -312,4 +348,3 @@ function ToolButton({ icon, label, hotkey, active, disabled, onClick, menu }: To
     </div>
   );
 }
-

@@ -33,7 +33,7 @@ export function laneRefKey(wayId: string, laneId: string): EntityId {
 }
 
 /** An arm ref key (one way-end meeting a junction), for ApproachControl. */
-export function armRefKey(wayId: string, end: "start" | "end"): EntityId {
+export function armRefKey(wayId: string, end: 'start' | 'end'): EntityId {
   return `${wayId}:${end}`;
 }
 
@@ -48,9 +48,13 @@ export function armRefKey(wayId: string, end: "start" | "end"): EntityId {
  * serialize keeps them across a save because it only validates ids it can
  * see. Rebuilding against the live lanes is cheap and has no false positives.
  */
-export function prunedToLiveLanes<T>(map: ComponentMap<T>, ways: { id: string; profile: { lanes: { id: string }[] } }[]): ComponentMap<T> {
+export function prunedToLiveLanes<T>(
+  map: ComponentMap<T>,
+  ways: { id: string; profile: { lanes: { id: string }[] } }[],
+): ComponentMap<T> {
   const live = new Set<string>();
-  for (const way of ways) for (const lane of way.profile.lanes) live.add(laneRefKey(way.id, lane.id));
+  for (const way of ways)
+    for (const lane of way.profile.lanes) live.add(laneRefKey(way.id, lane.id));
   const keys = Object.keys(map);
   if (keys.every((k) => live.has(k))) return map;
   const next: ComponentMap<T> = {};

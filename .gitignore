@@ -7,3 +7,11 @@ dist/
 .superpowers/
 *.tsbuildinfo
 .turbo/
+
+# Agent configuration. settings.json is committed team policy;
+# settings.local.json is personal and must never be. Both of these were
+# previously covered only by machine-local git config — a personal global
+# gitignore and .git/info/exclude — neither of which travels with a clone,
+# so a new contributor had no protection at all.
+.claude/settings.local.json
+.claude/worktrees/

@@ -4,11 +4,11 @@
 // classifyGtfsRouteType, buildGtfsIndex, piecesForRoutes, gtfsFilesToSystemPieces)
 // that fixture data can exercise directly, plus streamRtcGtfsBatches, the one
 // function that touches the network.
-import { unzipSync, strFromU8 } from "fflate";
-import { shortId } from "./ids";
-import { defaultProfileFor, makeOneWay } from "./profile";
-import { nearestOnPath, resolveWayPath } from "./geo";
-import type { LngLat, Pattern, Service, Station, Way } from "./system";
+import { unzipSync, strFromU8 } from 'fflate';
+import { shortId } from './ids';
+import { defaultProfileFor, makeOneWay } from './profile';
+import { nearestOnPath, resolveWayPath } from './geo';
+import type { LngLat, Pattern, Service, Station, Way } from './system';
 
 export interface GtfsImportResult {
   ways: Way[];
@@ -21,18 +21,18 @@ export interface GtfsImportResult {
 // has no dedicated equivalent for (trolleybus, funicular) falls back to the
 // closest physical match rather than being dropped.
 const ROUTE_TYPE_KIND: Record<number, { modeId: string; wayTypeId: string }> = {
-  0: { modeId: "tram", wayTypeId: "lightRail" }, // Tram, streetcar, light rail
-  1: { modeId: "subway", wayTypeId: "heavyRail" }, // Subway, metro
-  2: { modeId: "commuterRail", wayTypeId: "heavyRail" }, // Rail
-  3: { modeId: "bus", wayTypeId: "road" }, // Bus
-  4: { modeId: "ferry", wayTypeId: "water" }, // Ferry
-  5: { modeId: "tram", wayTypeId: "lightRail" }, // Cable tram
-  6: { modeId: "gondola", wayTypeId: "aerial" }, // Aerial lift
-  7: { modeId: "monorail", wayTypeId: "monorail" }, // Funicular — no dedicated catalog kind
-  11: { modeId: "bus", wayTypeId: "road" }, // Trolleybus — no dedicated catalog kind
-  12: { modeId: "monorail", wayTypeId: "monorail" }, // Monorail
+  0: { modeId: 'tram', wayTypeId: 'lightRail' }, // Tram, streetcar, light rail
+  1: { modeId: 'subway', wayTypeId: 'heavyRail' }, // Subway, metro
+  2: { modeId: 'commuterRail', wayTypeId: 'heavyRail' }, // Rail
+  3: { modeId: 'bus', wayTypeId: 'road' }, // Bus
+  4: { modeId: 'ferry', wayTypeId: 'water' }, // Ferry
+  5: { modeId: 'tram', wayTypeId: 'lightRail' }, // Cable tram
+  6: { modeId: 'gondola', wayTypeId: 'aerial' }, // Aerial lift
+  7: { modeId: 'monorail', wayTypeId: 'monorail' }, // Funicular — no dedicated catalog kind
+  11: { modeId: 'bus', wayTypeId: 'road' }, // Trolleybus — no dedicated catalog kind
+  12: { modeId: 'monorail', wayTypeId: 'monorail' }, // Monorail
 };
-const DEFAULT_ROUTE_KIND = { modeId: "bus", wayTypeId: "road" };
+const DEFAULT_ROUTE_KIND = { modeId: 'bus', wayTypeId: 'road' };
 
 export function classifyGtfsRouteType(routeType: number): { modeId: string; wayTypeId: string } {
   return ROUTE_TYPE_KIND[routeType] ?? DEFAULT_ROUTE_KIND;
@@ -43,10 +43,10 @@ export function classifyGtfsRouteType(routeType: number): { modeId: string; wayT
  *  more than that, so a hand-rolled parser is enough; no dependency for it. */
 export function parseGtfsCsv(text: string): Record<string, string>[] {
   const rows: string[][] = [];
-  let field = "";
+  let field = '';
   let row: string[] = [];
   let inQuotes = false;
-  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   for (let i = 0; i < normalized.length; i++) {
     const c = normalized[i];
     if (inQuotes) {
@@ -57,14 +57,14 @@ export function parseGtfsCsv(text: string): Record<string, string>[] {
         } else inQuotes = false;
       } else field += c;
     } else if (c === '"') inQuotes = true;
-    else if (c === ",") {
+    else if (c === ',') {
       row.push(field);
-      field = "";
-    } else if (c === "\n") {
+      field = '';
+    } else if (c === '\n') {
       row.push(field);
       rows.push(row);
       row = [];
-      field = "";
+      field = '';
     } else field += c;
   }
   if (field.length > 0 || row.length > 0) {
@@ -75,11 +75,11 @@ export function parseGtfsCsv(text: string): Record<string, string>[] {
   const header = rows[0].map((h) => h.trim());
   return rows
     .slice(1)
-    .filter((r) => r.length > 1 || r[0] !== "")
+    .filter((r) => r.length > 1 || r[0] !== '')
     .map((r) => {
       const obj: Record<string, string> = {};
       header.forEach((h, i) => {
-        obj[h] = (r[i] ?? "").trim();
+        obj[h] = (r[i] ?? '').trim();
       });
       return obj;
     });
@@ -127,7 +127,10 @@ function buildGtfsIndex(files: GtfsFiles): GtfsIndex {
   const shapePaths = new Map<string, LngLat[]>();
   for (const [shapeId, pts] of shapeGroups) {
     pts.sort((a, b) => a.seq - b.seq);
-    shapePaths.set(shapeId, pts.map((p) => p.coord));
+    shapePaths.set(
+      shapeId,
+      pts.map((p) => p.coord),
+    );
   }
 
   const stopById = new Map(stops.map((s) => [s.stop_id, s]));
@@ -147,7 +150,9 @@ function buildGtfsIndex(files: GtfsFiles): GtfsIndex {
   for (const st of stopTimes) {
     if (!st.trip_id || !st.stop_id) continue;
     if (!stopTimesByTrip.has(st.trip_id)) stopTimesByTrip.set(st.trip_id, []);
-    stopTimesByTrip.get(st.trip_id)!.push({ seq: Number(st.stop_sequence) || 0, stopId: st.stop_id });
+    stopTimesByTrip
+      .get(st.trip_id)!
+      .push({ seq: Number(st.stop_sequence) || 0, stopId: st.stop_id });
   }
 
   const routeShapeIds = new Map<string, string[]>();
@@ -157,7 +162,15 @@ function buildGtfsIndex(files: GtfsFiles): GtfsIndex {
     routeShapeIds.get(routeId)!.push(shapeId);
   }
 
-  return { routeById, stopById, shapePaths, shapeToRoute, shapeToTrip, stopTimesByTrip, routeShapeIds };
+  return {
+    routeById,
+    stopById,
+    shapePaths,
+    shapeToRoute,
+    shapeToTrip,
+    stopTimesByTrip,
+    routeShapeIds,
+  };
 }
 
 /** Ways/Services for just the given routes, plus any Stations newly reached
@@ -165,7 +178,11 @@ function buildGtfsIndex(files: GtfsFiles): GtfsIndex {
  *  stop shared by a route in an earlier batch and one in this batch must
  *  still resolve to the same Station), so it's passed in and mutated rather
  *  than started fresh each call. */
-function piecesForRoutes(index: GtfsIndex, routeIds: string[], stationByStopId: Map<string, Station>): GtfsImportResult {
+function piecesForRoutes(
+  index: GtfsIndex,
+  routeIds: string[],
+  stationByStopId: Map<string, Station>,
+): GtfsImportResult {
   const ways: Way[] = [];
   const wayIdByShape = new Map<string, string>();
   const services: Service[] = [];
@@ -186,15 +203,18 @@ function piecesForRoutes(index: GtfsIndex, routeIds: string[], stationByStopId: 
         id: wayId,
         typeId: kind.wayTypeId,
         points,
-        geometry: "straight",
-        grade: "atGrade",
+        geometry: 'straight',
+        grade: 'atGrade',
         // A GTFS shape is ONE direction of travel (a route's two directions are
         // separate shapes, points ordered start→end by shape_pt_sequence), so
         // model it as a one-way carriageway in that direction ("forward" = point
         // order). Buses (road) get a lean 2-lane carriageway rather than the
         // default 4-lane two-way road, so opposite-direction routes on a shared
         // corridor read as thin directional carriageways instead of stacked roads.
-        profile: makeOneWay(defaultProfileFor(kind.wayTypeId, kind.wayTypeId === "road" ? 2 : undefined), "forward"),
+        profile: makeOneWay(
+          defaultProfileFor(kind.wayTypeId, kind.wayTypeId === 'road' ? 2 : undefined),
+          'forward',
+        ),
         source: `gtfs:${shapeId}`,
       });
       patterns.push({ id: shortId(), wayIds: [wayId] });
@@ -205,7 +225,7 @@ function piecesForRoutes(index: GtfsIndex, routeIds: string[], stationByStopId: 
       id: shortId(),
       name: route.route_short_name || route.route_long_name || `Route ${routeId}`,
       modeId: kind.modeId,
-      color: route.route_color ? `#${route.route_color}` : "#e4572e",
+      color: route.route_color ? `#${route.route_color}` : '#e4572e',
       patterns,
     });
   }
@@ -291,16 +311,16 @@ export interface GtfsImportBatch {
  * case). The only function here that touches the network.
  */
 export async function* streamRtcGtfsBatches(batchSize = 2): AsyncGenerator<GtfsImportBatch> {
-  const res = await fetch("/api/gtfs/rtc");
+  const res = await fetch('/api/gtfs/rtc');
   if (!res.ok) throw new Error(`GTFS import failed (${res.status}).`);
   const zip = unzipSync(new Uint8Array(await res.arrayBuffer()));
-  const read = (name: string) => (zip[name] ? strFromU8(zip[name]) : "");
+  const read = (name: string) => (zip[name] ? strFromU8(zip[name]) : '');
   const index = buildGtfsIndex({
-    routes: read("routes.txt"),
-    trips: read("trips.txt"),
-    stops: read("stops.txt"),
-    stopTimes: read("stop_times.txt"),
-    shapes: read("shapes.txt"),
+    routes: read('routes.txt'),
+    trips: read('trips.txt'),
+    stops: read('stops.txt'),
+    stopTimes: read('stop_times.txt'),
+    shapes: read('shapes.txt'),
   });
 
   const routeIds = [...index.routeShapeIds.keys()];
@@ -308,7 +328,11 @@ export async function* streamRtcGtfsBatches(batchSize = 2): AsyncGenerator<GtfsI
   for (let i = 0; i < routeIds.length; i += batchSize) {
     const batch = routeIds.slice(i, i + batchSize);
     const pieces = piecesForRoutes(index, batch, stationByStopId);
-    yield { pieces, routesDone: Math.min(i + batchSize, routeIds.length), routesTotal: routeIds.length };
+    yield {
+      pieces,
+      routesDone: Math.min(i + batchSize, routeIds.length),
+      routesTotal: routeIds.length,
+    };
     // Hand control back to the browser between batches — setTimeout, not
     // requestAnimationFrame: rAF callbacks are paused indefinitely by most
     // browsers once the tab isn't visible/focused, which would silently

@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent } from 'react';
 
 /**
  * Enter commits a text edit (blurs the field) instead of doing nothing. The
@@ -8,5 +8,5 @@ import type { KeyboardEvent } from "react";
  * the app (committing the current draw).
  */
 export function blurOnEnter(e: KeyboardEvent<HTMLInputElement>): void {
-  if (e.key === "Enter") e.currentTarget.blur();
+  if (e.key === 'Enter') e.currentTarget.blur();
 }

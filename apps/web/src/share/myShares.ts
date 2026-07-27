@@ -7,7 +7,7 @@
 // edit token it was handed at creation." Losing this (private mode, cleared
 // site data) just means the next share re-creates or re-dedups rather than
 // updating in place — never data loss, since the share itself is unaffected.
-const STORAGE_KEY = "transitmapper:myShares";
+const STORAGE_KEY = 'transitmapper:myShares';
 
 export interface MyShareEntry {
   documentId: string;
@@ -24,11 +24,11 @@ function isMyShareEntry(v: unknown): v is MyShareEntry {
   const r = v as Record<string, unknown>;
   return (
     !!r &&
-    typeof r.documentId === "string" &&
-    typeof r.shareId === "string" &&
-    typeof r.editToken === "string" &&
-    typeof r.lastSharedData === "string" &&
-    typeof r.updatedAt === "number"
+    typeof r.documentId === 'string' &&
+    typeof r.shareId === 'string' &&
+    typeof r.editToken === 'string' &&
+    typeof r.lastSharedData === 'string' &&
+    typeof r.updatedAt === 'number'
   );
 }
 

@@ -1,8 +1,8 @@
-import { useEditor, useEditorStore } from "../editor/EditorProvider";
-import { exportSystemJson } from "../share/jsonExport";
-import { DropdownMenu, DropdownMenuItem } from "./DropdownMenu";
-import { Icon } from "./Icon";
-import { useUi } from "./UiProvider";
+import { useEditor, useEditorStore } from '../editor/EditorProvider';
+import { exportSystemJson } from '../share/jsonExport';
+import { DropdownMenu, DropdownMenuItem } from './DropdownMenu';
+import { Icon } from './Icon';
+import { useUi } from './UiProvider';
 
 /** Figma-style file menu: New/Import/Export, tucked behind one trigger in
  *  the left panel instead of sitting loose among the top bar's action
@@ -27,7 +27,12 @@ export function FileMenu() {
     <DropdownMenu
       align="start"
       trigger={
-        <button type="button" className="btn btn-plain brand-btn" title="File menu" aria-label="File menu">
+        <button
+          type="button"
+          className="btn btn-plain brand-btn"
+          title="File menu"
+          aria-label="File menu"
+        >
           <Icon name="file" size={17} />
           <span className="btn-label brand-name">TransitMapper</span>
         </button>
@@ -36,13 +41,13 @@ export function FileMenu() {
       <DropdownMenuItem onSelect={newSystem}>
         <Icon name="file" size={17} /> New system
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => openDialog("systems")}>
+      <DropdownMenuItem onSelect={() => openDialog('systems')}>
         <Icon name="layers" size={17} /> My systems…
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => openDialog("import")}>
+      <DropdownMenuItem onSelect={() => openDialog('import')}>
         <Icon name="road" size={17} /> Import streets…
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => openDialog("gtfs")}>
+      <DropdownMenuItem onSelect={() => openDialog('gtfs')}>
         <Icon name="bus" size={17} /> Import RTC's real system…
       </DropdownMenuItem>
       {/* The portable escape hatch out of browser localStorage (the only

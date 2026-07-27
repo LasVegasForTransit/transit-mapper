@@ -1,9 +1,9 @@
-import { forwardRef, type ButtonHTMLAttributes, type CSSProperties } from "react";
-import { Icon } from "./Icon";
+import { forwardRef, type ButtonHTMLAttributes, type CSSProperties } from 'react';
+import { Icon } from './Icon';
 
 /** MD3-style emphasis, loudest last — see app.css's ".btn" comment for what
  *  each one looks like and when to reach for it. */
-export type ButtonVariant = "plain" | "tonal" | "bordered" | "primary";
+export type ButtonVariant = 'plain' | 'tonal' | 'bordered' | 'primary';
 
 /**
  * The one icon-only button used everywhere in the app's chrome — toolbar
@@ -36,17 +36,17 @@ type IconButtonProps = {
   active?: boolean;
   variant?: ButtonVariant;
   className?: string;
-} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "title" | "aria-label" | "children">;
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'title' | 'aria-label' | 'children'>;
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { icon, size = 18, iconStyle, label, active = false, variant = "plain", className = "", ...rest },
+  { icon, size = 18, iconStyle, label, active = false, variant = 'plain', className = '', ...rest },
   ref,
 ) {
   return (
     <button
       ref={ref}
       type="button"
-      className={`btn btn-${variant} icon-only ${active ? "active" : ""} ${className}`.trim()}
+      className={`btn btn-${variant} icon-only ${active ? 'active' : ''} ${className}`.trim()}
       title={label}
       aria-label={label}
       {...rest}

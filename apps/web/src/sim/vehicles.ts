@@ -1,6 +1,6 @@
-import type { Feature, FeatureCollection, Point, Polygon } from "geojson";
-import type { GeoJSONSource, Map as MLMap } from "maplibre-gl";
-import type { EditorStore } from "../editor/store";
+import type { Feature, FeatureCollection, Point, Polygon } from 'geojson';
+import type { GeoJSONSource, Map as MLMap } from 'maplibre-gl';
+import type { EditorStore } from '../editor/store';
 import {
   bearingAtT,
   cumulativeLengths,
@@ -8,15 +8,29 @@ import {
   patternPath,
   pointAtDistance,
   rotatedRectPolygon,
-} from "@transitmapper/core/model/geo";
-import { patternLanePath } from "@transitmapper/core/geometry/vehicleLane";
-import { vehicleFootprint } from "@transitmapper/core/model/catalog";
-import type { LngLat, Pattern, SchedulePeriod, Service, Station, TransitSystem, Way } from "@transitmapper/core/model/system";
-import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from "../map/layers";
-import { vehiclesDisabledForPerf } from "../perf";
+} from '@transitmapper/core/model/geo';
+import { patternLanePath } from '@transitmapper/core/geometry/vehicleLane';
+import { vehicleFootprint } from '@transitmapper/core/model/catalog';
+import type {
+  LngLat,
+  Pattern,
+  SchedulePeriod,
+  Service,
+  Station,
+  TransitSystem,
+  Way,
+} from '@transitmapper/core/model/system';
+import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from '../map/layers';
+import { vehiclesDisabledForPerf } from '../perf';
 // Pure motion kernel (framework-free, WASM-portable) — this module is its rAF/
 // MapLibre host. See packages/core/src/sim/timetable.ts.
-import { buildTimetable, metersAtElapsed, VEHICLE_SPEED_MPS, type DwellStop, type Timetable } from "@transitmapper/core/sim/timetable";
+import {
+  buildTimetable,
+  metersAtElapsed,
+  VEHICLE_SPEED_MPS,
+  type DwellStop,
+  type Timetable,
+} from '@transitmapper/core/sim/timetable';
 
 const MIN_PERIOD_MS = 6000; // a floor so even a very short line doesn't blur past instantly
 // A very short headway on a long line could otherwise imply dozens of
@@ -35,7 +49,7 @@ export interface VehicleGate {
   /** Current view mode: vehicles render as a small dot in Network, a real
    *  true-scale footprint polygon riding its actual lane in Infrastructure,
    *  and not at all in Diagram. */
-  viewMode: () => "network" | "infrastructure" | "diagram";
+  viewMode: () => 'network' | 'infrastructure' | 'diagram';
 }
 
 /** Which real vehicle a service's animation/rendering should use: its
@@ -43,10 +57,19 @@ export interface VehicleGate {
  *  mode's plain default (vehicleFootprint) at the app's ambient default
  *  speed — the exact behavior every service had before vehicle kinds
  *  existed, so an unassigned service is never affected by this feature. */
-export function effectiveVehicleKind(system: TransitSystem, service: Service): { widthM: number; lengthM: number; speedMps: number } {
-  const kind = service.vehicleKindId ? system.vehicleKinds.find((k) => k.id === service.vehicleKindId) : undefined;
+export function effectiveVehicleKind(
+  system: TransitSystem,
+  service: Service,
+): { widthM: number; lengthM: number; speedMps: number } {
+  const kind = service.vehicleKindId
+    ? system.vehicleKinds.find((k) => k.id === service.vehicleKindId)
+    : undefined;
   if (kind) {
-    return { widthM: kind.widthM, lengthM: kind.lengthM, speedMps: kind.topSpeedKmh !== undefined ? kind.topSpeedKmh / 3.6 : VEHICLE_SPEED_MPS };
+    return {
+      widthM: kind.widthM,
+      lengthM: kind.lengthM,
+      speedMps: kind.topSpeedKmh !== undefined ? kind.topSpeedKmh / 3.6 : VEHICLE_SPEED_MPS,
+    };
   }
   return { ...vehicleFootprint(service.modeId), speedMps: VEHICLE_SPEED_MPS };
 }
@@ -108,14 +131,22 @@ function stationsByWay(stations: Station[]): Map<string, Station[]> {
  *  uses), positioned by arc-length along the pattern's full resolved path
  *  (via nearestOnPath) rather than by way-index — the more useful measure
  *  here, since the animation walks the path by distance, not by way. */
-export function dwellStopsForPattern(system: TransitSystem, pattern: Pattern, path: LngLat[], totalMeters: number): DwellStop[] {
+export function dwellStopsForPattern(
+  system: TransitSystem,
+  pattern: Pattern,
+  path: LngLat[],
+  totalMeters: number,
+): DwellStop[] {
   const byWay = stationsByWay(system.stations);
   const stops: DwellStop[] = [];
   for (const wayId of pattern.wayIds) {
     for (const st of byWay.get(wayId) ?? []) {
       const near = nearestOnPath(path, st.coord);
       if (!near) continue;
-      stops.push({ distMeters: near.t * totalMeters, dwellMs: (st.dwellSeconds ?? DEFAULT_DWELL_SECONDS) * 1000 });
+      stops.push({
+        distMeters: near.t * totalMeters,
+        dwellMs: (st.dwellSeconds ?? DEFAULT_DWELL_SECONDS) * 1000,
+      });
     }
   }
   return stops.sort((a, b) => a.distMeters - b.distMeters);
@@ -170,7 +201,12 @@ interface CachedPatternGeometry extends PatternGeometry {
 }
 const patternGeometryCache = new WeakMap<Pattern, CachedPatternGeometry>();
 
-function resolvePatternGeometry(system: TransitSystem, pattern: Pattern, speedMps: number, modeId?: string): PatternGeometry | null {
+function resolvePatternGeometry(
+  system: TransitSystem,
+  pattern: Pattern,
+  speedMps: number,
+  modeId?: string,
+): PatternGeometry | null {
   const cached = patternGeometryCache.get(pattern);
   if (
     cached &&
@@ -180,12 +216,18 @@ function resolvePatternGeometry(system: TransitSystem, pattern: Pattern, speedMp
     cached.forModeId === modeId
   )
     return cached;
-  const path = modeId !== undefined ? patternLanePath(system.ways, pattern, modeId) : patternPath(system.ways, pattern);
+  const path =
+    modeId !== undefined
+      ? patternLanePath(system.ways, pattern, modeId)
+      : patternPath(system.ways, pattern);
   if (path.length < 2) return null;
   const cumLengths = cumulativeLengths(path);
   const meters = cumLengths[cumLengths.length - 1];
   if (meters === 0) return null;
-  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+  let minLng = Infinity,
+    minLat = Infinity,
+    maxLng = -Infinity,
+    maxLat = -Infinity;
   for (const [lng, lat] of path) {
     if (lng < minLng) minLng = lng;
     if (lng > maxLng) maxLng = lng;
@@ -237,7 +279,11 @@ interface VehicleProps {
 }
 type VehicleFeature = Feature<Point, VehicleProps>;
 
-export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: VehicleGate): () => void {
+export function attachVehicleAnimation(
+  map: MLMap,
+  store: EditorStore,
+  gate: VehicleGate,
+): () => void {
   let frame: number;
   let lastUpdate = -Infinity;
 
@@ -246,7 +292,10 @@ export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: Veh
   // holds stable feature objects mutated in place; `collection.features` is
   // trimmed to the count actually used this tick.
   const pool: VehicleFeature[] = [];
-  const collection: FeatureCollection<Point, VehicleProps> = { type: "FeatureCollection", features: [] };
+  const collection: FeatureCollection<Point, VehicleProps> = {
+    type: 'FeatureCollection',
+    features: [],
+  };
 
   const tick = () => {
     frame = requestAnimationFrame(tick);
@@ -264,7 +313,7 @@ export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: Veh
         collection.features.length = 0;
         source?.setData(collection);
       }
-      infraSource?.setData({ type: "FeatureCollection", features: [] });
+      infraSource?.setData({ type: 'FeatureCollection', features: [] });
       return;
     }
 
@@ -292,18 +341,27 @@ export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: Veh
         existing.geometry.coordinates[0] = coord[0];
         existing.geometry.coordinates[1] = coord[1];
       } else {
-        pool[used] = { type: "Feature", properties: { color }, geometry: { type: "Point", coordinates: [coord[0], coord[1]] } };
+        pool[used] = {
+          type: 'Feature',
+          properties: { color },
+          geometry: { type: 'Point', coordinates: [coord[0], coord[1]] },
+        };
       }
       used++;
     };
 
-    if (viewMode === "network" || viewMode === "infrastructure") {
+    if (viewMode === 'network' || viewMode === 'infrastructure') {
       for (const service of system.services) {
         if (!gate.isVisible(service)) continue;
         const headwayMinutes = effectiveHeadwayMinutes(service);
         const { widthM, lengthM, speedMps } = effectiveVehicleKind(system, service);
         for (const pattern of service.patterns) {
-          const geometry = resolvePatternGeometry(system, pattern, speedMps, viewMode === "infrastructure" ? service.modeId : undefined);
+          const geometry = resolvePatternGeometry(
+            system,
+            pattern,
+            speedMps,
+            viewMode === 'infrastructure' ? service.modeId : undefined,
+          );
           if (!geometry) continue;
           // Viewport cull: skip patterns whose whole path is off-screen — scales
           // per-tick cost with ON-SCREEN patterns instead of all of them.
@@ -314,7 +372,12 @@ export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: Veh
           // even a short, stopless line doesn't blur past instantly.
           const periodMs = Math.max(MIN_PERIOD_MS, 2 * timetable.oneWayMs);
           const roundTripMinutes = (2 * timetable.oneWayMs) / 60000;
-          const count = headwayMinutes ? Math.min(MAX_VEHICLES_PER_PATTERN, Math.max(1, Math.floor(roundTripMinutes / headwayMinutes))) : 1;
+          const count = headwayMinutes
+            ? Math.min(
+                MAX_VEHICLES_PER_PATTERN,
+                Math.max(1, Math.floor(roundTripMinutes / headwayMinutes)),
+              )
+            : 1;
           for (let i = 0; i < count; i++) {
             const phase = (now / periodMs + i / count) % 1;
             const elapsedMs = phase * periodMs;
@@ -328,16 +391,19 @@ export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: Veh
               : meters - metersAtElapsed(meters, timetable, legElapsed);
             // Distance → coordinate is an O(log n) binary search over precomputed
             // arc lengths, not a full-path re-walk (pointAtT).
-            if (viewMode === "network") {
+            if (viewMode === 'network') {
               emit(pointAtDistance(path, cumLengths, distFromStart), service.color);
             } else {
               const t = meters === 0 ? 0 : distFromStart / meters;
               const center = pointAtDistance(path, cumLengths, distFromStart);
               const bearing = bearingAtT(path, t, meters);
               infraFeatures.push({
-                type: "Feature",
+                type: 'Feature',
                 properties: { color: service.color },
-                geometry: { type: "Polygon", coordinates: [rotatedRectPolygon(center, bearing, widthM, lengthM)] },
+                geometry: {
+                  type: 'Polygon',
+                  coordinates: [rotatedRectPolygon(center, bearing, widthM, lengthM)],
+                },
               });
             }
           }
@@ -348,7 +414,7 @@ export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: Veh
     if (collection.features.length !== used) collection.features.length = used;
     for (let i = 0; i < used; i++) collection.features[i] = pool[i];
     source?.setData(collection);
-    infraSource?.setData({ type: "FeatureCollection", features: infraFeatures });
+    infraSource?.setData({ type: 'FeatureCollection', features: infraFeatures });
   };
   frame = requestAnimationFrame(tick);
   return () => cancelAnimationFrame(frame);

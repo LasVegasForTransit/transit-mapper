@@ -1,5 +1,5 @@
-import { shortId } from "../ids";
-import type { LngLat } from "./valueTypes";
+import { shortId } from '../ids';
+import type { LngLat } from './valueTypes';
 
 /** Bundles any objects into one unit: a transfer complex, a line family, a
  *  facility complex (bus bays, platforms, entrances grouped under one real

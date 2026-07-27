@@ -15,7 +15,7 @@ press within snapping distance of a way the mode can use (bus on roads, light
 rail on light-rail track or streets, and so on; compatibility comes from the
 mode catalog).
 
-Instead of laying new geometry, each click extends a *route* through the
+Instead of laying new geometry, each click extends a _route_ through the
 network: the editor finds a path from your last point to the click through
 the junction graph, previews it, and follows the streets around corners. You
 only click at meaningful places: where the route turns, roughly one click

@@ -1,6 +1,6 @@
-import type { EditorStore } from "../editor/store";
-import { saveToLibrary } from "../storage/localStore";
-import { subscribeLiveCamera, withLiveCamera } from "./liveCamera";
+import type { EditorStore } from '../editor/store';
+import { saveToLibrary } from '../storage/localStore';
+import { subscribeLiveCamera, withLiveCamera } from './liveCamera';
 
 // Camera moves are debounced the same way content autosave is (App.tsx), so a
 // flick-pan writes localStorage once after it settles, not once per frame.

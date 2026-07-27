@@ -1,10 +1,15 @@
-import type { Map as MLMap, MapMouseEvent, MapGeoJSONFeature, GeoJSONSource } from "maplibre-gl";
-import type { EditorStore, MultiSelectItem } from "../editor/store";
-import { attachKeyboard } from "../editor/keymap";
-import { nearestOpenEndpoint, resolveWayPath, snap, squareFootprint } from "@transitmapper/core/model/geo";
-import { facilityType, mode } from "@transitmapper/core/model/catalog";
-import { anchorOnWay } from "@transitmapper/core/model/routeGraph";
-import type { LngLat } from "@transitmapper/core/model/system";
+import type { Map as MLMap, MapMouseEvent, MapGeoJSONFeature, GeoJSONSource } from 'maplibre-gl';
+import type { EditorStore, MultiSelectItem } from '../editor/store';
+import { attachKeyboard } from '../editor/keymap';
+import {
+  nearestOpenEndpoint,
+  resolveWayPath,
+  snap,
+  squareFootprint,
+} from '@transitmapper/core/model/geo';
+import { facilityType, mode } from '@transitmapper/core/model/catalog';
+import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
+import type { LngLat } from '@transitmapper/core/model/system';
 import {
   LYR_FACILITIES,
   LYR_HANDLES,
@@ -20,7 +25,7 @@ import {
   SRC_ENDPOINT_HINT,
   SRC_MARQUEE,
   SRC_PREVIEW,
-} from "./layers";
+} from './layers';
 
 /** A screen-space pixel coordinate (as opposed to LngLat's map-space one). */
 interface ScreenPoint {
@@ -133,7 +138,11 @@ export function isDoubleClickFinish(detail: number): boolean {
  * water) — the same startDraw/handle-drag/erase family, snap-first — so
  * drawing a road behaves exactly like drawing a rail line.
  */
-export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachInteractionsOptions): () => void {
+export function attachInteractions(
+  map: MLMap,
+  store: EditorStore,
+  opts: AttachInteractionsOptions,
+): () => void {
   const canvas = map.getCanvas();
   let spaceHeld = false;
   let suppressClick = false;
@@ -180,7 +189,7 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
   const startPan = (e: MapMouseEvent, rightButton: boolean) => {
     let last = e.point;
     let moved = false;
-    canvas.style.cursor = "grabbing";
+    canvas.style.cursor = 'grabbing';
     // Accumulate raw deltas and issue one panBy per animation frame (same
     // idiom as startGroupDrag's nudge accumulator below) — panBy re-renders
     // every layer in the whole style, so calling it once per raw mousemove
@@ -207,14 +216,20 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     const onUp = (ev: MapMouseEvent) => {
       if (frame !== null) cancelAnimationFrame(frame);
       flush();
-      map.off("mousemove", onMove);
+      map.off('mousemove', onMove);
       canvas.style.cursor = cursorFor();
       if (rightButton && !moved) {
         const st = store.getState();
         // Way tool, right-click ON an open endpoint: branch a NEW one-way
         // segment off it — the couplet gesture. Inherits the street's
         // cross-section and name; travel runs the direction you now draw.
-        if (st.tool === "way" && !st.readOnly && !opts.isDiagramMode() && !st.activeWayId && !st.routeDraft) {
+        if (
+          st.tool === 'way' &&
+          !st.readOnly &&
+          !opts.isDiagramMode() &&
+          !st.activeWayId &&
+          !st.routeDraft
+        ) {
           const hit = nearestOpenEndpoint(st.system.ways, lngLatOf(ev), SNAP_PX * metersPerPixel());
           if (hit) {
             st.beginOneWayBranch(hit.wayId, hit.end);
@@ -230,8 +245,8 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
         else st.select(null);
       }
     };
-    map.on("mousemove", onMove);
-    map.once("mouseup", onUp);
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
   };
 
   // ---- dragging an existing thing -----------------------------------------
@@ -251,15 +266,15 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     const onUp = () => {
       throttled.flush();
       endGesture();
-      map.off("mousemove", onMove);
-      if (!moved) store.getState().select({ kind: "way", id: wayId });
+      map.off('mousemove', onMove);
+      if (!moved) store.getState().select({ kind: 'way', id: wayId });
     };
-    map.on("mousemove", onMove);
-    map.once("mouseup", onUp);
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
     beginGesture(() => {
       throttled.cancel();
-      map.off("mousemove", onMove);
-      map.off("mouseup", onUp);
+      map.off('mousemove', onMove);
+      map.off('mouseup', onUp);
       if (original) store.getState().moveWayPoint(wayId, index, original); // revert the live edit
     });
   };
@@ -288,23 +303,27 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     const onUp = (ev: MapMouseEvent) => {
       previewThrottle.cancel();
       endGesture();
-      map.off("mousemove", onMove);
+      map.off('mousemove', onMove);
       setPreview(null);
       if (dragged) {
-        placeEnd(wayId, atStart, resolveEnd(wayId, atStart, lngLatOf(ev), ev.originalEvent.shiftKey));
+        placeEnd(
+          wayId,
+          atStart,
+          resolveEnd(wayId, atStart, lngLatOf(ev), ev.originalEvent.shiftKey),
+        );
         // Pulling an end across another same-grade way forms a real junction
         // there, same as finishing a draw does.
         store.getState().formCrossingJunctions(wayId);
       } else {
-        store.getState().select({ kind: "way", id: wayId });
+        store.getState().select({ kind: 'way', id: wayId });
       }
     };
-    map.on("mousemove", onMove);
-    map.once("mouseup", onUp);
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
     beginGesture(() => {
       previewThrottle.cancel();
-      map.off("mousemove", onMove);
-      map.off("mouseup", onUp);
+      map.off('mousemove', onMove);
+      map.off('mouseup', onUp);
       setPreview(null); // nothing committed yet — cancel just drops the drag
     });
   };
@@ -323,15 +342,15 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     const onUp = () => {
       throttled.flush();
       endGesture();
-      map.off("mousemove", onMove);
-      if (!moved) store.getState().select({ kind: "station", id });
+      map.off('mousemove', onMove);
+      if (!moved) store.getState().select({ kind: 'station', id });
     };
-    map.on("mousemove", onMove);
-    map.once("mouseup", onUp);
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
     beginGesture(() => {
       throttled.cancel();
-      map.off("mousemove", onMove);
-      map.off("mouseup", onUp);
+      map.off('mousemove', onMove);
+      map.off('mouseup', onUp);
       if (originalCoord) store.getState().moveStation(id, originalCoord, originalAnchor); // revert
     });
   };
@@ -348,16 +367,17 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     const onUp = () => {
       throttled.flush();
       endGesture();
-      map.off("mousemove", onMove);
-      if (!moved) store.getState().select({ kind: "facility", id });
+      map.off('mousemove', onMove);
+      if (!moved) store.getState().select({ kind: 'facility', id });
     };
-    map.on("mousemove", onMove);
-    map.once("mouseup", onUp);
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
     beginGesture(() => {
       throttled.cancel();
-      map.off("mousemove", onMove);
-      map.off("mouseup", onUp);
-      if (original && !Array.isArray(original[0])) store.getState().moveFacility(id, original as LngLat); // revert
+      map.off('mousemove', onMove);
+      map.off('mouseup', onUp);
+      if (original && !Array.isArray(original[0]))
+        store.getState().moveFacility(id, original as LngLat); // revert
     });
   };
 
@@ -366,7 +386,12 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
   // Stored OPEN (no repeated closing point), matching squareFootprint's own
   // convention — layers.ts's closeRing() closes it only at render time.
   function rectCorners(a: LngLat, b: LngLat): LngLat[] {
-    return [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]];
+    return [
+      [a[0], a[1]],
+      [b[0], a[1]],
+      [b[0], b[1]],
+      [a[0], b[1]],
+    ];
   }
   // Same points with the first repeated at the end — for the live preview
   // line only, so the rubber-band reads as a closed loop while drawing.
@@ -408,14 +433,16 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
 
     const startPt = e.point;
     let dragged = false;
-    const previewThrottle = rafThrottle((c: LngLat) => setPreview(closedForPreview(rectCorners(startCoord, c))));
+    const previewThrottle = rafThrottle((c: LngLat) =>
+      setPreview(closedForPreview(rectCorners(startCoord, c))),
+    );
     const onMove = (ev: MapMouseEvent) => {
       if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
       if (dragged) previewThrottle.call(lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
       previewThrottle.cancel();
-      map.off("mousemove", onMove);
+      map.off('mousemove', onMove);
       if (dragged) {
         const corners = rectCorners(startCoord, lngLatOf(ev));
         setPreview(null);
@@ -427,8 +454,8 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
       }
       suppressClick = true;
     };
-    map.on("mousemove", onMove);
-    map.once("mouseup", onUp);
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
   };
 
   const cancelStationLandDraft = () => {
@@ -463,14 +490,16 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
 
     const startPt = e.point;
     let dragged = false;
-    const previewThrottle = rafThrottle((c: LngLat) => setPreview(closedForPreview(rectCorners(startCoord, c))));
+    const previewThrottle = rafThrottle((c: LngLat) =>
+      setPreview(closedForPreview(rectCorners(startCoord, c))),
+    );
     const onMove = (ev: MapMouseEvent) => {
       if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
       if (dragged) previewThrottle.call(lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
       previewThrottle.cancel();
-      map.off("mousemove", onMove);
+      map.off('mousemove', onMove);
       if (dragged) {
         setPreview(null);
         const corners = rectCorners(startCoord, lngLatOf(ev));
@@ -486,8 +515,8 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
       // No drag + no click-points (Network view): leave the click alone so
       // onClick places the schematic stop.
     };
-    map.on("mousemove", onMove);
-    map.once("mouseup", onUp);
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
   };
 
   // Facility tool, AREA kind selected (building, platform, bus bay, …):
@@ -498,14 +527,16 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     const startCoord = lngLatOf(e);
     const startPt = e.point;
     let dragged = false;
-    const previewThrottle = rafThrottle((c: LngLat) => setPreview(closedForPreview(rectCorners(startCoord, c))));
+    const previewThrottle = rafThrottle((c: LngLat) =>
+      setPreview(closedForPreview(rectCorners(startCoord, c))),
+    );
     const onMove = (ev: MapMouseEvent) => {
       if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
       if (dragged) previewThrottle.call(lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
       previewThrottle.cancel();
-      map.off("mousemove", onMove);
+      map.off('mousemove', onMove);
       if (dragged) {
         setPreview(null);
         const st = store.getState();
@@ -515,8 +546,8 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
         suppressClick = true;
       }
     };
-    map.on("mousemove", onMove);
-    map.once("mouseup", onUp);
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
   };
 
   // Dragging any handle/station/facility that's part of a 2+ multi-select
@@ -554,13 +585,13 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
       if (frame !== null) cancelAnimationFrame(frame);
       flush();
       endGesture();
-      map.off("mousemove", onMove);
+      map.off('mousemove', onMove);
     };
-    map.on("mousemove", onMove);
-    map.once("mouseup", onUp);
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
     beginGesture(() => {
-      map.off("mousemove", onMove);
-      map.off("mouseup", onUp);
+      map.off('mousemove', onMove);
+      map.off('mouseup', onUp);
       if (frame !== null) cancelAnimationFrame(frame);
       flush(); // apply whatever hadn't been flushed yet, so `total` matches the store
       if (totalDx !== 0 || totalDy !== 0) store.getState().nudgeMultiSelection(-totalDx, -totalDy); // revert
@@ -570,7 +601,7 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
   // True once 2+ items are multi-selected AND this one is among them — the
   // gate that routes a drag to startGroupDrag instead of the normal
   // single-item gesture. A lone Shift-clicked item still drags normally.
-  const isGroupMember = (kind: MultiSelectItem["kind"], id: string): boolean => {
+  const isGroupMember = (kind: MultiSelectItem['kind'], id: string): boolean => {
     const items = store.getState().multiSelection;
     return items.length > 1 && items.some((i) => i.kind === kind && i.id === id);
   };
@@ -580,14 +611,15 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
   // handle, just targeting that owner's own physical geometry instead.
   const startPhysicalHandleDrag = (feature: MapGeoJSONFeature) => {
     suppressClick = true;
-    const kind = feature.properties.kind as "footprint" | "platform" | "groupFootprint";
+    const kind = feature.properties.kind as 'footprint' | 'platform' | 'groupFootprint';
     const index = feature.properties.index as number;
 
-    if (kind === "groupFootprint") {
+    if (kind === 'groupFootprint') {
       const groupId = feature.properties.groupId as string;
       const group = store.getState().system.groups.find((g) => g.id === groupId);
       const original = group?.footprint?.[index];
-      const apply = (coord: LngLat) => store.getState().moveGroupFootprintPoint(groupId, index, coord);
+      const apply = (coord: LngLat) =>
+        store.getState().moveGroupFootprintPoint(groupId, index, coord);
       let moved = false;
       const throttled = rafThrottle(apply);
       const onMove = (ev: MapMouseEvent) => {
@@ -597,15 +629,15 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
       const onUp = () => {
         throttled.flush();
         endGesture();
-        map.off("mousemove", onMove);
-        if (!moved) store.getState().select({ kind: "group", id: groupId });
+        map.off('mousemove', onMove);
+        if (!moved) store.getState().select({ kind: 'group', id: groupId });
       };
-      map.on("mousemove", onMove);
-      map.once("mouseup", onUp);
+      map.on('mousemove', onMove);
+      map.once('mouseup', onUp);
       beginGesture(() => {
         throttled.cancel();
-        map.off("mousemove", onMove);
-        map.off("mouseup", onUp);
+        map.off('mousemove', onMove);
+        map.off('mouseup', onUp);
         if (original) apply(original);
       });
       return;
@@ -615,9 +647,11 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     const platformId = feature.properties.platformId as string | undefined;
     const station = store.getState().system.stations.find((s) => s.id === stationId);
     const original =
-      kind === "footprint" ? station?.footprint?.[index] : station?.platforms?.find((p) => p.id === platformId)?.points[index];
+      kind === 'footprint'
+        ? station?.footprint?.[index]
+        : station?.platforms?.find((p) => p.id === platformId)?.points[index];
     const apply = (coord: LngLat) => {
-      if (kind === "footprint") store.getState().moveFootprintPoint(stationId, index, coord);
+      if (kind === 'footprint') store.getState().moveFootprintPoint(stationId, index, coord);
       else store.getState().movePlatformPoint(stationId, platformId!, index, coord);
     };
     let moved = false;
@@ -629,23 +663,31 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     const onUp = () => {
       throttled.flush();
       endGesture();
-      map.off("mousemove", onMove);
-      if (!moved) store.getState().select({ kind: "station", id: stationId });
+      map.off('mousemove', onMove);
+      if (!moved) store.getState().select({ kind: 'station', id: stationId });
     };
-    map.on("mousemove", onMove);
-    map.once("mouseup", onUp);
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
     beginGesture(() => {
       throttled.cancel();
-      map.off("mousemove", onMove);
-      map.off("mouseup", onUp);
+      map.off('mousemove', onMove);
+      map.off('mouseup', onUp);
       if (original) apply(original);
     });
   };
 
   const setPreview = (coords: LngLat[] | null) => {
     (map.getSource(SRC_PREVIEW) as GeoJSONSource | undefined)?.setData({
-      type: "FeatureCollection",
-      features: coords ? [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } }] : [],
+      type: 'FeatureCollection',
+      features: coords
+        ? [
+            {
+              type: 'Feature',
+              properties: {},
+              geometry: { type: 'LineString', coordinates: coords },
+            },
+          ]
+        : [],
     });
   };
 
@@ -653,8 +695,10 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
   // shown at an open endpoint the Way tool is currently hovering near.
   const setEndpointHint = (coord: LngLat | null) => {
     (map.getSource(SRC_ENDPOINT_HINT) as GeoJSONSource | undefined)?.setData({
-      type: "FeatureCollection",
-      features: coord ? [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: coord } }] : [],
+      type: 'FeatureCollection',
+      features: coord
+        ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: coord } }]
+        : [],
     });
   };
 
@@ -669,12 +713,21 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
       return [ll.lng, ll.lat];
     });
     (map.getSource(SRC_MARQUEE) as GeoJSONSource | undefined)?.setData({
-      type: "FeatureCollection",
-      features: [{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...corners, corners[0]]] } }],
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'Polygon', coordinates: [[...corners, corners[0]]] },
+        },
+      ],
     });
   };
   const clearMarquee = () => {
-    (map.getSource(SRC_MARQUEE) as GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: [] });
+    (map.getSource(SRC_MARQUEE) as GeoJSONSource | undefined)?.setData({
+      type: 'FeatureCollection',
+      features: [],
+    });
   };
 
   // Shift-drag on truly empty space (nothing else under the cursor) rubber-
@@ -696,19 +749,28 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     };
     const onUp = (ev: MapMouseEvent) => {
       marqueeThrottle.cancel();
-      map.off("mousemove", onMove);
+      map.off('mousemove', onMove);
       clearMarquee();
       if (!dragged) return; // a Shift-click on empty space stays a no-op
       const endPt = ev.point;
-      const corners = [startPt, { x: endPt.x, y: startPt.y }, endPt, { x: startPt.x, y: endPt.y }].map((p) => map.unproject([p.x, p.y]));
-      let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+      const corners = [
+        startPt,
+        { x: endPt.x, y: startPt.y },
+        endPt,
+        { x: startPt.x, y: endPt.y },
+      ].map((p) => map.unproject([p.x, p.y]));
+      let minLng = Infinity,
+        minLat = Infinity,
+        maxLng = -Infinity,
+        maxLat = -Infinity;
       for (const c of corners) {
         if (c.lng < minLng) minLng = c.lng;
         if (c.lng > maxLng) maxLng = c.lng;
         if (c.lat < minLat) minLat = c.lat;
         if (c.lat > maxLat) maxLat = c.lat;
       }
-      const inBox = (c: LngLat) => c[0] >= minLng && c[0] <= maxLng && c[1] >= minLat && c[1] <= maxLat;
+      const inBox = (c: LngLat) =>
+        c[0] >= minLng && c[0] <= maxLng && c[1] >= minLat && c[1] <= maxLat;
       // A way is "in the box" if the box touches its rendered path anywhere —
       // not just at a sampled point. Checking only resolveWayPath's own
       // points misses a long straight way whose two endpoints both sit
@@ -718,22 +780,27 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
       const pathInBox = (path: LngLat[]): boolean => {
         for (let i = 0; i < path.length; i++) {
           if (inBox(path[i])) return true;
-          if (i > 0 && segmentIntersectsBox(path[i - 1], path[i], minLng, minLat, maxLng, maxLat)) return true;
+          if (i > 0 && segmentIntersectsBox(path[i - 1], path[i], minLng, minLat, maxLng, maxLat))
+            return true;
         }
         return false;
       };
       const st = store.getState();
       const items: MultiSelectItem[] = [];
-      for (const w of st.system.ways) if (pathInBox(resolveWayPath(w))) items.push({ kind: "way", id: w.id });
-      for (const s of st.system.stations) if (inBox(s.coord)) items.push({ kind: "station", id: s.id });
+      for (const w of st.system.ways)
+        if (pathInBox(resolveWayPath(w))) items.push({ kind: 'way', id: w.id });
+      for (const s of st.system.stations)
+        if (inBox(s.coord)) items.push({ kind: 'station', id: s.id });
       for (const f of st.system.facilities) {
-        const coord = Array.isArray(f.geometry[0]) ? (f.geometry as LngLat[])[0] : (f.geometry as LngLat);
-        if (inBox(coord)) items.push({ kind: "facility", id: f.id });
+        const coord = Array.isArray(f.geometry[0])
+          ? (f.geometry as LngLat[])[0]
+          : (f.geometry as LngLat);
+        if (inBox(coord)) items.push({ kind: 'facility', id: f.id });
       }
       if (items.length > 0) st.addMultiSelection(items);
     };
-    map.on("mousemove", onMove);
-    map.once("mouseup", onUp);
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
   };
 
   const wayPointAt = (wayId: string, index: number): LngLat | null => {
@@ -764,7 +831,7 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     const startPt = e.point;
     const startCoord = lngLatOf(e);
     let started = false;
-    let wayId = "";
+    let wayId = '';
     let lastPt = startPt;
     const onMove = (ev: MapMouseEvent) => {
       if (!started) {
@@ -772,7 +839,7 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
         started = true;
         suppressClick = true;
         const st = store.getState();
-        wayId = st.beginWay(st.draftWayTypeId, "freeform");
+        wayId = st.beginWay(st.draftWayTypeId, 'freeform');
         st.addWayPoint(wayId, startCoord);
         lastPt = startPt;
       }
@@ -781,7 +848,7 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
       store.getState().addWayPoint(wayId, lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
-      map.off("mousemove", onMove);
+      map.off('mousemove', onMove);
       if (started) {
         // Still inside the checkpoint (endGesture is below) so the final
         // point + finishWay coalesce with the sampled points from onMove
@@ -791,11 +858,11 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
       }
       endGesture();
     };
-    map.on("mousemove", onMove);
-    map.once("mouseup", onUp);
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
     beginGesture(() => {
-      map.off("mousemove", onMove);
-      map.off("mouseup", onUp);
+      map.off('mousemove', onMove);
+      map.off('mouseup', onUp);
       if (started) store.getState().deleteWay(wayId); // discard whatever was sampled so far
     });
   };
@@ -847,30 +914,47 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
       }
     }
 
-    if (st.draftGeometry === "freeform") {
+    if (st.draftGeometry === 'freeform') {
       startFreehand(e);
       return;
     }
     const startPt = e.point;
     const startCoord = lngLatOf(e);
-    let wayId = st.activeWayId ?? "";
+    let wayId = st.activeWayId ?? '';
     const seededStart = !wayId; // no active way yet — this press only seeds/grabs
     let extendAtStart = activeExtendAtStart;
 
     if (!wayId) {
       // Alt-draw (forceSeparate) never resumes an existing way — it's the
       // opt-out from attaching to what's already here.
-      const resume = forceSeparate ? null : nearestOpenEndpoint(st.system.ways, startCoord, SNAP_PX * metersPerPixel(), st.draftWayTypeId);
+      const resume = forceSeparate
+        ? null
+        : nearestOpenEndpoint(
+            st.system.ways,
+            startCoord,
+            SNAP_PX * metersPerPixel(),
+            st.draftWayTypeId,
+          );
       if (resume) {
         wayId = resume.wayId;
-        extendAtStart = resume.end === "start";
+        extendAtStart = resume.end === 'start';
         st.resumeWay(wayId);
-        const ridingService = st.system.services.find((sv) => sv.patterns.some((p) => p.wayIds.includes(wayId)));
-        st.select(ridingService ? { kind: "service", id: ridingService.id } : { kind: "way", id: wayId });
+        const ridingService = st.system.services.find((sv) =>
+          sv.patterns.some((p) => p.wayIds.includes(wayId)),
+        );
+        st.select(
+          ridingService ? { kind: 'service', id: ridingService.id } : { kind: 'way', id: wayId },
+        );
       } else {
         wayId = st.beginWay(st.draftWayTypeId, st.draftGeometry);
         extendAtStart = false;
-        const seed = snap(st.system.ways, startCoord, SNAP_PX * metersPerPixel(), new Set([wayId]), st.draftWayTypeId);
+        const seed = snap(
+          st.system.ways,
+          startCoord,
+          SNAP_PX * metersPerPixel(),
+          new Set([wayId]),
+          st.draftWayTypeId,
+        );
         st.addWayPoint(wayId, seed ? seed.coord : startCoord);
         if (seed) st.joinWayPointToWay(wayId, 0, seed.wayId, seed.coord);
       }
@@ -890,21 +974,26 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     const onUp = (ev: MapMouseEvent) => {
       previewThrottle.cancel();
       endGesture();
-      map.off("mousemove", onMove);
+      map.off('mousemove', onMove);
       // Seed-only click just grabbed the start (fresh or resumed); every
       // other release adds a node.
       if (dragged || !seededStart) {
-        const end = resolveEnd(committedWayId, extendAtStart, lngLatOf(ev), ev.originalEvent.shiftKey);
+        const end = resolveEnd(
+          committedWayId,
+          extendAtStart,
+          lngLatOf(ev),
+          ev.originalEvent.shiftKey,
+        );
         placeEnd(committedWayId, extendAtStart, end);
       }
       suppressClick = true; // node placement is handled here, not in onClick
     };
-    map.on("mousemove", onMove);
-    map.once("mouseup", onUp);
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
     beginGesture(() => {
       previewThrottle.cancel();
-      map.off("mousemove", onMove);
-      map.off("mouseup", onUp);
+      map.off('mousemove', onMove);
+      map.off('mouseup', onUp);
       setPreview(null);
       // A brand-new way's seed point was already committed before this
       // closure exists — canceling just drops the pending node this press
@@ -927,10 +1016,21 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
   // roughly aligned with it (so extending continues straight instead of
   // introducing an accidental kink); a Shift-held drag instead constrains to
   // 45° from the endpoint; otherwise the raw cursor position.
-  const resolveEnd = (wayId: string, atStart: boolean, raw: LngLat, shiftKey: boolean): ResolvedEnd => {
+  const resolveEnd = (
+    wayId: string,
+    atStart: boolean,
+    raw: LngLat,
+    shiftKey: boolean,
+  ): ResolvedEnd => {
     const endpoint = wayEndpoint(wayId, atStart);
     if (shiftKey && endpoint) return { coord: angleSnap(endpoint, raw) };
-    const otherWay = snap(store.getState().system.ways, raw, SNAP_PX * metersPerPixel(), new Set([wayId]), store.getState().draftWayTypeId);
+    const otherWay = snap(
+      store.getState().system.ways,
+      raw,
+      SNAP_PX * metersPerPixel(),
+      new Set([wayId]),
+      store.getState().draftWayTypeId,
+    );
     if (otherWay) return { coord: otherWay.coord, snapWayId: otherWay.wayId };
     const heading = wayHeadingAnchor(wayId, atStart);
     if (endpoint && heading) {
@@ -964,7 +1064,7 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
   // latency on a hover affordance is imperceptible.
   const onHoverMoveImpl = (ev: MapMouseEvent) => {
     const st = store.getState();
-    if (st.tool === "way" && st.activeWayId) {
+    if (st.tool === 'way' && st.activeWayId) {
       const last = wayEndpoint(st.activeWayId, activeExtendAtStart);
       if (last) setPreview([last, lngLatOf(ev)]);
       setEndpointHint(null);
@@ -979,8 +1079,13 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
       return;
     }
     setPreview(null);
-    if (st.tool === "way" && !st.readOnly) {
-      const resume = nearestOpenEndpoint(st.system.ways, lngLatOf(ev), SNAP_PX * metersPerPixel(), st.draftWayTypeId);
+    if (st.tool === 'way' && !st.readOnly) {
+      const resume = nearestOpenEndpoint(
+        st.system.ways,
+        lngLatOf(ev),
+        SNAP_PX * metersPerPixel(),
+        st.draftWayTypeId,
+      );
       setEndpointHint(resume ? resume.coord : null);
     } else {
       setEndpointHint(null);
@@ -1004,20 +1109,26 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
   // as any other gesture; see beginGesture/endGesture).
   const startErase = (firstHandle: MapGeoJSONFeature) => {
     suppressClick = true;
-    store.getState().deleteWayPoint(firstHandle.properties.wayId as string, firstHandle.properties.index as number);
+    store
+      .getState()
+      .deleteWayPoint(
+        firstHandle.properties.wayId as string,
+        firstHandle.properties.index as number,
+      );
     const onMove = (ev: MapMouseEvent) => {
       const f = featureAt(ev, [LYR_HANDLES, LYR_WAY_ENDPOINTS]);
-      if (f) store.getState().deleteWayPoint(f.properties.wayId as string, f.properties.index as number);
+      if (f)
+        store.getState().deleteWayPoint(f.properties.wayId as string, f.properties.index as number);
     };
     const onUp = () => {
       endGesture();
-      map.off("mousemove", onMove);
+      map.off('mousemove', onMove);
     };
-    map.on("mousemove", onMove);
-    map.once("mouseup", onUp);
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
     beginGesture(() => {
-      map.off("mousemove", onMove);
-      map.off("mouseup", onUp);
+      map.off('mousemove', onMove);
+      map.off('mouseup', onUp);
     });
   };
 
@@ -1061,12 +1172,12 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
 
     if (oe.altKey) {
       if (physicalHandle) {
-        const kind = physicalHandle.properties.kind as "footprint" | "platform" | "groupFootprint";
-        if (kind === "groupFootprint") {
+        const kind = physicalHandle.properties.kind as 'footprint' | 'platform' | 'groupFootprint';
+        if (kind === 'groupFootprint') {
           st.deleteGroupFootprint(physicalHandle.properties.groupId as string);
         } else {
           const stationId = physicalHandle.properties.stationId as string;
-          if (kind === "footprint") st.deleteStationFootprint(stationId);
+          if (kind === 'footprint') st.deleteStationFootprint(stationId);
           else st.deletePlatform(stationId, physicalHandle.properties.platformId as string);
         }
         suppressClick = true;
@@ -1078,7 +1189,13 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
       } else if (facility) {
         st.deleteFacility(facility.properties.id as string);
         suppressClick = true;
-      } else if (st.tool === "way" && opts.isNetworkMode() && !st.routeDraft && !st.activeWayId && !isDoubleClickFinish(oe.detail)) {
+      } else if (
+        st.tool === 'way' &&
+        opts.isNetworkMode() &&
+        !st.routeDraft &&
+        !st.activeWayId &&
+        !isDoubleClickFinish(oe.detail)
+      ) {
         // Alt on empty space in the Way tool draws SEPARATE infrastructure,
         // opting out of share-by-default corridor snapping (see startDraw).
         startDraw(e, true);
@@ -1092,7 +1209,7 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     // needs its own deliberate gesture instead of being the unmodified
     // default. This target was otherwise a no-op under Ctrl/Cmd (nothing to
     // split off an endpoint), which is exactly why it was free to repurpose.
-    if ((oe.ctrlKey || oe.metaKey) && endpoint && st.tool === "select") {
+    if ((oe.ctrlKey || oe.metaKey) && endpoint && st.tool === 'select') {
       startExtendDrag(endpoint);
       return;
     }
@@ -1110,23 +1227,27 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     }
 
     switch (st.tool) {
-      case "select":
+      case 'select':
         // Shift-click toggles multi-select membership instead of starting any
         // drag — a discrete add/remove, resolved entirely here since every
         // draggable target below sets suppressClick and would otherwise
         // swallow the click before onClick ever saw it.
         if (oe.shiftKey) {
-          if (handle) st.toggleMultiSelect({ kind: "way", id: handle.properties.wayId as string });
-          else if (facility) st.toggleMultiSelect({ kind: "facility", id: facility.properties.id as string });
-          else if (station) st.toggleMultiSelect({ kind: "station", id: station.properties.id as string });
+          if (handle) st.toggleMultiSelect({ kind: 'way', id: handle.properties.wayId as string });
+          else if (facility)
+            st.toggleMultiSelect({ kind: 'facility', id: facility.properties.id as string });
+          else if (station)
+            st.toggleMultiSelect({ kind: 'station', id: station.properties.id as string });
           else {
             // A served way's visible line is drawn as its SERVICE feature, not
             // its (often-hidden) bare WAY_LAYERS one — try both, same as a
             // plain click's own hit-testing does.
             const wayHit = featureAt(e, WAY_LAYERS);
             const serviceHit = wayHit ? undefined : featureAt(e, SERVICE_LAYERS);
-            const wayId = wayHit ? (wayHit.properties.id as string) : (serviceHit?.properties.wayId as string | undefined);
-            if (wayId) st.toggleMultiSelect({ kind: "way", id: wayId });
+            const wayId = wayHit
+              ? (wayHit.properties.id as string)
+              : (serviceHit?.properties.wayId as string | undefined);
+            if (wayId) st.toggleMultiSelect({ kind: 'way', id: wayId });
             // Truly empty space under the cursor — rubber-band select
             // instead of toggling a single (nonexistent) target.
             else startMarqueeSelect(e);
@@ -1138,7 +1259,8 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
         // `handle` is `endpoint ?? …` — this also covers an endpoint whose
         // way is part of a multi-selection, so nudging one end drags the
         // whole group, same as any other member handle.
-        else if (handle && isGroupMember("way", handle.properties.wayId as string)) startGroupDrag(e);
+        else if (handle && isGroupMember('way', handle.properties.wayId as string))
+          startGroupDrag(e);
         // Plain drag on a way's open END reshapes it in place (moves that
         // one point, same gesture as an interior handle) — hold Ctrl/Cmd
         // instead to extend the way with a new point (handled above, before
@@ -1146,17 +1268,22 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
         // too little to reach otherwise).
         else if (endpoint) startHandleDrag(endpoint, oe.shiftKey);
         else if (handle) startHandleDrag(handle, oe.shiftKey);
-        else if (facility && isGroupMember("facility", facility.properties.id as string)) startGroupDrag(e);
+        else if (facility && isGroupMember('facility', facility.properties.id as string))
+          startGroupDrag(e);
         else if (facility) startFacilityDrag(facility.properties.id as string);
-        else if (station && isGroupMember("station", station.properties.id as string)) startGroupDrag(e);
+        else if (station && isGroupMember('station', station.properties.id as string))
+          startGroupDrag(e);
         else if (station) startStationDrag(station.properties.id as string);
         else {
           // Grabbing a multi-selected way's LINE anywhere (not just a control-
           // point handle) still moves the whole group — the natural "grab and
           // drag this line" gesture, not one gated on hitting an exact vertex.
           const lineHit = featureAt(e, [...WAY_LAYERS, ...SERVICE_LAYERS]);
-          const lineWayId = lineHit && ((lineHit.properties.wayId as string | undefined) ?? (lineHit.properties.id as string | undefined));
-          if (lineWayId && isGroupMember("way", lineWayId)) startGroupDrag(e);
+          const lineWayId =
+            lineHit &&
+            ((lineHit.properties.wayId as string | undefined) ??
+              (lineHit.properties.id as string | undefined));
+          if (lineWayId && isGroupMember('way', lineWayId)) startGroupDrag(e);
           // Empty space: left-drag pans too (not just right-drag/space+drag) —
           // the canvas shows a grab cursor there by default (see cursorFor),
           // so left-click must actually honor it or the cursor is a lie. A
@@ -1165,27 +1292,28 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
           else startPan(e, false);
         }
         break;
-      case "way":
+      case 'way':
         // In the Way tool a press always places the next node (even starting
         // on a handle) — reshaping handles is a Select-tool action — EXCEPT
         // the second press of a double-click, which exists only to trigger
         // the dblclick->finishWay that follows it. See isDoubleClickFinish.
         if (!isDoubleClickFinish(oe.detail)) startDraw(e);
         break;
-      case "station":
+      case 'station':
         if (station) startStationDrag(station.properties.id as string);
         // Infrastructure = 2D: the tool draws LAND (drag rect or click
         // points). Network keeps its schematic click-a-stop via onClick;
         // drag still draws land there too.
         else startStationLandDraw(e, !opts.isNetworkMode());
         break;
-      case "facility":
+      case 'facility':
         if (facility) startFacilityDrag(facility.properties.id as string);
         else if (!st.placingFacilityForGroupId) {
           // Complex mode drafts the site boundary; AREA kinds drag-draw the
           // structure's real shape; point kinds click-place via onClick.
           if (st.draftFacilityComplexMode) startFacilityBoundary(e);
-          else if (facilityType(st.draftFacilityTypeId).geometryKind === "area") startStructureDraw(e);
+          else if (facilityType(st.draftFacilityTypeId).geometryKind === 'area')
+            startStructureDraw(e);
         }
         break;
     }
@@ -1215,7 +1343,7 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     }
 
     switch (st.tool) {
-      case "station": {
+      case 'station': {
         // Point stops are a NETWORK-view (schematic) concept. In the
         // Infrastructure view everything is 2D — the mousedown gesture owns
         // station creation there (land only), so a bare click does nothing.
@@ -1225,7 +1353,7 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
         else st.addStation(coord);
         break;
       }
-      case "facility": {
+      case 'facility': {
         // Armed "place inside" (from a complex's Inspector) wins; complex
         // mode's boundary drafting lives in onMouseDown; otherwise a click
         // simply PLACES the selected facility type right there — point kinds
@@ -1234,37 +1362,45 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
           st.placeFacilityInGroup(st.placingFacilityForGroupId, st.draftFacilityTypeId, coord);
         } else if (!st.draftFacilityComplexMode) {
           const kind = facilityType(st.draftFacilityTypeId);
-          st.addFacility(st.draftFacilityTypeId, kind.geometryKind === "area" ? squareFootprint(coord, AREA_FACILITY_HALF_M) : coord);
+          st.addFacility(
+            st.draftFacilityTypeId,
+            kind.geometryKind === 'area' ? squareFootprint(coord, AREA_FACILITY_HALF_M) : coord,
+          );
         }
         break;
       }
-      case "select": {
+      case 'select': {
         // Stations/handles/lines outrank the junction footprint under them.
         const hit =
-          featureAt(e, [LYR_STATIONS, LYR_FACILITIES, LYR_HANDLES, ...SERVICE_LAYERS, ...WAY_LAYERS]) ??
-          featureAt(e, [LYR_JUNCTIONS]);
+          featureAt(e, [
+            LYR_STATIONS,
+            LYR_FACILITIES,
+            LYR_HANDLES,
+            ...SERVICE_LAYERS,
+            ...WAY_LAYERS,
+          ]) ?? featureAt(e, [LYR_JUNCTIONS]);
         if (!hit) {
           st.select(null);
         } else if (hit.layer.id === LYR_JUNCTIONS) {
-          st.select({ kind: "node", id: hit.properties.nodeId as string });
+          st.select({ kind: 'node', id: hit.properties.nodeId as string });
         } else if (hit.layer.id === LYR_STATIONS) {
-          st.select({ kind: "station", id: hit.properties.id as string });
+          st.select({ kind: 'station', id: hit.properties.id as string });
         } else if (hit.layer.id === LYR_FACILITIES) {
-          st.select({ kind: "facility", id: hit.properties.id as string });
+          st.select({ kind: 'facility', id: hit.properties.id as string });
         } else if (hit.layer.id === LYR_HANDLES) {
-          st.select({ kind: "way", id: hit.properties.wayId as string });
+          st.select({ kind: 'way', id: hit.properties.wayId as string });
         } else if (WAY_LAYERS.includes(hit.layer.id)) {
-          st.select({ kind: "way", id: hit.properties.id as string });
+          st.select({ kind: 'way', id: hit.properties.id as string });
         } else {
           // A service line. Click to select the service; click it again to add a
           // control point to the way it runs on.
           const serviceId = hit.properties.serviceId as string;
           const wayId = hit.properties.wayId as string;
-          if (st.selection?.kind === "service" && st.selection.id === serviceId) {
+          if (st.selection?.kind === 'service' && st.selection.id === serviceId) {
             const way = st.system.ways.find((w) => w.id === wayId);
             if (way) st.insertWayPoint(wayId, insertIndexOnPolygon(way.points, e.point), coord);
           } else {
-            st.select({ kind: "service", id: serviceId });
+            st.select({ kind: 'service', id: serviceId });
           }
         }
         break;
@@ -1299,14 +1435,14 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
   // the keymap's own (bubble-phase) Escape handler, so a canceled gesture
   // consumes the keypress instead of also "backing out" a level.
   const onEscapeCapture = (e: KeyboardEvent) => {
-    if (e.key !== "Escape") return;
+    if (e.key !== 'Escape') return;
     if (cancelActiveGesture) {
       e.preventDefault();
       e.stopImmediatePropagation();
       const cancel = cancelActiveGesture;
       cancelActiveGesture = null;
       cancel(); // reverts the live edit — its own set() calls stay coalesced
-                // since the checkpoint is still open until the next line
+      // since the checkpoint is still open until the next line
       store.getState().commitHistoryCheckpoint(); // no-op if the revert left system unchanged
       return;
     }
@@ -1321,7 +1457,7 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
       cancelStationLandDraft();
     }
   };
-  window.addEventListener("keydown", onEscapeCapture, true);
+  window.addEventListener('keydown', onEscapeCapture, true);
 
   // All discrete keyboard commands live in the declarative keymap. Here we only
   // supply it the context and let it drive the space-hold pan modifier.
@@ -1332,30 +1468,31 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     toggleUi: opts.toggleUi,
     setPanKeyHeld: (held) => {
       spaceHeld = held;
-      canvas.style.cursor = held ? "grab" : cursorFor();
+      canvas.style.cursor = held ? 'grab' : cursorFor();
     },
   });
 
   function cursorFor(): string {
-    if (spaceHeld) return "grab";
+    if (spaceHeld) return 'grab';
     // Diagram mode ignores the active tool entirely (nothing is drawable
     // there) — always the plain pan affordance, never a crosshair promising
     // a draw that won't happen.
-    if (opts.isDiagramMode()) return "grab";
+    if (opts.isDiagramMode()) return 'grab';
     const tool = store.getState().tool;
-    if (tool === "way" || tool === "station" || tool === "facility") return "crosshair";
+    if (tool === 'way' || tool === 'station' || tool === 'facility') return 'crosshair';
     // Select tool, empty space: left-drag pans here too (see onMouseDown), so
     // the grab cursor MapLibre already shows by default is actually honest —
     // explicit rather than relying on an inline-style reset falling through
     // to MapLibre's own CSS, which is what caused the mismatch in the first
     // place (this "" would inherit the container's cursor:grab regardless).
-    if (tool === "select") return "grab";
-    return "default";
+    if (tool === 'select') return 'grab';
+    return 'default';
   }
 
   // Cursor must always match what a press would actually do right now — never
   // show an affordance the current tool/readOnly state can't back up.
-  const draggable = () => store.getState().tool === "select" && !store.getState().readOnly && !opts.isDiagramMode();
+  const draggable = () =>
+    store.getState().tool === 'select' && !store.getState().readOnly && !opts.isDiagramMode();
   // Stations/handles/facilities: click-drag to select/reshape/reposition —
   // "grab" (not "pointer", which reads as "click this link/button") matches
   // the same drag-affordance convention as the map's own pan cursor. Which
@@ -1377,28 +1514,28 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
   // other modifier gestures (Alt-erase, Ctrl-split), doesn't get its own
   // hover cursor — only documented in the Inspector's hint text.
   const onEnterHandle = () => {
-    if (draggable()) canvas.style.cursor = "grab";
-    else if (store.getState().tool === "select") canvas.style.cursor = "default";
+    if (draggable()) canvas.style.cursor = 'grab';
+    else if (store.getState().tool === 'select') canvas.style.cursor = 'default';
   };
   const onLeaveFeature = () => {
     canvas.style.cursor = cursorFor();
   };
 
-  map.on("mousedown", onMouseDown);
-  map.on("mousemove", onHoverMove);
-  map.on("click", onClick);
-  map.on("dblclick", onDblClick);
-  map.on("mouseenter", LYR_STATIONS, onEnterHandle);
-  map.on("mouseleave", LYR_STATIONS, onLeaveFeature);
-  map.on("mouseenter", LYR_HANDLES, onEnterHandle);
-  map.on("mouseleave", LYR_HANDLES, onLeaveFeature);
-  map.on("mouseenter", LYR_WAY_ENDPOINTS, onEnterHandle);
-  map.on("mouseleave", LYR_WAY_ENDPOINTS, onLeaveFeature);
-  map.on("mouseenter", LYR_FACILITIES, onEnterHandle);
-  map.on("mouseleave", LYR_FACILITIES, onLeaveFeature);
-  map.on("mouseenter", LYR_PHYSICAL_HANDLES, onEnterHandle);
-  map.on("mouseleave", LYR_PHYSICAL_HANDLES, onLeaveFeature);
-  canvas.addEventListener("contextmenu", onContextMenu);
+  map.on('mousedown', onMouseDown);
+  map.on('mousemove', onHoverMove);
+  map.on('click', onClick);
+  map.on('dblclick', onDblClick);
+  map.on('mouseenter', LYR_STATIONS, onEnterHandle);
+  map.on('mouseleave', LYR_STATIONS, onLeaveFeature);
+  map.on('mouseenter', LYR_HANDLES, onEnterHandle);
+  map.on('mouseleave', LYR_HANDLES, onLeaveFeature);
+  map.on('mouseenter', LYR_WAY_ENDPOINTS, onEnterHandle);
+  map.on('mouseleave', LYR_WAY_ENDPOINTS, onLeaveFeature);
+  map.on('mouseenter', LYR_FACILITIES, onEnterHandle);
+  map.on('mouseleave', LYR_FACILITIES, onLeaveFeature);
+  map.on('mouseenter', LYR_PHYSICAL_HANDLES, onEnterHandle);
+  map.on('mouseleave', LYR_PHYSICAL_HANDLES, onLeaveFeature);
+  canvas.addEventListener('contextmenu', onContextMenu);
 
   let lastTool = store.getState().tool;
   let lastActive = store.getState().activeWayId;
@@ -1406,11 +1543,11 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
     if (s.tool !== lastTool) {
       lastTool = s.tool;
       canvas.style.cursor = cursorFor();
-      if (s.tool !== "way") {
+      if (s.tool !== 'way') {
         setPreview(null);
         setEndpointHint(null);
       }
-      if (s.tool !== "facility") facilityBoundaryDraft = null;
+      if (s.tool !== 'facility') facilityBoundaryDraft = null;
     }
     if (s.activeWayId !== lastActive) {
       lastActive = s.activeWayId;
@@ -1424,22 +1561,22 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
 
   return () => {
     hoverThrottle.cancel();
-    map.off("mousedown", onMouseDown);
-    map.off("mousemove", onHoverMove);
-    map.off("click", onClick);
-    map.off("dblclick", onDblClick);
-    map.off("mouseenter", LYR_STATIONS, onEnterHandle);
-    map.off("mouseleave", LYR_STATIONS, onLeaveFeature);
-    map.off("mouseenter", LYR_HANDLES, onEnterHandle);
-    map.off("mouseleave", LYR_HANDLES, onLeaveFeature);
-    map.off("mouseenter", LYR_WAY_ENDPOINTS, onEnterHandle);
-    map.off("mouseleave", LYR_WAY_ENDPOINTS, onLeaveFeature);
-    map.off("mouseenter", LYR_FACILITIES, onEnterHandle);
-    map.off("mouseleave", LYR_FACILITIES, onLeaveFeature);
-    map.off("mouseenter", LYR_PHYSICAL_HANDLES, onEnterHandle);
-    map.off("mouseleave", LYR_PHYSICAL_HANDLES, onLeaveFeature);
-    canvas.removeEventListener("contextmenu", onContextMenu);
-    window.removeEventListener("keydown", onEscapeCapture, true);
+    map.off('mousedown', onMouseDown);
+    map.off('mousemove', onHoverMove);
+    map.off('click', onClick);
+    map.off('dblclick', onDblClick);
+    map.off('mouseenter', LYR_STATIONS, onEnterHandle);
+    map.off('mouseleave', LYR_STATIONS, onLeaveFeature);
+    map.off('mouseenter', LYR_HANDLES, onEnterHandle);
+    map.off('mouseleave', LYR_HANDLES, onLeaveFeature);
+    map.off('mouseenter', LYR_WAY_ENDPOINTS, onEnterHandle);
+    map.off('mouseleave', LYR_WAY_ENDPOINTS, onLeaveFeature);
+    map.off('mouseenter', LYR_FACILITIES, onEnterHandle);
+    map.off('mouseleave', LYR_FACILITIES, onLeaveFeature);
+    map.off('mouseenter', LYR_PHYSICAL_HANDLES, onEnterHandle);
+    map.off('mouseleave', LYR_PHYSICAL_HANDLES, onLeaveFeature);
+    canvas.removeEventListener('contextmenu', onContextMenu);
+    window.removeEventListener('keydown', onEscapeCapture, true);
     detachKeyboard();
     unsubTool();
   };
@@ -1474,14 +1611,33 @@ export function attachInteractions(map: MLMap, store: EditorStore, opts: AttachI
 // used by startMarqueeSelect so a way is caught by the marquee even when it
 // merely passes through the box without either endpoint or any resampled
 // point landing inside it (a long straight way through a small box).
-function segmentIntersectsBox(a: LngLat, b: LngLat, minX: number, minY: number, maxX: number, maxY: number): boolean {
+function segmentIntersectsBox(
+  a: LngLat,
+  b: LngLat,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+): boolean {
   if (Math.max(a[0], b[0]) < minX || Math.min(a[0], b[0]) > maxX) return false;
   if (Math.max(a[1], b[1]) < minY || Math.min(a[1], b[1]) > maxY) return false;
   const edges: [LngLat, LngLat][] = [
-    [[minX, minY], [maxX, minY]],
-    [[maxX, minY], [maxX, maxY]],
-    [[maxX, maxY], [minX, maxY]],
-    [[minX, maxY], [minX, minY]],
+    [
+      [minX, minY],
+      [maxX, minY],
+    ],
+    [
+      [maxX, minY],
+      [maxX, maxY],
+    ],
+    [
+      [maxX, maxY],
+      [minX, maxY],
+    ],
+    [
+      [minX, maxY],
+      [minX, minY],
+    ],
   ];
   return edges.some(([p3, p4]) => segmentsIntersect(a, b, p3, p4));
 }

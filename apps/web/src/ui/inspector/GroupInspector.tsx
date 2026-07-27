@@ -1,15 +1,19 @@
-import { useState } from "react";
-import { useEditor } from "../../editor/EditorProvider";
-import { FACILITY_TYPE_ORDER, FACILITY_TYPES, facilityType } from "@transitmapper/core/model/catalog";
-import type { Station, TransitSystem } from "@transitmapper/core/model/system";
-import type { Selection } from "../../editor/store";
-import { ColorField } from "../ColorField";
-import { InspectorTabs, type InspectorTab } from "../InspectorTabs";
-import { Panel } from "../Panel";
-import { blurOnEnter } from "../formUtils";
-import { Icon } from "../Icon";
-import { useView } from "../ViewProvider";
-import { EmptyInspector, Stat } from "./shared";
+import { useState } from 'react';
+import { useEditor } from '../../editor/EditorProvider';
+import {
+  FACILITY_TYPE_ORDER,
+  FACILITY_TYPES,
+  facilityType,
+} from '@transitmapper/core/model/catalog';
+import type { Station, TransitSystem } from '@transitmapper/core/model/system';
+import type { Selection } from '../../editor/store';
+import { ColorField } from '../ColorField';
+import { InspectorTabs, type InspectorTab } from '../InspectorTabs';
+import { Panel } from '../Panel';
+import { blurOnEnter } from '../formUtils';
+import { Icon } from '../Icon';
+import { useView } from '../ViewProvider';
+import { EmptyInspector, Stat } from './shared';
 
 // A group member can be a station, a facility, or (transfer complexes formed
 // from LinesPanel) a service — resolve both its display name AND its real
@@ -17,17 +21,28 @@ import { EmptyInspector, Stat } from "./shared";
 // of always assuming "station".
 interface MemberLookup {
   stations: Station[];
-  facilities: TransitSystem["facilities"];
-  services: TransitSystem["services"];
+  facilities: TransitSystem['facilities'];
+  services: TransitSystem['services'];
 }
 
-function memberInfo({ stations, facilities, services }: MemberLookup, memberId: string): { selection: Selection; label: string } | null {
+function memberInfo(
+  { stations, facilities, services }: MemberLookup,
+  memberId: string,
+): { selection: Selection; label: string } | null {
   const station = stations.find((s) => s.id === memberId);
-  if (station) return { selection: { kind: "station", id: memberId }, label: station.name || "Unnamed station" };
+  if (station)
+    return {
+      selection: { kind: 'station', id: memberId },
+      label: station.name || 'Unnamed station',
+    };
   const facility = facilities.find((f) => f.id === memberId);
-  if (facility) return { selection: { kind: "facility", id: memberId }, label: facility.name || facilityType(facility.typeId).label };
+  if (facility)
+    return {
+      selection: { kind: 'facility', id: memberId },
+      label: facility.name || facilityType(facility.typeId).label,
+    };
   const service = services.find((sv) => sv.id === memberId);
-  if (service) return { selection: { kind: "service", id: memberId }, label: service.name };
+  if (service) return { selection: { kind: 'service', id: memberId }, label: service.name };
   return null;
 }
 
@@ -51,35 +66,43 @@ export function GroupInspector({ id }: GroupInspectorProps) {
   const removeGroupMember = useEditor((s) => s.removeGroupMember);
   const deleteGroup = useEditor((s) => s.deleteGroup);
   const selectAndFocus = useEditor((s) => s.selectAndFocus);
-  const [tab, setTab] = useState<string>("members");
+  const [tab, setTab] = useState<string>('members');
 
   if (!group) return <EmptyInspector />;
   const isComplex = !!group.footprint;
 
   const tabs: InspectorTab[] = [
-    { id: "members", label: "Members" },
-    { id: "site", label: "Site" },
+    { id: 'members', label: 'Members' },
+    { id: 'site', label: 'Site' },
   ];
 
   return (
     <Panel slot="right" aria-label="Selection details">
       <div className="insp-head">
-        {group.color ? <span className="dot" style={{ background: group.color }} /> : <span className="dot ring" />}
+        {group.color ? (
+          <span className="dot" style={{ background: group.color }} />
+        ) : (
+          <span className="dot ring" />
+        )}
         <input
           className="insp-name"
           aria-label="Group name"
-          placeholder={isComplex ? "Facility complex" : "Complex"}
-          value={group.name ?? ""}
+          placeholder={isComplex ? 'Facility complex' : 'Complex'}
+          value={group.name ?? ''}
           disabled={readOnly}
           onChange={(e) => renameGroup(id, e.target.value)}
           onKeyDown={blurOnEnter}
         />
       </div>
-      <div className="insp-kind">{isComplex ? "Facility complex · a real physical site" : "Group · bundles objects into one unit"}</div>
+      <div className="insp-kind">
+        {isComplex
+          ? 'Facility complex · a real physical site'
+          : 'Group · bundles objects into one unit'}
+      </div>
 
       <InspectorTabs tabs={tabs} active={tab} onChange={setTab} />
 
-      {tab === "members" && (
+      {tab === 'members' && (
         <div className="insp-section" role="tabpanel">
           <label className="field-label">Members</label>
           <div className="svc-list">
@@ -89,12 +112,21 @@ export function GroupInspector({ id }: GroupInspectorProps) {
               return (
                 <div key={mid} className="svc-chip chip-removable">
                   {info ? (
-                    <button className="chip-removable-label" onClick={() => selectAndFocus(info.selection)}>{info.label}</button>
+                    <button
+                      className="chip-removable-label"
+                      onClick={() => selectAndFocus(info.selection)}
+                    >
+                      {info.label}
+                    </button>
                   ) : (
                     <span className="chip-removable-label">Unknown</span>
                   )}
                   {!readOnly && (
-                    <button className="chip-remove-btn" aria-label="Remove member" onClick={() => removeGroupMember(id, mid)}>
+                    <button
+                      className="chip-remove-btn"
+                      aria-label="Remove member"
+                      onClick={() => removeGroupMember(id, mid)}
+                    >
                       <Icon name="x" size={14} />
                     </button>
                   )}
@@ -106,11 +138,17 @@ export function GroupInspector({ id }: GroupInspectorProps) {
         </div>
       )}
 
-      {tab === "site" && (
+      {tab === 'site' && (
         <div className="insp-section" role="tabpanel">
           {isComplex && group.color && (
             <div className="insp-field">
-              <ColorField value={group.color} palette={palette} disabled={readOnly} onChange={(c) => setGroupColor(id, c)} onAddToPalette={addPaletteColor} />
+              <ColorField
+                value={group.color}
+                palette={palette}
+                disabled={readOnly}
+                onChange={(c) => setGroupColor(id, c)}
+                onAddToPalette={addPaletteColor}
+              />
             </div>
           )}
           <GroupFootprint groupId={id} readOnly={readOnly} />
@@ -120,7 +158,7 @@ export function GroupInspector({ id }: GroupInspectorProps) {
       {!readOnly && (
         <div className="insp-footer">
           <button className="danger-btn" onClick={() => deleteGroup(id)}>
-            <Icon name="trash" size={18} /> Delete {isComplex ? "complex" : "group"}
+            <Icon name="trash" size={18} /> Delete {isComplex ? 'complex' : 'group'}
           </button>
         </div>
       )}
@@ -146,7 +184,7 @@ function GroupFootprint({ groupId, readOnly }: GroupFootprintProps) {
   // only ever renders in the Infrastructure view.
   const drawBoundary = () => {
     addGroupFootprint(groupId);
-    setViewMode("infrastructure");
+    setViewMode('infrastructure');
   };
 
   return (
@@ -155,7 +193,8 @@ function GroupFootprint({ groupId, readOnly }: GroupFootprintProps) {
       {!group.footprint ? (
         <>
           <p className="insp-sub">
-            Draw a boundary to turn this into a facility complex — visible &amp; editable in the Infrastructure view
+            Draw a boundary to turn this into a facility complex — visible &amp; editable in the
+            Infrastructure view
           </p>
           {!readOnly && (
             <button className="add-btn" onClick={drawBoundary}>
@@ -165,7 +204,11 @@ function GroupFootprint({ groupId, readOnly }: GroupFootprintProps) {
         </>
       ) : (
         <>
-          {!readOnly && <p className="insp-sub">Drag a corner in the Infrastructure view to reshape · Alt-click to erase one</p>}
+          {!readOnly && (
+            <p className="insp-sub">
+              Drag a corner in the Infrastructure view to reshape · Alt-click to erase one
+            </p>
+          )}
           <div className="stats">
             <Stat label="Corners" value={String(group.footprint.length)} />
           </div>
@@ -207,27 +250,43 @@ function GroupPlacement({ groupId, readOnly }: GroupPlacementProps) {
       <label className="field-label">Add to this complex</label>
       {placing ? (
         <div className="insp-row-actions">
-          <span className="panel-hint">Click the map to place a {FACILITY_TYPES[draftFacilityTypeId].label.toLowerCase()}…</span>
-          <button className="ghost-btn" onClick={cancelPlacingFacility}>Cancel</button>
+          <span className="panel-hint">
+            Click the map to place a {FACILITY_TYPES[draftFacilityTypeId].label.toLowerCase()}…
+          </span>
+          <button className="ghost-btn" onClick={cancelPlacingFacility}>
+            Cancel
+          </button>
         </div>
       ) : picking ? (
         <div className="insp-row-actions">
           <span className="panel-hint">Click a station or facility on the map to add it…</span>
-          <button className="ghost-btn" onClick={cancelPickingMember}>Cancel</button>
+          <button className="ghost-btn" onClick={cancelPickingMember}>
+            Cancel
+          </button>
         </div>
       ) : (
         <>
           <div className="insp-row-actions">
-            <select className="opt-select" value={draftFacilityTypeId} onChange={(e) => setDraftFacilityType(e.target.value)}>
+            <select
+              className="opt-select"
+              value={draftFacilityTypeId}
+              onChange={(e) => setDraftFacilityType(e.target.value)}
+            >
               {FACILITY_TYPE_ORDER.map((tid) => (
-                <option key={tid} value={tid}>{FACILITY_TYPES[tid].label}</option>
+                <option key={tid} value={tid}>
+                  {FACILITY_TYPES[tid].label}
+                </option>
               ))}
             </select>
             <button className="add-btn" onClick={() => startPlacingFacility(groupId)}>
               <Icon name="plus" size={17} /> Place inside
             </button>
           </div>
-          <button className="add-btn" style={{ marginTop: 8 }} onClick={() => startPickingMember(groupId)}>
+          <button
+            className="add-btn"
+            style={{ marginTop: 8 }}
+            onClick={() => startPickingMember(groupId)}
+          >
             <Icon name="cursor" size={16} /> Add existing…
           </button>
         </>

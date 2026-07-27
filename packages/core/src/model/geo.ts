@@ -4,12 +4,12 @@
 // six genuinely unrelated concerns. Every existing named export is
 // re-exported unchanged from its new home, so no import path anywhere in the
 // monorepo needs to change.
-export * from "./geo/spherical";
-export * from "./geo/planar";
-export * from "./geo/wayPath";
-export * from "./geo/measurement";
-export * from "./geo/servicePaths";
-export * from "./geo/serviceLane";
-export * from "./geo/corridorConflation";
-export * from "./geo/snapIndex";
-export * from "./geo/bounds";
+export * from './geo/spherical';
+export * from './geo/planar';
+export * from './geo/wayPath';
+export * from './geo/measurement';
+export * from './geo/servicePaths';
+export * from './geo/serviceLane';
+export * from './geo/corridorConflation';
+export * from './geo/snapIndex';
+export * from './geo/bounds';

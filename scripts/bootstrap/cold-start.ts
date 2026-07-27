@@ -22,10 +22,10 @@
  * scripts/bootstrap/ — kept consistent across projects intentionally
  * rather than each repo inventing its own onboarding-CLI shape.
  */
-import { intro, outro } from "@clack/prompts";
-import { runAuthPhase } from "./phases/auth.js";
-import { runCloudflareVerifyPhase } from "./phases/cloudflare-verify.js";
-import { runCiSecretsPhase } from "./phases/ci-secrets.js";
+import { intro, outro } from '@clack/prompts';
+import { runAuthPhase } from './phases/auth.js';
+import { runCloudflareVerifyPhase } from './phases/cloudflare-verify.js';
+import { runCiSecretsPhase } from './phases/ci-secrets.js';
 
 interface Phase {
   id: string;
@@ -34,13 +34,13 @@ interface Phase {
 }
 
 const PHASES: readonly Phase[] = [
-  { id: "auth", title: "CLI authentication", run: runAuthPhase },
-  { id: "cloudflare-verify", title: "Cloudflare deployment config", run: runCloudflareVerifyPhase },
-  { id: "ci-secrets", title: "CI secrets", run: runCiSecretsPhase },
+  { id: 'auth', title: 'CLI authentication', run: runAuthPhase },
+  { id: 'cloudflare-verify', title: 'Cloudflare deployment config', run: runCloudflareVerifyPhase },
+  { id: 'ci-secrets', title: 'CI secrets', run: runCiSecretsPhase },
 ];
 
 async function main(): Promise<void> {
-  intro("TransitMapper bootstrap");
+  intro('TransitMapper bootstrap');
 
   for (const phase of PHASES) {
     const result = await phase.run();
@@ -50,7 +50,7 @@ async function main(): Promise<void> {
     }
   }
 
-  outro("Bootstrap complete.");
+  outro('Bootstrap complete.');
 }
 
 main().catch((err) => {

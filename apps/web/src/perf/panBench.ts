@@ -1,5 +1,5 @@
-import type { Map as MLMap } from "maplibre-gl";
-import { formatFrameStats, summarizeFrames, type FrameStats } from "./frameStats";
+import type { Map as MLMap } from 'maplibre-gl';
+import { formatFrameStats, summarizeFrames, type FrameStats } from './frameStats';
 
 export interface PanBenchOptions {
   /** Number of pan increments (one per frame). */
@@ -9,7 +9,8 @@ export interface PanBenchOptions {
   dy?: number;
 }
 
-const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+const nextFrame = (): Promise<void> =>
+  new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
 /**
  * Scripted, repeatable pan: nudge the camera `steps` times, one per animation
@@ -31,15 +32,15 @@ export async function runPanBench(map: MLMap, opts: PanBenchOptions = {}): Promi
     durations.push(now - last);
     last = now;
   };
-  map.on("render", onRender);
+  map.on('render', onRender);
   last = performance.now();
   for (let i = 0; i < steps; i++) {
     map.panBy([dx, dy], { duration: 0 });
     await nextFrame();
   }
-  map.off("render", onRender);
+  map.off('render', onRender);
   const stats = summarizeFrames(durations.slice(2)); // drop warm-up frames
-  // eslint-disable-next-line no-console
+
   console.log(`[panBench] steps=${steps} dx=${dx} → ${formatFrameStats(stats)}`);
   return stats;
 }
@@ -68,7 +69,7 @@ export async function runZoomBench(map: MLMap, opts: ZoomBenchOptions = {}): Pro
     durations.push(now - last);
     last = now;
   };
-  map.on("render", onRender);
+  map.on('render', onRender);
   last = performance.now();
   for (let i = 1; i <= steps; i++) {
     map.setZoom(startZoom + dz * i);
@@ -78,9 +79,11 @@ export async function runZoomBench(map: MLMap, opts: ZoomBenchOptions = {}): Pro
     map.setZoom(startZoom + dz * i);
     await nextFrame();
   }
-  map.off("render", onRender);
+  map.off('render', onRender);
   const stats = summarizeFrames(durations.slice(2));
-  // eslint-disable-next-line no-console
-  console.log(`[zoomBench] steps=${steps} dz=${dz} (z${startZoom.toFixed(1)}→z${(startZoom + dz * steps).toFixed(1)}) → ${formatFrameStats(stats)}`);
+
+  console.log(
+    `[zoomBench] steps=${steps} dz=${dz} (z${startZoom.toFixed(1)}→z${(startZoom + dz * steps).toFixed(1)}) → ${formatFrameStats(stats)}`,
+  );
   return stats;
 }

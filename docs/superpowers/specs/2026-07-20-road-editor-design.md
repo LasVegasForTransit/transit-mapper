@@ -5,6 +5,7 @@
 TransitMapper's unified `Way` model treats roads as first-class infrastructure, but a road today is just a centerline with a scalar `capacity` fanned into identical parallel lines. The user wants a SimCity/Cities: Skylines-grade road editor: drag roads with the existing tools, customize lanes (count, width, kind, direction), get **real geometric intersections** automatically when roads cross, edit turn lanes per junction, model medians and paired one-way carriageways that share one identity ("Decatur Avenue"), and support pedestrian-only lanes/paths — all turnkey via GUI with optional keyboard shortcuts.
 
 Decisions made in brainstorming (all user-confirmed):
+
 - **Full geometric intersections** (trimmed carriageways, junction polygons, corner fillets, lane connector curves) — not schematic-only.
 - **Real lane-connectivity graph** (incoming lane → outgoing lane per junction) so future routing/simulation gets the graph for free.
 - **Generalized to ALL way types** — cross-section profiles replace scalar capacity for rail/bike/etc. too (tracks are a lane kind). No road-only parallel system; catalog-driven, no hardcoded kinds (standing non-negotiable).
@@ -16,22 +17,38 @@ Decisions made in brainstorming (all user-confirmed):
 All pure domain data; style stays in `src/style/catalogStyle.ts` per the enforced boundary.
 
 **catalog.ts additions:**
+
 - `LaneKindDef { id, label, role: "travel"|"separator"|"edge", defaultWidthM, widthPresetsM }`; `LANE_KINDS`: drive, bus, bike, parking, turnPocket, median, sidewalk, shoulder, track, platform, …
 - Each `WayType` declares allowed lane kinds + default profile. Pedestrian-only path = a way type whose default profile is one sidewalk lane (no special casing).
 - `ProfilePreset { id, label, wayTypeId, classId?, lanes }` — e.g. "2-lane local", "4-lane arterial", "Divided boulevard", "5-lane w/ center turn".
 - Way-type family gains a display noun for identities ("Street"/"Line"/"Trail").
 
 **system.ts:**
+
 ```ts
-interface LaneSpec { id: string; kindId: string; widthM: number;
-  direction: "forward"|"backward"|"both"|"none" }   // relative to point order
-interface CrossSection { lanes: LaneSpec[] }         // left-to-right facing forward (osm2streets convention)
+interface LaneSpec {
+  id: string;
+  kindId: string;
+  widthM: number;
+  direction: 'forward' | 'backward' | 'both' | 'none';
+} // relative to point order
+interface CrossSection {
+  lanes: LaneSpec[];
+} // left-to-right facing forward (osm2streets convention)
 // Way: + profile: CrossSection; capacity becomes DERIVED (count of travel lanes)
-interface LaneConnector { from: {wayId, laneId}; to: {wayId, laneId} }
+interface LaneConnector {
+  from: { wayId; laneId };
+  to: { wayId; laneId };
+}
 // Node: + connectors?: LaneConnector[]  (auto-derived by heuristic; stored only once user customizes)
 //       + control?: "uncontrolled"|"signal"|"stop"|"roundabout"
-interface NamedWay { id: string; name: string; wayIds: string[] }
+interface NamedWay {
+  id: string;
+  name: string;
+  wayIds: string[];
+}
 ```
+
 - Profile is **constant per Way**; cross-section changes (turn pocket appears, lane drop) = split the way (`splitWayAt` exists); pieces keep identity via `NamedWay`.
 - Widths stored meters, displayed feet (Vegas presets 10/11/12 ft).
 - Turn arrows are derived from connectors, never stored separately.
@@ -43,11 +60,12 @@ interface NamedWay { id: string; name: string; wayIds: string[] }
 ## Geometry engine (new src/geometry/, pure & network-free)
 
 Derives drawable geometry from the model on demand; never mutates it. Memoized via `WeakMap` on immutable objects like `resolveWayPath`. Four staged pure functions + orchestrator `deriveStreetGeometry(system, bbox)`:
+
 1. `laneOffsets(way)` — signed per-lane offset polylines from cumulative widths; carriageway edge polylines. Local-meter math via existing `geo.ts` mercator helpers.
 2. `junctionFootprint(node, ways)` — A/B Street algorithm: thicken incident ways, intersect adjacent edge lines for per-way **trim-back distances**, connect trim points with corner fillets. Explicit fallbacks for degenerate cases (2-way pass-through, acute angles, overlap). Densest unit tests in the repo (T, 4-way, 5-way, acute).
 3. `connectorCurves(node)` — cubic Béziers between trimmed lane endpoints per lane connector (stored or heuristic default); rendered as junction lane guides; future routing edges.
 4. `markings(way, node)` — dividers (dashed same-direction, double-solid between directions), turn arrows from connectors, crosswalks where sidewalk lanes meet junctions, median fills.
-Trim distances from stage 2 feed stage 1 (carriageways shorten at junctions).
+   Trim distances from stage 2 feed stage 1 (carriageways shorten at junctions).
 
 **Performance (user-probed, approved):** zoom-gated LOD (lane geometry only ≥ ~z15–16; below, today's cheap line rendering — whole-valley view never derives lanes); viewport-scoped derivation over a new grid spatial index (shared with the snap engine, currently a linear scan); per-way/per-node memoization (a drag invalidates 1 way + ≤2 nodes); split MapLibre sources — static derived geometry rebuilt on commit/viewport change vs a small scratch source for the actively-dragged way updated via existing `rafThrottle`. Escape hatch: module is pure → Web Worker move is mechanical. Add a `verify.ts` perf budget check.
 

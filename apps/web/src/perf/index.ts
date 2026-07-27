@@ -1,7 +1,7 @@
-import type { Map as MLMap } from "maplibre-gl";
-import { attachFrameMeter } from "./frameMeter";
-import { runPanBench, runZoomBench, type PanBenchOptions, type ZoomBenchOptions } from "./panBench";
-import type { FrameStats } from "./frameStats";
+import type { Map as MLMap } from 'maplibre-gl';
+import { attachFrameMeter } from './frameMeter';
+import { runPanBench, runZoomBench, type PanBenchOptions, type ZoomBenchOptions } from './panBench';
+import type { FrameStats } from './frameStats';
 
 /** Runtime A/B toggles, flipped from the devtools console to attribute cost —
  *  e.g. `__perf.vehicles = false` then re-run `await __panBench()` to see the

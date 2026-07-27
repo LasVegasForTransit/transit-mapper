@@ -4,8 +4,8 @@
 
 ## Problem
 
-Two transit lines that run down the same corridor are, in the real world, *sharing
-infrastructure* — the same track, the same road, often the same lane. TransitMapper doesn't
+Two transit lines that run down the same corridor are, in the real world, _sharing
+infrastructure_ — the same track, the same road, often the same lane. TransitMapper doesn't
 model that. Every drawn line mints its own `Way`, and overlapping lines are independent ways
 that happen to sit on top of each other. Two consequences:
 
@@ -14,9 +14,9 @@ that happen to sit on top of each other. Two consequences:
   conflation (`gtfsImport.ts` appends `nodes:[]`, so not even junctions are derived), so a
   boulevard carrying ten routes imports as ten overlapping ways — the visible "mess."
 
-Today, overlap is only handled *cosmetically*: services that happen to share the **same way
+Today, overlap is only handled _cosmetically_: services that happen to share the **same way
 object** fan out as parallel offset lines (`BUNDLE_SPACING_PX` in `buildFeatures.ts`). Nothing
-makes two *different* ways on the same ground share anything.
+makes two _different_ ways on the same ground share anything.
 
 ## The principle (user's framing)
 
@@ -25,24 +25,24 @@ makes two *different* ways on the same ground share anything.
 
 This inverts how the tool thinks:
 
-- **Today:** drawing a line *is* creating a `Way`. Infrastructure is the thing you draw.
+- **Today:** drawing a line _is_ creating a `Way`. Infrastructure is the thing you draw.
 - **Under the principle:** you draw a **service**; **infrastructure is a byproduct** — reused
   wherever the path runs along existing infrastructure, created fresh only for new ground.
 
 And the shared unit isn't a fuzzy "whatever's nearby" — it's **physically determined by mode**,
 which is what makes this intelligent rather than heuristic:
 
-| Mode | Shared unit | How a service sits on it | Snap tolerance |
-|---|---|---|---|
-| **Rail** (subway, commuter, light rail, tram, monorail) | the **track** (a rail-type way) | rides the track — sharing a track *is* overlapping, by definition | tight (a track is a precise line) |
-| **Bus / BRT** | the **road**, + a **lane** | rightmost travel lane in its direction, or a **bus lane** if the road has one | wide (~carriageway width) |
+| Mode                                                    | Shared unit                     | How a service sits on it                                                      | Snap tolerance                    |
+| ------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------- | --------------------------------- |
+| **Rail** (subway, commuter, light rail, tram, monorail) | the **track** (a rail-type way) | rides the track — sharing a track _is_ overlapping, by definition             | tight (a track is a precise line) |
+| **Bus / BRT**                                           | the **road**, + a **lane**      | rightmost travel lane in its direction, or a **bus lane** if the road has one | wide (~carriageway width)         |
 
 The couplet question resolves itself: buses default to **rightmost-in-direction-of-travel**, so
 divided roads and one-way pairs need no special logic.
 
 ## What already exists (why this is tractable)
 
-The target representation is largely in place; this feature mostly *wires it together* and adds a
+The target representation is largely in place; this feature mostly _wires it together_ and adds a
 matcher.
 
 - **Lane vocabulary exists.** `LANE_KINDS` already defines `drive`, `bus` (a bus lane —
@@ -53,9 +53,9 @@ matcher.
 - **Mode↔infrastructure wiring exists.** `Mode.wayTypeIds` (`model/catalog.ts`) already maps
   bus→`road`, subway/commuterRail→`heavyRail`, tram/lightRail→`[lightRail, road]`, etc. This is
   exactly the filter for "snap to the right kind of shared unit," and `routeBetween(sys, a, b,
-  { allowedTypeIds })` already routes services over existing compatible ways.
+{ allowedTypeIds })` already routes services over existing compatible ways.
 - **Per-lane geometry exists.** `wayLaneGeometry` (`geometry/streets.ts`) already computes each
-  lane's centerline; rendering can offset a service onto its *real* lane instead of a synthetic
+  lane's centerline; rendering can offset a service onto its _real_ lane instead of a synthetic
   index.
 - **A spatial index exists.** `buildSegmentGrid` (`geo/snapIndex.ts`, cached on `system.ways`
   identity) is the acceleration structure the corridor matcher needs.
@@ -88,7 +88,7 @@ export interface Pattern {
   travel; for rail, the direction's track. Used both at placement (to seed `lanes`) and at
   render (to fill gaps).
 - Lane assignment is **domain data** (which lane a service rides), never style — consistent with
-  the separation-of-concerns rule. Lane *colors/widths* stay in the style layer.
+  the separation-of-concerns rule. Lane _colors/widths_ stay in the style layer.
 
 ### 2. `corridorMatch` — mode-typed snapping (pure, `packages/core`)
 
@@ -123,13 +123,13 @@ Pick a mode → draw a **service** (not raw infrastructure):
    hatch.
 
 This makes route-drafting (already in the store as `startRouteDraft`/`extendRouteDraft`/
-`commitRouteDraft` over `routeBetween`) the *default* behavior of the draw tool, rather than a
+`commitRouteDraft` over `routeBetween`) the _default_ behavior of the draw tool, rather than a
 separate mode.
 
 ### 4. View semantics — Network and Infrastructure are lenses, not canvases
 
 **Invariant: switching views is lossless.** A line drawn in one view exists identically in the
-other; the views differ only in how much physical detail they *reveal*. Nothing is converted or
+other; the views differ only in how much physical detail they _reveal_. Nothing is converted or
 silently mutated by switching. (This already holds — `beginWay` bakes a full `profile`
 immediately; Network just collapses it to one line.)
 
@@ -142,23 +142,23 @@ immediately; Network just collapses it to one line.)
 
 **Draw in Network → switch to Infrastructure** (the concrete answer):
 
-- *Bus line:* Network shows one colored line; underneath it either joined an existing road or
+- _Bus line:_ Network shows one colored line; underneath it either joined an existing road or
   minted a default road, bus assigned to the curb lane. Infrastructure reveals that road at true
   width with the bus on its lane and junctions where it crosses other roads — where you then
   refine it.
-- *Train line:* Network shows one colored line; Infrastructure reveals a **track** (a single rail
+- _Train line:_ Network shows one colored line; Infrastructure reveals a **track** (a single rail
   line, not a multi-lane road) with the service on it; other services drawn on it share it.
 
 **Per-mode default cross-section for freshly-drawn infrastructure** (two-way by default for
 hand-drawing — distinct from GTFS import's one-way carriageways):
 
-| Mode | Default fresh infrastructure | Service sits on |
-|---|---|---|
-| **Bus / BRT** | two-way road, one travel lane per direction (upgradeable to a bus lane) | rightmost lane, its direction |
-| **Tram / streetcar** | two-way street with embedded track (single track if one-way armed) | the track |
-| **Train / metro / commuter** | two-track line, one per direction (single if one-way armed) | its direction's track |
+| Mode                         | Default fresh infrastructure                                            | Service sits on               |
+| ---------------------------- | ----------------------------------------------------------------------- | ----------------------------- |
+| **Bus / BRT**                | two-way road, one travel lane per direction (upgradeable to a bus lane) | rightmost lane, its direction |
+| **Tram / streetcar**         | two-way street with embedded track (single track if one-way armed)      | the track                     |
+| **Train / metro / commuter** | two-track line, one per direction (single if one-way armed)             | its direction's track         |
 
-The transition reads as *"here's the physical reality of what I sketched"* only if these defaults
+The transition reads as _"here's the physical reality of what I sketched"_ only if these defaults
 are sensible — a wrong default (bus → 6-lane freeway) makes it feel broken. Getting the defaults
 right is a first-class requirement, not a detail.
 
@@ -216,7 +216,7 @@ flowchart TB
 - **Continuous-snap jitter / snap-vs-not ambiguity.** Mode-scaled tolerance + hysteresis + clear
   "sharing this" visual feedback + the `Alt` escape hatch. Prototype the feel early.
 - **Piecewise join/leave → way splitting at branch nodes.** The node/junction model supports it,
-  but the draw tool must *materialize* the split (insert a coincident control point → derived
+  but the draw tool must _materialize_ the split (insert a coincident control point → derived
   node). Reuse the existing coincidence-based node derivation.
 - **Lane assignment on messy profiles** (turn pockets, one-way carriageways, lane-count changes).
   `defaultLaneFor` resolves against `role: "travel"` + direction; overrides handle the rest;
@@ -257,4 +257,4 @@ Extend `apps/web/scripts/verify.ts` (deterministic, `pnpm verify`) with:
 - Full lane-level routing through junctions (turn-by-turn lane connectors) beyond what
   `connectorCurves` already draws for a selected node.
 - Automatic re-conflation of already-drawn independent ways (render-time bundling of co-aligned
-  *separate* ways) — only if a residual-overlap problem remains after A–C.
+  _separate_ ways) — only if a residual-overlap problem remains after A–C.

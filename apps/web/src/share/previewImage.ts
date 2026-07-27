@@ -1,5 +1,5 @@
-import { previewSvg, PREVIEW_HEIGHT, PREVIEW_WIDTH } from "@transitmapper/core/render/preview";
-import type { TransitSystem } from "@transitmapper/core/model/system";
+import { previewSvg, PREVIEW_HEIGHT, PREVIEW_WIDTH } from '@transitmapper/core/render/preview';
+import type { TransitSystem } from '@transitmapper/core/model/system';
 
 // Rasterizing the share card, in the browser, at share time.
 //
@@ -21,12 +21,12 @@ function decodeSvg(markup: string): Promise<HTMLImageElement> {
   // and revocable. The card contains no external references (and, at unfurl
   // size, no text at all), so nothing here reaches the network or taints the
   // canvas it gets drawn into.
-  const url = URL.createObjectURL(new Blob([markup], { type: "image/svg+xml" }));
+  const url = URL.createObjectURL(new Blob([markup], { type: 'image/svg+xml' }));
   return new Promise((resolve, reject) => {
     const image = new Image();
     const timer = setTimeout(() => {
       URL.revokeObjectURL(url);
-      reject(new Error("Timed out rasterizing the preview image"));
+      reject(new Error('Timed out rasterizing the preview image'));
     }, DECODE_TIMEOUT_MS);
     image.onload = () => {
       clearTimeout(timer);
@@ -36,7 +36,7 @@ function decodeSvg(markup: string): Promise<HTMLImageElement> {
     image.onerror = () => {
       clearTimeout(timer);
       URL.revokeObjectURL(url);
-      reject(new Error("Could not rasterize the preview image"));
+      reject(new Error('Could not rasterize the preview image'));
     };
     image.src = url;
   });
@@ -51,17 +51,17 @@ function decodeSvg(markup: string): Promise<HTMLImageElement> {
 export async function renderPreviewPng(system: TransitSystem): Promise<Uint8Array | null> {
   try {
     const image = await decodeSvg(previewSvg(system));
-    const canvas = document.createElement("canvas");
+    const canvas = document.createElement('canvas');
     canvas.width = PREVIEW_WIDTH;
     canvas.height = PREVIEW_HEIGHT;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext('2d');
     if (!ctx) return null;
     // The card is composed at half this size; drawing it into the full-size
     // canvas is the same 2x scale-up the server renderer used to do, and costs
     // no sharpness because the source is vector.
     ctx.drawImage(image, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
 
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
     if (!blob) return null;
     return new Uint8Array(await blob.arrayBuffer());
   } catch {
@@ -71,7 +71,7 @@ export async function renderPreviewPng(system: TransitSystem): Promise<Uint8Arra
 
 /** PNG bytes as base64, for embedding in the share-creation JSON body. */
 export function toBase64(bytes: Uint8Array): string {
-  let binary = "";
+  let binary = '';
   // Chunked because String.fromCharCode(...bytes) blows the argument limit on
   // anything bigger than a few tens of kilobytes.
   const CHUNK = 0x8000;

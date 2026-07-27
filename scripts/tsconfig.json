@@ -1,0 +1,19 @@
+{
+  // Covers everything under scripts/, not just scripts/bootstrap/. The
+  // narrower config this replaced left doctor.ts and every future repo
+  // script untypechecked, which is the same blind spot apps/web had.
+  //
+  // An independent leaf: no composite, no references. `tsc -b --noEmit`
+  // raises TS6310 once a project has outgoing references.
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"]
+}

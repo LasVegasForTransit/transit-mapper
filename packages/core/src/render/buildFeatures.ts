@@ -1,14 +1,27 @@
-import type { FeatureCollection, Feature, LineString, Point, Polygon } from "geojson";
-import { wayType } from "@transitmapper/core/model/catalog";
-import { facilityRender, gradeFlags, laneRender, modeRender, showWayWhenServed, wayRender } from "../style/catalogStyle";
-import { resolveWayPath, serviceLaneOnWay, wayById } from "../model/geo";
-import { nearWaysForStations, servicesByWay, visibleWaysFor } from "./featureMemo";
-import { directionalLanes, isOneWay, wayCapacity } from "../model/profile";
-import { wayIntersectsBounds, wayLaneGeometry } from "../geometry/streets";
-import { collectWayTrims, connectorCurves, junctionGeometry, type JunctionGeometry, type WayTrims } from "../geometry/junctions";
-import { iconName } from "./iconName";
-import type { LngLat, Pattern, Service, TransitSystem } from "../model/system";
-import { HANDLE_ICON, widthPxAtZ14 } from "./constants";
+import type { FeatureCollection, Feature, LineString, Point, Polygon } from 'geojson';
+import { wayType } from '@transitmapper/core/model/catalog';
+import {
+  facilityRender,
+  gradeFlags,
+  laneRender,
+  modeRender,
+  showWayWhenServed,
+  wayRender,
+} from '../style/catalogStyle';
+import { resolveWayPath, serviceLaneOnWay, wayById } from '../model/geo';
+import { nearWaysForStations, servicesByWay, visibleWaysFor } from './featureMemo';
+import { directionalLanes, isOneWay, wayCapacity } from '../model/profile';
+import { wayIntersectsBounds, wayLaneGeometry } from '../geometry/streets';
+import {
+  collectWayTrims,
+  connectorCurves,
+  junctionGeometry,
+  type JunctionGeometry,
+  type WayTrims,
+} from '../geometry/junctions';
+import { iconName } from './iconName';
+import type { LngLat, Pattern, Service, TransitSystem } from '../model/system';
+import { HANDLE_ICON, widthPxAtZ14 } from './constants';
 
 /** What the renderer needs to know about the current selection: which single
  *  object is highlighted, if any. Deliberately structural rather than an
@@ -18,14 +31,14 @@ import { HANDLE_ICON, widthPxAtZ14 } from "./constants";
  *  satisfies this shape as-is, so call sites pass it unchanged. */
 export type Highlight = { kind: string; id: string } | null;
 
-const NEUTRAL_STATION = "#4b5563";
+const NEUTRAL_STATION = '#4b5563';
 // A dedicated-guideway/aerial/water way with no service riding it yet reads as
 // unassigned infrastructure — a faint dashed placeholder, not its real color.
 // Roads and bike ways are real surfaces independent of any service, so they
 // always show their actual catalog style, served or not.
-const UNASSIGNED_COLOR = "#b9b9b2";
+const UNASSIGNED_COLOR = '#b9b9b2';
 const UNASSIGNED_WIDTH = 2;
-const UNASSIGNED_FAMILIES = new Set(["guideway", "aerial", "water"]);
+const UNASSIGNED_FAMILIES = new Set(['guideway', 'aerial', 'water']);
 const BUNDLE_SPACING_PX = 5; // perpendicular gap between parallel services (Network schematic bundle)
 const LANE_SPACING_PX = 3; // perpendicular gap between a way's own capacity lanes/tracks
 const WITHIN_LANE_SPACING_PX = 1.5; // gap between services sharing ONE lane in Infrastructure lane-detail
@@ -154,7 +167,7 @@ export interface ViewOptions {
    *  Diagram = schematic/octolinear, same physical-detail-hidden behavior as
    *  Network but fed a geometrically transformed system (see
    *  model/diagramLayout.ts) instead of the real one. */
-  viewMode: "network" | "infrastructure" | "diagram";
+  viewMode: 'network' | 'infrastructure' | 'diagram';
   /** Mode ids currently shown; a service whose mode isn't in this set is hidden. */
   visibleModes: Set<string>;
   /** Way-type ids currently shown; a way whose type isn't in this set is hidden. */
@@ -190,7 +203,7 @@ export function buildFeatures(
   // Diagram inherits Network's schematic behavior (grade/footprints/
   // facilities hidden, capacity collapsed to one line) — only Infrastructure
   // wants the physical-planning detail.
-  const network = view.viewMode !== "infrastructure";
+  const network = view.viewMode !== 'infrastructure';
   // Reuse the WeakMap-cached way-by-id index (keyed on system.ways' identity)
   // instead of rebuilding a Map every call — reused below for the laneDetail
   // junction pass, the wayLabels loop, and the handle-ways loop.
@@ -210,7 +223,7 @@ export function buildFeatures(
   // of one representative line. Network view always collapses to one line
   // (capacity is physical-planning detail, out of place on the schematic map).
   const emitCrossSection = (
-    way: TransitSystem["ways"][number],
+    way: TransitSystem['ways'][number],
     path: LngLat[],
     color: string,
     width: number,
@@ -220,7 +233,7 @@ export function buildFeatures(
     const laneWidth = lanes > 1 ? Math.max(1.5, width / lanes + 0.75) : width;
     for (let i = 0; i < lanes; i++) {
       ways.push({
-        type: "Feature",
+        type: 'Feature',
         properties: {
           id: way.id,
           color,
@@ -228,7 +241,7 @@ export function buildFeatures(
           dashed,
           offset: (i - (lanes - 1) / 2) * LANE_SPACING_PX,
         },
-        geometry: { type: "LineString", coordinates: path },
+        geometry: { type: 'LineString', coordinates: path },
       });
     }
   };
@@ -243,7 +256,7 @@ export function buildFeatures(
   // metric widths (w14 + the exponential zoom expression in LANE_WIDTH_EXPR),
   // painted dividers, thin-line lanes (tracks), and direction arrows. Replaces
   // the emitCrossSection fan for that way at lane-detail zooms.
-  const emitLaneDetail = (way: TransitSystem["ways"][number]) => {
+  const emitLaneDetail = (way: TransitSystem['ways'][number]) => {
     // wayTrims is populated by the junction pass below before any call here.
     const trims = wayTrims.get(way.id) ?? { start: 0, end: 0 };
     const g = wayLaneGeometry(way, trims.start, trims.end);
@@ -252,23 +265,36 @@ export function buildFeatures(
       const r = laneRender(lane.kindId);
       if (r.surface) {
         lanes.push({
-          type: "Feature",
-          properties: { id: way.id, kindId: lane.kindId, color: r.color, w14: widthPxAtZ14(lane.widthM, lat) },
-          geometry: { type: "LineString", coordinates: lane.path },
+          type: 'Feature',
+          properties: {
+            id: way.id,
+            kindId: lane.kindId,
+            color: r.color,
+            w14: widthPxAtZ14(lane.widthM, lat),
+          },
+          geometry: { type: 'LineString', coordinates: lane.path },
         });
       } else {
         laneMarkings.push({
-          type: "Feature",
-          properties: { kind: "thinLane", color: r.color },
-          geometry: { type: "LineString", coordinates: lane.path },
+          type: 'Feature',
+          properties: { kind: 'thinLane', color: r.color },
+          geometry: { type: 'LineString', coordinates: lane.path },
         });
       }
     }
     for (const d of g.dividers) {
-      laneMarkings.push({ type: "Feature", properties: { kind: d.kind }, geometry: { type: "LineString", coordinates: d.path } });
+      laneMarkings.push({
+        type: 'Feature',
+        properties: { kind: d.kind },
+        geometry: { type: 'LineString', coordinates: d.path },
+      });
     }
     for (const a of g.arrows) {
-      laneArrows.push({ type: "Feature", properties: { id: way.id }, geometry: { type: "LineString", coordinates: a.path } });
+      laneArrows.push({
+        type: 'Feature',
+        properties: { id: way.id },
+        geometry: { type: 'LineString', coordinates: a.path },
+      });
     }
     // A lane-rendered way has no fan feature to carry its selection halo, so
     // emit one centerline stand-in per lane-detailed way. It's invisible unless
@@ -277,19 +303,26 @@ export function buildFeatures(
     // unconditionally (not only when selected) so the selection fast path can
     // light it via feature-state without a full rebuild.
     ways.push({
-      type: "Feature",
-      properties: { id: way.id, color: "#191a17", width: 10, dashed: false, offset: 0, haloOnly: true },
-      geometry: { type: "LineString", coordinates: resolveWayPath(way) },
+      type: 'Feature',
+      properties: {
+        id: way.id,
+        color: '#191a17',
+        width: 10,
+        dashed: false,
+        offset: 0,
+        haloOnly: true,
+      },
+      geometry: { type: 'LineString', coordinates: resolveWayPath(way) },
     });
   };
 
   // A way renders at lane detail when we're zoomed in enough (view.laneDetail),
   // it's on screen, and it isn't a tunnel (underground stays a dashed fan —
   // drawing asphalt for a bored tube would misread).
-  const wantsLaneDetail = (way: TransitSystem["ways"][number]) =>
+  const wantsLaneDetail = (way: TransitSystem['ways'][number]) =>
     !network &&
     view.laneDetail === true &&
-    way.grade !== "underground" &&
+    way.grade !== 'underground' &&
     way.profile.lanes.length > 0 &&
     (!view.bounds || wayIntersectsBounds(way, view.bounds));
 
@@ -302,7 +335,7 @@ export function buildFeatures(
   const connectorFeatures: Feature<LineString>[] = [];
   let wayTrims: WayTrims = new Map();
   if (!network && view.laneDetail === true) {
-    const laneNodes: { node: TransitSystem["nodes"][number]; g: JunctionGeometry }[] = [];
+    const laneNodes: { node: TransitSystem['nodes'][number]; g: JunctionGeometry }[] = [];
     for (const node of system.nodes) {
       const relevant = node.refs.some((r) => {
         const w = waysById.get(r.wayId);
@@ -317,9 +350,12 @@ export function buildFeatures(
     for (const { node, g } of laneNodes) {
       if (g.polygon.length >= 3) {
         junctionFeatures.push({
-          type: "Feature",
-          properties: { nodeId: node.id, selected: selection?.kind === "node" && selId === node.id },
-          geometry: { type: "Polygon", coordinates: [closeRing(g.polygon)] },
+          type: 'Feature',
+          properties: {
+            nodeId: node.id,
+            selected: selection?.kind === 'node' && selId === node.id,
+          },
+          geometry: { type: 'Polygon', coordinates: [closeRing(g.polygon)] },
         });
       }
       // Per-lane turn guides are editing detail for ONE junction. Emitting them
@@ -328,12 +364,12 @@ export function buildFeatures(
       // — so only draw them for the SELECTED node. The junction footprint +
       // carriageway trims above still render for every junction (that's the
       // paved road surface, not clutter).
-      if (selection?.kind === "node" && selId === node.id) {
+      if (selection?.kind === 'node' && selId === node.id) {
         for (const c of connectorCurves(node, waysById, wayTrims, system.turnRestrictions)) {
           connectorFeatures.push({
-            type: "Feature",
+            type: 'Feature',
             properties: { nodeId: node.id },
-            geometry: { type: "LineString", coordinates: c.path },
+            geometry: { type: 'LineString', coordinates: c.path },
           });
         }
       }
@@ -378,29 +414,46 @@ export function buildFeatures(
     // Network view silently hides direction, and a one-way couplet looks
     // like two ordinary parallel lines.
     if (network && isOneWay(way.profile)) {
-      const backward = directionalLanes(way.profile).every((l) => l.direction === "backward");
+      const backward = directionalLanes(way.profile).every((l) => l.direction === 'backward');
       laneArrows.push({
-        type: "Feature",
+        type: 'Feature',
         properties: { id: way.id },
-        geometry: { type: "LineString", coordinates: backward ? [...path].reverse() : path },
+        geometry: { type: 'LineString', coordinates: backward ? [...path].reverse() : path },
       });
     }
 
     // Network view is the clean schematic map — grade (tunnel/viaduct styling)
     // is physical-alignment detail that belongs to the Infrastructure view.
-    const { underground, elevated } = network ? { underground: false, elevated: false } : gradeFlags(way.grade);
-    const svcFeature = (svc: Service, coords: LngLat[], offset: number, w14?: number): Feature<LineString> => ({
-      type: "Feature",
+    const { underground, elevated } = network
+      ? { underground: false, elevated: false }
+      : gradeFlags(way.grade);
+    const svcFeature = (
+      svc: Service,
+      coords: LngLat[],
+      offset: number,
+      w14?: number,
+    ): Feature<LineString> => ({
+      type: 'Feature',
       // w14 present ⇒ a lane-detail overlay: the service layer grows it with
       // zoom, clamped to a sensible min/max (SERVICE_WIDTH_EXPR); absent ⇒ the
       // schematic fixed `width` is used (Network view).
-      properties: { serviceId: svc.id, wayId: way.id, color: svc.color, width: modeRender(svc.modeId).width, underground, elevated, offset, ...(w14 !== undefined ? { w14 } : {}) },
-      geometry: { type: "LineString", coordinates: coords },
+      properties: {
+        serviceId: svc.id,
+        wayId: way.id,
+        color: svc.color,
+        width: modeRender(svc.modeId).width,
+        underground,
+        elevated,
+        offset,
+        ...(w14 !== undefined ? { w14 } : {}),
+      },
+      geometry: { type: 'LineString', coordinates: coords },
     });
     // Constant per-service offset on the CENTERLINE — no jog at shared-segment
     // boundaries (see bundleSlots). This is the Network schematic and the
     // lane-detail fallback when a lane can't be resolved.
-    const centerlineFeature = (svc: Service) => svcFeature(svc, path, (slots.get(svc.id) ?? 0) * BUNDLE_SPACING_PX);
+    const centerlineFeature = (svc: Service) =>
+      svcFeature(svc, path, (slots.get(svc.id) ?? 0) * BUNDLE_SPACING_PX);
 
     if (laneDetail) {
       // INFRASTRUCTURE lane detail: draw each service on the ACTUAL lane it
@@ -408,7 +461,9 @@ export function buildFeatures(
       // of the schematic centerline. wayLaneGeometry is memoized on the same
       // trims emitLaneDetail already computed above, so this is a cache hit.
       const trims = wayTrims.get(way.id) ?? { start: 0, end: 0 };
-      const laneById = new Map(wayLaneGeometry(way, trims.start, trims.end).lanes.map((l) => [l.laneId, l] as const));
+      const laneById = new Map(
+        wayLaneGeometry(way, trims.start, trims.end).lanes.map((l) => [l.laneId, l] as const),
+      );
       const lat = way.points[0]?.[1] ?? 36;
       // Which lane(s) each service rides here — it may traverse the way in more
       // than one pattern/direction (both curbs). Group services by lane so
@@ -439,7 +494,11 @@ export function buildFeatures(
         // the band), but it carries the metric so a per-lane width can use it later.
         const w14 = widthPxAtZ14(lane.widthM * SERVICE_LANE_FRACTION, lat);
         const n = svcs.length; // lone service sits dead-centre on its lane
-        svcs.forEach((svc, i) => services.push(svcFeature(svc, lane.path, (i - (n - 1) / 2) * WITHIN_LANE_SPACING_PX, w14)));
+        svcs.forEach((svc, i) =>
+          services.push(
+            svcFeature(svc, lane.path, (i - (n - 1) / 2) * WITHIN_LANE_SPACING_PX, w14),
+          ),
+        );
       }
     } else {
       bundle.forEach((svc) => services.push(centerlineFeature(svc)));
@@ -462,7 +521,7 @@ export function buildFeatures(
     const color = anchorServices[0]?.color ?? servingServices[0]?.color ?? NEUTRAL_STATION;
     const interchange = servingServices.length > 1;
     return {
-      type: "Feature",
+      type: 'Feature',
       properties: {
         id: s.id,
         color,
@@ -472,9 +531,9 @@ export function buildFeatures(
         // LYR_STATION_LABELS in layerSpecs.ts). Keeps overview zooms from
         // resolving collisions over all ~3787 labels at once.
         major: interchange || s.majorStop === true,
-        name: s.name ?? "",
+        name: s.name ?? '',
       },
-      geometry: { type: "Point", coordinates: s.coord },
+      geometry: { type: 'Point', coordinates: s.coord },
     };
   });
 
@@ -486,7 +545,11 @@ export function buildFeatures(
     const way = waysById.get(wid);
     way?.points.forEach((p, i) => {
       const endpoint = i === 0 || i === way.points.length - 1;
-      handles.push({ type: "Feature", properties: { wayId: wid, index: i, endpoint, icon: HANDLE_ICON }, geometry: { type: "Point", coordinates: p } });
+      handles.push({
+        type: 'Feature',
+        properties: { wayId: wid, index: i, endpoint, icon: HANDLE_ICON },
+        geometry: { type: 'Point', coordinates: p },
+      });
     });
   }
 
@@ -499,28 +562,38 @@ export function buildFeatures(
     for (const st of system.stations) {
       if (st.footprint) {
         footprints.push({
-          type: "Feature",
+          type: 'Feature',
           properties: { stationId: st.id },
-          geometry: { type: "Polygon", coordinates: [closeRing(st.footprint)] },
+          geometry: { type: 'Polygon', coordinates: [closeRing(st.footprint)] },
         });
       }
       for (const pf of st.platforms ?? []) {
         platforms.push({
-          type: "Feature",
+          type: 'Feature',
           properties: { stationId: st.id, platformId: pf.id },
-          geometry: { type: "Polygon", coordinates: [closeRing(pf.points)] },
+          geometry: { type: 'Polygon', coordinates: [closeRing(pf.points)] },
         });
       }
       if (st.id === physicalHandleStationId) {
         st.footprint?.forEach((p, i) => {
-          physicalHandles.push({ type: "Feature", properties: { kind: "footprint", stationId: st.id, index: i, icon: HANDLE_ICON }, geometry: { type: "Point", coordinates: p } });
+          physicalHandles.push({
+            type: 'Feature',
+            properties: { kind: 'footprint', stationId: st.id, index: i, icon: HANDLE_ICON },
+            geometry: { type: 'Point', coordinates: p },
+          });
         });
         for (const pf of st.platforms ?? []) {
           pf.points.forEach((p, i) => {
             physicalHandles.push({
-              type: "Feature",
-              properties: { kind: "platform", stationId: st.id, platformId: pf.id, index: i, icon: HANDLE_ICON },
-              geometry: { type: "Point", coordinates: p },
+              type: 'Feature',
+              properties: {
+                kind: 'platform',
+                stationId: st.id,
+                platformId: pf.id,
+                index: i,
+                icon: HANDLE_ICON,
+              },
+              geometry: { type: 'Point', coordinates: p },
             });
           });
         }
@@ -534,17 +607,17 @@ export function buildFeatures(
     for (const g of system.groups) {
       if (g.footprint) {
         footprints.push({
-          type: "Feature",
+          type: 'Feature',
           properties: { groupId: g.id, ...(g.color ? { color: g.color } : {}) },
-          geometry: { type: "Polygon", coordinates: [closeRing(g.footprint)] },
+          geometry: { type: 'Polygon', coordinates: [closeRing(g.footprint)] },
         });
       }
       if (g.id === physicalHandleGroupId) {
         g.footprint?.forEach((p, i) => {
           physicalHandles.push({
-            type: "Feature",
-            properties: { kind: "groupFootprint", groupId: g.id, index: i, icon: HANDLE_ICON },
-            geometry: { type: "Point", coordinates: p },
+            type: 'Feature',
+            properties: { kind: 'groupFootprint', groupId: g.id, index: i, icon: HANDLE_ICON },
+            geometry: { type: 'Point', coordinates: p },
           });
         });
       }
@@ -564,7 +637,11 @@ export function buildFeatures(
         if (!w || !view.visibleWayTypes.has(w.typeId)) continue;
         const path = resolveWayPath(w);
         if (path.length < 2) continue;
-        wayLabels.push({ type: "Feature", properties: { name: nw.name }, geometry: { type: "LineString", coordinates: path } });
+        wayLabels.push({
+          type: 'Feature',
+          properties: { name: nw.name },
+          geometry: { type: 'LineString', coordinates: path },
+        });
       }
     }
   }
@@ -573,35 +650,37 @@ export function buildFeatures(
     ? []
     : system.facilities.map((f) => {
         const r = facilityRender(f.typeId);
-        const coord: LngLat = Array.isArray(f.geometry[0]) ? (f.geometry as LngLat[])[0] : (f.geometry as LngLat);
+        const coord: LngLat = Array.isArray(f.geometry[0])
+          ? (f.geometry as LngLat[])[0]
+          : (f.geometry as LngLat);
         return {
-          type: "Feature",
+          type: 'Feature',
           properties: {
             id: f.id,
             typeId: f.typeId,
             color: r.color,
             radius: r.radius,
             icon: iconName(r.icon, r.color),
-            name: f.name ?? "",
+            name: f.name ?? '',
           },
-          geometry: { type: "Point", coordinates: coord },
+          geometry: { type: 'Point', coordinates: coord },
         };
       });
 
   return {
-    ways: { type: "FeatureCollection", features: ways },
-    services: { type: "FeatureCollection", features: services },
-    stations: { type: "FeatureCollection", features: stations },
-    footprints: { type: "FeatureCollection", features: footprints },
-    platforms: { type: "FeatureCollection", features: platforms },
-    facilities: { type: "FeatureCollection", features: facilities },
-    physicalHandles: { type: "FeatureCollection", features: physicalHandles },
-    handles: { type: "FeatureCollection", features: handles },
-    lanes: { type: "FeatureCollection", features: lanes },
-    laneMarkings: { type: "FeatureCollection", features: laneMarkings },
-    laneArrows: { type: "FeatureCollection", features: laneArrows },
-    junctions: { type: "FeatureCollection", features: junctionFeatures },
-    connectors: { type: "FeatureCollection", features: connectorFeatures },
-    wayLabels: { type: "FeatureCollection", features: wayLabels },
+    ways: { type: 'FeatureCollection', features: ways },
+    services: { type: 'FeatureCollection', features: services },
+    stations: { type: 'FeatureCollection', features: stations },
+    footprints: { type: 'FeatureCollection', features: footprints },
+    platforms: { type: 'FeatureCollection', features: platforms },
+    facilities: { type: 'FeatureCollection', features: facilities },
+    physicalHandles: { type: 'FeatureCollection', features: physicalHandles },
+    handles: { type: 'FeatureCollection', features: handles },
+    lanes: { type: 'FeatureCollection', features: lanes },
+    laneMarkings: { type: 'FeatureCollection', features: laneMarkings },
+    laneArrows: { type: 'FeatureCollection', features: laneArrows },
+    junctions: { type: 'FeatureCollection', features: junctionFeatures },
+    connectors: { type: 'FeatureCollection', features: connectorFeatures },
+    wayLabels: { type: 'FeatureCollection', features: wayLabels },
   };
 }

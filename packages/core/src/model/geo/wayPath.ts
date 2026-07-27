@@ -1,4 +1,4 @@
-import type { LngLat, Way } from "../system";
+import type { LngLat, Way } from '../system';
 
 const CORNER_SAMPLES = 10; // interpolated points per rounded corner.
 // Each corner is cut back this fraction of its shorter adjacent segment before
@@ -24,7 +24,10 @@ export function resolveWayPath(way: Way): LngLat[] {
   const cached = wayPathCache.get(way);
   if (cached) return cached;
   const pts = way.points;
-  const path = way.geometry === "curved" && pts.length >= 3 ? roundedCorners(pts, CORNER_FRACTION, CORNER_SAMPLES) : pts;
+  const path =
+    way.geometry === 'curved' && pts.length >= 3
+      ? roundedCorners(pts, CORNER_FRACTION, CORNER_SAMPLES)
+      : pts;
   wayPathCache.set(way, path);
   return path;
 }
@@ -38,7 +41,11 @@ export function resolveWayPath(way: Way): LngLat[] {
  * it never reshapes anything further down the line. No tangents are computed
  * or propagated between non-adjacent points.
  */
-export function roundedCorners(points: LngLat[], cornerFraction: number, samples: number): LngLat[] {
+export function roundedCorners(
+  points: LngLat[],
+  cornerFraction: number,
+  samples: number,
+): LngLat[] {
   if (points.length < 3) return points;
   const out: LngLat[] = [points[0]];
   for (let i = 1; i < points.length - 1; i++) {
@@ -66,7 +73,13 @@ function lerpAt(a: LngLat, b: LngLat, f: number): LngLat {
   return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
 }
 
-function appendQuadraticBezier(p0: LngLat, control: LngLat, p2: LngLat, samples: number, out: LngLat[]): void {
+function appendQuadraticBezier(
+  p0: LngLat,
+  control: LngLat,
+  p2: LngLat,
+  samples: number,
+  out: LngLat[],
+): void {
   for (let s = 1; s <= samples; s++) {
     const t = s / samples;
     const u = 1 - t;

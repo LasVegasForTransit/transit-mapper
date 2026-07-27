@@ -1,5 +1,5 @@
-import type { LngLat } from "../system";
-import { EARTH_RADIUS_M, toRad } from "./spherical";
+import type { LngLat } from '../system';
+import { EARTH_RADIUS_M, toRad } from './spherical';
 
 /** A coordinate `dxMeters` east and `dyMeters` north of `center` (flat-earth
  *  approximation — good enough at station-footprint scale). */
@@ -77,8 +77,10 @@ export function offsetPolyline(points: LngLat[], offsetM: number): LngLat[] {
     while (kept.length >= 2) {
       const a = offsetLocal[kept[kept.length - 2]];
       const b = offsetLocal[kept[kept.length - 1]];
-      const abx = b[0] - a[0], aby = b[1] - a[1];
-      const bcx = offsetLocal[i][0] - b[0], bcy = offsetLocal[i][1] - b[1];
+      const abx = b[0] - a[0],
+        aby = b[1] - a[1];
+      const bcx = offsetLocal[i][0] - b[0],
+        bcy = offsetLocal[i][1] - b[1];
       const mag = Math.hypot(abx, aby) * Math.hypot(bcx, bcy);
       if (mag > 0 && (abx * bcx + aby * bcy) / mag < -0.3) kept.pop();
       else break;
@@ -92,13 +94,19 @@ export function offsetPolyline(points: LngLat[], offsetM: number): LngLat[] {
  *  long along `bearingDeg` (compass degrees, 0 = north, clockwise) and
  *  `widthM` wide perpendicular to that — a vehicle's true-scale
  *  real-world footprint, rotated to face its direction of travel. */
-export function rotatedRectPolygon(center: LngLat, bearingDeg: number, widthM: number, lengthM: number): LngLat[] {
+export function rotatedRectPolygon(
+  center: LngLat,
+  bearingDeg: number,
+  widthM: number,
+  lengthM: number,
+): LngLat[] {
   const rad = (bearingDeg * Math.PI) / 180;
   const fwd: [number, number] = [Math.sin(rad), Math.cos(rad)];
   const right: [number, number] = [Math.cos(rad), -Math.sin(rad)];
   const hl = lengthM / 2;
   const hw = widthM / 2;
-  const corner = (f: number, r: number): LngLat => offsetMeters(center, fwd[0] * f + right[0] * r, fwd[1] * f + right[1] * r);
+  const corner = (f: number, r: number): LngLat =>
+    offsetMeters(center, fwd[0] * f + right[0] * r, fwd[1] * f + right[1] * r);
   const ring: LngLat[] = [corner(hl, -hw), corner(hl, hw), corner(-hl, hw), corner(-hl, -hw)];
   return [...ring, ring[0]];
 }
@@ -111,7 +119,8 @@ export function pointInPolygon(point: LngLat, ring: LngLat[]): boolean {
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
-    const crosses = yi > point[1] !== yj > point[1] && point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi;
+    const crosses =
+      yi > point[1] !== yj > point[1] && point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi;
     if (crosses) inside = !inside;
   }
   return inside;

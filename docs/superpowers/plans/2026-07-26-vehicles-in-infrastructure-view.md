@@ -10,13 +10,14 @@
 
 **Spec:** [docs/superpowers/specs/2026-07-26-vehicles-in-infrastructure-view-design.md](../specs/2026-07-26-vehicles-in-infrastructure-view-design.md)
 
-**A note on "TDD" in this codebase:** there is no per-file test runner — every check lives in one compiled TypeScript file (`apps/web/scripts/verify.ts`) that imports the real modules directly. Writing a `check()` call against a function that doesn't exist yet fails the whole file to *compile*, not just that one check — so the practical red/green cycle here is: implement a small, focused function → add `check()` calls exercising it → run the whole harness once → confirm every check (old and new) prints `ok`. Each task below still lands one focused unit at a time.
+**A note on "TDD" in this codebase:** there is no per-file test runner — every check lives in one compiled TypeScript file (`apps/web/scripts/verify.ts`) that imports the real modules directly. Writing a `check()` call against a function that doesn't exist yet fails the whole file to _compile_, not just that one check — so the practical red/green cycle here is: implement a small, focused function → add `check()` calls exercising it → run the whole harness once → confirm every check (old and new) prints `ok`. Each task below still lands one focused unit at a time.
 
 ---
 
 ### Task 1: Direction detection + lane selection + lane-aware pattern path
 
 **Files:**
+
 - Create: `packages/core/src/geometry/vehicleLane.ts`
 - Modify: `apps/web/scripts/verify.ts` (add imports + checks)
 
@@ -35,10 +36,10 @@ Create `packages/core/src/geometry/vehicleLane.ts`:
 // needs wayLaneGeometry (geometry/streets.ts), which itself depends on
 // model/ — a model/ file reaching back into geometry/ would be circular.
 
-import { haversineMeters, resolveWayPath, wayById } from "../model/geo";
-import { mode } from "../model/catalog";
-import type { LaneDirection, LngLat, Pattern, Way } from "../model/system";
-import { wayLaneGeometry, type LanePath } from "./streets";
+import { haversineMeters, resolveWayPath, wayById } from '../model/geo';
+import { mode } from '../model/catalog';
+import type { LaneDirection, LngLat, Pattern, Way } from '../model/system';
+import { wayLaneGeometry, type LanePath } from './streets';
 
 /** One way in a pattern's sequence, with which direction (relative to the
  *  way's own stored point order) the pattern travels it. Nothing in the
@@ -66,7 +67,8 @@ export function patternWayTraversals(ways: Way[], pattern: Pattern): WayTraversa
     // Explicit annotation, not inferred — TS 7 (this repo's compiler as of
     // this plan) flags this as circular without it (TS7022), even though
     // `prevEnd` is already explicitly typed above.
-    const forward: boolean = prevEnd === null || haversineMeters(prevEnd, start) <= haversineMeters(prevEnd, end);
+    const forward: boolean =
+      prevEnd === null || haversineMeters(prevEnd, start) <= haversineMeters(prevEnd, end);
     out.push({ way, forward });
     prevEnd = forward ? end : start;
   }
@@ -79,7 +81,11 @@ export function patternWayTraversals(ways: Way[], pattern: Pattern): WayTraversa
 In `apps/web/scripts/verify.ts`, add to the import from `@transitmapper/core/geometry/vehicleLane` (new import block near the other `@transitmapper/core/geometry/*` import):
 
 ```ts
-import { patternWayTraversals, selectVehicleLane, patternLanePath } from "@transitmapper/core/geometry/vehicleLane";
+import {
+  patternWayTraversals,
+  selectVehicleLane,
+  patternLanePath,
+} from '@transitmapper/core/geometry/vehicleLane';
 ```
 
 Add checks (anchor: search for an existing `wayLaneGeometry` check and add this block after it):
@@ -89,28 +95,49 @@ Add checks (anchor: search for an existing `wayLaneGeometry` check and add this 
   // Two ways end-to-start, end-to-start — the natural "keep going forward"
   // case: way B's stored points already run the direction of travel.
   const wayA: Way = {
-    id: "va", typeId: "road", geometry: "straight", grade: "atGrade",
-    points: [[-115.2, 36.1], [-115.19, 36.1]],
+    id: 'va',
+    typeId: 'road',
+    geometry: 'straight',
+    grade: 'atGrade',
+    points: [
+      [-115.2, 36.1],
+      [-115.19, 36.1],
+    ],
     profile: { lanes: [] },
   };
   const wayB: Way = {
-    id: "vb", typeId: "road", geometry: "straight", grade: "atGrade",
-    points: [[-115.19, 36.1], [-115.18, 36.1]],
+    id: 'vb',
+    typeId: 'road',
+    geometry: 'straight',
+    grade: 'atGrade',
+    points: [
+      [-115.19, 36.1],
+      [-115.18, 36.1],
+    ],
     profile: { lanes: [] },
   };
-  const traversals = patternWayTraversals([wayA, wayB], { id: "p1", wayIds: ["va", "vb"] });
-  check("first way in a pattern defaults to forward", traversals[0].forward === true);
-  check("a way continuing in its own stored order is forward", traversals[1].forward === true);
+  const traversals = patternWayTraversals([wayA, wayB], { id: 'p1', wayIds: ['va', 'vb'] });
+  check('first way in a pattern defaults to forward', traversals[0].forward === true);
+  check('a way continuing in its own stored order is forward', traversals[1].forward === true);
 
   // way C's own points run the OPPOSITE direction of travel (start where
   // way A ends up, at the far end) — traversing it means walking it backward.
   const wayC: Way = {
-    id: "vc", typeId: "road", geometry: "straight", grade: "atGrade",
-    points: [[-115.18, 36.1], [-115.19, 36.1]],
+    id: 'vc',
+    typeId: 'road',
+    geometry: 'straight',
+    grade: 'atGrade',
+    points: [
+      [-115.18, 36.1],
+      [-115.19, 36.1],
+    ],
     profile: { lanes: [] },
   };
-  const reversedTraversals = patternWayTraversals([wayA, wayC], { id: "p2", wayIds: ["va", "vc"] });
-  check("a way stored opposite the direction of travel is detected as backward", reversedTraversals[1].forward === false);
+  const reversedTraversals = patternWayTraversals([wayA, wayC], { id: 'p2', wayIds: ['va', 'vc'] });
+  check(
+    'a way stored opposite the direction of travel is detected as backward',
+    reversedTraversals[1].forward === false,
+  );
 }
 ```
 
@@ -144,8 +171,10 @@ function orientedLanePath(lane: LanePath, forward: boolean): LngLat[] {
  */
 export function selectVehicleLane(way: Way, forward: boolean, modeId: string): LanePath | null {
   const geometry = wayLaneGeometry(way);
-  const direction: LaneDirection = forward ? "forward" : "backward";
-  const candidates = geometry.lanes.filter((l) => l.direction === direction || l.direction === "both");
+  const direction: LaneDirection = forward ? 'forward' : 'backward';
+  const candidates = geometry.lanes.filter(
+    (l) => l.direction === direction || l.direction === 'both',
+  );
   if (candidates.length === 0) return null;
 
   const preferredKindIds = mode(modeId).preferredLaneKindIds ?? [];
@@ -171,34 +200,65 @@ Append to the same check block in `apps/web/scripts/verify.ts` from Step 2:
   // drive, sidewalk — built directly as a profile so the test doesn't
   // depend on catalog defaults changing later.
   const road: Way = {
-    id: "vroad", typeId: "road", geometry: "straight", grade: "atGrade",
-    points: [[-115.2, 36.1], [-115.19, 36.1]],
+    id: 'vroad',
+    typeId: 'road',
+    geometry: 'straight',
+    grade: 'atGrade',
+    points: [
+      [-115.2, 36.1],
+      [-115.19, 36.1],
+    ],
     profile: {
       lanes: [
-        { id: "sw1", kindId: "sidewalk", widthM: 2, direction: "both" },
-        { id: "d1", kindId: "drive", widthM: 3.3, direction: "backward" },
-        { id: "d2", kindId: "drive", widthM: 3.3, direction: "backward" },
-        { id: "b1", kindId: "bus", widthM: 3.6, direction: "forward" },
-        { id: "d3", kindId: "drive", widthM: 3.3, direction: "forward" },
-        { id: "sw2", kindId: "sidewalk", widthM: 2, direction: "both" },
+        { id: 'sw1', kindId: 'sidewalk', widthM: 2, direction: 'both' },
+        { id: 'd1', kindId: 'drive', widthM: 3.3, direction: 'backward' },
+        { id: 'd2', kindId: 'drive', widthM: 3.3, direction: 'backward' },
+        { id: 'b1', kindId: 'bus', widthM: 3.6, direction: 'forward' },
+        { id: 'd3', kindId: 'drive', widthM: 3.3, direction: 'forward' },
+        { id: 'sw2', kindId: 'sidewalk', widthM: 2, direction: 'both' },
       ],
     },
   };
-  const busLane = selectVehicleLane(road, true, "bus");
-  check("a bus prefers the dedicated bus lane over a general drive lane", busLane?.kindId === "bus");
+  const busLane = selectVehicleLane(road, true, 'bus');
+  check(
+    'a bus prefers the dedicated bus lane over a general drive lane',
+    busLane?.kindId === 'bus',
+  );
 
-  const brtLane = selectVehicleLane(road, true, "brt");
-  check("BRT also prefers the bus lane (shares bus's preference list)", brtLane?.kindId === "bus");
+  const brtLane = selectVehicleLane(road, true, 'brt');
+  check("BRT also prefers the bus lane (shares bus's preference list)", brtLane?.kindId === 'bus');
 
-  const carModeLane = selectVehicleLane(road, true, "subway"); // subway has no preferredLaneKindIds
-  check("a mode with no lane preference falls back to whichever direction-matching lane is nearest centerline (here, the bus lane at offset 1.65m beats the drive lane at 5.1m)", carModeLane?.kindId === "bus");
+  const carModeLane = selectVehicleLane(road, true, 'subway'); // subway has no preferredLaneKindIds
+  check(
+    'a mode with no lane preference falls back to whichever direction-matching lane is nearest centerline (here, the bus lane at offset 1.65m beats the drive lane at 5.1m)',
+    carModeLane?.kindId === 'bus',
+  );
 
-  const backwardLane = selectVehicleLane(road, false, "bus");
-  check("no bus lane going backward on this road — falls back to a backward drive lane", backwardLane?.kindId === "drive");
-  check("the backward fallback is the one closest to centerline, not the outer one", backwardLane?.laneId === "d2");
+  const backwardLane = selectVehicleLane(road, false, 'bus');
+  check(
+    'no bus lane going backward on this road — falls back to a backward drive lane',
+    backwardLane?.kindId === 'drive',
+  );
+  check(
+    'the backward fallback is the one closest to centerline, not the outer one',
+    backwardLane?.laneId === 'd2',
+  );
 
-  const noProfileWay: Way = { id: "vempty", typeId: "road", geometry: "straight", grade: "atGrade", points: [[-115.2, 36.1], [-115.19, 36.1]], profile: { lanes: [] } };
-  check("a way with no profile at all returns no lane (caller falls back to centerline)", selectVehicleLane(noProfileWay, true, "bus") === null);
+  const noProfileWay: Way = {
+    id: 'vempty',
+    typeId: 'road',
+    geometry: 'straight',
+    grade: 'atGrade',
+    points: [
+      [-115.2, 36.1],
+      [-115.19, 36.1],
+    ],
+    profile: { lanes: [] },
+  };
+  check(
+    'a way with no profile at all returns no lane (caller falls back to centerline)',
+    selectVehicleLane(noProfileWay, true, 'bus') === null,
+  );
 }
 ```
 
@@ -242,18 +302,43 @@ Append to the same block:
 ```ts
 {
   const wayA: Way = {
-    id: "lp-a", typeId: "road", geometry: "straight", grade: "atGrade",
-    points: [[-115.2, 36.1], [-115.19, 36.1]],
-    profile: { lanes: [{ id: "a-d1", kindId: "drive", widthM: 3.3, direction: "forward" }, { id: "a-d2", kindId: "drive", widthM: 3.3, direction: "backward" }] },
+    id: 'lp-a',
+    typeId: 'road',
+    geometry: 'straight',
+    grade: 'atGrade',
+    points: [
+      [-115.2, 36.1],
+      [-115.19, 36.1],
+    ],
+    profile: {
+      lanes: [
+        { id: 'a-d1', kindId: 'drive', widthM: 3.3, direction: 'forward' },
+        { id: 'a-d2', kindId: 'drive', widthM: 3.3, direction: 'backward' },
+      ],
+    },
   };
   const wayB: Way = {
-    id: "lp-b", typeId: "road", geometry: "straight", grade: "atGrade",
-    points: [[-115.19, 36.1], [-115.18, 36.1]],
-    profile: { lanes: [{ id: "b-d1", kindId: "drive", widthM: 3.3, direction: "forward" }, { id: "b-d2", kindId: "drive", widthM: 3.3, direction: "backward" }] },
+    id: 'lp-b',
+    typeId: 'road',
+    geometry: 'straight',
+    grade: 'atGrade',
+    points: [
+      [-115.19, 36.1],
+      [-115.18, 36.1],
+    ],
+    profile: {
+      lanes: [
+        { id: 'b-d1', kindId: 'drive', widthM: 3.3, direction: 'forward' },
+        { id: 'b-d2', kindId: 'drive', widthM: 3.3, direction: 'backward' },
+      ],
+    },
   };
-  const path = patternLanePath([wayA, wayB], { id: "lp1", wayIds: ["lp-a", "lp-b"] }, "bus");
-  check("patternLanePath produces a continuous path across both ways", path.length >= 2);
-  check("patternLanePath's endpoints roughly track the ways' own endpoints (offset by lane width, not miles)", Math.abs(path[0][1] - 36.1) < 0.001 && Math.abs(path[path.length - 1][1] - 36.1) < 0.001);
+  const path = patternLanePath([wayA, wayB], { id: 'lp1', wayIds: ['lp-a', 'lp-b'] }, 'bus');
+  check('patternLanePath produces a continuous path across both ways', path.length >= 2);
+  check(
+    "patternLanePath's endpoints roughly track the ways' own endpoints (offset by lane width, not miles)",
+    Math.abs(path[0][1] - 36.1) < 0.001 && Math.abs(path[path.length - 1][1] - 36.1) < 0.001,
+  );
 }
 ```
 
@@ -273,6 +358,7 @@ git add packages/core/src/geometry/vehicleLane.ts apps/web/scripts/verify.ts
 ### Task 2: Bearing helper
 
 **Files:**
+
 - Modify: `packages/core/src/model/geo/measurement.ts`
 - Modify: `apps/web/scripts/verify.ts`
 
@@ -281,7 +367,7 @@ git add packages/core/src/geometry/vehicleLane.ts apps/web/scripts/verify.ts
 `packages/core/src/model/geo/spherical.ts` already has `bearingDegrees(a, b)` (great-circle bearing between two points — the same one the way-drawing bearing readout uses). Reuse it rather than writing a second, flat-approximation bearing formula. In `packages/core/src/model/geo/measurement.ts`, change the top import to add `bearingDegrees`:
 
 ```ts
-import { bearingDegrees, haversineMeters, toRad } from "./spherical";
+import { bearingDegrees, haversineMeters, toRad } from './spherical';
 ```
 
 Then add, after `pointAtT`:
@@ -316,13 +402,28 @@ In `apps/web/scripts/verify.ts`, add `bearingAtT` to the existing `@transitmappe
 
 ```ts
 {
-  const dueNorth: LngLat[] = [[-115.2, 36.1], [-115.2, 36.11]];
-  check("bearingAtT reads ~0° (north) for a due-north path", Math.abs(bearingAtT(dueNorth, 0.5)) < 1 || Math.abs(bearingAtT(dueNorth, 0.5) - 360) < 1);
+  const dueNorth: LngLat[] = [
+    [-115.2, 36.1],
+    [-115.2, 36.11],
+  ];
+  check(
+    'bearingAtT reads ~0° (north) for a due-north path',
+    Math.abs(bearingAtT(dueNorth, 0.5)) < 1 || Math.abs(bearingAtT(dueNorth, 0.5) - 360) < 1,
+  );
 
-  const dueEast: LngLat[] = [[-115.2, 36.1], [-115.19, 36.1]];
-  check("bearingAtT reads ~90° (east) for a due-east path", Math.abs(bearingAtT(dueEast, 0.5) - 90) < 1);
+  const dueEast: LngLat[] = [
+    [-115.2, 36.1],
+    [-115.19, 36.1],
+  ];
+  check(
+    'bearingAtT reads ~90° (east) for a due-east path',
+    Math.abs(bearingAtT(dueEast, 0.5) - 90) < 1,
+  );
 
-  check("bearingAtT on a too-short path returns 0 rather than throwing", bearingAtT([[-115.2, 36.1]], 0.5) === 0);
+  check(
+    'bearingAtT on a too-short path returns 0 rather than throwing',
+    bearingAtT([[-115.2, 36.1]], 0.5) === 0,
+  );
 }
 ```
 
@@ -342,6 +443,7 @@ git add packages/core/src/model/geo/measurement.ts apps/web/scripts/verify.ts
 ### Task 3: Rotated-rectangle polygon helper
 
 **Files:**
+
 - Modify: `packages/core/src/model/geo/planar.ts`
 - Modify: `apps/web/scripts/verify.ts`
 
@@ -354,13 +456,19 @@ In `packages/core/src/model/geo/planar.ts`, add after `squareFootprint`:
  *  long along `bearingDeg` (compass degrees, 0 = north, clockwise) and
  *  `widthM` wide perpendicular to that — a vehicle's true-scale
  *  real-world footprint, rotated to face its direction of travel. */
-export function rotatedRectPolygon(center: LngLat, bearingDeg: number, widthM: number, lengthM: number): LngLat[] {
+export function rotatedRectPolygon(
+  center: LngLat,
+  bearingDeg: number,
+  widthM: number,
+  lengthM: number,
+): LngLat[] {
   const rad = (bearingDeg * Math.PI) / 180;
   const fwd: [number, number] = [Math.sin(rad), Math.cos(rad)];
   const right: [number, number] = [Math.cos(rad), -Math.sin(rad)];
   const hl = lengthM / 2;
   const hw = widthM / 2;
-  const corner = (f: number, r: number): LngLat => offsetMeters(center, fwd[0] * f + right[0] * r, fwd[1] * f + right[1] * r);
+  const corner = (f: number, r: number): LngLat =>
+    offsetMeters(center, fwd[0] * f + right[0] * r, fwd[1] * f + right[1] * r);
   const ring: LngLat[] = [corner(hl, -hw), corner(hl, hw), corner(-hl, hw), corner(-hl, -hw)];
   return [...ring, ring[0]];
 }
@@ -374,10 +482,16 @@ In `apps/web/scripts/verify.ts`, add `rotatedRectPolygon` to the existing `@tran
 {
   const center: LngLat = [-115.2, 36.1];
   const ring = rotatedRectPolygon(center, 0, 3, 10); // facing due north
-  check("rotatedRectPolygon returns a closed ring (5 points, first === last)", ring.length === 5 && ring[0][0] === ring[4][0] && ring[0][1] === ring[4][1]);
+  check(
+    'rotatedRectPolygon returns a closed ring (5 points, first === last)',
+    ring.length === 5 && ring[0][0] === ring[4][0] && ring[0][1] === ring[4][1],
+  );
 
   const [dx, dy] = metersFromOrigin(center, ring[0]);
-  check("facing north, a corner sits ~half-length north/south and ~half-width east/west of center", Math.abs(Math.abs(dy) - 5) < 0.1 && Math.abs(Math.abs(dx) - 1.5) < 0.1);
+  check(
+    'facing north, a corner sits ~half-length north/south and ~half-width east/west of center',
+    Math.abs(Math.abs(dy) - 5) < 0.1 && Math.abs(Math.abs(dx) - 1.5) < 0.1,
+  );
 }
 ```
 
@@ -397,6 +511,7 @@ git add packages/core/src/model/geo/planar.ts apps/web/scripts/verify.ts
 ### Task 4: Catalog — `preferredLaneKindIds` on `MODES`
 
 **Files:**
+
 - Modify: `packages/core/src/model/catalog.ts:484-506`
 
 - [x] **Step 1: Extend the `Mode` interface and populate preferences**
@@ -421,18 +536,28 @@ export interface Mode {
 export const MODES: Record<string, Mode> = {
   // Heavy rail: subway and commuter rail are operationally different services
   // but ride the same track standard, so both are compatible with heavyRail.
-  subway: { id: "subway", label: "Subway / metro", wayTypeIds: ["heavyRail"] },
-  commuterRail: { id: "commuterRail", label: "Commuter rail", wayTypeIds: ["heavyRail"] },
+  subway: { id: 'subway', label: 'Subway / metro', wayTypeIds: ['heavyRail'] },
+  commuterRail: { id: 'commuterRail', label: 'Commuter rail', wayTypeIds: ['heavyRail'] },
   // Light rail & trams share the light-rail track standard — trams typically
   // run shorter, city-center alignments and more often street-run in a road's
   // right-of-way, which is why both also list "road" as compatible.
-  lightRail: { id: "lightRail", label: "Light rail", wayTypeIds: ["lightRail", "road"], preferredLaneKindIds: ["track", "drive"] },
-  tram: { id: "tram", label: "Tram / streetcar", wayTypeIds: ["lightRail", "road"], preferredLaneKindIds: ["track", "drive"] },
-  monorail: { id: "monorail", label: "Monorail", wayTypeIds: ["monorail"] },
-  brt: { id: "brt", label: "BRT", wayTypeIds: ["road"], preferredLaneKindIds: ["bus", "drive"] },
-  bus: { id: "bus", label: "Bus", wayTypeIds: ["road"], preferredLaneKindIds: ["bus", "drive"] },
-  gondola: { id: "gondola", label: "Gondola / aerial", wayTypeIds: ["aerial"] },
-  ferry: { id: "ferry", label: "Ferry", wayTypeIds: ["water"] },
+  lightRail: {
+    id: 'lightRail',
+    label: 'Light rail',
+    wayTypeIds: ['lightRail', 'road'],
+    preferredLaneKindIds: ['track', 'drive'],
+  },
+  tram: {
+    id: 'tram',
+    label: 'Tram / streetcar',
+    wayTypeIds: ['lightRail', 'road'],
+    preferredLaneKindIds: ['track', 'drive'],
+  },
+  monorail: { id: 'monorail', label: 'Monorail', wayTypeIds: ['monorail'] },
+  brt: { id: 'brt', label: 'BRT', wayTypeIds: ['road'], preferredLaneKindIds: ['bus', 'drive'] },
+  bus: { id: 'bus', label: 'Bus', wayTypeIds: ['road'], preferredLaneKindIds: ['bus', 'drive'] },
+  gondola: { id: 'gondola', label: 'Gondola / aerial', wayTypeIds: ['aerial'] },
+  ferry: { id: 'ferry', label: 'Ferry', wayTypeIds: ['water'] },
 };
 ```
 
@@ -441,8 +566,14 @@ export const MODES: Record<string, Mode> = {
 In `apps/web/scripts/verify.ts`, near the existing `MODES`/`modesForWayType` checks:
 
 ```ts
-check("bus mode prefers a dedicated bus lane over a general drive lane", MODES.bus.preferredLaneKindIds?.[0] === "bus");
-check("subway has no lane preference (its only way type has one lane kind, no ambiguity)", MODES.subway.preferredLaneKindIds === undefined);
+check(
+  'bus mode prefers a dedicated bus lane over a general drive lane',
+  MODES.bus.preferredLaneKindIds?.[0] === 'bus',
+);
+check(
+  'subway has no lane preference (its only way type has one lane kind, no ambiguity)',
+  MODES.subway.preferredLaneKindIds === undefined,
+);
 ```
 
 - [x] **Step 3: Run verify, confirm pass**
@@ -461,6 +592,7 @@ git add packages/core/src/model/catalog.ts apps/web/scripts/verify.ts
 ### Task 5: Style — vehicle footprint dimensions and paint constants
 
 **Files:**
+
 - Modify: `packages/core/src/style/catalogStyle.ts`
 - Modify: `apps/web/scripts/verify.ts`
 
@@ -501,7 +633,7 @@ export function vehicleFootprint(modeId: string): VehicleFootprint {
 // same value the Network-view dot already uses) — unlike a footprint or
 // platform, a vehicle belongs to exactly one service, so it gets that
 // service's color rather than the shared monochrome ink fill.
-export const VEHICLE_STROKE = "#191a17";
+export const VEHICLE_STROKE = '#191a17';
 export const VEHICLE_FILL_OPACITY = 0.92;
 ```
 
@@ -510,8 +642,14 @@ export const VEHICLE_FILL_OPACITY = 0.92;
 In `apps/web/scripts/verify.ts`, add `vehicleFootprint`, `VEHICLE_FOOTPRINT_M` to the `@transitmapper/core/style/catalogStyle` import (or add a new import line if none exists yet — search the file for `catalogStyle` to find the existing import block), then:
 
 ```ts
-check("a light rail vehicle is longer than a bus (real mode differentiation from size alone)", vehicleFootprint("lightRail").lengthM > vehicleFootprint("bus").lengthM);
-check("an unknown mode falls back to the bus footprint", vehicleFootprint("nonexistent-mode").lengthM === vehicleFootprint("bus").lengthM);
+check(
+  'a light rail vehicle is longer than a bus (real mode differentiation from size alone)',
+  vehicleFootprint('lightRail').lengthM > vehicleFootprint('bus').lengthM,
+);
+check(
+  'an unknown mode falls back to the bus footprint',
+  vehicleFootprint('nonexistent-mode').lengthM === vehicleFootprint('bus').lengthM,
+);
 ```
 
 - [x] **Step 3: Run verify, confirm pass**
@@ -530,6 +668,7 @@ git add packages/core/src/style/catalogStyle.ts apps/web/scripts/verify.ts
 ### Task 6: New source + layer pair for Infrastructure-view vehicles
 
 **Files:**
+
 - Modify: `apps/web/src/map/layers/constants.ts`
 - Modify: `apps/web/src/map/layers/layerSpecs.ts`
 
@@ -538,14 +677,14 @@ git add packages/core/src/style/catalogStyle.ts apps/web/scripts/verify.ts
 In `apps/web/src/map/layers/constants.ts`, add next to `SRC_VEHICLES`/`LYR_VEHICLES`:
 
 ```ts
-export const SRC_VEHICLES_INFRA = "tm-vehicles-infra";
+export const SRC_VEHICLES_INFRA = 'tm-vehicles-infra';
 ```
 
 and next to `LYR_VEHICLES`:
 
 ```ts
-export const LYR_VEHICLES_INFRA_FILL = "tm-vehicles-infra-fill";
-export const LYR_VEHICLES_INFRA_STROKE = "tm-vehicles-infra-stroke";
+export const LYR_VEHICLES_INFRA_FILL = 'tm-vehicles-infra-fill';
+export const LYR_VEHICLES_INFRA_STROKE = 'tm-vehicles-infra-stroke';
 ```
 
 - [x] **Step 2: Add the fill + stroke layer pair**
@@ -590,6 +729,7 @@ git add apps/web/src/map/layers/constants.ts apps/web/src/map/layers/layerSpecs.
 ### Task 7: Wire lane-aware geometry and rendering into `sim/vehicles.ts`
 
 **Files:**
+
 - Modify: `apps/web/src/sim/vehicles.ts`
 
 This is the task that actually makes vehicles appear in Infrastructure view. `VehicleGate` changes shape: `isVisible` becomes a pure mode-filter check (view-mode gating moves into this file, since the tick loop now needs to know the current view mode to decide which source/shape to render). `resolvePatternGeometry` (Network, unchanged) gets a sibling `resolveInfraPatternGeometry` built from `patternLanePath` instead of `patternPath`.
@@ -599,14 +739,29 @@ This is the task that actually makes vehicles appear in Infrastructure view. `Ve
 In `apps/web/src/sim/vehicles.ts`, replace the top of the file through the `VehicleGate` interface:
 
 ```ts
-import type { Feature, Point, Polygon } from "geojson";
-import type { GeoJSONSource, Map as MLMap } from "maplibre-gl";
-import type { EditorStore } from "../editor/store";
-import { bearingAtT, nearestOnPath, pathLengthMeters, patternPath, pointAtT, rotatedRectPolygon } from "@transitmapper/core/model/geo";
-import { patternLanePath } from "@transitmapper/core/geometry/vehicleLane";
-import { vehicleFootprint } from "@transitmapper/core/style/catalogStyle";
-import type { LngLat, Pattern, SchedulePeriod, Service, Station, TransitSystem, Way } from "@transitmapper/core/model/system";
-import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from "../map/layers";
+import type { Feature, Point, Polygon } from 'geojson';
+import type { GeoJSONSource, Map as MLMap } from 'maplibre-gl';
+import type { EditorStore } from '../editor/store';
+import {
+  bearingAtT,
+  nearestOnPath,
+  pathLengthMeters,
+  patternPath,
+  pointAtT,
+  rotatedRectPolygon,
+} from '@transitmapper/core/model/geo';
+import { patternLanePath } from '@transitmapper/core/geometry/vehicleLane';
+import { vehicleFootprint } from '@transitmapper/core/style/catalogStyle';
+import type {
+  LngLat,
+  Pattern,
+  SchedulePeriod,
+  Service,
+  Station,
+  TransitSystem,
+  Way,
+} from '@transitmapper/core/model/system';
+import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from '../map/layers';
 
 export const VEHICLE_SPEED_MPS = 11; // ~40 km/h — a plausible light-rail/tram running speed
 const MIN_PERIOD_MS = 6000; // a floor so even a very short line doesn't blur past instantly
@@ -626,7 +781,7 @@ export interface VehicleGate {
   /** Current view mode: vehicles render as a small dot in Network, a real
    *  true-scale footprint polygon riding its actual lane in Infrastructure,
    *  and not at all in Diagram. */
-  viewMode: () => "network" | "infrastructure" | "diagram";
+  viewMode: () => 'network' | 'infrastructure' | 'diagram';
 }
 ```
 
@@ -648,16 +803,33 @@ interface CachedInfraPatternGeometry extends PatternGeometry {
 }
 const infraPatternGeometryCache = new WeakMap<Pattern, CachedInfraPatternGeometry>();
 
-function resolveInfraPatternGeometry(system: TransitSystem, pattern: Pattern, modeId: string): PatternGeometry | null {
+function resolveInfraPatternGeometry(
+  system: TransitSystem,
+  pattern: Pattern,
+  modeId: string,
+): PatternGeometry | null {
   const cached = infraPatternGeometryCache.get(pattern);
-  if (cached && cached.forWays === system.ways && cached.forStations === system.stations && cached.forModeId === modeId) return cached;
+  if (
+    cached &&
+    cached.forWays === system.ways &&
+    cached.forStations === system.stations &&
+    cached.forModeId === modeId
+  )
+    return cached;
   const path = patternLanePath(system.ways, pattern, modeId);
   if (path.length < 2) return null;
   const meters = pathLengthMeters(path);
   if (meters === 0) return null;
   const stops = dwellStopsForPattern(system, pattern, path, meters);
   const timetable = buildTimetable(meters, stops);
-  const geometry: CachedInfraPatternGeometry = { path, meters, timetable, forWays: system.ways, forStations: system.stations, forModeId: modeId };
+  const geometry: CachedInfraPatternGeometry = {
+    path,
+    meters,
+    timetable,
+    forWays: system.ways,
+    forStations: system.stations,
+    forModeId: modeId,
+  };
   infraPatternGeometryCache.set(pattern, geometry);
   return geometry;
 }
@@ -668,7 +840,11 @@ function resolveInfraPatternGeometry(system: TransitSystem, pattern: Pattern, mo
 Replace the whole `attachVehicleAnimation` function body:
 
 ```ts
-export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: VehicleGate): () => void {
+export function attachVehicleAnimation(
+  map: MLMap,
+  store: EditorStore,
+  gate: VehicleGate,
+): () => void {
   let frame: number;
   const tick = () => {
     frame = requestAnimationFrame(tick);
@@ -681,20 +857,27 @@ export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: Veh
     const features: Feature<Point>[] = [];
     const infraFeatures: Feature<Polygon>[] = [];
 
-    if (viewMode === "network" || viewMode === "infrastructure") {
+    if (viewMode === 'network' || viewMode === 'infrastructure') {
       for (const service of system.services) {
         if (!gate.isVisible(service)) continue;
         const headwayMinutes = effectiveHeadwayMinutes(service);
         for (const pattern of service.patterns) {
           const geometry =
-            viewMode === "network" ? resolvePatternGeometry(system, pattern) : resolveInfraPatternGeometry(system, pattern, service.modeId);
+            viewMode === 'network'
+              ? resolvePatternGeometry(system, pattern)
+              : resolveInfraPatternGeometry(system, pattern, service.modeId);
           if (!geometry) continue;
           const { path, meters, timetable } = geometry;
           // periodMs is the animation's own out-and-back cycle — floored so
           // even a short, stopless line doesn't blur past instantly.
           const periodMs = Math.max(MIN_PERIOD_MS, 2 * timetable.oneWayMs);
           const roundTripMinutes = (2 * timetable.oneWayMs) / 60000;
-          const count = headwayMinutes ? Math.min(MAX_VEHICLES_PER_PATTERN, Math.max(1, Math.floor(roundTripMinutes / headwayMinutes))) : 1;
+          const count = headwayMinutes
+            ? Math.min(
+                MAX_VEHICLES_PER_PATTERN,
+                Math.max(1, Math.floor(roundTripMinutes / headwayMinutes)),
+              )
+            : 1;
           for (let i = 0; i < count; i++) {
             const phase = (now / periodMs + i / count) % 1;
             const elapsedMs = phase * periodMs;
@@ -707,28 +890,31 @@ export function attachVehicleAnimation(map: MLMap, store: EditorStore, gate: Veh
               ? metersAtElapsed(meters, timetable, legElapsed)
               : meters - metersAtElapsed(meters, timetable, legElapsed);
             const t = meters === 0 ? 0 : distFromStart / meters;
-            if (viewMode === "network") {
+            if (viewMode === 'network') {
               features.push({
-                type: "Feature",
+                type: 'Feature',
                 properties: { color: service.color },
-                geometry: { type: "Point", coordinates: pointAtT(path, t) },
+                geometry: { type: 'Point', coordinates: pointAtT(path, t) },
               });
             } else {
               const center = pointAtT(path, t);
               const bearing = bearingAtT(path, t);
               const { widthM, lengthM } = vehicleFootprint(service.modeId);
               infraFeatures.push({
-                type: "Feature",
+                type: 'Feature',
                 properties: { color: service.color },
-                geometry: { type: "Polygon", coordinates: [rotatedRectPolygon(center, bearing, widthM, lengthM)] },
+                geometry: {
+                  type: 'Polygon',
+                  coordinates: [rotatedRectPolygon(center, bearing, widthM, lengthM)],
+                },
               });
             }
           }
         }
       }
     }
-    source?.setData({ type: "FeatureCollection", features });
-    infraSource?.setData({ type: "FeatureCollection", features: infraFeatures });
+    source?.setData({ type: 'FeatureCollection', features });
+    infraSource?.setData({ type: 'FeatureCollection', features: infraFeatures });
   };
   frame = requestAnimationFrame(tick);
   return () => cancelAnimationFrame(frame);
@@ -751,6 +937,7 @@ git add apps/web/src/sim/vehicles.ts
 ### Task 8: Wire the new source into `MapCanvas.tsx`
 
 **Files:**
+
 - Modify: `apps/web/src/map/MapCanvas.tsx`
 
 - [x] **Step 1: Add `SRC_VEHICLES_INFRA` to `ALL_SOURCES`**
@@ -758,13 +945,27 @@ git add apps/web/src/sim/vehicles.ts
 Find the `ALL_SOURCES` array (search for `SRC_VEHICLES,` inside it) and add `SRC_VEHICLES_INFRA` right after `SRC_VEHICLES`:
 
 ```ts
-    const ALL_SOURCES = [
-      SRC_WAYS, SRC_SERVICES, SRC_STATIONS, SRC_HANDLES, SRC_PREVIEW,
-      SRC_ENDPOINT_HINT, SRC_MARQUEE, SRC_FOOTPRINTS, SRC_PLATFORMS,
-      SRC_FACILITIES, SRC_PHYSICAL_HANDLES, SRC_VEHICLES, SRC_VEHICLES_INFRA, SRC_LANES,
-      SRC_LANE_MARKINGS, SRC_LANE_ARROWS, SRC_JUNCTIONS, SRC_CONNECTORS,
-      SRC_WAY_LABELS,
-    ];
+const ALL_SOURCES = [
+  SRC_WAYS,
+  SRC_SERVICES,
+  SRC_STATIONS,
+  SRC_HANDLES,
+  SRC_PREVIEW,
+  SRC_ENDPOINT_HINT,
+  SRC_MARQUEE,
+  SRC_FOOTPRINTS,
+  SRC_PLATFORMS,
+  SRC_FACILITIES,
+  SRC_PHYSICAL_HANDLES,
+  SRC_VEHICLES,
+  SRC_VEHICLES_INFRA,
+  SRC_LANES,
+  SRC_LANE_MARKINGS,
+  SRC_LANE_ARROWS,
+  SRC_JUNCTIONS,
+  SRC_CONNECTORS,
+  SRC_WAY_LABELS,
+];
 ```
 
 Add `SRC_VEHICLES_INFRA` to this file's import from `./layers` (find the existing `SRC_VEHICLES,` in that import list and add it alongside).
@@ -774,18 +975,19 @@ Add `SRC_VEHICLES_INFRA` to this file's import from `./layers` (find the existin
 Find:
 
 ```ts
-      detachVehicles = attachVehicleAnimation(map, store, {
-        isVisible: (service) => viewRef.current.viewMode === "network" && viewRef.current.visibleModes.has(service.modeId),
-      });
+detachVehicles = attachVehicleAnimation(map, store, {
+  isVisible: (service) =>
+    viewRef.current.viewMode === 'network' && viewRef.current.visibleModes.has(service.modeId),
+});
 ```
 
 Replace with:
 
 ```ts
-      detachVehicles = attachVehicleAnimation(map, store, {
-        isVisible: (service) => viewRef.current.visibleModes.has(service.modeId),
-        viewMode: () => viewRef.current.viewMode,
-      });
+detachVehicles = attachVehicleAnimation(map, store, {
+  isVisible: (service) => viewRef.current.visibleModes.has(service.modeId),
+  viewMode: () => viewRef.current.viewMode,
+});
 ```
 
 - [x] **Step 3: Typecheck**

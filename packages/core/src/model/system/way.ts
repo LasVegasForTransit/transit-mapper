@@ -1,5 +1,5 @@
-import type { Grade } from "../catalog";
-import type { LaneDirection, LineGeometry, LngLat } from "./valueTypes";
+import type { Grade } from '../catalog';
+import type { LaneDirection, LineGeometry, LngLat } from './valueTypes';
 
 /** One way's control point that coincides with a junction. */
 export interface WayPointRef {

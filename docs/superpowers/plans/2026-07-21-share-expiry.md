@@ -15,6 +15,7 @@
 ### Task 1: Migration — add `expires_at`, clear existing shares
 
 **Files:**
+
 - Create: `apps/worker/src/migrations/0002_share_expiry.sql`
 
 - [ ] **Step 1: Write the migration**
@@ -52,6 +53,7 @@ git commit -m "Add expires_at column to systems table, clear existing shares"
 ### Task 2: Set `expires_at` on share creation
 
 **Files:**
+
 - Modify: `apps/worker/src/index.ts:19-42` (the `POST /api/systems` handler)
 
 - [ ] **Step 1: Add a shared constant and update the insert**
@@ -66,10 +68,10 @@ const ANONYMOUS_SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days.
 Then update the `POST /api/systems` handler's insert to compute and bind `expires_at`:
 
 ```typescript
-app.post("/api/systems", async (c) => {
+app.post('/api/systems', async (c) => {
   const raw = await c.req.text();
   if (raw.length > MAX_BODY_BYTES) {
-    return c.json({ error: "System too large" }, 413);
+    return c.json({ error: 'System too large' }, 413);
   }
 
   let system;
@@ -84,7 +86,7 @@ app.post("/api/systems", async (c) => {
   const now = Date.now();
   const expiresAt = now + ANONYMOUS_SHARE_TTL_MS;
   await c.env.DB.prepare(
-    "INSERT INTO systems (id, name, data, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+    'INSERT INTO systems (id, name, data, created_at, expires_at) VALUES (?, ?, ?, ?, ?)',
   )
     .bind(id, system.name.slice(0, 200), JSON.stringify(system), now, expiresAt)
     .run();
@@ -98,17 +100,21 @@ app.post("/api/systems", async (c) => {
 Run: `cd apps/worker && npx wrangler dev --local --persist-to .wrangler/state`
 
 In another terminal:
+
 ```bash
 curl -s -X POST http://localhost:8787/api/systems \
   -H 'content-type: application/json' \
   -d '{"system":{"id":"test-1","name":"Test System","stops":[],"ways":[],"lines":[],"createdAt":0,"updatedAt":0}}'
 ```
+
 Expected: a JSON response like `{"id":"<10-char-id>"}` (adjust the request body's `system` shape to whatever `parseSystem` in `packages/core/src/model/serialize.ts` actually requires — check that file if this 400s on shape).
 
 Then check the row directly:
+
 ```bash
 cd apps/worker && npx wrangler d1 execute transitmapper --local --command "SELECT id, created_at, expires_at FROM systems;"
 ```
+
 Expected: `expires_at` is approximately `created_at + 604800000` (7 days in ms).
 
 - [ ] **Step 3: Commit**
@@ -123,6 +129,7 @@ git commit -m "Set 7-day expires_at on anonymous share creation"
 ### Task 3: Enforce expiry on read (lazy delete + 404)
 
 **Files:**
+
 - Modify: `apps/worker/src/index.ts` (the `GET /api/systems/:id` handler)
 
 - [ ] **Step 1: Update the handler to check and enforce expiry**
@@ -130,19 +137,19 @@ git commit -m "Set 7-day expires_at on anonymous share creation"
 Replace the existing `GET /api/systems/:id` handler:
 
 ```typescript
-app.get("/api/systems/:id", async (c) => {
-  const id = c.req.param("id");
+app.get('/api/systems/:id', async (c) => {
+  const id = c.req.param('id');
   const row = await c.env.DB.prepare(
-    "SELECT id, data, created_at, expires_at FROM systems WHERE id = ?",
+    'SELECT id, data, created_at, expires_at FROM systems WHERE id = ?',
   )
     .bind(id)
     .first<{ id: string; data: string; created_at: number; expires_at: number | null }>();
 
-  if (!row) return c.json({ error: "Not found" }, 404);
+  if (!row) return c.json({ error: 'Not found' }, 404);
 
   if (row.expires_at !== null && row.expires_at < Date.now()) {
-    await c.env.DB.prepare("DELETE FROM systems WHERE id = ?").bind(id).run();
-    return c.json({ error: "Not found" }, 404);
+    await c.env.DB.prepare('DELETE FROM systems WHERE id = ?').bind(id).run();
+    return c.json({ error: 'Not found' }, 404);
   }
 
   return c.json<GetShareResponse>({
@@ -156,24 +163,30 @@ app.get("/api/systems/:id", async (c) => {
 - [ ] **Step 2: Verify manually — non-expired share still works**
 
 With `wrangler dev` still running, re-run the `curl -X POST` from Task 2 Step 2 to get a fresh `id`, then:
+
 ```bash
 curl -s http://localhost:8787/api/systems/<id>
 ```
+
 Expected: `200` with `{"id":..., "system":{...}, "createdAt":...}`.
 
 - [ ] **Step 3: Verify manually — expired share is deleted and 404s**
 
 Force an expiry by writing a past `expires_at` directly:
+
 ```bash
 cd apps/worker && npx wrangler d1 execute transitmapper --local --command "UPDATE systems SET expires_at = 1 WHERE id = '<id>';"
 curl -i http://localhost:8787/api/systems/<id>
 ```
+
 Expected: HTTP `404` with `{"error":"Not found"}`.
 
 Then confirm the row is actually gone:
+
 ```bash
 cd apps/worker && npx wrangler d1 execute transitmapper --local --command "SELECT id FROM systems WHERE id = '<id>';"
 ```
+
 Expected: no rows returned.
 
 - [ ] **Step 4: Commit**
@@ -188,6 +201,7 @@ git commit -m "Delete and 404 expired shares on read"
 ### Task 4: Daily cron sweep for unread expired shares
 
 **Files:**
+
 - Modify: `apps/worker/wrangler.toml`
 - Modify: `apps/worker/src/index.ts` (add `scheduled()` handler, change default export)
 
@@ -212,9 +226,7 @@ to:
 
 ```typescript
 async function scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
-  await env.DB.prepare(
-    "DELETE FROM systems WHERE expires_at IS NOT NULL AND expires_at < ?",
-  )
+  await env.DB.prepare('DELETE FROM systems WHERE expires_at IS NOT NULL AND expires_at < ?')
     .bind(Date.now())
     .run();
 }
@@ -228,12 +240,14 @@ export default {
 - [ ] **Step 3: Verify manually — seed an expired row and trigger the scheduled event**
 
 With `wrangler dev` running, seed one expired and one non-expired row:
+
 ```bash
 cd apps/worker && npx wrangler d1 execute transitmapper --local --command \
   "INSERT INTO systems (id, name, data, created_at, expires_at) VALUES ('exp-1', 'x', '{}', 0, 1), ('keep-1', 'x', '{}', 0, 9999999999999);"
 ```
 
 Trigger the scheduled event (wrangler dev supports this via its `__scheduled` test endpoint):
+
 ```bash
 curl "http://localhost:8787/__scheduled?cron=0+0+*+*+*"
 ```
@@ -243,6 +257,7 @@ curl "http://localhost:8787/__scheduled?cron=0+0+*+*+*"
 ```bash
 cd apps/worker && npx wrangler d1 execute transitmapper --local --command "SELECT id FROM systems WHERE id IN ('exp-1', 'keep-1');"
 ```
+
 Expected: only `keep-1` is returned; `exp-1` is gone.
 
 - [ ] **Step 5: Commit**

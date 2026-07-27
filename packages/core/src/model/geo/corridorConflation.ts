@@ -14,11 +14,11 @@
 // endpoints never land near the same existing way even though their middle
 // overlaps completely.
 
-import { bearingDegrees, haversineMeters } from "./spherical";
-import { projectOnSegment } from "./measurement";
-import { candidateWayIdsNear } from "./snapIndex";
-import { resolveWayPath, wayById } from "./wayPath";
-import type { LngLat, Way } from "../system";
+import { bearingDegrees, haversineMeters } from './spherical';
+import { projectOnSegment } from './measurement';
+import { candidateWayIdsNear } from './snapIndex';
+import { resolveWayPath, wayById } from './wayPath';
+import type { LngLat, Way } from '../system';
 
 /** A stretch of the new shape that runs along an already-existing way. */
 export interface OnWayRun {
@@ -79,7 +79,10 @@ function headingDeltaDeg(a: number, b: number): number {
  *  segment's own local heading (for direction-alignment checks). Built from
  *  already-exported primitives — does not touch `nearestOnPath`'s signature,
  *  which every existing caller (`snap`, station reanchoring) depends on. */
-function nearestWaySegment(way: Way, coord: LngLat): { point: LngLat; distMeters: number; headingDeg: number } | null {
+function nearestWaySegment(
+  way: Way,
+  coord: LngLat,
+): { point: LngLat; distMeters: number; headingDeg: number } | null {
   const path = resolveWayPath(way);
   if (path.length < 2) return null;
   let best: { point: LngLat; distMeters: number; headingDeg: number } | null = null;
@@ -88,7 +91,8 @@ function nearestWaySegment(way: Way, coord: LngLat): { point: LngLat; distMeters
     const b = path[i + 1];
     const { point } = projectOnSegment(coord, a, b);
     const d = haversineMeters(coord, point);
-    if (best === null || d < best.distMeters) best = { point, distMeters: d, headingDeg: bearingDegrees(a, b) };
+    if (best === null || d < best.distMeters)
+      best = { point, distMeters: d, headingDeg: bearingDegrees(a, b) };
   }
   return best;
 }
@@ -151,7 +155,11 @@ function groupRuns(values: (string | null)[], segLen: number[]): RawRun[] {
  * which are genuinely new. Returns an ordered sequence covering every segment
  * of `path` exactly once. Pure — no mutation, no lookup outside its inputs.
  */
-export function detectShapeRuns(path: LngLat[], candidateWays: Way[], opts: DetectRunsOptions = {}): ShapeRun[] {
+export function detectShapeRuns(
+  path: LngLat[],
+  candidateWays: Way[],
+  opts: DetectRunsOptions = {},
+): ShapeRun[] {
   const toleranceM = opts.toleranceM ?? CONFLATION_TOLERANCE_M;
   const headingToleranceDeg = opts.headingToleranceDeg ?? CONFLATION_HEADING_TOLERANCE_DEG;
   const minRunM = opts.minRunM ?? CONFLATION_MIN_RUN_M;
@@ -165,14 +173,17 @@ export function detectShapeRuns(path: LngLat[], candidateWays: Way[], opts: Dete
   const rawWayId: (string | null)[] = [];
   for (let i = 0; i < path.length - 1; i++) {
     segLen.push(haversineMeters(path[i], path[i + 1]));
-    rawWayId.push(matchOneSegment(path[i], path[i + 1], candidateWays, byId, toleranceM, headingToleranceDeg));
+    rawWayId.push(
+      matchOneSegment(path[i], path[i + 1], candidateWays, byId, toleranceM, headingToleranceDeg),
+    );
   }
 
   // Discard matched runs shorter than minRunM back to fresh (coincidental
   // crossing-street blips), then re-coalesce (a discarded blip may now sit
   // beside an already-fresh neighbor).
   let runs = groupRuns(rawWayId, segLen);
-  for (const r of runs) if (r.value !== null && r.lengthM < minRunM && runs.length > 1) r.value = null;
+  for (const r of runs)
+    if (r.value !== null && r.lengthM < minRunM && runs.length > 1) r.value = null;
   const expanded: (string | null)[] = [];
   for (const r of runs) for (let i = r.segFrom; i < r.segToExcl; i++) expanded.push(r.value);
   runs = groupRuns(expanded, segLen);
@@ -185,7 +196,12 @@ export function detectShapeRuns(path: LngLat[], candidateWays: Way[], opts: Dete
       const gap = runs[i];
       const prev = runs[i - 1];
       const next = runs[i + 1];
-      if (gap.value === null && gap.lengthM <= gapBridgeM && prev.value !== null && prev.value === next.value) {
+      if (
+        gap.value === null &&
+        gap.lengthM <= gapBridgeM &&
+        prev.value !== null &&
+        prev.value === next.value
+      ) {
         prev.segToExcl = next.segToExcl;
         prev.lengthM += gap.lengthM + next.lengthM;
         runs.splice(i, 2);
@@ -196,6 +212,8 @@ export function detectShapeRuns(path: LngLat[], candidateWays: Way[], opts: Dete
   }
 
   return runs.map((r): ShapeRun =>
-    r.value === null ? { fresh: true, fromIdx: r.segFrom, toIdx: r.segToExcl } : { onWayId: r.value, fromIdx: r.segFrom, toIdx: r.segToExcl },
+    r.value === null
+      ? { fresh: true, fromIdx: r.segFrom, toIdx: r.segToExcl }
+      : { onWayId: r.value, fromIdx: r.segFrom, toIdx: r.segToExcl },
   );
 }

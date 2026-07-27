@@ -1,6 +1,6 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from 'react';
 
-export type PanelSlot = "left" | "right";
+export type PanelSlot = 'left' | 'right';
 
 interface PanelProps extends HTMLAttributes<HTMLElement> {
   /** Which overlay-grid slot this card docks into — see .app-chrome's
@@ -22,7 +22,7 @@ interface PanelProps extends HTMLAttributes<HTMLElement> {
  * without that the way one of the seven above once could have, since
  * there's now exactly one place this markup is written.
  */
-export function Panel({ slot, className = "", children, ...rest }: PanelProps) {
+export function Panel({ slot, className = '', children, ...rest }: PanelProps) {
   return (
     <aside className={`panel panel-${slot} ${className}`.trim()} {...rest}>
       {children}

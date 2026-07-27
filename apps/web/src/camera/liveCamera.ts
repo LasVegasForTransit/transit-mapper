@@ -1,4 +1,4 @@
-import { DEFAULT_VIEWPORT, type Viewport } from "@transitmapper/core/model/system";
+import { DEFAULT_VIEWPORT, type Viewport } from '@transitmapper/core/model/system';
 
 // The LIVE map camera, held OUTSIDE the immutable domain `system` object.
 //

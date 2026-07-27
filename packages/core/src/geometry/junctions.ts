@@ -11,12 +11,12 @@
 // µs per node) and viewport-scoped by the caller, so it recomputes per
 // render rather than caching across frames.
 
-import { laneKind } from "../model/catalog";
-import { metersFromOrigin, offsetMeters, resolveWayPath } from "../model/geo";
-import { profileWidthM } from "../model/profile";
-import { laneRefKey, type ComponentMap } from "../model/components";
-import type { LaneConnector, LaneSpec, LngLat, Node, TurnRestriction, Way } from "../model/system";
-import { trimPath, wayLaneGeometry, type LanePath } from "./streets";
+import { laneKind } from '../model/catalog';
+import { metersFromOrigin, offsetMeters, resolveWayPath } from '../model/geo';
+import { profileWidthM } from '../model/profile';
+import { laneRefKey, type ComponentMap } from '../model/components';
+import type { LaneConnector, LaneSpec, LngLat, Node, TurnRestriction, Way } from '../model/system';
+import { trimPath, wayLaneGeometry, type LanePath } from './streets';
 
 type Vec = [number, number];
 
@@ -28,7 +28,7 @@ const rot90cw = (v: Vec): Vec => [v[1], -v[0]];
 export interface JunctionArm {
   wayId: string;
   /** Which end of the way meets the node. */
-  end: "start" | "end";
+  end: 'start' | 'end';
   dir: Vec;
   halfWidthM: number;
   /** How far this way's lane geometry pulls back from the shared vertex. */
@@ -63,7 +63,7 @@ export function junctionGeometry(node: Node, waysById: Map<string, Way>): Juncti
     const isStart = ref.pointIndex === 0;
     const isEnd = ref.pointIndex === way.points.length - 1;
     if (!isStart && !isEnd) continue; // pass-through: the way just runs across the junction
-    const key = `${way.id}:${isStart ? "start" : "end"}`;
+    const key = `${way.id}:${isStart ? 'start' : 'end'}`;
     if (seen.has(key)) continue;
     seen.add(key);
     const neighbor = way.points[isStart ? 1 : way.points.length - 2];
@@ -72,7 +72,7 @@ export function junctionGeometry(node: Node, waysById: Map<string, Way>): Juncti
     if (len < 0.01) continue;
     arms.push({
       wayId: way.id,
-      end: isStart ? "start" : "end",
+      end: isStart ? 'start' : 'end',
       dir: [d[0] / len, d[1] / len],
       halfWidthM: profileWidthM(way.profile) / 2,
       trimM: 0,
@@ -130,8 +130,16 @@ export function junctionGeometry(node: Node, waysById: Map<string, Way>): Juncti
     const right = rot90cw(arm.dir);
     const t = Math.max(arm.trimM, 0.5); // give even untrimmed arms a sliver of footprint
     polygon.push(
-      offsetMeters(node.coord, right[0] * arm.halfWidthM + arm.dir[0] * t, right[1] * arm.halfWidthM + arm.dir[1] * t),
-      offsetMeters(node.coord, left[0] * arm.halfWidthM + arm.dir[0] * t, left[1] * arm.halfWidthM + arm.dir[1] * t),
+      offsetMeters(
+        node.coord,
+        right[0] * arm.halfWidthM + arm.dir[0] * t,
+        right[1] * arm.halfWidthM + arm.dir[1] * t,
+      ),
+      offsetMeters(
+        node.coord,
+        left[0] * arm.halfWidthM + arm.dir[0] * t,
+        left[1] * arm.halfWidthM + arm.dir[1] * t,
+      ),
     );
   }
 
@@ -144,7 +152,7 @@ export function collectWayTrims(junctions: JunctionGeometry[]): WayTrims {
   for (const j of junctions) {
     for (const arm of j.arms) {
       const t = trims.get(arm.wayId) ?? { start: 0, end: 0 };
-      if (arm.end === "start") t.start = Math.max(t.start, arm.trimM);
+      if (arm.end === 'start') t.start = Math.max(t.start, arm.trimM);
       else t.end = Math.max(t.end, arm.trimM);
       trims.set(arm.wayId, t);
     }
@@ -159,38 +167,41 @@ export function collectWayTrims(junctions: JunctionGeometry[]): WayTrims {
 function turnAngle(inArm: JunctionArm, outArm: JunctionArm): number {
   const hx = -inArm.dir[0];
   const hy = -inArm.dir[1];
-  return Math.atan2(hx * outArm.dir[1] - hy * outArm.dir[0], hx * outArm.dir[0] + hy * outArm.dir[1]);
+  return Math.atan2(
+    hx * outArm.dir[1] - hy * outArm.dir[0],
+    hx * outArm.dir[0] + hy * outArm.dir[1],
+  );
 }
 
-export type TurnClass = "left" | "straight" | "right" | "uturn";
+export type TurnClass = 'left' | 'straight' | 'right' | 'uturn';
 
 export function classifyTurn(angleRad: number): TurnClass {
   const deg = (angleRad * 180) / Math.PI;
-  if (Math.abs(deg) <= 35) return "straight";
-  if (Math.abs(deg) >= 150) return "uturn";
-  return deg > 0 ? "left" : "right";
+  if (Math.abs(deg) <= 35) return 'straight';
+  if (Math.abs(deg) >= 150) return 'uturn';
+  return deg > 0 ? 'left' : 'right';
 }
 
 /** A way-end's directional lanes that travel INTO the node ("end" arm →
  *  forward lanes; "start" arm → backward lanes; "both" counts either way),
  *  ordered left-to-right in TRAVEL frame (start arms reverse the profile). */
-export function incomingLanes(way: Way, end: "start" | "end"): LaneSpec[] {
+export function incomingLanes(way: Way, end: 'start' | 'end'): LaneSpec[] {
   const lanes = way.profile.lanes.filter((l) => {
     if (!laneKind(l.kindId).directional) return false;
-    if (l.direction === "both") return true;
-    return end === "end" ? l.direction === "forward" : l.direction === "backward";
+    if (l.direction === 'both') return true;
+    return end === 'end' ? l.direction === 'forward' : l.direction === 'backward';
   });
-  return end === "end" ? lanes : [...lanes].reverse();
+  return end === 'end' ? lanes : [...lanes].reverse();
 }
 
 /** Same, for lanes traveling OUT of the node. */
-export function outgoingLanes(way: Way, end: "start" | "end"): LaneSpec[] {
+export function outgoingLanes(way: Way, end: 'start' | 'end'): LaneSpec[] {
   const lanes = way.profile.lanes.filter((l) => {
     if (!laneKind(l.kindId).directional) return false;
-    if (l.direction === "both") return true;
-    return end === "end" ? l.direction === "backward" : l.direction === "forward";
+    if (l.direction === 'both') return true;
+    return end === 'end' ? l.direction === 'backward' : l.direction === 'forward';
   });
-  return end === "end" ? [...lanes].reverse() : lanes;
+  return end === 'end' ? [...lanes].reverse() : lanes;
 }
 
 /** Pair inbound and outbound lanes for a straight-through connector,
@@ -199,7 +210,10 @@ export function outgoingLanes(way: Way, end: "start" | "end"): LaneSpec[] {
  *  curbside — still defaults to connecting to the same-kind lane on the far
  *  side, not whatever happens to share its numeric index) before falling
  *  back to positional pairing, right-aligned, for whatever's left over. */
-function pairStraightLanes(inbound: LaneSpec[], outbound: LaneSpec[]): { src: LaneSpec; dst: LaneSpec }[] {
+function pairStraightLanes(
+  inbound: LaneSpec[],
+  outbound: LaneSpec[],
+): { src: LaneSpec; dst: LaneSpec }[] {
   const outLeft = [...outbound];
   const pairs: { src: LaneSpec; dst: LaneSpec }[] = [];
   const unmatchedIn: LaneSpec[] = [];
@@ -215,7 +229,10 @@ function pairStraightLanes(inbound: LaneSpec[], outbound: LaneSpec[]): { src: La
   }
   const n = Math.min(unmatchedIn.length, outLeft.length);
   for (let i = 0; i < n; i++) {
-    pairs.push({ src: unmatchedIn[unmatchedIn.length - n + i], dst: outLeft[outLeft.length - n + i] });
+    pairs.push({
+      src: unmatchedIn[unmatchedIn.length - n + i],
+      dst: outLeft[outLeft.length - n + i],
+    });
   }
   return pairs;
 }
@@ -262,13 +279,16 @@ export function defaultConnectors(
       const turn = classifyTurn(turnAngle(inArm, outArm));
       const push = (src: LaneSpec, dst: LaneSpec) => {
         if (!turnAllowed(turnRestrictions, inWay.id, src.id, outWay.id)) return;
-        out.push({ from: { wayId: inWay.id, laneId: src.id }, to: { wayId: outWay.id, laneId: dst.id } });
+        out.push({
+          from: { wayId: inWay.id, laneId: src.id },
+          to: { wayId: outWay.id, laneId: dst.id },
+        });
       };
-      if (turn === "straight") {
+      if (turn === 'straight') {
         for (const { src, dst } of pairStraightLanes(inbound, outbound)) push(src, dst);
-      } else if (turn === "left") {
+      } else if (turn === 'left') {
         push(inbound[0], outbound[0]);
-      } else if (turn === "right") {
+      } else if (turn === 'right') {
         push(inbound[inbound.length - 1], outbound[outbound.length - 1]);
       }
       // u-turns are never defaulted; the junction editor can add them.
@@ -303,11 +323,15 @@ export interface ConnectorCurve {
 const CURVE_SAMPLES = 10;
 
 /** The node-side endpoint (and inward tangent) of one lane's trimmed path. */
-function laneEndAt(lane: LanePath, end: "start" | "end", trimM: number): { p: LngLat; tangent: Vec } | null {
-  const path = end === "start" ? trimPath(lane.path, trimM, 0) : trimPath(lane.path, 0, trimM);
+function laneEndAt(
+  lane: LanePath,
+  end: 'start' | 'end',
+  trimM: number,
+): { p: LngLat; tangent: Vec } | null {
+  const path = end === 'start' ? trimPath(lane.path, trimM, 0) : trimPath(lane.path, 0, trimM);
   if (path.length < 2) return null;
-  const p = end === "start" ? path[0] : path[path.length - 1];
-  const q = end === "start" ? path[1] : path[path.length - 2];
+  const p = end === 'start' ? path[0] : path[path.length - 1];
+  const q = end === 'start' ? path[1] : path[path.length - 2];
   const d = metersFromOrigin(p, q); // points AWAY from the node
   const len = Math.hypot(d[0], d[1]) || 1;
   return { p, tangent: [-d[0] / len, -d[1] / len] }; // toward the node
@@ -330,19 +354,28 @@ export function connectorCurves(
     // A way with both ends on one node (a loop) has two arms — pick the arm
     // where this specific lane actually travels the right direction.
     const fromArm =
-      g.arms.find((a) => a.wayId === c.from.wayId && incomingLanes(fromWay, a.end).some((l) => l.id === c.from.laneId)) ??
-      g.arms.find((a) => a.wayId === c.from.wayId);
+      g.arms.find(
+        (a) =>
+          a.wayId === c.from.wayId &&
+          incomingLanes(fromWay, a.end).some((l) => l.id === c.from.laneId),
+      ) ?? g.arms.find((a) => a.wayId === c.from.wayId);
     const toArm =
-      g.arms.find((a) => a.wayId === c.to.wayId && outgoingLanes(toWay, a.end).some((l) => l.id === c.to.laneId)) ??
-      g.arms.find((a) => a.wayId === c.to.wayId);
+      g.arms.find(
+        (a) =>
+          a.wayId === c.to.wayId && outgoingLanes(toWay, a.end).some((l) => l.id === c.to.laneId),
+      ) ?? g.arms.find((a) => a.wayId === c.to.wayId);
     if (!fromArm || !toArm) continue;
     const fromLane = wayLaneGeometry(fromWay).lanes.find((l) => l.laneId === c.from.laneId);
     const toLane = wayLaneGeometry(toWay).lanes.find((l) => l.laneId === c.to.laneId);
     if (!fromLane || !toLane) continue;
     const fromTrims = trims.get(fromWay.id) ?? { start: 0, end: 0 };
     const toTrims = trims.get(toWay.id) ?? { start: 0, end: 0 };
-    const a = laneEndAt(fromLane, fromArm.end, fromArm.end === "start" ? fromTrims.start : fromTrims.end);
-    const b = laneEndAt(toLane, toArm.end, toArm.end === "start" ? toTrims.start : toTrims.end);
+    const a = laneEndAt(
+      fromLane,
+      fromArm.end,
+      fromArm.end === 'start' ? fromTrims.start : fromTrims.end,
+    );
+    const b = laneEndAt(toLane, toArm.end, toArm.end === 'start' ? toTrims.start : toTrims.end);
     if (!a || !b) continue;
     const [dx, dy] = metersFromOrigin(a.p, b.p);
     const k = Math.max(Math.hypot(dx, dy) / 3, 1);
@@ -353,8 +386,14 @@ export function connectorCurves(
       const t = i / CURVE_SAMPLES;
       const mt = 1 - t;
       path.push([
-        mt * mt * mt * a.p[0] + 3 * mt * mt * t * p1[0] + 3 * mt * t * t * p2[0] + t * t * t * b.p[0],
-        mt * mt * mt * a.p[1] + 3 * mt * mt * t * p1[1] + 3 * mt * t * t * p2[1] + t * t * t * b.p[1],
+        mt * mt * mt * a.p[0] +
+          3 * mt * mt * t * p1[0] +
+          3 * mt * t * t * p2[0] +
+          t * t * t * b.p[0],
+        mt * mt * mt * a.p[1] +
+          3 * mt * mt * t * p1[1] +
+          3 * mt * t * t * p2[1] +
+          t * t * t * b.p[1],
       ]);
     }
     curves.push({ nodeId: node.id, from: c.from, to: c.to, path });

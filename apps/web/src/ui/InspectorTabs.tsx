@@ -23,7 +23,7 @@ export function InspectorTabs({ tabs, active, onChange }: InspectorTabsProps) {
           key={t.id}
           role="tab"
           aria-selected={active === t.id}
-          className={`insp-tab ${active === t.id ? "active" : ""}`}
+          className={`insp-tab ${active === t.id ? 'active' : ''}`}
           onClick={() => onChange(t.id)}
         >
           {t.label}

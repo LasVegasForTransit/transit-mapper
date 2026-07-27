@@ -29,7 +29,16 @@ function percentile(sorted: number[], p: number): number {
 export function summarizeFrames(durations: number[]): FrameStats {
   const n = durations.length;
   if (n === 0) {
-    return { samples: 0, fps: 0, medianMs: 0, p95Ms: 0, worstMs: 0, meanMs: 0, pctOver16: 0, pctOver33: 0 };
+    return {
+      samples: 0,
+      fps: 0,
+      medianMs: 0,
+      p95Ms: 0,
+      worstMs: 0,
+      meanMs: 0,
+      pctOver16: 0,
+      pctOver33: 0,
+    };
   }
   const sorted = [...durations].sort((a, b) => a - b);
   const median = percentile(sorted, 50);
@@ -48,6 +57,6 @@ export function summarizeFrames(durations: number[]): FrameStats {
 
 /** Compact one-line rendering of a FrameStats, for the overlay and console. */
 export function formatFrameStats(s: FrameStats): string {
-  if (s.samples === 0) return "no frames";
+  if (s.samples === 0) return 'no frames';
   return `${s.fps.toFixed(0)} fps  •  med ${s.medianMs.toFixed(1)}ms  p95 ${s.p95Ms.toFixed(1)}ms  worst ${s.worstMs.toFixed(1)}ms  •  >16ms ${(s.pctOver16 * 100).toFixed(0)}%  •  n=${s.samples}`;
 }

@@ -1,5 +1,5 @@
-import { INTERCHANGE_METERS, serviceWayIds, servedWayIds } from "../model/geo";
-import type { Service, Station, Way } from "../model/system";
+import { INTERCHANGE_METERS, serviceWayIds, servedWayIds } from '../model/geo';
+import type { Service, Station, Way } from '../model/system';
 
 // Memoized sub-computations of buildFeatures, each keyed on the IDENTITY of the
 // immutable arrays/sets it derives from. The store replaces system.ways/
@@ -41,7 +41,10 @@ const byWayCache = new WeakMap<Service[], WeakMap<Set<string>, Map<string, Servi
 /** Visible-mode services riding each way id, in stable (creation) order and
  *  deduplicated across a service's own patterns (a trunk shared by two branches
  *  still counts the service once). Cached on (services, visibleModes). */
-export function servicesByWay(services: Service[], visibleModes: Set<string>): Map<string, Service[]> {
+export function servicesByWay(
+  services: Service[],
+  visibleModes: Set<string>,
+): Map<string, Service[]> {
   let byModes = byWayCache.get(services);
   if (!byModes) {
     byModes = new WeakMap();

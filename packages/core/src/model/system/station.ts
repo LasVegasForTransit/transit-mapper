@@ -1,5 +1,5 @@
-import { shortId } from "../ids";
-import type { LngLat } from "./valueTypes";
+import { shortId } from '../ids';
+import type { LngLat } from './valueTypes';
 
 // Where a station rides on a way: normalized arc-length position [0,1] along
 // that way's resolved path. Recomputing the coord from this anchor is how a

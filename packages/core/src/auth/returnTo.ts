@@ -6,13 +6,19 @@
 // whoever crafted the link.
 
 // Written with escapes so the character class survives copy-paste.
+//
+// no-control-regex is disabled deliberately, and only here. The rule exists
+// to catch control characters written into a pattern by accident; matching
+// them is the entire purpose of this one, because a redirect target that
+// contains them is exactly what must be rejected.
+// eslint-disable-next-line no-control-regex
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
 
 export function safeReturnTo(value: string | null | undefined): string {
-  if (!value) return "/";
-  if (CONTROL_CHARACTERS.test(value)) return "/";
-  if (!value.startsWith("/")) return "/";
+  if (!value) return '/';
+  if (CONTROL_CHARACTERS.test(value)) return '/';
+  if (!value.startsWith('/')) return '/';
   // "//host" and "/\\host" are both protocol-relative URLs to another origin.
-  if (value.startsWith("//") || value.startsWith("/\\")) return "/";
+  if (value.startsWith('//') || value.startsWith('/\\')) return '/';
   return value;
 }

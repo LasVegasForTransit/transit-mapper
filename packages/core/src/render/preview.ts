@@ -1,12 +1,12 @@
-import { MODE_ORDER, WAY_TYPE_ORDER } from "../model/catalog";
-import { systemBounds } from "../model/geo";
-import type { LngLat, TransitSystem } from "../model/system";
-import type { ViewOptions } from "./buildFeatures";
-import { legendEntriesFor } from "./legend";
-import { fitBounds, metersPerPixel, projector } from "./project";
-import { scaleBarFor } from "./scaleBar";
-import { systemSvg } from "./svg";
-import { LVBT, LVBT_FONT_FAMILY } from "../style/lvbtBrand";
+import { MODE_ORDER, WAY_TYPE_ORDER } from '../model/catalog';
+import { systemBounds } from '../model/geo';
+import type { LngLat, TransitSystem } from '../model/system';
+import type { ViewOptions } from './buildFeatures';
+import { legendEntriesFor } from './legend';
+import { fitBounds, metersPerPixel, projector } from './project';
+import { scaleBarFor } from './scaleBar';
+import { systemSvg } from './svg';
+import { LVBT, LVBT_FONT_FAMILY } from '../style/lvbtBrand';
 
 // What a shared system looks like when something outside the app has to show
 // it: a link unfurl in Slack, an oEmbed thumbnail, the no-script fallback of
@@ -17,7 +17,6 @@ import { LVBT, LVBT_FONT_FAMILY } from "../style/lvbtBrand";
  *  serve, and what the meta tags advertise. */
 export const PREVIEW_WIDTH = 1200;
 export const PREVIEW_HEIGHT = 630;
-
 
 /**
  * The card is *composed* at half the size it's *rasterized* at, and resvg
@@ -73,7 +72,7 @@ const PREVIEW_PADDING = 34;
 // view specifically: the schematic is what reads at card size, where
 // lane-level infrastructure detail would just be noise.
 const PREVIEW_VIEW: ViewOptions = {
-  viewMode: "network",
+  viewMode: 'network',
   visibleModes: new Set(MODE_ORDER),
   visibleWayTypes: new Set(WAY_TYPE_ORDER),
 };
@@ -131,7 +130,7 @@ export function previewSvg(system: TransitSystem, opts: PreviewSvgOptions = {}):
     : { center: EMPTY_SYSTEM_CENTER, zoom: EMPTY_SYSTEM_ZOOM, width, height };
 
   return systemSvg(system, PREVIEW_VIEW, projector(viewport), {
-    title: system.name || "Transit system",
+    title: system.name || 'Transit system',
     legend: legendEntriesFor(system, PREVIEW_VIEW),
     width,
     height,

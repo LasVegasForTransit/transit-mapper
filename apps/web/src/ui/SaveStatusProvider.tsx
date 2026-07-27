@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import type { SaveOutcome } from "../storage/localStore";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import type { SaveOutcome } from '../storage/localStore';
 
 interface SaveStatusState {
   /** The result of the most recent write. Anything but "saved" means the
@@ -30,7 +30,7 @@ interface SaveStatusProviderProps {
  * every save.
  */
 export function SaveStatusProvider({ children }: SaveStatusProviderProps) {
-  const [outcome, setOutcome] = useState<SaveOutcome>("saved");
+  const [outcome, setOutcome] = useState<SaveOutcome>('saved');
   // Last write wins, deliberately: a later successful save is evidence that
   // whatever was wrong (quota freed, permission granted) no longer is, so it
   // should clear the warning rather than leave it stuck on screen.
@@ -41,6 +41,6 @@ export function SaveStatusProvider({ children }: SaveStatusProviderProps) {
 
 export function useSaveStatus(): SaveStatusState {
   const ctx = useContext(SaveStatusContext);
-  if (!ctx) throw new Error("useSaveStatus must be used within <SaveStatusProvider>");
+  if (!ctx) throw new Error('useSaveStatus must be used within <SaveStatusProvider>');
   return ctx;
 }

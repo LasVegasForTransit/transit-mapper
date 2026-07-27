@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { shortId } from "@transitmapper/core/model/ids";
-import type { ScheduleDayScope, SchedulePeriod } from "@transitmapper/core/model/system";
-import { blurOnEnter } from "./formUtils";
-import { Icon } from "./Icon";
-import { IconButton } from "./IconButton";
-import { Modal } from "./Modal";
+import { useState } from 'react';
+import { shortId } from '@transitmapper/core/model/ids';
+import type { ScheduleDayScope, SchedulePeriod } from '@transitmapper/core/model/system';
+import { blurOnEnter } from './formUtils';
+import { Icon } from './Icon';
+import { IconButton } from './IconButton';
+import { Modal } from './Modal';
 
 interface ScheduleDialogProps {
   serviceName: string;
@@ -25,9 +25,9 @@ interface ScheduleDialogProps {
 }
 
 const DAY_SCOPE_OPTIONS: [ScheduleDayScope, string][] = [
-  ["daily", "Every day"],
-  ["weekday", "Weekdays"],
-  ["weekend", "Weekends"],
+  ['daily', 'Every day'],
+  ['weekday', 'Weekdays'],
+  ['weekend', 'Weekends'],
 ];
 
 function seedPeriods(
@@ -40,10 +40,10 @@ function seedPeriods(
   return [
     {
       id: shortId(),
-      label: "All day",
-      days: "daily",
-      spanStart: spanStart ?? "06:00",
-      spanEnd: spanEnd ?? "23:00",
+      label: 'All day',
+      days: 'daily',
+      spanStart: spanStart ?? '06:00',
+      spanEnd: spanEnd ?? '23:00',
       frequencyMinutes: frequencyMinutes ?? 10,
     },
   ];
@@ -62,15 +62,27 @@ function seedPeriods(
  * replace) — there's no separate Save step, matching how every other field
  * in this app's Inspector already commits live rather than on submit.
  */
-export function ScheduleDialog({ serviceName, schedule, frequencyMinutes, spanStart, spanEnd, readOnly, onSave, onClose }: ScheduleDialogProps) {
-  const [periods, setPeriods] = useState<SchedulePeriod[]>(() => seedPeriods(schedule, frequencyMinutes, spanStart, spanEnd));
+export function ScheduleDialog({
+  serviceName,
+  schedule,
+  frequencyMinutes,
+  spanStart,
+  spanEnd,
+  readOnly,
+  onSave,
+  onClose,
+}: ScheduleDialogProps) {
+  const [periods, setPeriods] = useState<SchedulePeriod[]>(() =>
+    seedPeriods(schedule, frequencyMinutes, spanStart, spanEnd),
+  );
 
   const commit = (next: SchedulePeriod[]) => {
     setPeriods(next);
     onSave(next);
   };
 
-  const updatePeriod = (pid: string, patch: Partial<SchedulePeriod>) => commit(periods.map((p) => (p.id === pid ? { ...p, ...patch } : p)));
+  const updatePeriod = (pid: string, patch: Partial<SchedulePeriod>) =>
+    commit(periods.map((p) => (p.id === pid ? { ...p, ...patch } : p)));
 
   const addPeriod = () => {
     const last = periods[periods.length - 1];
@@ -79,9 +91,9 @@ export function ScheduleDialog({ serviceName, schedule, frequencyMinutes, spanSt
       {
         id: shortId(),
         label: `Period ${periods.length + 1}`,
-        days: "daily",
-        spanStart: last?.spanStart ?? "06:00",
-        spanEnd: last?.spanEnd ?? "23:00",
+        days: 'daily',
+        spanStart: last?.spanStart ?? '06:00',
+        spanEnd: last?.spanEnd ?? '23:00',
         frequencyMinutes: 15,
       },
     ]);
@@ -101,11 +113,15 @@ export function ScheduleDialog({ serviceName, schedule, frequencyMinutes, spanSt
       className="schedule-modal"
     >
       <p className="panel-hint">
-        Each period is its own days + time window + headway. Vehicle animation on the map uses whichever period runs most frequently.
+        Each period is its own days + time window + headway. Vehicle animation on the map uses
+        whichever period runs most frequently.
       </p>
 
       {periods.length === 0 ? (
-        <p className="panel-hint">No periods yet — this line is using its plain peak headway instead. Add one below to split it out.</p>
+        <p className="panel-hint">
+          No periods yet — this line is using its plain peak headway instead. Add one below to split
+          it out.
+        </p>
       ) : (
         <ul className="schedule-list">
           {periods.map((p) => (
@@ -120,15 +136,22 @@ export function ScheduleDialog({ serviceName, schedule, frequencyMinutes, spanSt
                   onChange={(e) => updatePeriod(p.id, { label: e.target.value })}
                   onKeyDown={blurOnEnter}
                 />
-                {!readOnly && <IconButton icon="trash" size={15} label={`Delete ${p.label || "this period"}`} onClick={() => removePeriod(p.id)} />}
+                {!readOnly && (
+                  <IconButton
+                    icon="trash"
+                    size={15}
+                    label={`Delete ${p.label || 'this period'}`}
+                    onClick={() => removePeriod(p.id)}
+                  />
+                )}
               </div>
 
-              <div className="chip-row" role="group" aria-label={`${p.label || "Period"} days`}>
+              <div className="chip-row" role="group" aria-label={`${p.label || 'Period'} days`}>
                 {DAY_SCOPE_OPTIONS.map(([d, label]) => (
                   <button
                     key={d}
                     type="button"
-                    className={`chip ${p.days === d ? "active" : ""}`}
+                    className={`chip ${p.days === d ? 'active' : ''}`}
                     aria-pressed={p.days === d}
                     disabled={readOnly}
                     onClick={() => updatePeriod(p.id, { days: d })}
@@ -142,7 +165,7 @@ export function ScheduleDialog({ serviceName, schedule, frequencyMinutes, spanSt
                 <input
                   type="time"
                   className="freq-input freq-time"
-                  aria-label={`${p.label || "Period"} first departure`}
+                  aria-label={`${p.label || 'Period'} first departure`}
                   value={p.spanStart}
                   disabled={readOnly}
                   onChange={(e) => updatePeriod(p.id, { spanStart: e.target.value })}
@@ -151,7 +174,7 @@ export function ScheduleDialog({ serviceName, schedule, frequencyMinutes, spanSt
                 <input
                   type="time"
                   className="freq-input freq-time"
-                  aria-label={`${p.label || "Period"} last departure`}
+                  aria-label={`${p.label || 'Period'} last departure`}
                   value={p.spanEnd}
                   disabled={readOnly}
                   onChange={(e) => updatePeriod(p.id, { spanEnd: e.target.value })}
@@ -160,10 +183,14 @@ export function ScheduleDialog({ serviceName, schedule, frequencyMinutes, spanSt
                   type="number"
                   min={1}
                   className="freq-input"
-                  aria-label={`${p.label || "Period"} headway in minutes`}
+                  aria-label={`${p.label || 'Period'} headway in minutes`}
                   value={p.frequencyMinutes}
                   disabled={readOnly}
-                  onChange={(e) => updatePeriod(p.id, { frequencyMinutes: Math.max(1, Math.round(Number(e.target.value) || 1)) })}
+                  onChange={(e) =>
+                    updatePeriod(p.id, {
+                      frequencyMinutes: Math.max(1, Math.round(Number(e.target.value) || 1)),
+                    })
+                  }
                 />
                 <span className="freq-suffix">min headway</span>
               </div>
@@ -173,7 +200,12 @@ export function ScheduleDialog({ serviceName, schedule, frequencyMinutes, spanSt
       )}
 
       {!readOnly && (
-        <button type="button" className="ghost-btn" style={{ width: "100%", justifyContent: "center" }} onClick={addPeriod}>
+        <button
+          type="button"
+          className="ghost-btn"
+          style={{ width: '100%', justifyContent: 'center' }}
+          onClick={addPeriod}
+        >
           <Icon name="plus" size={17} /> Add period
         </button>
       )}

@@ -13,14 +13,14 @@ export interface ClaimResult {
   status: number;
 }
 
-export type ClaimOutcome = "claimed" | "rejected" | "retry";
+export type ClaimOutcome = 'claimed' | 'rejected' | 'retry';
 
 export function claimOutcome(status: number): ClaimOutcome {
-  if (status === 200) return "claimed";
+  if (status === 200) return 'claimed';
   // 403 wrong or spent token, 409 already owned, 404 share is gone. None of
   // these change on a retry, so the local entry is dead weight.
-  if (status === 403 || status === 409 || status === 404) return "rejected";
-  return "retry";
+  if (status === 403 || status === 409 || status === 404) return 'rejected';
+  return 'retry';
 }
 
 /** Held shares minus the ones that reached a final state. Order preserved.
@@ -30,7 +30,7 @@ export function claimOutcome(status: number): ClaimOutcome {
  *  type must get the wider type back rather than a silently narrowed one. */
 export function retainedShares<T extends HeldShare>(held: T[], results: ClaimResult[]): T[] {
   const settled = new Set(
-    results.filter((r) => claimOutcome(r.status) !== "retry").map((r) => r.id),
+    results.filter((r) => claimOutcome(r.status) !== 'retry').map((r) => r.id),
   );
   return held.filter((share) => !settled.has(share.id));
 }

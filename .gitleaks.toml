@@ -1,0 +1,16 @@
+# Secret scanning. Extends gitleaks' upstream ruleset; everything below is
+# an addition or an exemption specific to this project.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Paths that carry no secrets but trip generic entropy rules."
+paths = [
+  # Content-addressed hashes throughout, which look like high-entropy
+  # strings to any generic detector.
+  '''pnpm-lock\.yaml''',
+  # Design records quote command output, token *names*, and example
+  # placeholders. Real values never belong here, and the three nets that
+  # matter still cover the rest of the tree.
+  '''docs/superpowers/.*\.md''',
+]

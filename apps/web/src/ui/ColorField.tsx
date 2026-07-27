@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { ColorSpectrum } from "./ColorSpectrum";
-import { Icon } from "./Icon";
-import { Popover } from "./Popover";
+import { useState } from 'react';
+import { ColorSpectrum } from './ColorSpectrum';
+import { Icon } from './Icon';
+import { Popover } from './Popover';
 
 /**
  * A single labeled color control: shows the current color, opens a compact
@@ -17,7 +17,14 @@ interface ColorFieldProps {
   onAddToPalette?: (hex: string) => void;
 }
 
-export function ColorField({ value, palette, label = "Color", disabled, onChange, onAddToPalette }: ColorFieldProps) {
+export function ColorField({
+  value,
+  palette,
+  label = 'Color',
+  disabled,
+  onChange,
+  onAddToPalette,
+}: ColorFieldProps) {
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState(false);
 
@@ -33,7 +40,12 @@ export function ColorField({ value, palette, label = "Color", disabled, onChange
         align="start"
         side="top"
         trigger={
-          <button type="button" className="cf-trigger" disabled={disabled} aria-label={`${label}: ${value}`}>
+          <button
+            type="button"
+            className="cf-trigger"
+            disabled={disabled}
+            aria-label={`${label}: ${value}`}
+          >
             <span className="cf-trigger-swatch" style={{ background: value }} />
             <Icon name="chevronDown" size={16} />
           </button>
@@ -44,7 +56,7 @@ export function ColorField({ value, palette, label = "Color", disabled, onChange
             <button
               key={c}
               type="button"
-              className={`cf-swatch ${c.toLowerCase() === value.toLowerCase() ? "active" : ""}`}
+              className={`cf-swatch ${c.toLowerCase() === value.toLowerCase() ? 'active' : ''}`}
               style={{ background: c }}
               aria-label={c}
               aria-pressed={c.toLowerCase() === value.toLowerCase()}
@@ -57,7 +69,12 @@ export function ColorField({ value, palette, label = "Color", disabled, onChange
           ))}
         </div>
 
-        <button type="button" className={`cf-custom-toggle ${custom ? "active" : ""}`} aria-pressed={custom} onClick={() => setCustom((v) => !v)}>
+        <button
+          type="button"
+          className={`cf-custom-toggle ${custom ? 'active' : ''}`}
+          aria-pressed={custom}
+          onClick={() => setCustom((v) => !v)}
+        >
           <Icon name="plus" size={16} /> Custom color
         </button>
 

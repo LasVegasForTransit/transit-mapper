@@ -10,10 +10,10 @@
 // offset is RIGHT of travel — so the first lane sits at the most negative
 // offset. See model/system.ts CrossSection and geo.ts offsetPolyline.
 
-import { laneKind } from "../model/catalog";
-import { offsetPolyline, resolveWayPath, serviceLaneOnWay } from "../model/geo";
-import { profileWidthM } from "../model/profile";
-import type { LaneDirection, LngLat, Pattern, Way } from "../model/system";
+import { laneKind } from '../model/catalog';
+import { offsetPolyline, resolveWayPath, serviceLaneOnWay } from '../model/geo';
+import { profileWidthM } from '../model/profile';
+import type { LaneDirection, LngLat, Pattern, Way } from '../model/system';
 
 /** One lane's drawable geometry: its centerline, offset from the way's. */
 export interface LanePath {
@@ -32,7 +32,7 @@ export interface DividerPath {
   /** laneLine = dashed separator between same-direction lanes;
    *  centerLine = opposing-directions separator (the double yellow);
    *  edgeLine = solid edge of the directional roadway. */
-  kind: "laneLine" | "centerLine" | "edgeLine";
+  kind: 'laneLine' | 'centerLine' | 'edgeLine';
   path: LngLat[];
 }
 
@@ -112,7 +112,14 @@ export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLane
     for (const lane of way.profile.lanes) {
       const offsetM = cum + lane.widthM / 2 - totalWidthM / 2;
       const path = offsetPolyline(center, offsetM);
-      lanes.push({ laneId: lane.id, kindId: lane.kindId, direction: lane.direction, widthM: lane.widthM, offsetM, path });
+      lanes.push({
+        laneId: lane.id,
+        kindId: lane.kindId,
+        direction: lane.direction,
+        widthM: lane.widthM,
+        offsetM,
+        path,
+      });
       cum += lane.widthM;
     }
 
@@ -130,11 +137,14 @@ export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLane
         const curDir = laneKind(cur.kindId).directional;
         if (prevDir && curDir) {
           const opposing =
-            (prev.direction === "forward" && cur.direction === "backward") ||
-            (prev.direction === "backward" && cur.direction === "forward");
-          dividers.push({ kind: opposing ? "centerLine" : "laneLine", path: offsetPolyline(center, b) });
+            (prev.direction === 'forward' && cur.direction === 'backward') ||
+            (prev.direction === 'backward' && cur.direction === 'forward');
+          dividers.push({
+            kind: opposing ? 'centerLine' : 'laneLine',
+            path: offsetPolyline(center, b),
+          });
         } else if (prevDir !== curDir) {
-          dividers.push({ kind: "edgeLine", path: offsetPolyline(center, b) });
+          dividers.push({ kind: 'edgeLine', path: offsetPolyline(center, b) });
         }
       }
     }
@@ -143,8 +153,9 @@ export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLane
     // its travel so line-placed symbols point the right way.
     for (const lane of lanes) {
       if (!laneKind(lane.kindId).directional) continue;
-      if (lane.direction === "forward") arrows.push(lane);
-      else if (lane.direction === "backward") arrows.push({ ...lane, path: [...lane.path].reverse() });
+      if (lane.direction === 'forward') arrows.push(lane);
+      else if (lane.direction === 'backward')
+        arrows.push({ ...lane, path: [...lane.path].reverse() });
     }
   }
 
@@ -172,7 +183,11 @@ export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLane
  * renders on (serviceLaneOnWay's pattern.lanes pins + defaultLaneFor). Same
  * problem, two independent call sites, not yet unified.
  */
-export function serviceLanePath(pattern: Pattern, waysById: Map<string, Way>, modeId: string): LngLat[] | null {
+export function serviceLanePath(
+  pattern: Pattern,
+  waysById: Map<string, Way>,
+  modeId: string,
+): LngLat[] | null {
   const path: LngLat[] = [];
   for (let i = 0; i < pattern.wayIds.length; i++) {
     const way = waysById.get(pattern.wayIds[i]);
@@ -192,7 +207,10 @@ export function serviceLanePath(pattern: Pattern, waysById: Map<string, Way>, mo
  *  signature if profiling ever demands it. */
 export function wayIntersectsBounds(way: Way, bounds: [LngLat, LngLat], padDeg = 0.002): boolean {
   const [[west, south], [east, north]] = bounds;
-  const minX = west - padDeg, maxX = east + padDeg, minY = south - padDeg, maxY = north + padDeg;
+  const minX = west - padDeg,
+    maxX = east + padDeg,
+    minY = south - padDeg,
+    maxY = north + padDeg;
   const pts = way.points;
   for (let i = 0; i < pts.length; i++) {
     const [lng, lat] = pts[i];
@@ -208,9 +226,18 @@ export function wayIntersectsBounds(way: Way, bounds: [LngLat, LngLat], padDeg =
 
 /** Liang–Barsky segment ∩ axis-aligned box — true when a→b crosses the box,
  *  including the case where both endpoints lie outside it. */
-function segmentIntersectsBox(a: LngLat, b: LngLat, minX: number, minY: number, maxX: number, maxY: number): boolean {
-  const dx = b[0] - a[0], dy = b[1] - a[1];
-  let t0 = 0, t1 = 1;
+function segmentIntersectsBox(
+  a: LngLat,
+  b: LngLat,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+): boolean {
+  const dx = b[0] - a[0],
+    dy = b[1] - a[1];
+  let t0 = 0,
+    t1 = 1;
   const edges: [number, number][] = [
     [-dx, a[0] - minX],
     [dx, maxX - a[0]],

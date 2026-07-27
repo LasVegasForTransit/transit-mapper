@@ -40,9 +40,11 @@ export function pngDimensions(bytes: Uint8Array): PngDimensions | null {
   }
   // Bytes 12-15 are the chunk type; anything but IHDR here means the file is
   // malformed or is something else wearing a PNG signature.
-  if (bytes[12] !== 0x49 || bytes[13] !== 0x48 || bytes[14] !== 0x44 || bytes[15] !== 0x52) return null;
+  if (bytes[12] !== 0x49 || bytes[13] !== 0x48 || bytes[14] !== 0x44 || bytes[15] !== 0x52)
+    return null;
 
-  const readU32 = (at: number) => ((bytes[at] << 24) | (bytes[at + 1] << 16) | (bytes[at + 2] << 8) | bytes[at + 3]) >>> 0;
+  const readU32 = (at: number) =>
+    ((bytes[at] << 24) | (bytes[at + 1] << 16) | (bytes[at + 2] << 8) | bytes[at + 3]) >>> 0;
   return { width: readU32(16), height: readU32(20) };
 }
 
@@ -58,22 +60,24 @@ export function pngDimensions(bytes: Uint8Array): PngDimensions | null {
  * decoding, no CRC verification.
  */
 function hasCleanChunkChain(bytes: Uint8Array): boolean {
-  const readU32 = (at: number) => ((bytes[at] << 24) | (bytes[at + 1] << 16) | (bytes[at + 2] << 8) | bytes[at + 3]) >>> 0;
-  const typeAt = (at: number) => String.fromCharCode(bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]);
+  const readU32 = (at: number) =>
+    ((bytes[at] << 24) | (bytes[at + 1] << 16) | (bytes[at + 2] << 8) | bytes[at + 3]) >>> 0;
+  const typeAt = (at: number) =>
+    String.fromCharCode(bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]);
 
   let offset = 8; // past the signature
   let sawIhdrFirst = false;
   while (offset + 12 <= bytes.length) {
     const length = readU32(offset);
     const type = typeAt(offset + 4);
-    if (offset === 8 && type !== "IHDR") return false;
+    if (offset === 8 && type !== 'IHDR') return false;
     if (offset === 8) sawIhdrFirst = true;
 
     // length + 12 is the whole chunk (4 length, 4 type, data, 4 CRC). Guard
     // against a declared length that overruns the buffer or wraps.
     const next = offset + 12 + length;
     if (!Number.isSafeInteger(next) || next > bytes.length) return false;
-    if (type === "IEND") return sawIhdrFirst && next === bytes.length;
+    if (type === 'IEND') return sawIhdrFirst && next === bytes.length;
     offset = next;
   }
   return false; // ran out of bytes without a terminating IEND
@@ -88,12 +92,12 @@ export interface PreviewCheck {
 
 /** Whether these bytes are acceptable as a stored preview card. */
 export function checkPreviewPng(bytes: Uint8Array, expected: PngDimensions): PreviewCheck {
-  if (bytes.length === 0) return { ok: false, reason: "Preview image is empty" };
+  if (bytes.length === 0) return { ok: false, reason: 'Preview image is empty' };
   if (bytes.length > MAX_PREVIEW_BYTES) {
     return { ok: false, reason: `Preview image is larger than ${MAX_PREVIEW_BYTES} bytes` };
   }
   const size = pngDimensions(bytes);
-  if (!size) return { ok: false, reason: "Preview image is not a PNG" };
+  if (!size) return { ok: false, reason: 'Preview image is not a PNG' };
   if (size.width !== expected.width || size.height !== expected.height) {
     return {
       ok: false,
@@ -101,7 +105,7 @@ export function checkPreviewPng(bytes: Uint8Array, expected: PngDimensions): Pre
     };
   }
   if (!hasCleanChunkChain(bytes)) {
-    return { ok: false, reason: "Preview image is not a well-formed PNG" };
+    return { ok: false, reason: 'Preview image is not a well-formed PNG' };
   }
   return { ok: true };
 }

@@ -44,7 +44,7 @@ defaulted from its type:
   parking lane at that kerb, outboard of any bus lane.
 - `cycleway` (and `cycleway:left` / `cycleway:right`) adds a bike lane for
   the case where OSM tags the lane on the roadway instead of drawing it as
-  its own way. `separate` means it *is* drawn separately and imports on its
+  its own way. `separate` means it _is_ drawn separately and imports on its
   own, so no lane is added here.
 
 Kerb inwards, a side reads: sidewalk, parking, bike, bus, then travel lanes.

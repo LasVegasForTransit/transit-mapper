@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent, type MutableRefObject } from "react";
+import { useRef, type KeyboardEvent, type MutableRefObject } from 'react';
 
 interface ListboxKeyboardNav<T extends HTMLElement> {
   /** Attach to the role="listbox" container. */
@@ -26,9 +26,11 @@ interface ListboxKeyboardNav<T extends HTMLElement> {
  * Callers still own each row's roving `tabIndex` (0 for the one row Tab
  * should land on — normally whichever is selected, else the first row).
  */
-export function useListboxKeyboardNav<T extends HTMLElement = HTMLDivElement>(): ListboxKeyboardNav<T> {
+export function useListboxKeyboardNav<
+  T extends HTMLElement = HTMLDivElement,
+>(): ListboxKeyboardNav<T> {
   const containerRef = useRef<T | null>(null);
-  const typeAheadBuffer = useRef("");
+  const typeAheadBuffer = useRef('');
   const typeAheadTimer = useRef<number | undefined>(undefined);
 
   // :not(:disabled) — a disabled option (e.g. an issue with nothing to jump
@@ -38,7 +40,9 @@ export function useListboxKeyboardNav<T extends HTMLElement = HTMLDivElement>():
   // recomputes the same currentIndex forever.
   const options = (): HTMLElement[] =>
     containerRef.current
-      ? Array.from(containerRef.current.querySelectorAll<HTMLElement>('[role="option"]:not(:disabled)'))
+      ? Array.from(
+          containerRef.current.querySelectorAll<HTMLElement>('[role="option"]:not(:disabled)'),
+        )
       : [];
 
   // .focus() alone would only move keyboard focus, leaving the app's actual
@@ -66,25 +70,25 @@ export function useListboxKeyboardNav<T extends HTMLElement = HTMLDivElement>():
     // active tool to Way). Once focus is inside a listbox, its own keyboard
     // model owns the keystroke — the same rule Finder/Explorer type-ahead
     // and Gmail's list navigation follow.
-    if (e.key === "ArrowDown") {
+    if (e.key === 'ArrowDown') {
       e.preventDefault();
       e.stopPropagation();
       activate(opts[currentIndex === -1 ? 0 : Math.min(opts.length - 1, currentIndex + 1)]);
       return;
     }
-    if (e.key === "ArrowUp") {
+    if (e.key === 'ArrowUp') {
       e.preventDefault();
       e.stopPropagation();
       activate(opts[currentIndex === -1 ? 0 : Math.max(0, currentIndex - 1)]);
       return;
     }
-    if (e.key === "Home") {
+    if (e.key === 'Home') {
       e.preventDefault();
       e.stopPropagation();
       activate(opts[0]);
       return;
     }
-    if (e.key === "End") {
+    if (e.key === 'End') {
       e.preventDefault();
       e.stopPropagation();
       activate(opts[opts.length - 1]);
@@ -95,7 +99,7 @@ export function useListboxKeyboardNav<T extends HTMLElement = HTMLDivElement>():
       window.clearTimeout(typeAheadTimer.current);
       typeAheadBuffer.current += e.key.toLowerCase();
       typeAheadTimer.current = window.setTimeout(() => {
-        typeAheadBuffer.current = "";
+        typeAheadBuffer.current = '';
       }, 600);
       const search = typeAheadBuffer.current;
       const startIndex = currentIndex === -1 ? 0 : currentIndex + 1;

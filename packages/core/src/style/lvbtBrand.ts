@@ -16,36 +16,36 @@
 /** Brand colors, light and dark. Token names match the brand page exactly. */
 export const LVBT = {
   light: {
-    surface: "#F7F4EC",
-    onSurface: "#0F1115",
-    onSurfaceVariant: "#4A4E57",
-    surfaceContainer: "#EFE9DB",
-    slab: "#0F1115",
-    onSlab: "#F7F4EC",
+    surface: '#F7F4EC',
+    onSurface: '#0F1115',
+    onSurfaceVariant: '#4A4E57',
+    surfaceContainer: '#EFE9DB',
+    slab: '#0F1115',
+    onSlab: '#F7F4EC',
     /** Both --color-outline and --color-outline-variant are this on light:
      *  borders in this identity are ink, never a soft grey hairline. */
-    outline: "#0F1115",
-    primary: "#E5471A",
-    onPrimary: "#F7F4EC",
-    primaryInk: "#BF3A10",
+    outline: '#0F1115',
+    primary: '#E5471A',
+    onPrimary: '#F7F4EC',
+    primaryInk: '#BF3A10',
   },
   dark: {
-    surface: "#191A1D",
-    onSurface: "#F7F4EC",
-    onSurfaceVariant: "#B0A99C",
-    surfaceContainer: "#232428",
-    slab: "#2D2F34",
-    onSlab: "#F7F4EC",
-    outline: "#72757D",
-    primary: "#E5471A",
-    onPrimary: "#F7F4EC",
-    primaryInk: "#FF8A5C",
+    surface: '#191A1D',
+    onSurface: '#F7F4EC',
+    onSurfaceVariant: '#B0A99C',
+    surfaceContainer: '#232428',
+    slab: '#2D2F34',
+    onSlab: '#F7F4EC',
+    outline: '#72757D',
+    primary: '#E5471A',
+    onPrimary: '#F7F4EC',
+    primaryInk: '#FF8A5C',
   },
 } as const;
 
 /** The brand typeface. Named bare (no fallback stack) where a renderer has to
  *  resolve it against bundled font data rather than system fonts. */
-export const LVBT_FONT_FAMILY = "Public Sans";
+export const LVBT_FONT_FAMILY = 'Public Sans';
 
 /**
  * With web-safe fallbacks, for contexts that render in a browser.
@@ -57,4 +57,3 @@ export const LVBT_FONT_FAMILY = "Public Sans";
  * nothing and the value stays safe to embed.
  */
 export const LVBT_FONT_STACK = `'${LVBT_FONT_FAMILY}', system-ui, sans-serif`;
-

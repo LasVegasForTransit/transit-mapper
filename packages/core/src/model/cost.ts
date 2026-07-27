@@ -1,6 +1,6 @@
-import type { Grade } from "./catalog";
-import { wayLengthMeters } from "./geo";
-import type { Way } from "./system";
+import type { Grade } from './catalog';
+import { wayLengthMeters } from './geo';
+import type { Way } from './system';
 
 export interface CapitalCostEstimate {
   perMileLowUsd: number;

@@ -1,5 +1,5 @@
-import type { FeatureCollection, Point } from "geojson";
-import type { LngLat } from "@transitmapper/core/model/system";
+import type { FeatureCollection, Point } from 'geojson';
+import type { LngLat } from '@transitmapper/core/model/system';
 
 /**
  * Hand-placed reference points for known Las Vegas anchors — the cheap
@@ -15,21 +15,21 @@ export interface Landmark {
 }
 
 export const LANDMARKS: Landmark[] = [
-  { name: "The Strip", coord: [-115.1728, 36.1147] },
-  { name: "Downtown", coord: [-115.1398, 36.1699] },
-  { name: "UNLV", coord: [-115.1425, 36.1077] },
-  { name: "Harry Reid Airport", coord: [-115.1537, 36.084] },
-  { name: "Summerlin", coord: [-115.3255, 36.1699] },
-  { name: "Henderson", coord: [-115.0281, 36.0395] },
+  { name: 'The Strip', coord: [-115.1728, 36.1147] },
+  { name: 'Downtown', coord: [-115.1398, 36.1699] },
+  { name: 'UNLV', coord: [-115.1425, 36.1077] },
+  { name: 'Harry Reid Airport', coord: [-115.1537, 36.084] },
+  { name: 'Summerlin', coord: [-115.3255, 36.1699] },
+  { name: 'Henderson', coord: [-115.0281, 36.0395] },
 ];
 
 export function landmarksFeatureCollection(): FeatureCollection<Point, { name: string }> {
   return {
-    type: "FeatureCollection",
+    type: 'FeatureCollection',
     features: LANDMARKS.map((l) => ({
-      type: "Feature",
+      type: 'Feature',
       properties: { name: l.name },
-      geometry: { type: "Point", coordinates: l.coord },
+      geometry: { type: 'Point', coordinates: l.coord },
     })),
   };
 }

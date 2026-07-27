@@ -44,6 +44,7 @@ Triggers: `pull_request` (branches: `[main]`) and `push` (branches-ignore:
 `[main]`) — same trigger shape as `website`'s `ci.yml`.
 
 One job, `validate`:
+
 - Checkout (`persist-credentials: false`)
 - Setup Node + pnpm (composite action, see below)
 - `pnpm typecheck` (root script already exists: `turbo run typecheck:run`)
@@ -57,6 +58,7 @@ One job, `validate`:
 Triggers: `push` (branches: `[main]`), `workflow_dispatch`.
 
 One job, `deploy`:
+
 - Checkout, setup Node + pnpm
 - `environment: { name: production }` — scopes `CLOUDFLARE_API_TOKEN`
   (`secrets`) and `CLOUDFLARE_ACCOUNT_ID` (`vars`) to that GitHub

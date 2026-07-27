@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useEditor } from "../editor/EditorProvider";
-import { crossingsWithoutJoiningChunked, validateSystemQuick, type Issue } from "@transitmapper/core/model/validate";
-import type { TransitSystem } from "@transitmapper/core/model/system";
-import { IconButton } from "./IconButton";
-import { Popover } from "./Popover";
-import { useListboxKeyboardNav } from "./useListboxKeyboardNav";
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEditor } from '../editor/EditorProvider';
+import {
+  crossingsWithoutJoiningChunked,
+  validateSystemQuick,
+  type Issue,
+} from '@transitmapper/core/model/validate';
+import type { TransitSystem } from '@transitmapper/core/model/system';
+import { IconButton } from './IconButton';
+import { Popover } from './Popover';
+import { useListboxKeyboardNav } from './useListboxKeyboardNav';
 
 /**
  * A pure sanity check surfaced as UI: ghost ways/services, orphaned stations,
@@ -55,12 +59,20 @@ export function IssuesPopover() {
 
   if (issues.length === 0) return null;
 
-  const label = `${issues.length} issue${issues.length === 1 ? "" : "s"} found`;
+  const label = `${issues.length} issue${issues.length === 1 ? '' : 's'} found`;
   const firstJumpableId = issues.find((i) => i.target)?.id;
 
   return (
-    <Popover trigger={<IconButton icon="warning" label={label} active className="issues-trigger" />}>
-      <div className="issues-popover" role="listbox" aria-label="Issues" ref={containerRef} onKeyDown={onKeyDown}>
+    <Popover
+      trigger={<IconButton icon="warning" label={label} active className="issues-trigger" />}
+    >
+      <div
+        className="issues-popover"
+        role="listbox"
+        aria-label="Issues"
+        ref={containerRef}
+        onKeyDown={onKeyDown}
+      >
         <span className="panel-section-label">{label}</span>
         <ul className="issues-list">
           {issues.map((issue) => (

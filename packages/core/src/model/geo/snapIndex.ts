@@ -1,7 +1,7 @@
-import type { LngLat, Way } from "../system";
-import { haversineMeters } from "./spherical";
-import { nearestOnPath, projectOnSegment } from "./measurement";
-import { resolveWayPath, wayById } from "./wayPath";
+import type { LngLat, Way } from '../system';
+import { haversineMeters } from './spherical';
+import { nearestOnPath, projectOnSegment } from './measurement';
+import { resolveWayPath, wayById } from './wayPath';
 
 export interface InsertionPoint {
   /** Index in the RAW `points` array to splice the new control point into. */
@@ -54,7 +54,13 @@ export interface Snap {
  * solve at real-GTFS scale (station drag, way-endpoint join-detection while
  * drawing, and "adopt existing infrastructure" all route through this).
  */
-export function snap(ways: Way[], coord: LngLat, maxMeters: number, exclude?: Set<string>, typeId?: string): Snap | null {
+export function snap(
+  ways: Way[],
+  coord: LngLat,
+  maxMeters: number,
+  exclude?: Set<string>,
+  typeId?: string,
+): Snap | null {
   const byId = wayById(ways);
   let best: Snap | null = null;
   for (const id of candidateWayIdsNear(coord, ways, maxMeters)) {
@@ -315,7 +321,7 @@ export const INTERCHANGE_METERS = 90;
 
 export interface OpenEndpoint {
   wayId: string;
-  end: "start" | "end";
+  end: 'start' | 'end';
   coord: LngLat;
   distMeters: number;
 }
@@ -327,14 +333,19 @@ export interface OpenEndpoint {
  * (turnkey, SimCity-style) instead of always starting an unrelated new one —
  * distinct from `snap()`, which matches anywhere along a path, not just ends.
  */
-export function nearestOpenEndpoint(ways: Way[], coord: LngLat, maxMeters: number, typeId?: string): OpenEndpoint | null {
+export function nearestOpenEndpoint(
+  ways: Way[],
+  coord: LngLat,
+  maxMeters: number,
+  typeId?: string,
+): OpenEndpoint | null {
   let best: OpenEndpoint | null = null;
   for (const way of ways) {
     if (typeId && way.typeId !== typeId) continue;
     if (way.points.length === 0) continue;
-    const candidates: ["start" | "end", LngLat][] = [
-      ["start", way.points[0]],
-      ["end", way.points[way.points.length - 1]],
+    const candidates: ['start' | 'end', LngLat][] = [
+      ['start', way.points[0]],
+      ['end', way.points[way.points.length - 1]],
     ];
     for (const [end, pt] of candidates) {
       const distMeters = haversineMeters(coord, pt);

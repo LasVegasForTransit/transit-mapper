@@ -18,8 +18,8 @@
 // any other stateful context, so relocating it is a call-site change, not a
 // rewrite.
 
-import { haversineMeters, nearestInsertionPoint } from "./geo";
-import type { LngLat, TransitSystem, Way } from "./system";
+import { haversineMeters, nearestInsertionPoint } from './geo';
+import type { LngLat, TransitSystem, Way } from './system';
 
 /** Where a route starts/ends: a way plus the raw-points insertion produced
  *  by projecting the clicked coordinate onto it (see anchorOnWay). */
@@ -114,7 +114,10 @@ function biasMultiplier(mid: LngLat, biasPath: LngLat[] | undefined, weight: num
   return 1 + weight * Math.min(best / BIAS_SCALE_M, 4);
 }
 
-function buildGraph(system: TransitSystem, opts: RouteGraphOptions): { vertices: Map<string, Vertex>; nodeAt: Map<string, string> } {
+function buildGraph(
+  system: TransitSystem,
+  opts: RouteGraphOptions,
+): { vertices: Map<string, Vertex>; nodeAt: Map<string, string> } {
   const vertices = new Map<string, Vertex>();
   const nodeAt = new Map<string, string>(); // "wayId:pointIndex" -> nodeId
   const nodesByWay = new Map<string, number[]>();
@@ -165,14 +168,25 @@ function buildGraph(system: TransitSystem, opts: RouteGraphOptions): { vertices:
  * null when no connected path exists. Mid-way anchors are handled as virtual
  * vertices spliced into their enclosing segment.
  */
-export function routeBetween(system: TransitSystem, from: RouteAnchor, to: RouteAnchor, opts: RouteGraphOptions): RouteResult | null {
+export function routeBetween(
+  system: TransitSystem,
+  from: RouteAnchor,
+  to: RouteAnchor,
+  opts: RouteGraphOptions,
+): RouteResult | null {
   // Both anchors on ONE way: the route is simply the stretch of that way
   // between them — the most common gesture (routing along a single street),
   // and one the vertex graph can't represent when both clicks land inside
   // the same block segment.
   if (from.wayId === to.wayId) {
     const way = system.ways.find((w) => w.id === from.wayId);
-    if (!way || !opts.allowedTypeIds.has(way.typeId) || opts.excludeWayIds?.has(way.id) || way.points.length < 2) return null;
+    if (
+      !way ||
+      !opts.allowedTypeIds.has(way.typeId) ||
+      opts.excludeWayIds?.has(way.id) ||
+      way.points.length < 2
+    )
+      return null;
     const arcPos = (a: RouteAnchor): number => {
       const seg = Math.max(1, Math.min(a.insertIndex, way.points.length - 1));
       return segmentCost(way, 0, seg - 1) + haversineMeters(way.points[seg - 1], a.coord);
@@ -185,13 +199,35 @@ export function routeBetween(system: TransitSystem, from: RouteAnchor, to: Route
     const segT = Math.max(1, Math.min(to.insertIndex, way.points.length - 1));
     if (segF === segT) {
       return {
-        spans: [{ wayId: way.id, fromPoint: segF, toPoint: segF, fromCoord: from.coord, toCoord: to.coord, noInterior: true, seg: segF }],
+        spans: [
+          {
+            wayId: way.id,
+            fromPoint: segF,
+            toPoint: segF,
+            fromCoord: from.coord,
+            toCoord: to.coord,
+            noInterior: true,
+            seg: segF,
+          },
+        ],
         lengthM: Math.abs(posF - posT),
       };
     }
     const span: RouteSpan = forward
-      ? { wayId: way.id, fromPoint: segF, toPoint: segT - 1, fromCoord: from.coord, toCoord: to.coord }
-      : { wayId: way.id, fromPoint: segF - 1, toPoint: segT, fromCoord: from.coord, toCoord: to.coord };
+      ? {
+          wayId: way.id,
+          fromPoint: segF,
+          toPoint: segT - 1,
+          fromCoord: from.coord,
+          toCoord: to.coord,
+        }
+      : {
+          wayId: way.id,
+          fromPoint: segF - 1,
+          toPoint: segT,
+          fromCoord: from.coord,
+          toCoord: to.coord,
+        };
     return { spans: [span], lengthM: Math.abs(posF - posT) };
   }
 
@@ -201,7 +237,13 @@ export function routeBetween(system: TransitSystem, from: RouteAnchor, to: Route
   // Splice a virtual vertex for an anchor into its way's enclosing segment.
   const splice = (anchor: RouteAnchor, key: string, isFrom: boolean): boolean => {
     const way = waysById.get(anchor.wayId);
-    if (!way || !opts.allowedTypeIds.has(way.typeId) || opts.excludeWayIds?.has(way.id) || way.points.length < 2) return false;
+    if (
+      !way ||
+      !opts.allowedTypeIds.has(way.typeId) ||
+      opts.excludeWayIds?.has(way.id) ||
+      way.points.length < 2
+    )
+      return false;
     const nodesByWay = new Map<string, number[]>();
     for (const node of system.nodes) {
       for (const ref of node.refs) {
@@ -228,7 +270,8 @@ export function routeBetween(system: TransitSystem, from: RouteAnchor, to: Route
     // Partial cost: the fractional piece from the anchor to the nearer raw
     // point, plus the whole-point stretch onward to the target index.
     const costTo = (idx: number): number => {
-      if (idx <= seg - 1) return haversineMeters(way.points[seg - 1], anchor.coord) + segmentCost(way, idx, seg - 1);
+      if (idx <= seg - 1)
+        return haversineMeters(way.points[seg - 1], anchor.coord) + segmentCost(way, idx, seg - 1);
       return haversineMeters(anchor.coord, way.points[seg]) + segmentCost(way, seg, idx);
     };
     const keyA = vertexKeyAt(way.id, a, nodeAt);
@@ -246,13 +289,17 @@ export function routeBetween(system: TransitSystem, from: RouteAnchor, to: Route
     vertices.set(key, v);
     // Mirror edges from the segment ends toward the virtual vertex (needed
     // for the destination anchor, which is routed INTO).
-    vertices.get(keyA)?.edges.push({ to: key, costM: costTo(a), span: isFrom ? spanA : { ...spanA } });
-    vertices.get(keyB)?.edges.push({ to: key, costM: costTo(b), span: isFrom ? spanB : { ...spanB } });
+    vertices
+      .get(keyA)
+      ?.edges.push({ to: key, costM: costTo(a), span: isFrom ? spanA : { ...spanA } });
+    vertices
+      .get(keyB)
+      ?.edges.push({ to: key, costM: costTo(b), span: isFrom ? spanB : { ...spanB } });
     return true;
   };
 
-  const FROM = "@from";
-  const TO = "@to";
+  const FROM = '@from';
+  const TO = '@to';
   if (!splice(from, FROM, true) || !splice(to, TO, false)) return null;
 
   // Plain Dijkstra — systems are a few thousand edges at most.
@@ -295,7 +342,13 @@ export function routeBetween(system: TransitSystem, from: RouteAnchor, to: Route
   const spans: RouteSpan[] = [];
   for (const s of raw) {
     const last = spans[spans.length - 1];
-    if (last && last.wayId === s.wayId && last.toPoint === s.fromPoint && !last.toCoord && !s.fromCoord) {
+    if (
+      last &&
+      last.wayId === s.wayId &&
+      last.toPoint === s.fromPoint &&
+      !last.toCoord &&
+      !s.fromCoord
+    ) {
       last.toPoint = s.toPoint;
       last.toCoord = s.toCoord;
     } else {

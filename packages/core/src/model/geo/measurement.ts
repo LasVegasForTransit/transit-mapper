@@ -1,6 +1,6 @@
-import type { LngLat, Way } from "../system";
-import { bearingDegrees, haversineMeters, toRad } from "./spherical";
-import { resolveWayPath } from "./wayPath";
+import type { LngLat, Way } from '../system';
+import { bearingDegrees, haversineMeters, toRad } from './spherical';
+import { resolveWayPath } from './wayPath';
 
 /** Total length of a polyline, in meters. */
 export function pathLengthMeters(path: LngLat[]): number {
@@ -18,7 +18,11 @@ export function wayLengthMeters(way: Way): number {
  *  pointAtT and bearingAtT. `totalMeters`, when the caller already has it
  *  (e.g. a cached pattern geometry), skips a redundant O(n) haversine sum;
  *  otherwise it's computed here. */
-function segmentAtT(path: LngLat[], t: number, totalMeters?: number): { a: LngLat; b: LngLat; f: number } | null {
+function segmentAtT(
+  path: LngLat[],
+  t: number,
+  totalMeters?: number,
+): { a: LngLat; b: LngLat; f: number } | null {
   if (path.length < 2) return null;
   const total = totalMeters ?? pathLengthMeters(path);
   if (total === 0) return null;
