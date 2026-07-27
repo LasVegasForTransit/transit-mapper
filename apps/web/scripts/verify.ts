@@ -40,7 +40,7 @@ import {
   wayById,
 } from '@transitmapper/core/model/geo';
 import { computeDiagramSystem } from '@transitmapper/core/model/diagramLayout';
-import { isDoubleClickFinish } from '../src/map/interactions';
+import { attachInteractions, isDoubleClickFinish } from '../src/map/interactions';
 import { KEY_BINDINGS, matchesKey, resolveBinding, type KeyContext } from '../src/editor/keymap';
 import { buildFeatures, HANDLE_ICON, LAYER_SPECS } from '../src/map/layers';
 import { LANDMARKS, landmarksFeatureCollection } from '../src/map/landmarks';
@@ -1519,6 +1519,34 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     "but its handles don't, without physicalHandleGroupId",
     infraGroupUnselected.physicalHandles.features.length === 0,
   );
+
+  // Same contract as buildHandles above: the selection fast path calls this
+  // builder directly, so it has to agree with the full build feature-for-
+  // feature — including emission ORDER, since a reordered collection is a
+  // needless re-upload even when it looks identical.
+  {
+    const sysP = store.getState().system;
+    const stAlone = buildPhysicalHandles(
+      sysP.stations.find((s) => s.id === stId),
+      null,
+    );
+    check(
+      'buildPhysicalHandles alone emits exactly what the full build emits for a station',
+      JSON.stringify(stAlone) === JSON.stringify(infra.physicalHandles.features),
+    );
+    const grAlone = buildPhysicalHandles(
+      null,
+      sysP.groups.find((g) => g.id === groupId),
+    );
+    check(
+      'buildPhysicalHandles alone emits exactly what the full build emits for a group',
+      JSON.stringify(grAlone) === JSON.stringify(infraWithGroup.physicalHandles.features),
+    );
+    check(
+      'buildPhysicalHandles with nothing selected emits nothing',
+      buildPhysicalHandles(null, null).length === 0,
+    );
+  }
 }
 
 // --- P3: v3 serialize round-trips footprints, platforms, facilities, groups ---
@@ -4693,6 +4721,233 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check('a plain single click (detail 1) still starts a draw press', !isDoubleClickFinish(1));
   check("the double-click's second press (detail 2) is skipped", isDoubleClickFinish(2));
   check("even a rapid triple-click's third press stays skipped", isDoubleClickFinish(3));
+}
+
+// --- A press that moves does not eat the NEXT click -----------------------
+// Gestures that handle their own node placement set an internal
+// `suppressClick` flag so onClick doesn't then act on the same press a
+// second time. The flag is cleared by the click it was meant to suppress —
+// but MapLibre only fires `click` when the pointer stayed within its
+// clickTolerance (3px by default) between mousedown and mouseup; past that
+// it drops the event outright (see maplibre-gl's own ui/handler/map_event.ts,
+// `click()`). So a press with any real movement in it left the flag armed
+// with no click coming to clear it, and the user's NEXT genuine click was
+// swallowed instead — reproduced live as click/nothing/click while trying to
+// start a light rail line, and felt random because whether it happens is
+// just whether your hand moved 3 pixels.
+{
+  // MapLibre's default; the exact value doesn't matter here, only that a
+  // press past it produces no `click` at all.
+  const CLICK_TOLERANCE_PX = 3;
+
+  interface FakePoint {
+    x: number;
+    y: number;
+  }
+
+  const CENTER_LNG = -115.17;
+  const CENTER_LAT = 36.1;
+  const CENTER_PX = { x: 640, y: 360 };
+  // Matches getZoom() === 14 at CENTER_LAT: 156543.03392 * cos(lat) / 2**14.
+  const M_PER_PX = (156543.03392 * Math.cos((CENTER_LAT * Math.PI) / 180)) / 2 ** 14;
+  const DEG_PER_PX_LAT = M_PER_PX / 111_320;
+  const DEG_PER_PX_LNG = M_PER_PX / (111_320 * Math.cos((CENTER_LAT * Math.PI) / 180));
+
+  /**
+   * The slice of the MapLibre map surface attachInteractions actually uses,
+   * with the one behavior this test turns on — `click` suppressed for a moved
+   * press — reproduced exactly as MapLibre does it.
+   */
+  function createFakeMap() {
+    const handlers = new Map<string, Set<(e: unknown) => void>>();
+    // Layer-scoped registrations (map.on(type, layer, fn)) are hover cursor
+    // plumbing; they never participate in click dispatch, so they're dropped.
+    const key = (type: string) => type;
+    const canvas = {
+      style: { cursor: '' },
+      addEventListener() {},
+      removeEventListener() {},
+    };
+    // Records what each GeoJSON source was last given, so a test can read the
+    // rubber band back out exactly as the map would draw it.
+    const sourceData = new Map<
+      string,
+      { features: { geometry: { coordinates: [number, number][] } }[] }
+    >();
+    const map = {
+      sourceData,
+      getCanvas: () => canvas,
+      getCenter: () => ({ lat: 36.1, lng: -115.17 }),
+      getZoom: () => 14,
+      getLayer: () => undefined,
+      getSource: (id: string) => ({ setData: (d: never) => sourceData.set(id, d) }),
+      queryRenderedFeatures: () => [],
+      // A flat local projection centered on Las Vegas, scaled to agree with
+      // the metersPerPixel() the code computes from getCenter()/getZoom()
+      // above. It has to be geographically faithful, not merely invertible:
+      // the draw assists work in meters, so a projection that (say) lands
+      // every test point up near the pole makes cos(latitude) collapse and
+      // the geometry it measures meaningless.
+      project: (c: [number, number]): FakePoint => ({
+        x: CENTER_PX.x + (c[0] - CENTER_LNG) / DEG_PER_PX_LNG,
+        y: CENTER_PX.y - (c[1] - CENTER_LAT) / DEG_PER_PX_LAT,
+      }),
+      unproject: (p: FakePoint): { lng: number; lat: number } => ({
+        lng: CENTER_LNG + (p.x - CENTER_PX.x) * DEG_PER_PX_LNG,
+        lat: CENTER_LAT - (p.y - CENTER_PX.y) * DEG_PER_PX_LAT,
+      }),
+      panBy() {},
+      on(type: string, a: unknown, b?: unknown) {
+        const fn = (typeof a === 'function' ? a : b) as (e: unknown) => void;
+        if (typeof a !== 'function') return; // layer-scoped hover handler
+        const set = handlers.get(key(type)) ?? new Set();
+        set.add(fn);
+        handlers.set(key(type), set);
+      },
+      once(type: string, fn: (e: unknown) => void) {
+        const wrapped = (e: unknown) => {
+          handlers.get(key(type))?.delete(wrapped);
+          fn(e);
+        };
+        map.on(type, wrapped);
+      },
+      off(type: string, a: unknown, b?: unknown) {
+        if (typeof a !== 'function') return;
+        handlers.get(key(type))?.delete(a as (e: unknown) => void);
+        void b;
+      },
+      fire(type: string, e: unknown) {
+        for (const fn of [...(handlers.get(key(type)) ?? [])]) fn(e);
+      },
+    };
+    return map;
+  }
+
+  const mouseEvent = (pt: FakePoint, map: ReturnType<typeof createFakeMap>) => ({
+    point: pt,
+    lngLat: map.unproject(pt),
+    originalEvent: {
+      button: 0,
+      detail: 1,
+      altKey: false,
+      shiftKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      preventDefault() {},
+    },
+    preventDefault() {},
+  });
+
+  /**
+   * One press, dispatched the way the browser and MapLibre actually dispatch
+   * it: mousedown and mouseup always, `click` only when the pointer stayed
+   * inside the tolerance.
+   */
+  function press(map: ReturnType<typeof createFakeMap>, from: FakePoint, dx = 0, dy = 0) {
+    const to = { x: from.x + dx, y: from.y + dy };
+    map.fire('mousedown', mouseEvent(from, map));
+    if (dx !== 0 || dy !== 0) map.fire('mousemove', mouseEvent(to, map));
+    map.fire('mouseup', mouseEvent(to, map));
+    if (Math.hypot(dx, dy) < CLICK_TOLERANCE_PX) map.fire('click', mouseEvent(to, map));
+  }
+
+  interface BrowserGlobals {
+    window?: unknown;
+    requestAnimationFrame?: unknown;
+    cancelAnimationFrame?: unknown;
+  }
+  const g = globalThis as BrowserGlobals;
+  const originalGlobals: BrowserGlobals = {
+    window: g.window,
+    requestAnimationFrame: g.requestAnimationFrame,
+    cancelAnimationFrame: g.cancelAnimationFrame,
+  };
+  g.window = { addEventListener() {}, removeEventListener() {} };
+  // Hover/preview work is rAF-throttled, so the tests need frames to exist.
+  // The callback must NOT run before requestAnimationFrame returns: rafThrottle
+  // stores the id it hands back and treats a non-null id as "a flush is already
+  // scheduled". Running the callback inline meant that assignment happened
+  // after the flush, leaving the throttle permanently convinced a frame was
+  // pending — it flushed once and then silently swallowed every later call.
+  // Queue here; nothing in this block needs a frame to actually run.
+  let frameId = 0;
+  const frames = new Map<number, () => void>();
+  g.requestAnimationFrame = (fn: () => void) => {
+    const id = ++frameId;
+    frames.set(id, fn);
+    return id;
+  };
+  g.cancelAnimationFrame = (id: number) => frames.delete(id);
+  try {
+    const run = (presses: [number, number][]) => {
+      const s = createEditorStore();
+      s.getState().setSystem(createEmptySystem());
+      s.getState().setTool('station');
+      const map = createFakeMap();
+      const detach = attachInteractions(map as never, s, {
+        openShortcuts() {},
+        toggleUi() {},
+        isDiagramMode: () => false,
+        isNetworkMode: () => true,
+        focusFootprint() {},
+      });
+      const added: number[] = [];
+      let x = 400;
+      for (const [dx, dy] of presses) {
+        const before = s.getState().system.stations.length;
+        press(map, { x, y: 300 }, dx, dy);
+        added.push(s.getState().system.stations.length - before);
+        x += 40; // never place two stations on the same spot
+      }
+      detach();
+      return added;
+    };
+
+    // Baseline: still-hand clicks each place a station, which is what makes
+    // the failure below a regression in the moved-press case specifically and
+    // not the station tool being broken generally.
+    check(
+      'consecutive still clicks each place a station',
+      JSON.stringify(
+        run([
+          [0, 0],
+          [0, 0],
+          [0, 0],
+        ]),
+      ) === '[1,1,1]',
+    );
+
+    // The bug. A moved press still places its own station (its mousedown/
+    // mouseup gesture handles that itself) — what regressed is the press
+    // AFTER it, which used to place nothing at all. Measured against the real
+    // MapLibre build before the fix, this was [1, 0].
+    check(
+      'a click right after a moved press still places a station',
+      JSON.stringify(
+        run([
+          [8, 0],
+          [0, 0],
+        ]),
+      ) === '[1,1]',
+    );
+
+    // The user-visible shape of it: click, click, nothing, click — every
+    // press works except the one following the press that moved. Before the
+    // fix this was [1, 1, 0, 1].
+    check(
+      'a moved press never leaves a later click silently doing nothing',
+      JSON.stringify(
+        run([
+          [0, 0],
+          [8, 0],
+          [0, 0],
+          [0, 0],
+        ]),
+      ) === '[1,1,1,1]',
+    );
+  } finally {
+    Object.assign(g, originalGlobals);
+  }
 }
 
 // ===========================================================================

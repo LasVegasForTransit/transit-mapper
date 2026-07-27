@@ -145,6 +145,26 @@ export function attachInteractions(
 ): () => void {
   const canvas = map.getCanvas();
   let spaceHeld = false;
+  /**
+   * Set by a gesture that already handled the current press itself, so onClick
+   * doesn't act on that same press a second time.
+   *
+   * Scoped to ONE press, and cleared by the next mousedown rather than by the
+   * click it suppresses. That distinction is the whole point: MapLibre only
+   * fires `click` when the pointer stayed within its clickTolerance (3px) from
+   * mousedown to mouseup, and drops the event entirely otherwise (see
+   * maplibre-gl's ui/handler/map_event.ts, `click()`). Clearing this in onClick
+   * alone therefore left it armed forever whenever a press moved at all — and
+   * the next genuine click got swallowed instead of the one it was meant for.
+   * That read as clicking to start a line and having nothing happen, seemingly
+   * at random, since what actually decided it was whether your hand moved
+   * three pixels.
+   *
+   * Every assignment below happens during a press (in onMouseDown or in that
+   * press's own mousemove/mouseup handlers), so a reset at the next mousedown
+   * always lands after the click this was armed for and before anything can
+   * arm it again.
+   */
   let suppressClick = false;
   // Sticky for the duration of one draw session (persists across the repeated
   // startDraw calls a click-click-click session makes): true when this
@@ -1145,6 +1165,9 @@ export function attachInteractions(
   const onMouseDown = (e: MapMouseEvent) => {
     const st = store.getState();
     const oe = e.originalEvent;
+    // A new press owns the flag outright: whatever the previous one armed is
+    // spent by now, whether or not a click ever arrived to consume it.
+    suppressClick = false;
     if (oe.button === 2 || (oe.button === 0 && spaceHeld)) {
       startPan(e, oe.button === 2);
       return;
@@ -1321,10 +1344,9 @@ export function attachInteractions(
 
   // ---- click: discrete add / select (fires only when not dragged) ---------
   const onClick = (e: MapMouseEvent) => {
-    if (suppressClick) {
-      suppressClick = false;
-      return;
-    }
+    // Not reset here — onMouseDown owns clearing it, so a press whose click
+    // MapLibre never fires can't leave this armed for the next one.
+    if (suppressClick) return;
     const st = store.getState();
     if (st.readOnly || opts.isDiagramMode() || spaceHeld) return;
     const coord = lngLatOf(e);
