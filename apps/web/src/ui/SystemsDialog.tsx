@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useEditor } from "../editor/EditorProvider";
-import { createEmptySystem, forkSystem } from "@transitmapper/core/model/serialize";
+import { useState } from 'react';
+import { useEditor } from '../editor/EditorProvider';
+import { createEmptySystem, forkSystem } from '@transitmapper/core/model/serialize';
 import {
   deleteFromLibrary,
   listLibrary,
@@ -9,18 +9,18 @@ import {
   saveToLibrary,
   setActiveId,
   type LibraryEntry,
-} from "../storage/localStore";
-import { getMyShare } from "../share/myShares";
-import { stopSharing } from "../share/api";
-import { useSaveStatus } from "./SaveStatusProvider";
-import { blurOnEnter } from "./formUtils";
-import { Icon } from "./Icon";
-import { IconButton } from "./IconButton";
-import { Modal } from "./Modal";
+} from '../storage/localStore';
+import { getMyShare } from '../share/myShares';
+import { stopSharing } from '../share/api';
+import { useSaveStatus } from './SaveStatusProvider';
+import { blurOnEnter } from './formUtils';
+import { Icon } from './Icon';
+import { IconButton } from './IconButton';
+import { Modal } from './Modal';
 
 function relativeTime(ts: number): string {
   const minutes = Math.round((Date.now() - ts) / 60_000);
-  if (minutes < 1) return "just now";
+  if (minutes < 1) return 'just now';
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
@@ -59,11 +59,11 @@ export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
     // A row whose bytes won't parse is listed, clickable, and used to do
     // absolutely nothing when clicked — forever, with no message.
     const result = loadSystemEntry(id);
-    if (result.status === "corrupt") {
+    if (result.status === 'corrupt') {
       onCorrupt();
       return;
     }
-    if (result.status !== "ok") return;
+    if (result.status !== 'ok') return;
     const system = result.system;
     setActiveId(id);
     setSystem(system, { readOnly: false });
@@ -126,24 +126,30 @@ export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
   };
 
   return (
-    <Modal title="My systems" description="Every system you've saved locally — switch, rename, duplicate, or delete." onClose={onClose}>
-      <p className="panel-hint">Saved on this device only — use Share to send a system to someone else.</p>
+    <Modal
+      title="My systems"
+      description="Every system you've saved locally — switch, rename, duplicate, or delete."
+      onClose={onClose}
+    >
+      <p className="panel-hint">
+        Saved on this device only — use Share to send a system to someone else.
+      </p>
 
       <ul className="systems-list">
         {entries.map((entry) => {
           const isActive = entry.id === currentId;
           const isConfirming = confirmingId === entry.id;
           return (
-            <li key={entry.id} className={`systems-row ${isActive ? "active" : ""}`}>
+            <li key={entry.id} className={`systems-row ${isActive ? 'active' : ''}`}>
               <button
                 type="button"
                 className="systems-open"
                 onClick={() => open(entry.id)}
                 disabled={isActive}
-                aria-label={isActive ? "Current system" : `Open ${entry.name || "Untitled system"}`}
-                title={isActive ? "Current system" : "Open"}
+                aria-label={isActive ? 'Current system' : `Open ${entry.name || 'Untitled system'}`}
+                title={isActive ? 'Current system' : 'Open'}
               >
-                <span className={`dot ${isActive ? "" : "ring"}`} />
+                <span className={`dot ${isActive ? '' : 'ring'}`} />
               </button>
               <input
                 className="systems-name-input"
@@ -152,7 +158,9 @@ export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
                 onChange={(e) => rename(entry, e.target.value)}
                 onKeyDown={blurOnEnter}
               />
-              <span className="systems-meta">{isActive ? "Current" : relativeTime(entry.updatedAt)}</span>
+              <span className="systems-meta">
+                {isActive ? 'Current' : relativeTime(entry.updatedAt)}
+              </span>
               {getMyShare(entry.id) && (
                 <IconButton
                   icon="share"
@@ -162,18 +170,36 @@ export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
                   onClick={() => revokeShare(entry.id)}
                 />
               )}
-              <IconButton icon="copy" size={16} label="Duplicate" onClick={() => duplicate(entry)} />
+              <IconButton
+                icon="copy"
+                size={16}
+                label="Duplicate"
+                onClick={() => duplicate(entry)}
+              />
               {isConfirming ? (
                 <span className="systems-confirm">
-                  <button type="button" className="danger-btn systems-confirm-btn" onClick={() => confirmDelete(entry.id)}>
+                  <button
+                    type="button"
+                    className="danger-btn systems-confirm-btn"
+                    onClick={() => confirmDelete(entry.id)}
+                  >
                     Delete
                   </button>
-                  <button type="button" className="ghost-btn systems-confirm-btn" onClick={() => setConfirmingId(null)}>
+                  <button
+                    type="button"
+                    className="ghost-btn systems-confirm-btn"
+                    onClick={() => setConfirmingId(null)}
+                  >
                     Cancel
                   </button>
                 </span>
               ) : (
-                <IconButton icon="trash" size={16} label="Delete" onClick={() => setConfirmingId(entry.id)} />
+                <IconButton
+                  icon="trash"
+                  size={16}
+                  label="Delete"
+                  onClick={() => setConfirmingId(entry.id)}
+                />
               )}
             </li>
           );

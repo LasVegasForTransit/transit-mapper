@@ -17,6 +17,7 @@
 ### Task 1: `VehicleKind` type + `TransitSystem`/`Service` fields
 
 **Files:**
+
 - Create: `packages/core/src/model/system/vehicleKind.ts`
 - Modify: `packages/core/src/model/system.ts` (barrel export)
 - Modify: `packages/core/src/model/system/document.ts` (`TransitSystem.vehicleKinds`)
@@ -58,7 +59,7 @@ export interface VehicleKind {
 In `packages/core/src/model/system.ts`, add a line to the existing `export * from "./system/..."` list:
 
 ```ts
-export * from "./system/vehicleKind";
+export * from './system/vehicleKind';
 ```
 
 - [x] **Step 3: Add `vehicleKinds` to `TransitSystem`**
@@ -66,7 +67,7 @@ export * from "./system/vehicleKind";
 In `packages/core/src/model/system/document.ts`, add the import and field:
 
 ```ts
-import type { VehicleKind } from "./vehicleKind";
+import type { VehicleKind } from './vehicleKind';
 ```
 
 (add alongside the existing type imports), and in the `TransitSystem` interface, add after `namedWays`:
@@ -83,8 +84,8 @@ import type { VehicleKind } from "./vehicleKind";
 Bump the schema version comment/literal from `8` to `9`:
 
 ```ts
-  /** Schema version, for migrations. */
-  version: 9;
+/** Schema version, for migrations. */
+version: 9;
 ```
 
 - [x] **Step 4: Add `vehicleKindId` to `Service`**
@@ -115,6 +116,7 @@ git add packages/core/src/model/system/vehicleKind.ts packages/core/src/model/sy
 ### Task 2: Serialize — parse, migrate, and seed `vehicleKinds`
 
 **Files:**
+
 - Modify: `packages/core/src/model/serialize.ts`
 - Modify: `apps/web/scripts/verify.ts`
 
@@ -130,16 +132,17 @@ function parseVehicleKinds(raw: unknown): VehicleKind[] {
   const out: VehicleKind[] = [];
   for (const v of raw) {
     const r = v as Record<string, unknown>;
-    if (typeof r.id !== "string" || typeof r.modeId !== "string" || typeof r.label !== "string") continue;
-    if (typeof r.widthM !== "number" || typeof r.lengthM !== "number") continue;
+    if (typeof r.id !== 'string' || typeof r.modeId !== 'string' || typeof r.label !== 'string')
+      continue;
+    if (typeof r.widthM !== 'number' || typeof r.lengthM !== 'number') continue;
     out.push({
       id: r.id,
       modeId: r.modeId,
       label: r.label,
       widthM: r.widthM,
       lengthM: r.lengthM,
-      capacityPax: typeof r.capacityPax === "number" ? r.capacityPax : undefined,
-      topSpeedKmh: typeof r.topSpeedKmh === "number" ? r.topSpeedKmh : undefined,
+      capacityPax: typeof r.capacityPax === 'number' ? r.capacityPax : undefined,
+      topSpeedKmh: typeof r.topSpeedKmh === 'number' ? r.topSpeedKmh : undefined,
     });
   }
   return out;
@@ -177,8 +180,8 @@ In `apps/web/scripts/verify.ts`, find the existing checks that exercise `parseSy
 {
   const legacy = parseSystem({
     version: 8,
-    id: "v8sys",
-    name: "V8",
+    id: 'v8sys',
+    name: 'V8',
     viewport: { center: [-115.17, 36.11], zoom: 12 },
     createdAt: 1,
     updatedAt: 1,
@@ -190,24 +193,40 @@ In `apps/web/scripts/verify.ts`, find the existing checks that exercise `parseSy
     nodes: [],
     namedWays: [],
     palette: [],
-    drivingSide: "right",
+    drivingSide: 'right',
     turnRestrictions: {},
     medians: {},
     approachControls: {},
   });
-  check("a v8 system migrates with an empty vehicleKinds list", Array.isArray(legacy.vehicleKinds) && legacy.vehicleKinds.length === 0);
-  check("a v8 system migrates to the current version", legacy.version === 9);
+  check(
+    'a v8 system migrates with an empty vehicleKinds list',
+    Array.isArray(legacy.vehicleKinds) && legacy.vehicleKinds.length === 0,
+  );
+  check('a v8 system migrates to the current version', legacy.version === 9);
 
   const withKinds = parseSystem({
     ...legacy,
     vehicleKinds: [
-      { id: "vk1", modeId: "bus", label: "Articulated bus", widthM: 2.6, lengthM: 18, topSpeedKmh: 60 },
-      { id: "vk-bad", modeId: "bus" }, // missing widthM/lengthM — dropped, not thrown
+      {
+        id: 'vk1',
+        modeId: 'bus',
+        label: 'Articulated bus',
+        widthM: 2.6,
+        lengthM: 18,
+        topSpeedKmh: 60,
+      },
+      { id: 'vk-bad', modeId: 'bus' }, // missing widthM/lengthM — dropped, not thrown
     ],
   });
-  check("a well-formed vehicle kind round-trips", withKinds.vehicleKinds.length === 1 && withKinds.vehicleKinds[0].label === "Articulated bus");
+  check(
+    'a well-formed vehicle kind round-trips',
+    withKinds.vehicleKinds.length === 1 && withKinds.vehicleKinds[0].label === 'Articulated bus',
+  );
 
-  check("createEmptySystem starts with an empty vehicle-kind list", createEmptySystem().vehicleKinds.length === 0);
+  check(
+    'createEmptySystem starts with an empty vehicle-kind list',
+    createEmptySystem().vehicleKinds.length === 0,
+  );
 }
 ```
 
@@ -227,6 +246,7 @@ git add packages/core/src/model/serialize.ts apps/web/scripts/verify.ts
 ### Task 3: Store actions — `setVehicleKinds`, `setServiceVehicleKind`
 
 **Files:**
+
 - Modify: `apps/web/src/editor/store.ts`
 
 Mirrors the existing `setServiceSchedule` design exactly (see its own comment in `store.ts`): the dialog owns local add/edit/delete logic and commits the whole array in one shot, rather than the store exposing a setter per field.
@@ -270,21 +290,32 @@ In `apps/web/scripts/verify.ts`, find the store-action test section (it already 
 ```ts
 {
   fresh();
-  const wayId = store.getState().beginWay("road", "straight");
+  const wayId = store.getState().beginWay('road', 'straight');
   store.getState().addWayPoint(wayId, [-115.2, 36.1]);
   store.getState().addWayPoint(wayId, [-115.19, 36.1]);
   store.getState().finishWay();
-  store.getState().setDraftMode("bus");
+  store.getState().setDraftMode('bus');
   const serviceId = store.getState().addServiceToWay(wayId)!;
 
-  store.getState().setVehicleKinds([{ id: "vk1", modeId: "bus", label: "Test bus", widthM: 2.6, lengthM: 12 }]);
-  check("setVehicleKinds replaces the system's whole list", store.getState().system.vehicleKinds.length === 1);
+  store
+    .getState()
+    .setVehicleKinds([{ id: 'vk1', modeId: 'bus', label: 'Test bus', widthM: 2.6, lengthM: 12 }]);
+  check(
+    "setVehicleKinds replaces the system's whole list",
+    store.getState().system.vehicleKinds.length === 1,
+  );
 
-  store.getState().setServiceVehicleKind(serviceId, "vk1");
-  check("setServiceVehicleKind assigns a kind to a service", store.getState().system.services.find((s) => s.id === serviceId)?.vehicleKindId === "vk1");
+  store.getState().setServiceVehicleKind(serviceId, 'vk1');
+  check(
+    'setServiceVehicleKind assigns a kind to a service',
+    store.getState().system.services.find((s) => s.id === serviceId)?.vehicleKindId === 'vk1',
+  );
 
   store.getState().setServiceVehicleKind(serviceId, undefined);
-  check("setServiceVehicleKind(undefined) clears the assignment", store.getState().system.services.find((s) => s.id === serviceId)?.vehicleKindId === undefined);
+  check(
+    'setServiceVehicleKind(undefined) clears the assignment',
+    store.getState().system.services.find((s) => s.id === serviceId)?.vehicleKindId === undefined,
+  );
 }
 ```
 
@@ -304,6 +335,7 @@ git add apps/web/src/editor/store.ts apps/web/scripts/verify.ts
 ### Task 4: Resolve effective vehicle kind in the simulation
 
 **Files:**
+
 - Modify: `apps/web/src/sim/vehicles.ts`
 - Modify: `apps/web/scripts/verify.ts`
 
@@ -319,10 +351,19 @@ In `apps/web/src/sim/vehicles.ts`, add after the `VehicleGate` interface:
  *  mode's plain default (vehicleFootprint) at the app's ambient default
  *  speed — the exact behavior every service had before vehicle kinds
  *  existed, so an unassigned service is never affected by this feature. */
-export function effectiveVehicleKind(system: TransitSystem, service: Service): { widthM: number; lengthM: number; speedMps: number } {
-  const kind = service.vehicleKindId ? system.vehicleKinds.find((k) => k.id === service.vehicleKindId) : undefined;
+export function effectiveVehicleKind(
+  system: TransitSystem,
+  service: Service,
+): { widthM: number; lengthM: number; speedMps: number } {
+  const kind = service.vehicleKindId
+    ? system.vehicleKinds.find((k) => k.id === service.vehicleKindId)
+    : undefined;
   if (kind) {
-    return { widthM: kind.widthM, lengthM: kind.lengthM, speedMps: kind.topSpeedKmh !== undefined ? kind.topSpeedKmh / 3.6 : VEHICLE_SPEED_MPS };
+    return {
+      widthM: kind.widthM,
+      lengthM: kind.lengthM,
+      speedMps: kind.topSpeedKmh !== undefined ? kind.topSpeedKmh / 3.6 : VEHICLE_SPEED_MPS,
+    };
   }
   const fallback = vehicleFootprint(service.modeId);
   return { widthM: fallback.widthM, lengthM: fallback.lengthM, speedMps: VEHICLE_SPEED_MPS };
@@ -334,7 +375,11 @@ export function effectiveVehicleKind(system: TransitSystem, service: Service): {
 Replace their signatures:
 
 ```ts
-export function buildTimetable(totalMeters: number, stops: DwellStop[], speedMps: number = VEHICLE_SPEED_MPS): Timetable {
+export function buildTimetable(
+  totalMeters: number,
+  stops: DwellStop[],
+  speedMps: number = VEHICLE_SPEED_MPS,
+): Timetable {
   const travelMs = (totalMeters / speedMps) * 1000;
   const dwellMs = stops.reduce((sum, s) => sum + s.dwellMs, 0);
   return { oneWayMs: travelMs + dwellMs, stops };
@@ -342,7 +387,12 @@ export function buildTimetable(totalMeters: number, stops: DwellStop[], speedMps
 ```
 
 ```ts
-export function metersAtElapsed(totalMeters: number, timetable: Timetable, elapsedMs: number, speedMps: number = VEHICLE_SPEED_MPS): number {
+export function metersAtElapsed(
+  totalMeters: number,
+  timetable: Timetable,
+  elapsedMs: number,
+  speedMps: number = VEHICLE_SPEED_MPS,
+): number {
   let clock = 0;
   let lastDist = 0;
   for (const stop of timetable.stops) {
@@ -369,16 +419,33 @@ interface CachedPatternGeometry extends PatternGeometry {
 }
 const patternGeometryCache = new WeakMap<Pattern, CachedPatternGeometry>();
 
-function resolvePatternGeometry(system: TransitSystem, pattern: Pattern, speedMps: number): PatternGeometry | null {
+function resolvePatternGeometry(
+  system: TransitSystem,
+  pattern: Pattern,
+  speedMps: number,
+): PatternGeometry | null {
   const cached = patternGeometryCache.get(pattern);
-  if (cached && cached.forWays === system.ways && cached.forStations === system.stations && cached.forSpeedMps === speedMps) return cached;
+  if (
+    cached &&
+    cached.forWays === system.ways &&
+    cached.forStations === system.stations &&
+    cached.forSpeedMps === speedMps
+  )
+    return cached;
   const path = patternPath(system.ways, pattern);
   if (path.length < 2) return null;
   const meters = pathLengthMeters(path);
   if (meters === 0) return null;
   const stops = dwellStopsForPattern(system, pattern, path, meters);
   const timetable = buildTimetable(meters, stops, speedMps);
-  const geometry: CachedPatternGeometry = { path, meters, timetable, forWays: system.ways, forStations: system.stations, forSpeedMps: speedMps };
+  const geometry: CachedPatternGeometry = {
+    path,
+    meters,
+    timetable,
+    forWays: system.ways,
+    forStations: system.stations,
+    forSpeedMps: speedMps,
+  };
   patternGeometryCache.set(pattern, geometry);
   return geometry;
 }
@@ -395,7 +462,12 @@ interface CachedInfraPatternGeometry extends PatternGeometry {
 }
 const infraPatternGeometryCache = new WeakMap<Pattern, CachedInfraPatternGeometry>();
 
-function resolveInfraPatternGeometry(system: TransitSystem, pattern: Pattern, modeId: string, speedMps: number): PatternGeometry | null {
+function resolveInfraPatternGeometry(
+  system: TransitSystem,
+  pattern: Pattern,
+  modeId: string,
+  speedMps: number,
+): PatternGeometry | null {
   const cached = infraPatternGeometryCache.get(pattern);
   if (
     cached &&
@@ -469,28 +541,70 @@ In `apps/web/scripts/verify.ts`, add `effectiveVehicleKind` to the existing `../
 
 ```ts
 {
-  const busService: Service = { id: "evk-bus", name: "Bus", modeId: "bus", color: "#2ea44f", patterns: [] };
+  const busService: Service = {
+    id: 'evk-bus',
+    name: 'Bus',
+    modeId: 'bus',
+    color: '#2ea44f',
+    patterns: [],
+  };
   const sysNoKinds: TransitSystem = { ...createEmptySystem(), vehicleKinds: [] };
 
   const unassigned = effectiveVehicleKind(sysNoKinds, busService);
-  const busDefault = vehicleFootprint("bus");
-  check("an unassigned service resolves to its mode's plain default size", unassigned.widthM === busDefault.widthM && unassigned.lengthM === busDefault.lengthM);
-  check("an unassigned service resolves to the app's default speed", unassigned.speedMps === VEHICLE_SPEED_MPS);
+  const busDefault = vehicleFootprint('bus');
+  check(
+    "an unassigned service resolves to its mode's plain default size",
+    unassigned.widthM === busDefault.widthM && unassigned.lengthM === busDefault.lengthM,
+  );
+  check(
+    "an unassigned service resolves to the app's default speed",
+    unassigned.speedMps === VEHICLE_SPEED_MPS,
+  );
 
   const sysWithKind: TransitSystem = {
     ...sysNoKinds,
-    vehicleKinds: [{ id: "evk1", modeId: "bus", label: "Articulated", widthM: 2.6, lengthM: 18, topSpeedKmh: 72 }],
+    vehicleKinds: [
+      {
+        id: 'evk1',
+        modeId: 'bus',
+        label: 'Articulated',
+        widthM: 2.6,
+        lengthM: 18,
+        topSpeedKmh: 72,
+      },
+    ],
   };
-  const assigned = effectiveVehicleKind(sysWithKind, { ...busService, vehicleKindId: "evk1" });
-  check("an assigned service uses its vehicle kind's own dimensions", assigned.widthM === 2.6 && assigned.lengthM === 18);
-  check("an assigned service's top speed converts km/h to m/s", Math.abs(assigned.speedMps - 20) < 1e-9);
+  const assigned = effectiveVehicleKind(sysWithKind, { ...busService, vehicleKindId: 'evk1' });
+  check(
+    "an assigned service uses its vehicle kind's own dimensions",
+    assigned.widthM === 2.6 && assigned.lengthM === 18,
+  );
+  check(
+    "an assigned service's top speed converts km/h to m/s",
+    Math.abs(assigned.speedMps - 20) < 1e-9,
+  );
 
-  const kindNoSpeed: TransitSystem = { ...sysNoKinds, vehicleKinds: [{ id: "evk2", modeId: "bus", label: "No speed set", widthM: 3, lengthM: 20 }] };
-  const assignedNoSpeed = effectiveVehicleKind(kindNoSpeed, { ...busService, vehicleKindId: "evk2" });
-  check("an assigned kind with no topSpeedKmh falls back to the app's default speed", assignedNoSpeed.speedMps === VEHICLE_SPEED_MPS);
+  const kindNoSpeed: TransitSystem = {
+    ...sysNoKinds,
+    vehicleKinds: [{ id: 'evk2', modeId: 'bus', label: 'No speed set', widthM: 3, lengthM: 20 }],
+  };
+  const assignedNoSpeed = effectiveVehicleKind(kindNoSpeed, {
+    ...busService,
+    vehicleKindId: 'evk2',
+  });
+  check(
+    "an assigned kind with no topSpeedKmh falls back to the app's default speed",
+    assignedNoSpeed.speedMps === VEHICLE_SPEED_MPS,
+  );
 
-  const danglingRef = effectiveVehicleKind(sysNoKinds, { ...busService, vehicleKindId: "does-not-exist" });
-  check("a vehicleKindId pointing at a deleted kind falls back to the mode default, not a crash", danglingRef.widthM === busDefault.widthM);
+  const danglingRef = effectiveVehicleKind(sysNoKinds, {
+    ...busService,
+    vehicleKindId: 'does-not-exist',
+  });
+  check(
+    'a vehicleKindId pointing at a deleted kind falls back to the mode default, not a crash',
+    danglingRef.widthM === busDefault.widthM,
+  );
 }
 ```
 
@@ -510,6 +624,7 @@ git add apps/web/src/sim/vehicles.ts apps/web/scripts/verify.ts
 ### Task 5: `VehicleKindsDialog`
 
 **Files:**
+
 - Create: `apps/web/src/ui/VehicleKindsDialog.tsx`
 
 Same live-commit local-state pattern as `apps/web/src/ui/ScheduleDialog.tsx` — no separate Save step, every edit commits immediately via `onSave`.
@@ -519,14 +634,14 @@ Same live-commit local-state pattern as `apps/web/src/ui/ScheduleDialog.tsx` —
 Create `apps/web/src/ui/VehicleKindsDialog.tsx`:
 
 ```tsx
-import { useState } from "react";
-import { shortId } from "@transitmapper/core/model/ids";
-import { MODES, MODE_ORDER } from "@transitmapper/core/model/catalog";
-import type { VehicleKind } from "@transitmapper/core/model/system";
-import { blurOnEnter } from "./formUtils";
-import { Icon } from "./Icon";
-import { IconButton } from "./IconButton";
-import { Modal } from "./Modal";
+import { useState } from 'react';
+import { shortId } from '@transitmapper/core/model/ids';
+import { MODES, MODE_ORDER } from '@transitmapper/core/model/catalog';
+import type { VehicleKind } from '@transitmapper/core/model/system';
+import { blurOnEnter } from './formUtils';
+import { Icon } from './Icon';
+import { IconButton } from './IconButton';
+import { Modal } from './Modal';
 
 interface VehicleKindsDialogProps {
   /** The service that opened this dialog — a newly added kind defaults to
@@ -547,7 +662,13 @@ interface VehicleKindsDialogProps {
  * via onSave on every change (store.ts's setVehicleKinds is a one-shot
  * replace), no separate Save step.
  */
-export function VehicleKindsDialog({ modeId, vehicleKinds, readOnly, onSave, onClose }: VehicleKindsDialogProps) {
+export function VehicleKindsDialog({
+  modeId,
+  vehicleKinds,
+  readOnly,
+  onSave,
+  onClose,
+}: VehicleKindsDialogProps) {
   const [kinds, setKinds] = useState<VehicleKind[]>(vehicleKinds);
 
   const commit = (next: VehicleKind[]) => {
@@ -555,9 +676,20 @@ export function VehicleKindsDialog({ modeId, vehicleKinds, readOnly, onSave, onC
     onSave(next);
   };
 
-  const updateKind = (kid: string, patch: Partial<VehicleKind>) => commit(kinds.map((k) => (k.id === kid ? { ...k, ...patch } : k)));
+  const updateKind = (kid: string, patch: Partial<VehicleKind>) =>
+    commit(kinds.map((k) => (k.id === kid ? { ...k, ...patch } : k)));
   const removeKind = (kid: string) => commit(kinds.filter((k) => k.id !== kid));
-  const addKind = () => commit([...kinds, { id: shortId(), modeId, label: `${MODES[modeId]?.label ?? "Vehicle"} kind`, widthM: 2.6, lengthM: 12 }]);
+  const addKind = () =>
+    commit([
+      ...kinds,
+      {
+        id: shortId(),
+        modeId,
+        label: `${MODES[modeId]?.label ?? 'Vehicle'} kind`,
+        widthM: 2.6,
+        lengthM: 12,
+      },
+    ]);
 
   return (
     <Modal
@@ -567,7 +699,10 @@ export function VehicleKindsDialog({ modeId, vehicleKinds, readOnly, onSave, onC
       className="schedule-modal"
     >
       {kinds.length === 0 ? (
-        <p className="panel-hint">No custom vehicle kinds yet — every service is using its mode's plain default size and speed.</p>
+        <p className="panel-hint">
+          No custom vehicle kinds yet — every service is using its mode's plain default size and
+          speed.
+        </p>
       ) : (
         <ul className="schedule-list">
           {kinds.map((k) => (
@@ -582,7 +717,14 @@ export function VehicleKindsDialog({ modeId, vehicleKinds, readOnly, onSave, onC
                   onChange={(e) => updateKind(k.id, { label: e.target.value })}
                   onKeyDown={blurOnEnter}
                 />
-                {!readOnly && <IconButton icon="trash" size={15} label={`Delete ${k.label || "this vehicle kind"}`} onClick={() => removeKind(k.id)} />}
+                {!readOnly && (
+                  <IconButton
+                    icon="trash"
+                    size={15}
+                    label={`Delete ${k.label || 'this vehicle kind'}`}
+                    onClick={() => removeKind(k.id)}
+                  />
+                )}
               </div>
 
               <label className="field-label" htmlFor={`vk-mode-${k.id}`}>
@@ -591,7 +733,7 @@ export function VehicleKindsDialog({ modeId, vehicleKinds, readOnly, onSave, onC
               <select
                 id={`vk-mode-${k.id}`}
                 className="opt-select"
-                style={{ width: "100%", marginBottom: 8 }}
+                style={{ width: '100%', marginBottom: 8 }}
                 disabled={readOnly}
                 value={k.modeId}
                 onChange={(e) => updateKind(k.id, { modeId: e.target.value })}
@@ -609,10 +751,12 @@ export function VehicleKindsDialog({ modeId, vehicleKinds, readOnly, onSave, onC
                   min={0.5}
                   step={0.1}
                   className="freq-input"
-                  aria-label={`${k.label || "Vehicle"} width in meters`}
+                  aria-label={`${k.label || 'Vehicle'} width in meters`}
                   value={k.widthM}
                   disabled={readOnly}
-                  onChange={(e) => updateKind(k.id, { widthM: Math.max(0.5, Number(e.target.value) || 0.5) })}
+                  onChange={(e) =>
+                    updateKind(k.id, { widthM: Math.max(0.5, Number(e.target.value) || 0.5) })
+                  }
                 />
                 <span className="freq-suffix">m wide</span>
                 <input
@@ -620,10 +764,12 @@ export function VehicleKindsDialog({ modeId, vehicleKinds, readOnly, onSave, onC
                   min={1}
                   step={0.5}
                   className="freq-input"
-                  aria-label={`${k.label || "Vehicle"} length in meters`}
+                  aria-label={`${k.label || 'Vehicle'} length in meters`}
                   value={k.lengthM}
                   disabled={readOnly}
-                  onChange={(e) => updateKind(k.id, { lengthM: Math.max(1, Number(e.target.value) || 1) })}
+                  onChange={(e) =>
+                    updateKind(k.id, { lengthM: Math.max(1, Number(e.target.value) || 1) })
+                  }
                 />
                 <span className="freq-suffix">m long</span>
               </div>
@@ -633,22 +779,34 @@ export function VehicleKindsDialog({ modeId, vehicleKinds, readOnly, onSave, onC
                   type="number"
                   min={0}
                   className="freq-input"
-                  aria-label={`${k.label || "Vehicle"} passenger capacity`}
+                  aria-label={`${k.label || 'Vehicle'} passenger capacity`}
                   placeholder="Not set"
-                  value={k.capacityPax ?? ""}
+                  value={k.capacityPax ?? ''}
                   disabled={readOnly}
-                  onChange={(e) => updateKind(k.id, { capacityPax: e.target.value === "" ? undefined : Math.max(0, Math.round(Number(e.target.value))) })}
+                  onChange={(e) =>
+                    updateKind(k.id, {
+                      capacityPax:
+                        e.target.value === ''
+                          ? undefined
+                          : Math.max(0, Math.round(Number(e.target.value))),
+                    })
+                  }
                 />
                 <span className="freq-suffix">passengers</span>
                 <input
                   type="number"
                   min={0}
                   className="freq-input"
-                  aria-label={`${k.label || "Vehicle"} top speed in km/h`}
+                  aria-label={`${k.label || 'Vehicle'} top speed in km/h`}
                   placeholder="Not set"
-                  value={k.topSpeedKmh ?? ""}
+                  value={k.topSpeedKmh ?? ''}
                   disabled={readOnly}
-                  onChange={(e) => updateKind(k.id, { topSpeedKmh: e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)) })}
+                  onChange={(e) =>
+                    updateKind(k.id, {
+                      topSpeedKmh:
+                        e.target.value === '' ? undefined : Math.max(0, Number(e.target.value)),
+                    })
+                  }
                 />
                 <span className="freq-suffix">km/h top speed</span>
               </div>
@@ -658,7 +816,12 @@ export function VehicleKindsDialog({ modeId, vehicleKinds, readOnly, onSave, onC
       )}
 
       {!readOnly && (
-        <button type="button" className="ghost-btn" style={{ width: "100%", justifyContent: "center" }} onClick={addKind}>
+        <button
+          type="button"
+          className="ghost-btn"
+          style={{ width: '100%', justifyContent: 'center' }}
+          onClick={addKind}
+        >
           <Icon name="plus" size={17} /> Add vehicle kind
         </button>
       )}
@@ -683,6 +846,7 @@ git add apps/web/src/ui/VehicleKindsDialog.tsx
 ### Task 6: Wire the dialog and picker into `ServiceInspector`
 
 **Files:**
+
 - Modify: `apps/web/src/ui/inspector/ServiceInspector.tsx`
 
 - [x] **Step 1: Add imports and state**
@@ -690,21 +854,23 @@ git add apps/web/src/ui/VehicleKindsDialog.tsx
 Add near the top, alongside the existing `ScheduleDialog` lazy import:
 
 ```ts
-const VehicleKindsDialog = lazy(() => import("../VehicleKindsDialog").then((m) => ({ default: m.VehicleKindsDialog })));
+const VehicleKindsDialog = lazy(() =>
+  import('../VehicleKindsDialog').then((m) => ({ default: m.VehicleKindsDialog })),
+);
 ```
 
 Inside the component, alongside the existing `scheduleOpen` state:
 
 ```ts
-  const [vehicleKindsOpen, setVehicleKindsOpen] = useState(false);
+const [vehicleKindsOpen, setVehicleKindsOpen] = useState(false);
 ```
 
 Alongside the existing selectors (`setServiceSchedule`, etc.):
 
 ```ts
-  const vehicleKinds = useEditor((s) => s.system.vehicleKinds);
-  const setServiceVehicleKind = useEditor((s) => s.setServiceVehicleKind);
-  const setVehicleKinds = useEditor((s) => s.setVehicleKinds);
+const vehicleKinds = useEditor((s) => s.system.vehicleKinds);
+const setServiceVehicleKind = useEditor((s) => s.setServiceVehicleKind);
+const setVehicleKinds = useEditor((s) => s.setVehicleKinds);
 ```
 
 - [x] **Step 2: Add the picker to the "line" tab**
@@ -744,17 +910,19 @@ In the `tab === "line"` block, after the Mode chip-row's closing `</div>` and be
 Alongside the existing `{scheduleOpen && (...)}` block:
 
 ```tsx
-      {vehicleKindsOpen && (
-        <Suspense fallback={null}>
-          <VehicleKindsDialog
-            modeId={service.modeId}
-            vehicleKinds={vehicleKinds}
-            readOnly={readOnly}
-            onSave={setVehicleKinds}
-            onClose={() => setVehicleKindsOpen(false)}
-          />
-        </Suspense>
-      )}
+{
+  vehicleKindsOpen && (
+    <Suspense fallback={null}>
+      <VehicleKindsDialog
+        modeId={service.modeId}
+        vehicleKinds={vehicleKinds}
+        readOnly={readOnly}
+        onSave={setVehicleKinds}
+        onClose={() => setVehicleKindsOpen(false)}
+      />
+    </Suspense>
+  );
+}
 ```
 
 - [x] **Step 4: Typecheck**

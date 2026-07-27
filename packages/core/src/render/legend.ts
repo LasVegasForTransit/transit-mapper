@@ -1,5 +1,5 @@
-import type { TransitSystem } from "../model/system";
-import type { ViewOptions } from "./buildFeatures";
+import type { TransitSystem } from '../model/system';
+import type { ViewOptions } from './buildFeatures';
 
 export interface LegendEntry {
   color: string;
@@ -13,5 +13,5 @@ export interface LegendEntry {
 export function legendEntriesFor(system: TransitSystem, view: ViewOptions): LegendEntry[] {
   return system.services
     .filter((sv) => view.visibleModes.has(sv.modeId))
-    .map((sv) => ({ color: sv.color, label: sv.name || "Unnamed line" }));
+    .map((sv) => ({ color: sv.color, label: sv.name || 'Unnamed line' }));
 }

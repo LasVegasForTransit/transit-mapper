@@ -7,7 +7,7 @@ renders each mode's vehicles as true-to-scale polygons, sized from a flat
 per-mode default table (bus ≈2.6×12m, light rail car ≈2.65×27m, …). That
 spec assumes one fixed size per mode.
 
-This spec lets a person testing a transit system idea choose *which*
+This spec lets a person testing a transit system idea choose _which_
 vehicle a line actually runs — e.g. a short single-unit LRV vs. a long
 double-consist one, for the same "light rail" mode — and see that choice
 reflected both in the rendered footprint and in how fast the line runs.
@@ -59,12 +59,12 @@ New type, alongside `Service`/`Pattern` in `packages/core/src/model/system`:
 ```ts
 interface VehicleKind {
   id: string;
-  modeId: string;        // which mode this kind is usable for
-  label: string;         // "Siemens S700", "40' Standard Bus"
+  modeId: string; // which mode this kind is usable for
+  label: string; // "Siemens S700", "40' Standard Bus"
   widthM: number;
   lengthM: number;
-  capacityPax?: number;  // informational only, see Non-goals
-  topSpeedKmh?: number;  // drives simulated travel time; see below
+  capacityPax?: number; // informational only, see Non-goals
+  topSpeedKmh?: number; // drives simulated travel time; see below
 }
 ```
 
@@ -89,7 +89,7 @@ behavior changes until someone actively creates and assigns a custom kind.
 ### Rendering (extends the previous spec)
 
 The rotated-rectangle polygon width/length (previous spec, section 4) is
-sourced from the service's *resolved* vehicle kind — assigned kind if
+sourced from the service's _resolved_ vehicle kind — assigned kind if
 `vehicleKindId` is set, else the mode's synthesized default — instead of
 reading the per-mode table directly. The per-mode table doesn't go away;
 it just moves one layer down, to where defaults are seeded from.

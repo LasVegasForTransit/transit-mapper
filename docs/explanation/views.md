@@ -5,10 +5,10 @@ representation. The same document renders three ways:
 
 - **Network** — the schematic. Colored service lines, point stops, one-way
   chevrons. This is the transit map as riders think of it, and the view
-  where you draw and route *services*.
+  where you draw and route _services_.
 - **Infrastructure** — the physical world. Roads with lanes, tracks,
   junction footprints, station land, buildings. This is where you draw and
-  edit *infrastructure*.
+  edit _infrastructure_.
 - **Diagram** — a read-only straightened diagram of the network, in the
   tradition of printed transit maps.
 

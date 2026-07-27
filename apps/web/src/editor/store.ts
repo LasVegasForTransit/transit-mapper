@@ -1,16 +1,65 @@
-import { createStore } from "zustand/vanilla";
-import { LANE_KINDS, PROFILE_PRESETS, laneKind, mode, modesForWayType, wayType, type Grade } from "@transitmapper/core/model/catalog";
-import { buildProfile, cloneProfile, combineProfiles, defaultProfileFor, directionalLanes, flipProfile, makeOneWay, profileWidthM, separateProfiles, withLaneCount } from "@transitmapper/core/model/profile";
-import { modeRender } from "@transitmapper/core/style/catalogStyle";
-import { liveCamera } from "../camera/liveCamera";
-import { detectShapeRuns, haversineMeters, nearestInsertionPoint, nearestOnPath, offsetPolyline, pathLengthMeters, patternPath, pointAtT, pointInPolygon, resolveWayPath, snap, squareFootprint, type ShapeRun } from "@transitmapper/core/model/geo";
-import { anchorOnWay, routeBetween, type RouteAnchor, type RouteSpan } from "@transitmapper/core/model/routeGraph";
-import { wayCrossings } from "@transitmapper/core/model/validate";
-import { shortId } from "@transitmapper/core/model/ids";
-import { createEmptySystem } from "@transitmapper/core/model/serialize";
-import { armRefKey, getComponent, laneRefKey, prunedToLiveLanes, withComponent, withoutComponent } from "@transitmapper/core/model/components";
-import { createFacility, createGroup as createGroupEntity, createStation } from "@transitmapper/core/model/system";
-import { withoutAlreadyImported, type ImportedNetwork } from "@transitmapper/core/model/import";
+import { createStore } from 'zustand/vanilla';
+import {
+  LANE_KINDS,
+  PROFILE_PRESETS,
+  laneKind,
+  mode,
+  modesForWayType,
+  wayType,
+  type Grade,
+} from '@transitmapper/core/model/catalog';
+import {
+  buildProfile,
+  cloneProfile,
+  combineProfiles,
+  defaultProfileFor,
+  directionalLanes,
+  flipProfile,
+  makeOneWay,
+  profileWidthM,
+  separateProfiles,
+  withLaneCount,
+} from '@transitmapper/core/model/profile';
+import { modeRender } from '@transitmapper/core/style/catalogStyle';
+import { liveCamera } from '../camera/liveCamera';
+import {
+  detectShapeRuns,
+  haversineMeters,
+  nearestInsertionPoint,
+  nearestOnPath,
+  offsetPolyline,
+  pathLengthMeters,
+  patternPath,
+  pointAtT,
+  pointInPolygon,
+  resolveWayPath,
+  snap,
+  squareFootprint,
+  type ShapeRun,
+} from '@transitmapper/core/model/geo';
+import {
+  anchorOnWay,
+  routeBetween,
+  type RouteAnchor,
+  type RouteSpan,
+} from '@transitmapper/core/model/routeGraph';
+import { wayCrossings } from '@transitmapper/core/model/validate';
+import { shortId } from '@transitmapper/core/model/ids';
+import { createEmptySystem } from '@transitmapper/core/model/serialize';
+import {
+  armRefKey,
+  getComponent,
+  laneRefKey,
+  prunedToLiveLanes,
+  withComponent,
+  withoutComponent,
+} from '@transitmapper/core/model/components';
+import {
+  createFacility,
+  createGroup as createGroupEntity,
+  createStation,
+} from '@transitmapper/core/model/system';
+import { withoutAlreadyImported, type ImportedNetwork } from '@transitmapper/core/model/import';
 import type {
   CrossSection,
   DrivingSide,
@@ -31,9 +80,9 @@ import type {
   VehicleKind,
   Viewport,
   Way,
-} from "@transitmapper/core/model/system";
+} from '@transitmapper/core/model/system';
 
-export type Tool = "select" | "way" | "station" | "facility";
+export type Tool = 'select' | 'way' | 'station' | 'facility';
 
 // A freshly-drawn line should already be a "working" one — an ambient
 // vehicle animating along it — without a trip to the Inspector first (both
@@ -41,23 +90,23 @@ export type Tool = "select" | "way" | "station" | "facility";
 // "10 min" / "6am–11pm" default preset chips, so the value never surprises
 // once the panel IS opened.
 const DEFAULT_FREQUENCY_MINUTES = 10;
-const DEFAULT_SPAN_START = "06:00";
-const DEFAULT_SPAN_END = "23:00";
+const DEFAULT_SPAN_START = '06:00';
+const DEFAULT_SPAN_END = '23:00';
 
 export type Selection =
-  | { kind: "way"; id: string }
-  | { kind: "service"; id: string }
-  | { kind: "station"; id: string }
-  | { kind: "facility"; id: string }
-  | { kind: "group"; id: string }
-  | { kind: "node"; id: string }
+  | { kind: 'way'; id: string }
+  | { kind: 'service'; id: string }
+  | { kind: 'station'; id: string }
+  | { kind: 'facility'; id: string }
+  | { kind: 'group'; id: string }
+  | { kind: 'node'; id: string }
   | null;
 
 /** One member of a multi-select group — the "nudge this whole line" /
  *  "delete these five things together" set, kept separate from `Selection`
  *  (which stays one object, driving the Inspector) rather than trying to
  *  make one field do both jobs. */
-export type MultiSelectItem = { kind: "way" | "station" | "facility"; id: string };
+export type MultiSelectItem = { kind: 'way' | 'station' | 'facility'; id: string };
 
 const FOOTPRINT_HALF_SIZE_M = 30;
 // How far a drawn station footprint's center may sit from a way and still
@@ -200,7 +249,7 @@ export interface EditorState {
    *  branch point), type, grade, class, and shared street identity, and is
    *  joined to the source at that endpoint as a real junction. Returns the
    *  new way's id (it becomes the active draw). */
-  beginOneWayBranch: (fromWayId: string, end: "start" | "end") => string | null;
+  beginOneWayBranch: (fromWayId: string, end: 'start' | 'end') => string | null;
   setDraftFacilityType: (typeId: string) => void;
   setDraftFacilityComplexMode: (on: boolean) => void;
   addPaletteColor: (color: string) => void;
@@ -273,7 +322,11 @@ export interface EditorState {
   setNodeConnectors: (nodeId: string, connectors: LaneConnector[] | undefined) => void;
   /** Traffic control for one specific approach, overriding the node's
    *  whole-node control for that arm only; undefined clears the override. */
-  setApproachControl: (wayId: string, end: "start" | "end", control: NodeControl | undefined) => void;
+  setApproachControl: (
+    wayId: string,
+    end: 'start' | 'end',
+    control: NodeControl | undefined,
+  ) => void;
 
   // turn restrictions (see model/system.ts's TurnRestriction)
   /** Restrict which target Ways a lane may feed at its next junction;
@@ -476,7 +529,7 @@ function touch(system: TransitSystem): TransitSystem {
 function systemContentEqual(before: TransitSystem, after: TransitSystem): boolean {
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]) as Set<keyof TransitSystem>;
   for (const key of keys) {
-    if (key === "updatedAt") continue;
+    if (key === 'updatedAt') continue;
     const b = before[key];
     const a = after[key];
     if (b === a) continue;
@@ -492,10 +545,16 @@ function reanchorStations(system: TransitSystem, wayId: string): Station[] {
   if (!way) return system.stations;
   const path = resolveWayPath(way);
   if (path.length < 2) return system.stations;
-  return system.stations.map((s) => (s.anchor?.wayId === wayId ? { ...s, coord: pointAtT(path, s.anchor.t) } : s));
+  return system.stations.map((s) =>
+    s.anchor?.wayId === wayId ? { ...s, coord: pointAtT(path, s.anchor.t) } : s,
+  );
 }
 
-function updateWayPoints(system: TransitSystem, wayId: string, fn: (points: LngLat[]) => LngLat[]): TransitSystem {
+function updateWayPoints(
+  system: TransitSystem,
+  wayId: string,
+  fn: (points: LngLat[]) => LngLat[],
+): TransitSystem {
   const ways = system.ways.map((w) => (w.id === wayId ? { ...w, points: fn(w.points) } : w));
   const withWays = { ...system, ways };
   return { ...withWays, stations: reanchorStations(withWays, wayId), updatedAt: Date.now() };
@@ -508,7 +567,11 @@ function updateWayPoints(system: TransitSystem, wayId: string, fn: (points: LngL
 // O(totalWays + totalStations) regardless of k. Each way's transform is
 // independent and each station only ever reanchors off its own anchor way,
 // so one combined pass produces byte-identical output to k sequential ones.
-function updateWayPointsBatch(system: TransitSystem, wayIds: Set<string>, fn: (points: LngLat[]) => LngLat[]): TransitSystem {
+function updateWayPointsBatch(
+  system: TransitSystem,
+  wayIds: Set<string>,
+  fn: (points: LngLat[]) => LngLat[],
+): TransitSystem {
   if (wayIds.size === 0) return system;
   const changedWays = new Map<string, Way>();
   const ways = system.ways.map((w) => {
@@ -531,7 +594,12 @@ function updateWayPointsBatch(system: TransitSystem, wayIds: Set<string>, fn: (p
     stationsChanged = true;
     return { ...s, coord: pointAtT(path, anchor.t) };
   });
-  return { ...system, ways, stations: stationsChanged ? stations : system.stations, updatedAt: Date.now() };
+  return {
+    ...system,
+    ways,
+    stations: stationsChanged ? stations : system.stations,
+    updatedAt: Date.now(),
+  };
 }
 
 // Drop every intermediate point that isn't a junction (keeps refs.length >= 2
@@ -560,7 +628,9 @@ function straightenWay(system: TransitSystem, wayId: string): TransitSystem {
 
 // Drop a way from every shared identity, and drop identities left empty.
 function pruneNamedWays(namedWays: NamedWay[], wayId: string): NamedWay[] {
-  return namedWays.map((n) => ({ ...n, wayIds: n.wayIds.filter((id) => id !== wayId) })).filter((n) => n.wayIds.length > 0);
+  return namedWays
+    .map((n) => ({ ...n, wayIds: n.wayIds.filter((id) => id !== wayId) }))
+    .filter((n) => n.wayIds.length > 0);
 }
 
 // Drop lane connectors that reference a way (it's gone, or its lanes are).
@@ -568,7 +638,9 @@ function pruneConnectorsForWay(nodes: Node[], wayId: string): Node[] {
   return nodes.map((n) => {
     if (!n.connectors) return n;
     const connectors = n.connectors.filter((c) => c.from.wayId !== wayId && c.to.wayId !== wayId);
-    return connectors.length === n.connectors.length ? n : { ...n, connectors: connectors.length > 0 ? connectors : undefined };
+    return connectors.length === n.connectors.length
+      ? n
+      : { ...n, connectors: connectors.length > 0 ? connectors : undefined };
   });
 }
 
@@ -578,7 +650,9 @@ function removeWay(system: TransitSystem, wayId: string): TransitSystem {
   const services = system.services
     .map((s) => ({
       ...s,
-      patterns: s.patterns.map((p) => ({ ...p, wayIds: p.wayIds.filter((id) => id !== wayId) })).filter((p) => p.wayIds.length > 0),
+      patterns: s.patterns
+        .map((p) => ({ ...p, wayIds: p.wayIds.filter((id) => id !== wayId) }))
+        .filter((p) => p.wayIds.length > 0),
     }))
     .filter((s) => s.patterns.length > 0);
   return {
@@ -600,7 +674,9 @@ function removeWay(system: TransitSystem, wayId: string): TransitSystem {
 function shiftNodeRefsForInsert(nodes: Node[], wayId: string, atIndex: number): Node[] {
   return nodes.map((n) => ({
     ...n,
-    refs: n.refs.map((r) => (r.wayId === wayId && r.pointIndex >= atIndex ? { ...r, pointIndex: r.pointIndex + 1 } : r)),
+    refs: n.refs.map((r) =>
+      r.wayId === wayId && r.pointIndex >= atIndex ? { ...r, pointIndex: r.pointIndex + 1 } : r,
+    ),
   }));
 }
 
@@ -610,24 +686,40 @@ function shiftNodeRefsForDelete(nodes: Node[], wayId: string, index: number): No
       ...n,
       refs: n.refs
         .filter((r) => !(r.wayId === wayId && r.pointIndex === index))
-        .map((r) => (r.wayId === wayId && r.pointIndex > index ? { ...r, pointIndex: r.pointIndex - 1 } : r)),
+        .map((r) =>
+          r.wayId === wayId && r.pointIndex > index ? { ...r, pointIndex: r.pointIndex - 1 } : r,
+        ),
     }))
     .filter((n) => n.refs.length >= 2); // fewer than 2 refs isn't a junction anymore
 }
 
 function removeNodeRefsForWay(nodes: Node[], wayId: string): Node[] {
-  return nodes.map((n) => ({ ...n, refs: n.refs.filter((r) => r.wayId !== wayId) })).filter((n) => n.refs.length >= 2);
+  return nodes
+    .map((n) => ({ ...n, refs: n.refs.filter((r) => r.wayId !== wayId) }))
+    .filter((n) => n.refs.length >= 2);
 }
 
 // Moving a point that belongs to a Node must move EVERY way's coincident
 // point, not just the one dragged — otherwise the junction desyncs.
-function cascadeMove(system: TransitSystem, wayId: string, index: number, coord: LngLat): TransitSystem {
-  const node = system.nodes.find((n) => n.refs.some((r) => r.wayId === wayId && r.pointIndex === index));
-  if (!node) return updateWayPoints(system, wayId, (pts) => pts.map((p, i) => (i === index ? coord : p)));
+function cascadeMove(
+  system: TransitSystem,
+  wayId: string,
+  index: number,
+  coord: LngLat,
+): TransitSystem {
+  const node = system.nodes.find((n) =>
+    n.refs.some((r) => r.wayId === wayId && r.pointIndex === index),
+  );
+  if (!node)
+    return updateWayPoints(system, wayId, (pts) => pts.map((p, i) => (i === index ? coord : p)));
 
   let ways = system.ways;
   for (const ref of node.refs) {
-    ways = ways.map((w) => (w.id === ref.wayId ? { ...w, points: w.points.map((p, i) => (i === ref.pointIndex ? coord : p)) } : w));
+    ways = ways.map((w) =>
+      w.id === ref.wayId
+        ? { ...w, points: w.points.map((p, i) => (i === ref.pointIndex ? coord : p)) }
+        : w,
+    );
   }
   const nodes = system.nodes.map((n) => (n.id === node.id ? { ...n, coord } : n));
   let next: TransitSystem = { ...system, ways, nodes };
@@ -646,12 +738,20 @@ const JOIN_REUSE_TOLERANCE_M = 0.75;
  * as refs of a shared Node. This is what makes two ways drawn to "meet" share
  * a literal coordinate on both sides, not just a coincidental-looking curve.
  */
-function joinWayPointToWay(system: TransitSystem, wayId: string, index: number, targetWayId: string, coord: LngLat): TransitSystem {
+function joinWayPointToWay(
+  system: TransitSystem,
+  wayId: string,
+  index: number,
+  targetWayId: string,
+  coord: LngLat,
+): TransitSystem {
   if (wayId === targetWayId) return system;
   const targetWay = system.ways.find((w) => w.id === targetWayId);
   if (!targetWay) return system;
 
-  let targetIndex = targetWay.points.findIndex((p) => haversineMeters(p, coord) <= JOIN_REUSE_TOLERANCE_M);
+  let targetIndex = targetWay.points.findIndex(
+    (p) => haversineMeters(p, coord) <= JOIN_REUSE_TOLERANCE_M,
+  );
   let ways = system.ways;
   let nodes = system.nodes;
   let exactCoord = coord;
@@ -662,7 +762,12 @@ function joinWayPointToWay(system: TransitSystem, wayId: string, index: number, 
     targetIndex = insertion.index;
     exactCoord = insertion.coord;
     ways = ways.map((w) =>
-      w.id === targetWayId ? { ...w, points: [...w.points.slice(0, targetIndex), exactCoord, ...w.points.slice(targetIndex)] } : w,
+      w.id === targetWayId
+        ? {
+            ...w,
+            points: [...w.points.slice(0, targetIndex), exactCoord, ...w.points.slice(targetIndex)],
+          }
+        : w,
     );
     nodes = shiftNodeRefsForInsert(nodes, targetWayId, targetIndex);
   } else {
@@ -672,12 +777,22 @@ function joinWayPointToWay(system: TransitSystem, wayId: string, index: number, 
   // Keep our own way's point exactly coincident even if the caller's snapped
   // coordinate (computed off the curve-resolved path) drifted slightly from
   // the target way's actual raw control point.
-  ways = ways.map((w) => (w.id === wayId ? { ...w, points: w.points.map((p, i) => (i === index ? exactCoord : p)) } : w));
+  ways = ways.map((w) =>
+    w.id === wayId ? { ...w, points: w.points.map((p, i) => (i === index ? exactCoord : p)) } : w,
+  );
 
-  const existingNode = nodes.find((n) => n.refs.some((r) => r.wayId === targetWayId && r.pointIndex === targetIndex));
+  const existingNode = nodes.find((n) =>
+    n.refs.some((r) => r.wayId === targetWayId && r.pointIndex === targetIndex),
+  );
   if (existingNode) {
-    const alreadyLinked = existingNode.refs.some((r) => r.wayId === wayId && r.pointIndex === index);
-    nodes = nodes.map((n) => (n.id === existingNode.id && !alreadyLinked ? { ...n, refs: [...n.refs, { wayId, pointIndex: index }] } : n));
+    const alreadyLinked = existingNode.refs.some(
+      (r) => r.wayId === wayId && r.pointIndex === index,
+    );
+    nodes = nodes.map((n) =>
+      n.id === existingNode.id && !alreadyLinked
+        ? { ...n, refs: [...n.refs, { wayId, pointIndex: index }] }
+        : n,
+    );
   } else {
     nodes = [
       ...nodes,
@@ -709,7 +824,12 @@ function joinWayPointToWay(system: TransitSystem, wayId: string, index: number, 
  * every station that rode the original way is re-snapped onto whichever new
  * half its (unmoved) coordinate now actually sits on.
  */
-function splitWay(system: TransitSystem, wayId: string, index: number, newWayId = shortId()): TransitSystem {
+function splitWay(
+  system: TransitSystem,
+  wayId: string,
+  index: number,
+  newWayId = shortId(),
+): TransitSystem {
   const way = system.ways.find((w) => w.id === wayId);
   if (!way || index <= 0 || index >= way.points.length - 1) return system; // each half needs ≥2 points
   const wayA: Way = { ...way, points: way.points.slice(0, index + 1) };
@@ -728,19 +848,30 @@ function splitWay(system: TransitSystem, wayId: string, index: number, newWayId 
     }),
   }));
   const splitAlreadyLinked = nodes.some(
-    (n) => n.refs.some((r) => r.wayId === wayId && r.pointIndex === index) && n.refs.some((r) => r.wayId === newWayId && r.pointIndex === 0),
+    (n) =>
+      n.refs.some((r) => r.wayId === wayId && r.pointIndex === index) &&
+      n.refs.some((r) => r.wayId === newWayId && r.pointIndex === 0),
   );
   if (!splitAlreadyLinked) {
     nodes = [
       ...nodes,
-      { id: shortId(), coord: way.points[index], refs: [{ wayId, pointIndex: index }, { wayId: newWayId, pointIndex: 0 }] },
+      {
+        id: shortId(),
+        coord: way.points[index],
+        refs: [
+          { wayId, pointIndex: index },
+          { wayId: newWayId, pointIndex: 0 },
+        ],
+      },
     ];
   }
 
   const services = system.services.map((sv) => ({
     ...sv,
     patterns: sv.patterns.map((p) =>
-      p.wayIds.includes(wayId) ? { ...p, wayIds: p.wayIds.flatMap((wid) => (wid === wayId ? [wayId, newWayId] : [wid])) } : p,
+      p.wayIds.includes(wayId)
+        ? { ...p, wayIds: p.wayIds.flatMap((wid) => (wid === wayId ? [wayId, newWayId] : [wid])) }
+        : p,
     ),
   }));
 
@@ -774,7 +905,9 @@ function splitWay(system: TransitSystem, wayId: string, index: number, newWayId 
 
   // The second half inherits the first's shared identity — a street split by
   // an intersection is still the same street.
-  const namedWays = system.namedWays.map((nw) => (nw.wayIds.includes(wayId) ? { ...nw, wayIds: [...nw.wayIds, newWayId] } : nw));
+  const namedWays = system.namedWays.map((nw) =>
+    nw.wayIds.includes(wayId) ? { ...nw, wayIds: [...nw.wayIds, newWayId] } : nw,
+  );
 
   return { ...system, ways, nodes, services, stations, namedWays, updatedAt: Date.now() };
 }
@@ -803,10 +936,10 @@ function mergeWays(system: TransitSystem, keepId: string, otherId: string): Tran
 
   // The four ways two open polylines can meet end-to-end. Pick the closest.
   const combos = [
-    { dist: haversineMeters(aEnd, bStart), key: "ab" },
-    { dist: haversineMeters(aEnd, bEnd), key: "abR" },
-    { dist: haversineMeters(aStart, bEnd), key: "ba" },
-    { dist: haversineMeters(aStart, bStart), key: "bRa" },
+    { dist: haversineMeters(aEnd, bStart), key: 'ab' },
+    { dist: haversineMeters(aEnd, bEnd), key: 'abR' },
+    { dist: haversineMeters(aStart, bEnd), key: 'ba' },
+    { dist: haversineMeters(aStart, bStart), key: 'bRa' },
   ].sort((x, y) => x.dist - y.dist);
   if (combos[0].dist > JOIN_REUSE_TOLERANCE_M) return system;
 
@@ -815,17 +948,17 @@ function mergeWays(system: TransitSystem, keepId: string, otherId: string): Tran
   let mapA: (i: number) => number;
   let mapB: (k: number) => number;
   switch (combos[0].key) {
-    case "ab":
+    case 'ab':
       mergedPoints = [...a.points, ...b.points.slice(1)];
       mapA = (i) => i;
       mapB = (k) => aLen - 1 + k;
       break;
-    case "abR":
+    case 'abR':
       mergedPoints = [...a.points, ...reversedB.slice(1)];
       mapA = (i) => i;
       mapB = (k) => aLen - 1 + (bLen - 1 - k);
       break;
-    case "ba":
+    case 'ba':
       mergedPoints = [...b.points, ...a.points.slice(1)];
       mapB = (k) => k;
       mapA = (i) => bLen - 1 + i;
@@ -838,7 +971,9 @@ function mergeWays(system: TransitSystem, keepId: string, otherId: string): Tran
   }
 
   const mergedWay: Way = { ...a, points: mergedPoints };
-  const ways = system.ways.filter((w) => w.id !== otherId).map((w) => (w.id === keepId ? mergedWay : w));
+  const ways = system.ways
+    .filter((w) => w.id !== otherId)
+    .map((w) => (w.id === keepId ? mergedWay : w));
 
   // Re-index every node ref onto the merged way, dedupe refs that now name
   // the same point (the seam), and drop nodes no longer joining 2+ refs.
@@ -914,14 +1049,20 @@ function formCrossingJunctions(system: TransitSystem, wayId: string): TransitSys
       const { coord, aIndex } = crossings[0];
 
       // A real shared vertex on both ways, linked as one Node…
-      const inserted = updateWayPoints(next, aId, (pts) => [...pts.slice(0, aIndex), coord, ...pts.slice(aIndex)]);
+      const inserted = updateWayPoints(next, aId, (pts) => [
+        ...pts.slice(0, aIndex),
+        coord,
+        ...pts.slice(aIndex),
+      ]);
       next = { ...inserted, nodes: shiftNodeRefsForInsert(inserted.nodes, aId, aIndex) };
       next = joinWayPointToWay(next, aId, aIndex, b.id, coord);
 
       // …then split both ways there so each junction arm is its own way.
       const exact = next.ways.find((w) => w.id === aId)!.points[aIndex];
       const bWay = next.ways.find((w) => w.id === b.id)!;
-      const bIndex = bWay.points.findIndex((p) => haversineMeters(p, exact) <= JOIN_REUSE_TOLERANCE_M);
+      const bIndex = bWay.points.findIndex(
+        (p) => haversineMeters(p, exact) <= JOIN_REUSE_TOLERANCE_M,
+      );
       const aNewId = shortId();
       next = splitWay(next, aId, aIndex, aNewId);
       if (bIndex > 0 && bIndex < bWay.points.length - 1) next = splitWay(next, b.id, bIndex);
@@ -943,8 +1084,17 @@ function formCrossingJunctions(system: TransitSystem, wayId: string): TransitSys
 // ways are split so each span is exactly one whole way. All topology
 // bookkeeping rides the same helpers as every other mutation.
 
-function insertPointIntoWay(system: TransitSystem, wayId: string, index: number, coord: LngLat): TransitSystem {
-  const next = updateWayPoints(system, wayId, (pts) => [...pts.slice(0, index), coord, ...pts.slice(index)]);
+function insertPointIntoWay(
+  system: TransitSystem,
+  wayId: string,
+  index: number,
+  coord: LngLat,
+): TransitSystem {
+  const next = updateWayPoints(system, wayId, (pts) => [
+    ...pts.slice(0, index),
+    coord,
+    ...pts.slice(index),
+  ]);
   return { ...next, nodes: shiftNodeRefsForInsert(next.nodes, wayId, index) };
 }
 
@@ -952,7 +1102,10 @@ function insertPointIntoWay(system: TransitSystem, wayId: string, index: number,
 // that point instead of inserting a near-duplicate beside it.
 const ANCHOR_REUSE_M = 1;
 
-function materializeRouteSpans(system: TransitSystem, spansIn: RouteSpan[]): { system: TransitSystem; wayIds: string[] } | null {
+function materializeRouteSpans(
+  system: TransitSystem,
+  spansIn: RouteSpan[],
+): { system: TransitSystem; wayIds: string[] } | null {
   let sys = system;
   const wayIds: string[] = [];
   for (const spanIn of spansIn) {
@@ -967,7 +1120,9 @@ function materializeRouteSpans(system: TransitSystem, spansIn: RouteSpan[]): { s
       const base = way0.points[seg - 1];
       if (!base) return null;
       const [near, far] =
-        haversineMeters(base, s.fromCoord) <= haversineMeters(base, s.toCoord) ? [s.fromCoord, s.toCoord] : [s.toCoord, s.fromCoord];
+        haversineMeters(base, s.fromCoord) <= haversineMeters(base, s.toCoord)
+          ? [s.fromCoord, s.toCoord]
+          : [s.toCoord, s.fromCoord];
       sys = insertPointIntoWay(sys, s.wayId, seg, far);
       sys = insertPointIntoWay(sys, s.wayId, seg, near);
       s.fromPoint = seg;
@@ -980,28 +1135,34 @@ function materializeRouteSpans(system: TransitSystem, spansIn: RouteSpan[]): { s
 
     // Splice fractional anchors in as real control points (higher insertion
     // index first, so the second insert's shift is easy to account for).
-    const inserts: { at: number; coord: LngLat; role: "from" | "to" }[] = [];
-    if (s.fromCoord) inserts.push({ at: forward ? s.fromPoint : s.fromPoint + 1, coord: s.fromCoord, role: "from" });
-    if (s.toCoord) inserts.push({ at: forward ? s.toPoint + 1 : s.toPoint, coord: s.toCoord, role: "to" });
+    const inserts: { at: number; coord: LngLat; role: 'from' | 'to' }[] = [];
+    if (s.fromCoord)
+      inserts.push({
+        at: forward ? s.fromPoint : s.fromPoint + 1,
+        coord: s.fromCoord,
+        role: 'from',
+      });
+    if (s.toCoord)
+      inserts.push({ at: forward ? s.toPoint + 1 : s.toPoint, coord: s.toCoord, role: 'to' });
     inserts.sort((x, y) => y.at - x.at);
     for (const ins of inserts) {
       const way = sys.ways.find((w) => w.id === s.wayId)!;
       const prev = way.points[ins.at - 1];
       const next = way.points[ins.at];
       if (prev && haversineMeters(prev, ins.coord) < ANCHOR_REUSE_M) {
-        if (ins.role === "from") s.fromPoint = ins.at - 1;
+        if (ins.role === 'from') s.fromPoint = ins.at - 1;
         else s.toPoint = ins.at - 1;
         continue;
       }
       if (next && haversineMeters(next, ins.coord) < ANCHOR_REUSE_M) {
-        if (ins.role === "from") s.fromPoint = ins.at;
+        if (ins.role === 'from') s.fromPoint = ins.at;
         else s.toPoint = ins.at;
         continue;
       }
       sys = insertPointIntoWay(sys, s.wayId, ins.at, ins.coord);
       if (s.fromPoint >= ins.at) s.fromPoint += 1;
       if (s.toPoint >= ins.at) s.toPoint += 1;
-      if (ins.role === "from") s.fromPoint = ins.at;
+      if (ins.role === 'from') s.fromPoint = ins.at;
       else s.toPoint = ins.at;
     }
 
@@ -1033,11 +1194,16 @@ function materializeRouteSpans(system: TransitSystem, spansIn: RouteSpan[]): { s
  * carriageway construction — a small, deliberate duplication that keeps
  * gtfsImport.ts's pure, tested transform untouched.
  */
-function materializeShapeRun(system: TransitSystem, run: ShapeRun, path: LngLat[], wayTypeId: string): { system: TransitSystem; wayIds: string[] } | null {
+function materializeShapeRun(
+  system: TransitSystem,
+  run: ShapeRun,
+  path: LngLat[],
+  wayTypeId: string,
+): { system: TransitSystem; wayIds: string[] } | null {
   const startCoord = path[run.fromIdx];
   const endCoord = path[run.toIdx];
   if (!startCoord || !endCoord) return null;
-  if ("fresh" in run) {
+  if ('fresh' in run) {
     const points = path.slice(run.fromIdx, run.toIdx + 1);
     if (points.length < 2) return null;
     const wayId = shortId();
@@ -1045,9 +1211,12 @@ function materializeShapeRun(system: TransitSystem, run: ShapeRun, path: LngLat[
       id: wayId,
       typeId: wayTypeId,
       points,
-      geometry: "straight",
-      grade: "atGrade",
-      profile: makeOneWay(defaultProfileFor(wayTypeId, wayTypeId === "road" ? 2 : undefined), "forward"),
+      geometry: 'straight',
+      grade: 'atGrade',
+      profile: makeOneWay(
+        defaultProfileFor(wayTypeId, wayTypeId === 'road' ? 2 : undefined),
+        'forward',
+      ),
     };
     return { system: { ...system, ways: [...system.ways, way] }, wayIds: [wayId] };
   }
@@ -1069,11 +1238,18 @@ function materializeShapeRun(system: TransitSystem, run: ShapeRun, path: LngLat[
  * group (already covered by the way's own shift, so shifting it again would
  * double the movement).
  */
-function nudgeSelection(system: TransitSystem, items: MultiSelectItem[], dx: number, dy: number): TransitSystem {
-  const wayIds = new Set(items.filter((i) => i.kind === "way").map((i) => i.id));
-  let next = updateWayPointsBatch(system, wayIds, (pts) => pts.map((p): LngLat => [p[0] + dx, p[1] + dy]));
+function nudgeSelection(
+  system: TransitSystem,
+  items: MultiSelectItem[],
+  dx: number,
+  dy: number,
+): TransitSystem {
+  const wayIds = new Set(items.filter((i) => i.kind === 'way').map((i) => i.id));
+  let next = updateWayPointsBatch(system, wayIds, (pts) =>
+    pts.map((p): LngLat => [p[0] + dx, p[1] + dy]),
+  );
 
-  const stationIds = new Set(items.filter((i) => i.kind === "station").map((i) => i.id));
+  const stationIds = new Set(items.filter((i) => i.kind === 'station').map((i) => i.id));
   if (stationIds.size > 0) {
     next = {
       ...next,
@@ -1084,7 +1260,7 @@ function nudgeSelection(system: TransitSystem, items: MultiSelectItem[], dx: num
     };
   }
 
-  const facilityIds = new Set(items.filter((i) => i.kind === "facility").map((i) => i.id));
+  const facilityIds = new Set(items.filter((i) => i.kind === 'facility').map((i) => i.id));
   if (facilityIds.size > 0) {
     next = {
       ...next,
@@ -1138,24 +1314,24 @@ export function createEditorStore() {
 
   const editor = createStore<EditorState>()((set, get) => ({
     system: createEmptySystem(),
-    tool: "select",
+    tool: 'select',
     selection: null,
     cameraFocusToken: 0,
     focusNameToken: 0,
     focusNameStationId: null,
     multiSelection: [],
     activeWayId: null,
-    draftWayTypeId: "lightRail",
-    draftModeId: "lightRail",
-    draftGeometry: "curved",
-    draftColor: modeRender("lightRail").color,
-    draftGrade: "atGrade",
-    draftClassId: wayType("lightRail").defaultClassId,
+    draftWayTypeId: 'lightRail',
+    draftModeId: 'lightRail',
+    draftGeometry: 'curved',
+    draftColor: modeRender('lightRail').color,
+    draftGrade: 'atGrade',
+    draftClassId: wayType('lightRail').defaultClassId,
     draftPresetId: null,
     draftServiceEnabled: true,
     routeDraft: null,
     draftOneWay: false,
-    draftFacilityTypeId: "entrance",
+    draftFacilityTypeId: 'entrance',
     draftFacilityComplexMode: false,
     placingFacilityForGroupId: null,
     pickingMemberForGroupId: null,
@@ -1166,7 +1342,14 @@ export function createEditorStore() {
 
     setSystem: (system, opts) => {
       skipHistory = true;
-      set({ system, readOnly: opts?.readOnly === true, selection: null, multiSelection: [], activeWayId: null, tool: "select" });
+      set({
+        system,
+        readOnly: opts?.readOnly === true,
+        selection: null,
+        multiSelection: [],
+        activeWayId: null,
+        tool: 'select',
+      });
       skipHistory = false;
       resetHistory();
       set({ canUndo: false, canRedo: false });
@@ -1177,7 +1360,14 @@ export function createEditorStore() {
       const prev = past.pop()!;
       future.push(get().system);
       skipHistory = true;
-      set({ system: prev, selection: null, multiSelection: [], activeWayId: null, canUndo: past.length > 0, canRedo: true });
+      set({
+        system: prev,
+        selection: null,
+        multiSelection: [],
+        activeWayId: null,
+        canUndo: past.length > 0,
+        canRedo: true,
+      });
       skipHistory = false;
     },
 
@@ -1186,7 +1376,14 @@ export function createEditorStore() {
       const next = future.pop()!;
       past.push(get().system);
       skipHistory = true;
-      set({ system: next, selection: null, multiSelection: [], activeWayId: null, canUndo: true, canRedo: future.length > 0 });
+      set({
+        system: next,
+        selection: null,
+        multiSelection: [],
+        activeWayId: null,
+        canUndo: true,
+        canRedo: future.length > 0,
+      });
       skipHistory = false;
     },
 
@@ -1216,7 +1413,14 @@ export function createEditorStore() {
 
     newSystem: () => {
       skipHistory = true;
-      set({ system: createEmptySystem(), readOnly: false, selection: null, multiSelection: [], activeWayId: null, tool: "way" });
+      set({
+        system: createEmptySystem(),
+        readOnly: false,
+        selection: null,
+        multiSelection: [],
+        activeWayId: null,
+        tool: 'way',
+      });
       skipHistory = false;
       resetHistory();
       set({ canUndo: false, canRedo: false });
@@ -1242,7 +1446,8 @@ export function createEditorStore() {
 
     select: (selection) => set({ selection, multiSelection: [] }),
 
-    selectAndFocus: (selection) => set((s) => ({ selection, multiSelection: [], cameraFocusToken: s.cameraFocusToken + 1 })),
+    selectAndFocus: (selection) =>
+      set((s) => ({ selection, multiSelection: [], cameraFocusToken: s.cameraFocusToken + 1 })),
 
     toggleMultiSelect: (item) =>
       set((s) => {
@@ -1255,27 +1460,35 @@ export function createEditorStore() {
 
     addMultiSelection: (items) =>
       set((s) => {
-        const has = (item: MultiSelectItem) => s.multiSelection.some((i) => i.kind === item.kind && i.id === item.id);
+        const has = (item: MultiSelectItem) =>
+          s.multiSelection.some((i) => i.kind === item.kind && i.id === item.id);
         const additions = items.filter((item) => !has(item));
-        return additions.length === 0 ? {} : { multiSelection: [...s.multiSelection, ...additions], selection: null };
+        return additions.length === 0
+          ? {}
+          : { multiSelection: [...s.multiSelection, ...additions], selection: null };
       }),
     clearMultiSelection: () => set({ multiSelection: [] }),
     deleteMultiSelection: () =>
       set((s) => {
         let system = s.system;
         for (const item of s.multiSelection) {
-          if (item.kind === "way") system = removeWay(system, item.id);
-          else if (item.kind === "station") system = { ...system, stations: system.stations.filter((st) => st.id !== item.id) };
-          else system = { ...system, facilities: system.facilities.filter((f) => f.id !== item.id) };
+          if (item.kind === 'way') system = removeWay(system, item.id);
+          else if (item.kind === 'station')
+            system = { ...system, stations: system.stations.filter((st) => st.id !== item.id) };
+          else
+            system = { ...system, facilities: system.facilities.filter((f) => f.id !== item.id) };
         }
         return { system: touch(system), multiSelection: [] };
       }),
-    nudgeMultiSelection: (dx, dy) => set((s) => ({ system: nudgeSelection(s.system, s.multiSelection, dx, dy) })),
+    nudgeMultiSelection: (dx, dy) =>
+      set((s) => ({ system: nudgeSelection(s.system, s.multiSelection, dx, dy) })),
 
     setDraftWayType: (typeId) =>
       set((s) => {
         const compatible = modesForWayType(typeId);
-        const modeId = compatible.some((m) => m.id === s.draftModeId) ? s.draftModeId : (compatible[0]?.id ?? s.draftModeId);
+        const modeId = compatible.some((m) => m.id === s.draftModeId)
+          ? s.draftModeId
+          : (compatible[0]?.id ?? s.draftModeId);
         return {
           draftWayTypeId: typeId,
           draftModeId: modeId,
@@ -1294,7 +1507,9 @@ export function createEditorStore() {
     setDraftMode: (modeId) =>
       set((s) => {
         const m = mode(modeId);
-        const wayTypeId = m.wayTypeIds.includes(s.draftWayTypeId) ? s.draftWayTypeId : (m.wayTypeIds[0] ?? s.draftWayTypeId);
+        const wayTypeId = m.wayTypeIds.includes(s.draftWayTypeId)
+          ? s.draftWayTypeId
+          : (m.wayTypeIds[0] ?? s.draftWayTypeId);
         return {
           draftModeId: modeId,
           draftWayTypeId: wayTypeId,
@@ -1319,11 +1534,16 @@ export function createEditorStore() {
     },
     setDraftServiceEnabled: (enabled) => set({ draftServiceEnabled: enabled }),
     setDraftOneWay: (on) => set({ draftOneWay: on }),
-    setDraftFacilityType: (typeId) => set({ draftFacilityTypeId: typeId, draftFacilityComplexMode: false }),
+    setDraftFacilityType: (typeId) =>
+      set({ draftFacilityTypeId: typeId, draftFacilityComplexMode: false }),
     setDraftFacilityComplexMode: (on) => set({ draftFacilityComplexMode: on }),
 
     addPaletteColor: (color) =>
-      set((s) => (s.system.palette.includes(color) ? s : { system: touch({ ...s.system, palette: [...s.system.palette, color] }) })),
+      set((s) =>
+        s.system.palette.includes(color)
+          ? s
+          : { system: touch({ ...s.system, palette: [...s.system.palette, color] }) },
+      ),
 
     beginWay: (typeId, geometry, color) => {
       const st = get();
@@ -1334,7 +1554,10 @@ export function createEditorStore() {
       // (the normal case: the Way tool keeps them in sync via setDraftWayType).
       // A caller passing an explicit typeId that diverges from the current draft
       // falls back to that type's own default class, never a stale one.
-      const classId = resolvedTypeId === st.draftWayTypeId ? st.draftClassId : wayType(resolvedTypeId).defaultClassId;
+      const classId =
+        resolvedTypeId === st.draftWayTypeId
+          ? st.draftClassId
+          : wayType(resolvedTypeId).defaultClassId;
       // The armed draft preset ("4-lane arterial", …) shapes the new way's
       // cross-section when it belongs to the resolved type; otherwise the
       // type's own default profile applies.
@@ -1342,17 +1565,21 @@ export function createEditorStore() {
       const presetApplies = preset && preset.wayTypeId === resolvedTypeId;
       // The armed Direction toggle: one-way ways travel the direction
       // they're drawn in (flip later with D).
-      const baseProfile = buildProfile(presetApplies ? preset.lanes : wayType(resolvedTypeId).defaultProfile);
+      const baseProfile = buildProfile(
+        presetApplies ? preset.lanes : wayType(resolvedTypeId).defaultProfile,
+      );
       const way: Way = {
         id: wayId,
         typeId: resolvedTypeId,
         points: [],
         geometry: resolvedGeometry,
         grade: st.draftGrade,
-        profile: st.draftOneWay ? makeOneWay(baseProfile, "forward") : baseProfile,
+        profile: st.draftOneWay ? makeOneWay(baseProfile, 'forward') : baseProfile,
         classId: presetApplies && preset.classId ? preset.classId : classId,
       };
-      const modeId = modesForWayType(resolvedTypeId).some((m) => m.id === st.draftModeId) ? st.draftModeId : modesForWayType(resolvedTypeId)[0]?.id;
+      const modeId = modesForWayType(resolvedTypeId).some((m) => m.id === st.draftModeId)
+        ? st.draftModeId
+        : modesForWayType(resolvedTypeId)[0]?.id;
       // While "add branch" is armed, this way becomes a new PATTERN on the
       // target service once drawing finishes (see finishWay) instead of
       // spawning its own separate service.
@@ -1377,7 +1604,11 @@ export function createEditorStore() {
           services: service ? [...s.system.services, service] : s.system.services,
         }),
         activeWayId: wayId,
-        selection: service ? { kind: "service", id: service.id } : addingBranch ? s.selection : { kind: "way", id: wayId },
+        selection: service
+          ? { kind: 'service', id: service.id }
+          : addingBranch
+            ? s.selection
+            : { kind: 'way', id: wayId },
       }));
       return wayId;
     },
@@ -1388,7 +1619,7 @@ export function createEditorStore() {
       const st = get();
       const src = st.system.ways.find((w) => w.id === fromWayId);
       if (!src || src.points.length < 2) return null;
-      const branchPoint = end === "start" ? src.points[0] : src.points[src.points.length - 1];
+      const branchPoint = end === 'start' ? src.points[0] : src.points[src.points.length - 1];
       const wayId = shortId();
       const way: Way = {
         id: wayId,
@@ -1398,7 +1629,7 @@ export function createEditorStore() {
         grade: src.grade,
         // Continue the street's own cross-section, made one-way with travel
         // AWAY from the branch point (the direction it's about to be drawn).
-        profile: makeOneWay(cloneProfile(src.profile), "forward"),
+        profile: makeOneWay(cloneProfile(src.profile), 'forward'),
         classId: src.classId,
       };
       set((s) => {
@@ -1408,29 +1639,40 @@ export function createEditorStore() {
         // The branch continues the same street identity, if there is one.
         const identity = system.namedWays.find((n) => n.wayIds.includes(fromWayId));
         if (identity) {
-          system = { ...system, namedWays: system.namedWays.map((n) => (n.id === identity.id ? { ...n, wayIds: [...n.wayIds, wayId] } : n)) };
+          system = {
+            ...system,
+            namedWays: system.namedWays.map((n) =>
+              n.id === identity.id ? { ...n, wayIds: [...n.wayIds, wayId] } : n,
+            ),
+          };
         }
         return {
           system: touch(system),
           activeWayId: wayId,
-          selection: { kind: "way", id: wayId },
+          selection: { kind: 'way', id: wayId },
           draftOneWay: true, // the Direction toggle arms so follow-up segments match
         };
       });
       return wayId;
     },
 
-    addWayPoint: (wayId, coord) => set((s) => ({ system: updateWayPoints(s.system, wayId, (pts) => [...pts, coord]) })),
+    addWayPoint: (wayId, coord) =>
+      set((s) => ({ system: updateWayPoints(s.system, wayId, (pts) => [...pts, coord]) })),
 
     insertWayPoint: (wayId, index, coord) =>
       set((s) => ({
         system: {
-          ...updateWayPoints(s.system, wayId, (pts) => [...pts.slice(0, index), coord, ...pts.slice(index)]),
+          ...updateWayPoints(s.system, wayId, (pts) => [
+            ...pts.slice(0, index),
+            coord,
+            ...pts.slice(index),
+          ]),
           nodes: shiftNodeRefsForInsert(s.system.nodes, wayId, index),
         },
       })),
 
-    moveWayPoint: (wayId, index, coord) => set((s) => ({ system: cascadeMove(s.system, wayId, index, coord) })),
+    moveWayPoint: (wayId, index, coord) =>
+      set((s) => ({ system: cascadeMove(s.system, wayId, index, coord) })),
 
     deleteWayPoint: (wayId, index) =>
       set((s) => ({
@@ -1453,17 +1695,24 @@ export function createEditorStore() {
         const way = s.system.ways.find((w) => w.id === activeWayId);
         if (way && way.points.length < 2) {
           // The stub way (and its default service, if any) is discarded.
-          return { activeWayId: null, addingPatternForServiceId: null, system: touch(removeWay(s.system, activeWayId)), selection: null };
+          return {
+            activeWayId: null,
+            addingPatternForServiceId: null,
+            system: touch(removeWay(s.system, activeWayId)),
+            selection: null,
+          };
         }
         if (addingPatternForServiceId) {
           const services = s.system.services.map((sv) =>
-            sv.id === addingPatternForServiceId ? { ...sv, patterns: [...sv.patterns, { id: shortId(), wayIds: [activeWayId] }] } : sv,
+            sv.id === addingPatternForServiceId
+              ? { ...sv, patterns: [...sv.patterns, { id: shortId(), wayIds: [activeWayId] }] }
+              : sv,
           );
           return {
             activeWayId: null,
             addingPatternForServiceId: null,
             system: touch({ ...s.system, services }),
-            selection: { kind: "service", id: addingPatternForServiceId },
+            selection: { kind: 'service', id: addingPatternForServiceId },
           };
         }
         return { activeWayId: null };
@@ -1479,15 +1728,30 @@ export function createEditorStore() {
 
     setWayGeometry: (id, geometry) =>
       set((s) => {
-        const withGeom = { ...s.system, ways: s.system.ways.map((w) => (w.id === id ? { ...w, geometry } : w)) };
-        return { system: { ...withGeom, stations: reanchorStations(withGeom, id), updatedAt: Date.now() } };
+        const withGeom = {
+          ...s.system,
+          ways: s.system.ways.map((w) => (w.id === id ? { ...w, geometry } : w)),
+        };
+        return {
+          system: { ...withGeom, stations: reanchorStations(withGeom, id), updatedAt: Date.now() },
+        };
       }),
 
     setWayGrade: (id, grade) =>
-      set((s) => ({ system: touch({ ...s.system, ways: s.system.ways.map((w) => (w.id === id ? { ...w, grade } : w)) }) })),
+      set((s) => ({
+        system: touch({
+          ...s.system,
+          ways: s.system.ways.map((w) => (w.id === id ? { ...w, grade } : w)),
+        }),
+      })),
 
     setWayClassId: (id, classId) =>
-      set((s) => ({ system: touch({ ...s.system, ways: s.system.ways.map((w) => (w.id === id ? { ...w, classId } : w)) }) })),
+      set((s) => ({
+        system: touch({
+          ...s.system,
+          ways: s.system.ways.map((w) => (w.id === id ? { ...w, classId } : w)),
+        }),
+      })),
 
     // Capacity is derived from the cross-section, so stepping it adds or
     // removes primary travel lanes (drive/track) via profile.ts.
@@ -1495,14 +1759,21 @@ export function createEditorStore() {
       set((s) => ({
         system: touch({
           ...s.system,
-          ways: s.system.ways.map((w) => (w.id === id ? { ...w, profile: withLaneCount(w.profile, w.typeId, capacity, s.system.drivingSide) } : w)),
+          ways: s.system.ways.map((w) =>
+            w.id === id
+              ? {
+                  ...w,
+                  profile: withLaneCount(w.profile, w.typeId, capacity, s.system.drivingSide),
+                }
+              : w,
+          ),
         }),
       })),
 
     deleteWay: (id) =>
       set((s) => ({
         system: touch(removeWay(s.system, id)),
-        selection: s.selection?.kind === "way" && s.selection.id === id ? null : s.selection,
+        selection: s.selection?.kind === 'way' && s.selection.id === id ? null : s.selection,
         activeWayId: s.activeWayId === id ? null : s.activeWayId,
       })),
 
@@ -1513,12 +1784,8 @@ export function createEditorStore() {
     // existing node's refs are disturbed (cf. shiftNodeRefsFor* above).
     importWays: (incoming) => {
       const state = get().system;
-      const { network, duplicateWays, identityAdditions, junctionAdditions } = withoutAlreadyImported(
-        incoming,
-        state.ways,
-        state.namedWays,
-        state.nodes,
-      );
+      const { network, duplicateWays, identityAdditions, junctionAdditions } =
+        withoutAlreadyImported(incoming, state.ways, state.namedWays, state.nodes);
       const { ways, nodes, namedWays, medians, turnRestrictions } = network;
       const additionsById = new Map(identityAdditions.map((a) => [a.id, a.wayIds]));
       const armsById = new Map(junctionAdditions.map((a) => [a.id, a.refs]));
@@ -1549,7 +1816,10 @@ export function createEditorStore() {
           medians: medians.reduce((acc, m) => withComponent(acc, m.id, m.median), s.system.medians),
           // Turn bans OSM records as relations. touch() prunes any whose lane
           // stops existing, so these can't outlive the profile they describe.
-          turnRestrictions: turnRestrictions.reduce((acc, t) => withComponent(acc, t.key, t.restriction), s.system.turnRestrictions),
+          turnRestrictions: turnRestrictions.reduce(
+            (acc, t) => withComponent(acc, t.key, t.restriction),
+            s.system.turnRestrictions,
+          ),
         }),
       }));
       return { added: ways.length, skipped: duplicateWays };
@@ -1575,11 +1845,21 @@ export function createEditorStore() {
         const nodes = s.system.nodes.map((n) => {
           if (!n.connectors) return n;
           const connectors = n.connectors.filter(
-            (c) => (c.from.wayId !== id || laneIds.has(c.from.laneId)) && (c.to.wayId !== id || laneIds.has(c.to.laneId)),
+            (c) =>
+              (c.from.wayId !== id || laneIds.has(c.from.laneId)) &&
+              (c.to.wayId !== id || laneIds.has(c.to.laneId)),
           );
-          return connectors.length === n.connectors.length ? n : { ...n, connectors: connectors.length > 0 ? connectors : undefined };
+          return connectors.length === n.connectors.length
+            ? n
+            : { ...n, connectors: connectors.length > 0 ? connectors : undefined };
         });
-        return { system: touch({ ...s.system, ways: s.system.ways.map((w) => (w.id === id ? { ...w, profile } : w)), nodes }) };
+        return {
+          system: touch({
+            ...s.system,
+            ways: s.system.ways.map((w) => (w.id === id ? { ...w, profile } : w)),
+            nodes,
+          }),
+        };
       }),
 
     applyProfilePreset: (id, presetId) => {
@@ -1599,17 +1879,23 @@ export function createEditorStore() {
         const current = s.system.namedWays.find((n) => n.wayIds.includes(wayId));
         if (!trimmed) {
           if (!current) return s;
-          return { system: touch({ ...s.system, namedWays: pruneNamedWays(s.system.namedWays, wayId) }) };
+          return {
+            system: touch({ ...s.system, namedWays: pruneNamedWays(s.system.namedWays, wayId) }),
+          };
         }
         let namedWays: NamedWay[];
         if (current) {
           // Renaming through any member renames the shared identity — that's
           // the point of it being shared.
-          namedWays = s.system.namedWays.map((n) => (n.id === current.id ? { ...n, name: trimmed } : n));
+          namedWays = s.system.namedWays.map((n) =>
+            n.id === current.id ? { ...n, name: trimmed } : n,
+          );
         } else {
           const existing = s.system.namedWays.find((n) => n.name === trimmed);
           namedWays = existing
-            ? s.system.namedWays.map((n) => (n.id === existing.id ? { ...n, wayIds: [...n.wayIds, wayId] } : n))
+            ? s.system.namedWays.map((n) =>
+                n.id === existing.id ? { ...n, wayIds: [...n.wayIds, wayId] } : n,
+              )
             : [...s.system.namedWays, { id: shortId(), name: trimmed, wayIds: [wayId] }];
         }
         return { system: touch({ ...s.system, namedWays }) };
@@ -1617,17 +1903,26 @@ export function createEditorStore() {
 
     renameNamedWay: (id, name) =>
       set((s) => ({
-        system: touch({ ...s.system, namedWays: s.system.namedWays.map((n) => (n.id === id ? { ...n, name: name.trim() } : n)) }),
+        system: touch({
+          ...s.system,
+          namedWays: s.system.namedWays.map((n) => (n.id === id ? { ...n, name: name.trim() } : n)),
+        }),
       })),
 
     setNodeControl: (nodeId, control) =>
       set((s) => ({
-        system: touch({ ...s.system, nodes: s.system.nodes.map((n) => (n.id === nodeId ? { ...n, control } : n)) }),
+        system: touch({
+          ...s.system,
+          nodes: s.system.nodes.map((n) => (n.id === nodeId ? { ...n, control } : n)),
+        }),
       })),
 
     setNodeConnectors: (nodeId, connectors) =>
       set((s) => ({
-        system: touch({ ...s.system, nodes: s.system.nodes.map((n) => (n.id === nodeId ? { ...n, connectors } : n)) }),
+        system: touch({
+          ...s.system,
+          nodes: s.system.nodes.map((n) => (n.id === nodeId ? { ...n, connectors } : n)),
+        }),
       })),
 
     setApproachControl: (wayId, end, control) =>
@@ -1650,12 +1945,16 @@ export function createEditorStore() {
 
     setDrivingSide: (side) => set((s) => ({ system: touch({ ...s.system, drivingSide: side }) })),
 
-    formCrossingJunctions: (wayId) => set((s) => ({ system: formCrossingJunctions(s.system, wayId) })),
+    formCrossingJunctions: (wayId) =>
+      set((s) => ({ system: formCrossingJunctions(s.system, wayId) })),
 
     mergeWays: (keepWayId, otherWayId) =>
       set((s) => ({
         system: mergeWays(s.system, keepWayId, otherWayId),
-        selection: s.selection?.kind === "way" && s.selection.id === otherWayId ? { kind: "way", id: keepWayId } : s.selection,
+        selection:
+          s.selection?.kind === 'way' && s.selection.id === otherWayId
+            ? { kind: 'way', id: keepWayId }
+            : s.selection,
       })),
 
     separateCarriageways: (wayId) => {
@@ -1670,7 +1969,7 @@ export function createEditorStore() {
       // one (captured below into the Median component so a later combine
       // can restore it), else the catalog default — measured center-to-
       // center below.
-      const medianLane = way.profile.lanes.find((l) => laneKind(l.kindId).role === "separator");
+      const medianLane = way.profile.lanes.find((l) => laneKind(l.kindId).role === 'separator');
       const medianWidth = medianLane?.widthM ?? 0;
       const gap = Math.max(medianWidth, LANE_KINDS.median.defaultWidthM);
       const d = profileWidthM(sep.forward) / 2 + gap + profileWidthM(sep.backward) / 2;
@@ -1680,23 +1979,33 @@ export function createEditorStore() {
       // way offset LEFT of travel under right-hand traffic (mirrored under
       // left-hand traffic). Both live under one identity.
       const newId = shortId();
-      const backwardOffsetM = drivingSide === "left" ? d : -d;
-      const newWay: Way = { ...way, id: newId, points: offsetPolyline(way.points, backwardOffsetM), profile: sep.backward };
+      const backwardOffsetM = drivingSide === 'left' ? d : -d;
+      const newWay: Way = {
+        ...way,
+        id: newId,
+        points: offsetPolyline(way.points, backwardOffsetM),
+        profile: sep.backward,
+      };
       set((s) => {
-        const ways = [...s.system.ways.map((w) => (w.id === wayId ? { ...w, profile: sep.forward } : w)), newWay];
+        const ways = [
+          ...s.system.ways.map((w) => (w.id === wayId ? { ...w, profile: sep.forward } : w)),
+          newWay,
+        ];
         const current = s.system.namedWays.find((n) => n.wayIds.includes(wayId));
         let namedWays: NamedWay[];
         let namedWayId: string;
         if (current) {
           namedWayId = current.id;
-          namedWays = s.system.namedWays.map((n) => (n.id === current.id ? { ...n, wayIds: [...n.wayIds, newId] } : n));
+          namedWays = s.system.namedWays.map((n) =>
+            n.id === current.id ? { ...n, wayIds: [...n.wayIds, newId] } : n,
+          );
         } else {
           namedWayId = shortId();
-          namedWays = [...s.system.namedWays, { id: namedWayId, name: "", wayIds: [wayId, newId] }];
+          namedWays = [...s.system.namedWays, { id: namedWayId, name: '', wayIds: [wayId, newId] }];
         }
         const medians = withComponent(s.system.medians, namedWayId, {
           widthM: gap,
-          kindId: medianLane?.kindId ?? "median",
+          kindId: medianLane?.kindId ?? 'median',
         });
         return { system: touch({ ...s.system, ways, namedWays, medians }) };
       });
@@ -1709,19 +2018,22 @@ export function createEditorStore() {
         if (!nw || nw.wayIds.length !== 2) return s;
         const x = s.system.ways.find((w) => w.id === nw.wayIds[0]);
         const y = s.system.ways.find((w) => w.id === nw.wayIds[1]);
-        if (!x || !y || x.typeId !== y.typeId || x.points.length < 2 || y.points.length < 2) return s;
+        if (!x || !y || x.typeId !== y.typeId || x.points.length < 2 || y.points.length < 2)
+          return s;
         // combineProfiles assumes one one-way half per direction; joining two
         // two-way ways would produce a four-directional street. `<= 1` rather
         // than isOneWay so the zero-directional-lane half separateProfiles can
         // produce still round-trips. The inspector shows the same rule as a
         // disabled button — see WayInspector's canCombine.
-        const oneDirectionOnly = (w: Way) => new Set(directionalLanes(w.profile).map((l) => l.direction)).size <= 1;
+        const oneDirectionOnly = (w: Way) =>
+          new Set(directionalLanes(w.profile).map((l) => l.direction)).size <= 1;
         if (!oneDirectionOnly(x) || !oneDirectionOnly(y)) return s;
 
         // The forward carriageway's alignment survives as the combined
         // centerline (symmetric with separateCarriageways, which kept the
         // original alignment for the forward half).
-        const runsForward = (w: Way) => directionalLanes(w.profile).every((l) => l.direction === "forward");
+        const runsForward = (w: Way) =>
+          directionalLanes(w.profile).every((l) => l.direction === 'forward');
         const keeper = runsForward(x) ? x : runsForward(y) ? y : x;
         const other = keeper === x ? y : x;
 
@@ -1731,12 +2043,21 @@ export function createEditorStore() {
         // separateCarriageways (same point orientation, backward lanes).
         const sameDir =
           haversineMeters(keeper.points[0], other.points[0]) +
-            haversineMeters(keeper.points[keeper.points.length - 1], other.points[other.points.length - 1]) <=
+            haversineMeters(
+              keeper.points[keeper.points.length - 1],
+              other.points[other.points.length - 1],
+            ) <=
           haversineMeters(keeper.points[0], other.points[other.points.length - 1]) +
             haversineMeters(keeper.points[keeper.points.length - 1], other.points[0]);
         const backHalf = sameDir ? other.profile : flipProfile(other.profile);
         const median = getComponent(s.system.medians, namedWayId);
-        const combined = combineProfiles(backHalf, keeper.profile, median?.widthM, median?.kindId, s.system.drivingSide);
+        const combined = combineProfiles(
+          backHalf,
+          keeper.profile,
+          median?.widthM,
+          median?.kindId,
+          s.system.drivingSide,
+        );
 
         // Everything anchored to the discarded carriageway belongs to the
         // street, not to the half that happened to lose the coin flip.
@@ -1770,17 +2091,29 @@ export function createEditorStore() {
         const mapIndex = (k: number): number => (aligned ? k : nearestIndex(other.points[k]));
         const nodes = s.system.nodes
           .map((n) => {
-            const refs = n.refs.map((r) => (r.wayId === other.id ? { wayId: keeper.id, pointIndex: mapIndex(r.pointIndex) } : r));
+            const refs = n.refs.map((r) =>
+              r.wayId === other.id ? { wayId: keeper.id, pointIndex: mapIndex(r.pointIndex) } : r,
+            );
             const seen = new Set<string>();
-            return { ...n, refs: refs.filter((r) => (seen.has(`${r.wayId}:${r.pointIndex}`) ? false : (seen.add(`${r.wayId}:${r.pointIndex}`), true))) };
+            return {
+              ...n,
+              refs: refs.filter((r) =>
+                seen.has(`${r.wayId}:${r.pointIndex}`)
+                  ? false
+                  : (seen.add(`${r.wayId}:${r.pointIndex}`), true),
+              ),
+            };
           })
           .filter((n) => n.refs.length >= 2);
 
         let system = removeWay({ ...s.system, stations, nodes }, other.id);
-        system = { ...system, ways: system.ways.map((w) => (w.id === keeper.id ? { ...w, profile: combined } : w)) };
+        system = {
+          ...system,
+          ways: system.ways.map((w) => (w.id === keeper.id ? { ...w, profile: combined } : w)),
+        };
         return {
           system: touch(system),
-          selection: { kind: "way", id: keeper.id },
+          selection: { kind: 'way', id: keeper.id },
         };
       }),
 
@@ -1790,7 +2123,10 @@ export function createEditorStore() {
         const medians =
           widthM === undefined
             ? withoutComponent(s.system.medians, namedWayId)
-            : withComponent(s.system.medians, namedWayId, { widthM, kindId: existing?.kindId ?? "median" });
+            : withComponent(s.system.medians, namedWayId, {
+                widthM,
+                kindId: existing?.kindId ?? 'median',
+              });
         return { system: touch({ ...s.system, medians }) };
       }),
 
@@ -1832,7 +2168,13 @@ export function createEditorStore() {
         if (seen.has(s.wayId)) return false;
         seen.add(s.wayId);
       }
-      set({ routeDraft: { ...rd, lastAnchor: anchor, spans: [...spans, ...rest.map((s) => ({ ...s }))] } });
+      set({
+        routeDraft: {
+          ...rd,
+          lastAnchor: anchor,
+          spans: [...spans, ...rest.map((s) => ({ ...s }))],
+        },
+      });
       return true;
     },
 
@@ -1868,7 +2210,7 @@ export function createEditorStore() {
       };
       set(() => ({
         system: touch({ ...mat.system, services: [...mat.system.services, service] }),
-        selection: { kind: "service", id },
+        selection: { kind: 'service', id },
       }));
       return id;
     },
@@ -1912,7 +2254,12 @@ export function createEditorStore() {
           ...sys,
           services: sys.services.map((sv) =>
             sv.id === serviceId
-              ? { ...sv, patterns: sv.patterns.map((p) => (p.id === pattern.id ? { ...p, wayIds: mat.wayIds } : p)) }
+              ? {
+                  ...sv,
+                  patterns: sv.patterns.map((p) =>
+                    p.id === pattern.id ? { ...p, wayIds: mat.wayIds } : p,
+                  ),
+                }
               : sv,
           ),
         };
@@ -1943,7 +2290,9 @@ export function createEditorStore() {
         for (const oldId of oldWayIds) {
           const w = sys.ways.find((x) => x.id === oldId);
           if (!w || w.source) continue;
-          const ridden = sys.services.some((sv) => sv.patterns.some((p) => p.wayIds.includes(oldId)));
+          const ridden = sys.services.some((sv) =>
+            sv.patterns.some((p) => p.wayIds.includes(oldId)),
+          );
           const named = sys.namedWays.some((n) => n.wayIds.includes(oldId));
           if (!ridden && !named) sys = removeWay(sys, oldId);
         }
@@ -1966,7 +2315,11 @@ export function createEditorStore() {
         const service = sys.services.find((sv) => sv.id === serviceId);
         if (!service) continue;
         for (const pattern of service.patterns) {
-          targets.push({ serviceId, patternId: pattern.id, length: pathLengthMeters(patternPath(sys.ways, pattern)) });
+          targets.push({
+            serviceId,
+            patternId: pattern.id,
+            length: pathLengthMeters(patternPath(sys.ways, pattern)),
+          });
         }
       }
       targets.sort((a, b) => b.length - a.length);
@@ -1990,7 +2343,7 @@ export function createEditorStore() {
         const runs = detectShapeRuns(path, candidates);
         // A single run covering the whole shape with nothing matched — leave
         // the pattern on its own way unchanged.
-        if (runs.length === 1 && "fresh" in runs[0]) continue;
+        if (runs.length === 1 && 'fresh' in runs[0]) continue;
 
         const newWayIds: string[] = [];
         let ok = true;
@@ -2009,7 +2362,12 @@ export function createEditorStore() {
           ...sys,
           services: sys.services.map((sv) =>
             sv.id === target.serviceId
-              ? { ...sv, patterns: sv.patterns.map((p) => (p.id === target.patternId ? { ...p, wayIds: newWayIds } : p)) }
+              ? {
+                  ...sv,
+                  patterns: sv.patterns.map((p) =>
+                    p.id === target.patternId ? { ...p, wayIds: newWayIds } : p,
+                  ),
+                }
               : sv,
           ),
         };
@@ -2020,7 +2378,9 @@ export function createEditorStore() {
         // is always safe to remove once no pattern rides it anymore.
         for (const oldId of oldWayIds) {
           if (newWayIds.includes(oldId)) continue;
-          const stillRidden = sys.services.some((sv) => sv.patterns.some((p) => p.wayIds.includes(oldId)));
+          const stillRidden = sys.services.some((sv) =>
+            sv.patterns.some((p) => p.wayIds.includes(oldId)),
+          );
           if (!stillRidden) sys = removeWay(sys, oldId);
         }
         reconciled++;
@@ -2036,10 +2396,13 @@ export function createEditorStore() {
       const compatible = modesForWayType(way?.typeId ?? st.draftWayTypeId);
       if (compatible.length === 0) return null; // this way type carries no service (e.g. bike)
       const id = shortId();
-      const modeId = compatible.some((m) => m.id === st.draftModeId) ? st.draftModeId : compatible[0].id;
+      const modeId = compatible.some((m) => m.id === st.draftModeId)
+        ? st.draftModeId
+        : compatible[0].id;
       const usedColors = new Set(st.system.services.map((s) => s.color.toLowerCase()));
       // Offer a color that isn't already on this system, falling back to the mode default.
-      const color = st.system.palette.find((c) => !usedColors.has(c.toLowerCase())) ?? modeRender(modeId).color;
+      const color =
+        st.system.palette.find((c) => !usedColors.has(c.toLowerCase())) ?? modeRender(modeId).color;
       // A freshly-drawn line gets a working default schedule immediately —
       // "drag a line, see a system running" shouldn't require a trip to the
       // Inspector first. DEFAULT_FREQUENCY_MINUTES/DEFAULT_SPAN mirror the
@@ -2056,52 +2419,90 @@ export function createEditorStore() {
         spanStart: DEFAULT_SPAN_START,
         spanEnd: DEFAULT_SPAN_END,
       };
-      set((s) => ({ system: touch({ ...s.system, services: [...s.system.services, service] }), selection: { kind: "service", id } }));
+      set((s) => ({
+        system: touch({ ...s.system, services: [...s.system.services, service] }),
+        selection: { kind: 'service', id },
+      }));
       return id;
     },
 
     setServiceName: (id, name) =>
-      set((s) => ({ system: touch({ ...s.system, services: s.system.services.map((sv) => (sv.id === id ? { ...sv, name } : sv)) }) })),
+      set((s) => ({
+        system: touch({
+          ...s.system,
+          services: s.system.services.map((sv) => (sv.id === id ? { ...sv, name } : sv)),
+        }),
+      })),
     setServiceColor: (id, color) =>
-      set((s) => ({ system: touch({ ...s.system, services: s.system.services.map((sv) => (sv.id === id ? { ...sv, color } : sv)) }) })),
+      set((s) => ({
+        system: touch({
+          ...s.system,
+          services: s.system.services.map((sv) => (sv.id === id ? { ...sv, color } : sv)),
+        }),
+      })),
     setServiceMode: (id, modeId) =>
-      set((s) => ({ system: touch({ ...s.system, services: s.system.services.map((sv) => (sv.id === id ? { ...sv, modeId } : sv)) }) })),
+      set((s) => ({
+        system: touch({
+          ...s.system,
+          services: s.system.services.map((sv) => (sv.id === id ? { ...sv, modeId } : sv)),
+        }),
+      })),
     setServiceFrequency: (id, minutes) =>
       set((s) => ({
-        system: touch({ ...s.system, services: s.system.services.map((sv) => (sv.id === id ? { ...sv, frequencyMinutes: minutes } : sv)) }),
+        system: touch({
+          ...s.system,
+          services: s.system.services.map((sv) =>
+            sv.id === id ? { ...sv, frequencyMinutes: minutes } : sv,
+          ),
+        }),
       })),
     setServiceSpan: (id, start, end) =>
       set((s) => ({
-        system: touch({ ...s.system, services: s.system.services.map((sv) => (sv.id === id ? { ...sv, spanStart: start, spanEnd: end } : sv)) }),
+        system: touch({
+          ...s.system,
+          services: s.system.services.map((sv) =>
+            sv.id === id ? { ...sv, spanStart: start, spanEnd: end } : sv,
+          ),
+        }),
       })),
     setServiceSchedule: (id, periods) =>
       set((s) => ({
         system: touch({
           ...s.system,
-          services: s.system.services.map((sv) => (sv.id === id ? { ...sv, schedule: periods && periods.length > 0 ? periods : undefined } : sv)),
+          services: s.system.services.map((sv) =>
+            sv.id === id
+              ? { ...sv, schedule: periods && periods.length > 0 ? periods : undefined }
+              : sv,
+          ),
         }),
       })),
 
-    setVehicleKinds: (kinds) => set((s) => ({ system: touch({ ...s.system, vehicleKinds: kinds }) })),
+    setVehicleKinds: (kinds) =>
+      set((s) => ({ system: touch({ ...s.system, vehicleKinds: kinds }) })),
     setServiceVehicleKind: (id, vehicleKindId) =>
       set((s) => ({
-        system: touch({ ...s.system, services: s.system.services.map((sv) => (sv.id === id ? { ...sv, vehicleKindId } : sv)) }),
+        system: touch({
+          ...s.system,
+          services: s.system.services.map((sv) => (sv.id === id ? { ...sv, vehicleKindId } : sv)),
+        }),
       })),
 
     deleteService: (id) =>
       set((s) => ({
         system: touch({ ...s.system, services: s.system.services.filter((sv) => sv.id !== id) }),
-        selection: s.selection?.kind === "service" && s.selection.id === id ? null : s.selection,
+        selection: s.selection?.kind === 'service' && s.selection.id === id ? null : s.selection,
       })),
 
-    startAddingPattern: (serviceId) => set({ addingPatternForServiceId: serviceId, tool: "way" }),
+    startAddingPattern: (serviceId) => set({ addingPatternForServiceId: serviceId, tool: 'way' }),
     cancelAddingPattern: () => set({ addingPatternForServiceId: null }),
     deletePattern: (serviceId, patternId) =>
       set((s) => ({
         system: touch({
           ...s.system,
           services: s.system.services.map((sv) =>
-            sv.id === serviceId && sv.patterns.length > 1 ? { ...sv, patterns: sv.patterns.filter((p) => p.id !== patternId) } : sv,
+            sv.id === serviceId && sv.patterns.length > 1
+              ? { ...sv, patterns: sv.patterns.filter((p) => p.id !== patternId) }
+              : sv,
           ),
         }),
       })),
@@ -2110,7 +2511,8 @@ export function createEditorStore() {
       set((s) => {
         const source = s.system.services.find((sv) => sv.id === sourceId);
         const target = s.system.services.find((sv) => sv.id === targetId);
-        if (!source || !target || source.id === target.id || source.modeId !== target.modeId) return {};
+        if (!source || !target || source.id === target.id || source.modeId !== target.modeId)
+          return {};
         // Each carried-over pattern keeps its own name if it already had one
         // (a source that was itself already branched); otherwise it's named
         // after the service it came from, so the merged list still reads as
@@ -2121,9 +2523,14 @@ export function createEditorStore() {
             ...s.system,
             services: s.system.services
               .filter((sv) => sv.id !== sourceId)
-              .map((sv) => (sv.id === targetId ? { ...sv, patterns: [...sv.patterns, ...carried] } : sv)),
+              .map((sv) =>
+                sv.id === targetId ? { ...sv, patterns: [...sv.patterns, ...carried] } : sv,
+              ),
           }),
-          selection: s.selection?.kind === "service" && s.selection.id === sourceId ? { kind: "service", id: targetId } : s.selection,
+          selection:
+            s.selection?.kind === 'service' && s.selection.id === sourceId
+              ? { kind: 'service', id: targetId }
+              : s.selection,
         };
       }),
 
@@ -2131,7 +2538,7 @@ export function createEditorStore() {
       const station = createStation(coord, anchor);
       set((s) => ({
         system: touch({ ...s.system, stations: [...s.system.stations, station] }),
-        selection: { kind: "station", id: station.id },
+        selection: { kind: 'station', id: station.id },
         focusNameToken: s.focusNameToken + 1,
         focusNameStationId: station.id,
       }));
@@ -2154,23 +2561,38 @@ export function createEditorStore() {
         ...(hit ? { anchor: { wayId: hit.wayId, t: hit.t } } : {}),
         footprint,
       };
-      set((s) => ({ system: touch({ ...s.system, stations: [...s.system.stations, station] }), selection: { kind: "station", id } }));
+      set((s) => ({
+        system: touch({ ...s.system, stations: [...s.system.stations, station] }),
+        selection: { kind: 'station', id },
+      }));
       return id;
     },
 
     moveStation: (id, coord, anchor) =>
       set((s) => ({
-        system: touch({ ...s.system, stations: s.system.stations.map((st) => (st.id === id ? { ...st, coord, anchor: anchor ?? undefined } : st)) }),
+        system: touch({
+          ...s.system,
+          stations: s.system.stations.map((st) =>
+            st.id === id ? { ...st, coord, anchor: anchor ?? undefined } : st,
+          ),
+        }),
       })),
 
     setStationName: (id, name) =>
-      set((s) => ({ system: touch({ ...s.system, stations: s.system.stations.map((st) => (st.id === id ? { ...st, name } : st)) }) })),
+      set((s) => ({
+        system: touch({
+          ...s.system,
+          stations: s.system.stations.map((st) => (st.id === id ? { ...st, name } : st)),
+        }),
+      })),
 
     setStationDwellSeconds: (id, seconds) =>
       set((s) => ({
         system: touch({
           ...s.system,
-          stations: s.system.stations.map((st) => (st.id === id ? { ...st, dwellSeconds: seconds } : st)),
+          stations: s.system.stations.map((st) =>
+            st.id === id ? { ...st, dwellSeconds: seconds } : st,
+          ),
         }),
       })),
 
@@ -2180,14 +2602,16 @@ export function createEditorStore() {
       set((s) => ({
         system: touch({
           ...s.system,
-          stations: s.system.stations.map((st) => (st.id === id ? { ...st, majorStop: major || undefined } : st)),
+          stations: s.system.stations.map((st) =>
+            st.id === id ? { ...st, majorStop: major || undefined } : st,
+          ),
         }),
       })),
 
     deleteStation: (id) =>
       set((s) => ({
         system: touch({ ...s.system, stations: s.system.stations.filter((st) => st.id !== id) }),
-        selection: s.selection?.kind === "station" && s.selection.id === id ? null : s.selection,
+        selection: s.selection?.kind === 'station' && s.selection.id === id ? null : s.selection,
       })),
 
     addStationFootprint: (stationId) =>
@@ -2196,7 +2620,12 @@ export function createEditorStore() {
         if (!station || station.footprint) return s;
         const footprint = squareFootprint(station.coord, FOOTPRINT_HALF_SIZE_M);
         return {
-          system: touch({ ...s.system, stations: s.system.stations.map((st) => (st.id === stationId ? { ...st, footprint } : st)) }),
+          system: touch({
+            ...s.system,
+            stations: s.system.stations.map((st) =>
+              st.id === stationId ? { ...st, footprint } : st,
+            ),
+          }),
         };
       }),
 
@@ -2205,7 +2634,9 @@ export function createEditorStore() {
         system: touch({
           ...s.system,
           stations: s.system.stations.map((st) =>
-            st.id === stationId && st.footprint ? { ...st, footprint: st.footprint.map((p, i) => (i === index ? coord : p)) } : st,
+            st.id === stationId && st.footprint
+              ? { ...st, footprint: st.footprint.map((p, i) => (i === index ? coord : p)) }
+              : st,
           ),
         }),
       })),
@@ -2214,7 +2645,9 @@ export function createEditorStore() {
       set((s) => ({
         system: touch({
           ...s.system,
-          stations: s.system.stations.map((st) => (st.id === stationId ? { ...st, footprint: undefined, platforms: undefined } : st)),
+          stations: s.system.stations.map((st) =>
+            st.id === stationId ? { ...st, footprint: undefined, platforms: undefined } : st,
+          ),
         }),
       })),
 
@@ -2223,11 +2656,17 @@ export function createEditorStore() {
       set((s) => {
         const station = s.system.stations.find((st) => st.id === stationId);
         if (!station) return s;
-        const platform: Platform = { id: platformId, points: squareFootprint(station.coord, PLATFORM_HALF_SIZE_M), edges: 1 };
+        const platform: Platform = {
+          id: platformId,
+          points: squareFootprint(station.coord, PLATFORM_HALF_SIZE_M),
+          edges: 1,
+        };
         return {
           system: touch({
             ...s.system,
-            stations: s.system.stations.map((st) => (st.id === stationId ? { ...st, platforms: [...(st.platforms ?? []), platform] } : st)),
+            stations: s.system.stations.map((st) =>
+              st.id === stationId ? { ...st, platforms: [...(st.platforms ?? []), platform] } : st,
+            ),
           }),
         };
       });
@@ -2243,7 +2682,9 @@ export function createEditorStore() {
               ? {
                   ...st,
                   platforms: (st.platforms ?? []).map((p) =>
-                    p.id === platformId ? { ...p, points: p.points.map((pt, i) => (i === index ? coord : pt)) } : p,
+                    p.id === platformId
+                      ? { ...p, points: p.points.map((pt, i) => (i === index ? coord : pt)) }
+                      : p,
                   ),
                 }
               : st,
@@ -2256,7 +2697,9 @@ export function createEditorStore() {
         system: touch({
           ...s.system,
           stations: s.system.stations.map((st) =>
-            st.id === stationId ? { ...st, platforms: (st.platforms ?? []).filter((p) => p.id !== platformId) } : st,
+            st.id === stationId
+              ? { ...st, platforms: (st.platforms ?? []).filter((p) => p.id !== platformId) }
+              : st,
           ),
         }),
       })),
@@ -2271,37 +2714,60 @@ export function createEditorStore() {
         // it joins the station's complex automatically (creating one if this
         // is the first structure), instead of floating as an unrelated
         // object the user must group by hand.
-        const at: LngLat = Array.isArray(geometry[0]) ? centroidOf(geometry as LngLat[]) : (geometry as LngLat);
+        const at: LngLat = Array.isArray(geometry[0])
+          ? centroidOf(geometry as LngLat[])
+          : (geometry as LngLat);
         const host = system.stations.find((st) => st.footprint && pointInPolygon(at, st.footprint));
         if (host) {
           const existing = system.groups.find((g) => g.memberIds.includes(host.id));
           system = existing
-            ? { ...system, groups: system.groups.map((g) => (g.id === existing.id ? { ...g, memberIds: [...g.memberIds, id] } : g)) }
+            ? {
+                ...system,
+                groups: system.groups.map((g) =>
+                  g.id === existing.id ? { ...g, memberIds: [...g.memberIds, id] } : g,
+                ),
+              }
             : {
                 ...system,
-                groups: [...system.groups, createGroupEntity([host.id, id], host.name ? `${host.name} complex` : undefined)],
+                groups: [
+                  ...system.groups,
+                  createGroupEntity([host.id, id], host.name ? `${host.name} complex` : undefined),
+                ],
               };
         }
-        return { system: touch(system), selection: { kind: "facility", id } };
+        return { system: touch(system), selection: { kind: 'facility', id } };
       });
       return id;
     },
 
     moveFacility: (id, geometry) =>
-      set((s) => ({ system: touch({ ...s.system, facilities: s.system.facilities.map((f) => (f.id === id ? { ...f, geometry } : f)) }) })),
+      set((s) => ({
+        system: touch({
+          ...s.system,
+          facilities: s.system.facilities.map((f) => (f.id === id ? { ...f, geometry } : f)),
+        }),
+      })),
 
     setFacilityName: (id, name) =>
-      set((s) => ({ system: touch({ ...s.system, facilities: s.system.facilities.map((f) => (f.id === id ? { ...f, name } : f)) }) })),
+      set((s) => ({
+        system: touch({
+          ...s.system,
+          facilities: s.system.facilities.map((f) => (f.id === id ? { ...f, name } : f)),
+        }),
+      })),
 
     deleteFacility: (id) =>
       set((s) => ({
         system: touch({ ...s.system, facilities: s.system.facilities.filter((f) => f.id !== id) }),
-        selection: s.selection?.kind === "facility" && s.selection.id === id ? null : s.selection,
+        selection: s.selection?.kind === 'facility' && s.selection.id === id ? null : s.selection,
       })),
 
     createGroup: (memberIds, name) => {
       const group = createGroupEntity(memberIds, name);
-      set((s) => ({ system: touch({ ...s.system, groups: [...s.system.groups, group] }), selection: { kind: "group", id: group.id } }));
+      set((s) => ({
+        system: touch({ ...s.system, groups: [...s.system.groups, group] }),
+        selection: { kind: 'group', id: group.id },
+      }));
       return group.id;
     },
 
@@ -2309,7 +2775,11 @@ export function createEditorStore() {
       set((s) => ({
         system: touch({
           ...s.system,
-          groups: s.system.groups.map((g) => (g.id === groupId && !g.memberIds.includes(memberId) ? { ...g, memberIds: [...g.memberIds, memberId] } : g)),
+          groups: s.system.groups.map((g) =>
+            g.id === groupId && !g.memberIds.includes(memberId)
+              ? { ...g, memberIds: [...g.memberIds, memberId] }
+              : g,
+          ),
         }),
       })),
 
@@ -2317,28 +2787,46 @@ export function createEditorStore() {
       set((s) => ({
         system: touch({
           ...s.system,
-          groups: s.system.groups.map((g) => (g.id === groupId ? { ...g, memberIds: g.memberIds.filter((m) => m !== memberId) } : g)),
+          groups: s.system.groups.map((g) =>
+            g.id === groupId ? { ...g, memberIds: g.memberIds.filter((m) => m !== memberId) } : g,
+          ),
         }),
       })),
 
     renameGroup: (id, name) =>
-      set((s) => ({ system: touch({ ...s.system, groups: s.system.groups.map((g) => (g.id === id ? { ...g, name } : g)) }) })),
+      set((s) => ({
+        system: touch({
+          ...s.system,
+          groups: s.system.groups.map((g) => (g.id === id ? { ...g, name } : g)),
+        }),
+      })),
     setGroupColor: (id, color) =>
-      set((s) => ({ system: touch({ ...s.system, groups: s.system.groups.map((g) => (g.id === id ? { ...g, color } : g)) }) })),
+      set((s) => ({
+        system: touch({
+          ...s.system,
+          groups: s.system.groups.map((g) => (g.id === id ? { ...g, color } : g)),
+        }),
+      })),
 
     deleteGroup: (id) =>
       set((s) => ({
         system: touch({ ...s.system, groups: s.system.groups.filter((g) => g.id !== id) }),
-        selection: s.selection?.kind === "group" && s.selection.id === id ? null : s.selection,
+        selection: s.selection?.kind === 'group' && s.selection.id === id ? null : s.selection,
       })),
 
     createFacilityComplex: (footprint) => {
       const id = shortId();
       const st = get();
-      const usedColors = new Set(st.system.groups.filter((g) => g.color).map((g) => g.color!.toLowerCase()));
-      const color = st.system.palette.find((c) => !usedColors.has(c.toLowerCase())) ?? st.system.palette[0];
+      const usedColors = new Set(
+        st.system.groups.filter((g) => g.color).map((g) => g.color!.toLowerCase()),
+      );
+      const color =
+        st.system.palette.find((c) => !usedColors.has(c.toLowerCase())) ?? st.system.palette[0];
       const group: Group = { id, memberIds: [], footprint, color };
-      set((s) => ({ system: touch({ ...s.system, groups: [...s.system.groups, group] }), selection: { kind: "group", id } }));
+      set((s) => ({
+        system: touch({ ...s.system, groups: [...s.system.groups, group] }),
+        selection: { kind: 'group', id },
+      }));
       return id;
     },
 
@@ -2348,7 +2836,12 @@ export function createEditorStore() {
         if (!group || group.footprint) return s;
         const center = liveCamera().center; // no single coord to anchor a plain group; center on the LIVE view (camera lives outside `system` now — see camera/liveCamera.ts)
         const footprint = squareFootprint(center, GROUP_FOOTPRINT_HALF_SIZE_M);
-        return { system: touch({ ...s.system, groups: s.system.groups.map((g) => (g.id === groupId ? { ...g, footprint } : g)) }) };
+        return {
+          system: touch({
+            ...s.system,
+            groups: s.system.groups.map((g) => (g.id === groupId ? { ...g, footprint } : g)),
+          }),
+        };
       }),
 
     moveGroupFootprintPoint: (groupId, index, coord) =>
@@ -2356,17 +2849,25 @@ export function createEditorStore() {
         system: touch({
           ...s.system,
           groups: s.system.groups.map((g) =>
-            g.id === groupId && g.footprint ? { ...g, footprint: g.footprint.map((p, i) => (i === index ? coord : p)) } : g,
+            g.id === groupId && g.footprint
+              ? { ...g, footprint: g.footprint.map((p, i) => (i === index ? coord : p)) }
+              : g,
           ),
         }),
       })),
 
     deleteGroupFootprint: (groupId) =>
       set((s) => ({
-        system: touch({ ...s.system, groups: s.system.groups.map((g) => (g.id === groupId ? { ...g, footprint: undefined } : g)) }),
+        system: touch({
+          ...s.system,
+          groups: s.system.groups.map((g) =>
+            g.id === groupId ? { ...g, footprint: undefined } : g,
+          ),
+        }),
       })),
 
-    startPlacingFacility: (groupId) => set({ placingFacilityForGroupId: groupId, pickingMemberForGroupId: null, tool: "facility" }),
+    startPlacingFacility: (groupId) =>
+      set({ placingFacilityForGroupId: groupId, pickingMemberForGroupId: null, tool: 'facility' }),
     cancelPlacingFacility: () => set({ placingFacilityForGroupId: null }),
 
     placeFacilityInGroup: (groupId, typeId, coord) => {
@@ -2376,16 +2877,19 @@ export function createEditorStore() {
         system: touch({
           ...s.system,
           facilities: [...s.system.facilities, facility],
-          groups: s.system.groups.map((g) => (g.id === groupId ? { ...g, memberIds: [...g.memberIds, id] } : g)),
+          groups: s.system.groups.map((g) =>
+            g.id === groupId ? { ...g, memberIds: [...g.memberIds, id] } : g,
+          ),
         }),
-        selection: { kind: "group", id: groupId },
+        selection: { kind: 'group', id: groupId },
         placingFacilityForGroupId: null,
-        tool: "select",
+        tool: 'select',
       }));
       return id;
     },
 
-    startPickingMember: (groupId) => set({ pickingMemberForGroupId: groupId, placingFacilityForGroupId: null, tool: "select" }),
+    startPickingMember: (groupId) =>
+      set({ pickingMemberForGroupId: groupId, placingFacilityForGroupId: null, tool: 'select' }),
     cancelPickingMember: () => set({ pickingMemberForGroupId: null }),
   }));
 

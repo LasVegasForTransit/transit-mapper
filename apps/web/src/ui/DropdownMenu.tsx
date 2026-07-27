@@ -1,5 +1,5 @@
-import * as RdxMenu from "@radix-ui/react-dropdown-menu";
-import type { ReactNode } from "react";
+import * as RdxMenu from '@radix-ui/react-dropdown-menu';
+import type { ReactNode } from 'react';
 
 /**
  * The one trigger-driven action menu used everywhere (File menu, the Export
@@ -12,10 +12,10 @@ import type { ReactNode } from "react";
 interface DropdownMenuProps {
   trigger: ReactNode;
   children: ReactNode;
-  align?: "start" | "end" | "center";
+  align?: 'start' | 'end' | 'center';
 }
 
-export function DropdownMenu({ trigger, children, align = "end" }: DropdownMenuProps) {
+export function DropdownMenu({ trigger, children, align = 'end' }: DropdownMenuProps) {
   return (
     <RdxMenu.Root>
       <RdxMenu.Trigger asChild>{trigger}</RdxMenu.Trigger>

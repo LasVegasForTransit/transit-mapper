@@ -6,13 +6,13 @@
 // a System is one *document* — a regional, multimodal network — separating
 // INFRASTRUCTURE (Way) from SERVICE (Service); kinds (way types, modes,
 // grades, facility classes) live in catalog.ts.
-export * from "./system/valueTypes";
-export * from "./system/way";
-export * from "./system/node";
-export * from "./system/namedWay";
-export * from "./system/service";
-export * from "./system/station";
-export * from "./system/facility";
-export * from "./system/group";
-export * from "./system/vehicleKind";
-export * from "./system/document";
+export * from './system/valueTypes';
+export * from './system/way';
+export * from './system/node';
+export * from './system/namedWay';
+export * from './system/service';
+export * from './system/station';
+export * from './system/facility';
+export * from './system/group';
+export * from './system/vehicleKind';
+export * from './system/document';

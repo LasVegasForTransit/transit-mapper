@@ -1,8 +1,12 @@
-import { parseSystem } from "@transitmapper/core/model/serialize";
-import type { TransitSystem } from "@transitmapper/core/model/system";
-import type { CreateShareRequest, CreateShareResponse, GetShareResponse } from "@transitmapper/core/share/contract";
-import { renderPreviewPng, toBase64 } from "./previewImage";
-import { getMyShare, removeMyShare, setMyShare } from "./myShares";
+import { parseSystem } from '@transitmapper/core/model/serialize';
+import type { TransitSystem } from '@transitmapper/core/model/system';
+import type {
+  CreateShareRequest,
+  CreateShareResponse,
+  GetShareResponse,
+} from '@transitmapper/core/share/contract';
+import { renderPreviewPng, toBase64 } from './previewImage';
+import { getMyShare, removeMyShare, setMyShare } from './myShares';
 
 async function sharePayload(system: TransitSystem): Promise<{ body: string; data: string }> {
   const png = await renderPreviewPng(system);
@@ -20,9 +24,9 @@ async function sharePayload(system: TransitSystem): Promise<{ body: string; data
  *  than failing outright. */
 async function createShare(system: TransitSystem): Promise<CreateShareResponse & { data: string }> {
   const { body, data } = await sharePayload(system);
-  const res = await fetch("/api/systems", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
+  const res = await fetch('/api/systems', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
     body,
   });
   if (!res.ok) {
@@ -32,11 +36,15 @@ async function createShare(system: TransitSystem): Promise<CreateShareResponse &
   return { ...((await res.json()) as CreateShareResponse), data };
 }
 
-async function updateShare(shareId: string, editToken: string, system: TransitSystem): Promise<string> {
+async function updateShare(
+  shareId: string,
+  editToken: string,
+  system: TransitSystem,
+): Promise<string> {
   const { body, data } = await sharePayload(system);
   const res = await fetch(`/api/systems/${encodeURIComponent(shareId)}`, {
-    method: "PATCH",
-    headers: { "content-type": "application/json", "x-edit-token": editToken },
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', 'x-edit-token': editToken },
     body,
   });
   if (!res.ok) {
@@ -90,8 +98,8 @@ export async function stopSharing(documentId: string): Promise<boolean> {
   const existing = getMyShare(documentId);
   if (!existing) return false;
   const res = await fetch(`/api/systems/${encodeURIComponent(existing.shareId)}`, {
-    method: "DELETE",
-    headers: { "x-edit-token": existing.editToken },
+    method: 'DELETE',
+    headers: { 'x-edit-token': existing.editToken },
   });
   if (!res.ok && res.status !== 404) {
     const msg = await res.text().catch(() => res.statusText);
@@ -104,7 +112,7 @@ export async function stopSharing(documentId: string): Promise<boolean> {
 /** Fetch a shared system by id and validate it. */
 export async function fetchShare(id: string): Promise<TransitSystem> {
   const res = await fetch(`/api/systems/${encodeURIComponent(id)}`);
-  if (res.status === 404) throw new Error("This shared system was not found.");
+  if (res.status === 404) throw new Error('This shared system was not found.');
   if (!res.ok) throw new Error(`Failed to load shared system (${res.status}).`);
   const data = (await res.json()) as GetShareResponse;
   return parseSystem(data.system);

@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawnSync } from 'node:child_process';
 
 export interface CommandResult {
   ok: boolean;
@@ -8,7 +8,7 @@ export interface CommandResult {
 
 /** Always /bin/sh — POSIX, no zshenv/zshrc/profile loading. */
 function resolveShell(): string {
-  return "/bin/sh";
+  return '/bin/sh';
 }
 
 /**
@@ -18,7 +18,7 @@ function resolveShell(): string {
  * subprocess environment, where it could leak into wrangler's own logs/state
  * or confuse wrangler about which token to use.
  */
-const SUBPROCESS_ENV_DENYLIST: ReadonlySet<string> = new Set(["CLOUDFLARE_API_TOKEN"]);
+const SUBPROCESS_ENV_DENYLIST: ReadonlySet<string> = new Set(['CLOUDFLARE_API_TOKEN']);
 
 function subprocessEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
@@ -30,21 +30,21 @@ function subprocessEnv(): NodeJS.ProcessEnv {
 }
 
 export function runCommand(command: string): CommandResult {
-  const result = spawnSync(resolveShell(), ["-c", command], {
-    stdio: "pipe",
-    encoding: "utf8",
+  const result = spawnSync(resolveShell(), ['-c', command], {
+    stdio: 'pipe',
+    encoding: 'utf8',
     env: subprocessEnv(),
   });
   return {
     ok: result.status === 0,
-    stdout: (result.stdout ?? "").trim(),
-    stderr: (result.stderr ?? "").trim(),
+    stdout: (result.stdout ?? '').trim(),
+    stderr: (result.stderr ?? '').trim(),
   };
 }
 
 export function runInteractiveCommand(command: string): boolean {
-  const result = spawnSync(resolveShell(), ["-c", command], {
-    stdio: "inherit",
+  const result = spawnSync(resolveShell(), ['-c', command], {
+    stdio: 'inherit',
     env: subprocessEnv(),
   });
   return result.status === 0;
@@ -62,7 +62,7 @@ export function shellEscape(value: string): string {
  */
 export function tryOpenInBrowser(url: string): boolean {
   const opener =
-    process.platform === "darwin" ? "open" : process.platform === "win32" ? 'start ""' : "xdg-open";
+    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start ""' : 'xdg-open';
   const r = runCommand(`${opener} ${shellEscape(url)}`);
   return r.ok;
 }

@@ -1,4 +1,4 @@
-import type { TransitSystem } from "@transitmapper/core/model/system";
+import type { TransitSystem } from '@transitmapper/core/model/system';
 
 // Same download-a-blob dance as pngExport.ts/svgExport.ts's own
 // downloadDataUrl/downloadBlob — kept as its own tiny copy rather than a
@@ -6,7 +6,7 @@ import type { TransitSystem } from "@transitmapper/core/model/system";
 // else in common worth abstracting.
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+  const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
@@ -25,6 +25,6 @@ function downloadBlob(blob: Blob, filename: string): void {
  * also what a future "Import system…" would read back in.
  */
 export function exportSystemJson(system: TransitSystem): void {
-  const blob = new Blob([JSON.stringify(system, null, 2)], { type: "application/json" });
-  downloadBlob(blob, `${system.name || "transit-system"}.json`);
+  const blob = new Blob([JSON.stringify(system, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, `${system.name || 'transit-system'}.json`);
 }

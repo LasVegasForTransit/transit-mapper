@@ -7,10 +7,24 @@
     },
     "typecheck": {
       "dependsOn": ["^typecheck"],
+      "inputs": ["src/**", "scripts/**", "tsconfig*.json"],
       "outputs": ["*.tsbuildinfo"]
+    },
+    "lint": {
+      "inputs": ["src/**", "scripts/**", "$TURBO_ROOT$/eslint.config.js"],
+      "outputs": []
     },
     "verify": {
       "dependsOn": ["^typecheck"],
+      "inputs": ["src/**", "scripts/**"],
+      "outputs": []
+    },
+    "check:types": {
+      "inputs": ["wrangler.toml", "worker-configuration.d.ts"],
+      "outputs": []
+    },
+    "check": {
+      "dependsOn": ["lint", "typecheck", "verify", "check:types"],
       "outputs": []
     }
   }

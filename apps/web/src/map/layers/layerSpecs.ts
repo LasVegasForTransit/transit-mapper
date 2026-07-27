@@ -1,4 +1,4 @@
-import type { LayerSpecification } from "maplibre-gl";
+import type { LayerSpecification } from 'maplibre-gl';
 import {
   CENTER_LINE_COLOR,
   FOOTPRINT_FILL,
@@ -11,7 +11,7 @@ import {
   PLATFORM_STROKE,
   VEHICLE_FILL_OPACITY,
   VEHICLE_STROKE,
-} from "@transitmapper/core/style/catalogStyle";
+} from '@transitmapper/core/style/catalogStyle';
 import {
   LANE_WIDTH_EXPR,
   SERVICE_WIDTH_EXPR,
@@ -77,7 +77,7 @@ import {
   SRC_VEHICLES_INFRA,
   SRC_WAYS,
   SRC_WAY_LABELS,
-} from "./constants";
+} from './constants';
 
 export const LAYER_SPECS: LayerSpecification[] = [
   // Paint order, bottom-up: reference landmarks first (fixed context, not
@@ -92,145 +92,163 @@ export const LAYER_SPECS: LayerSpecification[] = [
     // …) — static context, not user data (see map/landmarks.ts). Muted and
     // small so a real drawn system always reads as the foreground.
     id: LYR_LANDMARKS,
-    type: "circle",
+    type: 'circle',
     source: SRC_LANDMARKS,
-    paint: { "circle-radius": 3, "circle-color": "#9a9a92", "circle-opacity": 0.7 },
+    paint: { 'circle-radius': 3, 'circle-color': '#9a9a92', 'circle-opacity': 0.7 },
   },
   {
     id: LYR_LANDMARK_LABELS,
-    type: "symbol",
+    type: 'symbol',
     source: SRC_LANDMARKS,
     layout: {
-      "text-field": ["get", "name"],
-      "text-font": ["literal", ["Noto Sans Regular"]],
-      "text-size": 11,
-      "text-variable-anchor": ["top", "bottom", "right", "left"],
-      "text-radial-offset": 0.6,
-      "text-allow-overlap": false,
-      "text-optional": true,
+      'text-field': ['get', 'name'],
+      'text-font': ['literal', ['Noto Sans Regular']],
+      'text-size': 11,
+      'text-variable-anchor': ['top', 'bottom', 'right', 'left'],
+      'text-radial-offset': 0.6,
+      'text-allow-overlap': false,
+      'text-optional': true,
     },
-    paint: { "text-color": "#9a9a92", "text-halo-color": "#ffffff", "text-halo-width": 1.2 },
+    paint: { 'text-color': '#9a9a92', 'text-halo-color': '#ffffff', 'text-halo-width': 1.2 },
   },
   {
     // Junction footprints: the shared asphalt where lane-detailed ways meet.
     // Painted BENEATH the lane surfaces so each arm's trimmed carriageway
     // butts cleanly against the footprint.
     id: LYR_JUNCTIONS,
-    type: "fill",
+    type: 'fill',
     source: SRC_JUNCTIONS,
-    paint: { "fill-color": "#7d8188", "fill-opacity": 0.9 },
+    paint: { 'fill-color': '#7d8188', 'fill-opacity': 0.9 },
   },
   {
     id: LYR_JUNCTION_SELECTED,
-    type: "line",
+    type: 'line',
     source: SRC_JUNCTIONS,
-    filter: ["get", "selected"],
-    paint: { "line-color": "#191a17", "line-width": 2.5, "line-opacity": 0.7 },
+    filter: ['get', 'selected'],
+    paint: { 'line-color': '#191a17', 'line-width': 2.5, 'line-opacity': 0.7 },
   },
   {
     // Lane surfaces: each lane's centerline drawn at its true metric width
     // (w14 × exponential zoom scaling), so a 5-lane arterial reads as real
     // asphalt at high zoom. Only populated at lane-detail zooms.
     id: LYR_LANE_SURFACES,
-    type: "line",
+    type: 'line',
     source: SRC_LANES,
-    layout: { "line-cap": "butt", "line-join": "round" },
-    paint: { "line-color": ["get", "color"], "line-width": LANE_WIDTH_EXPR as never, "line-opacity": 0.9 },
+    layout: { 'line-cap': 'butt', 'line-join': 'round' },
+    paint: {
+      'line-color': ['get', 'color'],
+      'line-width': LANE_WIDTH_EXPR as never,
+      'line-opacity': 0.9,
+    },
   },
   {
     // Thin-line lanes (rail tracks embedded in or beside a street) — a track
     // is a pair of rails, not a slab, so it draws as a fixed thin line.
     id: LYR_LANE_TRACKS,
-    type: "line",
+    type: 'line',
     source: SRC_LANE_MARKINGS,
-    filter: ["==", ["get", "kind"], "thinLane"],
-    layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-color": ["get", "color"], "line-width": 2.5 },
+    filter: ['==', ['get', 'kind'], 'thinLane'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': ['get', 'color'], 'line-width': 2.5 },
   },
   {
     // Dashed white separator between same-direction lanes.
     id: LYR_LANE_LINES,
-    type: "line",
+    type: 'line',
     source: SRC_LANE_MARKINGS,
-    filter: ["==", ["get", "kind"], "laneLine"],
-    paint: { "line-color": LANE_LINE_COLOR, "line-width": 1.2, "line-dasharray": [3, 3], "line-opacity": 0.9 },
+    filter: ['==', ['get', 'kind'], 'laneLine'],
+    paint: {
+      'line-color': LANE_LINE_COLOR,
+      'line-width': 1.2,
+      'line-dasharray': [3, 3],
+      'line-opacity': 0.9,
+    },
   },
   {
     // Solid edge line where the directional roadway meets sidewalk/parking.
     id: LYR_EDGE_LINES,
-    type: "line",
+    type: 'line',
     source: SRC_LANE_MARKINGS,
-    filter: ["==", ["get", "kind"], "edgeLine"],
-    paint: { "line-color": LANE_LINE_COLOR, "line-width": 1.2, "line-opacity": 0.75 },
+    filter: ['==', ['get', 'kind'], 'edgeLine'],
+    paint: { 'line-color': LANE_LINE_COLOR, 'line-width': 1.2, 'line-opacity': 0.75 },
   },
   {
     // The center line where directions oppose — solid yellow.
     id: LYR_CENTER_LINES,
-    type: "line",
+    type: 'line',
     source: SRC_LANE_MARKINGS,
-    filter: ["==", ["get", "kind"], "centerLine"],
-    paint: { "line-color": CENTER_LINE_COLOR, "line-width": 1.8, "line-opacity": 0.95 },
+    filter: ['==', ['get', 'kind'], 'centerLine'],
+    paint: { 'line-color': CENTER_LINE_COLOR, 'line-width': 1.8, 'line-opacity': 0.95 },
   },
   {
     // Per-lane turn guides through a junction (from the lane-connectivity
     // graph — stored connectors or the derived defaults). Faint dashes, so
     // they read as guidance rather than paint.
     id: LYR_CONNECTORS,
-    type: "line",
+    type: 'line',
     source: SRC_CONNECTORS,
-    layout: { "line-cap": "round" },
-    paint: { "line-color": LANE_LINE_COLOR, "line-width": 1.2, "line-dasharray": [1.5, 2], "line-opacity": 0.55 },
+    layout: { 'line-cap': 'round' },
+    paint: {
+      'line-color': LANE_LINE_COLOR,
+      'line-width': 1.2,
+      'line-dasharray': [1.5, 2],
+      'line-opacity': 0.55,
+    },
   },
   {
     // Direction arrows along each one-way lane, pointing with travel (the
     // geometry engine pre-reverses backward lanes' paths).
     id: LYR_LANE_ARROWS,
-    type: "symbol",
+    type: 'symbol',
     source: SRC_LANE_ARROWS,
     // Direction detail belongs to closer zooms — without this, one-way ways
     // (now including every GTFS-imported route) would strew ▶ chevrons across
     // the whole-network overview.
     minzoom: 13,
     layout: {
-      "symbol-placement": "line",
-      "symbol-spacing": 90,
-      "text-field": "▶",
-      "text-size": 10,
-      "text-keep-upright": false,
-      "text-allow-overlap": true,
-      "text-ignore-placement": true,
+      'symbol-placement': 'line',
+      'symbol-spacing': 90,
+      'text-field': '▶',
+      'text-size': 10,
+      'text-keep-upright': false,
+      'text-allow-overlap': true,
+      'text-ignore-placement': true,
     },
-    paint: { "text-color": LANE_ARROW_COLOR, "text-opacity": 0.9 },
+    paint: { 'text-color': LANE_ARROW_COLOR, 'text-opacity': 0.9 },
   },
   {
     id: LYR_FOOTPRINTS_FILL,
-    type: "fill",
+    type: 'fill',
     source: SRC_FOOTPRINTS,
     // A facility complex with its own color reads more clearly with a
     // slightly stronger fill than the shared monochrome default — a station
     // footprint (no color property) keeps the original subtle tint.
     paint: {
-      "fill-color": ["coalesce", ["get", "color"], FOOTPRINT_FILL],
-      "fill-opacity": ["case", ["has", "color"], 0.14, FOOTPRINT_FILL_OPACITY],
+      'fill-color': ['coalesce', ['get', 'color'], FOOTPRINT_FILL],
+      'fill-opacity': ['case', ['has', 'color'], 0.14, FOOTPRINT_FILL_OPACITY],
     },
   },
   {
     id: LYR_FOOTPRINTS_STROKE,
-    type: "line",
+    type: 'line',
     source: SRC_FOOTPRINTS,
-    paint: { "line-color": ["coalesce", ["get", "color"], FOOTPRINT_STROKE], "line-width": 1.5, "line-dasharray": [3, 2] },
+    paint: {
+      'line-color': ['coalesce', ['get', 'color'], FOOTPRINT_STROKE],
+      'line-width': 1.5,
+      'line-dasharray': [3, 2],
+    },
   },
   {
     id: LYR_PLATFORMS_FILL,
-    type: "fill",
+    type: 'fill',
     source: SRC_PLATFORMS,
-    paint: { "fill-color": PLATFORM_FILL, "fill-opacity": PLATFORM_FILL_OPACITY },
+    paint: { 'fill-color': PLATFORM_FILL, 'fill-opacity': PLATFORM_FILL_OPACITY },
   },
   {
     id: LYR_PLATFORMS_STROKE,
-    type: "line",
+    type: 'line',
     source: SRC_PLATFORMS,
-    paint: { "line-color": PLATFORM_STROKE, "line-width": 1.5 },
+    paint: { 'line-color': PLATFORM_STROKE, 'line-width': 1.5 },
   },
   {
     // A selected bare/infra way gets the same soft dark halo a selected
@@ -239,18 +257,25 @@ export const LAYER_SPECS: LayerSpecification[] = [
     // different at all, since only service features ever carried a
     // `selected` flag before.
     id: LYR_WAY_SELECTED,
-    type: "line",
+    type: 'line',
     source: SRC_WAYS,
     // Driven by feature-state (set on selection in MapCanvas), not a `selected`
     // property — so selecting a way flips one setFeatureState call instead of
     // re-uploading the whole (RTC-scale ~121k-waypoint) source. Invisible until
     // its way is selected.
-    layout: { "line-cap": "round", "line-join": "round" },
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      "line-color": "#191a17",
-      "line-width": SELECT_HALO_WIDTH_EXPR as never,
-      "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, ["boolean", ["feature-state", "hover"], false], 0.1, 0],
-      "line-offset": ["get", "offset"],
+      'line-color': '#191a17',
+      'line-width': SELECT_HALO_WIDTH_EXPR as never,
+      'line-opacity': [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        0.18,
+        ['boolean', ['feature-state', 'hover'], false],
+        0.1,
+        0,
+      ],
+      'line-offset': ['get', 'offset'],
     },
   },
   {
@@ -258,76 +283,115 @@ export const LAYER_SPECS: LayerSpecification[] = [
     // features (see emitCrossSection) — line-offset is what actually spaces
     // them apart on screen into a real physical cross-section.
     id: LYR_WAYS_SOLID,
-    type: "line",
+    type: 'line',
     source: SRC_WAYS,
     // haloOnly features exist purely for LYR_WAY_SELECTED (a lane-rendered
     // way's selection glow) — they must never paint as a solid line.
-    filter: ["all", ["!", ["get", "dashed"]], ["!", ["to-boolean", ["get", "haloOnly"]]]],
-    layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-color": ["get", "color"], "line-width": ["get", "width"], "line-opacity": 0.85, "line-offset": ["get", "offset"] },
+    filter: ['all', ['!', ['get', 'dashed']], ['!', ['to-boolean', ['get', 'haloOnly']]]],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': ['get', 'color'],
+      'line-width': ['get', 'width'],
+      'line-opacity': 0.85,
+      'line-offset': ['get', 'offset'],
+    },
   },
   {
     id: LYR_WAYS_DASHED,
-    type: "line",
+    type: 'line',
     source: SRC_WAYS,
-    filter: ["get", "dashed"],
-    layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-color": ["get", "color"], "line-width": ["get", "width"], "line-dasharray": [2, 2], "line-opacity": 0.85, "line-offset": ["get", "offset"] },
+    filter: ['get', 'dashed'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': ['get', 'color'],
+      'line-width': ['get', 'width'],
+      'line-dasharray': [2, 2],
+      'line-opacity': 0.85,
+      'line-offset': ['get', 'offset'],
+    },
   },
   {
     // Elevated ways get a dark casing beneath — reads as a viaduct.
     id: LYR_SERVICES_ELEVATED,
-    type: "line",
+    type: 'line',
     source: SRC_SERVICES,
-    filter: ["get", "elevated"],
-    layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-color": "#191a17", "line-width": SERVICE_ELEVATED_WIDTH_EXPR as never, "line-opacity": 0.32, "line-offset": ["get", "offset"] },
+    filter: ['get', 'elevated'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': '#191a17',
+      'line-width': SERVICE_ELEVATED_WIDTH_EXPR as never,
+      'line-opacity': 0.32,
+      'line-offset': ['get', 'offset'],
+    },
   },
   {
     id: LYR_SERVICE_SELECTED,
-    type: "line",
+    type: 'line',
     source: SRC_SERVICES,
     // feature-state driven (see LYR_WAY_SELECTED). Selecting a way also lights
     // its rider services here — MapCanvas sets state on their serviceIds.
-    layout: { "line-cap": "round", "line-join": "round" },
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      "line-color": "#191a17",
-      "line-width": SELECT_HALO_WIDTH_EXPR as never,
-      "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, ["boolean", ["feature-state", "hover"], false], 0.1, 0],
-      "line-offset": ["get", "offset"],
+      'line-color': '#191a17',
+      'line-width': SELECT_HALO_WIDTH_EXPR as never,
+      'line-opacity': [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        0.18,
+        ['boolean', ['feature-state', 'hover'], false],
+        0.1,
+        0,
+      ],
+      'line-offset': ['get', 'offset'],
     },
   },
   {
     id: LYR_SERVICES_SOLID,
-    type: "line",
+    type: 'line',
     source: SRC_SERVICES,
-    filter: ["!", ["get", "underground"]],
-    layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-color": ["get", "color"], "line-width": SERVICE_WIDTH_EXPR as never, "line-offset": ["get", "offset"] },
+    filter: ['!', ['get', 'underground']],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': ['get', 'color'],
+      'line-width': SERVICE_WIDTH_EXPR as never,
+      'line-offset': ['get', 'offset'],
+    },
   },
   {
     // Underground ways render dashed, like a tunnel.
     id: LYR_SERVICES_UNDERGROUND,
-    type: "line",
+    type: 'line',
     source: SRC_SERVICES,
-    filter: ["get", "underground"],
-    layout: { "line-cap": "butt", "line-join": "round" },
-    paint: { "line-color": ["get", "color"], "line-width": SERVICE_WIDTH_EXPR as never, "line-dasharray": [2.5, 2], "line-offset": ["get", "offset"] },
+    filter: ['get', 'underground'],
+    layout: { 'line-cap': 'butt', 'line-join': 'round' },
+    paint: {
+      'line-color': ['get', 'color'],
+      'line-width': SERVICE_WIDTH_EXPR as never,
+      'line-dasharray': [2.5, 2],
+      'line-offset': ['get', 'offset'],
+    },
   },
   {
     id: LYR_STATION_SELECTED,
-    type: "circle",
+    type: 'circle',
     source: SRC_STATIONS,
     // feature-state driven (see LYR_WAY_SELECTED).
     paint: {
-      "circle-radius": ["case", ["get", "interchange"], 12, 10],
-      "circle-color": "#191a17",
-      "circle-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, ["boolean", ["feature-state", "hover"], false], 0.1, 0],
+      'circle-radius': ['case', ['get', 'interchange'], 12, 10],
+      'circle-color': '#191a17',
+      'circle-opacity': [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        0.18,
+        ['boolean', ['feature-state', 'hover'], false],
+        0.1,
+        0,
+      ],
     },
   },
   {
     id: LYR_STATIONS,
-    type: "circle",
+    type: 'circle',
     source: SRC_STATIONS,
     paint: {
       // Gently zoom-scaled with a REASONABLE FLOOR — dots stay clearly visible
@@ -336,18 +400,18 @@ export const LAYER_SPECS: LayerSpecification[] = [
       // Full size (r5/r7) returns at street zoom. Export bloat (thousands of
       // stops in one frame) is handled separately, on the export map only
       // (map/export/exportRenderer.ts), NOT by shrinking the live dots.
-      "circle-radius": [
-        "interpolate",
-        ["linear"],
-        ["zoom"],
+      'circle-radius': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
         11,
-        ["case", ["get", "interchange"], 5, 4],
+        ['case', ['get', 'interchange'], 5, 4],
         14,
-        ["case", ["get", "interchange"], 7, 5],
+        ['case', ['get', 'interchange'], 7, 5],
       ],
-      "circle-color": "#ffffff",
-      "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 11, 2.2, 14, 3],
-      "circle-stroke-color": ["case", ["get", "interchange"], "#111827", ["get", "color"]],
+      'circle-color': '#ffffff',
+      'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 11, 2.2, 14, 3],
+      'circle-stroke-color': ['case', ['get', 'interchange'], '#111827', ['get', 'color']],
     },
   },
   {
@@ -355,13 +419,13 @@ export const LAYER_SPECS: LayerSpecification[] = [
     // pushing to SRC_VEHICLES — bypasses the store entirely (ambient motion,
     // never a system mutation), so its data is never touched by buildFeatures.
     id: LYR_VEHICLES,
-    type: "circle",
+    type: 'circle',
     source: SRC_VEHICLES,
     paint: {
-      "circle-radius": 5,
-      "circle-color": ["get", "color"],
-      "circle-stroke-width": 2,
-      "circle-stroke-color": "#ffffff",
+      'circle-radius': 5,
+      'circle-color': ['get', 'color'],
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#ffffff',
     },
   },
   {
@@ -373,15 +437,15 @@ export const LAYER_SPECS: LayerSpecification[] = [
     // vehicle's own route color, unlike the monochrome footprint fill,
     // since a vehicle belongs to one service.
     id: LYR_VEHICLES_INFRA_FILL,
-    type: "fill",
+    type: 'fill',
     source: SRC_VEHICLES_INFRA,
-    paint: { "fill-color": ["get", "color"], "fill-opacity": VEHICLE_FILL_OPACITY },
+    paint: { 'fill-color': ['get', 'color'], 'fill-opacity': VEHICLE_FILL_OPACITY },
   },
   {
     id: LYR_VEHICLES_INFRA_STROKE,
-    type: "line",
+    type: 'line',
     source: SRC_VEHICLES_INFRA,
-    paint: { "line-color": VEHICLE_STROKE, "line-width": 1 },
+    paint: { 'line-color': VEHICLE_STROKE, 'line-width': 1 },
   },
   {
     // MAJOR station labels — interchanges (derived) and hand-flagged major
@@ -392,23 +456,28 @@ export const LAYER_SPECS: LayerSpecification[] = [
     // the 3787-label symbol-collision cost that made panning drop frames.
     // Two variable anchors (was four) — fewer per-label placement attempts.
     id: LYR_STATION_LABELS_MAJOR,
-    type: "symbol",
+    type: 'symbol',
     source: SRC_STATIONS,
     minzoom: 12,
-    filter: ["all", ["!=", ["get", "name"], ""], ["get", "major"]],
+    filter: ['all', ['!=', ['get', 'name'], ''], ['get', 'major']],
     layout: {
-      "text-field": ["get", "name"],
-      "text-font": ["case", ["get", "interchange"], ["literal", ["Noto Sans Bold"]], ["literal", ["Noto Sans Regular"]]],
-      "text-size": 12,
-      "text-variable-anchor": ["top", "bottom"],
-      "text-radial-offset": 0.7,
-      "text-justify": "auto",
-      "text-allow-overlap": false,
-      "text-optional": true,
+      'text-field': ['get', 'name'],
+      'text-font': [
+        'case',
+        ['get', 'interchange'],
+        ['literal', ['Noto Sans Bold']],
+        ['literal', ['Noto Sans Regular']],
+      ],
+      'text-size': 12,
+      'text-variable-anchor': ['top', 'bottom'],
+      'text-radial-offset': 0.7,
+      'text-justify': 'auto',
+      'text-allow-overlap': false,
+      'text-optional': true,
       // Interchanges outrank plain major stops when they compete for space.
-      "symbol-sort-key": ["case", ["get", "interchange"], 0, 1],
+      'symbol-sort-key': ['case', ['get', 'interchange'], 0, 1],
     },
-    paint: { "text-color": "#191a17", "text-halo-color": "#ffffff", "text-halo-width": 1.4 },
+    paint: { 'text-color': '#191a17', 'text-halo-color': '#ffffff', 'text-halo-width': 1.4 },
   },
   {
     // Ordinary station labels — every OTHER named stop (empty-name ones stay
@@ -416,45 +485,50 @@ export const LAYER_SPECS: LayerSpecification[] = [
     // screen instead of the whole valley's worth colliding into unreadable
     // soup. Anchor varies so collision can slide a label around its station.
     id: LYR_STATION_LABELS,
-    type: "symbol",
+    type: 'symbol',
     source: SRC_STATIONS,
     minzoom: 14,
-    filter: ["all", ["!=", ["get", "name"], ""], ["!", ["get", "major"]]],
+    filter: ['all', ['!=', ['get', 'name'], ''], ['!', ['get', 'major']]],
     layout: {
-      "text-field": ["get", "name"],
-      "text-font": ["literal", ["Noto Sans Regular"]],
-      "text-size": 12,
-      "text-variable-anchor": ["top", "bottom"],
-      "text-radial-offset": 0.7,
-      "text-justify": "auto",
-      "text-allow-overlap": false,
-      "text-optional": true,
-      "symbol-sort-key": 2,
+      'text-field': ['get', 'name'],
+      'text-font': ['literal', ['Noto Sans Regular']],
+      'text-size': 12,
+      'text-variable-anchor': ['top', 'bottom'],
+      'text-radial-offset': 0.7,
+      'text-justify': 'auto',
+      'text-allow-overlap': false,
+      'text-optional': true,
+      'symbol-sort-key': 2,
     },
-    paint: { "text-color": "#191a17", "text-halo-color": "#ffffff", "text-halo-width": 1.4 },
+    paint: { 'text-color': '#191a17', 'text-halo-color': '#ffffff', 'text-halo-width': 1.4 },
   },
   {
     // Street/line/trail names along their ways — classic map street labels,
     // only at zooms where the name is about THIS street, not clutter.
     id: LYR_WAY_LABELS,
-    type: "symbol",
+    type: 'symbol',
     source: SRC_WAY_LABELS,
     minzoom: 13,
     layout: {
-      "symbol-placement": "line",
-      "text-field": ["get", "name"],
-      "text-font": ["literal", ["Noto Sans Regular"]],
-      "text-size": 12,
-      "text-letter-spacing": 0.05,
+      'symbol-placement': 'line',
+      'text-field': ['get', 'name'],
+      'text-font': ['literal', ['Noto Sans Regular']],
+      'text-size': 12,
+      'text-letter-spacing': 0.05,
     },
-    paint: { "text-color": "#191a17", "text-halo-color": "#ffffff", "text-halo-width": 1.4 },
+    paint: { 'text-color': '#191a17', 'text-halo-color': '#ffffff', 'text-halo-width': 1.4 },
   },
   {
     id: LYR_PREVIEW,
-    type: "line",
+    type: 'line',
     source: SRC_PREVIEW,
-    layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-color": "#191a17", "line-width": 2, "line-dasharray": [1.5, 1.5], "line-opacity": 0.5 },
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': '#191a17',
+      'line-width': 2,
+      'line-dasharray': [1.5, 1.5],
+      'line-opacity': 0.5,
+    },
   },
   {
     // Way tool, not yet drawing, hovering near an existing way's open end:
@@ -465,15 +539,15 @@ export const LAYER_SPECS: LayerSpecification[] = [
     // wasn't visible at all for the arbitrary other way you're about to snap
     // onto.
     id: LYR_ENDPOINT_HINT,
-    type: "circle",
+    type: 'circle',
     source: SRC_ENDPOINT_HINT,
     paint: {
-      "circle-radius": 13,
-      "circle-color": "#191a17",
-      "circle-opacity": 0.16,
-      "circle-stroke-width": 2.5,
-      "circle-stroke-color": "#191a17",
-      "circle-stroke-opacity": 0.85,
+      'circle-radius': 13,
+      'circle-color': '#191a17',
+      'circle-opacity': 0.16,
+      'circle-stroke-width': 2.5,
+      'circle-stroke-color': '#191a17',
+      'circle-stroke-opacity': 0.85,
     },
   },
   {
@@ -482,30 +556,47 @@ export const LAYER_SPECS: LayerSpecification[] = [
     // point" shape, so it can never be mistaken for a station or facility
     // (both of which stay circular/pictogram markers).
     id: LYR_HANDLES,
-    type: "symbol",
+    type: 'symbol',
     source: SRC_HANDLES,
-    filter: ["!", ["get", "endpoint"]],
-    layout: { "icon-image": ["get", "icon"], "icon-size": 0.28, "icon-allow-overlap": true, "icon-ignore-placement": true },
+    filter: ['!', ['get', 'endpoint']],
+    layout: {
+      'icon-image': ['get', 'icon'],
+      'icon-size': 0.28,
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+    },
   },
   {
     // A way's open ends: drag to EXTEND (adds a new point), not reshape —
     // deliberately inverted (ink fill / light ring) so it never reads as a
     // regular handle or, worse, a station stop.
     id: LYR_WAY_ENDPOINTS,
-    type: "circle",
+    type: 'circle',
     source: SRC_HANDLES,
-    filter: ["get", "endpoint"],
-    paint: { "circle-radius": 7, "circle-color": "#191a17", "circle-stroke-width": 2, "circle-stroke-color": "#ffffff" },
+    filter: ['get', 'endpoint'],
+    paint: {
+      'circle-radius': 7,
+      'circle-color': '#191a17',
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#ffffff',
+    },
   },
   {
     id: LYR_FACILITY_SELECTED,
-    type: "circle",
+    type: 'circle',
     source: SRC_FACILITIES,
     // feature-state driven (see LYR_WAY_SELECTED).
     paint: {
-      "circle-radius": ["+", ["get", "radius"], 5],
-      "circle-color": "#191a17",
-      "circle-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, ["boolean", ["feature-state", "hover"], false], 0.1, 0],
+      'circle-radius': ['+', ['get', 'radius'], 5],
+      'circle-color': '#191a17',
+      'circle-opacity': [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        0.18,
+        ['boolean', ['feature-state', 'hover'], false],
+        0.1,
+        0,
+      ],
     },
   },
   {
@@ -514,53 +605,63 @@ export const LAYER_SPECS: LayerSpecification[] = [
     // same glyph set as the React UI) so they read as distinct real-world
     // things instead of interchangeable colored dots.
     id: LYR_FACILITIES,
-    type: "symbol",
+    type: 'symbol',
     source: SRC_FACILITIES,
-    layout: { "icon-image": ["get", "icon"], "icon-size": 0.4, "icon-allow-overlap": true, "icon-ignore-placement": true },
+    layout: {
+      'icon-image': ['get', 'icon'],
+      'icon-size': 0.4,
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+    },
   },
   {
     // Named facilities only — most stay unlabeled (an "entrance" pictogram
     // is usually self-explanatory), but a named depot/yard or parking lot
     // reads much better with its name on the map.
     id: LYR_FACILITY_LABELS,
-    type: "symbol",
+    type: 'symbol',
     source: SRC_FACILITIES,
     // Facility names are close-up infrastructure detail (depots, entrances) —
     // no reason to place/collide them at overview zooms.
     minzoom: 14,
-    filter: ["!=", ["get", "name"], ""],
+    filter: ['!=', ['get', 'name'], ''],
     layout: {
-      "text-field": ["get", "name"],
-      "text-font": ["literal", ["Noto Sans Regular"]],
-      "text-size": 11,
-      "text-variable-anchor": ["bottom", "top", "right", "left"],
-      "text-radial-offset": 0.9,
-      "text-allow-overlap": false,
-      "text-optional": true,
+      'text-field': ['get', 'name'],
+      'text-font': ['literal', ['Noto Sans Regular']],
+      'text-size': 11,
+      'text-variable-anchor': ['bottom', 'top', 'right', 'left'],
+      'text-radial-offset': 0.9,
+      'text-allow-overlap': false,
+      'text-optional': true,
     },
-    paint: { "text-color": "#191a17", "text-halo-color": "#ffffff", "text-halo-width": 1.4 },
+    paint: { 'text-color': '#191a17', 'text-halo-color': '#ffffff', 'text-halo-width': 1.4 },
   },
   {
     // Footprint/platform vertices of the station currently being edited —
     // same reshape affordance/style as way handles (same verb, same look).
     id: LYR_PHYSICAL_HANDLES,
-    type: "symbol",
+    type: 'symbol',
     source: SRC_PHYSICAL_HANDLES,
-    layout: { "icon-image": ["get", "icon"], "icon-size": 0.28, "icon-allow-overlap": true, "icon-ignore-placement": true },
+    layout: {
+      'icon-image': ['get', 'icon'],
+      'icon-size': 0.28,
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+    },
   },
   {
     // Shift-drag rubber-band select (see map/interactions.ts's
     // startMarqueeSelect) — last in paint order so it always draws above
     // everything else while the drag is live.
     id: LYR_MARQUEE_FILL,
-    type: "fill",
+    type: 'fill',
     source: SRC_MARQUEE,
-    paint: { "fill-color": "#191a17", "fill-opacity": 0.08 },
+    paint: { 'fill-color': '#191a17', 'fill-opacity': 0.08 },
   },
   {
     id: LYR_MARQUEE_STROKE,
-    type: "line",
+    type: 'line',
     source: SRC_MARQUEE,
-    paint: { "line-color": "#191a17", "line-width": 1.5, "line-dasharray": [2, 2] },
+    paint: { 'line-color': '#191a17', 'line-width': 1.5, 'line-dasharray': [2, 2] },
   },
 ];

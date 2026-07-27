@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useEditor } from "../../editor/EditorProvider";
+import { useEffect } from 'react';
+import { useEditor } from '../../editor/EditorProvider';
 import {
   FACILITY_TYPES,
   WAY_FAMILIES,
@@ -7,12 +7,12 @@ import {
   modesForWayType,
   profilePresetsForWayType,
   wayType,
-} from "@transitmapper/core/model/catalog";
-import type { Tool } from "../../editor/store";
-import { ColorField } from "../ColorField";
-import { Panel } from "../Panel";
-import { useView } from "../ViewProvider";
-import { GEOMETRY_OPTIONS, GradeChips } from "./shared";
+} from '@transitmapper/core/model/catalog';
+import type { Tool } from '../../editor/store';
+import { ColorField } from '../ColorField';
+import { Panel } from '../Panel';
+import { useView } from '../ViewProvider';
+import { GEOMETRY_OPTIONS, GradeChips } from './shared';
 
 /**
  * When a drawing tool is armed (anything but Select), the sidebar shows
@@ -31,9 +31,9 @@ export interface ToolDraftInspectorProps {
 }
 
 export function ToolDraftInspector({ tool }: ToolDraftInspectorProps) {
-  if (tool === "way") return <WayDraftInspector />;
-  if (tool === "station") return <StationDraftInspector />;
-  if (tool === "facility") return <FacilityDraftInspector />;
+  if (tool === 'way') return <WayDraftInspector />;
+  if (tool === 'station') return <StationDraftInspector />;
+  if (tool === 'facility') return <FacilityDraftInspector />;
   return null;
 }
 
@@ -70,7 +70,7 @@ function WayDraftInspector() {
 
   const type = wayType(draftWayTypeId);
   const compatibleModes = modesForWayType(draftWayTypeId);
-  const networkFirst = viewMode === "network";
+  const networkFirst = viewMode === 'network';
   const currentMode = mode(draftModeId);
 
   // The whole separation of concerns, enforced: drawing in the
@@ -85,16 +85,24 @@ function WayDraftInspector() {
     <Panel slot="right" aria-label="Drawing options">
       <div className="insp-head">
         {networkFirst && <span className="dot" style={{ background: draftColor }} />}
-        <span className="insp-name static">{networkFirst ? currentMode.label : WAY_FAMILIES[type.family].toolLabel}</span>
+        <span className="insp-name static">
+          {networkFirst ? currentMode.label : WAY_FAMILIES[type.family].toolLabel}
+        </span>
       </div>
       <div className="insp-kind">Drawing tool · options apply to what you draw next</div>
       <div className="insp-section">
         {networkFirst && currentMode.wayTypeIds.length > 1 && (
           <>
             <label className="field-label">Runs on</label>
-            <select className="opt-select" value={draftWayTypeId} onChange={(e) => setDraftWayType(e.target.value)}>
+            <select
+              className="opt-select"
+              value={draftWayTypeId}
+              onChange={(e) => setDraftWayType(e.target.value)}
+            >
               {currentMode.wayTypeIds.map((id) => (
-                <option key={id} value={id}>{wayType(id).label}</option>
+                <option key={id} value={id}>
+                  {wayType(id).label}
+                </option>
               ))}
             </select>
           </>
@@ -103,10 +111,16 @@ function WayDraftInspector() {
         {!networkFirst && profilePresetsForWayType(draftWayTypeId).length > 0 && (
           <>
             <label className="field-label">Cross-section</label>
-            <select className="opt-select" value={draftPresetId ?? ""} onChange={(e) => setDraftPreset(e.target.value || null)}>
+            <select
+              className="opt-select"
+              value={draftPresetId ?? ''}
+              onChange={(e) => setDraftPreset(e.target.value || null)}
+            >
               <option value="">Default</option>
               {profilePresetsForWayType(draftWayTypeId).map((p) => (
-                <option key={p.id} value={p.id}>{p.label}</option>
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
               ))}
             </select>
           </>
@@ -123,7 +137,12 @@ function WayDraftInspector() {
             <label className="field-label">Class</label>
             <div className="chip-row" role="group" aria-label="Class">
               {type.classes.map((c) => (
-                <button key={c.id} className={`chip ${draftClassId === c.id ? "active" : ""}`} aria-pressed={draftClassId === c.id} onClick={() => setDraftClassId(c.id)}>
+                <button
+                  key={c.id}
+                  className={`chip ${draftClassId === c.id ? 'active' : ''}`}
+                  aria-pressed={draftClassId === c.id}
+                  onClick={() => setDraftClassId(c.id)}
+                >
                   {c.label}
                 </button>
               ))}
@@ -133,10 +152,17 @@ function WayDraftInspector() {
 
         <GradeChips value={draftGrade} disabled={false} onChange={setDraftGrade} />
 
-        <label className="field-label" id="draft-shape-label">Shape</label>
+        <label className="field-label" id="draft-shape-label">
+          Shape
+        </label>
         <div className="chip-row" role="group" aria-labelledby="draft-shape-label">
           {GEOMETRY_OPTIONS.map(([g, label]) => (
-            <button key={g} className={`chip ${draftGeometry === g ? "active" : ""}`} aria-pressed={draftGeometry === g} onClick={() => setDraftGeometry(g)}>
+            <button
+              key={g}
+              className={`chip ${draftGeometry === g ? 'active' : ''}`}
+              aria-pressed={draftGeometry === g}
+              onClick={() => setDraftGeometry(g)}
+            >
               {label}
             </button>
           ))}
@@ -148,17 +174,27 @@ function WayDraftInspector() {
             schematic line. */}
         {!networkFirst && (
           <>
-            <label className="field-label" id="draft-direction-label">Direction</label>
+            <label className="field-label" id="draft-direction-label">
+              Direction
+            </label>
             <div
               className="chip-row"
               role="group"
               aria-labelledby="draft-direction-label"
               title="One-way runs the direction you draw (O toggles; D flips after). Tip: right-click an existing endpoint to branch a one-way segment off it."
             >
-              <button className={`chip ${!draftOneWay ? "active" : ""}`} aria-pressed={!draftOneWay} onClick={() => setDraftOneWay(false)}>
+              <button
+                className={`chip ${!draftOneWay ? 'active' : ''}`}
+                aria-pressed={!draftOneWay}
+                onClick={() => setDraftOneWay(false)}
+              >
                 Two-way
               </button>
-              <button className={`chip ${draftOneWay ? "active" : ""}`} aria-pressed={draftOneWay} onClick={() => setDraftOneWay(true)}>
+              <button
+                className={`chip ${draftOneWay ? 'active' : ''}`}
+                aria-pressed={draftOneWay}
+                onClick={() => setDraftOneWay(true)}
+              >
                 One-way
               </button>
             </div>
@@ -166,7 +202,13 @@ function WayDraftInspector() {
         )}
 
         {networkFirst && compatibleModes.length > 0 && (
-          <ColorField label="Color" value={draftColor} palette={palette} onChange={setDraftColor} onAddToPalette={addPaletteColor} />
+          <ColorField
+            label="Color"
+            value={draftColor}
+            palette={palette}
+            onChange={setDraftColor}
+            onAddToPalette={addPaletteColor}
+          />
         )}
       </div>
     </Panel>
@@ -184,10 +226,17 @@ function StationDraftInspector() {
       </div>
       <div className="insp-kind">Drawing tool</div>
       <div className="insp-section">
-        {viewMode === "infrastructure" ? (
-          <p className="panel-hint">Drag a rectangle — or click corner points, double-click to close — to define the station's land. Its border IS the station; draw structures (buildings, platforms, bus bays) on it.</p>
+        {viewMode === 'infrastructure' ? (
+          <p className="panel-hint">
+            Drag a rectangle — or click corner points, double-click to close — to define the
+            station's land. Its border IS the station; draw structures (buildings, platforms, bus
+            bays) on it.
+          </p>
         ) : (
-          <p className="panel-hint">Click to place a stop — it snaps onto the line under it. Draw full station footprints in the Infrastructure view.</p>
+          <p className="panel-hint">
+            Click to place a stop — it snaps onto the line under it. Draw full station footprints in
+            the Infrastructure view.
+          </p>
         )}
       </div>
     </Panel>
@@ -210,9 +259,9 @@ function FacilityDraftInspector() {
   const cancelPlacingFacility = useEditor((s) => s.cancelPlacingFacility);
 
   const placingGroup = placingFor ? groups.find((g) => g.id === placingFor) : undefined;
-  const typeLabel = FACILITY_TYPES[draftFacilityTypeId]?.label.toLowerCase() ?? "facility";
-  const article = /^[aeiou]/.test(typeLabel) ? "an" : "a";
-  const isArea = FACILITY_TYPES[draftFacilityTypeId]?.geometryKind === "area";
+  const typeLabel = FACILITY_TYPES[draftFacilityTypeId]?.label.toLowerCase() ?? 'facility';
+  const article = /^[aeiou]/.test(typeLabel) ? 'an' : 'a';
+  const isArea = FACILITY_TYPES[draftFacilityTypeId]?.geometryKind === 'area';
 
   // One plain sentence that matches what a click actually does. The WHAT
   // (entrance/depot/… or Complex) is the tool's flyout variant, not a menu
@@ -226,17 +275,26 @@ function FacilityDraftInspector() {
       <div className="insp-section">
         {placingGroup ? (
           <p className="panel-hint">
-            Click the map to place {article} {typeLabel} in {placingGroup.name || "this complex"}.{" "}
+            Click the map to place {article} {typeLabel} in {placingGroup.name || 'this complex'}.{' '}
             <button type="button" className="link-btn" onClick={cancelPlacingFacility}>
               Cancel
             </button>
           </p>
         ) : complexMode ? (
-          <p className="panel-hint">Drag a rectangle — or click corner points and double-click to close — to outline the site.</p>
+          <p className="panel-hint">
+            Drag a rectangle — or click corner points and double-click to close — to outline the
+            site.
+          </p>
         ) : isArea ? (
-          <p className="panel-hint">Drag to draw the {typeLabel}'s shape · on station land it joins that station automatically.</p>
+          <p className="panel-hint">
+            Drag to draw the {typeLabel}'s shape · on station land it joins that station
+            automatically.
+          </p>
         ) : (
-          <p className="panel-hint">Click the map to place {article} {typeLabel} · on station land it joins that station automatically.</p>
+          <p className="panel-hint">
+            Click the map to place {article} {typeLabel} · on station land it joins that station
+            automatically.
+          </p>
         )}
       </div>
     </Panel>

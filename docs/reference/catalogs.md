@@ -1,6 +1,6 @@
 # Catalogs
 
-Every *kind* in TransitMapper (way types, service modes, lane kinds,
+Every _kind_ in TransitMapper (way types, service modes, lane kinds,
 facility types, grades, presets) is catalog **data** in
 [`src/model/catalog.ts`](../../src/model/catalog.ts), not a union type baked
 into logic. Records in the data model reference catalog entries by string
@@ -15,16 +15,16 @@ The physical carriers. Each declares its family, its capacity unit, its
 facility classes, which lane kinds its cross-section may include, and the
 default profile a new way starts with.
 
-| Id | Label | Family | Capacity unit |
-| --- | --- | --- | --- |
-| `heavyRail` | Heavy rail | guideway | tracks |
-| `lightRail` | Light rail / tram | guideway | tracks |
-| `monorail` | Monorail | guideway | beams |
-| `road` | Road | roadway | lanes |
-| `bike` | Bike | path | width |
-| `pedestrian` | Pedestrian | path | width |
-| `aerial` | Aerial / gondola | aerial | cabins/hr |
-| `water` | Ferry route | water | vessels |
+| Id           | Label             | Family   | Capacity unit |
+| ------------ | ----------------- | -------- | ------------- |
+| `heavyRail`  | Heavy rail        | guideway | tracks        |
+| `lightRail`  | Light rail / tram | guideway | tracks        |
+| `monorail`   | Monorail          | guideway | beams         |
+| `road`       | Road              | roadway  | lanes         |
+| `bike`       | Bike              | path     | width         |
+| `pedestrian` | Pedestrian        | path     | width         |
+| `aerial`     | Aerial / gondola  | aerial   | cabins/hr     |
+| `water`      | Ferry route       | water    | vessels       |
 
 Heavy rail, light rail, and monorail are separate types (not classes of one
 "rail") because they're physically incompatible track standards. Roads carry
@@ -63,17 +63,17 @@ boulevard preset makes an arterial).
 Services people ride. Each mode lists the way types it can run over, which
 drives every compatibility check (the mode picker, route drawing, adoption):
 
-| Id | Label | Runs over |
-| --- | --- | --- |
-| `subway` | Subway / metro | heavyRail |
-| `commuterRail` | Commuter rail | heavyRail |
-| `lightRail` | Light rail | lightRail, road |
-| `tram` | Tram / streetcar | lightRail, road |
-| `monorail` | Monorail | monorail |
-| `brt` | BRT | road |
-| `bus` | Bus | road |
-| `gondola` | Gondola / aerial | aerial |
-| `ferry` | Ferry | water |
+| Id             | Label            | Runs over       |
+| -------------- | ---------------- | --------------- |
+| `subway`       | Subway / metro   | heavyRail       |
+| `commuterRail` | Commuter rail    | heavyRail       |
+| `lightRail`    | Light rail       | lightRail, road |
+| `tram`         | Tram / streetcar | lightRail, road |
+| `monorail`     | Monorail         | monorail        |
+| `brt`          | BRT              | road            |
+| `bus`          | Bus              | road            |
+| `gondola`      | Gondola / aerial | aerial          |
+| `ferry`        | Ferry            | water           |
 
 Light rail and trams list `road` because they street-run in a road's
 right-of-way (a road's cross-section can include `track` lanes).

@@ -66,7 +66,7 @@ Dijkstra's algorithm, with two refinements:
   sketch by discounting edges close to the sketched path, so among many
   plausible street routings the one following the user's drawing wins.
 
-Committing a route *materializes* it: anchors that fall mid-way become real
+Committing a route _materializes_ it: anchors that fall mid-way become real
 control points, ways are split there, and the service's patterns list the
 resulting ways in travel order. Materializing rather than storing fractional
 positions keeps the service model uniform: a routed service and a sketched

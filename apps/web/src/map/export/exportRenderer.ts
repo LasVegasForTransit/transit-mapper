@@ -1,8 +1,8 @@
-import maplibregl, { type GeoJSONSource, type Map as MLMap } from "maplibre-gl";
-import { systemBounds } from "@transitmapper/core/model/geo";
-import type { TransitSystem } from "@transitmapper/core/model/system";
-import { BASEMAP_STYLE } from "../basemap";
-import { landmarksFeatureCollection } from "../landmarks";
+import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
+import { systemBounds } from '@transitmapper/core/model/geo';
+import type { TransitSystem } from '@transitmapper/core/model/system';
+import { BASEMAP_STYLE } from '../basemap';
+import { landmarksFeatureCollection } from '../landmarks';
 import {
   buildFeatures,
   LAYER_SPECS,
@@ -22,9 +22,9 @@ import {
   SRC_WAY_LABELS,
   SRC_WAYS,
   type ViewOptions,
-} from "../layers";
+} from '../layers';
 
-const EMPTY_FC = { type: "FeatureCollection" as const, features: [] };
+const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
 const DEFAULT_SIZE = { width: 1600, height: 1000 };
 const RENDER_TIMEOUT_MS = 20000;
 
@@ -58,13 +58,17 @@ export interface RenderedExport {
  * The caller composites using the returned map + canvas, then MUST call
  * dispose() (a try/finally) to tear down the map and its hidden container.
  */
-export function renderSystemForExport(system: TransitSystem, view: ViewOptions, opts: ExportRenderOptions = {}): Promise<RenderedExport> {
+export function renderSystemForExport(
+  system: TransitSystem,
+  view: ViewOptions,
+  opts: ExportRenderOptions = {},
+): Promise<RenderedExport> {
   const width = Math.max(1, Math.round(opts.width ?? DEFAULT_SIZE.width));
   const height = Math.max(1, Math.round(opts.height ?? DEFAULT_SIZE.height));
   const padding = opts.padding ?? 56;
 
   return new Promise<RenderedExport>((resolve, reject) => {
-    const container = document.createElement("div");
+    const container = document.createElement('div');
     container.style.cssText = `position:absolute;left:-10000px;top:0;width:${width}px;height:${height}px;pointer-events:none;`;
     document.body.appendChild(container);
 
@@ -86,7 +90,7 @@ export function renderSystemForExport(system: TransitSystem, view: ViewOptions, 
       }
       container.remove();
     };
-    const timer = setTimeout(() => fail(new Error("Export render timed out.")), RENDER_TIMEOUT_MS);
+    const timer = setTimeout(() => fail(new Error('Export render timed out.')), RENDER_TIMEOUT_MS);
     function fail(err: unknown): void {
       if (settled) return;
       settled = true;
@@ -95,17 +99,20 @@ export function renderSystemForExport(system: TransitSystem, view: ViewOptions, 
       reject(err instanceof Error ? err : new Error(String(err)));
     }
 
-    map.on("error", (e) => fail(e.error ?? new Error("Export map error.")));
-    map.on("load", () => {
+    map.on('error', (e) => fail(e.error ?? new Error('Export map error.')));
+    map.on('load', () => {
       try {
         registerMapIcons(map);
         // Add every source ANY layer references (derived from LAYER_SPECS) so
         // addLayer never throws on a missing source — the static context source
         // gets the real landmarks, the rest start empty.
         for (const spec of LAYER_SPECS) {
-          const src = "source" in spec ? spec.source : undefined;
-          if (typeof src !== "string" || map.getSource(src)) continue;
-          map.addSource(src, { type: "geojson", data: src === SRC_LANDMARKS ? landmarksFeatureCollection() : EMPTY_FC });
+          const src = 'source' in spec ? spec.source : undefined;
+          if (typeof src !== 'string' || map.getSource(src)) continue;
+          map.addSource(src, {
+            type: 'geojson',
+            data: src === SRC_LANDMARKS ? landmarksFeatureCollection() : EMPTY_FC,
+          });
         }
         for (const spec of LAYER_SPECS) map.addLayer(spec);
 
@@ -115,16 +122,24 @@ export function renderSystemForExport(system: TransitSystem, view: ViewOptions, 
         // zoom-interpolated, so a small/sparse system (framed at a higher zoom)
         // keeps readable dots. Live-map dots keep their reasonable floor.
         if (map.getLayer(LYR_STATIONS)) {
-          map.setPaintProperty(LYR_STATIONS, "circle-radius", [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
+          map.setPaintProperty(LYR_STATIONS, 'circle-radius', [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
             10,
-            ["case", ["get", "interchange"], 2.2, 1.4],
+            ['case', ['get', 'interchange'], 2.2, 1.4],
             14,
-            ["case", ["get", "interchange"], 5, 3.5],
+            ['case', ['get', 'interchange'], 5, 3.5],
           ]);
-          map.setPaintProperty(LYR_STATIONS, "circle-stroke-width", ["interpolate", ["linear"], ["zoom"], 10, 0.7, 14, 2]);
+          map.setPaintProperty(LYR_STATIONS, 'circle-stroke-width', [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            10,
+            0.7,
+            14,
+            2,
+          ]);
         }
 
         // Resize BEFORE fitBounds — fitBounds reads the current container size.
@@ -133,7 +148,8 @@ export function renderSystemForExport(system: TransitSystem, view: ViewOptions, 
         if (bounds) map.fitBounds(bounds, { padding, animate: false });
 
         const fc = buildFeatures(system, null, [], view);
-        const set = (src: string, data: GeoJSON.FeatureCollection) => (map.getSource(src) as GeoJSONSource | undefined)?.setData(data);
+        const set = (src: string, data: GeoJSON.FeatureCollection) =>
+          (map.getSource(src) as GeoJSONSource | undefined)?.setData(data);
         set(SRC_WAYS, fc.ways);
         set(SRC_SERVICES, fc.services);
         set(SRC_STATIONS, fc.stations);
@@ -147,7 +163,7 @@ export function renderSystemForExport(system: TransitSystem, view: ViewOptions, 
         set(SRC_CONNECTORS, fc.connectors);
         set(SRC_WAY_LABELS, fc.wayLabels);
 
-        map.once("idle", () => {
+        map.once('idle', () => {
           if (settled) return;
           settled = true;
           clearTimeout(timer);

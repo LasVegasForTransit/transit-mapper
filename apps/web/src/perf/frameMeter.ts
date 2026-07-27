@@ -1,5 +1,5 @@
-import type { Map as MLMap } from "maplibre-gl";
-import { formatFrameStats, summarizeFrames, type FrameStats } from "./frameStats";
+import type { Map as MLMap } from 'maplibre-gl';
+import { formatFrameStats, summarizeFrames, type FrameStats } from './frameStats';
 
 const WINDOW = 240; // rolling painted-frame samples (~a few seconds of movement)
 const MAX_GAP_MS = 500; // ignore idle gaps between bursts of rendering
@@ -30,13 +30,13 @@ export function attachFrameMeter(map: MLMap): FrameMeter {
       if (durations.length > WINDOW) durations.shift();
     }
   };
-  map.on("render", onRender);
+  map.on('render', onRender);
 
-  const overlay = document.createElement("div");
+  const overlay = document.createElement('div');
   overlay.style.cssText =
-    "position:fixed;left:8px;bottom:8px;z-index:99999;font:11px ui-monospace,SFMono-Regular,monospace;" +
-    "background:rgba(25,26,23,0.82);color:#fff;padding:4px 8px;border-radius:6px;" +
-    "pointer-events:none;white-space:nowrap;letter-spacing:0.02em";
+    'position:fixed;left:8px;bottom:8px;z-index:99999;font:11px ui-monospace,SFMono-Regular,monospace;' +
+    'background:rgba(25,26,23,0.82);color:#fff;padding:4px 8px;border-radius:6px;' +
+    'pointer-events:none;white-space:nowrap;letter-spacing:0.02em';
   document.body.appendChild(overlay);
 
   let overlayRaf = requestAnimationFrame(function refresh() {
@@ -47,7 +47,7 @@ export function attachFrameMeter(map: MLMap): FrameMeter {
   return {
     stats: () => summarizeFrames(durations),
     detach: () => {
-      map.off("render", onRender);
+      map.off('render', onRender);
       cancelAnimationFrame(overlayRaf);
       overlay.remove();
     },

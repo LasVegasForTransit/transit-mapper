@@ -1,17 +1,22 @@
-import { useState } from "react";
-import { useEditor } from "../../editor/EditorProvider";
-import { GRADES, LANE_KINDS, WAY_FAMILIES, wayType } from "@transitmapper/core/model/catalog";
-import { estimateWayCapitalCost, formatUsdCompact } from "@transitmapper/core/model/cost";
-import { bearingDegrees, formatBearing, formatKm, wayLengthMeters } from "@transitmapper/core/model/geo";
-import { getComponent } from "@transitmapper/core/model/components";
-import { directionalLanes, isOneWay, wayCapacity } from "@transitmapper/core/model/profile";
-import { CrossSectionEditor } from "../CrossSectionEditor";
-import { InspectorTabs, type InspectorTab } from "../InspectorTabs";
-import { Panel } from "../Panel";
-import { blurOnEnter } from "../formUtils";
-import { Icon } from "../Icon";
-import { useView } from "../ViewProvider";
-import { GEOMETRY_OPTIONS, GradeChips, EmptyInspector, ServicesOnWay, Stat } from "./shared";
+import { useState } from 'react';
+import { useEditor } from '../../editor/EditorProvider';
+import { GRADES, LANE_KINDS, WAY_FAMILIES, wayType } from '@transitmapper/core/model/catalog';
+import { estimateWayCapitalCost, formatUsdCompact } from '@transitmapper/core/model/cost';
+import {
+  bearingDegrees,
+  formatBearing,
+  formatKm,
+  wayLengthMeters,
+} from '@transitmapper/core/model/geo';
+import { getComponent } from '@transitmapper/core/model/components';
+import { directionalLanes, isOneWay, wayCapacity } from '@transitmapper/core/model/profile';
+import { CrossSectionEditor } from '../CrossSectionEditor';
+import { InspectorTabs, type InspectorTab } from '../InspectorTabs';
+import { Panel } from '../Panel';
+import { blurOnEnter } from '../formUtils';
+import { Icon } from '../Icon';
+import { useView } from '../ViewProvider';
+import { GEOMETRY_OPTIONS, GradeChips, EmptyInspector, ServicesOnWay, Stat } from './shared';
 
 const MEDIAN_FT = 0.3048;
 const medianFtLabel = (m: number) => `${Math.round(m / MEDIAN_FT)}′`;
@@ -30,12 +35,14 @@ function MedianField({ namedWayId, readOnly }: MedianFieldProps) {
   const widthM = median?.widthM ?? LANE_KINDS.median.defaultWidthM;
   return (
     <>
-      <label className="field-label" id="median-width-label">Median</label>
+      <label className="field-label" id="median-width-label">
+        Median
+      </label>
       <div className="chip-row" role="group" aria-labelledby="median-width-label">
         {LANE_KINDS.median.widthPresetsM.map((w) => (
           <button
             key={w}
-            className={`chip ${Math.abs(widthM - w) < 0.01 ? "active" : ""}`}
+            className={`chip ${Math.abs(widthM - w) < 0.01 ? 'active' : ''}`}
             aria-pressed={Math.abs(widthM - w) < 0.01}
             disabled={readOnly}
             onClick={() => setMedianWidth(namedWayId, w)}
@@ -70,15 +77,18 @@ export function WayInspector({ id }: WayInspectorProps) {
   // A median is only ever captured by separating, so its presence is the
   // durable record that this street is a separated pair — unlike the member
   // count, which any split changes.
-  const hasCapturedMedian = useEditor((s) => (namedWay ? getComponent(s.system.medians, namedWay.id) !== undefined : false));
+  const hasCapturedMedian = useEditor((s) =>
+    namedWay ? getComponent(s.system.medians, namedWay.id) !== undefined : false,
+  );
   // combineProfiles assumes one one-way half per direction; joining two
   // two-way ways would produce a four-directional street.
-  const carriagewaysAreOneWay = useEditor((s) =>
-    namedWay?.wayIds.length === 2 &&
-    namedWay.wayIds.every((wid) => {
-      const w = s.system.ways.find((x) => x.id === wid);
-      return !!w && new Set(directionalLanes(w.profile).map((l) => l.direction)).size <= 1;
-    }),
+  const carriagewaysAreOneWay = useEditor(
+    (s) =>
+      namedWay?.wayIds.length === 2 &&
+      namedWay.wayIds.every((wid) => {
+        const w = s.system.ways.find((x) => x.id === wid);
+        return !!w && new Set(directionalLanes(w.profile).map((l) => l.direction)).size <= 1;
+      }),
   );
   const canCombine = namedWay?.wayIds.length === 2 && carriagewaysAreOneWay;
   const separateCarriageways = useEditor((s) => s.separateCarriageways);
@@ -89,7 +99,7 @@ export function WayInspector({ id }: WayInspectorProps) {
   const allWays = useEditor((s) => s.system.ways);
   const select = useEditor((s) => s.select);
   const { viewMode } = useView();
-  const [tab, setTab] = useState<string>(viewMode === "infrastructure" ? "lanes" : "identity");
+  const [tab, setTab] = useState<string>(viewMode === 'infrastructure' ? 'lanes' : 'identity');
 
   if (!way) return <EmptyInspector />;
   const type = wayType(way.typeId);
@@ -98,11 +108,11 @@ export function WayInspector({ id }: WayInspectorProps) {
   const cost = estimateWayCapitalCost(way);
   const identityNoun = WAY_FAMILIES[type.family].identityNoun;
 
-  const infra = viewMode === "infrastructure";
+  const infra = viewMode === 'infrastructure';
   const tabs: InspectorTab[] = [
-    ...(infra ? [{ id: "lanes", label: "Lanes" }] : []),
-    { id: "identity", label: "Identity" },
-    { id: "alignment", label: "Alignment" },
+    ...(infra ? [{ id: 'lanes', label: 'Lanes' }] : []),
+    { id: 'identity', label: 'Identity' },
+    { id: 'alignment', label: 'Alignment' },
   ];
   // The current tab can vanish when the view changes (Lanes is
   // Infrastructure-only) — fall back rather than showing an empty panel.
@@ -113,7 +123,10 @@ export function WayInspector({ id }: WayInspectorProps) {
   // shape splitWayAt leaves behind.
   const endIndexes = new Set([0, way.points.length - 1]);
   const mergeCandidate = nodes
-    .filter((n) => n.refs.length === 2 && n.refs.some((r) => r.wayId === id && endIndexes.has(r.pointIndex)))
+    .filter(
+      (n) =>
+        n.refs.length === 2 && n.refs.some((r) => r.wayId === id && endIndexes.has(r.pointIndex)),
+    )
     .map((n) => n.refs.find((r) => r.wayId !== id))
     .map((ref) => (ref ? allWays.find((w) => w.id === ref.wayId) : undefined))
     .find((w) => !!w && w.typeId === way.typeId);
@@ -121,8 +134,12 @@ export function WayInspector({ id }: WayInspectorProps) {
   // Straighten only has something to do when a non-junction control point
   // sits strictly between the endpoints — junction points stay put so
   // connected ways don't desync.
-  const junctionIndexes = new Set(nodes.flatMap((n) => n.refs.filter((r) => r.wayId === id).map((r) => r.pointIndex)));
-  const canStraighten = way.points.some((_, i) => i !== 0 && i !== way.points.length - 1 && !junctionIndexes.has(i));
+  const junctionIndexes = new Set(
+    nodes.flatMap((n) => n.refs.filter((r) => r.wayId === id).map((r) => r.pointIndex)),
+  );
+  const canStraighten = way.points.some(
+    (_, i) => i !== 0 && i !== way.points.length - 1 && !junctionIndexes.has(i),
+  );
 
   return (
     <Panel slot="right" aria-label="Selection details">
@@ -131,14 +148,14 @@ export function WayInspector({ id }: WayInspectorProps) {
         <span className="insp-name static">{namedWay?.name || type.label}</span>
       </div>
       <div className="insp-kind">
-        {namedWay?.name ? `${type.label} · ` : ""}
+        {namedWay?.name ? `${type.label} · ` : ''}
         {wayCapacity(way)} {type.capacityLabel} · {formatKm(length)}
       </div>
-      {way.source?.startsWith("osm:") && <div className="badge">Imported from OpenStreetMap</div>}
+      {way.source?.startsWith('osm:') && <div className="badge">Imported from OpenStreetMap</div>}
 
       <InspectorTabs tabs={tabs} active={active} onChange={setTab} />
 
-      {active === "lanes" && (
+      {active === 'lanes' && (
         <div className="insp-section" role="tabpanel">
           <CrossSectionEditor wayId={id} readOnly={readOnly} />
           {!readOnly && (
@@ -149,7 +166,7 @@ export function WayInspector({ id }: WayInspectorProps) {
                   title="Split into two one-way carriageways around a median gap — both stay one named street"
                   onClick={() => {
                     const newId = separateCarriageways(id);
-                    if (newId) select({ kind: "way", id });
+                    if (newId) select({ kind: 'way', id });
                   }}
                 >
                   Separate carriageways
@@ -168,8 +185,8 @@ export function WayInspector({ id }: WayInspectorProps) {
                     namedWay.wayIds.length !== 2
                       ? `This street is ${namedWay.wayIds.length} segments; combining works on a two-carriageway street. Merge the split segments first.`
                       : !carriagewaysAreOneWay
-                        ? "Both halves must be one-way to combine into a two-way street."
-                        : "Merge the two one-way carriageways back into one two-way street"
+                        ? 'Both halves must be one-way to combine into a two-way street.'
+                        : 'Merge the two one-way carriageways back into one two-way street'
                   }
                   onClick={() => combineCarriageways(namedWay.id)}
                 >
@@ -184,24 +201,29 @@ export function WayInspector({ id }: WayInspectorProps) {
             // a cross street splits a carriageway, as MedianField promises.
             <MedianField namedWayId={namedWay.id} readOnly={readOnly} />
           )}
-          {!readOnly && <p className="insp-sub">Shortcuts: [ ] lanes · D flip · O one-way · 1–9 presets</p>}
+          {!readOnly && (
+            <p className="insp-sub">Shortcuts: [ ] lanes · D flip · O one-way · 1–9 presets</p>
+          )}
         </div>
       )}
 
-      {active === "identity" && (
+      {active === 'identity' && (
         <div className="insp-section" role="tabpanel">
           <label className="field-label">{identityNoun} name</label>
           <input
-            key={`${id}:${namedWay?.id ?? "none"}`}
+            key={`${id}:${namedWay?.id ?? 'none'}`}
             className="insp-name-input"
             placeholder={`Unnamed ${identityNoun.toLowerCase()}`}
-            defaultValue={namedWay?.name ?? ""}
+            defaultValue={namedWay?.name ?? ''}
             readOnly={readOnly}
             onBlur={(e) => nameWay(id, e.target.value)}
             onKeyDown={blurOnEnter}
           />
           {!readOnly && namedWay && namedWay.wayIds.length > 1 && (
-            <p className="insp-sub">Shared by {namedWay.wayIds.length} segments — renaming here renames the whole {identityNoun.toLowerCase()}</p>
+            <p className="insp-sub">
+              Shared by {namedWay.wayIds.length} segments — renaming here renames the whole{' '}
+              {identityNoun.toLowerCase()}
+            </p>
           )}
 
           {type.classes.length > 0 && (
@@ -209,7 +231,13 @@ export function WayInspector({ id }: WayInspectorProps) {
               <label className="field-label">Class</label>
               <div className="chip-row" role="group" aria-label="Class">
                 {type.classes.map((c) => (
-                  <button key={c.id} className={`chip ${way.classId === c.id ? "active" : ""}`} aria-pressed={way.classId === c.id} disabled={readOnly} onClick={() => setWayClassId(id, c.id)}>
+                  <button
+                    key={c.id}
+                    className={`chip ${way.classId === c.id ? 'active' : ''}`}
+                    aria-pressed={way.classId === c.id}
+                    disabled={readOnly}
+                    onClick={() => setWayClassId(id, c.id)}
+                  >
                     {c.label}
                   </button>
                 ))}
@@ -222,26 +250,29 @@ export function WayInspector({ id }: WayInspectorProps) {
           {cost && (
             <div className="cost-estimate">
               <label className="field-label">Est. capital cost</label>
-              <div className="cost-range">{formatUsdCompact(cost.totalLowUsd)}–{formatUsdCompact(cost.totalHighUsd)}</div>
+              <div className="cost-range">
+                {formatUsdCompact(cost.totalLowUsd)}–{formatUsdCompact(cost.totalHighUsd)}
+              </div>
               <p className="insp-sub">
-                {formatUsdCompact(cost.perMileLowUsd)}–{formatUsdCompact(cost.perMileHighUsd)} per mile, {type.label.toLowerCase()} · {GRADES[way.grade].label.toLowerCase()}.
-                A rough order-of-magnitude bucket, not a feasibility estimate.
+                {formatUsdCompact(cost.perMileLowUsd)}–{formatUsdCompact(cost.perMileHighUsd)} per
+                mile, {type.label.toLowerCase()} · {GRADES[way.grade].label.toLowerCase()}. A rough
+                order-of-magnitude bucket, not a feasibility estimate.
               </p>
             </div>
           )}
         </div>
       )}
 
-      {active === "alignment" && (
+      {active === 'alignment' && (
         <div className="insp-section" role="tabpanel">
           <label className="field-label">Shape</label>
           <div className="chip-row" role="group" aria-label="Shape">
             {GEOMETRY_OPTIONS.map(([g, label]) => (
               <button
                 key={g}
-                className={`chip ${way.geometry === g ? "active" : ""}`}
+                className={`chip ${way.geometry === g ? 'active' : ''}`}
                 aria-pressed={way.geometry === g}
-                disabled={readOnly || (g === "freeform" && way.geometry !== "freeform")}
+                disabled={readOnly || (g === 'freeform' && way.geometry !== 'freeform')}
                 onClick={() => setWayGeometry(id, g)}
               >
                 {label}
@@ -280,7 +311,12 @@ export function WayInspector({ id }: WayInspectorProps) {
             </div>
           )}
 
-          {!readOnly && <p className="insp-sub">Drag a handle to reshape · Ctrl-drag an end to extend · Alt-drag to erase · Ctrl-click a point to split</p>}
+          {!readOnly && (
+            <p className="insp-sub">
+              Drag a handle to reshape · Ctrl-drag an end to extend · Alt-drag to erase · Ctrl-click
+              a point to split
+            </p>
+          )}
         </div>
       )}
 

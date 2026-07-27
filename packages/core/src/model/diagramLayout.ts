@@ -14,8 +14,8 @@
 // move to a Web Worker or run server-side later if the relaxation solver
 // ever needs to run on a system too large to iterate 60 times synchronously
 // on the main thread.
-import { metersFromOrigin, offsetMeters, pointAtT } from "./geo";
-import type { LngLat, TransitSystem, Way } from "./system";
+import { metersFromOrigin, offsetMeters, pointAtT } from './geo';
+import type { LngLat, TransitSystem, Way } from './system';
 
 const cache = new WeakMap<TransitSystem, TransitSystem>();
 
@@ -78,7 +78,10 @@ function buildDiagramSystem(system: TransitSystem): TransitSystem {
     }
     const vertices = [...indices]
       .sort((a, b) => a - b)
-      .map((index) => ({ index, key: nodeKeyByWayPoint.get(`${way.id}:${index}`) ?? `end:${way.id}:${index}` }));
+      .map((index) => ({
+        index,
+        key: nodeKeyByWayPoint.get(`${way.id}:${index}`) ?? `end:${way.id}:${index}`,
+      }));
     wayVertices.set(way.id, vertices);
     for (const v of vertices) {
       if (!vertexSeed.has(v.key)) vertexSeed.set(v.key, way.points[v.index]);
@@ -106,7 +109,8 @@ function buildDiagramSystem(system: TransitSystem): TransitSystem {
   const edges: Edge[] = [];
   for (const vertices of wayVertices.values()) {
     for (let i = 0; i < vertices.length - 1; i++) {
-      if (vertices[i].key !== vertices[i + 1].key) edges.push({ a: vertices[i].key, b: vertices[i + 1].key });
+      if (vertices[i].key !== vertices[i + 1].key)
+        edges.push({ a: vertices[i].key, b: vertices[i + 1].key });
     }
   }
 
@@ -138,7 +142,11 @@ function buildDiagramSystem(system: TransitSystem): TransitSystem {
   const newWays: Way[] = system.ways.map((way) => {
     const vertices = wayVertices.get(way.id);
     if (!vertices) return way;
-    return { ...way, points: vertices.map((v) => finalCoord.get(v.key) ?? way.points[v.index]), geometry: "straight" };
+    return {
+      ...way,
+      points: vertices.map((v) => finalCoord.get(v.key) ?? way.points[v.index]),
+      geometry: 'straight',
+    };
   });
   const wayById = new Map(newWays.map((w) => [w.id, w]));
 

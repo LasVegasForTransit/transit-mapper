@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import { useEditor } from "../../editor/EditorProvider";
-import { INTERCHANGE_METERS, servedWayIds, serviceWayIds } from "@transitmapper/core/model/geo";
-import { InspectorTabs, type InspectorTab } from "../InspectorTabs";
-import { Panel } from "../Panel";
-import { blurOnEnter } from "../formUtils";
-import { Icon } from "../Icon";
-import { useView } from "../ViewProvider";
-import { EmptyInspector, Stat } from "./shared";
+import { useEffect, useRef, useState } from 'react';
+import { useEditor } from '../../editor/EditorProvider';
+import { INTERCHANGE_METERS, servedWayIds, serviceWayIds } from '@transitmapper/core/model/geo';
+import { InspectorTabs, type InspectorTab } from '../InspectorTabs';
+import { Panel } from '../Panel';
+import { blurOnEnter } from '../formUtils';
+import { Icon } from '../Icon';
+import { useView } from '../ViewProvider';
+import { EmptyInspector, Stat } from './shared';
 
 export interface StationInspectorProps {
   id: string;
@@ -29,7 +29,7 @@ export function StationInspector({ id }: StationInspectorProps) {
   const focusNameToken = useEditor((s) => s.focusNameToken);
   const focusNameStationId = useEditor((s) => s.focusNameStationId);
   const consumeFocusName = useEditor((s) => s.consumeFocusName);
-  const [tab, setTab] = useState<string>("stop");
+  const [tab, setTab] = useState<string>('stop');
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   // Placing a station is the one moment the very next thing you want to do
@@ -57,47 +57,61 @@ export function StationInspector({ id }: StationInspectorProps) {
   const served = services.filter((sv) => serviceWayIds(sv).some((w) => nearWays.has(w)));
 
   const tabs: InspectorTab[] = [
-    { id: "stop", label: "Stop" },
-    { id: "physical", label: "Physical" },
-    { id: "complex", label: "Complex" },
+    { id: 'stop', label: 'Stop' },
+    { id: 'physical', label: 'Physical' },
+    { id: 'complex', label: 'Complex' },
   ];
 
   return (
     <Panel slot="right" aria-label="Selection details">
       <div className="insp-head">
-        <span className="dot" style={{ background: served[0]?.color ?? "#4b5563" }} />
+        <span className="dot" style={{ background: served[0]?.color ?? '#4b5563' }} />
         <input
           ref={nameInputRef}
           className="insp-name"
           aria-label="Station name"
           placeholder="Unnamed station"
-          value={station.name ?? ""}
+          value={station.name ?? ''}
           disabled={readOnly}
           onChange={(e) => setStationName(id, e.target.value)}
           onKeyDown={blurOnEnter}
         />
       </div>
       <div className="insp-kind">
-        {served.length > 1 ? `Interchange · ${served.length} services` : served.length === 1 ? `Served by ${served[0].name}` : "Station · a stop"}
+        {served.length > 1
+          ? `Interchange · ${served.length} services`
+          : served.length === 1
+            ? `Served by ${served[0].name}`
+            : 'Station · a stop'}
       </div>
 
       <InspectorTabs tabs={tabs} active={tab} onChange={setTab} />
 
-      {tab === "stop" && (
+      {tab === 'stop' && (
         <div className="insp-section" role="tabpanel">
-          {!station.anchor && <div className="panel-hint">Free station — drag it onto a way to attach it.</div>}
+          {!station.anchor && (
+            <div className="panel-hint">Free station — drag it onto a way to attach it.</div>
+          )}
           <label className="field-label">Served by</label>
           <div className="svc-list">
             {served.length === 0 && <span className="panel-hint">No services nearby</span>}
             {served.map((sv) => (
-              <button key={sv.id} className="svc-chip" onClick={() => selectAndFocus({ kind: "service", id: sv.id })}>
+              <button
+                key={sv.id}
+                className="svc-chip"
+                onClick={() => selectAndFocus({ kind: 'service', id: sv.id })}
+              >
                 <span className="dot sm" style={{ background: sv.color }} /> {sv.name}
               </button>
             ))}
           </div>
 
-          <label className="field-label" htmlFor="dwell-input">Dwell time</label>
-          <p className="insp-sub">How long a vehicle waits here before departing, in the ambient animation.</p>
+          <label className="field-label" htmlFor="dwell-input">
+            Dwell time
+          </label>
+          <p className="insp-sub">
+            How long a vehicle waits here before departing, in the ambient animation.
+          </p>
           <div className="freq-row">
             <input
               id="dwell-input"
@@ -105,10 +119,17 @@ export function StationInspector({ id }: StationInspectorProps) {
               min={0}
               className="freq-input"
               aria-label="Dwell time in seconds"
-              value={station.dwellSeconds ?? ""}
+              value={station.dwellSeconds ?? ''}
               disabled={readOnly}
               placeholder="20 (default)"
-              onChange={(e) => setStationDwellSeconds(id, e.target.value === "" ? undefined : Math.max(0, Math.round(Number(e.target.value))))}
+              onChange={(e) =>
+                setStationDwellSeconds(
+                  id,
+                  e.target.value === ''
+                    ? undefined
+                    : Math.max(0, Math.round(Number(e.target.value))),
+                )
+              }
               onKeyDown={blurOnEnter}
             />
             <span className="freq-suffix">seconds</span>
@@ -123,17 +144,20 @@ export function StationInspector({ id }: StationInspectorProps) {
             />
             Major stop
           </label>
-          <p className="insp-sub">Labels this stop from a lower zoom (like an interchange), so key stops stay legible on a busy map.</p>
+          <p className="insp-sub">
+            Labels this stop from a lower zoom (like an interchange), so key stops stay legible on a
+            busy map.
+          </p>
         </div>
       )}
 
-      {tab === "physical" && (
+      {tab === 'physical' && (
         <div className="insp-section" role="tabpanel">
           <StationFootprint stationId={id} readOnly={readOnly} />
         </div>
       )}
 
-      {tab === "complex" && (
+      {tab === 'complex' && (
         <div className="insp-section" role="tabpanel">
           <StationGrouping stationId={id} readOnly={readOnly} />
         </div>
@@ -170,11 +194,11 @@ function StationFootprint({ stationId, readOnly }: StationFootprintProps) {
   // rendering rather than the view-mode mismatch it actually is.
   const drawFootprint = () => {
     addStationFootprint(stationId);
-    setViewMode("infrastructure");
+    setViewMode('infrastructure');
   };
   const drawPlatform = () => {
     addPlatform(stationId);
-    setViewMode("infrastructure");
+    setViewMode('infrastructure');
   };
 
   return (
@@ -182,7 +206,9 @@ function StationFootprint({ stationId, readOnly }: StationFootprintProps) {
       <label className="field-label">Footprint</label>
       {!station.footprint ? (
         <>
-          <p className="insp-sub">Physical boundary — visible &amp; editable in the Infrastructure view</p>
+          <p className="insp-sub">
+            Physical boundary — visible &amp; editable in the Infrastructure view
+          </p>
           {!readOnly && (
             <button className="add-btn" onClick={drawFootprint}>
               <Icon name="plus" size={17} /> Draw footprint
@@ -191,7 +217,11 @@ function StationFootprint({ stationId, readOnly }: StationFootprintProps) {
         </>
       ) : (
         <>
-          {!readOnly && <p className="insp-sub">Drag a corner in the Infrastructure view to reshape · Alt-click to erase one</p>}
+          {!readOnly && (
+            <p className="insp-sub">
+              Drag a corner in the Infrastructure view to reshape · Alt-click to erase one
+            </p>
+          )}
           <div className="stats">
             <Stat label="Corners" value={String(station.footprint.length)} />
             <Stat label="Platforms" value={String(station.platforms?.length ?? 0)} />
@@ -202,7 +232,11 @@ function StationFootprint({ stationId, readOnly }: StationFootprintProps) {
               <div key={p.id} className="svc-chip chip-removable">
                 <span className="chip-removable-label">Platform {i + 1}</span>
                 {!readOnly && (
-                  <button className="chip-remove-btn" aria-label="Remove platform" onClick={() => deletePlatform(stationId, p.id)}>
+                  <button
+                    className="chip-remove-btn"
+                    aria-label="Remove platform"
+                    onClick={() => deletePlatform(stationId, p.id)}
+                  >
                     <Icon name="x" size={14} />
                   </button>
                 )}
@@ -238,25 +272,34 @@ function StationGrouping({ stationId, readOnly }: StationGroupingProps) {
   const addGroupMember = useEditor((s) => s.addGroupMember);
   const removeGroupMember = useEditor((s) => s.removeGroupMember);
   const selectAndFocus = useEditor((s) => s.selectAndFocus);
-  const [picked, setPicked] = useState("");
+  const [picked, setPicked] = useState('');
 
   const myGroup = groups.find((g) => g.memberIds.includes(stationId));
-  const otherStations = stations.filter((st) => st.id !== stationId && !myGroup?.memberIds.includes(st.id));
+  const otherStations = stations.filter(
+    (st) => st.id !== stationId && !myGroup?.memberIds.includes(st.id),
+  );
 
   const groupWith = () => {
     if (!picked) return;
     if (myGroup) addGroupMember(myGroup.id, picked);
-    else createGroup([stationId, picked], "Station complex");
-    setPicked("");
+    else createGroup([stationId, picked], 'Station complex');
+    setPicked('');
   };
 
   return (
     <>
       <label className="field-label">Complex</label>
-      {!myGroup && <p className="insp-sub">Group with another station to form a transfer complex</p>}
+      {!myGroup && (
+        <p className="insp-sub">Group with another station to form a transfer complex</p>
+      )}
       {myGroup && (
         <div className="svc-list">
-          <button className="svc-chip" onClick={() => selectAndFocus({ kind: "group", id: myGroup.id })}>{myGroup.name || "Complex"}</button>
+          <button
+            className="svc-chip"
+            onClick={() => selectAndFocus({ kind: 'group', id: myGroup.id })}
+          >
+            {myGroup.name || 'Complex'}
+          </button>
           {myGroup.memberIds
             .filter((m) => m !== stationId)
             .map((mid) => {
@@ -264,11 +307,18 @@ function StationGrouping({ stationId, readOnly }: StationGroupingProps) {
               if (!st) return null;
               return (
                 <div key={mid} className="svc-chip chip-removable">
-                  <button className="chip-removable-label" onClick={() => selectAndFocus({ kind: "station", id: mid })}>
-                    {st.name || "Unnamed station"}
+                  <button
+                    className="chip-removable-label"
+                    onClick={() => selectAndFocus({ kind: 'station', id: mid })}
+                  >
+                    {st.name || 'Unnamed station'}
                   </button>
                   {!readOnly && (
-                    <button className="chip-remove-btn" aria-label="Remove from complex" onClick={() => removeGroupMember(myGroup.id, mid)}>
+                    <button
+                      className="chip-remove-btn"
+                      aria-label="Remove from complex"
+                      onClick={() => removeGroupMember(myGroup.id, mid)}
+                    >
                       <Icon name="x" size={14} />
                     </button>
                   )}
@@ -282,7 +332,9 @@ function StationGrouping({ stationId, readOnly }: StationGroupingProps) {
           <select className="opt-select" value={picked} onChange={(e) => setPicked(e.target.value)}>
             <option value="">Choose a station…</option>
             {otherStations.map((st) => (
-              <option key={st.id} value={st.id}>{st.name || "Unnamed station"}</option>
+              <option key={st.id} value={st.id}>
+                {st.name || 'Unnamed station'}
+              </option>
             ))}
           </select>
           <button className="add-btn" onClick={groupWith} disabled={!picked}>

@@ -1,0 +1,33 @@
+#!/usr/bin/env sh
+# Validates the subject line against the standard in
+# docs/development/reference/commit-messages.md.
+#
+# The rules live in that document, not in this script. This only enforces
+# the two that a machine can check without judgement.
+set -e
+MSG_FILE="$1"
+SUBJECT=$(head -1 "$MSG_FILE")
+
+# git writes these itself; they are not authored messages.
+case "$SUBJECT" in
+  "Merge "*|"Revert "*|"fixup!"*|"squash!"*|"amend!"*) exit 0 ;;
+esac
+
+if ! printf '%s' "$SUBJECT" | grep -qE '^[a-z]+(\([a-z0-9._/-]+\))?!?: .+'; then
+  printf '\n  Commit blocked: the subject is not a conventional commit.\n\n' >&2
+  printf '    got:       %s\n' "$SUBJECT" >&2
+  printf '    expected:  type(optional-scope): description\n' >&2
+  printf '    example:   feat: add pnpm preflight\n\n' >&2
+  printf '    see:  docs/development/reference/commit-messages.md\n\n' >&2
+  exit 1
+fi
+
+LENGTH=$(printf '%s' "$SUBJECT" | wc -c | tr -d ' ')
+if [ "$LENGTH" -gt 72 ]; then
+  printf '\n  Commit blocked: the subject is %s characters; the limit is 72.\n\n' "$LENGTH" >&2
+  printf '    %s\n\n' "$SUBJECT" >&2
+  printf '    Put the detail in the body. The subject names the change;\n' >&2
+  printf '    the body explains why it was made.\n\n' >&2
+  printf '    see:  docs/development/reference/commit-messages.md\n\n' >&2
+  exit 1
+fi

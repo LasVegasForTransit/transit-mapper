@@ -7,12 +7,15 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "lint": "eslint .",
+    "verify": "vitest run"
   },
   "dependencies": {
-    "fflate": "^0.8.2"
+    "fflate": "catalog:"
   },
   "devDependencies": {
-    "@types/geojson": "^7946.0.15"
+    "@types/geojson": "catalog:",
+    "vitest": "catalog:"
   }
 }

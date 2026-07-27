@@ -4,9 +4,9 @@
 // and the migration in serialize.ts stay thin, and all of it is directly
 // unit-testable.
 
-import { LANE_KINDS, laneKind, wayType, type ProfileTemplateLane } from "./catalog";
-import { shortId } from "./ids";
-import type { CrossSection, DrivingSide, LaneDirection, LaneSpec, Way } from "./system";
+import { LANE_KINDS, laneKind, wayType, type ProfileTemplateLane } from './catalog';
+import { shortId } from './ids';
+import type { CrossSection, DrivingSide, LaneDirection, LaneSpec, Way } from './system';
 
 /** Instantiate a catalog profile template into a concrete CrossSection with
  *  fresh stable lane ids; widths default from each lane kind. */
@@ -62,7 +62,11 @@ export interface ProfileEdges {
  * lane facing forward. Backward lanes therefore come first under right-hand
  * traffic, matching defaultProfileFor and withLaneCount.
  */
-export function profileWithPrimaryLanes(typeId: string, primary: ProfileTemplateLane[], edges: ProfileEdges = {}): CrossSection {
+export function profileWithPrimaryLanes(
+  typeId: string,
+  primary: ProfileTemplateLane[],
+  edges: ProfileEdges = {},
+): CrossSection {
   const type = wayType(typeId);
   const leading: ProfileTemplateLane[] = [];
   const trailing: ProfileTemplateLane[] = [];
@@ -97,11 +101,14 @@ export function defaultProfileFor(typeId: string, capacity?: number): CrossSecti
 
   const primary: ProfileTemplateLane[] = [];
   if (n === 1) {
-    primary.push({ kindId: type.primaryLaneKindId, direction: "both" });
+    primary.push({ kindId: type.primaryLaneKindId, direction: 'both' });
   } else {
     const backward = Math.floor(n / 2);
     for (let i = 0; i < n; i++) {
-      primary.push({ kindId: type.primaryLaneKindId, direction: i < backward ? "backward" : "forward" });
+      primary.push({
+        kindId: type.primaryLaneKindId,
+        direction: i < backward ? 'backward' : 'forward',
+      });
     }
   }
   return profileWithPrimaryLanes(typeId, primary);
@@ -124,7 +131,7 @@ export function profileWidthM(profile: CrossSection): number {
 
 /** Travel lanes only (drive/track/bike/sidewalk/…), in left-to-right order. */
 export function travelLanes(profile: CrossSection): LaneSpec[] {
-  return profile.lanes.filter((l) => laneKind(l.kindId).role === "travel");
+  return profile.lanes.filter((l) => laneKind(l.kindId).role === 'travel');
 }
 
 /** Lanes whose direction one-way/flip operations steer (drive/track/bike…,
@@ -147,10 +154,14 @@ export function directionalLanes(profile: CrossSection): LaneSpec[] {
  * a forward traveler's curb lane is the LAST matching lane and a backward
  * traveler's is the FIRST.
  */
-export function defaultLaneFor(profile: CrossSection, direction: "forward" | "backward", preferKindIds: readonly string[] = []): string | null {
-  const matches = (d: LaneDirection): boolean => d === direction || d === "both";
+export function defaultLaneFor(
+  profile: CrossSection,
+  direction: 'forward' | 'backward',
+  preferKindIds: readonly string[] = [],
+): string | null {
+  const matches = (d: LaneDirection): boolean => d === direction || d === 'both';
   const curb = (lanes: LaneSpec[]): LaneSpec | undefined =>
-    lanes.length === 0 ? undefined : direction === "forward" ? lanes[lanes.length - 1] : lanes[0];
+    lanes.length === 0 ? undefined : direction === 'forward' ? lanes[lanes.length - 1] : lanes[0];
   const inDirection = directionalLanes(profile).filter((l) => matches(l.direction));
   // A preferred kind (a dedicated bus lane, the mode's track) wins, in order.
   for (const kindId of preferKindIds) {
@@ -165,23 +176,28 @@ export function defaultLaneFor(profile: CrossSection, direction: "forward" | "ba
   return travelLanes(profile)[0]?.id ?? profile.lanes[0]?.id ?? null;
 }
 
-const flipDirection = (d: LaneDirection): LaneDirection => (d === "forward" ? "backward" : d === "backward" ? "forward" : d);
+const flipDirection = (d: LaneDirection): LaneDirection =>
+  d === 'forward' ? 'backward' : d === 'backward' ? 'forward' : d;
 
 /** The same physical street described facing the other way — reverses lane
  *  order and swaps forward/backward. Pairs with reversing the way's points. */
 export function flipProfile(profile: CrossSection): CrossSection {
-  return { lanes: [...profile.lanes].reverse().map((l) => ({ ...l, direction: flipDirection(l.direction) })) };
+  return {
+    lanes: [...profile.lanes]
+      .reverse()
+      .map((l) => ({ ...l, direction: flipDirection(l.direction) })),
+  };
 }
 
 /** True when every directional lane runs the same single direction. */
 export function isOneWay(profile: CrossSection): boolean {
   const dirs = new Set(directionalLanes(profile).map((l) => l.direction));
-  return dirs.size === 1 && (dirs.has("forward") || dirs.has("backward"));
+  return dirs.size === 1 && (dirs.has('forward') || dirs.has('backward'));
 }
 
 /** Make every directional lane run `direction` (one-way conversion) —
  *  sidewalks, parking, and separators are left alone. */
-export function makeOneWay(profile: CrossSection, direction: "forward" | "backward"): CrossSection {
+export function makeOneWay(profile: CrossSection, direction: 'forward' | 'backward'): CrossSection {
   return {
     lanes: profile.lanes.map((l) => (laneKind(l.kindId).directional ? { ...l, direction } : l)),
   };
@@ -191,17 +207,26 @@ export function makeOneWay(profile: CrossSection, direction: "forward" | "backwa
  *  right half forward under right-hand traffic (a single directional lane
  *  becomes bidirectional) — mirrored under left-hand traffic, where forward
  *  keeps to the left. */
-export function makeTwoWay(profile: CrossSection, drivingSide: DrivingSide = "right"): CrossSection {
+export function makeTwoWay(
+  profile: CrossSection,
+  drivingSide: DrivingSide = 'right',
+): CrossSection {
   const travel = directionalLanes(profile);
   if (travel.length === 0) return profile;
   if (travel.length === 1) {
     const only = travel[0];
-    return { lanes: profile.lanes.map((l) => (l.id === only.id ? { ...l, direction: "both" as LaneDirection } : l)) };
+    return {
+      lanes: profile.lanes.map((l) =>
+        l.id === only.id ? { ...l, direction: 'both' as LaneDirection } : l,
+      ),
+    };
   }
   const half = Math.floor(travel.length / 2);
-  const leftHalfDirection: LaneDirection = drivingSide === "left" ? "forward" : "backward";
-  const rightHalfDirection: LaneDirection = drivingSide === "left" ? "backward" : "forward";
-  const directionByLaneId = new Map(travel.map((l, i) => [l.id, i < half ? leftHalfDirection : rightHalfDirection]));
+  const leftHalfDirection: LaneDirection = drivingSide === 'left' ? 'forward' : 'backward';
+  const rightHalfDirection: LaneDirection = drivingSide === 'left' ? 'backward' : 'forward';
+  const directionByLaneId = new Map(
+    travel.map((l, i) => [l.id, i < half ? leftHalfDirection : rightHalfDirection]),
+  );
   return {
     lanes: profile.lanes.map((l) => {
       const d = directionByLaneId.get(l.id);
@@ -215,44 +240,67 @@ export function makeTwoWay(profile: CrossSection, drivingSide: DrivingSide = "ri
  *  keep the split balanced; removing takes from the majority side. Which
  *  side backward lanes cluster on (front of the array vs. back) follows
  *  `drivingSide`, matching separateProfiles/makeTwoWay's convention. */
-export function withLaneCount(profile: CrossSection, typeId: string, count: number, drivingSide: DrivingSide = "right"): CrossSection {
+export function withLaneCount(
+  profile: CrossSection,
+  typeId: string,
+  count: number,
+  drivingSide: DrivingSide = 'right',
+): CrossSection {
   const primaryKindId = wayType(typeId).primaryLaneKindId;
   const target = clampLaneCount(count);
   let lanes = [...profile.lanes];
   const primaries = () => lanes.filter((l) => l.kindId === primaryKindId);
   // Right-hand traffic: backward lanes cluster at the front (left) of the
   // array. Left-hand traffic mirrors this.
-  const backwardAtFront = drivingSide === "right";
+  const backwardAtFront = drivingSide === 'right';
 
   // No primary lanes at all (unusual profile): seed one bidirectional lane.
   if (primaries().length === 0) {
-    lanes.push({ id: shortId(), kindId: primaryKindId, widthM: laneKind(primaryKindId).defaultWidthM, direction: "both" });
+    lanes.push({
+      id: shortId(),
+      kindId: primaryKindId,
+      widthM: laneKind(primaryKindId).defaultWidthM,
+      direction: 'both',
+    });
   }
 
   while (primaries().length < target) {
     const current = primaries();
-    const forward = current.filter((l) => l.direction === "forward").length;
-    const backward = current.filter((l) => l.direction === "backward").length;
+    const forward = current.filter((l) => l.direction === 'forward').length;
+    const backward = current.filter((l) => l.direction === 'backward').length;
     const direction: LaneDirection = isOneWay(profile)
       ? current[0].direction
       : forward <= backward
-        ? "forward"
-        : "backward";
+        ? 'forward'
+        : 'backward';
     // A bidirectional single lane becoming multi-lane splits into directions.
-    if (current.length === 1 && current[0].direction === "both") {
-      lanes = lanes.map((l) => (l.id === current[0].id ? { ...l, direction: "backward" as LaneDirection } : l));
+    if (current.length === 1 && current[0].direction === 'both') {
+      lanes = lanes.map((l) =>
+        l.id === current[0].id ? { ...l, direction: 'backward' as LaneDirection } : l,
+      );
     }
-    const insertAtFront = direction === "backward" ? backwardAtFront : !backwardAtFront;
-    const anchor = insertAtFront ? lanes.indexOf(primaries()[0]) : lanes.indexOf(primaries()[primaries().length - 1]) + 1;
-    lanes.splice(anchor, 0, { id: shortId(), kindId: primaryKindId, widthM: laneKind(primaryKindId).defaultWidthM, direction });
+    const insertAtFront = direction === 'backward' ? backwardAtFront : !backwardAtFront;
+    const anchor = insertAtFront
+      ? lanes.indexOf(primaries()[0])
+      : lanes.indexOf(primaries()[primaries().length - 1]) + 1;
+    lanes.splice(anchor, 0, {
+      id: shortId(),
+      kindId: primaryKindId,
+      widthM: laneKind(primaryKindId).defaultWidthM,
+      direction,
+    });
   }
 
   while (primaries().length > target) {
     const current = primaries();
-    const forward = current.filter((l) => l.direction === "forward");
-    const backward = current.filter((l) => l.direction === "backward");
+    const forward = current.filter((l) => l.direction === 'forward');
+    const backward = current.filter((l) => l.direction === 'backward');
     const victim =
-      forward.length > backward.length ? forward[0] : backward.length > 0 ? backward[backward.length - 1] : current[current.length - 1];
+      forward.length > backward.length
+        ? forward[0]
+        : backward.length > 0
+          ? backward[backward.length - 1]
+          : current[current.length - 1];
     lanes = lanes.filter((l) => l.id !== victim.id);
     // Collapsing to one directional lane keeps its direction; that's still
     // a valid one-lane one-way street.
@@ -279,20 +327,25 @@ export interface SeparatedProfiles {
  * and the right half forward; left-hand traffic mirrors this. Returns null
  * when the profile is already one-way (nothing to separate).
  */
-export function separateProfiles(profile: CrossSection, drivingSide: DrivingSide = "right"): SeparatedProfiles | null {
+export function separateProfiles(
+  profile: CrossSection,
+  drivingSide: DrivingSide = 'right',
+): SeparatedProfiles | null {
   if (isOneWay(profile)) return null;
   const lanes = profile.lanes;
 
   // Split point: the median if present, else between the last backward-ish
   // travel lane and the first forward one.
-  const medianIdx = lanes.findIndex((l) => laneKind(l.kindId).role === "separator");
+  const medianIdx = lanes.findIndex((l) => laneKind(l.kindId).role === 'separator');
   let leftLanes: LaneSpec[];
   let rightLanes: LaneSpec[];
   if (medianIdx >= 0) {
     leftLanes = lanes.slice(0, medianIdx);
     rightLanes = lanes.slice(medianIdx + 1);
   } else {
-    const firstForward = lanes.findIndex((l) => laneKind(l.kindId).directional && l.direction === "forward");
+    const firstForward = lanes.findIndex(
+      (l) => laneKind(l.kindId).directional && l.direction === 'forward',
+    );
     const splitAt = firstForward >= 0 ? firstForward : Math.ceil(lanes.length / 2);
     leftLanes = lanes.slice(0, splitAt);
     rightLanes = lanes.slice(splitAt);
@@ -300,11 +353,12 @@ export function separateProfiles(profile: CrossSection, drivingSide: DrivingSide
 
   // Bidirectional travel lanes (e.g. a center turn lane that ended up in a
   // half) become the half's own direction.
-  const oneWay = (half: LaneSpec[], direction: "forward" | "backward"): CrossSection =>
+  const oneWay = (half: LaneSpec[], direction: 'forward' | 'backward'): CrossSection =>
     makeOneWay({ lanes: half.map((l) => ({ ...l, id: shortId() })) }, direction);
 
-  const [backHalf, fwdHalf] = drivingSide === "left" ? [rightLanes, leftLanes] : [leftLanes, rightLanes];
-  return { backward: oneWay(backHalf, "backward"), forward: oneWay(fwdHalf, "forward") };
+  const [backHalf, fwdHalf] =
+    drivingSide === 'left' ? [rightLanes, leftLanes] : [leftLanes, rightLanes];
+  return { backward: oneWay(backHalf, 'backward'), forward: oneWay(fwdHalf, 'forward') };
 }
 
 /** Join two one-way carriageway profiles back into one two-way profile with
@@ -321,16 +375,22 @@ export function combineProfiles(
   forward: CrossSection,
   medianWidthM?: number,
   medianKindId?: string,
-  drivingSide: DrivingSide = "right",
+  drivingSide: DrivingSide = 'right',
 ): CrossSection {
   const median: LaneSpec = {
     id: shortId(),
-    kindId: medianKindId ?? "median",
+    kindId: medianKindId ?? 'median',
     widthM: medianWidthM ?? LANE_KINDS.median.defaultWidthM,
-    direction: "none",
+    direction: 'none',
   };
-  const [leftHalf, rightHalf] = drivingSide === "left" ? [forward, backward] : [backward, forward];
-  return { lanes: [...leftHalf.lanes.map((l) => ({ ...l })), median, ...rightHalf.lanes.map((l) => ({ ...l }))] };
+  const [leftHalf, rightHalf] = drivingSide === 'left' ? [forward, backward] : [backward, forward];
+  return {
+    lanes: [
+      ...leftHalf.lanes.map((l) => ({ ...l })),
+      median,
+      ...rightHalf.lanes.map((l) => ({ ...l })),
+    ],
+  };
 }
 
 /** A deep copy of a profile with FRESH lane ids — for a new way that starts

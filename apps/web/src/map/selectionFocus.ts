@@ -4,9 +4,9 @@
 // consumes it. Lives under map/ (not model/geo.ts) because it depends on
 // Selection, an editor-state concept the domain model itself knows nothing
 // about.
-import type { Selection } from "../editor/store";
-import { resolveWayPath, serviceWayIds } from "@transitmapper/core/model/geo";
-import type { LngLat, TransitSystem } from "@transitmapper/core/model/system";
+import type { Selection } from '../editor/store';
+import { resolveWayPath, serviceWayIds } from '@transitmapper/core/model/geo';
+import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
 
 export interface SelectionFocus {
   /** Bounding box to frame the camera on. */
@@ -20,14 +20,20 @@ export interface SelectionFocus {
 
 function bboxOf(coords: LngLat[]): [LngLat, LngLat] | null {
   if (coords.length === 0) return null;
-  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+  let minLng = Infinity,
+    minLat = Infinity,
+    maxLng = -Infinity,
+    maxLat = -Infinity;
   for (const [lng, lat] of coords) {
     if (lng < minLng) minLng = lng;
     if (lng > maxLng) maxLng = lng;
     if (lat < minLat) minLat = lat;
     if (lat > maxLat) maxLat = lat;
   }
-  return [[minLng, minLat], [maxLng, maxLat]];
+  return [
+    [minLng, minLat],
+    [maxLng, maxLat],
+  ];
 }
 
 function memberCoords(system: TransitSystem, memberIds: string[]): LngLat[] {
@@ -36,7 +42,10 @@ function memberCoords(system: TransitSystem, memberIds: string[]): LngLat[] {
     const st = system.stations.find((s) => s.id === id);
     if (st) coords.push(st.coord);
     const f = system.facilities.find((f) => f.id === id);
-    if (f) coords.push(...(Array.isArray(f.geometry[0]) ? (f.geometry as LngLat[]) : [f.geometry as LngLat]));
+    if (f)
+      coords.push(
+        ...(Array.isArray(f.geometry[0]) ? (f.geometry as LngLat[]) : [f.geometry as LngLat]),
+      );
     const w = system.ways.find((w) => w.id === id);
     if (w) coords.push(...resolveWayPath(w));
   }
@@ -47,21 +56,23 @@ export function selectionFocus(system: TransitSystem, selection: Selection): Sel
   if (!selection) return null;
 
   switch (selection.kind) {
-    case "station": {
+    case 'station': {
       const st = system.stations.find((s) => s.id === selection.id);
       if (!st) return null;
       const bounds = bboxOf([st.coord, ...(st.footprint ?? [])]);
       return bounds ? { bounds, needsInfrastructureView: false } : null;
     }
-    case "facility": {
+    case 'facility': {
       const f = system.facilities.find((f) => f.id === selection.id);
       if (!f) return null;
-      const coords = Array.isArray(f.geometry[0]) ? (f.geometry as LngLat[]) : [f.geometry as LngLat];
+      const coords = Array.isArray(f.geometry[0])
+        ? (f.geometry as LngLat[])
+        : [f.geometry as LngLat];
       const bounds = bboxOf(coords);
       // Facilities only ever render in the Infrastructure view.
       return bounds ? { bounds, needsInfrastructureView: true } : null;
     }
-    case "way": {
+    case 'way': {
       const w = system.ways.find((w) => w.id === selection.id);
       if (!w) return null;
       const bounds = bboxOf(resolveWayPath(w));
@@ -72,15 +83,17 @@ export function selectionFocus(system: TransitSystem, selection: Selection): Sel
       const served = system.services.some((sv) => serviceWayIds(sv).includes(w.id));
       return { bounds, needsInfrastructureView: !served };
     }
-    case "service": {
+    case 'service': {
       const svc = system.services.find((sv) => sv.id === selection.id);
       if (!svc) return null;
       const wayIds = serviceWayIds(svc);
-      const coords = system.ways.filter((w) => wayIds.includes(w.id)).flatMap((w) => resolveWayPath(w));
+      const coords = system.ways
+        .filter((w) => wayIds.includes(w.id))
+        .flatMap((w) => resolveWayPath(w));
       const bounds = bboxOf(coords);
       return bounds ? { bounds, needsInfrastructureView: false } : null;
     }
-    case "group": {
+    case 'group': {
       const g = system.groups.find((g) => g.id === selection.id);
       if (!g) return null;
       if (g.footprint) {
@@ -93,14 +106,17 @@ export function selectionFocus(system: TransitSystem, selection: Selection): Sel
       const bounds = bboxOf(memberCoords(system, g.memberIds));
       return bounds ? { bounds, needsInfrastructureView: false } : null;
     }
-    case "node": {
+    case 'node': {
       const n = system.nodes.find((n) => n.id === selection.id);
       if (!n) return null;
       // A tight box around the junction; footprints only render in
       // Infrastructure at lane-detail zooms.
       const pad = 0.0012;
       return {
-        bounds: [[n.coord[0] - pad, n.coord[1] - pad], [n.coord[0] + pad, n.coord[1] + pad]],
+        bounds: [
+          [n.coord[0] - pad, n.coord[1] - pad],
+          [n.coord[0] + pad, n.coord[1] + pad],
+        ],
         needsInfrastructureView: true,
       };
     }

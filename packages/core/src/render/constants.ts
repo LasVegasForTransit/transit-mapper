@@ -1,4 +1,4 @@
-import { iconName } from "./iconName";
+import { iconName } from './iconName';
 
 // The DOM-free half of the map layer constants. The MapLibre source/layer id
 // vocabulary (SRC_*/LYR_*) and the paint expressions stay in the web app —
@@ -10,8 +10,8 @@ import { iconName } from "./iconName";
 // the standard vector-editor "this is a control point" shape) regardless of
 // what they're attached to, so they read as one consistent tool affordance
 // and never as a real object like a station or facility.
-export const HANDLE_INK = "#191a17";
-export const HANDLE_ICON = iconName("square", HANDLE_INK);
+export const HANDLE_INK = '#191a17';
+export const HANDLE_ICON = iconName('square', HANDLE_INK);
 
 // meters-per-pixel at zoom 14 on a 512px-tile web-mercator map; lane widths
 // are stored in meters, so each feature carries its z14 pixel width and the

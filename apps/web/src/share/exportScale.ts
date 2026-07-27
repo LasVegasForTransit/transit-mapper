@@ -1,12 +1,12 @@
-import type { Map as MLMap } from "maplibre-gl";
-import { haversineMeters } from "@transitmapper/core/model/geo";
-import { scaleBarFor, type ScaleBarSpec } from "@transitmapper/core/render/scaleBar";
+import type { Map as MLMap } from 'maplibre-gl';
+import { haversineMeters } from '@transitmapper/core/model/geo';
+import { scaleBarFor, type ScaleBarSpec } from '@transitmapper/core/render/scaleBar';
 
 // The nice-number rounding and label formatting moved to core (render/
 // scaleBar.ts) so the Worker can size a scale bar for a server-rendered
 // preview too. Re-exported here so existing importers — and the tests that
 // cover the rounding rules — don't need to care where the math lives.
-export { formatScaleMeters, niceScaleMeters } from "@transitmapper/core/render/scaleBar";
+export { formatScaleMeters, niceScaleMeters } from '@transitmapper/core/render/scaleBar';
 export type { ScaleBarSpec };
 
 /** A scale bar sized against the given map's current zoom: the widest "nice"

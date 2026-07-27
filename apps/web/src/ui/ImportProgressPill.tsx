@@ -1,4 +1,4 @@
-import { useImportProgress } from "./UiProvider";
+import { useImportProgress } from './UiProvider';
 
 /** A background import's live status (see UiProvider's ImportProgress) —
  *  no backdrop, doesn't trap focus or block the map: the whole point is
@@ -14,10 +14,10 @@ export function ImportProgressPill() {
 
   return (
     <div className={`import-progress-pill ${state}`} role="status" aria-live="polite">
-      {state === "loading" && <span className="import-progress-spinner" aria-hidden="true" />}
+      {state === 'loading' && <span className="import-progress-spinner" aria-hidden="true" />}
       <span>
         {label}
-        {state === "loading" && total > 0 ? ` — ${done}/${total} routes` : ""}
+        {state === 'loading' && total > 0 ? ` — ${done}/${total} routes` : ''}
       </span>
     </div>
   );

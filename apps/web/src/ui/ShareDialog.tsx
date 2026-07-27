@@ -1,25 +1,25 @@
-import { useEffect, useState } from "react";
-import { useEditor } from "../editor/EditorProvider";
-import { getOrCreateShare, stopSharing } from "../share/api";
-import { getMyShare } from "../share/myShares";
-import { withLiveCamera } from "../camera/liveCamera";
-import { Icon } from "./Icon";
-import { Modal } from "./Modal";
+import { useEffect, useState } from 'react';
+import { useEditor } from '../editor/EditorProvider';
+import { getOrCreateShare, stopSharing } from '../share/api';
+import { getMyShare } from '../share/myShares';
+import { withLiveCamera } from '../camera/liveCamera';
+import { Icon } from './Icon';
+import { Modal } from './Modal';
 
 interface ShareDialogProps {
   onClose: () => void;
 }
 
-type Status = "loading" | "done" | "error" | "stopped";
+type Status = 'loading' | 'done' | 'error' | 'stopped';
 
 /** Google Docs-style: one link per document, always the same one. Opening
  *  this dialog again — changed or not — never produces a second URL; see
  *  share/api.ts#getOrCreateShare for how that's guaranteed. */
 export function ShareDialog({ onClose }: ShareDialogProps) {
   const system = useEditor((s) => s.system);
-  const [status, setStatus] = useState<Status>("loading");
-  const [url, setUrl] = useState("");
-  const [error, setError] = useState("");
+  const [status, setStatus] = useState<Status>('loading');
+  const [url, setUrl] = useState('');
+  const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   // Only a share this browser holds the edit token for can be stopped — a
   // dedup hit onto someone else's row isn't ours to revoke.
@@ -34,12 +34,12 @@ export function ShareDialog({ onClose }: ShareDialogProps) {
         if (cancelled) return;
         setUrl(sharedUrl);
         setRevocable(getMyShare(system.id) !== null);
-        setStatus("done");
+        setStatus('done');
       })
       .catch((e: Error) => {
         if (cancelled) return;
         setError(e.message);
-        setStatus("error");
+        setStatus('error');
       });
     return () => {
       cancelled = true;
@@ -61,31 +61,37 @@ export function ShareDialog({ onClose }: ShareDialogProps) {
   const stop = async () => {
     try {
       await stopSharing(system.id);
-      setStatus("stopped");
+      setStatus('stopped');
     } catch (e) {
       setError((e as Error).message);
-      setStatus("error");
+      setStatus('error');
     }
   };
 
   return (
-    <Modal title="Share this system" description="Create a shareable, read-only link to this system." onClose={onClose}>
-      {status === "loading" && <p className="panel-hint">Creating a shareable link…</p>}
+    <Modal
+      title="Share this system"
+      description="Create a shareable, read-only link to this system."
+      onClose={onClose}
+    >
+      {status === 'loading' && <p className="panel-hint">Creating a shareable link…</p>}
 
-      {status === "error" && <p className="error-text">Something went wrong. {error}</p>}
+      {status === 'error' && <p className="error-text">Something went wrong. {error}</p>}
 
-      {status === "stopped" && <p className="panel-hint">This link no longer works. Share again to create a new one.</p>}
+      {status === 'stopped' && (
+        <p className="panel-hint">This link no longer works. Share again to create a new one.</p>
+      )}
 
-      {status === "done" && (
+      {status === 'done' && (
         <>
           <p className="panel-hint">
-            Anyone with this link can view the system and fork their own copy. Sharing again from this
-            browser updates this same link instead of creating a new one.
+            Anyone with this link can view the system and fork their own copy. Sharing again from
+            this browser updates this same link instead of creating a new one.
           </p>
           <div className="share-row">
             <input className="share-url" value={url} readOnly onFocus={(e) => e.target.select()} />
             <button className="primary-btn" onClick={copy}>
-              <Icon name="copy" size={18} /> {copied ? "Copied" : "Copy"}
+              <Icon name="copy" size={18} /> {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
           {revocable && (

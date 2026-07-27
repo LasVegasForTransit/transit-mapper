@@ -101,7 +101,7 @@ export interface ImportedNetwork {
   nodes: Node[];
 }
 
-export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork
+export function osmElementsToNetwork(elements: OsmWayElement[]): ImportedNetwork;
 ```
 
 (`ImportedNetwork` gained a third field, `namedWays`, in the follow-on
@@ -131,7 +131,7 @@ junction, which is correct.
 
 One case looks like a violation of `Node`'s "shared by two or more ways" and
 is not. A closed way — every roundabout and loop road — repeats its first
-node ID last, so that ID collects two refs from a *single* way and emits a
+node ID last, so that ID collects two refs from a _single_ way and emits a
 junction of one way meeting itself. This is wanted: `routeGraph` keys
 vertices through node identity, so sharing the node is what makes the loop
 close in the graph rather than dead-ending, and it keeps the two ends moving
@@ -182,7 +182,7 @@ The real differences are narrower:
   places and `coordKey` rounds to 6. That happens to be safe today. Node IDs
   do not rely on it being safe.
 
-Neither approach needs a tolerance to be *tuned* — `coordKey`'s precision is
+Neither approach needs a tolerance to be _tuned_ — `coordKey`'s precision is
 fixed, not a knob. The argument for node IDs is that they are exact and cost
 the same, not that coordinate matching would be a disaster.
 
@@ -249,15 +249,15 @@ basis for one realistic fixture, trimmed to a handful of ways.
 Running the implemented pipeline against the same Overpass box
 (36.110,-115.180 to 36.120,-115.170), streets plus light rail:
 
-| | result |
-|---|---|
-| ways imported | 149 |
-| junctions built | 117 |
-| widest junction | 5 arms |
-| dangling or out-of-range refs | none |
-| junctions whose coord disagrees with a ref's point | none |
-| connected components, before | 149 |
-| connected components, after | 2 |
+|                                                    | result |
+| -------------------------------------------------- | ------ |
+| ways imported                                      | 149    |
+| junctions built                                    | 117    |
+| widest junction                                    | 5 arms |
+| dangling or out-of-range refs                      | none   |
+| junctions whose coord disagrees with a ref's point | none   |
+| connected components, before                       | 149    |
+| connected components, after                        | 2      |
 
 The component count is the metric that matters, and it is the one to use if
 this is ever measured again. The unjoined-crossing count is not: it was 4
@@ -275,10 +275,10 @@ a fragment whose continuation lies outside the imported box.
 Both were considered for this change and cut deliberately.
 
 **Snapping imports onto existing ways.** Needed when a person imports over
-work already *drawn*. It is a different mechanism — `snap()` against the
+work already _drawn_. It is a different mechanism — `snap()` against the
 current system, then `joinWayPointToWay` per match — with its own tolerance
 question. Still deferred, and deliberately: the case that actually mattered
-turned out to be importing over work already *imported*, which node identity
+turned out to be importing over work already _imported_, which node identity
 solves exactly. See "Follow-on: re-importing".
 
 **Lane profiles from OSM tags.** ~~Deferred.~~ Built immediately after this
@@ -300,15 +300,15 @@ each where there should have been two one-way carriageways.
 default for roads only — `lanes` and `turn:lanes` are road vocabulary, and
 rail and bike ways are already right with a single bidirectional lane.
 
-| tag | effect |
-|---|---|
-| `oneway=yes\|true\|1` | every lane runs forward |
-| `oneway=-1\|reverse` | every lane runs backward |
-| `lanes` | total travel lanes, centre turn lane included |
-| `lanes:forward` / `lanes:backward` | the split; one side implies the other from `lanes` |
-| `lanes:both_ways` | a shared centre `turnPocket` |
-| `turn:lanes` (+`:forward`/`:backward`) | turn-only lanes become `turnPocket` |
-| `sidewalk`, `sidewalk:left`, `sidewalk:right` | which edges keep a sidewalk |
+| tag                                           | effect                                             |
+| --------------------------------------------- | -------------------------------------------------- |
+| `oneway=yes\|true\|1`                         | every lane runs forward                            |
+| `oneway=-1\|reverse`                          | every lane runs backward                           |
+| `lanes`                                       | total travel lanes, centre turn lane included      |
+| `lanes:forward` / `lanes:backward`            | the split; one side implies the other from `lanes` |
+| `lanes:both_ways`                             | a shared centre `turnPocket`                       |
+| `turn:lanes` (+`:forward`/`:backward`)        | turn-only lanes become `turnPocket`                |
+| `sidewalk`, `sidewalk:left`, `sidewalk:right` | which edges keep a sidewalk                        |
 
 Where OSM says nothing, the class supplies a total (`ROAD_LANES_BY_CLASS`:
 transitway and arterial 4, collector and local 2), halved for a one-way way
@@ -323,7 +323,7 @@ on the reasoning that it is one carriageway of a street that wide.
   truncating would silently put a pocket in the wrong lane, and in real data
   a mismatch usually means the tag describes a different segment.
 - **`turn:lanes:backward` maps on reversed.** Lanes are stored left-to-right
-  facing forward, but OSM lists turns left-to-right as the *driver* sees
+  facing forward, but OSM lists turns left-to-right as the _driver_ sees
   them, so for backward lanes the two orders are opposites.
 - **`sidewalk=separate` drops the sidewalk.** It means OSM maps the footway
   as its own way; drawing one here as well would double it.
@@ -356,7 +356,7 @@ below; see "Still not read" at the end of this document for the current list.
 
 OSM splits a street into a way per block and per direction, all carrying the
 same `name` — exactly the identity `NamedWay` exists to hold, and unused by
-the import until now. Ways are grouped by name *and* way type, since a street
+the import until now. Ways are grouped by name _and_ way type, since a street
 and the tram line along it often share a name in OSM without being one
 facility. A name matching a single way gets no NamedWay; the identity would
 add nothing over the way itself.
@@ -413,7 +413,7 @@ failed". The import now tries a second public server before giving up.
 Two things learned the hard way. A mirror that answers `curl` is useless if
 it omits CORS headers — `overpass.osm.jp` was in the list until a browser
 check showed it failing preflight, and both remaining endpoints were verified
-from a browser rather than a terminal. And Overpass's *error* responses often
+from a browser rather than a terminal. And Overpass's _error_ responses often
 drop the CORS headers its successful ones carry, so an overloaded server
 reaches the app as a thrown `TypeError` with no status: the retry loop treats
 a thrown fetch as "try the next mirror", and the failure message says only
@@ -430,7 +430,7 @@ same bridge now correctly imported as elevated.
 
 Bus lanes, on-street parking, roadway-modifier cycleways, `width`, `maxspeed`,
 and per-approach control. See "Still not read" at the end for what is
-genuinely outstanding now. 
+genuinely outstanding now.
 
 ## Follow-on: left-hand traffic
 
@@ -445,7 +445,7 @@ It is threaded from `ImportDialog` through `importOsmWays` and
 The first implementation mirrored the finished profile — reversed its
 left-to-right order — which was wrong, and wrong in a way the tests then
 enshrined. OSM's `:left`/`:right` suffixes and `turn:lanes` ordering are
-defined against the *way's* forward direction in every country, so reversing
+defined against the _way's_ forward direction in every country, so reversing
 moved every tagged side to the wrong kerb. A one-way street is the decisive
 case: all its lanes run one way, so there is no arrangement to mirror, yet a
 London street tagged `busway:left` came out with its bus lane at the offside
@@ -473,7 +473,7 @@ the dialog so no caller can skip it.
 
 The interesting half is not the dropping but the re-pointing. A junction
 between a way already present and a newly imported one is kept, with its ref
-aimed at the existing way — so a second import *joins* the first instead of
+aimed at the existing way — so a second import _joins_ the first instead of
 merely not duplicating it. That is the same node-identity join used within a
 single import, so it still needs no proximity tolerance, and it is why
 snapping remains unnecessary for this case.
@@ -552,7 +552,7 @@ named arm.
 Three deliberate limits, each of which would otherwise produce a ban the sign
 never meant:
 
-- **Via-node only.** A via-*way* restriction describes a movement through a
+- **Via-node only.** A via-_way_ restriction describes a movement through a
   whole link, which has no expression in a per-lane target set at a single
   junction.
 - **The vocabulary is checked.** `no_*`/`only_*` values are matched against a
@@ -588,7 +588,7 @@ The current list, superseding every earlier one:
   `ApproachControl` exists but the import cannot tell which arm a sign faces.
 - **Via-way turn restrictions**, and the `except` qualifier on the ones that
   are read.
-- **Snapping an import onto hand-drawn ways.** Joining a *previous import*
+- **Snapping an import onto hand-drawn ways.** Joining a _previous import_
   is handled exactly by node identity (see "Follow-on: re-importing"); welding
   to hand-drawn geometry still needs a proximity tolerance and is not built.
 - **`turn:lanes` whose entry count disagrees with the lane count** is ignored

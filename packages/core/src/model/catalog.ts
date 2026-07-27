@@ -27,7 +27,7 @@ export interface FacilityClass {
 /** What a lane element does in the cross-section: carries moving traffic
  *  (vehicles, trains, bikes, pedestrians), separates other lanes (median,
  *  buffer), or sits at the edge of the traveled way (parking, shoulder). */
-export type LaneRole = "travel" | "separator" | "edge";
+export type LaneRole = 'travel' | 'separator' | 'edge';
 
 export interface LaneKindDef {
   id: string;
@@ -49,90 +49,90 @@ const FT = 0.3048;
 
 export const LANE_KINDS: Record<string, LaneKindDef> = {
   drive: {
-    id: "drive",
-    label: "Drive lane",
-    role: "travel",
+    id: 'drive',
+    label: 'Drive lane',
+    role: 'travel',
     defaultWidthM: 11 * FT,
     widthPresetsM: [10 * FT, 11 * FT, 12 * FT],
     countsAsCapacity: true,
     directional: true,
   },
   bus: {
-    id: "bus",
-    label: "Bus lane",
-    role: "travel",
+    id: 'bus',
+    label: 'Bus lane',
+    role: 'travel',
     defaultWidthM: 12 * FT,
     widthPresetsM: [11 * FT, 12 * FT],
     countsAsCapacity: true,
     directional: true,
   },
   turnPocket: {
-    id: "turnPocket",
-    label: "Turn lane",
-    role: "travel",
+    id: 'turnPocket',
+    label: 'Turn lane',
+    role: 'travel',
     defaultWidthM: 10 * FT,
     widthPresetsM: [10 * FT, 11 * FT],
     countsAsCapacity: false,
     directional: true,
   },
   bike: {
-    id: "bike",
-    label: "Bike lane",
-    role: "travel",
+    id: 'bike',
+    label: 'Bike lane',
+    role: 'travel',
     defaultWidthM: 6 * FT,
     widthPresetsM: [5 * FT, 6 * FT, 8 * FT],
     countsAsCapacity: true,
     directional: true,
   },
   sidewalk: {
-    id: "sidewalk",
-    label: "Sidewalk",
-    role: "travel",
+    id: 'sidewalk',
+    label: 'Sidewalk',
+    role: 'travel',
     defaultWidthM: 6 * FT,
     widthPresetsM: [5 * FT, 6 * FT, 10 * FT],
     countsAsCapacity: false,
     directional: false,
   },
   parking: {
-    id: "parking",
-    label: "Parking",
-    role: "edge",
+    id: 'parking',
+    label: 'Parking',
+    role: 'edge',
     defaultWidthM: 8 * FT,
     widthPresetsM: [7 * FT, 8 * FT, 10 * FT],
     countsAsCapacity: false,
     directional: false,
   },
   shoulder: {
-    id: "shoulder",
-    label: "Shoulder",
-    role: "edge",
+    id: 'shoulder',
+    label: 'Shoulder',
+    role: 'edge',
     defaultWidthM: 6 * FT,
     widthPresetsM: [4 * FT, 6 * FT, 10 * FT],
     countsAsCapacity: false,
     directional: false,
   },
   median: {
-    id: "median",
-    label: "Median",
-    role: "separator",
+    id: 'median',
+    label: 'Median',
+    role: 'separator',
     defaultWidthM: 4 * FT,
     widthPresetsM: [2 * FT, 4 * FT, 10 * FT, 16 * FT],
     countsAsCapacity: false,
     directional: false,
   },
   track: {
-    id: "track",
-    label: "Track",
-    role: "travel",
+    id: 'track',
+    label: 'Track',
+    role: 'travel',
     defaultWidthM: 4,
     widthPresetsM: [3.5, 4, 4.5],
     countsAsCapacity: true,
     directional: true,
   },
   platform: {
-    id: "platform",
-    label: "Platform",
-    role: "separator",
+    id: 'platform',
+    label: 'Platform',
+    role: 'separator',
     defaultWidthM: 6,
     widthPresetsM: [3, 6, 9],
     countsAsCapacity: false,
@@ -140,9 +140,9 @@ export const LANE_KINDS: Record<string, LaneKindDef> = {
   },
   // Aerial ropeway span / navigable water lane — one operating channel.
   channel: {
-    id: "channel",
-    label: "Channel",
-    role: "travel",
+    id: 'channel',
+    label: 'Channel',
+    role: 'travel',
     defaultWidthM: 15,
     widthPresetsM: [10, 15, 30],
     countsAsCapacity: true,
@@ -160,7 +160,7 @@ export function laneKind(id: string): LaneKindDef {
 // The physical carrier. `family` groups types for the UI and view filters;
 // `capacityLabel` names the unit a way of this type is measured in.
 
-export type WayFamily = "guideway" | "roadway" | "path" | "aerial" | "water";
+export type WayFamily = 'guideway' | 'roadway' | 'path' | 'aerial' | 'water';
 
 // What a shared identity (NamedWay) across several ways of this family is
 // called in the UI: two road carriageways form a "Street", two rail tracks a
@@ -174,11 +174,11 @@ export interface WayFamilyInfo {
 }
 
 export const WAY_FAMILIES: Record<WayFamily, WayFamilyInfo> = {
-  guideway: { identityNoun: "Line", toolLabel: "Track" },
-  roadway: { identityNoun: "Street", toolLabel: "Road" },
-  path: { identityNoun: "Trail", toolLabel: "Path" },
-  aerial: { identityNoun: "Line", toolLabel: "Aerial" },
-  water: { identityNoun: "Route", toolLabel: "Ferry" },
+  guideway: { identityNoun: 'Line', toolLabel: 'Track' },
+  roadway: { identityNoun: 'Street', toolLabel: 'Road' },
+  path: { identityNoun: 'Trail', toolLabel: 'Path' },
+  aerial: { identityNoun: 'Line', toolLabel: 'Aerial' },
+  water: { identityNoun: 'Route', toolLabel: 'Ferry' },
 };
 
 /** Way-type ids grouped by family, in WAY_TYPE_ORDER order — the source the
@@ -203,7 +203,7 @@ export function wayTypesByFamily(): { family: WayFamily; typeIds: string[] }[] {
  *  (see model/profile.ts buildProfile). */
 export interface ProfileTemplateLane {
   kindId: string;
-  direction: "forward" | "backward" | "both" | "none";
+  direction: 'forward' | 'backward' | 'both' | 'none';
   widthM?: number;
 }
 
@@ -234,124 +234,143 @@ export const WAY_TYPES: Record<string, WayType> = {
   // monorail is a third, wholly separate guideway standard. Two of these can
   // run parallel alignments to save space, but can never be the same Way.
   heavyRail: {
-    id: "heavyRail",
-    label: "Heavy rail",
-    family: "guideway",
-    capacityLabel: "tracks",
+    id: 'heavyRail',
+    label: 'Heavy rail',
+    family: 'guideway',
+    capacityLabel: 'tracks',
     defaultCapacity: 2,
     classes: [],
-    laneKindIds: ["track", "platform"],
-    primaryLaneKindId: "track",
+    laneKindIds: ['track', 'platform'],
+    primaryLaneKindId: 'track',
     defaultProfile: [
-      { kindId: "track", direction: "backward" },
-      { kindId: "track", direction: "forward" },
+      { kindId: 'track', direction: 'backward' },
+      { kindId: 'track', direction: 'forward' },
     ],
   },
   lightRail: {
-    id: "lightRail",
-    label: "Light rail / tram",
-    family: "guideway",
-    capacityLabel: "tracks",
+    id: 'lightRail',
+    label: 'Light rail / tram',
+    family: 'guideway',
+    capacityLabel: 'tracks',
     defaultCapacity: 1,
     classes: [],
-    laneKindIds: ["track", "platform"],
-    primaryLaneKindId: "track",
-    defaultProfile: [{ kindId: "track", direction: "both", widthM: 3.5 }],
+    laneKindIds: ['track', 'platform'],
+    primaryLaneKindId: 'track',
+    defaultProfile: [{ kindId: 'track', direction: 'both', widthM: 3.5 }],
   },
   monorail: {
-    id: "monorail",
-    label: "Monorail",
-    family: "guideway",
-    capacityLabel: "beams",
+    id: 'monorail',
+    label: 'Monorail',
+    family: 'guideway',
+    capacityLabel: 'beams',
     defaultCapacity: 1,
     classes: [],
-    laneKindIds: ["track", "platform"],
-    primaryLaneKindId: "track",
-    defaultProfile: [{ kindId: "track", direction: "both", widthM: 2 }],
+    laneKindIds: ['track', 'platform'],
+    primaryLaneKindId: 'track',
+    defaultProfile: [{ kindId: 'track', direction: 'both', widthM: 2 }],
   },
   road: {
-    id: "road",
-    label: "Road",
-    family: "roadway",
-    capacityLabel: "lanes",
+    id: 'road',
+    label: 'Road',
+    family: 'roadway',
+    capacityLabel: 'lanes',
     defaultCapacity: 4,
-    defaultClassId: "arterial",
+    defaultClassId: 'arterial',
     classes: [
-      { id: "transitway", label: "Transitway" },
-      { id: "arterial", label: "Arterial" },
-      { id: "collector", label: "Collector" },
-      { id: "local", label: "Local" },
+      { id: 'transitway', label: 'Transitway' },
+      { id: 'arterial', label: 'Arterial' },
+      { id: 'collector', label: 'Collector' },
+      { id: 'local', label: 'Local' },
     ],
-    laneKindIds: ["drive", "bus", "turnPocket", "bike", "parking", "shoulder", "median", "sidewalk", "track"],
-    primaryLaneKindId: "drive",
+    laneKindIds: [
+      'drive',
+      'bus',
+      'turnPocket',
+      'bike',
+      'parking',
+      'shoulder',
+      'median',
+      'sidewalk',
+      'track',
+    ],
+    primaryLaneKindId: 'drive',
     defaultProfile: [
-      { kindId: "sidewalk", direction: "both" },
-      { kindId: "drive", direction: "backward" },
-      { kindId: "drive", direction: "backward" },
-      { kindId: "drive", direction: "forward" },
-      { kindId: "drive", direction: "forward" },
-      { kindId: "sidewalk", direction: "both" },
+      { kindId: 'sidewalk', direction: 'both' },
+      { kindId: 'drive', direction: 'backward' },
+      { kindId: 'drive', direction: 'backward' },
+      { kindId: 'drive', direction: 'forward' },
+      { kindId: 'drive', direction: 'forward' },
+      { kindId: 'sidewalk', direction: 'both' },
     ],
   },
   bike: {
-    id: "bike",
-    label: "Bike",
-    family: "path",
-    capacityLabel: "width",
+    id: 'bike',
+    label: 'Bike',
+    family: 'path',
+    capacityLabel: 'width',
     defaultCapacity: 1,
-    defaultClassId: "protected",
+    defaultClassId: 'protected',
     classes: [
-      { id: "protected", label: "Protected track" },
-      { id: "buffered", label: "Buffered lane" },
-      { id: "painted", label: "Painted lane" },
-      { id: "path", label: "Off-street path" },
-      { id: "greenway", label: "Neighborhood greenway" },
+      { id: 'protected', label: 'Protected track' },
+      { id: 'buffered', label: 'Buffered lane' },
+      { id: 'painted', label: 'Painted lane' },
+      { id: 'path', label: 'Off-street path' },
+      { id: 'greenway', label: 'Neighborhood greenway' },
     ],
-    laneKindIds: ["bike", "sidewalk", "median"],
-    primaryLaneKindId: "bike",
-    defaultProfile: [{ kindId: "bike", direction: "both" }],
+    laneKindIds: ['bike', 'sidewalk', 'median'],
+    primaryLaneKindId: 'bike',
+    defaultProfile: [{ kindId: 'bike', direction: 'both' }],
   },
   pedestrian: {
-    id: "pedestrian",
-    label: "Pedestrian",
-    family: "path",
-    capacityLabel: "width",
+    id: 'pedestrian',
+    label: 'Pedestrian',
+    family: 'path',
+    capacityLabel: 'width',
     defaultCapacity: 1,
-    defaultClassId: "promenade",
+    defaultClassId: 'promenade',
     classes: [
-      { id: "promenade", label: "Promenade / mall" },
-      { id: "pathway", label: "Pathway" },
-      { id: "stairs", label: "Stairs / passage" },
+      { id: 'promenade', label: 'Promenade / mall' },
+      { id: 'pathway', label: 'Pathway' },
+      { id: 'stairs', label: 'Stairs / passage' },
     ],
-    laneKindIds: ["sidewalk", "bike", "median"],
-    primaryLaneKindId: "sidewalk",
-    defaultProfile: [{ kindId: "sidewalk", direction: "both", widthM: 3 }],
+    laneKindIds: ['sidewalk', 'bike', 'median'],
+    primaryLaneKindId: 'sidewalk',
+    defaultProfile: [{ kindId: 'sidewalk', direction: 'both', widthM: 3 }],
   },
   aerial: {
-    id: "aerial",
-    label: "Aerial / gondola",
-    family: "aerial",
-    capacityLabel: "cabins/hr",
+    id: 'aerial',
+    label: 'Aerial / gondola',
+    family: 'aerial',
+    capacityLabel: 'cabins/hr',
     defaultCapacity: 1,
     classes: [],
-    laneKindIds: ["channel"],
-    primaryLaneKindId: "channel",
-    defaultProfile: [{ kindId: "channel", direction: "both" }],
+    laneKindIds: ['channel'],
+    primaryLaneKindId: 'channel',
+    defaultProfile: [{ kindId: 'channel', direction: 'both' }],
   },
   water: {
-    id: "water",
-    label: "Ferry route",
-    family: "water",
-    capacityLabel: "vessels",
+    id: 'water',
+    label: 'Ferry route',
+    family: 'water',
+    capacityLabel: 'vessels',
     defaultCapacity: 1,
     classes: [],
-    laneKindIds: ["channel"],
-    primaryLaneKindId: "channel",
-    defaultProfile: [{ kindId: "channel", direction: "both" }],
+    laneKindIds: ['channel'],
+    primaryLaneKindId: 'channel',
+    defaultProfile: [{ kindId: 'channel', direction: 'both' }],
   },
 };
 
-export const WAY_TYPE_ORDER: string[] = ["heavyRail", "lightRail", "monorail", "road", "bike", "pedestrian", "aerial", "water"];
+export const WAY_TYPE_ORDER: string[] = [
+  'heavyRail',
+  'lightRail',
+  'monorail',
+  'road',
+  'bike',
+  'pedestrian',
+  'aerial',
+  'water',
+];
 
 // ---- Profile presets --------------------------------------------------------
 // One-click cross-sections offered when drawing or editing a way — "pick a
@@ -366,114 +385,151 @@ export interface ProfilePreset {
   lanes: ProfileTemplateLane[];
 }
 
-const SIDEWALK: ProfileTemplateLane = { kindId: "sidewalk", direction: "both" };
-const DRIVE_F: ProfileTemplateLane = { kindId: "drive", direction: "forward" };
-const DRIVE_B: ProfileTemplateLane = { kindId: "drive", direction: "backward" };
+const SIDEWALK: ProfileTemplateLane = { kindId: 'sidewalk', direction: 'both' };
+const DRIVE_F: ProfileTemplateLane = { kindId: 'drive', direction: 'forward' };
+const DRIVE_B: ProfileTemplateLane = { kindId: 'drive', direction: 'backward' };
 
 export const PROFILE_PRESETS: Record<string, ProfilePreset> = {
   roadLocal2: {
-    id: "roadLocal2",
-    label: "2-lane local",
-    wayTypeId: "road",
-    classId: "local",
-    lanes: [SIDEWALK, { kindId: "parking", direction: "none" }, DRIVE_B, DRIVE_F, { kindId: "parking", direction: "none" }, SIDEWALK],
+    id: 'roadLocal2',
+    label: '2-lane local',
+    wayTypeId: 'road',
+    classId: 'local',
+    lanes: [
+      SIDEWALK,
+      { kindId: 'parking', direction: 'none' },
+      DRIVE_B,
+      DRIVE_F,
+      { kindId: 'parking', direction: 'none' },
+      SIDEWALK,
+    ],
   },
   roadCollector3: {
-    id: "roadCollector3",
-    label: "3-lane w/ center turn",
-    wayTypeId: "road",
-    classId: "collector",
-    lanes: [SIDEWALK, { kindId: "bike", direction: "backward" }, DRIVE_B, { kindId: "turnPocket", direction: "both" }, DRIVE_F, { kindId: "bike", direction: "forward" }, SIDEWALK],
+    id: 'roadCollector3',
+    label: '3-lane w/ center turn',
+    wayTypeId: 'road',
+    classId: 'collector',
+    lanes: [
+      SIDEWALK,
+      { kindId: 'bike', direction: 'backward' },
+      DRIVE_B,
+      { kindId: 'turnPocket', direction: 'both' },
+      DRIVE_F,
+      { kindId: 'bike', direction: 'forward' },
+      SIDEWALK,
+    ],
   },
   roadArterial4: {
-    id: "roadArterial4",
-    label: "4-lane arterial",
-    wayTypeId: "road",
-    classId: "arterial",
+    id: 'roadArterial4',
+    label: '4-lane arterial',
+    wayTypeId: 'road',
+    classId: 'arterial',
     lanes: [SIDEWALK, DRIVE_B, DRIVE_B, DRIVE_F, DRIVE_F, SIDEWALK],
   },
   roadArterial5: {
-    id: "roadArterial5",
-    label: "5-lane w/ center turn",
-    wayTypeId: "road",
-    classId: "arterial",
-    lanes: [SIDEWALK, DRIVE_B, DRIVE_B, { kindId: "turnPocket", direction: "both" }, DRIVE_F, DRIVE_F, SIDEWALK],
-  },
-  roadBoulevard: {
-    id: "roadBoulevard",
-    label: "Divided boulevard",
-    wayTypeId: "road",
-    classId: "arterial",
+    id: 'roadArterial5',
+    label: '5-lane w/ center turn',
+    wayTypeId: 'road',
+    classId: 'arterial',
     lanes: [
       SIDEWALK,
-      { kindId: "bike", direction: "backward" },
       DRIVE_B,
       DRIVE_B,
-      { kindId: "median", direction: "none", widthM: 16 * FT },
+      { kindId: 'turnPocket', direction: 'both' },
       DRIVE_F,
       DRIVE_F,
-      { kindId: "bike", direction: "forward" },
+      SIDEWALK,
+    ],
+  },
+  roadBoulevard: {
+    id: 'roadBoulevard',
+    label: 'Divided boulevard',
+    wayTypeId: 'road',
+    classId: 'arterial',
+    lanes: [
+      SIDEWALK,
+      { kindId: 'bike', direction: 'backward' },
+      DRIVE_B,
+      DRIVE_B,
+      { kindId: 'median', direction: 'none', widthM: 16 * FT },
+      DRIVE_F,
+      DRIVE_F,
+      { kindId: 'bike', direction: 'forward' },
       SIDEWALK,
     ],
   },
   roadOneWay3: {
-    id: "roadOneWay3",
-    label: "3-lane one-way",
-    wayTypeId: "road",
-    classId: "arterial",
-    lanes: [SIDEWALK, { kindId: "parking", direction: "none" }, DRIVE_F, DRIVE_F, DRIVE_F, SIDEWALK],
+    id: 'roadOneWay3',
+    label: '3-lane one-way',
+    wayTypeId: 'road',
+    classId: 'arterial',
+    lanes: [
+      SIDEWALK,
+      { kindId: 'parking', direction: 'none' },
+      DRIVE_F,
+      DRIVE_F,
+      DRIVE_F,
+      SIDEWALK,
+    ],
   },
   roadTransitway: {
-    id: "roadTransitway",
-    label: "Transitway",
-    wayTypeId: "road",
-    classId: "transitway",
-    lanes: [SIDEWALK, { kindId: "bus", direction: "backward" }, { kindId: "bus", direction: "forward" }, SIDEWALK],
+    id: 'roadTransitway',
+    label: 'Transitway',
+    wayTypeId: 'road',
+    classId: 'transitway',
+    lanes: [
+      SIDEWALK,
+      { kindId: 'bus', direction: 'backward' },
+      { kindId: 'bus', direction: 'forward' },
+      SIDEWALK,
+    ],
   },
   railSingle: {
-    id: "railSingle",
-    label: "Single track",
-    wayTypeId: "heavyRail",
-    lanes: [{ kindId: "track", direction: "both" }],
+    id: 'railSingle',
+    label: 'Single track',
+    wayTypeId: 'heavyRail',
+    lanes: [{ kindId: 'track', direction: 'both' }],
   },
   railDouble: {
-    id: "railDouble",
-    label: "Double track",
-    wayTypeId: "heavyRail",
+    id: 'railDouble',
+    label: 'Double track',
+    wayTypeId: 'heavyRail',
     lanes: [
-      { kindId: "track", direction: "backward" },
-      { kindId: "track", direction: "forward" },
+      { kindId: 'track', direction: 'backward' },
+      { kindId: 'track', direction: 'forward' },
     ],
   },
   railQuad: {
-    id: "railQuad",
-    label: "Quad track",
-    wayTypeId: "heavyRail",
+    id: 'railQuad',
+    label: 'Quad track',
+    wayTypeId: 'heavyRail',
     lanes: [
-      { kindId: "track", direction: "backward" },
-      { kindId: "track", direction: "backward" },
-      { kindId: "track", direction: "forward" },
-      { kindId: "track", direction: "forward" },
+      { kindId: 'track', direction: 'backward' },
+      { kindId: 'track', direction: 'backward' },
+      { kindId: 'track', direction: 'forward' },
+      { kindId: 'track', direction: 'forward' },
     ],
   },
 };
 
 export const PROFILE_PRESET_ORDER: string[] = [
-  "roadLocal2",
-  "roadCollector3",
-  "roadArterial4",
-  "roadArterial5",
-  "roadBoulevard",
-  "roadOneWay3",
-  "roadTransitway",
-  "railSingle",
-  "railDouble",
-  "railQuad",
+  'roadLocal2',
+  'roadCollector3',
+  'roadArterial4',
+  'roadArterial5',
+  'roadBoulevard',
+  'roadOneWay3',
+  'roadTransitway',
+  'railSingle',
+  'railDouble',
+  'railQuad',
 ];
 
 /** Presets for a way type, in catalog order. */
 export function profilePresetsForWayType(typeId: string): ProfilePreset[] {
-  return PROFILE_PRESET_ORDER.map((id) => PROFILE_PRESETS[id]).filter((p) => p.wayTypeId === typeId);
+  return PROFILE_PRESET_ORDER.map((id) => PROFILE_PRESETS[id]).filter(
+    (p) => p.wayTypeId === typeId,
+  );
 }
 
 // ---- Service modes ---------------------------------------------------------
@@ -512,42 +568,67 @@ export interface Mode {
 export const MODES: Record<string, Mode> = {
   // Heavy rail: subway and commuter rail are operationally different services
   // but ride the same track standard, so both are compatible with heavyRail.
-  subway: { id: "subway", label: "Subway / metro", wayTypeIds: ["heavyRail"], defaultFootprintM: { widthM: 2.65, lengthM: 22 } },
-  commuterRail: { id: "commuterRail", label: "Commuter rail", wayTypeIds: ["heavyRail"], defaultFootprintM: { widthM: 2.9, lengthM: 25 } },
+  subway: {
+    id: 'subway',
+    label: 'Subway / metro',
+    wayTypeIds: ['heavyRail'],
+    defaultFootprintM: { widthM: 2.65, lengthM: 22 },
+  },
+  commuterRail: {
+    id: 'commuterRail',
+    label: 'Commuter rail',
+    wayTypeIds: ['heavyRail'],
+    defaultFootprintM: { widthM: 2.9, lengthM: 25 },
+  },
   // Light rail & trams share the light-rail track standard — trams typically
   // run shorter, city-center alignments and more often street-run in a road's
   // right-of-way, which is why both also list "road" as compatible.
   lightRail: {
-    id: "lightRail",
-    label: "Light rail",
-    wayTypeIds: ["lightRail", "road"],
-    preferredLaneKindIds: ["track", "drive"],
+    id: 'lightRail',
+    label: 'Light rail',
+    wayTypeIds: ['lightRail', 'road'],
+    preferredLaneKindIds: ['track', 'drive'],
     defaultFootprintM: { widthM: 2.65, lengthM: 27 },
   },
   tram: {
-    id: "tram",
-    label: "Tram / streetcar",
-    wayTypeIds: ["lightRail", "road"],
-    preferredLaneKindIds: ["track", "drive"],
+    id: 'tram',
+    label: 'Tram / streetcar',
+    wayTypeIds: ['lightRail', 'road'],
+    preferredLaneKindIds: ['track', 'drive'],
     defaultFootprintM: { widthM: 2.4, lengthM: 18 },
   },
-  monorail: { id: "monorail", label: "Monorail", wayTypeIds: ["monorail"], defaultFootprintM: { widthM: 3, lengthM: 12 } },
+  monorail: {
+    id: 'monorail',
+    label: 'Monorail',
+    wayTypeIds: ['monorail'],
+    defaultFootprintM: { widthM: 3, lengthM: 12 },
+  },
   brt: {
-    id: "brt",
-    label: "BRT",
-    wayTypeIds: ["road"],
-    preferredLaneKindIds: ["bus", "drive"],
+    id: 'brt',
+    label: 'BRT',
+    wayTypeIds: ['road'],
+    preferredLaneKindIds: ['bus', 'drive'],
     defaultFootprintM: { widthM: 2.6, lengthM: 12 },
   },
   bus: {
-    id: "bus",
-    label: "Bus",
-    wayTypeIds: ["road"],
-    preferredLaneKindIds: ["bus", "drive"],
+    id: 'bus',
+    label: 'Bus',
+    wayTypeIds: ['road'],
+    preferredLaneKindIds: ['bus', 'drive'],
     defaultFootprintM: { widthM: 2.6, lengthM: 12 },
   },
-  gondola: { id: "gondola", label: "Gondola / aerial", wayTypeIds: ["aerial"], defaultFootprintM: { widthM: 2, lengthM: 3 } },
-  ferry: { id: "ferry", label: "Ferry", wayTypeIds: ["water"], defaultFootprintM: { widthM: 6, lengthM: 20 } },
+  gondola: {
+    id: 'gondola',
+    label: 'Gondola / aerial',
+    wayTypeIds: ['aerial'],
+    defaultFootprintM: { widthM: 2, lengthM: 3 },
+  },
+  ferry: {
+    id: 'ferry',
+    label: 'Ferry',
+    wayTypeIds: ['water'],
+    defaultFootprintM: { widthM: 6, lengthM: 20 },
+  },
 };
 
 /** A mode's approximate true-world footprint — falls back to the bus
@@ -557,15 +638,15 @@ export function vehicleFootprint(modeId: string): VehicleFootprint {
 }
 
 export const MODE_ORDER: string[] = [
-  "subway",
-  "lightRail",
-  "tram",
-  "monorail",
-  "brt",
-  "bus",
-  "commuterRail",
-  "gondola",
-  "ferry",
+  'subway',
+  'lightRail',
+  'tram',
+  'monorail',
+  'brt',
+  'bus',
+  'commuterRail',
+  'gondola',
+  'ferry',
 ];
 
 /** Modes compatible with a way type, in catalog order. */
@@ -576,19 +657,19 @@ export function modesForWayType(typeId: string): Mode[] {
 // ---- Grade -----------------------------------------------------------------
 // Vertical alignment of a way: below ground, at grade, or elevated.
 
-export type Grade = "underground" | "atGrade" | "elevated";
+export type Grade = 'underground' | 'atGrade' | 'elevated';
 
 export interface GradeInfo {
   label: string;
 }
 
 export const GRADES: Record<Grade, GradeInfo> = {
-  underground: { label: "Underground" },
-  atGrade: { label: "At grade" },
-  elevated: { label: "Elevated" },
+  underground: { label: 'Underground' },
+  atGrade: { label: 'At grade' },
+  elevated: { label: 'Elevated' },
 };
 
-export const GRADE_ORDER: Grade[] = ["underground", "atGrade", "elevated"];
+export const GRADE_ORDER: Grade[] = ['underground', 'atGrade', 'elevated'];
 
 // ---- Facility types ---------------------------------------------------------
 // Catalog-typed point/area features that aren't ways or stations in their own
@@ -597,7 +678,7 @@ export const GRADE_ORDER: Grade[] = ["underground", "atGrade", "elevated"];
 // be confused with `FacilityClass` above, which refines a WAY's right-of-way
 // (arterial vs. local), a different axis entirely.
 
-export type FacilityGeometryKind = "point" | "area";
+export type FacilityGeometryKind = 'point' | 'area';
 
 export interface FacilityType {
   id: string;
@@ -606,22 +687,31 @@ export interface FacilityType {
 }
 
 export const FACILITY_TYPES: Record<string, FacilityType> = {
-  entrance: { id: "entrance", label: "Entrance", geometryKind: "point" },
-  bikeDock: { id: "bikeDock", label: "Bike dock", geometryKind: "point" },
-  elevator: { id: "elevator", label: "Elevator", geometryKind: "point" },
+  entrance: { id: 'entrance', label: 'Entrance', geometryKind: 'point' },
+  bikeDock: { id: 'bikeDock', label: 'Bike dock', geometryKind: 'point' },
+  elevator: { id: 'elevator', label: 'Elevator', geometryKind: 'point' },
   // A station building / terminal / headhouse — the general-purpose drawn
   // structure that sits on station land alongside platforms and bus bays.
-  building: { id: "building", label: "Building", geometryKind: "area" },
-  parkingLot: { id: "parkingLot", label: "Parking", geometryKind: "area" },
-  depot: { id: "depot", label: "Depot / yard", geometryKind: "area" },
+  building: { id: 'building', label: 'Building', geometryKind: 'area' },
+  parkingLot: { id: 'parkingLot', label: 'Parking', geometryKind: 'area' },
+  depot: { id: 'depot', label: 'Depot / yard', geometryKind: 'area' },
   // A bus's curbside stopping bay and a boarding platform (rail/tram/BRT
   // alike) both have a real footprint — placed inside a facility boundary
   // the same way a station's platforms sit inside its own footprint.
-  busBay: { id: "busBay", label: "Bus bay", geometryKind: "area" },
-  platform: { id: "platform", label: "Platform", geometryKind: "area" },
+  busBay: { id: 'busBay', label: 'Bus bay', geometryKind: 'area' },
+  platform: { id: 'platform', label: 'Platform', geometryKind: 'area' },
 };
 
-export const FACILITY_TYPE_ORDER: string[] = ["entrance", "bikeDock", "elevator", "building", "busBay", "platform", "parkingLot", "depot"];
+export const FACILITY_TYPE_ORDER: string[] = [
+  'entrance',
+  'bikeDock',
+  'elevator',
+  'building',
+  'busBay',
+  'platform',
+  'parkingLot',
+  'depot',
+];
 
 export function facilityType(id: string): FacilityType {
   return Object.hasOwn(FACILITY_TYPES, id) ? FACILITY_TYPES[id] : FACILITY_TYPES.entrance;
@@ -654,23 +744,28 @@ export function mode(id: string): Mode {
 }
 
 /** Facility class within a way type, or undefined if none/unknown. */
-export function facilityClass(typeId: string, classId: string | undefined): FacilityClass | undefined {
+export function facilityClass(
+  typeId: string,
+  classId: string | undefined,
+): FacilityClass | undefined {
   if (!classId) return undefined;
-  return Object.hasOwn(WAY_TYPES, typeId) ? WAY_TYPES[typeId].classes.find((c) => c.id === classId) : undefined;
+  return Object.hasOwn(WAY_TYPES, typeId)
+    ? WAY_TYPES[typeId].classes.find((c) => c.id === classId)
+    : undefined;
 }
 
 // Default colors offered when seeding a new system's line palette. Lives here
 // (not in the web app's style module) because serialize.ts's createEmptySystem
 // needs it — a domain module can't reach into presentation code.
 export const LINE_COLORS: string[] = [
-  "#e4572e",
-  "#2e86e4",
-  "#2ea44f",
-  "#8b5cf6",
-  "#f59e0b",
-  "#db2777",
-  "#0891b2",
-  "#65a30d",
-  "#dc2626",
-  "#4f46e5",
+  '#e4572e',
+  '#2e86e4',
+  '#2ea44f',
+  '#8b5cf6',
+  '#f59e0b',
+  '#db2777',
+  '#0891b2',
+  '#65a30d',
+  '#dc2626',
+  '#4f46e5',
 ];

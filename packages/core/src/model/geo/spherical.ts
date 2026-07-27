@@ -1,4 +1,4 @@
-import type { LngLat } from "../system";
+import type { LngLat } from '../system';
 
 export const EARTH_RADIUS_M = 6371008.8;
 
@@ -12,8 +12,7 @@ export function haversineMeters(a: LngLat, b: LngLat): number {
   const dLng = toRad(b[0] - a[0]);
   const lat1 = toRad(a[1]);
   const lat2 = toRad(b[1]);
-  const h =
-    Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+  const h = Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
   return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
@@ -28,7 +27,24 @@ export function bearingDegrees(a: LngLat, b: LngLat): number {
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
-const COMPASS_POINTS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+const COMPASS_POINTS = [
+  'N',
+  'NNE',
+  'NE',
+  'ENE',
+  'E',
+  'ESE',
+  'SE',
+  'SSE',
+  'S',
+  'SSW',
+  'SW',
+  'WSW',
+  'W',
+  'WNW',
+  'NW',
+  'NNW',
+];
 
 /** "142° SE" — a bearing in degrees plus its nearest 16-point compass label. */
 export function formatBearing(degrees: number): string {

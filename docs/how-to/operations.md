@@ -18,7 +18,7 @@ deploys the Worker, and then smoke-tests the live site.
 
 Because nothing applied migrations automatically before this workflow existed,
 the first automated deploy after it lands applies whatever backlog production
-has accumulated — so check the backlog is what you expect *before* merging a
+has accumulated — so check the backlog is what you expect _before_ merging a
 change to this workflow, not after:
 
 ```bash

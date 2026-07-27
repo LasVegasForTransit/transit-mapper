@@ -1,12 +1,13 @@
-import type { Grade } from "./catalog";
-import { serviceWayIds } from "./geo";
-import type { LngLat, TransitSystem, Way } from "./system";
+import type { Grade } from './catalog';
+import { serviceWayIds } from './geo';
+import type { LngLat, TransitSystem, Way } from './system';
 
 export interface Issue {
   id: string;
   message: string;
   /** What clicking this issue should select, if anything. */
-  target?: { kind: "way"; id: string } | { kind: "station"; id: string } | { kind: "service"; id: string };
+  target?:
+    { kind: 'way'; id: string } | { kind: 'station'; id: string } | { kind: 'service'; id: string };
 }
 
 /**
@@ -24,7 +25,7 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
       issues.push({
         id: `ghost-way-${way.id}`,
         message: `A ${way.typeId} way has fewer than 2 points and won't render.`,
-        target: { kind: "way", id: way.id },
+        target: { kind: 'way', id: way.id },
       });
     }
   }
@@ -34,7 +35,7 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
       issues.push({
         id: `ghost-service-${service.id}`,
         message: `"${service.name}" doesn't run over any way.`,
-        target: { kind: "service", id: service.id },
+        target: { kind: 'service', id: service.id },
       });
     }
   }
@@ -44,8 +45,8 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
     if (station.anchor && !wayIds.has(station.anchor.wayId)) {
       issues.push({
         id: `orphan-station-${station.id}`,
-        message: `"${station.name || "A station"}" is anchored to a way that no longer exists.`,
-        target: { kind: "station", id: station.id },
+        message: `"${station.name || 'A station'}" is anchored to a way that no longer exists.`,
+        target: { kind: 'station', id: station.id },
       });
     }
   }
@@ -117,7 +118,10 @@ function crossCellKey(cx: number, cy: number): string {
   return `${cx}:${cy}`;
 }
 
-function crossBboxCells(a: LngLat, b: LngLat): { cx0: number; cx1: number; cy0: number; cy1: number } {
+function crossBboxCells(
+  a: LngLat,
+  b: LngLat,
+): { cx0: number; cx1: number; cy0: number; cy1: number } {
   return {
     cx0: Math.floor(Math.min(a[0], b[0]) / CROSS_CELL_DEG),
     cx1: Math.floor(Math.max(a[0], b[0]) / CROSS_CELL_DEG),
@@ -170,7 +174,13 @@ function buildCrossGrid(ways: Way[]): CrossGrid {
   let cellsUsed = 0;
   for (const way of ways) {
     for (let i = 0; i < way.points.length - 1; i++) {
-      const seg: CrossSegment = { wayId: way.id, typeId: way.typeId, grade: way.grade, a: way.points[i], b: way.points[i + 1] };
+      const seg: CrossSegment = {
+        wayId: way.id,
+        typeId: way.typeId,
+        grade: way.grade,
+        a: way.points[i],
+        b: way.points[i + 1],
+      };
       all.push(seg);
       const { cx0, cx1, cy0, cy1 } = crossBboxCells(seg.a, seg.b);
       const span = (cx1 - cx0 + 1) * (cy1 - cy0 + 1);
@@ -215,7 +225,7 @@ function crossingIssuesForSegment(
     issues.push({
       id: `crossing-${key}`,
       message: `A ${way.typeId} way crosses a ${other.typeId} way without joining — check whether they should share a junction.`,
-      target: { kind: "way", id: way.id },
+      target: { kind: 'way', id: way.id },
     });
   };
 
@@ -255,10 +265,17 @@ function crossingIssuesForSegment(
   return issues;
 }
 
-function crossingIssuesForWay(way: Way, grid: CrossGrid, joined: Set<string>, flagged: Set<string>): Issue[] {
+function crossingIssuesForWay(
+  way: Way,
+  grid: CrossGrid,
+  joined: Set<string>,
+  flagged: Set<string>,
+): Issue[] {
   const issues: Issue[] = [];
   for (let i = 0; i < way.points.length - 1; i++) {
-    issues.push(...crossingIssuesForSegment(way, way.points[i], way.points[i + 1], grid, joined, flagged));
+    issues.push(
+      ...crossingIssuesForSegment(way, way.points[i], way.points[i + 1], grid, joined, flagged),
+    );
   }
   return issues;
 }
@@ -311,7 +328,9 @@ const CROSSING_CHUNK_BUDGET_MS = 8;
  * later is a transport change around this same generator, not a rewrite of
  * the algorithm.
  */
-export async function* crossingsWithoutJoiningChunked(system: TransitSystem): AsyncGenerator<Issue[]> {
+export async function* crossingsWithoutJoiningChunked(
+  system: TransitSystem,
+): AsyncGenerator<Issue[]> {
   const joined = jointWayPairs(system);
   const ways = system.ways.filter((w) => w.points.length >= 2);
   const grid = buildCrossGrid(ways);
@@ -320,7 +339,9 @@ export async function* crossingsWithoutJoiningChunked(system: TransitSystem): As
   let chunkStart = performance.now();
   for (const way of ways) {
     for (let i = 0; i < way.points.length - 1; i++) {
-      chunkIssues.push(...crossingIssuesForSegment(way, way.points[i], way.points[i + 1], grid, joined, flagged));
+      chunkIssues.push(
+        ...crossingIssuesForSegment(way, way.points[i], way.points[i + 1], grid, joined, flagged),
+      );
       if (performance.now() - chunkStart < CROSSING_CHUNK_BUDGET_MS) continue;
       if (chunkIssues.length > 0) {
         yield chunkIssues;

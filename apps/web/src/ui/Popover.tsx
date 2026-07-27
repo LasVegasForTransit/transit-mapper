@@ -1,5 +1,5 @@
-import * as RdxPopover from "@radix-ui/react-popover";
-import type { ReactNode } from "react";
+import * as RdxPopover from '@radix-ui/react-popover';
+import type { ReactNode } from 'react';
 
 /**
  * The one trigger-driven popover shell for arbitrary interactive content
@@ -12,10 +12,10 @@ import type { ReactNode } from "react";
 interface PopoverProps {
   trigger: ReactNode;
   children: ReactNode;
-  align?: "start" | "end" | "center";
+  align?: 'start' | 'end' | 'center';
   /** Preferred side — Radix still flips to whichever side actually fits if
    *  this one collides with the viewport edge. */
-  side?: "top" | "bottom" | "left" | "right";
+  side?: 'top' | 'bottom' | 'left' | 'right';
   className?: string;
   /** Omit both for the common case — Radix owns open state internally.
    *  Pass both when a caller needs to close the popover itself in response
@@ -25,7 +25,15 @@ interface PopoverProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function Popover({ trigger, children, align = "end", side = "bottom", className = "", open, onOpenChange }: PopoverProps) {
+export function Popover({
+  trigger,
+  children,
+  align = 'end',
+  side = 'bottom',
+  className = '',
+  open,
+  onOpenChange,
+}: PopoverProps) {
   return (
     <RdxPopover.Root open={open} onOpenChange={onOpenChange}>
       <RdxPopover.Trigger asChild>{trigger}</RdxPopover.Trigger>

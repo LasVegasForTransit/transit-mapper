@@ -68,12 +68,12 @@ Name the station in the inspector's header field.
 
 ## 5. Draw the line itself
 
-Switch to the **Network** view. This is the schematic. You draw *services*
+Switch to the **Network** view. This is the schematic. You draw _services_
 here: the colored lines people ride.
 
 1. Click the **Line** tool. Its chevron picks the mode; choose Light rail.
 2. Press on your track and click along it. Because you started on existing
-   compatible infrastructure, the line *routes along it* through the
+   compatible infrastructure, the line _routes along it_ through the
    junction graph instead of laying new geometry. Press `Enter` to finish.
 
 The line appears in the left panel with a color and a name you can edit.

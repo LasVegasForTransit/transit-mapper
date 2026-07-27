@@ -1,9 +1,9 @@
-import { useEditor } from "../../editor/EditorProvider";
-import { facilityType } from "@transitmapper/core/model/catalog";
-import { Panel } from "../Panel";
-import { blurOnEnter } from "../formUtils";
-import { Icon } from "../Icon";
-import { EmptyInspector } from "./shared";
+import { useEditor } from '../../editor/EditorProvider';
+import { facilityType } from '@transitmapper/core/model/catalog';
+import { Panel } from '../Panel';
+import { blurOnEnter } from '../formUtils';
+import { Icon } from '../Icon';
+import { EmptyInspector } from './shared';
 
 export interface FacilityInspectorProps {
   id: string;
@@ -28,7 +28,7 @@ export function FacilityInspector({ id }: FacilityInspectorProps) {
           className="insp-name"
           aria-label="Facility name"
           placeholder={type.label}
-          value={facility.name ?? ""}
+          value={facility.name ?? ''}
           disabled={readOnly}
           onChange={(e) => setFacilityName(id, e.target.value)}
           onKeyDown={blurOnEnter}
@@ -41,8 +41,11 @@ export function FacilityInspector({ id }: FacilityInspectorProps) {
         <>
           <label className="field-label">Part of</label>
           <div className="svc-list">
-            <button className="svc-chip" onClick={() => selectAndFocus({ kind: "group", id: complex.id })}>
-              {complex.name || "Facility complex"}
+            <button
+              className="svc-chip"
+              onClick={() => selectAndFocus({ kind: 'group', id: complex.id })}
+            >
+              {complex.name || 'Facility complex'}
             </button>
           </div>
         </>

@@ -1,5 +1,5 @@
-import type { LngLat, NodeControl } from "./valueTypes";
-import type { WayPointRef } from "./way";
+import type { LngLat, NodeControl } from './valueTypes';
+import type { WayPointRef } from './way';
 
 /** One edge of a junction's lane-connectivity graph: a specific incoming
  *  lane continues into a specific outgoing lane. Turn arrows painted on

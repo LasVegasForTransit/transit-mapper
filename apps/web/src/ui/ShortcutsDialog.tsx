@@ -1,27 +1,27 @@
-import { useMemo } from "react";
-import { KEY_BINDINGS } from "../editor/keymap";
-import { Modal } from "./Modal";
+import { useMemo } from 'react';
+import { KEY_BINDINGS } from '../editor/keymap';
+import { Modal } from './Modal';
 
 const KEY_LABEL: Record<string, string> = {
-  ArrowUp: "↑",
-  ArrowDown: "↓",
-  ArrowLeft: "←",
-  ArrowRight: "→",
-  Escape: "Esc",
-  Enter: "↵",
-  Delete: "Del",
-  Backspace: "⌫",
-  PageUp: "PgUp",
-  PageDown: "PgDn",
-  " ": "Space",
+  ArrowUp: '↑',
+  ArrowDown: '↓',
+  ArrowLeft: '←',
+  ArrowRight: '→',
+  Escape: 'Esc',
+  Enter: '↵',
+  Delete: 'Del',
+  Backspace: '⌫',
+  PageUp: 'PgUp',
+  PageDown: 'PgDn',
+  ' ': 'Space',
 };
 
 function keyLabel(k: string): string {
   return KEY_LABEL[k] ?? (k.length === 1 ? k.toUpperCase() : k);
 }
 
-const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
-const MOD_LABEL = IS_MAC ? "⌘" : "Ctrl";
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
+const MOD_LABEL = IS_MAC ? '⌘' : 'Ctrl';
 
 interface ShortcutsDialogProps {
   onClose: () => void;
@@ -43,7 +43,12 @@ export function ShortcutsDialog({ onClose }: ShortcutsDialogProps) {
   }, []);
 
   return (
-    <Modal title="Keyboard shortcuts" description="Every keyboard shortcut available in the editor, grouped by category." onClose={onClose} className="shortcuts-modal">
+    <Modal
+      title="Keyboard shortcuts"
+      description="Every keyboard shortcut available in the editor, grouped by category."
+      onClose={onClose}
+      className="shortcuts-modal"
+    >
       <div className="shortcuts-grid">
         {groups.map((g) => (
           <section key={g.name} className="shortcuts-group">
@@ -70,7 +75,8 @@ export function ShortcutsDialog({ onClose }: ShortcutsDialogProps) {
       </div>
 
       <p className="shortcuts-foot">
-        Pan also works by right-drag or <kbd>Space</kbd>-drag · Alt-click deletes a point or station · Shift constrains to 45°.
+        Pan also works by right-drag or <kbd>Space</kbd>-drag · Alt-click deletes a point or station
+        · Shift constrains to 45°.
       </p>
     </Modal>
   );

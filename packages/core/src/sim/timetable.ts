@@ -21,7 +21,11 @@ export interface Timetable {
   stops: DwellStop[];
 }
 
-export function buildTimetable(totalMeters: number, stops: DwellStop[], speedMps: number = VEHICLE_SPEED_MPS): Timetable {
+export function buildTimetable(
+  totalMeters: number,
+  stops: DwellStop[],
+  speedMps: number = VEHICLE_SPEED_MPS,
+): Timetable {
   const travelMs = (totalMeters / speedMps) * 1000;
   const dwellMs = stops.reduce((sum, s) => sum + s.dwellMs, 0);
   return { oneWayMs: travelMs + dwellMs, stops };
@@ -33,7 +37,12 @@ export function buildTimetable(totalMeters: number, stops: DwellStop[], speedMps
  * segment then its dwell pause. Elapsed time past the last stop covers the final
  * leg into the path's end.
  */
-export function metersAtElapsed(totalMeters: number, timetable: Timetable, elapsedMs: number, speedMps: number = VEHICLE_SPEED_MPS): number {
+export function metersAtElapsed(
+  totalMeters: number,
+  timetable: Timetable,
+  elapsedMs: number,
+  speedMps: number = VEHICLE_SPEED_MPS,
+): number {
   let clock = 0;
   let lastDist = 0;
   for (const stop of timetable.stops) {

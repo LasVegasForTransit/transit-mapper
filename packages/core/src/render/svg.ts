@@ -1,10 +1,10 @@
-import type { Feature, LineString, Point } from "geojson";
-import type { LngLat, TransitSystem } from "../model/system";
-import { buildFeatures, type ViewOptions } from "./buildFeatures";
-import type { LegendEntry } from "./legend";
-import type { ScaleBarSpec } from "./scaleBar";
-import type { ScreenPoint } from "./project";
-import { LVBT, LVBT_FONT_STACK } from "../style/lvbtBrand";
+import type { Feature, LineString, Point } from 'geojson';
+import type { LngLat, TransitSystem } from '../model/system';
+import { buildFeatures, type ViewOptions } from './buildFeatures';
+import type { LegendEntry } from './legend';
+import type { ScaleBarSpec } from './scaleBar';
+import type { ScreenPoint } from './project';
+import { LVBT, LVBT_FONT_STACK } from '../style/lvbtBrand';
 
 // The vector composition of a finished map: system geometry, plus the
 // furniture (title, legend, north arrow, scale bar) that makes an exported
@@ -22,7 +22,7 @@ import { LVBT, LVBT_FONT_STACK } from "../style/lvbtBrand";
 const INK = LVBT.light.onSurface;
 const PAPER = LVBT.light.surface;
 /** Backing for the title and legend panels — brand paper, not white. */
-const PANEL_FILL = "rgba(247, 244, 236, 0.88)";
+const PANEL_FILL = 'rgba(247, 244, 236, 0.88)';
 const PAD = 20;
 const TITLE_INSET = 14; // left/optical inset of the title inside its band
 const SWATCH = 14;
@@ -151,13 +151,13 @@ interface LabelBox {
 
 /** Where a label sits relative to its anchor, in preference order: directly
  *  above (the cartographic default), then below, then out to either side. */
-type LabelPlacement = "above" | "below" | "right" | "left";
-const PLACEMENTS: LabelPlacement[] = ["above", "below", "right", "left"];
+type LabelPlacement = 'above' | 'below' | 'right' | 'left';
+const PLACEMENTS: LabelPlacement[] = ['above', 'below', 'right', 'left'];
 
 interface PlacedLabel {
   x: number;
   y: number;
-  anchor: "middle" | "start" | "end";
+  anchor: 'middle' | 'start' | 'end';
   box: LabelBox;
 }
 
@@ -185,24 +185,24 @@ function placeLabel(
   for (const placement of PLACEMENTS) {
     let x = cx;
     let y = cy;
-    let anchor: PlacedLabel["anchor"] = "middle";
+    let anchor: PlacedLabel['anchor'] = 'middle';
     let box: LabelBox;
 
-    if (placement === "above") {
+    if (placement === 'above') {
       y = cy - gap;
       box = { left: cx - w / 2, right: cx + w / 2, top: y - h, bottom: y + h * 0.25 };
-    } else if (placement === "below") {
+    } else if (placement === 'below') {
       y = cy + gap + h * 0.8;
       box = { left: cx - w / 2, right: cx + w / 2, top: y - h, bottom: y + h * 0.25 };
-    } else if (placement === "right") {
+    } else if (placement === 'right') {
       x = cx + gap;
       y = cy + h * 0.35;
-      anchor = "start";
+      anchor = 'start';
       box = { left: x, right: x + w, top: y - h, bottom: y + h * 0.25 };
     } else {
       x = cx - gap;
       y = cy + h * 0.35;
-      anchor = "end";
+      anchor = 'end';
       box = { left: x - w, right: x, top: y - h, bottom: y + h * 0.25 };
     }
 
@@ -212,11 +212,15 @@ function placeLabel(
 }
 
 function escapeXml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function titleMarkup(title: string, width: number, fontFamily: string, size: number): string {
-  if (!title.trim()) return "";
+  if (!title.trim()) return '';
   // Rough width estimate (no DOM measurement available for a detached SVG
   // string) — generous enough that the backing panel never clips real titles.
   const bandH = size * 1.9;
@@ -231,8 +235,14 @@ function titleMarkup(title: string, width: number, fontFamily: string, size: num
   );
 }
 
-function legendMarkup(legend: LegendEntry[], width: number, height: number, fontFamily: string, size: number): string {
-  if (legend.length === 0) return "";
+function legendMarkup(
+  legend: LegendEntry[],
+  width: number,
+  height: number,
+  fontFamily: string,
+  size: number,
+): string {
+  if (legend.length === 0) return '';
   const rowH = Math.max(ROW_H, size * 1.7);
 
   // A legend is a caption, not the picture. Left uncapped, a system with
@@ -258,14 +268,19 @@ function legendMarkup(legend: LegendEntry[], width: number, height: number, font
         `<text x="${PAD + SWATCH + 10}" y="${(y + rowH / 2 + size * 0.34).toFixed(1)}" font-family="${fontFamily}" font-size="${size.toFixed(1)}" font-weight="500" fill="${INK}">${escapeXml(e.label)}</text>`
       );
     })
-    .join("");
+    .join('');
   const overflowRow = truncated
     ? `<text x="${PAD + SWATCH + 10}" y="${(rowY(shown.length) + rowH / 2 + size * 0.34).toFixed(1)}" font-family="${fontFamily}" font-size="${size.toFixed(1)}" font-style="italic" fill="${INK}">+${overflow} more</text>`
-    : "";
+    : '';
   return `<rect x="0" y="${top.toFixed(1)}" width="${panelW.toFixed(0)}" height="${panelH.toFixed(1)}" fill="${PANEL_FILL}"/>${rows}${overflowRow}`;
 }
 
-function scaleBarMarkup(spec: ScaleBarSpec, width: number, height: number, fontFamily: string): string {
+function scaleBarMarkup(
+  spec: ScaleBarSpec,
+  width: number,
+  height: number,
+  fontFamily: string,
+): string {
   const x0 = width - PAD - spec.widthPx;
   const y = height - PAD - 6;
   const tick = 5;
@@ -323,20 +338,20 @@ export function systemSvg(
     coords
       .map((c, i) => {
         const p = project(c);
-        return `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+        return `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`;
       })
-      .join(" ");
+      .join(' ');
 
   for (const f of fc.ways.features as Feature<LineString>[]) {
     const p = f.properties as { color: string; width: number; dashed?: boolean };
     parts.push(
-      `<path d="${pathD(f.geometry.coordinates as LngLat[])}" fill="none" stroke="${p.color}" stroke-width="${p.width}" stroke-linecap="round" stroke-linejoin="round"${p.dashed ? ' stroke-dasharray="4,4"' : ""} opacity="0.85"/>`,
+      `<path d="${pathD(f.geometry.coordinates as LngLat[])}" fill="none" stroke="${p.color}" stroke-width="${p.width}" stroke-linecap="round" stroke-linejoin="round"${p.dashed ? ' stroke-dasharray="4,4"' : ''} opacity="0.85"/>`,
     );
   }
   for (const f of fc.services.features as Feature<LineString>[]) {
     const p = f.properties as { color: string; width: number; underground?: boolean };
     parts.push(
-      `<path d="${pathD(f.geometry.coordinates as LngLat[])}" fill="none" stroke="${p.color}" stroke-width="${p.width}" stroke-linecap="round" stroke-linejoin="round"${p.underground ? ' stroke-dasharray="5,4"' : ""}/>`,
+      `<path d="${pathD(f.geometry.coordinates as LngLat[])}" fill="none" stroke="${p.color}" stroke-width="${p.width}" stroke-linecap="round" stroke-linejoin="round"${p.underground ? ' stroke-dasharray="5,4"' : ''}/>`,
     );
   }
   // Markers are drawn as they're encountered, but their labels are collected
@@ -382,17 +397,34 @@ export function systemSvg(
   for (const f of fc.facilities.features as Feature<Point>[]) {
     const p = f.properties as { color: string; radius: number; name?: string };
     const { x, y } = project(f.geometry.coordinates as LngLat);
-    parts.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${p.radius}" fill="${p.color}" stroke="${PAPER}" stroke-width="1.5"/>`);
+    parts.push(
+      `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${p.radius}" fill="${p.color}" stroke="${PAPER}" stroke-width="1.5"/>`,
+    );
     markerObstacle(x, y, p.radius);
     if (p.name && legible(FURNITURE_TEXT_SIZE)) {
-      candidates.push({ text: p.name, size: FURNITURE_TEXT_SIZE, weight: 400, cx: x, cy: y, clearance: p.radius, priority: 0 });
+      candidates.push({
+        text: p.name,
+        size: FURNITURE_TEXT_SIZE,
+        weight: 400,
+        cx: x,
+        cy: y,
+        clearance: p.radius,
+        priority: 0,
+      });
     }
   }
 
   // Sorted by priority, ties keeping document order, so the same system always
   // produces the same drawing.
   for (const label of [...candidates].sort((a, b) => b.priority - a.priority)) {
-    const placed = placeLabel(label.text, label.size, label.cx, label.cy, label.clearance, obstacles);
+    const placed = placeLabel(
+      label.text,
+      label.size,
+      label.cx,
+      label.cy,
+      label.clearance,
+      obstacles,
+    );
     if (!placed) continue; // nowhere clear — absent beats printed through a neighbour
     obstacles.push(placed.box);
     parts.push(
@@ -404,7 +436,8 @@ export function systemSvg(
   // captioning this image, and only when they'd be readable.
   if (!opts.captionedExternally) {
     if (legible(TITLE_SIZE)) parts.push(titleMarkup(opts.title, width, fontFamily, TITLE_SIZE));
-    if (legible(LEGEND_TEXT_SIZE)) parts.push(legendMarkup(opts.legend, width, height, fontFamily, LEGEND_TEXT_SIZE));
+    if (legible(LEGEND_TEXT_SIZE))
+      parts.push(legendMarkup(opts.legend, width, height, fontFamily, LEGEND_TEXT_SIZE));
   }
   // A north arrow and a scale bar are instruments — unreadable, they're just
   // marks. Both hang on the same legibility test as the text that labels them.
@@ -420,7 +453,7 @@ export function systemSvg(
   const insetSurface =
     opts.insetBackground && borderInset > 0
       ? `<rect x="${borderInset}" y="${borderInset}" width="${width - borderInset * 2}" height="${height - borderInset * 2}" fill="${opts.insetBackground}"/>`
-      : "";
+      : '';
   // Drawn last, so a line running to the edge passes under the frame rather
   // than over it. Inset by half its width because SVG strokes straddle the
   // path — without that, the outer half falls outside the viewBox and the
@@ -433,6 +466,6 @@ export function systemSvg(
   const edge = borderInset + borderWidth / 2;
   const border = opts.borderColor
     ? `<rect x="${edge}" y="${edge}" width="${width - edge * 2}" height="${height - edge * 2}" fill="none" stroke="${opts.borderColor}" stroke-width="${borderWidth}"/>`
-    : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="${background}"/>${insetSurface}${parts.join("")}${border}</svg>`;
+    : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="${background}"/>${insetSurface}${parts.join('')}${border}</svg>`;
 }

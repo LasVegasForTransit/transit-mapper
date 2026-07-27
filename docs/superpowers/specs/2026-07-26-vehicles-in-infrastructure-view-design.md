@@ -65,7 +65,7 @@ not a dot or a raster icon.
 ### 1. Direction detection (new)
 
 `Pattern.wayIds` is just an ordered list of way IDs — nothing today records
-whether a pattern traverses a given way *with* or *against* that way's own
+whether a pattern traverses a given way _with_ or _against_ that way's own
 stored point order. This has never mattered before because a plain
 centerline path looks the same either way; it matters now because lane
 selection needs to know which physical direction the vehicle is going.
@@ -99,7 +99,7 @@ vehicle rides:
 ### 3. Lane-accurate pattern path (new)
 
 A new function, same shape as `patternPath` (`(ways, pattern) => LngLat[]`),
-stitches each way's *selected lane path* (from step 2, using its
+stitches each way's _selected lane path_ (from step 2, using its
 `WayLaneGeometry.lanes[i].path` — already correctly oriented for direction
 via the existing `arrows` handling in `streets.ts`) instead of the way's
 centerline. Everything downstream — `resolvePatternGeometry`'s caching,
@@ -120,7 +120,7 @@ Per animation frame, for each visible vehicle in Infrastructure view:
   taking a center point, bearing, width (m), and length (m).
 - Dimensions: a new per-mode table in `catalogStyle.ts` (approximate real
   width/length in meters; rail-family modes can share one entry). Style
-  module, not catalog — this governs how big to *draw* the mode, the same
+  module, not catalog — this governs how big to _draw_ the mode, the same
   category as `MODE_RENDER`'s color/width today.
 
 These polygons go into a new source (`SRC_VEHICLES_INFRA`) and a new layer
@@ -128,7 +128,7 @@ These polygons go into a new source (`SRC_VEHICLES_INFRA`) and a new layer
 `LYR_PLATFORMS`), visible only in Infrastructure view. Unlike footprints
 (monochrome ink fill, since they belong to no single service), a vehicle's
 fill is its route color — the same color the Network-view dot already
-uses — with an ink outline stroke, since a vehicle *does* belong to one
+uses — with an ink outline stroke, since a vehicle _does_ belong to one
 service.
 
 Network view's existing `SRC_VEHICLES` circle layer, and the centerline
@@ -152,7 +152,7 @@ path it uses, are untouched.
 - Small per-mode icons for Network view (currently explicitly out of
   scope, using the same icon-registration pipeline facilities already
   use).
-- Letting a person choose *which* vehicle a mode runs (different real
+- Letting a person choose _which_ vehicle a mode runs (different real
   dimensions/speed for the same mode), rather than one fixed size per
   mode. See [Vehicle catalogs](2026-07-26-vehicle-catalogs-design.md),
   which builds directly on this spec's per-mode default table and

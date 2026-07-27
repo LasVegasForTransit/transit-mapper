@@ -1,6 +1,6 @@
-import * as Dialog from "@radix-ui/react-dialog";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Icon } from "./Icon";
+import * as Dialog from '@radix-ui/react-dialog';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Icon } from './Icon';
 
 /**
  * The one modal-dialog shell every dialog in this app renders through —
@@ -23,7 +23,14 @@ interface ModalProps {
   footer?: ReactNode;
 }
 
-export function Modal({ title, description, onClose, className = "", children, footer }: ModalProps) {
+export function Modal({
+  title,
+  description,
+  onClose,
+  className = '',
+  children,
+  footer,
+}: ModalProps) {
   // Every dialog here is opened by a trigger that lives outside this
   // component (a button in TopBar/FileMenu/GroupInspector/…), not a
   // <Dialog.Trigger> Radix can track itself — so its own default

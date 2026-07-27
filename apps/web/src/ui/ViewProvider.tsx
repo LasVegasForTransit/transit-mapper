@@ -1,5 +1,5 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { MODE_ORDER, WAY_TYPE_ORDER } from "@transitmapper/core/model/catalog";
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
 
 // Level-of-detail state: Network (stylized, service-focused), Infrastructure
 // (physical, catalog-styled), or Diagram (schematic, octolinear, read-only)
@@ -7,7 +7,7 @@ import { MODE_ORDER, WAY_TYPE_ORDER } from "@transitmapper/core/model/catalog";
 // catalog entry is visible by default with no code change here. Kept as its
 // own React context (not the zustand domain store) because it's view/
 // presentation state, not part of the transit system model.
-export type ViewMode = "network" | "infrastructure" | "diagram";
+export type ViewMode = 'network' | 'infrastructure' | 'diagram';
 
 interface ViewState {
   viewMode: ViewMode;
@@ -38,9 +38,11 @@ interface ViewProviderProps {
 }
 
 export function ViewProvider({ children }: ViewProviderProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>("network");
+  const [viewMode, setViewMode] = useState<ViewMode>('network');
   const [visibleModes, setVisibleModes] = useState<Set<string>>(() => new Set(MODE_ORDER));
-  const [visibleWayTypes, setVisibleWayTypes] = useState<Set<string>>(() => new Set(WAY_TYPE_ORDER));
+  const [visibleWayTypes, setVisibleWayTypes] = useState<Set<string>>(
+    () => new Set(WAY_TYPE_ORDER),
+  );
   const [showLandmarks, setShowLandmarks] = useState(true);
 
   const value = useMemo<ViewState>(
@@ -63,6 +65,6 @@ export function ViewProvider({ children }: ViewProviderProps) {
 
 export function useView(): ViewState {
   const ctx = useContext(ViewContext);
-  if (!ctx) throw new Error("useView must be used within <ViewProvider>");
+  if (!ctx) throw new Error('useView must be used within <ViewProvider>');
   return ctx;
 }

@@ -35,7 +35,12 @@ for a slide or a document.
 Any share link can be embedded as a live, read-only map:
 
 ```html
-<iframe src="https://map.lasvegasfortransit.org/e/<id>" width="800" height="500" style="border:0"></iframe>
+<iframe
+  src="https://map.lasvegasfortransit.org/e/<id>"
+  width="800"
+  height="500"
+  style="border:0"
+></iframe>
 ```
 
 Readers can pan and zoom, and click through to the full system. The embed is

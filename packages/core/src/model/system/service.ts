@@ -1,4 +1,4 @@
-import type { ScheduleDayScope } from "./valueTypes";
+import type { ScheduleDayScope } from './valueTypes';
 
 /** One path a service runs — more than one on the same service models a
  *  branch/variant sharing that service's identity (name/color/mode), e.g. a

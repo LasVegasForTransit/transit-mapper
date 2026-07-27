@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
-import { useEditor } from "../editor/EditorProvider";
-import { Icon } from "./Icon";
-import { IconButton } from "./IconButton";
-import { Panel } from "./Panel";
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { useEditor } from '../editor/EditorProvider';
+import { Icon } from './Icon';
+import { IconButton } from './IconButton';
+import { Panel } from './Panel';
 
 export interface WorkbenchProps {
   /** File menu / system name / Hide-UI toggle. Docks into the menu panel's
@@ -59,7 +59,16 @@ export interface WorkbenchProps {
  * with the chrome hidden, not fade with it. So the map renders as this
  * component's own sibling in App.tsx, unaffected by whatever this does.
  */
-export function Workbench({ brand, menuPanel, supplementalPanel, hasSupplementalContent, primaryToolbar, viewSwitcher, modeToolbar, importStatus }: WorkbenchProps) {
+export function Workbench({
+  brand,
+  menuPanel,
+  supplementalPanel,
+  hasSupplementalContent,
+  primaryToolbar,
+  viewSwitcher,
+  modeToolbar,
+  importStatus,
+}: WorkbenchProps) {
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const clearSelection = useEditor((s) => s.select);
   const backToSelectTool = useEditor((s) => s.setTool);
@@ -77,7 +86,10 @@ export function Workbench({ brand, menuPanel, supplementalPanel, hasSupplemental
           intercept — the standard "controls float over a canvas" trick. */}
       <div
         className="pointer-events-none absolute inset-2 md:grid md:gap-2"
-        style={{ gridTemplateColumns: "auto 1fr auto", gridTemplateRows: `auto 1fr var(--controls-clearance)` }}
+        style={{
+          gridTemplateColumns: 'auto 1fr auto',
+          gridTemplateRows: `auto 1fr var(--controls-clearance)`,
+        }}
       >
         {/* ---- mobile-only top bar (desktop folds brand into the menu
             panel's own header, and viewSwitcher/primaryToolbar into their
@@ -117,17 +129,23 @@ export function Workbench({ brand, menuPanel, supplementalPanel, hasSupplemental
             instead, the same way the mobile top bar/tool dock always have
             been — confirmed live, that's what "centered" needs to mean
             here: centered on the map, not on a leftover grid track. ---- */}
-        <div className="pointer-events-auto hidden self-stretch justify-self-start md:flex" style={{ gridArea: "1 / 1 / 4 / 2" }}>
+        <div
+          className="pointer-events-auto hidden self-stretch justify-self-start md:flex"
+          style={{ gridArea: '1 / 1 / 4 / 2' }}
+        >
           <MenuCard brand={brand}>{menuPanel}</MenuCard>
         </div>
         <div
           className="actions-full pointer-events-auto hidden max-w-[900px] flex-wrap items-center justify-end gap-2 self-start justify-self-end rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2 shadow-[var(--shadow)] md:flex"
-          style={{ gridArea: "1 / 3 / 2 / 4" }}
+          style={{ gridArea: '1 / 3 / 2 / 4' }}
         >
           {primaryToolbar}
         </div>
         {showingSupplemental && (
-          <div className="pointer-events-auto hidden self-stretch justify-self-end md:flex" style={{ gridArea: "2 / 3 / 3 / 4" }}>
+          <div
+            className="pointer-events-auto hidden self-stretch justify-self-end md:flex"
+            style={{ gridArea: '2 / 3 / 3 / 4' }}
+          >
             {supplementalPanel}
           </div>
         )}
@@ -155,7 +173,7 @@ export function Workbench({ brand, menuPanel, supplementalPanel, hasSupplemental
           {importStatus && <div className="pointer-events-auto">{importStatus}</div>}
           <div
             className={`transition-opacity duration-150 md:pointer-events-auto md:opacity-100 ${
-              sheetExpanded ? "pointer-events-none opacity-0" : "pointer-events-auto opacity-100"
+              sheetExpanded ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'
             }`}
           >
             {modeToolbar}
@@ -168,10 +186,14 @@ export function Workbench({ brand, menuPanel, supplementalPanel, hasSupplemental
           instead of a second component tree. ---- */}
       <div
         className={`absolute inset-x-0 bottom-0 z-[5] flex flex-col rounded-t-2xl border-t border-[var(--border)] bg-[var(--bg)] shadow-[0_-6px_20px_rgba(25,26,23,0.12)] transition-[max-height] duration-200 ease-[cubic-bezier(0.2,0.7,0.3,1)] md:hidden ${
-          sheetExpanded ? "max-h-[62vh]" : "max-h-14 overflow-hidden"
+          sheetExpanded ? 'max-h-[62vh]' : 'max-h-14 overflow-hidden'
         }`}
       >
-        <SheetHandle expanded={sheetExpanded} setExpanded={setSheetExpanded} title={showingSupplemental ? "Details" : "Objects"} />
+        <SheetHandle
+          expanded={sheetExpanded}
+          setExpanded={setSheetExpanded}
+          title={showingSupplemental ? 'Details' : 'Objects'}
+        />
         {showingSupplemental && (
           // Whichever put supplementalPanel here — a selection, an armed
           // tool, or (rarely) both — clears both. Each is a no-op on
@@ -182,13 +204,15 @@ export function Workbench({ brand, menuPanel, supplementalPanel, hasSupplemental
             className="sheet-back"
             onClick={() => {
               clearSelection(null);
-              backToSelectTool("select");
+              backToSelectTool('select');
             }}
           >
-            <Icon name="chevronDown" size={15} style={{ transform: "rotate(90deg)" }} /> Objects
+            <Icon name="chevronDown" size={15} style={{ transform: 'rotate(90deg)' }} /> Objects
           </button>
         )}
-        <div className="min-h-0 flex-1 overflow-y-auto">{showingSupplemental ? supplementalPanel : menuPanel}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {showingSupplemental ? supplementalPanel : menuPanel}
+        </div>
       </div>
     </>
   );
@@ -213,13 +237,13 @@ function MenuCard({ brand, children }: MenuCardProps) {
         <IconButton
           icon="chevronDown"
           size={16}
-          iconStyle={{ transform: collapsed ? "rotate(-90deg)" : undefined }}
-          label={collapsed ? "Expand" : "Collapse"}
+          iconStyle={{ transform: collapsed ? 'rotate(-90deg)' : undefined }}
+          label={collapsed ? 'Expand' : 'Collapse'}
           onClick={() => setCollapsed((c) => !c)}
         />
         <span className="panel-head-title">Objects</span>
       </div>
-      <div className={`collapsible ${collapsed ? "collapsed" : ""}`}>
+      <div className={`collapsible ${collapsed ? 'collapsed' : ''}`}>
         <div className="collapsible-inner">{children}</div>
       </div>
     </Panel>
@@ -269,11 +293,15 @@ function SheetHandle({ expanded, setExpanded, title }: SheetHandleProps) {
       onPointerUp={onPointerUp}
       onClick={onClick}
       aria-expanded={expanded}
-      aria-label={expanded ? "Collapse panel" : "Expand panel"}
+      aria-label={expanded ? 'Collapse panel' : 'Expand panel'}
     >
       <span className="sheet-grip" />
       <span className="sheet-title">{title}</span>
-      <Icon name="chevronDown" size={16} style={{ transform: expanded ? undefined : "rotate(180deg)" }} />
+      <Icon
+        name="chevronDown"
+        size={16}
+        style={{ transform: expanded ? undefined : 'rotate(180deg)' }}
+      />
     </button>
   );
 }

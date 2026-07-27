@@ -1,7 +1,7 @@
 # Data model
 
 A saved document is one `TransitSystem` (defined in
-[`src/model/system.ts`](../../src/model/system.ts)): a regional, multimodal
+[`src/model/system.ts`](../../../packages/core/src/model/system.ts)): a regional, multimodal
 network. The model's central split is **infrastructure versus service**: a
 `Way` is the physical carrier, a `Service` is a colored route people ride,
 and many services can share one way.
@@ -13,19 +13,19 @@ saves and shared snapshots keep working.
 
 ## TransitSystem
 
-| Field | Meaning |
-| --- | --- |
-| `version` | Schema version (7). |
-| `id`, `name`, `description` | Identity. |
-| `viewport` | Saved camera (`center`, `zoom`). |
-| `ways` | Physical infrastructure. |
-| `services` | Transit lines. |
-| `stations` | Stops / stations. |
-| `facilities` | Catalog-typed point and area features. |
-| `groups` | Bundles of members; a facility complex when it has a footprint. |
-| `nodes` | Junctions — coordinates shared by 2+ ways. |
-| `namedWays` | Shared identities across ways ("Decatur Avenue"). |
-| `palette` | The system's saved colors. |
+| Field                       | Meaning                                                         |
+| --------------------------- | --------------------------------------------------------------- |
+| `version`                   | Schema version (7).                                             |
+| `id`, `name`, `description` | Identity.                                                       |
+| `viewport`                  | Saved camera (`center`, `zoom`).                                |
+| `ways`                      | Physical infrastructure.                                        |
+| `services`                  | Transit lines.                                                  |
+| `stations`                  | Stops / stations.                                               |
+| `facilities`                | Catalog-typed point and area features.                          |
+| `groups`                    | Bundles of members; a facility complex when it has a footprint. |
+| `nodes`                     | Junctions — coordinates shared by 2+ ways.                      |
+| `namedWays`                 | Shared identities across ways ("Decatur Avenue").               |
+| `palette`                   | The system's saved colors.                                      |
 
 ## Way — physical infrastructure
 
@@ -34,15 +34,15 @@ a gondola span, a ferry route. One unified type covers all of them,
 discriminated by `typeId` into the way-type catalog; there is no per-mode
 class hierarchy.
 
-| Field | Meaning |
-| --- | --- |
-| `typeId` | Way-type catalog id (`road`, `heavyRail`, `bike`, …). |
-| `points` | Control vertices (`[lng, lat]`) defining the alignment. |
+| Field      | Meaning                                                                |
+| ---------- | ---------------------------------------------------------------------- |
+| `typeId`   | Way-type catalog id (`road`, `heavyRail`, `bike`, …).                  |
+| `points`   | Control vertices (`[lng, lat]`) defining the alignment.                |
 | `geometry` | How the path renders between points: `straight`, `curved`, `freeform`. |
-| `grade` | `underground`, `atGrade`, or `elevated`. |
-| `profile` | The cross-section (below). |
-| `classId` | Facility class within the type (arterial vs. local, …). |
-| `source` | Provenance marker, e.g. `"osm:<wayId>"` for imported ways. |
+| `grade`    | `underground`, `atGrade`, or `elevated`.                               |
+| `profile`  | The cross-section (below).                                             |
+| `classId`  | Facility class within the type (arterial vs. local, …).                |
+| `source`   | Provenance marker, e.g. `"osm:<wayId>"` for imported ways.             |
 
 ### CrossSection and LaneSpec
 
@@ -52,10 +52,10 @@ index, the osm2streets convention).
 
 ```ts
 interface LaneSpec {
-  id: string;         // stable, so junction connectors can reference it
-  kindId: string;     // lane-kind catalog id: drive, track, median, sidewalk, …
-  widthM: number;     // meters (the UI shows feet)
-  direction: "forward" | "backward" | "both" | "none";
+  id: string; // stable, so junction connectors can reference it
+  kindId: string; // lane-kind catalog id: drive, track, median, sidewalk, …
+  widthM: number; // meters (the UI shows feet)
+  direction: 'forward' | 'backward' | 'both' | 'none';
 }
 ```
 
@@ -103,12 +103,16 @@ over a surface street is a bridge, not a missing junction.
 ## NamedWay — shared identity
 
 ```ts
-interface NamedWay { id: string; name: string; wayIds: string[] }
+interface NamedWay {
+  id: string;
+  name: string;
+  wayIds: string[];
+}
 ```
 
 One named physical facility spanning several ways: the two one-way
 carriageways of a boulevard, a trail crossing many junction-split segments.
-What the identity is *called* in the UI ("Street", "Line", "Trail") comes
+What the identity is _called_ in the UI ("Street", "Line", "Trail") comes
 from the way family's catalog noun.
 
 ## Service, Pattern, SchedulePeriod
@@ -128,13 +132,13 @@ Scheduling stays at the level of headways rather than timetables:
 
 ## Station
 
-| Field | Meaning |
-| --- | --- |
-| `coord` | Network-node position, snapped onto its way. |
-| `anchor` | `{wayId, t}` — normalized arc-length position along the way; how a station follows its way when the alignment is reshaped. |
-| `footprint` | The station's land: a boundary polygon drawn in the Infrastructure view. |
-| `platforms` | Platform polygons inside the station (`edges: 1` side, `2` island). |
-| `dwellSeconds` | Vehicle dwell time for the ambient animation. |
+| Field          | Meaning                                                                                                                    |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `coord`        | Network-node position, snapped onto its way.                                                                               |
+| `anchor`       | `{wayId, t}` — normalized arc-length position along the way; how a station follows its way when the alignment is reshaped. |
+| `footprint`    | The station's land: a boundary polygon drawn in the Infrastructure view.                                                   |
+| `platforms`    | Platform polygons inside the station (`edges: 1` side, `2` island).                                                        |
+| `dwellSeconds` | Vehicle dwell time for the ambient animation.                                                                              |
 
 ## Facility and Group
 

@@ -1,4 +1,4 @@
-import type { LngLat, TransitSystem } from "../system";
+import type { LngLat, TransitSystem } from '../system';
 
 export function formatKm(meters: number): string {
   return `${(meters / 1000).toFixed(1)} km`;
@@ -10,7 +10,10 @@ export function formatKm(meters: number): string {
  *  screen. Null for an empty system, so callers can fall back to the current
  *  viewport instead of fitting to nothing. */
 export function systemBounds(system: TransitSystem): [LngLat, LngLat] | null {
-  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+  let minLng = Infinity,
+    minLat = Infinity,
+    maxLng = -Infinity,
+    maxLat = -Infinity;
   const grow = (c: LngLat) => {
     if (c[0] < minLng) minLng = c[0];
     if (c[1] < minLat) minLat = c[1];
@@ -29,5 +32,8 @@ export function systemBounds(system: TransitSystem): [LngLat, LngLat] | null {
   }
   for (const g of system.groups) g.footprint?.forEach(grow);
   if (minLng === Infinity) return null;
-  return [[minLng, minLat], [maxLng, maxLat]];
+  return [
+    [minLng, minLat],
+    [maxLng, maxLat],
+  ];
 }

@@ -1,0 +1,36 @@
+#!/usr/bin/env sh
+# Layer 1 of four. Auto-fixes the staged files and blocks on nothing a
+# machine can repair.
+#
+# The speed target is under two seconds, and it is a correctness
+# requirement rather than a nicety: a hook that is slow or that scolds gets
+# bypassed with --no-verify, and a bypassed hook enforces nothing at all.
+# CI is the guarantee. This exists so CI is rarely the thing that tells you.
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
+[ -z "$STAGED" ] && exit 0
+
+# Formats everything prettier understands and applies eslint --fix to
+# TypeScript. Both rewrite in place and re-stage; neither fails on anything
+# fixable.
+if ! pnpm --silent exec lint-staged; then
+  printf '\n  Commit blocked: lint-staged could not fix everything.\n'
+  printf '    fix:  pnpm check --fix\n\n' >&2
+  exit 1
+fi
+
+# Secret scanning, net 1 of 3. Nets 2 and 3 are CI and GitHub push
+# protection, because this one is bypassable by design.
+if command -v gitleaks >/dev/null 2>&1; then
+  if ! gitleaks git --staged --redact --no-banner 2>/dev/null; then
+    printf '\n  Commit blocked: a secret was detected in the staged changes.\n'
+    printf '  Remove it, then rotate it — assume anything written down is burned.\n'
+    printf '    see:  docs/development/reference/secrets.md\n\n' >&2
+    exit 1
+  fi
+else
+  printf '  note: gitleaks not installed, skipping the local secret scan.\n' >&2
+  printf '        CI still scans. Install it with: brew install gitleaks\n' >&2
+fi

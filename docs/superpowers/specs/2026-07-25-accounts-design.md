@@ -129,9 +129,9 @@ Google OAuth 2.0 authorization code flow with PKCE, written directly in
 Two endpoints exist for browser navigation. They return redirects and set
 cookies, and no API client calls them, so they are mounted outside `/api`.
 
-| Route | Behavior |
-| --- | --- |
-| `GET /auth/google` | Generate `state` and a PKCE verifier, store both in short-lived cookies, redirect to Google. |
+| Route                       | Behavior                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `GET /auth/google`          | Generate `state` and a PKCE verifier, store both in short-lived cookies, redirect to Google.                 |
 | `GET /auth/google/callback` | Verify `state`, exchange the code, resolve the profile, upsert user and account, create a session, redirect. |
 
 ### Start
@@ -208,16 +208,16 @@ as optional in local development.
 `/api` holds REST resources. The action is carried by the HTTP method, and
 collections are filtered with query parameters.
 
-| Route | Behavior |
-| --- | --- |
-| `GET /api/auth/providers` | Sign-in providers currently available. |
-| `GET /api/session` | The current session's user. 404 when signed out. |
-| `DELETE /api/session` | End the session. 204 on success. |
-| `GET /api/systems?owner=me` | Shares owned by the current user. |
-| `POST /api/systems` | Create a snapshot. |
-| `GET /api/systems/:id` | Read a snapshot. Unchanged. |
-| `PUT /api/systems/:id/owner` | Claim an anonymous share. |
-| `DELETE /api/systems/:id` | Delete a share. Owner only. |
+| Route                        | Behavior                                         |
+| ---------------------------- | ------------------------------------------------ |
+| `GET /api/auth/providers`    | Sign-in providers currently available.           |
+| `GET /api/session`           | The current session's user. 404 when signed out. |
+| `DELETE /api/session`        | End the session. 204 on success.                 |
+| `GET /api/systems?owner=me`  | Shares owned by the current user.                |
+| `POST /api/systems`          | Create a snapshot.                               |
+| `GET /api/systems/:id`       | Read a snapshot. Unchanged.                      |
+| `PUT /api/systems/:id/owner` | Claim an anonymous share.                        |
+| `DELETE /api/systems/:id`    | Delete a share. Owner only.                      |
 
 `GET /api/systems` without a filter returns 400. The collection is never
 enumerable, and `owner=me` is the only supported filter.
@@ -408,8 +408,7 @@ plan:
   the URL still resolves.
 - Replay a claim for an already-owned share, confirm 409.
 - Claim with a wrong token, confirm 403 and that the row is untouched.
-- Sign out, confirm the session row is gone and `GET /api/session` returns
-  404.
+- Sign out, confirm the session row is gone and `GET /api/session` returns 404.
 - Delete a share owned by someone else, confirm 403.
 - Run the scheduled handler with a mix of expired and permanent rows, confirm
   only expired anonymous rows and expired sessions are removed.

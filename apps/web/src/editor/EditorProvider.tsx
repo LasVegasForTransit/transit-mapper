@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
-import { useStore } from "zustand";
-import { createEditorStore, type EditorState, type EditorStore } from "./store";
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
+import { useStore } from 'zustand';
+import { createEditorStore, type EditorState, type EditorStore } from './store';
 
 // The editor store is created once and shared through context, so React
 // components consume it via hooks and the imperative map/keyboard layers
@@ -21,13 +21,15 @@ export function EditorProvider({ children }: EditorProviderProps) {
     }
   }, []);
 
-  return <EditorStoreContext.Provider value={storeRef.current}>{children}</EditorStoreContext.Provider>;
+  return (
+    <EditorStoreContext.Provider value={storeRef.current}>{children}</EditorStoreContext.Provider>
+  );
 }
 
 /** The store instance, for imperative access (getState / subscribe / actions). */
 export function useEditorStore(): EditorStore {
   const store = useContext(EditorStoreContext);
-  if (!store) throw new Error("useEditorStore must be used within <EditorProvider>");
+  if (!store) throw new Error('useEditorStore must be used within <EditorProvider>');
   return store;
 }
 

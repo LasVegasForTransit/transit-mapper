@@ -1,19 +1,22 @@
-import { useRef, type ReactNode } from "react";
-import { useEditor } from "../editor/EditorProvider";
-import type { MultiSelectItem, Selection } from "../editor/store";
-import { Icon } from "./Icon";
-import { NodeInspector } from "./NodeInspector";
-import { Panel } from "./Panel";
-import { useDelayedUnmount } from "./useDelayedUnmount";
-import { useView } from "./ViewProvider";
-import { ToolDraftInspector } from "./inspector/drafts";
-import { ServiceInspector } from "./inspector/ServiceInspector";
-import { WayInspector } from "./inspector/WayInspector";
-import { StationInspector } from "./inspector/StationInspector";
-import { FacilityInspector } from "./inspector/FacilityInspector";
-import { GroupInspector } from "./inspector/GroupInspector";
+import { useRef, type ReactNode } from 'react';
+import { useEditor } from '../editor/EditorProvider';
+import type { MultiSelectItem, Selection } from '../editor/store';
+import { Icon } from './Icon';
+import { NodeInspector } from './NodeInspector';
+import { Panel } from './Panel';
+import { useDelayedUnmount } from './useDelayedUnmount';
+import { useView } from './ViewProvider';
+import { ToolDraftInspector } from './inspector/drafts';
+import { ServiceInspector } from './inspector/ServiceInspector';
+import { WayInspector } from './inspector/WayInspector';
+import { StationInspector } from './inspector/StationInspector';
+import { FacilityInspector } from './inspector/FacilityInspector';
+import { GroupInspector } from './inspector/GroupInspector';
 
-function renderInspectorContent(selection: Selection, multiSelection: MultiSelectItem[]): ReactNode {
+function renderInspectorContent(
+  selection: Selection,
+  multiSelection: MultiSelectItem[],
+): ReactNode {
   if (multiSelection.length > 0) return <MultiInspector items={multiSelection} />;
   if (!selection) return null;
   // key={id}: switching selection to a DIFFERENT service must remount, not
@@ -21,11 +24,12 @@ function renderInspectorContent(selection: Selection, multiSelection: MultiSelec
   // state derived once at mount from that service's own values (see
   // ServiceInspector), and would otherwise stay stuck open/closed from
   // whichever service was selected previously.
-  if (selection.kind === "service") return <ServiceInspector key={selection.id} id={selection.id} />;
-  if (selection.kind === "way") return <WayInspector id={selection.id} />;
-  if (selection.kind === "facility") return <FacilityInspector id={selection.id} />;
-  if (selection.kind === "group") return <GroupInspector id={selection.id} />;
-  if (selection.kind === "node") return <NodeInspector id={selection.id} />;
+  if (selection.kind === 'service')
+    return <ServiceInspector key={selection.id} id={selection.id} />;
+  if (selection.kind === 'way') return <WayInspector id={selection.id} />;
+  if (selection.kind === 'facility') return <FacilityInspector id={selection.id} />;
+  if (selection.kind === 'group') return <GroupInspector id={selection.id} />;
+  if (selection.kind === 'node') return <NodeInspector id={selection.id} />;
   return <StationInspector id={selection.id} />;
 }
 
@@ -43,19 +47,29 @@ export function Inspector() {
   const tool = useEditor((s) => s.tool);
   const readOnly = useEditor((s) => s.readOnly);
   const { viewMode } = useView();
-  const showingToolDraft = tool !== "select" && !readOnly && viewMode !== "diagram";
+  const showingToolDraft = tool !== 'select' && !readOnly && viewMode !== 'diagram';
   const isOpen = showingToolDraft || multiSelection.length > 0 || selection !== null;
   const { mounted, closing } = useDelayedUnmount(isOpen, 160);
 
-  const current = showingToolDraft ? <ToolDraftInspector tool={tool} /> : renderInspectorContent(selection, multiSelection);
+  const current = showingToolDraft ? (
+    <ToolDraftInspector tool={tool} />
+  ) : (
+    renderInspectorContent(selection, multiSelection)
+  );
   const lastContent = useRef<ReactNode>(current);
   if (current !== null) lastContent.current = current;
 
   if (!mounted) return null;
-  return <div data-inspector-state={closing ? "closed" : "open"}>{current ?? lastContent.current}</div>;
+  return (
+    <div data-inspector-state={closing ? 'closed' : 'open'}>{current ?? lastContent.current}</div>
+  );
 }
 
-const MULTI_KIND_LABEL: Record<MultiSelectItem["kind"], string> = { way: "way", station: "station", facility: "facility" };
+const MULTI_KIND_LABEL: Record<MultiSelectItem['kind'], string> = {
+  way: 'way',
+  station: 'station',
+  facility: 'facility',
+};
 
 interface MultiInspectorProps {
   items: MultiSelectItem[];
@@ -69,9 +83,11 @@ function MultiInspector({ items }: MultiInspectorProps) {
   const clearMultiSelection = useEditor((s) => s.clearMultiSelection);
   const deleteMultiSelection = useEditor((s) => s.deleteMultiSelection);
 
-  const counts = new Map<MultiSelectItem["kind"], number>();
+  const counts = new Map<MultiSelectItem['kind'], number>();
   for (const item of items) counts.set(item.kind, (counts.get(item.kind) ?? 0) + 1);
-  const summary = [...counts.entries()].map(([kind, n]) => `${n} ${MULTI_KIND_LABEL[kind]}${n === 1 ? "" : "s"}`).join(", ");
+  const summary = [...counts.entries()]
+    .map(([kind, n]) => `${n} ${MULTI_KIND_LABEL[kind]}${n === 1 ? '' : 's'}`)
+    .join(', ');
 
   return (
     <Panel slot="right" aria-label="Selection details">
@@ -81,9 +97,19 @@ function MultiInspector({ items }: MultiInspectorProps) {
       </div>
       <div className="insp-kind">{summary}</div>
 
-      {!readOnly && <p className="insp-sub">Drag any selected way, station, or facility to move the whole group · Shift-click to add or remove one</p>}
+      {!readOnly && (
+        <p className="insp-sub">
+          Drag any selected way, station, or facility to move the whole group · Shift-click to add
+          or remove one
+        </p>
+      )}
 
-      <button type="button" className="ghost-btn" style={{ width: "100%", justifyContent: "center", marginBottom: 8 }} onClick={clearMultiSelection}>
+      <button
+        type="button"
+        className="ghost-btn"
+        style={{ width: '100%', justifyContent: 'center', marginBottom: 8 }}
+        onClick={clearMultiSelection}
+      >
         Clear selection
       </button>
       {!readOnly && (

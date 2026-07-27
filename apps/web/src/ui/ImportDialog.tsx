@@ -1,9 +1,14 @@
-import { useEffect, useState } from "react";
-import { useEditor } from "../editor/EditorProvider";
-import { getMap } from "../map/mapRef";
-import { IMPORT_CATEGORY_LABELS, IMPORT_CATEGORY_ORDER, importOsmWays, type ImportCategory } from "@transitmapper/core/model/import";
-import { Icon } from "./Icon";
-import { Modal } from "./Modal";
+import { useEffect, useState } from 'react';
+import { useEditor } from '../editor/EditorProvider';
+import { getMap } from '../map/mapRef';
+import {
+  IMPORT_CATEGORY_LABELS,
+  IMPORT_CATEGORY_ORDER,
+  importOsmWays,
+  type ImportCategory,
+} from '@transitmapper/core/model/import';
+import { Icon } from './Icon';
+import { Modal } from './Modal';
 
 // Below this zoom the visible area is too large for a responsible Overpass
 // query (slow, or likely to time out / return an unreasonable amount of data).
@@ -16,11 +21,13 @@ interface ImportDialogProps {
 export function ImportDialog({ onClose }: ImportDialogProps) {
   const importWays = useEditor((s) => s.importWays);
   const drivingSide = useEditor((s) => s.system.drivingSide);
-  const [categories, setCategories] = useState<Set<ImportCategory>>(() => new Set(["road", "bike"]));
-  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [categories, setCategories] = useState<Set<ImportCategory>>(
+    () => new Set(['road', 'bike']),
+  );
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [count, setCount] = useState(0);
   const [skipped, setSkipped] = useState(0);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
   const toggle = (c: ImportCategory) =>
     setCategories((prev) => {
@@ -42,9 +49,9 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
     const map = getMap();
     if (!map) return;
     const onZoom = () => setZoom(map.getZoom());
-    map.on("zoomend", onZoom);
+    map.on('zoomend', onZoom);
     return () => {
-      map.off("zoomend", onZoom);
+      map.off('zoomend', onZoom);
     };
   }, []);
 
@@ -53,8 +60,8 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
   const run = async () => {
     const map = getMap();
     if (!map || categories.size === 0) return;
-    setStatus("loading");
-    setError("");
+    setStatus('loading');
+    setError('');
     try {
       const b = map.getBounds();
       const network = await importOsmWays(
@@ -65,10 +72,10 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
       const { added, skipped: alreadyHere } = importWays(network);
       setCount(added);
       setSkipped(alreadyHere);
-      setStatus("done");
+      setStatus('done');
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Import failed.");
-      setStatus("error");
+      setError(e instanceof Error ? e.message : 'Import failed.');
+      setStatus('error');
     }
   };
 
@@ -80,11 +87,12 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
       footer={
         <button
           className="primary-btn"
-          style={{ marginTop: 16, width: "100%", justifyContent: "center" }}
-          disabled={!zoomedInEnough || categories.size === 0 || status === "loading"}
+          style={{ marginTop: 16, width: '100%', justifyContent: 'center' }}
+          disabled={!zoomedInEnough || categories.size === 0 || status === 'loading'}
           onClick={run}
         >
-          <Icon name="download" size={18} /> {status === "loading" ? "Importing…" : "Import into this system"}
+          <Icon name="download" size={18} />{' '}
+          {status === 'loading' ? 'Importing…' : 'Import into this system'}
         </button>
       }
     >
@@ -93,11 +101,16 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
         services over — real streets, rail, and bike routes as a starting point.
       </p>
 
-      <div className="chip-row" role="group" aria-label="Categories to import" style={{ marginTop: 8 }}>
+      <div
+        className="chip-row"
+        role="group"
+        aria-label="Categories to import"
+        style={{ marginTop: 8 }}
+      >
         {IMPORT_CATEGORY_ORDER.map((c) => (
           <button
             key={c}
-            className={`chip ${categories.has(c) ? "active" : ""}`}
+            className={`chip ${categories.has(c) ? 'active' : ''}`}
             aria-pressed={categories.has(c)}
             onClick={() => toggle(c)}
           >
@@ -107,7 +120,10 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
       </div>
 
       {!zoomedInEnough && (
-        <p className="error-text" style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+        <p
+          className="error-text"
+          style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}
+        >
           This area's too big to pull streets for all at once.
           <button type="button" className="link-btn" onClick={zoomIn}>
             Zoom in
@@ -115,12 +131,16 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
         </p>
       )}
 
-      {status === "error" && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
-      {status === "done" && (
+      {status === 'error' && (
+        <p className="error-text" style={{ marginTop: 8 }}>
+          {error}
+        </p>
+      )}
+      {status === 'done' && (
         <p className="panel-hint" style={{ marginTop: 8 }}>
           {count === 0 && skipped > 0
-            ? `This area is already in your system — all ${skipped} street${skipped === 1 ? " was" : "s were"} imported before.`
-            : `Imported ${count} way${count === 1 ? "" : "s"}${skipped > 0 ? `, skipping ${skipped} already in this system` : ""}. They start as bare infrastructure — draw a service over any of them from the Way inspector.`}
+            ? `This area is already in your system — all ${skipped} street${skipped === 1 ? ' was' : 's were'} imported before.`
+            : `Imported ${count} way${count === 1 ? '' : 's'}${skipped > 0 ? `, skipping ${skipped} already in this system` : ''}. They start as bare infrastructure — draw a service over any of them from the Way inspector.`}
         </p>
       )}
     </Modal>

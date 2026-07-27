@@ -22,7 +22,7 @@ middle, with per-lane guide curves showing which lane continues where.
 Click a junction footprint with the Select tool. The junction inspector has
 two tabs:
 
-- **Turn lanes** lists each approach (lanes that travel *into* the
+- **Turn lanes** lists each approach (lanes that travel _into_ the
   junction), left-to-right as a driver sees them. The arrows on each lane
   toggle whether that lane may turn left, go straight, or turn right; each
   toggle edits the real lane-connectivity graph, and the guide curves on the
@@ -40,5 +40,5 @@ and the rightmost also turns right.
 
 To make an overpass out of an existing at-grade crossing, you currently
 delete the junction's effect by re-drawing: set one way's grade to Elevated
-*before* drawing it across. Changing grade after a junction has formed does
+_before_ drawing it across. Changing grade after a junction has formed does
 not yet un-form the junction; that cleanup is on the roadmap.

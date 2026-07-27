@@ -12,7 +12,7 @@ With the **Station** tool (`S`):
 - **click** corner points one at a time and finish with `Enter` or
   double-click (`Esc` cancels).
 
-The boundary you draw *is* the station, its primary identity in the physical
+The boundary you draw _is_ the station, its primary identity in the physical
 world. The station anchors itself to the nearest way inside or near the
 boundary, so its Network-view stop lands on the line it serves. Reshape the
 land later by selecting the station and dragging its corner handles.

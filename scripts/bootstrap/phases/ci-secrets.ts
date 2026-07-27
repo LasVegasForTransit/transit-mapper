@@ -1,9 +1,9 @@
-import { log, note } from "@clack/prompts";
-import { runCommand, shellEscape, tryOpenInBrowser } from "../lib/shell.js";
-import { promptConfirm, promptSecret } from "../lib/ui.js";
-import type { PhaseResult } from "./auth.js";
+import { log, note } from '@clack/prompts';
+import { runCommand, shellEscape, tryOpenInBrowser } from '../lib/shell.js';
+import { promptConfirm, promptSecret } from '../lib/ui.js';
+import type { PhaseResult } from './auth.js';
 
-const GITHUB_ENVIRONMENT = "production";
+const GITHUB_ENVIRONMENT = 'production';
 
 /**
  * Account-scoped API token page: tokens created here are bound to a single
@@ -24,24 +24,24 @@ function tokenDashboardUrl(accountId: string): string {
  */
 function tokenPromptBody(accountId: string): string {
   return [
-    "This lets GitHub Actions deploy the Worker on every push to main.",
-    "",
+    'This lets GitHub Actions deploy the Worker on every push to main.',
+    '',
     `  1. Open ${tokenDashboardUrl(accountId)} (opening it for you now)`,
     '  2. Find "Edit Cloudflare Workers" and click "Use template"',
-    "     This creates TWO permission blocks — one scoped to \"Account\"",
-    "     (Workers Scripts, KV, R2), one scoped to \"Specified Domains\"",
-    "     (Workers Routes). Leave both as they are.",
+    '     This creates TWO permission blocks — one scoped to "Account"',
+    '     (Workers Scripts, KV, R2), one scoped to "Specified Domains"',
+    '     (Workers Routes). Leave both as they are.',
     '  3. Click "+ Add policy" to add a THIRD block (D1 is account-scoped,',
     "     so it can't go in either existing block):",
     '       - Change its left dropdown from "Specified Domains" to "Account"',
     '       - Search "database" and check Edit next to "D1 Database"',
-    "       - Set the account selector to this account",
-    "  4. On each Account-scoped block, confirm the account selected is",
-    "     this one (not \"All accounts\")",
+    '       - Set the account selector to this account',
+    '  4. On each Account-scoped block, confirm the account selected is',
+    '     this one (not "All accounts")',
     '  5. Click "Continue to summary", then "Create Token"',
-    "  6. Copy the token from the success screen",
-    "  7. Paste it below (it will not be shown on screen as you type)",
-  ].join("\n");
+    '  6. Copy the token from the success screen',
+    '  7. Paste it below (it will not be shown on screen as you type)',
+  ].join('\n');
 }
 
 /**
@@ -53,13 +53,13 @@ function tokenPromptBody(accountId: string): string {
 function parseAccountIds(stdout: string): string[] {
   const rowRe = /│\s*([^│]+?)\s*│\s*([0-9a-f]{32})\s*│/g;
   const ids: string[] = [];
-  for (const line of stdout.split("\n")) {
+  for (const line of stdout.split('\n')) {
     rowRe.lastIndex = 0;
     const match = rowRe.exec(line);
     if (!match) continue;
     const name = match[1]!.trim();
     const id = match[2]!.trim();
-    if (name.toLowerCase() === "account name") continue;
+    if (name.toLowerCase() === 'account name') continue;
     ids.push(id);
   }
   return ids;
@@ -74,15 +74,15 @@ function parseAccountIds(stdout: string): string[] {
  * on-disk file.
  */
 export async function runCiSecretsPhase(): Promise<PhaseResult> {
-  const whoami = runCommand("wrangler whoami");
+  const whoami = runCommand('wrangler whoami');
   if (!whoami.ok) {
-    log.error("`wrangler whoami` failed — make sure the auth phase succeeded first.");
+    log.error('`wrangler whoami` failed — make sure the auth phase succeeded first.');
     return { success: false };
   }
 
   const accountIds = parseAccountIds(whoami.stdout);
   if (accountIds.length === 0) {
-    log.error("Could not parse an account id out of `wrangler whoami` output.");
+    log.error('Could not parse an account id out of `wrangler whoami` output.');
     return { success: false };
   }
   const accountId = accountIds[0]!;
@@ -96,10 +96,10 @@ export async function runCiSecretsPhase(): Promise<PhaseResult> {
     return { success: false };
   }
 
-  note(tokenPromptBody(accountId), "Cloudflare API token");
+  note(tokenPromptBody(accountId), 'Cloudflare API token');
   tryOpenInBrowser(tokenDashboardUrl(accountId));
 
-  const token = await promptSecret("Paste the Cloudflare API token:");
+  const token = await promptSecret('Paste the Cloudflare API token:');
 
   const setToken = runCommand(
     `gh secret set CLOUDFLARE_API_TOKEN --env ${GITHUB_ENVIRONMENT} --body ${shellEscape(token)}`,

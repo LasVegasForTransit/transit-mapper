@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 export interface ErrorBoundaryProps {
   /** What this boundary is protecting, named for the message the user reads
@@ -55,7 +55,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     // regarding durability is the wrong place to start guessing.
     return (
       <div className="app-banner" role="alert">
-        This {this.props.label} couldn’t be opened. Reloading the page usually fixes it; your last saved system is still in this browser.
+        This {this.props.label} couldn’t be opened. Reloading the page usually fixes it; your last
+        saved system is still in this browser.
       </div>
     );
   }

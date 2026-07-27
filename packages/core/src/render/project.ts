@@ -1,4 +1,4 @@
-import type { LngLat } from "../model/system";
+import type { LngLat } from '../model/system';
 
 // Web Mercator projection, matching MapLibre's own conventions exactly (512px
 // tiles, zoom as a log2 scale factor) so a system framed here lands where it
