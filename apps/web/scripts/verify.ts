@@ -26,7 +26,7 @@ import { isDoubleClickFinish } from "../src/map/interactions";
 import { KEY_BINDINGS, matchesKey, resolveBinding, type KeyContext } from "../src/editor/keymap";
 import { buildFeatures, HANDLE_ICON, LAYER_SPECS } from "../src/map/layers";
 import { LANDMARKS, landmarksFeatureCollection } from "../src/map/landmarks";
-import { buildOverpassQuery, classifyOsmWay, gradeFromOsmTags, osmElementsToNetwork, osmElementsToWays, profileFromOsmTags, type OsmWayElement } from "@transitmapper/core/model/import";
+import { buildOverpassQuery, classifyOsmWay, gradeFromOsmTags, osmElementsToNetwork, osmElementsToWays, profileFromOsmTags, withoutAlreadyImported, type OsmWayElement } from "@transitmapper/core/model/import";
 import { classifyGtfsRouteType, gtfsFilesToBatchedPieces, gtfsFilesToSystemPieces, parseGtfsCsv } from "@transitmapper/core/model/gtfsImport";
 import { legendEntriesFor } from "../src/share/exportLegend";
 import { formatScaleMeters, niceScaleMeters } from "../src/share/exportScale";
@@ -1492,6 +1492,72 @@ check("fork has new id + copy name", forked.id !== sys.id && forked.name.include
   fresh();
   store.getState().importWays(osmElementsToNetwork(named));
   check("importWays appends the import's street identities", store.getState().system.namedWays.length === 1);
+}
+
+// --- P4: re-importing an area doesn't duplicate what's already there ---
+{
+  const area: OsmWayElement[] = [
+    { type: "way", id: 1, tags: { highway: "residential" }, nodes: [10, 500], geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.15 }] },
+    { type: "way", id: 2, tags: { highway: "residential" }, nodes: [500, 11], geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.1, lon: -115.1 }] },
+  ];
+
+  // First import into an empty system: nothing to skip.
+  const first = withoutAlreadyImported(osmElementsToNetwork(area), []);
+  check("a first import keeps every way", first.network.ways.length === 2);
+  check("a first import skips nothing", first.duplicateWays === 0);
+  check("a first import keeps its junction", first.network.nodes.length === 1);
+
+  // The exact same area again: everything is already there.
+  const again = withoutAlreadyImported(osmElementsToNetwork(area), first.network.ways);
+  check("re-importing the same area adds no ways", again.network.ways.length === 0);
+  check("re-importing reports what it skipped", again.duplicateWays === 2);
+  check("re-importing adds no duplicate junction", again.network.nodes.length === 0);
+
+  // A neighbouring area that overlaps: Overpass returns way 2 whole again.
+  const neighbour: OsmWayElement[] = [
+    area[1],
+    { type: "way", id: 3, tags: { highway: "residential" }, nodes: [11, 12], geometry: [{ lat: 36.1, lon: -115.1 }, { lat: 36.1, lon: -115.05 }] },
+  ];
+  const seam = withoutAlreadyImported(osmElementsToNetwork(neighbour), first.network.ways);
+  check("an overlapping import keeps only what's new", seam.network.ways.length === 1 && seam.duplicateWays === 1);
+  check("the seam junction survives", seam.network.nodes.length === 1);
+  const seamRefs = seam.network.nodes[0].refs;
+  check("the seam junction points one ref at the already-present way", seamRefs.some((r) => first.network.ways.some((w) => w.id === r.wayId)));
+  check("and one ref at the newly imported way", seamRefs.some((r) => r.wayId === seam.network.ways[0].id));
+
+  // A way the user has since edited: still a duplicate, but its indices no
+  // longer mean what OSM meant, so refs into it are not re-pointed.
+  const edited = first.network.ways.map((w) =>
+    w.source === "osm:2" ? { ...w, points: [...w.points, [-115.05, 36.1] as [number, number]] } : w,
+  );
+  const afterEdit = withoutAlreadyImported(osmElementsToNetwork(neighbour), edited);
+  check("an edited way is still recognised as a duplicate", afterEdit.duplicateWays === 1);
+  check("but no junction is placed on its shifted indices", afterEdit.network.nodes.length === 0);
+
+  // Street identities follow the same rule as junctions.
+  const namedArea: OsmWayElement[] = [
+    { type: "way", id: 1, tags: { highway: "primary", name: "Main Street" }, nodes: [10, 500], geometry: [{ lat: 36.1, lon: -115.2 }, { lat: 36.1, lon: -115.15 }] },
+    { type: "way", id: 2, tags: { highway: "primary", name: "Main Street" }, nodes: [500, 11], geometry: [{ lat: 36.1, lon: -115.15 }, { lat: 36.1, lon: -115.1 }] },
+  ];
+  const namedFirst = withoutAlreadyImported(osmElementsToNetwork(namedArea), []);
+  check("a first import keeps its street identity", namedFirst.network.namedWays.length === 1);
+  check(
+    "re-importing adds no duplicate identity",
+    withoutAlreadyImported(osmElementsToNetwork(namedArea), namedFirst.network.ways).network.namedWays.length === 0,
+  );
+
+  // Hand-drawn ways have no source and must never be mistaken for imports.
+  const handDrawn: Way[] = [
+    { id: "drawn", typeId: "road", points: [[-115.2, 36.1], [-115.15, 36.1]], geometry: "straight", grade: "atGrade", profile: defaultProfileFor("road") },
+  ];
+  check("hand-drawn ways never count as duplicates", withoutAlreadyImported(osmElementsToNetwork(area), handDrawn).duplicateWays === 0);
+
+  // And the store enforces it, whatever the caller passes.
+  fresh();
+  store.getState().importWays(osmElementsToNetwork(area));
+  const second = store.getState().importWays(osmElementsToNetwork(area));
+  check("the store skips duplicates rather than trusting the caller", store.getState().system.ways.length === 2);
+  check("the store reports added/skipped", second.added === 0 && second.skipped === 2);
 }
 
 // --- P4: OSM import derives junctions from node identity, not coordinates ---

@@ -9,7 +9,7 @@ import { shortId } from "@transitmapper/core/model/ids";
 import { createEmptySystem } from "@transitmapper/core/model/serialize";
 import { armRefKey, getComponent, laneRefKey, withComponent, withoutComponent } from "@transitmapper/core/model/components";
 import { createFacility, createGroup as createGroupEntity, createStation } from "@transitmapper/core/model/system";
-import type { ImportedNetwork } from "@transitmapper/core/model/import";
+import { withoutAlreadyImported, type ImportedNetwork } from "@transitmapper/core/model/import";
 import type {
   CrossSection,
   DrivingSide,
@@ -239,8 +239,10 @@ export interface EditorState {
    *  auto-created, since imported streets/rail are real physical context to
    *  draw services over, not a route in themselves. The nodes come from OSM's
    *  own node identity (see model/import.ts), so an imported grid arrives
-   *  connected and routable rather than as loose segments. */
-  importWays: (network: ImportedNetwork) => void;
+   *  connected and routable rather than as loose segments. Ways this system
+   *  already imported are skipped rather than duplicated; returns what was
+   *  added vs. skipped so the caller can say which happened. */
+  importWays: (network: ImportedNetwork) => { added: number; skipped: number };
   /** Append a GTFS import's ways/services/stations (P4 follow-on: RTC's real
    *  system as a comparison baseline) — unlike importWays, this DOES create
    *  services/stations, since a GTFS feed is already a real rideable
@@ -1444,7 +1446,9 @@ export function createEditorStore() {
     // Safe to append without renumbering refs: every id is a fresh shortId()
     // and every ref points at a way created in this same import, so no
     // existing node's refs are disturbed (cf. shiftNodeRefsFor* above).
-    importWays: ({ ways, nodes, namedWays }) =>
+    importWays: (incoming) => {
+      const { network, duplicateWays } = withoutAlreadyImported(incoming, get().system.ways);
+      const { ways, nodes, namedWays } = network;
       set((s) => ({
         system: touch({
           ...s.system,
@@ -1452,7 +1456,9 @@ export function createEditorStore() {
           nodes: [...s.system.nodes, ...nodes],
           namedWays: [...s.system.namedWays, ...namedWays],
         }),
-      })),
+      }));
+      return { added: ways.length, skipped: duplicateWays };
+    },
 
     importGtfs: (pieces) =>
       set((s) => ({

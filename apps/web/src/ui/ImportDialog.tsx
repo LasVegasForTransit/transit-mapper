@@ -19,6 +19,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
   const [categories, setCategories] = useState<Set<ImportCategory>>(() => new Set(["road", "bike"]));
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [count, setCount] = useState(0);
+  const [skipped, setSkipped] = useState(0);
   const [error, setError] = useState("");
 
   const toggle = (c: ImportCategory) =>
@@ -61,8 +62,9 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
         [...categories],
         drivingSide,
       );
-      importWays(network);
-      setCount(network.ways.length);
+      const { added, skipped: alreadyHere } = importWays(network);
+      setCount(added);
+      setSkipped(alreadyHere);
       setStatus("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed.");
@@ -116,8 +118,9 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
       {status === "error" && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
       {status === "done" && (
         <p className="panel-hint" style={{ marginTop: 8 }}>
-          Imported {count} way{count === 1 ? "" : "s"}. They start as bare infrastructure — draw a
-          service over any of them from the Way inspector.
+          {count === 0 && skipped > 0
+            ? `This area is already in your system — all ${skipped} street${skipped === 1 ? " was" : "s were"} imported before.`
+            : `Imported ${count} way${count === 1 ? "" : "s"}${skipped > 0 ? `, skipping ${skipped} already in this system` : ""}. They start as bare infrastructure — draw a service over any of them from the Way inspector.`}
         </p>
       )}
     </Modal>

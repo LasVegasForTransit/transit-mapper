@@ -267,10 +267,11 @@ a fragment whose continuation lies outside the imported box.
 Both were considered for this change and cut deliberately.
 
 **Snapping imports onto existing ways.** Needed when a person imports over
-work already drawn. It is a different mechanism — `snap()` against the
+work already *drawn*. It is a different mechanism — `snap()` against the
 current system, then `joinWayPointToWay` per match — with its own tolerance
-question, and it does not block the blank-slate import case that this spec
-makes correct.
+question. Still deferred, and deliberately: the case that actually mattered
+turned out to be importing over work already *imported*, which node identity
+solves exactly. See "Follow-on: re-importing".
 
 **Lane profiles from OSM tags.** ~~Deferred.~~ Built immediately after this
 change — see "Follow-on: lane profiles" below.
@@ -442,3 +443,33 @@ it carries the asymmetric parts — a turn pocket, a sidewalk on one side only
 
 Changing the setting later does not re-mirror ways already imported; that
 would be a bulk mutation of the user's existing work, not a setting change.
+
+## Follow-on: re-importing
+
+Import was additive with no memory, so clicking the button twice — or
+importing a viewport that overlaps an earlier one — silently doubled the
+geometry into overlapping ways that look like one street and behave like two.
+Overpass makes the overlap case routine rather than rare: it returns a way
+whole whenever any part of it falls in the box, so neighbouring imports
+always share their boundary streets.
+
+`withoutAlreadyImported` filters an import against the system's existing
+`Way.source` markers before anything is appended, in the store rather than
+the dialog so no caller can skip it.
+
+The interesting half is not the dropping but the re-pointing. A junction
+between a way already present and a newly imported one is kept, with its ref
+aimed at the existing way — so a second import *joins* the first instead of
+merely not duplicating it. That is the same node-identity join used within a
+single import, so it still needs no proximity tolerance, and it is why
+snapping remains unnecessary for this case.
+
+A way the user has since edited is recognised as a duplicate and dropped, but
+refs into it are not re-pointed: once the point count no longer matches OSM's,
+the indices no longer mean what OSM meant by them, and a junction on the
+wrong vertex of someone's edited street is worse than one they add back
+themselves.
+
+`importWays` returns `{added, skipped}` so the dialog can distinguish
+"imported 0 ways" from "all 149 of these were already here" — the same
+outcome, but only one of them is a mistake worth telling someone about.

@@ -83,8 +83,16 @@ junctions, adopt them under existing sketches.
 
 ## Practical notes
 
-- Import is additive; running it twice over the same area duplicates ways.
-  Undo reverses an import in one step.
+- Import is additive but not duplicative: a street this system already
+  imported is skipped, and the dialog says how many it skipped. Undo reverses
+  an import in one step.
+- Importing a neighbouring area joins it to what you already have. Overpass
+  returns a street whole whenever any of it falls in the box, so the shared
+  boundary streets are recognised and the junction at the seam is formed
+  against the copy you already had.
+- A street you have edited since importing is still recognised, so it won't
+  duplicate — but no new junction is placed on it, since its shape is now
+  yours rather than OSM's.
 - Junctions are formed **within** an import, not against what's already on
   the map. If you import over streets you drew yourself, the two networks sit
   side by side without joining; connect them with the usual editing tools.

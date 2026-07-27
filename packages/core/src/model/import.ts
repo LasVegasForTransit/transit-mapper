@@ -647,6 +647,92 @@ const OVERPASS_ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://
  */
 const OVERPASS_RETRYABLE = new Set([429, 502, 503, 504]);
 
+/** An import filtered against what a system already holds, plus how much was
+ *  dropped — the dialog reports it, since "imported 0 ways" and "all 149 of
+ *  these are already here" mean very different things to someone who just
+ *  clicked the button twice. */
+export interface DedupedImport {
+  network: ImportedNetwork;
+  /** Ways skipped because that OSM way is already in the system. */
+  duplicateWays: number;
+}
+
+/**
+ * Drop the parts of an import the system already has, and re-point what's
+ * left at the copies it kept.
+ *
+ * Import is additive, and re-importing is easy to do by accident: click the
+ * button twice, or import a second viewport that overlaps the first —
+ * Overpass returns a way whole whenever any of it falls in the box, so
+ * neighbouring imports share their boundary streets. Without this, every
+ * repeat silently doubled the geometry into overlapping ways that look like
+ * one street and behave like two.
+ *
+ * The re-pointing is what makes a second import *join* the first rather than
+ * merely not duplicate it: a junction between a way already present and a
+ * newly imported one survives, with its ref aimed at the existing way. That
+ * is the same exact node-identity join used within a single import, so it
+ * still needs no proximity tolerance.
+ *
+ * A way the user has since edited (its point count no longer matches OSM's)
+ * is still recognised as a duplicate and dropped, but refs into it are NOT
+ * re-pointed: the indices no longer mean what OSM meant by them, and a
+ * junction placed on the wrong vertex of someone's edited street is worse
+ * than a junction they can add back themselves.
+ */
+export function withoutAlreadyImported(network: ImportedNetwork, existingWays: Way[]): DedupedImport {
+  const existingBySource = new Map<string, Way>();
+  for (const way of existingWays) if (way.source) existingBySource.set(way.source, way);
+
+  const keptWays: Way[] = [];
+  // New way id -> the already-present way it duplicates, when refs into it
+  // can still be trusted to line up.
+  const rePointTo = new Map<string, string>();
+  const dropped = new Set<string>();
+  let duplicateWays = 0;
+
+  for (const way of network.ways) {
+    const existing = way.source ? existingBySource.get(way.source) : undefined;
+    if (!existing) {
+      keptWays.push(way);
+      continue;
+    }
+    duplicateWays++;
+    dropped.add(way.id);
+    if (existing.points.length === way.points.length) rePointTo.set(way.id, existing.id);
+  }
+
+  const keptWayIds = new Set(keptWays.map((w) => w.id));
+  const resolve = (wayId: string): string | undefined =>
+    keptWayIds.has(wayId) ? wayId : rePointTo.get(wayId);
+
+  const nodes: Node[] = [];
+  for (const node of network.nodes) {
+    const refs: WayPointRef[] = [];
+    for (const ref of node.refs) {
+      const wayId = resolve(ref.wayId);
+      if (wayId) refs.push({ ...ref, wayId });
+    }
+    if (refs.length < 2) continue;
+    // Every arm already in the system means this junction came in with the
+    // earlier import and is already recorded; only a junction touching
+    // something new is new.
+    if (!refs.some((r) => keptWayIds.has(r.wayId))) continue;
+    nodes.push({ ...node, refs });
+  }
+
+  const namedWays: NamedWay[] = [];
+  for (const identity of network.namedWays) {
+    const wayIds = identity.wayIds.map(resolve).filter((id): id is string => id !== undefined);
+    // Same reasoning as junctions: an identity spanning only ways that were
+    // already here was already created when they were.
+    if (wayIds.length < 2 || !wayIds.some((id) => keptWayIds.has(id))) continue;
+    namedWays.push({ ...identity, wayIds });
+  }
+
+  return { network: { ways: keptWays, nodes, namedWays }, duplicateWays };
+}
+
 /** Fetch OSM ways for the given categories within a bounding box from the
  *  public Overpass API and convert them to catalog-typed Ways plus the
  *  junctions and street identities between them. The only function here that
