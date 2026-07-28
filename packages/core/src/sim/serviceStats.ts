@@ -12,7 +12,7 @@
 //
 // Pure, like the rest of packages/core/src/sim.
 
-import { cumulativeLengths, nearestOnPath, patternPath } from '../model/geo';
+import { cumulativeLengths, nearestOnPath, patternCoversWayAt, patternPath } from '../model/geo';
 import type { LngLat, Pattern, Service, Station, VehicleKind, Way } from '../model/system';
 import { vehicleFootprint } from '../model/catalog';
 import { planService, type ServicePlan } from './fleet';
@@ -79,7 +79,13 @@ function stationsByWay(stations: Station[]): Map<string, Station[]> {
  *  "is this a stop on this branch" test the Route tab's stop-sequence list
  *  uses), positioned by arc-length along the pattern's full resolved path
  *  (via nearestOnPath) rather than by way-index — the more useful measure
- *  here, since a vehicle walks the path by distance, not by way. */
+ *  here, since a vehicle walks the path by distance, not by way.
+ *
+ *  Riding a way is not the same as reaching every point on it: a station past
+ *  where the line terminates would otherwise project onto the nearest end of
+ *  the trimmed path and stack a phantom dwell on the terminus. The extent test
+ *  needs no geometry — `anchor.t` and a leg's range are both way-relative — so
+ *  the caller's already-resolved `path` stays the only projection here. */
 export function dwellStopsForPattern(
   stations: Station[],
   pattern: Pattern,
@@ -90,6 +96,7 @@ export function dwellStopsForPattern(
   const stops: DwellStop[] = [];
   for (const { wayId } of pattern.legs) {
     for (const st of byWay.get(wayId) ?? []) {
+      if (st.anchor && !patternCoversWayAt(pattern, wayId, st.anchor.t)) continue;
       const near = nearestOnPath(path, st.coord);
       if (!near) continue;
       stops.push({

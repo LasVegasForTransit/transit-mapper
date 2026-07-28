@@ -8,7 +8,17 @@ import {
   showWayWhenServed,
   wayRender,
 } from '../style/catalogStyle';
-import { resolveWayPath, serviceLaneOnWay, wayById } from '../model/geo';
+import {
+  nearestOnPath,
+  pathLengthMeters,
+  resolveWayPath,
+  serviceCoversWayAt,
+  serviceHasPartialLeg,
+  serviceLaneOnWay,
+  serviceRangesOnWay,
+  slicePathByT,
+  wayById,
+} from '../model/geo';
 import { nearWaysForStations, servicesByWay, visibleWaysFor } from './featureMemo';
 import { directionalLanes, isOneWay, wayCapacity } from '../model/profile';
 import { wayIntersectsBounds, wayLaneGeometry } from '../geometry/streets';
@@ -531,8 +541,22 @@ export function buildFeatures(
     // Constant per-service offset on the CENTERLINE — no jog at shared-segment
     // boundaries (see bundleSlots). This is the Network schematic and the
     // lane-detail fallback when a lane can't be resolved.
-    const centerlineFeature = (svc: Service) =>
-      svcFeature(svc, path, (slots.get(svc.id) ?? 0) * BUNDLE_SPACING_PX);
+    //
+    // One feature per stretch of this way the service actually runs over, not
+    // one per way it merely touches: a line that terminates mid-block has to
+    // stop being drawn there. A service covering the whole way — still the
+    // common case — takes the untouched path and emits exactly one feature, so
+    // a system nobody has trimmed produces byte-identical output.
+    const centerlineFeatures = (svc: Service, on: LngLat[] = path): Feature<LineString>[] => {
+      const offset = (slots.get(svc.id) ?? 0) * BUNDLE_SPACING_PX;
+      const ranges = serviceRangesOnWay(svc, way.id);
+      if (ranges.length === 1 && ranges[0][0] <= 0 && ranges[0][1] >= 1)
+        return [svcFeature(svc, on, offset)];
+      return ranges
+        .map(([lo, hi]) => slicePathByT(on, lo, hi))
+        .filter((p) => p.length >= 2)
+        .map((p) => svcFeature(svc, p, offset));
+    };
 
     if (laneDetail) {
       // INFRASTRUCTURE lane detail: draw each service on the ACTUAL lane it
@@ -564,8 +588,15 @@ export function buildFeatures(
       // A bundle rider with no lane resolved anywhere on this way (a lane-less
       // profile) falls back to the centerline.
       bundle.forEach((svc) => {
-        if (!resolved.has(svc.id)) services.push(centerlineFeature(svc));
+        if (!resolved.has(svc.id)) services.push(...centerlineFeatures(svc));
       });
+      // A lane path is the centerline carved back at each junction footprint,
+      // so a position measured against the untrimmed way sits further along
+      // it. Convert once per way rather than slicing against the wrong ruler.
+      const wayMeters = pathLengthMeters(path);
+      const laneMeters = Math.max(1e-9, wayMeters - trims.start - trims.end);
+      const ontoLane = (t: number): number =>
+        Math.max(0, Math.min(1, (t * wayMeters - trims.start) / laneMeters));
       for (const [laneId, svcs] of byLane) {
         const lane = laneById.get(laneId)!;
         // w14 = the lane's overlay half-width in z14 px; today it only FLAGS a
@@ -573,14 +604,21 @@ export function buildFeatures(
         // the band), but it carries the metric so a per-lane width can use it later.
         const w14 = widthPxAtZ14(lane.widthM * SERVICE_LANE_FRACTION, lat);
         const n = svcs.length; // lone service sits dead-centre on its lane
-        svcs.forEach((svc, i) =>
-          services.push(
-            svcFeature(svc, lane.path, (i - (n - 1) / 2) * WITHIN_LANE_SPACING_PX, w14),
-          ),
-        );
+        svcs.forEach((svc, i) => {
+          const offset = (i - (n - 1) / 2) * WITHIN_LANE_SPACING_PX;
+          const ranges = serviceRangesOnWay(svc, way.id);
+          if (ranges.length === 1 && ranges[0][0] <= 0 && ranges[0][1] >= 1) {
+            services.push(svcFeature(svc, lane.path, offset, w14));
+            return;
+          }
+          for (const [lo, hi] of ranges) {
+            const piece = slicePathByT(lane.path, ontoLane(lo), ontoLane(hi));
+            if (piece.length >= 2) services.push(svcFeature(svc, piece, offset, w14));
+          }
+        });
       }
     } else {
-      bundle.forEach((svc) => services.push(centerlineFeature(svc)));
+      bundle.forEach((svc) => services.push(...centerlineFeatures(svc)));
     }
   }
 
@@ -589,14 +627,36 @@ export function buildFeatures(
   // part of this function at RTC scale — memoized on (stations, visibleWays) so a
   // selection/viewport rebuild reuses it instead of re-scanning ~3787 stations.
   const nearWaysByStation = nearWaysForStations(system.stations, visibleWays);
+  // `byWay` reports every service that touches a way, which over-reports once a
+  // service can cover only part of one: a line terminating at the north end of
+  // a boulevard would otherwise colour a station at its south end and count
+  // toward that station's interchange badge. Checking each service's actual
+  // extent costs a projection per (station, way), so it is only done for the
+  // services that have a trimmed leg at all — normally none, in which case this
+  // whole path is a Set lookup that always says yes.
+  const trimmedServiceIds = new Set(
+    system.services.filter(serviceHasPartialLeg).map((sv) => sv.id),
+  );
+  const reaches = (sv: Service, wayId: string, coord: LngLat): boolean => {
+    if (!trimmedServiceIds.has(sv.id)) return true;
+    const way = waysById.get(wayId);
+    if (!way) return true;
+    const near = nearestOnPath(resolveWayPath(way), coord);
+    return near ? serviceCoversWayAt(sv, wayId, near.t) : true;
+  };
   const stations: Feature<Point>[] = system.stations.map((s, si) => {
     // `byWay` already maps a way to the (visible-mode) services riding it —
     // reuse it here instead of re-deriving each service's way ids per station.
     const nearWays = nearWaysByStation[si];
     const servingServiceSet = new Set<Service>();
-    for (const wid of nearWays) for (const sv of byWay.get(wid) ?? []) servingServiceSet.add(sv);
+    for (const wid of nearWays)
+      for (const sv of byWay.get(wid) ?? []) {
+        if (reaches(sv, wid, s.coord)) servingServiceSet.add(sv);
+      }
     const servingServices = [...servingServiceSet];
-    const anchorServices = s.anchor ? (byWay.get(s.anchor.wayId) ?? []) : [];
+    const anchorServices = s.anchor
+      ? (byWay.get(s.anchor.wayId) ?? []).filter((sv) => reaches(sv, s.anchor!.wayId, s.coord))
+      : [];
     const color = anchorServices[0]?.color ?? servingServices[0]?.color ?? NEUTRAL_STATION;
     const interchange = servingServices.length > 1;
     return {

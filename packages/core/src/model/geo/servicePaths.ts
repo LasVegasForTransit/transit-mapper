@@ -40,14 +40,54 @@ export function legIsWhole(leg: PatternLeg): boolean {
 }
 
 /** Does this pattern actually reach position `t` on `wayId`? The extent-aware
- *  counterpart to a bare `wayIds.includes(...)` test — a station anchored to a
- *  way a line only partly covers is not necessarily a stop on that line. */
+ *  counterpart to a bare way-id membership test — a station anchored to a way a
+ *  line only partly covers is not necessarily a stop on that line. */
 export function patternCoversWayAt(pattern: Pattern, wayId: string, t: number): boolean {
   return pattern.legs.some((leg) => {
     if (leg.wayId !== wayId) return false;
     const [lo, hi] = legRange(leg);
     return t >= lo && t <= hi;
   });
+}
+
+/** Whether this service reaches position `t` on `wayId`, across all its
+ *  branches. */
+export function serviceCoversWayAt(service: Service, wayId: string, t: number): boolean {
+  return service.patterns.some((p) => patternCoversWayAt(p, wayId, t));
+}
+
+/** Whether any of a service's legs covers less than a whole way. Almost always
+ *  false, which is worth knowing: it lets the extent-aware paths in rendering
+ *  skip their extra work entirely for a system nobody has trimmed. */
+export function serviceHasPartialLeg(service: Service): boolean {
+  return service.patterns.some((p) => p.legs.some((l) => !legIsWhole(l)));
+}
+
+/**
+ * The stretches of `wayId` a service appears on, as merged `[lo, hi]` ranges in
+ * the way's own parameterization — what rendering needs to draw the line where
+ * it actually runs.
+ *
+ * Merged, because two branches of one service overlapping on a shared trunk
+ * are one line on the ground, not two stacked on top of each other. A service
+ * that covers the way end to end yields the single range `[0, 1]`.
+ */
+export function serviceRangesOnWay(service: Service, wayId: string): [number, number][] {
+  const ranges: [number, number][] = [];
+  for (const pattern of service.patterns) {
+    for (const leg of pattern.legs) {
+      if (leg.wayId === wayId) ranges.push(legRange(leg));
+    }
+  }
+  if (ranges.length <= 1) return ranges;
+  ranges.sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [ranges[0]];
+  for (const [lo, hi] of ranges.slice(1)) {
+    const last = merged[merged.length - 1];
+    if (lo <= last[1]) last[1] = Math.max(last[1], hi);
+    else merged.push([lo, hi]);
+  }
+  return merged;
 }
 
 /** One way of a pattern, resolved into the pattern's own direction of travel.
