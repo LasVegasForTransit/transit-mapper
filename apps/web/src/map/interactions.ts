@@ -1274,12 +1274,17 @@ export function attachInteractions(
     }
     clearPreviews();
     if (st.tool === 'way' && !st.readOnly) {
-      const resume = nearestOpenEndpoint(
-        st.system.ways,
-        lngLatOf(ev),
-        snapMeters(SNAP_PX),
-        st.draftWayTypeId,
-      );
+      // Mirror startDraw's compatibility rule exactly: Network view draws a
+      // MODE, whose compatible carriers can be wider than the one way type
+      // currently selected for new infrastructure. The ring must promise the
+      // same endpoint the subsequent press will actually resume.
+      const resume = opts.isNetworkMode()
+        ? nearestOpenEndpoint(
+            st.system.ways.filter((way) => mode(st.draftModeId).wayTypeIds.includes(way.typeId)),
+            lngLatOf(ev),
+            snapMeters(SNAP_PX),
+          )
+        : nearestOpenEndpoint(st.system.ways, lngLatOf(ev), snapMeters(SNAP_PX), st.draftWayTypeId);
       setEndpointHint(resume ? resume.coord : null);
     } else {
       setEndpointHint(null);

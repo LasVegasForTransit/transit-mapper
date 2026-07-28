@@ -75,6 +75,7 @@ import {
   buildPhysicalHandles,
   HANDLE_ICON,
   LAYER_SPECS,
+  SRC_ENDPOINT_HINT,
   SRC_PREVIEW,
 } from '../src/map/layers';
 import { LANDMARKS, landmarksFeatureCollection } from '../src/map/landmarks';
@@ -5864,6 +5865,53 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
         ]),
       ) === '[1,1,1,1]',
     );
+
+    // Network view normally treats a press on compatible infrastructure as
+    // the start of a route draft. An OPEN END is the exception: dragging the
+    // endpoint must resume and extend that same way. Test a tram whose draft
+    // carrier is light rail against a road, because mode compatibility is
+    // deliberately wider than the one draft way type.
+    {
+      const s = createEditorStore();
+      s.getState().setSystem(createEmptySystem());
+      const map = createFakeMap();
+      const roadStart = map.unproject({ x: 400, y: 300 });
+      const roadEnd = map.unproject({ x: 600, y: 300 });
+      const roadId = s.getState().beginWay('road', 'straight');
+      s.getState().addWayPoint(roadId, [roadStart.lng, roadStart.lat]);
+      s.getState().addWayPoint(roadId, [roadEnd.lng, roadEnd.lat]);
+      s.getState().finishWay();
+      s.getState().setDraftWayType('lightRail');
+      s.getState().setDraftMode('tram');
+      s.getState().setTool('way');
+
+      const detach = attachInteractions(map as never, s, {
+        openShortcuts() {},
+        toggleUi() {},
+        sim: { togglePaused() {}, stepSpeed() {} },
+        isDiagramMode: () => false,
+        isNetworkMode: () => true,
+        focusFootprint() {},
+        openContextMenu() {},
+      });
+
+      map.fire('mousemove', mouseEvent({ x: 600, y: 300 }, map));
+      pumpFrames();
+      check(
+        'Network view marks every mode-compatible endpoint it will resume',
+        map.sourceData.get(SRC_ENDPOINT_HINT)?.features?.length === 1,
+      );
+
+      press(map, { x: 600, y: 300 }, 80, 40);
+      const road = s.getState().system.ways.find((way) => way.id === roadId);
+      check(
+        "dragging a compatible way's own endpoint extends it in Network view",
+        s.getState().system.ways.length === 1 &&
+          road?.points.length === 3 &&
+          s.getState().routeDraft === null,
+      );
+      detach();
+    }
 
     // --- What you see is what you get -------------------------------------
     // The rubber band is a promise about the geometry the next release will
