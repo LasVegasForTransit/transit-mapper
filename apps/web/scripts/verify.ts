@@ -201,6 +201,7 @@ import {
   buildTimetable,
   metersAtElapsed,
   VEHICLE_SPEED_MPS,
+  roundTripMs as runRoundTripMs,
 } from '@transitmapper/core/sim/timetable';
 import {
   activeSchedule,
@@ -8393,10 +8394,7 @@ function buildGrid() {
     'no-stop timetable is pure travel time',
     noStops.oneWayMs === (totalMeters / VEHICLE_SPEED_MPS) * 1000,
   );
-  check(
-    'no-stop position is linear in elapsed time',
-    metersAtElapsed(totalMeters, noStops, 50000) === 550,
-  );
+  check('no-stop position is linear in elapsed time', metersAtElapsed(noStops, 50000) === 550);
 
   // One stop halfway (550m in), dwelling 20s.
   const halfwayMs = (550 / VEHICLE_SPEED_MPS) * 1000; // 50000ms to reach it
@@ -8407,19 +8405,19 @@ function buildGrid() {
   );
   check(
     'still approaching the stop reads as mid-travel',
-    metersAtElapsed(totalMeters, oneStop, halfwayMs - 10000) === 440,
+    metersAtElapsed(oneStop, halfwayMs - 10000) === 440,
   );
   check(
     'mid-dwell holds position at the stop',
-    metersAtElapsed(totalMeters, oneStop, halfwayMs + 10000) === 550,
+    metersAtElapsed(oneStop, halfwayMs + 10000) === 550,
   );
   check(
     'travel resumes after the dwell ends',
-    metersAtElapsed(totalMeters, oneStop, halfwayMs + 20000 + 10000) === 660,
+    metersAtElapsed(oneStop, halfwayMs + 20000 + 10000) === 660,
   );
   check(
     "the full one-way time reaches the path's end",
-    metersAtElapsed(totalMeters, oneStop, oneStop.oneWayMs) === totalMeters,
+    metersAtElapsed(oneStop, oneStop.oneWayMs) === totalMeters,
   );
 
   // A timetable BUILT at a custom speed must be WALKED at that same speed.
@@ -8434,11 +8432,11 @@ function buildGrid() {
   );
   check(
     'a faster vehicle kind covers more ground in the same elapsed time',
-    metersAtElapsed(totalMeters, fast, 10000, fastSpeed) === 220,
+    metersAtElapsed(fast, 10000, fastSpeed) === 220,
   );
   check(
     "walking a timetable at the speed it was built with lands exactly on the path's end",
-    metersAtElapsed(totalMeters, fast, fast.oneWayMs, fastSpeed) === totalMeters,
+    metersAtElapsed(fast, fast.oneWayMs, fastSpeed) === totalMeters,
   );
 }
 
@@ -9833,7 +9831,15 @@ function buildGrid() {
   const roundTripMs = 2 * oneWayMs;
   const headwayMs = 10 * 60_000;
   const timetable = buildTimetable(totalMeters, [], speed);
+  // A line that comes back the way it went: both directions are the same
+  // timetable, which is what makes the round trip exactly twice the one-way
+  // time and every number below unchanged from before directions existed.
+  const timetables = { outbound: timetable, inbound: timetable };
   const plan = planService(roundTripMs, headwayMs);
+  check(
+    'a line that returns the way it came has a round trip of exactly twice one way',
+    runRoundTripMs(timetables) === roundTripMs,
+  );
 
   // Round trip 2,000,000 ms + a 100,000 ms minimum layover = 2,100,000, which
   // is 3.5 headways — so four vehicles, and a 40-minute cycle.
@@ -9856,7 +9862,7 @@ function buildGrid() {
   const reachedAtMs = (stopMeters / speed) * 1000;
   let everyRunOnTime = true;
   for (let i = 0; i < plan.fleet; i++) {
-    const state = runStateAt(i * headwayMs + reachedAtMs, timetable, totalMeters, plan, i, speed);
+    const state = runStateAt(i * headwayMs + reachedAtMs, timetables, plan, i, speed);
     if (Math.abs(state.distMeters - stopMeters) > 1e-6 || state.phase !== 'outbound')
       everyRunOnTime = false;
   }
@@ -9865,62 +9871,37 @@ function buildGrid() {
   // The wrap is where even spacing gets it wrong: after the last vehicle, the
   // next one along is the first vehicle again, and it must arrive one headway
   // later — not after whatever is left of the cycle.
-  const afterLast = runStateAt(
-    plan.fleet * headwayMs + reachedAtMs,
-    timetable,
-    totalMeters,
-    plan,
-    0,
-    speed,
-  );
+  const afterLast = runStateAt(plan.fleet * headwayMs + reachedAtMs, timetables, plan, 0, speed);
   check(
     'the headway holds across the wrap from the last vehicle back to the first',
     Math.abs(afterLast.distMeters - stopMeters) < 1e-6,
   );
 
   // The rest of the cycle.
-  const atFarTerminal = runStateAt(
-    oneWayMs + plan.layoverMs / 2,
-    timetable,
-    totalMeters,
-    plan,
-    0,
-    speed,
-  );
+  const atFarTerminal = runStateAt(oneWayMs + plan.layoverMs / 2, timetables, plan, 0, speed);
   check(
     'a vehicle waits out its layover at the far terminal',
     atFarTerminal.phase === 'layover' && atFarTerminal.distMeters === totalMeters,
   );
-  const returning = runStateAt(
-    oneWayMs + plan.layoverMs + reachedAtMs,
-    timetable,
-    totalMeters,
-    plan,
-    0,
-    speed,
-  );
+  const returning = runStateAt(oneWayMs + plan.layoverMs + reachedAtMs, timetables, plan, 0, speed);
   check(
     'the return leg passes the same stop from the other direction',
-    returning.phase === 'inbound' &&
-      Math.abs(returning.distMeters - (totalMeters - stopMeters)) < 1e-6,
+    // Measured along the RETURN path from its own start, not counted down the
+    // outward one — so the same elapsed time gives the same number, and the
+    // two directions no longer have to be the same length for it to mean
+    // anything.
+    returning.phase === 'inbound' && Math.abs(returning.distMeters - stopMeters) < 1e-6,
   );
-  const backHome = runStateAt(
-    plan.cycleMs - plan.layoverMs / 2,
-    timetable,
-    totalMeters,
-    plan,
-    0,
-    speed,
-  );
+  const backHome = runStateAt(plan.cycleMs - plan.layoverMs / 2, timetables, plan, 0, speed);
   check(
     'a vehicle finishes its cycle waiting at the terminal it started from',
-    backHome.phase === 'layover' && backHome.distMeters === 0,
+    backHome.phase === 'layover' && backHome.distMeters === totalMeters,
   );
-  const wrapped = runStateAt(plan.cycleMs + reachedAtMs, timetable, totalMeters, plan, 0, speed);
+  const wrapped = runStateAt(plan.cycleMs + reachedAtMs, timetables, plan, 0, speed);
   check('the cycle repeats exactly', Math.abs(wrapped.distMeters - stopMeters) < 1e-6);
   check(
     "a run's position doesn't depend on how many cycles have passed",
-    runStateAt(-plan.cycleMs + reachedAtMs, timetable, totalMeters, plan, 0, speed).distMeters ===
+    runStateAt(-plan.cycleMs + reachedAtMs, timetables, plan, 0, speed).distMeters ===
       wrapped.distMeters,
   );
 
@@ -9935,7 +9916,10 @@ function buildGrid() {
     ],
     speed,
   );
-  const slowerPlan = planService(2 * withStops.oneWayMs, headwayMs);
+  const slowerPlan = planService(
+    runRoundTripMs({ outbound: withStops, inbound: withStops }),
+    headwayMs,
+  );
   check('adding stops lengthens the round trip', withStops.oneWayMs > oneWayMs);
   check(
     'a slower round trip at the same headway needs at least as many vehicles',

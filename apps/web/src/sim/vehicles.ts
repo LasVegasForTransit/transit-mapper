@@ -22,7 +22,7 @@ import { vehiclesDisabledForPerf } from '../perf';
 import type { SimClock } from './simClock';
 // Pure motion kernel (framework-free, WASM-portable) — this module is its rAF/
 // MapLibre host. See packages/core/src/sim/timetable.ts.
-import type { Timetable } from '@transitmapper/core/sim/timetable';
+import { roundTripMs, type RunTimetables } from '@transitmapper/core/sim/timetable';
 // Measurement comes from core/sim's patternStats — the same call the Service
 // inspector makes — so the numbers a planner reads and the ones the map runs
 // are the same object, not two that happen to agree. Lane geometry is used
@@ -126,18 +126,15 @@ interface LegGeometry {
 interface PatternGeometry {
   outbound: LegGeometry;
   inbound: LegGeometry;
-  /** The outbound leg's length: the coordinate system runStateAt reports
-   *  distances in, and what the timetable was built from. A return leg is a
-   *  different lane, whose own length differs by a metre or two where an
-   *  offset cuts a corner differently, so a position crosses onto it as a
-   *  FRACTION rather than as a raw distance — otherwise the return arrives
-   *  early and sits clamped at its terminal. */
-  meters: number;
-  timetable: Timetable;
-  /** Axis-aligned bounds [minLng, minLat, maxLng, maxLat] of the outbound
-   *  path, so an off-screen pattern is culled wholesale before any of its
-   *  vehicles are computed. The return leg sits a lane width outside this in
-   *  places, which the cull's half-viewport margin swallows many times over. */
+  /** One timetable per direction, each measured against its own polyline.
+   *  There is no shared ruler any more, and there cannot be: a one-way
+   *  couplet's return trip is a different street of a different length. */
+  timetables: RunTimetables;
+  /** Axis-aligned bounds [minLng, minLat, maxLng, maxLat] of BOTH directions,
+   *  so an off-screen pattern is culled wholesale before any of its vehicles
+   *  are computed. Both, not just the outbound: a lane offset sits inside the
+   *  cull's half-viewport margin, but a couplet's return street is a block
+   *  away and would be culled while still on screen. */
   bbox: [number, number, number, number];
 }
 
@@ -220,20 +217,27 @@ function resolvePatternGeometry(
     cumLengths: stats.cumLengths,
     meters: stats.meters,
   };
-  const meters = stats.meters;
   const outPath =
     modeId !== undefined ? patternLanePath(system.ways, pattern, modeId, 'outbound') : null;
   const outbound = outPath && outPath.length >= 2 ? legFrom(outPath) : centerline;
   // Infrastructure view's return leg is a genuinely different polyline — the
   // lane on the other side of the street — so it is resolved, not mirrored.
+  // In Network view the return centerline comes from the pattern's own
+  // sections, which is the same line reversed for a plain line and a different
+  // street for a couplet.
   const backPath =
     modeId !== undefined ? patternLanePath(system.ways, pattern, modeId, 'inbound') : null;
-  const inbound = backPath && backPath.length >= 2 ? legFrom(backPath) : reversedLeg(centerline);
+  const inbound =
+    backPath && backPath.length >= 2
+      ? legFrom(backPath)
+      : stats.inboundPath.length >= 2
+        ? legFrom(stats.inboundPath)
+        : reversedLeg(centerline);
   let minLng = Infinity,
     minLat = Infinity,
     maxLng = -Infinity,
     maxLat = -Infinity;
-  for (const [lng, lat] of stats.path) {
+  for (const [lng, lat] of [...outbound.path, ...inbound.path]) {
     if (lng < minLng) minLng = lng;
     if (lng > maxLng) maxLng = lng;
     if (lat < minLat) minLat = lat;
@@ -242,8 +246,7 @@ function resolvePatternGeometry(
   const geometry: CachedPatternGeometry = {
     outbound,
     inbound,
-    meters,
-    timetable: stats.timetable,
+    timetables: stats.timetables,
     bbox: [minLng, minLat, maxLng, maxLat],
     forWays: system.ways,
     forStations: system.stations,
@@ -399,12 +402,12 @@ export function attachVehicleAnimation(
           // per-tick cost with ON-SCREEN patterns instead of all of them.
           const bb = geometry.bbox;
           if (bb[2] < cullW || bb[0] > cullE || bb[3] < cullS || bb[1] > cullN) continue;
-          const { meters, timetable } = geometry;
+          const { timetables } = geometry;
           // The cycle is built FROM the headway (see core/sim/fleet.ts), so
           // vehicles pass every stop exactly one headway apart instead of
           // approximately. Fleet size falls out of it.
           const plan = planService(
-            2 * timetable.oneWayMs,
+            roundTripMs(timetables),
             headwayMinutes === undefined ? undefined : headwayMinutes * 60_000,
           );
           // A rendering cap, NOT a modeling one: the plan keeps its true cycle
@@ -421,18 +424,18 @@ export function attachVehicleAnimation(
             // `speedMps` is load-bearing, not decorative: the timetable was
             // BUILT at this vehicle kind's own speed, so walking it at the
             // module default instead would have the two disagree.
-            const { distMeters, leg } = runStateAt(simMs, timetable, meters, plan, i, speedMps);
-            // runStateAt measures from the start of the OUTBOUND path whichever
-            // way the vehicle faces, so a return-leg vehicle counts down. Flip
-            // it into progress along the leg the vehicle is actually on, then
-            // carry it across as a FRACTION: the two legs are separate
-            // polylines of slightly different length, and a raw distance would
-            // leave the return arriving short of its terminal.
-            const { path, cumLengths, meters: legMeters } = geometry[leg];
-            const t = leg === 'outbound' ? distMeters / meters : (meters - distMeters) / meters;
+            const { distMeters, run } = runStateAt(simMs, timetables, plan, i, speedMps);
+            // distMeters is measured along the path `run` names, so it is used
+            // directly. This used to rescale a position off the outbound ruler
+            // onto the return lane as a fraction, which was the only way to
+            // cope with one ruler describing two polylines — and could not
+            // have coped with two polylines of genuinely different length.
+            const { path, cumLengths, meters: legMeters } = geometry[run];
+            const along = Math.min(distMeters, legMeters);
+            const t = legMeters > 0 ? along / legMeters : 0;
             // Distance → coordinate is an O(log n) binary search over precomputed
             // arc lengths, not a full-path re-walk (pointAtT).
-            const center = pointAtDistance(path, cumLengths, t * legMeters);
+            const center = pointAtDistance(path, cumLengths, along);
             if (viewMode === 'network') {
               emit(center, service.color);
             } else {

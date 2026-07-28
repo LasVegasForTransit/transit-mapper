@@ -23,13 +23,27 @@ import {
   cumulativeLengths,
   nearestOnPath,
   patternCoversWayAt,
-  patternPath,
-  patternLegs,
+  patternRunLegs,
+  patternRunPath,
 } from '../model/geo';
-import type { LngLat, Pattern, Service, Station, VehicleKind, Way } from '../model/system';
+import type {
+  LngLat,
+  Pattern,
+  RunDirection,
+  Service,
+  Station,
+  VehicleKind,
+  Way,
+} from '../model/system';
 import { vehicleFootprint } from '../model/catalog';
 import { planService, type ServicePlan } from './fleet';
-import { buildTimetable, VEHICLE_SPEED_MPS, type DwellStop, type Timetable } from './timetable';
+import {
+  buildTimetable,
+  roundTripMs,
+  VEHICLE_SPEED_MPS,
+  type DwellStop,
+  type RunTimetables,
+} from './timetable';
 
 /** Doors open, board/alight, doors close — a plausible light-rail/bus dwell
  *  when a station doesn't specify its own (Station.dwellSeconds). */
@@ -119,10 +133,17 @@ export function patternStops(
   pattern: Pattern,
   path: LngLat[],
   totalMeters: number,
+  run: RunDirection = 'outbound',
 ): PatternStop[] {
   const byWay = stationsByWay(stations);
   const stops: PatternStop[] = [];
-  for (const { wayId } of patternLegs(pattern)) {
+  // Only the ways THIS direction rides. A couplet's outward street and return
+  // street are different ways, so asking the flat leg list would offer every
+  // station on both to be projected onto whichever path is in hand — and a
+  // station a block east would land on the outward line at whatever point sits
+  // nearest it.
+  const ridden = new Set(patternRunLegs(pattern, run).map((r) => r.leg.wayId));
+  for (const wayId of ridden) {
     for (const st of byWay.get(wayId) ?? []) {
       if (st.anchor && !patternCoversWayAt(pattern, wayId, st.anchor.t)) continue;
       const near = nearestOnPath(path, st.coord);
@@ -143,8 +164,9 @@ export function dwellStopsForPattern(
   pattern: Pattern,
   path: LngLat[],
   totalMeters: number,
+  run: RunDirection = 'outbound',
 ): DwellStop[] {
-  return patternStops(stations, pattern, path, totalMeters).map(({ distMeters, dwellMs }) => ({
+  return patternStops(stations, pattern, path, totalMeters, run).map(({ distMeters, dwellMs }) => ({
     distMeters,
     dwellMs,
   }));
@@ -158,17 +180,27 @@ export interface PatternStats {
   /** Prefix-sum arc lengths for `path`, so a caller resolving a position every
    *  frame does not re-walk it. */
   cumLengths: Float64Array;
-  /** One-way path length. */
+  /** OUTBOUND path length — what "how long is this line" has always meant.
+   *  A couplet whose return is longer under-reports here, which is the right
+   *  trade against a number that describes neither direction. */
   meters: number;
-  /** The stations this pattern calls at, in the order a rider reaches them. */
+  /** The stations this pattern calls at outbound, in the order a rider reaches
+   *  them. See `inboundStops` for the return trip, which on a couplet is a
+   *  different set at different distances. */
   stops: PatternStop[];
+  inboundStops: PatternStop[];
   /** Total time standing still at those stops, one way. */
   dwellMs: number;
   /** One way, travel plus dwell. */
   oneWayMs: number;
-  /** Out and back. What fleet size is computed against. */
+  /** Outward plus return — NOT twice either. Identical to the old `2 ×` for a
+   *  line that comes back the way it went, so no existing system's fleet or
+   *  layover moves by a millisecond. */
   roundTripMs: number;
-  timetable: Timetable;
+  /** The return trip's own geometry. Equal to `path` reversed for a plain
+   *  line; a different street for a couplet. */
+  inboundPath: LngLat[];
+  timetables: RunTimetables;
   /** Null when this pattern has no usable path (fewer than two points, or
    *  zero length) — nothing runs on it and nothing should be claimed about it. */
   plan: ServicePlan | null;
@@ -187,32 +219,47 @@ export function patternStats(
   speedMps: number,
   headwayMinutes?: number,
 ): PatternStats | null {
-  const path = patternPath(ways, pattern);
+  const path = patternRunPath(ways, pattern, 'outbound');
   if (path.length < 2) return null;
   const cumLengths = cumulativeLengths(path);
   const meters = cumLengths[cumLengths.length - 1];
   if (meters === 0) return null;
-  const stops = patternStops(stations, pattern, path, meters);
-  const timetable = buildTimetable(
+  const stops = patternStops(stations, pattern, path, meters, 'outbound');
+  const outbound = buildTimetable(
     meters,
     stops.map(({ distMeters, dwellMs }) => ({ distMeters, dwellMs })),
     speedMps,
   );
-  const roundTripMs = 2 * timetable.oneWayMs;
+
+  const inboundPath = patternRunPath(ways, pattern, 'inbound');
+  const inboundCum = cumulativeLengths(inboundPath);
+  const inboundMeters = inboundPath.length >= 2 ? inboundCum[inboundCum.length - 1] : 0;
+  const inboundStops =
+    inboundMeters > 0 ? patternStops(stations, pattern, inboundPath, inboundMeters, 'inbound') : [];
+  // A line that goes out and never comes back is a real thing to have drawn
+  // (validate.ts reports it), so measure the return as zero rather than
+  // refusing to measure the line at all.
+  const inbound = buildTimetable(
+    inboundMeters,
+    inboundStops.map(({ distMeters, dwellMs }) => ({ distMeters, dwellMs })),
+    speedMps,
+  );
+
+  const timetables = { outbound, inbound };
+  const cycle = roundTripMs(timetables);
   return {
     pattern,
     path,
     cumLengths,
     meters,
     stops,
+    inboundStops,
     dwellMs: stops.reduce((sum, s) => sum + s.dwellMs, 0),
-    oneWayMs: timetable.oneWayMs,
-    roundTripMs,
-    timetable,
-    plan: planService(
-      roundTripMs,
-      headwayMinutes === undefined ? undefined : headwayMinutes * 60_000,
-    ),
+    oneWayMs: outbound.oneWayMs,
+    roundTripMs: cycle,
+    inboundPath,
+    timetables,
+    plan: planService(cycle, headwayMinutes === undefined ? undefined : headwayMinutes * 60_000),
   };
 }
 

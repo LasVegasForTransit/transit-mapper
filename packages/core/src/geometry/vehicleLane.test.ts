@@ -19,7 +19,7 @@ import {
 } from '../model/geo';
 import { serviceLaneOnWay } from '../model/geo/serviceLane';
 import { planService, runStateAt } from '../sim/fleet';
-import { buildTimetable } from '../sim/timetable';
+import { buildTimetable, roundTripMs } from '../sim/timetable';
 import { aPattern, aRoad } from '../testing/fixtures';
 import { wayLaneGeometry } from './streets';
 import { patternLanePath } from './vehicleLane';
@@ -114,19 +114,23 @@ describe('two runs of one light rail line', () => {
       outbound: cumulativeLengths(legs.outbound),
       inbound: cumulativeLengths(legs.inbound),
     };
-    const meters = cum.outbound[cum.outbound.length - 1];
-    const timetable = buildTimetable(meters, [], speedMps);
-    const plan = planService(2 * timetable.oneWayMs, 10 * 60_000);
+    const timetables = {
+      outbound: buildTimetable(cum.outbound[cum.outbound.length - 1], [], speedMps),
+      inbound: buildTimetable(cum.inbound[cum.inbound.length - 1], [], speedMps),
+    };
+    const plan = planService(roundTripMs(timetables), 10 * 60_000);
     expect(plan.fleet).toBeGreaterThan(1); // otherwise there is nothing to hit
 
     let closest = Infinity;
     for (let t = 0; t < plan.cycleMs; t += 250) {
       const points = [];
       for (let i = 0; i < plan.fleet; i++) {
-        const { distMeters, leg } = runStateAt(t, timetable, meters, plan, i, speedMps);
-        const along = leg === 'outbound' ? distMeters : meters - distMeters;
-        const legMeters = cum[leg][cum[leg].length - 1];
-        points.push(pointAtDistance(legs[leg], cum[leg], (along / meters) * legMeters));
+        // No ruler conversion: distMeters is measured along the path its own
+        // direction names. This used to need rescaling from the outbound
+        // ruler onto the return lane, which is the arithmetic that could not
+        // survive the two directions being different lengths.
+        const { distMeters, run } = runStateAt(t, timetables, plan, i, speedMps);
+        points.push(pointAtDistance(legs[run], cum[run], distMeters));
       }
       for (let a = 0; a < points.length; a++)
         for (let b = a + 1; b < points.length; b++)

@@ -17,7 +17,8 @@
 //
 // Pure, like the rest of packages/core/src/sim: time comes in as an argument.
 
-import { metersAtElapsed, VEHICLE_SPEED_MPS, type Timetable } from './timetable';
+import { metersAtElapsed, VEHICLE_SPEED_MPS, type RunTimetables } from './timetable';
+import type { RunDirection } from '../model/system';
 
 /** Every line gets at least this much recovery time per round trip, however
  *  short it is — a vehicle that reached the end of the line and instantly
@@ -46,20 +47,21 @@ export interface ServicePlan {
 
 /** Where a vehicle is in its cycle. `layover` is a vehicle holding at a
  *  terminal; dwelling at an intermediate stop is inside the travel legs, since
- *  the timetable already holds position through a dwell. */
-export type RunPhase = 'outbound' | 'inbound' | 'layover';
+ *  the timetable already holds position through a dwell. Built from
+ *  RunDirection so the two vocabularies cannot drift apart. */
+export type RunPhase = RunDirection | 'layover';
 
 export interface RunState {
-  /** Distance along the pattern path from its start, in meters. Always
-   *  measured along the OUTBOUND path, whichever leg the vehicle is on, so one
-   *  number describes a position on the line regardless of heading. */
+  /** Distance in meters from the start of the path `run` names — NOT a
+   *  position on the outbound path counted down. The two directions of a
+   *  one-way couplet are different streets of possibly different lengths, so
+   *  there is no single ruler both can be measured against. */
   distMeters: number;
   phase: RunPhase;
-  /** Which leg the vehicle is running. The return leg rides the opposite lane
-   *  — a different polyline on real infrastructure — so a caller drawing the
-   *  vehicle needs this to pick the right one. A vehicle laying over at a
-   *  terminal is on the leg it just finished. */
-  leg: 'outbound' | 'inbound';
+  /** Which direction the vehicle is running, and so which polyline the caller
+   *  should place it on. A vehicle laying over at a terminal is on the
+   *  direction it just finished. */
+  run: RunDirection;
 }
 
 function minimumLayoverMs(roundTripMs: number): number {
@@ -99,36 +101,37 @@ export function planService(roundTripMs: number, headwayMs?: number): ServicePla
  */
 export function runStateAt(
   simMs: number,
-  timetable: Timetable,
-  totalMeters: number,
+  timetables: RunTimetables,
   plan: ServicePlan,
   index: number,
   speedMps: number = VEHICLE_SPEED_MPS,
 ): RunState {
   const { cycleMs, layoverMs, headwayMs } = plan;
   const intoCycle = (((simMs - index * headwayMs) % cycleMs) + cycleMs) % cycleMs;
-  const oneWayMs = timetable.oneWayMs;
+  const { outbound, inbound } = timetables;
 
-  if (intoCycle < oneWayMs) {
+  if (intoCycle < outbound.oneWayMs) {
     return {
-      distMeters: metersAtElapsed(totalMeters, timetable, intoCycle, speedMps),
+      distMeters: metersAtElapsed(outbound, intoCycle, speedMps),
       phase: 'outbound',
-      leg: 'outbound',
+      run: 'outbound',
     };
   }
-  const afterOutbound = intoCycle - oneWayMs;
+  const afterOutbound = intoCycle - outbound.oneWayMs;
   if (afterOutbound < layoverMs) {
-    return { distMeters: totalMeters, phase: 'layover', leg: 'outbound' };
+    return { distMeters: outbound.totalMeters, phase: 'layover', run: 'outbound' };
   }
   const intoReturn = afterOutbound - layoverMs;
-  if (intoReturn < oneWayMs) {
-    // The return leg is the same timetable mirrored — the dwell points are the
-    // same physical stations whichever way the vehicle is facing.
+  if (intoReturn < inbound.oneWayMs) {
+    // Walked FORWARD along the return path, not backwards along the outward
+    // one. Those are the same polyline for a line that comes back the way it
+    // went, and two different streets for a couplet — and mirroring was the
+    // assumption that made the second case impossible to express.
     return {
-      distMeters: totalMeters - metersAtElapsed(totalMeters, timetable, intoReturn, speedMps),
+      distMeters: metersAtElapsed(inbound, intoReturn, speedMps),
       phase: 'inbound',
-      leg: 'inbound',
+      run: 'inbound',
     };
   }
-  return { distMeters: 0, phase: 'layover', leg: 'inbound' };
+  return { distMeters: inbound.totalMeters, phase: 'layover', run: 'inbound' };
 }
