@@ -171,8 +171,23 @@ export function Workbench({
             when the three together want more than the row has, the middle
             wraps instead of anything sliding under anything else. No
             measured constants, no breakpoint, nothing for a caller to
-            know. ---- */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 hidden items-start gap-2 md:flex">
+            know.
+
+            A real grid item in row 1, not `absolute inset-x-0 top-0` — an
+            absolutely positioned grid item opts out of the grid's own track
+            sizing, so row 1's `auto` height ignored this row's actual
+            rendered height entirely. That was invisible right up until the
+            actions card ran out of width and its own `flex-wrap` grew it
+            tall instead of wide, at which point row 1 was still sized as if
+            it were empty and row 2 (the Inspector panel) started underneath
+            it and got covered — confirmed live at 768px, where the actions
+            card wraps to ~220px tall. Placing this row in the grid for real
+            makes row 1 size to whatever it actually renders at, so row 2
+            gets pushed down instead of covered, at every width. ---- */}
+        <div
+          className="pointer-events-none hidden items-start gap-2 md:flex"
+          style={{ gridColumn: '1 / -1', gridRow: '1' }}
+        >
           <div className="flex-1" style={{ minWidth: 'var(--panel-w)' }} aria-hidden="true" />
           <div className="pointer-events-auto flex min-w-0 flex-wrap items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2 shadow-[var(--shadow)]">
             {viewSwitcher}
