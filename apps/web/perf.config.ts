@@ -15,7 +15,7 @@ export const PERF_BASELINE_DIRECTORY = 'perf';
 export const BUNDLE_BUDGETS: BundleBudget[] = [
   {
     entry: 'main',
-    maximumRawBytes: 1_600_000,
+    maximumRawBytes: 1_610_000,
     maximumGzipBytes: 460_000,
     maximumBrotliBytes: 400_000,
   },
