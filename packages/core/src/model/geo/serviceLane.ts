@@ -5,30 +5,16 @@
 // direction a pattern travels a way is stored on its leg (see
 // system/service.ts) and fed to profile.ts's defaultLaneFor.
 
+import { mode } from '../catalog';
 import { defaultLaneFor } from '../profile';
 import type { Pattern, Way } from '../system';
 
 /** The lane kinds a mode prefers, most-preferred first — a bus wants a
  *  dedicated bus lane then a drive lane; rail wants its track. Fed to
- *  defaultLaneFor's `preferKindIds`. No such field exists on the mode catalog,
- *  so the mapping lives here. */
+ *  defaultLaneFor's `preferKindIds`. Read from the mode catalog rather than
+ *  restated here, so a new mode is a catalog entry and nothing else. */
 export function preferredLaneKinds(modeId: string): readonly string[] {
-  switch (modeId) {
-    case 'bus':
-    case 'brt':
-      return ['bus', 'drive'];
-    case 'subway':
-    case 'commuterRail':
-    case 'lightRail':
-    case 'tram':
-    case 'monorail':
-      return ['track'];
-    case 'gondola':
-    case 'ferry':
-      return ['channel'];
-    default:
-      return ['drive'];
-  }
+  return mode(modeId).preferredLaneKindIds ?? [];
 }
 
 /**
