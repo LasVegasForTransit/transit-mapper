@@ -18,6 +18,8 @@ import {
   DropdownMenuSeparator,
 } from './DropdownMenu';
 import { Icon } from './Icon';
+import { useInertRef } from './useInertRef';
+import { useUi } from './UiProvider';
 import { useView } from './ViewProvider';
 
 // One dock icon per way family; unknown families fall back to the plain line.
@@ -58,6 +60,8 @@ export function Toolbar() {
   const draftFacilityComplexMode = useEditor((s) => s.draftFacilityComplexMode);
   const setDraftFacilityComplexMode = useEditor((s) => s.setDraftFacilityComplexMode);
   const { viewMode } = useView();
+  const { uiHidden } = useUi();
+  const dockRef = useInertRef<HTMLDivElement>(uiHidden);
   // Diagram is a schematic projection, not the real system — nothing drawn
   // on it can be dragged or clicked back into a real edit (see
   // map/interactions.ts's isDiagramMode gating), so drawing/editing tools are
@@ -76,7 +80,7 @@ export function Toolbar() {
   };
 
   return (
-    <div className="toolbar-dock">
+    <div ref={dockRef} className="toolbar-dock zen-cluster">
       <div className="tool-row">
         {/* Cluster 1: selection — neither a path nor a place. */}
         <div className="tool-cluster" role="toolbar" aria-label="Select">
