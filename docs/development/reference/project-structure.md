@@ -32,8 +32,9 @@ apps/
       style/     How catalog kinds LOOK (colors, widths, dashes, icons).
       share/     Export (PNG/SVG/JSON), the share card, the share-API client.
       storage/   Local persistence.
-      perf/      DEV-only frame instrumentation. Never ships enabled.
-    scripts/     verify.ts — the test suite.
+      perf/      Frame instrumentation plus pure fixtures/report/budget policy.
+    perf/        Checked desktop and mobile browser-performance baselines.
+    scripts/     verify.ts plus the production Chrome/output performance tools.
   worker/        Cloudflare Worker + D1 migrations for shared snapshots.
     scripts/     verify.ts — the Worker's own suite (URL scoping, uploads).
 docs/            This documentation.
@@ -131,7 +132,10 @@ requestAnimationFrame and MapLibre host that drives it is
 
 - `buildFeatures.ts` — the system-to-styled-GeoJSON projector. Shared by the
   editor map, the embed, image exports and the share card, so none of them can
-  drift from the others.
+  drift from the others. Its public coordinator selects named topology,
+  station, selection-handle, physical-detail, label, and facility phases; a
+  partial live-map refresh does not weave source-specific conditions through
+  one monolithic projection pass.
 - `project.ts` — Web Mercator projection and `fitBounds`, matching MapLibre's
   conventions but needing no map. What a card is projected through.
 - `svg.ts` — the vector composition (geometry plus title, legend, north arrow,
@@ -232,21 +236,91 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 
 ## apps/web/src/storage/ — the local library
 
-- `localStore.ts` — a library of saved systems in `localStorage`, replacing
-  a single-slot autosave where "New system" silently overwrote the only one
-  there was. Each system has its own key so switching never touches the
-  others, and a small index holds just id, name and timestamp so the list
-  renders without loading every system in full.
+- `indexedDbLibrary.ts` — the primary document database. Complete serialized
+  systems and their lightweight library rows live in separate object stores
+  and are updated atomically, so listing many RTC-sized systems never reads
+  their document bodies.
+- `libraryStore.ts` and `browserLibrary.ts` — the storage boundary. They
+  serialize through a dedicated Worker, migrate old `localStorage` documents
+  only after IndexedDB commits, and distinguish unavailable storage from a
+  genuinely empty library.
+- `localStore.ts` — the backward-compatible reader and emergency fallback for
+  documents created before IndexedDB. It also makes a best-effort synchronous
+  close-time copy when a document fits the browser's quota. The marker stored
+  atomically with that copy makes an equal-timestamp camera snapshot
+  authoritative on recovery; localStorage is not the primary store for new
+  saves.
+- `bootstrapLibrary.ts` — startup recovery policy. An IndexedDB failure never
+  becomes a new blank document or changes the active-document pointer.
+- `persistenceCoordinator.ts` — coalesces content and camera changes into one
+  ordered save lane and drains it without stranding a snapshot. It retains
+  undurable and failed state per document across document switches. Camera
+  movement is presentation state and does not change a library entry's
+  `updatedAt`; content edits do.
+
+## apps/web/src/perf/ and apps/web/scripts/perf/ — measured performance
+
+`src/perf/` owns deterministic small, dense, and RTC-shaped fixtures; the
+named report schemas; pure statistics and budget evaluation; bundle/PWA graph
+policy; direct-manipulation instrumentation; and the large-document storage
+thresholds. Vite includes the browser harness only in development or when the
+runner builds with `VITE_PERF_BUILD=1`; a private per-navigation flag then
+selects automated measurement instead of the developer overlay. Ordinary
+production bundles do not include that harness. `frameMeter.ts` and
+`paintedFrameCapture.ts` sample
+actual MapLibre renders rather than idle animation frames; `panBench.ts`
+retains a deterministic attribution path alongside the trusted-input gate.
+
+`scripts/perf/run.ts` is a small process entry. `orchestrator.ts` sequences the
+fixed suite; `cli.ts` and `process.ts` own arguments and preview-process
+lifecycle; `browser.ts` and `browserContract.ts` own Chrome protocol and page
+instrumentation; `journeys.ts` and `scenarioRuns.ts` own trusted interactions
+and cold/warm repetitions; `offline.ts` and `soak.ts` own their specialized
+proofs; and `artifacts.ts` writes reports and checked baselines. The diagnostic
+storage probe keeps compatibility parse, stringify, and `localStorage` write
+costs separate; editor journeys seed and read back real IndexedDB records.
+`report-bundle.ts` and `verify-pwa-output.ts` inspect production output after
+Vite builds it.
+
+The checked reports in `apps/web/perf/` are reviewable comparison evidence.
+Generated traces and current reports live under
+`apps/web/artifacts/performance/` and are ignored. This suite is deliberately
+outside `pnpm check`, whose browser-free and network-free contract remains
+unchanged. See [Measure browser performance](../how-to/measure-performance.md).
+
+## apps/web/src/import/ — bounded browser imports
+
+Large GTFS archives are downloaded once and transferred to `gtfs.worker.ts`,
+which parses them and emits bounded batches so store commits can yield between
+them. Reconciliation runs in a second Worker because corridor matching is also
+CPU-heavy. The protocol files contain the typed message boundaries; the
+`streamRtcGtfs.ts` and `reconcileRtcGtfs.ts` hosts own cancellation, timeouts,
+progress, and Worker cleanup.
+
+This boundary keeps archive parsing and reconciliation off the main thread
+without moving domain rules out of `packages/core`.
+
+## apps/web/src/network/ — cancellable requests
+
+- `fetchWithTimeout.ts` — combines a caller's abort signal with a hard request
+  deadline. Share, embed, and import callers use the same behavior so a stalled
+  Worker, proxy, or upstream request cannot leave an interaction busy forever.
 
 ## apps/web/src/sim/ — the running simulation
 
 - `simClock.ts` — the `SimClock`: simulated time, and the only value in the
   app that changes 30 times a second. Created by `ui/SimProvider.tsx` and
   injected, never a module-level singleton.
-- `vehicles.ts` — the animation host. Advances the clock, asks
-  `packages/core/src/sim/` where every vehicle is, and writes a GeoJSON source
-  directly rather than going through React, because it updates every frame and
-  reconciliation at that rate is the thing that would make it stutter.
+- `vehicles.ts` — the stable animation API facade.
+- `vehicleAnimationHost.ts` — advances the clock and writes GeoJSON directly
+  to MapLibre, avoiding React reconciliation on the 30 Hz path. During a
+  transient edit it keeps painting against the last settled system, then
+  adopts the committed system once, so responsiveness does not cost visible
+  continuity.
+- `patternGeometry.ts` — dependency-aware pattern geometry and timetable
+  caches. Unrelated way/station edits preserve warm entries.
+- `serviceSchedule.ts` — minute-level schedule resolution and the next wake-up
+  calculation for an idle simulation.
 - `devHandle.ts` — `window.__sim`, a development-only clock driver.
 
 The pure half lives in `packages/core/src/sim/` (`clock.ts`, `timetable.ts`),
@@ -286,6 +360,9 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
   snapping, route drafting, station-land drawing.
 - `MapCanvas.tsx` — the map component; keeps sources in sync with the store
   and heals overlay layers if the style reloads.
+- `initialStyleFallback.ts` — bounds initial third-party style loading and
+  switches failures to a local blank style so system geometry and pointer
+  interactions still initialize offline.
 - `layers/` — the layer specifications and icons `layers.ts` assembles.
 - `export/` — rendering the map to an image off-screen.
 - `basemap.ts`, `icons.ts`, `landmarks.ts`, `mapRef.ts`,
@@ -296,33 +373,14 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 - `liveCamera.ts` — the live map camera, held in a module-level holder
   outside the domain `system`. There is one map per session, and the value
   mirrors that map, so a store or a context would buy nothing.
-- `cameraPersistence.ts` — folds the live camera into the saved library
-  entry on a debounce, and does not touch `updatedAt`.
 
 The camera is presentation state, not domain data, and separating the two
 is a performance decision as much as a modelling one. While the camera
 lived in `system`, every pan minted a new `system` reference, which made a
 drag frame look like a content edit to the renderer subscription, every
 mounted selector, and autosave alike. Moving it out cost the saved-viewport
-behaviour, which `cameraPersistence.ts` restores deliberately rather than
-by making the camera reactive again.
-
-## apps/web/src/perf/ — measuring frames
-
-- `frameStats.ts` — summarises frame durations. Reports the median rather
-  than the mean, plus p95, worst, and the fraction of frames over the 60Hz
-  and 30Hz budgets.
-- `frameMeter.ts` — samples painted-frame intervals from MapLibre's render
-  event, because the map paints on demand and a plain animation-frame
-  counter keeps ticking when nothing is drawn.
-- `panBench.ts` — a scripted pan and zoom in the same shape as a real drag.
-  Deterministic input is what makes two runs comparable, so "feels
-  smoother" becomes a number.
-- `index.ts` — wires the above to `window.__panBench`, `window.__perf` and
-  friends for use from devtools.
-
-None of this ships enabled. The only caller guards on the DEV flag and
-`index.ts` no-ops again on its own.
+behaviour, which `storage/persistenceCoordinator.ts` restores deliberately
+rather than by making the camera reactive again.
 
 ## apps/web/src/ui/ — components
 

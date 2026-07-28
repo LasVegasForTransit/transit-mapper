@@ -59,6 +59,8 @@ For people changing the code rather than using the app.
 
 - [Run the checks](development/how-to/run-the-checks.md) — what `pnpm check`
   does, and the fix for each failure.
+- [Measure browser performance](development/how-to/measure-performance.md) —
+  the fixed Chrome protocol, hard gates, baselines, offline proof, and leak soak.
 - [Write a test](development/how-to/write-a-test.md) — the two suites, and
   which one new work belongs in.
 - [Add a package](development/how-to/add-a-package.md) — the generator, and
@@ -75,6 +77,8 @@ For people changing the code rather than using the app.
   are and which boundaries are load-bearing.
 - [Checks](development/reference/checks.md) — every check, what makes it
   fail, and the command that fixes it.
+- [Performance acceptance matrix](development/reference/performance-acceptance-matrix.md) —
+  automated gates and the manual browser/failure-path release checklist.
 - [The enforcement model](development/explanation/enforcement-model.md) —
   why the harness is shaped this way.
 

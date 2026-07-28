@@ -282,32 +282,40 @@ about four updates a second.
 
 ## Where the code is
 
-|                                             |                                                                                                           |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `packages/core/src/sim/clock.ts`            | the speed ladder, time-of-day and weekday math, span math. Pure.                                          |
-| `packages/core/src/sim/fleet.ts`            | fleet size, cycle time, layover, and where run _i_ is. Pure.                                              |
-| `packages/core/src/sim/frequency.ts`        | which services call at a stop, and their combined frequency. Pure.                                        |
-| `packages/core/src/sim/timetable.ts`        | travel — accelerating, cruising, braking — and dwell, along one pattern. Pure.                            |
-| `packages/core/src/sim/serviceStats.ts`     | the one measurement of a line: path, stops, timetable, plan. Pure.                                        |
-| `packages/core/src/geometry/vehicleLane.ts` | the lane-accurate polyline one leg of a pattern rides. Pure.                                              |
-| `apps/web/src/sim/simClock.ts`              | the `SimClock` instance: the mutable number and its subscribers.                                          |
-| `apps/web/src/sim/vehicles.ts`              | the 30 Hz animation host — advances the clock, asks core where everything is, pushes GeoJSON to MapLibre. |
-| `apps/web/src/sim/devHandle.ts`             | `window.__sim`, a development-only handle for driving the clock by hand.                                  |
-| `apps/web/src/ui/SimProvider.tsx`           | speed and paused state, and ownership of the clock instance.                                              |
-| `apps/web/src/ui/SimControls.tsx`           | the transport controls, beside the view switch.                                                           |
+|                                             |                                                                                |
+| ------------------------------------------- | ------------------------------------------------------------------------------ |
+| `packages/core/src/sim/clock.ts`            | the speed ladder, time-of-day and weekday math, span math. Pure.               |
+| `packages/core/src/sim/fleet.ts`            | fleet size, cycle time, layover, and where run _i_ is. Pure.                   |
+| `packages/core/src/sim/frequency.ts`        | which services call at a stop, and their combined frequency. Pure.             |
+| `packages/core/src/sim/timetable.ts`        | travel — accelerating, cruising, braking — and dwell, along one pattern. Pure. |
+| `packages/core/src/sim/serviceStats.ts`     | the one measurement of a line: path, stops, timetable, plan. Pure.             |
+| `packages/core/src/geometry/vehicleLane.ts` | the lane-accurate polyline one leg of a pattern rides. Pure.                   |
+| `apps/web/src/sim/simClock.ts`              | the `SimClock` instance: the mutable number and its subscribers.               |
+| `apps/web/src/sim/vehicles.ts`              | the stable browser animation API facade.                                       |
+| `apps/web/src/sim/vehicleAnimationHost.ts`  | the 30 Hz host — advances the clock and pushes GeoJSON to MapLibre.            |
+| `apps/web/src/sim/patternGeometry.ts`       | dependency-aware geometry and timetable caches for each pattern.               |
+| `apps/web/src/sim/serviceSchedule.ts`       | minute-level active-service resolution and idle wake-up policy.                |
+| `apps/web/src/sim/devHandle.ts`             | `window.__sim`, a development-only handle for driving the clock by hand.       |
+| `apps/web/src/ui/SimProvider.tsx`           | speed and paused state, and ownership of the clock instance.                   |
+| `apps/web/src/ui/SimControls.tsx`           | the transport controls, beside the view switch.                                |
 
 The line between the last two groups is the one that matters: `packages/core`
 decides _what the answer is_ and the app decides _when to ask_. That is why the
 simulator can be tested without a browser.
 
-## Cost, and what hasn't been measured
+## Cost and interaction priority
 
 The simulation resolves on a fixed 30 Hz tick, decoupled from the render loop,
-and skips whole patterns whose path is off-screen. Two things keep it cheap:
+and skips whole patterns whose path is off-screen. Three things keep it cheap:
 
 - A service that isn't running is skipped before its geometry is resolved.
 - Schedule resolution — walking each service's periods and parsing their spans
   — is redone only when the simulated **minute** changes, not every frame.
+- During a transient geometry edit, animation continues against the last
+  settled system. This preserves truthful time and visible motion without
+  rebuilding pattern geometry for every pointer snapshot; release adopts the
+  committed system on the next frame. Camera manipulation continues using the
+  current bounds normally.
 
 At agency scale, imported feeds now carry real service levels (see below), so
 every pattern plans a real fleet rather than a single vehicle. What bounds the
@@ -336,12 +344,13 @@ more multiplies and a square root in place of one division — so the shape of
 this table should hold, but that is an expectation, not a re-measurement; the
 table above hasn't been rerun against it.
 
-**What has NOT been measured.** Everything downstream of that: handing up to
-~3,400 features per tick to MapLibre, and painting them. That needs a real,
-focused browser — `__panBench` / `__zoomBench` with `__perf.vehicles` toggled.
-A headless pane parks `requestAnimationFrame` and composites only a frame or
-two per interaction, which is not enough to time a pan; that was confirmed by
-trying it, not assumed.
+**Browser attribution.** The fixed headed-Chrome suite now measures the
+downstream work too: source uploads, MapLibre painted-frame intervals, and
+unexpected long tasks while trusted pointer input runs with the simulation
+both running and paused. `__panBench` / `__zoomBench` with
+`__perf.vehicles` toggled remain the local A/B seam. See
+[Measure browser performance](../../development/how-to/measure-performance.md)
+for the protocol and current evidence.
 
 ## Service levels from an imported feed
 
