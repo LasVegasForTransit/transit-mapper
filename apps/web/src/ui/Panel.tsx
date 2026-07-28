@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from 'react';
+import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 
 export type PanelSlot = 'left' | 'right';
 
@@ -21,11 +21,18 @@ interface PanelProps extends HTMLAttributes<HTMLElement> {
  * .panel's own comment in app.css) — a call site can't quietly ship
  * without that the way one of the seven above once could have, since
  * there's now exactly one place this markup is written.
+ *
+ * forwardRef exists for MenuCard's own use — it measures this element's
+ * DOM node directly to drive the zen-mode width morph (see that
+ * component's comment). No other current caller needs the ref.
  */
-export function Panel({ slot, className = '', children, ...rest }: PanelProps) {
+export const Panel = forwardRef<HTMLElement, PanelProps>(function Panel(
+  { slot, className = '', children, ...rest },
+  ref,
+) {
   return (
-    <aside className={`panel panel-${slot} ${className}`.trim()} {...rest}>
+    <aside ref={ref} className={`panel panel-${slot} ${className}`.trim()} {...rest}>
       {children}
     </aside>
   );
-}
+});
