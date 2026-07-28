@@ -3192,11 +3192,13 @@ export function createEditorStore() {
       const cut = endCoord
         ? cutIndexOnLegs(st.system.ways, outLegs, endCoord, RETURN_REJOIN_SNAP_M)
         : null;
+      // A return path that ends nowhere near the line has not rejoined it, and
+      // guessing is the dangerous move: the only guess available is "the whole
+      // line is a couplet", which silently splits it end to end when the
+      // planner drew one block. Refuse and let them draw it again.
+      if (!cut) return false;
 
-      // No usable rejoin point means the return path parallels the whole line.
-      const [shared, diverged] = cut
-        ? splitLegsAt(outLegs, cut.legIndex, cut.t)
-        : [[] as PatternLeg[], outLegs];
+      const [shared, diverged] = splitLegsAt(outLegs, cut.legIndex, cut.t);
       if (diverged.length === 0) return false;
 
       const sections = pruneSections([

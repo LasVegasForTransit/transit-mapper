@@ -6,7 +6,7 @@ import {
   serviceWayIds,
   wayById,
 } from './geo';
-import type { LngLat, RunDirection, TransitSystem, Way } from './system';
+import type { LngLat, Pattern, PatternSection, RunDirection, TransitSystem, Way } from './system';
 
 /** How a direction of service reads in a sentence a planner will see. */
 const RUN_NOUN: Record<RunDirection, string> = {
@@ -27,6 +27,64 @@ export interface Issue {
   /** What clicking this issue should select, if anything. */
   target?:
     { kind: 'way'; id: string } | { kind: 'station'; id: string } | { kind: 'service'; id: string };
+}
+
+/** How far apart the two halves of a one-way couplet may sit where they meet.
+ *
+ *  Deliberately NOT LEG_JOIN_TOLERANCE_M: that measures a join meant to be
+ *  exact, and these two ends are meant NOT to touch — a couplet loops round a
+ *  block at each end. This only has to catch the case where a line was split
+ *  against a path that was never beside it, which is a mistake measured in
+ *  kilometres, not metres. A long block is the right order of magnitude. */
+const SPLIT_FACING_TOLERANCE_M = 600;
+
+/** A split section whose two directions do not actually run beside each other.
+ *  The failure it catches: a return path attached against the wrong stretch of
+ *  a line, which leaves a "couplet" whose halves are miles apart and which
+ *  every other check would accept, because each half is continuous on its own. */
+function splitGapIssues(
+  waysById: Map<string, Way>,
+  service: { id: string; name: string },
+  pattern: Pattern,
+): Issue[] {
+  const out: Issue[] = [];
+  pattern.sections.forEach((section, i) => {
+    if (section.kind !== 'split') return;
+    const forward = sectionRunPath(waysById, pattern, section, 'outbound');
+    const back = sectionRunPath(waysById, pattern, section, 'inbound');
+    if (forward.length < 2 || back.length < 2) return;
+    // Outbound ends where inbound begins, and inbound ends where outbound
+    // begins — the two ends of the couplet.
+    const far = haversineMeters(forward[forward.length - 1], back[0]);
+    const near = haversineMeters(back[back.length - 1], forward[0]);
+    if (Math.max(far, near) <= SPLIT_FACING_TOLERANCE_M) return;
+    out.push({
+      id: `split-too-far-${service.id}-${pattern.id}-${i}`,
+      message: `"${service.name}" has an outward and a return trip that never meet — they were split against stretches that are nowhere near each other.`,
+      target: { kind: 'service', id: service.id },
+    });
+  });
+  return out;
+}
+
+/** One section's path for one direction. Resolved through the pattern so leg
+ *  extents and orientation are honoured exactly as the real render does. */
+function sectionRunPath(
+  waysById: Map<string, Way>,
+  pattern: Pattern,
+  section: PatternSection,
+  run: RunDirection,
+): LngLat[] {
+  const legs = new Set(
+    section.kind === 'split'
+      ? run === 'outbound'
+        ? section.outbound
+        : section.inbound
+      : section.legs,
+  );
+  return patternRunSegments(waysById, pattern, run)
+    .filter((seg) => legs.has(seg.leg))
+    .flatMap((seg) => seg.path);
 }
 
 /**
@@ -104,6 +162,7 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
           break; // one report per direction; the first break is the useful one
         }
       }
+      issues.push(...splitGapIssues(waysById, service, pattern));
     }
   }
 

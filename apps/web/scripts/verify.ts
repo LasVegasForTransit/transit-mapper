@@ -2263,7 +2263,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
   check(
     'the joined line runs both ways end to end',
-    store.getState().system.services[0].patterns[0].legs.length === 2,
+    patternLegs(store.getState().system.services[0].patterns[0]).length === 2,
   );
   check(
     'the joined line has no gap for the validator to report',
@@ -10884,6 +10884,31 @@ function buildGrid() {
     pathLengthMeters(patternRunPath(store.getState().system.ways, trimmedCp, 'outbound')) <
       outBefore - 1,
   );
+
+  // A return path drawn nowhere near the line must not attach. The dangerous
+  // failure is not refusing — it is guessing, because the only guess available
+  // is "the whole line is a couplet", which splits a line end to end when
+  // someone drew one block of it miles away.
+  {
+    const farWays = store.getState().system.ways;
+    const faraway = farWays.map((w) => w.id).find((wid) => wid === 'down')!;
+    const spansFarAway = [
+      { wayId: faraway, fromPoint: 0, toPoint: 1, fromCoord: [-114.5, 35.5] as LngLat },
+    ];
+    const before = JSON.stringify(
+      store.getState().system.services.find((sv) => sv.id === svc)!.patterns[0].sections,
+    );
+    check(
+      'a return path that ends nowhere near the line is refused',
+      !store.getState().attachReturnPath(svc, trimmedCp.id, spansFarAway),
+    );
+    check(
+      'refusing a far-away return path leaves the line exactly as it was',
+      JSON.stringify(
+        store.getState().system.services.find((sv) => sv.id === svc)!.patterns[0].sections,
+      ) === before,
+    );
+  }
 
   // And it can be undone.
   store.getState().makePatternTwoWay(svc, trimmedCp.id);

@@ -20,6 +20,7 @@ import {
   serviceRangesOnWay,
   slicePathByT,
   wayById,
+  patternRunSegments,
 } from '../model/geo';
 import { nearWaysForStations, servicesByWay, visibleWaysFor } from './featureMemo';
 import { directionalLanes, isOneWay, wayCapacity } from '../model/profile';
@@ -32,7 +33,15 @@ import {
   type WayTrims,
 } from '../geometry/junctions';
 import { iconName } from './iconName';
-import type { LngLat, Pattern, Service, TransitSystem } from '../model/system';
+import type {
+  PatternLeg,
+  RunDirection,
+  Way,
+  LngLat,
+  Pattern,
+  Service,
+  TransitSystem,
+} from '../model/system';
 import { HANDLE_ICON, widthPxAtZ14 } from './constants';
 
 /** What the renderer needs to know about the current selection: which single
@@ -155,6 +164,54 @@ function wayPatternIndex(byWay: Map<string, Service[]>): Map<string, WayPatternE
   }
   wayPatternIndexCache.set(byWay, index);
   return index;
+}
+
+/**
+ * The stretches of `wayId` that some service rides in one direction only, each
+ * already oriented the way that service travels it.
+ *
+ * "One direction only" is a property of the LINE, not the street: a couplet
+ * drawn along two ordinary two-way streets has each half ridden one way, and a
+ * planner looking at the schematic has nothing else to tell them which. A leg
+ * both directions share yields nothing here, because an arrow on it would be
+ * a lie in one of the two directions.
+ *
+ * Deduplicated by geometry start/end so two branches of one service riding the
+ * same one-directional stretch do not stack arrows on top of each other.
+ */
+function oneDirectionalStretches(
+  waysById: Map<string, Way>,
+  services: Service[],
+  wayId: string,
+): LngLat[][] {
+  const out: LngLat[][] = [];
+  const seen = new Set<string>();
+  for (const svc of services) {
+    for (const pattern of svc.patterns) {
+      for (const section of pattern.sections) {
+        if (section.kind === 'shared') continue;
+        const sides: { legs: PatternLeg[]; run: RunDirection }[] =
+          section.kind === 'split'
+            ? [
+                { legs: section.outbound, run: 'outbound' },
+                { legs: section.inbound, run: 'inbound' },
+              ]
+            : [{ legs: section.legs, run: 'outbound' as RunDirection }];
+        for (const side of sides) {
+          const wanted = new Set(side.legs.filter((l) => l.wayId === wayId));
+          if (wanted.size === 0) continue;
+          for (const seg of patternRunSegments(waysById, pattern, side.run)) {
+            if (!wanted.has(seg.leg) || seg.path.length < 2) continue;
+            const key = `${seg.path[0].join()}>${seg.path[seg.path.length - 1].join()}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push(seg.path);
+          }
+        }
+      }
+    }
+  }
+  return out;
 }
 
 export interface SystemFeatures {
@@ -516,13 +573,30 @@ export function buildFeatures(
     // chevrons along the served line, pointing with travel — otherwise
     // Network view silently hides direction, and a one-way couplet looks
     // like two ordinary parallel lines.
-    if (network && isOneWay(way.profile)) {
+    const wayIsOneWay = isOneWay(way.profile);
+    if (network && wayIsOneWay) {
       const backward = directionalLanes(way.profile).every((l) => l.direction === 'backward');
       laneArrows.push({
         type: 'Feature',
         properties: { id: way.id },
         geometry: { type: 'LineString', coordinates: backward ? [...path].reverse() : path },
       });
+    }
+    // A stretch only ONE direction of a line rides is one-way as far as that
+    // line is concerned, whatever the street underneath permits. Without this
+    // a couplet drawn along two-way streets reads as two ordinary parallel
+    // lines and nothing says which way round either half runs.
+    //
+    // Skipped when the way itself is one-way, because the chevrons above
+    // already say it and two sets of arrows on one line is noise.
+    if (network && !wayIsOneWay) {
+      for (const one of oneDirectionalStretches(waysById, byWay.get(way.id) ?? [], way.id)) {
+        laneArrows.push({
+          type: 'Feature',
+          properties: { id: way.id },
+          geometry: { type: 'LineString', coordinates: one },
+        });
+      }
     }
 
     // Network view is the clean schematic map — grade (tunnel/viaduct styling)
