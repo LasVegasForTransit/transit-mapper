@@ -9,6 +9,9 @@ export const SRC_SERVICES = 'tm-services';
 export const SRC_STATIONS = 'tm-stations';
 export const SRC_HANDLES = 'tm-handles';
 export const SRC_PREVIEW = 'tm-preview';
+/** Stretches of existing infrastructure the in-progress stroke will be
+ *  absorbed onto when it commits. See interactions.ts's setSharingPreview. */
+export const SRC_SHARING = 'tm-sharing';
 export const SRC_FOOTPRINTS = 'tm-footprints';
 export const SRC_PLATFORMS = 'tm-platforms';
 export const SRC_FACILITIES = 'tm-facilities';
@@ -43,6 +46,7 @@ export const LYR_FACILITY_LABELS = 'tm-facility-labels';
 export const LYR_HANDLES = 'tm-handles';
 export const LYR_WAY_ENDPOINTS = 'tm-way-endpoints';
 export const LYR_PREVIEW = 'tm-preview';
+export const LYR_SHARING = 'tm-sharing';
 export const LYR_FOOTPRINTS_FILL = 'tm-footprints-fill';
 export const LYR_FOOTPRINTS_STROKE = 'tm-footprints-stroke';
 export const LYR_PLATFORMS_FILL = 'tm-platforms-fill';
