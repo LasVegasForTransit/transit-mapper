@@ -33,10 +33,17 @@ jobs:
       matrix:
         profile: ${{ fromJSON(github.event_name == 'pull_request' && '["desktop"]' || '["desktop","mobile"]') }}
     env:
-      CURRENT_ARTIFACT: /tmp/transitmapper-performance-current-${{ matrix.profile }}
-      BASELINE_ARTIFACT: /tmp/transitmapper-performance-baseline-${{ matrix.profile }}
       XVFB_ARGS: -screen 0 1440x900x24 -nolisten tcp -dpi 96
     steps:
+      # runner.temp is unavailable while job-level env is evaluated. Resolve
+      # the runner-provided directory after the job starts instead.
+      - name: Configure artifact paths
+        run: |
+          printf '%s\n' \
+            "CURRENT_ARTIFACT=$RUNNER_TEMP/transitmapper-performance-current-${{ matrix.profile }}" \
+            "BASELINE_ARTIFACT=$RUNNER_TEMP/transitmapper-performance-baseline-${{ matrix.profile }}" \
+            >> "$GITHUB_ENV"
+
       - name: Checkout candidate
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -131,9 +138,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      SOAK_ARTIFACT: /tmp/transitmapper-performance-soak
       XVFB_ARGS: -screen 0 1440x900x24 -nolisten tcp -dpi 96
     steps:
+      # Keep soak artifacts in the runner-owned temporary directory too.
+      - name: Configure artifact path
+        run: |
+          printf '%s\n' \
+            "SOAK_ARTIFACT=$RUNNER_TEMP/transitmapper-performance-soak" \
+            >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
