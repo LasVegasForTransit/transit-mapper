@@ -1490,7 +1490,14 @@ function materializeShapeRun(
   const from = anchorOnWay(way, startCoord);
   const to = anchorOnWay(way, endCoord);
   if (!from || !to) return null;
-  const res = routeBetween(system, from, to, { allowedTypeIds: new Set([way.typeId]) });
+  // 'legal' rather than 'preferLegal': an imported shape already knows which
+  // direction it runs, and the way under it was minted one-way in that
+  // direction. A run that cannot route legally is a conflation miss, and
+  // falling through to fresh geometry beats binding it to a wrong-way leg.
+  const res = routeBetween(system, from, to, {
+    allowedTypeIds: new Set([way.typeId]),
+    travel: 'legal',
+  });
   if (!res) return null;
   const legs = materializeRouteSpans(system, res.spans);
   return legs ? { system, legs } : null;
@@ -2504,13 +2511,26 @@ export function createEditorStore() {
       const rd = st.routeDraft;
       if (!rd) return false;
       const allowed = new Set(mode(rd.modeId).wayTypeIds);
-      const res = routeBetween(st.system, rd.lastAnchor, anchor, { allowedTypeIds: allowed });
+      // 'preferLegal': a one-way street should push the route round the block,
+      // but when nothing legal exists a bare refusal is indistinguishable from
+      // a missed click. Give the planner the line and mark what is wrong with
+      // it — the spans come back flagged `wrongWay`.
+      const res = routeBetween(st.system, rd.lastAnchor, anchor, {
+        allowedTypeIds: allowed,
+        travel: 'preferLegal',
+      });
       if (!res || res.spans.length === 0) return false;
 
       // Consecutive legs share their boundary anchor; when the new leg
       // continues straight through the same way, merge the seam into one
-      // span. Doubling back over a way already in the route is beyond what
-      // split-based materialization can represent — refuse the extension.
+      // span. The draft then refuses any way it has already used.
+      //
+      // That refusal is blunter than routeGraph's, which now rejects only
+      // spans that overlap in the same direction. Leaving it blunt for now:
+      // relaxing it needs the draft to know which of a line's two directions
+      // a span belongs to, and that arrives with the couplet gestures. Until
+      // then a route that legitimately re-uses a way has to be drawn in two
+      // strokes rather than being silently mis-joined.
       const spans = rd.spans.map((s) => ({ ...s }));
       let rest = res.spans;
       const last = spans[spans.length - 1];
@@ -2604,11 +2624,15 @@ export function createEditorStore() {
         const from = anchorOnWay(wayA, sA.coord);
         const to = anchorOnWay(wayB, sB.coord);
         if (!from || !to) continue;
+        // 'preferLegal': failure here is `continue`, which leaves the pattern
+        // silently un-adopted with nothing said. A flagged adoption is the
+        // better of the two, since the wrong-way issue then names it.
         const res = routeBetween(sys, from, to, {
           allowedTypeIds: allowed,
           excludeWayIds: exclude,
           biasPath: sketchPath,
           biasWeight: ADOPT_BIAS_WEIGHT,
+          travel: 'preferLegal',
         });
         if (!res) continue;
         const adoptedLegs = materializeRouteSpans(sys, res.spans);

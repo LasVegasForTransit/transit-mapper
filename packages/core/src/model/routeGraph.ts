@@ -19,6 +19,7 @@
 // rewrite.
 
 import { haversineMeters, nearestInsertionPoint } from './geo';
+import { type Traversal, wayTraversal } from './profile';
 import type { LngLat, TransitSystem, Way } from './system';
 
 /** Where a route starts/ends: a way plus the raw-points insertion produced
@@ -32,9 +33,11 @@ export interface RouteAnchor {
 
 /** One traversed stretch of one way, in RAW control-point indexes. The route
  *  runs fromPoint→toPoint; fromPoint > toPoint means it traverses the way
- *  against its point order (fine for services — patterns are orientation-
- *  agnostic). Endpoints that landed mid-way carry the fractional coordinate
- *  so materialization can splice a real point in. */
+ *  against its point order, which is a real direction of travel and not a
+ *  formality — a leg records it, the lane is picked from it, and the router
+ *  refuses it on a one-way street unless asked not to. Endpoints that landed
+ *  mid-way carry the fractional coordinate so materialization can splice a
+ *  real point in. */
 export interface RouteSpan {
   wayId: string;
   fromPoint: number;
@@ -48,6 +51,13 @@ export interface RouteSpan {
    *  segment's upper point index. fromPoint/toPoint are not meaningful. */
   noInterior?: boolean;
   seg?: number;
+  /** Set on a span that runs against its way's one-way profile, which only
+   *  happens when the rule allowed it anyway — `'ignore'`, or `'preferLegal'`
+   *  after nothing legal was found. Feedback for the gesture in progress, NOT
+   *  a record: nothing persists it, and a street made one-way UNDER an
+   *  existing line never grows one. validate.ts's wrong-way issue is the
+   *  durable answer, because it recomputes from the profile every time. */
+  wrongWay?: true;
 }
 
 export interface RouteResult {
@@ -90,6 +100,22 @@ function vertexKeyAt(wayId: string, pointIndex: number, nodeAt: Map<string, stri
   return nodeAt.get(`${wayId}:${pointIndex}`) ?? `e:${wayId}:${pointIndex}`;
 }
 
+/**
+ * How hard a way's one-way profile constrains a route.
+ *
+ * - `'legal'` — a one-way profile is a hard constraint. No legal path means
+ *   no route. Right where the caller can act on a refusal, and right for an
+ *   import whose direction is already known.
+ * - `'preferLegal'` — try `'legal'`; on failure route as if unconstrained and
+ *   mark the offending spans `wrongWay`. Right where a silent refusal would
+ *   read to the planner as "my click did nothing" — they get the line, and
+ *   they get told what is wrong with it.
+ * - `'ignore'` — the orientation-free graph this module had before one-way
+ *   profiles were honoured. Kept because it is what a pure connectivity
+ *   question wants, not for backwards compatibility.
+ */
+export type TravelRule = 'legal' | 'preferLegal' | 'ignore';
+
 export interface RouteGraphOptions {
   /** Only ways of these types participate (mode compatibility). */
   allowedTypeIds: Set<string>;
@@ -99,6 +125,22 @@ export interface RouteGraphOptions {
    *  the route follows a sketched line instead of any equally-short detour. */
   biasPath?: LngLat[];
   biasWeight?: number;
+  /** Defaults to `'legal'`. A system with no one-way ways routes identically
+   *  under all three, since a two-way profile admits both edges either way. */
+  travel?: TravelRule;
+}
+
+/** Whether a way whose profile permits `traversal` may be ridden in the
+ *  direction of increasing (`forward`) or decreasing (`backward`) point
+ *  index. Under `'ignore'` the caller passes `'both'` and everything opens. */
+function allows(traversal: Traversal, forward: boolean): boolean {
+  return traversal === 'both' || traversal === (forward ? 'forward' : 'backward');
+}
+
+/** The traversal the graph should enforce for `way` — its profile's, or the
+ *  unconstrained `'both'` when the caller asked for no enforcement. */
+function ruledTraversal(way: Way, rule: TravelRule): Traversal {
+  return rule === 'ignore' ? 'both' : wayTraversal(way);
 }
 
 const BIAS_SCALE_M = 300; // distance at which the bias multiplier ≈ 1+weight
@@ -117,6 +159,7 @@ function biasMultiplier(mid: LngLat, biasPath: LngLat[] | undefined, weight: num
 function buildGraph(
   system: TransitSystem,
   opts: RouteGraphOptions,
+  rule: TravelRule,
 ): { vertices: Map<string, Vertex>; nodeAt: Map<string, string> } {
   const vertices = new Map<string, Vertex>();
   const nodeAt = new Map<string, string>(); // "wayId:pointIndex" -> nodeId
@@ -154,8 +197,14 @@ function buildGraph(
       const cost = segmentCost(way, a, b) * biasMultiplier(mid, opts.biasPath, weight);
       const va = ensure(keyA, way.points[a]);
       const vb = ensure(keyB, way.points[b]);
-      va.edges.push({ to: keyB, costM: cost, span: { wayId: way.id, fromPoint: a, toPoint: b } });
-      vb.edges.push({ to: keyA, costM: cost, span: { wayId: way.id, fromPoint: b, toPoint: a } });
+      // Both vertices exist either way, so a one-way street still JOINS the
+      // network at both ends — it just cannot be entered from the far one.
+      // Dropping the vertex instead would disconnect everything beyond it.
+      const traversal = ruledTraversal(way, rule);
+      if (allows(traversal, true))
+        va.edges.push({ to: keyB, costM: cost, span: { wayId: way.id, fromPoint: a, toPoint: b } });
+      if (allows(traversal, false))
+        vb.edges.push({ to: keyA, costM: cost, span: { wayId: way.id, fromPoint: b, toPoint: a } });
     }
   }
   return { vertices, nodeAt };
@@ -167,6 +216,9 @@ function buildGraph(
  * Shortest route between two anchors over existing infrastructure. Returns
  * null when no connected path exists. Mid-way anchors are handled as virtual
  * vertices spliced into their enclosing segment.
+ *
+ * Routes ONE direction of travel. A couplet is two calls, which is why
+ * nothing here knows about a line's two runs.
  */
 export function routeBetween(
   system: TransitSystem,
@@ -174,19 +226,54 @@ export function routeBetween(
   to: RouteAnchor,
   opts: RouteGraphOptions,
 ): RouteResult | null {
-  // Both anchors on ONE way: the route is simply the stretch of that way
+  const rule = opts.travel ?? 'legal';
+  const legal = routeWithRule(system, from, to, opts, rule === 'ignore' ? 'ignore' : 'legal');
+  if (legal || rule !== 'preferLegal') return legal;
+  // Nothing legal exists, and the caller would rather show a wrong-way line
+  // than swallow the gesture. Re-route unconstrained and say which spans are
+  // the problem, so the refusal is visible instead of silent.
+  const relaxed = routeWithRule(system, from, to, opts, 'ignore');
+  if (!relaxed) return null;
+  const waysById = new Map(system.ways.map((w) => [w.id, w]));
+  return { ...relaxed, spans: relaxed.spans.map((s) => markWrongWay(s, waysById)) };
+}
+
+/** A span tagged when it runs against its way's profile. A `noInterior` span
+ *  carries no point order to judge, so it is left alone rather than guessed
+ *  at — it covers less than one segment, where a wrong-way warning would be
+ *  noise. */
+function markWrongWay(span: RouteSpan, waysById: Map<string, Way>): RouteSpan {
+  const way = waysById.get(span.wayId);
+  if (!way || span.noInterior || span.fromPoint === span.toPoint) return span;
+  const forward = span.fromPoint < span.toPoint;
+  return allows(wayTraversal(way), forward) ? span : { ...span, wrongWay: true };
+}
+
+function routeWithRule(
+  system: TransitSystem,
+  from: RouteAnchor,
+  to: RouteAnchor,
+  opts: RouteGraphOptions,
+  rule: TravelRule,
+): RouteResult | null {
+  // Both anchors on ONE way: the route is usually just the stretch of that way
   // between them — the most common gesture (routing along a single street),
   // and one the vertex graph can't represent when both clicks land inside
   // the same block segment.
-  if (from.wayId === to.wayId) {
-    const way = system.ways.find((w) => w.id === from.wayId);
-    if (
-      !way ||
-      !opts.allowedTypeIds.has(way.typeId) ||
-      opts.excludeWayIds?.has(way.id) ||
-      way.points.length < 2
-    )
-      return null;
+  //
+  // Usually, not always. This path bypasses buildGraph, so it has to apply the
+  // one-way rule itself, and when the direct traversal is illegal it must fall
+  // THROUGH to the graph rather than refuse: two points on a one-way street
+  // are still connected, by going round the block and back up its couplet
+  // twin. Refusing here is what would make a couplet undrawable.
+  const sameWay = from.wayId === to.wayId ? system.ways.find((w) => w.id === from.wayId) : null;
+  if (
+    sameWay &&
+    opts.allowedTypeIds.has(sameWay.typeId) &&
+    !opts.excludeWayIds?.has(sameWay.id) &&
+    sameWay.points.length >= 2
+  ) {
+    const way = sameWay;
     const arcPos = (a: RouteAnchor): number => {
       const seg = Math.max(1, Math.min(a.insertIndex, way.points.length - 1));
       return segmentCost(way, 0, seg - 1) + haversineMeters(way.points[seg - 1], a.coord);
@@ -195,6 +282,13 @@ export function routeBetween(
     const posT = arcPos(to);
     if (Math.abs(posF - posT) < 0.5) return null; // same spot
     const forward = posF < posT;
+    if (!allows(ruledTraversal(way, rule), forward))
+      return routeOverGraph(system, from, to, opts, rule);
+    // Getting here against the profile means the rule permitted it. Stamp the
+    // span now, because this is the only place the direction is known: a
+    // same-segment span has no meaningful point order for markWrongWay to
+    // read, and on a single-segment street that span is the whole route.
+    const against = allows(wayTraversal(way), forward) ? {} : ({ wrongWay: true } as const);
     const segF = Math.max(1, Math.min(from.insertIndex, way.points.length - 1));
     const segT = Math.max(1, Math.min(to.insertIndex, way.points.length - 1));
     if (segF === segT) {
@@ -208,6 +302,7 @@ export function routeBetween(
             toCoord: to.coord,
             noInterior: true,
             seg: segF,
+            ...against,
           },
         ],
         lengthM: Math.abs(posF - posT),
@@ -220,6 +315,7 @@ export function routeBetween(
           toPoint: segT - 1,
           fromCoord: from.coord,
           toCoord: to.coord,
+          ...against,
         }
       : {
           wayId: way.id,
@@ -227,11 +323,25 @@ export function routeBetween(
           toPoint: segT,
           fromCoord: from.coord,
           toCoord: to.coord,
+          ...against,
         };
     return { spans: [span], lengthM: Math.abs(posF - posT) };
   }
 
-  const { vertices, nodeAt } = buildGraph(system, opts);
+  return routeOverGraph(system, from, to, opts, rule);
+}
+
+/** Dijkstra over the segment graph. Split out from routeWithRule so the
+ *  same-way shortcut can hand back to it when the direct traversal is illegal
+ *  and the route has to go round the block. */
+function routeOverGraph(
+  system: TransitSystem,
+  from: RouteAnchor,
+  to: RouteAnchor,
+  opts: RouteGraphOptions,
+  rule: TravelRule,
+): RouteResult | null {
+  const { vertices, nodeAt } = buildGraph(system, opts, rule);
   const waysById = new Map(system.ways.map((w) => [w.id, w]));
 
   // Splice a virtual vertex for an anchor into its way's enclosing segment.
@@ -284,17 +394,29 @@ export function routeBetween(
     const spanB: RouteSpan = isFrom
       ? { wayId: way.id, fromPoint: seg, toPoint: b, fromCoord: anchor.coord }
       : { wayId: way.id, fromPoint: b, toPoint: seg, toCoord: anchor.coord };
-    v.edges.push({ to: keyA, costM: costTo(a), span: spanA });
-    v.edges.push({ to: keyB, costM: costTo(b), span: spanB });
+    // A mid-way anchor is the second place traversals are created, and it is
+    // easy to miss: leaving toward `a` walks the point order DOWN and toward
+    // `b` walks it UP, and the mirror edges below run the opposite way again.
+    // Gate all four, or a one-way street stays enterable from its far end
+    // whenever the click landed mid-block.
+    const traversal = ruledTraversal(way, rule);
+    const towardA = allows(traversal, false);
+    const towardB = allows(traversal, true);
+    if (towardA) v.edges.push({ to: keyA, costM: costTo(a), span: spanA });
+    if (towardB) v.edges.push({ to: keyB, costM: costTo(b), span: spanB });
+    if (!towardA && !towardB) return false;
     vertices.set(key, v);
     // Mirror edges from the segment ends toward the virtual vertex (needed
-    // for the destination anchor, which is routed INTO).
-    vertices
-      .get(keyA)
-      ?.edges.push({ to: key, costM: costTo(a), span: isFrom ? spanA : { ...spanA } });
-    vertices
-      .get(keyB)
-      ?.edges.push({ to: key, costM: costTo(b), span: isFrom ? spanB : { ...spanB } });
+    // for the destination anchor, which is routed INTO). Arriving from `a`
+    // walks the point order up, and from `b` down — the reverse of above.
+    if (towardB)
+      vertices
+        .get(keyA)
+        ?.edges.push({ to: key, costM: costTo(a), span: isFrom ? spanA : { ...spanA } });
+    if (towardA)
+      vertices
+        .get(keyB)
+        ?.edges.push({ to: key, costM: costTo(b), span: isFrom ? spanB : { ...spanB } });
     return true;
   };
 
@@ -355,14 +477,40 @@ export function routeBetween(
       spans.push({ ...s });
     }
   }
-  // A route that would traverse the same way in two separate spans is beyond
-  // what materialization (split-based) can represent safely — reject it.
-  const seen = new Set<string>();
-  for (const s of spans) {
-    if (seen.has(s.wayId)) return null;
-    seen.add(s.wayId);
+  return overlapsItself(spans) ? null : { spans, lengthM: dist.get(TO) ?? 0 };
+}
+
+/**
+ * Whether a route doubles back over ground it has already covered.
+ *
+ * This used to reject ANY way named twice, justified by materialization being
+ * split-based. It has not been split-based since legs grew extents: a leg
+ * names a stretch of a way, so two legs on one way are ordinary. What is still
+ * wrong is two spans covering the same stretch the same way round, because
+ * `serviceRangesOnWay` merges those into one drawn line and the stop
+ * derivation counts the stations under them twice. Two spans on disjoint
+ * stretches — a route out along a street and back along a later block of it —
+ * are fine, and rejecting them was costing real routes.
+ *
+ * A `noInterior` span carries no meaningful point order, so it is compared by
+ * way alone and any repeat is refused.
+ */
+function overlapsItself(spans: RouteSpan[]): boolean {
+  for (let i = 0; i < spans.length; i++) {
+    for (let j = i + 1; j < spans.length; j++) {
+      const a = spans[i];
+      const b = spans[j];
+      if (a.wayId !== b.wayId) continue;
+      if (a.noInterior || b.noInterior) return true;
+      const aForward = a.fromPoint < a.toPoint;
+      const bForward = b.fromPoint < b.toPoint;
+      if (aForward !== bForward) continue; // opposite directions: a couplet, not a doubling
+      const lo = Math.max(Math.min(a.fromPoint, a.toPoint), Math.min(b.fromPoint, b.toPoint));
+      const hi = Math.min(Math.max(a.fromPoint, a.toPoint), Math.max(b.fromPoint, b.toPoint));
+      if (lo < hi) return true;
+    }
   }
-  return { spans, lengthM: dist.get(TO) ?? 0 };
+  return false;
 }
 
 /** The route's drawable polyline (raw way points; fractional anchor ends). */
