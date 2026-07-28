@@ -1029,26 +1029,43 @@ export function attachInteractions(
     // space fall through to a new-way draw; while a route draft is live,
     // empty-space clicks are ignored (finish with Enter/double-click, back out
     // with Escape).
-    if (opts.isNetworkMode() && !st.activeWayId && !forceSeparate) {
-      const allowed = new Set(mode(st.draftModeId).wayTypeIds);
-      const candidates = st.system.ways.filter((w) => allowed.has(w.typeId));
-      const hit = snap(candidates, lngLatOf(e), snapMeters(SNAP_PX));
+    //
+    // `candidates` here is also what "compatible" means for resuming a way's
+    // own OPEN END below: a mode can ride more than one way type (streetcar
+    // covers both lightRail and road), wider than the single draftWayTypeId
+    // Infrastructure view draws with, so the resume check has to share this
+    // set rather than filter by draftWayTypeId alone.
+    const networkCandidates = opts.isNetworkMode()
+      ? st.system.ways.filter((w) => mode(st.draftModeId).wayTypeIds.includes(w.typeId))
+      : null;
+    if (networkCandidates && !st.activeWayId && !forceSeparate) {
       if (st.routeDraft) {
         suppressClick = true;
+        const hit = snap(networkCandidates, lngLatOf(e), snapMeters(SNAP_PX));
         if (hit) {
-          const way = candidates.find((w) => w.id === hit.wayId);
+          const way = networkCandidates.find((w) => w.id === hit.wayId);
           const anchor = way ? anchorOnWay(way, hit.coord) : null;
           if (anchor) st.extendRouteDraft(anchor);
         }
         return;
       }
-      if (hit) {
-        const way = candidates.find((w) => w.id === hit.wayId);
-        const anchor = way ? anchorOnWay(way, hit.coord) : null;
-        if (anchor) {
-          suppressClick = true;
-          st.startRouteDraft(anchor);
-          return;
+      // A press on one of these candidates' own open end must win over
+      // starting a route draft along it — an end sits at distance 0 on its
+      // own path, so the corridor snap below would otherwise always fire
+      // first and swallow the press before the extend-drag handlers (added
+      // further down) ever get registered.
+      const onOwnEndpoint =
+        nearestOpenEndpoint(networkCandidates, lngLatOf(e), snapMeters(SNAP_PX)) !== null;
+      if (!onOwnEndpoint) {
+        const hit = snap(networkCandidates, lngLatOf(e), snapMeters(SNAP_PX));
+        if (hit) {
+          const way = networkCandidates.find((w) => w.id === hit.wayId);
+          const anchor = way ? anchorOnWay(way, hit.coord) : null;
+          if (anchor) {
+            suppressClick = true;
+            st.startRouteDraft(anchor);
+            return;
+          }
         }
       }
     }
@@ -1065,10 +1082,16 @@ export function attachInteractions(
 
     if (!wayId) {
       // Alt-draw (forceSeparate) never resumes an existing way — it's the
-      // opt-out from attaching to what's already here.
+      // opt-out from attaching to what's already here. In Network view this
+      // must search the same networkCandidates set the block above checked
+      // for `onOwnEndpoint`, or a mode that rides more than one way type
+      // (e.g. streetcar's lightRail+road) could find the endpoint above but
+      // fail to resume it here and silently start an unrelated new way.
       const resume = forceSeparate
         ? null
-        : nearestOpenEndpoint(st.system.ways, startCoord, snapMeters(SNAP_PX), st.draftWayTypeId);
+        : networkCandidates
+          ? nearestOpenEndpoint(networkCandidates, startCoord, snapMeters(SNAP_PX))
+          : nearestOpenEndpoint(st.system.ways, startCoord, snapMeters(SNAP_PX), st.draftWayTypeId);
       if (resume) {
         wayId = resume.wayId;
         extendAtStart = resume.end === 'start';
