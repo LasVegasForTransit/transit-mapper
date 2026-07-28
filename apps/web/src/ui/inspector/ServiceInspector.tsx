@@ -131,6 +131,8 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   const deletePattern = useEditor((s) => s.deletePattern);
   const mergeServiceInto = useEditor((s) => s.mergeServiceInto);
   const adoptExistingInfrastructure = useEditor((s) => s.adoptExistingInfrastructure);
+  const startReturnPathDraft = useEditor((s) => s.startReturnPathDraft);
+  const makePatternTwoWay = useEditor((s) => s.makePatternTwoWay);
   const trimPatternTo = useEditor((s) => s.trimPatternTo);
   const splitServiceAt = useEditor((s) => s.splitServiceAt);
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -618,6 +620,38 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                 <Icon name="plus" size={17} /> Add branch
               </button>
             )}
+            {singlePattern &&
+              (patternHasSplit(singlePattern) ? (
+                <>
+                  <p className="insp-sub">
+                    This line runs two one-way paths. Its outward and return trips use different
+                    streets.
+                  </p>
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}
+                    onClick={() => makePatternTwoWay(id, singlePattern.id)}
+                  >
+                    Make it run both ways on one street
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="insp-sub">
+                    Splitting the line lets its return trip run a different street — a one-way
+                    couplet. Draw the return path from the far end back toward the start.
+                  </p>
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}
+                    onClick={() => startReturnPathDraft(id, singlePattern.id)}
+                  >
+                    <Icon name="plus" size={17} /> Draw a separate return path
+                  </button>
+                </>
+              ))}
             {mergeTargets.length > 0 && (
               <>
                 <label className="field-label" htmlFor="merge-into-select">

@@ -16,7 +16,14 @@
  */
 
 import { mode } from './catalog';
-import { haversineMeters, patternPath, legRunsWithPoints } from './geo';
+import {
+  haversineMeters,
+  patternPath,
+  legRunsWithPoints,
+  patternLegs,
+  oneSection,
+  patternHasSplit,
+} from './geo';
 import { materializeRouteSpans } from './routeLegs';
 import { anchorOnWay, routeBetween } from './routeGraph';
 import type { Pattern, PatternLeg, Service, TransitSystem, Way } from './system';
@@ -36,12 +43,12 @@ function reverseLegs(legs: PatternLeg[]): PatternLeg[] {
 
 /** Legs oriented so that `end` is the last thing travelled. */
 function legsEndingAt(pattern: Pattern, end: 'start' | 'end'): PatternLeg[] {
-  return end === 'end' ? pattern.legs : reverseLegs(pattern.legs);
+  return end === 'end' ? patternLegs(pattern) : reverseLegs(patternLegs(pattern));
 }
 
 /** Legs oriented so that `end` is the first thing travelled. */
 function legsStartingAt(pattern: Pattern, end: 'start' | 'end'): PatternLeg[] {
-  return end === 'start' ? pattern.legs : reverseLegs(pattern.legs);
+  return end === 'start' ? patternLegs(pattern) : reverseLegs(patternLegs(pattern));
 }
 
 function terminusCoord(system: TransitSystem, pattern: Pattern, end: 'start' | 'end') {
@@ -75,8 +82,8 @@ function connectorLegs(
   if (!fromCoord || !toCoord) return null;
   if (haversineMeters(fromCoord, toCoord) <= LEG_JOIN_TOLERANCE_M) return [];
 
-  const fromWay = wayAtEnd(system, from.pattern.legs, from.end);
-  const toWay = wayAtEnd(system, to.pattern.legs, to.end);
+  const fromWay = wayAtEnd(system, patternLegs(from.pattern), from.end);
+  const toWay = wayAtEnd(system, patternLegs(to.pattern), to.end);
   if (!fromWay || !toWay) return null;
   const fromAnchor = anchorOnWay(fromWay, fromCoord);
   const toAnchor = anchorOnWay(toWay, toCoord);
@@ -115,6 +122,12 @@ export function throughRouteServices(
   const keepPattern = keep.patterns.find((p) => p.id === meeting.aPatternId);
   const otherPattern = other.patterns.find((p) => p.id === meeting.bPatternId);
   if (!keepPattern || !otherPattern) return null;
+  // A line whose two directions run different streets cannot be spliced into
+  // the middle of another one: the joint is where the two halves of a couplet
+  // would have to be re-paired against the other line's, and nothing here
+  // knows how to do that. Refusing beats flattening it silently, which is what
+  // building one undivided leg list out of it would amount to.
+  if (patternHasSplit(keepPattern) || patternHasSplit(otherPattern)) return null;
 
   const connector = connectorLegs(
     system,
@@ -124,13 +137,14 @@ export function throughRouteServices(
   );
   if (!connector) return null;
 
+  // One undivided stretch, safely: a couplet on either side was refused above.
   const joined: Pattern = {
     ...keepPattern,
-    legs: [
+    sections: oneSection([
       ...legsEndingAt(keepPattern, meeting.aEnd),
       ...connector,
       ...legsStartingAt(otherPattern, meeting.bEnd),
-    ],
+    ]),
   };
 
   const carried = other.patterns

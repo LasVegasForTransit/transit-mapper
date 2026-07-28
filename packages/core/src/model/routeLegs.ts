@@ -61,7 +61,11 @@ export function materializeRouteSpans(
     const from = nearestOnPath(path, startCoord);
     const to = nearestOnPath(path, endCoord);
     if (!from || !to) return null;
-    if (Math.abs(from.t - to.t) < DEGENERATE_SPAN_T) return null;
+    // A span with no length contributes no ground. It happens whenever a
+    // route starts or ends exactly on a way's endpoint — which is every time
+    // a return path is drawn from a line's terminus — so skipping it beats
+    // failing the whole materialization over a span that describes nothing.
+    if (Math.abs(from.t - to.t) < DEGENERATE_SPAN_T) continue;
 
     const forward = from.t <= to.t;
     const lo = Math.min(from.t, to.t);

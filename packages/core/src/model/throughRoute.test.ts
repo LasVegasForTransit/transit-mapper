@@ -4,7 +4,7 @@
 // not part of the join.
 
 import { describe, expect, it } from 'vitest';
-import { patternPath } from './geo';
+import { patternPath, patternLegs } from './geo';
 import { throughRouteServices } from './throughRoute';
 import { validateSystemQuick } from './validate';
 import { aPattern, aRoad, aService, aSystem } from '../testing/fixtures';
@@ -36,7 +36,7 @@ describe('joining two lines into a through-route', () => {
     expect(next!.services).toHaveLength(1);
     const [joined] = next!.services;
     expect(joined.patterns).toHaveLength(1);
-    expect(joined.patterns[0].legs.map((l) => l.wayId)).toEqual(['west', 'east']);
+    expect(patternLegs(joined.patterns[0]).map((l) => l.wayId)).toEqual(['west', 'east']);
   });
 
   it('keeps the surviving line’s own name and colour', () => {
@@ -64,9 +64,9 @@ describe('joining two lines into a through-route', () => {
     });
     const next = throughRouteServices(system, 'a', 'b');
     const joined = next!.services[0].patterns[0];
-    expect(joined.legs.map((l) => l.wayId)).toEqual(['west', 'east']);
+    expect(patternLegs(joined).map((l) => l.wayId)).toEqual(['west', 'east']);
     // Travelling east means running `east` against its own point order.
-    expect(joined.legs[1].direction).toBe('againstPoints');
+    expect(patternLegs(joined)[1].direction).toBe('againstPoints');
     const path = patternPath(next!.ways, joined);
     expect(path[0][0]).toBeCloseTo(-115.21, 5);
     expect(path[path.length - 1][0]).toBeCloseTo(-115.19, 5);

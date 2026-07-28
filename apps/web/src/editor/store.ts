@@ -42,13 +42,15 @@ import {
   resolveWayPath,
   snap,
   squareFootprint,
-  stretchLeg,
   wayById,
   wayLengthMeters,
   wholeLeg,
   type ShapeRun,
   patternLegs,
   oneSection,
+  patternRunPath,
+  patternRunLegs,
+  patternHasSplit,
 } from '@transitmapper/core/model/geo';
 import {
   anchorOnWay,
@@ -87,6 +89,7 @@ import {
 } from '@transitmapper/core/model/system';
 import { withoutAlreadyImported, type ImportedNetwork } from '@transitmapper/core/model/import';
 import type {
+  PatternSection,
   CrossSection,
   DrivingSide,
   Facility,
@@ -409,7 +412,14 @@ export interface EditorState {
   // line drawing, and re-binding a sketched service onto real ways)
   /** Live route-drawing state: mode being drawn, the last committed anchor,
    *  and the spans accumulated so far. Null when not route-drawing. */
-  routeDraft: { modeId: string; lastAnchor: RouteAnchor; spans: RouteSpan[] } | null;
+  routeDraft: {
+    modeId: string;
+    lastAnchor: RouteAnchor;
+    spans: RouteSpan[];
+    /** What committing this draft should do. Absent = mint a new service,
+     *  which is what every draft did before couplets existed. */
+    returnFor?: { serviceId: string; patternId: string };
+  } | null;
   startRouteDraft: (anchor: RouteAnchor) => void;
   /** Route from the last anchor to `anchor` along existing compatible ways
    *  and append it. Returns false (no state change) when no path exists or
@@ -498,6 +508,16 @@ export interface EditorState {
    *  service's id, or null when the cut lands on a terminus and there is
    *  nothing to split. */
   splitServiceAt: (serviceId: string, patternId: string, wayId: string, t: number) => string | null;
+  /** Start drawing this pattern's return path, from the far end of its
+   *  outward trip. The draft routes direction-aware like any other, and
+   *  committing it turns the covered stretch into a one-way couplet. */
+  startReturnPathDraft: (serviceId: string, patternId: string) => boolean;
+  /** Attach a drawn return path to a pattern, turning the stretch it parallels
+   *  into a couplet. Returns false when the path cannot be resolved or does
+   *  not rejoin the outward trip. */
+  attachReturnPath: (serviceId: string, patternId: string, spans: RouteSpan[]) => boolean;
+  /** Undo a couplet: both directions ride the outward trip's streets again. */
+  makePatternTwoWay: (serviceId: string, patternId: string) => void;
   /** Take a stretch of a way out of existence: the way is cut around it and
    *  the middle removed, and every line riding it is trimmed to match. A line
    *  the stretch cut through survives as two patterns on the same service
@@ -1466,6 +1486,147 @@ function stitchFreshLegEnds(
 // ---- routing over existing infrastructure ----------------------------------
 // Materializing a route into legs lives in core (model/routeLegs.ts) — it is
 // pure, and through-routing two lines needs the same conversion.
+
+/** The map coordinate a span ends at, for a span whose end is a real control
+ *  point rather than a fractional anchor. */
+function coordAtSpanEnd(system: TransitSystem, span: RouteSpan): LngLat | null {
+  const way = system.ways.find((w) => w.id === span.wayId);
+  if (!way) return null;
+  return way.points[span.toPoint] ?? null;
+}
+
+/**
+ * Where `coord` falls on a leg list, as the leg it lands on and the position
+ * along that leg's WAY.
+ *
+ * This is the measurement patternEdits deliberately does not take: its
+ * arithmetic is geometry-free and the store supplies the one number each
+ * operation needs. Splitting a line into a couplet needs it because the point
+ * the return path rejoins at is a coordinate, and turning that into "which leg,
+ * how far along" is a projection.
+ */
+function cutIndexOnLegs(
+  ways: Way[],
+  legs: PatternLeg[],
+  coord: LngLat,
+  maxDistM = Infinity,
+): { legIndex: number; t: number } | null {
+  let bestIndex = -1;
+  let bestT = 0;
+  let bestDist = Infinity;
+  legs.forEach((leg, legIndex) => {
+    const way = ways.find((w) => w.id === leg.wayId);
+    if (!way) return;
+    const path = resolveWayPath(way);
+    if (path.length < 2) return;
+    const near = nearestOnPath(path, coord);
+    if (!near || near.distMeters >= bestDist) return;
+    bestIndex = legIndex;
+    bestT = near.t;
+    bestDist = near.distMeters;
+  });
+  return bestIndex >= 0 && bestDist <= maxDistM ? { legIndex: bestIndex, t: bestT } : null;
+}
+
+/** A section's legs, whichever kind it is — for the questions that do not care
+ *  which direction rides them. */
+function sectionLegs(section: PatternSection): PatternLeg[] {
+  return section.kind === 'split' ? [...section.outbound, ...section.inbound] : section.legs;
+}
+
+/** The map coordinate at position `t` along a way. */
+function coordOnWay(ways: Way[], wayId: string, t: number): LngLat | null {
+  const way = ways.find((w) => w.id === wayId);
+  if (!way) return null;
+  const path = resolveWayPath(way);
+  return path.length >= 2 ? pointAtT(path, t) : null;
+}
+
+/** One section cut back to `t` on `wayId`, dropping what lies beyond it in
+ *  ride order. Returns null when the cut cannot be placed. */
+function trimSection(
+  ways: Way[],
+  section: PatternSection,
+  wayId: string,
+  t: number,
+  side: 'start' | 'end',
+): PatternSection | null {
+  const cutOne = (legs: PatternLeg[], at: { legIndex: number; t: number }, sd: 'start' | 'end') =>
+    truncateLegs(legs, at.legIndex, at.t, sd);
+  const indexIn = (legs: PatternLeg[]) => {
+    const matching = legs.flatMap((l, i) => (l.wayId === wayId ? [i] : []));
+    const legIndex = (side === 'start' ? matching[0] : matching[matching.length - 1]) ?? -1;
+    return legIndex < 0 ? null : { legIndex, t };
+  };
+
+  if (section.kind !== 'split') {
+    const at = indexIn(section.legs);
+    return at ? { ...section, legs: cutOne(section.legs, at, side) } : null;
+  }
+
+  const outAt = indexIn(section.outbound);
+  if (!outAt) return null;
+  const outbound = cutOne(section.outbound, outAt, side);
+  // The return trip is a different street, so the same cut has to be FOUND on
+  // it rather than computed from the outward one — a projection, which is why
+  // patternEdits cannot do this and the store must.
+  //
+  // And it cuts the other end: the outward trip's far terminus is the return
+  // trip's first stop, so trimming the end of one trims the start of the other.
+  const coord = coordOnWay(ways, wayId, t);
+  // No distance cap here, unlike the rejoin test in attachReturnPath. That one
+  // decides WHETHER an unrelated stroke belongs to this line, so a far match
+  // means "no". These two halves are already known to be one pattern, so the
+  // only question is WHERE the matching point is — and the nearest point on
+  // the return path is that point however wide the couplet happens to be.
+  const inAt = coord ? cutIndexOnLegs(ways, section.inbound, coord) : null;
+  // Only a return with no resolvable legs at all gets here. Shortening one
+  // direction and not the other would leave a line no vehicle can run.
+  if (!inAt) return null;
+  const inbound = cutOne(section.inbound, inAt, side === 'end' ? 'start' : 'end');
+  return { kind: 'split', outbound, inbound };
+}
+
+/** A pattern's sections cut back so the line begins — or ends — at `t` on
+ *  `wayId`. Null when the cut names a way the pattern does not ride. */
+function trimSectionsTo(
+  ways: Way[],
+  sections: PatternSection[],
+  wayId: string,
+  t: number,
+  side: 'start' | 'end',
+): PatternSection[] | null {
+  const holds = (sec: PatternSection) => sectionLegs(sec).some((l) => l.wayId === wayId);
+  let idx = -1;
+  if (side === 'start') idx = sections.findIndex(holds);
+  else
+    for (let i = sections.length - 1; i >= 0; i--)
+      if (holds(sections[i])) {
+        idx = i;
+        break;
+      }
+  if (idx < 0) return null;
+  const cut = trimSection(ways, sections[idx], wayId, t, side);
+  if (!cut) return null;
+  const kept = side === 'start' ? sections.slice(idx + 1) : sections.slice(0, idx);
+  return pruneSections(side === 'start' ? [cut, ...kept] : [...kept, cut]);
+}
+
+/**
+ * How far from the outward trip a return path may end and still count as
+ * rejoining it.
+ *
+ * A block or two. The planner stops drawing on the RETURN street, which is a
+ * street away from the outward one by definition, and often one corner short
+ * of where the two actually merge — so this cannot be tight.
+ *
+ * It cannot be loose either, and that is the more dangerous direction. The
+ * rejoin point decides how much of the line becomes a couplet: everything from
+ * there to the terminus. Accepting a far-away match would silently split a
+ * line end to end when someone drew one block of it. Beyond this, the draw is
+ * refused outright rather than guessed at — see attachReturnPath.
+ */
+const RETURN_REJOIN_SNAP_M = 600;
 
 /**
  * Realize one detected corridor-conflation run (see
@@ -2563,15 +2724,27 @@ export function createEditorStore() {
       const last = spans[spans.length - 1];
       const first = res.spans[0];
       if (last && first.wayId === last.wayId) {
-        if (last.noInterior || first.noInterior) return false; // seam direction is undefined for fractional spans
-        const dirPrev = Math.sign(last.toPoint - last.fromPoint);
-        const dirNext = Math.sign(first.toPoint - first.fromPoint);
-        if (last.toCoord && first.fromCoord && dirPrev === dirNext) {
-          last.toPoint = first.toPoint;
+        // Two fractional spans inside one segment of one way join cleanly:
+        // the result is still one fractional span, from the first's start to
+        // the second's end. Any street drawn as a bare two-point line produces
+        // these, so refusing them outright made a couplet undrawable on
+        // exactly the streets people sketch first.
+        if (last.noInterior && first.noInterior) {
+          if (last.seg !== first.seg || !last.toCoord || !first.toCoord) return false;
           last.toCoord = first.toCoord;
           rest = res.spans.slice(1);
+        } else if (last.noInterior || first.noInterior) {
+          return false; // one fractional, one not: the seam direction is undefined
         } else {
-          return false;
+          const dirPrev = Math.sign(last.toPoint - last.fromPoint);
+          const dirNext = Math.sign(first.toPoint - first.fromPoint);
+          if (last.toCoord && first.fromCoord && dirPrev === dirNext) {
+            last.toPoint = first.toPoint;
+            last.toCoord = first.toCoord;
+            rest = res.spans.slice(1);
+          } else {
+            return false;
+          }
         }
       }
       const seen = new Set(spans.map((s) => s.wayId));
@@ -2595,6 +2768,14 @@ export function createEditorStore() {
       if (rd.spans.length === 0) {
         set({ routeDraft: null });
         return null;
+      }
+      // A return-path draft belongs to a line that already exists: committing
+      // it turns that line into a couplet rather than minting a second one.
+      if (rd.returnFor) {
+        const { serviceId, patternId } = rd.returnFor;
+        const attached = get().attachReturnPath(serviceId, patternId, rd.spans);
+        set({ routeDraft: null });
+        return attached ? serviceId : null;
       }
       const id = get().createRoutedService(rd.spans, rd.modeId);
       set({ routeDraft: null });
@@ -2651,6 +2832,12 @@ export function createEditorStore() {
         const from = anchorOnWay(wayA, sA.coord);
         const to = anchorOnWay(wayB, sB.coord);
         if (!from || !to) continue;
+        // Adoption replaces a pattern's whole path with one routed line, which
+        // for a couplet would silently discard the direction it was drawn
+        // with. Refuse rather than flatten: the planner drew two one-way paths
+        // on purpose, and re-routing each of them separately is a different
+        // gesture than this one.
+        if (patternHasSplit(pattern)) continue;
         // 'preferLegal': failure here is `continue`, which leaves the pattern
         // silently un-adopted with nothing said. A flagged adoption is the
         // better of the two, since the wrong-way issue then names it.
@@ -2892,13 +3079,12 @@ export function createEditorStore() {
         const pattern = service?.patterns.find((p) => p.id === patternId);
         if (!pattern) return {};
         // Trim at the leg NEAREST the end being moved, so dragging a terminus
-        // back over a way the line visits twice shortens the right visit.
-        const matching = patternLegs(pattern).flatMap((l, i) => (l.wayId === wayId ? [i] : []));
-        const legIndex = (side === 'start' ? matching[0] : matching[matching.length - 1]) ?? -1;
-        if (legIndex < 0) return {};
-        const legs = truncateLegs(patternLegs(pattern), legIndex, t, side);
+        // back over a way the line visits twice shortens the right visit. On a
+        // couplet this cuts both directions: the return trip's matching point
+        // is found on its own street rather than assumed to be the same leg.
+        const sections = trimSectionsTo(s.system.ways, pattern.sections, wayId, t, side);
         // Trimming a line away entirely is a deletion the user didn't ask for.
-        if (legs.length === 0) return {};
+        if (!sections || sections.length === 0) return {};
         return {
           system: touch({
             ...s.system,
@@ -2907,9 +3093,7 @@ export function createEditorStore() {
                 ? sv
                 : {
                     ...sv,
-                    patterns: sv.patterns.map((p) =>
-                      p.id === patternId ? { ...p, sections: oneSection(legs) } : p,
-                    ),
+                    patterns: sv.patterns.map((p) => (p.id === patternId ? { ...p, sections } : p)),
                   },
             ),
           }),
@@ -2958,6 +3142,109 @@ export function createEditorStore() {
       }));
       return newId;
     },
+
+    startReturnPathDraft: (serviceId, patternId) => {
+      const st = get();
+      const service = st.system.services.find((sv) => sv.id === serviceId);
+      const pattern = service?.patterns.find((p) => p.id === patternId);
+      if (!service || !pattern) return false;
+      // Drawn FROM the far end of the outward trip, because that is where a
+      // return trip starts. The planner then traces it back down whatever
+      // streets carry the other direction.
+      const out = patternRunPath(st.system.ways, pattern, 'outbound');
+      if (out.length < 2) return false;
+      const terminus = out[out.length - 1];
+      // Anchored on the line's OWN last way, not on whatever way happens to be
+      // nearest the terminus. At a junction those differ, and starting the
+      // draft on a cross-street makes the first hop a seam the draft then has
+      // to merge — which it will refuse.
+      const runLegs = patternRunLegs(pattern, 'outbound');
+      const lastWayId = runLegs[runLegs.length - 1]?.leg.wayId;
+      const way = st.system.ways.find((w) => w.id === lastWayId);
+      const anchorAt = way ? anchorOnWay(way, terminus) : null;
+      if (!anchorAt) return false;
+      set({
+        routeDraft: {
+          modeId: service.modeId,
+          lastAnchor: anchorAt,
+          spans: [],
+          returnFor: { serviceId, patternId },
+        },
+      });
+      return true;
+    },
+
+    attachReturnPath: (serviceId, patternId, spans) => {
+      const st = get();
+      const service = st.system.services.find((sv) => sv.id === serviceId);
+      const pattern = service?.patterns.find((p) => p.id === patternId);
+      if (!service || !pattern || spans.length === 0) return false;
+      const returnLegs = materializeRouteSpans(st.system, spans);
+      if (!returnLegs || returnLegs.length === 0) return false;
+
+      // Where the return trip rejoins the outward one decides how much of the
+      // line becomes a couplet: everything from there to the terminus, and
+      // nothing before it. The draft's last anchor IS that point — it is where
+      // the planner stopped drawing.
+      const rejoin = spans[spans.length - 1];
+      const endCoord = rejoin.toCoord ?? coordAtSpanEnd(st.system, rejoin);
+      const outLegs = patternLegs(pattern);
+      const cut = endCoord
+        ? cutIndexOnLegs(st.system.ways, outLegs, endCoord, RETURN_REJOIN_SNAP_M)
+        : null;
+
+      // No usable rejoin point means the return path parallels the whole line.
+      const [shared, diverged] = cut
+        ? splitLegsAt(outLegs, cut.legIndex, cut.t)
+        : [[] as PatternLeg[], outLegs];
+      if (diverged.length === 0) return false;
+
+      const sections = pruneSections([
+        ...(shared.length > 0 ? oneSection(shared) : []),
+        { kind: 'split' as const, outbound: diverged, inbound: returnLegs },
+      ]);
+      set((s) => ({
+        system: touch({
+          ...s.system,
+          services: s.system.services.map((sv) =>
+            sv.id !== serviceId
+              ? sv
+              : {
+                  ...sv,
+                  patterns: sv.patterns.map((p) => (p.id === patternId ? { ...p, sections } : p)),
+                },
+          ),
+        }),
+        routeDraft: null,
+      }));
+      return true;
+    },
+
+    makePatternTwoWay: (serviceId, patternId) =>
+      set((s) => {
+        const service = s.system.services.find((sv) => sv.id === serviceId);
+        const pattern = service?.patterns.find((p) => p.id === patternId);
+        if (!pattern || !patternHasSplit(pattern)) return {};
+        // The outward trip's streets are the ones that survive: they are what
+        // the line was before anyone drew a return path, and the return
+        // streets are the addition being undone.
+        const legs = patternRunLegs(pattern, 'outbound').map((r) => r.leg);
+        return {
+          system: touch({
+            ...s.system,
+            services: s.system.services.map((sv) =>
+              sv.id !== serviceId
+                ? sv
+                : {
+                    ...sv,
+                    patterns: sv.patterns.map((p) =>
+                      p.id === patternId ? { ...p, sections: oneSection(legs) } : p,
+                    ),
+                  },
+            ),
+          }),
+        };
+      }),
 
     deleteWayStretch: (wayId, fromT, toT) => {
       const st = get();

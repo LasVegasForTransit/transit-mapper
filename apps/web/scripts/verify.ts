@@ -55,6 +55,9 @@ import {
   MAX_GRID_CELLS,
   MAX_OVERSIZE_SEGMENTS,
   wayById,
+  patternHasSplit,
+  patternRunLegs,
+  patternRunPath,
 } from '@transitmapper/core/model/geo';
 import { computeDiagramSystem } from '@transitmapper/core/model/diagramLayout';
 import {
@@ -10764,6 +10767,133 @@ function buildGrid() {
   check(
     'the new half takes a colour of its own',
     afterSplit.services[0].color !== afterSplit.services[1].color,
+  );
+}
+
+// --- one-way couplets: a line whose two directions run different streets ---
+// The gesture is: draw a line, then draw its return path round the block. What
+// comes back has to be ONE line with two directions, not two lines, because it
+// shares a name, a headway and a fleet.
+{
+  const SWc: LngLat = [-115.2, 36.1];
+  const NWc: LngLat = [-115.2, 36.14];
+  const NEc: LngLat = [-115.19, 36.14];
+  const SEc: LngLat = [-115.19, 36.1];
+  const blockWay = (id: string, points: LngLat[]) => ({
+    id,
+    typeId: 'road',
+    points,
+    geometry: 'straight',
+    grade: 'atGrade',
+  });
+  // Built as a document rather than drawn, because parseSystem derives a
+  // junction wherever control points coincide and the headless draw flow has
+  // no snapping to form them with.
+  store.getState().setSystem(
+    parseSystem({
+      version: 3,
+      ways: [
+        blockWay('up', [SWc, NWc]),
+        blockWay('north', [NWc, NEc]),
+        blockWay('down', [NEc, SEc]),
+        blockWay('south', [SEc, SWc]),
+      ],
+      services: [],
+      stations: [],
+    }),
+  );
+  store.getState().setDraftMode('bus');
+  const svc = store.getState().addServiceToWay('up')!;
+  const outPattern = store.getState().system.services.find((sv) => sv.id === svc)!.patterns[0];
+  check('a plain line starts with one undivided path', !patternHasSplit(outPattern));
+
+  check(
+    'drawing a return path starts from the far end of the outward trip',
+    store.getState().startReturnPathDraft(svc, outPattern.id),
+  );
+
+  const anchorAt = (wayId: string, coord: LngLat) =>
+    anchorOnWay(
+      store.getState().system.ways.find((x) => x.id === wayId)!,
+      coord,
+    )!;
+  const midOf = (a: LngLat, b: LngLat): LngLat => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  check(
+    'the return path can be traced round the block',
+    store.getState().extendRouteDraft(anchorAt('north', midOf(NWc, NEc))) &&
+      store.getState().extendRouteDraft(anchorAt('down', midOf(NEc, SEc))) &&
+      store.getState().extendRouteDraft(anchorAt('south', midOf(SEc, SWc))),
+  );
+  check(
+    'committing a return path keeps it on the same line',
+    store.getState().commitRouteDraft() === svc,
+  );
+  check('the system still holds exactly one line', store.getState().system.services.length === 1);
+
+  const coupled = store.getState().system.services.find((sv) => sv.id === svc)!;
+  const cp = coupled.patterns[0];
+  check("the line's two directions now run different streets", patternHasSplit(cp));
+
+  const outWays = patternRunLegs(cp, 'outbound').map((r) => r.leg.wayId);
+  const backWays = patternRunLegs(cp, 'inbound').map((r) => r.leg.wayId);
+  check('the outward trip still runs the street it was drawn on', outWays.includes('up'));
+  check('the return trip runs the streets it was traced along', backWays.includes('down'));
+  check('the outward trip never runs the return street', !outWays.includes('down'));
+  check('the return trip never runs the outward street', !backWays.includes('up'));
+
+  // The whole point of the sim change: the cycle is the two directions added
+  // together, and this couplet's return is genuinely longer than its outward.
+  const ps = serviceStats(
+    store.getState().system.ways,
+    store.getState().system.stations,
+    [],
+    coupled,
+  )!.patterns[0];
+  check(
+    'the round trip is the outward trip plus the return, not twice either',
+    Math.abs(ps.roundTripMs - (ps.timetables.outbound.oneWayMs + ps.timetables.inbound.oneWayMs)) <
+      1e-6 && Math.abs(ps.roundTripMs - 2 * ps.timetables.outbound.oneWayMs) > 1,
+  );
+  check(
+    'the return trip is measured on its own longer path',
+    ps.timetables.inbound.totalMeters > ps.timetables.outbound.totalMeters,
+  );
+
+  // A couplet must not read as a broken route: its two halves are a block
+  // apart on purpose, and the old single-walk check called that a gap.
+  check(
+    'a couplet is not reported as having a gap in its route',
+    !validateSystem(store.getState().system).some((i) => i.id.startsWith('broken-pattern-')),
+  );
+
+  // Adoption would replace the whole path with one routed line, silently
+  // discarding the direction it was drawn with.
+  check(
+    'adopting infrastructure refuses to flatten a couplet',
+    store.getState().adoptExistingInfrastructure(svc) === 0,
+  );
+
+  // Trimming cuts BOTH directions — the return's matching point is found on
+  // its own street rather than assumed to be the same leg.
+  const outBefore = pathLengthMeters(patternRunPath(store.getState().system.ways, cp, 'outbound'));
+  store.getState().trimPatternTo(svc, cp.id, 'up', 0.5, 'end');
+  const trimmedCp = store.getState().system.services.find((sv) => sv.id === svc)!.patterns[0];
+  check('trimming a couplet keeps both of its directions', patternHasSplit(trimmedCp));
+  check(
+    'trimming a couplet shortens the outward trip',
+    pathLengthMeters(patternRunPath(store.getState().system.ways, trimmedCp, 'outbound')) <
+      outBefore - 1,
+  );
+
+  // And it can be undone.
+  store.getState().makePatternTwoWay(svc, trimmedCp.id);
+  const flat = store.getState().system.services.find((sv) => sv.id === svc)!.patterns[0];
+  check('a couplet can be turned back into a two-way line', !patternHasSplit(flat));
+  check(
+    'undoing a couplet keeps the streets the outward trip ran',
+    patternRunLegs(flat, 'outbound')
+      .map((r) => r.leg.wayId)
+      .includes('up'),
   );
 }
 
