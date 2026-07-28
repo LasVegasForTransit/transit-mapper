@@ -7,6 +7,7 @@ import {
   patternPath,
   patternLegs,
   patternRunPath,
+  patternHasCouplet,
   patternHasSplit,
 } from '@transitmapper/core/model/geo';
 import type {
@@ -623,7 +624,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
               </button>
             )}
             {singlePattern &&
-              (patternHasSplit(singlePattern) ? (
+              (patternHasCouplet(singlePattern) ? (
                 <>
                   <p className="insp-sub">
                     This line runs two one-way paths. Its outward and return trips use different

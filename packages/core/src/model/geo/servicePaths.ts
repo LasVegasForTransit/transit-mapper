@@ -34,12 +34,22 @@ export function patternLegs(pattern: Pattern): PatternLeg[] {
   );
 }
 
-/** Whether a pattern's two directions are genuinely different paths. False for
- *  every pattern in every document before v12 — and worth asking, because a
- *  false answer lets the direction-aware paths do one walk instead of two for
- *  the same answer. */
+/** Whether a pattern's two directions cover different ground — true for a
+ *  couplet AND for a turnaround, since a loop ridden once is on the outward
+ *  trip and not the return. What the geometry, simulation and validation want:
+ *  a false answer lets them do one walk instead of two for the same result.
+ *  False for every pattern in every document before v12. */
 export function patternHasSplit(pattern: Pattern): boolean {
   return pattern.sections.some((s) => s.kind !== 'shared');
+}
+
+/** Whether a pattern is a one-way COUPLET specifically: two directions running
+ *  different streets alongside each other. Narrower than patternHasSplit,
+ *  which a turnaround also satisfies — and the difference matters wherever a
+ *  person is being told what their line is, because a loop at the terminus is
+ *  not "two one-way paths" and offering to un-split it says nothing. */
+export function patternHasCouplet(pattern: Pattern): boolean {
+  return pattern.sections.some((s) => s.kind === 'split');
 }
 
 /** A pattern whose path is one undivided stretch — what drawing a line

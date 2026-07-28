@@ -141,11 +141,38 @@ shorter shape's own length, floored at a platform pair and capped at a long
 block, and the two terminals are judged separately so a good end cannot pay for
 a bad one.
 
+## The follow-ups, and what they turned out to be
+
+**Wrong-way feedback was a promise nothing kept — twice.** The router marked
+spans `wrongWay` and nothing read the flag, so a draft that had to route
+against traffic showed the planner a line and told them nothing. And the
+durable check the routing commit named as the half to build first was not
+built at all: nothing re-routes an existing line, so a street made one-way
+UNDERNEATH one left it running the wrong way with the draft flag long gone.
+Both exist now, the second recomputed from the profile every time so it
+appears and clears itself as the street changes.
+
+**Per-direction stop lists were delivered in part.** The couplet case works
+for free and a shared platform works by proximity; the case that needed new
+data — a stop on a stretch both directions ride, called at one way and passed
+the other — needed `Pattern.skippedStops`. A denylist, not a served-list,
+because stops are derived and a served-list goes stale by LOSING stops.
+
+**`turnaround` was unreachable, and the reason was a bug.** No gesture built
+one because `attachReturnPath` refused exactly the case it describes: a return
+path rejoining at the far terminus leaves nothing diverged, which was read as
+failure. It is a loop round the block, ridden once, and it now produces the
+section it always should have.
+
+That surfaced `patternHasSplit` doing double duty. It means "the two directions
+cover different ground", which a turnaround satisfies — right for the geometry,
+simulation and validation, wrong for telling a person their line "runs two
+one-way paths". `patternHasCouplet` is the narrow question the UI asks.
+
 ## What is still open
 
 `Station.anchors: StationAnchor[]` remains the real answer for a platform that
-genuinely belongs to two ways; the 150 m proximity rule above is a proximity
-heuristic standing in for it.
+genuinely belongs to two ways; the 150 m proximity rule above stands in for it.
 
 Turn restrictions are honoured for ROUTING but not for the lane a service ends
 up pinned to, so a route may take a turn its eventual lane could not.
