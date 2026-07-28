@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && tsx scripts/perf/report-bundle.ts && tsx scripts/perf/verify-pwa-output.ts",
     "preview": "vite preview",
+    "perf": "tsx scripts/perf/run.ts",
+    "perf:record": "tsx scripts/perf/run.ts --record",
+    "perf:soak": "tsx scripts/perf/run.ts --soak",
     "typecheck": "tsc -b --noEmit && tsc -p tsconfig.scripts.json",
     "verify": "tsx scripts/verify.ts && vitest run",
     "lint": "eslint ."
@@ -31,6 +34,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
+    "playwright-core": "catalog:",
     "tsx": "catalog:",
     "vite": "catalog:",
     "vite-plugin-pwa": "catalog:",
