@@ -8,9 +8,11 @@ import type { TransitSystem } from '@transitmapper/core/model/system';
 import { fetchShare } from './share/api';
 import {
   getActiveId,
+  hasSeenOnboarding,
   listLibrary,
   loadSystemById,
   loadSystemEntry,
+  markOnboardingSeen,
   migrateLegacySingleSlot,
   saveToLibrary,
   setActiveId,
@@ -58,6 +60,9 @@ const ShortcutsDialog = lazy(() =>
 );
 const SystemsDialog = lazy(() =>
   import('./ui/SystemsDialog').then((m) => ({ default: m.SystemsDialog })),
+);
+const OnboardingDialog = lazy(() =>
+  import('./ui/onboarding/OnboardingDialog').then((m) => ({ default: m.OnboardingDialog })),
 );
 
 const SHARE_PREFIX = '/s/';
@@ -109,7 +114,15 @@ function LazyDialog({ children, onFailure }: LazyDialogProps) {
 export function App() {
   const store = useEditorStore();
   const name = useEditor((s) => s.system.name);
-  const { shortcutsOpen, closeShortcuts, uiHidden, toggleUi, activeDialog, closeDialog } = useUi();
+  const {
+    shortcutsOpen,
+    closeShortcuts,
+    uiHidden,
+    toggleUi,
+    activeDialog,
+    openDialog,
+    closeDialog,
+  } = useUi();
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   // Anything worth telling the user that isn't the share-load error: a stored
@@ -163,8 +176,12 @@ export function App() {
     setActiveId(system.id);
     store.getState().setSystem(system, { readOnly: false });
     if (isBrandNew) store.getState().setTool('way');
+    // Independent of isBrandNew: that flag means "no saved system found,"
+    // which a returning user hits too (they deleted their only system) —
+    // conflating the two would re-show onboarding to someone who's seen it.
+    if (!hasSeenOnboarding()) openDialog('onboarding');
     setReady(true);
-  }, [store, report]);
+  }, [store, report, openDialog]);
 
   // Autosave the working copy into its own library entry (never a read-only
   // shared view). Switching to a different system's id updates the active
@@ -400,6 +417,21 @@ export function App() {
       {activeDialog === 'systems' && (
         <LazyDialog onFailure={dialogFailed}>
           <SystemsDialog onClose={closeDialog} onCorrupt={() => setNotice(corruptOpenNotice)} />
+        </LazyDialog>
+      )}
+      {activeDialog === 'onboarding' && (
+        <LazyDialog
+          onFailure={() => {
+            markOnboardingSeen();
+            dialogFailed();
+          }}
+        >
+          <OnboardingDialog
+            onClose={() => {
+              markOnboardingSeen();
+              closeDialog();
+            }}
+          />
         </LazyDialog>
       )}
     </div>

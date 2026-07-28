@@ -17,11 +17,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from './DropdownMenu';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 import { useView } from './ViewProvider';
 
 // One dock icon per way family; unknown families fall back to the plain line.
-const FAMILY_TOOL_ICON: Record<WayFamily, string> = {
+const FAMILY_TOOL_ICON: Record<WayFamily, IconName> = {
   guideway: 'line',
   roadway: 'road',
   path: 'bike',
@@ -223,7 +223,12 @@ export function Toolbar() {
               icon={
                 draftFacilityComplexMode
                   ? 'boundary'
-                  : (facilityRender(draftFacilityTypeId).icon ?? 'plus')
+                  : // facilityRender lives in packages/core, which can't know
+                    // about this app's icon vocabulary — its `icon` field is a
+                    // plain string by necessity. The cast is the one place that
+                    // boundary is crossed; every value it can actually return
+                    // (see catalogStyle.ts's facilityRender) is a real IconName.
+                    ((facilityRender(draftFacilityTypeId).icon as IconName) ?? 'plus')
               }
               label="Facility"
               hotkey="F"
@@ -298,7 +303,7 @@ interface ToolMenuSection {
 }
 
 interface ToolButtonProps {
-  icon: string;
+  icon: IconName;
   label: string;
   hotkey?: string;
   active: boolean;
