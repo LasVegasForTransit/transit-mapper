@@ -270,13 +270,30 @@ and skips whole patterns whose path is off-screen. Two things keep it cheap:
 At agency scale, imported feeds now carry real service levels (see below), so
 every pattern plans a real fleet rather than a single vehicle. What bounds the
 cost on screen is the per-pattern draw cap: the plan keeps its true fleet and
-headway, and only the first twelve runs are drawn. A verify check pins that
-relationship at RTC's order of magnitude.
+headway, and only the first twelve runs are drawn.
 
-**The before/after measurement on a real machine still has not been taken.**
-`__panBench` / `__zoomBench` with `__perf.vehicles` toggled, tab focused — a
-headless browser parks `requestAnimationFrame`, so those numbers cannot be
-taken there. That is the one piece of this work with no evidence behind it.
+**What has been measured.** The simulation's own per-tick cost, over 285
+patterns — RTC Southern Nevada's order of magnitude — on a 71-minute round trip
+with 25 stops, running the real `activeSchedule` → `planService` → `runStateAt`
+chain 300 times:
+
+| service level              | fleet/pattern | vehicles drawn | per tick | share of a 30 Hz budget |
+| -------------------------- | ------------- | -------------- | -------- | ----------------------- |
+| untimed (one vehicle each) | 1             | 285            | 0.056 ms | 0.2%                    |
+| every 10 min               | 8             | 2,280          | 0.115 ms | 0.3%                    |
+| every 5 min                | 15 (12 drawn) | 3,420          | 0.161 ms | 0.5%                    |
+
+An eightfold rise in vehicles costs about twice the time, because per-service
+schedule resolution — one call per service however many vehicles it runs —
+dominates at the low end. In absolute terms it is half a percent of the frame
+budget, so deriving headways from a feed is not what will make this slow.
+
+**What has NOT been measured.** Everything downstream of that: handing up to
+~3,400 features per tick to MapLibre, and painting them. That needs a real,
+focused browser — `__panBench` / `__zoomBench` with `__perf.vehicles` toggled.
+A headless pane parks `requestAnimationFrame` and composites only a frame or
+two per interaction, which is not enough to time a pan; that was confirmed by
+trying it, not assumed.
 
 ## Service levels from an imported feed
 
