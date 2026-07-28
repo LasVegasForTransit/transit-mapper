@@ -20,7 +20,7 @@
 
 import { getComponent, laneRefKey } from './components';
 import { haversineMeters, nearestInsertionPoint } from './geo';
-import { type Traversal, wayTraversal } from './profile';
+import { directionalLanes, type Traversal, wayTraversal } from './profile';
 import type { LngLat, Node, TransitSystem, Way } from './system';
 
 /** Where a route starts/ends: a way plus the raw-points insertion produced
@@ -192,7 +192,12 @@ function turnAllowed(
     if (!linked) return false;
   }
   const from = waysById.get(fromWayId);
-  const lanes = from ? from.profile.lanes : [];
+  // DIRECTIONAL lanes only — the ones that carry traffic, and the only ones a
+  // TurnRestriction is ever set on. Asking every lane means a sidewalk, which
+  // can never hold a restriction, answers "unrestricted" and vetoes the whole
+  // check: restricting every drive lane of a street would have no effect at
+  // all. Same set makeOneWay and defaultLaneFor steer.
+  const lanes = from ? directionalLanes(from.profile) : [];
   if (lanes.length === 0) return true;
   let anyRestricted = false;
   for (const lane of lanes) {

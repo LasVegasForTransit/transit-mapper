@@ -223,7 +223,8 @@ describe('turn restrictions at a junction', () => {
     const restrictions = Object.fromEntries(
       sys.ways
         .find((w) => w.id === 'southArm')!
-        .profile.lanes.map((l) => [`southArm:${l.id}`, { allowedTargets: ['northArm'] }]),
+        .profile.lanes.filter((l) => l.kindId === 'drive')
+        .map((l) => [`southArm:${l.id}`, { allowedTargets: ['northArm'] }]),
     );
     const restricted = routeThrough({ ...sys, turnRestrictions: restrictions })!;
     const free = routeThrough(sys)!;
@@ -242,16 +243,36 @@ describe('turn restrictions at a junction', () => {
 
   it('allows the turn when one lane still permits it', () => {
     const sys = crossroads();
-    const lanes = sys.ways.find((w) => w.id === 'southArm')!.profile.lanes;
-    // All but one lane forbid the turn — a right-turn-only pocket is the real
-    // shape of this, and refusing on the strength of the others would send the
-    // line the long way round a junction it is allowed to cross.
+    const drive = sys.ways
+      .find((w) => w.id === 'southArm')!
+      .profile.lanes.filter((l) => l.kindId === 'drive');
+    expect(drive.length).toBeGreaterThan(1);
+    // All but one traffic lane forbid the turn. A right-turn pocket is the
+    // real shape of this, and refusing on the strength of the others would
+    // send the line the long way round a junction it may cross.
     const restrictions = Object.fromEntries(
-      lanes.slice(1).map((l) => [`southArm:${l.id}`, { allowedTargets: ['northArm'] }]),
+      drive.slice(1).map((l) => [`southArm:${l.id}`, { allowedTargets: ['northArm'] }]),
     );
-    const res = routeThrough({ ...sys, turnRestrictions: restrictions });
-    expect(res).not.toBeNull();
-    expect(res!.spans.map((s) => s.wayId)).toContain('eastArm');
+    const res = routeThrough({ ...sys, turnRestrictions: restrictions })!;
+    // The DIRECT route, not the detour — asserting only that eastArm appears
+    // would pass either way, since the detour reaches it too.
+    expect(res.lengthM).toBeCloseTo(routeThrough(sys)!.lengthM, 6);
+  });
+
+  it('is not vetoed by a sidewalk, which can never hold a restriction', () => {
+    // Restricting the lanes a UI would actually offer — the ones that carry
+    // traffic. Asking every lane instead lets a sidewalk answer "unrestricted"
+    // and the restriction does nothing at all.
+    const sys = crossroads();
+    const drive = sys.ways
+      .find((w) => w.id === 'southArm')!
+      .profile.lanes.filter((l) => l.kindId === 'drive');
+    expect(drive.length).toBeGreaterThan(0);
+    const restrictions = Object.fromEntries(
+      drive.map((l) => [`southArm:${l.id}`, { allowedTargets: ['northArm'] }]),
+    );
+    const restricted = routeThrough({ ...sys, turnRestrictions: restrictions })!;
+    expect(restricted.lengthM).toBeGreaterThan(routeThrough(sys)!.lengthM);
   });
 
   it('treats a lane restricted to nothing as fully blocked', () => {
@@ -259,7 +280,8 @@ describe('turn restrictions at a junction', () => {
     const restrictions = Object.fromEntries(
       sys.ways
         .find((w) => w.id === 'southArm')!
-        .profile.lanes.map((l) => [`southArm:${l.id}`, { allowedTargets: [] }]),
+        .profile.lanes.filter((l) => l.kindId === 'drive')
+        .map((l) => [`southArm:${l.id}`, { allowedTargets: [] }]),
     );
     expect(routeThrough({ ...sys, turnRestrictions: restrictions })).toBeNull();
   });
