@@ -14,7 +14,7 @@
 // move to a Web Worker or run server-side later if the relaxation solver
 // ever needs to run on a system too large to iterate 60 times synchronously
 // on the main thread.
-import { metersFromOrigin, offsetMeters, pointAtT, primaryAnchor } from './geo';
+import { metersFromOrigin, offsetMeters, pointAtT, primaryAnchor, resolveWayPath } from './geo';
 import type { LngLat, TransitSystem, Way } from './system';
 
 const cache = new WeakMap<TransitSystem, TransitSystem>();
@@ -157,7 +157,11 @@ function buildDiagramSystem(system: TransitSystem): TransitSystem {
     if (!anchor) return st;
     const way = wayById.get(anchor.wayId);
     if (!way || way.points.length < 2) return st;
-    return { ...st, coord: pointAtT(way.points, anchor.t) };
+    // A station's t is a fraction of the way's RESOLVED path (that is what
+    // anchoring measured it against), and a filleted or curved way is longer
+    // than its control polyline — measuring against the raw points slid every
+    // station along its line in the schematic.
+    return { ...st, coord: pointAtT(resolveWayPath(way), anchor.t) };
   });
 
   return { ...system, ways: newWays, stations: newStations };
