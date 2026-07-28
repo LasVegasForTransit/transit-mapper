@@ -24,6 +24,7 @@ import {
 import { modeRender } from '@transitmapper/core/style/catalogStyle';
 import { liveCamera } from '../camera/liveCamera';
 import {
+  candidateWayIdsAlong,
   detectShapeRuns,
   haversineMeters,
   nearestInsertionPoint,
@@ -1124,9 +1125,18 @@ function formCrossingJunctions(system: TransitSystem, wayId: string): TransitSys
     const a = next.ways.find((w) => w.id === aId);
     if (!a || a.points.length < 2) continue;
 
+    // Only ways sharing a grid cell with this one can cross it. Without this,
+    // wayCrossings — a nested loop over every segment PAIR, with no bbox
+    // reject — ran against every way in the system, on every finishWay. At
+    // RTC scale (~120k points) drawing one line across a few streets was a
+    // multi-second freeze. The grid is the same one snapping already
+    // maintains, cached on the ways array, so this is a lookup rather than a
+    // second index.
+    const nearby = candidateWayIdsAlong(resolveWayPath(a), next.ways);
     let formed = false;
     for (const b of next.ways) {
       if (b.id === aId || b.grade !== a.grade || b.points.length < 2) continue;
+      if (!nearby.has(b.id)) continue;
       const crossings = wayCrossings(a, b);
       if (crossings.length === 0) continue;
       const { coord, aIndex } = crossings[0];
