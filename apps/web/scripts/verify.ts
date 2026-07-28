@@ -10773,6 +10773,68 @@ function buildGrid() {
   );
 }
 
+// --- a couplet meeting itself: two one-way paths brought back together ---
+// Dragging the two halves of a couplet into one street is a real edit, and the
+// question is what becomes of the line. Combining a boulevard's carriageways
+// is the sharp version: one of the two ways it rides stops existing.
+{
+  fresh();
+  store.getState().setDraftMode('bus');
+  store.getState().setSystem(
+    parseSystem({
+      version: 3,
+      ways: [
+        {
+          id: 'blvd',
+          typeId: 'road',
+          points: [
+            [-115.2, 36.1],
+            [-115.2, 36.13],
+          ],
+          geometry: 'straight',
+          grade: 'atGrade',
+        },
+      ],
+      services: [],
+      stations: [],
+    }),
+  );
+  const backId = store.getState().separateCarriageways('blvd')!;
+  const cSvc = store.getState().addServiceToWay('blvd')!;
+  const cPat = store.getState().system.services.find((sv) => sv.id === cSvc)!.patterns[0];
+  check(
+    'a couplet can run the two carriageways of one boulevard',
+    store.getState().attachReturnPath(cSvc, cPat.id, [{ wayId: backId, fromPoint: 1, toPoint: 0 }]),
+  );
+  const split = store.getState().system.services.find((sv) => sv.id === cSvc)!.patterns[0];
+  check('its two directions run the two carriageways', patternHasSplit(split));
+
+  store.getState().combineCarriageways(store.getState().system.namedWays[0].id);
+  const combined = store.getState().system.services.find((sv) => sv.id === cSvc);
+  check('combining the carriageways does not delete the line', !!combined);
+  const cp2 = combined!.patterns[0];
+  // removeWay PRUNES legs naming the way it drops, so before the rescue this
+  // silently deleted whichever direction rode the discarded carriageway — on a
+  // couplet, the whole return trip.
+  check(
+    'the direction that rode the discarded carriageway is rebound, not dropped',
+    patternRunLegs(cp2, 'inbound').length > 0,
+  );
+  check(
+    'both directions now run the one street that is left',
+    patternRunLegs(cp2, 'outbound').every((r) => r.leg.wayId === 'blvd') &&
+      patternRunLegs(cp2, 'inbound').every((r) => r.leg.wayId === 'blvd'),
+  );
+  check(
+    'a line running one street both ways is no longer a couplet',
+    !patternHasSplit(cp2) && cp2.sections.every((x) => x.kind === 'shared'),
+  );
+  check(
+    'combining the carriageways leaves nothing to report',
+    validateSystem(store.getState().system).length === 0,
+  );
+}
+
 // --- one-way couplets: a line whose two directions run different streets ---
 // The gesture is: draw a line, then draw its return path round the block. What
 // comes back has to be ONE line with two directions, not two lines, because it

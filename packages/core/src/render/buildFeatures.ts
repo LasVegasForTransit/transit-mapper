@@ -188,6 +188,21 @@ function oneDirectionalStretches(
   const seen = new Set<string>();
   for (const svc of services) {
     for (const pattern of svc.patterns) {
+      // Which stretches this pattern rides BOTH ways, whatever sections they
+      // sit in. An arrow means "one-way as far as this line is concerned", so
+      // a stretch the line also comes back along must not get one — and after
+      // a couplet's two streets are merged into one, the split section's two
+      // sides land on that one street and would otherwise draw opposing
+      // chevrons on it. Asked of the resolved runs rather than of the section
+      // kinds, so it holds however the sections got that way.
+      const ridden = new Map<string, number>();
+      for (const run of PATTERN_RUNS) {
+        for (const { leg } of patternRunLegs(pattern, run)) {
+          ridden.set(leg.wayId, (ridden.get(leg.wayId) ?? 0) | (run === 'outbound' ? 1 : 2));
+        }
+      }
+      const bothWays = (wayIdOn: string) => ridden.get(wayIdOn) === 3;
+      if (bothWays(wayId)) continue;
       for (const section of pattern.sections) {
         if (section.kind === 'shared') continue;
         const sides: { legs: PatternLeg[]; run: RunDirection }[] =

@@ -68,6 +68,7 @@ import {
   truncateLegs,
   mapSectionLegs,
   pruneSections,
+  normalizeSections,
 } from '@transitmapper/core/model/patternEdits';
 import { materializeRouteSpans } from '@transitmapper/core/model/routeLegs';
 import type { SelectionRef } from '@transitmapper/core/model/selectionActions';
@@ -1023,8 +1024,8 @@ function splitWay(
       patternLegs(p).some((l) => l.wayId === wayId)
         ? {
             ...p,
-            sections: mapSectionLegs(p.sections, (legs) =>
-              splitLegs(legs, wayId, newWayId, tSplit),
+            sections: normalizeSections(
+              mapSectionLegs(p.sections, (legs) => splitLegs(legs, wayId, newWayId, tSplit)),
             ),
           }
         : p,
@@ -1171,15 +1172,21 @@ function mergeWays(system: TransitSystem, keepId: string, otherId: string): Tran
     ...sv,
     patterns: sv.patterns.map((p) => ({
       ...p,
-      sections: mapSectionLegs(p.sections, (legs) =>
-        mergeLegs(legs, keepId, otherId, {
-          positionOf: (wayId, t) => {
-            const old = oldPaths.get(wayId);
-            if (!old || old.length < 2) return t;
-            return nearestOnPath(mergedPath, pointAtT(old, t))?.t ?? t;
-          },
-          reversed: (wayId) => wayId === otherId && bReversed,
-        }),
+      // normalizeSections, because merging a couplet's two one-way streets into
+      // one two-way street lands both directions on the same ground: the line
+      // still runs out and back, but it is no longer split, and left as a split
+      // the schematic draws one-way chevrons BOTH ways along one street.
+      sections: normalizeSections(
+        mapSectionLegs(p.sections, (legs) =>
+          mergeLegs(legs, keepId, otherId, {
+            positionOf: (wayId, t) => {
+              const old = oldPaths.get(wayId);
+              if (!old || old.length < 2) return t;
+              return nearestOnPath(mergedPath, pointAtT(old, t))?.t ?? t;
+            },
+            reversed: (wayId) => wayId === otherId && bReversed,
+          }),
+        ),
       ),
     })),
   }));
@@ -2665,7 +2672,40 @@ export function createEditorStore() {
           })
           .filter((n) => n.refs.length >= 2);
 
-        let system = removeWay({ ...s.system, stations, nodes }, other.id);
+        // Service legs need the same rescue as stations and nodes above, and
+        // used to be the one thing that did not get it: removeWay PRUNES legs
+        // naming the discarded carriageway, so combining a boulevard silently
+        // deleted whichever direction of a line rode that half. On a one-way
+        // couplet that is the entire return trip.
+        //
+        // mergeLegs already does the work — remap each extent onto the
+        // keeper's parameterization and flip the direction when the two halves
+        // ran opposite ways round — so this is the same remap it takes for two
+        // ways fused end to end, with the projection done against the keeper.
+        const otherPath = resolveWayPath(other);
+        const rebindRemap = {
+          positionOf: (wayId: string, t: number): number => {
+            if (wayId !== other.id || otherPath.length < 2) return t;
+            return nearestOnPath(keeperPath, pointAtT(otherPath, t))?.t ?? t;
+          },
+          reversed: (wayId: string): boolean => wayId === other.id && !sameDir,
+        };
+        const rebound = s.system.services.map((sv) => ({
+          ...sv,
+          patterns: sv.patterns.map((pt) => ({
+            ...pt,
+            // Then normalize: with both directions now on the keeper, a couplet
+            // over this boulevard is a line running one two-way street, and
+            // saying otherwise would draw one-way chevrons both ways along it.
+            sections: normalizeSections(
+              mapSectionLegs(pt.sections, (legs) =>
+                mergeLegs(legs, keeper.id, other.id, rebindRemap),
+              ),
+            ),
+          })),
+        }));
+
+        let system = removeWay({ ...s.system, stations, nodes, services: rebound }, other.id);
         system = {
           ...system,
           ways: system.ways.map((w) => (w.id === keeper.id ? { ...w, profile: combined } : w)),

@@ -47,6 +47,59 @@ export function mapSectionLegs(
   );
 }
 
+/**
+ * Collapse a `split` back to `shared` once its two sides have landed on the
+ * same ground.
+ *
+ * Infrastructure edits can do this without anyone deciding to: merge a
+ * couplet's two one-way streets into one two-way street and the line still
+ * runs out and back, but now over the same way. Left as a split it is a lie
+ * with visible consequences — the schematic draws one-way chevrons in BOTH
+ * directions along a street that carries both, and the inspector goes on
+ * offering to un-split a line that is no longer split.
+ *
+ * "Same ground" is the same set of ways covering overlapping stretches. The
+ * two sides run it in opposite directions, which is exactly what a shared
+ * stretch means, so the outbound legs survive as the shared ones.
+ */
+export function normalizeSections(sections: PatternSection[]): PatternSection[] {
+  return sections.map((section) => {
+    if (section.kind !== 'split') return section;
+    return sidesCoverSameGround(section.outbound, section.inbound)
+      ? { kind: 'shared', legs: section.outbound }
+      : section;
+  });
+}
+
+function sidesCoverSameGround(a: PatternLeg[], b: PatternLeg[]): boolean {
+  if (a.length === 0 || b.length === 0) return false;
+  const rangesByWay = (legs: PatternLeg[]) => {
+    const out = new Map<string, [number, number][]>();
+    for (const leg of legs) {
+      const list = out.get(leg.wayId) ?? [];
+      list.push(legRange(leg));
+      out.set(leg.wayId, list);
+    }
+    return out;
+  };
+  const ra = rangesByWay(a);
+  const rb = rangesByWay(b);
+  if (ra.size !== rb.size) return false;
+  for (const [wayId, aRanges] of ra) {
+    const bRanges = rb.get(wayId);
+    if (!bRanges) return false;
+    // Every stretch one side rides has to be ridden by the other. Overlap
+    // rather than equality: the two directions of one street are measured
+    // from opposite ends and come back off by float noise.
+    const covered = (from: [number, number][], by: [number, number][]) =>
+      from.every(([lo, hi]) =>
+        by.some(([lo2, hi2]) => Math.min(hi, hi2) - Math.max(lo, lo2) > -TOUCH_T),
+      );
+    if (!covered(aRanges, bRanges) || !covered(bRanges, aRanges)) return false;
+  }
+  return true;
+}
+
 /** Sections with every empty leg list dropped, and the whole thing dropped to
  *  [] when nothing survives. An edit that removes the last leg of a section
  *  leaves a section that describes no ground, which every reader would then
