@@ -38,6 +38,25 @@ export function VehicleKindsDialog({
   const [kinds, setKinds] = useState<VehicleKind[]>(vehicleKinds);
   const unitSystem = useUnitPreference();
 
+  // Conversion helpers for imperial/metric display
+  const METERS_TO_FEET = 3.28083989501312;
+  const KMH_TO_MPH = 0.62137119223733;
+
+  const displayWidth = (meters: number) =>
+    unitSystem === 'metric' ? meters : Math.round(meters * METERS_TO_FEET);
+  const toMetersFromDisplay = (display: number) =>
+    unitSystem === 'metric' ? display : display / METERS_TO_FEET;
+
+  const displayLength = (meters: number) =>
+    unitSystem === 'metric' ? meters : Math.round(meters * METERS_TO_FEET);
+  const toMetersFromDisplayLength = (display: number) =>
+    unitSystem === 'metric' ? display : display / METERS_TO_FEET;
+
+  const displaySpeed = (kmh: number) =>
+    unitSystem === 'metric' ? kmh : Math.round(kmh * KMH_TO_MPH);
+  const toKmhFromDisplay = (display: number) =>
+    unitSystem === 'metric' ? display : display / KMH_TO_MPH;
+
   const commit = (next: VehicleKind[]) => {
     setKinds(next);
     onSave(next);
@@ -118,11 +137,13 @@ export function VehicleKindsDialog({
                   min={0.5}
                   step={0.1}
                   className="freq-input"
-                  aria-label={`${k.label || 'Vehicle'} width in meters`}
-                  value={k.widthM}
+                  aria-label={`${k.label || 'Vehicle'} width in ${unitSystem === 'metric' ? 'meters' : 'feet'}`}
+                  value={displayWidth(k.widthM)}
                   disabled={readOnly}
                   onChange={(e) =>
-                    updateKind(k.id, { widthM: Math.max(0.5, Number(e.target.value) || 0.5) })
+                    updateKind(k.id, {
+                      widthM: Math.max(0.5, toMetersFromDisplay(Number(e.target.value)) || 0.5),
+                    })
                   }
                 />
                 <span className="freq-suffix">
@@ -136,10 +157,12 @@ export function VehicleKindsDialog({
                   step={0.5}
                   className="freq-input"
                   aria-label={`${k.label || 'Vehicle'} length in ${unitSystem === 'metric' ? 'meters' : 'feet'}`}
-                  value={k.lengthM}
+                  value={displayLength(k.lengthM)}
                   disabled={readOnly}
                   onChange={(e) =>
-                    updateKind(k.id, { lengthM: Math.max(1, Number(e.target.value) || 1) })
+                    updateKind(k.id, {
+                      lengthM: Math.max(1, toMetersFromDisplayLength(Number(e.target.value)) || 1),
+                    })
                   }
                 />
                 <span className="freq-suffix">
@@ -174,12 +197,14 @@ export function VehicleKindsDialog({
                   className="freq-input"
                   aria-label={`${k.label || 'Vehicle'} top speed in ${unitSystem === 'metric' ? 'km/h' : 'mph'}`}
                   placeholder="Not set"
-                  value={k.topSpeedKmh ?? ''}
+                  value={k.topSpeedKmh !== undefined ? displaySpeed(k.topSpeedKmh) : ''}
                   disabled={readOnly}
                   onChange={(e) =>
                     updateKind(k.id, {
                       topSpeedKmh:
-                        e.target.value === '' ? undefined : Math.max(0, Number(e.target.value)),
+                        e.target.value === ''
+                          ? undefined
+                          : Math.max(0, toKmhFromDisplay(Number(e.target.value))),
                     })
                   }
                 />

@@ -61,6 +61,9 @@ const ShortcutsDialog = lazy(() =>
 const SystemsDialog = lazy(() =>
   import('./ui/SystemsDialog').then((m) => ({ default: m.SystemsDialog })),
 );
+const SettingsDialog = lazy(() =>
+  import('./ui/SettingsDialog').then((m) => ({ default: m.SettingsDialog })),
+);
 const OnboardingDialog = lazy(() =>
   import('./ui/onboarding/OnboardingDialog').then((m) => ({ default: m.OnboardingDialog })),
 );
@@ -417,6 +420,11 @@ export function App() {
       {activeDialog === 'systems' && (
         <LazyDialog onFailure={dialogFailed}>
           <SystemsDialog onClose={closeDialog} onCorrupt={() => setNotice(corruptOpenNotice)} />
+        </LazyDialog>
+      )}
+      {activeDialog === 'settings' && (
+        <LazyDialog onFailure={dialogFailed}>
+          <SettingsDialog onClose={closeDialog} />
         </LazyDialog>
       )}
       {activeDialog === 'onboarding' && (

@@ -22,6 +22,9 @@ export interface UserPreferences {
   unitSystem: UnitSystem;
 }
 
+// Cached snapshot to prevent unnecessary re-renders from Object.is comparisons
+let cachedSnapshot: UserPreferences | null = null;
+
 function getPreferences(): UserPreferences {
   if (typeof window === 'undefined') {
     return { unitSystem: 'metric' };
@@ -32,9 +35,20 @@ function getPreferences(): UserPreferences {
   return { unitSystem };
 }
 
+function getCachedSnapshot(): UserPreferences {
+  const current = getPreferences();
+  // Only replace cached snapshot if the underlying value changed
+  if (!cachedSnapshot || cachedSnapshot.unitSystem !== current.unitSystem) {
+    cachedSnapshot = current;
+  }
+  return cachedSnapshot;
+}
+
 function setPreferences(prefs: Partial<UserPreferences>): void {
   if (prefs.unitSystem !== undefined) {
     localStorage.setItem(UNIT_SYSTEM_KEY, prefs.unitSystem);
+    // Invalidate cache so next getCachedSnapshot call creates a fresh object
+    cachedSnapshot = null;
   }
   listeners.forEach((listener) => listener());
 }
@@ -47,7 +61,7 @@ function subscribe(listener: Listener): () => void {
 }
 
 export function useUserPreferences(): UserPreferences {
-  return useSyncExternalStore(subscribe, getPreferences, getPreferences);
+  return useSyncExternalStore(subscribe, getCachedSnapshot, getCachedSnapshot);
 }
 
 export function useUnitPreference(): UnitSystem {
