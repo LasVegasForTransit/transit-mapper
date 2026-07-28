@@ -99,6 +99,12 @@ export interface GtfsFiles {
   frequencies?: string;
 }
 
+/** How close a second way has to pass a stop already placed for that stop to
+ *  count as riding it too. A platform pair either side of a street, or the two
+ *  faces of a transit centre — not a way that merely runs through the same
+ *  neighbourhood. */
+const SHARED_STOP_REACH_M = 150;
+
 /**
  * How far a candidate pair's facing terminals may sit apart, as a fraction of
  * the shorter shape's own length.
@@ -425,7 +431,21 @@ function piecesForRoutes(
     const way = ways.find((w) => w.id === wayId)!;
     const path = resolveWayPath(way);
     for (const { stopId } of [...stopSeq].sort((a, b) => a.seq - b.seq)) {
-      if (stationByStopId.has(stopId)) continue;
+      // A stop_id already seen on another shape is the SAME platform reached
+      // from a second way — a transit centre both halves of a couplet pull
+      // into, or an island between two tracks. It gains an anchor on this way
+      // rather than being skipped, which is what used to leave every line on
+      // the second way driving past a stop it plainly calls at.
+      const existing = stationByStopId.get(stopId);
+      if (existing) {
+        if (!existing.anchors.some((a) => a.wayId === wayId)) {
+          const on = nearestOnPath(path, existing.coord);
+          if (on && haversineMeters(on.coord, existing.coord) <= SHARED_STOP_REACH_M) {
+            existing.anchors.push({ wayId, t: on.t });
+          }
+        }
+        continue;
+      }
       const stop = index.stopById.get(stopId);
       if (!stop) continue;
       const lat = Number(stop.stop_lat);
@@ -437,7 +457,7 @@ function piecesForRoutes(
         id: shortId(),
         name: stop.stop_name || undefined,
         coord: nearest ? nearest.coord : coord,
-        anchor: nearest ? { wayId, t: nearest.t } : undefined,
+        anchors: nearest ? [{ wayId, t: nearest.t }] : [],
       };
       stationByStopId.set(stopId, station);
       newStations.push(station);

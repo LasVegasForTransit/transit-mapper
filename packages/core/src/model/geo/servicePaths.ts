@@ -1,4 +1,6 @@
 import type {
+  Station,
+  StationAnchor,
   LegDirection,
   LngLat,
   Pattern,
@@ -128,6 +130,17 @@ export function wrongWayLegs(
     if (traversal !== (forward ? 'forward' : 'backward')) out.push(leg);
   }
   return out;
+}
+
+/** The way a bare "which way is this station on" question means: the first
+ *  anchor, which is also the one whose alignment moves the station. */
+export function primaryAnchor(station: Station): StationAnchor | undefined {
+  return station.anchors[0];
+}
+
+/** This station's anchor on a specific way, if it rides that way at all. */
+export function anchorOnWayId(station: Station, wayId: string): StationAnchor | undefined {
+  return station.anchors.find((a) => a.wayId === wayId);
 }
 
 /** The ways a pattern runs over. Legs carry more than an id now, and most

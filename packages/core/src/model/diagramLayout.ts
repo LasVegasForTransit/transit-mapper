@@ -14,7 +14,7 @@
 // move to a Web Worker or run server-side later if the relaxation solver
 // ever needs to run on a system too large to iterate 60 times synchronously
 // on the main thread.
-import { metersFromOrigin, offsetMeters, pointAtT } from './geo';
+import { metersFromOrigin, offsetMeters, pointAtT, primaryAnchor } from './geo';
 import type { LngLat, TransitSystem, Way } from './system';
 
 const cache = new WeakMap<TransitSystem, TransitSystem>();
@@ -151,10 +151,13 @@ function buildDiagramSystem(system: TransitSystem): TransitSystem {
   const wayById = new Map(newWays.map((w) => [w.id, w]));
 
   const newStations = system.stations.map((st) => {
-    if (!st.anchor) return st;
-    const way = wayById.get(st.anchor.wayId);
+    // The FIRST anchor: a station on two ways is moved by the alignment it
+    // was primarily placed on, not by whichever happens to be iterated first.
+    const anchor = primaryAnchor(st);
+    if (!anchor) return st;
+    const way = wayById.get(anchor.wayId);
     if (!way || way.points.length < 2) return st;
-    return { ...st, coord: pointAtT(way.points, st.anchor.t) };
+    return { ...st, coord: pointAtT(way.points, anchor.t) };
   });
 
   return { ...system, ways: newWays, stations: newStations };

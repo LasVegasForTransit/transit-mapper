@@ -11,6 +11,10 @@ import { describe, expect, it } from 'vitest';
 import { makeOneWay } from './profile';
 import { anchorOnWay, routeBetween } from './routeGraph';
 import { createEmptySystem } from './serialize';
+import { preferredLaneKinds, serviceLaneOnWay } from './geo/serviceLane';
+import { oneSection, wholeLeg, wayById } from './geo';
+import { defaultLaneFor } from './profile';
+import type { Pattern } from './system';
 import { aRoad } from '../testing/fixtures';
 import type { LngLat, Node, TransitSystem, Way } from './system';
 
@@ -304,5 +308,56 @@ describe('turn restrictions at a junction', () => {
     // Connectors are derived by heuristic when unset, and enforcing our own
     // guess would refuse turns nobody ever forbade.
     expect(routeThrough(crossroads({}, undefined))).not.toBeNull();
+  });
+});
+
+describe('the lane a service is put in at a restricted junction', () => {
+  // Routing refuses a turn a lane cannot make; drawing the vehicle in that
+  // lane anyway would show the line doing exactly what the router just ruled
+  // out. The lane choice honours the same records.
+  const C: LngLat = [-115.2, 36.12];
+  const S: LngLat = [-115.2, 36.1];
+  const E: LngLat = [-115.18, 36.12];
+
+  const southArm = aRoad('southArm', [S, C]);
+  const eastArm = aRoad('eastArm', [C, E]);
+  const drive = southArm.profile.lanes.filter((l) => l.kindId === 'drive');
+  const forwardDrive = drive.filter((l) => l.direction === 'forward');
+
+  const pattern: Pattern = {
+    id: 'p',
+    sections: oneSection([wholeLeg('southArm'), wholeLeg('eastArm')]),
+  };
+  const ways = wayById([southArm, eastArm]);
+
+  it('picks its usual lane when nothing restricts the turn', () => {
+    const lane = serviceLaneOnWay(pattern, 0, ways, 'bus');
+    expect(lane).toBe(defaultLaneFor(southArm.profile, 'forward', preferredLaneKinds('bus')));
+  });
+
+  it('avoids a lane that may not make the turn it is about to make', () => {
+    expect(forwardDrive.length).toBeGreaterThan(1);
+    // The curb lane — the one it would otherwise take — may only continue
+    // straight on, so the line has to be drawn in another.
+    const usual = defaultLaneFor(southArm.profile, 'forward', preferredLaneKinds('bus'))!;
+    const restrictions = { [`southArm:${usual}`]: { allowedTargets: ['northArm'] } };
+    const lane = serviceLaneOnWay(pattern, 0, ways, 'bus', undefined, {
+      nextWayId: 'eastArm',
+      turnRestrictions: restrictions,
+    });
+    expect(lane).not.toBe(usual);
+    expect(lane).not.toBeNull();
+  });
+
+  it('still puts the line somewhere when no lane may make the turn', () => {
+    // A line already drawn through the junction has to be drawn in some lane.
+    const restrictions = Object.fromEntries(
+      southArm.profile.lanes.map((l) => [`southArm:${l.id}`, { allowedTargets: [] }]),
+    );
+    const lane = serviceLaneOnWay(pattern, 0, ways, 'bus', undefined, {
+      nextWayId: 'eastArm',
+      turnRestrictions: restrictions,
+    });
+    expect(lane).toBe(defaultLaneFor(southArm.profile, 'forward', preferredLaneKinds('bus')));
   });
 });

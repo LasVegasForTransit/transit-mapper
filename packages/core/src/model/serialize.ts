@@ -19,6 +19,7 @@ import {
   type LegDirection,
   type PatternSection,
   type RunDirection,
+  type StationAnchor,
   type LegExtent,
   type LegLane,
   type PatternLeg,
@@ -35,7 +36,7 @@ import {
 
 export function createEmptySystem(now = Date.now()): TransitSystem {
   return {
-    version: 13, // v13 lets a pattern skip a stop in one direction (see system/service.ts)
+    version: 14, // v14 lets a station ride more than one way (see system/station.ts)
     id: shortId(),
     name: 'Untitled system',
     viewport: { ...DEFAULT_VIEWPORT },
@@ -480,6 +481,22 @@ function parseLegLane(r: Record<string, unknown>): LegLane {
 /** Per-direction skipped stops (v13+). Station ids are validated against the
  *  document later — a skip naming a station that no longer exists is the one
  *  way this can go stale, and it is dropped in finish(). */
+/** v14 stores every way a station rides; v13 and earlier stored at most one.
+ *  A lone `anchor` becomes a one-element list, which is what every station in
+ *  every older document was. */
+function parseAnchors(raw: unknown, legacy: StationAnchor | undefined): StationAnchor[] {
+  if (Array.isArray(raw)) {
+    const out: StationAnchor[] = [];
+    for (const entry of raw) {
+      const r = entry as Record<string, unknown>;
+      const t = normalizedT(r?.t);
+      if (typeof r?.wayId === 'string' && t !== undefined) out.push({ wayId: r.wayId, t });
+    }
+    if (out.length > 0) return out;
+  }
+  return legacy ? [legacy] : [];
+}
+
 function parseSkippedStops(raw: unknown): Partial<Record<RunDirection, string[]>> | undefined {
   const r = raw as Record<string, unknown> | undefined;
   if (!r || typeof r !== 'object') return undefined;
@@ -757,7 +774,7 @@ function parseStation(s: unknown): Station {
     id: r.id,
     name: typeof r.name === 'string' ? r.name : undefined,
     coord: stationCoord,
-    ...(anchor ? { anchor } : {}),
+    anchors: parseAnchors(r.anchors, anchor),
     ...(footprint ? { footprint } : {}),
     ...(platforms ? { platforms } : {}),
     ...(typeof r.dwellSeconds === 'number' ? { dwellSeconds: r.dwellSeconds } : {}),
@@ -935,7 +952,7 @@ function finish(
 
   const now = Date.now();
   return {
-    version: 13,
+    version: 14,
     id: typeof o.id === 'string' ? o.id : shortId(),
     name: typeof o.name === 'string' ? o.name : 'Untitled system',
     description: typeof o.description === 'string' ? o.description : undefined,

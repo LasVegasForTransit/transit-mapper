@@ -169,10 +169,27 @@ cover different ground", which a turnaround satisfies — right for the geometry
 simulation and validation, wrong for telling a person their line "runs two
 one-way paths". `patternHasCouplet` is the narrow question the UI asks.
 
+**A platform on more than one way.** `Station.anchor` became
+`Station.anchors: StationAnchor[]`, and the 150 m proximity rule that stood in
+for it is gone — a station now records the ways it rides instead of the stop
+derivation guessing from how close two streets happen to be. GTFS import gives
+a stop seen on a second shape a second anchor rather than skipping it, which is
+what a feed reusing one stop_id for both directions produces on every import.
+Deleting one way keeps a station the other still serves, dropping only that
+anchor.
+
+That re-exposed the spread trap a third time: `{ ...station, anchor: x }`
+compiles against a Station with no `anchor` field and leaves the real list
+holding a stale entry. Every re-anchor now goes through one helper so it cannot
+be written by hand.
+
+**Turn restrictions in lane choice.** Routing refused a turn a lane could not
+make while the renderer still drew the vehicle in that lane — the line doing
+exactly what the router had ruled out. `defaultLaneFor` takes a gate on which
+lanes may be chosen, and abandons it when no lane qualifies: a line already
+drawn through a junction has to be put somewhere, and the wrong lane beats no
+lane.
+
 ## What is still open
 
-`Station.anchors: StationAnchor[]` remains the real answer for a platform that
-genuinely belongs to two ways; the 150 m proximity rule above stands in for it.
-
-Turn restrictions are honoured for ROUTING but not for the lane a service ends
-up pinned to, so a route may take a turn its eventual lane could not.
+Nothing from this work.

@@ -21,12 +21,11 @@
 
 import {
   cumulativeLengths,
-  haversineMeters,
-  patternHasSplit,
   nearestOnPath,
   patternCoversWayAt,
   patternRunLegs,
   patternRunPath,
+  anchorOnWayId,
 } from '../model/geo';
 import type {
   LngLat,
@@ -95,10 +94,14 @@ function stationsByWay(stations: Station[]): Map<string, Station[]> {
   if (index) return index;
   index = new Map();
   for (const st of stations) {
-    if (!st.anchor) continue;
-    const arr = index.get(st.anchor.wayId);
-    if (arr) arr.push(st);
-    else index.set(st.anchor.wayId, [st]);
+    // Indexed under EVERY way it rides. A platform shared between two ways is
+    // a stop on the lines using either — which is what the proximity rule
+    // below used to approximate, and now does not have to.
+    for (const anchor of st.anchors) {
+      const arr = index.get(anchor.wayId);
+      if (arr) arr.push(st);
+      else index.set(anchor.wayId, [st]);
+    }
   }
   stationsByWayCache.set(stations, index);
   return index;
@@ -130,15 +133,6 @@ export interface PatternStop {
  * needs no geometry (`anchor.t` and a leg's range are both way-relative), so
  * the caller's already-resolved `path` stays the only projection here.
  */
-/** How close a station anchored to a line's OTHER direction has to sit for
- *  this direction to count as calling there too.
- *
- *  A platform pair either side of one street, or a transit center both halves
- *  of a couplet pull into — not a stop a block away on the return street,
- *  which is a different stop that this direction genuinely drives past. Wide
- *  enough for a divided boulevard, far short of a city block. */
-const SHARED_PLATFORM_REACH_M = 150;
-
 export function patternStops(
   stations: Station[],
   pattern: Pattern,
@@ -161,7 +155,8 @@ export function patternStops(
   for (const wayId of ridden) {
     for (const st of byWay.get(wayId) ?? []) {
       if (skipped.has(st.id)) continue;
-      if (st.anchor && !patternCoversWayAt(pattern, wayId, st.anchor.t)) continue;
+      const onThisWay = anchorOnWayId(st, wayId);
+      if (onThisWay && !patternCoversWayAt(pattern, wayId, onThisWay.t)) continue;
       const near = nearestOnPath(path, st.coord);
       if (!near) continue;
       called.add(st.id);
@@ -173,31 +168,6 @@ export function patternStops(
     }
   }
 
-  // One platform, both directions. A transit center or a rail station is a
-  // single record anchored to ONE of the two streets a couplet runs, so the
-  // other direction rides straight past a stop it plainly calls at — and a
-  // feed that reuses one stop_id for both directions produces exactly this on
-  // import. A station on the other direction's way that this direction passes
-  // within touching distance is one this direction calls at too.
-  //
-  // Only for a pattern whose directions are different ground: a plain line
-  // rides the same ways both ways, so there is nothing here it has not already
-  // found, and it should not pay for the extra projections.
-  if (patternHasSplit(pattern)) {
-    for (const { leg } of patternRunLegs(pattern, run === 'outbound' ? 'inbound' : 'outbound')) {
-      for (const st of byWay.get(leg.wayId) ?? []) {
-        if (called.has(st.id) || skipped.has(st.id)) continue;
-        const near = nearestOnPath(path, st.coord);
-        if (!near || haversineMeters(near.coord, st.coord) > SHARED_PLATFORM_REACH_M) continue;
-        called.add(st.id);
-        stops.push({
-          station: st,
-          distMeters: near.t * totalMeters,
-          dwellMs: (st.dwellSeconds ?? DEFAULT_DWELL_SECONDS) * 1000,
-        });
-      }
-    }
-  }
   return stops.sort((a, b) => a.distMeters - b.distMeters);
 }
 

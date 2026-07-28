@@ -95,14 +95,14 @@ describe('what a line amounts to', () => {
 });
 
 describe('a platform both directions of a couplet use', () => {
-  // A transit center, or a rail platform: ONE station record, anchored to one
-  // of the two streets. A feed that reuses a stop_id for both directions
-  // imports exactly this, and the return trip used to drive straight past it.
+  // A transit centre, or an island platform: ONE station record riding BOTH
+  // ways. That is what `Station.anchors` is for — a single anchor could only
+  // name one of them, and every line on the other drove past a stop it plainly
+  // calls at.
   const A = aRoad('outward', [
     [-115.2, 36.1],
     [-115.2, 36.12],
   ]);
-  // ~90 m east — inside touching distance of the outward street.
   const B = aRoad('return', [
     [-115.199, 36.12],
     [-115.199, 36.1],
@@ -111,7 +111,17 @@ describe('a platform both directions of a couplet use', () => {
     id: 'cp',
     sections: [{ kind: 'split', outbound: [wholeLeg('outward')], inbound: [wholeLeg('return')] }],
   };
-  const shared = aStation('centre', [-115.2, 36.11], { wayId: 'outward', t: 0.5 });
+  const shared = aStation(
+    'centre',
+    [-115.2, 36.11],
+    { wayId: 'outward', t: 0.5 },
+    {
+      anchors: [
+        { wayId: 'outward', t: 0.5 },
+        { wayId: 'return', t: 0.5 },
+      ],
+    },
+  );
   const ways = [A, B];
 
   const idsOn = (run: 'outbound' | 'inbound') =>
@@ -123,11 +133,8 @@ describe('a platform both directions of a couplet use', () => {
       run,
     ).map((s) => s.station.id);
 
-  it('is called at by the direction it is anchored to', () => {
+  it('is called at by both directions', () => {
     expect(idsOn('outbound')).toEqual(['centre']);
-  });
-
-  it('is called at by the other direction too', () => {
     expect(idsOn('inbound')).toEqual(['centre']);
   });
 
@@ -137,31 +144,41 @@ describe('a platform both directions of a couplet use', () => {
   });
 });
 
-describe('a stop on the far half of a wide couplet', () => {
-  // Same shape, but the two streets are ~900 m apart. A stop on one is a
-  // different stop from anything on the other, and claiming otherwise would
-  // put a dwell where no vehicle stops.
+describe('a stop anchored to only one half of a couplet', () => {
+  // No proximity guessing: a station records the ways it rides, and a
+  // direction that does not ride one of them drives past. This used to be
+  // inferred from how close the two streets happened to be.
   const A = aRoad('outward', [
     [-115.2, 36.1],
     [-115.2, 36.12],
   ]);
   const B = aRoad('return', [
-    [-115.19, 36.12],
-    [-115.19, 36.1],
+    [-115.199, 36.12],
+    [-115.199, 36.1],
   ]);
   const couplet: Pattern = {
-    id: 'wide',
+    id: 'one-sided',
     sections: [{ kind: 'split', outbound: [wholeLeg('outward')], inbound: [wholeLeg('return')] }],
   };
-  const onReturn = aStation('east', [-115.19, 36.11], { wayId: 'return', t: 0.5 });
+  const onReturnOnly = aStation('east', [-115.199, 36.11], { wayId: 'return', t: 0.5 });
   const ways = [A, B];
 
-  it('is not claimed by the direction that never goes near it', () => {
+  it('is called at by the direction that rides its way', () => {
+    const path = patternRunPath(ways, couplet, 'inbound');
+    expect(
+      patternStops([onReturnOnly], couplet, path, pathLengthMeters(path), 'inbound').map(
+        (s) => s.station.id,
+      ),
+    ).toEqual(['east']);
+  });
+
+  it('is not claimed by the direction that does not', () => {
     const path = patternRunPath(ways, couplet, 'outbound');
-    const ids = patternStops([onReturn], couplet, path, pathLengthMeters(path), 'outbound').map(
-      (s) => s.station.id,
-    );
-    expect(ids).toEqual([]);
+    expect(
+      patternStops([onReturnOnly], couplet, path, pathLengthMeters(path), 'outbound').map(
+        (s) => s.station.id,
+      ),
+    ).toEqual([]);
   });
 });
 

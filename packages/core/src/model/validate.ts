@@ -203,7 +203,7 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
 
   const wayIds = new Set(system.ways.map((w) => w.id));
   for (const station of system.stations) {
-    if (station.anchor && !wayIds.has(station.anchor.wayId)) {
+    if (station.anchors.some((a) => !wayIds.has(a.wayId))) {
       issues.push({
         id: `orphan-station-${station.id}`,
         message: `"${station.name || 'A station'}" is anchored to a way that no longer exists.`,

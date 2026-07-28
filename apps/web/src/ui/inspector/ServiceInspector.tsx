@@ -9,6 +9,7 @@ import {
   patternRunPath,
   patternHasCouplet,
   patternHasSplit,
+  primaryAnchor,
 } from '@transitmapper/core/model/geo';
 import type {
   RunDirection,
@@ -751,7 +752,13 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                             className="ghost-btn stop-action"
                             title={`Cut this line back so it starts at ${st.name || 'this stop'}`}
                             onClick={() =>
-                              trimPatternTo(id, pattern.id, st.anchor!.wayId, st.anchor!.t, 'start')
+                              trimPatternTo(
+                                id,
+                                pattern.id,
+                                primaryAnchor(st)!.wayId,
+                                primaryAnchor(st)!.t,
+                                'start',
+                              )
                             }
                           >
                             Start here
@@ -763,7 +770,13 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                             className="ghost-btn stop-action"
                             title={`Cut this line back so it ends at ${st.name || 'this stop'}`}
                             onClick={() =>
-                              trimPatternTo(id, pattern.id, st.anchor!.wayId, st.anchor!.t, 'end')
+                              trimPatternTo(
+                                id,
+                                pattern.id,
+                                primaryAnchor(st)!.wayId,
+                                primaryAnchor(st)!.t,
+                                'end',
+                              )
                             }
                           >
                             End here
@@ -775,7 +788,12 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                             className="ghost-btn stop-action"
                             title={`Cut this line in two here — both halves keep running on the same infrastructure`}
                             onClick={() =>
-                              splitServiceAt(id, pattern.id, st.anchor!.wayId, st.anchor!.t)
+                              splitServiceAt(
+                                id,
+                                pattern.id,
+                                primaryAnchor(st)!.wayId,
+                                primaryAnchor(st)!.t,
+                              )
                             }
                           >
                             Split

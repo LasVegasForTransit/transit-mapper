@@ -158,11 +158,19 @@ export function defaultLaneFor(
   profile: CrossSection,
   direction: 'forward' | 'backward',
   preferKindIds: readonly string[] = [],
+  /** Optional gate on which lanes may be chosen — used to keep a service out
+   *  of a lane that cannot make the turn it is about to make. Applied BEFORE
+   *  the preference and curb rules, and abandoned entirely when it would leave
+   *  no candidate at all: a line already drawn through a junction has to be
+   *  put in some lane, and the wrong lane beats no lane. */
+  permits?: (laneId: string) => boolean,
 ): string | null {
   const matches = (d: LaneDirection): boolean => d === direction || d === 'both';
   const curb = (lanes: LaneSpec[]): LaneSpec | undefined =>
     lanes.length === 0 ? undefined : direction === 'forward' ? lanes[lanes.length - 1] : lanes[0];
-  const inDirection = directionalLanes(profile).filter((l) => matches(l.direction));
+  const allInDirection = directionalLanes(profile).filter((l) => matches(l.direction));
+  const permitted = permits ? allInDirection.filter((l) => permits(l.id)) : allInDirection;
+  const inDirection = permitted.length > 0 ? permitted : allInDirection;
   // A preferred kind (a dedicated bus lane, the mode's track) wins, in order.
   for (const kindId of preferKindIds) {
     const hit = curb(inDirection.filter((l) => l.kindId === kindId));
