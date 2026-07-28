@@ -242,17 +242,19 @@ about four updates a second.
 
 ## Where the code is
 
-|                                      |                                                                                                           |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `packages/core/src/sim/clock.ts`     | the speed ladder, time-of-day and weekday math, span math. Pure.                                          |
-| `packages/core/src/sim/fleet.ts`     | fleet size, cycle time, layover, and where run _i_ is. Pure.                                              |
-| `packages/core/src/sim/frequency.ts` | which services call at a stop, and their combined frequency. Pure.                                        |
-| `packages/core/src/sim/timetable.ts` | travel and dwell along one pattern. Pure.                                                                 |
-| `apps/web/src/sim/simClock.ts`       | the `SimClock` instance: the mutable number and its subscribers.                                          |
-| `apps/web/src/sim/vehicles.ts`       | the 30 Hz animation host — advances the clock, asks core where everything is, pushes GeoJSON to MapLibre. |
-| `apps/web/src/sim/devHandle.ts`      | `window.__sim`, a development-only handle for driving the clock by hand.                                  |
-| `apps/web/src/ui/SimProvider.tsx`    | speed and paused state, and ownership of the clock instance.                                              |
-| `apps/web/src/ui/SimControls.tsx`    | the transport controls, beside the view switch.                                                           |
+|                                             |                                                                                                           |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `packages/core/src/sim/clock.ts`            | the speed ladder, time-of-day and weekday math, span math. Pure.                                          |
+| `packages/core/src/sim/fleet.ts`            | fleet size, cycle time, layover, and where run _i_ is. Pure.                                              |
+| `packages/core/src/sim/frequency.ts`        | which services call at a stop, and their combined frequency. Pure.                                        |
+| `packages/core/src/sim/timetable.ts`        | travel and dwell along one pattern. Pure.                                                                 |
+| `packages/core/src/sim/serviceStats.ts`     | the one measurement of a line: path, stops, timetable, plan. Pure.                                        |
+| `packages/core/src/geometry/vehicleLane.ts` | the lane-accurate polyline one leg of a pattern rides. Pure.                                              |
+| `apps/web/src/sim/simClock.ts`              | the `SimClock` instance: the mutable number and its subscribers.                                          |
+| `apps/web/src/sim/vehicles.ts`              | the 30 Hz animation host — advances the clock, asks core where everything is, pushes GeoJSON to MapLibre. |
+| `apps/web/src/sim/devHandle.ts`             | `window.__sim`, a development-only handle for driving the clock by hand.                                  |
+| `apps/web/src/ui/SimProvider.tsx`           | speed and paused state, and ownership of the clock instance.                                              |
+| `apps/web/src/ui/SimControls.tsx`           | the transport controls, beside the view switch.                                                           |
 
 The line between the last two groups is the one that matters: `packages/core`
 decides _what the answer is_ and the app decides _when to ask_. That is why the

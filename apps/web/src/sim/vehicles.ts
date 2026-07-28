@@ -4,7 +4,6 @@ import type { EditorStore } from '../editor/store';
 import {
   bearingAtT,
   cumulativeLengths,
-  patternPath,
   pointAtDistance,
   rotatedRectPolygon,
 } from '@transitmapper/core/model/geo';
@@ -23,12 +22,12 @@ import { vehiclesDisabledForPerf } from '../perf';
 import type { SimClock } from './simClock';
 // Pure motion kernel (framework-free, WASM-portable) — this module is its rAF/
 // MapLibre host. See packages/core/src/sim/timetable.ts.
-import { buildTimetable, type Timetable } from '@transitmapper/core/sim/timetable';
-// Stop-finding and vehicle resolution are shared with the Service inspector,
-// so the numbers a planner reads and the ones the map runs can't drift apart.
-// (The lane-aware Infrastructure path means this file still builds its own
-// timetable rather than calling patternStats, which measures the centerline.)
-import { dwellStopsForPattern, effectiveVehicleKind } from '@transitmapper/core/sim/serviceStats';
+import type { Timetable } from '@transitmapper/core/sim/timetable';
+// Measurement comes from core/sim's patternStats — the same call the Service
+// inspector makes — so the numbers a planner reads and the ones the map runs
+// are the same object, not two that happen to agree. Lane geometry is used
+// here for drawing only; see the rule at the top of serviceStats.ts.
+import { effectiveVehicleKind, patternStats } from '@transitmapper/core/sim/serviceStats';
 import { planService, runStateAt } from '@transitmapper/core/sim/fleet';
 import {
   activeSchedule,
@@ -210,36 +209,41 @@ function resolvePatternGeometry(
     cached.forModeId === modeId
   )
     return cached;
-  const path =
-    modeId !== undefined
-      ? patternLanePath(system.ways, pattern, modeId, 'outbound')
-      : patternPath(system.ways, pattern);
-  if (path.length < 2) return null;
-  const outbound = legFrom(path);
-  const meters = outbound.meters;
-  if (meters === 0) return null;
+  // The measurement — path, stops, timetable — comes from the same call the
+  // Service inspector makes, so what a planner reads and what the map runs are
+  // one object rather than two that agree. Lane geometry below is for DRAWING
+  // only: it never measures time.
+  const stats = patternStats(system.ways, system.stations, pattern, speedMps);
+  if (!stats) return null;
+  const centerline: LegGeometry = {
+    path: stats.path,
+    cumLengths: stats.cumLengths,
+    meters: stats.meters,
+  };
+  const meters = stats.meters;
+  const outPath =
+    modeId !== undefined ? patternLanePath(system.ways, pattern, modeId, 'outbound') : null;
+  const outbound = outPath && outPath.length >= 2 ? legFrom(outPath) : centerline;
   // Infrastructure view's return leg is a genuinely different polyline — the
   // lane on the other side of the street — so it is resolved, not mirrored.
   const backPath =
     modeId !== undefined ? patternLanePath(system.ways, pattern, modeId, 'inbound') : null;
-  const inbound = backPath && backPath.length >= 2 ? legFrom(backPath) : reversedLeg(outbound);
+  const inbound = backPath && backPath.length >= 2 ? legFrom(backPath) : reversedLeg(centerline);
   let minLng = Infinity,
     minLat = Infinity,
     maxLng = -Infinity,
     maxLat = -Infinity;
-  for (const [lng, lat] of path) {
+  for (const [lng, lat] of stats.path) {
     if (lng < minLng) minLng = lng;
     if (lng > maxLng) maxLng = lng;
     if (lat < minLat) minLat = lat;
     if (lat > maxLat) maxLat = lat;
   }
-  const stops = dwellStopsForPattern(system.stations, pattern, path, meters);
-  const timetable = buildTimetable(meters, stops, speedMps);
   const geometry: CachedPatternGeometry = {
     outbound,
     inbound,
     meters,
-    timetable,
+    timetable: stats.timetable,
     bbox: [minLng, minLat, maxLng, maxLat],
     forWays: system.ways,
     forStations: system.stations,

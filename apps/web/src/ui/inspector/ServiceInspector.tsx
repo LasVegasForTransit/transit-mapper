@@ -1,13 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { useEditor } from '../../editor/EditorProvider';
 import { MODE_ORDER, MODES, modesForWayType } from '@transitmapper/core/model/catalog';
-import {
-  formatKm,
-  pathLengthMeters,
-  patternPath,
-  patternSegments,
-  wayById,
-} from '@transitmapper/core/model/geo';
+import { formatKm, pathLengthMeters, patternPath } from '@transitmapper/core/model/geo';
 import type {
   Pattern,
   ScheduleDayScope,
@@ -21,7 +15,7 @@ import {
   formatSimClock,
   minutesOfDay,
 } from '@transitmapper/core/sim/clock';
-import { serviceStats } from '@transitmapper/core/sim/serviceStats';
+import { patternStops, serviceStats } from '@transitmapper/core/sim/serviceStats';
 import { ColorField } from '../ColorField';
 import { InspectorTabs, type InspectorTab } from '../InspectorTabs';
 import { Panel } from '../Panel';
@@ -77,30 +71,12 @@ function formatSpan(start: string, end: string): string {
   return `${start}–${end}`;
 }
 
-// The rider's mental model of a line — "calls at: Downtown, Arts District,
-// Sahara, Airport" — has nowhere else to live (LinesPanel shows raw way
-// segments, not ride order). Ordered by each station's position along this
-// ONE pattern's ways, in ride order then by arc-length within a way — and a
-// way the pattern travels BACKWARD lists its stops in descending `anchor.t`,
-// since that field is way-relative, not ride-relative. A branch pattern only
-// lists stops on its own ways, not a shared trunk's (reconstructing "which
-// trunk stops feed this branch" needs graph traversal through junctions, out
-// of scope for this derived display).
-function orderedStopsForPattern(ways: Way[], stations: Station[], pattern: Pattern): Station[] {
-  const segments = patternSegments(wayById(ways), pattern);
-  const rideOrder = new Map(segments.map((s, i) => [s.way.id, { i, forward: s.forward }]));
-  return stations
-    .filter(
-      (st): st is Station & { anchor: NonNullable<Station['anchor']> } =>
-        !!st.anchor && rideOrder.has(st.anchor.wayId),
-    )
-    .slice()
-    .sort((a, b) => {
-      const wa = rideOrder.get(a.anchor.wayId)!;
-      const wb = rideOrder.get(b.anchor.wayId)!;
-      if (wa.i !== wb.i) return wa.i - wb.i;
-      return wa.forward ? a.anchor.t - b.anchor.t : b.anchor.t - a.anchor.t;
-    });
+/** One pattern's stops, in ride order. Resolves the pattern's path to project
+ *  against — cheap here, since only the selected service is ever inspected. */
+function stopsOnPattern(ways: Way[], stations: Station[], pattern: Pattern): Station[] {
+  const path = patternPath(ways, pattern);
+  if (path.length < 2) return [];
+  return patternStops(stations, pattern, path, pathLengthMeters(path)).map((s) => s.station);
 }
 
 export interface ServiceInspectorProps {
@@ -176,7 +152,15 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   );
   const patternStops = service.patterns.map((p) => ({
     pattern: p,
-    stops: orderedStopsForPattern(ways, stations, p),
+    // Ride order from core's patternStops — the same derivation the simulation
+    // dwells on, so the panel's "calls at" list and the stops a vehicle
+    // actually makes cannot disagree. This used to be a second implementation
+    // here, and it disagreed about extents: it filtered on way id alone, so a
+    // station past where the line terminates stayed in the list. A branch
+    // lists only stops on its own ways; reconstructing "which trunk stops feed
+    // this branch" needs graph traversal through junctions, out of scope for
+    // this display.
+    stops: stopsOnPattern(ways, stations, p),
   }));
   const totalStops = new Set(patternStops.flatMap(({ stops }) => stops.map((st) => st.id))).size;
   const isAddingBranch = addingPatternForServiceId === id;
@@ -770,7 +754,7 @@ function ServiceLoad({ service }: ServiceLoadProps) {
     );
 
   const roundTrip = formatMinutes(stats.longestRoundTripMs / 60_000);
-  const stops = stats.patterns.reduce((most, p) => Math.max(most, p.stopCount), 0);
+  const stops = stats.patterns.reduce((most, p) => Math.max(most, p.stops.length), 0);
   const dwell = stats.patterns.reduce((most, p) => Math.max(most, p.dwellMs), 0) / 60_000;
 
   return (

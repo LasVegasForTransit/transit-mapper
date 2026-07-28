@@ -9847,7 +9847,7 @@ function buildGrid() {
     { id: 'ss-b', coord: [-115.25, 36.2], anchor: { wayId: 'ss-w', t: 0.5 } },
   ];
   const stopped = serviceStats(ways, stations, [], svc, 10)!;
-  check('stations on a line become stops', stopped.patterns[0].stopCount === 2);
+  check('stations on a line become stops', stopped.patterns[0].stops.length === 2);
   check('stops make the round trip longer', stopped.longestRoundTripMs > bare.longestRoundTripMs);
   check(
     'a longer dwell makes it longer still',
