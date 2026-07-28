@@ -47,6 +47,8 @@ import {
   wayLengthMeters,
   wholeLeg,
   type ShapeRun,
+  patternLegs,
+  oneSection,
 } from '@transitmapper/core/model/geo';
 import {
   anchorOnWay,
@@ -62,6 +64,8 @@ import {
   splitLegsAt,
   splitLegsIntoRuns,
   truncateLegs,
+  mapSectionLegs,
+  pruneSections,
 } from '@transitmapper/core/model/patternEdits';
 import { materializeRouteSpans } from '@transitmapper/core/model/routeLegs';
 import type { SelectionRef } from '@transitmapper/core/model/selectionActions';
@@ -747,16 +751,26 @@ function removeWay(system: TransitSystem, wayId: string): TransitSystem {
       ...s,
       patterns: s.patterns
         .map((p) => {
-          const legs = p.legs.filter((l) => l.wayId !== wayId);
-          if (legs.length === p.legs.length) return p;
-          const runs = splitLegsIntoRuns(legs, (a, b) => legsMeet(ways, a, b));
-          const longest = runs.reduce(
-            (best, run) => (run.length > best.length ? run : best),
-            [] as PatternLeg[],
+          const filtered = mapSectionLegs(p.sections, (legs) =>
+            legs.filter((l) => l.wayId !== wayId),
           );
-          return { ...p, legs: longest };
+          if (patternLegs({ ...p, sections: filtered }).length === patternLegs(p).length) return p;
+          // Only once something was actually removed: a pattern that already
+          // had a break in it should keep it rather than be silently halved.
+          // Each section keeps its own longest continuous run, since a
+          // couplet's two halves break independently.
+          const sections = pruneSections(
+            mapSectionLegs(filtered, (legs) => {
+              const runs = splitLegsIntoRuns(legs, (a, b) => legsMeet(ways, a, b));
+              return runs.reduce(
+                (best, run) => (run.length > best.length ? run : best),
+                [] as PatternLeg[],
+              );
+            }),
+          );
+          return { ...p, sections };
         })
-        .filter((p) => p.legs.length > 0),
+        .filter((p) => patternLegs(p).length > 0),
     }))
     .filter((s) => s.patterns.length > 0);
   return {
@@ -986,8 +1000,13 @@ function splitWay(
   const services = system.services.map((sv) => ({
     ...sv,
     patterns: sv.patterns.map((p) =>
-      p.legs.some((l) => l.wayId === wayId)
-        ? { ...p, legs: splitLegs(p.legs, wayId, newWayId, tSplit) }
+      patternLegs(p).some((l) => l.wayId === wayId)
+        ? {
+            ...p,
+            sections: mapSectionLegs(p.sections, (legs) =>
+              splitLegs(legs, wayId, newWayId, tSplit),
+            ),
+          }
         : p,
     ),
   }));
@@ -1132,14 +1151,16 @@ function mergeWays(system: TransitSystem, keepId: string, otherId: string): Tran
     ...sv,
     patterns: sv.patterns.map((p) => ({
       ...p,
-      legs: mergeLegs(p.legs, keepId, otherId, {
-        positionOf: (wayId, t) => {
-          const old = oldPaths.get(wayId);
-          if (!old || old.length < 2) return t;
-          return nearestOnPath(mergedPath, pointAtT(old, t))?.t ?? t;
-        },
-        reversed: (wayId) => wayId === otherId && bReversed,
-      }),
+      sections: mapSectionLegs(p.sections, (legs) =>
+        mergeLegs(legs, keepId, otherId, {
+          positionOf: (wayId, t) => {
+            const old = oldPaths.get(wayId);
+            if (!old || old.length < 2) return t;
+            return nearestOnPath(mergedPath, pointAtT(old, t))?.t ?? t;
+          },
+          reversed: (wayId) => wayId === otherId && bReversed,
+        }),
+      ),
     })),
   }));
   const stations = system.stations.map((st) => {
@@ -1242,7 +1263,7 @@ function unusedPaletteColor(system: TransitSystem, modeId: string): string {
  *  a throwaway pattern reuses the one trimming-and-orienting implementation
  *  rather than repeating it; this runs on an explicit delete, not per frame. */
 function legsMeet(ways: Way[], a: PatternLeg, b: PatternLeg): boolean {
-  const segs = patternSegments(wayById(ways), { id: 'probe', legs: [a, b] });
+  const segs = patternSegments(wayById(ways), { id: 'probe', sections: oneSection([a, b]) });
   if (segs.length < 2) return false;
   const end = segs[0].path[segs[0].path.length - 1];
   const start = segs[1].path[0];
@@ -1363,7 +1384,9 @@ function conflatePatternOntoExisting(
       sv.id === serviceId
         ? {
             ...sv,
-            patterns: sv.patterns.map((p) => (p.id === patternId ? { ...p, legs: newLegs } : p)),
+            patterns: sv.patterns.map((p) =>
+              p.id === patternId ? { ...p, sections: oneSection(newLegs) } : p,
+            ),
           }
         : sv,
     ),
@@ -1383,7 +1406,7 @@ function conflatePatternOntoExisting(
     if (!way || way.source) continue; // imported infrastructure is not a by-product
     if (sys.namedWays.some((n) => n.wayIds.includes(oldId))) continue; // somebody named it
     const stillRidden = sys.services.some((sv) =>
-      sv.patterns.some((p) => p.legs.some((l) => l.wayId === oldId)),
+      sv.patterns.some((p) => patternLegs(p).some((l) => l.wayId === oldId)),
     );
     if (!stillRidden) sys = removeWay(sys, oldId);
   }
@@ -1931,7 +1954,7 @@ export function createEditorStore() {
               name: `Line ${nextLineNumber++}`,
               modeId,
               color: color ?? st.draftColor,
-              patterns: [{ id: shortId(), legs: [wholeLeg(wayId)] }],
+              patterns: [{ id: shortId(), sections: oneSection([wholeLeg(wayId)]) }],
               frequencyMinutes: DEFAULT_FREQUENCY_MINUTES,
               spanStart: DEFAULT_SPAN_START,
               spanEnd: DEFAULT_SPAN_END,
@@ -2047,7 +2070,10 @@ export function createEditorStore() {
             sv.id === addingPatternForServiceId
               ? {
                   ...sv,
-                  patterns: [...sv.patterns, { id: shortId(), legs: [wholeLeg(activeWayId)] }],
+                  patterns: [
+                    ...sv.patterns,
+                    { id: shortId(), sections: oneSection([wholeLeg(activeWayId)]) },
+                  ],
                 }
               : sv,
           );
@@ -2075,7 +2101,9 @@ export function createEditorStore() {
       // local one and the busway beside the road.
       if (!get().draftSeparate) {
         for (const svc of get().system.services) {
-          const pattern = svc.patterns.find((p) => p.legs.some((l) => l.wayId === finishedWayId));
+          const pattern = svc.patterns.find((p) =>
+            patternLegs(p).some((l) => l.wayId === finishedWayId),
+          );
           if (!pattern) continue;
           const next = conflatePatternOntoExisting(get().system, svc.id, pattern.id);
           if (next) set({ system: touch(next) });
@@ -2586,7 +2614,7 @@ export function createEditorStore() {
         name: `Line ${nextLineNumber++}`,
         modeId: resolvedModeId,
         color: st.draftColor,
-        patterns: [{ id: shortId(), legs }],
+        patterns: [{ id: shortId(), sections: oneSection(legs) }],
         frequencyMinutes: DEFAULT_FREQUENCY_MINUTES,
         spanStart: DEFAULT_SPAN_START,
         spanEnd: DEFAULT_SPAN_END,
@@ -2646,7 +2674,10 @@ export function createEditorStore() {
               ? {
                   ...sv,
                   patterns: sv.patterns.map((p) =>
-                    p.id === pattern.id ? { ...p, legs: adoptedLegs } : p,
+                    // Adoption replaces the whole path, so any direction
+                    // structure it had goes with it — see the note on
+                    // materializeRouteSpans about re-routing each direction.
+                    p.id === pattern.id ? { ...p, sections: oneSection(adoptedLegs) } : p,
                   ),
                 }
               : sv,
@@ -2680,7 +2711,7 @@ export function createEditorStore() {
           const w = sys.ways.find((x) => x.id === oldId);
           if (!w || w.source) continue;
           const ridden = sys.services.some((sv) =>
-            sv.patterns.some((p) => p.legs.some((l) => l.wayId === oldId)),
+            sv.patterns.some((p) => patternLegs(p).some((l) => l.wayId === oldId)),
           );
           const named = sys.namedWays.some((n) => n.wayIds.includes(oldId));
           if (!ridden && !named) sys = removeWay(sys, oldId);
@@ -2734,7 +2765,7 @@ export function createEditorStore() {
         }
         const service = sys.services.find((sv) => sv.id === target.serviceId);
         const pattern = service?.patterns.find((p) => p.id === target.patternId);
-        for (const leg of pattern?.legs ?? []) established.add(leg.wayId);
+        for (const leg of pattern ? patternLegs(pattern) : []) established.add(leg.wayId);
       }
 
       if (reconciled > 0) set({ system: touch(sys) });
@@ -2762,7 +2793,7 @@ export function createEditorStore() {
         name: `Line ${nextLineNumber++}`,
         modeId,
         color,
-        patterns: [{ id: shortId(), legs: [wholeLeg(wayId)] }],
+        patterns: [{ id: shortId(), sections: oneSection([wholeLeg(wayId)]) }],
         frequencyMinutes: DEFAULT_FREQUENCY_MINUTES,
         spanStart: DEFAULT_SPAN_START,
         spanEnd: DEFAULT_SPAN_END,
@@ -2862,10 +2893,10 @@ export function createEditorStore() {
         if (!pattern) return {};
         // Trim at the leg NEAREST the end being moved, so dragging a terminus
         // back over a way the line visits twice shortens the right visit.
-        const matching = pattern.legs.flatMap((l, i) => (l.wayId === wayId ? [i] : []));
+        const matching = patternLegs(pattern).flatMap((l, i) => (l.wayId === wayId ? [i] : []));
         const legIndex = (side === 'start' ? matching[0] : matching[matching.length - 1]) ?? -1;
         if (legIndex < 0) return {};
-        const legs = truncateLegs(pattern.legs, legIndex, t, side);
+        const legs = truncateLegs(patternLegs(pattern), legIndex, t, side);
         // Trimming a line away entirely is a deletion the user didn't ask for.
         if (legs.length === 0) return {};
         return {
@@ -2876,7 +2907,9 @@ export function createEditorStore() {
                 ? sv
                 : {
                     ...sv,
-                    patterns: sv.patterns.map((p) => (p.id === patternId ? { ...p, legs } : p)),
+                    patterns: sv.patterns.map((p) =>
+                      p.id === patternId ? { ...p, sections: oneSection(legs) } : p,
+                    ),
                   },
             ),
           }),
@@ -2888,9 +2921,9 @@ export function createEditorStore() {
       const service = st.system.services.find((sv) => sv.id === serviceId);
       const pattern = service?.patterns.find((p) => p.id === patternId);
       if (!service || !pattern) return null;
-      const legIndex = pattern.legs.findIndex((l) => l.wayId === wayId);
+      const legIndex = patternLegs(pattern).findIndex((l) => l.wayId === wayId);
       if (legIndex < 0) return null;
-      const [near, far] = splitLegsAt(pattern.legs, legIndex, t);
+      const [near, far] = splitLegsAt(patternLegs(pattern), legIndex, t);
       // A cut on a terminus leaves nothing on one side — not a split.
       if (near.length === 0 || far.length === 0) return null;
       const newId = shortId();
@@ -2902,7 +2935,7 @@ export function createEditorStore() {
         id: newId,
         name: `${service.name} (south)`,
         color: unusedPaletteColor(st.system, service.modeId),
-        patterns: [{ ...pattern, id: shortId(), legs: far }],
+        patterns: [{ ...pattern, id: shortId(), sections: oneSection(far) }],
       };
       set((s) => ({
         system: touch({
@@ -2914,7 +2947,7 @@ export function createEditorStore() {
                 : {
                     ...sv,
                     patterns: sv.patterns.map((p) =>
-                      p.id === patternId ? { ...p, legs: near } : p,
+                      p.id === patternId ? { ...p, sections: oneSection(near) } : p,
                     ),
                   },
             ),
@@ -2945,8 +2978,9 @@ export function createEditorStore() {
         services: st.system.services.map((sv) => ({
           ...sv,
           patterns: sv.patterns.flatMap((p) => {
-            const legs = removeStretchFromLegs(p.legs, wayId, lo, hi);
-            if (legs.length === p.legs.length && legs.every((l, i) => l === p.legs[i])) return [p];
+            const before = patternLegs(p);
+            const legs = removeStretchFromLegs(before, wayId, lo, hi);
+            if (legs.length === before.length && legs.every((l, i) => l === before[i])) return [p];
             affected++;
             if (legs.length === 0) return [];
             // Taking a stretch out from under a line can leave it in two
@@ -2959,7 +2993,7 @@ export function createEditorStore() {
             return runs.map((run, i) => ({
               ...p,
               id: i === 0 ? p.id : shortId(),
-              legs: run,
+              sections: oneSection(run),
             }));
           }),
         })),
@@ -3002,7 +3036,7 @@ export function createEditorStore() {
       for (const way of ordered.slice(1)) {
         for (const svc of sys.services) {
           for (const pattern of svc.patterns) {
-            if (!pattern.legs.some((l) => l.wayId === way.id)) continue;
+            if (!patternLegs(pattern).some((l) => l.wayId === way.id)) continue;
             const next = conflatePatternOntoExisting(sys, svc.id, pattern.id, keepers);
             if (next) sys = next;
           }

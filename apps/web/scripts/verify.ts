@@ -42,6 +42,8 @@ import {
   serviceLaneOnWay,
   wholeLegs,
   wholeLeg,
+  patternLegs,
+  oneSection,
   stretchLeg,
   legRange,
   legIsWhole,
@@ -423,7 +425,7 @@ check(
         ...svc,
         patterns: svc.patterns.map((p) => ({
           ...p,
-          legs: p.legs.map((l) =>
+          legs: patternLegs(p).map((l) =>
             l.wayId === w ? { ...l, lane: { kind: 'pinned' as const, laneId } } : l,
           ),
         })),
@@ -433,7 +435,7 @@ check(
   const reparsed = parseSystem(JSON.parse(JSON.stringify(withLanes)));
   check(
     "a leg's lane pin survives a serialize/parse round-trip",
-    legPinnedLane(reparsed.services[0].patterns[0].legs[0]) === laneId,
+    legPinnedLane(patternLegs(reparsed.services[0].patterns[0])[0]) === laneId,
   );
   // v9 kept lane pins in a wayId-keyed map on the pattern; they migrate onto
   // the leg for the way they named, and a pin naming a way the pattern doesn't
@@ -446,7 +448,7 @@ check(
         ...svc,
         patterns: svc.patterns.map((p) => ({
           id: p.id,
-          wayIds: p.legs.map((l) => l.wayId),
+          wayIds: patternLegs(p).map((l) => l.wayId),
           lanes: { [w]: laneId, 'ghost-way': laneId },
         })),
       },
@@ -455,11 +457,11 @@ check(
   const fromV9 = parseSystem(JSON.parse(JSON.stringify(v9Shape)));
   check(
     "a v9 pattern's lane map migrates onto the leg for that way",
-    legPinnedLane(fromV9.services[0].patterns[0].legs[0]) === laneId,
+    legPinnedLane(patternLegs(fromV9.services[0].patterns[0])[0]) === laneId,
   );
   check(
     'a v9 lane pin naming a way the pattern never runs over is dropped',
-    fromV9.services[0].patterns[0].legs.every((l) => l.wayId !== 'ghost-way'),
+    patternLegs(fromV9.services[0].patterns[0]).every((l) => l.wayId !== 'ghost-way'),
   );
 }
 
@@ -523,10 +525,10 @@ check(
     store.getState().system.ways.length === waysBefore,
   );
   const bSvc = store.getState().system.services.find((sv) => sv.id === bId)!;
-  const bLeg = bSvc.patterns[0].legs[0];
+  const bLeg = patternLegs(bSvc.patterns[0])[0];
   check(
     'the joining service names the stretch it uses instead of owning a way',
-    bSvc.patterns[0].legs.length === 1 &&
+    patternLegs(bSvc.patterns[0]).length === 1 &&
       bLeg.wayId === A &&
       !legIsWhole(bLeg) &&
       legFrom(bLeg) > 0 &&
@@ -671,7 +673,7 @@ check(
   ]);
   const lastToLastPattern = {
     id: 'p',
-    legs: wholeLegs(meetAtLast, ['a', 'b']),
+    sections: oneSection(wholeLegs(meetAtLast, ['a', 'b'])),
   };
   const lastToLast = patternSegments(meetAtLast, lastToLastPattern);
   check(
@@ -830,14 +832,17 @@ check(
   ]);
   check(
     'serviceLaneOnWay: a bus resolves the forward-curb travel lane',
-    serviceLaneOnWay({ id: 'p', legs: legsOf('w') }, 0, roadMap, 'bus') ===
+    serviceLaneOnWay({ id: 'p', sections: oneSection(legsOf('w')) }, 0, roadMap, 'bus') ===
       defaultLaneFor(road, 'forward', ['bus', 'drive']),
   );
   const pinId = road.lanes[0].id;
   check(
     'serviceLaneOnWay: an explicit pattern.lanes pin overrides the default',
     serviceLaneOnWay(
-      { id: 'p', legs: [{ ...wholeLeg('w'), lane: { kind: 'pinned', laneId: pinId } }] },
+      {
+        id: 'p',
+        sections: oneSection([{ ...wholeLeg('w'), lane: { kind: 'pinned', laneId: pinId } }]),
+      },
       0,
       roadMap,
       'bus',
@@ -860,7 +865,12 @@ check(
       },
     ],
   ]);
-  const railLane = serviceLaneOnWay({ id: 'p', legs: legsOf('r') }, 0, railMap, 'subway');
+  const railLane = serviceLaneOnWay(
+    { id: 'p', sections: oneSection(legsOf('r')) },
+    0,
+    railMap,
+    'subway',
+  );
   check(
     'serviceLaneOnWay: rail resolves a track lane',
     travelLanes(rail).find((l) => l.id === railLane)?.kindId === 'track',
@@ -955,7 +965,7 @@ check(
   store.getState().addWayPoint(b, [-115.1, 36.2]);
   store.getState().finishWay();
   const multiWaysById = wayById(store.getState().system.ways);
-  const multiPattern = { id: 'mp', legs: wholeLegs(multiWaysById, [a, b]) };
+  const multiPattern = { id: 'mp', sections: oneSection(wholeLegs(multiWaysById, [a, b])) };
   const multiPath = serviceLanePath(multiPattern, multiWaysById, 'bus');
   check(
     'serviceLanePath stitches a multi-way pattern into one continuous path',
@@ -1253,7 +1263,7 @@ check('deleting a service keeps the other services', servicesOnWay(kc).length ==
     name: 'Tram',
     modeId: 'tram',
     color: '#16a085',
-    patterns: [{ id: 'p1', legs: legsOf('w1', 'w2') }],
+    patterns: [{ id: 'p1', sections: oneSection(legsOf('w1', 'w2')) }],
   };
   const totalLength = wayLengthMeters(dedicated) + wayLengthMeters(streetRunning);
   check(
@@ -6340,7 +6350,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     approachControls: {},
   });
   check('a v9 document parses to the current version', v9.version === createEmptySystem().version);
-  const v9Legs = v9.services[0].patterns[0].legs;
+  const v9Legs = patternLegs(v9.services[0].patterns[0]);
   check(
     'a v9 pattern migrates to one leg per way, in the same order',
     v9Legs.length === 2 && v9Legs[0].wayId === 'wA' && v9Legs[1].wayId === 'wB',
@@ -6364,7 +6374,9 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   const reparsed = parseSystem(JSON.parse(JSON.stringify(v9)));
   check(
     'a v10 document keeps the directions it already stores',
-    reparsed.services[0].patterns[0].legs.every((l, i) => l.direction === v9Legs[i].direction),
+    patternLegs(reparsed.services[0].patterns[0]).every(
+      (l, i) => l.direction === v9Legs[i].direction,
+    ),
   );
 }
 
@@ -6506,7 +6518,9 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check(
     'the riding service runs over just the merged way',
     merged.services.every((sv) =>
-      sv.patterns.every((p) => p.legs.length === 1 && p.legs[0].wayId === halves[0]),
+      sv.patterns.every(
+        (p) => patternLegs(p).length === 1 && patternLegs(p)[0].wayId === halves[0],
+      ),
     ),
   );
   // Merging two ways that don't touch is refused.
@@ -6809,7 +6823,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
   check(
     'services still ride their (now split) ways',
-    after.services.every((sv) => sv.patterns.every((p) => p.legs.length === 2)),
+    after.services.every((sv) => sv.patterns.every((p) => patternLegs(p).length === 2)),
   );
 
   // Grade separation: an ELEVATED way crossing a surface street is an
@@ -7007,7 +7021,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     profile: { lanes: [] },
   };
   const twoWayIds = wayById([wayA, wayB]);
-  const straightOn = { id: 'p1', legs: wholeLegs(twoWayIds, ['va', 'vb']) };
+  const straightOn = { id: 'p1', sections: oneSection(wholeLegs(twoWayIds, ['va', 'vb'])) };
   const segs = patternSegments(twoWayIds, straightOn);
   check('first way in a pattern defaults to forward', segs[0].forward === true);
   check('a way continuing in its own stored order is forward', segs[1].forward === true);
@@ -7028,7 +7042,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   const reversedIds = wayById([wayA, wayC]);
   const reversedSegs = patternSegments(reversedIds, {
     id: 'p2',
-    legs: wholeLegs(reversedIds, ['va', 'vc']),
+    sections: oneSection(wholeLegs(reversedIds, ['va', 'vc'])),
   });
   check(
     'a way stored opposite the direction of travel is detected as backward',
@@ -7039,7 +7053,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // each traversed the other way round — so the two cannot disagree.
   const backSegs = patternRunSegments(
     reversedIds,
-    { id: 'p2', legs: wholeLegs(reversedIds, ['va', 'vc']) },
+    { id: 'p2', sections: oneSection(wholeLegs(reversedIds, ['va', 'vc'])) },
     'inbound',
   );
   const mirrored = [...reversedSegs].reverse();
@@ -7074,7 +7088,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     },
   };
   const roadIds = wayById([road]);
-  const roadPattern = { id: 'vp', legs: wholeLegs(roadIds, ['vroad']) };
+  const roadPattern = { id: 'vp', sections: oneSection(wholeLegs(roadIds, ['vroad'])) };
   const laneOf = (forward: boolean, modeId: string) =>
     road.profile.lanes.find(
       (l) => l.id === serviceLaneOnWay(roadPattern, 0, roadIds, modeId, forward),
@@ -7137,7 +7151,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   };
   const lpPath = patternLanePath(
     [lpWayA, lpWayB],
-    { id: 'lp1', legs: wholeLegs(wayById([lpWayA, lpWayB]), ['lp-a', 'lp-b']) },
+    { id: 'lp1', sections: oneSection(wholeLegs(wayById([lpWayA, lpWayB]), ['lp-a', 'lp-b'])) },
     'bus',
   );
   check('patternLanePath produces a continuous path across both ways', lpPath.length >= 2);
@@ -7839,7 +7853,7 @@ function buildGrid() {
   const svc = after.services[0];
   check(
     'the routed service rides one pattern of existing ways',
-    svc.patterns.length === 1 && svc.patterns[0].legs.length === res.spans.length,
+    svc.patterns.length === 1 && patternLegs(svc.patterns[0]).length === res.spans.length,
   );
   check(
     'routing over existing streets adds no infrastructure at all',
@@ -7853,7 +7867,7 @@ function buildGrid() {
   );
   check(
     'the mid-way anchors became leg extents rather than splits',
-    svc.patterns[0].legs.some((l) => !legIsWhole(l)),
+    patternLegs(svc.patterns[0]).some((l) => !legIsWhole(l)),
   );
   // The route length is now measured off what the legs actually cover, not by
   // summing whole ways — which is the point: the ways are longer than the ride.
@@ -7974,7 +7988,7 @@ function buildGrid() {
   check('adoptExistingInfrastructure rebinds the pattern', rebound === 1);
   check(
     'the adopted pattern rides real grid ways (top road arms)',
-    adopted.patterns[0].legs.length >= 1 &&
+    patternLegs(adopted.patterns[0]).length >= 1 &&
       patternWayIds(adopted.patterns[0]).every((wid) => after.ways.some((w) => w.id === wid)),
   );
   check(
@@ -8516,7 +8530,7 @@ function buildGrid() {
     { id: 'unanchored', coord: [-115.2, 36.1] },
   ];
   const pathMeters = haversineMeters(path[0], path[1]);
-  const pattern = { id: 'p1', legs: legsOf('w1') };
+  const pattern = { id: 'p1', sections: oneSection(legsOf('w1')) };
   const stops = dwellStopsForPattern(sys.stations, pattern, path, pathMeters);
   check("only stations anchored to the pattern's ways become stops", stops.length === 3);
   // A line covering only the first 60% of w1 does not call at the stop at
@@ -8524,7 +8538,7 @@ function buildGrid() {
   // trimmed path and stacks a phantom dwell on the terminus.
   const trimmedStops = dwellStopsForPattern(
     sys.stations,
-    { id: 'p2', legs: [stretchLeg(wholeLeg('w1'), 0, 0.6)] },
+    { id: 'p2', sections: oneSection([stretchLeg(wholeLeg('w1'), 0, 0.6)]) },
     path,
     pathMeters,
   );
@@ -9972,7 +9986,7 @@ function buildGrid() {
     name: 'Green',
     modeId: 'lightRail',
     color: '#0a0',
-    patterns: [{ id: 'ss-p', legs: legsOf('ss-w') }],
+    patterns: [{ id: 'ss-p', sections: oneSection(legsOf('ss-w')) }],
     frequencyMinutes: 10,
   };
 
@@ -10042,8 +10056,8 @@ function buildGrid() {
   const branched: Service = {
     ...svc,
     patterns: [
-      { id: 'ss-p', legs: legsOf('ss-w') },
-      { id: 'ss-p2', legs: legsOf('ss-w') },
+      { id: 'ss-p', sections: oneSection(legsOf('ss-w')) },
+      { id: 'ss-p2', sections: oneSection(legsOf('ss-w')) },
     ],
   };
   check(
@@ -10576,14 +10590,14 @@ function buildGrid() {
         name: 'On it',
         modeId: 'bus',
         color: '#111',
-        patterns: [{ id: 'pa', legs: legsOf(way.id) }],
+        patterns: [{ id: 'pa', sections: oneSection(legsOf(way.id)) }],
       },
       {
         id: 'sv-off',
         name: 'Miles away',
         modeId: 'bus',
         color: '#222',
-        patterns: [{ id: 'pb', legs: legsOf(otherWay.id) }],
+        patterns: [{ id: 'pb', sections: oneSection(legsOf(otherWay.id)) }],
       },
     ];
     const stop: Station = { id: 'st-here', coord: [-115.2, 36.1] };
@@ -10793,7 +10807,7 @@ function buildGrid() {
     'no surviving piece names a way that was deleted',
     after.services
       .flatMap((sv) => sv.patterns)
-      .every((p) => p.legs.every((l) => after.ways.some((w) => w.id === l.wayId))),
+      .every((p) => patternLegs(p).every((l) => after.ways.some((w) => w.id === l.wayId))),
   );
   check(
     'the surviving system has no route with a gap in it',
@@ -10894,11 +10908,15 @@ function buildGrid() {
   check('both lines exist as lines', after.services.length === 2);
   check(
     'the second line rides the road the first one laid',
-    after.services.every((sv) => sv.patterns.every((p) => p.legs.every((l) => l.wayId === first))),
+    after.services.every((sv) =>
+      sv.patterns.every((p) => patternLegs(p).every((l) => l.wayId === first)),
+    ),
   );
   check(
     'it rides only the stretch it was drawn over, not the whole road',
-    after.services.flatMap((sv) => sv.patterns).some((p) => p.legs.some((l) => legFrom(l) > 0)),
+    after.services
+      .flatMap((sv) => sv.patterns)
+      .some((p) => patternLegs(p).some((l) => legFrom(l) > 0)),
   );
   check(
     'the shared road is drawn once, with both lines fanned across it',
@@ -11011,14 +11029,14 @@ function buildGrid() {
   check(
     'both lines now ride the one remaining road',
     after.services.every((sv) =>
-      sv.patterns.every((p) => p.legs.every((l) => l.wayId === after.ways[0].id)),
+      sv.patterns.every((p) => patternLegs(p).every((l) => l.wayId === after.ways[0].id)),
     ),
   );
   check(
     'the shorter line rides only the stretch of it that it covered',
     after.services
       .flatMap((sv) => sv.patterns)
-      .some((pt) => pt.legs.some((l) => legFrom(l) > 0 && legTo(l) < 1)),
+      .some((pt) => patternLegs(pt).some((l) => legFrom(l) > 0 && legTo(l) < 1)),
   );
 
   // A line that runs along the corridor and then carries on past the end of it
@@ -11038,7 +11056,10 @@ function buildGrid() {
     'the overhanging line rides both the shared corridor and its own tail',
     partial.services
       .flatMap((sv) => sv.patterns)
-      .some((pt) => pt.legs.length === 2 && pt.legs.some((l) => l.wayId === overhanging[0])),
+      .some(
+        (pt) =>
+          patternLegs(pt).length === 2 && patternLegs(pt).some((l) => l.wayId === overhanging[0]),
+      ),
   );
   check(
     'the fused line has no route with a gap in it',

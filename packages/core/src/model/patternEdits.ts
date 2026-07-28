@@ -19,7 +19,45 @@
 // against.
 
 import { legRange, legRunsWithPoints } from './geo/servicePaths';
-import type { LegDirection, PatternLeg } from './system';
+import type { LegDirection, PatternLeg, PatternSection } from './system';
+
+/**
+ * Apply a leg rewrite to every section of a pattern, each section's list on
+ * its own.
+ *
+ * This is how the arithmetic below survived sections without being rewritten.
+ * Splitting a way, merging two, or removing a stretch are all facts about the
+ * INFRASTRUCTURE: they apply wherever a leg names the affected way, and a
+ * couplet's two halves are affected independently and identically. So the
+ * per-leg arithmetic never needs to know which direction it is working on.
+ *
+ * The edits that DO care which direction they cut — trimming a line back,
+ * cutting one in two — are not this shape, because the point to cut at has to
+ * be found separately on each direction's own ground. Those take a section
+ * index, not a callback.
+ */
+export function mapSectionLegs(
+  sections: PatternSection[],
+  fn: (legs: PatternLeg[]) => PatternLeg[],
+): PatternSection[] {
+  return sections.map((section) =>
+    section.kind === 'split'
+      ? { ...section, outbound: fn(section.outbound), inbound: fn(section.inbound) }
+      : { ...section, legs: fn(section.legs) },
+  );
+}
+
+/** Sections with every empty leg list dropped, and the whole thing dropped to
+ *  [] when nothing survives. An edit that removes the last leg of a section
+ *  leaves a section that describes no ground, which every reader would then
+ *  have to special-case. */
+export function pruneSections(sections: PatternSection[]): PatternSection[] {
+  return sections.filter((section) =>
+    section.kind === 'split'
+      ? section.outbound.length > 0 || section.inbound.length > 0
+      : section.legs.length > 0,
+  );
+}
 
 /** Two extents this close (as a fraction of the way) are treated as touching.
  *  Legs that were adjacent by construction come back from a coordinate

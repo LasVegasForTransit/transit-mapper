@@ -13,6 +13,7 @@ import {
   snap,
   squareFootprint,
   type ShapeRun,
+  patternLegs,
 } from '@transitmapper/core/model/geo';
 import { facilityType, mode } from '@transitmapper/core/model/catalog';
 import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
@@ -1072,7 +1073,7 @@ export function attachInteractions(
         extendAtStart = resume.end === 'start';
         st.resumeWay(wayId);
         const ridingService = st.system.services.find((sv) =>
-          sv.patterns.some((p) => p.legs.some((l) => l.wayId === wayId)),
+          sv.patterns.some((p) => patternLegs(p).some((l) => l.wayId === wayId)),
         );
         st.select(
           ridingService ? { kind: 'service', id: ridingService.id } : { kind: 'way', id: wayId },

@@ -53,16 +53,55 @@ export interface PatternLeg {
   lane: LegLane;
 }
 
+/** Which of a line's two directions of service is being asked about. NOT the
+ *  same axis as LegDirection: that one is about a way's stored point order,
+ *  this one is about which trip a rider is on. sim/fleet.ts's RunPhase is
+ *  built from this so the two vocabularies cannot drift apart. */
+export type RunDirection = 'outbound' | 'inbound';
+
+/**
+ * One stretch of a pattern, and which directions of service ride it.
+ *
+ * A section rather than a per-leg tag, because the alternative cannot express
+ * the constraint that matters. Tagging legs in one flat array makes an
+ * inbound-only leg's POSITION load-bearing — put it after the shared leg it
+ * should precede and the return path silently reads discontinuous — and the
+ * type permits both spellings, so only a validator tells them apart. Here the
+ * two halves of a couplet are held by the object containing them, and the
+ * broken spelling cannot be written.
+ *
+ * - `shared` — both directions ride these legs, the return one flipped. Every
+ *   pattern in every document before v12 is exactly one of these, which is why
+ *   nothing about an existing line changes.
+ * - `split` — the directions part company: a one-way couplet, or a stretch one
+ *   direction skips. The two leg lists are each in their OWN ride order.
+ * - `turnaround` — ridden once, at the point the vehicle reverses. A loop
+ *   round a block at a terminus, which belongs to neither direction.
+ */
+export type PatternSection =
+  | { kind: 'shared'; legs: PatternLeg[] }
+  | { kind: 'split'; outbound: PatternLeg[]; inbound: PatternLeg[] }
+  | { kind: 'turnaround'; legs: PatternLeg[] };
+
 /** One path a service runs — more than one on the same service models a
  *  branch/variant sharing that service's identity (name/color/mode), e.g. a
- *  trunk splitting into an airport branch and a downtown branch. */
+ *  trunk splitting into an airport branch and a downtown branch.
+ *
+ *  Still branches, not directions: two directions of ONE path are two runs of
+ *  one pattern (see PatternSection), because they share a stop list, a headway
+ *  and a fleet, which two branches do not. */
 export interface Pattern {
   id: string;
-  /** Ordered ways this pattern runs over, with the stretch of each it uses
-   *  (its path; may span way types). Consecutive legs must meet: validate.ts
-   *  checks that, since a leg list can express a gap that a bare way-id list
-   *  could not. */
-  legs: PatternLeg[];
+  /** The pattern's path, in sections ordered along OUTBOUND travel.
+   *
+   *  The outbound run reads them in order, taking `legs` or `outbound`. The
+   *  inbound run reads them in REVERSE, taking `legs` or `inbound`, reversed
+   *  within each section and each leg's travel direction flipped.
+   *
+   *  Consecutive legs must meet WITHIN a direction; validate.ts walks each
+   *  direction separately, since a couplet's two halves deliberately do not
+   *  touch. */
+  sections: PatternSection[];
   /** Optional label for a specific branch/variant, e.g. "via Airport". */
   name?: string;
 }

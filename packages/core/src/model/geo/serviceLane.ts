@@ -8,7 +8,7 @@
 import { mode } from '../catalog';
 import { defaultLaneFor } from '../profile';
 import type { Pattern, Way } from '../system';
-import { legPinnedLane, legRunsWithPoints } from './servicePaths';
+import { legPinnedLane, legRunsWithPoints, patternLegs } from './servicePaths';
 
 /** The lane kinds a mode prefers, most-preferred first — a bus wants a
  *  dedicated bus lane then a drive lane; rail wants its track. Fed to
@@ -45,7 +45,7 @@ export function serviceLaneOnWay(
   modeId: string,
   forward?: boolean,
 ): string | null {
-  const leg = pattern.legs[wayIndex];
+  const leg = patternLegs(pattern)[wayIndex];
   if (!leg) return null;
   const way = waysById.get(leg.wayId);
   if (!way) return null;

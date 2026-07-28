@@ -19,7 +19,13 @@
 //
 // Pure, like the rest of packages/core/src/sim.
 
-import { cumulativeLengths, nearestOnPath, patternCoversWayAt, patternPath } from '../model/geo';
+import {
+  cumulativeLengths,
+  nearestOnPath,
+  patternCoversWayAt,
+  patternPath,
+  patternLegs,
+} from '../model/geo';
 import type { LngLat, Pattern, Service, Station, VehicleKind, Way } from '../model/system';
 import { vehicleFootprint } from '../model/catalog';
 import { planService, type ServicePlan } from './fleet';
@@ -116,7 +122,7 @@ export function patternStops(
 ): PatternStop[] {
   const byWay = stationsByWay(stations);
   const stops: PatternStop[] = [];
-  for (const { wayId } of pattern.legs) {
+  for (const { wayId } of patternLegs(pattern)) {
     for (const st of byWay.get(wayId) ?? []) {
       if (st.anchor && !patternCoversWayAt(pattern, wayId, st.anchor.t)) continue;
       const near = nearestOnPath(path, st.coord);

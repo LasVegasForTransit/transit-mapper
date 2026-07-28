@@ -17,6 +17,7 @@ import {
   patternSegments,
   resolveWayPath,
   serviceLaneOnWay,
+  patternLegs,
   stitchPaths,
 } from '../model/geo';
 import { profileWidthM } from '../model/profile';
@@ -215,7 +216,7 @@ export function serviceLanePath(
   const segments = patternSegments(waysById, pattern);
   // A way the pattern references but that couldn't be resolved is dropped by
   // patternSegments; the contract here is all-or-nothing, so that's a null.
-  if (segments.length !== pattern.legs.length) return null;
+  if (segments.length !== patternLegs(pattern).length) return null;
   const lanePaths: LngLat[][] = [];
   for (const { way, forward, wayIndex } of segments) {
     const laneId = serviceLaneOnWay(pattern, wayIndex, waysById, modeId);

@@ -18,6 +18,7 @@ import {
   serviceRangesOnWay,
   slicePathByT,
   wayById,
+  patternLegs,
 } from '../model/geo';
 import { nearWaysForStations, servicesByWay, visibleWaysFor } from './featureMemo';
 import { directionalLanes, isOneWay, wayCapacity } from '../model/profile';
@@ -131,7 +132,7 @@ function wayPatternIndex(byWay: Map<string, Service[]>): Map<string, WayPatternE
       if (seen.has(svc.id)) continue;
       seen.add(svc.id);
       for (const pattern of svc.patterns) {
-        pattern.legs.forEach((leg, wayIdx) => {
+        patternLegs(pattern).forEach((leg, wayIdx) => {
           let arr = index.get(leg.wayId);
           if (!arr) index.set(leg.wayId, (arr = []));
           arr.push({ svc, pattern, wayIdx });

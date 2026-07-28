@@ -7,7 +7,7 @@
 // change breaks the build here — once — instead of quietly weakening every
 // test that builds one.
 
-import { wayById, wholeLegs } from '../model/geo';
+import { wayById, wholeLegs, oneSection } from '../model/geo';
 import { defaultProfileFor } from '../model/profile';
 import { createEmptySystem } from '../model/serialize';
 import type { LngLat, Pattern, Service, Station, TransitSystem, Way } from '../model/system';
@@ -35,7 +35,7 @@ export function aPattern(
   wayIds: string[],
   overrides: Partial<Pattern> = {},
 ): Pattern {
-  return { id, legs: wholeLegs(wayById(ways), wayIds), ...overrides };
+  return { id, sections: oneSection(wholeLegs(wayById(ways), wayIds)), ...overrides };
 }
 
 /** A bus line running the given patterns. */

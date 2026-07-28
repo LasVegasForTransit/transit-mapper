@@ -9,7 +9,7 @@ import { shortId } from './ids';
 import { deriveServiceLevels, type DerivedServiceLevel } from './gtfsSchedule';
 import { defaultProfileFor, makeOneWay } from './profile';
 import { wayType } from './catalog';
-import { nearestOnPath, resolveWayPath, wholeLeg } from './geo';
+import { nearestOnPath, resolveWayPath, wholeLeg, oneSection } from './geo';
 import type { LngLat, Pattern, Service, Station, Way } from './system';
 
 export interface GtfsImportResult {
@@ -234,7 +234,7 @@ function piecesForRoutes(
       // A freshly minted shape way is traversed in its own point order,
       // end to end — the one case where direction and extent need no
       // derivation at all.
-      patterns.push({ id: shortId(), legs: [wholeLeg(wayId)] });
+      patterns.push({ id: shortId(), sections: oneSection([wholeLeg(wayId)]) });
     }
     if (patterns.length === 0) continue;
 

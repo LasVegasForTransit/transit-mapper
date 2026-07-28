@@ -1,6 +1,18 @@
 import type { Grade } from './catalog';
-import { haversineMeters, patternSegments, serviceWayIds, wayById } from './geo';
-import type { LngLat, TransitSystem, Way } from './system';
+import {
+  haversineMeters,
+  patternHasSplit,
+  patternRunSegments,
+  serviceWayIds,
+  wayById,
+} from './geo';
+import type { LngLat, RunDirection, TransitSystem, Way } from './system';
+
+/** How a direction of service reads in a sentence a planner will see. */
+const RUN_NOUN: Record<RunDirection, string> = {
+  outbound: 'outward',
+  inbound: 'return',
+};
 
 /** How far apart two consecutive legs' join coordinates may sit before the
  *  route counts as broken. Junctions are formed from exactly-coincident
@@ -51,18 +63,46 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
     // Legs can, so the check that used to be structural has to be an explicit
     // one. A break here means some edit rewrote the legs without keeping them
     // joined, and the line will render as two disconnected pieces.
+    //
+    // Continuity is per DIRECTION. A couplet's outbound and inbound halves are
+    // two different streets a block apart, so asking one walk to cover both
+    // would report every couplet as broken forever.
     for (const pattern of service.patterns) {
-      const segments = patternSegments(waysById, pattern);
-      for (let i = 1; i < segments.length; i++) {
-        const prevEnd = segments[i - 1].path[segments[i - 1].path.length - 1];
-        const nextStart = segments[i].path[0];
-        if (haversineMeters(prevEnd, nextStart) <= LEG_JOIN_TOLERANCE_M) continue;
-        issues.push({
-          id: `broken-pattern-${service.id}-${pattern.id}-${i}`,
-          message: `"${service.name}" has a gap in its route where it leaves one way and joins the next.`,
-          target: { kind: 'service', id: service.id },
-        });
-        break; // one report per pattern; the first break is the useful one
+      // An unsplit pattern's inbound run is its outbound run reversed — same
+      // joins, same coordinates, same answer — so it is walked once. This runs
+      // reactively on every store change, and doubling that for every system
+      // that has never seen a couplet buys nothing.
+      const runs: RunDirection[] = patternHasSplit(pattern)
+        ? ['outbound', 'inbound']
+        : ['outbound'];
+      for (const run of runs) {
+        const segments = patternRunSegments(waysById, pattern, run);
+        if (segments.length === 0 && patternHasSplit(pattern)) {
+          issues.push({
+            id: `empty-run-${service.id}-${pattern.id}-${run}`,
+            message: `"${service.name}" has no ${RUN_NOUN[run]} path — it goes out and never comes back.`,
+            target: { kind: 'service', id: service.id },
+          });
+          continue;
+        }
+        for (let i = 1; i < segments.length; i++) {
+          const prevEnd = segments[i - 1].path[segments[i - 1].path.length - 1];
+          const nextStart = segments[i].path[0];
+          if (haversineMeters(prevEnd, nextStart) <= LEG_JOIN_TOLERANCE_M) continue;
+          issues.push({
+            // An unsplit pattern keeps the id it had before directions
+            // existed: these are React keys and selection targets in
+            // IssuesPopover, so preserving them makes this a pure addition.
+            id: patternHasSplit(pattern)
+              ? `broken-pattern-${service.id}-${pattern.id}-${run}-${i}`
+              : `broken-pattern-${service.id}-${pattern.id}-${i}`,
+            message: patternHasSplit(pattern)
+              ? `"${service.name}" has a gap in its ${RUN_NOUN[run]} route where it leaves one way and joins the next.`
+              : `"${service.name}" has a gap in its route where it leaves one way and joins the next.`,
+            target: { kind: 'service', id: service.id },
+          });
+          break; // one report per direction; the first break is the useful one
+        }
       }
     }
   }

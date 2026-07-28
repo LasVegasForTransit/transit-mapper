@@ -1,6 +1,6 @@
 import { shortId } from './ids';
 import { LINE_COLORS, laneKind } from './catalog';
-import { deriveLegDirections, wayById } from './geo';
+import { deriveLegDirections, oneSection, wayById } from './geo';
 import { defaultProfileFor } from './profile';
 import type { ComponentMap } from './components';
 import {
@@ -33,7 +33,7 @@ import {
 
 export function createEmptySystem(now = Date.now()): TransitSystem {
   return {
-    version: 11, // v11 gives a leg typed direction/extent/lane (see model/system/service.ts)
+    version: 12, // v12 puts a pattern's path in sections — one per direction of service
     id: shortId(),
     name: 'Untitled system',
     viewport: { ...DEFAULT_VIEWPORT },
@@ -524,17 +524,24 @@ function parsePatterns(raw: unknown, legacyWayIds: unknown): DraftPattern[] {
 function resolveLegDirections(patterns: DraftPattern[], ways: Way[]): Pattern[] {
   const byId = wayById(ways);
   return patterns.map((p) => {
-    if (p.legs.every((l) => l.direction !== undefined)) return p as Pattern;
+    const { legs, ...rest } = p;
+    if (legs.every((l) => l.direction !== undefined))
+      return { ...rest, sections: oneSection(legs as PatternLeg[]) };
+    // Only a pre-v11 document can be missing a direction, and no pre-v12
+    // document can be split, so the whole leg list is one continuous path and
+    // continuity derivation reads it correctly.
     const derived = deriveLegDirections(
       byId,
-      p.legs.map((l) => l.wayId),
+      legs.map((l) => l.wayId),
     );
     return {
-      ...p,
-      legs: p.legs.map((l, i) => ({
-        ...l,
-        direction: l.direction ?? (derived[i] ? 'withPoints' : 'againstPoints'),
-      })),
+      ...rest,
+      sections: oneSection(
+        legs.map((l, i) => ({
+          ...l,
+          direction: l.direction ?? (derived[i] ? 'withPoints' : 'againstPoints'),
+        })) as PatternLeg[],
+      ),
     };
   });
 }
@@ -840,7 +847,7 @@ function finish(
 
   const now = Date.now();
   return {
-    version: 11,
+    version: 12,
     id: typeof o.id === 'string' ? o.id : shortId(),
     name: typeof o.name === 'string' ? o.name : 'Untitled system',
     description: typeof o.description === 'string' ? o.description : undefined,

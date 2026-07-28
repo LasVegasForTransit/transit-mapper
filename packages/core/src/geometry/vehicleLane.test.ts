@@ -14,6 +14,8 @@ import {
   pointAtDistance,
   stretchLeg,
   wayById,
+  oneSection,
+  patternLegs,
 } from '../model/geo';
 import { serviceLaneOnWay } from '../model/geo/serviceLane';
 import { planService, runStateAt } from '../sim/fleet';
@@ -85,7 +87,7 @@ describe('the lane a pattern rides', () => {
     // offset sideways, so without trimming it the vehicles ran the whole
     // street while the drawn line stopped where it should.
     const half = aPattern('p4', [road], ['w']);
-    half.legs[0] = stretchLeg(half.legs[0], 0, 0.5);
+    half.sections = oneSection([stretchLeg(patternLegs(half)[0], 0, 0.5)]);
     const whole = patternLanePath([road], pattern, 'lightRail', 'outbound');
     const partial = patternLanePath([road], half, 'lightRail', 'outbound');
     const lengthOf = (p: [number, number][]) => {

@@ -1,12 +1,100 @@
-import type { LegDirection, LngLat, Pattern, PatternLeg, Service, Way } from '../system';
+import type {
+  LegDirection,
+  LngLat,
+  Pattern,
+  PatternLeg,
+  PatternSection,
+  RunDirection,
+  Service,
+  Way,
+} from '../system';
+// Re-exported from where it used to be declared: RunDirection is a model
+// concept now (system/service.ts), but every caller reaches it through geo.
+export type { RunDirection } from '../system';
+
 import { slicePathByT } from './measurement';
 import { haversineMeters } from './spherical';
 import { resolveWayPath, wayById } from './wayPath';
 
-/** The ways a pattern runs over, in ride order. Legs carry more than an id
- *  now, and most callers only want the ids. */
+/**
+ * Every leg of a pattern, in one flat list.
+ *
+ * The order is outbound-ish and deliberately unspecified beyond that: it is
+ * sections in order, and within a `split` the outbound legs then the inbound
+ * ones. Right for anything that asks a set question — which ways does this
+ * pattern touch, does it cover this point, is any leg partial. WRONG for
+ * anything that walks a path, because a couplet's two halves are interleaved
+ * here in an order no vehicle drives. Use patternRunLegs or patternRunSegments
+ * for that.
+ */
+export function patternLegs(pattern: Pattern): PatternLeg[] {
+  return pattern.sections.flatMap((s) =>
+    s.kind === 'split' ? [...s.outbound, ...s.inbound] : s.legs,
+  );
+}
+
+/** Whether a pattern's two directions are genuinely different paths. False for
+ *  every pattern in every document before v12 — and worth asking, because a
+ *  false answer lets the direction-aware paths do one walk instead of two for
+ *  the same answer. */
+export function patternHasSplit(pattern: Pattern): boolean {
+  return pattern.sections.some((s) => s.kind !== 'shared');
+}
+
+/** A pattern whose path is one undivided stretch — what drawing a line
+ *  produces, and what every pre-v12 document contained. */
+export function oneSection(legs: PatternLeg[]): PatternSection[] {
+  return [{ kind: 'shared', legs }];
+}
+
+/** One leg as a given direction of service rides it. */
+export interface RunLeg {
+  leg: PatternLeg;
+  /** Index into `patternLegs(pattern)` — NOT into the array this came back in,
+   *  which skips the other direction's legs and is reversed for inbound. */
+  index: number;
+  /** RIDE direction: whether the vehicle travels this way with its point
+   *  order. Already flipped for inbound, so this is the field callers want;
+   *  `leg.direction` is storage. */
+  forward: boolean;
+}
+
+/**
+ * The legs one direction of service rides, in that direction's ride order.
+ *
+ * The single place the outbound/inbound reading rule is written down. A
+ * `turnaround` is ridden once and is attributed to the outbound run, because
+ * the vehicle covers it before it can start back and the round-trip clock has
+ * to count it exactly once.
+ */
+export function patternRunLegs(pattern: Pattern, run: RunDirection): RunLeg[] {
+  const flat = patternLegs(pattern);
+  const indexOf = new Map<PatternLeg, number>(flat.map((l, i) => [l, i]));
+  const out: RunLeg[] = [];
+  const take = (legs: PatternLeg[], flip: boolean) => {
+    const ordered = flip ? [...legs].reverse() : legs;
+    for (const leg of ordered) {
+      out.push({
+        leg,
+        index: indexOf.get(leg) ?? -1,
+        forward: flip ? !legRunsWithPoints(leg) : legRunsWithPoints(leg),
+      });
+    }
+  };
+  const sections = run === 'inbound' ? [...pattern.sections].reverse() : pattern.sections;
+  for (const section of sections) {
+    if (section.kind === 'shared') take(section.legs, run === 'inbound');
+    else if (section.kind === 'turnaround') {
+      if (run === 'outbound') take(section.legs, false);
+    } else take(run === 'outbound' ? section.outbound : section.inbound, false);
+  }
+  return out;
+}
+
+/** The ways a pattern runs over. Legs carry more than an id now, and most
+ *  callers only want the ids. Set-shaped, not path-shaped — see patternLegs. */
 export function patternWayIds(pattern: Pattern): string[] {
-  return pattern.legs.map((l) => l.wayId);
+  return patternLegs(pattern).map((l) => l.wayId);
 }
 
 /** Every way a service touches across ALL its patterns, deduplicated — the
@@ -21,7 +109,7 @@ export function patternWayIds(pattern: Pattern): string[] {
  *  one for "does this line actually reach this point" — use
  *  patternCoversWayAt for that. */
 export function serviceWayIds(service: Service): string[] {
-  return [...new Set(service.patterns.flatMap((p) => p.legs.map((l) => l.wayId)))];
+  return [...new Set(service.patterns.flatMap((p) => patternLegs(p).map((l) => l.wayId)))];
 }
 
 /** The stretch of its way a leg covers, as an ordered [lo, hi] pair in the
@@ -73,7 +161,7 @@ export function stretchLeg(leg: PatternLeg, fromT: number, toT: number): Pattern
  *  counterpart to a bare way-id membership test — a station anchored to a way a
  *  line only partly covers is not necessarily a stop on that line. */
 export function patternCoversWayAt(pattern: Pattern, wayId: string, t: number): boolean {
-  return pattern.legs.some((leg) => {
+  return patternLegs(pattern).some((leg) => {
     if (leg.wayId !== wayId) return false;
     const [lo, hi] = legRange(leg);
     return t >= lo && t <= hi;
@@ -90,7 +178,7 @@ export function serviceCoversWayAt(service: Service, wayId: string, t: number): 
  *  false, which is worth knowing: it lets the extent-aware paths in rendering
  *  skip their extra work entirely for a system nobody has trimmed. */
 export function serviceHasPartialLeg(service: Service): boolean {
-  return service.patterns.some((p) => p.legs.some((l) => !legIsWhole(l)));
+  return service.patterns.some((p) => patternLegs(p).some((l) => !legIsWhole(l)));
 }
 
 /**
@@ -105,7 +193,7 @@ export function serviceHasPartialLeg(service: Service): boolean {
 export function serviceRangesOnWay(service: Service, wayId: string): [number, number][] {
   const ranges: [number, number][] = [];
   for (const pattern of service.patterns) {
-    for (const leg of pattern.legs) {
+    for (const leg of patternLegs(pattern)) {
       if (leg.wayId === wayId) ranges.push(legRange(leg));
     }
   }
@@ -124,13 +212,17 @@ export function serviceRangesOnWay(service: Service, wayId: string): [number, nu
  *  `path` runs from where the pattern enters the way to where it leaves it,
  *  trimmed to the leg's extent, so consecutive segments concatenate directly. */
 export interface PatternSegment {
-  /** Position in `pattern.legs` — what serviceLaneOnWay's `wayIndex`
-   *  expects. Not the index into the returned array, which skips missing and
-   *  degenerate ways. */
+  /** Position in `patternLegs(pattern)`. Not the index into the returned
+   *  array, which skips missing and degenerate ways and is reversed for the
+   *  inbound run. */
   wayIndex: number;
   leg: PatternLeg;
   way: Way;
-  /** Traversed with increasing point index. */
+  /** Which direction of service this resolution is for. */
+  run: RunDirection;
+  /** RIDE direction — already flipped for inbound. Every existing reader of
+   *  this field keeps working per-direction unchanged, because it always meant
+   *  "the way the vehicle is pointing" and it still does. */
   forward: boolean;
   /** The way's resolved path, trimmed to the leg's extent and oriented into
    *  travel order. */
@@ -138,7 +230,9 @@ export interface PatternSegment {
 }
 
 interface CachedSegments {
-  segments: PatternSegment[];
+  /** Filled lazily per direction: a plain line's inbound run is rarely asked
+   *  for, and resolving it costs the same as the outbound one. */
+  byRun: Partial<Record<RunDirection, PatternSegment[]>>;
   forWaysById: Map<string, Way>;
 }
 
@@ -158,53 +252,57 @@ const segmentsCache = new WeakMap<Pattern, CachedSegments>();
  * for where a caller that has only geometry gets one.
  */
 export function patternSegments(waysById: Map<string, Way>, pattern: Pattern): PatternSegment[] {
-  const cached = segmentsCache.get(pattern);
-  if (cached && cached.forWaysById === waysById) return cached.segments;
-
-  const segments: PatternSegment[] = [];
-  pattern.legs.forEach((leg, wayIndex) => {
-    const way = waysById.get(leg.wayId);
-    if (!way) return;
-    const raw = resolveWayPath(way);
-    if (raw.length < 2) return;
-    const [lo, hi] = legRange(leg);
-    const trimmed = legIsWhole(leg) ? raw : slicePathByT(raw, lo, hi);
-    if (trimmed.length < 2) return;
-    const forward = legRunsWithPoints(leg);
-    segments.push({
-      wayIndex,
-      leg,
-      way,
-      forward,
-      path: forward ? trimmed : [...trimmed].reverse(),
-    });
-  });
-
-  segmentsCache.set(pattern, { segments, forWaysById: waysById });
-  return segments;
+  return patternRunSegments(waysById, pattern, 'outbound');
 }
 
-/** Which of a pattern's two runs is being resolved. */
-export type RunDirection = 'outbound' | 'inbound';
-
 /**
- * A pattern's segments for one run.
+ * A pattern's ways as one direction of service rides them, each trimmed to its
+ * leg's extent and oriented the way the vehicle travels it.
  *
- * The return run is the outbound list MIRRORED — reversed order, each segment
- * reversed and its direction flipped — rather than resolved a second time, so
- * the two runs cannot disagree about a way. It is a genuinely different piece
- * of ground once lanes are involved: the far curb of a two-way street.
+ * Resolved per direction, not mirrored. The return run used to be the outbound
+ * list reversed with every segment flipped, which is exactly right while both
+ * directions ride the same ground and exactly wrong once they do not: a
+ * couplet's return trip is a different street, with its own length and its own
+ * stops, and mirroring cannot produce it.
+ *
+ * Direction comes from the section and the leg, never from geometry — see
+ * deriveLegDirections for where a caller holding only geometry gets one.
  */
 export function patternRunSegments(
   waysById: Map<string, Way>,
   pattern: Pattern,
   run: RunDirection = 'outbound',
 ): PatternSegment[] {
-  const outbound = patternSegments(waysById, pattern);
-  if (run === 'outbound') return outbound;
-  return outbound
-    .map((s) => ({ ...s, forward: !s.forward, path: [...s.path].reverse() }))
-    .reverse();
+  const cached = segmentsCache.get(pattern);
+  if (cached && cached.forWaysById === waysById) {
+    const hit = cached.byRun[run];
+    if (hit) return hit;
+  }
+
+  const segments: PatternSegment[] = [];
+  for (const { leg, index, forward } of patternRunLegs(pattern, run)) {
+    const way = waysById.get(leg.wayId);
+    if (!way) continue;
+    const raw = resolveWayPath(way);
+    if (raw.length < 2) continue;
+    const [lo, hi] = legRange(leg);
+    const trimmed = legIsWhole(leg) ? raw : slicePathByT(raw, lo, hi);
+    if (trimmed.length < 2) continue;
+    segments.push({
+      wayIndex: index,
+      leg,
+      way,
+      run,
+      forward,
+      path: forward ? trimmed : [...trimmed].reverse(),
+    });
+  }
+
+  const entry =
+    cached && cached.forWaysById === waysById ? cached : { byRun: {}, forWaysById: waysById };
+  entry.byRun[run] = segments;
+  segmentsCache.set(pattern, entry);
+  return segments;
 }
 
 /**
@@ -295,5 +393,11 @@ export function stitchPaths(paths: LngLat[][]): LngLat[] {
  *  them, trimmed to the stretch of each it uses, stitched into one
  *  polyline. */
 export function patternPath(ways: Way[], pattern: Pattern): LngLat[] {
-  return stitchPaths(patternSegments(wayById(ways), pattern).map((s) => s.path));
+  return patternRunPath(ways, pattern, 'outbound');
+}
+
+/** The polyline one direction of service actually drives — its ways, in that
+ *  direction's ride order, trimmed and oriented, stitched into one line. */
+export function patternRunPath(ways: Way[], pattern: Pattern, run: RunDirection): LngLat[] {
+  return stitchPaths(patternRunSegments(wayById(ways), pattern, run).map((s) => s.path));
 }
