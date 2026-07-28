@@ -6,6 +6,7 @@
 // function that touches the network.
 import { unzipSync, strFromU8 } from 'fflate';
 import { shortId } from './ids';
+import { deriveServiceLevels, type DerivedServiceLevel } from './gtfsSchedule';
 import { defaultProfileFor, makeOneWay } from './profile';
 import { wayType } from './catalog';
 import { nearestOnPath, resolveWayPath } from './geo';
@@ -92,6 +93,10 @@ export interface GtfsFiles {
   stops: string;
   stopTimes: string;
   shapes?: string;
+  /** Optional, and most feeds omit it. When present it states each route's
+   *  headway directly, which beats measuring one off stop_times — see
+   *  gtfsSchedule.ts. */
+  frequencies?: string;
 }
 
 interface GtfsIndex {
@@ -103,6 +108,9 @@ interface GtfsIndex {
   stopTimesByTrip: Map<string, { seq: number; stopId: string }[]>;
   /** routeId -> its shapeIds, in the order first seen — the unit a batch is drawn from. */
   routeShapeIds: Map<string, string[]>;
+  /** routeId -> how often it runs. Empty for a feed whose stop_times carry no
+   *  usable departure times. */
+  serviceLevelByRoute: Map<string, DerivedServiceLevel>;
 }
 
 /** Parse every GTFS file and build the lookup structures the transform
@@ -171,6 +179,11 @@ function buildGtfsIndex(files: GtfsFiles): GtfsIndex {
     shapeToTrip,
     stopTimesByTrip,
     routeShapeIds,
+    serviceLevelByRoute: deriveServiceLevels({
+      trips,
+      stopTimes,
+      frequencies: files.frequencies ? parseGtfsCsv(files.frequencies) : undefined,
+    }),
   };
 }
 
@@ -228,6 +241,10 @@ function piecesForRoutes(
       modeId: kind.modeId,
       color: route.route_color ? `#${route.route_color}` : '#e4572e',
       patterns,
+      // How often it runs, recovered from the feed. Spread rather than
+      // assigned field by field so a route whose timing couldn't be read
+      // stays exactly as it was before: no headway, no span, one vehicle.
+      ...(index.serviceLevelByRoute.get(routeId) ?? {}),
     });
   }
 
@@ -321,6 +338,7 @@ export async function* streamRtcGtfsBatches(batchSize = 2): AsyncGenerator<GtfsI
     trips: read('trips.txt'),
     stops: read('stops.txt'),
     stopTimes: read('stop_times.txt'),
+    frequencies: read('frequencies.txt'),
     shapes: read('shapes.txt'),
   });
 
