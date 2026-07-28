@@ -18,6 +18,9 @@ packages/
       share/     contract.ts — the wire shapes both the app and worker use.
                  claim.ts/ownership.ts are accounts groundwork (see below).
       auth/      Accounts groundwork: NOT WIRED UP (see below).
+  pwa-updater/   The React hook behind the "new version available" prompt.
+  tsconfig/      Shared compiler options. JSON only, no source.
+  eslint-plugin/ Lint rules for invariants the compiler cannot express.
 apps/
   web/           The Vite React SPA.
     src/
@@ -135,6 +138,44 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
   anonymous shares it created. Pure, so the test suite can cover it: getting
   it wrong either loses a claimable share forever or retries a hopeless one
   on every page load.
+
+## packages/pwa-updater/ — the update prompt
+
+- `src/useAppUpdate.ts` — the React hook behind the "a new version is
+  available" banner.
+
+The service worker is registered as `prompt` rather than `autoUpdate`, and
+registration happens by hand from `App.tsx`. Both are deliberate: the point
+is a banner someone acts on, not a version swapped out from under them
+mid-edit, and automatic registration would inject itself into the embed
+entry too.
+
+It is its own package rather than a file in `apps/web` because the hook and
+the Vite plugin configuration are one concern, and because nothing about it
+depends on the editor.
+
+## packages/tsconfig/ — shared compiler options
+
+- `base.json` — the compiler options every package extends.
+
+JSON only. It ships no source, so `check:contract` does not ask it for
+`lint`, `typecheck` or `verify`: there would be nothing for those scripts
+to do, and writing three that do nothing is how a task list stops meaning
+anything.
+
+## packages/eslint-plugin/ — rules the compiler cannot express
+
+- `src/core-runtime-purity.ts` — rejects browser-only globals in
+  `packages/core`, which is typechecked against the browser and workerd
+  both. The compiler cannot catch it, because core needs typings the two
+  runtimes share and those arrive alongside browser-only ones.
+
+Rules live here when the invariant is real, mechanical, and has no false
+positives. An invariant that needs judgement stays in `AGENTS.md` with
+**nothing** in its enforcement column, because a rule that fires on correct
+code gets disabled and then enforces nothing.
+
+See [the enforcement model](../explanation/enforcement-model.md).
 
 ## apps/web/src/share/ — exporting and publishing
 

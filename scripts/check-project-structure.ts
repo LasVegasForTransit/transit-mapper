@@ -14,14 +14,55 @@
  * touches it. An entry with no directory is a map of a place that no longer
  * exists, which is worse than no map.
  */
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const DOC = resolve(ROOT, 'docs/development/reference/project-structure.md');
 
-/** Workspace roots whose immediate `src/` children are subsystems. */
-const SOURCE_ROOTS = ['apps/web/src', 'apps/worker/src', 'packages/core/src'];
+interface TurboPackage {
+  name: string;
+  path: string;
+}
+
+interface TurboQueryResponse {
+  data: { packages: { items: TurboPackage[] } };
+}
+
+/**
+ * Workspace roots whose immediate `src/` children are subsystems.
+ *
+ * Asked of the build graph, not hardcoded. The list used to be three literal
+ * paths, and a package added afterwards was invisible to this check for as
+ * long as nobody remembered to extend the constant — which is how
+ * `packages/pwa-updater` and `packages/tsconfig` both arrived with nothing
+ * written about them while the check reported the tree fully described.
+ *
+ * A check whose coverage is a constant stops covering the repository the
+ * moment the repository grows, and says nothing when it does.
+ */
+function listPackagePaths(): string[] {
+  const raw = execFileSync(
+    'npx',
+    ['turbo', 'query', 'query { packages { items { name path } } }'],
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+    },
+  );
+  // turbo prints a version banner before the JSON body.
+  const parsed = JSON.parse(raw.slice(raw.indexOf('{'))) as TurboQueryResponse;
+  // "//" is the workspace root, which is not a package anyone documents.
+  return parsed.data.packages.items.filter((p) => p.name !== '//').map((p) => p.path);
+}
+
+function sourceRoots(): string[] {
+  return listPackagePaths()
+    .map((p) => `${p}/src`)
+    .filter((p) => existsSync(resolve(ROOT, p)))
+    .sort();
+}
 
 /**
  * Directories that are deliberately not described as subsystems.
@@ -32,7 +73,7 @@ const EXEMPT = new Set(['apps/worker/src/migrations']);
 
 function sourceDirectories(): string[] {
   const found: string[] = [];
-  for (const root of SOURCE_ROOTS) {
+  for (const root of sourceRoots()) {
     const abs = resolve(ROOT, root);
     if (!existsSync(abs)) continue;
     for (const entry of readdirSync(abs, { withFileTypes: true })) {
@@ -56,6 +97,26 @@ function documentedPaths(source: string): Set<string> {
   return paths;
 }
 
+/** Workspace package paths the document names. */
+function documentedPackages(source: string): Set<string> {
+  return new Set([...source.matchAll(/\b((?:apps|packages)\/[A-Za-z0-9_.-]+)/g)].map((m) => m[1]));
+}
+
+/**
+ * Every workspace package is named somewhere in the document.
+ *
+ * Checking directories under `src/` is not enough on its own: a package whose
+ * `src/` holds files and no subdirectories contributes no directories to
+ * check, so an entire package can be added without the check noticing.
+ * `packages/pwa-updater` did exactly that.
+ */
+function undocumentedPackages(source: string): string[] {
+  const documented = documentedPackages(source);
+  return listPackagePaths()
+    .filter((p) => !documented.has(p))
+    .sort();
+}
+
 function main(): void {
   const source = readFileSync(DOC, 'utf8');
   const documented = documentedPaths(source);
@@ -71,30 +132,31 @@ function main(): void {
     .filter((p) => !existsSync(resolve(ROOT, p)))
     .sort();
 
-  if (undocumented.length === 0 && missing.length === 0) {
+  const orphanPackages = undocumentedPackages(source);
+
+  if (undocumented.length === 0 && missing.length === 0 && orphanPackages.length === 0) {
     console.log(`project structure: ${actual.length} source directories, all described.`);
     return;
   }
 
   console.error(`\n${docRelative} no longer matches the source tree.\n`);
 
+  if (orphanPackages.length > 0) {
+    console.error('  Workspace packages not mentioned in the document:');
+    for (const p of orphanPackages) console.error(`    ${p}`);
+    console.error(`\n    fix:  add each to the tree and give it a section in ${docRelative}\n`);
+  }
+
   if (undocumented.length > 0) {
-    console.error('  Directories with nothing written about them:');
+    console.error('  Source directories not mentioned in the document:');
     for (const d of undocumented) console.error(`    ${d}`);
-    console.error(
-      '\n  A subsystem nobody wrote down can only be understood by reading' +
-        '\n  every file that touches it.' +
-        `\n    fix:  add a section for it to ${docRelative}\n`,
-    );
+    console.error(`\n    fix:  add a section for each to ${docRelative}\n`);
   }
 
   if (missing.length > 0) {
-    console.error('  Described, but no longer present:');
+    console.error('  Described in the document, but not present on disk:');
     for (const p of missing) console.error(`    ${p}`);
-    console.error(
-      '\n  A map of a place that does not exist is worse than no map.' +
-        `\n    fix:  remove or update the entry in ${docRelative}\n`,
-    );
+    console.error(`\n    fix:  remove or update each entry in ${docRelative}\n`);
   }
 
   process.exit(1);
