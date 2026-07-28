@@ -2190,6 +2190,33 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   store.getState().toggleMultiSelect({ kind: 'service', id: lineE });
   check('a service can be part of a multi-selection', store.getState().multiSelection.length === 2);
 
+  // Selecting one thing and then shift-clicking a second has to end up with
+  // both, not just the second.
+  store.getState().clearMultiSelection();
+  store.getState().select({ kind: 'service', id: lineW });
+  store.getState().extendSelection({ kind: 'service', id: lineE });
+  check(
+    'extending a single selection groups both, not just the second',
+    store.getState().multiSelection.length === 2,
+  );
+  store.getState().clearMultiSelection();
+  store.getState().select({ kind: 'service', id: lineW });
+  store.getState().extendSelection({ kind: 'service', id: lineW });
+  check(
+    '…and extending onto the one thing already selected groups it once',
+    store.getState().multiSelection.length === 1,
+  );
+  store.getState().clearMultiSelection();
+  store.getState().select({ kind: 'service', id: lineW });
+  store.getState().toggleMultiSelect({ kind: 'service', id: lineE });
+  check(
+    'a plain toggle still builds the group from scratch',
+    store.getState().multiSelection.length === 1,
+  );
+  store.getState().clearMultiSelection();
+  store.getState().toggleMultiSelect({ kind: 'service', id: lineW });
+  store.getState().toggleMultiSelect({ kind: 'service', id: lineE });
+
   const registry = createSelectionActions(store);
   const refs = store.getState().multiSelection;
   const actionIds = registry

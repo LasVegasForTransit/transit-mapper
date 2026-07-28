@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useEditor } from '../editor/EditorProvider';
 import type { Selection } from '../editor/store';
 import {
@@ -67,7 +67,11 @@ export function LinesPanel() {
   const facilities = useEditor((s) => s.system.facilities);
   const groups = useEditor((s) => s.system.groups);
   const selection = useEditor((s) => s.selection);
+  const multiSelection = useEditor((s) => s.multiSelection);
   const selectAndFocus = useEditor((s) => s.selectAndFocus);
+  const extendSelection = useEditor((s) => s.extendSelection);
+  const addMultiSelection = useEditor((s) => s.addMultiSelection);
+  const lastServiceIdRef = useRef<string | null>(null);
   const { containerRef, onKeyDown } = useListboxKeyboardNav<HTMLDivElement>();
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const expandSection = (key: string) => setExpanded((prev) => new Set(prev).add(key));
@@ -158,6 +162,33 @@ export function LinesPanel() {
             : null;
   const rovingKey = selectedKey ?? firstKey;
 
+  /**
+   * List conventions, not map conventions: ctrl/cmd-click toggles one line and
+   * shift-click extends a range from the last one clicked. Shift toggles on
+   * the map and extends here, which looks inconsistent written down and is
+   * what every list in every other application does.
+   *
+   * The range runs over the rows actually on screen, so "Show more" changing
+   * what a shift-click reaches is visible rather than surprising.
+   */
+  const selectServiceRow = (e: ReactMouseEvent, serviceId: string) => {
+    const visible = servicesShown.visible;
+    if (e.shiftKey && lastServiceIdRef.current) {
+      const from = visible.findIndex((sv) => sv.id === lastServiceIdRef.current);
+      const to = visible.findIndex((sv) => sv.id === serviceId);
+      if (from >= 0 && to >= 0) {
+        const [lo, hi] = from <= to ? [from, to] : [to, from];
+        addMultiSelection(
+          visible.slice(lo, hi + 1).map((sv) => ({ kind: 'service' as const, id: sv.id })),
+        );
+        return;
+      }
+    }
+    lastServiceIdRef.current = serviceId;
+    if (e.ctrlKey || e.metaKey) extendSelection({ kind: 'service', id: serviceId });
+    else selectAndFocus({ kind: 'service', id: serviceId });
+  };
+
   return (
     <div
       className="panel-body"
@@ -173,7 +204,8 @@ export function LinesPanel() {
         </p>
       )}
       {servicesShown.visible.map((sv) => {
-        const active = selection?.kind === 'service' && selection.id === sv.id;
+        const inGroup = multiSelection.some((i) => i.kind === 'service' && i.id === sv.id);
+        const active = (selection?.kind === 'service' && selection.id === sv.id) || inGroup;
         return (
           <button
             key={sv.id}
@@ -181,7 +213,7 @@ export function LinesPanel() {
             aria-selected={active}
             tabIndex={rowKey('service', sv.id) === rovingKey ? 0 : -1}
             className={`list-row ${active ? 'active' : ''}`}
-            onClick={() => selectAndFocus({ kind: 'service', id: sv.id })}
+            onClick={(e) => selectServiceRow(e, sv.id)}
           >
             <span className="dot" style={{ background: sv.color }} />
             <span className="list-name">{sv.name}</span>

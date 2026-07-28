@@ -103,7 +103,10 @@ import type {
   Way,
 } from '@transitmapper/core/model/system';
 
-export type Tool = 'select' | 'way' | 'station' | 'facility';
+/** `lines` selects SERVICES and only services — a drag-select for routes,
+ *  offered in the Network view where lines are what you are working on. The
+ *  Select tool stays the one that picks up and moves infrastructure. */
+export type Tool = 'select' | 'way' | 'station' | 'facility' | 'lines';
 
 // A freshly-drawn line should already be a "working" one — an ambient
 // vehicle animating along it — without a trip to the Inspector first (both
@@ -250,8 +253,15 @@ export interface EditorState {
    *  fits the camera onto it — see cameraFocusToken's own doc comment for
    *  when to reach for this instead of plain select(). */
   selectAndFocus: (selection: Selection) => void;
-  /** Adds/removes one item from the multi-select group (Shift-click). */
+  /** Adds/removes one item from the multi-select group, and nothing else.
+   *  The programmatic form — a gesture that means "and this one too" wants
+   *  extendSelection below. */
   toggleMultiSelect: (item: MultiSelectItem) => void;
+  /** The grouping GESTURE: shift-click on the map, ctrl/cmd-click in the
+   *  Objects list. Same as toggleMultiSelect, except that starting a group
+   *  carries the current single selection into it — see its implementation
+   *  for why the two are separate actions. */
+  extendSelection: (item: MultiSelectItem) => void;
   /** Adds every given item to the multi-select group, deduplicated against
    *  what's already there (Shift-drag rubber-band select — see
    *  map/interactions.ts's startMarqueeSelect). Unlike toggleMultiSelect,
@@ -1738,6 +1748,38 @@ export function createEditorStore() {
           ? s.multiSelection.filter((i) => !(i.kind === item.kind && i.id === item.id))
           : [...s.multiSelection, item];
         return { multiSelection, selection: null };
+      }),
+
+    extendSelection: (item) =>
+      set((s) => {
+        const exists = s.multiSelection.some((i) => i.kind === item.kind && i.id === item.id);
+        if (exists) {
+          return {
+            multiSelection: s.multiSelection.filter(
+              (i) => !(i.kind === item.kind && i.id === item.id),
+            ),
+            selection: null,
+          };
+        }
+        // Starting a group absorbs whatever was singly selected, so "click one
+        // line, shift-click a second" ends up with both. Without it the first
+        // click is thrown away, the group reads "1 selected", and no pairwise
+        // action is reachable in two clicks.
+        //
+        // This is why it is a separate action from toggleMultiSelect rather
+        // than a change to it: creating anything selects it, so a plain toggle
+        // that absorbed the selection would sweep a just-placed station into
+        // the next group nobody meant it to join.
+        const selected = s.selection;
+        const seed: MultiSelectItem[] =
+          s.multiSelection.length === 0 &&
+          selected &&
+          selected.kind !== 'node' &&
+          selected.kind !== 'group' &&
+          !(selected.kind === item.kind && selected.id === item.id)
+            ? [{ kind: selected.kind, id: selected.id }]
+            : [];
+        return { multiSelection: [...seed, ...s.multiSelection, item], selection: null };
       }),
 
     addMultiSelection: (items) =>

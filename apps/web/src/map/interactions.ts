@@ -8,6 +8,7 @@ import {
   metersFromOrigin,
   nearestOpenEndpoint,
   offsetMeters,
+  patternPath,
   resolveWayPath,
   snap,
   squareFootprint,
@@ -15,7 +16,7 @@ import {
 } from '@transitmapper/core/model/geo';
 import { facilityType, mode } from '@transitmapper/core/model/catalog';
 import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
-import type { LngLat } from '@transitmapper/core/model/system';
+import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
 import {
   LYR_FACILITIES,
   LYR_HANDLES,
@@ -99,6 +100,17 @@ function rafThrottle<A extends unknown[]>(fn: (...args: A) => void) {
     },
   };
 }
+
+/** What a marquee can ask about the box it just swept. Separating this from
+ *  the gesture keeps "where did the box land" in one place and "what counts
+ *  as caught by it" in another — the Select tool and the Lines tool answer
+ *  the second question differently and share the first. */
+export interface MarqueeProbe {
+  inBox: (coord: LngLat) => boolean;
+  pathInBox: (path: LngLat[]) => boolean;
+}
+
+export type MarqueeCollector = (probe: MarqueeProbe, system: TransitSystem) => MultiSelectItem[];
 
 export interface AttachInteractionsOptions {
   openShortcuts: () => void;
@@ -836,7 +848,35 @@ export function attachInteractions(
   // screen space) so this stays correct even if the map ever gains rotation
   // — it doesn't today, but this way nothing here silently assumes it never
   // will.
-  const startMarqueeSelect = (e: MapMouseEvent) => {
+  /** Everything physical the box touched — the Select tool's own marquee. */
+  const collectInfrastructure: MarqueeCollector = ({ inBox, pathInBox }, system) => {
+    const items: MultiSelectItem[] = [];
+    for (const w of system.ways)
+      if (pathInBox(resolveWayPath(w))) items.push({ kind: 'way', id: w.id });
+    for (const s of system.stations) if (inBox(s.coord)) items.push({ kind: 'station', id: s.id });
+    for (const f of system.facilities) {
+      const coord = Array.isArray(f.geometry[0])
+        ? (f.geometry as LngLat[])[0]
+        : (f.geometry as LngLat);
+      if (inBox(coord)) items.push({ kind: 'facility', id: f.id });
+    }
+    return items;
+  };
+
+  /** Every LINE the box touched and nothing else — the Lines tool's marquee.
+   *  A box dragged over one boulevard covers the street and every service on
+   *  it; which of those you meant is what picking up the tool already said,
+   *  so nothing here has to guess. */
+  const collectServices: MarqueeCollector = ({ pathInBox }, system) => {
+    const items: MultiSelectItem[] = [];
+    for (const service of system.services) {
+      if (service.patterns.some((p) => pathInBox(patternPath(system.ways, p))))
+        items.push({ kind: 'service', id: service.id });
+    }
+    return items;
+  };
+
+  const startMarqueeSelect = (e: MapMouseEvent, collect: MarqueeCollector) => {
     suppressClick = true;
     const startPt = e.point;
     let dragged = false;
@@ -884,17 +924,7 @@ export function attachInteractions(
         return false;
       };
       const st = store.getState();
-      const items: MultiSelectItem[] = [];
-      for (const w of st.system.ways)
-        if (pathInBox(resolveWayPath(w))) items.push({ kind: 'way', id: w.id });
-      for (const s of st.system.stations)
-        if (inBox(s.coord)) items.push({ kind: 'station', id: s.id });
-      for (const f of st.system.facilities) {
-        const coord = Array.isArray(f.geometry[0])
-          ? (f.geometry as LngLat[])[0]
-          : (f.geometry as LngLat);
-        if (inBox(coord)) items.push({ kind: 'facility', id: f.id });
-      }
+      const items = collect({ inBox, pathInBox }, st.system);
       if (items.length > 0) st.addMultiSelection(items);
     };
     map.on('mousemove', onMove);
@@ -1371,24 +1401,30 @@ export function attachInteractions(
         // draggable target below sets suppressClick and would otherwise
         // swallow the click before onClick ever saw it.
         if (oe.shiftKey) {
-          if (handle) st.toggleMultiSelect({ kind: 'way', id: handle.properties.wayId as string });
+          if (handle) st.extendSelection({ kind: 'way', id: handle.properties.wayId as string });
           else if (facility)
-            st.toggleMultiSelect({ kind: 'facility', id: facility.properties.id as string });
+            st.extendSelection({ kind: 'facility', id: facility.properties.id as string });
           else if (station)
-            st.toggleMultiSelect({ kind: 'station', id: station.properties.id as string });
+            st.extendSelection({ kind: 'station', id: station.properties.id as string });
           else {
             // A served way's visible line is drawn as its SERVICE feature, not
             // its (often-hidden) bare WAY_LAYERS one — try both, same as a
             // plain click's own hit-testing does.
+            //
+            // And resolve it to the same THING a plain click would: clicking a
+            // line selects the service, so shift-clicking one has to add the
+            // service. It used to add the way underneath instead, which meant
+            // shift-clicking two visible transit lines produced two streets
+            // and no way to act on the lines at all.
             const wayHit = featureAt(e, WAY_LAYERS);
             const serviceHit = wayHit ? undefined : featureAt(e, SERVICE_LAYERS);
-            const wayId = wayHit
-              ? (wayHit.properties.id as string)
-              : (serviceHit?.properties.wayId as string | undefined);
-            if (wayId) st.toggleMultiSelect({ kind: 'way', id: wayId });
+            const serviceId = serviceHit?.properties.serviceId as string | undefined;
+            const wayId = wayHit ? (wayHit.properties.id as string) : undefined;
+            if (serviceId) st.extendSelection({ kind: 'service', id: serviceId });
+            else if (wayId) st.extendSelection({ kind: 'way', id: wayId });
             // Truly empty space under the cursor — rubber-band select
             // instead of toggling a single (nonexistent) target.
-            else startMarqueeSelect(e);
+            else startMarqueeSelect(e, collectInfrastructure);
           }
           suppressClick = true;
           break;
@@ -1430,6 +1466,17 @@ export function attachInteractions(
           else startPan(e, false);
         }
         break;
+      case 'lines': {
+        // The Lines tool is a selection tool for services and nothing else:
+        // every press starts a marquee that catches lines, and a press that
+        // never moves falls through to onClick's normal select handling.
+        // Dragging infrastructure is the Select tool's job, and keeping the
+        // two apart is the whole reason this tool exists — a box over a
+        // boulevard would otherwise have to guess between the street and the
+        // eleven routes on it.
+        startMarqueeSelect(e, collectServices);
+        break;
+      }
       case 'way':
         // In the Way tool a press always places the next node (even starting
         // on a handle) — reshaping handles is a Select-tool action — EXCEPT
@@ -1621,7 +1668,8 @@ export function attachInteractions(
     // a draw that won't happen.
     if (opts.isDiagramMode()) return 'grab';
     const tool = store.getState().tool;
-    if (tool === 'way' || tool === 'station' || tool === 'facility') return 'crosshair';
+    if (tool === 'way' || tool === 'station' || tool === 'facility' || tool === 'lines')
+      return 'crosshair';
     // Select tool, empty space: left-drag pans here too (see onMouseDown), so
     // the grab cursor MapLibre already shows by default is actually honest —
     // explicit rather than relying on an inline-style reset falling through

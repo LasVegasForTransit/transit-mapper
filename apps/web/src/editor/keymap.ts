@@ -156,6 +156,12 @@ export const KEY_BINDINGS: KeyBinding[] = [
   },
   {
     group: 'Tools',
+    keys: ['e'],
+    description: 'Select lines',
+    run: (c) => c.editor.getState().setTool('lines'),
+  },
+  {
+    group: 'Tools',
     keys: ['l'],
     description: 'Draw way / line (last kind)',
     when: editable,

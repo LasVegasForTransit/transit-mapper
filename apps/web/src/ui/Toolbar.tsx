@@ -88,6 +88,21 @@ export function Toolbar() {
             disabled={false}
             onClick={() => setTool('select')}
           />
+          {/* Network view only: a marquee here catches LINES, where the Select
+              tool's catches the streets under them. Both gestures are useful
+              and neither can be inferred from the box, so they are two tools
+              rather than one tool with a hidden modifier. Infrastructure view
+              has no lines to sweep, so the button isn't there at all. */}
+          {network && (
+            <ToolButton
+              icon="line"
+              label="Select lines"
+              hotkey="E"
+              active={tool === 'lines'}
+              disabled={locked}
+              onClick={() => setTool('lines')}
+            />
+          )}
         </div>
 
         {/* Cluster 2: PATHS — linear infrastructure (or lines in Network). */}
