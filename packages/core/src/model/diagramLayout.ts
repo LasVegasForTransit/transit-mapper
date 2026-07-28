@@ -157,10 +157,14 @@ function buildDiagramSystem(system: TransitSystem): TransitSystem {
     if (!anchor) return st;
     const way = wayById.get(anchor.wayId);
     if (!way || way.points.length < 2) return st;
-    // A station's t is a fraction of the way's RESOLVED path (that is what
-    // anchoring measured it against), and a filleted or curved way is longer
-    // than its control polyline — measuring against the raw points slid every
-    // station along its line in the schematic.
+    // A station's t is a fraction of the way's RESOLVED path — that is what
+    // anchoring measured it against — so that is the ruler to place it with.
+    //
+    // No station moves today: the schematic ways this walks are rebuilt as
+    // `straight` above, and resolveWayPath returns the points unchanged for
+    // those. It is written this way so it stays correct if the schematic ever
+    // keeps a way's own geometry, where the resolved path is longer than the
+    // polyline through its vertices and every station would sit early.
     return { ...st, coord: pointAtT(resolveWayPath(way), anchor.t) };
   });
 
