@@ -200,6 +200,7 @@ import {
   effectiveVehicleKind,
   patternStats,
   serviceStats,
+  patternStops,
 } from '@transitmapper/core/sim/serviceStats';
 import {
   buildTimetable,
@@ -10792,6 +10793,77 @@ function buildGrid() {
     'the new half takes a colour of its own',
     afterSplit.services[0].color !== afterSplit.services[1].color,
   );
+}
+
+// --- skipping a stop in one direction ---
+// One street ridden both ways, with a stop the return trip runs past. Nothing
+// about sections can express this: the stretch is shared, so the omission has
+// nowhere to live but an explicit record.
+{
+  fresh();
+  store.getState().setDraftMode('bus');
+  store.getState().setSystem(
+    parseSystem({
+      version: 3,
+      ways: [
+        {
+          id: 'street',
+          typeId: 'road',
+          points: [
+            [-115.2, 36.1],
+            [-115.2, 36.14],
+          ],
+          geometry: 'straight',
+          grade: 'atGrade',
+        },
+      ],
+      services: [],
+      stations: [],
+    }),
+  );
+  const sSvc = store.getState().addServiceToWay('street')!;
+  const sPat = store.getState().system.services.find((sv) => sv.id === sSvc)!.patterns[0];
+  // Anchored explicitly: addStation places a station where it is told and does
+  // not go looking for a way to bind it to, and an unanchored station is not a
+  // stop on anything.
+  const northId = store.getState().addStation([-115.2, 36.13], { wayId: 'street', t: 0.75 })!;
+  store.getState().addStation([-115.2, 36.11], { wayId: 'street', t: 0.25 });
+
+  const idsOn = (run: 'outbound' | 'inbound') => {
+    const sys = store.getState().system;
+    const pt = sys.services.find((sv) => sv.id === sSvc)!.patterns[0];
+    const path = patternRunPath(sys.ways, pt, run);
+    return patternStops(sys.stations, pt, path, pathLengthMeters(path), run).map(
+      (x) => x.station.id,
+    );
+  };
+
+  check('both directions call at both stops to begin with', idsOn('inbound').length === 2);
+
+  store.getState().setStopSkipped(sSvc, sPat.id, 'inbound', northId, true);
+  check('skipping a stop removes it from that direction', !idsOn('inbound').includes(northId));
+  check('the other direction still calls there', idsOn('outbound').includes(northId));
+
+  // Serialization is where this vanishes silently if it is not carried.
+  const reloaded = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
+  const rp = reloaded.services.find((sv) => sv.id === sSvc)!.patterns[0];
+  check(
+    'a skipped stop survives a save and a reload',
+    (rp.skippedStops?.inbound ?? []).includes(northId),
+  );
+
+  // A skip names a station, and a station can be deleted after the fact.
+  store.getState().deleteStation(northId);
+  const afterDelete = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
+  const dp = afterDelete.services.find((sv) => sv.id === sSvc)!.patterns[0];
+  check(
+    'a skip naming a station that no longer exists is dropped on load',
+    dp.skippedStops === undefined,
+  );
+
+  store.getState().setStopSkipped(sSvc, sPat.id, 'inbound', northId, false);
+  const cleared = store.getState().system.services.find((sv) => sv.id === sSvc)!.patterns[0];
+  check('un-skipping the last stop drops the record entirely', cleared.skippedStops === undefined);
 }
 
 // --- a couplet meeting itself: two one-way paths brought back together ---

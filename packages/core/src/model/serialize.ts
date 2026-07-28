@@ -18,6 +18,7 @@ import {
   type Pattern,
   type LegDirection,
   type PatternSection,
+  type RunDirection,
   type LegExtent,
   type LegLane,
   type PatternLeg,
@@ -34,7 +35,7 @@ import {
 
 export function createEmptySystem(now = Date.now()): TransitSystem {
   return {
-    version: 12, // v12 puts a pattern's path in sections — one per direction of service
+    version: 13, // v13 lets a pattern skip a stop in one direction (see system/service.ts)
     id: shortId(),
     name: 'Untitled system',
     viewport: { ...DEFAULT_VIEWPORT },
@@ -421,6 +422,7 @@ interface DraftPattern {
   /** Set for a v12+ document, whose sections already say everything — nothing
    *  is left for finish() to derive. */
   sections?: PatternSection[];
+  skippedStops?: Partial<Record<RunDirection, string[]>>;
   name?: string;
 }
 
@@ -475,6 +477,20 @@ function parseLegLane(r: Record<string, unknown>): LegLane {
  *  dropped rather than kept empty, and a `split` needs BOTH sides — one side
  *  alone is a line that goes out and never comes back, which is a real thing
  *  to have drawn but not a thing to silently invent from a bad record. */
+/** Per-direction skipped stops (v13+). Station ids are validated against the
+ *  document later — a skip naming a station that no longer exists is the one
+ *  way this can go stale, and it is dropped in finish(). */
+function parseSkippedStops(raw: unknown): Partial<Record<RunDirection, string[]>> | undefined {
+  const r = raw as Record<string, unknown> | undefined;
+  if (!r || typeof r !== 'object') return undefined;
+  const out: Partial<Record<RunDirection, string[]>> = {};
+  for (const run of ['outbound', 'inbound'] as const) {
+    const ids = strings(r[run]);
+    if (ids.length > 0) out[run] = ids;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function parseSections(raw: unknown[]): PatternSection[] {
   const out: PatternSection[] = [];
   for (const entry of raw) {
@@ -529,7 +545,14 @@ function parsePatterns(raw: unknown, legacyWayIds: unknown): DraftPattern[] {
         // of service ride it.
         if (Array.isArray(r.sections)) {
           const sections = parseSections(r.sections);
-          if (sections.length > 0) return { id: r.id, legs: [], sections, name };
+          if (sections.length > 0)
+            return {
+              id: r.id,
+              legs: [],
+              sections,
+              skippedStops: parseSkippedStops(r.skippedStops),
+              name,
+            };
         }
         // v10–v11: one flat leg list, each leg carrying its own direction,
         // extent, and lane pin. The whole thing is one shared stretch.
@@ -868,6 +891,20 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
  *  every parse path produces before finish() resolves them against the ways. */
 type DraftService = Omit<Service, 'patterns'> & { patterns: DraftPattern[] };
 
+/** A pattern whose skipped-stop list names only stations that still exist,
+ *  with the field dropped entirely once nothing survives — so the common case
+ *  (no skips at all) round-trips as an absent field rather than an empty one. */
+function prunedSkippedStops(pattern: Pattern, liveStationIds: Set<string>): Pattern {
+  if (!pattern.skippedStops) return pattern;
+  const kept: Partial<Record<RunDirection, string[]>> = {};
+  for (const run of ['outbound', 'inbound'] as const) {
+    const ids = (pattern.skippedStops[run] ?? []).filter((id) => liveStationIds.has(id));
+    if (ids.length > 0) kept[run] = ids;
+  }
+  const { skippedStops: _dropped, ...rest } = pattern;
+  return Object.keys(kept).length > 0 ? { ...rest, skippedStops: kept } : rest;
+}
+
 function finish(
   o: Record<string, unknown>,
   parts: Omit<
@@ -891,9 +928,14 @@ function finish(
       ? (o.palette as string[])
       : [...LINE_COLORS];
 
+  // A skip names a station, and a station can be deleted after the skip was
+  // set — the one way this record goes stale. Rebuilt against the stations
+  // that actually parsed, which is cheap and has no false positives.
+  const liveStationIds = new Set(parts.stations.map((st) => st.id));
+
   const now = Date.now();
   return {
-    version: 12,
+    version: 13,
     id: typeof o.id === 'string' ? o.id : shortId(),
     name: typeof o.name === 'string' ? o.name : 'Untitled system',
     description: typeof o.description === 'string' ? o.description : undefined,
@@ -903,7 +945,9 @@ function finish(
     ...parts,
     services: parts.services.map((sv) => ({
       ...sv,
-      patterns: resolveLegDirections(sv.patterns, parts.ways),
+      patterns: resolveLegDirections(sv.patterns, parts.ways).map((pt) =>
+        prunedSkippedStops(pt, liveStationIds),
+      ),
     })),
     vehicleKinds: parseVehicleKinds(o.vehicleKinds),
     palette,

@@ -155,8 +155,12 @@ export function patternStops(
   // nearest it.
   const ridden = new Set(patternRunLegs(pattern, run).map((r) => r.leg.wayId));
   const called = new Set<string>();
+  // Stops this direction passes without calling. Only ever set for a stop on
+  // a stretch both directions ride — see Pattern.skippedStops.
+  const skipped = new Set(pattern.skippedStops?.[run] ?? []);
   for (const wayId of ridden) {
     for (const st of byWay.get(wayId) ?? []) {
+      if (skipped.has(st.id)) continue;
       if (st.anchor && !patternCoversWayAt(pattern, wayId, st.anchor.t)) continue;
       const near = nearestOnPath(path, st.coord);
       if (!near) continue;
@@ -182,7 +186,7 @@ export function patternStops(
   if (patternHasSplit(pattern)) {
     for (const { leg } of patternRunLegs(pattern, run === 'outbound' ? 'inbound' : 'outbound')) {
       for (const st of byWay.get(leg.wayId) ?? []) {
-        if (called.has(st.id)) continue;
+        if (called.has(st.id) || skipped.has(st.id)) continue;
         const near = nearestOnPath(path, st.coord);
         if (!near || haversineMeters(near.coord, st.coord) > SHARED_PLATFORM_REACH_M) continue;
         called.add(st.id);

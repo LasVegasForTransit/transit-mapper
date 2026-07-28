@@ -102,6 +102,27 @@ export interface Pattern {
    *  direction separately, since a couplet's two halves deliberately do not
    *  touch. */
   sections: PatternSection[];
+  /**
+   * Stations this pattern passes but does NOT call at, per direction.
+   *
+   * The one exception to derived stops, and it exists for exactly one case: a
+   * stop on a stretch BOTH directions ride, served in one direction only. That
+   * stretch is one `shared` section, so there is nothing per-direction to hang
+   * the omission on and nothing else in the model can say it. Where the two
+   * directions ride different ways — a couplet — the derivation already gets
+   * it right and this is not involved.
+   *
+   * A denylist rather than a list of the stops that ARE served, because stops
+   * are derived: adding a station to a corridor adds it to every line running
+   * past, which is the behaviour the whole model is built on. An explicit
+   * served-list would have to be maintained by every station edit anywhere,
+   * and a stale one silently LOSES stops. A denylist can only go stale by
+   * naming a station that no longer exists, which the parser drops.
+   *
+   * Absent — the case for every pattern in every document before v13 — skips
+   * nothing.
+   */
+  skippedStops?: Partial<Record<RunDirection, string[]>>;
   /** Optional label for a specific branch/variant, e.g. "via Airport". */
   name?: string;
 }

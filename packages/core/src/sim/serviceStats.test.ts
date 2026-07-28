@@ -13,7 +13,7 @@ import {
   wholeLeg,
 } from '../model/geo';
 import { aPattern, aRoad, aStation } from '../testing/fixtures';
-import { patternStats, patternStops } from './serviceStats';
+import { dwellStopsForPattern, patternStats, patternStops } from './serviceStats';
 import type { Pattern } from '../model/system';
 
 const road = aRoad('w', [
@@ -162,5 +162,56 @@ describe('a stop on the far half of a wide couplet', () => {
       (s) => s.station.id,
     );
     expect(ids).toEqual([]);
+  });
+});
+
+describe('a stop served in one direction only', () => {
+  // The case sections alone cannot express: ONE street, ridden both ways, with
+  // a stop the return trip runs past without calling at. A couplet gets this
+  // for free because its two directions ride different ways; this does not.
+  const street = aRoad('street', [
+    [-115.2, 36.1],
+    [-115.2, 36.14],
+  ]);
+  const stops = [
+    aStation('south', [-115.2, 36.11], { wayId: 'street', t: 0.25 }),
+    aStation('north', [-115.2, 36.13], { wayId: 'street', t: 0.75 }),
+  ];
+  const base: Pattern = { id: 'p', sections: oneSection([wholeLeg('street')]) };
+  const skippingNorthOnTheWayBack: Pattern = {
+    ...base,
+    skippedStops: { inbound: ['north'] },
+  };
+
+  const idsOn = (pattern: Pattern, run: 'outbound' | 'inbound') => {
+    const path = patternRunPath([street], pattern, run);
+    return patternStops(stops, pattern, path, pathLengthMeters(path), run).map((s) => s.station.id);
+  };
+
+  it('calls at both stops in both directions when nothing is skipped', () => {
+    expect(idsOn(base, 'outbound').sort()).toEqual(['north', 'south']);
+    expect(idsOn(base, 'inbound').sort()).toEqual(['north', 'south']);
+  });
+
+  it('still calls at the skipped stop in the direction that was not skipped', () => {
+    expect(idsOn(skippingNorthOnTheWayBack, 'outbound').sort()).toEqual(['north', 'south']);
+  });
+
+  it('does not call at it in the direction it was skipped in', () => {
+    expect(idsOn(skippingNorthOnTheWayBack, 'inbound')).toEqual(['south']);
+  });
+
+  it('does not slow the vehicle down where it no longer stops', () => {
+    // The inspector's list and the dwells the simulation holds for are one
+    // derivation, so a skip has to reach the clock as well as the panel.
+    const path = patternRunPath([street], skippingNorthOnTheWayBack, 'inbound');
+    const dwells = dwellStopsForPattern(
+      stops,
+      skippingNorthOnTheWayBack,
+      path,
+      pathLengthMeters(path),
+      'inbound',
+    );
+    expect(dwells).toHaveLength(1);
   });
 });

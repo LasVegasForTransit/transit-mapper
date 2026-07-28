@@ -132,6 +132,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   const mergeServiceInto = useEditor((s) => s.mergeServiceInto);
   const adoptExistingInfrastructure = useEditor((s) => s.adoptExistingInfrastructure);
   const startReturnPathDraft = useEditor((s) => s.startReturnPathDraft);
+  const setStopSkipped = useEditor((s) => s.setStopSkipped);
   const makePatternTwoWay = useEditor((s) => s.makePatternTwoWay);
   const trimPatternTo = useEditor((s) => s.trimPatternTo);
   const splitServiceAt = useEditor((s) => s.splitServiceAt);
@@ -181,6 +182,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
     // ground. A line that comes back the way it went would just list the same
     // stations backwards, which tells a planner nothing they can act on.
     returnStops: patternHasSplit(p) ? stopsOnPattern(ways, stations, p, 'inbound') : [],
+    skippedInbound: new Set(p.skippedStops?.inbound ?? []),
   }));
   const totalStops = new Set(patternStops.flatMap(({ stops }) => stops.map((st) => st.id))).size;
   const isAddingBranch = addingPatternForServiceId === id;
@@ -688,7 +690,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
           </>
         )}
 
-        {patternStops.map(({ pattern, stops, returnStops }, i) =>
+        {patternStops.map(({ pattern, stops, returnStops, skippedInbound }, i) =>
           stops.length > 0 ? (
             <div key={pattern.id}>
               <label className="field-label">
@@ -716,6 +718,32 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                     </button>
                     {!readOnly && stops.length > 1 && (
                       <span className="stop-actions">
+                        {/* Only where both directions ride the same stretch.
+                            On a couplet they ride different streets, so a stop
+                            already belongs to one direction and skipping it in
+                            "the other" would mean nothing. */}
+                        {patternHasSplit(pattern) ? null : (
+                          <button
+                            type="button"
+                            className="ghost-btn stop-action"
+                            title={
+                              skippedInbound.has(st.id)
+                                ? `Call at ${st.name || 'this stop'} on the return trip again`
+                                : `Skip ${st.name || 'this stop'} on the return trip only`
+                            }
+                            onClick={() =>
+                              setStopSkipped(
+                                id,
+                                pattern.id,
+                                'inbound',
+                                st.id,
+                                !skippedInbound.has(st.id),
+                              )
+                            }
+                          >
+                            {skippedInbound.has(st.id) ? 'Call returning' : 'Skip returning'}
+                          </button>
+                        )}
                         {j > 0 && (
                           <button
                             type="button"
