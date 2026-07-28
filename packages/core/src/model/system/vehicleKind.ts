@@ -21,4 +21,12 @@ export interface VehicleKind {
    *  falls back to the app's ambient default speed, same as an unassigned
    *  service today. */
   topSpeedKmh?: number;
+  /** How fast this vehicle speeds up from rest, in m/s². Unset falls back to
+   *  a plausible default, same as topSpeedKmh. */
+  accelMps2?: number;
+  /** How fast this vehicle slows to a stop, in m/s². Unset falls back to a
+   *  plausible default, same as topSpeedKmh. Usually higher than
+   *  accelMps2 — braking is faster than accelerating for most rail and bus
+   *  vehicles. */
+  decelMps2?: number;
 }

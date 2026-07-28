@@ -22,7 +22,11 @@ import { vehiclesDisabledForPerf } from '../perf';
 import type { SimClock } from './simClock';
 // Pure motion kernel (framework-free, WASM-portable) — this module is its rAF/
 // MapLibre host. See packages/core/src/sim/timetable.ts.
-import { roundTripMs, type RunTimetables } from '@transitmapper/core/sim/timetable';
+import {
+  roundTripMs,
+  type RunTimetables,
+  type VehicleMotionProfile,
+} from '@transitmapper/core/sim/timetable';
 // Measurement comes from core/sim's patternStats — the same call the Service
 // inspector makes — so the numbers a planner reads and the ones the map runs
 // are the same object, not two that happen to agree. Lane geometry is used
@@ -181,7 +185,13 @@ function reversedLeg(leg: LegGeometry): LegGeometry {
 interface CachedPatternGeometry extends PatternGeometry {
   forWays: Way[];
   forStations: Station[];
+  // Compared field-by-field rather than by object identity: effectiveVehicleKind
+  // builds a fresh VehicleMotionProfile object every call, so `===` on the
+  // object itself would invalidate this cache on every tick even when nothing
+  // about the vehicle changed.
   forSpeedMps: number;
+  forAccelMps2: number;
+  forDecelMps2: number;
   // undefined = Network view's raw centerline (patternPath); a mode id =
   // Infrastructure view's lane-aware path (patternLanePath) for that mode.
   // One cache slot per Pattern is enough — only one view is ever ticking at
@@ -194,7 +204,7 @@ const patternGeometryCache = new WeakMap<Pattern, CachedPatternGeometry>();
 function resolvePatternGeometry(
   system: TransitSystem,
   pattern: Pattern,
-  speedMps: number,
+  profile: VehicleMotionProfile,
   modeId?: string,
 ): PatternGeometry | null {
   const cached = patternGeometryCache.get(pattern);
@@ -202,7 +212,9 @@ function resolvePatternGeometry(
     cached &&
     cached.forWays === system.ways &&
     cached.forStations === system.stations &&
-    cached.forSpeedMps === speedMps &&
+    cached.forSpeedMps === profile.speedMps &&
+    cached.forAccelMps2 === profile.accelMps2 &&
+    cached.forDecelMps2 === profile.decelMps2 &&
     cached.forModeId === modeId
   )
     return cached;
@@ -210,7 +222,7 @@ function resolvePatternGeometry(
   // Service inspector makes, so what a planner reads and what the map runs are
   // one object rather than two that agree. Lane geometry below is for DRAWING
   // only: it never measures time.
-  const stats = patternStats(system.ways, system.stations, pattern, speedMps);
+  const stats = patternStats(system.ways, system.stations, pattern, profile);
   if (!stats) return null;
   const centerline: LegGeometry = {
     path: stats.path,
@@ -250,7 +262,9 @@ function resolvePatternGeometry(
     bbox: [minLng, minLat, maxLng, maxLat],
     forWays: system.ways,
     forStations: system.stations,
-    forSpeedMps: speedMps,
+    forSpeedMps: profile.speedMps,
+    forAccelMps2: profile.accelMps2,
+    forDecelMps2: profile.decelMps2,
     forModeId: modeId,
   };
   patternGeometryCache.set(pattern, geometry);
@@ -389,12 +403,12 @@ export function attachVehicleAnimation(
         const active = running.get(service.id);
         if (!active) continue;
         const headwayMinutes = active.headwayMinutes;
-        const { widthM, lengthM, speedMps } = effectiveVehicleKind(system.vehicleKinds, service);
+        const { widthM, lengthM, profile } = effectiveVehicleKind(system.vehicleKinds, service);
         for (const pattern of service.patterns) {
           const geometry = resolvePatternGeometry(
             system,
             pattern,
-            speedMps,
+            profile,
             viewMode === 'infrastructure' ? service.modeId : undefined,
           );
           if (!geometry) continue;
@@ -421,10 +435,10 @@ export function attachVehicleAnimation(
             // Resolved against SIMULATED time, so the speed control and pause
             // work — and so a vehicle's position depends only on what time it
             // is in the simulation, not on how long this tab has been open.
-            // `speedMps` is load-bearing, not decorative: the timetable was
-            // BUILT at this vehicle kind's own speed, so walking it at the
+            // `profile` is load-bearing, not decorative: the timetable was
+            // BUILT at this vehicle kind's own profile, so walking it at the
             // module default instead would have the two disagree.
-            const { distMeters, run } = runStateAt(simMs, timetables, plan, i, speedMps);
+            const { distMeters, run } = runStateAt(simMs, timetables, plan, i, profile);
             // distMeters is measured along the path `run` names, so it is used
             // directly. This used to rescale a position off the outbound ruler
             // onto the return lane as a fraction, which was the only way to

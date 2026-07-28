@@ -388,6 +388,8 @@ function parseVehicleKinds(raw: unknown): VehicleKind[] {
       lengthM: r.lengthM,
       capacityPax: typeof r.capacityPax === 'number' ? r.capacityPax : undefined,
       topSpeedKmh: typeof r.topSpeedKmh === 'number' ? r.topSpeedKmh : undefined,
+      accelMps2: typeof r.accelMps2 === 'number' ? r.accelMps2 : undefined,
+      decelMps2: typeof r.decelMps2 === 'number' ? r.decelMps2 : undefined,
     });
   }
   return out;

@@ -174,6 +174,43 @@ export function VehicleKindsDialog({
                 />
                 <span className="freq-suffix">km/h top speed</span>
               </div>
+
+              <div className="freq-row">
+                <input
+                  type="number"
+                  min={0.1}
+                  step={0.1}
+                  className="freq-input"
+                  aria-label={`${k.label || 'Vehicle'} acceleration in meters per second squared`}
+                  placeholder="Not set"
+                  value={k.accelMps2 ?? ''}
+                  disabled={readOnly}
+                  onChange={(e) =>
+                    updateKind(k.id, {
+                      accelMps2:
+                        e.target.value === '' ? undefined : Math.max(0.1, Number(e.target.value)),
+                    })
+                  }
+                />
+                <span className="freq-suffix">m/s² accel</span>
+                <input
+                  type="number"
+                  min={0.1}
+                  step={0.1}
+                  className="freq-input"
+                  aria-label={`${k.label || 'Vehicle'} deceleration in meters per second squared`}
+                  placeholder="Not set"
+                  value={k.decelMps2 ?? ''}
+                  disabled={readOnly}
+                  onChange={(e) =>
+                    updateKind(k.id, {
+                      decelMps2:
+                        e.target.value === '' ? undefined : Math.max(0.1, Number(e.target.value)),
+                    })
+                  }
+                />
+                <span className="freq-suffix">m/s² decel</span>
+              </div>
             </li>
           ))}
         </ul>

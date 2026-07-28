@@ -59,6 +59,35 @@ A run has no id and no memory. "Vehicle 3 of the main pattern" is a coordinate,
 not an object — two consecutive frames are unrelated calculations that happen
 to agree.
 
+## Ramping up and down between stops
+
+A vehicle's travel time between two stops used to be a straight division —
+`distance ÷ speed`, the same constant from the first meter to the last. Every
+leg (a run's first stretch out of a terminal, each stop to the next, and the
+last stretch into one) is now its own accelerate/cruise/decelerate move
+instead, starting and ending at rest, same as a real vehicle actually leaving
+and arriving.
+
+A leg long enough covers all three phases: speed up, hold the top speed, then
+brake to a stop. A leg too short to reach top speed at all — closely-spaced
+stops, the ordinary case on a tram or bus line — never gets there: it
+accelerates to whatever peak it can reach and immediately starts braking. Both
+cases fall out of one closed-form calculation with no iteration and no
+per-frame state, so this costs about the same near-zero share of the frame
+budget the old division did.
+
+Acceleration and deceleration are properties of the vehicle
+(`VehicleKind.accelMps2`/`decelMps2`, alongside its top speed), with a
+plausible built-in default for anything left unset — the same fallback
+pattern top speed already followed before a vehicle kind existed to override
+it.
+
+One consequence worth expecting: a round trip now takes a little longer than
+distance ÷ speed ever suggested, and a line whose stops sit close together can
+spend the whole run never actually reaching its vehicle's nominal top speed.
+That grows the round trip — and can grow the fleet a headway needs — a little
+further than stops and dwell alone already did.
+
 ## Why "every 10 minutes" is exactly true
 
 Set a line's headway to 10 minutes and its stops are served every 10 minutes —
@@ -258,7 +287,7 @@ about four updates a second.
 | `packages/core/src/sim/clock.ts`            | the speed ladder, time-of-day and weekday math, span math. Pure.                                          |
 | `packages/core/src/sim/fleet.ts`            | fleet size, cycle time, layover, and where run _i_ is. Pure.                                              |
 | `packages/core/src/sim/frequency.ts`        | which services call at a stop, and their combined frequency. Pure.                                        |
-| `packages/core/src/sim/timetable.ts`        | travel and dwell along one pattern. Pure.                                                                 |
+| `packages/core/src/sim/timetable.ts`        | travel — accelerating, cruising, braking — and dwell, along one pattern. Pure.                            |
 | `packages/core/src/sim/serviceStats.ts`     | the one measurement of a line: path, stops, timetable, plan. Pure.                                        |
 | `packages/core/src/geometry/vehicleLane.ts` | the lane-accurate polyline one leg of a pattern rides. Pure.                                              |
 | `apps/web/src/sim/simClock.ts`              | the `SimClock` instance: the mutable number and its subscribers.                                          |
@@ -300,6 +329,12 @@ An eightfold rise in vehicles costs about twice the time, because per-service
 schedule resolution — one call per service however many vehicles it runs —
 dominates at the low end. In absolute terms it is half a percent of the frame
 budget, so deriving headways from a feed is not what will make this slow.
+
+These numbers predate accelerating/decelerating between stops. The per-leg
+calculation is still one closed-form computation with no iteration — a few
+more multiplies and a square root in place of one division — so the shape of
+this table should hold, but that is an expectation, not a re-measurement; the
+table above hasn't been rerun against it.
 
 **What has NOT been measured.** Everything downstream of that: handing up to
 ~3,400 features per tick to MapLibre, and painting them. That needs a real,

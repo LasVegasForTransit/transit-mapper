@@ -40,10 +40,11 @@ import { vehicleFootprint } from '../model/catalog';
 import { planService, type ServicePlan } from './fleet';
 import {
   buildTimetable,
+  DEFAULT_MOTION_PROFILE,
   roundTripMs,
-  VEHICLE_SPEED_MPS,
   type DwellStop,
   type RunTimetables,
+  type VehicleMotionProfile,
 } from './timetable';
 
 /** Doors open, board/alight, doors close — a plausible light-rail/bus dwell
@@ -53,13 +54,16 @@ export const DEFAULT_DWELL_SECONDS = 20;
 export interface ResolvedVehicle {
   widthM: number;
   lengthM: number;
-  speedMps: number;
+  profile: VehicleMotionProfile;
 }
 
 /** Which real vehicle a service runs: its assigned VehicleKind if it has one
  *  and that kind still exists, else the mode's plain default at the app's
- *  ambient default speed — the exact behavior every service had before vehicle
- *  kinds existed, so an unassigned service is never affected by the feature. */
+ *  ambient default motion profile — the exact behavior every service had
+ *  before vehicle kinds existed, so an unassigned service is never affected
+ *  by the feature. Each of a kind's motion fields (top speed, acceleration,
+ *  deceleration) falls back independently — a kind can pin one and leave the
+ *  others at the plausible default. */
 export function effectiveVehicleKind(
   vehicleKinds: VehicleKind[],
   service: Service,
@@ -71,10 +75,15 @@ export function effectiveVehicleKind(
     return {
       widthM: kind.widthM,
       lengthM: kind.lengthM,
-      speedMps: kind.topSpeedKmh !== undefined ? kind.topSpeedKmh / 3.6 : VEHICLE_SPEED_MPS,
+      profile: {
+        speedMps:
+          kind.topSpeedKmh !== undefined ? kind.topSpeedKmh / 3.6 : DEFAULT_MOTION_PROFILE.speedMps,
+        accelMps2: kind.accelMps2 ?? DEFAULT_MOTION_PROFILE.accelMps2,
+        decelMps2: kind.decelMps2 ?? DEFAULT_MOTION_PROFILE.decelMps2,
+      },
     };
   }
-  return { ...vehicleFootprint(service.modeId), speedMps: VEHICLE_SPEED_MPS };
+  return { ...vehicleFootprint(service.modeId), profile: DEFAULT_MOTION_PROFILE };
 }
 
 // Stations grouped by their anchor way id, cached by the stations array's own
@@ -229,7 +238,7 @@ export function patternStats(
   ways: Way[],
   stations: Station[],
   pattern: Pattern,
-  speedMps: number,
+  profile: VehicleMotionProfile,
   headwayMinutes?: number,
 ): PatternStats | null {
   const path = patternRunPath(ways, pattern, 'outbound');
@@ -241,7 +250,7 @@ export function patternStats(
   const outbound = buildTimetable(
     meters,
     stops.map(({ distMeters, dwellMs }) => ({ distMeters, dwellMs })),
-    speedMps,
+    profile,
   );
 
   const inboundPath = patternRunPath(ways, pattern, 'inbound');
@@ -255,7 +264,7 @@ export function patternStats(
   const inbound = buildTimetable(
     inboundMeters,
     inboundStops.map(({ distMeters, dwellMs }) => ({ distMeters, dwellMs })),
-    speedMps,
+    profile,
   );
 
   const timetables = { outbound, inbound };
@@ -299,9 +308,9 @@ export function serviceStats(
   service: Service,
   headwayMinutes?: number,
 ): ServiceStats | null {
-  const { speedMps } = effectiveVehicleKind(vehicleKinds, service);
+  const { profile } = effectiveVehicleKind(vehicleKinds, service);
   const patterns = service.patterns
-    .map((pattern) => patternStats(ways, stations, pattern, speedMps, headwayMinutes))
+    .map((pattern) => patternStats(ways, stations, pattern, profile, headwayMinutes))
     .filter((stats): stats is PatternStats => stats !== null);
   if (patterns.length === 0) return null;
   const longest = patterns.reduce((a, b) => (b.roundTripMs > a.roundTripMs ? b : a));

@@ -17,7 +17,12 @@
 //
 // Pure, like the rest of packages/core/src/sim: time comes in as an argument.
 
-import { metersAtElapsed, VEHICLE_SPEED_MPS, type RunTimetables } from './timetable';
+import {
+  DEFAULT_MOTION_PROFILE,
+  metersAtElapsed,
+  type RunTimetables,
+  type VehicleMotionProfile,
+} from './timetable';
 import type { RunDirection } from '../model/system';
 
 /** Every line gets at least this much recovery time per round trip, however
@@ -95,7 +100,7 @@ export function planService(roundTripMs: number, headwayMs?: number): ServicePla
  * function evaluated one headway earlier — no per-vehicle state, and the
  * modulo makes the cycle wrap exact rather than approximately even.
  *
- * `speedMps` must be the speed the timetable was BUILT with, or the two
+ * `profile` must be the one the timetable was BUILT with, or the two
  * disagree and a vehicle arrives early (and sits clamped at the end) or never
  * arrives at all.
  */
@@ -104,7 +109,7 @@ export function runStateAt(
   timetables: RunTimetables,
   plan: ServicePlan,
   index: number,
-  speedMps: number = VEHICLE_SPEED_MPS,
+  profile: VehicleMotionProfile = DEFAULT_MOTION_PROFILE,
 ): RunState {
   const { cycleMs, layoverMs, headwayMs } = plan;
   const intoCycle = (((simMs - index * headwayMs) % cycleMs) + cycleMs) % cycleMs;
@@ -112,7 +117,7 @@ export function runStateAt(
 
   if (intoCycle < outbound.oneWayMs) {
     return {
-      distMeters: metersAtElapsed(outbound, intoCycle, speedMps),
+      distMeters: metersAtElapsed(outbound, intoCycle, profile),
       phase: 'outbound',
       run: 'outbound',
     };
@@ -128,7 +133,7 @@ export function runStateAt(
     // went, and two different streets for a couplet — and mirroring was the
     // assumption that made the second case impossible to express.
     return {
-      distMeters: metersAtElapsed(inbound, intoReturn, speedMps),
+      distMeters: metersAtElapsed(inbound, intoReturn, profile),
       phase: 'inbound',
       run: 'inbound',
     };
