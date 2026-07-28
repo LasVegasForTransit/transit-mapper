@@ -3,9 +3,11 @@ import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { ViewOptions } from '../map/layers';
 import { getMap } from '../map/mapRef';
 import { renderSystemForExport } from '../map/export/exportRenderer';
+import { waitForExportFrame } from './exportOperation';
 import { singleFlight } from './singleFlight';
 import { legendEntriesFor, type LegendEntry } from './exportLegend';
 import { scaleBarSpec } from './exportScale';
+import { canvasToPngBlob } from './previewImage';
 
 const INK = '#191a17';
 const PAD = 20; // export-canvas padding, independent of the app's 4px UI grid (this is print/image space)
@@ -18,13 +20,15 @@ export interface ComposeOptions {
   legend: LegendEntry[];
 }
 
-function downloadDataUrl(url: string, filename: string): void {
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function drawScaleBar(
@@ -140,15 +144,26 @@ function composeCanvas(
 
 /** Capture an already-framed map (e.g. the export dialog's own preview
  *  instance) as a PNG, with the title/legend composited on top. */
-export function exportPngFromMap(
+export async function exportPngFromMap(
   map: MLMap,
   opts: ComposeOptions,
   filename = 'transit-system.png',
-): void {
-  map.once('idle', () => {
-    downloadDataUrl(composeCanvas(map.getCanvas(), map, opts).toDataURL('image/png'), filename);
-  });
-  map.triggerRepaint();
+  signal?: AbortSignal,
+): Promise<void> {
+  await waitForExportFrame(map, { signal });
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error
+      ? signal.reason
+      : new DOMException('Export was canceled.', 'AbortError');
+  }
+  const blob = await canvasToPngBlob(composeCanvas(map.getCanvas(), map, opts), { signal });
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error
+      ? signal.reason
+      : new DOMException('Export was canceled.', 'AbortError');
+  }
+  if (!blob) throw new Error('The browser could not encode the PNG export.');
+  downloadBlob(blob, filename);
 }
 
 /** Quick-export path: render the whole system's extent on a dedicated OFFSCREEN
@@ -185,7 +200,9 @@ const fullSystemPngFlight = singleFlight(
           title: system.name || 'Transit system',
           legend: legendEntriesFor(system, view),
         });
-        downloadDataUrl(composed.toDataURL('image/png'), filename);
+        const blob = await canvasToPngBlob(composed);
+        if (!blob) throw new Error('The browser could not encode the PNG export.');
+        downloadBlob(blob, filename);
       } finally {
         rendered.dispose();
       }

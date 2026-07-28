@@ -1,22 +1,8 @@
 import { useEffect, useRef } from 'react';
-import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
+import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import { BASEMAP_STYLE } from '../map/basemap';
-import {
-  buildFeatures,
-  LAYER_SPECS,
-  registerMapIcons,
-  SRC_FACILITIES,
-  SRC_FOOTPRINTS,
-  SRC_HANDLES,
-  SRC_PHYSICAL_HANDLES,
-  SRC_PLATFORMS,
-  SRC_PREVIEW,
-  SRC_SERVICES,
-  SRC_STATIONS,
-  SRC_VEHICLES,
-  SRC_WAYS,
-  type ViewOptions,
-} from '../map/layers';
+import { buildFeatures, registerMapIcons, SRC_STATIONS, type ViewOptions } from '../map/layers';
+import { addExportSourcesAndLayers, setExportFeatureData } from '../map/export/exportLayerSetup';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 
@@ -48,27 +34,17 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
       zoom: system.viewport.zoom,
       preserveDrawingBuffer: true, // needed to read the canvas back out for PNG export
       attributionControl: false,
+      // The export UI promises pan and zoom, not a second 3D camera. Keeping it
+      // flat and north-up lets SVG projection run exactly off-thread.
+      dragRotate: false,
+      touchPitch: false,
+      pitchWithRotate: false,
     });
     mapRef.current = map;
-    const emptyFC = { type: 'FeatureCollection' as const, features: [] };
 
     map.on('load', () => {
       registerMapIcons(map);
-      map.addSource(SRC_WAYS, { type: 'geojson', data: emptyFC });
-      map.addSource(SRC_SERVICES, { type: 'geojson', data: emptyFC });
-      map.addSource(SRC_STATIONS, { type: 'geojson', data: emptyFC });
-      map.addSource(SRC_HANDLES, { type: 'geojson', data: emptyFC });
-      map.addSource(SRC_PREVIEW, { type: 'geojson', data: emptyFC });
-      map.addSource(SRC_FOOTPRINTS, { type: 'geojson', data: emptyFC });
-      map.addSource(SRC_PLATFORMS, { type: 'geojson', data: emptyFC });
-      map.addSource(SRC_FACILITIES, { type: 'geojson', data: emptyFC });
-      map.addSource(SRC_PHYSICAL_HANDLES, { type: 'geojson', data: emptyFC });
-      // Never populated here — a static export has no ambient vehicles — but
-      // LAYER_SPECS' vehicles layer still needs a source to attach to or
-      // addLayer throws (the bug this comment is here to stop someone from
-      // reintroducing when adding the next new layer/source pair).
-      map.addSource(SRC_VEHICLES, { type: 'geojson', data: emptyFC });
-      for (const spec of LAYER_SPECS) map.addLayer(spec);
+      addExportSourcesAndLayers(map);
 
       // Resize BEFORE fitting bounds — the dialog's layout (and this map's
       // container) may not have settled to its final size yet at "load"
@@ -99,14 +75,9 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
 
   const pushData = () => {
     const map = mapRef.current;
-    if (!map || !map.getSource(SRC_WAYS)) return;
+    if (!map || !map.getSource(SRC_STATIONS)) return;
     const fc = buildFeatures(system, null, [], view);
-    (map.getSource(SRC_WAYS) as GeoJSONSource).setData(fc.ways);
-    (map.getSource(SRC_SERVICES) as GeoJSONSource).setData(fc.services);
-    (map.getSource(SRC_STATIONS) as GeoJSONSource).setData(fc.stations);
-    (map.getSource(SRC_FOOTPRINTS) as GeoJSONSource).setData(fc.footprints);
-    (map.getSource(SRC_PLATFORMS) as GeoJSONSource).setData(fc.platforms);
-    (map.getSource(SRC_FACILITIES) as GeoJSONSource).setData(fc.facilities);
+    setExportFeatureData(map, fc);
   };
   const pushDataRef = useRef(pushData);
   pushDataRef.current = pushData;

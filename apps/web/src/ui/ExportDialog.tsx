@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Map as MLMap } from 'maplibre-gl';
 import { useEditor } from '../editor/EditorProvider';
 import { MODE_ORDER, MODES, WAY_TYPE_ORDER, WAY_TYPES } from '@transitmapper/core/model/catalog';
@@ -11,6 +11,13 @@ import { Modal } from './Modal';
 import type { ViewMode } from './ViewProvider';
 
 type ExportFormat = 'png' | 'svg';
+const EXPORT_TIMEOUT_MS = 20_000;
+
+function yieldForExportFeedback(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
 
 /**
  * Export dialog: a dedicated, pannable/zoomable preview (see
@@ -32,7 +39,18 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
   const [visibleWayTypes, setVisibleWayTypes] = useState<Set<string>>(new Set(WAY_TYPE_ORDER));
   const [title, setTitle] = useState(system.name || 'Transit system');
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
   const mapRef = useRef<MLMap | null>(null);
+  const exportController = useRef<AbortController | null>(null);
+
+  useEffect(
+    () => () => {
+      const controller = exportController.current;
+      exportController.current = null;
+      controller?.abort(new DOMException('Export dialog closed.', 'AbortError'));
+    },
+    [],
+  );
 
   const view = useMemo(
     () => ({ viewMode, visibleModes, visibleWayTypes }),
@@ -55,31 +73,55 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
       return next;
     });
 
-  const run = () => {
+  const close = () => {
+    const controller = exportController.current;
+    exportController.current = null;
+    controller?.abort(new DOMException('Export dialog closed.', 'AbortError'));
+    onClose();
+  };
+
+  const run = async () => {
+    if (exportController.current) return;
     const map = mapRef.current;
     if (!map) return;
     const filename = `${system.name || 'transit-system'}.${format}`;
+    const controller = new AbortController();
+    exportController.current = controller;
     setExporting(true);
-    if (format === 'svg') {
-      exportSvgFromMap(system, view, map, { title, legend }, filename);
+    setExportError('');
+    const timer = window.setTimeout(
+      () => controller.abort(new Error('Export timed out.')),
+      EXPORT_TIMEOUT_MS,
+    );
+    try {
+      // Commit the busy state before any SVG string construction or canvas
+      // encoding begins, so the click is visibly acknowledged first.
+      await yieldForExportFeedback();
+      if (controller.signal.aborted) throw controller.signal.reason;
+      if (format === 'svg') {
+        await exportSvgFromMap(system, view, map, { title, legend }, filename, controller.signal);
+      } else {
+        await exportPngFromMap(map, { title, legend }, filename, controller.signal);
+      }
+      if (exportController.current !== controller) return;
+      exportController.current = null;
       setExporting(false);
       onClose();
-      return;
+    } catch (error) {
+      if (exportController.current !== controller) return;
+      exportController.current = null;
+      setExporting(false);
+      if (error instanceof Error && error.name !== 'AbortError') setExportError(error.message);
+    } finally {
+      window.clearTimeout(timer);
     }
-    exportPngFromMap(map, { title, legend }, filename);
-    // exportPngFromMap waits for the next idle frame internally — close once
-    // that's had a moment to fire, so the download always actually starts.
-    window.setTimeout(() => {
-      setExporting(false);
-      onClose();
-    }, 250);
   };
 
   return (
     <Modal
       title="Export"
       description="Export the system as a PNG or SVG map, framed and titled however you like."
-      onClose={onClose}
+      onClose={close}
       className="export-modal"
       footer={
         <button className="primary-btn export-run-btn" disabled={exporting} onClick={run}>
@@ -88,6 +130,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
         </button>
       }
     >
+      {exportError && <p className="error-text">{exportError}</p>}
       <div className="export-body">
         <div className="export-controls">
           <div className="opt-field">
