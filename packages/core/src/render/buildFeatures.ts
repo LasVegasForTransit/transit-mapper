@@ -568,22 +568,30 @@ export function buildFeatures(
         wayLaneGeometry(way, trims.start, trims.end).lanes.map((l) => [l.laneId, l] as const),
       );
       const lat = way.points[0]?.[1] ?? 36;
-      // Which lane(s) each service rides here — it may traverse the way in more
-      // than one pattern/direction (both curbs). Group services by lane so
-      // services sharing a lane can fan slightly instead of overprinting.
-      // wayPatternIndex is pre-built once for the whole system — O(1) here,
-      // not a re-scan of every rider's full pattern list per way.
+      // Which lane(s) each service rides here — both directions of every
+      // pattern that traverses this way, so a two-way service claims both
+      // curbs. Group services by lane so services sharing a lane can fan
+      // slightly instead of overprinting. wayPatternIndex is pre-built once
+      // for the whole system — O(1) here, not a re-scan of every rider's full
+      // pattern list per way.
       const byLane = new Map<string, Service[]>();
       const resolved = new Set<string>();
       for (const { svc, pattern, wayIdx } of wayPatternIndex(byWay).get(way.id) ?? []) {
-        const laneId = serviceLaneOnWay(pattern, wayIdx, waysById, svc.modeId);
-        if (!laneId || !laneById.has(laneId)) continue;
-        resolved.add(svc.id);
-        let arr = byLane.get(laneId);
-        if (!arr) byLane.set(laneId, (arr = []));
-        // A service can land on the SAME lane via two of its own patterns
-        // (rare) — don't double-emit it there.
-        if (!arr.some((s) => s.id === svc.id)) arr.push(svc);
+        // BOTH runs, because a service occupies both curb lanes of a two-way
+        // street and its return-run vehicles ride the second one. Draw only
+        // the leg's own direction and half the line's trains run on bare
+        // asphalt, which reads as the vehicles having come off their route.
+        for (const forward of [true, false]) {
+          const laneId = serviceLaneOnWay(pattern, wayIdx, waysById, svc.modeId, forward);
+          if (!laneId || !laneById.has(laneId)) continue;
+          resolved.add(svc.id);
+          let arr = byLane.get(laneId);
+          if (!arr) byLane.set(laneId, (arr = []));
+          // A service can land on the SAME lane twice — via two of its own
+          // patterns, or because a single track (or a pinned leg) carries both
+          // its runs. Don't double-emit it there.
+          if (!arr.some((s) => s.id === svc.id)) arr.push(svc);
+        }
       }
       // A bundle rider with no lane resolved anywhere on this way (a lane-less
       // profile) falls back to the centerline.
