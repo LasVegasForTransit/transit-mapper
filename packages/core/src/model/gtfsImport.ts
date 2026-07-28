@@ -99,15 +99,34 @@ export interface GtfsFiles {
   frequencies?: string;
 }
 
-/** How far a pair's facing terminals may sit apart and still be the two ends
- *  of one line. A couplet loops round a block at each end, so this is a block.
- *  Not measured against a real feed yet — RTC Southern Nevada's is the one to
- *  check it against before trusting it on anything but obvious pairs. */
-const SHAPE_PAIR_TERMINAL_M = 400;
+/**
+ * How far a candidate pair's facing terminals may sit apart, as a fraction of
+ * the shorter shape's own length.
+ *
+ * Derived rather than asserted, because "a block" is not a fixed distance in
+ * the only sense that matters here: 400 m between the ends of a 25 km trunk
+ * route is the two halves of a couplet meeting, and 400 m between the ends of
+ * a 600 m circulator is most of the route. A flat number gets one of those two
+ * wrong whichever value it takes.
+ */
+const SHAPE_PAIR_TERMINAL_FRACTION = 0.05;
+
+/** …clamped, because the fraction alone misbehaves at both extremes. The floor
+ *  is a platform pair either side of one street, which even the shortest route
+ *  is allowed. The ceiling is a long block: past it the two shapes are not
+ *  meeting at a terminal however long they are. */
+const SHAPE_PAIR_TERMINAL_MIN_M = 100;
+const SHAPE_PAIR_TERMINAL_MAX_M = 800;
 
 /** A short-turn shares a terminal with the full run it shortens, so only
  *  length tells them apart. */
 const SHAPE_PAIR_LENGTH_TOLERANCE = 0.25;
+
+/** The terminal tolerance for two shapes of these lengths. */
+function terminalToleranceM(lenA: number, lenB: number): number {
+  const scaled = Math.min(lenA, lenB) * SHAPE_PAIR_TERMINAL_FRACTION;
+  return Math.min(SHAPE_PAIR_TERMINAL_MAX_M, Math.max(SHAPE_PAIR_TERMINAL_MIN_M, scaled));
+}
 
 export interface ShapePairing {
   /** Shapes that are the two directions of one path. */
@@ -161,11 +180,19 @@ export function pairRouteShapes(
     for (let i = 1; i < path.length; i++) m += haversineMeters(path[i - 1], path[i]);
     return m;
   };
-  const facingGap = (a: string, b: string): number | null => {
+  /** Both ends of a candidate pair: where a's finish meets b's start, and
+   *  where b's finish meets a's start. Returned separately rather than summed,
+   *  because a pair that meets perfectly at one end and misses by half a
+   *  kilometre at the other is not a pair, and a sum lets the good end pay for
+   *  the bad one. */
+  const facingGaps = (a: string, b: string): { far: number; near: number } | null => {
     const pa = shapePaths.get(a);
     const pb = shapePaths.get(b);
     if (!pa || !pb || pa.length < 2 || pb.length < 2) return null;
-    return haversineMeters(pa[pa.length - 1], pb[0]) + haversineMeters(pb[pb.length - 1], pa[0]);
+    return {
+      far: haversineMeters(pa[pa.length - 1], pb[0]),
+      near: haversineMeters(pb[pb.length - 1], pa[0]),
+    };
   };
 
   const couplets: ShapePairing['couplets'] = [];
@@ -174,12 +201,15 @@ export function pairRouteShapes(
     let best: { id: string; gap: number } | null = null;
     for (const b of right) {
       if (taken.has(b)) continue;
-      const gap = facingGap(a, b);
-      if (gap === null || gap > 2 * SHAPE_PAIR_TERMINAL_M) continue;
+      const gaps = facingGaps(a, b);
+      if (!gaps) continue;
       const la = lengthOf(a);
       const lb = lengthOf(b);
+      const tolerance = terminalToleranceM(la, lb);
+      if (gaps.far > tolerance || gaps.near > tolerance) continue;
       const longer = Math.max(la, lb);
       if (longer > 0 && Math.abs(la - lb) / longer > SHAPE_PAIR_LENGTH_TOLERANCE) continue;
+      const gap = gaps.far + gaps.near;
       if (!best || gap < best.gap) best = { id: b, gap };
     }
     if (!best) continue;

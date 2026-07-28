@@ -132,3 +132,51 @@ describe('two shapes that are nowhere near each other', () => {
     expect(res.singles).toEqual(['out', 'elsewhere']);
   });
 });
+
+describe('how far apart two terminals may be', () => {
+  // The same absolute gap means different things on different routes, which is
+  // why the tolerance scales with the shapes rather than being a fixed block.
+  const line = (a: LngLat, b: LngLat): LngLat[] => [a, b];
+  const pairOf = (paths: Map<string, LngLat[]>) =>
+    pairRouteShapes(
+      ['o', 'i'],
+      paths,
+      new Map([
+        ['o', '0'],
+        ['i', '1'],
+      ]),
+      new Map([
+        ['o', 10],
+        ['i', 10],
+      ]),
+    );
+
+  it('accepts a 300 m gap between the ends of a long route', () => {
+    // ~11 km each way; 300 m at the top is two halves of a couplet meeting.
+    const paths = new Map<string, LngLat[]>([
+      ['o', line([-115.2, 36.1], [-115.2, 36.2])],
+      ['i', line([-115.2033, 36.2], [-115.2033, 36.1])],
+    ]);
+    expect(pairOf(paths).couplets).toEqual([{ outbound: 'o', inbound: 'i' }]);
+  });
+
+  it('refuses the same 300 m gap between the ends of a short circulator', () => {
+    // ~600 m each way. The same 300 m is half the route — these are not the
+    // two ends of one line.
+    const paths = new Map<string, LngLat[]>([
+      ['o', line([-115.2, 36.1], [-115.2, 36.1054])],
+      ['i', line([-115.2033, 36.1054], [-115.2033, 36.1])],
+    ]);
+    expect(pairOf(paths).couplets).toEqual([]);
+    expect(pairOf(paths).singles).toEqual(['o', 'i']);
+  });
+
+  it('refuses a pair that meets at one end and misses badly at the other', () => {
+    // A sum-based test would let the perfect end pay for the broken one.
+    const paths = new Map<string, LngLat[]>([
+      ['o', line([-115.2, 36.1], [-115.2, 36.2])],
+      ['i', line([-115.2, 36.2], [-115.22, 36.1])],
+    ]);
+    expect(pairOf(paths).couplets).toEqual([]);
+  });
+});
