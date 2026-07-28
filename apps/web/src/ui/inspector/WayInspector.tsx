@@ -2,12 +2,8 @@ import { useState } from 'react';
 import { useEditor } from '../../editor/EditorProvider';
 import { GRADES, LANE_KINDS, WAY_FAMILIES, wayType } from '@transitmapper/core/model/catalog';
 import { estimateWayCapitalCost, formatUsdCompact } from '@transitmapper/core/model/cost';
-import {
-  bearingDegrees,
-  formatBearing,
-  formatKm,
-  wayLengthMeters,
-} from '@transitmapper/core/model/geo';
+import { bearingDegrees, formatBearing, wayLengthMeters } from '@transitmapper/core/model/geo';
+import { formatDistance } from '@transitmapper/core/model/units';
 import { getComponent } from '@transitmapper/core/model/components';
 import { directionalLanes, isOneWay, wayCapacity } from '@transitmapper/core/model/profile';
 import { CrossSectionEditor } from '../CrossSectionEditor';
@@ -16,6 +12,7 @@ import { Panel } from '../Panel';
 import { blurOnEnter } from '../formUtils';
 import { Icon } from '../Icon';
 import { useView } from '../ViewProvider';
+import { useUnitPreference } from '../../services/userPreferences';
 import { GEOMETRY_OPTIONS, GradeChips, EmptyInspector, ServicesOnWay, Stat } from './shared';
 
 const MEDIAN_FT = 0.3048;
@@ -66,6 +63,7 @@ export interface WayInspectorProps {
 // gets Identity/Alignment only. The old everything-stacked form (and its
 // capacity stepper, which the lane strip made redundant) is gone.
 export function WayInspector({ id }: WayInspectorProps) {
+  const unitSystem = useUnitPreference();
   const way = useEditor((s) => s.system.ways.find((w) => w.id === id));
   const readOnly = useEditor((s) => s.readOnly);
   const setWayGeometry = useEditor((s) => s.setWayGeometry);
@@ -154,7 +152,7 @@ export function WayInspector({ id }: WayInspectorProps) {
       </div>
       <div className="insp-kind">
         {namedWay?.name ? `${type.label} · ` : ''}
-        {wayCapacity(way)} {type.capacityLabel} · {formatKm(length)}
+        {wayCapacity(way)} {type.capacityLabel} · {formatDistance(length, unitSystem)}
       </div>
       {way.source?.startsWith('osm:') && <div className="badge">Imported from OpenStreetMap</div>}
 
@@ -288,7 +286,7 @@ export function WayInspector({ id }: WayInspectorProps) {
           <GradeChips value={way.grade} disabled={readOnly} onChange={(g) => setWayGrade(id, g)} />
 
           <div className="stats">
-            <Stat label="Length" value={formatKm(length)} />
+            <Stat label="Length" value={formatDistance(length, unitSystem)} />
             <Stat label="Bearing" value={bearing === undefined ? '—' : formatBearing(bearing)} />
             <Stat label="Points" value={String(way.points.length)} />
           </div>

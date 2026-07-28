@@ -173,6 +173,7 @@ export function TopBarActions() {
           {!readOnly && (
             <DropdownMenuItem onSelect={() => openDialog('share')}>Share…</DropdownMenuItem>
           )}
+          <DropdownMenuItem onSelect={() => openDialog('settings')}>Settings…</DropdownMenuItem>
           <DropdownMenuItem onSelect={toggleUi}>Hide UI</DropdownMenuItem>
         </DropdownMenu>
       </span>

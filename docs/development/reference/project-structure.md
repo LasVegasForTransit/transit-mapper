@@ -90,6 +90,8 @@ and `apps/worker` depend on it as a workspace package.
   Pure, so the derivation is testable without a feed.
 - `diagramLayout.ts` — the Diagram view's schematic layout.
 - `cost.ts` — rough cost estimation.
+- `units.ts` — conversion and locale-aware formatting between the metric
+  values stored by the model and the units selected for display.
 - `ids.ts` — id generation.
 
 ## packages/core/src/geometry/ — derived street geometry
@@ -216,6 +218,17 @@ Everything that turns a system into something that leaves the app.
   one.
 
 See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
+
+## apps/web/src/services/ — browser preferences
+
+- `userPreferences.ts` — browser-local settings, including the selected unit
+  system. A cached external-store snapshot lets React consumers update
+  together without moving preferences into the domain model.
+
+## apps/web/src/i18n/ — user-facing messages
+
+- `messages.ts` — strings shared by the settings and vehicle-kind surfaces,
+  grouped by the feature that owns them.
 
 ## apps/web/src/storage/ — the local library
 
