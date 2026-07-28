@@ -115,16 +115,8 @@ function LazyDialog({ children, onFailure }: LazyDialogProps) {
 
 export function App() {
   const store = useEditorStore();
-  const name = useEditor((s) => s.system.name);
-  const {
-    shortcutsOpen,
-    closeShortcuts,
-    uiHidden,
-    toggleUi,
-    activeDialog,
-    openDialog,
-    closeDialog,
-  } = useUi();
+  const { shortcutsOpen, closeShortcuts, uiHidden, activeDialog, openDialog, closeDialog } =
+    useUi();
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   // Anything worth telling the user that isn't the share-load error: a stored
