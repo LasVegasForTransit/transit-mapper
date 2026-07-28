@@ -9,7 +9,8 @@
 
 import { wayById, wholeLegs } from '../model/geo';
 import { defaultProfileFor } from '../model/profile';
-import type { LngLat, Pattern, Station, Way } from '../model/system';
+import { createEmptySystem } from '../model/serialize';
+import type { LngLat, Pattern, Service, Station, TransitSystem, Way } from '../model/system';
 
 /** A road with the way type's default cross-section. */
 export function aRoad(id: string, points: LngLat[], overrides: Partial<Way> = {}): Way {
@@ -35,6 +36,23 @@ export function aPattern(
   overrides: Partial<Pattern> = {},
 ): Pattern {
   return { id, legs: wholeLegs(wayById(ways), wayIds), ...overrides };
+}
+
+/** A bus line running the given patterns. */
+export function aService(
+  id: string,
+  patterns: Pattern[],
+  overrides: Partial<Service> = {},
+): Service {
+  return { id, name: id, modeId: 'bus', color: '#e4572e', patterns, ...overrides };
+}
+
+/** An otherwise-empty system holding exactly these records. Tests that care
+ *  about junctions pass `nodes` themselves — nothing here infers them, since
+ *  a node is what the store creates deliberately and half these tests exist
+ *  to check what happens when one is absent. */
+export function aSystem(parts: Partial<TransitSystem> = {}): TransitSystem {
+  return { ...createEmptySystem(0), ...parts };
 }
 
 /** A station anchored partway along a way. `t` runs along the WAY's own point

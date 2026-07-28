@@ -395,10 +395,16 @@ export interface WayCrossing {
  *  Endpoint touches (already-joined junction vertices) are not crossings —
  *  same rule as the validation pass above. */
 export function wayCrossings(a: Way, b: Way): WayCrossing[] {
+  return polylineCrossings(a.points, b.points);
+}
+
+/** wayCrossings over bare polylines — for paths that are not a way's own
+ *  control points, such as the resolved path a service rides. */
+export function polylineCrossings(a: LngLat[], b: LngLat[]): WayCrossing[] {
   const crossings: WayCrossing[] = [];
-  for (let i = 0; i < a.points.length - 1; i++) {
-    for (let j = 0; j < b.points.length - 1; j++) {
-      const hit = segmentCrossingPoint(a.points[i], a.points[i + 1], b.points[j], b.points[j + 1]);
+  for (let i = 0; i < a.length - 1; i++) {
+    for (let j = 0; j < b.length - 1; j++) {
+      const hit = segmentCrossingPoint(a[i], a[i + 1], b[j], b[j + 1]);
       if (hit) crossings.push({ coord: hit, aIndex: i + 1, bIndex: j + 1 });
     }
   }
