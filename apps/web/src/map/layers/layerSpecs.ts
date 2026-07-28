@@ -83,6 +83,11 @@ import {
   SRC_WAY_LABELS,
 } from './constants';
 
+/** The app's `--danger` token (see ui/app.css). Not a new colour: a route
+ *  running against traffic is the same class of problem the Issues badge
+ *  reports, and it should read as the same thing. */
+const WRONG_WAY_COLOR = '#b23b2e';
+
 export const LAYER_SPECS: LayerSpecification[] = [
   // Paint order, bottom-up: reference landmarks first (fixed context, not
   // system data — must sit under everything the user actually draws), then
@@ -577,10 +582,13 @@ export const LAYER_SPECS: LayerSpecification[] = [
     source: SRC_PREVIEW,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#191a17',
-      'line-width': 2,
+      // A stretch the route had to run against traffic is drawn in the warning
+      // colour, heavier and at full opacity — the rest of the draft is a faint
+      // dashed hint, and something wrong with it has to out-read that.
+      'line-color': ['case', ['get', 'wrongWay'], WRONG_WAY_COLOR, '#191a17'],
+      'line-width': ['case', ['get', 'wrongWay'], 3.5, 2],
       'line-dasharray': [1.5, 1.5],
-      'line-opacity': 0.5,
+      'line-opacity': ['case', ['get', 'wrongWay'], 1, 0.5],
     },
   },
   {

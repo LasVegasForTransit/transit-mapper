@@ -12,6 +12,7 @@ import type {
 // concept now (system/service.ts), but every caller reaches it through geo.
 export type { RunDirection } from '../system';
 
+import { wayTraversal } from '../profile';
 import { slicePathByT } from './measurement';
 import { haversineMeters } from './spherical';
 import { resolveWayPath, wayById } from './wayPath';
@@ -90,6 +91,31 @@ export function patternRunLegs(pattern: Pattern, run: RunDirection): RunLeg[] {
     else if (section.kind === 'turnaround') {
       if (run === 'outbound') take(section.legs, false);
     } else take(run === 'outbound' ? section.outbound : section.inbound, false);
+  }
+  return out;
+}
+
+/**
+ * The legs of one direction that run against their way's one-way profile.
+ *
+ * The DURABLE half of the wrong-way story. A route draft can mark the spans it
+ * just produced, but nothing re-routes an existing line: make a street one-way
+ * underneath one and it goes on running the wrong way with the draft flag long
+ * gone. This recomputes from the profile every time it is asked, so it stays
+ * true however the street got that way.
+ */
+export function wrongWayLegs(
+  waysById: Map<string, Way>,
+  pattern: Pattern,
+  run: RunDirection,
+): PatternLeg[] {
+  const out: PatternLeg[] = [];
+  for (const { leg, forward } of patternRunLegs(pattern, run)) {
+    const way = waysById.get(leg.wayId);
+    if (!way) continue;
+    const traversal = wayTraversal(way);
+    if (traversal === 'both') continue;
+    if (traversal !== (forward ? 'forward' : 'backward')) out.push(leg);
   }
   return out;
 }
