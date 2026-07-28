@@ -152,7 +152,13 @@ import {
   outgoingLanes,
 } from '@transitmapper/core/geometry/junctions';
 import { wayCrossings } from '@transitmapper/core/model/validate';
-import { mergeLegs, splitLegs } from '@transitmapper/core/model/patternEdits';
+import {
+  mergeLegs,
+  removeStretchFromLegs,
+  splitLegs,
+  splitLegsAt,
+  truncateLegs,
+} from '@transitmapper/core/model/patternEdits';
 import { anchorOnWay, routeBetween, routePath } from '@transitmapper/core/model/routeGraph';
 // `snap` and `squareFootprint` come from the same module in the import block
 // at the top of this file; naming them twice was a duplicate-identifier error
@@ -10478,6 +10484,163 @@ function buildGrid() {
   const other = createSimClock({ startMs: 12 * MS_PER_MINUTE });
   other.advance(1000);
   check('two clocks keep their own time', clock.now() === 0 && other.now() === 13 * MS_PER_MINUTE);
+}
+
+// --- editing a line in pieces ---
+// Trimming a line back, cutting one in two, and taking a stretch of road out
+// from under one. All three used to be impossible: a service covered whole
+// ways, so the only way to shorten a line was to delete it.
+{
+  const legsFor = (...specs: [string, boolean, number?, number?][]): PatternLeg[] =>
+    specs.map(([wayId, forward, fromT, toT]) => ({
+      wayId,
+      forward,
+      ...(fromT !== undefined ? { fromT } : {}),
+      ...(toT !== undefined ? { toT } : {}),
+    }));
+
+  // Trimming the END of a forward leg keeps the low end of the way.
+  const trimEnd = truncateLegs(legsFor(['w', true]), 0, 0.6, 'end');
+  check(
+    'trimming a line back leaves it running only up to that point',
+    trimEnd.length === 1 && trimEnd[0].fromT === 0 && Math.abs(trimEnd[0].toT! - 0.6) < 1e-9,
+  );
+  // …and trimming the START of that same leg keeps the high end.
+  const trimStart = truncateLegs(legsFor(['w', true]), 0, 0.6, 'start');
+  check(
+    'trimming the other end of a line keeps the far side',
+    trimStart.length === 1 && Math.abs(trimStart[0].fromT! - 0.6) < 1e-9 && trimStart[0].toT === 1,
+  );
+  // A BACKWARD leg rides the way high-to-low, so "the start of the line" is
+  // the way's high end. Getting this backward would trim the wrong half.
+  const trimBackward = truncateLegs(legsFor(['w', false]), 0, 0.6, 'start');
+  check(
+    'trimming the start of a line that runs its way backward keeps the low end',
+    trimBackward.length === 1 && trimBackward[0].fromT === 0,
+  );
+  // Trimming into the middle of a multi-way line drops the legs beyond it.
+  const trimMulti = truncateLegs(legsFor(['a', true], ['b', true], ['c', true]), 1, 0.4, 'end');
+  check(
+    'trimming a line back past a junction drops the ways beyond it',
+    trimMulti.length === 2 && trimMulti[1].wayId === 'b',
+  );
+
+  const [near, far] = splitLegsAt(legsFor(['a', true], ['b', true]), 0, 0.5);
+  check(
+    'cutting a line in two gives each half the stretch on its own side',
+    near.length === 1 &&
+      Math.abs(near[0].toT! - 0.5) < 1e-9 &&
+      far.length === 2 &&
+      Math.abs(far[0].fromT! - 0.5) < 1e-9,
+  );
+  const [onEnd] = splitLegsAt(legsFor(['a', true]), 0, 0);
+  check('cutting a line at its own terminus splits nothing off', onEnd.length === 0);
+
+  // Taking a stretch out of the middle of a way leaves the pieces either side.
+  const holed = removeStretchFromLegs(legsFor(['w', true]), 'w', 0.4, 0.6);
+  check(
+    'removing a stretch from under a line leaves the pieces on both sides',
+    holed.length === 2 &&
+      Math.abs(holed[0].toT! - 0.4) < 1e-9 &&
+      Math.abs(holed[1].fromT! - 0.6) < 1e-9,
+  );
+  check(
+    'a line running the way backward gets those pieces in ride order',
+    removeStretchFromLegs(legsFor(['w', false]), 'w', 0.4, 0.6)[0].fromT === 0.6,
+  );
+  check(
+    'removing a stretch a line does not reach leaves it alone',
+    removeStretchFromLegs(legsFor(['w', true, 0, 0.3]), 'w', 0.4, 0.6).length === 1,
+  );
+  check(
+    'removing the whole of what a line covers leaves it with nothing',
+    removeStretchFromLegs(legsFor(['w', true]), 'w', 0, 1).length === 0,
+  );
+}
+
+// --- the same three edits, through the store and against real geometry ---
+{
+  fresh();
+  store.getState().setDraftMode('bus');
+  const road = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(road, [-115.3, 36.1]);
+  store.getState().addWayPoint(road, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const line = store.getState().system.services[0];
+  const pattern = line.patterns[0];
+  const fullLength = pathLengthMeters(patternPath(store.getState().system.ways, pattern));
+
+  store.getState().trimPatternTo(line.id, pattern.id, road, 0.5, 'end');
+  const trimmed = store.getState().system;
+  check(
+    'trimming a line leaves the road it ran on completely alone',
+    trimmed.ways.length === 1 && trimmed.ways[0].points.length === 2,
+  );
+  check(
+    'the trimmed line is half as long as it was',
+    Math.abs(
+      pathLengthMeters(patternPath(trimmed.ways, trimmed.services[0].patterns[0])) - fullLength / 2,
+    ) < 1,
+  );
+
+  // Cutting that half-line in two at its own midpoint: both halves survive, on
+  // the same road.
+  const spawnedId = store.getState().splitServiceAt(line.id, pattern.id, road, 0.25);
+  const afterSplit = store.getState().system;
+  check(
+    'cutting a line in two produces a second line',
+    !!spawnedId && afterSplit.services.length === 2,
+  );
+  check(
+    'both halves ride the same road — cutting a line does not cut the street',
+    afterSplit.ways.length === 1,
+  );
+  check(
+    'the two halves add up to the line that was there before',
+    Math.abs(
+      afterSplit.services.reduce(
+        (m, sv) => m + pathLengthMeters(patternPath(afterSplit.ways, sv.patterns[0])),
+        0,
+      ) -
+        fullLength / 2,
+    ) < 1,
+  );
+  check(
+    'the new half takes a colour of its own',
+    afterSplit.services[0].color !== afterSplit.services[1].color,
+  );
+}
+
+{
+  // Deleting a stretch of road from under a line that runs its whole length:
+  // the road is cut, and the line survives as two pieces rather than losing
+  // whichever half is shorter.
+  fresh();
+  store.getState().setDraftMode('bus');
+  const road = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(road, [-115.3, 36.1]);
+  store.getState().addWayPoint(road, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const svcId = store.getState().system.services[0].id;
+
+  const affected = store.getState().deleteWayStretch(road, 0.4, 0.6);
+  const after = store.getState().system;
+  check('deleting a stretch reports the line it cut', affected === 1);
+  check('the road is left as the two pieces either side', after.ways.length === 2);
+  check(
+    'the line survives as two pieces rather than losing half of itself',
+    after.services.find((sv) => sv.id === svcId)?.patterns.length === 2,
+  );
+  check(
+    'no surviving piece names a way that was deleted',
+    after.services
+      .flatMap((sv) => sv.patterns)
+      .every((p) => p.legs.every((l) => after.ways.some((w) => w.id === l.wayId))),
+  );
+  check(
+    'the surviving system has no route with a gap in it',
+    validateSystem(after).every((i) => !i.id.startsWith('broken-pattern')),
+  );
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
