@@ -58,6 +58,7 @@ import {
   patternHasSplit,
   patternRunLegs,
   patternRunPath,
+  patternHasCouplet,
 } from '@transitmapper/core/model/geo';
 import { computeDiagramSystem } from '@transitmapper/core/model/diagramLayout';
 import {
@@ -10792,6 +10793,75 @@ function buildGrid() {
   check(
     'the new half takes a colour of its own',
     afterSplit.services[0].color !== afterSplit.services[1].color,
+  );
+}
+
+// --- a loop at the terminus ---
+// A bus running out along a street, round a block at the far end, and back the
+// way it came. Not a couplet: the line is shared end to end and the loop is
+// ridden ONCE per cycle. Drawing one used to be refused outright.
+{
+  fresh();
+  store.getState().setDraftMode('bus');
+  const P = (lng: number, lat: number): LngLat => [lng, lat];
+  const road = (id: string, pts: LngLat[]) => ({
+    id,
+    typeId: 'road',
+    points: pts,
+    geometry: 'straight' as const,
+    grade: 'atGrade' as const,
+  });
+  const S = P(-115.2, 36.1);
+  const N = P(-115.2, 36.13);
+  const NE = P(-115.1988, 36.13);
+  const SE = P(-115.1988, 36.128);
+  store.getState().setSystem(
+    parseSystem({
+      version: 3,
+      ways: [
+        road('spine', [S, N]),
+        road('top', [N, NE]),
+        road('side', [NE, SE]),
+        road('back', [SE, N]),
+      ],
+      services: [],
+      stations: [],
+    }),
+  );
+  const tSvc = store.getState().addServiceToWay('spine')!;
+  const tPat = store.getState().system.services.find((sv) => sv.id === tSvc)!.patterns[0];
+  // The loop starts and ends at the spine's far terminus.
+  const looped = store.getState().attachReturnPath(tSvc, tPat.id, [
+    { wayId: 'top', fromPoint: 0, toPoint: 1 },
+    { wayId: 'side', fromPoint: 0, toPoint: 1 },
+    { wayId: 'back', fromPoint: 0, toPoint: 1 },
+  ]);
+  check('a loop drawn at the terminus is accepted', looped);
+
+  const lp = store.getState().system.services.find((sv) => sv.id === tSvc)!.patterns[0];
+  check(
+    'it is a turnaround, not a couplet',
+    lp.sections.some((x) => x.kind === 'turnaround') && !patternHasCouplet(lp),
+  );
+  const outWays = patternRunLegs(lp, 'outbound').map((r) => r.leg.wayId);
+  const backWays = patternRunLegs(lp, 'inbound').map((r) => r.leg.wayId);
+  check(
+    'the outward trip runs the spine and then the loop',
+    outWays.includes('spine') && outWays.includes('side'),
+  );
+  check(
+    'the return trip runs the spine and not the loop again',
+    backWays.includes('spine') && !backWays.includes('side'),
+  );
+  check(
+    'the loop is ridden once per cycle, not twice',
+    outWays.filter((w) => w === 'side').length + backWays.filter((w) => w === 'side').length === 1,
+  );
+  check(
+    'a turnaround survives a save and a reload',
+    parseSystem(JSON.parse(JSON.stringify(store.getState().system)))
+      .services.find((sv) => sv.id === tSvc)!
+      .patterns[0].sections.some((x) => x.kind === 'turnaround'),
   );
 }
 

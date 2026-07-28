@@ -11,7 +11,7 @@ import {
   type SelectionAction,
   type SelectionActionProvider,
 } from '@transitmapper/core/model/selectionActions';
-import { patternHasSplit } from '@transitmapper/core/model/geo';
+import { patternHasCouplet } from '@transitmapper/core/model/geo';
 import { servicesShareOrCross, terminiMeet } from '@transitmapper/core/model/selectionRelations';
 import type { EditorStore } from '../store';
 
@@ -28,7 +28,7 @@ export function serviceActionProvider(store: EditorStore): SelectionActionProvid
       // gets the return trip is a question the menu cannot ask.
       if (!service || service.patterns.length !== 1) return [];
       const pattern = service.patterns[0];
-      return patternHasSplit(pattern)
+      return patternHasCouplet(pattern)
         ? [
             {
               id: 'service.makeTwoWay',

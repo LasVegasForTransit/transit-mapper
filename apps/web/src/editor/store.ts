@@ -3286,12 +3286,21 @@ export function createEditorStore() {
       if (!cut) return false;
 
       const [shared, diverged] = splitLegsAt(outLegs, cut.legIndex, cut.t);
-      if (diverged.length === 0) return false;
 
-      const sections = pruneSections([
-        ...(shared.length > 0 ? oneSection(shared) : []),
-        { kind: 'split' as const, outbound: diverged, inbound: returnLegs },
-      ]);
+      // Nothing diverged means the drawn path rejoins at the far END of the
+      // line rather than partway down it: a loop round the block at the
+      // terminus, ridden once and then the line comes back the way it went.
+      // That is a turnaround, not a couplet — the whole line is still shared,
+      // with the loop appended. It used to be refused, which is why nothing
+      // could build a turnaround section at all.
+      const sections = pruneSections(
+        diverged.length === 0
+          ? [...oneSection(outLegs), { kind: 'turnaround' as const, legs: returnLegs }]
+          : [
+              ...(shared.length > 0 ? oneSection(shared) : []),
+              { kind: 'split' as const, outbound: diverged, inbound: returnLegs },
+            ],
+      );
       set((s) => ({
         system: touch({
           ...s.system,
