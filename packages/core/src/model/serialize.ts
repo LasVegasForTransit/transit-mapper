@@ -17,6 +17,7 @@ import {
   type NodeControl,
   type Pattern,
   type LegDirection,
+  type PatternSection,
   type LegExtent,
   type LegLane,
   type PatternLeg,
@@ -417,6 +418,9 @@ type DraftLeg = Omit<PatternLeg, 'direction'> & { direction?: LegDirection };
 interface DraftPattern {
   id: string;
   legs: DraftLeg[];
+  /** Set for a v12+ document, whose sections already say everything — nothing
+   *  is left for finish() to derive. */
+  sections?: PatternSection[];
   name?: string;
 }
 
@@ -467,6 +471,37 @@ function parseLegLane(r: Record<string, unknown>): LegLane {
   return { kind: 'auto' };
 }
 
+/** A pattern's sections (v12+). A section whose legs all fail to parse is
+ *  dropped rather than kept empty, and a `split` needs BOTH sides — one side
+ *  alone is a line that goes out and never comes back, which is a real thing
+ *  to have drawn but not a thing to silently invent from a bad record. */
+function parseSections(raw: unknown[]): PatternSection[] {
+  const out: PatternSection[] = [];
+  for (const entry of raw) {
+    const r = entry as Record<string, unknown>;
+    if (!r) continue;
+    if (r.kind === 'split') {
+      const outbound = parseLegs(r.outbound).filter(isResolvedLeg);
+      const inbound = parseLegs(r.inbound).filter(isResolvedLeg);
+      if (outbound.length === 0 || inbound.length === 0) continue;
+      out.push({ kind: 'split', outbound, inbound });
+      continue;
+    }
+    if (r.kind !== 'shared' && r.kind !== 'turnaround') continue;
+    const legs = parseLegs(r.legs).filter(isResolvedLeg);
+    if (legs.length === 0) continue;
+    out.push({ kind: r.kind, legs });
+  }
+  return out;
+}
+
+/** A v12 leg always carries its direction; one that does not is a record we
+ *  cannot place, and guessing it from continuity is exactly the derivation
+ *  that reads a couplet as broken. */
+function isResolvedLeg(leg: DraftLeg): leg is PatternLeg {
+  return leg.direction !== undefined;
+}
+
 function parseLegs(raw: unknown): DraftLeg[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -490,7 +525,14 @@ function parsePatterns(raw: unknown, legacyWayIds: unknown): DraftPattern[] {
         const r = p as Record<string, unknown>;
         if (typeof r.id !== 'string') return null;
         const name = typeof r.name === 'string' ? r.name : undefined;
-        // v10: legs carry their own direction, extent, and lane pin.
+        // v12: the path is sections, one per stretch, saying which directions
+        // of service ride it.
+        if (Array.isArray(r.sections)) {
+          const sections = parseSections(r.sections);
+          if (sections.length > 0) return { id: r.id, legs: [], sections, name };
+        }
+        // v10–v11: one flat leg list, each leg carrying its own direction,
+        // extent, and lane pin. The whole thing is one shared stretch.
         if (Array.isArray(r.legs)) return { id: r.id, legs: parseLegs(r.legs), name };
         // v5–v9: a bare ordered way list plus a wayId-keyed lane map. Every
         // way is covered end to end, since nothing before v10 could say
@@ -524,7 +566,11 @@ function parsePatterns(raw: unknown, legacyWayIds: unknown): DraftPattern[] {
 function resolveLegDirections(patterns: DraftPattern[], ways: Way[]): Pattern[] {
   const byId = wayById(ways);
   return patterns.map((p) => {
-    const { legs, ...rest } = p;
+    const { legs, sections, ...rest } = p;
+    // A v12 document already said which directions ride what; there is nothing
+    // to derive and deriving anyway would read a couplet's two halves as one
+    // broken line.
+    if (sections) return { ...rest, sections };
     if (legs.every((l) => l.direction !== undefined))
       return { ...rest, sections: oneSection(legs as PatternLeg[]) };
     // Only a pre-v11 document can be missing a direction, and no pre-v12

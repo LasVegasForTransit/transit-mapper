@@ -169,6 +169,7 @@ import {
   splitLegs,
   splitLegsAt,
   truncateLegs,
+  mapSectionLegs,
 } from '@transitmapper/core/model/patternEdits';
 import { anchorOnWay, routeBetween, routePath } from '@transitmapper/core/model/routeGraph';
 // `snap` and `squareFootprint` come from the same module in the import block
@@ -429,8 +430,10 @@ check(
         ...svc,
         patterns: svc.patterns.map((p) => ({
           ...p,
-          legs: patternLegs(p).map((l) =>
-            l.wayId === w ? { ...l, lane: { kind: 'pinned' as const, laneId } } : l,
+          sections: mapSectionLegs(p.sections, (legs) =>
+            legs.map((l) =>
+              l.wayId === w ? { ...l, lane: { kind: 'pinned' as const, laneId } } : l,
+            ),
           ),
         })),
       },
@@ -10840,6 +10843,42 @@ function buildGrid() {
   check('the return trip runs the streets it was traced along', backWays.includes('down'));
   check('the outward trip never runs the return street', !outWays.includes('down'));
   check('the return trip never runs the outward street', !backWays.includes('up'));
+
+  // Round-tripping is where this feature can be lost silently: the couplet is
+  // correct in memory, gets saved, and comes back as a line that runs over no
+  // ways at all. That is exactly what happened — parsePatterns only knew how
+  // to read the flat leg list, so a saved couplet reloaded as nothing.
+  {
+    const saved = JSON.parse(JSON.stringify(store.getState().system));
+    const reloaded = parseSystem(saved);
+    const rp = reloaded.services.find((sv) => sv.id === svc)!.patterns[0];
+    check('a couplet survives a save and a reload', patternHasSplit(rp));
+    check(
+      'a reloaded couplet still runs over its ways',
+      serviceWayIds(reloaded.services.find((sv) => sv.id === svc)!).length === 4,
+    );
+    check(
+      'a reloaded couplet keeps each direction on its own streets',
+      patternRunLegs(rp, 'outbound')
+        .map((r) => r.leg.wayId)
+        .join() ===
+        patternRunLegs(cp, 'outbound')
+          .map((r) => r.leg.wayId)
+          .join() &&
+        patternRunLegs(rp, 'inbound')
+          .map((r) => r.leg.wayId)
+          .join() ===
+          patternRunLegs(cp, 'inbound')
+            .map((r) => r.leg.wayId)
+            .join(),
+    );
+    check(
+      'a reloaded couplet is not reported as broken',
+      !validateSystem(reloaded).some(
+        (i) => i.id.startsWith('broken-pattern-') || i.id.startsWith('ghost-service-'),
+      ),
+    );
+  }
 
   // The whole point of the sim change: the cycle is the two directions added
   // together, and this couplet's return is genuinely longer than its outward.
