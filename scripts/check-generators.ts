@@ -12,7 +12,7 @@
  * uncommitted work. CI runs it, where the tree is disposable.
  */
 import { execFileSync } from 'node:child_process';
-import { rmSync, existsSync } from 'node:fs';
+import { rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -22,6 +22,16 @@ interface Scenario {
   args: string[];
   /** Removed afterwards, whether the run passed or failed. */
   creates: string[];
+  /**
+   * Existing files the generator edits rather than creates. Their contents
+   * are captured before the run and written back after.
+   *
+   * Deleting a path is not enough once a generator edits something that was
+   * already tracked: the `package` generator adds the new package to the
+   * project map, and without this the check left that entry behind on every
+   * run, so the repository came back dirty from a command that only reads.
+   */
+  modifies?: string[];
 }
 
 const SCENARIOS: Scenario[] = [
@@ -29,6 +39,7 @@ const SCENARIOS: Scenario[] = [
     generator: 'package',
     args: ['gencheck', 'A package generated to verify the generator'],
     creates: ['packages/gencheck'],
+    modifies: ['docs/development/reference/project-structure.md'],
   },
   {
     generator: 'lint-rule',
@@ -44,14 +55,21 @@ function run(command: string, args: string[]): void {
   execFileSync(command, args, { cwd: ROOT, stdio: 'pipe' });
 }
 
-function cleanUp(paths: string[]): void {
+function cleanUp(paths: string[], originals: Map<string, string>): void {
   for (const p of paths) rmSync(resolve(ROOT, p), { recursive: true, force: true });
+  for (const [p, contents] of originals) writeFileSync(resolve(ROOT, p), contents, 'utf8');
 }
 
 function main(): void {
   const created: string[] = [];
+  const originals = new Map<string, string>();
   try {
     for (const scenario of SCENARIOS) {
+      // Captured before the generator runs, and only once, so a scenario
+      // listed twice cannot record already-modified contents as the original.
+      for (const p of scenario.modifies ?? []) {
+        if (!originals.has(p)) originals.set(p, readFileSync(resolve(ROOT, p), 'utf8'));
+      }
       run('npx', ['turbo', 'gen', scenario.generator, '--args', ...scenario.args]);
       created.push(...scenario.creates);
       for (const p of scenario.creates) {
@@ -69,18 +87,16 @@ function main(): void {
   } catch (err) {
     console.error('\ngenerators: output does not pass pnpm check.\n');
     console.error(
-      '  A generator exists so scaffolding is correct without being corrected.' +
-        '\n  Output that fails the checks breaks that promise silently.\n' +
-        '\n  fix:  run the generator by hand, run pnpm check, and repair the' +
+      '  fix:  run the generator by hand, run pnpm check, and repair the' +
         '\n        template in turbo/generators/templates/\n',
     );
     if (err instanceof Error) console.error(err.message);
-    cleanUp(created);
+    cleanUp(created, originals);
     run('pnpm', ['install', '--no-frozen-lockfile']);
     process.exit(1);
   }
 
-  cleanUp(created);
+  cleanUp(created, originals);
   run('pnpm', ['install', '--no-frozen-lockfile']);
 }
 

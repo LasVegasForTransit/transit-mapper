@@ -1,5 +1,59 @@
 import type { PlopTypes } from '@turbo/gen';
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const PROJECT_STRUCTURE = 'docs/development/reference/project-structure.md';
+
+/**
+ * The repository root, asked of plop rather than of `import.meta`.
+ *
+ * `import.meta.dirname` is undefined inside the generator runtime, and
+ * `resolve()` throws on it — which plop reports as "no generators found",
+ * pointing at the wrong thing entirely.
+ */
+function repositoryRoot(plop: PlopTypes.NodePlopAPI): string {
+  return resolve(plop.getPlopfilePath(), '../..');
+}
+
+/** Width of the description column in the tree block. */
+const TREE_COLUMN = 17;
+
+interface PackageAnswers {
+  name: string;
+  purpose: string;
+}
+
+/**
+ * Writes the new package into the project map.
+ *
+ * `check:structure` requires every workspace package to appear there, so a
+ * generated package fails `pnpm check` the moment it exists unless this runs.
+ * The generator already asked for the purpose; before this it collected the
+ * answer and threw it away.
+ */
+function documentPackage(answers: unknown, _config: unknown, plop: PlopTypes.NodePlopAPI): string {
+  const { name, purpose } = answers as PackageAnswers;
+  const path = `packages/${name}`;
+  const doc = resolve(repositoryRoot(plop), PROJECT_STRUCTURE);
+  let source = readFileSync(doc, 'utf8');
+
+  if (source.includes(`${path}/`)) return `${path} was already in the project map.`;
+
+  // Into the tree, immediately before `apps/` — the last line of the
+  // `packages/` block whatever that block currently contains.
+  const label = `  ${name}/`.padEnd(TREE_COLUMN, ' ');
+  source = source.replace(/^apps\/$/m, `${label}${purpose}\napps/`);
+
+  // As a section before Testing, which is the tail of the document and not a
+  // directory anyone would look for a package under.
+  source = source.replace(
+    /^## Testing$/m,
+    `## ${path}/ — ${purpose}\n\n- \`src/index.ts\` — replace this line with what the package holds.\n\n## Testing`,
+  );
+
+  writeFileSync(doc, source, 'utf8');
+  return `docs/development/reference/project-structure.md — added ${path}`;
+}
 
 /**
  * Generators exist so the checks have less to catch.
@@ -54,6 +108,7 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
         path: 'packages/{{name}}/src/index.test.ts',
         templateFile: 'templates/package/index.test.ts.hbs',
       },
+      documentPackage,
       () => 'Package created. Run `pnpm install` so the workspace link exists, then `pnpm check`.',
     ],
   });
