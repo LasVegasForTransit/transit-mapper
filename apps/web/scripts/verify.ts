@@ -7057,9 +7057,12 @@ check(
   'bus mode prefers a dedicated bus lane over a general drive lane',
   MODES.bus.preferredLaneKindIds?.[0] === 'bus',
 );
+check('subway prefers a track', MODES.subway.preferredLaneKindIds?.[0] === 'track');
+// preferredLaneKinds reads this field and nothing else, so a mode that leaves
+// it unset silently loses its lane preference.
 check(
-  'subway has no lane preference (its only way type has one lane kind, no ambiguity)',
-  MODES.subway.preferredLaneKindIds === undefined,
+  'every mode declares which lane kinds it prefers',
+  Object.values(MODES).every((m) => (m.preferredLaneKindIds?.length ?? 0) > 0),
 );
 
 // --- R2: lane-detail rendering emission (LOD + viewport scoping) ---

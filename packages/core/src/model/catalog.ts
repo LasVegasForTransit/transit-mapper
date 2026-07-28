@@ -587,9 +587,10 @@ export interface Mode {
   /** Lane kinds this mode prefers when a way offers more than one lane
    *  going its direction — e.g. a bus prefers a dedicated bus lane over a
    *  general drive lane when one exists. Checked in order; first kind
-   *  with any match wins. Falls back to any direction-matching lane when
-   *  unset or none of the preferred kinds are present on this way. See
-   *  geometry/vehicleLane.ts's selectVehicleLane. */
+   *  with any match wins. Falls back to the curb lane in the travel
+   *  direction when none of the preferred kinds are present on this way.
+   *  Read by model/geo/serviceLane.ts's preferredLaneKinds, which is the
+   *  single answer to "which lane does this service ride". */
   preferredLaneKindIds?: string[];
   /** Approximate true-world size, in meters — rail-family modes share
    *  dimensions with their nearest real-world equivalent; exact figures
@@ -623,6 +624,7 @@ export const MODES: Record<string, Mode> = {
     id: 'subway',
     label: 'Subway / metro',
     wayTypeIds: ['heavyRail'],
+    preferredLaneKindIds: ['track'],
     defaultFootprintM: { widthM: 2.65, lengthM: 22 },
     corridorToleranceM: RAIL_CORRIDOR_TOLERANCE_M,
   },
@@ -630,6 +632,7 @@ export const MODES: Record<string, Mode> = {
     id: 'commuterRail',
     label: 'Commuter rail',
     wayTypeIds: ['heavyRail'],
+    preferredLaneKindIds: ['track'],
     defaultFootprintM: { widthM: 2.9, lengthM: 25 },
     corridorToleranceM: RAIL_CORRIDOR_TOLERANCE_M,
   },
@@ -656,6 +659,7 @@ export const MODES: Record<string, Mode> = {
     id: 'monorail',
     label: 'Monorail',
     wayTypeIds: ['monorail'],
+    preferredLaneKindIds: ['track'],
     defaultFootprintM: { widthM: 3, lengthM: 12 },
     corridorToleranceM: RAIL_CORRIDOR_TOLERANCE_M,
   },
@@ -677,12 +681,14 @@ export const MODES: Record<string, Mode> = {
     id: 'gondola',
     label: 'Gondola / aerial',
     wayTypeIds: ['aerial'],
+    preferredLaneKindIds: ['channel'],
     defaultFootprintM: { widthM: 2, lengthM: 3 },
   },
   ferry: {
     id: 'ferry',
     label: 'Ferry',
     wayTypeIds: ['water'],
+    preferredLaneKindIds: ['channel'],
     defaultFootprintM: { widthM: 6, lengthM: 20 },
   },
 };
