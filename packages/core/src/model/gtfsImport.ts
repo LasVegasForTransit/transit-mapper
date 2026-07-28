@@ -504,6 +504,38 @@ export interface GtfsImportBatch {
   routesTotal: number;
 }
 
+/** Inflate, decode, index, and batch a GTFS ZIP without touching the network.
+ * The browser runs this entry point inside a dedicated Worker, while the pure
+ * signature keeps archive behavior fixture-testable in Node and workerd. */
+export function gtfsArchiveToBatches(
+  archive: Uint8Array,
+  requestedBatchSize = 2,
+): GtfsImportBatch[] {
+  const zip = unzipSync(archive);
+  const read = (name: string) => (zip[name] ? strFromU8(zip[name]) : '');
+  const index = buildGtfsIndex({
+    routes: read('routes.txt'),
+    trips: read('trips.txt'),
+    stops: read('stops.txt'),
+    stopTimes: read('stop_times.txt'),
+    frequencies: read('frequencies.txt'),
+    shapes: read('shapes.txt'),
+  });
+  const routeIds = [...index.routeShapeIds.keys()];
+  const routesTotal = routeIds.length;
+  const batchSize = Math.max(1, Math.floor(requestedBatchSize));
+  const stationByStopId = new Map<string, Station>();
+  const batches: GtfsImportBatch[] = [];
+  for (let i = 0; i < routesTotal; i += batchSize) {
+    batches.push({
+      pieces: piecesForRoutes(index, routeIds.slice(i, i + batchSize), stationByStopId),
+      routesDone: Math.min(i + batchSize, routesTotal),
+      routesTotal,
+    });
+  }
+  return batches;
+}
+
 /**
  * RTC Southern Nevada's real, actively-maintained GTFS feed — fetched
  * through the Worker's /api/gtfs/rtc proxy since the feed's own host
@@ -520,27 +552,9 @@ export interface GtfsImportBatch {
 export async function* streamRtcGtfsBatches(batchSize = 2): AsyncGenerator<GtfsImportBatch> {
   const res = await fetch('/api/gtfs/rtc');
   if (!res.ok) throw new Error(`GTFS import failed (${res.status}).`);
-  const zip = unzipSync(new Uint8Array(await res.arrayBuffer()));
-  const read = (name: string) => (zip[name] ? strFromU8(zip[name]) : '');
-  const index = buildGtfsIndex({
-    routes: read('routes.txt'),
-    trips: read('trips.txt'),
-    stops: read('stops.txt'),
-    stopTimes: read('stop_times.txt'),
-    frequencies: read('frequencies.txt'),
-    shapes: read('shapes.txt'),
-  });
-
-  const routeIds = [...index.routeShapeIds.keys()];
-  const stationByStopId = new Map<string, Station>();
-  for (let i = 0; i < routeIds.length; i += batchSize) {
-    const batch = routeIds.slice(i, i + batchSize);
-    const pieces = piecesForRoutes(index, batch, stationByStopId);
-    yield {
-      pieces,
-      routesDone: Math.min(i + batchSize, routeIds.length),
-      routesTotal: routeIds.length,
-    };
+  const batches = gtfsArchiveToBatches(new Uint8Array(await res.arrayBuffer()), batchSize);
+  for (const batch of batches) {
+    yield batch;
     // Hand control back to the browser between batches — setTimeout, not
     // requestAnimationFrame: rAF callbacks are paused indefinitely by most
     // browsers once the tab isn't visible/focused, which would silently
