@@ -35,6 +35,7 @@ export interface SimClockSettings {
 }
 
 export type SimClockListener = (simMs: number) => void;
+export type SimClockSettingsListener = (settings: SimClockSettings) => void;
 
 export interface SimClock {
   /** The current simulated instant, in ms since Monday 00:00. */
@@ -52,6 +53,11 @@ export interface SimClock {
   /** Mirror the user's settings in from React. Cheap and rare — a click, not
    *  a frame. */
   setSettings(next: SimClockSettings): void;
+  /** Settings change far less often than time. Imperative hosts use this
+   *  separate channel to stop their schedulers completely while paused and
+   *  wake immediately when play is pressed, without putting the 30 Hz clock
+   *  itself into React state. */
+  subscribeSettings(listener: SimClockSettingsListener): () => void;
   /** Jump the clock. Used by the DEV `__sim` handle today, and the seam any
    *  future time scrubber would go through — because vehicle position is a
    *  pure function of this number, a jump leaves nothing to reconcile. */
@@ -74,6 +80,7 @@ export function createSimClock(options: CreateSimClockOptions = {}): SimClock {
     paused: options.paused ?? false,
   };
   const listeners = new Set<SimClockListener>();
+  const settingsListeners = new Set<SimClockSettingsListener>();
 
   const notify = () => {
     for (const listener of listeners) listener(simMs);
@@ -91,7 +98,15 @@ export function createSimClock(options: CreateSimClockOptions = {}): SimClock {
       return simMs;
     },
     setSettings(next) {
+      if (next.speedId === settings.speedId && next.paused === settings.paused) return;
       settings = { ...next };
+      for (const listener of settingsListeners) listener({ ...settings });
+    },
+    subscribeSettings(listener) {
+      settingsListeners.add(listener);
+      return () => {
+        settingsListeners.delete(listener);
+      };
     },
     setTime(nextMs) {
       simMs = nextMs;
