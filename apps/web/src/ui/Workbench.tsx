@@ -194,7 +194,7 @@ export function Workbench({
             {simControls}
           </div>
           <div className="flex flex-1 justify-end">
-            <div className="actions-full pointer-events-auto flex max-w-[900px] flex-wrap items-center justify-end gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2 shadow-[var(--shadow)]">
+            <div className="actions-full flex max-w-[900px] flex-wrap items-center justify-end gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2 shadow-[var(--shadow)]">
               {primaryToolbar}
             </div>
           </div>
