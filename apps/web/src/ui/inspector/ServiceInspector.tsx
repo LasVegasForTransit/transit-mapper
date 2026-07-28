@@ -141,6 +141,8 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   const deletePattern = useEditor((s) => s.deletePattern);
   const mergeServiceInto = useEditor((s) => s.mergeServiceInto);
   const adoptExistingInfrastructure = useEditor((s) => s.adoptExistingInfrastructure);
+  const trimPatternTo = useEditor((s) => s.trimPatternTo);
+  const splitServiceAt = useEditor((s) => s.splitServiceAt);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [vehicleKindsOpen, setVehicleKindsOpen] = useState(false);
   const [tab, setTab] = useState<string>('line');
@@ -659,9 +661,15 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                   ? ` — ${pattern.name || (i === 0 ? 'Main' : `Branch ${i}`)}`
                   : ''}
               </label>
+              {!readOnly && stops.length > 1 && (
+                <p className="insp-sub">
+                  A stop is a place this line can be cut. Ending it at a stop shortens the line; the
+                  street it runs on is not touched.
+                </p>
+              )}
               <ol className="stop-list">
                 {stops.map((st, j) => (
-                  <li key={st.id}>
+                  <li key={st.id} className="stop-row">
                     <button
                       type="button"
                       className="stop-item"
@@ -670,6 +678,46 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                       <span className="stop-index">{j + 1}</span>
                       <span className="stop-name">{st.name || 'Unnamed station'}</span>
                     </button>
+                    {!readOnly && stops.length > 1 && (
+                      <span className="stop-actions">
+                        {j > 0 && (
+                          <button
+                            type="button"
+                            className="ghost-btn stop-action"
+                            title={`Cut this line back so it starts at ${st.name || 'this stop'}`}
+                            onClick={() =>
+                              trimPatternTo(id, pattern.id, st.anchor!.wayId, st.anchor!.t, 'start')
+                            }
+                          >
+                            Start here
+                          </button>
+                        )}
+                        {j < stops.length - 1 && (
+                          <button
+                            type="button"
+                            className="ghost-btn stop-action"
+                            title={`Cut this line back so it ends at ${st.name || 'this stop'}`}
+                            onClick={() =>
+                              trimPatternTo(id, pattern.id, st.anchor!.wayId, st.anchor!.t, 'end')
+                            }
+                          >
+                            End here
+                          </button>
+                        )}
+                        {j > 0 && j < stops.length - 1 && (
+                          <button
+                            type="button"
+                            className="ghost-btn stop-action"
+                            title={`Cut this line in two here — both halves keep running on the same infrastructure`}
+                            onClick={() =>
+                              splitServiceAt(id, pattern.id, st.anchor!.wayId, st.anchor!.t)
+                            }
+                          >
+                            Split
+                          </button>
+                        )}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ol>

@@ -1631,6 +1631,36 @@ input {
   white-space: nowrap;
 }
 
+/* Where a line can be cut. Revealed on hover/focus rather than shown always:
+   three buttons per stop on a forty-stop line is a wall, and the row still has
+   to read as a stop sequence first. Kept in the layout at all times (opacity,
+   not display) so the list doesn't reflow under the pointer. */
+.stop-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.stop-actions {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.stop-row:hover .stop-actions,
+.stop-row:focus-within .stop-actions {
+  opacity: 1;
+}
+.ghost-btn.stop-action {
+  padding: 2px 7px;
+  font-size: var(--fs-label-sm);
+}
+@media (prefers-reduced-motion: reduce) {
+  .stop-actions {
+    transition: none;
+  }
+}
+
 /* ---- a service's patterns/branches (ServiceInspector) ---- */
 .pattern-list {
   list-style: none;

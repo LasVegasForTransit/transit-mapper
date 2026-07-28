@@ -46,6 +46,10 @@ export default defineConfig({
     }),
   ],
   server: {
+    // Honour PORT so a second checkout of this repo can run its own dev
+    // server alongside the first instead of losing the race for 5173. Unset
+    // (the normal case) leaves Vite on its own default.
+    port: process.env.PORT ? Number(process.env.PORT) : undefined,
     proxy: {
       '/api': 'http://localhost:8787',
     },
