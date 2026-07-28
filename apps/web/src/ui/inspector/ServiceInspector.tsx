@@ -162,8 +162,8 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   if (!service) return <EmptyInspector />;
   const singlePattern = service.patterns.length === 1 ? service.patterns[0] : null;
   const singleWay =
-    singlePattern?.wayIds.length === 1
-      ? ways.find((w) => w.id === singlePattern.wayIds[0])
+    singlePattern?.legs.length === 1
+      ? ways.find((w) => w.id === singlePattern.legs[0].wayId)
       : undefined;
   // Measured along what the line actually rides, not by summing whole way
   // lengths: a way the pattern couldn't resolve contributes nothing, and once
@@ -558,7 +558,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
         )}
         <ul className="pattern-list">
           {service.patterns.map((p, i) => {
-            const pWay = ways.find((w) => w.id === p.wayIds[0]);
+            const pWay = ways.find((w) => w.id === p.legs[0]?.wayId);
             return (
               <li key={p.id} className="pattern-row">
                 <button
@@ -572,8 +572,8 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                     {p.name || (i === 0 ? 'Main' : `Branch ${i}`)}
                   </span>
                   <span className="pattern-meta">
-                    {formatKm(pathLengthMeters(patternPath(ways, p)))} · {p.wayIds.length} way
-                    {p.wayIds.length === 1 ? '' : 's'}
+                    {formatKm(pathLengthMeters(patternPath(ways, p)))} · {p.legs.length} way
+                    {p.legs.length === 1 ? '' : 's'}
                   </span>
                 </button>
                 {!readOnly && service.patterns.length > 1 && (

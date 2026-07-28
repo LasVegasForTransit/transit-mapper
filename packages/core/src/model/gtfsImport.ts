@@ -231,7 +231,10 @@ function piecesForRoutes(
         ),
         source: `gtfs:${shapeId}`,
       });
-      patterns.push({ id: shortId(), wayIds: [wayId] });
+      // A freshly minted shape way is traversed in its own point order,
+      // end to end — the one case where direction and extent need no
+      // derivation at all.
+      patterns.push({ id: shortId(), legs: [{ wayId, forward: true }] });
     }
     if (patterns.length === 0) continue;
 

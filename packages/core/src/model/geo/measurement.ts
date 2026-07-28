@@ -107,6 +107,35 @@ export function pointAtDistance(path: LngLat[], cum: Float64Array, distMeters: n
   return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
 }
 
+/** The stretch of a polyline between two normalized arc-length positions,
+ *  with interpolated endpoints and every original vertex in between. `t0` and
+ *  `t1` are clamped to [0,1] and swapped if given out of order, so the result
+ *  always runs in the path's own direction — a caller that wants it in travel
+ *  order reverses it. A degenerate range (or a path with no length) yields the
+ *  single point at `t0`, which callers treat as "nothing to draw".
+ *
+ *  This is what lets a pattern cover part of a way without the way being split
+ *  to match. */
+export function slicePathByT(path: LngLat[], t0: number, t1: number): LngLat[] {
+  if (path.length < 2) return path.slice();
+  const lo = Math.max(0, Math.min(1, Math.min(t0, t1)));
+  const hi = Math.max(0, Math.min(1, Math.max(t0, t1)));
+  if (lo <= 0 && hi >= 1) return path;
+  const cum = cumulativeLengths(path);
+  const total = cum[cum.length - 1];
+  if (total === 0) return [path[0]];
+  const startM = lo * total;
+  const endM = hi * total;
+  const out: LngLat[] = [pointAtDistance(path, cum, startM)];
+  for (let i = 0; i < path.length; i++) {
+    // Strictly between, so an endpoint that lands exactly on a vertex isn't
+    // emitted twice.
+    if (cum[i] > startM && cum[i] < endM) out.push(path[i]);
+  }
+  if (endM > startM) out.push(pointAtDistance(path, cum, endM));
+  return out;
+}
+
 export interface NearestOnPath {
   /** Normalized arc-length position [0,1] of the closest point. */
   t: number;

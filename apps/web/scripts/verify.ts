@@ -32,10 +32,12 @@ import {
   segmentGridStats,
   servedWayIds,
   serviceWayIds,
+  deriveLegDirections,
   patternPath,
   patternSegments,
-  patternWayDirection,
+  patternWayIds,
   serviceLaneOnWay,
+  wholeLegs,
   detectShapeRuns,
   snap,
   MAX_GRID_CELLS,
@@ -150,6 +152,7 @@ import {
   outgoingLanes,
 } from '@transitmapper/core/geometry/junctions';
 import { wayCrossings } from '@transitmapper/core/model/validate';
+import { mergeLegs, splitLegs } from '@transitmapper/core/model/patternEdits';
 import { anchorOnWay, routeBetween, routePath } from '@transitmapper/core/model/routeGraph';
 // `snap` and `squareFootprint` come from the same module in the import block
 // at the top of this file; naming them twice was a duplicate-identifier error
@@ -159,6 +162,7 @@ import type {
   CrossSection,
   LngLat,
   Node,
+  PatternLeg,
   Service,
   Station,
   TransitSystem,
@@ -240,6 +244,12 @@ function check(name: string, cond: boolean) {
   if (!cond) failures++;
 }
 
+/** Whole-way legs in stored point order — the shape a hand-built fixture wants
+ *  when direction and extent aren't what it's testing. Use wholeLegs when the
+ *  fixture's ways genuinely need their direction derived from geometry. */
+const legsOf = (...wayIds: string[]): PatternLeg[] =>
+  wayIds.map((wayId) => ({ wayId, forward: true }));
+
 const store = createEditorStore();
 const ed = store.getState();
 const fresh = () => ed.setSystem(createEmptySystem());
@@ -256,7 +266,7 @@ store.getState().finishWay();
 let sys = store.getState().system;
 check('way defined by 3 control points', sys.ways.find((w) => w.id === a)!.points.length === 3);
 check('drawing a way creates exactly one service', sys.services.length === 1);
-check('the service runs over that way', sys.services[0].patterns[0].wayIds[0] === a);
+check('the service runs over that way', patternWayIds(sys.services[0].patterns[0])[0] === a);
 
 // --- multiple services share one way (the service/infra split) ---
 const svc2 = store.getState().addServiceToWay(a);
@@ -390,26 +400,49 @@ check(
   store.getState().finishWay();
   const svc = store.getState().system.services[0];
   const laneId = defaultLaneFor(store.getState().system.ways[0].profile, 'forward')!;
-  // Hand-build a pattern lane assignment and round-trip the whole system.
+  // Hand-build a leg lane pin and round-trip the whole system.
   const withLanes = {
     ...store.getState().system,
-    services: [{ ...svc, patterns: svc.patterns.map((p) => ({ ...p, lanes: { [w]: laneId } })) }],
+    services: [
+      {
+        ...svc,
+        patterns: svc.patterns.map((p) => ({
+          ...p,
+          legs: p.legs.map((l) => (l.wayId === w ? { ...l, laneId } : l)),
+        })),
+      },
+    ],
   };
   const reparsed = parseSystem(JSON.parse(JSON.stringify(withLanes)));
   check(
-    'Pattern.lanes survives a serialize/parse round-trip',
-    reparsed.services[0].patterns[0].lanes?.[w] === laneId,
+    "a leg's lane pin survives a serialize/parse round-trip",
+    reparsed.services[0].patterns[0].legs[0].laneId === laneId,
   );
-  // A lane pinned to a way NOT in the pattern is dropped on parse.
-  const withStray = {
+  // v9 kept lane pins in a wayId-keyed map on the pattern; they migrate onto
+  // the leg for the way they named, and a pin naming a way the pattern doesn't
+  // run over has nowhere to land and is dropped.
+  const v9Shape = {
     ...store.getState().system,
+    version: 9,
     services: [
-      { ...svc, patterns: svc.patterns.map((p) => ({ ...p, lanes: { 'ghost-way': laneId } })) },
+      {
+        ...svc,
+        patterns: svc.patterns.map((p) => ({
+          id: p.id,
+          wayIds: p.legs.map((l) => l.wayId),
+          lanes: { [w]: laneId, 'ghost-way': laneId },
+        })),
+      },
     ],
   };
+  const fromV9 = parseSystem(JSON.parse(JSON.stringify(v9Shape)));
   check(
-    'Pattern.lanes drops entries for ways not in the pattern',
-    parseSystem(JSON.parse(JSON.stringify(withStray))).services[0].patterns[0].lanes === undefined,
+    "a v9 pattern's lane map migrates onto the leg for that way",
+    fromV9.services[0].patterns[0].legs[0].laneId === laneId,
+  );
+  check(
+    'a v9 lane pin naming a way the pattern never runs over is dropped',
+    fromV9.services[0].patterns[0].legs.every((l) => l.wayId !== 'ghost-way'),
   );
 }
 
@@ -524,9 +557,11 @@ check(
 }
 
 // --- lane-accurate service rendering (Infrastructure view) ---
-// A committed pattern stores no travel direction, so patternWayDirection derives
-// it from geometry; serviceLaneOnWay resolves the curb/track lane; buildFeatures
-// draws the service on that lane in lane detail, on the centerline in Network.
+// A leg stores which direction it travels its way; deriveLegDirections is what
+// supplies that for a caller holding only geometry (the v9→v10 migration, route
+// materialization). serviceLaneOnWay then resolves the curb/track lane, and
+// buildFeatures draws the service on that lane in lane detail, on the
+// centerline in Network.
 {
   const P0: LngLat = [-115.2, 36.1],
     P1: LngLat = [-115.15, 36.1],
@@ -545,8 +580,8 @@ check(
     ['b', mkWay('b', [P1, P2])],
   ]);
   check(
-    "patternWayDirection: exit at the way's last point → forward",
-    patternWayDirection({ id: 'p', wayIds: ['a', 'b'] }, 0, fwd) === 'forward',
+    "deriveLegDirections: exit at the way's last point → forward",
+    deriveLegDirections(fwd, ['a', 'b'])[0] === true,
   );
   // wayA points [P1,P0] → it exits into wayB at wayA's FIRST point → backward.
   const bwd = new Map<string, Way>([
@@ -554,30 +589,34 @@ check(
     ['b', mkWay('b', [P1, P2])],
   ]);
   check(
-    "patternWayDirection: exit at the way's first point → backward",
-    patternWayDirection({ id: 'p', wayIds: ['a', 'b'] }, 0, bwd) === 'backward',
+    "deriveLegDirections: exit at the way's first point → backward",
+    deriveLegDirections(bwd, ['a', 'b'])[0] === false,
   );
   check(
-    'patternWayDirection: a single-way pattern defaults to forward',
-    patternWayDirection({ id: 'p', wayIds: ['a'] }, 0, fwd) === 'forward',
+    'deriveLegDirections: a single way has no continuity to read and stays forward',
+    deriveLegDirections(fwd, ['a'])[0] === true,
   );
 
-  // patternSegments owns the derivation the whole app reads. The case that
-  // used to break: two ways meeting LAST-point-to-LAST-point. Stitching them
-  // in stored order walks A forward to P1 and then jumps back out to P2 via
-  // P1 again, dropping the second way's real extent — the rendered line
-  // teleported. routeBetween emits spans in both directions, so this shape is
-  // reachable from ordinary routing, not just hand-built fixtures.
+  // The case that used to break: two ways meeting LAST-point-to-LAST-point.
+  // Stitching them in stored order walks A forward to P1 and then jumps back
+  // out to P2 via P1 again, dropping the second way's real extent — the
+  // rendered line teleported. routeBetween emits spans in both directions, so
+  // this shape is reachable from ordinary routing, not just hand-built
+  // fixtures.
   const meetAtLast = new Map<string, Way>([
     ['a', mkWay('a', [P0, P1])],
     ['b', mkWay('b', [P2, P1])],
   ]);
-  const lastToLast = patternSegments(meetAtLast, { id: 'p', wayIds: ['a', 'b'] });
+  const lastToLastPattern = {
+    id: 'p',
+    legs: wholeLegs(meetAtLast, ['a', 'b']),
+  };
+  const lastToLast = patternSegments(meetAtLast, lastToLastPattern);
   check(
-    'patternSegments: a way entered at its last point is traversed backward',
+    'a way entered at its last point is traversed backward',
     lastToLast.length === 2 && lastToLast[0].forward && !lastToLast[1].forward,
   );
-  const lastToLastPath = patternPath([...meetAtLast.values()], { id: 'p', wayIds: ['a', 'b'] });
+  const lastToLastPath = patternPath([...meetAtLast.values()], lastToLastPattern);
   check(
     'patternPath: ways meeting last-to-last stitch without a teleport',
     Math.abs(
@@ -598,8 +637,117 @@ check(
     ['b', mkWay('b', [P1, P2])],
   ]);
   check(
-    'patternSegments: the first way is oriented by where the second one meets it',
-    patternSegments(enterAtLast, { id: 'p', wayIds: ['a', 'b'] })[0].forward === false,
+    'deriveLegDirections: the first way is oriented by where the second one meets it',
+    deriveLegDirections(enterAtLast, ['a', 'b'])[0] === false,
+  );
+}
+
+// --- a leg's extent survives the way underneath it being reshaped ---
+// A leg names a stretch of a way as a fraction of that way's length, so
+// splitting or merging the way changes what the fraction means. Getting this
+// wrong doesn't crash — it silently slides a service to a different piece of
+// the corridor — so the arithmetic is checked directly rather than only
+// through the store.
+{
+  const whole = (wayId: string, forward = true): PatternLeg => ({ wayId, forward });
+  const part = (wayId: string, fromT: number, toT: number, forward = true): PatternLeg => ({
+    wayId,
+    forward,
+    fromT,
+    toT,
+  });
+  const half = 0.5;
+
+  const splitWhole = splitLegs([whole('w')], 'w', 'w2', half);
+  check(
+    'splitting a way under a leg that covered all of it yields both halves, whole',
+    splitWhole.length === 2 &&
+      splitWhole[0].wayId === 'w' &&
+      splitWhole[1].wayId === 'w2' &&
+      splitWhole.every((l) => l.fromT === undefined && l.toT === undefined),
+  );
+
+  const beforeSplit = splitLegs([part('w', 0.1, 0.3)], 'w', 'w2', half);
+  check(
+    'a leg wholly before the split stays on the first half, rescaled to it',
+    beforeSplit.length === 1 &&
+      beforeSplit[0].wayId === 'w' &&
+      Math.abs(beforeSplit[0].fromT! - 0.2) < 1e-9 &&
+      Math.abs(beforeSplit[0].toT! - 0.6) < 1e-9,
+  );
+
+  const afterSplit = splitLegs([part('w', 0.6, 0.9)], 'w', 'w2', half);
+  check(
+    'a leg wholly after the split moves to the second half, rescaled to it',
+    afterSplit.length === 1 &&
+      afterSplit[0].wayId === 'w2' &&
+      Math.abs(afterSplit[0].fromT! - 0.2) < 1e-9 &&
+      Math.abs(afterSplit[0].toT! - 0.8) < 1e-9,
+  );
+
+  const straddle = splitLegs([part('w', 0.25, 0.75)], 'w', 'w2', half);
+  check(
+    'a leg spanning the split becomes two, each rescaled to its own half',
+    straddle.length === 2 &&
+      Math.abs(straddle[0].fromT! - 0.5) < 1e-9 &&
+      straddle[0].toT === 1 &&
+      straddle[1].fromT === 0 &&
+      Math.abs(straddle[1].toT! - 0.5) < 1e-9,
+  );
+
+  const straddleBack = splitLegs([part('w', 0.25, 0.75, false)], 'w', 'w2', half);
+  check(
+    'a backward leg spanning the split reaches the second half first',
+    straddleBack.length === 2 && straddleBack[0].wayId === 'w2' && straddleBack[1].wayId === 'w',
+  );
+
+  check(
+    "a split carries the leg's lane pin onto both halves",
+    splitLegs([{ wayId: 'w', forward: true, laneId: 'lane-1' }], 'w', 'w2', half).every(
+      (l) => l.laneId === 'lane-1',
+    ),
+  );
+
+  const untouched = [part('w', 0.2, 0.8)];
+  check(
+    'a split at a way end has no half to rescale against and leaves the legs alone',
+    splitLegs(untouched, 'w', 'w2', 0) === untouched &&
+      splitLegs(untouched, 'w', 'w2', 1) === untouched,
+  );
+
+  // Merging is the inverse: the store measures where each old position lands
+  // on the merged way, and mergeLegs collapses the pair back into one leg.
+  const seam = 0.4;
+  const merged = mergeLegs([whole('keep'), whole('other')], 'keep', 'other', {
+    positionOf: (wayId, t) => (wayId === 'keep' ? t * seam : seam + t * (1 - seam)),
+    reversed: () => false,
+  });
+  check(
+    'merging two ways a pattern rode end-to-end collapses them into one whole leg',
+    merged.length === 1 &&
+      merged[0].wayId === 'keep' &&
+      merged[0].fromT === undefined &&
+      merged[0].toT === undefined,
+  );
+
+  const partialMerge = mergeLegs([part('other', 0.5, 1)], 'keep', 'other', {
+    positionOf: (_wayId, t) => seam + t * (1 - seam),
+    reversed: () => false,
+  });
+  check(
+    'a leg that covered part of the absorbed way keeps that stretch on the merged one',
+    partialMerge.length === 1 &&
+      Math.abs(partialMerge[0].fromT! - 0.7) < 1e-9 &&
+      Math.abs(partialMerge[0].toT! - 1) < 1e-9,
+  );
+
+  const flipped = mergeLegs([whole('other')], 'keep', 'other', {
+    positionOf: (_wayId, t) => 1 - t,
+    reversed: (wayId) => wayId === 'other',
+  });
+  check(
+    'a leg on a way the merge reversed now travels the merged way the other way round',
+    flipped.length === 1 && flipped[0].forward === false,
   );
 }
 
@@ -623,13 +771,18 @@ check(
   ]);
   check(
     'serviceLaneOnWay: a bus resolves the forward-curb travel lane',
-    serviceLaneOnWay({ id: 'p', wayIds: ['w'] }, 0, roadMap, 'bus') ===
+    serviceLaneOnWay({ id: 'p', legs: legsOf('w') }, 0, roadMap, 'bus') ===
       defaultLaneFor(road, 'forward', ['bus', 'drive']),
   );
   const pinId = road.lanes[0].id;
   check(
     'serviceLaneOnWay: an explicit pattern.lanes pin overrides the default',
-    serviceLaneOnWay({ id: 'p', wayIds: ['w'], lanes: { w: pinId } }, 0, roadMap, 'bus') === pinId,
+    serviceLaneOnWay(
+      { id: 'p', legs: [{ wayId: 'w', forward: true, laneId: pinId }] },
+      0,
+      roadMap,
+      'bus',
+    ) === pinId,
   );
   const rail = defaultProfileFor('heavyRail', 2);
   const railMap = new Map<string, Way>([
@@ -648,7 +801,7 @@ check(
       },
     ],
   ]);
-  const railLane = serviceLaneOnWay({ id: 'p', wayIds: ['r'] }, 0, railMap, 'subway');
+  const railLane = serviceLaneOnWay({ id: 'p', legs: legsOf('r') }, 0, railMap, 'subway');
   check(
     'serviceLaneOnWay: rail resolves a track lane',
     travelLanes(rail).find((l) => l.id === railLane)?.kindId === 'track',
@@ -742,8 +895,8 @@ check(
   store.getState().addWayPoint(b, [-115.2, 36.2]);
   store.getState().addWayPoint(b, [-115.1, 36.2]);
   store.getState().finishWay();
-  const multiPattern = { id: 'mp', wayIds: [a, b] };
   const multiWaysById = wayById(store.getState().system.ways);
+  const multiPattern = { id: 'mp', legs: wholeLegs(multiWaysById, [a, b]) };
   const multiPath = serviceLanePath(multiPattern, multiWaysById, 'bus');
   check(
     'serviceLanePath stitches a multi-way pattern into one continuous path',
@@ -1041,7 +1194,7 @@ check('deleting a service keeps the other services', servicesOnWay(kc).length ==
     name: 'Tram',
     modeId: 'tram',
     color: '#16a085',
-    patterns: [{ id: 'p1', wayIds: ['w1', 'w2'] }],
+    patterns: [{ id: 'p1', legs: legsOf('w1', 'w2') }],
   };
   const totalLength = wayLengthMeters(dedicated) + wayLengthMeters(streetRunning);
   check(
@@ -1179,7 +1332,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check('legacy lightRail line → lightRail way type', m.ways[0].typeId === 'lightRail');
   check(
     'legacy line → one service on that way',
-    m.services.length === 1 && m.services[0].patterns[0].wayIds[0] === 'l1',
+    m.services.length === 1 && patternWayIds(m.services[0].patterns[0])[0] === 'l1',
   );
   check(
     'legacy service keeps color/name',
@@ -1994,7 +2147,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 
   const service = s.services.find((sv) => sv.id === svc)!;
-  const svcWayIds = service.patterns[0].wayIds;
+  const svcWayIds = patternWayIds(service.patterns[0]);
   check(
     "the riding service's pattern now runs over both halves, in order",
     svcWayIds.length === 2 && svcWayIds[0] === trunk && svcWayIds[1] === wayB.id,
@@ -2108,7 +2261,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     'finishing the draw attaches a second pattern on the same service',
     svc.patterns.length === 2,
   );
-  check('the new pattern rides the branch way', svc.patterns[1].wayIds.includes(branchWay));
+  check('the new pattern rides the branch way', patternWayIds(svc.patterns[1]).includes(branchWay));
   check(
     'finishWay disarms addingPatternForServiceId',
     store.getState().addingPatternForServiceId === null,
@@ -2195,7 +2348,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check(
     'a v4 flat-wayIds service migrates into a single pattern',
     legacyV4.services[0].patterns.length === 1 &&
-      legacyV4.services[0].patterns[0].wayIds[0] === 'w',
+      patternWayIds(legacyV4.services[0].patterns[0])[0] === 'w',
   );
 
   // A service with zero patterns is a ghost, same as the old empty-wayIds case.
@@ -4340,7 +4493,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check(
     "the service has one pattern riding the shape's way",
     pieces.services[0].patterns.length === 1 &&
-      pieces.services[0].patterns[0].wayIds[0] === pieces.ways[0].id,
+      patternWayIds(pieces.services[0].patterns[0])[0] === pieces.ways[0].id,
   );
   check('the route color round-trips as a hex color', pieces.services[0].color === '#E4572E');
   check(
@@ -5916,7 +6069,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     'a v8 system migrates with an empty vehicleKinds list',
     Array.isArray(legacy.vehicleKinds) && legacy.vehicleKinds.length === 0,
   );
-  check('a v8 system migrates to the current version', legacy.version === 9);
+  check('a v8 system migrates to the current version', legacy.version === 10);
 
   const withKinds = parseSystem({
     ...legacy,
@@ -5940,6 +6093,83 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check(
     'createEmptySystem starts with an empty vehicle-kind list',
     createEmptySystem().vehicleKinds.length === 0,
+  );
+}
+
+// --- v9 → v10: a bare way list becomes legs with directions ---
+// v9 and earlier stored a pattern as an ordered list of way ids and nothing
+// else, so a migrated document has to have each leg's travel direction
+// recovered from the geometry of the ways it ships with. What must not change
+// is the line's rendered shape: a document that drew correctly under v9 has to
+// draw identically after the migration, or every saved system moves.
+{
+  const A: LngLat = [-115.2, 36.1],
+    B: LngLat = [-115.15, 36.1],
+    C: LngLat = [-115.1, 36.1];
+  const legacyWay = (id: string, points: LngLat[]) => ({
+    id,
+    typeId: 'road',
+    points,
+    geometry: 'straight',
+    grade: 'atGrade',
+    profile: { lanes: [{ id: `${id}-l`, kindId: 'drive', widthM: 3.3, direction: 'both' }] },
+  });
+  // wB is stored [C, B]: the pattern enters it at its LAST point, which is
+  // exactly the case a v9 document had no way to record.
+  const v9 = parseSystem({
+    version: 9,
+    id: 'sys-v9',
+    name: 'v9',
+    viewport: { center: [-115.17, 36.11], zoom: 12 },
+    createdAt: 1,
+    updatedAt: 1,
+    ways: [legacyWay('wA', [A, B]), legacyWay('wB', [C, B])],
+    services: [
+      {
+        id: 'sv',
+        name: 'Line 1',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [{ id: 'p1', wayIds: ['wA', 'wB'] }],
+      },
+    ],
+    stations: [],
+    facilities: [],
+    groups: [],
+    nodes: [],
+    namedWays: [],
+    palette: [],
+    drivingSide: 'right',
+    turnRestrictions: {},
+    medians: {},
+    approachControls: {},
+  });
+  check('a v9 document parses to the current version', v9.version === 10);
+  const v9Legs = v9.services[0].patterns[0].legs;
+  check(
+    'a v9 pattern migrates to one leg per way, in the same order',
+    v9Legs.length === 2 && v9Legs[0].wayId === 'wA' && v9Legs[1].wayId === 'wB',
+  );
+  check(
+    'the migration recovers the direction v9 could not record',
+    v9Legs[0].forward === true && v9Legs[1].forward === false,
+  );
+  check(
+    'every migrated leg covers its whole way, since v9 could not say otherwise',
+    v9Legs.every((l) => l.fromT === undefined && l.toT === undefined),
+  );
+  check(
+    "the migrated line's shape is the one v9 drew, end to end and unbroken",
+    Math.abs(
+      pathLengthMeters(patternPath(v9.ways, v9.services[0].patterns[0])) -
+        (haversineMeters(A, B) + haversineMeters(B, C)),
+    ) < 1e-6,
+  );
+  // And it stays put: re-parsing a v10 document must not re-derive anything.
+  const reparsed = parseSystem(JSON.parse(JSON.stringify(v9)));
+  check(
+    'a v10 document keeps the directions it already stores',
+    reparsed.services[0].patterns[0].legs.every((l, i) => l.forward === v9Legs[i].forward),
   );
 }
 
@@ -6081,7 +6311,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check(
     'the riding service runs over just the merged way',
     merged.services.every((sv) =>
-      sv.patterns.every((p) => p.wayIds.length === 1 && p.wayIds[0] === halves[0]),
+      sv.patterns.every((p) => p.legs.length === 1 && p.legs[0].wayId === halves[0]),
     ),
   );
   // Merging two ways that don't touch is refused.
@@ -6384,7 +6614,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
   check(
     'services still ride their (now split) ways',
-    after.services.every((sv) => sv.patterns.every((p) => p.wayIds.length === 2)),
+    after.services.every((sv) => sv.patterns.every((p) => p.legs.length === 2)),
   );
 
   // Grade separation: an ELEVATED way crossing a surface street is an
@@ -6581,7 +6811,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     ],
     profile: { lanes: [] },
   };
-  const traversals = patternWayTraversals([wayA, wayB], { id: 'p1', wayIds: ['va', 'vb'] });
+  const traversals = patternWayTraversals([wayA, wayB], {
+    id: 'p1',
+    legs: wholeLegs(wayById([wayA, wayB]), ['va', 'vb']),
+  });
   check('first way in a pattern defaults to forward', traversals[0].forward === true);
   check('a way continuing in its own stored order is forward', traversals[1].forward === true);
 
@@ -6598,7 +6831,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     ],
     profile: { lanes: [] },
   };
-  const reversedTraversals = patternWayTraversals([wayA, wayC], { id: 'p2', wayIds: ['va', 'vc'] });
+  const reversedTraversals = patternWayTraversals([wayA, wayC], {
+    id: 'p2',
+    legs: wholeLegs(wayById([wayA, wayC]), ['va', 'vc']),
+  });
   check(
     'a way stored opposite the direction of travel is detected as backward',
     reversedTraversals[1].forward === false,
@@ -6700,7 +6936,11 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       ],
     },
   };
-  const lpPath = patternLanePath([lpWayA, lpWayB], { id: 'lp1', wayIds: ['lp-a', 'lp-b'] }, 'bus');
+  const lpPath = patternLanePath(
+    [lpWayA, lpWayB],
+    { id: 'lp1', legs: wholeLegs(wayById([lpWayA, lpWayB]), ['lp-a', 'lp-b']) },
+    'bus',
+  );
   check('patternLanePath produces a continuous path across both ways', lpPath.length >= 2);
   check(
     "patternLanePath's endpoints roughly track the ways' own endpoints (offset by lane width, not miles)",
@@ -7397,16 +7637,16 @@ function buildGrid() {
   const svc = after.services[0];
   check(
     'the routed service rides one pattern of existing ways',
-    svc.patterns.length === 1 && svc.patterns[0].wayIds.length === res.spans.length,
+    svc.patterns.length === 1 && svc.patterns[0].legs.length === res.spans.length,
   );
   check('mid-way anchors split their ways (two new arms)', after.ways.length === waysBefore + 2);
   check(
     'no new parallel geometry was drawn (every ridden way pre-existed or is a split arm)',
-    svc.patterns[0].wayIds.every((wid) =>
+    patternWayIds(svc.patterns[0]).every((wid) =>
       after.ways.some((w) => w.id === wid && w.typeId === 'road'),
     ),
   );
-  const ridden = after.ways.filter((w) => svc.patterns[0].wayIds.includes(w.id));
+  const ridden = after.ways.filter((w) => patternWayIds(svc.patterns[0]).includes(w.id));
   const total = ridden.reduce((m, w) => m + wayLengthMeters(w), 0);
   check('ridden ways cover the route length', Math.abs(total - res.lengthM) < 500);
 }
@@ -7486,7 +7726,7 @@ function buildGrid() {
   const svcId = store.getState().commitRouteDraft();
   const sys = store.getState().system;
   check('committing a same-way route creates the service', !!svcId && sys.services.length === 1);
-  const ridden = sys.services[0].patterns[0].wayIds;
+  const ridden = patternWayIds(sys.services[0].patterns[0]);
   check(
     'the road was split into three arms; the line rides the middle one',
     sys.ways.length === 3 && ridden.length === 1,
@@ -7514,7 +7754,7 @@ function buildGrid() {
   // A station riding the sketch, to prove it follows the adoption.
   const st1 = store
     .getState()
-    .addStation([-115.25, 36.202], { wayId: svc.patterns[0].wayIds[0], t: 0.2 });
+    .addStation([-115.25, 36.202], { wayId: patternWayIds(svc.patterns[0])[0], t: 0.2 });
 
   const rebound = store.getState().adoptExistingInfrastructure(svc.id);
   const after = store.getState().system;
@@ -7522,17 +7762,17 @@ function buildGrid() {
   check('adoptExistingInfrastructure rebinds the pattern', rebound === 1);
   check(
     'the adopted pattern rides real grid ways (top road arms)',
-    adopted.patterns[0].wayIds.length >= 1 &&
-      adopted.patterns[0].wayIds.every((wid) => after.ways.some((w) => w.id === wid)),
+    adopted.patterns[0].legs.length >= 1 &&
+      patternWayIds(adopted.patterns[0]).every((wid) => after.ways.some((w) => w.id === wid)),
   );
   check(
     'adopted ways lie on the grid, not the sketch offset',
-    adopted.patterns[0].wayIds.every((wid) => {
+    patternWayIds(adopted.patterns[0]).every((wid) => {
       const w = after.ways.find((x) => x.id === wid)!;
       return w.points.every((p) => Math.abs(p[1] - 36.2) < 0.0005);
     }),
   );
-  const sketchWayIds = new Set(svc.patterns[0].wayIds);
+  const sketchWayIds = new Set(patternWayIds(svc.patterns[0]));
   check(
     'orphaned sketch geometry was removed',
     after.ways.every((w) => !sketchWayIds.has(w.id)),
@@ -7540,7 +7780,7 @@ function buildGrid() {
   const station = after.stations.find((s2) => s2.id === st1)!;
   check(
     'the station followed onto an adopted way',
-    !!station.anchor && adopted.patterns[0].wayIds.includes(station.anchor.wayId),
+    !!station.anchor && patternWayIds(adopted.patterns[0]).includes(station.anchor.wayId),
   );
 }
 
@@ -7634,7 +7874,7 @@ function buildGrid() {
   store.getState().finishWay();
   const trunkSvc = store
     .getState()
-    .system.services.find((sv) => sv.patterns.some((p) => p.wayIds.includes(trunk)))!;
+    .system.services.find((sv) => sv.patterns.some((p) => patternWayIds(p).includes(trunk)))!;
 
   // Shuttle: another solo-way pattern, a strict corridor subset of the trunk
   // (offset 3m, spanning only the middle 200m) — diverges at both ends by
@@ -7646,7 +7886,7 @@ function buildGrid() {
   store.getState().finishWay();
   const shuttleSvc = store
     .getState()
-    .system.services.find((sv) => sv.patterns.some((p) => p.wayIds.includes(shuttle)))!;
+    .system.services.find((sv) => sv.patterns.some((p) => patternWayIds(p).includes(shuttle)))!;
 
   const before = store.getState().system;
   check(
@@ -7667,7 +7907,7 @@ function buildGrid() {
   const trunkAfter = after.services.find((sv) => sv.id === trunkSvc.id)!;
   check(
     "the trunk's original way id survives as (part of) its route",
-    trunkAfter.patterns[0].wayIds.includes(trunk),
+    patternWayIds(trunkAfter.patterns[0]).includes(trunk),
   );
   check(
     "the trunk's route is still continuous end-to-end (splitting didn't drop any of it)",
@@ -7677,7 +7917,7 @@ function buildGrid() {
   const shuttleAfter = after.services.find((sv) => sv.id === shuttleSvc.id)!;
   check(
     'the shuttle no longer rides its own original solo way',
-    !shuttleAfter.patterns[0].wayIds.includes(shuttle),
+    !patternWayIds(shuttleAfter.patterns[0]).includes(shuttle),
   );
   check(
     "the shuttle's original solo way was removed, not left as a duplicate",
@@ -7685,7 +7925,7 @@ function buildGrid() {
   );
   check(
     "the shuttle's new way(s) lie on the trunk's alignment (y≈0), not its own original 3m offset",
-    shuttleAfter.patterns[0].wayIds.every((wid) =>
+    patternWayIds(shuttleAfter.patterns[0]).every((wid) =>
       after.ways
         .find((w) => w.id === wid)!
         .points.every((p) => Math.abs(metersFromOrigin(origin, p)[1]) < 1),
@@ -8056,7 +8296,7 @@ function buildGrid() {
     { id: 'unanchored', coord: [-115.2, 36.1] },
   ];
   const pathMeters = haversineMeters(path[0], path[1]);
-  const pattern = { id: 'p1', wayIds: ['w1'] };
+  const pattern = { id: 'p1', legs: legsOf('w1') };
   const stops = dwellStopsForPattern(sys.stations, pattern, path, pathMeters);
   check("only stations anchored to the pattern's ways become stops", stops.length === 3);
   check(
@@ -9502,7 +9742,7 @@ function buildGrid() {
     name: 'Green',
     modeId: 'lightRail',
     color: '#0a0',
-    patterns: [{ id: 'ss-p', wayIds: ['ss-w'] }],
+    patterns: [{ id: 'ss-p', legs: legsOf('ss-w') }],
     frequencyMinutes: 10,
   };
 
@@ -9572,8 +9812,8 @@ function buildGrid() {
   const branched: Service = {
     ...svc,
     patterns: [
-      { id: 'ss-p', wayIds: ['ss-w'] },
-      { id: 'ss-p2', wayIds: ['ss-w'] },
+      { id: 'ss-p', legs: legsOf('ss-w') },
+      { id: 'ss-p2', legs: legsOf('ss-w') },
     ],
   };
   check(
@@ -10106,14 +10346,14 @@ function buildGrid() {
         name: 'On it',
         modeId: 'bus',
         color: '#111',
-        patterns: [{ id: 'pa', wayIds: [way.id] }],
+        patterns: [{ id: 'pa', legs: legsOf(way.id) }],
       },
       {
         id: 'sv-off',
         name: 'Miles away',
         modeId: 'bus',
         color: '#222',
-        patterns: [{ id: 'pb', wayIds: [otherWay.id] }],
+        patterns: [{ id: 'pb', legs: legsOf(otherWay.id) }],
       },
     ];
     const stop: Station = { id: 'st-here', coord: [-115.2, 36.1] };

@@ -121,9 +121,9 @@ function wayPatternIndex(byWay: Map<string, Service[]>): Map<string, WayPatternE
       if (seen.has(svc.id)) continue;
       seen.add(svc.id);
       for (const pattern of svc.patterns) {
-        pattern.wayIds.forEach((wid, wayIdx) => {
-          let arr = index.get(wid);
-          if (!arr) index.set(wid, (arr = []));
+        pattern.legs.forEach((leg, wayIdx) => {
+          let arr = index.get(leg.wayId);
+          if (!arr) index.set(leg.wayId, (arr = []));
           arr.push({ svc, pattern, wayIdx });
         });
       }

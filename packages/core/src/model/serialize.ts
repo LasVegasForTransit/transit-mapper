@@ -1,5 +1,6 @@
 import { shortId } from './ids';
 import { LINE_COLORS, laneKind } from './catalog';
+import { deriveLegDirections, wayById } from './geo';
 import { defaultProfileFor } from './profile';
 import type { ComponentMap } from './components';
 import {
@@ -15,6 +16,7 @@ import {
   type Node,
   type NodeControl,
   type Pattern,
+  type PatternLeg,
   type ScheduleDayScope,
   type SchedulePeriod,
   type Service,
@@ -28,7 +30,7 @@ import {
 
 export function createEmptySystem(now = Date.now()): TransitSystem {
   return {
-    version: 9, // v9 adds vehicleKinds (see model/system/vehicleKind.ts)
+    version: 10, // v10 adds per-leg service extents (see model/system/service.ts)
     id: shortId(),
     name: 'Untitled system',
     viewport: { ...DEFAULT_VIEWPORT },
@@ -390,10 +392,10 @@ function parseVehicleKinds(raw: unknown): VehicleKind[] {
  *  becomes its one pattern. A service with genuinely nothing (empty/missing
  *  both) parses to `patterns: []`, same "ghost record" shape a pre-v5
  *  `wayIds: []` service was — validateSystem flags it, parsing doesn't drop it. */
-/** A pattern's optional per-way lane assignment (wayId → LaneSpec.id). Kept
+/** A v9 pattern's optional per-way lane assignment (wayId → LaneSpec.id). Kept
  *  only for ways actually in this pattern, and only string values — unknown
- *  or ill-typed entries are dropped. Omitted entirely when empty so a default-
- *  lane pattern round-trips without a stray `lanes: {}`. */
+ *  or ill-typed entries are dropped. v10 moved the pin onto the leg, so this
+ *  reads the old shape only. */
 function parseLaneMap(raw: unknown, wayIds: string[]): Record<string, string> | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
   const allowed = new Set(wayIds);
@@ -404,25 +406,90 @@ function parseLaneMap(raw: unknown, wayIds: string[]): Record<string, string> | 
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-function parsePatterns(raw: unknown, legacyWayIds: unknown): Pattern[] {
+/** A leg whose direction isn't known yet. v9 and earlier stored no direction
+ *  at all, so a migrated leg leaves `forward` unset and `finish` derives it
+ *  from the parsed ways — which only exist once the whole document is
+ *  assembled, hence the two-step. */
+type DraftLeg = Omit<PatternLeg, 'forward'> & { forward?: boolean };
+interface DraftPattern {
+  id: string;
+  legs: DraftLeg[];
+  name?: string;
+}
+
+/** A normalized arc position, or undefined when the value is absent or not a
+ *  usable number. Out-of-range values clamp rather than reject: a document
+ *  that says 1.4 means "the end of the way", not "unparseable". */
+function normalizedT(raw: unknown): number | undefined {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
+  return Math.max(0, Math.min(1, raw));
+}
+
+function parseLegs(raw: unknown): DraftLeg[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((l): DraftLeg | null => {
+      const r = l as Record<string, unknown>;
+      if (!r || typeof r.wayId !== 'string') return null;
+      const fromT = normalizedT(r.fromT);
+      const toT = normalizedT(r.toT);
+      return {
+        wayId: r.wayId,
+        ...(typeof r.forward === 'boolean' ? { forward: r.forward } : {}),
+        ...(fromT !== undefined ? { fromT } : {}),
+        ...(toT !== undefined ? { toT } : {}),
+        ...(typeof r.laneId === 'string' ? { laneId: r.laneId } : {}),
+      };
+    })
+    .filter((l): l is DraftLeg => l !== null);
+}
+
+function parsePatterns(raw: unknown, legacyWayIds: unknown): DraftPattern[] {
   if (Array.isArray(raw)) {
     return raw
-      .map((p): Pattern | null => {
+      .map((p): DraftPattern | null => {
         const r = p as Record<string, unknown>;
         if (typeof r.id !== 'string') return null;
+        const name = typeof r.name === 'string' ? r.name : undefined;
+        // v10: legs carry their own direction, extent, and lane pin.
+        if (Array.isArray(r.legs)) return { id: r.id, legs: parseLegs(r.legs), name };
+        // v5–v9: a bare ordered way list plus a wayId-keyed lane map. Every
+        // way is covered end to end, since nothing before v10 could say
+        // otherwise; direction is filled in by finish().
         const wayIds = strings(r.wayIds);
         const lanes = parseLaneMap(r.lanes, wayIds);
         return {
           id: r.id,
-          wayIds,
-          name: typeof r.name === 'string' ? r.name : undefined,
-          ...(lanes ? { lanes } : {}),
+          legs: wayIds.map((wayId) => ({
+            wayId,
+            ...(lanes?.[wayId] ? { laneId: lanes[wayId] } : {}),
+          })),
+          name,
         };
       })
-      .filter((p): p is Pattern => p !== null);
+      .filter((p): p is DraftPattern => p !== null);
   }
   const wayIds = strings(legacyWayIds);
-  return wayIds.length > 0 ? [{ id: shortId(), wayIds }] : [];
+  return wayIds.length > 0 ? [{ id: shortId(), legs: wayIds.map((wayId) => ({ wayId })) }] : [];
+}
+
+/** Fill in the direction of every leg a pre-v10 document couldn't record,
+ *  deriving it from the geometry of the ways the document actually contains.
+ *  Runs once the whole system is assembled, because that derivation needs the
+ *  ways. A v10 leg already says which way it runs and is left alone. */
+function resolveLegDirections(patterns: DraftPattern[], ways: Way[]): Pattern[] {
+  const byId = wayById(ways);
+  return patterns.map((p) => {
+    if (p.legs.every((l) => l.forward !== undefined)) return p as Pattern;
+    const derived = deriveLegDirections(
+      byId,
+      p.legs.map((l) => l.wayId),
+    );
+    return {
+      ...p,
+      legs: p.legs.map((l, i) => ({ ...l, forward: l.forward ?? derived[i] })),
+    };
+  });
 }
 
 const SCHEDULE_DAY_SCOPES = new Set(['daily', 'weekday', 'weekend']);
@@ -485,7 +552,7 @@ function parseV3(o: Record<string, unknown>): TransitSystem {
     };
   });
 
-  const services: Service[] = rawServices.map((s) => {
+  const services: DraftService[] = rawServices.map((s) => {
     const r = s as Record<string, unknown>;
     if (typeof r.id !== 'string') throw new Error('Bad service');
     return {
@@ -602,7 +669,7 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
   const rawRoads = Array.isArray(o.roads) ? o.roads : [];
 
   const ways: Way[] = [];
-  const services: Service[] = [];
+  const services: DraftService[] = [];
 
   if (rawCorridors.length > 0 || rawServices.length > 0) {
     for (const c of rawCorridors) {
@@ -661,7 +728,7 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
         name: typeof r.name === 'string' ? r.name : 'Service',
         modeId: typeof r.mode === 'string' ? r.mode : 'bus',
         color: typeof r.color === 'string' ? r.color : '#2ea44f',
-        patterns: [{ id: shortId(), wayIds: [r.id] }],
+        patterns: [{ id: shortId(), legs: [{ wayId: r.id }] }],
       });
     }
   }
@@ -697,12 +764,19 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
   });
 }
 
+/** A service whose patterns may still be missing per-leg directions — what
+ *  every parse path produces before finish() resolves them against the ways. */
+type DraftService = Omit<Service, 'patterns'> & { patterns: DraftPattern[] };
+
 function finish(
   o: Record<string, unknown>,
-  parts: Pick<
-    TransitSystem,
-    'ways' | 'services' | 'stations' | 'facilities' | 'groups' | 'nodes' | 'namedWays'
-  >,
+  parts: Omit<
+    Pick<
+      TransitSystem,
+      'ways' | 'services' | 'stations' | 'facilities' | 'groups' | 'nodes' | 'namedWays'
+    >,
+    'services'
+  > & { services: DraftService[] },
 ): TransitSystem {
   const vp = o.viewport as Record<string, unknown> | undefined;
   // Normalized, not merely validated. A predicate that answers "is this a
@@ -719,7 +793,7 @@ function finish(
 
   const now = Date.now();
   return {
-    version: 9,
+    version: 10,
     id: typeof o.id === 'string' ? o.id : shortId(),
     name: typeof o.name === 'string' ? o.name : 'Untitled system',
     description: typeof o.description === 'string' ? o.description : undefined,
@@ -727,6 +801,10 @@ function finish(
     createdAt: typeof o.createdAt === 'number' ? o.createdAt : now,
     updatedAt: typeof o.updatedAt === 'number' ? o.updatedAt : now,
     ...parts,
+    services: parts.services.map((sv) => ({
+      ...sv,
+      patterns: resolveLegDirections(sv.patterns, parts.ways),
+    })),
     vehicleKinds: parseVehicleKinds(o.vehicleKinds),
     palette,
     drivingSide: drivingSideOf(o.drivingSide),

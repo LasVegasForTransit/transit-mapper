@@ -88,7 +88,7 @@ export function dwellStopsForPattern(
 ): DwellStop[] {
   const byWay = stationsByWay(stations);
   const stops: DwellStop[] = [];
-  for (const wayId of pattern.wayIds) {
+  for (const { wayId } of pattern.legs) {
     for (const st of byWay.get(wayId) ?? []) {
       const near = nearestOnPath(path, st.coord);
       if (!near) continue;
