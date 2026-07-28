@@ -7,7 +7,7 @@ import type { LngLat, TransitSystem, Way } from './system';
  *  control points, and mergeWays already refuses a join looser than 0.75 m, so
  *  a metre is generous — it absorbs the float drift of a coordinate round-trip
  *  without accepting a gap anyone would notice. */
-const LEG_JOIN_TOLERANCE_M = 1;
+export const LEG_JOIN_TOLERANCE_M = 1;
 
 export interface Issue {
   id: string;
