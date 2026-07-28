@@ -907,6 +907,11 @@ export function attachInteractions(
   // a busway beside a road).
   const startDraw = (e: MapMouseEvent, forceSeparate = false) => {
     const st = store.getState();
+    // Remember it for the whole gesture: finishWay is what decides whether the
+    // committed line rides existing infrastructure or keeps its own, and by
+    // then this press is long gone. Only the press that STARTS a line arms it,
+    // so Alt on a later node doesn't silently change the line's mind.
+    if (!st.activeWayId) st.setDraftSeparate(forceSeparate);
 
     // Network view, pressing ON existing compatible infrastructure: draw by
     // ROUTING along it (snap-to-streets) instead of laying new geometry, since
