@@ -6,40 +6,23 @@
 // needs wayLaneGeometry (geometry/streets.ts), which itself depends on
 // model/ — a model/ file reaching back into geometry/ would be circular.
 
-import { haversineMeters, resolveWayPath, wayById } from '../model/geo';
+import { patternSegments, stitchPaths, wayById } from '../model/geo';
 import { mode } from '../model/catalog';
 import type { LaneDirection, LngLat, Pattern, Way } from '../model/system';
 import { wayLaneGeometry, type LanePath } from './streets';
 
 /** One way in a pattern's sequence, with which direction (relative to the
- *  way's own stored point order) the pattern travels it. Nothing in the
- *  data model records this today — `Pattern.wayIds` is just an ordered
- *  list of ids — so it's derived by continuity: each way after the first
- *  is oriented toward whichever of its own endpoints sits closer to the
- *  previous way's resolved exit point. The first way has no prior segment
- *  to compare against and keeps its stored order. */
+ *  way's own stored point order) the pattern travels it. Nothing in the data
+ *  model records this — `Pattern.wayIds` is just an ordered list of ids — so
+ *  it is derived by continuity in model/geo/servicePaths.ts, which owns that
+ *  derivation for the whole app. */
 export interface WayTraversal {
   way: Way;
   forward: boolean;
 }
 
 export function patternWayTraversals(ways: Way[], pattern: Pattern): WayTraversal[] {
-  const byId = wayById(ways);
-  const out: WayTraversal[] = [];
-  let prevEnd: LngLat | null = null;
-  for (const wayId of pattern.wayIds) {
-    const way = byId.get(wayId);
-    if (!way) continue;
-    const raw = resolveWayPath(way);
-    if (raw.length < 2) continue;
-    const start = raw[0];
-    const end = raw[raw.length - 1];
-    const forward: boolean =
-      prevEnd === null || haversineMeters(prevEnd, start) <= haversineMeters(prevEnd, end);
-    out.push({ way, forward });
-    prevEnd = forward ? end : start;
-  }
-  return out;
+  return patternSegments(wayById(ways), pattern).map(({ way, forward }) => ({ way, forward }));
 }
 
 /** A lane's path, oriented so index 0 → last matches the pattern's actual
@@ -90,14 +73,12 @@ export function selectVehicleLane(way: Way, forward: boolean, modeId: string): L
  * of its ways happens to be bare/unprofiled infrastructure.
  */
 export function patternLanePath(ways: Way[], pattern: Pattern, modeId: string): LngLat[] {
-  const traversals = patternWayTraversals(ways, pattern);
-  const path: LngLat[] = [];
-  for (const { way, forward } of traversals) {
-    const lane = selectVehicleLane(way, forward, modeId);
-    const raw = resolveWayPath(way);
-    const seg = lane ? orientedLanePath(lane, forward) : forward ? raw : [...raw].reverse();
-    if (seg.length < 2) continue;
-    path.push(...(path.length ? seg.slice(1) : seg));
-  }
-  return path;
+  return stitchPaths(
+    patternSegments(wayById(ways), pattern).map(({ way, forward, path }) => {
+      const lane = selectVehicleLane(way, forward, modeId);
+      // `path` is already oriented into travel order; a lane path is not,
+      // since wayLaneGeometry always follows the way's own point order.
+      return lane ? orientedLanePath(lane, forward) : path;
+    }),
+  );
 }

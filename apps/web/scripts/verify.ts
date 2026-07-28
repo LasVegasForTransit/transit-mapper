@@ -33,6 +33,7 @@ import {
   servedWayIds,
   serviceWayIds,
   patternPath,
+  patternSegments,
   patternWayDirection,
   serviceLaneOnWay,
   detectShapeRuns,
@@ -559,6 +560,46 @@ check(
   check(
     'patternWayDirection: a single-way pattern defaults to forward',
     patternWayDirection({ id: 'p', wayIds: ['a'] }, 0, fwd) === 'forward',
+  );
+
+  // patternSegments owns the derivation the whole app reads. The case that
+  // used to break: two ways meeting LAST-point-to-LAST-point. Stitching them
+  // in stored order walks A forward to P1 and then jumps back out to P2 via
+  // P1 again, dropping the second way's real extent — the rendered line
+  // teleported. routeBetween emits spans in both directions, so this shape is
+  // reachable from ordinary routing, not just hand-built fixtures.
+  const meetAtLast = new Map<string, Way>([
+    ['a', mkWay('a', [P0, P1])],
+    ['b', mkWay('b', [P2, P1])],
+  ]);
+  const lastToLast = patternSegments(meetAtLast, { id: 'p', wayIds: ['a', 'b'] });
+  check(
+    'patternSegments: a way entered at its last point is traversed backward',
+    lastToLast.length === 2 && lastToLast[0].forward && !lastToLast[1].forward,
+  );
+  const lastToLastPath = patternPath([...meetAtLast.values()], { id: 'p', wayIds: ['a', 'b'] });
+  check(
+    'patternPath: ways meeting last-to-last stitch without a teleport',
+    Math.abs(
+      pathLengthMeters(lastToLastPath) - (haversineMeters(P0, P1) + haversineMeters(P1, P2)),
+    ) < 1e-6,
+  );
+  check(
+    'patternPath: the stitched path ends at the far end of the last way',
+    lastToLastPath[lastToLastPath.length - 1][0] === P2[0],
+  );
+
+  // The first way is oriented by where the SECOND way meets it. Deriving it
+  // from stored order alone (the old geometry/vehicleLane.ts rule) got this
+  // one backward and picked the opposite lane from serviceLane.ts for the
+  // same service.
+  const enterAtLast = new Map<string, Way>([
+    ['a', mkWay('a', [P1, P0])],
+    ['b', mkWay('b', [P1, P2])],
+  ]);
+  check(
+    'patternSegments: the first way is oriented by where the second one meets it',
+    patternSegments(enterAtLast, { id: 'p', wayIds: ['a', 'b'] })[0].forward === false,
   );
 }
 

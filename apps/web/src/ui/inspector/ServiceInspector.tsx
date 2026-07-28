@@ -1,7 +1,13 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { useEditor } from '../../editor/EditorProvider';
 import { MODE_ORDER, MODES, modesForWayType } from '@transitmapper/core/model/catalog';
-import { formatKm, wayLengthMeters } from '@transitmapper/core/model/geo';
+import {
+  formatKm,
+  pathLengthMeters,
+  patternPath,
+  patternSegments,
+  wayById,
+} from '@transitmapper/core/model/geo';
 import type {
   Pattern,
   ScheduleDayScope,
@@ -71,31 +77,29 @@ function formatSpan(start: string, end: string): string {
   return `${start}–${end}`;
 }
 
-function lengthOfWays(ways: Way[], wayIds: string[]): number {
-  return wayIds.reduce((sum, wid) => {
-    const w = ways.find((x) => x.id === wid);
-    return sum + (w ? wayLengthMeters(w) : 0);
-  }, 0);
-}
-
 // The rider's mental model of a line — "calls at: Downtown, Arts District,
 // Sahara, Airport" — has nowhere else to live (LinesPanel shows raw way
 // segments, not ride order). Ordered by each station's position along this
-// ONE pattern's ways, in wayIds order then by arc-length t within a way — a
-// branch pattern only lists stops on its own ways, not a shared trunk's
-// (reconstructing "which trunk stops feed this branch" needs graph
-// traversal through junctions, out of scope for this derived display).
-function orderedStopsForPattern(stations: Station[], pattern: Pattern): Station[] {
+// ONE pattern's ways, in ride order then by arc-length within a way — and a
+// way the pattern travels BACKWARD lists its stops in descending `anchor.t`,
+// since that field is way-relative, not ride-relative. A branch pattern only
+// lists stops on its own ways, not a shared trunk's (reconstructing "which
+// trunk stops feed this branch" needs graph traversal through junctions, out
+// of scope for this derived display).
+function orderedStopsForPattern(ways: Way[], stations: Station[], pattern: Pattern): Station[] {
+  const segments = patternSegments(wayById(ways), pattern);
+  const rideOrder = new Map(segments.map((s, i) => [s.way.id, { i, forward: s.forward }]));
   return stations
     .filter(
       (st): st is Station & { anchor: NonNullable<Station['anchor']> } =>
-        !!st.anchor && pattern.wayIds.includes(st.anchor.wayId),
+        !!st.anchor && rideOrder.has(st.anchor.wayId),
     )
     .slice()
     .sort((a, b) => {
-      const wayDelta =
-        pattern.wayIds.indexOf(a.anchor.wayId) - pattern.wayIds.indexOf(b.anchor.wayId);
-      return wayDelta !== 0 ? wayDelta : a.anchor.t - b.anchor.t;
+      const wa = rideOrder.get(a.anchor.wayId)!;
+      const wb = rideOrder.get(b.anchor.wayId)!;
+      if (wa.i !== wb.i) return wa.i - wb.i;
+      return wa.forward ? a.anchor.t - b.anchor.t : b.anchor.t - a.anchor.t;
     });
 }
 
@@ -161,10 +165,16 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
     singlePattern?.wayIds.length === 1
       ? ways.find((w) => w.id === singlePattern.wayIds[0])
       : undefined;
-  const length = service.patterns.reduce((sum, p) => sum + lengthOfWays(ways, p.wayIds), 0);
+  // Measured along what the line actually rides, not by summing whole way
+  // lengths: a way the pattern couldn't resolve contributes nothing, and once
+  // a pattern can cover part of a way the two numbers stop agreeing.
+  const length = service.patterns.reduce(
+    (sum, p) => sum + pathLengthMeters(patternPath(ways, p)),
+    0,
+  );
   const patternStops = service.patterns.map((p) => ({
     pattern: p,
-    stops: orderedStopsForPattern(stations, p),
+    stops: orderedStopsForPattern(ways, stations, p),
   }));
   const totalStops = new Set(patternStops.flatMap(({ stops }) => stops.map((st) => st.id))).size;
   const isAddingBranch = addingPatternForServiceId === id;
@@ -562,7 +572,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                     {p.name || (i === 0 ? 'Main' : `Branch ${i}`)}
                   </span>
                   <span className="pattern-meta">
-                    {formatKm(lengthOfWays(ways, p.wayIds))} · {p.wayIds.length} way
+                    {formatKm(pathLengthMeters(patternPath(ways, p)))} · {p.wayIds.length} way
                     {p.wayIds.length === 1 ? '' : 's'}
                   </span>
                 </button>
