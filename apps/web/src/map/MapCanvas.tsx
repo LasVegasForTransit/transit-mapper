@@ -41,6 +41,7 @@ import {
   SRC_JUNCTIONS,
   SRC_LANDMARKS,
   SRC_LANE_ARROWS,
+  SRC_SERVICE_ARROWS,
   SRC_LANE_MARKINGS,
   SRC_LANES,
   SRC_MARQUEE,
@@ -290,6 +291,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       SRC_LANES,
       SRC_LANE_MARKINGS,
       SRC_LANE_ARROWS,
+      SRC_SERVICE_ARROWS,
       SRC_JUNCTIONS,
       SRC_CONNECTORS,
       SRC_WAY_LABELS,
@@ -507,6 +509,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       (map.getSource(SRC_LANES) as GeoJSONSource | undefined)?.setData(fc.lanes);
       (map.getSource(SRC_LANE_MARKINGS) as GeoJSONSource | undefined)?.setData(fc.laneMarkings);
       (map.getSource(SRC_LANE_ARROWS) as GeoJSONSource | undefined)?.setData(fc.laneArrows);
+      (map.getSource(SRC_SERVICE_ARROWS) as GeoJSONSource | undefined)?.setData(fc.serviceArrows);
       (map.getSource(SRC_JUNCTIONS) as GeoJSONSource | undefined)?.setData(fc.junctions);
       (map.getSource(SRC_CONNECTORS) as GeoJSONSource | undefined)?.setData(fc.connectors);
       (map.getSource(SRC_WAY_LABELS) as GeoJSONSource | undefined)?.setData(fc.wayLabels);

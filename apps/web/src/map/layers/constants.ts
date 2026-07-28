@@ -23,6 +23,11 @@ export const SRC_ENDPOINT_HINT = 'tm-endpoint-hint';
 export const SRC_LANES = 'tm-lanes';
 export const SRC_LANE_MARKINGS = 'tm-lane-markings';
 export const SRC_LANE_ARROWS = 'tm-lane-arrows';
+/** Direction arrows on a SERVICE line, where only one of its two directions
+ *  rides that stretch. Distinct from lane arrows: those describe the street
+ *  and sit on the asphalt under everything; these describe a line and have to
+ *  sit on top of it, in its own colour. */
+export const SRC_SERVICE_ARROWS = 'tm-service-arrows';
 export const SRC_JUNCTIONS = 'tm-junctions';
 export const SRC_CONNECTORS = 'tm-connectors';
 export const SRC_WAY_LABELS = 'tm-way-labels';
@@ -63,6 +68,7 @@ export const LYR_CENTER_LINES = 'tm-center-lines';
 export const LYR_EDGE_LINES = 'tm-edge-lines';
 export const LYR_LANE_TRACKS = 'tm-lane-tracks';
 export const LYR_LANE_ARROWS = 'tm-lane-arrows';
+export const LYR_SERVICE_ARROWS = 'tm-service-arrows';
 export const LYR_JUNCTIONS = 'tm-junctions';
 export const LYR_JUNCTION_SELECTED = 'tm-junction-selected';
 export const LYR_CONNECTORS = 'tm-connectors';

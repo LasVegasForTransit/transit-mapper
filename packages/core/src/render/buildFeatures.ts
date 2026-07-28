@@ -183,8 +183,8 @@ function oneDirectionalStretches(
   waysById: Map<string, Way>,
   services: Service[],
   wayId: string,
-): LngLat[][] {
-  const out: LngLat[][] = [];
+): { path: LngLat[]; color: string }[] {
+  const out: { path: LngLat[]; color: string }[] = [];
   const seen = new Set<string>();
   for (const svc of services) {
     for (const pattern of svc.patterns) {
@@ -205,7 +205,7 @@ function oneDirectionalStretches(
             const key = `${seg.path[0].join()}>${seg.path[seg.path.length - 1].join()}`;
             if (seen.has(key)) continue;
             seen.add(key);
-            out.push(seg.path);
+            out.push({ path: seg.path, color: svc.color });
           }
         }
       }
@@ -229,6 +229,10 @@ export interface SystemFeatures {
   lanes: FeatureCollection<LineString>;
   laneMarkings: FeatureCollection<LineString>;
   laneArrows: FeatureCollection<LineString>;
+  /** Travel arrows for stretches only ONE direction of a line rides. Carries
+   *  the service colour, because these sit on top of the line rather than on
+   *  the asphalt beneath it. */
+  serviceArrows: FeatureCollection<LineString>;
   junctions: FeatureCollection<Polygon>;
   connectors: FeatureCollection<LineString>;
   /** Shared-identity (NamedWay) name labels along their member ways. */
@@ -411,6 +415,7 @@ export function buildFeatures(
   const lanes: Feature<LineString>[] = [];
   const laneMarkings: Feature<LineString>[] = [];
   const laneArrows: Feature<LineString>[] = [];
+  const serviceArrows: Feature<LineString>[] = [];
 
   // True-scale per-lane rendering for one way: lane surfaces at their real
   // metric widths (w14 + the exponential zoom expression in LANE_WIDTH_EXPR),
@@ -591,10 +596,10 @@ export function buildFeatures(
     // already say it and two sets of arrows on one line is noise.
     if (network && !wayIsOneWay) {
       for (const one of oneDirectionalStretches(waysById, byWay.get(way.id) ?? [], way.id)) {
-        laneArrows.push({
+        serviceArrows.push({
           type: 'Feature',
-          properties: { id: way.id },
-          geometry: { type: 'LineString', coordinates: one },
+          properties: { id: way.id, color: one.color },
+          geometry: { type: 'LineString', coordinates: one.path },
         });
       }
     }
@@ -871,6 +876,7 @@ export function buildFeatures(
     lanes: { type: 'FeatureCollection', features: lanes },
     laneMarkings: { type: 'FeatureCollection', features: laneMarkings },
     laneArrows: { type: 'FeatureCollection', features: laneArrows },
+    serviceArrows: { type: 'FeatureCollection', features: serviceArrows },
     junctions: { type: 'FeatureCollection', features: junctionFeatures },
     connectors: { type: 'FeatureCollection', features: connectorFeatures },
     wayLabels: { type: 'FeatureCollection', features: wayLabels },

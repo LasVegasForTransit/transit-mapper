@@ -32,6 +32,7 @@ import {
   LYR_LANDMARKS,
   LYR_LANDMARK_LABELS,
   LYR_LANE_ARROWS,
+  LYR_SERVICE_ARROWS,
   LYR_LANE_LINES,
   LYR_LANE_SURFACES,
   LYR_LANE_TRACKS,
@@ -67,6 +68,7 @@ import {
   SRC_LANDMARKS,
   SRC_LANES,
   SRC_LANE_ARROWS,
+  SRC_SERVICE_ARROWS,
   SRC_LANE_MARKINGS,
   SRC_MARQUEE,
   SRC_PHYSICAL_HANDLES,
@@ -215,6 +217,10 @@ export const LAYER_SPECS: LayerSpecification[] = [
       'text-keep-upright': false,
       'text-allow-overlap': true,
       'text-ignore-placement': true,
+      // Without this MapLibre asks for its built-in default stack, which the
+      // basemap does not serve, so no glyph loads and the arrow silently never
+      // draws. Every other text layer here names the stack for the same reason.
+      'text-font': ['literal', ['Noto Sans Regular']],
     },
     paint: { 'text-color': LANE_ARROW_COLOR, 'text-opacity': 0.9 },
   },
@@ -389,6 +395,34 @@ export const LAYER_SPECS: LayerSpecification[] = [
         0.1,
         0,
       ],
+    },
+  },
+  {
+    // Travel arrows on a service line, for a stretch only one of its two
+    // directions rides. Sits ABOVE the service lines, unlike the lane arrows
+    // above: those describe the street and belong on the asphalt underneath,
+    // while these describe the line and are unreadable anywhere but on top of
+    // it. Drawn in the line's own colour with a paper halo so a couplet's two
+    // halves each say which way they run against a pale basemap — the lane
+    // arrows' near-white would vanish there.
+    id: LYR_SERVICE_ARROWS,
+    type: 'symbol',
+    source: SRC_SERVICE_ARROWS,
+    minzoom: 13,
+    layout: {
+      'symbol-placement': 'line',
+      'symbol-spacing': 90,
+      'text-field': '▶',
+      'text-size': 11,
+      'text-keep-upright': false,
+      'text-allow-overlap': true,
+      'text-ignore-placement': true,
+      'text-font': ['literal', ['Noto Sans Regular']],
+    },
+    paint: {
+      'text-color': ['coalesce', ['get', 'color'], LANE_ARROW_COLOR],
+      'text-halo-color': '#f7f4ec',
+      'text-halo-width': 1.4,
     },
   },
   {
