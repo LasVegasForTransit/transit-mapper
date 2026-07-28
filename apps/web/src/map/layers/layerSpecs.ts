@@ -716,8 +716,8 @@ export const LAYER_SPECS: LayerSpecification[] = [
     },
   },
   {
-    // During direct manipulation, the full settled projection stays frozen and
-    // this tiny source carries only the geometry under the pointer. It is
+    // During direct manipulation, the last settled projection remains stable
+    // while this tiny source carries live geometry under the pointer. It is
     // intentionally simplified; release restores the exact derived rendering.
     id: LYR_GESTURE_FILL,
     type: 'fill',
