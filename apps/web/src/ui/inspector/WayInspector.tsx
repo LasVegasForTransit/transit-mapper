@@ -104,7 +104,12 @@ export function WayInspector({ id }: WayInspectorProps) {
   if (!way) return <EmptyInspector />;
   const type = wayType(way.typeId);
   const length = wayLengthMeters(way);
-  const bearing = bearingDegrees(way.points[0], way.points[way.points.length - 1]);
+  // A way mid-draw (or one left ghosted — see validate.ts's "fewer than 2
+  // points" check) can have 0 or 1 points; bearingDegrees needs two.
+  const bearing =
+    way.points.length >= 2
+      ? bearingDegrees(way.points[0], way.points[way.points.length - 1])
+      : undefined;
   const cost = estimateWayCapitalCost(way);
   const identityNoun = WAY_FAMILIES[type.family].identityNoun;
 
@@ -284,7 +289,7 @@ export function WayInspector({ id }: WayInspectorProps) {
 
           <div className="stats">
             <Stat label="Length" value={formatKm(length)} />
-            <Stat label="Bearing" value={formatBearing(bearing)} />
+            <Stat label="Bearing" value={bearing === undefined ? '—' : formatBearing(bearing)} />
             <Stat label="Points" value={String(way.points.length)} />
           </div>
 
