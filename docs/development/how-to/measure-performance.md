@@ -18,9 +18,11 @@ Install stable Google Chrome, then run:
 pnpm perf
 ```
 
-The command builds the production app, starts Vite preview on
-`127.0.0.1:4173`, and measures the complete desktop matrix. To diagnose one
-surface without replacing a baseline:
+The command first builds and gates the production app, then builds a private
+instrumented variant, starts Vite preview on `127.0.0.1:4173`, and measures the
+complete desktop matrix. Bundle and PWA reports always describe the public
+production graph; the measurement-only harness is not counted as shipped
+payload. To diagnose one surface without replacing a baseline:
 
 ```bash
 pnpm perf -- --scenario rtc

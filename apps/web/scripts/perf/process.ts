@@ -1,9 +1,14 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 export const APP_ROOT = resolve(import.meta.dirname, '../..');
 export const PREVIEW_PORT = 4_173;
 export const PREVIEW_URL = `http://127.0.0.1:${PREVIEW_PORT}`;
+const BUILD_REPORT_DIRECTORY = resolve(APP_ROOT, 'dist/performance');
+const BUILD_REPORT_PATHS = ['bundle-report.json', 'pwa-report.json'].map((filename) =>
+  resolve(BUILD_REPORT_DIRECTORY, filename),
+);
 
 export interface RunningPreview {
   child: ChildProcess;
@@ -45,10 +50,26 @@ async function runCommand(
 }
 
 export async function buildPerformanceApp(): Promise<void> {
-  await runCommand('pnpm', ['run', 'build'], {
+  // Gate and capture the graph that actually ships before adding the private
+  // browser instrumentation. Otherwise the harness grades its own code as
+  // production payload and can fail a delivery budget before Chrome starts.
+  await runCommand('pnpm', ['run', 'build'], process.env);
+  const productionReports = new Map(
+    await Promise.all(
+      BUILD_REPORT_PATHS.map(async (path) => [path, await readFile(path)] as const),
+    ),
+  );
+
+  await runCommand('pnpm', ['exec', 'vite', 'build'], {
     ...process.env,
     VITE_PERF_BUILD: '1',
   });
+
+  // Vite empties dist/ for the instrumented build. Restore the production
+  // delivery evidence so reports and --skip-build continue to describe the
+  // public artifact while preview serves the instrumented one.
+  await mkdir(BUILD_REPORT_DIRECTORY, { recursive: true });
+  await Promise.all([...productionReports].map(([path, contents]) => writeFile(path, contents)));
 }
 
 async function waitForPreview(preview: RunningPreview): Promise<void> {
