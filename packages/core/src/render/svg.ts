@@ -349,7 +349,13 @@ export function systemSvg(
     );
   }
   for (const f of fc.services.features as Feature<LineString>[]) {
-    const p = f.properties as { color: string; width: number; underground?: boolean };
+    const p = f.properties as {
+      color: string;
+      width: number;
+      underground?: boolean;
+      hitTarget?: boolean;
+    };
+    if (p.hitTarget) continue;
     parts.push(
       `<path d="${pathD(f.geometry.coordinates as LngLat[])}" fill="none" stroke="${p.color}" stroke-width="${p.width}" stroke-linecap="round" stroke-linejoin="round"${p.underground ? ' stroke-dasharray="5,4"' : ''}/>`,
     );

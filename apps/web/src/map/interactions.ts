@@ -19,6 +19,7 @@ import {
 import { facilityType, mode } from '@transitmapper/core/model/catalog';
 import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
 import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
+import type { ServiceActionHit } from '@transitmapper/core/model/selectionActions';
 import type { EditGestureTargets } from './gestureProjection';
 import {
   LYR_FACILITIES,
@@ -27,6 +28,7 @@ import {
   LYR_LANE_SURFACES,
   LYR_PHYSICAL_HANDLES,
   LYR_SERVICES_UNDERGROUND,
+  LYR_SERVICES_HIT,
   LYR_SERVICES_SOLID,
   LYR_WAY_ENDPOINTS,
   LYR_WAYS_DASHED,
@@ -54,7 +56,7 @@ const FREEHAND_SAMPLE_PX = 16; // spacing between points sampled while freehand-
 // angle was the wrong unit for this.
 const STRAIGHT_SNAP_PX = 10;
 
-const SERVICE_LAYERS = [LYR_SERVICES_SOLID, LYR_SERVICES_UNDERGROUND];
+const SERVICE_LAYERS = [LYR_SERVICES_HIT, LYR_SERVICES_SOLID, LYR_SERVICES_UNDERGROUND];
 // Lane surfaces stand in for the fan at lane-detail zooms — they carry the
 // same `id` property, so way hit-testing works in both rendering modes.
 const WAY_LAYERS = [LYR_WAYS_SOLID, LYR_WAYS_DASHED, LYR_LANE_SURFACES];
@@ -139,7 +141,7 @@ export interface AttachInteractionsOptions {
   /** Open the map's action menu at these viewport pixels. Called for a right
    *  CLICK that placed no node and finished no draw — a right DRAG still
    *  pans, so this never fires mid-gesture. */
-  openContextMenu: (x: number, y: number, at: LngLat) => void;
+  openContextMenu: (x: number, y: number, at: LngLat, serviceHit?: ServiceActionHit) => void;
   /** MapCanvas uses these exact pointer-gesture boundaries to switch from the
    *  full derived map to its one-source manipulation projection, then rebuild
    *  the settled map once on commit/cancel. Optional for non-rendering callers
@@ -1726,7 +1728,9 @@ export function attachInteractions(
   /** What a right-click at this point is about, resolved exactly the way a
    *  left click resolves what to select — the two must agree, or right-
    *  clicking a line would offer actions for the street under it. */
-  const rightClickTarget = (e: MapMouseEvent): MultiSelectItem | null => {
+  const rightClickTarget = (
+    e: MapMouseEvent,
+  ): { target: MultiSelectItem; serviceHit?: ServiceActionHit } | null => {
     const hit = featureAt(e, [
       LYR_STATIONS,
       LYR_FACILITIES,
@@ -1735,12 +1739,26 @@ export function attachInteractions(
       ...WAY_LAYERS,
     ]);
     if (!hit) return null;
-    if (hit.layer.id === LYR_STATIONS) return { kind: 'station', id: hit.properties.id as string };
+    if (hit.layer.id === LYR_STATIONS)
+      return { target: { kind: 'station', id: hit.properties.id as string } };
     if (hit.layer.id === LYR_FACILITIES)
-      return { kind: 'facility', id: hit.properties.id as string };
-    if (hit.layer.id === LYR_HANDLES) return { kind: 'way', id: hit.properties.wayId as string };
-    if (WAY_LAYERS.includes(hit.layer.id)) return { kind: 'way', id: hit.properties.id as string };
-    return { kind: 'service', id: hit.properties.serviceId as string };
+      return { target: { kind: 'facility', id: hit.properties.id as string } };
+    if (hit.layer.id === LYR_HANDLES)
+      return { target: { kind: 'way', id: hit.properties.wayId as string } };
+    if (WAY_LAYERS.includes(hit.layer.id))
+      return { target: { kind: 'way', id: hit.properties.id as string } };
+    const { serviceId, patternId, run, legIndex } = hit.properties;
+    const serviceHit =
+      typeof serviceId === 'string' &&
+      typeof patternId === 'string' &&
+      (run === 'outbound' || run === 'inbound') &&
+      typeof legIndex === 'number'
+        ? { serviceId, patternId, run, legIndex }
+        : undefined;
+    return {
+      target: { kind: 'service', id: serviceId as string },
+      ...(serviceHit ? { serviceHit } : {}),
+    };
   };
 
   /**
@@ -1755,18 +1773,19 @@ export function attachInteractions(
    */
   const openMenuAt = (e: MapMouseEvent) => {
     const st = store.getState();
-    const target = rightClickTarget(e);
-    if (!target) {
+    const hit = rightClickTarget(e);
+    if (!hit) {
       st.select(null);
       st.clearMultiSelection();
       return;
     }
+    const { target, serviceHit } = hit;
     const inGroup = st.multiSelection.some((i) => i.kind === target.kind && i.id === target.id);
     const isSelected = st.selection?.kind === target.kind && st.selection.id === target.id;
     if (!inGroup && !isSelected) st.select(target);
     // The map coordinate travels with the screen one: an action that cuts a
     // line where you clicked needs the place, not the pixel.
-    opts.openContextMenu(e.originalEvent.clientX, e.originalEvent.clientY, lngLatOf(e));
+    opts.openContextMenu(e.originalEvent.clientX, e.originalEvent.clientY, lngLatOf(e), serviceHit);
   };
 
   const onContextMenu = (ev: Event) => ev.preventDefault();

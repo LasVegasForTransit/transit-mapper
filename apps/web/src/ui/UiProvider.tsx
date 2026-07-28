@@ -9,6 +9,7 @@ import {
   type SetStateAction,
 } from 'react';
 import type { LngLat } from '@transitmapper/core/model/system';
+import type { ServiceActionHit } from '@transitmapper/core/model/selectionActions';
 
 export type DialogName =
   'import' | 'gtfs' | 'export' | 'share' | 'systems' | 'settings' | 'onboarding';
@@ -71,8 +72,8 @@ const ImportProgressContext = createContext<ImportProgressState | null>(null);
 interface ContextMenuState {
   /** Screen position for the menu, plus the map coordinate the right-click
    *  landed on — actions that cut a line where you clicked need the latter. */
-  contextMenuAt: { x: number; y: number; at: LngLat } | null;
-  openContextMenu: (x: number, y: number, at: LngLat) => void;
+  contextMenuAt: { x: number; y: number; at: LngLat; serviceHit?: ServiceActionHit } | null;
+  openContextMenu: (x: number, y: number, at: LngLat, serviceHit?: ServiceActionHit) => void;
   closeContextMenu: () => void;
 }
 
@@ -87,11 +88,15 @@ export function UiProvider({ children }: UiProviderProps) {
   const [uiHidden, setUiHidden] = useState(false);
   const [activeDialog, setActiveDialog] = useState<DialogName | null>(null);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
-  const [contextMenuAt, setContextMenuAt] = useState<{ x: number; y: number; at: LngLat } | null>(
-    null,
-  );
+  const [contextMenuAt, setContextMenuAt] = useState<{
+    x: number;
+    y: number;
+    at: LngLat;
+    serviceHit?: ServiceActionHit;
+  } | null>(null);
   const openContextMenu = useCallback(
-    (x: number, y: number, at: LngLat) => setContextMenuAt({ x, y, at }),
+    (x: number, y: number, at: LngLat, serviceHit?: ServiceActionHit) =>
+      setContextMenuAt({ x, y, at, ...(serviceHit ? { serviceHit } : {}) }),
     [],
   );
   const closeContextMenu = useCallback(() => setContextMenuAt(null), []);

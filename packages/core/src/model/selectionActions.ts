@@ -13,7 +13,7 @@
  * the app's providers, which are the only place those two facts meet.
  */
 
-import type { LngLat, TransitSystem } from './system';
+import type { LngLat, RunDirection, TransitSystem } from './system';
 
 /** One selected object. The store's MultiSelectItem is this type — it lives
  *  here because the registry takes a selection as input and core cannot
@@ -21,6 +21,16 @@ import type { LngLat, TransitSystem } from './system';
 export interface SelectionRef {
   kind: 'way' | 'station' | 'facility' | 'service';
   id: string;
+}
+
+/** The rendered route occurrence that a service gesture hit. A service can
+ * ride the same way more than once, so `wayId` and a map coordinate alone do
+ * not identify which pass the editor must change. */
+export interface ServiceActionHit {
+  serviceId: string;
+  patternId: string;
+  run: RunDirection;
+  legIndex: number;
 }
 
 export interface ActionContext {
@@ -36,6 +46,8 @@ export interface ActionContext {
    *  why the inspector and the menu can share one registry without either
    *  knowing about the other. */
   at?: LngLat;
+  /** Exact occurrence encoded by the service feature under a map gesture. */
+  serviceHit?: ServiceActionHit;
 }
 
 export interface SelectionAction {

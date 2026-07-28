@@ -48,6 +48,7 @@ import {
   LYR_PREVIEW,
   LYR_SHARING,
   LYR_SERVICES_ELEVATED,
+  LYR_SERVICES_HIT,
   LYR_SERVICES_SOLID,
   LYR_SERVICES_UNDERGROUND,
   LYR_SERVICE_SELECTED,
@@ -333,7 +334,7 @@ export const LAYER_SPECS: LayerSpecification[] = [
     id: LYR_SERVICES_ELEVATED,
     type: 'line',
     source: SRC_SERVICES,
-    filter: ['get', 'elevated'],
+    filter: ['all', ['!', ['get', 'hitTarget']], ['get', 'elevated']],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': '#191a17',
@@ -346,6 +347,7 @@ export const LAYER_SPECS: LayerSpecification[] = [
     id: LYR_SERVICE_SELECTED,
     type: 'line',
     source: SRC_SERVICES,
+    filter: ['!', ['get', 'hitTarget']],
     // feature-state driven (see LYR_WAY_SELECTED). Selecting a way also lights
     // its rider services here — MapCanvas sets state on their serviceIds.
     layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -367,7 +369,7 @@ export const LAYER_SPECS: LayerSpecification[] = [
     id: LYR_SERVICES_SOLID,
     type: 'line',
     source: SRC_SERVICES,
-    filter: ['!', ['get', 'underground']],
+    filter: ['all', ['!', ['get', 'hitTarget']], ['!', ['get', 'underground']]],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': ['get', 'color'],
@@ -380,12 +382,29 @@ export const LAYER_SPECS: LayerSpecification[] = [
     id: LYR_SERVICES_UNDERGROUND,
     type: 'line',
     source: SRC_SERVICES,
-    filter: ['get', 'underground'],
+    filter: ['all', ['!', ['get', 'hitTarget']], ['get', 'underground']],
     layout: { 'line-cap': 'butt', 'line-join': 'round' },
     paint: {
       'line-color': ['get', 'color'],
       'line-width': SERVICE_WIDTH_EXPR as never,
       'line-dasharray': [2.5, 2],
+      'line-offset': ['get', 'offset'],
+    },
+  },
+  {
+    // Kept at zero opacity but queryable. It carries pattern/run/leg identity
+    // where a service rides the same physical way more than once.
+    id: LYR_SERVICES_HIT,
+    type: 'line',
+    source: SRC_SERVICES,
+    filter: ['get', 'hitTarget'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': '#000000',
+      'line-width': 24,
+      'line-opacity': 0,
+      // The hit surface must sit on the same fanned/lane path as the line it
+      // names; otherwise a bundled repeated line catches clicks at its center.
       'line-offset': ['get', 'offset'],
     },
   },
