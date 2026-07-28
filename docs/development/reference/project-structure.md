@@ -90,6 +90,8 @@ and `apps/worker` depend on it as a workspace package.
   Pure, so the derivation is testable without a feed.
 - `diagramLayout.ts` — the Diagram view's schematic layout.
 - `cost.ts` — rough cost estimation.
+- `units.ts` — unit conversion and formatting (metric/imperial). Precise
+  constants and locale-aware display via `Intl.NumberFormat`.
 - `ids.ts` — id generation.
 
 ## packages/core/src/geometry/ — derived street geometry
