@@ -78,6 +78,7 @@ import {
   SRC_PREVIEW,
 } from '../src/map/layers';
 import { LANDMARKS, landmarksFeatureCollection } from '../src/map/landmarks';
+import { armVisibilityAwareTimeout } from '../src/map/export/visibilityAwareTimeout';
 import {
   buildOverpassQuery,
   classifyOsmWay,
@@ -11898,6 +11899,83 @@ function buildGrid() {
       return named?.name === 'Decatur Avenue' && named.wayIds.length === 2;
     })(),
   );
+}
+
+// --- PNG export's render timeout pauses while the tab is hidden ---
+// MapLibre's tile loading and painting run entirely on requestAnimationFrame,
+// which browsers fully suspend while a document is hidden, so the offscreen
+// export map makes zero progress until it's visible again. A flat wall-clock
+// timeout used to fire for that dead time even though the export would have
+// completed fine — this is the regression the bug fixed.
+{
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  class FakeVisibility {
+    hidden = false;
+    private listeners = new Set<() => void>();
+    addEventListener(_type: 'visibilitychange', listener: () => void): void {
+      this.listeners.add(listener);
+    }
+    removeEventListener(_type: 'visibilitychange', listener: () => void): void {
+      this.listeners.delete(listener);
+    }
+    setHidden(hidden: boolean): void {
+      this.hidden = hidden;
+      for (const listener of this.listeners) listener();
+    }
+  }
+
+  {
+    const visibility = new FakeVisibility();
+    let fired = false;
+    armVisibilityAwareTimeout(30, () => (fired = true), visibility);
+    await sleep(60);
+    check('a visible tab still times out after the full window', fired);
+  }
+
+  {
+    const visibility = new FakeVisibility();
+    visibility.hidden = true;
+    let fired = false;
+    armVisibilityAwareTimeout(30, () => (fired = true), visibility);
+    await sleep(60);
+    check('a tab that starts hidden never times out on its own', !fired);
+  }
+
+  {
+    const visibility = new FakeVisibility();
+    let fired = false;
+    let resumes = 0;
+    armVisibilityAwareTimeout(
+      40,
+      () => (fired = true),
+      visibility,
+      () => resumes++,
+    );
+    await sleep(15);
+    visibility.setHidden(true); // pause with the window ~2/3 unelapsed
+    await sleep(80); // well past the original 40ms budget
+    check('going hidden pauses the countdown instead of firing it', !fired);
+    visibility.setHidden(false); // resume: a fresh 40ms window
+    check('becoming visible again calls onResume', resumes === 1);
+    await sleep(20);
+    check('the fresh window has not fired yet', !fired);
+    await sleep(30);
+    check('the fresh window fires once it fully elapses', fired);
+  }
+
+  {
+    const visibility = new FakeVisibility();
+    let fired = false;
+    const timeout = armVisibilityAwareTimeout(20, () => (fired = true), visibility);
+    timeout.cancel();
+    await sleep(40);
+    check('cancel stops the timeout for good', !fired);
+    visibility.setHidden(true);
+    visibility.setHidden(false);
+    await sleep(40);
+    check('cancel also detaches the visibility listener', !fired);
+  }
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
