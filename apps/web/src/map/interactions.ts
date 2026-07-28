@@ -2,12 +2,16 @@ import type { Map as MLMap, MapMouseEvent, MapGeoJSONFeature, GeoJSONSource } fr
 import type { EditorStore, MultiSelectItem } from '../editor/store';
 import { attachKeyboard, type SimCommands } from '../editor/keymap';
 import {
+  CONFLATION_TOLERANCE_M,
+  densifyForMatching,
+  detectShapeRuns,
   metersFromOrigin,
   nearestOpenEndpoint,
   offsetMeters,
   resolveWayPath,
   snap,
   squareFootprint,
+  type ShapeRun,
 } from '@transitmapper/core/model/geo';
 import { facilityType, mode } from '@transitmapper/core/model/catalog';
 import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
@@ -27,6 +31,7 @@ import {
   SRC_ENDPOINT_HINT,
   SRC_MARQUEE,
   SRC_PREVIEW,
+  SRC_SHARING,
 } from './layers';
 
 /** A screen-space pixel coordinate (as opposed to LngLat's map-space one). */
@@ -208,6 +213,26 @@ export function attachInteractions(
   const metersPerPixel = () =>
     (156543.03392 * Math.cos((map.getCenter().lat * Math.PI) / 180)) / 2 ** map.getZoom();
 
+  /**
+   * Snapping tolerance in metres — a screen distance, but never more than a
+   * real one.
+   *
+   * A pixel tolerance alone keeps snapping feeling the same at every zoom,
+   * which is why it is expressed that way. Unbounded, though, it stops meaning
+   * anything: at a zoom that fits a metropolitan area on screen one pixel is
+   * over a hundred metres, so an eighteen-pixel radius reaches two kilometres
+   * and every press lands on whatever line is nearest. Drawing a second line
+   * along an existing one resumed the existing one instead, from most of a
+   * kilometre away.
+   *
+   * The ceiling is a claim about the world rather than about the screen: past
+   * this, two things are different places and the user meant the empty ground
+   * they clicked. Well under the 90 m at which two stops start counting as one
+   * interchange, and well over the width of any street.
+   */
+  const MAX_SNAP_M = 50;
+  const snapMeters = (px: number) => Math.min(px * metersPerPixel(), MAX_SNAP_M);
+
   // ---- pan (right-drag or space+left-drag) --------------------------------
   // Not part of the cancel system: it never mutates the system, so there's
   // nothing for Escape to undo — releasing the mouse already ends it.
@@ -255,7 +280,7 @@ export function attachInteractions(
           !st.activeWayId &&
           !st.routeDraft
         ) {
-          const hit = nearestOpenEndpoint(st.system.ways, lngLatOf(ev), SNAP_PX * metersPerPixel());
+          const hit = nearestOpenEndpoint(st.system.ways, lngLatOf(ev), snapMeters(SNAP_PX));
           if (hit) {
             st.beginOneWayBranch(hit.wayId, hit.end);
             return;
@@ -329,7 +354,7 @@ export function attachInteractions(
       previewThrottle.cancel();
       endGesture();
       map.off('mousemove', onMove);
-      setPreview(null);
+      clearPreviews();
       if (dragged) {
         placeEnd(
           wayId,
@@ -349,7 +374,7 @@ export function attachInteractions(
       previewThrottle.cancel();
       map.off('mousemove', onMove);
       map.off('mouseup', onUp);
-      setPreview(null); // nothing committed yet — cancel just drops the drag
+      clearPreviews(); // nothing committed yet — cancel just drops the drag
     });
   };
 
@@ -426,13 +451,13 @@ export function attachInteractions(
 
   const cancelFacilityBoundaryDraft = () => {
     facilityBoundaryDraft = null;
-    setPreview(null);
+    clearPreviews();
   };
 
   const finishFacilityBoundaryDraft = () => {
     const draft = facilityBoundaryDraft;
     facilityBoundaryDraft = null;
-    setPreview(null);
+    clearPreviews();
     if (!draft || draft.length < 3) return; // need at least a triangle for a real region
     store.getState().createFacilityComplex(draft);
     opts.focusFootprint(draft);
@@ -470,7 +495,7 @@ export function attachInteractions(
       map.off('mousemove', onMove);
       if (dragged) {
         const corners = rectCorners(startCoord, lngLatOf(ev));
-        setPreview(null);
+        clearPreviews();
         store.getState().createFacilityComplex(corners);
         opts.focusFootprint(corners);
       } else {
@@ -485,13 +510,13 @@ export function attachInteractions(
 
   const cancelStationLandDraft = () => {
     stationLandDraft = null;
-    setPreview(null);
+    clearPreviews();
   };
 
   const finishStationLandDraft = () => {
     const draft = stationLandDraft;
     stationLandDraft = null;
-    setPreview(null);
+    clearPreviews();
     if (!draft || draft.length < 3) return; // a border needs at least a triangle
     store.getState().addDrawnStation(draft);
     opts.focusFootprint(draft);
@@ -526,7 +551,7 @@ export function attachInteractions(
       previewThrottle.cancel();
       map.off('mousemove', onMove);
       if (dragged) {
-        setPreview(null);
+        clearPreviews();
         const corners = rectCorners(startCoord, lngLatOf(ev));
         store.getState().addDrawnStation(corners);
         opts.focusFootprint(corners);
@@ -563,7 +588,7 @@ export function attachInteractions(
       previewThrottle.cancel();
       map.off('mousemove', onMove);
       if (dragged) {
-        setPreview(null);
+        clearPreviews();
         const st = store.getState();
         const corners = rectCorners(startCoord, lngLatOf(ev));
         st.addFacility(st.draftFacilityTypeId, corners);
@@ -699,6 +724,54 @@ export function attachInteractions(
       map.off('mouseup', onUp);
       if (original) apply(original);
     });
+  };
+
+  /**
+   * The stretches of existing infrastructure this stroke will be absorbed onto
+   * if it commits now.
+   *
+   * Drawing a line that runs along a street rebinds it onto that street on
+   * commit (see finishWay). Without showing it first, the line jumps onto the
+   * street the moment you press Enter and nothing warned you — a preview has
+   * to say what the commit will do.
+   */
+  const setSharingPreview = (runs: LngLat[][], color: string) => {
+    (map.getSource(SRC_SHARING) as GeoJSONSource | undefined)?.setData({
+      type: 'FeatureCollection',
+      features: runs
+        .filter((coords) => coords.length >= 2)
+        .map((coords) => ({
+          type: 'Feature',
+          properties: { color },
+          geometry: { type: 'LineString', coordinates: coords },
+        })),
+    });
+  };
+
+  /** What the stroke so far would share, resolved the SAME way finishWay
+   *  resolves it — same matcher, same mode tolerance, same candidate filter —
+   *  so the preview cannot promise something the commit won't do. */
+  const sharingRunsFor = (points: LngLat[]): LngLat[][] => {
+    const st = store.getState();
+    if (st.draftSeparate || points.length < 2) return [];
+    const modeSpec = mode(st.draftModeId);
+    const allowed = new Set(modeSpec.wayTypeIds);
+    const candidates = st.system.ways.filter(
+      (w) => allowed.has(w.typeId) && w.id !== st.activeWayId,
+    );
+    if (candidates.length === 0) return [];
+    const toleranceM = modeSpec.corridorToleranceM ?? CONFLATION_TOLERANCE_M;
+    const dense = densifyForMatching(points, toleranceM);
+    return detectShapeRuns(dense, candidates, { toleranceM })
+      .filter((run): run is Extract<ShapeRun, { onWayId: string }> => !('fresh' in run))
+      .map((run) => dense.slice(run.fromIdx, run.toIdx + 1));
+  };
+
+  /** Both preview overlays go together: the highlight only ever means
+   *  something alongside the rubber band that produced it. */
+  const clearPreviews = () => {
+    setPreview(null);
+    setSharingPreview([], '#000000');
   };
 
   const setPreview = (coords: LngLat[] | null) => {
@@ -923,7 +996,7 @@ export function attachInteractions(
     if (opts.isNetworkMode() && !st.activeWayId && !forceSeparate) {
       const allowed = new Set(mode(st.draftModeId).wayTypeIds);
       const candidates = st.system.ways.filter((w) => allowed.has(w.typeId));
-      const hit = snap(candidates, lngLatOf(e), SNAP_PX * metersPerPixel());
+      const hit = snap(candidates, lngLatOf(e), snapMeters(SNAP_PX));
       if (st.routeDraft) {
         suppressClick = true;
         if (hit) {
@@ -959,12 +1032,7 @@ export function attachInteractions(
       // opt-out from attaching to what's already here.
       const resume = forceSeparate
         ? null
-        : nearestOpenEndpoint(
-            st.system.ways,
-            startCoord,
-            SNAP_PX * metersPerPixel(),
-            st.draftWayTypeId,
-          );
+        : nearestOpenEndpoint(st.system.ways, startCoord, snapMeters(SNAP_PX), st.draftWayTypeId);
       if (resume) {
         wayId = resume.wayId;
         extendAtStart = resume.end === 'start';
@@ -981,7 +1049,7 @@ export function attachInteractions(
         const seed = snap(
           st.system.ways,
           startCoord,
-          SNAP_PX * metersPerPixel(),
+          snapMeters(SNAP_PX),
           new Set([wayId]),
           st.draftWayTypeId,
         );
@@ -1025,7 +1093,7 @@ export function attachInteractions(
       previewThrottle.cancel();
       map.off('mousemove', onMove);
       map.off('mouseup', onUp);
-      setPreview(null);
+      clearPreviews();
       // A brand-new way's seed point was already committed before this
       // closure exists — canceling just drops the pending node this press
       // would have added; the way stays active (as if only the seed had
@@ -1058,19 +1126,14 @@ export function attachInteractions(
     const otherWay = snap(
       store.getState().system.ways,
       raw,
-      SNAP_PX * metersPerPixel(),
+      snapMeters(SNAP_PX),
       new Set([wayId]),
       store.getState().draftWayTypeId,
     );
     if (otherWay) return { coord: otherWay.coord, snapWayId: otherWay.wayId };
     const heading = wayHeadingAnchor(wayId, atStart);
     if (endpoint && heading) {
-      const straight = continueStraight(
-        endpoint,
-        heading,
-        raw,
-        STRAIGHT_SNAP_PX * metersPerPixel(),
-      );
+      const straight = continueStraight(endpoint, heading, raw, snapMeters(STRAIGHT_SNAP_PX));
       if (straight) return { coord: straight };
     }
     return { coord: raw };
@@ -1114,6 +1177,14 @@ export function attachInteractions(
     // the current endpoint is identical to the one the committed way renders.
     const points = atStart ? [coord, ...way.points.slice(0, 2)] : [...way.points.slice(-2), coord];
     setPreview(resolveWayPath({ ...way, points }));
+    // Against the WHOLE stroke, not just the segment being previewed: whether
+    // a stretch counts as shared depends on how long the run is, which only
+    // the whole line can answer (see detectShapeRuns' minRunM).
+    const whole = atStart ? [coord, ...way.points] : [...way.points, coord];
+    setSharingPreview(
+      sharingRunsFor(resolveWayPath({ ...way, points: whole })),
+      store.getState().draftColor,
+    );
   };
 
   // Rubber-band preview from the last node to the cursor while drawing; when
@@ -1142,12 +1213,12 @@ export function attachInteractions(
       setPreview(closedForPreview([...stationLandDraft, lngLatOf(ev)]));
       return;
     }
-    setPreview(null);
+    clearPreviews();
     if (st.tool === 'way' && !st.readOnly) {
       const resume = nearestOpenEndpoint(
         st.system.ways,
         lngLatOf(ev),
-        SNAP_PX * metersPerPixel(),
+        snapMeters(SNAP_PX),
         st.draftWayTypeId,
       );
       setEndpointHint(resume ? resume.coord : null);
@@ -1160,7 +1231,7 @@ export function attachInteractions(
 
   const placeOrSnapStation = (id: string, coord: LngLat) => {
     const ways = store.getState().system.ways;
-    const s = snap(ways, coord, SNAP_PX * metersPerPixel());
+    const s = snap(ways, coord, snapMeters(SNAP_PX));
     if (s) store.getState().moveStation(id, s.coord, { wayId: s.wayId, t: s.t });
     else store.getState().moveStation(id, coord, undefined);
   };
@@ -1414,7 +1485,7 @@ export function attachInteractions(
         // Infrastructure view everything is 2D — the mousedown gesture owns
         // station creation there (land only), so a bare click does nothing.
         if (!opts.isNetworkMode()) break;
-        const s = snap(st.system.ways, coord, SNAP_PX * metersPerPixel());
+        const s = snap(st.system.ways, coord, snapMeters(SNAP_PX));
         if (s) st.addStation(s.coord, { wayId: s.wayId, t: s.t });
         else st.addStation(coord);
         break;
@@ -1615,7 +1686,7 @@ export function attachInteractions(
       lastTool = s.tool;
       canvas.style.cursor = cursorFor();
       if (s.tool !== 'way') {
-        setPreview(null);
+        clearPreviews();
         setEndpointHint(null);
       }
       if (s.tool !== 'facility') facilityBoundaryDraft = null;
@@ -1623,7 +1694,7 @@ export function attachInteractions(
     if (s.activeWayId !== lastActive) {
       lastActive = s.activeWayId;
       if (!s.activeWayId) {
-        setPreview(null); // clear rubber-band when a draw ends
+        clearPreviews(); // clear rubber-band when a draw ends
         activeExtendAtStart = false;
       }
     }

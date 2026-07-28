@@ -41,6 +41,7 @@ import {
   LYR_PLATFORMS_FILL,
   LYR_PLATFORMS_STROKE,
   LYR_PREVIEW,
+  LYR_SHARING,
   LYR_SERVICES_ELEVATED,
   LYR_SERVICES_SOLID,
   LYR_SERVICES_UNDERGROUND,
@@ -71,6 +72,7 @@ import {
   SRC_PHYSICAL_HANDLES,
   SRC_PLATFORMS,
   SRC_PREVIEW,
+  SRC_SHARING,
   SRC_SERVICES,
   SRC_STATIONS,
   SRC_VEHICLES,
@@ -517,6 +519,23 @@ export const LAYER_SPECS: LayerSpecification[] = [
       'text-letter-spacing': 0.05,
     },
     paint: { 'text-color': '#191a17', 'text-halo-color': '#ffffff', 'text-halo-width': 1.4 },
+  },
+  {
+    // "This is what you are about to join." A finished line is rebound onto
+    // the infrastructure it runs along, and without showing that beforehand
+    // the commit moves the line onto a street with no warning — the preview
+    // has to say what the commit will do. Drawn UNDER the dashed preview
+    // line, wide and soft, in the line's own colour: the point is that this
+    // stretch is about to become part of it.
+    id: LYR_SHARING,
+    type: 'line',
+    source: SRC_SHARING,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': ['get', 'color'],
+      'line-width': 9,
+      'line-opacity': 0.35,
+    },
   },
   {
     id: LYR_PREVIEW,
