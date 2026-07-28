@@ -135,7 +135,7 @@ export function Workbench({
             the primary actions and reveals the ⋯ overflow that carries the
             rest (see TopBarActions). */}
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 md:hidden">
-          <div className="pointer-events-auto min-w-0 flex-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2 shadow-[var(--shadow)]">
+          <div className="pointer-events-auto min-w-0 flex-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 shadow-[var(--shadow)]">
             <div className="mobile-topleft">
               <div className="mobile-topleft-row">{brand}</div>
               {viewSwitcher}
@@ -211,7 +211,7 @@ export function Workbench({
           style={{ gridColumn: '1 / -1', gridRow: '1' }}
         >
           <div className="flex-1" style={{ minWidth: 'var(--panel-w)' }} aria-hidden="true" />
-          <div className="pointer-events-auto flex min-w-0 flex-wrap items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-2 shadow-[var(--shadow)]">
+          <div className="pointer-events-auto flex min-w-0 flex-wrap items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 shadow-[var(--shadow)]">
             {viewSwitcher}
             {simControls}
           </div>
