@@ -65,11 +65,20 @@ and `apps/worker` depend on it as a workspace package.
 - `profile.ts` — pure cross-section operations: build/flip/one-way/derive
   capacity, separate/combine carriageway profiles.
 - `geo.ts` — geographic math: projections, distances, polyline offsetting,
-  point-in-polygon.
+  point-in-polygon. `geo/servicePaths.ts` holds `patternSegments`, the one
+  place that resolves a line's ways into ride order, direction, and the
+  stretch of each it covers; `geo/corridorConflation.ts` decides which
+  stretches of a path run along infrastructure that already exists.
 - `routeGraph.ts` — the routing graph over ways and junctions;
   `routeBetween` finds paths for service drawing and adoption.
-- `validate.ts` — system-level checks (crossings, dangling refs) surfaced in
-  the Issues popover.
+- `patternEdits.ts` — how a line's legs change, both when the infrastructure
+  under them moves (a way split or merged) and when the line itself is edited
+  (trimmed, cut in two, or a stretch of road taken out from under it). Pure:
+  the store supplies the one measurement each edit needs and this decides what
+  the legs become, so the arithmetic is testable without a system to test it
+  against.
+- `validate.ts` — system-level checks (crossings, dangling refs, a route with
+  a gap in it) surfaced in the Issues popover.
 - `serialize.ts` — versioned save/load with migrations (v3 → current).
 - `import.ts` — OpenStreetMap import: pure tag classification plus the one
   Overpass fetch.

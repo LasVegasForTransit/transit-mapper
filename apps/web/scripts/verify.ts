@@ -10916,5 +10916,31 @@ function buildGrid() {
   );
 }
 
+// --- an identity with no name contributes no name ---
+// separateCarriageways mints an identity purely to hold the two halves of a
+// street together, with an empty name. Numbering a blank name gave the object
+// list rows reading " 1" and " 2".
+{
+  fresh();
+  store.getState().setDraftMode('bus');
+  const w = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(w, [-115.3, 36.1]);
+  store.getState().addWayPoint(w, [-115.1, 36.1]);
+  store.getState().finishWay();
+  store.getState().separateCarriageways(w);
+  const sys = store.getState().system;
+  const unnamed = sys.namedWays.find((n) => !n.name);
+  check('separating carriageways mints an identity with no name', !!unnamed);
+  check('and that identity spans both halves', !!unnamed && unnamed.wayIds.length === 2);
+  check(
+    'naming it later still names every half',
+    (() => {
+      store.getState().renameNamedWay(unnamed!.id, 'Decatur Avenue');
+      const named = store.getState().system.namedWays.find((n) => n.id === unnamed!.id);
+      return named?.name === 'Decatur Avenue' && named.wayIds.length === 2;
+    })(),
+  );
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

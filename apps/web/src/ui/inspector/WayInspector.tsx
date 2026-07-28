@@ -219,7 +219,7 @@ export function WayInspector({ id }: WayInspectorProps) {
             onBlur={(e) => nameWay(id, e.target.value)}
             onKeyDown={blurOnEnter}
           />
-          {!readOnly && namedWay && namedWay.wayIds.length > 1 && (
+          {!readOnly && namedWay && namedWay.name && namedWay.wayIds.length > 1 && (
             <p className="insp-sub">
               Shared by {namedWay.wayIds.length} segments — renaming here renames the whole{' '}
               {identityNoun.toLowerCase()}
