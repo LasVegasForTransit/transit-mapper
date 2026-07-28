@@ -36,6 +36,7 @@ function sample(
     paintedFrameMs: [],
     unexpectedLongTaskMs: [],
     actions: ['camera-drag'] as Array<'camera-drag' | 'entity-drag' | 'draw'>,
+    simulationState: 'running' as const,
   };
   const counters = {
     sourceUploadCount: 0,
@@ -252,12 +253,18 @@ describe('performance budgets', () => {
       benchmark: 'integer-mix-v1',
       samplesMs: [100],
       medianMs: 100,
+      displayFrameIntervalSamplesMs: [16.7],
+      displayFrameIntervalMedianMs: 16.7,
+      estimatedDisplayRefreshHz: 1000 / 16.7,
     };
     const actual = report(120);
     actual.calibration = {
       benchmark: 'integer-mix-v1',
       samplesMs: [120],
       medianMs: 120,
+      displayFrameIntervalSamplesMs: [16.7],
+      displayFrameIntervalMedianMs: 16.7,
+      estimatedDisplayRefreshHz: 1000 / 16.7,
     };
 
     const result = evaluatePerfBudgets({
@@ -272,6 +279,43 @@ describe('performance budgets', () => {
         (violation) => violation.kind === 'regression' && violation.metric === 'loadMs',
       ),
     ).toEqual([]);
+  });
+
+  it('does not use display cadence to normalize a regression', () => {
+    const baseline = report(100);
+    baseline.calibration = {
+      benchmark: 'integer-mix-v1',
+      samplesMs: [100],
+      medianMs: 100,
+      displayFrameIntervalSamplesMs: [16.7],
+      displayFrameIntervalMedianMs: 16.7,
+      estimatedDisplayRefreshHz: 1000 / 16.7,
+    };
+    const actual = report(120);
+    actual.calibration = {
+      benchmark: 'integer-mix-v1',
+      samplesMs: [100],
+      medianMs: 100,
+      displayFrameIntervalSamplesMs: [33.3],
+      displayFrameIntervalMedianMs: 33.3,
+      estimatedDisplayRefreshHz: 1000 / 33.3,
+    };
+
+    const result = evaluatePerfBudgets({
+      report: actual,
+      baseline,
+      scenarios: [PERF_SCENARIOS.small],
+      maxRegressionRatio: 0.1,
+    });
+
+    expect(result.violations).toContainEqual(
+      expect.objectContaining({
+        kind: 'regression',
+        metric: 'loadMs',
+        actual: 120,
+        normalizedActual: 120,
+      }),
+    );
   });
 
   it('fails clearly when CI requires a missing baseline', () => {

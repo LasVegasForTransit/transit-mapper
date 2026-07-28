@@ -113,6 +113,14 @@ export interface PerfGestureDiagnostics {
   paintedFrameMs: number[];
   unexpectedLongTaskMs: number[];
   actions: Array<'camera-drag' | 'entity-drag' | 'draw'>;
+  simulationState: 'running' | 'paused' | 'not-applicable';
+  /** Deterministic programmatic pan retained for attribution only. The hard
+   * frame gate is always sourced from the trusted actions above. */
+  scriptedPan?: {
+    paintedFrameMs: number[];
+    unexpectedLongTaskMs: number[];
+    sourceUploadCount: number | null;
+  };
 }
 
 export interface PerfRuntimeCounters {
@@ -145,7 +153,20 @@ export interface PerfMemorySnapshot {
 
 export type PerfStorageWriteOutcome = 'stored' | 'quota-exceeded' | 'unavailable';
 
+export interface PerfProductionPersistenceProbe {
+  /** Draw commit through the durable IndexedDB transaction completing. */
+  saveMs: number;
+  /** The named storage serialization Worker's measured request/response lane. */
+  workerSerializationMs: number;
+  /** The production read-write transaction against the document stores. */
+  indexedDbWriteMs: number;
+}
+
 export interface PerfPersistenceProbe {
+  /** Present only on editor journeys, which perform and prove a real save. */
+  production?: PerfProductionPersistenceProbe;
+  /** The remaining fields are a compatibility-boundary diagnostic. They are
+   * not the production autosave path. */
   serializedBytes: number;
   parseMs: number;
   serializationMs: number;
@@ -203,6 +224,10 @@ export interface PerfScenarioSummary {
    */
   gateValues: Record<PerfMetricName, number>;
   persistence: {
+    productionSampleCount: number;
+    productionSaveMs: PerfMetricSummary;
+    productionWorkerSerializationMs: PerfMetricSummary;
+    productionIndexedDbWriteMs: PerfMetricSummary;
     serializedBytes: number;
     parseMs: PerfMetricSummary;
     serializationMs: PerfMetricSummary;
@@ -219,6 +244,11 @@ export interface PerfCalibration {
   benchmark: 'integer-mix-v1';
   samplesMs: number[];
   medianMs: number;
+  /** Consecutive requestAnimationFrame intervals from the headed calibration
+   * page. These describe the display environment and never normalize gates. */
+  displayFrameIntervalSamplesMs: number[];
+  displayFrameIntervalMedianMs: number;
+  estimatedDisplayRefreshHz: number;
 }
 
 export interface PerfReport {

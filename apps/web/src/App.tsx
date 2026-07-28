@@ -7,10 +7,10 @@ import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { fetchShare } from './share/api';
 import {
   listLibrary,
-  loadSystemById,
   loadSystemEntry,
   migrateLegacySingleSlot,
   saveToLibrary,
+  type SaveOutcome,
 } from './storage/browserLibrary';
 import {
   getActiveId,
@@ -22,6 +22,7 @@ import {
   attachPersistenceCoordinator,
   type PersistenceCoordinator,
 } from './storage/persistenceCoordinator';
+import { resolveLibraryBootstrap } from './storage/bootstrapLibrary';
 import { Icon } from './ui/Icon';
 import { ImportProgressPill } from './ui/ImportProgressPill';
 import { MapContextMenu } from './ui/MapContextMenu';
@@ -139,6 +140,8 @@ export function App() {
     useUi();
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [storageRecovery, setStorageRecovery] = useState(false);
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   // Anything worth telling the user that isn't the share-load error: a stored
   // system that wouldn't parse, a dialog that failed to load.
   const [notice, setNotice] = useState<string | null>(null);
@@ -177,26 +180,33 @@ export function App() {
     // can act on and someone quietly leaving.
     let disposed = false;
     void (async () => {
-      const activeId = getActiveId();
-      const active = activeId ? await loadSystemEntry(activeId) : { status: 'missing' as const };
-      let system = active.status === 'ok' ? active.system : null;
-      if (active.status === 'corrupt' && !disposed) setNotice(corruptSystemNotice);
-      if (!system) system = await migrateLegacySingleSlot();
-      if (!system) {
-        const entries = await listLibrary();
-        if (entries.length > 0) system = await loadSystemById(entries[0].id);
+      const result = await resolveLibraryBootstrap({
+        activeId: getActiveId(),
+        library: {
+          load: loadSystemEntry,
+          list: listLibrary,
+          migrateLegacySingleSlot,
+        },
+        createSystem: createEmptySystem,
+      });
+      if (disposed) return;
+      if (result.status === 'unavailable') {
+        // Do not create a blank replacement or change activeId. IndexedDB may
+        // contain the only copy of an agency-scale document and recover on
+        // the next attempt.
+        setStorageRecovery(true);
+        setReady(false);
+        return;
       }
-      let isBrandNew = false;
-      if (!system) {
-        system = createEmptySystem();
-        isBrandNew = true;
-      }
+      const { system, isBrandNew } = result;
+      if (result.encounteredCorruption) setNotice(corruptSystemNotice);
       // A loaded system is already durable, and legacy reads migrate as part
       // of loading. Only a genuinely new document needs a bootstrap write;
       // rewriting an RTC-sized system here would delay first paint for no
       // additional safety.
       if (isBrandNew) report(await saveToLibrary(system));
       if (disposed) return;
+      setStorageRecovery(false);
       setActiveId(system.id);
       store.getState().setSystem(system, { readOnly: false });
       if (isBrandNew) store.getState().setTool('way');
@@ -209,7 +219,7 @@ export function App() {
     return () => {
       disposed = true;
     };
-  }, [store, report, openDialog]);
+  }, [store, report, openDialog, bootstrapAttempt]);
 
   // Content and camera changes share one debounce/write lane. A pan that lands
   // next to an edit therefore serializes the document once, not once for each
@@ -226,6 +236,22 @@ export function App() {
   }, [store, report, ready]);
 
   const flushPendingSave = useCallback(() => persistence.current?.flush(), []);
+  const recordSaveOutcome = useCallback(
+    (id: string, outcome: SaveOutcome) => {
+      const coordinator = persistence.current;
+      if (coordinator) coordinator.recordOutcome(id, outcome);
+      else report(outcome);
+    },
+    [report],
+  );
+  const discardPendingSave = useCallback(
+    (id: string) => {
+      const coordinator = persistence.current;
+      if (coordinator) coordinator.discard(id);
+      else report('saved');
+    },
+    [report],
+  );
 
   // Service worker registration + update lifecycle — never wired into
   // embed's own entry point (see vite.config.ts).
@@ -272,6 +298,20 @@ export function App() {
   const banner = saveMessage ? (
     <div className="app-banner" role="alert">
       {saveMessage}
+    </div>
+  ) : storageRecovery ? (
+    <div className="app-banner app-banner-action" role="alert">
+      <span>
+        Your saved systems are temporarily unavailable. Nothing was replaced; retry when browser
+        storage is available again.
+      </span>
+      <button
+        type="button"
+        className="ghost-btn"
+        onClick={() => setBootstrapAttempt((attempt) => attempt + 1)}
+      >
+        Try again
+      </button>
     </div>
   ) : loadError ? (
     <div className="app-banner" role="alert">
@@ -321,6 +361,22 @@ export function App() {
       </button>
     </div>
   ) : null;
+
+  if (!ready) {
+    return (
+      <div className="app" data-zen={uiHidden || undefined}>
+        <div className="absolute inset-x-0 top-3 z-20 flex justify-center px-3">
+          <div className="max-w-[560px]">
+            {banner ?? (
+              <div className="app-banner" role="status" aria-live="polite">
+                Opening your saved systems…
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     // data-zen cascades to every opted-in chrome element via CSS attribute
@@ -403,6 +459,8 @@ export function App() {
             onClose={closeDialog}
             onCorrupt={() => setNotice(corruptOpenNotice)}
             flushPendingSave={flushPendingSave}
+            recordSaveOutcome={recordSaveOutcome}
+            discardPendingSave={discardPendingSave}
           />
         </LazyDialog>
       )}

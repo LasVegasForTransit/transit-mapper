@@ -147,10 +147,16 @@ interface GestureLifecycleProbe {
   onEnd: () => void;
 }
 
+interface DirectManipulationLifecycleProbe {
+  onStart: () => void;
+  onEnd: () => void;
+}
+
 function attach(
   map: ReturnType<typeof createMap>,
   store: ReturnType<typeof createEditorStore>,
   gesture?: GestureLifecycleProbe,
+  directManipulation?: DirectManipulationLifecycleProbe,
 ) {
   return attachInteractions(map as unknown as MLMap, store, {
     openShortcuts() {},
@@ -162,6 +168,8 @@ function attach(
     openContextMenu() {},
     onEditGestureStart: gesture?.onStart,
     onEditGestureEnd: gesture?.onEnd,
+    onDirectManipulationStart: directManipulation?.onStart,
+    onDirectManipulationEnd: directManipulation?.onEnd,
   });
 }
 
@@ -254,11 +262,43 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('select');
     const map = createMap(true);
     const lifecycle: string[] = [];
-    const detach = attach(map, store, {
-      onStart: (targets) =>
-        lifecycle.push(
-          `start:${targets.wayPoints?.[0]?.wayId}:${targets.wayPoints?.[0]?.pointIndex}`,
-        ),
+    const detach = attach(
+      map,
+      store,
+      {
+        onStart: (targets) =>
+          lifecycle.push(
+            `edit-start:${targets.wayPoints?.[0]?.wayId}:${targets.wayPoints?.[0]?.pointIndex}`,
+          ),
+        onEnd: () => lifecycle.push('edit-end'),
+      },
+      {
+        onStart: () => lifecycle.push('direct-start'),
+        onEnd: () => lifecycle.push('direct-end'),
+      },
+    );
+
+    map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
+    map.fire('mousemove', mouseEvent(map, { x: 140, y: 110 }));
+    scheduler.pump();
+
+    expect(lifecycle).toEqual(['direct-start', 'edit-start:erasable:1']);
+
+    map.fire('mouseup', mouseEvent(map, { x: 140, y: 110 }));
+
+    expect(lifecycle).toEqual(['direct-start', 'edit-start:erasable:1', 'edit-end', 'direct-end']);
+    detach();
+  });
+
+  it('reports the exact boundary around a camera drag', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('select');
+    const map = createMap();
+    const lifecycle: string[] = [];
+    const detach = attach(map, store, undefined, {
+      onStart: () => lifecycle.push('start'),
       onEnd: () => lifecycle.push('end'),
     });
 
@@ -266,11 +306,11 @@ describe('pointer work coalescing', () => {
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 110 }));
     scheduler.pump();
 
-    expect(lifecycle).toEqual(['start:erasable:1']);
+    expect(lifecycle).toEqual(['start']);
 
     map.fire('mouseup', mouseEvent(map, { x: 140, y: 110 }));
 
-    expect(lifecycle).toEqual(['start:erasable:1', 'end']);
+    expect(lifecycle).toEqual(['start', 'end']);
     detach();
   });
 });

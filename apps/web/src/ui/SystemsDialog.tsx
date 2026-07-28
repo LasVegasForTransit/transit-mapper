@@ -4,16 +4,15 @@ import { createEmptySystem, forkSystem } from '@transitmapper/core/model/seriali
 import {
   deleteFromLibrary,
   listLibrary,
-  loadSystemById,
   loadSystemEntry,
   saveToLibrary,
   type LibraryEntry,
+  type SaveOutcome,
 } from '../storage/browserLibrary';
 import { setActiveId } from '../storage/localStore';
 import { deleteAfterFlush } from '../storage/deleteAfterFlush';
 import { getMyShare } from '../share/myShares';
 import { stopSharing } from '../share/api';
-import { useSaveStatus } from './SaveStatusProvider';
 import { blurOnEnter } from './formUtils';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
@@ -33,6 +32,8 @@ function relativeTime(ts: number): string {
 interface SystemsDialogProps {
   onClose: () => void;
   flushPendingSave: () => void | Promise<void>;
+  recordSaveOutcome: (id: string, outcome: SaveOutcome) => void;
+  discardPendingSave: (id: string) => void;
   /** Reports a stored system that exists but won't parse, so the app can say
    *  so — the row stays in the list and its bytes stay on disk. */
   onCorrupt: () => void;
@@ -42,30 +43,45 @@ interface SystemsDialogProps {
  *  system its own row, switch between them without losing anything, rename/
  *  duplicate/delete in place. See storage/localStore.ts for the storage
  *  shape this reads and writes. */
-export function SystemsDialog({ onClose, onCorrupt, flushPendingSave }: SystemsDialogProps) {
+export function SystemsDialog({
+  onClose,
+  onCorrupt,
+  flushPendingSave,
+  recordSaveOutcome,
+  discardPendingSave,
+}: SystemsDialogProps) {
   const currentId = useEditor((s) => s.system.id);
   const currentName = useEditor((s) => s.system.name);
   const setName = useEditor((s) => s.setName);
   const setSystem = useEditor((s) => s.setSystem);
-  // Every write below goes through this. Without it a rename or duplicate
-  // that hits a full quota simply doesn't happen, and the row silently snaps
-  // back to its old value with no explanation anywhere.
-  const { report } = useSaveStatus();
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [libraryUnavailable, setLibraryUnavailable] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
-  const refresh = async () => {
-    setEntries(await listLibrary());
+  const refresh = async (): Promise<LibraryEntry[] | null> => {
+    const result = await listLibrary();
     setLoading(false);
+    if (result.status === 'unavailable') {
+      setLibraryUnavailable(true);
+      return null;
+    }
+    setLibraryUnavailable(false);
+    setEntries(result.entries);
+    return result.entries;
   };
 
   useEffect(() => {
     let disposed = false;
-    void listLibrary().then((next) => {
+    void listLibrary().then((result) => {
       if (!disposed) {
-        setEntries(next);
         setLoading(false);
+        if (result.status === 'unavailable') {
+          setLibraryUnavailable(true);
+        } else {
+          setLibraryUnavailable(false);
+          setEntries(result.entries);
+        }
       }
     });
     return () => {
@@ -78,6 +94,10 @@ export function SystemsDialog({ onClose, onCorrupt, flushPendingSave }: SystemsD
     // A row whose bytes won't parse is listed, clickable, and used to do
     // absolutely nothing when clicked — forever, with no message.
     const result = await loadSystemEntry(id);
+    if (result.status === 'unavailable') {
+      setLibraryUnavailable(true);
+      return;
+    }
     if (result.status === 'corrupt') {
       onCorrupt();
       return;
@@ -101,18 +121,27 @@ export function SystemsDialog({ onClose, onCorrupt, flushPendingSave }: SystemsD
       ),
     );
     void (async () => {
-      const system = await loadSystemById(entry.id);
-      if (!system) return;
-      const outcome = await saveToLibrary({ ...system, name, updatedAt });
-      report(outcome);
+      const loaded = await loadSystemEntry(entry.id);
+      if (loaded.status === 'unavailable') {
+        setLibraryUnavailable(true);
+        return;
+      }
+      if (loaded.status !== 'ok') return;
+      const outcome = await saveToLibrary({ ...loaded.system, name, updatedAt });
+      recordSaveOutcome(entry.id, outcome);
       if (outcome !== 'saved') await refresh();
     })();
   };
 
   const duplicate = async (entry: LibraryEntry) => {
-    const system = await loadSystemById(entry.id);
-    if (!system) return;
-    report(await saveToLibrary(forkSystem(system)));
+    const loaded = await loadSystemEntry(entry.id);
+    if (loaded.status === 'unavailable') {
+      setLibraryUnavailable(true);
+      return;
+    }
+    if (loaded.status !== 'ok') return;
+    const duplicateSystem = forkSystem(loaded.system);
+    recordSaveOutcome(duplicateSystem.id, await saveToLibrary(duplicateSystem));
     await refresh();
   };
 
@@ -143,15 +172,27 @@ export function SystemsDialog({ onClose, onCorrupt, flushPendingSave }: SystemsD
     const outcome = await deleteAfterFlush(id, {
       flush: flushPendingSave,
       deleteDocument: deleteFromLibrary,
+      discardDocument: discardPendingSave,
     });
-    report(outcome);
+    if (outcome !== 'saved') recordSaveOutcome(id, outcome);
     if (outcome === 'saved' && id === currentId) {
-      const remaining = await listLibrary();
-      const next =
-        remaining.length > 0 ? await loadSystemById(remaining[0].id) : createEmptySystem();
-      if (next) {
+      const remaining = await refresh();
+      if (!remaining) return;
+      if (remaining.length === 0) {
+        const next = createEmptySystem();
         setActiveId(next.id);
         setSystem(next, { readOnly: false });
+      } else {
+        const loaded = await loadSystemEntry(remaining[0].id);
+        if (loaded.status === 'unavailable') {
+          setLibraryUnavailable(true);
+          return;
+        }
+        if (loaded.status === 'corrupt') onCorrupt();
+        if (loaded.status === 'ok') {
+          setActiveId(loaded.system.id);
+          setSystem(loaded.system, { readOnly: false });
+        }
       }
     }
     setConfirmingId(null);
@@ -170,6 +211,14 @@ export function SystemsDialog({ onClose, onCorrupt, flushPendingSave }: SystemsD
 
       <ul className="systems-list" aria-busy={loading}>
         {loading && <li className="panel-hint">Loading saved systems…</li>}
+        {libraryUnavailable && (
+          <li className="panel-hint">
+            Saved systems are temporarily unavailable.{' '}
+            <button type="button" className="ghost-btn" onClick={() => void refresh()}>
+              Try again
+            </button>
+          </li>
+        )}
         {entries.map((entry) => {
           const isActive = entry.id === currentId;
           const isConfirming = confirmingId === entry.id;
@@ -240,7 +289,13 @@ export function SystemsDialog({ onClose, onCorrupt, flushPendingSave }: SystemsD
         })}
       </ul>
 
-      <button type="button" className="ghost-btn" style={{ marginTop: 8 }} onClick={startNew}>
+      <button
+        type="button"
+        className="ghost-btn"
+        style={{ marginTop: 8 }}
+        onClick={startNew}
+        disabled={libraryUnavailable}
+      >
         <Icon name="plus" size={17} /> New system
       </button>
     </Modal>

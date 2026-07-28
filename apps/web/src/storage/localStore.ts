@@ -1,4 +1,5 @@
 import { parseSystem } from '@transitmapper/core/model/serialize';
+import { shortId } from '@transitmapper/core/model/ids';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 
 // A real library of saved systems, replacing the old single-slot autosave
@@ -10,7 +11,11 @@ const LEGACY_KEY = 'transitmapper:system'; // pre-library single slot
 const LIBRARY_INDEX_KEY = 'transitmapper:library';
 const ACTIVE_ID_KEY = 'transitmapper:activeId';
 const ONBOARDING_SEEN_KEY = 'transitmapper:onboardingSeen';
+const INDEXED_DB_HISTORY_KEY = 'transitmapper:indexedDbLibrary';
+const STORAGE_PROBE_KEY = 'transitmapper:storageProbe';
 const SYSTEM_KEY_PREFIX = 'transitmapper:system:';
+const EMERGENCY_SNAPSHOT_FIELD = '__transitmapperEmergencySnapshot';
+const LEGACY_AUTHORITATIVE_SNAPSHOT_ID = 'legacy-emergency-snapshot';
 const systemKey = (id: string) => `${SYSTEM_KEY_PREFIX}${id}`;
 
 export interface LibraryEntry {
@@ -118,6 +123,8 @@ export interface SaveToLibraryOptions {
   onMeasure?: (measurement: SaveMeasurement) => void;
   /** Deterministic clock seam for tests; performance.now in real measurements. */
   now?: () => number;
+  /** Keep recovery authority in the same atomic document write. */
+  authoritativeSnapshotId?: string;
 }
 
 /** Quota exhaustion reports differently across browsers, and pre-DOMException
@@ -210,7 +217,15 @@ export function saveToLibrary(
   let serializedAt = startedAt;
   let documentWrittenAt = startedAt;
   try {
-    serialized = JSON.stringify(system);
+    // A camera-only save deliberately keeps updatedAt unchanged. The marker
+    // therefore travels in the same localStorage value as the document: a
+    // separate metadata write could be lost at termination or quota limits,
+    // making an older IndexedDB record look equally current on the next load.
+    serialized = JSON.stringify(
+      options.authoritativeSnapshotId
+        ? { ...system, [EMERGENCY_SNAPSHOT_FIELD]: options.authoritativeSnapshotId }
+        : system,
+    );
     serializedAt = measuring ? now() : 0;
     localStorage.setItem(systemKey(system.id), serialized);
     documentWrittenAt = measuring ? now() : 0;
@@ -238,6 +253,36 @@ export function saveToLibrary(
     outcome,
   });
   return outcome;
+}
+
+/** A synchronous recovery copy used when IndexedDB cannot commit. Its unique
+ * marker lets a later IndexedDB record prove exactly which fallback it
+ * superseded, even when undo moved the document timestamp backward. */
+export function saveAuthoritativeToLibrary(system: TransitSystem): SaveOutcome {
+  return saveToLibrary(system, { authoritativeSnapshotId: shortId(16) });
+}
+
+export function getAuthoritativeSnapshotId(id: string): string | null {
+  try {
+    const raw = localStorage.getItem(systemKey(id));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const marker = parsed[EMERGENCY_SNAPSHOT_FIELD];
+    if (typeof marker === 'string' && marker.length > 0) return marker;
+    // Read the boolean marker written by early performance-audit builds.
+    return marker === true ? LEGACY_AUTHORITATIVE_SNAPSHOT_ID : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Synchronous close-time recovery uses the same authoritative copy format as
+ * an IndexedDB-failure fallback. */
+export const saveEmergencyToLibrary = saveAuthoritativeToLibrary;
+
+/** Compatibility predicate for tests and callers that only need presence. */
+export function isEmergencyLibraryCopy(id: string): boolean {
+  return getAuthoritativeSnapshotId(id) !== null;
 }
 
 /**
@@ -272,6 +317,43 @@ export function setActiveId(id: string): void {
     localStorage.setItem(ACTIVE_ID_KEY, id);
   } catch {
     // ignore
+  }
+}
+
+/** A read can succeed in browser modes that reject every write. Bootstrap
+ * uses this probe only when IndexedDB is unavailable and no local documents
+ * exist, to decide whether a genuinely new localStorage-only library is
+ * viable without confusing a failed IndexedDB read with an empty library. */
+export function isLocalStorageAvailable(): boolean {
+  try {
+    localStorage.setItem(STORAGE_PROBE_KEY, '1');
+    localStorage.removeItem(STORAGE_PROBE_KEY);
+    return true;
+  } catch {
+    try {
+      localStorage.removeItem(STORAGE_PROBE_KEY);
+    } catch {
+      // Storage is unavailable; cleanup cannot improve that result.
+    }
+    return false;
+  }
+}
+
+export function hasIndexedDbLibraryHistory(): boolean {
+  try {
+    return localStorage.getItem(INDEXED_DB_HISTORY_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setIndexedDbLibraryHistory(hasDocuments: boolean): void {
+  try {
+    if (hasDocuments) localStorage.setItem(INDEXED_DB_HISTORY_KEY, '1');
+    else localStorage.removeItem(INDEXED_DB_HISTORY_KEY);
+  } catch {
+    // The active-id pointer still protects the common migrated-document
+    // recovery path when this small advisory marker cannot be written.
   }
 }
 

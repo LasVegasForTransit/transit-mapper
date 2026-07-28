@@ -138,11 +138,13 @@ function createGate(
     visible?: boolean;
     viewMode?: 'network' | 'infrastructure' | 'diagram';
     pinnedPeriod?: string;
+    directManipulationActive?: boolean;
   } = {},
 ) {
   let visible = options.visible ?? true;
   let viewMode = options.viewMode ?? 'network';
   let pinnedPeriod = options.pinnedPeriod;
+  let directManipulationActive = options.directManipulationActive ?? false;
   const listeners = new Set<() => void>();
   const invalidate = () => {
     for (const listener of listeners) listener();
@@ -151,6 +153,7 @@ function createGate(
     isVisible: () => visible,
     viewMode: () => viewMode,
     pinnedPeriod: () => pinnedPeriod,
+    isDirectManipulationActive: () => directManipulationActive,
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => {
@@ -167,6 +170,10 @@ function createGate(
     },
     setPinnedPeriod(next: string | undefined) {
       pinnedPeriod = next;
+      invalidate();
+    },
+    setDirectManipulationActive(next: boolean) {
+      directManipulationActive = next;
       invalidate();
     },
   };
@@ -412,6 +419,45 @@ describe('vehicle animation scheduling', () => {
     expect(network.updates).toHaveLength(1);
     expect(network.updates[0].features.length).toBeGreaterThan(0);
     expect(infrastructure.updates).toHaveLength(0);
+
+    detach();
+  });
+
+  it('holds vehicle sources static during direct manipulation and catches the clock up on resume', () => {
+    const scheduled = installScheduler();
+    const store = createEditorStore();
+    store.getState().setSystem(runningSystem());
+    const clock = createSimClock({ speedId: 'realtime' });
+    const startedAt = clock.now();
+    const { map, network } = createMap();
+    const gate = createGate();
+
+    const detach = attachVehicleAnimation(map, store, clock, gate);
+    scheduled.pumpFrame(0);
+    expect(network.updates).toHaveLength(1);
+
+    gate.setDirectManipulationActive(true);
+
+    expect(network.updates).toHaveLength(1);
+    expect(scheduled.raf.size).toBe(0);
+    expect(clock.now()).toBe(startedAt);
+
+    map.fire('moveend');
+    expect(scheduled.raf.size).toBe(0);
+
+    scheduled.setNow(240);
+    const system = store.getState().system;
+    store.getState().setSystem({ ...system, name: 'Edited while dragging' });
+    expect(network.updates).toHaveLength(1);
+    expect(scheduled.raf.size).toBe(0);
+
+    scheduled.setNow(1_040);
+    gate.setDirectManipulationActive(false);
+    expect(scheduled.raf.size).toBe(1);
+    scheduled.pumpFrame(1_040);
+
+    expect(network.updates).toHaveLength(2);
+    expect(clock.now()).toBe(startedAt + 1_040);
 
     detach();
   });

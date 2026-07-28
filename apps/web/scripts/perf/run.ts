@@ -20,11 +20,23 @@ import {
   PERF_SCENARIO_LIST,
 } from '../../perf.config';
 import { evaluatePerfBudgets } from '../../src/perf/budget';
+import { summarizeDisplayCadence } from '../../src/perf/calibration';
 import { generatePerfFixture } from '../../src/perf/fixtures';
 import { summarizeGesture, type RawGestureMeasurements } from '../../src/perf/gestureStats';
+import {
+  directGestureGateMeasurements,
+  type DirectGestureMeasurements,
+} from '../../src/perf/gestureGate';
 import { classifyPersistence } from '../../src/perf/persistencePolicy';
 import { createPerfReport, createUnavailablePerfReport } from '../../src/perf/report';
 import { PERF_SCENARIOS } from '../../src/perf/scenarios';
+import { soakViolations, type SoakSnapshot } from '../../src/perf/soakPolicy';
+import { FIRST_SYSTEM_MAP_PAINT_MARK } from '../../src/perf/mapPaintMark';
+import {
+  cameraChanged,
+  drawChangedSystem,
+  projectedPointChanged,
+} from '../../src/perf/journeyProof';
 import type {
   PerfBundleEntry,
   PerfBudgetEvaluation,
@@ -35,6 +47,7 @@ import type {
   PerfNetworkSnapshot,
   PerfPhaseCounters,
   PerfPersistenceProbe,
+  PerfProductionPersistenceProbe,
   PerfReport,
   PerfProfileId,
   PerfProtocol,
@@ -60,11 +73,6 @@ interface RunningPreview {
   child: ChildProcess;
   url: string;
   logs: string[];
-}
-
-interface PerfInitPayload {
-  activeId: string;
-  serializedSystem: string;
 }
 
 interface BrowserMetricState {
@@ -94,18 +102,18 @@ interface GenericGestureState {
   longTaskMs: number[];
   active: boolean;
   lastFrameAt: number;
+  startedAt: number;
   sourceUploadsBefore: number | null;
 }
 
-interface GenericGestureMeasurements {
-  inputToNextPaintMs: number[];
-  animationFrameMs: number[];
-  longTaskMs: number[];
-  sourceUploadCount: number | null;
+interface GenericGestureMeasurements extends DirectGestureMeasurements {
+  paintedFrameMs: number[] | null;
   actions: Array<'camera-drag' | 'entity-drag' | 'draw'>;
+  productionPersistence: PerfProductionPersistenceProbe | null;
 }
 
 interface PerfPageWindow extends Window {
+  __TRANSITMAPPER_PERF_RUN__?: boolean;
   __genericPerfGesture?: GenericGestureState;
   __genericPerfFrame?: FrameRequestCallback;
   __panGestureBench?: (options?: {
@@ -115,10 +123,29 @@ interface PerfPageWindow extends Window {
   }) => Promise<RawGestureMeasurements>;
   __perfSourceUploadCount?: () => number;
   __perfProjectLngLat?: (coord: LngLat) => { x: number; y: number };
+  __perfStationSnapshot?: (
+    stationId: string,
+  ) => { coord: LngLat; revision: number; wayCount: number } | null;
+  __perfCameraSnapshot?: () => { center: LngLat; zoom: number };
+  __perfOverlaySnapshot?: () => OfflineOverlaySnapshot;
+  __perfStartPaintedFrameCapture?: () => void;
+  __perfStopPaintedFrameCapture?: () => number[];
   __perfWebGlContextCount?: number;
   __mapProjectionCounts?: () => PerfPhaseCounters & {
     sourceUploadCount: number;
   };
+  __perfProductionPersistence?: BrowserProductionPersistenceState;
+}
+
+interface BrowserProductionPersistenceCycle {
+  workerStartedAt: number;
+  workerCompletedAt: number | null;
+  indexedDbStartedAt: number | null;
+  indexedDbCompletedAt: number | null;
+}
+
+interface BrowserProductionPersistenceState {
+  cycles: BrowserProductionPersistenceCycle[];
 }
 
 interface EventTimingMeasurement {
@@ -179,12 +206,37 @@ interface RunScenarioOptions {
 }
 
 interface OfflineRuntimeReport {
-  schemaVersion: 1;
+  schemaVersion: 3;
   generatedAt: string;
   cacheEvicted: true;
   offline: true;
   serviceWorkerControlled: true;
   documentName: string;
+  storageMigration: {
+    indexedDbDocument: true;
+    indexedDbLibraryEntry: true;
+    legacyDocumentRemoved: true;
+  };
+  overlay: OfflineOverlaySnapshot;
+  edit: OfflineEditProof;
+}
+
+interface OfflineOverlaySnapshot {
+  sourceExists: boolean;
+  layerExists: boolean;
+  sourceLoaded: boolean;
+  featureCount: number;
+}
+
+interface OfflineStationSnapshot {
+  coord: LngLat;
+  revision: number;
+}
+
+interface OfflineEditProof {
+  stationId: string;
+  before: OfflineStationSnapshot;
+  after: OfflineStationSnapshot;
 }
 
 interface ListenerResult {
@@ -197,17 +249,8 @@ interface RuntimeObjectResult {
   };
 }
 
-interface SoakSnapshot {
-  elapsedMs: number;
-  jsHeapUsedBytes: number;
-  domNodeCount: number;
-  listenerCount: number;
-  workerCount: number;
-  webGlContextCount: number;
-}
-
 interface SoakReport {
-  schemaVersion: 1;
+  schemaVersion: 2;
   generatedAt: string;
   durationMs: number;
   scenarioId: 'rtc';
@@ -218,6 +261,8 @@ interface SoakReport {
   status: 'pass' | 'fail';
   editCycles: number;
   exportDialogCycles: number;
+  pngDownloadCount: number;
+  svgDownloadCount: number;
   webGlContextCountSource: 'created-minus-context-lost-events';
 }
 
@@ -228,6 +273,7 @@ const REPORT_FILENAME = 'report.json';
 const BUNDLE_REPORT_PATH = resolve(APP_ROOT, 'dist/performance/bundle-report.json');
 const PWA_REPORT_PATH = resolve(APP_ROOT, 'dist/performance/pwa-report.json');
 const PWA_RUNTIME_REPORT_FILENAME = 'pwa-runtime-report.json';
+const DISPLAY_CADENCE_SAMPLE_COUNT = 60;
 let activeProtocol: PerfProtocol = PERF_PROTOCOL;
 
 function usage(): string {
@@ -426,15 +472,15 @@ async function configureProtocol(session: CDPSession): Promise<void> {
   });
 }
 
-async function measurePersistencePhases(
+async function measureCompatibilityPersistenceDiagnostic(
   page: Page,
   session: CDPSession,
   previewUrl: string,
   serializedSystem: string,
 ): Promise<PerfPersistenceProbe> {
-  // Use the real origin and unmodified Storage prototype for this probe. The
-  // fixture shim is installed only afterwards so it cannot turn a quota
-  // failure into an apparent successful save.
+  // This deliberately measures the legacy compatibility boundary, not the
+  // application save lane. Production Worker + IndexedDB phases are captured
+  // from the real editor gesture below.
   await page.goto(`${previewUrl}/favicon.svg`, {
     waitUntil: 'load',
     timeout: 60_000,
@@ -471,48 +517,92 @@ async function measurePersistencePhases(
   return classifyPersistence(measured);
 }
 
-async function installMeasurementState(
+async function deletePerformanceDatabase(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolvePromise, reject) => {
+        const request = indexedDB.deleteDatabase('transitmapper-documents');
+        request.onsuccess = () => resolvePromise();
+        request.onerror = () => reject(request.error);
+        request.onblocked = () =>
+          reject(new DOMException('Performance database reset was blocked.', 'InvalidStateError'));
+      }),
+  );
+}
+
+async function seedIndexedDbFixture(
   page: Page,
-  system: string,
+  serializedSystem: string,
+  fixture: { id: string; name: string; updatedAt: number },
+): Promise<void> {
+  await deletePerformanceDatabase(page);
+  await page.evaluate(
+    async (seed) => {
+      localStorage.clear();
+      localStorage.setItem('transitmapper:activeId', seed.id);
+      localStorage.setItem('transitmapper:onboardingSeen', '1');
+      localStorage.setItem('transitmapper:indexedDbLibrary', '1');
+      const database = await new Promise<IDBDatabase>((resolvePromise, reject) => {
+        const request = indexedDB.open('transitmapper-documents', 1);
+        request.onupgradeneeded = () => {
+          const opened = request.result;
+          if (!opened.objectStoreNames.contains('systems')) {
+            opened.createObjectStore('systems', { keyPath: 'id' });
+          }
+          if (!opened.objectStoreNames.contains('library')) {
+            opened.createObjectStore('library', { keyPath: 'id' });
+          }
+        };
+        request.onsuccess = () => resolvePromise(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise<void>((resolvePromise, reject) => {
+        const transaction = database.transaction(['systems', 'library'], 'readwrite');
+        transaction.objectStore('systems').put({
+          id: seed.id,
+          name: seed.name,
+          updatedAt: seed.updatedAt,
+          serialized: seed.serializedSystem,
+        });
+        transaction.objectStore('library').put({
+          id: seed.id,
+          name: seed.name,
+          updatedAt: seed.updatedAt,
+        });
+        transaction.oncomplete = () => resolvePromise();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      });
+      database.close();
+    },
+    { ...fixture, serializedSystem },
+  );
+}
+
+async function seedLegacyFixture(
+  page: Page,
+  serializedSystem: string,
   activeId: string,
 ): Promise<void> {
-  const payload: PerfInitPayload = {
-    activeId,
-    serializedSystem: system,
-  };
-  await page.addInitScript((init: PerfInitPayload) => {
+  await deletePerformanceDatabase(page);
+  await page.evaluate(
+    (seed) => {
+      localStorage.clear();
+      localStorage.setItem('transitmapper:activeId', seed.activeId);
+      localStorage.setItem(`transitmapper:system:${seed.activeId}`, seed.serializedSystem);
+      localStorage.setItem('transitmapper:onboardingSeen', '1');
+    },
+    { activeId, serializedSystem },
+  );
+}
+
+async function installPerformanceInstrumentation(page: Page): Promise<void> {
+  await page.addInitScript(() => {
     (
       window as Window & {
         __TRANSITMAPPER_PERF_RUN__?: boolean;
       }
     ).__TRANSITMAPPER_PERF_RUN__ = true;
-    const seeded = new Map<string, string>([
-      ['transitmapper:activeId', init.activeId],
-      [`transitmapper:system:${init.activeId}`, init.serializedSystem],
-      ['transitmapper:onboardingSeen', '1'],
-    ]);
-    const local = window.localStorage;
-    const originalGetItem = Storage.prototype.getItem;
-    const originalSetItem = Storage.prototype.setItem;
-    const originalRemoveItem = Storage.prototype.removeItem;
-    Storage.prototype.getItem = function (key: string): string | null {
-      if (this === local && seeded.has(key)) return seeded.get(key) ?? null;
-      return originalGetItem.call(this, key);
-    };
-    Storage.prototype.setItem = function (key: string, value: string): void {
-      if (this === local) {
-        seeded.set(key, String(value));
-        return;
-      }
-      originalSetItem.call(this, key, value);
-    };
-    Storage.prototype.removeItem = function (key: string): void {
-      if (this === local) {
-        seeded.delete(key);
-        return;
-      }
-      originalRemoveItem.call(this, key);
-    };
 
     const state: BrowserMetricState = {
       largestContentfulPaintMs: 0,
@@ -538,12 +628,70 @@ async function installMeasurementState(
       for (const entry of list.getEntries()) state.longTaskTotalMs += entry.duration;
     }).observe({ type: 'longtask', buffered: true });
 
-    const canvasTimer = window.setInterval(() => {
-      if (!document.querySelector('.maplibregl-canvas')) return;
-      state.firstMapCanvasMs = performance.now();
-      window.clearInterval(canvasTimer);
-    }, 16);
-  }, payload);
+    const persistence: BrowserProductionPersistenceState = { cycles: [] };
+    (window as PerfPageWindow).__perfProductionPersistence = persistence;
+
+    if (typeof Worker !== 'undefined') {
+      const nativeWorker = Worker;
+      const nativePostMessage = Worker.prototype.postMessage;
+      window.Worker = new Proxy(nativeWorker, {
+        construct: (target, argumentsList, newTarget) => {
+          const worker = Reflect.construct(target, argumentsList, newTarget) as Worker;
+          const options = argumentsList[1] as WorkerOptions | undefined;
+          if (options?.name !== 'transitmapper-storage-serializer') return worker;
+          let cycle: BrowserProductionPersistenceCycle | null = null;
+          worker.postMessage = new Proxy(nativePostMessage, {
+            apply: (postTarget, thisArgument, postArguments) => {
+              cycle = {
+                workerStartedAt: performance.now(),
+                workerCompletedAt: null,
+                indexedDbStartedAt: null,
+                indexedDbCompletedAt: null,
+              };
+              persistence.cycles.push(cycle);
+              return Reflect.apply(postTarget, thisArgument, postArguments);
+            },
+          });
+          worker.addEventListener('message', () => {
+            if (cycle) cycle.workerCompletedAt = performance.now();
+          });
+          return worker;
+        },
+      });
+    }
+
+    if (typeof IDBDatabase !== 'undefined') {
+      const nativeTransaction = IDBDatabase.prototype.transaction;
+      IDBDatabase.prototype.transaction = new Proxy(nativeTransaction, {
+        apply: (target, thisArgument, argumentsList) => {
+          const transaction = Reflect.apply(target, thisArgument, argumentsList) as IDBTransaction;
+          const stores =
+            typeof argumentsList[0] === 'string'
+              ? [argumentsList[0]]
+              : Array.from(argumentsList[0] as Iterable<string>);
+          if (argumentsList[1] === 'readwrite' && stores.includes('systems')) {
+            const cycle = [...persistence.cycles]
+              .reverse()
+              .find(
+                (candidate) =>
+                  candidate.workerCompletedAt !== null && candidate.indexedDbStartedAt === null,
+              );
+            if (cycle) {
+              cycle.indexedDbStartedAt = performance.now();
+              transaction.addEventListener(
+                'complete',
+                () => {
+                  cycle.indexedDbCompletedAt = performance.now();
+                },
+                { once: true },
+              );
+            }
+          }
+          return transaction;
+        },
+      });
+    }
+  });
 }
 
 async function configureSurfaceRoutes(
@@ -610,7 +758,7 @@ async function stopTrace(session: CDPSession, path: string): Promise<void> {
 }
 
 async function collectStartupMetrics(page: Page): Promise<BrowserStartupSnapshot> {
-  return page.evaluate(() => {
+  return page.evaluate((mapPaintMarkName) => {
     const navigation = performance.getEntriesByType('navigation')[0] as
       PerformanceNavigationTiming | undefined;
     const firstContentfulPaint = performance.getEntriesByName('first-contentful-paint')[0];
@@ -619,7 +767,8 @@ async function collectStartupMetrics(page: Page): Promise<BrowserStartupSnapshot
     if (!navigation || !firstContentfulPaint || !state) {
       throw new Error('Required browser performance entries were not recorded.');
     }
-    if (state.largestContentfulPaintMs <= 0 || state.firstMapCanvasMs === null) {
+    const firstMapPaint = performance.getEntriesByName(mapPaintMarkName, 'mark')[0];
+    if (state.largestContentfulPaintMs <= 0 || !firstMapPaint) {
       throw new Error('The editor never produced a largest paint and map canvas.');
     }
     const origin = window.location.origin;
@@ -639,7 +788,7 @@ async function collectStartupMetrics(page: Page): Promise<BrowserStartupSnapshot
         loadMs: navigation.loadEventEnd,
         firstContentfulPaintMs: firstContentfulPaint.startTime,
         largestContentfulPaintMs: state.largestContentfulPaintMs,
-        firstMapCanvasMs: state.firstMapCanvasMs,
+        firstMapCanvasMs: firstMapPaint.startTime,
         cumulativeLayoutShift: state.cumulativeLayoutShift,
         longTaskTotalMs: state.longTaskTotalMs,
         transferBytes,
@@ -651,7 +800,7 @@ async function collectStartupMetrics(page: Page): Promise<BrowserStartupSnapshot
         transferBytes,
       },
     };
-  });
+  }, FIRST_SYSTEM_MAP_PAINT_MARK);
 }
 
 async function collectMemory(
@@ -678,15 +827,19 @@ async function collectMemory(
 async function runDirectManipulation(
   page: Page,
   scenario: PerfScenario,
-  entityCoord?: LngLat,
+  entityId?: string,
+  entityName?: string,
 ): Promise<GenericGestureMeasurements> {
   await page.evaluate(() => {
+    const persistence = (window as PerfPageWindow).__perfProductionPersistence;
+    if (persistence) persistence.cycles.length = 0;
     const state: GenericGestureState = {
       eventTimings: [],
       animationFrameMs: [],
       longTaskMs: [],
       active: true,
       lastFrameAt: performance.now(),
+      startedAt: performance.now(),
       sourceUploadsBefore: (window as PerfPageWindow).__perfSourceUploadCount?.() ?? null,
     };
     (window as PerfPageWindow).__genericPerfGesture = state;
@@ -698,6 +851,7 @@ async function runDirectManipulation(
     new PerformanceObserver((list) => {
       if (!state.active) return;
       for (const entry of list.getEntries() as BrowserEventTimingEntry[]) {
+        if (entry.startTime < state.startedAt) continue;
         state.eventTimings.push({
           name: entry.name,
           interactionId: entry.interactionId,
@@ -711,6 +865,7 @@ async function runDirectManipulation(
     new PerformanceObserver((list) => {
       if (!state.active) return;
       for (const entry of list.getEntries() as BrowserEventTimingEntry[]) {
+        if (entry.startTime < state.startedAt) continue;
         state.eventTimings.push({
           name: entry.name,
           interactionId: entry.interactionId,
@@ -744,24 +899,51 @@ async function runDirectManipulation(
   const centerX = bounds.x + bounds.width / 2;
   const centerY = bounds.y + bounds.height / 2;
   const dragDistance = Math.min(120, bounds.width * 0.25);
+  const hasPaintedFrameCapture = await page.evaluate(
+    () =>
+      typeof (window as PerfPageWindow).__perfStartPaintedFrameCapture === 'function' &&
+      typeof (window as PerfPageWindow).__perfStopPaintedFrameCapture === 'function',
+  );
+  const paintedFrameMs: number[] | null = hasPaintedFrameCapture ? [] : null;
+  const startPaintedAction = async (): Promise<void> => {
+    if (!hasPaintedFrameCapture) return;
+    await page.evaluate(() => (window as PerfPageWindow).__perfStartPaintedFrameCapture?.());
+  };
+  const stopPaintedAction = async (): Promise<void> => {
+    if (!paintedFrameMs) return;
+    const frames = await page.evaluate(
+      () => (window as PerfPageWindow).__perfStopPaintedFrameCapture?.() ?? [],
+    );
+    paintedFrameMs.push(...frames);
+  };
+  const waitForResponsePaint = () =>
+    page.evaluate(
+      () =>
+        new Promise<void>((resolvePromise) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolvePromise()));
+        }),
+    );
 
-  const actions: Array<'camera-drag' | 'entity-drag' | 'draw'> = ['camera-drag'];
+  const actions: Array<'camera-drag' | 'entity-drag' | 'draw'> = [];
   if (scenario.surface === 'editor') {
-    if (!entityCoord) throw new Error('The editor scenario has no station drag target.');
+    if (!entityId) throw new Error('The editor scenario has no station drag target.');
+    if (!entityName) throw new Error('The editor scenario has no station name proof.');
     await page.keyboard.press('v');
     await page.waitForFunction(
-      () => typeof (window as PerfPageWindow).__perfProjectLngLat === 'function',
+      () =>
+        typeof (window as PerfPageWindow).__perfProjectLngLat === 'function' &&
+        typeof (window as PerfPageWindow).__perfStationSnapshot === 'function',
       undefined,
       { timeout: 30_000 },
     );
-    const beforeUploads = await page.evaluate(
-      () => (window as PerfPageWindow).__perfSourceUploadCount?.() ?? null,
-    );
-    const target = await page.evaluate((coord) => {
+    const beforeEntity = await page.evaluate((stationId) => {
+      const snapshot = (window as PerfPageWindow).__perfStationSnapshot?.(stationId);
+      if (!snapshot) throw new Error('The live station performance seam returned no target.');
       const project = (window as PerfPageWindow).__perfProjectLngLat;
       if (!project) throw new Error('The performance projection seam is unavailable.');
-      return project(coord);
-    }, entityCoord);
+      return { snapshot, point: project(snapshot.coord) };
+    }, entityId!);
+    const target = beforeEntity.point;
     if (
       target.x < bounds.x ||
       target.x > bounds.x + bounds.width ||
@@ -770,27 +952,77 @@ async function runDirectManipulation(
     ) {
       throw new Error('The deterministic station drag target is outside the map viewport.');
     }
+    await page.mouse.click(target.x, target.y);
+    const selectedStationName = page.getByLabel('Station name');
+    await selectedStationName.waitFor({ state: 'visible', timeout: 30_000 });
+    if ((await selectedStationName.inputValue()) !== entityName) {
+      throw new Error(
+        'The projected fixture target did not resolve to the expected painted station.',
+      );
+    }
+    await page.evaluate(() => {
+      const state = (window as PerfPageWindow).__genericPerfGesture;
+      if (!state) throw new Error('The direct-manipulation measurement did not start.');
+      state.eventTimings.length = 0;
+      state.animationFrameMs.length = 0;
+      state.longTaskMs.length = 0;
+      state.startedAt = performance.now();
+      state.lastFrameAt = state.startedAt;
+      state.sourceUploadsBefore = (window as PerfPageWindow).__perfSourceUploadCount?.() ?? null;
+    });
+    await startPaintedAction();
     await page.mouse.move(target.x, target.y);
     await page.mouse.down();
     await page.mouse.move(target.x + 32, target.y + 18, { steps: 8 });
     await page.mouse.up();
-    await page.evaluate(
-      () =>
-        new Promise<void>((resolvePromise) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => resolvePromise()));
-        }),
+    await waitForResponsePaint();
+    await stopPaintedAction();
+    const afterEntity = await page.evaluate(
+      (stationId) => (window as PerfPageWindow).__perfStationSnapshot?.(stationId) ?? null,
+      entityId,
     );
-    const afterUploads = await page.evaluate(
-      () => (window as PerfPageWindow).__perfSourceUploadCount?.() ?? null,
-    );
-    if (beforeUploads === null || afterUploads === null || afterUploads <= beforeUploads) {
-      throw new Error('The deterministic station pointer drag did not commit an entity update.');
+    const coordinateChanged =
+      afterEntity !== null &&
+      (afterEntity.coord[0] !== beforeEntity.snapshot.coord[0] ||
+        afterEntity.coord[1] !== beforeEntity.snapshot.coord[1]);
+    if (
+      !afterEntity ||
+      !coordinateChanged ||
+      afterEntity.revision === beforeEntity.snapshot.revision
+    ) {
+      throw new Error(
+        'The deterministic station pointer drag did not change the live model coordinate and revision.',
+      );
     }
     actions.push('entity-drag');
   }
 
+  const cameraProbeCoord =
+    scenario.surface === 'embed'
+      ? null
+      : await page.evaluate((stationId) => {
+          const snapshot = stationId
+            ? (window as PerfPageWindow).__perfStationSnapshot?.(stationId)
+            : null;
+          if (!snapshot) throw new Error('The camera projection target is unavailable.');
+          return snapshot.coord;
+        }, entityId);
+  const beforeCamera =
+    scenario.surface === 'embed'
+      ? await page.evaluate(() => {
+          const snapshot = (window as PerfPageWindow).__perfCameraSnapshot?.();
+          if (!snapshot) throw new Error('The embed performance camera seam is unavailable.');
+          return snapshot;
+        })
+      : await page.evaluate((coord) => {
+          const project = (window as PerfPageWindow).__perfProjectLngLat;
+          if (!coord || !project) throw new Error('The camera projection seam is unavailable.');
+          return project(coord);
+        }, cameraProbeCoord);
+  await startPaintedAction();
   await page.mouse.move(centerX - dragDistance / 2, centerY);
-  await page.mouse.down();
+  const cameraButton = scenario.surface === 'embed' ? 'left' : 'right';
+  await page.mouse.down({ button: cameraButton });
   for (let step = 1; step <= 24; step += 1) {
     await page.mouse.move(
       centerX - dragDistance / 2 + (dragDistance * step) / 24,
@@ -798,21 +1030,148 @@ async function runDirectManipulation(
     );
     await page.waitForTimeout(12);
   }
-  await page.mouse.up();
+  await page.mouse.up({ button: cameraButton });
+  await waitForResponsePaint();
+  await stopPaintedAction();
+  const afterCamera =
+    scenario.surface === 'embed'
+      ? await page.evaluate(() => {
+          const snapshot = (window as PerfPageWindow).__perfCameraSnapshot?.();
+          if (!snapshot) throw new Error('The embed performance camera seam disappeared.');
+          return snapshot;
+        })
+      : await page.evaluate((coord) => {
+          const project = (window as PerfPageWindow).__perfProjectLngLat;
+          if (!coord || !project) throw new Error('The camera projection seam disappeared.');
+          return project(coord);
+        }, cameraProbeCoord);
+  const didCameraChange =
+    scenario.surface === 'embed'
+      ? cameraChanged(
+          beforeCamera as { center: LngLat; zoom: number },
+          afterCamera as { center: LngLat; zoom: number },
+        )
+      : projectedPointChanged(
+          beforeCamera as { x: number; y: number },
+          afterCamera as { x: number; y: number },
+        );
+  if (!didCameraChange) {
+    throw new Error('The deterministic pointer drag did not change the live camera.');
+  }
+  actions.push('camera-drag');
 
+  let productionPersistence: PerfProductionPersistenceProbe | null = null;
   if (scenario.surface === 'editor') {
-    actions.push('draw');
+    const beforeDraw = await page.evaluate((stationId) => {
+      const snapshot = (window as PerfPageWindow).__perfStationSnapshot?.(stationId);
+      if (!snapshot) throw new Error('The performance system seam is unavailable.');
+      return snapshot;
+    }, entityId!);
     await page.keyboard.press('l');
     const drawY = bounds.y + bounds.height * 0.7;
-    for (const ratio of [0.35, 0.5, 0.65]) {
+    const ratios = [0.35, 0.5, 0.65];
+    await page.keyboard.down('Alt');
+    await page.mouse.click(bounds.x + bounds.width * ratios[0], drawY);
+    await page.keyboard.up('Alt');
+    await page.waitForTimeout(24);
+    for (const ratio of ratios.slice(1)) {
       await page.mouse.click(bounds.x + bounds.width * ratio, drawY);
       await page.waitForTimeout(24);
     }
     await page.keyboard.press('Enter');
+    const afterDraw = await page.evaluate((stationId) => {
+      const snapshot = (window as PerfPageWindow).__perfStationSnapshot?.(stationId);
+      if (!snapshot) throw new Error('The performance system seam disappeared after drawing.');
+      return { snapshot, committedAt: performance.now() };
+    }, entityId!);
+    await waitForResponsePaint();
+    if (!drawChangedSystem(beforeDraw, afterDraw.snapshot)) {
+      throw new Error(
+        'The deterministic line draw did not advance the system revision and model way count.',
+      );
+    }
+    actions.push('draw');
     // This interval includes validation and the shared content/camera
     // persistence debounce, so the interaction scenario catches contention
     // from the real work an edit schedules.
     await page.waitForTimeout(550);
+    await page.waitForFunction(
+      (committedAt) =>
+        (window as PerfPageWindow).__perfProductionPersistence?.cycles.some(
+          (cycle) =>
+            cycle.workerStartedAt >= committedAt &&
+            cycle.workerCompletedAt !== null &&
+            cycle.indexedDbStartedAt !== null &&
+            cycle.indexedDbCompletedAt !== null,
+        ) === true,
+      afterDraw.committedAt,
+      { timeout: 30_000 },
+    );
+    const durable = await page.evaluate(
+      async (expected) => {
+        const cycle = [...((window as PerfPageWindow).__perfProductionPersistence?.cycles ?? [])]
+          .reverse()
+          .find(
+            (candidate) =>
+              candidate.workerStartedAt >= expected.committedAt &&
+              candidate.workerCompletedAt !== null &&
+              candidate.indexedDbStartedAt !== null &&
+              candidate.indexedDbCompletedAt !== null,
+          );
+        if (
+          !cycle ||
+          cycle.workerCompletedAt === null ||
+          cycle.indexedDbStartedAt === null ||
+          cycle.indexedDbCompletedAt === null
+        ) {
+          throw new Error('The production persistence phases were incomplete.');
+        }
+        const database = await new Promise<IDBDatabase>((resolvePromise, reject) => {
+          const request = indexedDB.open('transitmapper-documents', 1);
+          request.onsuccess = () => resolvePromise(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        const record = await new Promise<{ serialized?: string } | undefined>(
+          (resolvePromise, reject) => {
+            const transaction = database.transaction('systems', 'readonly');
+            const request = transaction.objectStore('systems').get(expected.systemId);
+            request.onsuccess = () =>
+              resolvePromise(request.result as { serialized?: string } | undefined);
+            request.onerror = () => reject(request.error);
+          },
+        );
+        database.close();
+        const stored = record?.serialized ? (JSON.parse(record.serialized) as unknown) : null;
+        return {
+          cycle,
+          stored:
+            stored &&
+            typeof stored === 'object' &&
+            'updatedAt' in stored &&
+            'ways' in stored &&
+            typeof stored.updatedAt === 'number' &&
+            Array.isArray(stored.ways)
+              ? { revision: stored.updatedAt, wayCount: stored.ways.length }
+              : null,
+        };
+      },
+      {
+        committedAt: afterDraw.committedAt,
+        systemId: `perf-${scenario.fixtureId}`,
+      },
+    );
+    if (
+      !durable.stored ||
+      durable.stored.revision !== afterDraw.snapshot.revision ||
+      durable.stored.wayCount !== afterDraw.snapshot.wayCount
+    ) {
+      throw new Error('The production IndexedDB record did not contain the committed line draw.');
+    }
+    productionPersistence = {
+      saveMs: durable.cycle.indexedDbCompletedAt! - afterDraw.committedAt,
+      workerSerializationMs: durable.cycle.workerCompletedAt! - durable.cycle.workerStartedAt,
+      indexedDbWriteMs: durable.cycle.indexedDbCompletedAt! - durable.cycle.indexedDbStartedAt!,
+    };
   }
 
   await page.evaluate(
@@ -858,17 +1217,23 @@ async function runDirectManipulation(
       `${scenario.id} produced no Event Timing entries for trusted pointer interactions.`,
     );
   }
-  return { ...measurements, actions };
+  if (scenario.surface !== 'embed' && (!paintedFrameMs || paintedFrameMs.length === 0)) {
+    throw new Error(`${scenario.id} produced no painted map frames for its trusted actions.`);
+  }
+  return { ...measurements, paintedFrameMs, actions, productionPersistence };
 }
 
 async function runMeasuredGesture(
   page: Page,
   scenario: PerfScenario,
-  entityCoord?: LngLat,
+  entityId?: string,
+  entityName?: string,
+  simulationState: PerfGestureDiagnostics['simulationState'] = 'not-applicable',
 ): Promise<{
   metrics: ReturnType<typeof summarizeGesture>['metrics'];
   diagnostics: PerfGestureDiagnostics;
   counters: Omit<PerfRuntimeCounters, 'domNodeCount'>;
+  persistence: PerfProductionPersistenceProbe | null;
 }> {
   if (scenario.surface !== 'embed') {
     await page.waitForFunction(
@@ -880,7 +1245,10 @@ async function runMeasuredGesture(
   const phaseBefore = await page.evaluate(
     () => (window as PerfPageWindow).__mapProjectionCounts?.() ?? null,
   );
-  const direct = await runDirectManipulation(page, scenario, entityCoord);
+  const direct = await runDirectManipulation(page, scenario, entityId, entityName);
+  const phaseAfter = await page.evaluate(
+    () => (window as PerfPageWindow).__mapProjectionCounts?.() ?? null,
+  );
   let mapMeasurements: RawGestureMeasurements | null = null;
   if (scenario.surface !== 'embed') {
     await page.waitForFunction(
@@ -891,12 +1259,19 @@ async function runMeasuredGesture(
     mapMeasurements = await page.evaluate(async () => {
       const benchmark = (window as PerfPageWindow).__panGestureBench;
       if (!benchmark) throw new Error('The painted-map gesture benchmark is unavailable.');
-      return benchmark();
+      const outbound = await benchmark({ steps: 40, dx: 4 });
+      const inbound = await benchmark({ steps: 40, dx: -4 });
+      return {
+        inputToNextPaintMs: [...outbound.inputToNextPaintMs, ...inbound.inputToNextPaintMs],
+        paintedFrameMs: [...outbound.paintedFrameMs, ...inbound.paintedFrameMs],
+        longTaskMs: [...outbound.longTaskMs, ...inbound.longTaskMs],
+        sourceUploadCount:
+          outbound.sourceUploadCount === null && inbound.sourceUploadCount === null
+            ? null
+            : (outbound.sourceUploadCount ?? 0) + (inbound.sourceUploadCount ?? 0),
+      };
     });
   }
-  const phaseAfter = await page.evaluate(
-    () => (window as PerfPageWindow).__mapProjectionCounts?.() ?? null,
-  );
   const phaseCounters: PerfPhaseCounters | null =
     phaseBefore && phaseAfter
       ? {
@@ -909,30 +1284,31 @@ async function runMeasuredGesture(
         }
       : null;
 
-  const raw: RawGestureMeasurements = {
-    inputToNextPaintMs: direct.inputToNextPaintMs,
-    paintedFrameMs: mapMeasurements?.paintedFrameMs ?? direct.animationFrameMs,
-    longTaskMs: [...direct.longTaskMs, ...(mapMeasurements?.longTaskMs ?? [])],
-    sourceUploadCount:
-      direct.sourceUploadCount === null && mapMeasurements?.sourceUploadCount == null
-        ? null
-        : (direct.sourceUploadCount ?? 0) + (mapMeasurements?.sourceUploadCount ?? 0),
-  };
+  const raw = directGestureGateMeasurements(direct, mapMeasurements);
   const summary = summarizeGesture(raw);
   return {
     metrics: summary.metrics,
     diagnostics: {
       name: scenario.surface === 'editor' ? 'entity-drag-draw' : 'map-drag',
-      frameSource: mapMeasurements ? 'map-render' : 'animation-frame-proxy',
+      frameSource: direct.paintedFrameMs !== null ? 'map-render' : 'animation-frame-proxy',
       inputToNextPaintMs: raw.inputToNextPaintMs,
       paintedFrameMs: raw.paintedFrameMs,
       unexpectedLongTaskMs: raw.longTaskMs.filter((duration) => duration > 50),
       actions: direct.actions,
+      simulationState,
+      scriptedPan: mapMeasurements
+        ? {
+            paintedFrameMs: mapMeasurements.paintedFrameMs,
+            unexpectedLongTaskMs: mapMeasurements.longTaskMs.filter((duration) => duration > 50),
+            sourceUploadCount: mapMeasurements.sourceUploadCount,
+          }
+        : undefined,
     },
     counters: {
       ...summary.counters,
       phaseCounters,
     },
+    persistence: direct.productionPersistence,
   };
 }
 
@@ -948,6 +1324,7 @@ async function waitForScenarioReady(
   page: Page,
   scenario: PerfScenario,
   expectedName: string,
+  loadPhase: 'cold' | 'warm',
 ): Promise<void> {
   await page.locator(scenario.readySelector).first().waitFor({
     state: 'visible',
@@ -973,6 +1350,29 @@ async function waitForScenarioReady(
       { timeout: 60_000 },
     );
   }
+  try {
+    await page.waitForFunction(
+      (markName) => performance.getEntriesByName(markName, 'mark').length > 0,
+      FIRST_SYSTEM_MAP_PAINT_MARK,
+      { timeout: 60_000 },
+    );
+  } catch (error) {
+    const diagnostics = await page.evaluate(
+      (markName) => ({
+        automatedPerfRun: (window as PerfPageWindow).__TRANSITMAPPER_PERF_RUN__ === true,
+        firstMapCanvasMs: (window as Window & { __transitMapperPerf?: BrowserMetricState })
+          .__transitMapperPerf?.firstMapCanvasMs,
+        marks: performance.getEntriesByName(markName, 'mark').map((entry) => entry.startTime),
+        overlay: (window as PerfPageWindow).__perfOverlaySnapshot?.() ?? null,
+        projectionCounts: (window as PerfPageWindow).__mapProjectionCounts?.() ?? null,
+      }),
+      FIRST_SYSTEM_MAP_PAINT_MARK,
+    );
+    throw new Error(
+      `${scenario.id} ${loadPhase} load never produced a proven system paint: ` +
+        `${JSON.stringify(diagnostics)}. Original error: ${String(error)}`,
+    );
+  }
   await page.evaluate(
     () =>
       new Promise<void>((resolvePromise) => {
@@ -989,6 +1389,7 @@ async function runSample(options: RunSampleOptions): Promise<PerfSample | undefi
       height: activeProtocol.viewport.height,
     },
     deviceScaleFactor: activeProtocol.viewport.deviceScaleFactor,
+    reducedMotion: 'no-preference',
     serviceWorkers: 'block',
   });
   const page = await context.newPage();
@@ -999,13 +1400,15 @@ async function runSample(options: RunSampleOptions): Promise<PerfSample | undefi
     await configureProtocol(session);
     const fixture = generatePerfFixture(options.scenario.fixtureId);
     const serializedFixture = JSON.stringify(fixture);
-    const persistence = await measurePersistencePhases(
+    const compatibilityPersistence = await measureCompatibilityPersistenceDiagnostic(
       page,
       session,
       options.previewUrl,
       serializedFixture,
     );
-    await installMeasurementState(page, serializedFixture, fixture.id);
+    await seedIndexedDbFixture(page, serializedFixture, fixture);
+    await installPerformanceInstrumentation(page);
+    await session.send('Network.clearBrowserCache');
     await configureSurfaceRoutes(page, options.scenario, serializedFixture);
     if (options.tracePath) {
       await startTrace(session);
@@ -1016,16 +1419,45 @@ async function runSample(options: RunSampleOptions): Promise<PerfSample | undefi
       waitUntil: 'load',
       timeout: 60_000,
     });
-    await waitForScenarioReady(page, options.scenario, fixture.name);
+    await waitForScenarioReady(page, options.scenario, fixture.name, 'cold');
+    if (options.scenario.surface === 'editor') {
+      await page.getByLabel('Pause the simulation (K)').waitFor({
+        state: 'visible',
+        timeout: 30_000,
+      });
+    }
     const startup = await collectStartupMetrics(page);
-    const entityCoord = fixture.stations[Math.floor(fixture.stations.length / 2)]?.coord;
-    const gesture = await runMeasuredGesture(page, options.scenario, entityCoord);
+    const entity = fixture.stations[Math.floor(fixture.stations.length / 2)];
+    const entityId = entity?.id;
+    const entityName = entity?.name;
+    const gesture = await runMeasuredGesture(
+      page,
+      options.scenario,
+      entityId,
+      entityName,
+      options.scenario.surface === 'editor' ? 'running' : 'not-applicable',
+    );
     const coldMemory = await collectMemory(session);
 
     await page.reload({ waitUntil: 'load', timeout: 60_000 });
-    await waitForScenarioReady(page, options.scenario, fixture.name);
+    await waitForScenarioReady(page, options.scenario, fixture.name, 'warm');
+    if (options.scenario.surface === 'editor') {
+      const pause = page.getByLabel('Pause the simulation (K)');
+      await pause.waitFor({ state: 'visible', timeout: 30_000 });
+      await page.keyboard.press('k');
+      await page.getByLabel('Run the simulation (K)').waitFor({
+        state: 'visible',
+        timeout: 30_000,
+      });
+    }
     const warmStartup = await collectStartupMetrics(page);
-    const warmGesture = await runMeasuredGesture(page, options.scenario, entityCoord);
+    const warmGesture = await runMeasuredGesture(
+      page,
+      options.scenario,
+      entityId,
+      entityName,
+      options.scenario.surface === 'editor' ? 'paused' : 'not-applicable',
+    );
     const warmMemory = await collectMemory(session);
     const metrics: PerfMetricValues = {
       ...startup.metrics,
@@ -1059,7 +1491,23 @@ async function runSample(options: RunSampleOptions): Promise<PerfSample | undefi
       warmNetwork: warmStartup.network,
       memory: coldMemory.memory,
       warmMemory: warmMemory.memory,
-      persistence,
+      persistence: {
+        ...compatibilityPersistence,
+        production:
+          gesture.persistence && warmGesture.persistence
+            ? {
+                saveMs: Math.max(gesture.persistence.saveMs, warmGesture.persistence.saveMs),
+                workerSerializationMs: Math.max(
+                  gesture.persistence.workerSerializationMs,
+                  warmGesture.persistence.workerSerializationMs,
+                ),
+                indexedDbWriteMs: Math.max(
+                  gesture.persistence.indexedDbWriteMs,
+                  warmGesture.persistence.indexedDbWriteMs,
+                ),
+              }
+            : (gesture.persistence ?? warmGesture.persistence ?? undefined),
+      },
       traceArtifact: options.tracePath
         ? relative(options.outputDirectory, options.tracePath)
         : undefined,
@@ -1113,7 +1561,21 @@ async function runCalibration(browser: Browser): Promise<PerfCalibration> {
     await session.send('Emulation.setCPUThrottlingRate', {
       rate: activeProtocol.cpuThrottlingRate,
     });
-    const samplesMs = await page.evaluate(() => {
+    const measured = await page.evaluate(async (displaySampleCount) => {
+      // Keep the callbacks inline. `tsx` gives locally named callbacks an
+      // `__name` helper, but Playwright serializes only this function body into
+      // the page, where that Node-side helper does not exist.
+      const displayFrameIntervalSamplesMs: number[] = [];
+      let previousFrameAt = await new Promise<number>((resolveFrame) =>
+        requestAnimationFrame(resolveFrame),
+      );
+      for (let sample = 0; sample < displaySampleCount; sample += 1) {
+        const now = await new Promise<number>((resolveFrame) =>
+          requestAnimationFrame(resolveFrame),
+        );
+        displayFrameIntervalSamplesMs.push(now - previousFrameAt);
+        previousFrameAt = now;
+      }
       const measurements: number[] = [];
       for (let run = 0; run < 6; run += 1) {
         let value = 0x9e3779b9;
@@ -1127,13 +1589,17 @@ async function runCalibration(browser: Browser): Promise<PerfCalibration> {
         }
         if (run > 0) measurements.push(performance.now() - startedAt);
       }
-      return measurements;
-    });
+      return { samplesMs: measurements, displayFrameIntervalSamplesMs };
+    }, DISPLAY_CADENCE_SAMPLE_COUNT);
+    const { samplesMs, displayFrameIntervalSamplesMs } = measured;
     const sorted = [...samplesMs].sort((left, right) => left - right);
+    const displayCadence = summarizeDisplayCadence(displayFrameIntervalSamplesMs);
     return {
       benchmark: 'integer-mix-v1',
       samplesMs,
       medianMs: sorted[Math.floor(sorted.length / 2)],
+      displayFrameIntervalSamplesMs,
+      ...displayCadence,
     };
   } finally {
     await closeContext(context);
@@ -1157,7 +1623,9 @@ async function verifyCacheEvictedOfflineReload(
   const session = await context.newCDPSession(page);
   const fixture = generatePerfFixture('small');
   try {
-    await installMeasurementState(page, JSON.stringify(fixture), fixture.id);
+    await page.goto(`${previewUrl}/favicon.svg`, { waitUntil: 'load', timeout: 60_000 });
+    await seedLegacyFixture(page, JSON.stringify(fixture), fixture.id);
+    await installPerformanceInstrumentation(page);
     await page.goto(`${previewUrl}/`, { waitUntil: 'load', timeout: 60_000 });
     const name = page.getByLabel('System name');
     await name.waitFor({ state: 'visible', timeout: 60_000 });
@@ -1172,6 +1640,49 @@ async function verifyCacheEvictedOfflineReload(
       throw new Error(
         `The online PWA bootstrap restored "${initialDocumentName}" instead of ` +
           `"${fixture.name}" (${JSON.stringify(storageState)}).`,
+      );
+    }
+    const storageMigration = await page.evaluate(async (expectedId) => {
+      const database = await new Promise<IDBDatabase>((resolvePromise, reject) => {
+        const request = indexedDB.open('transitmapper-documents', 1);
+        request.onsuccess = () => resolvePromise(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const transaction = database.transaction(['systems', 'library'], 'readonly');
+      const documentRequest = transaction.objectStore('systems').get(expectedId);
+      const libraryRequest = transaction.objectStore('library').get(expectedId);
+      const [documentRecord, libraryEntry] = await Promise.all([
+        new Promise<{ id?: string; serialized?: string } | undefined>((resolvePromise, reject) => {
+          documentRequest.onsuccess = () =>
+            resolvePromise(
+              documentRequest.result as { id?: string; serialized?: string } | undefined,
+            );
+          documentRequest.onerror = () => reject(documentRequest.error);
+        }),
+        new Promise<{ id?: string } | undefined>((resolvePromise, reject) => {
+          libraryRequest.onsuccess = () =>
+            resolvePromise(libraryRequest.result as { id?: string } | undefined);
+          libraryRequest.onerror = () => reject(libraryRequest.error);
+        }),
+      ]);
+      database.close();
+      return {
+        indexedDbDocument:
+          documentRecord?.id === expectedId &&
+          typeof documentRecord.serialized === 'string' &&
+          (JSON.parse(documentRecord.serialized) as { id?: string }).id === expectedId,
+        indexedDbLibraryEntry: libraryEntry?.id === expectedId,
+        legacyDocumentRemoved: localStorage.getItem(`transitmapper:system:${expectedId}`) === null,
+      };
+    }, fixture.id);
+    if (
+      !storageMigration.indexedDbDocument ||
+      !storageMigration.indexedDbLibraryEntry ||
+      !storageMigration.legacyDocumentRemoved
+    ) {
+      throw new Error(
+        `The online bootstrap did not migrate the real legacy fixture to IndexedDB: ` +
+          JSON.stringify(storageMigration),
       );
     }
     await page.evaluate(async () => navigator.serviceWorker.ready);
@@ -1195,13 +1706,85 @@ async function verifyCacheEvictedOfflineReload(
           `"${fixture.name}".`,
       );
     }
+    await page.waitForFunction(
+      () => {
+        const overlay = (window as PerfPageWindow).__perfOverlaySnapshot?.();
+        return (
+          overlay?.sourceExists === true &&
+          overlay.layerExists === true &&
+          overlay.sourceLoaded === true &&
+          overlay.featureCount > 0
+        );
+      },
+      undefined,
+      { timeout: 30_000 },
+    );
+    const overlay = await page.evaluate(() => {
+      const snapshot = (window as PerfPageWindow).__perfOverlaySnapshot?.();
+      if (!snapshot) throw new Error('The offline overlay proof seam is unavailable.');
+      return snapshot;
+    });
+    const stationId = fixture.stations[Math.floor(fixture.stations.length / 2)]?.id;
+    if (!stationId) throw new Error('The offline fixture has no station edit target.');
+    await page.keyboard.press('v');
+    const beforeEdit = await page.evaluate((targetId) => {
+      const snapshot = (window as PerfPageWindow).__perfStationSnapshot?.(targetId);
+      const project = (window as PerfPageWindow).__perfProjectLngLat;
+      if (!snapshot || !project) {
+        throw new Error('The offline editor model seams are unavailable.');
+      }
+      return { snapshot, point: project(snapshot.coord) };
+    }, stationId);
+    const canvasBounds = await page.locator('.maplibregl-canvas').first().boundingBox();
+    if (
+      !canvasBounds ||
+      beforeEdit.point.x < canvasBounds.x ||
+      beforeEdit.point.x > canvasBounds.x + canvasBounds.width ||
+      beforeEdit.point.y < canvasBounds.y ||
+      beforeEdit.point.y > canvasBounds.y + canvasBounds.height
+    ) {
+      throw new Error('The offline station edit target is outside the map viewport.');
+    }
+    await page.mouse.move(beforeEdit.point.x, beforeEdit.point.y);
+    await page.mouse.down();
+    await page.mouse.move(beforeEdit.point.x + 24, beforeEdit.point.y + 12, { steps: 6 });
+    await page.mouse.up();
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolvePromise) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolvePromise()));
+        }),
+    );
+    const afterEdit = await page.evaluate(
+      (targetId) => (window as PerfPageWindow).__perfStationSnapshot?.(targetId) ?? null,
+      stationId,
+    );
+    if (
+      !afterEdit ||
+      afterEdit.revision === beforeEdit.snapshot.revision ||
+      (afterEdit.coord[0] === beforeEdit.snapshot.coord[0] &&
+        afterEdit.coord[1] === beforeEdit.snapshot.coord[1])
+    ) {
+      throw new Error('The cache-evicted offline editor did not commit the station edit.');
+    }
     const report: OfflineRuntimeReport = {
-      schemaVersion: 1,
+      schemaVersion: 3,
       generatedAt: new Date().toISOString(),
       cacheEvicted: true,
       offline: true,
       serviceWorkerControlled: true,
       documentName,
+      storageMigration: {
+        indexedDbDocument: true,
+        indexedDbLibraryEntry: true,
+        legacyDocumentRemoved: true,
+      },
+      overlay,
+      edit: {
+        stationId,
+        before: beforeEdit.snapshot,
+        after: afterEdit,
+      },
     };
     await writeFile(
       resolve(outputDirectory, PWA_RUNTIME_REPORT_FILENAME),
@@ -1252,28 +1835,6 @@ async function soakSnapshot(
   };
 }
 
-function soakViolations(initial: SoakSnapshot, final: SoakSnapshot): string[] {
-  const violations: string[] = [];
-  const metrics: Array<keyof Omit<SoakSnapshot, 'elapsedMs'>> = [
-    'jsHeapUsedBytes',
-    'domNodeCount',
-    'listenerCount',
-    'workerCount',
-    'webGlContextCount',
-  ];
-  for (const metric of metrics) {
-    const initialValue = initial[metric];
-    const finalValue = final[metric];
-    const limit = initialValue === 0 ? 0 : initialValue * 1.1;
-    if (finalValue > limit) {
-      violations.push(
-        `${metric} grew from ${initialValue} to ${finalValue}; the 10% limit is ${limit}.`,
-      );
-    }
-  }
-  return violations;
-}
-
 async function runBalancedSoakPan(page: Page): Promise<void> {
   await page.evaluate(async () => {
     await (window as PerfPageWindow).__panGestureBench?.({
@@ -1287,24 +1848,42 @@ async function runBalancedSoakPan(page: Page): Promise<void> {
   });
 }
 
-async function runSoakEditCycle(page: Page, coord: LngLat): Promise<void> {
-  const target = await page.evaluate((stationCoord) => {
-    const project = (window as PerfPageWindow).__perfProjectLngLat;
-    if (!project) throw new Error('The soak station projection seam is unavailable.');
-    return project(stationCoord);
-  }, coord);
+async function runSoakEditCycle(page: Page, stationId: string, stationName: string): Promise<void> {
   await page.keyboard.press('v');
-  await page.mouse.move(target.x, target.y);
+  const before = await page.evaluate((targetId) => {
+    const station = (window as PerfPageWindow).__perfStationSnapshot?.(targetId);
+    const project = (window as PerfPageWindow).__perfProjectLngLat;
+    if (!station || !project) throw new Error('The soak station target is unavailable.');
+    return { station, point: project(station.coord) };
+  }, stationId);
+  await page.mouse.click(before.point.x, before.point.y);
+  const selectedStationName = page.getByLabel('Station name');
+  await selectedStationName.waitFor({ state: 'visible', timeout: 30_000 });
+  if ((await selectedStationName.inputValue()) !== stationName) {
+    throw new Error('The soak target did not resolve to the expected painted station.');
+  }
+  await page.mouse.move(before.point.x, before.point.y);
   await page.mouse.down();
-  await page.mouse.move(target.x + 24, target.y + 12, { steps: 6 });
+  await page.mouse.move(before.point.x + 24, before.point.y + 12, { steps: 6 });
   await page.mouse.up();
+  const moved = await page.evaluate(
+    (targetId) => (window as PerfPageWindow).__perfStationSnapshot?.(targetId) ?? null,
+    stationId,
+  );
+  if (
+    !moved ||
+    moved.revision === before.station.revision ||
+    (moved.coord[0] === before.station.coord[0] && moved.coord[1] === before.station.coord[1])
+  ) {
+    throw new Error('The soak edit cycle did not commit a station move.');
+  }
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
   // Include validation and the content/camera persistence lane, then leave the
   // document at its deterministic starting shape for the next cycle.
   await page.waitForTimeout(550);
 }
 
-async function runSoakExportCycle(page: Page): Promise<void> {
+async function runSoakExportCycle(page: Page, format: 'PNG' | 'SVG'): Promise<number> {
   await page.locator('button[title="Export…"]').click();
   const dialog = page.getByRole('dialog');
   await dialog.waitFor({ state: 'visible', timeout: 30_000 });
@@ -1312,9 +1891,21 @@ async function runSoakExportCycle(page: Page): Promise<void> {
     state: 'visible',
     timeout: 30_000,
   });
-  await page.waitForTimeout(250);
-  await dialog.getByRole('button', { name: 'Close' }).click();
-  await dialog.waitFor({ state: 'detached', timeout: 5_000 });
+  await dialog.getByRole('button', { name: format, exact: true }).click();
+  const downloadPromise = page.waitForEvent('download', { timeout: 30_000 });
+  await dialog.getByRole('button', { name: `Export ${format}`, exact: true }).click();
+  const download = await downloadPromise;
+  const stream = await download.createReadStream();
+  if (!stream) throw new Error(`Chrome did not expose the ${format} download stream.`);
+  let downloadedBytes = 0;
+  for await (const chunk of stream) {
+    downloadedBytes += Buffer.isBuffer(chunk) ? chunk.byteLength : Buffer.byteLength(chunk);
+  }
+  const failure = await download.failure();
+  if (failure) throw new Error(`${format} download failed: ${failure}`);
+  if (downloadedBytes === 0) throw new Error(`${format} download produced an empty file.`);
+  await dialog.waitFor({ state: 'detached', timeout: 30_000 });
+  return downloadedBytes;
 }
 
 async function runSoak(
@@ -1378,9 +1969,12 @@ async function runSoak(
         return context;
       };
     });
-    await installMeasurementState(page, JSON.stringify(fixture), fixture.id);
+    await page.goto(`${previewUrl}/favicon.svg`, { waitUntil: 'load', timeout: 60_000 });
+    await seedIndexedDbFixture(page, JSON.stringify(fixture), fixture);
+    await installPerformanceInstrumentation(page);
+    await session.send('Network.clearBrowserCache');
     await page.goto(`${previewUrl}/`, { waitUntil: 'load', timeout: 60_000 });
-    await waitForScenarioReady(page, PERF_SCENARIOS.rtc, fixture.name);
+    await waitForScenarioReady(page, PERF_SCENARIOS.rtc, fixture.name, 'cold');
     await page.waitForFunction(
       () => typeof (window as PerfPageWindow).__panGestureBench === 'function',
       undefined,
@@ -1389,24 +1983,36 @@ async function runSoak(
     for (let warmup = 0; warmup < 3; warmup += 1) {
       await runBalancedSoakPan(page);
     }
+    const station = fixture.stations[Math.floor(fixture.stations.length / 2)];
+    if (!station) throw new Error('The RTC soak fixture has no station target.');
+    // Put the edit, Worker/IndexedDB save, lazy dialog, second MapLibre map,
+    // and one real encoder/download through their one-time initialization
+    // before the forced-GC baseline.
+    await runSoakEditCycle(page, station.id, station.name ?? '');
+    await runSoakExportCycle(page, 'PNG');
+    await page.waitForTimeout(1_000);
 
     const startedAt = Date.now();
     const initial = await soakSnapshot(page, session, startedAt);
-    const stationCoord = fixture.stations[Math.floor(fixture.stations.length / 2)]?.coord;
-    if (!stationCoord) throw new Error('The RTC soak fixture has no station target.');
     let iterations = 0;
     let editCycles = 0;
     let exportDialogCycles = 0;
+    let pngDownloadCount = 0;
+    let svgDownloadCount = 0;
     console.log(`perf soak: exercising RTC scale for ${durationMs} ms`);
     while (Date.now() - startedAt < durationMs) {
       await runBalancedSoakPan(page);
       iterations += 1;
-      if (iterations % 4 === 0) {
-        await runSoakEditCycle(page, stationCoord);
+      if (iterations === 1 || iterations % 4 === 0) {
+        await runSoakEditCycle(page, station.id, station.name ?? '');
         editCycles += 1;
       }
-      if (iterations % 8 === 0) {
-        await runSoakExportCycle(page);
+      if (iterations === 1 || iterations % 8 === 0) {
+        await runSoakExportCycle(page, 'PNG');
+        pngDownloadCount += 1;
+        exportDialogCycles += 1;
+        await runSoakExportCycle(page, 'SVG');
+        svgDownloadCount += 1;
         exportDialogCycles += 1;
       }
       await page.waitForTimeout(100);
@@ -1415,9 +2021,14 @@ async function runSoak(
     // forced-GC final snapshot.
     await page.waitForTimeout(1_000);
     const final = await soakSnapshot(page, session, startedAt);
-    const violations = soakViolations(initial, final);
+    const violations = soakViolations(initial, final, {
+      editCycles,
+      exportDialogCycles,
+      pngDownloadCount,
+      svgDownloadCount,
+    });
     const report: SoakReport = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       generatedAt: new Date().toISOString(),
       durationMs,
       scenarioId: 'rtc',
@@ -1428,6 +2039,8 @@ async function runSoak(
       status: violations.length === 0 ? 'pass' : 'fail',
       editCycles,
       exportDialogCycles,
+      pngDownloadCount,
+      svgDownloadCount,
       webGlContextCountSource: 'created-minus-context-lost-events',
     };
     const path = resolve(outputDirectory, 'soak-report.json');

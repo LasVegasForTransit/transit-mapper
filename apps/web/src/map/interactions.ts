@@ -146,6 +146,11 @@ export interface AttachInteractionsOptions {
    *  such as interaction unit tests. */
   onEditGestureStart?: (targets: EditGestureTargets) => void;
   onEditGestureEnd?: () => void;
+  /** Pointer-down boundaries for any continuous manipulation, including
+   * camera pans. Ambient rendering can yield until the user's hand releases
+   * without conflating a camera move with an editable history checkpoint. */
+  onDirectManipulationStart?: () => void;
+  onDirectManipulationEnd?: () => void;
 }
 
 /**
@@ -262,6 +267,7 @@ export function attachInteractions(
   // Not part of the cancel system: it never mutates the system, so there's
   // nothing for Escape to undo — releasing the mouse already ends it.
   const startPan = (e: MapMouseEvent, rightButton: boolean) => {
+    opts.onDirectManipulationStart?.();
     let last = e.point;
     let moved = false;
     canvas.style.cursor = 'grabbing';
@@ -293,6 +299,7 @@ export function attachInteractions(
       flush();
       map.off('mousemove', onMove);
       canvas.style.cursor = cursorFor();
+      opts.onDirectManipulationEnd?.();
       if (rightButton && !moved) {
         const st = store.getState();
         // Way tool, right-click ON an open endpoint: branch a NEW one-way
@@ -1395,6 +1402,7 @@ export function attachInteractions(
 
   function beginGesture(cancel: () => void, targets: EditGestureTargets = {}) {
     cancelActiveGesture = cancel;
+    opts.onDirectManipulationStart?.();
     opts.onEditGestureStart?.(targets);
     store.getState().beginHistoryCheckpoint();
   }
@@ -1402,6 +1410,7 @@ export function attachInteractions(
     cancelActiveGesture = null;
     store.getState().commitHistoryCheckpoint();
     opts.onEditGestureEnd?.();
+    opts.onDirectManipulationEnd?.();
   }
 
   // ---- mousedown: dispatch by button, modifier, tool, target --------------
@@ -1773,10 +1782,10 @@ export function attachInteractions(
       e.stopImmediatePropagation();
       const cancel = cancelActiveGesture;
       cancelActiveGesture = null;
-      cancel(); // reverts the live edit — its own set() calls stay coalesced
-      // since the checkpoint is still open until the next line
-      store.getState().commitHistoryCheckpoint(); // no-op if the revert left system unchanged
+      cancel(); // cleans up live handlers/previews and any gesture-local state
+      store.getState().cancelHistoryCheckpoint(); // restores the exact pre-gesture system
       opts.onEditGestureEnd?.();
+      opts.onDirectManipulationEnd?.();
       return;
     }
     if (facilityBoundaryDraft) {

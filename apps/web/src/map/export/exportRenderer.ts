@@ -1,31 +1,11 @@
-import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
+import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { BASEMAP_STYLE } from '../basemap';
-import { landmarksFeatureCollection } from '../landmarks';
 import { armVisibilityAwareTimeout } from './visibilityAwareTimeout';
-import {
-  buildFeatures,
-  LAYER_SPECS,
-  LYR_STATIONS,
-  registerMapIcons,
-  SRC_CONNECTORS,
-  SRC_FACILITIES,
-  SRC_FOOTPRINTS,
-  SRC_JUNCTIONS,
-  SRC_LANDMARKS,
-  SRC_LANE_ARROWS,
-  SRC_LANE_MARKINGS,
-  SRC_LANES,
-  SRC_PLATFORMS,
-  SRC_SERVICES,
-  SRC_STATIONS,
-  SRC_WAY_LABELS,
-  SRC_WAYS,
-  type ViewOptions,
-} from '../layers';
+import { buildFeatures, LYR_STATIONS, registerMapIcons, type ViewOptions } from '../layers';
+import { addExportSourcesAndLayers, setExportFeatureData } from './exportLayerSetup';
 
-const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
 const DEFAULT_SIZE = { width: 1600, height: 1000 };
 const RENDER_TIMEOUT_MS = 20000;
 
@@ -116,18 +96,7 @@ export function renderSystemForExport(
     map.on('load', () => {
       try {
         registerMapIcons(map);
-        // Add every source ANY layer references (derived from LAYER_SPECS) so
-        // addLayer never throws on a missing source — the static context source
-        // gets the real landmarks, the rest start empty.
-        for (const spec of LAYER_SPECS) {
-          const src = 'source' in spec ? spec.source : undefined;
-          if (typeof src !== 'string' || map.getSource(src)) continue;
-          map.addSource(src, {
-            type: 'geojson',
-            data: src === SRC_LANDMARKS ? landmarksFeatureCollection() : EMPTY_FC,
-          });
-        }
-        for (const spec of LAYER_SPECS) map.addLayer(spec);
+        addExportSourcesAndLayers(map);
 
         // Export-only: a full-system export frames thousands of stops at once, so
         // shrink station circles here (on the export map, NOT the live map) to
@@ -161,20 +130,7 @@ export function renderSystemForExport(
         if (bounds) map.fitBounds(bounds, { padding, animate: false });
 
         const fc = buildFeatures(system, null, [], view);
-        const set = (src: string, data: GeoJSON.FeatureCollection) =>
-          (map.getSource(src) as GeoJSONSource | undefined)?.setData(data);
-        set(SRC_WAYS, fc.ways);
-        set(SRC_SERVICES, fc.services);
-        set(SRC_STATIONS, fc.stations);
-        set(SRC_FOOTPRINTS, fc.footprints);
-        set(SRC_PLATFORMS, fc.platforms);
-        set(SRC_FACILITIES, fc.facilities);
-        set(SRC_LANES, fc.lanes);
-        set(SRC_LANE_MARKINGS, fc.laneMarkings);
-        set(SRC_LANE_ARROWS, fc.laneArrows);
-        set(SRC_JUNCTIONS, fc.junctions);
-        set(SRC_CONNECTORS, fc.connectors);
-        set(SRC_WAY_LABELS, fc.wayLabels);
+        setExportFeatureData(map, fc);
 
         map.once('idle', () => {
           if (settled) return;

@@ -2,12 +2,16 @@ import { parseSystem } from '@transitmapper/core/model/serialize';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { LibraryEntry, LoadResult, SaveOutcome } from './localStore';
 
-export interface StoredSystemRecord extends LibraryEntry {
+export interface StoredLibraryEntry extends LibraryEntry {
+  supersededAuthoritativeSnapshotId?: string;
+}
+
+export interface StoredSystemRecord extends StoredLibraryEntry {
   serialized: string;
 }
 
 export interface LibraryDatabase {
-  list(): Promise<LibraryEntry[]>;
+  list(): Promise<StoredLibraryEntry[]>;
   load(id: string): Promise<StoredSystemRecord | null>;
   save(record: StoredSystemRecord): Promise<void>;
   delete(id: string): Promise<void>;
@@ -16,10 +20,14 @@ export interface LibraryDatabase {
 export interface LegacyLibrary {
   list(): LibraryEntry[];
   load(id: string): LoadResult;
-  save(system: TransitSystem): SaveOutcome;
+  saveAuthoritative(system: TransitSystem): SaveOutcome;
   delete(id: string): SaveOutcome;
+  getAuthoritativeSnapshotId(id: string): string | null;
   loadLegacySingleSlot(): TransitSystem | null;
   removeLegacySingleSlot(): void;
+  isAvailable(): boolean;
+  hasDatabaseHistory(): boolean;
+  setDatabaseHistory(hasDocuments: boolean): void;
 }
 
 export interface LibraryStoreDependencies {
@@ -28,9 +36,19 @@ export interface LibraryStoreDependencies {
   serialize: (system: TransitSystem) => Promise<string>;
 }
 
+export type LibraryLoadResult = LoadResult | { status: 'unavailable' };
+
+export type LibraryListResult =
+  | {
+      status: 'ok';
+      entries: LibraryEntry[];
+      source: 'complete' | 'legacy-only';
+    }
+  | { status: 'unavailable' };
+
 export interface LibraryStore {
-  list(): Promise<LibraryEntry[]>;
-  load(id: string): Promise<LoadResult>;
+  list(): Promise<LibraryListResult>;
+  load(id: string): Promise<LibraryLoadResult>;
   save(system: TransitSystem): Promise<SaveOutcome>;
   delete(id: string): Promise<SaveOutcome>;
   migrateLegacySingleSlot(): Promise<TransitSystem | null>;
@@ -71,6 +89,9 @@ export function createLibraryStore(dependencies: LibraryStoreDependencies): Libr
   const saveLanes = new Map<string, DocumentSaveLane>();
 
   const copyToDatabase = async (system: TransitSystem): Promise<SaveOutcome> => {
+    const supersededAuthoritativeSnapshotId = dependencies.legacy.getAuthoritativeSnapshotId(
+      system.id,
+    );
     try {
       const serialized = await dependencies.serialize(system);
       await dependencies.database.save({
@@ -78,10 +99,18 @@ export function createLibraryStore(dependencies: LibraryStoreDependencies): Libr
         name: system.name,
         updatedAt: system.updatedAt,
         serialized,
+        ...(supersededAuthoritativeSnapshotId ? { supersededAuthoritativeSnapshotId } : {}),
       });
+      dependencies.legacy.setDatabaseHistory(true);
       // The IndexedDB transaction is committed before the legacy copy is
-      // touched. A failed cleanup can waste space but cannot lose work.
-      dependencies.legacy.delete(system.id);
+      // touched. Delete only the copy observed before that transaction: a
+      // fallback from another tab may have appeared while it was in flight.
+      if (
+        dependencies.legacy.getAuthoritativeSnapshotId(system.id) ===
+        supersededAuthoritativeSnapshotId
+      ) {
+        dependencies.legacy.delete(system.id);
+      }
       return 'saved';
     } catch (error) {
       return outcomeFor(error);
@@ -93,7 +122,7 @@ export function createLibraryStore(dependencies: LibraryStoreDependencies): Libr
     if (databaseOutcome === 'saved') return 'saved';
     // IndexedDB can be unavailable in locked-down/private contexts. Keep
     // the old path as a real fallback for documents that still fit there.
-    return dependencies.legacy.save(system);
+    return dependencies.legacy.saveAuthoritative(system);
   };
 
   const drain = async (id: string, lane: DocumentSaveLane): Promise<void> => {
@@ -144,15 +173,43 @@ export function createLibraryStore(dependencies: LibraryStoreDependencies): Libr
     list: async () => {
       await waitForCurrentSaves();
       const legacyEntries = dependencies.legacy.list();
-      let databaseEntries: LibraryEntry[];
+      let databaseEntries: StoredLibraryEntry[];
       try {
         databaseEntries = await dependencies.database.list();
       } catch {
-        return legacyEntries.sort((a, b) => b.updatedAt - a.updatedAt);
+        if (!dependencies.legacy.hasDatabaseHistory() && dependencies.legacy.isAvailable()) {
+          return {
+            status: 'ok',
+            entries: legacyEntries.sort((a, b) => b.updatedAt - a.updatedAt),
+            source: 'legacy-only',
+          };
+        }
+        return { status: 'unavailable' };
       }
-      const merged = new Map(legacyEntries.map((entry) => [entry.id, entry]));
-      for (const entry of databaseEntries) merged.set(entry.id, entry);
-      return [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+      dependencies.legacy.setDatabaseHistory(databaseEntries.length > 0);
+      const merged = new Map(databaseEntries.map((entry) => [entry.id, entry]));
+      for (const entry of legacyEntries) {
+        const existing = merged.get(entry.id);
+        const authoritativeSnapshotId = dependencies.legacy.getAuthoritativeSnapshotId(entry.id);
+        const isCurrentAuthoritativeSnapshot =
+          authoritativeSnapshotId !== null &&
+          authoritativeSnapshotId !== existing?.supersededAuthoritativeSnapshotId;
+        const isSupersededAuthoritativeSnapshot =
+          authoritativeSnapshotId !== null &&
+          authoritativeSnapshotId === existing?.supersededAuthoritativeSnapshotId;
+        if (
+          !existing ||
+          isCurrentAuthoritativeSnapshot ||
+          (!isSupersededAuthoritativeSnapshot && entry.updatedAt > existing.updatedAt)
+        ) {
+          merged.set(entry.id, entry);
+        }
+      }
+      return {
+        status: 'ok',
+        entries: [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt),
+        source: 'complete',
+      };
     },
     load: async (id) => {
       await waitForDocument(id);
@@ -160,15 +217,31 @@ export function createLibraryStore(dependencies: LibraryStoreDependencies): Libr
       try {
         record = await dependencies.database.load(id);
       } catch {
-        return dependencies.legacy.load(id);
+        const legacy = dependencies.legacy.load(id);
+        return legacy.status === 'missing' ? { status: 'unavailable' } : legacy;
       }
       if (record) {
+        dependencies.legacy.setDatabaseHistory(true);
         const parsed = parseRecord(record);
-        if (parsed.status === 'ok') return parsed;
+        const legacy = dependencies.legacy.load(id);
+        if (parsed.status === 'ok') {
+          const authoritativeSnapshotId = dependencies.legacy.getAuthoritativeSnapshotId(id);
+          const isCurrentAuthoritativeSnapshot =
+            authoritativeSnapshotId !== null &&
+            authoritativeSnapshotId !== record.supersededAuthoritativeSnapshotId;
+          if (
+            legacy.status === 'ok' &&
+            (isCurrentAuthoritativeSnapshot ||
+              (authoritativeSnapshotId === null && legacy.system.updatedAt > record.updatedAt))
+          ) {
+            await copyToDatabase(legacy.system);
+            return legacy;
+          }
+          return parsed;
+        }
         // A prior localStorage copy may still be valid after an interrupted
         // migration. Prefer the recoverable document but retain both sources:
         // the corrupt IndexedDB bytes may be repairable by a future version.
-        const legacy = dependencies.legacy.load(id);
         return legacy.status === 'ok' ? legacy : parsed;
       }
 
@@ -182,8 +255,11 @@ export function createLibraryStore(dependencies: LibraryStoreDependencies): Libr
       await waitForDocument(id);
       try {
         await dependencies.database.delete(id);
-      } catch {
-        return dependencies.legacy.delete(id);
+      } catch (error) {
+        // Preserve the legacy copy too. The authoritative IndexedDB record
+        // may still exist and would reappear when the database recovers; a
+        // partially successful delete is both misleading and less recoverable.
+        return outcomeFor(error);
       }
       return dependencies.legacy.delete(id);
     },

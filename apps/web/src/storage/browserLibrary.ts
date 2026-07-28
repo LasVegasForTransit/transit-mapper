@@ -1,20 +1,29 @@
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { createIndexedDbLibraryDatabase } from './indexedDbLibrary';
-import { createLibraryStore, type LibraryDatabase, type LibraryStore } from './libraryStore';
+import {
+  createLibraryStore,
+  type LibraryDatabase,
+  type LibraryListResult,
+  type LibraryLoadResult,
+  type LibraryStore,
+} from './libraryStore';
 import {
   deleteFromLibrary as deleteLegacy,
+  getAuthoritativeSnapshotId,
+  hasIndexedDbLibraryHistory,
+  isLocalStorageAvailable,
   listLibrary as listLegacy,
   loadLegacySingleSlot,
   loadSystemEntry as loadLegacy,
   removeLegacySingleSlot,
-  saveToLibrary as saveLegacy,
-  type LibraryEntry,
-  type LoadResult,
+  saveAuthoritativeToLibrary,
+  setIndexedDbLibraryHistory,
   type SaveOutcome,
 } from './localStore';
 import { serializeSystemOffThread } from './serializeSystem';
 
 export type { LibraryEntry, LoadResult, SaveOutcome } from './localStore';
+export type { LibraryListResult, LibraryLoadResult } from './libraryStore';
 
 function unavailableDatabase(): LibraryDatabase {
   const fail = (): never => {
@@ -41,21 +50,25 @@ function getBrowserStore(): LibraryStore {
     legacy: {
       list: listLegacy,
       load: loadLegacy,
-      save: saveLegacy,
+      saveAuthoritative: saveAuthoritativeToLibrary,
       delete: deleteLegacy,
+      getAuthoritativeSnapshotId,
       loadLegacySingleSlot,
       removeLegacySingleSlot,
+      isAvailable: isLocalStorageAvailable,
+      hasDatabaseHistory: hasIndexedDbLibraryHistory,
+      setDatabaseHistory: setIndexedDbLibraryHistory,
     },
     serialize: serializeSystemOffThread,
   });
   return browserStore;
 }
 
-export function listLibrary(): Promise<LibraryEntry[]> {
+export function listLibrary(): Promise<LibraryListResult> {
   return getBrowserStore().list();
 }
 
-export function loadSystemEntry(id: string): Promise<LoadResult> {
+export function loadSystemEntry(id: string): Promise<LibraryLoadResult> {
   return getBrowserStore().load(id);
 }
 

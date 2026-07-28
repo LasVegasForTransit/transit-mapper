@@ -1,5 +1,4 @@
-import type { LibraryDatabase, StoredSystemRecord } from './libraryStore';
-import type { LibraryEntry } from './localStore';
+import type { LibraryDatabase, StoredLibraryEntry, StoredSystemRecord } from './libraryStore';
 
 const INDEXED_DB_NAME = 'transitmapper-documents';
 const INDEXED_DB_VERSION = 1;
@@ -75,7 +74,7 @@ export function createIndexedDbLibraryDatabase(factory: IDBFactory): LibraryData
       const transaction = database.transaction(INDEXED_DB_INDEX_STORE, 'readonly');
       return (await requestResult(
         transaction.objectStore(INDEXED_DB_INDEX_STORE).getAll(),
-      )) as LibraryEntry[];
+      )) as StoredLibraryEntry[];
     },
     load: async (id) => {
       const database = await open();
@@ -96,7 +95,12 @@ export function createIndexedDbLibraryDatabase(factory: IDBFactory): LibraryData
         id: record.id,
         name: record.name,
         updatedAt: record.updatedAt,
-      } satisfies LibraryEntry);
+        ...(record.supersededAuthoritativeSnapshotId
+          ? {
+              supersededAuthoritativeSnapshotId: record.supersededAuthoritativeSnapshotId,
+            }
+          : {}),
+      } satisfies StoredLibraryEntry);
       await transactionComplete(transaction);
     },
     delete: async (id) => {

@@ -5100,19 +5100,17 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     revertedPoint[0] === -115.1 && revertedPoint[1] === 36.1 && movedPoint[0] === -115.0,
   );
 
-  // A cancelled drag that reverts to the exact original value shouldn't
-  // create a phantom undo step — this is what an Escape-cancelled gesture
-  // looks like from the store's side (see interactions.ts).
+  // An Escape-cancelled drag restores the exact checkpoint snapshot instead
+  // of serializing changed agency-scale collections to discover equivalence.
   store.getState().redo();
   const stepsBeforeNoOpDrag = countUndoSteps();
-  const original = store.getState().system.ways.find((w) => w.id === wayId)!.points[1];
+  const beforeCancelledDrag = store.getState().system;
   store.getState().beginHistoryCheckpoint();
   store.getState().moveWayPoint(wayId, 1, [-114.9, 36.3]);
-  store.getState().moveWayPoint(wayId, 1, original); // the gesture's own cancel-revert
-  store.getState().commitHistoryCheckpoint();
+  store.getState().cancelHistoryCheckpoint();
   check(
-    'a checkpoint that nets no change (cancel-revert) pushes no undo step',
-    countUndoSteps() === stepsBeforeNoOpDrag,
+    'canceling a checkpoint restores its exact snapshot and pushes no undo step',
+    store.getState().system === beforeCancelledDrag && countUndoSteps() === stepsBeforeNoOpDrag,
   );
 
   function countUndoSteps(): number {

@@ -18,6 +18,9 @@ import {
 } from '../map/layers';
 import { fetchWithTimeout } from '../network/fetchWithTimeout';
 import { EMBED_LAYER_SPECS, EMBED_SOURCE_IDS } from './config';
+import { markFirstSystemMapPaint } from '../perf/mapPaintMark';
+
+const PERF_HARNESS_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
 
 // The embedded map: a live, read-only view of one shared system, meant to sit
 // in someone else's article. Deliberately NOT the editor with its chrome
@@ -75,6 +78,16 @@ function createMap(container: HTMLElement): MLMap {
   });
   map.touchZoomRotate.disableRotation();
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+  if (PERF_HARNESS_BUILD && window.__TRANSITMAPPER_PERF_RUN__ === true) {
+    const cameraSnapshot = () => {
+      const center = map.getCenter();
+      return { center: [center.lng, center.lat] as [number, number], zoom: map.getZoom() };
+    };
+    window.__perfCameraSnapshot = cameraSnapshot;
+    map.on('remove', () => {
+      if (window.__perfCameraSnapshot === cameraSnapshot) delete window.__perfCameraSnapshot;
+    });
+  }
 
   // An embed lives at whatever size the host page decides, and that size can
   // change after load — a responsive article column, a lazy-loaded iframe that
@@ -175,6 +188,7 @@ async function drawSystem(
   const bounds = systemBounds(system);
   if (bounds) map.fitBounds(bounds, { padding: 40, animate: false });
   await waitForSystemPaint(map);
+  markFirstSystemMapPaint();
 }
 
 async function start(): Promise<void> {

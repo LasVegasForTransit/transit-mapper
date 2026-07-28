@@ -35,18 +35,21 @@ Ordered. Where two conflict, the higher-numbered goal yields.
 
 | Priority | Goal                                           | Motivation                                                      |
 | -------- | ---------------------------------------------- | --------------------------------------------------------------- |
-| 1        | Usability by non-engineers                     | The intended authors are advocates and planners, not developers |
-| 2        | Editing availability independent of any server | The organization cannot promise indefinite hosting              |
-| 3        | Correctness of derived geometry                | A plan that misleads is worse than no plan                      |
-| 4        | Operating cost near zero                       | A volunteer nonprofit funds this                                |
-| 5        | Contributor onboarding                         | The contributor pool is small and intermittent                  |
+| 1        | Immediate response to direct manipulation      | An editor that lags under a real system is not usable           |
+| 2        | Usability by non-engineers                     | The intended authors are advocates and planners, not developers |
+| 3        | Editing availability independent of any server | The organization cannot promise indefinite hosting              |
+| 4        | Correctness of derived geometry                | A plan that misleads is worse than no plan                      |
+| 5        | Operating cost near zero                       | A volunteer nonprofit funds this                                |
+| 6        | Contributor onboarding                         | The contributor pool is small and intermittent                  |
 
-The order settles arguments. Usability beats correctness, so the editor
-accepts a half-drawn network and shows what is wrong instead of refusing
-input until it validates. Availability beats cost, so documents live in the
-browser even though a server would be easier to build. Cost beats
-onboarding, so the Worker stays small enough to be awkward to read, and we
-document the awkwardness rather than spend money removing it.
+The order settles arguments. Direct manipulation therefore uses progressive
+detail and defers ambient rendering rather than making the pointer wait for a
+complete derived map. Usability beats correctness, so the editor accepts a
+half-drawn network and shows what is wrong instead of refusing input until it
+validates. Availability beats cost, so documents live in the browser even
+though a server would be easier to build. Cost beats onboarding, so the Worker
+stays small enough to be awkward to read, and we document the awkwardness
+rather than spend money removing it.
 
 ### Stakeholders
 
@@ -89,8 +92,9 @@ linting off.
 There are no accounts. Every published link is public, and nothing in the
 system can depend on knowing who is asking.
 
-Working documents live in browser storage. It is small, and the user can
-clear it at any moment.
+Working documents live in browser-owned IndexedDB, with localStorage retained
+only for migration and close-time recovery. Browser quotas are finite, and the
+user can clear either store at any moment.
 
 ### Organizational
 
@@ -196,14 +200,16 @@ what it was derived from.
 flowchart TD
   subgraph browser [Browser]
     web["apps/web — editor"]
-    ls[("localStorage")]
+    idb[("IndexedDB documents")]
+    ls[("localStorage compatibility")]
   end
   subgraph edge [Cloudflare]
     worker["apps/worker — publishing"]
     d1[("D1")]
   end
   core["packages/core — domain"]
-  web <--> ls
+  web <--> idb
+  web -. legacy read and close-time fallback .-> ls
   worker <--> d1
   web -- publish --> worker
   core -.-> web
@@ -265,16 +271,30 @@ MapLibre sources directly.
 
 ### Editing
 
-A pointer gesture becomes a store action. The store calls the core to
-re-derive geometry and routing for the affected ways and their neighbours,
-the map re-renders from the result, and the document is written to
-`localStorage`.
+A pointer gesture first updates a scratch MapLibre source containing only the
+manipulated geometry. Full derived detail remains masked until commit, so raw
+pointer movement never rebuilds the RTC-sized system. On commit, the store
+calls the core to re-derive geometry and routing for the affected ways and
+their neighbours. Dependency revisions select only the MapLibre sources whose
+data can have changed; unrequested feature-building phases do not traverse
+their collections.
 
 Neighbours are the part people miss. Editing one way moves the junctions at
 both its ends, and that retrims every other way meeting those junctions. An
 edit is never local to the thing edited.
 
-No network call happens anywhere in this flow.
+Autosave coalesces content and live-camera changes, serializes the latest
+snapshot in a Worker, and atomically commits the document and library row to
+IndexedDB. While a pointer or camera gesture is active, the simulated clock
+continues but vehicle-source painting yields until release, preventing ambient
+animation from competing with feedback for the user's hand.
+
+Browser termination cannot guarantee completion of an asynchronous IndexedDB
+transaction. On `visibilitychange`/`pagehide`, each still-undurable document
+therefore gets a best-effort synchronous localStorage recovery copy when it
+fits. That copy carries its authority marker in the same write, so an
+equal-timestamp camera snapshot cannot be mistaken for a stale migration copy
+on the next launch. No network call happens anywhere in this flow.
 
 ### Publishing
 
@@ -472,6 +492,7 @@ flowchart LR
   q --> e[Efficiency]
   q --> m[Maintainability]
   u --> u1[Draw without training]
+  u --> u2[Input stays responsive]
   a --> a1[Edit with no server]
   c --> c1[Geometry matches intent]
   e --> e1[Zero marginal cost]
@@ -483,33 +504,35 @@ flowchart LR
 Every scenario can be shown false. Where nothing verifies one, section 11
 says so.
 
-| Quality         | Scenario                                                    | Expected                                                             |
-| --------------- | ----------------------------------------------------------- | -------------------------------------------------------------------- |
-| Usability       | An advocate with no GIS experience draws a two-line network | Completed without documentation                                      |
-| Availability    | The publishing service is unreachable                       | Editing, saving, and exporting continue                              |
-| Availability    | Browser storage is cleared                                  | Unpublished work is lost; published snapshots survive                |
-| Correctness     | Two ways cross                                              | A junction forms with turn lanes consistent with both cross-sections |
-| Correctness     | A snapshot written against an older format is opened        | It parses and renders                                                |
-| Efficiency      | A visitor loads the editor                                  | The Worker is not invoked                                            |
-| Efficiency      | A document of hostile size is submitted                     | Rejected before storage                                              |
-| Maintainability | A new transit mode is added                                 | One catalog record, no conditional edited                            |
-| Maintainability | A contributor returns after two months                      | `pnpm check` states the bar; a failure names its fix                 |
+| Quality         | Scenario                                                    | Expected                                                                |
+| --------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Usability       | An advocate with no GIS experience draws a two-line network | Completed without documentation                                         |
+| Usability       | An RTC-scale system is edited while deferred work runs      | Input-to-next-paint p95 is at most 50 ms; no unexpected task over 50 ms |
+| Availability    | The publishing service is unreachable                       | Editing, saving, and exporting continue                                 |
+| Availability    | Browser storage is cleared                                  | Unpublished work is lost; published snapshots survive                   |
+| Correctness     | Two ways cross                                              | A junction forms with turn lanes consistent with both cross-sections    |
+| Correctness     | A snapshot written against an older format is opened        | It parses and renders                                                   |
+| Efficiency      | A visitor loads the editor                                  | The Worker is not invoked                                               |
+| Efficiency      | A document of hostile size is submitted                     | Rejected before storage                                                 |
+| Maintainability | A new transit mode is added                                 | One catalog record, no conditional edited                               |
+| Maintainability | A contributor returns after two months                      | `pnpm check` states the bar; a failure names its fix                    |
 
 No automated check covers the usability scenario. It is the only one that can
 fail without turning a build red.
 
 ## 11. Risks and Technical Debt
 
-| Item                                                  | Effect                                                                                                          | Status                                                           |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Wall-clock performance assertion                      | A spatial-grid bound is asserted in elapsed milliseconds, measured between 178ms and 3,229ms for identical code | Mitigated by running tests serially; needs a deterministic proxy |
-| Single maintainer                                     | Review, deployment, and credentials rest with one person                                                        | Open                                                             |
-| Unwired account code                                  | Identity, sessions, and ownership are implemented and imported by nothing; it reads as dead code and is not     | Documented in section 12 and the code map                        |
-| TypeScript pinned to 6                                | The toolchain cannot move to 7 until `typescript-eslint` supports it                                            | Blocked upstream                                                 |
-| Merge queue unavailable                               | A personal account owns the repository, so concurrent merges are never tested against the merged result         | Unblocked by transferring to the organization                    |
-| Browser storage as the only home for unpublished work | Clearing site data loses documents, with no recovery path                                                       | Accepted; publishing is the backup                               |
-| Two test suites                                       | A sequential `check()` script and Vitest coexist; the former resists being split                                | Accepted; new tests go to Vitest                                 |
-| Usability unverified                                  | The first quality goal has no automated check and no usability testing behind it                                | Open                                                             |
+| Item                                                  | Effect                                                                                                                                | Status                                                               |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Wall-clock performance assertion                      | A spatial-grid bound is asserted in elapsed milliseconds, measured between 178ms and 3,229ms for identical code                       | Mitigated by running tests serially; needs a deterministic proxy     |
+| Single maintainer                                     | Review, deployment, and credentials rest with one person                                                                              | Open                                                                 |
+| Unwired account code                                  | Identity, sessions, and ownership are implemented and imported by nothing; it reads as dead code and is not                           | Documented in section 12 and the code map                            |
+| TypeScript pinned to 6                                | The toolchain cannot move to 7 until `typescript-eslint` supports it                                                                  | Blocked upstream                                                     |
+| Merge queue unavailable                               | A personal account owns the repository, so concurrent merges are never tested against the merged result                               | Unblocked by transferring to the organization                        |
+| Browser storage as the only home for unpublished work | Clearing site data loses documents, with no recovery path                                                                             | Accepted; publishing is the backup                                   |
+| Hard termination during an agency-scale save          | Browsers cannot guarantee an async IndexedDB commit after process termination; a synchronous fallback may exceed `localStorage` quota | Mitigated by flushing on visibility change and documenting the limit |
+| Two test suites                                       | A sequential `check()` script and Vitest coexist; the former resists being split                                                      | Accepted; new tests go to Vitest                                     |
+| Usability unverified                                  | The first quality goal has no automated check and no usability testing behind it                                                      | Open                                                                 |
 
 Watch the first and last entries. A flaky assertion teaches people to re-run
 a build instead of reading it, and an unverified top-priority goal is a

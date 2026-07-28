@@ -233,14 +233,27 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 
 ## apps/web/src/storage/ — the local library
 
-- `localStore.ts` — a library of saved systems in `localStorage`, replacing
-  a single-slot autosave where "New system" silently overwrote the only one
-  there was. Each system has its own key so switching never touches the
-  others, and a small index holds just id, name and timestamp so the list
-  renders without loading every system in full.
-- `persistenceCoordinator.ts` — coalesces content and camera changes into
-  bounded saves. Camera movement is presentation state and does not change a
-  library entry's `updatedAt`; content edits do.
+- `indexedDbLibrary.ts` — the primary document database. Complete serialized
+  systems and their lightweight library rows live in separate object stores
+  and are updated atomically, so listing many RTC-sized systems never reads
+  their document bodies.
+- `libraryStore.ts` and `browserLibrary.ts` — the storage boundary. They
+  serialize through a dedicated Worker, migrate old `localStorage` documents
+  only after IndexedDB commits, and distinguish unavailable storage from a
+  genuinely empty library.
+- `localStore.ts` — the backward-compatible reader and emergency fallback for
+  documents created before IndexedDB. It also makes a best-effort synchronous
+  close-time copy when a document fits the browser's quota. The marker stored
+  atomically with that copy makes an equal-timestamp camera snapshot
+  authoritative on recovery; localStorage is not the primary store for new
+  saves.
+- `bootstrapLibrary.ts` — startup recovery policy. An IndexedDB failure never
+  becomes a new blank document or changes the active-document pointer.
+- `persistenceCoordinator.ts` — coalesces content and camera changes into one
+  ordered save lane and drains it without stranding a snapshot. It retains
+  undurable and failed state per document across document switches. Camera
+  movement is presentation state and does not change a library entry's
+  `updatedAt`; content edits do.
 
 ## apps/web/src/perf/ and apps/web/scripts/perf/ — measured performance
 
@@ -249,12 +262,18 @@ named report schemas; pure statistics and budget evaluation; bundle/PWA graph
 policy; direct-manipulation instrumentation; and the large-document storage
 thresholds. The production harness remains inert unless the runner sets its
 private per-navigation flag. Normal users do not pay for the developer overlay
-or automated counters.
+or automated counters. `frameMeter.ts` and `paintedFrameCapture.ts` sample
+actual MapLibre renders rather than idle animation frames; `panBench.ts`
+retains a deterministic attribution path alongside the trusted-input gate.
 
 `scripts/perf/run.ts` owns the stateful edge: stable headed Chrome, CPU/network
 emulation, cold and warm navigations, share/embed request fixtures, trusted
-pointer input, traces, calibration, the real localStorage probe, offline
-reload, and the ten-minute leak soak. `report-bundle.ts` and
+pointer input, traces, CPU/display calibration, a diagnostic legacy-storage
+boundary probe, production Worker/IndexedDB save timing, offline migration and
+reload, and the ten-minute leak soak with real PNG/SVG downloads. The
+diagnostic probe keeps compatibility parse, stringify, and `localStorage`
+write costs separate; editor journeys seed and read back real IndexedDB
+records. `report-bundle.ts` and
 `verify-pwa-output.ts` inspect production output after Vite builds it.
 
 The checked reports in `apps/web/perf/` are reviewable comparison evidence.
@@ -329,6 +348,9 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
   snapping, route drafting, station-land drawing.
 - `MapCanvas.tsx` — the map component; keeps sources in sync with the store
   and heals overlay layers if the style reloads.
+- `initialStyleFallback.ts` — bounds initial third-party style loading and
+  switches failures to a local blank style so system geometry and pointer
+  interactions still initialize offline.
 - `layers/` — the layer specifications and icons `layers.ts` assembles.
 - `export/` — rendering the map to an image off-screen.
 - `basemap.ts`, `icons.ts`, `landmarks.ts`, `mapRef.ts`,
@@ -347,29 +369,6 @@ drag frame look like a content edit to the renderer subscription, every
 mounted selector, and autosave alike. Moving it out cost the saved-viewport
 behaviour, which `storage/persistenceCoordinator.ts` restores deliberately
 rather than by making the camera reactive again.
-
-## apps/web/src/perf/ — measuring frames
-
-- `frameStats.ts` — summarises frame durations. Reports the median rather
-  than the mean, plus p95, worst, and the fraction of frames over the 60Hz
-  and 30Hz budgets.
-- `frameMeter.ts` — samples painted-frame intervals from MapLibre's render
-  event, because the map paints on demand and a plain animation-frame
-  counter keeps ticking when nothing is drawn.
-- `panBench.ts` — a scripted pan and zoom in the same shape as a real drag.
-  Deterministic input is what makes two runs comparable, so "feels
-  smoother" becomes a number.
-- `fixtures.ts`, `scenarios.ts`, `report.ts`, `budget.ts` — deterministic
-  small, dense, and agency-scale systems; the measurement protocol; stable
-  reports; and absolute/regression budget evaluation.
-- `bundleBudget.ts`, `pwaPrecache.ts` — inspect production build output so
-  bundle growth and accidental precaching of large lazy chunks fail visibly.
-- `index.ts` — wires the above to `window.__panBench`, `window.__perf` and
-  friends for use from devtools.
-
-Interactive instrumentation remains development-only. `perf.config.ts`,
-`scripts/perf/`, and `.github/workflows/performance.yml` run the repeatable
-browser and build measurements in CI.
 
 ## apps/web/src/ui/ — components
 

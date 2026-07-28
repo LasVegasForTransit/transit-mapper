@@ -300,14 +300,18 @@ The line between the last two groups is the one that matters: `packages/core`
 decides _what the answer is_ and the app decides _when to ask_. That is why the
 simulator can be tested without a browser.
 
-## Cost, and what hasn't been measured
+## Cost and interaction priority
 
 The simulation resolves on a fixed 30 Hz tick, decoupled from the render loop,
-and skips whole patterns whose path is off-screen. Two things keep it cheap:
+and skips whole patterns whose path is off-screen. Three things keep it cheap:
 
 - A service that isn't running is skipped before its geometry is resolved.
 - Schedule resolution — walking each service's periods and parsing their spans
   — is redone only when the simulated **minute** changes, not every frame.
+- While a person is continuously dragging geometry or the camera, the last
+  vehicle positions remain visible and vehicle-source uploads sleep. The clock
+  catches up to the real elapsed interval on release, so the simulation keeps
+  correct time without competing with pointer feedback.
 
 At agency scale, imported feeds now carry real service levels (see below), so
 every pattern plans a real fleet rather than a single vehicle. What bounds the
@@ -336,12 +340,13 @@ more multiplies and a square root in place of one division — so the shape of
 this table should hold, but that is an expectation, not a re-measurement; the
 table above hasn't been rerun against it.
 
-**What has NOT been measured.** Everything downstream of that: handing up to
-~3,400 features per tick to MapLibre, and painting them. That needs a real,
-focused browser — `__panBench` / `__zoomBench` with `__perf.vehicles` toggled.
-A headless pane parks `requestAnimationFrame` and composites only a frame or
-two per interaction, which is not enough to time a pan; that was confirmed by
-trying it, not assumed.
+**Browser attribution.** The fixed headed-Chrome suite now measures the
+downstream work too: source uploads, MapLibre painted-frame intervals, and
+unexpected long tasks while trusted pointer input runs with the simulation
+both running and paused. `__panBench` / `__zoomBench` with
+`__perf.vehicles` toggled remain the local A/B seam. See
+[Measure browser performance](../../development/how-to/measure-performance.md)
+for the protocol and current evidence.
 
 ## Service levels from an imported feed
 

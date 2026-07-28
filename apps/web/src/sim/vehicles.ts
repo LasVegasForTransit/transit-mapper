@@ -84,6 +84,10 @@ export interface VehicleGate {
    *  service then runs that period's configuration regardless of the clock.
    *  Undefined means follow the clock. */
   pinnedPeriod: () => string | undefined;
+  /** True while the user is continuously manipulating map geometry or the
+   * camera. Vehicle positions remain visually frozen for that brief interval
+   * so ambient source uploads cannot contend with pointer feedback. */
+  isDirectManipulationActive: () => boolean;
   /** Presentation state lives outside the editor store. Publish view, mode
    *  filter, and pinned-period changes here so an inactive animation can stop
    *  completely instead of polling those getters forever. */
@@ -567,6 +571,13 @@ export function attachVehicleAnimation(
     const wokeFromIdle = idle;
     idle = false;
     const realNow = performance.now();
+    if (gate.isDirectManipulationActive()) {
+      // Keep the last visible positions in both sources and stop polling. The
+      // gate wakes us on release; leaving lastRealNow untouched makes that
+      // resumed tick advance the clock across the whole visible interval.
+      idle = true;
+      return;
+    }
     const sinceLast = realNow - lastUpdate;
     if (!paused && sinceLast < VEHICLE_UPDATE_INTERVAL_MS) {
       // Preserve this across the cadence-only frame so the next real update
@@ -830,12 +841,22 @@ export function attachVehicleAnimation(
   const unsubscribeStore = store.subscribe((state) => {
     if (state.system === previousSystem) return;
     previousSystem = state.system;
+    if (gate.isDirectManipulationActive()) return;
     wake(true);
   });
-  const wakeForCamera = () => wake(true);
+  const wakeForCamera = () => {
+    if (!gate.isDirectManipulationActive()) wake(true);
+  };
   map.on('moveend', wakeForCamera);
   map.on('zoomend', wakeForCamera);
-  const unsubscribeGate = gate.subscribe(() => wake(true));
+  const unsubscribeGate = gate.subscribe(() => {
+    if (gate.isDirectManipulationActive()) {
+      cancelScheduled();
+      idle = true;
+      return;
+    }
+    wake(true);
+  });
   const onVisibilityChange = () => {
     const realNow = performance.now();
     if (document.visibilityState === 'hidden' && !clock.settings().paused) {

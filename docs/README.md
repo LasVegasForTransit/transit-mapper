@@ -77,6 +77,8 @@ For people changing the code rather than using the app.
   are and which boundaries are load-bearing.
 - [Checks](development/reference/checks.md) — every check, what makes it
   fail, and the command that fixes it.
+- [Performance acceptance matrix](development/reference/performance-acceptance-matrix.md) —
+  automated gates and the manual browser/failure-path release checklist.
 - [The enforcement model](development/explanation/enforcement-model.md) —
   why the harness is shaped this way.
 

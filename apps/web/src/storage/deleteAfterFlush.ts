@@ -3,6 +3,7 @@ import type { SaveOutcome } from './localStore';
 export interface DeleteAfterFlushOptions {
   flush: () => void | Promise<void>;
   deleteDocument: (id: string) => Promise<SaveOutcome>;
+  discardDocument: (id: string) => void;
 }
 
 /** A pending autosave captured before deletion would otherwise commit after
@@ -13,5 +14,7 @@ export async function deleteAfterFlush(
   options: DeleteAfterFlushOptions,
 ): Promise<SaveOutcome> {
   await options.flush();
-  return options.deleteDocument(id);
+  const outcome = await options.deleteDocument(id);
+  if (outcome === 'saved') options.discardDocument(id);
+  return outcome;
 }

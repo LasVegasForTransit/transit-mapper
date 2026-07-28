@@ -82,8 +82,14 @@ function aggregateGateValues(
     PERF_METRIC_NAMES.map((metric) => [metric, metrics[metric].p95]),
   ) as Record<PerfMetricName, number>;
   const inputSamples = samples.flatMap((sample) => sample.gesture.inputToNextPaintMs);
-  const paintedSamples = samples.flatMap((sample) => sample.gesture.paintedFrameMs);
-  const unexpectedLongTasks = samples.flatMap((sample) => sample.gesture.unexpectedLongTaskMs);
+  const paintedSamples = samples.flatMap((sample) => [
+    ...sample.gesture.paintedFrameMs,
+    ...sample.warmGesture.paintedFrameMs,
+  ]);
+  const unexpectedLongTasks = samples.flatMap((sample) => [
+    ...sample.gesture.unexpectedLongTaskMs,
+    ...sample.warmGesture.unexpectedLongTaskMs,
+  ]);
   const warmInputSamples = samples.flatMap((sample) => sample.warmGesture.inputToNextPaintMs);
 
   result.inputToNextPaintP95Ms = summarizeMetric(
@@ -124,6 +130,25 @@ function summarizeScenario(scenario: PerfScenario, samples: PerfSample[]): PerfS
     metrics,
     gateValues: aggregateGateValues(scenarioSamples, metrics),
     persistence: {
+      productionSampleCount: scenarioSamples.filter((sample) => sample.persistence.production)
+        .length,
+      productionSaveMs: summarizeMetric(
+        scenarioSamples.flatMap((sample) =>
+          sample.persistence.production ? [sample.persistence.production.saveMs] : [],
+        ),
+      ),
+      productionWorkerSerializationMs: summarizeMetric(
+        scenarioSamples.flatMap((sample) =>
+          sample.persistence.production
+            ? [sample.persistence.production.workerSerializationMs]
+            : [],
+        ),
+      ),
+      productionIndexedDbWriteMs: summarizeMetric(
+        scenarioSamples.flatMap((sample) =>
+          sample.persistence.production ? [sample.persistence.production.indexedDbWriteMs] : [],
+        ),
+      ),
       serializedBytes: Math.max(
         0,
         ...scenarioSamples.map((sample) => sample.persistence.serializedBytes),

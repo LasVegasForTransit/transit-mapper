@@ -31,6 +31,7 @@ function sample(run: number, loadMs: number): PerfSample {
     paintedFrameMs: [],
     unexpectedLongTaskMs: [],
     actions: ['camera-drag'] as Array<'camera-drag' | 'entity-drag' | 'draw'>,
+    simulationState: 'running' as const,
   };
   const counters = {
     sourceUploadCount: 0,
@@ -115,6 +116,58 @@ describe('performance reports', () => {
       projectedEntityCount: 4,
     });
     expect(report.samples.map((value) => value.run)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('gates painted frames and unexpected long tasks across cold and warm gestures', () => {
+    const samples = [1, 2, 3, 4, 5].map((run) => {
+      const measured = sample(run, 10);
+      measured.gesture = {
+        ...measured.gesture,
+        paintedFrameMs: [10],
+        unexpectedLongTaskMs: [],
+      };
+      measured.warmGesture = {
+        ...measured.warmGesture,
+        paintedFrameMs: run === 5 ? [40] : [20],
+        unexpectedLongTaskMs: run === 5 ? [65] : [],
+      };
+      return measured;
+    });
+
+    const report = createPerfReport({
+      generatedAt: '2026-07-28T12:00:00.000Z',
+      protocol: PERF_PROTOCOL,
+      scenarios: [PERF_SCENARIOS.small],
+      samples,
+    });
+
+    expect(report.scenarios[0].gateValues.paintedFrameP95Ms).toBe(40);
+    expect(report.scenarios[0].gateValues.paintedFramesOver33Ratio).toBe(0.1);
+    expect(report.scenarios[0].gateValues.maxUnexpectedLongTaskMs).toBe(65);
+  });
+
+  it('summarizes the measured production Worker and IndexedDB save lane', () => {
+    const samples = [1, 2, 3, 4, 5].map((run) => {
+      const measured = sample(run, 10);
+      measured.persistence.production = {
+        saveMs: 450 + run,
+        workerSerializationMs: 10 + run,
+        indexedDbWriteMs: 2 + run,
+      };
+      return measured;
+    });
+
+    const report = createPerfReport({
+      generatedAt: '2026-07-28T12:00:00.000Z',
+      protocol: PERF_PROTOCOL,
+      scenarios: [PERF_SCENARIOS.small],
+      samples,
+    });
+
+    expect(report.scenarios[0].persistence.productionSampleCount).toBe(5);
+    expect(report.scenarios[0].persistence.productionSaveMs.median).toBe(453);
+    expect(report.scenarios[0].persistence.productionWorkerSerializationMs.p95).toBe(15);
+    expect(report.scenarios[0].persistence.productionIndexedDbWriteMs.max).toBe(7);
   });
 
   it('reports an unavailable browser without inventing timings', () => {

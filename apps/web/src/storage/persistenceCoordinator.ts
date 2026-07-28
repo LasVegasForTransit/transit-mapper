@@ -2,7 +2,7 @@ import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { EditorStore } from '../editor/store';
 import { subscribeLiveCamera, withLiveCamera } from '../camera/liveCamera';
 import { saveToLibrary, type SaveOutcome } from './browserLibrary';
-import { setActiveId } from './localStore';
+import { saveEmergencyToLibrary, setActiveId } from './localStore';
 
 const SAVE_DEBOUNCE_MS = 450;
 
@@ -28,6 +28,7 @@ export interface PersistenceScheduler {
 export interface PersistenceCoordinatorOptions {
   store: PersistenceStore;
   save: (system: TransitSystem) => Promise<SaveOutcome>;
+  emergencySave: (system: TransitSystem) => SaveOutcome;
   report: (outcome: SaveOutcome) => void;
   setActiveId: (id: string) => void;
   withLiveCamera: (system: TransitSystem) => TransitSystem;
@@ -39,6 +40,10 @@ export interface PersistenceCoordinatorOptions {
 export interface PersistenceCoordinator {
   /** Force the one pending content/camera snapshot to disk now. */
   flush(): Promise<void>;
+  /** Reconcile a library write performed outside the autosave lane. */
+  recordOutcome(id: string, outcome: SaveOutcome): void;
+  /** Forget a successfully deleted document after its pending save is flushed. */
+  discard(id: string): void;
   detach(): void;
 }
 
@@ -66,6 +71,9 @@ export function createPersistenceCoordinator(
 ): PersistenceCoordinator {
   let timer: number | null = null;
   let pendingSystem: TransitSystem | null = null;
+  const undurableSystems = new Map<string, TransitSystem>();
+  const lastEmergencySystems = new Map<string, TransitSystem>();
+  const failedOutcomes = new Map<string, Exclude<SaveOutcome, 'saved'>>();
   const saveQueue: TransitSystem[] = [];
   let drainPromise: Promise<void> | null = null;
 
@@ -74,14 +82,53 @@ export function createPersistenceCoordinator(
     options.scheduler.cancel(timer);
     timer = null;
   };
+  const reportEffectiveOutcome = (): void => {
+    const effectiveOutcome = [...failedOutcomes.values()].includes('full')
+      ? 'full'
+      : failedOutcomes.size > 0
+        ? 'unavailable'
+        : 'saved';
+    options.report(effectiveOutcome);
+  };
+  const recordOutcome = (id: string, outcome: SaveOutcome): void => {
+    if (outcome === 'saved') {
+      failedOutcomes.delete(id);
+    } else failedOutcomes.set(id, outcome);
+    reportEffectiveOutcome();
+  };
   const drainSaves = async (): Promise<void> => {
     while (saveQueue.length > 0) {
       const system = saveQueue.shift()!;
       try {
-        options.report(await options.save(system));
+        const outcome = await options.save(system);
+        recordOutcome(system.id, outcome);
+        if (outcome === 'saved' && undurableSystems.get(system.id) === system) {
+          undurableSystems.delete(system.id);
+          lastEmergencySystems.delete(system.id);
+        }
       } catch {
-        options.report('unavailable');
+        recordOutcome(system.id, 'unavailable');
       }
+    }
+  };
+  const ensureDrain = (): Promise<void> | null => {
+    if (drainPromise || saveQueue.length === 0) return drainPromise;
+    const current = drainSaves();
+    drainPromise = current;
+    const settled = () => {
+      if (drainPromise === current) drainPromise = null;
+      // A snapshot can be enqueued after drainSaves observes an empty queue
+      // but before this promise reaction runs. Restart here so that boundary
+      // cannot strand the snapshot.
+      if (saveQueue.length > 0) ensureDrain();
+    };
+    void current.then(settled, settled);
+    return current;
+  };
+  const waitForIdle = async (): Promise<void> => {
+    while (drainPromise || saveQueue.length > 0) {
+      const current = ensureDrain() ?? drainPromise;
+      if (current) await current;
     }
   };
   const enqueueSave = (system: TransitSystem): void => {
@@ -94,11 +141,7 @@ export function createPersistenceCoordinator(
     } else {
       saveQueue.push(system);
     }
-    if (!drainPromise) {
-      drainPromise = drainSaves().finally(() => {
-        drainPromise = null;
-      });
-    }
+    ensureDrain();
   };
   const flush = (): Promise<void> => {
     cancelTimer();
@@ -110,7 +153,7 @@ export function createPersistenceCoordinator(
       // snapshots queued behind the write already in progress.
       enqueueSave(system);
     }
-    return drainPromise ?? Promise.resolve();
+    return waitForIdle();
   };
   const queue = (system: TransitSystem) => {
     // Capture the camera while this document is still current. A system
@@ -118,6 +161,7 @@ export function createPersistenceCoordinator(
     // flush runs; reading it then would save the new document's viewport
     // onto the old document.
     pendingSystem = options.withLiveCamera(system);
+    undurableSystems.set(pendingSystem.id, pendingSystem);
     cancelTimer();
     timer = options.scheduler.schedule(() => {
       void flush();
@@ -144,20 +188,44 @@ export function createPersistenceCoordinator(
     const current = options.store.getState();
     if (!current.readOnly) queue(current.system);
   });
-  const unsubscribePageHide = options.scheduler.subscribePageHide(() => {
-    // pagehide cannot guarantee completion of any async browser database
-    // transaction, but starting it immediately is safer than abandoning the
-    // still-debounced snapshot.
+  const lifecycleFlush = () => {
+    for (const [id, system] of undurableSystems) {
+      if (lastEmergencySystems.get(id) === system) continue;
+      // IndexedDB is asynchronous and browsers do not guarantee its
+      // completion after a hard page termination. Keep the old synchronous
+      // localStorage path as a close-time emergency copy for documents that
+      // fit. RTC-scale documents can exceed localStorage quota; for those,
+      // visibilitychange merely gives the required async IndexedDB write the
+      // earliest platform-supported start.
+      const outcome = options.emergencySave(system);
+      if (outcome === 'saved') lastEmergencySystems.set(id, system);
+      recordOutcome(id, outcome);
+    }
     void flush();
-  });
+  };
+  const unsubscribePageHide = options.scheduler.subscribePageHide(lifecycleFlush);
   const unsubscribeHidden = options.scheduler.subscribeHidden(() => {
     // visibilitychange normally arrives before pagehide and gives an
     // asynchronous IndexedDB transaction more time to commit.
-    void flush();
+    lifecycleFlush();
   });
 
   return {
     flush,
+    recordOutcome,
+    discard: (id) => {
+      if (pendingSystem?.id === id) {
+        pendingSystem = null;
+        cancelTimer();
+      }
+      for (let index = saveQueue.length - 1; index >= 0; index--) {
+        if (saveQueue[index]?.id === id) saveQueue.splice(index, 1);
+      }
+      undurableSystems.delete(id);
+      lastEmergencySystems.delete(id);
+      failedOutcomes.delete(id);
+      reportEffectiveOutcome();
+    },
     detach: () => {
       void flush();
       unsubscribeStore();
@@ -175,6 +243,7 @@ export function attachPersistenceCoordinator(
   return createPersistenceCoordinator({
     store,
     save: saveToLibrary,
+    emergencySave: saveEmergencyToLibrary,
     report,
     setActiveId,
     withLiveCamera,

@@ -9,12 +9,31 @@ import {
 } from './panBench';
 import type { FrameStats } from './frameStats';
 import type { RawGestureMeasurements } from './gestureStats';
+import { attachPaintedFrameCapture } from './paintedFrameCapture';
 
 /** Runtime A/B toggles, flipped from the devtools console to attribute cost —
  *  e.g. `__perf.vehicles = false` then re-run `await __panBench()` to see the
  *  vehicle loop's share of the pan frame budget. */
 export interface DevPerfFlags {
   vehicles: boolean;
+}
+
+export interface PerfStationSnapshot {
+  coord: [number, number];
+  revision: number;
+  wayCount: number;
+}
+
+export interface PerfOverlaySnapshot {
+  sourceExists: boolean;
+  layerExists: boolean;
+  sourceLoaded: boolean;
+  featureCount: number;
+}
+
+export interface PerfHarnessOptions {
+  stationSnapshot?: (stationId: string) => PerfStationSnapshot | null;
+  overlaySnapshot?: () => PerfOverlaySnapshot;
 }
 
 declare global {
@@ -26,6 +45,11 @@ declare global {
     __zoomBench?: (opts?: ZoomBenchOptions) => Promise<FrameStats>;
     __perfSourceUploadCount?: () => number;
     __perfProjectLngLat?: (coord: [number, number]) => { x: number; y: number };
+    __perfStationSnapshot?: (stationId: string) => PerfStationSnapshot | null;
+    __perfCameraSnapshot?: () => { center: [number, number]; zoom: number };
+    __perfOverlaySnapshot?: () => PerfOverlaySnapshot;
+    __perfStartPaintedFrameCapture?: () => void;
+    __perfStopPaintedFrameCapture?: () => number[];
     __TRANSITMAPPER_PERF_RUN__?: boolean;
   }
 }
@@ -74,28 +98,37 @@ function automatedPerfRun(): boolean {
 }
 
 function perfHarnessEnabled(): boolean {
-  return import.meta.env.DEV || automatedPerfRun();
+  return import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
 }
 
 /**
- * DEV-only performance harness: a live painted-frame overlay, a scripted pan
- * benchmark (`window.__panBench`), and A/B flags (`window.__perf`). Never ships
- * enabled — the sole caller (map/MapCanvas.tsx) guards on import.meta.env.DEV,
- * and this also no-ops defensively in production.
+ * Development/performance-build harness: a live painted-frame overlay, a
+ * scripted pan benchmark (`window.__panBench`), and A/B flags (`window.__perf`).
+ * MapCanvas guards the call with the same compile-time flag, which lets Rollup
+ * remove this module from ordinary production builds.
  */
-export function attachPerfHarness(map: MLMap): () => void {
+export function attachPerfHarness(map: MLMap, options: PerfHarnessOptions = {}): () => void {
   if (!perfHarnessEnabled()) return () => {};
   window.__perf ??= { vehicles: true };
   // The live overlay is useful in devtools but adds a perpetual rAF loop. The
   // automated runner asks for raw gesture samples directly and stays clean.
   const meter = automatedPerfRun() ? undefined : attachFrameMeter(map);
   const sourceUploads = attachSourceUploadMeter(map);
+  const paintedFrames = attachPaintedFrameCapture(map);
   window.__perfSourceUploadCount = sourceUploads.count;
   window.__perfProjectLngLat = (coord) => {
     const point = map.project(coord);
     const bounds = map.getCanvas().getBoundingClientRect();
     return { x: bounds.left + point.x, y: bounds.top + point.y };
   };
+  window.__perfCameraSnapshot = () => {
+    const center = map.getCenter();
+    return { center: [center.lng, center.lat], zoom: map.getZoom() };
+  };
+  if (options.stationSnapshot) window.__perfStationSnapshot = options.stationSnapshot;
+  if (options.overlaySnapshot) window.__perfOverlaySnapshot = options.overlaySnapshot;
+  window.__perfStartPaintedFrameCapture = paintedFrames.start;
+  window.__perfStopPaintedFrameCapture = paintedFrames.stop;
   if (meter) window.__frameStats = meter.stats;
   window.__panBench = (opts) => runPanBench(map, opts);
   window.__panGestureBench = (opts) => runPanGestureBench(map, sourceUploads.count, opts);
@@ -103,12 +136,18 @@ export function attachPerfHarness(map: MLMap): () => void {
   return () => {
     meter?.detach();
     sourceUploads.detach();
+    paintedFrames.detach();
     delete window.__frameStats;
     delete window.__panBench;
     delete window.__panGestureBench;
     delete window.__zoomBench;
     delete window.__perfSourceUploadCount;
     delete window.__perfProjectLngLat;
+    delete window.__perfCameraSnapshot;
+    delete window.__perfStationSnapshot;
+    delete window.__perfOverlaySnapshot;
+    delete window.__perfStartPaintedFrameCapture;
+    delete window.__perfStopPaintedFrameCapture;
   };
 }
 
