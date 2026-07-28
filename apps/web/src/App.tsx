@@ -27,7 +27,6 @@ import { LinesPanel } from './ui/LinesPanel';
 import { SimControls, SimControlsCompact } from './ui/SimControls';
 import { Toolbar } from './ui/Toolbar';
 import { TopBarActions, TopBarBrand, ViewSwitch } from './ui/TopBar';
-import { useDelayedUnmount } from './ui/useDelayedUnmount';
 import { useSaveStatus } from './ui/SaveStatusProvider';
 import { useUi } from './ui/UiProvider';
 import { useView } from './ui/ViewProvider';
@@ -243,11 +242,6 @@ export function App() {
     }
   }, []);
 
-  // Hiding the UI used to unmount the whole chrome instantly; now it stays
-  // mounted (fading/rising out) for the CSS exit transition, and the restore
-  // button only appears once that's actually finished — avoiding an instant
-  // snap AND the two overlapping in the same top-left corner mid-transition.
-  const { mounted: chromeMounted, closing: chromeClosing } = useDelayedUnmount(!uiHidden, 160);
   const selection = useEditor((s) => s.selection);
   const multiSelection = useEditor((s) => s.multiSelection);
   const tool = useEditor((s) => s.tool);
@@ -333,7 +327,13 @@ export function App() {
   ) : null;
 
   return (
-    <div className="app">
+    // data-zen cascades to every opted-in chrome element via CSS attribute
+    // selectors (see app.css's "Zen mode" block: .zen-label, .zen-cluster,
+    // and friends) — a component becomes zen-aware by adding a class, not
+    // by threading uiHidden through props. MapCanvas and the banner below
+    // sit under this same root but carry none of those classes, so they're
+    // untouched by it.
+    <div className="app" data-zen={uiHidden || undefined}>
       {ready && <MapCanvas onBasemapUnavailable={() => setNotice(basemapNotice)} />}
       {/* Outside the chrome, like the banner above: right-clicking still has
           to offer its actions when the UI is hidden, since hiding the panels
@@ -359,34 +359,18 @@ export function App() {
           <div className="pointer-events-auto max-w-[560px]">{banner}</div>
         </div>
       )}
-      {chromeMounted && (
-        <div data-ui-state={chromeClosing ? 'closed' : 'open'} className="app-chrome">
-          <Workbench
-            brand={<TopBarBrand />}
-            menuPanel={<LinesPanel />}
-            supplementalPanel={<Inspector />}
-            hasSupplementalContent={hasSupplementalContent}
-            primaryToolbar={<TopBarActions />}
-            viewSwitcher={<ViewSwitch />}
-            simControls={<SimControls />}
-            simControlsCompact={<SimControlsCompact />}
-            modeToolbar={<Toolbar />}
-            importStatus={<ImportProgressPill />}
-          />
-        </div>
-      )}
-      {!chromeMounted && uiHidden && (
-        <button
-          type="button"
-          className="ui-restore"
-          onClick={toggleUi}
-          title="Show UI (\\)"
-          aria-label={`Show UI — ${name}`}
-        >
-          <Icon name="sidebar" size={16} />
-          <span className="ui-restore-name">{name}</span>
-        </button>
-      )}
+      <Workbench
+        brand={<TopBarBrand />}
+        menuPanel={<LinesPanel />}
+        supplementalPanel={<Inspector />}
+        hasSupplementalContent={hasSupplementalContent}
+        primaryToolbar={<TopBarActions />}
+        viewSwitcher={<ViewSwitch />}
+        simControls={<SimControls />}
+        simControlsCompact={<SimControlsCompact />}
+        modeToolbar={<Toolbar />}
+        importStatus={<ImportProgressPill />}
+      />
       {shortcutsOpen && (
         <LazyDialog
           onFailure={() => {
