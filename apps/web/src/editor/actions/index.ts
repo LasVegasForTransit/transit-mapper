@@ -10,6 +10,7 @@ import {
 } from '@transitmapper/core/model/selectionActions';
 import type { EditorStore } from '../store';
 import { commonActionProvider } from './commonActions';
+import { servicePointActionProvider, wayPointActionProvider } from './pointActions';
 import { serviceActionProvider } from './serviceActions';
 import { wayActionProvider } from './wayActions';
 
@@ -28,6 +29,10 @@ export function createSelectionActions(store: EditorStore): SelectionActionRegis
 
   registry.register(whenEditable(wayActionProvider(store)));
   registry.register(whenEditable(serviceActionProvider(store)));
+  // Point-anchored cuts come before the whole-object merges: when a click has
+  // a place, what it can do THERE is the more specific answer.
+  registry.register(whenEditable(servicePointActionProvider(store)));
+  registry.register(whenEditable(wayPointActionProvider(store)));
   registry.register(whenEditable(commonActionProvider(store)));
   return registry;
 }

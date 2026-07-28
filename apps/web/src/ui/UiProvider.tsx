@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import type { LngLat } from '@transitmapper/core/model/system';
 
 export type DialogName = 'import' | 'gtfs' | 'export' | 'share' | 'systems';
 
@@ -54,8 +55,10 @@ const ImportProgressContext = createContext<ImportProgressState | null>(null);
  *  useUi() consumer would otherwise re-render each time a menu opens or
  *  closes, and none of them care where the cursor was. */
 interface ContextMenuState {
-  contextMenuAt: { x: number; y: number } | null;
-  openContextMenu: (x: number, y: number) => void;
+  /** Screen position for the menu, plus the map coordinate the right-click
+   *  landed on — actions that cut a line where you clicked need the latter. */
+  contextMenuAt: { x: number; y: number; at: LngLat } | null;
+  openContextMenu: (x: number, y: number, at: LngLat) => void;
   closeContextMenu: () => void;
 }
 
@@ -70,8 +73,13 @@ export function UiProvider({ children }: UiProviderProps) {
   const [uiHidden, setUiHidden] = useState(false);
   const [activeDialog, setActiveDialog] = useState<DialogName | null>(null);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
-  const [contextMenuAt, setContextMenuAt] = useState<{ x: number; y: number } | null>(null);
-  const openContextMenu = useCallback((x: number, y: number) => setContextMenuAt({ x, y }), []);
+  const [contextMenuAt, setContextMenuAt] = useState<{ x: number; y: number; at: LngLat } | null>(
+    null,
+  );
+  const openContextMenu = useCallback(
+    (x: number, y: number, at: LngLat) => setContextMenuAt({ x, y, at }),
+    [],
+  );
   const closeContextMenu = useCallback(() => setContextMenuAt(null), []);
   const openShortcuts = useCallback(() => setShortcutsOpen(true), []);
   const closeShortcuts = useCallback(() => setShortcutsOpen(false), []);

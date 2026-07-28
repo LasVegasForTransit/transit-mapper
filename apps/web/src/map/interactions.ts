@@ -138,7 +138,7 @@ export interface AttachInteractionsOptions {
   /** Open the map's action menu at these viewport pixels. Called for a right
    *  CLICK that placed no node and finished no draw — a right DRAG still
    *  pans, so this never fires mid-gesture. */
-  openContextMenu: (x: number, y: number) => void;
+  openContextMenu: (x: number, y: number, at: LngLat) => void;
 }
 
 /**
@@ -1662,7 +1662,9 @@ export function attachInteractions(
     const inGroup = st.multiSelection.some((i) => i.kind === target.kind && i.id === target.id);
     const isSelected = st.selection?.kind === target.kind && st.selection.id === target.id;
     if (!inGroup && !isSelected) st.select(target);
-    opts.openContextMenu(e.originalEvent.clientX, e.originalEvent.clientY);
+    // The map coordinate travels with the screen one: an action that cuts a
+    // line where you clicked needs the place, not the pixel.
+    opts.openContextMenu(e.originalEvent.clientX, e.originalEvent.clientY, lngLatOf(e));
   };
 
   const onContextMenu = (ev: Event) => ev.preventDefault();

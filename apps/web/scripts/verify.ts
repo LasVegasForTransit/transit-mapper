@@ -1,6 +1,6 @@
 // Deterministic verification of the editor/model logic without a browser.
 // Run with: node scripts/verify.ts  (or: npm run verify)
-import { createEditorStore } from '../src/editor/store';
+import { createEditorStore, type MultiSelectItem } from '../src/editor/store';
 import { createSelectionActions } from '../src/editor/actions';
 import { validateSystemQuick } from '@transitmapper/core/model/validate';
 import { parseSystem, forkSystem, createEmptySystem } from '@transitmapper/core/model/serialize';
@@ -2199,6 +2199,111 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     "…not the other selected way's path (they're shaped differently enough to tell apart)",
     Math.abs(actual[0] - wrongOnB[0]) > 1e-6 || Math.abs(actual[1] - wrongOnB[1]) > 1e-6,
   );
+}
+
+// --- cutting where you CLICKED: the point-anchored actions that make a
+// stretch of a line removable without a station at each end ---
+{
+  fresh();
+  const way = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(way, [-115.2, 36.1]);
+  store.getState().addWayPoint(way, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const line = store.getState().system.services[0].id;
+  const registry = createSelectionActions(store);
+  const refs: MultiSelectItem[] = [{ kind: 'service', id: line }];
+  const midway: LngLat = [-115.15, 36.1];
+
+  check(
+    'without a click position a line offers no point-anchored cut',
+    registry
+      .actionsFor({ system: store.getState().system, refs })
+      .every((a) => !a.id.startsWith('service.cutHere')),
+  );
+
+  const at = (coord: LngLat) =>
+    registry.actionsFor({ system: store.getState().system, refs, at: coord });
+  check(
+    'clicking along the line offers to cut it there',
+    at(midway).some((a) => a.id === 'service.cutHere'),
+  );
+  check(
+    'clicking at the very end of a line offers no cut, since there is nothing to cut off',
+    at([-115.2, 36.1]).every((a) => a.group !== 'cut'),
+  );
+
+  at(midway)
+    .find((a) => a.id === 'service.endHere')!
+    .run();
+  const trimmed = store.getState().system.services[0].patterns[0];
+  const section = trimmed.sections[0];
+  const legs = section.kind === 'split' ? section.outbound : section.legs;
+  const extent = legs[0].extent;
+  check(
+    'ending the line at the clicked point shortens it there',
+    legs.length === 1 && extent.kind === 'stretch' && extent.toT < 0.6,
+  );
+  check('…and leaves the street it ran on alone', store.getState().system.ways.length === 1);
+
+  // Cut at a point, and the far half becomes its own line — how a stretch in
+  // the middle comes out: cut at both ends, delete the middle.
+  fresh();
+  const way2 = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(way2, [-115.2, 36.1]);
+  store.getState().addWayPoint(way2, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const line2 = store.getState().system.services[0].id;
+  const refs2: MultiSelectItem[] = [{ kind: 'service', id: line2 }];
+  registry
+    .actionsFor({ system: store.getState().system, refs: refs2, at: [-115.15, 36.1] })
+    .find((a) => a.id === 'service.cutHere')!
+    .run();
+  check(
+    'cutting a line at a point leaves two lines',
+    store.getState().system.services.length === 2,
+  );
+
+  // A way divides at a click too, which splitWayAt alone could not do: it
+  // only ever cut at an existing control point.
+  fresh();
+  const way3 = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(way3, [-115.2, 36.1]);
+  store.getState().addWayPoint(way3, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const refs3: MultiSelectItem[] = [{ kind: 'way', id: way3 }];
+  const divide = registry
+    .actionsFor({ system: store.getState().system, refs: refs3, at: [-115.15, 36.1] })
+    .find((a) => a.id === 'way.splitHere');
+  check('a way offers to divide where you clicked', !!divide);
+  divide!.run();
+  check('dividing a way at a point leaves two ways', store.getState().system.ways.length === 2);
+}
+
+// --- a duplicate street offers its own way out ---
+{
+  fresh();
+  store.getState().setDraftServiceEnabled(false);
+  const road = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(road, [-115.2, 36.1]);
+  store.getState().addWayPoint(road, [-115.1, 36.1]);
+  store.getState().finishWay();
+  // A second street laid alongside it, carrying a line — what a stroke drawn
+  // just outside snapping range leaves behind.
+  store.getState().setDraftServiceEnabled(true);
+  const beside = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(beside, [-115.19, 36.10028]);
+  store.getState().addWayPoint(beside, [-115.11, 36.10028]);
+  store.getState().finishWay();
+  check('the duplicate survived drawing', store.getState().system.ways.length === 2);
+
+  const registry = createSelectionActions(store);
+  const duplicate = store.getState().system.ways.find((w) => w.id !== road)!;
+  const merge = registry
+    .actionsFor({ system: store.getState().system, refs: [{ kind: 'way', id: duplicate.id }] })
+    .find((a) => a.id === 'way.mergeIntoNeighbour');
+  check('one selected street running alongside another offers to merge into it', !!merge);
+  merge!.run();
+  check('and merging leaves a single street', store.getState().system.ways.length === 1);
 }
 
 // --- selecting LINES: services join the multi-select group, the action

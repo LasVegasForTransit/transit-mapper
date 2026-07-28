@@ -20,6 +20,12 @@ import {
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { EditorStore } from '../store';
 
+/** How far apart two streets may be and still read as one having been laid by
+ *  accident beside the other. Wider than the automatic corridor tolerance
+ *  because a duplicate only exists by having escaped it, and matched to the
+ *  ceiling an explicit merge will reach (see the store's own). */
+const DUPLICATE_STREET_M = 60;
+
 /** Longest first, matching what mergeWaysIntoCorridor does internally: a long
  *  trunk should be the corridor everything else joins, not a short shuttle
  *  that happened to be clicked first. */
@@ -47,9 +53,38 @@ function corridorMergeWouldAbsorb(system: TransitSystem, ordered: string[]): boo
 export function wayActionProvider(store: EditorStore): SelectionActionProvider {
   return ({ system, refs }) => {
     const wayIds = refIds(refs, 'way');
+    if (wayIds.length !== refs.length) return [];
+
+    // ONE way, running alongside another it could belong to: the recovery for
+    // a stroke that laid its own street beside an existing one instead of
+    // sharing it. That happens legitimately — snapping stops at 50 m and
+    // conflation at the mode's tolerance, both on purpose — but until now the
+    // only way out was to select both streets and know to look for a merge.
+    // The duplicate is the thing you are looking at, so the offer belongs on
+    // it.
+    if (wayIds.length === 1) {
+      const [id] = wayIds;
+      const typeId = system.ways.find((x) => x.id === id)?.typeId;
+      const host = system.ways.find(
+        (w) =>
+          w.id !== id && w.typeId === typeId && runsAlongside(system, id, w.id, DUPLICATE_STREET_M),
+      );
+      if (!host) return [];
+      const ordered = longestFirst(system, [id, host.id]);
+      return [
+        {
+          id: 'way.mergeIntoNeighbour',
+          label: 'Merge into the street beside it',
+          hint: 'Moves this one’s lines onto the street it runs along',
+          group: 'merge',
+          run: () => store.getState().mergeWaysIntoCorridor(ordered),
+        },
+      ];
+    }
+
     // Mixed selections offer nothing here: a way and a station have no
     // relationship these operations act on.
-    if (wayIds.length < 2 || wayIds.length !== refs.length) return [];
+    if (wayIds.length < 2) return [];
 
     const actions: SelectionAction[] = [];
 

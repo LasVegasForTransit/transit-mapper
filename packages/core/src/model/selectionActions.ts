@@ -13,7 +13,7 @@
  * the app's providers, which are the only place those two facts meet.
  */
 
-import type { TransitSystem } from './system';
+import type { LngLat, TransitSystem } from './system';
 
 /** One selected object. The store's MultiSelectItem is this type — it lives
  *  here because the registry takes a selection as input and core cannot
@@ -26,6 +26,16 @@ export interface SelectionRef {
 export interface ActionContext {
   system: TransitSystem;
   refs: SelectionRef[];
+  /** Where on the map the gesture happened, when it had a place: the point a
+   *  right-click landed on. Absent for the inspector, which is a panel and
+   *  points at nothing.
+   *
+   *  This is what lets an action act on a POSITION rather than on a whole
+   *  object — cutting a line where you clicked instead of only at a stop.
+   *  Providers that need it simply return nothing when it is absent, which is
+   *  why the inspector and the menu can share one registry without either
+   *  knowing about the other. */
+  at?: LngLat;
 }
 
 export interface SelectionAction {

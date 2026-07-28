@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { SelectionAction, SelectionRef } from '@transitmapper/core/model/selectionActions';
+import type { LngLat } from '@transitmapper/core/model/system';
 import { blockedMergeNote } from './actions';
 import { useEditor, useSelectionActionRegistry } from './EditorProvider';
 import type { Selection } from './store';
@@ -26,8 +27,12 @@ function refsOfSelection(selection: Selection): SelectionRef[] {
  *
  * Both surfaces call this rather than the registry, so the rule that a
  * multi-selection outranks a single selection is stated once.
+ *
+ * `at` is where the gesture happened, and only the right-click menu has one.
+ * The inspector passes nothing, so actions anchored to a POINT — cut this line
+ * where you clicked — never appear in a panel that points at nowhere.
  */
-export function useSelectionActions(): SelectionActionsView {
+export function useSelectionActions(at?: LngLat): SelectionActionsView {
   const registry = useSelectionActionRegistry();
   const system = useEditor((s) => s.system);
   const multiSelection = useEditor((s) => s.multiSelection);
@@ -39,8 +44,8 @@ export function useSelectionActions(): SelectionActionsView {
     if (refs.length === 0) return { refs, actions: [], note: null };
     return {
       refs,
-      actions: registry.actionsFor({ system, refs }),
+      actions: registry.actionsFor({ system, refs, at }),
       note: readOnly ? null : blockedMergeNote(system, refs),
     };
-  }, [registry, system, multiSelection, selection, readOnly]);
+  }, [registry, system, multiSelection, selection, readOnly, at]);
 }

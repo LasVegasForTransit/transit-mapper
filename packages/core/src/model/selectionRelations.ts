@@ -99,13 +99,26 @@ export function crossesAtDifferentGrades(system: TransitSystem, aId: string, bId
  * where it is. Callers that gate a menu entry pair this with a carries-a-
  * service check.
  */
-export function runsAlongside(system: TransitSystem, aId: string, bId: string): boolean {
+export function runsAlongside(
+  system: TransitSystem,
+  aId: string,
+  bId: string,
+  /** How far apart the two may be. The default is the automatic tolerance,
+   *  which is right for deciding whether to OFFER an ordinary corridor merge.
+   *  Asking "is this street a duplicate of that one" needs a wider band on
+   *  purpose: a duplicate only exists because it fell outside the automatic
+   *  tolerance, so judging the recovery by that same number guarantees it is
+   *  never offered. */
+  toleranceM: number = CONFLATION_TOLERANCE_M,
+): boolean {
   const a = wayOf(system, aId);
   const b = wayOf(system, bId);
   if (!a || !b || a.id === b.id) return false;
-  const path = densifyForMatching(resolveWayPath(a), CONFLATION_TOLERANCE_M);
+  const path = densifyForMatching(resolveWayPath(a), toleranceM);
   if (path.length < 2) return false;
-  return detectShapeRuns(path, [b]).some((run) => 'onWayId' in run);
+  return detectShapeRuns(path, [b], { toleranceM, minRunM: toleranceM * 1.25 }).some(
+    (run) => 'onWayId' in run,
+  );
 }
 
 /** True when any pattern of the service rides this way. */
