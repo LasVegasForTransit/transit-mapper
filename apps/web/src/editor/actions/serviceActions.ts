@@ -1,4 +1,4 @@
-// What two selected lines let you do.
+// What a selected line — or two — lets you do.
 //
 // The two merges here are genuinely different operations and the geometry
 // picks between them: lines that meet end to end become one continuous ride,
@@ -11,12 +11,44 @@ import {
   type SelectionAction,
   type SelectionActionProvider,
 } from '@transitmapper/core/model/selectionActions';
+import { patternHasSplit } from '@transitmapper/core/model/geo';
 import { servicesShareOrCross, terminiMeet } from '@transitmapper/core/model/selectionRelations';
 import type { EditorStore } from '../store';
 
 export function serviceActionProvider(store: EditorStore): SelectionActionProvider {
   return ({ system, refs }) => {
     const serviceIds = refIds(refs, 'service');
+
+    // One line selected: the couplet gestures. Offered here rather than only
+    // in the inspector because splitting a line is a thing you decide while
+    // looking at where it runs, which is the map.
+    if (serviceIds.length === 1 && refs.length === 1) {
+      const service = system.services.find((s) => s.id === serviceIds[0]);
+      // A branching line has no single path to split — which of its branches
+      // gets the return trip is a question the menu cannot ask.
+      if (!service || service.patterns.length !== 1) return [];
+      const pattern = service.patterns[0];
+      return patternHasSplit(pattern)
+        ? [
+            {
+              id: 'service.makeTwoWay',
+              label: 'Make it run both ways on one street',
+              hint: 'Its return trip rejoins the outward one',
+              group: 'direction',
+              run: () => store.getState().makePatternTwoWay(service.id, pattern.id),
+            },
+          ]
+        : [
+            {
+              id: 'service.drawReturnPath',
+              label: 'Draw a separate return path',
+              hint: 'Trace the streets the return trip runs — a one-way couplet',
+              group: 'direction',
+              run: () => store.getState().startReturnPathDraft(service.id, pattern.id),
+            },
+          ];
+    }
+
     if (serviceIds.length !== 2 || refs.length !== 2) return [];
 
     const [a, b] = serviceIds;

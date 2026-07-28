@@ -2255,6 +2255,27 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     !actionIds.includes('way.mergeCorridor'),
   );
 
+  // One line selected: the couplet gestures live on the same menu, because
+  // splitting a line is decided while looking at where it runs.
+  {
+    const oneRef = [{ kind: 'service' as const, id: lineW }];
+    const oneIds = registry
+      .actionsFor({ system: store.getState().system, refs: oneRef })
+      .map((action) => action.id);
+    check(
+      'one selected line is offered a separate return path',
+      oneIds.includes('service.drawReturnPath'),
+    );
+    check(
+      'a line that is not split is not offered to be un-split',
+      !oneIds.includes('service.makeTwoWay'),
+    );
+    check(
+      'the two-line merges are absent when only one line is selected',
+      !oneIds.includes('service.throughRoute') && !oneIds.includes('service.mergeInto'),
+    );
+  }
+
   const before = store.getState().system.services.length;
   registry
     .actionsFor({ system: store.getState().system, refs })

@@ -19,7 +19,7 @@ export function preferredLaneKinds(modeId: string): readonly string[] {
 }
 
 /**
- * The LaneSpec id a service of mode `modeId` rides on `pattern.legs[wayIndex]`:
+ * The LaneSpec id a service of mode `modeId` rides on `patternLegs(pattern)[wayIndex]`:
  * the leg's own pin if set, else the default resolved from the way's
  * cross-section, the direction of travel, and the mode's preferred lane
  * kinds. Null only for a lane-less profile.
