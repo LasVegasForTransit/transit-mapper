@@ -2,7 +2,11 @@ import { Hono, type Context } from 'hono';
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import { shortId } from '@transitmapper/core/model/ids';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import type { CreateShareResponse, GetShareResponse } from '@transitmapper/core/share/contract';
+import {
+  MAX_SHARE_BODY_BYTES,
+  type CreateShareResponse,
+  type GetShareResponse,
+} from '@transitmapper/core/share/contract';
 import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from '@transitmapper/core/render/preview';
 import { checkPreviewPng, MAX_PREVIEW_BYTES } from '@transitmapper/core/render/pngBytes';
 
@@ -20,7 +24,6 @@ interface Env {
   SHARE_CREATE_LIMITER?: RateLimiter;
 }
 
-const MAX_BODY_BYTES = 1_000_000; // ~1 MB — generous for a hand-drawn system.
 const ANONYMOUS_SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days.
 
 // The iframe size we ask for when a consumer doesn't constrain us — wide
@@ -283,12 +286,12 @@ app.post('/api/systems', async (c) => {
   // code units — a body of multi-byte characters measures up to three times
   // smaller that way and slipped past the limit entirely.
   const declaredLength = Number(c.req.header('content-length'));
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_SHARE_BODY_BYTES) {
     return c.json({ error: 'System too large' }, 413);
   }
 
   const raw = await c.req.text();
-  if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
+  if (new TextEncoder().encode(raw).byteLength > MAX_SHARE_BODY_BYTES) {
     return c.json({ error: 'System too large' }, 413);
   }
 
@@ -385,11 +388,11 @@ app.patch('/api/systems/:id', async (c) => {
   }
 
   const declaredLength = Number(c.req.header('content-length'));
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_SHARE_BODY_BYTES) {
     return c.json({ error: 'System too large' }, 413);
   }
   const raw = await c.req.text();
-  if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
+  if (new TextEncoder().encode(raw).byteLength > MAX_SHARE_BODY_BYTES) {
     return c.json({ error: 'System too large' }, 413);
   }
 
