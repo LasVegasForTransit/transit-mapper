@@ -295,21 +295,35 @@ export function markOnboardingSeen(): void {
   }
 }
 
+/** Reads the pre-library single autosave without modifying it. The async
+ * IndexedDB migration removes this key only after its replacement commits. */
+export function loadLegacySingleSlot(): TransitSystem | null {
+  try {
+    const raw = localStorage.getItem(LEGACY_KEY);
+    return raw ? parseSystem(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function removeLegacySingleSlot(): void {
+  try {
+    localStorage.removeItem(LEGACY_KEY);
+  } catch {
+    // The committed library copy is durable. Leaving this redundant source
+    // costs space but is safer than treating cleanup as a failed migration.
+  }
+}
+
 /** One-time migration from the pre-library single autosave slot — loads it,
  *  saves it into the library under its own id, and removes the legacy key.
  *  Returns null (a no-op) if there was nothing there to migrate. */
 export function migrateLegacySingleSlot(): TransitSystem | null {
-  try {
-    const raw = localStorage.getItem(LEGACY_KEY);
-    if (!raw) return null;
-    const system = parseSystem(JSON.parse(raw));
-    // Only drop the legacy key once the copy is definitely on disk. Removing
-    // it after a failed save would delete the one surviving copy of work that
-    // predates the library — the exact data this migration exists to rescue.
-    if (saveToLibrary(system) !== 'saved') return system;
-    localStorage.removeItem(LEGACY_KEY);
-    return system;
-  } catch {
-    return null;
-  }
+  const system = loadLegacySingleSlot();
+  if (!system) return null;
+  // Only drop the legacy key once the copy is definitely on disk. Removing
+  // it after a failed save would delete the one surviving copy of work that
+  // predates the library — the exact data this migration exists to rescue.
+  if (saveToLibrary(system) === 'saved') removeLegacySingleSlot();
+  return system;
 }

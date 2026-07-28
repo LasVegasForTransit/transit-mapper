@@ -362,6 +362,43 @@ describe('vehicle animation scheduling', () => {
     detach();
   });
 
+  it('an inactive service wakes when its future span begins', () => {
+    const scheduled = installScheduler();
+    const store = createEditorStore();
+    const system = runningSystem();
+    system.services[0] = {
+      ...system.services[0],
+      spanStart: '05:00',
+      spanEnd: '23:00',
+    };
+    store.getState().setSystem(system);
+    const minuteMs = 60_000;
+    const clock = createSimClock({
+      startMs: (4 * 60 + 59) * minuteMs,
+      speedId: '1x',
+    });
+    const { map, network } = createMap();
+    const gate = createGate();
+
+    const detach = attachVehicleAnimation(map, store, clock, gate);
+    scheduled.pumpFrame(0);
+
+    expect(network.updates).toHaveLength(0);
+    expect(scheduled.raf.size).toBe(0);
+    expect(scheduled.timers.size).toBe(1);
+
+    scheduled.setNow(1_000);
+    [...scheduled.timers.values()][0]();
+    expect(scheduled.raf.size).toBe(1);
+    scheduled.pumpFrame(1_000);
+
+    expect(clock.now()).toBe(5 * 60 * minuteMs);
+    expect(network.updates).toHaveLength(1);
+    expect(network.updates[0].features.length).toBeGreaterThan(0);
+
+    detach();
+  });
+
   it('network animation does not rewrite an already-empty infrastructure source', () => {
     const scheduled = installScheduler();
     const store = createEditorStore();

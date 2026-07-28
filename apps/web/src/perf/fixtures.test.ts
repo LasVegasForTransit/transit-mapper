@@ -26,6 +26,10 @@ describe('performance fixtures', () => {
     }
   });
 
+  it('centers the small fixture on its own deterministic geometry', () => {
+    expect(generatePerfFixture('small').viewport.center).toEqual([-115.303, 36.026]);
+  });
+
   it('keeps the smaller scenarios materially below agency scale', () => {
     const small = countPerfFixture(generatePerfFixture('small'));
     const dense = countPerfFixture(generatePerfFixture('dense'));

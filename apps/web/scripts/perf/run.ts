@@ -10,6 +10,7 @@ import {
   type CDPSession,
   type Page,
 } from 'playwright-core';
+import type { LngLat } from '@transitmapper/core/model/system';
 import {
   createPerfProtocol,
   PERF_BASELINE_DIRECTORY,
@@ -23,6 +24,7 @@ import { generatePerfFixture } from '../../src/perf/fixtures';
 import { summarizeGesture, type RawGestureMeasurements } from '../../src/perf/gestureStats';
 import { classifyPersistence } from '../../src/perf/persistencePolicy';
 import { createPerfReport, createUnavailablePerfReport } from '../../src/perf/report';
+import { PERF_SCENARIOS } from '../../src/perf/scenarios';
 import type {
   PerfBundleEntry,
   PerfBudgetEvaluation,
@@ -31,6 +33,7 @@ import type {
   PerfMemorySnapshot,
   PerfMetricValues,
   PerfNetworkSnapshot,
+  PerfPhaseCounters,
   PerfPersistenceProbe,
   PerfReport,
   PerfProfileId,
@@ -48,6 +51,8 @@ interface PerfCliOptions {
   skipBuild: boolean;
   profile: PerfProfileId;
   scenarioId?: PerfScenario['id'];
+  soak: boolean;
+  soakDurationMs: number;
   help: boolean;
 }
 
@@ -97,13 +102,23 @@ interface GenericGestureMeasurements {
   animationFrameMs: number[];
   longTaskMs: number[];
   sourceUploadCount: number | null;
-  actions: Array<'drag' | 'draw'>;
+  actions: Array<'camera-drag' | 'entity-drag' | 'draw'>;
 }
 
 interface PerfPageWindow extends Window {
   __genericPerfGesture?: GenericGestureState;
-  __panGestureBench?: () => Promise<RawGestureMeasurements>;
+  __genericPerfFrame?: FrameRequestCallback;
+  __panGestureBench?: (options?: {
+    steps?: number;
+    dx?: number;
+    dy?: number;
+  }) => Promise<RawGestureMeasurements>;
   __perfSourceUploadCount?: () => number;
+  __perfProjectLngLat?: (coord: LngLat) => { x: number; y: number };
+  __perfWebGlContextCount?: number;
+  __mapProjectionCounts?: () => PerfPhaseCounters & {
+    sourceUploadCount: number;
+  };
 }
 
 interface EventTimingMeasurement {
@@ -172,6 +187,40 @@ interface OfflineRuntimeReport {
   documentName: string;
 }
 
+interface ListenerResult {
+  listeners: unknown[];
+}
+
+interface RuntimeObjectResult {
+  result: {
+    objectId?: string;
+  };
+}
+
+interface SoakSnapshot {
+  elapsedMs: number;
+  jsHeapUsedBytes: number;
+  domNodeCount: number;
+  listenerCount: number;
+  workerCount: number;
+  webGlContextCount: number;
+}
+
+interface SoakReport {
+  schemaVersion: 1;
+  generatedAt: string;
+  durationMs: number;
+  scenarioId: 'rtc';
+  maximumGrowthRatio: 0.1;
+  initial: SoakSnapshot;
+  final: SoakSnapshot;
+  violations: string[];
+  status: 'pass' | 'fail';
+  editCycles: number;
+  exportDialogCycles: number;
+  webGlContextCountSource: 'created-minus-context-lost-events';
+}
+
 const APP_ROOT = resolve(import.meta.dirname, '../..');
 const PREVIEW_PORT = 4_173;
 const PREVIEW_URL = `http://127.0.0.1:${PREVIEW_PORT}`;
@@ -191,6 +240,8 @@ function usage(): string {
     '  --require-baseline     Fail when --baseline is absent or unavailable',
     '  --profile <name>        desktop (default) or mobile',
     '  --scenario <id>         Run one scenario for local diagnosis',
+    '  --soak                  Run the ten-minute RTC leak gate',
+    '  --soak-duration <ms>    Shorter local soak smoke (default 600000)',
     '  --skip-build           Reuse the current dist/ output',
     '  --record               Retain one Chrome trace per measured run',
     '  --help                 Show this help',
@@ -211,13 +262,23 @@ function parseOptions(args: string[]): PerfCliOptions {
   let skipBuild = false;
   let profile: PerfProfileId = 'desktop';
   let scenarioId: PerfScenario['id'] | undefined;
+  let soak = false;
+  let soakDurationMs = 10 * 60 * 1_000;
   let help = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--') continue;
     if (argument === '--record') record = true;
-    else if (argument === '--require-baseline') requireBaseline = true;
+    else if (argument === '--soak') soak = true;
+    else if (argument === '--soak-duration') {
+      const value = Number(optionValue(args, index, argument));
+      if (!Number.isInteger(value) || value < 1_000) {
+        throw new Error('--soak-duration must be an integer of at least 1000 ms.');
+      }
+      soakDurationMs = value;
+      index += 1;
+    } else if (argument === '--require-baseline') requireBaseline = true;
     else if (argument === '--skip-build') skipBuild = true;
     else if (argument === '--profile') {
       const value = optionValue(args, index, argument);
@@ -257,6 +318,8 @@ function parseOptions(args: string[]): PerfCliOptions {
     skipBuild,
     profile,
     scenarioId,
+    soak,
+    soakDurationMs,
     help,
   };
 }
@@ -432,18 +495,18 @@ async function installMeasurementState(
     const originalGetItem = Storage.prototype.getItem;
     const originalSetItem = Storage.prototype.setItem;
     const originalRemoveItem = Storage.prototype.removeItem;
-    Storage.prototype.getItem = function getItem(key: string): string | null {
+    Storage.prototype.getItem = function (key: string): string | null {
       if (this === local && seeded.has(key)) return seeded.get(key) ?? null;
       return originalGetItem.call(this, key);
     };
-    Storage.prototype.setItem = function setItem(key: string, value: string): void {
+    Storage.prototype.setItem = function (key: string, value: string): void {
       if (this === local) {
         seeded.set(key, String(value));
         return;
       }
       originalSetItem.call(this, key, value);
     };
-    Storage.prototype.removeItem = function removeItem(key: string): void {
+    Storage.prototype.removeItem = function (key: string): void {
       if (this === local) {
         seeded.delete(key);
         return;
@@ -475,22 +538,11 @@ async function installMeasurementState(
       for (const entry of list.getEntries()) state.longTaskTotalMs += entry.duration;
     }).observe({ type: 'longtask', buffered: true });
 
-    const findCanvas = (): void => {
-      if (state.firstMapCanvasMs !== null) return;
-      if (document.querySelector('.maplibregl-canvas')) {
-        state.firstMapCanvasMs = performance.now();
-      }
-    };
-    const beginCanvasObservation = (): void => {
-      findCanvas();
-      const observer = new MutationObserver(() => {
-        findCanvas();
-        if (state.firstMapCanvasMs !== null) observer.disconnect();
-      });
-      observer.observe(document.documentElement, { childList: true, subtree: true });
-    };
-    if (document.documentElement) beginCanvasObservation();
-    else document.addEventListener('DOMContentLoaded', beginCanvasObservation, { once: true });
+    const canvasTimer = window.setInterval(() => {
+      if (!document.querySelector('.maplibregl-canvas')) return;
+      state.firstMapCanvasMs = performance.now();
+      window.clearInterval(canvasTimer);
+    }, 16);
   }, payload);
 }
 
@@ -626,6 +678,7 @@ async function collectMemory(
 async function runDirectManipulation(
   page: Page,
   scenario: PerfScenario,
+  entityCoord?: LngLat,
 ): Promise<GenericGestureMeasurements> {
   await page.evaluate(() => {
     const state: GenericGestureState = {
@@ -637,7 +690,12 @@ async function runDirectManipulation(
       sourceUploadsBefore: (window as PerfPageWindow).__perfSourceUploadCount?.() ?? null,
     };
     (window as PerfPageWindow).__genericPerfGesture = state;
-    const recordEventTiming = (list: PerformanceObserverEntryList): void => {
+    const eventObserverOptions = {
+      type: 'event',
+      buffered: true,
+      durationThreshold: 16,
+    } as PerformanceObserverInit;
+    new PerformanceObserver((list) => {
       if (!state.active) return;
       for (const entry of list.getEntries() as BrowserEventTimingEntry[]) {
         state.eventTimings.push({
@@ -647,27 +705,33 @@ async function runDirectManipulation(
           startTime: entry.startTime,
         });
       }
-    };
-    const eventObserverOptions = {
-      type: 'event',
-      buffered: true,
-      durationThreshold: 16,
-    } as PerformanceObserverInit;
-    new PerformanceObserver(recordEventTiming).observe(eventObserverOptions);
+    }).observe(eventObserverOptions);
     // first-input is not subject to Event Timing's 16 ms reporting threshold,
     // so a fast first drag remains a real measured value rather than a zero.
-    new PerformanceObserver(recordEventTiming).observe({
+    new PerformanceObserver((list) => {
+      if (!state.active) return;
+      for (const entry of list.getEntries() as BrowserEventTimingEntry[]) {
+        state.eventTimings.push({
+          name: entry.name,
+          interactionId: entry.interactionId,
+          duration: entry.duration,
+          startTime: entry.startTime,
+        });
+      }
+    }).observe({
       type: 'first-input',
       buffered: true,
     });
-    const tick = (now: number): void => {
+    (window as PerfPageWindow).__genericPerfFrame = function (now: number): void {
       if (state.active) {
         state.animationFrameMs.push(now - state.lastFrameAt);
         state.lastFrameAt = now;
-        requestAnimationFrame(tick);
+        const next = (window as PerfPageWindow).__genericPerfFrame;
+        if (next) requestAnimationFrame(next);
       }
     };
-    requestAnimationFrame(tick);
+    const initialFrame = (window as PerfPageWindow).__genericPerfFrame;
+    if (initialFrame) requestAnimationFrame(initialFrame);
     new PerformanceObserver((list) => {
       if (!state.active) return;
       for (const entry of list.getEntries()) state.longTaskMs.push(entry.duration);
@@ -680,6 +744,51 @@ async function runDirectManipulation(
   const centerX = bounds.x + bounds.width / 2;
   const centerY = bounds.y + bounds.height / 2;
   const dragDistance = Math.min(120, bounds.width * 0.25);
+
+  const actions: Array<'camera-drag' | 'entity-drag' | 'draw'> = ['camera-drag'];
+  if (scenario.surface === 'editor') {
+    if (!entityCoord) throw new Error('The editor scenario has no station drag target.');
+    await page.keyboard.press('v');
+    await page.waitForFunction(
+      () => typeof (window as PerfPageWindow).__perfProjectLngLat === 'function',
+      undefined,
+      { timeout: 30_000 },
+    );
+    const beforeUploads = await page.evaluate(
+      () => (window as PerfPageWindow).__perfSourceUploadCount?.() ?? null,
+    );
+    const target = await page.evaluate((coord) => {
+      const project = (window as PerfPageWindow).__perfProjectLngLat;
+      if (!project) throw new Error('The performance projection seam is unavailable.');
+      return project(coord);
+    }, entityCoord);
+    if (
+      target.x < bounds.x ||
+      target.x > bounds.x + bounds.width ||
+      target.y < bounds.y ||
+      target.y > bounds.y + bounds.height
+    ) {
+      throw new Error('The deterministic station drag target is outside the map viewport.');
+    }
+    await page.mouse.move(target.x, target.y);
+    await page.mouse.down();
+    await page.mouse.move(target.x + 32, target.y + 18, { steps: 8 });
+    await page.mouse.up();
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolvePromise) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolvePromise()));
+        }),
+    );
+    const afterUploads = await page.evaluate(
+      () => (window as PerfPageWindow).__perfSourceUploadCount?.() ?? null,
+    );
+    if (beforeUploads === null || afterUploads === null || afterUploads <= beforeUploads) {
+      throw new Error('The deterministic station pointer drag did not commit an entity update.');
+    }
+    actions.push('entity-drag');
+  }
+
   await page.mouse.move(centerX - dragDistance / 2, centerY);
   await page.mouse.down();
   for (let step = 1; step <= 24; step += 1) {
@@ -691,7 +800,6 @@ async function runDirectManipulation(
   }
   await page.mouse.up();
 
-  const actions: Array<'drag' | 'draw'> = ['drag'];
   if (scenario.surface === 'editor') {
     actions.push('draw');
     await page.keyboard.press('l');
@@ -713,11 +821,16 @@ async function runDirectManipulation(
         requestAnimationFrame(() => requestAnimationFrame(() => resolvePromise()));
       }),
   );
+  // Event Timing entries are queued after the presentation that ends an
+  // interaction. Two rAFs establish that paint; this short task turn lets
+  // PerformanceObserver deliver the buffered entry before we read it.
+  await page.waitForTimeout(250);
 
   const measurements = await page.evaluate(() => {
     const state = (window as PerfPageWindow).__genericPerfGesture;
     if (!state) throw new Error('The direct-manipulation measurement did not start.');
     state.active = false;
+    delete (window as PerfPageWindow).__genericPerfFrame;
     const deduplicated = new Map<string, EventTimingMeasurement>();
     for (const entry of state.eventTimings) {
       const key = `${entry.name}:${entry.interactionId}:${entry.startTime}:${entry.duration}`;
@@ -751,12 +864,23 @@ async function runDirectManipulation(
 async function runMeasuredGesture(
   page: Page,
   scenario: PerfScenario,
+  entityCoord?: LngLat,
 ): Promise<{
   metrics: ReturnType<typeof summarizeGesture>['metrics'];
   diagnostics: PerfGestureDiagnostics;
   counters: Omit<PerfRuntimeCounters, 'domNodeCount'>;
 }> {
-  const direct = await runDirectManipulation(page, scenario);
+  if (scenario.surface !== 'embed') {
+    await page.waitForFunction(
+      () => typeof (window as PerfPageWindow).__mapProjectionCounts === 'function',
+      undefined,
+      { timeout: 30_000 },
+    );
+  }
+  const phaseBefore = await page.evaluate(
+    () => (window as PerfPageWindow).__mapProjectionCounts?.() ?? null,
+  );
+  const direct = await runDirectManipulation(page, scenario, entityCoord);
   let mapMeasurements: RawGestureMeasurements | null = null;
   if (scenario.surface !== 'embed') {
     await page.waitForFunction(
@@ -770,6 +894,20 @@ async function runMeasuredGesture(
       return benchmark();
     });
   }
+  const phaseAfter = await page.evaluate(
+    () => (window as PerfPageWindow).__mapProjectionCounts?.() ?? null,
+  );
+  const phaseCounters: PerfPhaseCounters | null =
+    phaseBefore && phaseAfter
+      ? {
+          fullProjectionCount: phaseAfter.fullProjectionCount - phaseBefore.fullProjectionCount,
+          gestureProjectionCount:
+            phaseAfter.gestureProjectionCount - phaseBefore.gestureProjectionCount,
+          entityComparisonCount:
+            phaseAfter.entityComparisonCount - phaseBefore.entityComparisonCount,
+          projectedEntityCount: phaseAfter.projectedEntityCount - phaseBefore.projectedEntityCount,
+        }
+      : null;
 
   const raw: RawGestureMeasurements = {
     inputToNextPaintMs: direct.inputToNextPaintMs,
@@ -784,14 +922,17 @@ async function runMeasuredGesture(
   return {
     metrics: summary.metrics,
     diagnostics: {
-      name: scenario.surface === 'editor' ? 'map-drag-draw' : 'map-drag',
+      name: scenario.surface === 'editor' ? 'entity-drag-draw' : 'map-drag',
       frameSource: mapMeasurements ? 'map-render' : 'animation-frame-proxy',
       inputToNextPaintMs: raw.inputToNextPaintMs,
       paintedFrameMs: raw.paintedFrameMs,
       unexpectedLongTaskMs: raw.longTaskMs.filter((duration) => duration > 50),
       actions: direct.actions,
     },
-    counters: summary.counters,
+    counters: {
+      ...summary.counters,
+      phaseCounters,
+    },
   };
 }
 
@@ -877,13 +1018,14 @@ async function runSample(options: RunSampleOptions): Promise<PerfSample | undefi
     });
     await waitForScenarioReady(page, options.scenario, fixture.name);
     const startup = await collectStartupMetrics(page);
-    const gesture = await runMeasuredGesture(page, options.scenario);
+    const entityCoord = fixture.stations[Math.floor(fixture.stations.length / 2)]?.coord;
+    const gesture = await runMeasuredGesture(page, options.scenario, entityCoord);
     const coldMemory = await collectMemory(session);
 
     await page.reload({ waitUntil: 'load', timeout: 60_000 });
     await waitForScenarioReady(page, options.scenario, fixture.name);
     const warmStartup = await collectStartupMetrics(page);
-    const warmGesture = await runMeasuredGesture(page, options.scenario);
+    const warmGesture = await runMeasuredGesture(page, options.scenario, entityCoord);
     const warmMemory = await collectMemory(session);
     const metrics: PerfMetricValues = {
       ...startup.metrics,
@@ -1073,6 +1215,231 @@ async function verifyCacheEvictedOfflineReload(
   }
 }
 
+async function listenerCount(session: CDPSession): Promise<number> {
+  let total = 0;
+  for (const expression of ['window', 'document', 'document.querySelector(".maplibregl-canvas")']) {
+    const evaluated = (await session.send('Runtime.evaluate', {
+      expression,
+      returnByValue: false,
+    })) as RuntimeObjectResult;
+    const objectId = evaluated.result.objectId;
+    if (!objectId) continue;
+    const result = (await session.send('DOMDebugger.getEventListeners', {
+      objectId,
+    })) as ListenerResult;
+    total += result.listeners.length;
+    await session.send('Runtime.releaseObject', { objectId });
+  }
+  return total;
+}
+
+async function soakSnapshot(
+  page: Page,
+  session: CDPSession,
+  startedAt: number,
+): Promise<SoakSnapshot> {
+  await session.send('HeapProfiler.collectGarbage');
+  const { memory, domNodeCount } = await collectMemory(session);
+  return {
+    elapsedMs: Date.now() - startedAt,
+    jsHeapUsedBytes: memory.jsHeapUsedBytes,
+    domNodeCount,
+    listenerCount: await listenerCount(session),
+    workerCount: page.workers().length,
+    webGlContextCount: await page.evaluate(
+      () => (window as PerfPageWindow).__perfWebGlContextCount ?? 0,
+    ),
+  };
+}
+
+function soakViolations(initial: SoakSnapshot, final: SoakSnapshot): string[] {
+  const violations: string[] = [];
+  const metrics: Array<keyof Omit<SoakSnapshot, 'elapsedMs'>> = [
+    'jsHeapUsedBytes',
+    'domNodeCount',
+    'listenerCount',
+    'workerCount',
+    'webGlContextCount',
+  ];
+  for (const metric of metrics) {
+    const initialValue = initial[metric];
+    const finalValue = final[metric];
+    const limit = initialValue === 0 ? 0 : initialValue * 1.1;
+    if (finalValue > limit) {
+      violations.push(
+        `${metric} grew from ${initialValue} to ${finalValue}; the 10% limit is ${limit}.`,
+      );
+    }
+  }
+  return violations;
+}
+
+async function runBalancedSoakPan(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    await (window as PerfPageWindow).__panGestureBench?.({
+      steps: 40,
+      dx: 4,
+    });
+    await (window as PerfPageWindow).__panGestureBench?.({
+      steps: 40,
+      dx: -4,
+    });
+  });
+}
+
+async function runSoakEditCycle(page: Page, coord: LngLat): Promise<void> {
+  const target = await page.evaluate((stationCoord) => {
+    const project = (window as PerfPageWindow).__perfProjectLngLat;
+    if (!project) throw new Error('The soak station projection seam is unavailable.');
+    return project(stationCoord);
+  }, coord);
+  await page.keyboard.press('v');
+  await page.mouse.move(target.x, target.y);
+  await page.mouse.down();
+  await page.mouse.move(target.x + 24, target.y + 12, { steps: 6 });
+  await page.mouse.up();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
+  // Include validation and the content/camera persistence lane, then leave the
+  // document at its deterministic starting shape for the next cycle.
+  await page.waitForTimeout(550);
+}
+
+async function runSoakExportCycle(page: Page): Promise<void> {
+  await page.locator('button[title="Export…"]').click();
+  const dialog = page.getByRole('dialog');
+  await dialog.waitFor({ state: 'visible', timeout: 30_000 });
+  await dialog.locator('.export-preview-map .maplibregl-canvas').waitFor({
+    state: 'visible',
+    timeout: 30_000,
+  });
+  await page.waitForTimeout(250);
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await dialog.waitFor({ state: 'detached', timeout: 5_000 });
+}
+
+async function runSoak(
+  browser: Browser,
+  previewUrl: string,
+  outputDirectory: string,
+  durationMs: number,
+): Promise<SoakReport> {
+  const context = await browser.newContext({
+    viewport: {
+      width: activeProtocol.viewport.width,
+      height: activeProtocol.viewport.height,
+    },
+    deviceScaleFactor: activeProtocol.viewport.deviceScaleFactor,
+    serviceWorkers: 'block',
+  });
+  const page = await context.newPage();
+  const session = await context.newCDPSession(page);
+  const fixture = generatePerfFixture('rtc');
+  try {
+    await configureProtocol(session);
+    await session.send('HeapProfiler.enable');
+    await page.addInitScript(() => {
+      type CanvasGetContext = (
+        this: HTMLCanvasElement,
+        contextId: string,
+        options?: unknown,
+      ) => RenderingContext | null;
+      const canvasPrototype = HTMLCanvasElement.prototype as unknown as {
+        getContext: CanvasGetContext;
+      };
+      const original = canvasPrototype.getContext;
+      const contexts = new WeakSet<object>();
+      (window as PerfPageWindow).__perfWebGlContextCount = 0;
+      canvasPrototype.getContext = function (
+        this: HTMLCanvasElement,
+        contextId: string,
+        options?: unknown,
+      ): RenderingContext | null {
+        const context = original.call(this, contextId, options);
+        if (
+          context &&
+          (contextId === 'webgl' || contextId === 'webgl2') &&
+          !contexts.has(context)
+        ) {
+          contexts.add(context);
+          (window as PerfPageWindow).__perfWebGlContextCount =
+            ((window as PerfPageWindow).__perfWebGlContextCount ?? 0) + 1;
+          this.addEventListener(
+            'webglcontextlost',
+            () => {
+              if (!contexts.delete(context)) return;
+              (window as PerfPageWindow).__perfWebGlContextCount = Math.max(
+                0,
+                ((window as PerfPageWindow).__perfWebGlContextCount ?? 1) - 1,
+              );
+            },
+            { once: true },
+          );
+        }
+        return context;
+      };
+    });
+    await installMeasurementState(page, JSON.stringify(fixture), fixture.id);
+    await page.goto(`${previewUrl}/`, { waitUntil: 'load', timeout: 60_000 });
+    await waitForScenarioReady(page, PERF_SCENARIOS.rtc, fixture.name);
+    await page.waitForFunction(
+      () => typeof (window as PerfPageWindow).__panGestureBench === 'function',
+      undefined,
+      { timeout: 30_000 },
+    );
+    for (let warmup = 0; warmup < 3; warmup += 1) {
+      await runBalancedSoakPan(page);
+    }
+
+    const startedAt = Date.now();
+    const initial = await soakSnapshot(page, session, startedAt);
+    const stationCoord = fixture.stations[Math.floor(fixture.stations.length / 2)]?.coord;
+    if (!stationCoord) throw new Error('The RTC soak fixture has no station target.');
+    let iterations = 0;
+    let editCycles = 0;
+    let exportDialogCycles = 0;
+    console.log(`perf soak: exercising RTC scale for ${durationMs} ms`);
+    while (Date.now() - startedAt < durationMs) {
+      await runBalancedSoakPan(page);
+      iterations += 1;
+      if (iterations % 4 === 0) {
+        await runSoakEditCycle(page, stationCoord);
+        editCycles += 1;
+      }
+      if (iterations % 8 === 0) {
+        await runSoakExportCycle(page);
+        exportDialogCycles += 1;
+      }
+      await page.waitForTimeout(100);
+    }
+    // Let dialog MapLibre workers and contexts observe unmount before the
+    // forced-GC final snapshot.
+    await page.waitForTimeout(1_000);
+    const final = await soakSnapshot(page, session, startedAt);
+    const violations = soakViolations(initial, final);
+    const report: SoakReport = {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      durationMs,
+      scenarioId: 'rtc',
+      maximumGrowthRatio: 0.1,
+      initial,
+      final,
+      violations,
+      status: violations.length === 0 ? 'pass' : 'fail',
+      editCycles,
+      exportDialogCycles,
+      webGlContextCountSource: 'created-minus-context-lost-events',
+    };
+    const path = resolve(outputDirectory, 'soak-report.json');
+    await writeFile(path, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    console.log(`performance soak report: ${path}`);
+    for (const violation of violations) console.error(`performance soak: ${violation}`);
+    return report;
+  } finally {
+    await closeContext(context);
+  }
+}
+
 async function readBaseline(path: string | undefined): Promise<PerfReport | undefined> {
   if (!path) return undefined;
   try {
@@ -1145,6 +1512,15 @@ async function run(options: PerfCliOptions): Promise<void> {
   if (options.record && options.scenarioId) {
     throw new Error('--record requires the full scenario matrix; omit --scenario.');
   }
+  if (options.soak && (options.record || options.scenarioId)) {
+    throw new Error('--soak cannot be combined with --record or --scenario.');
+  }
+  if (!options.soak && options.soakDurationMs !== 10 * 60 * 1_000) {
+    throw new Error('--soak-duration requires --soak.');
+  }
+  if (options.soak && options.profile !== 'desktop') {
+    throw new Error('--soak uses the desktop RTC protocol; omit --profile mobile.');
+  }
   activeProtocol = createPerfProtocol(options.profile);
   const scenarios = options.scenarioId
     ? PERF_SCENARIO_LIST.filter((scenario) => scenario.id === options.scenarioId)
@@ -1164,6 +1540,16 @@ async function run(options: PerfCliOptions): Promise<void> {
       channel: activeProtocol.browserChannel,
       headless: false,
     });
+    if (options.soak) {
+      const soak = await runSoak(
+        browser,
+        preview.url,
+        options.outputDirectory,
+        options.soakDurationMs,
+      );
+      if (soak.status !== 'pass') process.exitCode = 1;
+      return;
+    }
     calibration = await runCalibration(browser);
     await verifyCacheEvictedOfflineReload(browser, preview.url, options.outputDirectory);
     const samples: PerfSample[] = [];
@@ -1186,12 +1572,6 @@ async function run(options: PerfCliOptions): Promise<void> {
       bundles,
       calibration,
     });
-    const reportPath = await writeReport(options.outputDirectory, report);
-    if (options.record) {
-      const path = checkedBaselinePath(options.profile);
-      await writeCheckedBaseline(path, report);
-      console.log(`performance baseline refreshed: ${path}`);
-    }
     const evaluation = evaluatePerfBudgets({
       report,
       baseline,
@@ -1199,6 +1579,13 @@ async function run(options: PerfCliOptions): Promise<void> {
       maxRegressionRatio: PERF_MAX_REGRESSION_RATIO,
       requireBaseline: options.requireBaseline,
     });
+    report.evaluation = evaluation;
+    const reportPath = await writeReport(options.outputDirectory, report);
+    if (options.record) {
+      const path = checkedBaselinePath(options.profile);
+      await writeCheckedBaseline(path, report);
+      console.log(`performance baseline refreshed: ${path}`);
+    }
     reportEvaluation(evaluation);
     console.log(`performance report: ${reportPath}`);
     if (evaluation.status !== 'pass') process.exitCode = 1;

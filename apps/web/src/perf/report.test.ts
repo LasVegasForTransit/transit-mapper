@@ -30,13 +30,19 @@ function sample(run: number, loadMs: number): PerfSample {
     inputToNextPaintMs: [],
     paintedFrameMs: [],
     unexpectedLongTaskMs: [],
-    actions: ['drag'] as Array<'drag' | 'draw'>,
+    actions: ['camera-drag'] as Array<'camera-drag' | 'entity-drag' | 'draw'>,
   };
   const counters = {
     sourceUploadCount: 0,
     paintedFrameCount: 0,
     unexpectedLongTaskCount: 0,
     domNodeCount: 0,
+    phaseCounters: {
+      fullProjectionCount: 1,
+      gestureProjectionCount: 2,
+      entityComparisonCount: 3,
+      projectedEntityCount: 4,
+    },
   };
   const network = {
     requestCount: 0,
@@ -102,6 +108,12 @@ describe('performance reports', () => {
     expect(report.scenarios[0].metrics.inputToNextPaintP95Ms.median).toBe(35);
     expect(report.scenarios[0].metrics.loadMs.variance).toBe(200);
     expect(report.scenarios[0].gateValues.loadMs).toBe(50);
+    expect(report.samples[0].counters.phaseCounters).toEqual({
+      fullProjectionCount: 1,
+      gestureProjectionCount: 2,
+      entityComparisonCount: 3,
+      projectedEntityCount: 4,
+    });
     expect(report.samples.map((value) => value.run)).toEqual([1, 2, 3, 4, 5]);
   });
 

@@ -8,6 +8,7 @@ dev-dist/
 .superpowers/
 *.tsbuildinfo
 .turbo/
+apps/web/artifacts/performance/
 apps/web/artifacts/
 
 # Agent configuration. settings.json is committed team policy;

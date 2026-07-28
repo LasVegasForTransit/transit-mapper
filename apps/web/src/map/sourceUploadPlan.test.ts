@@ -1,23 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
-import { ALL_SYSTEM_FEATURE_SOURCES, sourceUploadsForSystemChange } from './sourceUploadPlan';
+import {
+  ALL_SYSTEM_FEATURE_SOURCES,
+  createSourceUploadQueue,
+  sourceUploadsForSystemChange,
+} from './sourceUploadPlan';
 import {
   SRC_CONNECTORS,
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
+  SRC_HANDLES,
+  SRC_JUNCTIONS,
+  SRC_LANE_ARROWS,
+  SRC_LANE_MARKINGS,
+  SRC_LANES,
   SRC_PHYSICAL_HANDLES,
   SRC_PLATFORMS,
+  SRC_SERVICE_ARROWS,
   SRC_SERVICES,
   SRC_STATIONS,
   SRC_WAY_LABELS,
+  SRC_WAYS,
 } from './layers';
 
 describe('map source upload planning', () => {
   it('uploads every derived source for initial, healed-style, and view builds', () => {
     const system = createEmptySystem();
+    const nextDocument = { ...system, id: 'another-document' };
 
     expect(sourceUploadsForSystemChange(null, system)).toEqual(ALL_SYSTEM_FEATURE_SOURCES);
     expect(sourceUploadsForSystemChange(system, system, { forceAll: true })).toEqual(
+      ALL_SYSTEM_FEATURE_SOURCES,
+    );
+    expect(sourceUploadsForSystemChange(system, nextDocument, { forceAll: true })).toEqual(
       ALL_SYSTEM_FEATURE_SOURCES,
     );
     expect(ALL_SYSTEM_FEATURE_SOURCES).toHaveLength(15);
@@ -35,6 +50,20 @@ describe('map source upload planning', () => {
     ]);
   });
 
+  it('refreshes route handles when a selected service pattern changes', () => {
+    const before = createEmptySystem();
+    const after = { ...before, services: [...before.services] };
+
+    expect(sourceUploadsForSystemChange(before, after)).toEqual([
+      SRC_WAYS,
+      SRC_SERVICES,
+      SRC_STATIONS,
+      SRC_HANDLES,
+      SRC_LANE_ARROWS,
+      SRC_SERVICE_ARROWS,
+    ]);
+  });
+
   it('keeps facility, named-way, and restriction changes on their dependent sources', () => {
     const before = createEmptySystem();
 
@@ -44,6 +73,12 @@ describe('map source upload planning', () => {
         facilities: [...before.facilities],
       }),
     ).toEqual([SRC_FACILITIES]);
+    expect(
+      sourceUploadsForSystemChange(before, {
+        ...before,
+        groups: [...before.groups],
+      }),
+    ).toEqual([SRC_FOOTPRINTS, SRC_PHYSICAL_HANDLES]);
     expect(
       sourceUploadsForSystemChange(before, {
         ...before,
@@ -75,5 +110,107 @@ describe('map source upload planning', () => {
       SRC_PHYSICAL_HANDLES,
     ]);
     expect(new Set(sources).size).toBe(sources.length);
+  });
+
+  it('covers every dependent collection for way, service, and node topology', () => {
+    const before = createEmptySystem();
+
+    expect(sourceUploadsForSystemChange(before, { ...before, ways: [...before.ways] })).toEqual([
+      SRC_WAYS,
+      SRC_SERVICES,
+      SRC_STATIONS,
+      SRC_HANDLES,
+      SRC_LANES,
+      SRC_LANE_MARKINGS,
+      SRC_LANE_ARROWS,
+      SRC_SERVICE_ARROWS,
+      SRC_JUNCTIONS,
+      SRC_CONNECTORS,
+      SRC_WAY_LABELS,
+    ]);
+    expect(
+      sourceUploadsForSystemChange(before, { ...before, services: [...before.services] }),
+    ).toEqual([
+      SRC_WAYS,
+      SRC_SERVICES,
+      SRC_STATIONS,
+      SRC_HANDLES,
+      SRC_LANE_ARROWS,
+      SRC_SERVICE_ARROWS,
+    ]);
+    expect(sourceUploadsForSystemChange(before, { ...before, nodes: [...before.nodes] })).toEqual([
+      SRC_WAYS,
+      SRC_SERVICES,
+      SRC_STATIONS,
+      SRC_HANDLES,
+      SRC_LANES,
+      SRC_LANE_MARKINGS,
+      SRC_LANE_ARROWS,
+      SRC_SERVICE_ARROWS,
+      SRC_JUNCTIONS,
+      SRC_CONNECTORS,
+    ]);
+  });
+
+  it('conservatively refreshes lane and junction geometry for system traffic rules', () => {
+    const before = createEmptySystem();
+    const topologySources = [
+      SRC_WAYS,
+      SRC_SERVICES,
+      SRC_LANES,
+      SRC_LANE_MARKINGS,
+      SRC_LANE_ARROWS,
+      SRC_SERVICE_ARROWS,
+      SRC_JUNCTIONS,
+      SRC_CONNECTORS,
+    ];
+
+    expect(
+      sourceUploadsForSystemChange(before, {
+        ...before,
+        drivingSide: before.drivingSide === 'right' ? 'left' : 'right',
+      }),
+    ).toEqual(topologySources);
+    expect(
+      sourceUploadsForSystemChange(before, {
+        ...before,
+        medians: { ...before.medians },
+      }),
+    ).toEqual(topologySources);
+    expect(
+      sourceUploadsForSystemChange(before, {
+        ...before,
+        approachControls: { ...before.approachControls },
+      }),
+    ).toEqual([SRC_LANES, SRC_LANE_MARKINGS, SRC_LANE_ARROWS, SRC_JUNCTIONS, SRC_CONNECTORS]);
+  });
+
+  it('preserves the exact source union queued across an active gesture', () => {
+    const before = createEmptySystem();
+    const queue = createSourceUploadQueue();
+
+    queue.add(
+      sourceUploadsForSystemChange(before, {
+        ...before,
+        stations: [...before.stations],
+      }),
+    );
+    queue.add(
+      sourceUploadsForSystemChange(before, {
+        ...before,
+        facilities: [...before.facilities],
+      }),
+    );
+
+    expect(queue.hasPending()).toBe(true);
+    expect(queue.take()).toEqual([
+      SRC_STATIONS,
+      SRC_FOOTPRINTS,
+      SRC_PLATFORMS,
+      SRC_FACILITIES,
+      SRC_PHYSICAL_HANDLES,
+    ]);
+    expect(queue.hasPending()).toBe(false);
+    expect(queue.take()).toEqual([]);
   });
 });

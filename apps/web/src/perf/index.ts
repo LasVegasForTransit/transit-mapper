@@ -25,6 +25,7 @@ declare global {
     __panGestureBench?: (opts?: PanBenchOptions) => Promise<RawGestureMeasurements>;
     __zoomBench?: (opts?: ZoomBenchOptions) => Promise<FrameStats>;
     __perfSourceUploadCount?: () => number;
+    __perfProjectLngLat?: (coord: [number, number]) => { x: number; y: number };
     __TRANSITMAPPER_PERF_RUN__?: boolean;
   }
 }
@@ -90,6 +91,11 @@ export function attachPerfHarness(map: MLMap): () => void {
   const meter = automatedPerfRun() ? undefined : attachFrameMeter(map);
   const sourceUploads = attachSourceUploadMeter(map);
   window.__perfSourceUploadCount = sourceUploads.count;
+  window.__perfProjectLngLat = (coord) => {
+    const point = map.project(coord);
+    const bounds = map.getCanvas().getBoundingClientRect();
+    return { x: bounds.left + point.x, y: bounds.top + point.y };
+  };
   if (meter) window.__frameStats = meter.stats;
   window.__panBench = (opts) => runPanBench(map, opts);
   window.__panGestureBench = (opts) => runPanGestureBench(map, sourceUploads.count, opts);
@@ -102,6 +108,7 @@ export function attachPerfHarness(map: MLMap): () => void {
     delete window.__panGestureBench;
     delete window.__zoomBench;
     delete window.__perfSourceUploadCount;
+    delete window.__perfProjectLngLat;
   };
 }
 

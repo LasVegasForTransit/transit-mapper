@@ -42,6 +42,7 @@ export const ALL_SYSTEM_FEATURE_SOURCES = [
 ] as const;
 
 export type SystemFeatureSourceId = (typeof ALL_SYSTEM_FEATURE_SOURCES)[number];
+export type SourceUploadRequest = 'all' | readonly SystemFeatureSourceId[];
 
 export interface SourceUploadPlanOptions {
   /** View changes and repaired styles can invalidate every derived collection
@@ -49,7 +50,23 @@ export interface SourceUploadPlanOptions {
   forceAll?: boolean;
 }
 
+export interface SourceUploadQueue {
+  add: (request: SourceUploadRequest) => void;
+  hasPending: () => boolean;
+  take: () => readonly SystemFeatureSourceId[];
+}
+
 const NO_SOURCES: readonly SystemFeatureSourceId[] = [];
+const TOPOLOGY_SOURCES: readonly SystemFeatureSourceId[] = [
+  SRC_WAYS,
+  SRC_SERVICES,
+  SRC_LANES,
+  SRC_LANE_MARKINGS,
+  SRC_LANE_ARROWS,
+  SRC_SERVICE_ARROWS,
+  SRC_JUNCTIONS,
+  SRC_CONNECTORS,
+];
 
 /** Every TransitSystem field is classified here so a newly-added field cannot
  * silently leave MapLibre stale. Dependencies are deliberately conservative
@@ -68,15 +85,29 @@ const SOURCE_DEPENDENCIES: Record<keyof TransitSystem, readonly SystemFeatureSou
     SRC_CONNECTORS,
     SRC_WAY_LABELS,
   ],
-  services: [SRC_WAYS, SRC_SERVICES, SRC_STATIONS, SRC_LANE_ARROWS, SRC_SERVICE_ARROWS],
+  services: [
+    SRC_WAYS,
+    SRC_SERVICES,
+    SRC_STATIONS,
+    SRC_HANDLES,
+    SRC_LANE_ARROWS,
+    SRC_SERVICE_ARROWS,
+  ],
   stations: [SRC_STATIONS, SRC_FOOTPRINTS, SRC_PLATFORMS, SRC_PHYSICAL_HANDLES],
   facilities: [SRC_FACILITIES],
   groups: [SRC_FOOTPRINTS, SRC_PHYSICAL_HANDLES],
   nodes: [
+    // Diagram layout consumes node membership when projecting every connected
+    // way, so node edits can also move schematic ways, their handles,
+    // services, arrows, and anchored stations.
+    SRC_WAYS,
     SRC_SERVICES,
+    SRC_STATIONS,
+    SRC_HANDLES,
     SRC_LANES,
     SRC_LANE_MARKINGS,
     SRC_LANE_ARROWS,
+    SRC_SERVICE_ARROWS,
     SRC_JUNCTIONS,
     SRC_CONNECTORS,
   ],
@@ -92,9 +123,13 @@ const SOURCE_DEPENDENCIES: Record<keyof TransitSystem, readonly SystemFeatureSou
   updatedAt: NO_SOURCES,
   vehicleKinds: NO_SOURCES,
   palette: NO_SOURCES,
-  drivingSide: NO_SOURCES,
-  medians: NO_SOURCES,
-  approachControls: NO_SOURCES,
+  // These values are currently normalized into Way profiles during import,
+  // but they describe topology/lane semantics. Keeping their refresh mapping
+  // conservative prevents a future renderer read from silently retaining old
+  // geometry at the MapLibre boundary.
+  drivingSide: TOPOLOGY_SOURCES,
+  medians: TOPOLOGY_SOURCES,
+  approachControls: [SRC_LANES, SRC_LANE_MARKINGS, SRC_LANE_ARROWS, SRC_JUNCTIONS, SRC_CONNECTORS],
 };
 
 const SYSTEM_KEYS = Object.keys(SOURCE_DEPENDENCIES) as (keyof TransitSystem)[];
@@ -119,4 +154,32 @@ export function sourceUploadsForSystemChange(
   // Return canonical order rather than mutation order so operation-count tests
   // and trace annotations stay deterministic across combined store commits.
   return ALL_SYSTEM_FEATURE_SOURCES.filter((sourceId) => changedSources.has(sourceId));
+}
+
+/** Accumulate dependency plans across coalesced commits or an active gesture.
+ * Calling `take` is the only operation that clears the queue. */
+export function createSourceUploadQueue(): SourceUploadQueue {
+  const pending = new Set<SystemFeatureSourceId>();
+  let allPending = false;
+
+  return {
+    add: (request) => {
+      if (request === 'all') {
+        allPending = true;
+        pending.clear();
+        return;
+      }
+      if (allPending) return;
+      for (const sourceId of request) pending.add(sourceId);
+    },
+    hasPending: () => allPending || pending.size > 0,
+    take: () => {
+      const sourceIds = allPending
+        ? ALL_SYSTEM_FEATURE_SOURCES
+        : ALL_SYSTEM_FEATURE_SOURCES.filter((sourceId) => pending.has(sourceId));
+      allPending = false;
+      pending.clear();
+      return sourceIds;
+    },
+  };
 }

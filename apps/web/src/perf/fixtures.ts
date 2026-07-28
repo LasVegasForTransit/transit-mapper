@@ -26,6 +26,15 @@ function rounded(value: number): number {
   return Number(value.toFixed(6));
 }
 
+function fixtureCenter(wayCount: number): LngLat {
+  const columns = Math.ceil(Math.sqrt(wayCount));
+  const rows = Math.ceil(wayCount / columns);
+  return [
+    rounded(-115.31 + ((columns - 1) * 0.0035) / 2),
+    rounded(36.02 + ((rows - 1) * 0.003) / 2),
+  ];
+}
+
 function allocatedCount(total: number, buckets: number, index: number): number {
   const floor = Math.floor(total / buckets);
   return floor + (index < total % buckets ? 1 : 0);
@@ -134,7 +143,7 @@ export function generatePerfFixture(scenarioId: PerfFixtureId): TransitSystem {
     id: `perf-${scenarioId}`,
     name: `Performance fixture: ${PERF_SCENARIOS[scenarioId].label}`,
     viewport: {
-      center: [-115.2, 36.1],
+      center: fixtureCenter(ways.length),
       zoom: scenarioId === 'small' ? 12 : 10,
     },
     ways,

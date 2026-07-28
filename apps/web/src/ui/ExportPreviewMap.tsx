@@ -48,6 +48,11 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
       zoom: system.viewport.zoom,
       preserveDrawingBuffer: true, // needed to read the canvas back out for PNG export
       attributionControl: false,
+      // The export UI promises pan and zoom, not a second 3D camera. Keeping it
+      // flat and north-up lets SVG projection run exactly off-thread.
+      dragRotate: false,
+      touchPitch: false,
+      pitchWithRotate: false,
     });
     mapRef.current = map;
     const emptyFC = { type: 'FeatureCollection' as const, features: [] };

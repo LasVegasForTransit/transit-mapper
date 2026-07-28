@@ -9,7 +9,6 @@ import { useView } from '../ui/ViewProvider';
 import { BASEMAP_STYLE } from './basemap';
 import { attachInteractions } from './interactions';
 import { computeDiagramSystem } from '@transitmapper/core/model/diagramLayout';
-import { featureInputsChanged } from '@transitmapper/core/render/featureInputs';
 import { serviceWayIds, systemBounds, wayById } from '@transitmapper/core/model/geo';
 import { routePath } from '@transitmapper/core/model/routeGraph';
 import { selectionFocus } from './selectionFocus';
@@ -71,7 +70,9 @@ import {
 import { buildGestureLayerMaskPlan, maskedGestureFilter } from './gestureLayerMask';
 import {
   ALL_SYSTEM_FEATURE_SOURCES,
+  createSourceUploadQueue,
   sourceUploadsForSystemChange,
+  type SourceUploadRequest,
   type SystemFeatureSourceId,
 } from './sourceUploadPlan';
 import { landmarksFeatureCollection } from './landmarks';
@@ -536,36 +537,15 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     let gestureProjectionAborted = false;
     let gesturePreviewVisible = false;
     let fullAfterGesture = false;
-    type SourceUploadRequest = 'all' | readonly SystemFeatureSourceId[];
-    const pendingSourceUploads = new Set<SystemFeatureSourceId>();
-    let allSourcesPending = false;
+    const sourceUploadQueue = createSourceUploadQueue();
 
-    const queueSourceUploads = (request: SourceUploadRequest) => {
-      if (request === 'all') {
-        allSourcesPending = true;
-        pendingSourceUploads.clear();
-        return;
-      }
-      if (allSourcesPending) return;
-      for (const sourceId of request) pendingSourceUploads.add(sourceId);
-    };
-
-    const takeQueuedSourceUploads = (): readonly SystemFeatureSourceId[] => {
-      const sourceIds = allSourcesPending
-        ? ALL_SYSTEM_FEATURE_SOURCES
-        : ALL_SYSTEM_FEATURE_SOURCES.filter((sourceId) => pendingSourceUploads.has(sourceId));
-      allSourcesPending = false;
-      pendingSourceUploads.clear();
-      return sourceIds;
-    };
-
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV || window.__TRANSITMAPPER_PERF_RUN__ === true) {
       window.__mapProjectionCounts = () => ({ ...projectionCounts });
     }
 
     const pushData = (requestedSources: readonly SystemFeatureSourceId[]) => {
       if (gestureActive) {
-        queueSourceUploads(requestedSources);
+        sourceUploadQueue.add(requestedSources);
         fullAfterGesture = true;
         return;
       }
@@ -649,7 +629,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // still reflects the LATEST merged state, not a stale snapshot.
     let pushDataRaf: number | null = null;
     const schedulePushData = (request: SourceUploadRequest = 'all') => {
-      queueSourceUploads(request);
+      sourceUploadQueue.add(request);
       if (gestureActive) {
         fullAfterGesture = true;
         return;
@@ -657,7 +637,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       if (pushDataRaf !== null) return;
       pushDataRaf = requestAnimationFrame(() => {
         pushDataRaf = null;
-        pushData(takeQueuedSourceUploads());
+        pushData(sourceUploadQueue.take());
       });
     };
     // React view changes invalidate all derived collections, while store
@@ -750,7 +730,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       if (selectionRaf !== null) {
         cancelAnimationFrame(selectionRaf);
         selectionRaf = null;
-        queueSourceUploads('all');
+        sourceUploadQueue.add('all');
         fullAfterGesture = true;
       }
       applyGestureProjectionResult(gestureProjection.project(baseline));
@@ -767,11 +747,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       const needsFullProjection = finish.rebuild || fullAfterGesture;
       fullAfterGesture = false;
       if (needsFullProjection) {
-        const hasQueuedSources = allSourcesPending || pendingSourceUploads.size > 0;
         // Gesture store commits already contributed their exact dependency
         // union. Fall back to all only for a canceled/aborted path that did not
         // expose a classifiable system change.
-        schedulePushData(hasQueuedSources ? [] : 'all');
+        schedulePushData(sourceUploadQueue.hasPending() ? [] : 'all');
       }
     };
 
@@ -901,15 +880,19 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     ro.observe(containerRef.current);
 
     const unsub = store.subscribe((s, prev) => {
-      // Gated on what buildFeatures actually READS, not on the `system`
-      // reference. Renaming the system, panning (setViewport), or picking a
-      // palette color all mint a new `system` while producing byte-identical
-      // features — and renames arrive one per keystroke. See
-      // core/render/featureInputs.ts for the classification and its guarantees.
-      if (featureInputsChanged(prev.system, s.system)) {
-        const changedSources = sourceUploadsForSystemChange(prev.system, s.system);
+      // Plan from the exact TransitSystem fields whose references changed.
+      // Renaming the system, moving the camera, or picking a palette color
+      // produces an empty plan; topology edits conservatively include every
+      // derived collection they can influence.
+      const documentChanged = prev.system.id !== s.system.id;
+      const changedSources = sourceUploadsForSystemChange(prev.system, s.system, {
+        forceAll: documentChanged,
+      });
+      if (changedSources.length > 0 || (gestureActive && documentChanged)) {
         if (gestureActive) {
-          queueSourceUploads(changedSources);
+          // A document switch must abort the baseline-bound gesture even in
+          // the degenerate case where the new document reuses the same arrays.
+          sourceUploadQueue.add(documentChanged ? 'all' : changedSources);
           if (!gestureProjectionAborted && gestureProjection)
             applyGestureProjectionResult(gestureProjection.project(s.system));
           else fullAfterGesture = true;
@@ -923,7 +906,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         map.getSource(SRC_SERVICES)
       ) {
         if (gestureActive) {
-          queueSourceUploads('all');
+          sourceUploadQueue.add('all');
           fullAfterGesture = true;
         } else {
           // Only the selection/active way changed. Node selection rides the
@@ -1019,7 +1002,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       detachSimDev?.();
       clearGesturePreview();
       restoreGestureMask();
-      if (import.meta.env.DEV) delete window.__mapProjectionCounts;
+      if (import.meta.env.DEV || window.__TRANSITMAPPER_PERF_RUN__ === true)
+        delete window.__mapProjectionCounts;
       schedulePushDataRef.current = null;
       setMap(null);
       map.remove();

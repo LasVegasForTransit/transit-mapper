@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "perf": "tsx scripts/perf/run.ts",
     "perf:record": "tsx scripts/perf/run.ts --record",
+    "perf:soak": "tsx scripts/perf/run.ts --soak",
     "typecheck": "tsc -b --noEmit && tsc -p tsconfig.scripts.json",
     "verify": "tsx scripts/verify.ts && vitest run",
     "lint": "eslint ."

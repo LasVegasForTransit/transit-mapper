@@ -99,7 +99,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
       await yieldForExportFeedback();
       if (controller.signal.aborted) throw controller.signal.reason;
       if (format === 'svg') {
-        exportSvgFromMap(system, view, map, { title, legend }, filename);
+        await exportSvgFromMap(system, view, map, { title, legend }, filename, controller.signal);
       } else {
         await exportPngFromMap(map, { title, legend }, filename, controller.signal);
       }

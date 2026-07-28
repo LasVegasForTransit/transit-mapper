@@ -120,6 +120,17 @@ is still outstanding, roughly in order of how badly it misleads people.
   15m half-extent they inherited. A platform and a depot should not be the same size; that's a design
   pass, not a refactor.
 
+## Engineering: opt-in performance evidence
+
+- **Anonymous performance telemetry, only after explicit opt-in.** The local and CI harness can show
+  which operations are slow on its known machines, but not which devices people actually use.
+  A future setting may send an allowlisted set of timings, coarse device/browser capability buckets,
+  counters, and the app version. It starts off, explains the payload before consent, and can be
+  turned off again. It never sends document contents, system or route names, coordinates or
+  geometry, share ids, URLs, search/import terms, account identifiers, or a persistent
+  device/fingerprint id. Adding any field outside that allowlist requires a new privacy review and
+  updated consent copy; “anonymous” is not permission to quietly widen the payload.
+
 ## How to help
 
 TransitMapper is open source, and contributions are welcome. See

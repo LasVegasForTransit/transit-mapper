@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { reloadAfterFlush } from './reloadAfterFlush';
 
 // How often an already-registered tab checks for a new deploy. Workbox's own
 // update check only fires on navigation/reload, which a long-lived app tab
@@ -16,7 +17,7 @@ export interface AppUpdate {
   /** Clears the offlineReady flag without reloading; nothing to act on. */
   dismissOfflineReady: () => void;
   /** Activates the waiting service worker and reloads onto the new build. */
-  reload: () => void;
+  reload: () => Promise<void>;
 }
 
 /**
@@ -26,10 +27,10 @@ export interface AppUpdate {
  * should keep this out of any bundle entry (e.g. an embedded/iframed one)
  * that isn't meant to register a service worker of its own.
  *
- * @param flushPendingSave Called synchronously before reloading, so an
- *   update-triggered reload never drops a still-debounced autosave write.
+ * @param flushPendingSave Awaited before reloading, so an update-triggered
+ *   reload never drops a still-debounced asynchronous IndexedDB write.
  */
-export function useAppUpdate(flushPendingSave: () => void): AppUpdate {
+export function useAppUpdate(flushPendingSave: () => void | Promise<void>): AppUpdate {
   const updateInterval = useRef<number | undefined>(undefined);
 
   const {
@@ -56,13 +57,10 @@ export function useAppUpdate(flushPendingSave: () => void): AppUpdate {
   // over setOfflineReady itself — a useState setter, always stable) so a
   // caller can safely put these in its own effect dependency arrays.
   const dismissOfflineReady = useCallback(() => setOfflineReady(false), [setOfflineReady]);
-  const reload = useCallback(() => {
-    flushPendingSave();
-    // The reload itself happens once the new worker reports "controlling"
-    // (see vite-plugin-pwa's react client) — asynchronous and after
-    // flushPendingSave has already landed, so there's no race to guard here.
-    void updateServiceWorker();
-  }, [flushPendingSave, updateServiceWorker]);
+  const reload = useCallback(
+    () => reloadAfterFlush(flushPendingSave, () => updateServiceWorker()),
+    [flushPendingSave, updateServiceWorker],
+  );
 
   return { needRefresh, offlineReady, dismissOfflineReady, reload };
 }

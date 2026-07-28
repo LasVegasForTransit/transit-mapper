@@ -35,13 +35,14 @@ function sample(
     inputToNextPaintMs: [],
     paintedFrameMs: [],
     unexpectedLongTaskMs: [],
-    actions: ['drag'] as Array<'drag' | 'draw'>,
+    actions: ['camera-drag'] as Array<'camera-drag' | 'entity-drag' | 'draw'>,
   };
   const counters = {
     sourceUploadCount: 0,
     paintedFrameCount: 0,
     unexpectedLongTaskCount: 0,
     domNodeCount: 0,
+    phaseCounters: null,
   };
   const network = {
     requestCount: 0,

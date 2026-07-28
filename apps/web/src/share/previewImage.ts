@@ -15,6 +15,16 @@ import { renderPreviewMarkup, type RenderPreviewMarkupOptions } from './previewW
 /** How long to wait for the browser to decode our own SVG before giving up.
  *  Share creation must not hang on a preview that isn't essential. */
 const DECODE_TIMEOUT_MS = 5000;
+const PNG_ENCODE_TIMEOUT_MS = 5000;
+
+export interface CanvasPngSource {
+  toBlob(callback: (blob: Blob | null) => void, type?: string, quality?: number): void;
+}
+
+export interface CanvasToPngBlobOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
 
 function abortError(signal: AbortSignal): Error {
   return signal.reason instanceof Error
@@ -54,6 +64,40 @@ function decodeSvg(markup: string, signal?: AbortSignal): Promise<HTMLImageEleme
   });
 }
 
+/** Canvas encoding has a callback-only browser API, and some failed/lost
+ * contexts never invoke that callback. The preview is optional, so a bounded
+ * rejection is safer than leaving the entire share operation pending. */
+export function canvasToPngBlob(
+  canvas: CanvasPngSource,
+  options: CanvasToPngBlobOptions = {},
+): Promise<Blob | null> {
+  if (options.signal?.aborted) return Promise.reject(abortError(options.signal));
+  return new Promise<Blob | null>((resolve, reject) => {
+    let settled = false;
+    const finish = (outcome: { blob: Blob | null } | { error: Error }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      options.signal?.removeEventListener('abort', onAbort);
+      if ('blob' in outcome) resolve(outcome.blob);
+      else reject(outcome.error);
+    };
+    const onAbort = () => finish({ error: abortError(options.signal!) });
+    const timer = setTimeout(
+      () => finish({ error: new Error('Timed out encoding the preview image') }),
+      options.timeoutMs ?? PNG_ENCODE_TIMEOUT_MS,
+    );
+    options.signal?.addEventListener('abort', onAbort, { once: true });
+    try {
+      canvas.toBlob((blob) => finish({ blob }), 'image/png');
+    } catch (error) {
+      finish({
+        error: error instanceof Error ? error : new Error('Could not encode the preview image'),
+      });
+    }
+  });
+}
+
 /**
  * Draws the share card and returns it as PNG bytes at Open Graph card size,
  * or null if the browser can't produce one. A missing preview is not an error
@@ -77,7 +121,7 @@ export async function renderPreviewPng(
     // no sharpness because the source is vector.
     ctx.drawImage(image, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
 
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    const blob = await canvasToPngBlob(canvas, { signal: options.signal });
     if (options.signal?.aborted) throw abortError(options.signal);
     if (!blob) return null;
     return new Uint8Array(await blob.arrayBuffer());

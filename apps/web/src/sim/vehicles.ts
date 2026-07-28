@@ -38,7 +38,10 @@ import {
   activeSchedule,
   advanceSimMs,
   dayScopeAt,
+  MS_PER_DAY,
+  MS_PER_MINUTE,
   minutesOfDay,
+  parseHhMm,
   simSpeed,
   type ActiveSchedule,
 } from '@transitmapper/core/sim/clock';
@@ -118,6 +121,58 @@ class ScheduleResolver {
       this.table.set(service.id, activeSchedule(service, nowMin, dayScope, pinnedLabel));
     return this.table;
   }
+}
+
+/**
+ * Find the next instant when at least one currently visible service can
+ * become active. Inactive services should not keep a 30 Hz animation loop
+ * alive, but sleeping until an unrelated UI event would freeze simulated
+ * time before a later service span.
+ *
+ * Schedule state changes only at a period start or a day boundary. Checking
+ * those sparse candidates across one weekly cycle avoids polling every
+ * simulated minute and also covers weekday/weekend transitions and wrapped
+ * spans. The caller has already established that no service is active now.
+ */
+function nextActiveServiceMs(services: Service[], simMs: number): number | null {
+  const dayStart = Math.floor(simMs / MS_PER_DAY) * MS_PER_DAY;
+  let next: number | null = null;
+  const consider = (candidate: number) => {
+    if (candidate > simMs && (next === null || candidate < next)) next = candidate;
+  };
+
+  for (let dayOffset = 0; dayOffset <= 7; dayOffset++) {
+    const candidateDay = dayStart + dayOffset * MS_PER_DAY;
+    const candidateScope = dayScopeAt(candidateDay);
+    for (const service of services) {
+      const periods = service.schedule;
+      if (periods && periods.length > 0) {
+        for (const period of periods) {
+          const start = parseHhMm(period.spanStart);
+          const end = parseHhMm(period.spanEnd);
+          if (
+            start === null ||
+            end === null ||
+            (period.days !== 'daily' && period.days !== candidateScope)
+          )
+            continue;
+          // Wrapped and all-day spans are already active at midnight under
+          // activeSchedule's current-day semantics; ordinary spans begin at
+          // their stated start.
+          if (end <= start) consider(candidateDay);
+          consider(candidateDay + start * MS_PER_MINUTE);
+        }
+        continue;
+      }
+      if (service.spanStart === undefined || service.spanEnd === undefined) continue;
+      const start = parseHhMm(service.spanStart);
+      const end = parseHhMm(service.spanEnd);
+      if (start === null || end === null) continue;
+      if (end <= start) consider(candidateDay);
+      consider(candidateDay + start * MS_PER_MINUTE);
+    }
+  }
+  return next;
 }
 
 /** One run's drawable geometry. The two legs are distinct polylines, not one
@@ -402,6 +457,7 @@ export function attachVehicleAnimation(
   gate: VehicleGate,
 ): () => void {
   let frame: number | null = null;
+  let idleWakeTimer: number | null = null;
   let detached = false;
   let paintPausedFrame = false;
   let advancingClock = false;
@@ -460,10 +516,18 @@ export function attachVehicleAnimation(
       cancelAnimationFrame(frame);
       frame = null;
     }
+    if (idleWakeTimer !== null) {
+      clearTimeout(idleWakeTimer);
+      idleWakeTimer = null;
+    }
   };
   const scheduleFrame = (allowPaused = false) => {
     if (allowPaused) paintPausedFrame = true;
     if (detached || frame !== null || (clock.settings().paused && !allowPaused)) return;
+    if (idleWakeTimer !== null) {
+      clearTimeout(idleWakeTimer);
+      idleWakeTimer = null;
+    }
     frame = requestAnimationFrame(tick);
   };
   const wake = (allowPaused = false) => {
@@ -621,11 +685,13 @@ export function attachVehicleAnimation(
       dayScopeAt(simMs),
       inputs.pinnedPeriod,
     );
+    let hasActiveService = false;
     for (const service of inputs.visibleServices) {
       // A service outside its span of service isn't running, so it costs
       // nothing — this check comes before geometry resolution on purpose.
       const active = running.get(service.id);
       if (!active) continue;
+      hasActiveService = true;
       const headwayMinutes = active.headwayMinutes;
       const { widthM, lengthM, profile } = effectiveVehicleKind(system.vehicleKinds, service);
       for (const pattern of service.patterns) {
@@ -700,8 +766,27 @@ export function attachVehicleAnimation(
       infrastructureCollection.features[i] = infrastructurePool[i];
     setNetworkData(source, collection);
     setInfrastructureData(infraSource, infrastructureCollection);
-    if (paused || (used === 0 && infrastructureUsed === 0)) idle = true;
-    else scheduleFrame();
+    if (paused) {
+      idle = true;
+    } else if (used > 0 || infrastructureUsed > 0) {
+      scheduleFrame();
+    } else {
+      idle = true;
+      if (
+        !hasActiveService &&
+        inputs.visibleServices.length > 0 &&
+        inputs.pinnedPeriod === undefined
+      ) {
+        const nextActive = nextActiveServiceMs(inputs.visibleServices, simMs);
+        if (nextActive !== null) {
+          const realDelay = (nextActive - simMs) / simSpeed(clock.settings().speedId).simPerReal;
+          idleWakeTimer = setTimeout(() => {
+            idleWakeTimer = null;
+            wake();
+          }, Math.ceil(realDelay));
+        }
+      }
+    }
   }
 
   const unsubscribeSettings = clock.subscribeSettings((settings) => {

@@ -12,6 +12,7 @@
     "preview": "pnpm --filter @transitmapper/web preview",
     "perf": "pnpm --filter @transitmapper/web perf",
     "perf:record": "pnpm --filter @transitmapper/web perf:record",
+    "perf:soak": "pnpm --filter @transitmapper/web perf:soak",
     "worker:dev": "pnpm --filter @transitmapper/worker dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",

@@ -10,6 +10,10 @@ on:
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - '.github/workflows/performance.yml'
+  schedule:
+    # Run after the busiest shared-runner window, with both desktop and mobile
+    # profiles plus the leak soak below.
+    - cron: '23 10 * * *'
   workflow_dispatch:
 
 permissions:
@@ -21,12 +25,16 @@ concurrency:
 
 jobs:
   browser:
-    name: Fixed Chrome protocol
+    name: Fixed Chrome protocol (${{ matrix.profile }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJSON(github.event_name == 'pull_request' && '["desktop"]' || '["desktop","mobile"]') }}
     env:
-      CURRENT_ARTIFACT: ${{ runner.temp }}/transitmapper-performance-current
-      BASELINE_ARTIFACT: ${{ runner.temp }}/transitmapper-performance-baseline
+      CURRENT_ARTIFACT: ${{ runner.temp }}/transitmapper-performance-current-${{ matrix.profile }}
+      BASELINE_ARTIFACT: ${{ runner.temp }}/transitmapper-performance-baseline-${{ matrix.profile }}
     steps:
       - name: Checkout candidate
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -34,6 +42,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout base revision
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.base.sha || github.event.repository.default_branch }}
@@ -55,7 +64,8 @@ jobs:
       - name: Detect a measurable base revision
         id: baseline
         run: |
-          if test -f .performance-baseline/apps/web/scripts/perf/run.ts; then
+          if test "${{ github.event_name }}" = "pull_request" \
+            && test -f .performance-baseline/apps/web/scripts/perf/run.ts; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
@@ -68,8 +78,14 @@ jobs:
 
       - name: Record base revision
         if: steps.baseline.outputs.available == 'true'
+        # A pre-existing absolute violation must not prevent collecting the
+        # comparison data. The candidate run below remains the hard gate.
+        continue-on-error: true
         working-directory: .performance-baseline
-        run: xvfb-run -a pnpm perf:record -- --output "$BASELINE_ARTIFACT"
+        run: >-
+          xvfb-run -a pnpm perf:record --
+          --profile "${{ matrix.profile }}"
+          --output "$BASELINE_ARTIFACT"
 
       - name: Record candidate and enforce budgets
         env:
@@ -77,21 +93,58 @@ jobs:
         run: |
           if test "$BASELINE_AVAILABLE" = "true"; then
             xvfb-run -a pnpm perf:record -- \
+              --profile "${{ matrix.profile }}" \
               --output "$CURRENT_ARTIFACT" \
               --baseline "$BASELINE_ARTIFACT/report.json" \
               --require-baseline
           else
-            echo "::notice::No performance harness exists on the base revision; enforcing absolute budgets only."
-            xvfb-run -a pnpm perf:record -- --output "$CURRENT_ARTIFACT"
+            echo "::notice::Using the checked-in calibrated baseline."
+            xvfb-run -a pnpm perf:record -- \
+              --profile "${{ matrix.profile }}" \
+              --output "$CURRENT_ARTIFACT" \
+              --require-baseline
           fi
 
       - name: Upload reports and Chrome traces
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: performance-${{ github.run_id }}-${{ github.run_attempt }}
+          name: performance-${{ matrix.profile }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ env.CURRENT_ARTIFACT }}
             ${{ env.BASELINE_ARTIFACT }}
+          if-no-files-found: warn
+          retention-days: 14
+
+  soak:
+    name: Ten-minute RTC leak gate
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SOAK_ARTIFACT: ${{ runner.temp }}/transitmapper-performance-soak
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Confirm stable Chrome and virtual display
+        run: |
+          google-chrome --version
+          command -v xvfb-run
+
+      - name: Exercise RTC scale for ten minutes
+        run: xvfb-run -a pnpm perf:soak -- --output "$SOAK_ARTIFACT"
+
+      - name: Upload leak report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: performance-soak-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.SOAK_ARTIFACT }}
           if-no-files-found: warn
           retention-days: 14

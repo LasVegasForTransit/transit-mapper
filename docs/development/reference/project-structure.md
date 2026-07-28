@@ -32,8 +32,9 @@ apps/
       style/     How catalog kinds LOOK (colors, widths, dashes, icons).
       share/     Export (PNG/SVG/JSON), the share card, the share-API client.
       storage/   Local persistence.
-      perf/      DEV-only frame instrumentation. Never ships enabled.
-    scripts/     verify.ts — the test suite.
+      perf/      Frame instrumentation plus pure fixtures/report/budget policy.
+    perf/        Checked desktop and mobile browser-performance baselines.
+    scripts/     verify.ts plus the production Chrome/output performance tools.
   worker/        Cloudflare Worker + D1 migrations for shared snapshots.
     scripts/     verify.ts — the Worker's own suite (URL scoping, uploads).
 docs/            This documentation.
@@ -240,6 +241,27 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 - `persistenceCoordinator.ts` — coalesces content and camera changes into
   bounded saves. Camera movement is presentation state and does not change a
   library entry's `updatedAt`; content edits do.
+
+## apps/web/src/perf/ and apps/web/scripts/perf/ — measured performance
+
+`src/perf/` owns deterministic small, dense, and RTC-shaped fixtures; the
+named report schemas; pure statistics and budget evaluation; bundle/PWA graph
+policy; direct-manipulation instrumentation; and the large-document storage
+thresholds. The production harness remains inert unless the runner sets its
+private per-navigation flag. Normal users do not pay for the developer overlay
+or automated counters.
+
+`scripts/perf/run.ts` owns the stateful edge: stable headed Chrome, CPU/network
+emulation, cold and warm navigations, share/embed request fixtures, trusted
+pointer input, traces, calibration, the real localStorage probe, offline
+reload, and the ten-minute leak soak. `report-bundle.ts` and
+`verify-pwa-output.ts` inspect production output after Vite builds it.
+
+The checked reports in `apps/web/perf/` are reviewable comparison evidence.
+Generated traces and current reports live under
+`apps/web/artifacts/performance/` and are ignored. This suite is deliberately
+outside `pnpm check`, whose browser-free and network-free contract remains
+unchanged. See [Measure browser performance](../how-to/measure-performance.md).
 
 ## apps/web/src/import/ — bounded browser imports
 

@@ -106,13 +106,13 @@ export interface PerfMetricValues {
 }
 
 export interface PerfGestureDiagnostics {
-  name: 'map-pan' | 'map-drag' | 'map-drag-draw';
+  name: 'map-pan' | 'map-drag' | 'entity-drag-draw';
   frameSource: 'map-render' | 'animation-frame-proxy';
   /** Trusted pointer interactions observed through the Event Timing API. */
   inputToNextPaintMs: number[];
   paintedFrameMs: number[];
   unexpectedLongTaskMs: number[];
-  actions: Array<'drag' | 'draw'>;
+  actions: Array<'camera-drag' | 'entity-drag' | 'draw'>;
 }
 
 export interface PerfRuntimeCounters {
@@ -121,6 +121,14 @@ export interface PerfRuntimeCounters {
   paintedFrameCount: number;
   unexpectedLongTaskCount: number;
   domNodeCount: number;
+  phaseCounters: PerfPhaseCounters | null;
+}
+
+export interface PerfPhaseCounters {
+  fullProjectionCount: number;
+  gestureProjectionCount: number;
+  entityComparisonCount: number;
+  projectedEntityCount: number;
 }
 
 export interface PerfNetworkSnapshot {
@@ -223,6 +231,8 @@ export interface PerfReport {
   bundles: PerfBundleEntry[];
   samples: PerfSample[];
   scenarios: PerfScenarioSummary[];
+  /** Filled by the executable runner after report construction. */
+  evaluation?: PerfBudgetEvaluation;
 }
 
 export interface CreatePerfReportOptions {

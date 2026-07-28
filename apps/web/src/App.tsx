@@ -6,14 +6,16 @@ import { useEditor, useEditorStore } from './editor/EditorProvider';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { fetchShare } from './share/api';
 import {
-  getActiveId,
-  hasSeenOnboarding,
   listLibrary,
   loadSystemById,
   loadSystemEntry,
-  markOnboardingSeen,
   migrateLegacySingleSlot,
   saveToLibrary,
+} from './storage/browserLibrary';
+import {
+  getActiveId,
+  hasSeenOnboarding,
+  markOnboardingSeen,
   setActiveId,
 } from './storage/localStore';
 import {
@@ -173,31 +175,40 @@ export function App() {
     // app to a blank canvas and concludes their work is gone. The bytes are
     // still in storage; saying so is the difference between a bug report we
     // can act on and someone quietly leaving.
-    const activeId = getActiveId();
-    const active = activeId ? loadSystemEntry(activeId) : { status: 'missing' as const };
-    let system = active.status === 'ok' ? active.system : null;
-    if (active.status === 'corrupt') setNotice(corruptSystemNotice);
-    if (!system) system = migrateLegacySingleSlot();
-    if (!system) {
-      const entries = listLibrary();
-      if (entries.length > 0) system = loadSystemById(entries[0].id);
-    }
-    let isBrandNew = false;
-    if (!system) {
-      system = createEmptySystem();
-      isBrandNew = true;
-    }
-    // The first save is the one that proves storage works at all — a browser
-    // in private mode fails here, before the user has typed anything.
-    report(saveToLibrary(system));
-    setActiveId(system.id);
-    store.getState().setSystem(system, { readOnly: false });
-    if (isBrandNew) store.getState().setTool('way');
-    // Independent of isBrandNew: that flag means "no saved system found,"
-    // which a returning user hits too (they deleted their only system) —
-    // conflating the two would re-show onboarding to someone who's seen it.
-    if (!hasSeenOnboarding()) openDialog('onboarding');
-    setReady(true);
+    let disposed = false;
+    void (async () => {
+      const activeId = getActiveId();
+      const active = activeId ? await loadSystemEntry(activeId) : { status: 'missing' as const };
+      let system = active.status === 'ok' ? active.system : null;
+      if (active.status === 'corrupt' && !disposed) setNotice(corruptSystemNotice);
+      if (!system) system = await migrateLegacySingleSlot();
+      if (!system) {
+        const entries = await listLibrary();
+        if (entries.length > 0) system = await loadSystemById(entries[0].id);
+      }
+      let isBrandNew = false;
+      if (!system) {
+        system = createEmptySystem();
+        isBrandNew = true;
+      }
+      // A loaded system is already durable, and legacy reads migrate as part
+      // of loading. Only a genuinely new document needs a bootstrap write;
+      // rewriting an RTC-sized system here would delay first paint for no
+      // additional safety.
+      if (isBrandNew) report(await saveToLibrary(system));
+      if (disposed) return;
+      setActiveId(system.id);
+      store.getState().setSystem(system, { readOnly: false });
+      if (isBrandNew) store.getState().setTool('way');
+      // Independent of isBrandNew: that flag means "no saved system found,"
+      // which a returning user hits too (they deleted their only system) —
+      // conflating the two would re-show onboarding to someone who's seen it.
+      if (!hasSeenOnboarding()) openDialog('onboarding');
+      setReady(true);
+    })();
+    return () => {
+      disposed = true;
+    };
   }, [store, report, openDialog]);
 
   // Content and camera changes share one debounce/write lane. A pan that lands
@@ -205,13 +216,14 @@ export function App() {
   // source of state; pagehide and update reloads flush this same pending value.
   const persistence = useRef<PersistenceCoordinator | null>(null);
   useEffect(() => {
+    if (!ready) return;
     const coordinator = attachPersistenceCoordinator(store, report);
     persistence.current = coordinator;
     return () => {
       if (persistence.current === coordinator) persistence.current = null;
       coordinator.detach();
     };
-  }, [store, report]);
+  }, [store, report, ready]);
 
   const flushPendingSave = useCallback(() => persistence.current?.flush(), []);
 
@@ -387,7 +399,11 @@ export function App() {
       )}
       {activeDialog === 'systems' && (
         <LazyDialog onFailure={dialogFailed}>
-          <SystemsDialog onClose={closeDialog} onCorrupt={() => setNotice(corruptOpenNotice)} />
+          <SystemsDialog
+            onClose={closeDialog}
+            onCorrupt={() => setNotice(corruptOpenNotice)}
+            flushPendingSave={flushPendingSave}
+          />
         </LazyDialog>
       )}
       {activeDialog === 'settings' && (
