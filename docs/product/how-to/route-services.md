@@ -95,8 +95,15 @@ than swallowing the click, with the offending stretches flagged.
 One-way ways a service runs over display travel-direction chevrons in the
 Network view.
 
-Turn restrictions are not enforced yet, so a route may still make a turn a
-junction's lane connectors forbid.
+Turn restrictions are enforced too. Where a junction's lane connectors or turn
+restrictions forbid a movement, the route goes round rather than through — on
+past the junction, turn round, and back to it on a street that may turn. A
+blocked turn is a detour, not a refusal, because the two points are still
+connected.
+
+A turn is refused only when EVERY lane of the arriving street forbids it. A
+right-turn pocket is enough to permit the turn, which is the safe reading: the
+alternative sends a line the long way round a junction it may cross.
 
 ## Split a line into two one-way paths
 

@@ -18,9 +18,10 @@
 // any other stateful context, so relocating it is a call-site change, not a
 // rewrite.
 
+import { getComponent, laneRefKey } from './components';
 import { haversineMeters, nearestInsertionPoint } from './geo';
 import { type Traversal, wayTraversal } from './profile';
-import type { LngLat, TransitSystem, Way } from './system';
+import type { LngLat, Node, TransitSystem, Way } from './system';
 
 /** Where a route starts/ends: a way plus the raw-points insertion produced
  *  by projecting the clicked coordinate onto it (see anchorOnWay). */
@@ -154,6 +155,59 @@ function biasMultiplier(mid: LngLat, biasPath: LngLat[] | undefined, weight: num
     if (d < best) best = d;
   }
   return 1 + weight * Math.min(best / BIAS_SCALE_M, 4);
+}
+
+/**
+ * Whether a route arriving at `node` along `fromWayId` may continue onto
+ * `toWayId`.
+ *
+ * Two records can forbid it, and both are per-LANE while a route has not
+ * chosen a lane yet — the chicken-and-egg this deferred on for a while. It is
+ * resolved by asking whether ANY lane of the arriving way permits the
+ * movement, which is the safe direction: a turn is refused only when every
+ * lane that could make it says no. Over-refusing here would send a line the
+ * long way round a junction it is allowed to cross, which is worse than
+ * letting one through that a lane-level check would later catch.
+ *
+ * `Node.connectors` is the explicit lane-connectivity graph, stored only once
+ * someone customizes turn lanes; absent it is derived by heuristic on demand,
+ * and enforcing a heuristic nobody authored would be enforcing our guess. So
+ * an absent connector list permits everything.
+ *
+ * A `TurnRestriction` with an empty `allowedTargets` is a fully blocked lane —
+ * how a modal filter is expressed — and blocks every target from that lane.
+ */
+function turnAllowed(
+  node: Node,
+  fromWayId: string,
+  toWayId: string,
+  waysById: Map<string, Way>,
+  turnRestrictions: TransitSystem['turnRestrictions'],
+): boolean {
+  if (fromWayId === toWayId) return true; // continuing along one way is not a turn
+  if (node.connectors && node.connectors.length > 0) {
+    const linked = node.connectors.some(
+      (c) => c.from.wayId === fromWayId && c.to.wayId === toWayId,
+    );
+    if (!linked) return false;
+  }
+  const from = waysById.get(fromWayId);
+  const lanes = from ? from.profile.lanes : [];
+  if (lanes.length === 0) return true;
+  let anyRestricted = false;
+  for (const lane of lanes) {
+    const restriction = getComponent(turnRestrictions, laneRefKey(fromWayId, lane.id));
+    if (!restriction) return true; // an unrestricted lane can make the turn
+    anyRestricted = true;
+    if (restriction.allowedTargets.includes(toWayId)) return true;
+  }
+  return !anyRestricted;
+}
+
+/** Whether a vertex key names a real junction rather than a way-local endpoint
+ *  — only a junction can restrict a turn. See vertexKeyAt. */
+function junctionIdOf(vertexKey: string): string | null {
+  return vertexKey.startsWith('e:') || vertexKey.startsWith('@') ? null : vertexKey;
 }
 
 function buildGraph(
@@ -343,6 +397,7 @@ function routeOverGraph(
 ): RouteResult | null {
   const { vertices, nodeAt } = buildGraph(system, opts, rule);
   const waysById = new Map(system.ways.map((w) => [w.id, w]));
+  const nodesById = new Map(system.nodes.map((n) => [n.id, n]));
 
   // Splice a virtual vertex for an anchor into its way's enclosing segment.
   const splice = (anchor: RouteAnchor, key: string, isFrom: boolean): boolean => {
@@ -424,11 +479,28 @@ function routeOverGraph(
   const TO = '@to';
   if (!splice(from, FROM, true) || !splice(to, TO, false)) return null;
 
-  // Plain Dijkstra — systems are a few thousand edges at most.
+  // Dijkstra over (vertex, way arrived on) rather than over vertices alone.
+  //
+  // A turn restriction is a fact about a PAIR of ways meeting at a junction,
+  // so "can I leave along B" depends on how the route got here — which a plain
+  // vertex state cannot express. Splitting the state on the arriving way is
+  // the edge-expanded graph the deferral note called for, done in the search
+  // instead of in the construction: same expansion, but buildGraph stays a
+  // description of the network rather than of the ways through it.
+  //
+  // The cost is bounded by junction degree, and only where a junction actually
+  // has several arms — a state is only created for an (arriving way, vertex)
+  // pair a route can really reach.
+  const stateKey = (vertexKey: string, viaWayId: string): string => `${vertexKey}|${viaWayId}`;
+  const START = stateKey(FROM, '');
   const dist = new Map<string, number>();
+  const at = new Map<string, { vertexKey: string; viaWayId: string }>();
   const prev = new Map<string, { key: string; span: RouteSpan; costM: number }>();
   const visited = new Set<string>();
-  dist.set(FROM, 0);
+  dist.set(START, 0);
+  at.set(START, { vertexKey: FROM, viaWayId: '' });
+
+  let goal: string | null = null;
   while (true) {
     let cur: string | null = null;
     let best = Infinity;
@@ -439,23 +511,47 @@ function routeOverGraph(
       }
     }
     if (cur === null) return null; // exhausted without reaching TO
-    if (cur === TO) break;
+    const here = at.get(cur)!;
+    if (here.vertexKey === TO) {
+      goal = cur;
+      break;
+    }
     visited.add(cur);
-    const v = vertices.get(cur);
+    const v = vertices.get(here.vertexKey);
     if (!v) continue;
+    const junction = junctionIdOf(here.vertexKey);
+    const node = junction ? nodesById.get(junction) : undefined;
     for (const e of v.edges) {
+      // A turn is only restrictable where the route is actually at a junction
+      // and is changing ways. Leaving the start anchor has no arriving way and
+      // so cannot be a turn.
+      if (
+        node &&
+        here.viaWayId &&
+        !turnAllowed(node, here.viaWayId, e.span.wayId, waysById, system.turnRestrictions)
+      )
+        continue;
+      // A zero-length hop does not change which way the route is ON. Anchors
+      // spliced exactly onto a junction produce spans covering no ground at
+      // all, and letting one of those set the arriving way launders a
+      // forbidden turn through a third street the route never travels: enter
+      // the junction on A, "use" B for nothing, leave on C, and the A→C rule
+      // is never consulted.
+      const nextVia = e.costM > 0 ? e.span.wayId : here.viaWayId;
+      const nextKey = stateKey(e.to, nextVia);
       const nd = best + e.costM;
-      if (nd < (dist.get(e.to) ?? Infinity)) {
-        dist.set(e.to, nd);
-        prev.set(e.to, { key: cur, span: e.span, costM: e.costM });
+      if (nd < (dist.get(nextKey) ?? Infinity)) {
+        dist.set(nextKey, nd);
+        at.set(nextKey, { vertexKey: e.to, viaWayId: nextVia });
+        prev.set(nextKey, { key: cur, span: e.span, costM: e.costM });
       }
     }
   }
 
   // Walk back, then merge consecutive spans over the same way.
   const raw: RouteSpan[] = [];
-  let cursor = TO;
-  while (cursor !== FROM) {
+  let cursor = goal;
+  while (cursor !== START) {
     const p = prev.get(cursor);
     if (!p) return null;
     raw.unshift(p.span);
@@ -464,10 +560,18 @@ function routeOverGraph(
   const spans: RouteSpan[] = [];
   for (const s of raw) {
     const last = spans[spans.length - 1];
+    // Same way, continuing in the SAME direction. Without the direction test
+    // an out-and-back — up a street and straight back down it, which is what a
+    // legal U-turn round a forbidden turn looks like — merges into a span from
+    // a point to itself, and the detour vanishes into a zero-length nothing.
+    const sameDirection =
+      last !== undefined &&
+      Math.sign(last.toPoint - last.fromPoint) === Math.sign(s.toPoint - s.fromPoint);
     if (
       last &&
       last.wayId === s.wayId &&
       last.toPoint === s.fromPoint &&
+      sameDirection &&
       !last.toCoord &&
       !s.fromCoord
     ) {
@@ -477,7 +581,7 @@ function routeOverGraph(
       spans.push({ ...s });
     }
   }
-  return overlapsItself(spans) ? null : { spans, lengthM: dist.get(TO) ?? 0 };
+  return overlapsItself(spans) ? null : { spans, lengthM: dist.get(goal) ?? 0 };
 }
 
 /**

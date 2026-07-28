@@ -157,3 +157,130 @@ describe('a two-way system is unaffected', () => {
     expect(up!.lengthM).toBeCloseTo(down!.lengthM, 5);
   });
 });
+
+describe('turn restrictions at a junction', () => {
+  // A crossroads: one north-south street meeting one east-west street, all
+  // two-way, so nothing but the turn rule can change the answer.
+  const C: LngLat = [-115.2, 36.12];
+  const S: LngLat = [-115.2, 36.1];
+  const N: LngLat = [-115.2, 36.14];
+  const W: LngLat = [-115.22, 36.12];
+  const E: LngLat = [-115.18, 36.12];
+
+  const crossroads = (
+    turnRestrictions: TransitSystem['turnRestrictions'] = {},
+    connectors?: Node['connectors'],
+  ): TransitSystem => {
+    const ways = [
+      aRoad('southArm', [S, C]),
+      aRoad('northArm', [C, N]),
+      aRoad('westArm', [W, C]),
+      aRoad('eastArm', [C, E]),
+    ];
+    const refs = ways.flatMap((w) =>
+      w.points
+        .map((pt, i) => ({ wayId: w.id, pointIndex: i, pt }))
+        .filter((r) => r.pt[0] === C[0] && r.pt[1] === C[1])
+        .map(({ wayId, pointIndex }) => ({ wayId, pointIndex })),
+    );
+    return {
+      ...createEmptySystem(),
+      ways,
+      nodes: [{ id: 'x', coord: C, refs, ...(connectors ? { connectors } : {}) }],
+      turnRestrictions,
+    };
+  };
+
+  // Mid-block on both ends. An anchor sitting exactly ON the junction makes
+  // every hop zero-length, so the route never travels along anything and there
+  // is no arriving way for a turn rule to be about — a degenerate case, and
+  // not the gesture anyone makes.
+  const midSouth: LngLat = [-115.2, 36.11];
+  const midEast: LngLat = [-115.19, 36.12];
+  const routeThrough = (sys: TransitSystem) =>
+    routeBetween(
+      sys,
+      anchorOnWay(
+        sys.ways.find((w) => w.id === 'southArm')!,
+        midSouth,
+      )!,
+      anchorOnWay(
+        sys.ways.find((w) => w.id === 'eastArm')!,
+        midEast,
+      )!,
+      ROADS,
+    );
+
+  it('lets a line turn where nothing forbids it', () => {
+    const res = routeThrough(crossroads());
+    expect(res).not.toBeNull();
+    expect(res!.spans.map((s) => s.wayId)).toContain('eastArm');
+  });
+
+  it('refuses a turn every lane of the arriving street forbids', () => {
+    const sys = crossroads();
+    // Every lane of the south arm may continue north, and nothing else.
+    const restrictions = Object.fromEntries(
+      sys.ways
+        .find((w) => w.id === 'southArm')!
+        .profile.lanes.map((l) => [`southArm:${l.id}`, { allowedTargets: ['northArm'] }]),
+    );
+    const restricted = routeThrough({ ...sys, turnRestrictions: restrictions })!;
+    const free = routeThrough(sys)!;
+    // It still gets there, the long way: straight on, turn round, and come
+    // back to the junction on a street that may turn east. Refusing outright
+    // would be wrong — the two points ARE connected, just not by that turn.
+    expect(restricted).not.toBeNull();
+    expect(restricted.lengthM).toBeGreaterThan(free.lengthM);
+    // The detour is visible as a there-and-back on the north arm.
+    const north = restricted.spans.filter((s) => s.wayId === 'northArm');
+    expect(north.length).toBe(2);
+    expect(Math.sign(north[0].toPoint - north[0].fromPoint)).toBe(
+      -Math.sign(north[1].toPoint - north[1].fromPoint),
+    );
+  });
+
+  it('allows the turn when one lane still permits it', () => {
+    const sys = crossroads();
+    const lanes = sys.ways.find((w) => w.id === 'southArm')!.profile.lanes;
+    // All but one lane forbid the turn — a right-turn-only pocket is the real
+    // shape of this, and refusing on the strength of the others would send the
+    // line the long way round a junction it is allowed to cross.
+    const restrictions = Object.fromEntries(
+      lanes.slice(1).map((l) => [`southArm:${l.id}`, { allowedTargets: ['northArm'] }]),
+    );
+    const res = routeThrough({ ...sys, turnRestrictions: restrictions });
+    expect(res).not.toBeNull();
+    expect(res!.spans.map((s) => s.wayId)).toContain('eastArm');
+  });
+
+  it('treats a lane restricted to nothing as fully blocked', () => {
+    const sys = crossroads();
+    const restrictions = Object.fromEntries(
+      sys.ways
+        .find((w) => w.id === 'southArm')!
+        .profile.lanes.map((l) => [`southArm:${l.id}`, { allowedTargets: [] }]),
+    );
+    expect(routeThrough({ ...sys, turnRestrictions: restrictions })).toBeNull();
+  });
+
+  it('honours an explicit connector graph', () => {
+    const sys = crossroads();
+    const south = sys.ways.find((w) => w.id === 'southArm')!;
+    const north = sys.ways.find((w) => w.id === 'northArm')!;
+    // The junction has been customized to send the south arm only north.
+    const connectors = [
+      {
+        from: { wayId: 'southArm', laneId: south.profile.lanes[0].id },
+        to: { wayId: 'northArm', laneId: north.profile.lanes[0].id },
+      },
+    ];
+    expect(routeThrough(crossroads({}, connectors))).toBeNull();
+  });
+
+  it('ignores an absent connector graph rather than enforcing a guess', () => {
+    // Connectors are derived by heuristic when unset, and enforcing our own
+    // guess would refuse turns nobody ever forbade.
+    expect(routeThrough(crossroads({}, undefined))).not.toBeNull();
+  });
+});

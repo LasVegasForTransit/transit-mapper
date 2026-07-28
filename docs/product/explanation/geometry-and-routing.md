@@ -106,10 +106,22 @@ That flag is feedback for the gesture in progress and nothing persists it — a
 street made one-way _under_ an existing line never grows one. The durable
 answer has to recompute from the profile.
 
-Turn restrictions are still ignored. Honoring them needs vertex identity to
-become `(arrivingWayId, nodeId)` — an edge-expanded graph, multiplying vertices
-by junction degree and rewriting both the search state and the walk-back. That
-is a bigger change than one-way routing and should not ride along with it.
+Turn restrictions are honoured. A restriction is a fact about a PAIR of ways
+meeting at a junction, so "may I leave along B" depends on how the route
+arrived — which a plain per-vertex search state cannot express. The search
+state is therefore the pair `(vertex, way arrived on)`: the edge-expanded graph,
+done in the search rather than in the construction, so `buildGraph` stays a
+description of the network instead of a description of the ways through it. The
+extra states are bounded by junction degree and only appear where a junction
+really has several arms.
+
+Both records that can forbid a turn are per-LANE, and a route has not chosen a
+lane yet. A turn is refused only when every lane of the arriving way forbids
+it — over-refusing would send a line the long way round a junction it is
+allowed to cross, which is worse than letting one through that a lane-level
+check would later catch. An absent connector list permits everything, because
+connectors are derived by heuristic when unset and enforcing our own guess
+would refuse turns nobody forbade.
 
 A route may now cover the same way twice, as long as the two visits do not
 overlap in the same direction. Out along a street and back up a later block of

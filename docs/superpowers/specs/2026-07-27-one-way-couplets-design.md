@@ -103,21 +103,49 @@ appears whenever a route starts on a way's endpoint; and the draft anchored on
 whatever way sat nearest the terminus, which at a junction is often a
 cross-street.
 
+## What was closed afterwards, and how
+
+**Turn restrictions.** The deferral said vertex identity had to become
+`(arrivingWayId, nodeId)`. That was right, but the expansion belongs in the
+SEARCH rather than in the construction: Dijkstra's state is now the pair, and
+`buildGraph` stays a description of the network instead of a description of the
+ways through it. The chicken-and-egg — restrictions are per-lane, and a route
+has not picked a lane — is resolved by asking whether ANY lane of the arriving
+way permits the movement. That is the safe direction: over-refusing sends a
+line the long way round a junction it is allowed to cross.
+
+Two things fell out of it that were not visible beforehand. A zero-length hop
+laundered a forbidden turn — enter on A, "use" B for no distance, leave on C,
+and the A→C rule is never consulted — so a hop covering no ground no longer
+changes which way the route is on. And span merging collapsed an out-and-back
+on one street into a span from a point to itself, which is exactly what a legal
+U-turn round a forbidden turn looks like; merging now requires the two spans to
+run the same direction.
+
+A blocked turn is a detour, not a refusal. The router goes straight on, turns
+round, and comes back on a street that may turn — because the two points are
+still connected, just not by that turn.
+
+**Splitting a couplet.** Cutting a line in two is trimming it twice from
+opposite ends, and trimming was already couplet-aware, so it is now literally
+that. Both halves come out couplets.
+
+**Stops shared between directions.** Rather than `Station.anchors[]`, the stop
+derivation admits a station on the other direction's way when this direction
+passes within 150 m — a platform pair or a transit center, and deliberately far
+short of a block, since a stop a block away on the return street is a different
+stop this direction genuinely drives past.
+
+**The GTFS pairing threshold.** No longer a constant. It scales with the
+shorter shape's own length, floored at a platform pair and capped at a long
+block, and the two terminals are judged separately so a good end cannot pay for
+a bad one.
+
 ## What is still open
 
-Turn restrictions are ignored. Honoring them needs vertex identity to become
-`(arrivingWayId, nodeId)` — an edge-expanded graph — which is a bigger change
-than one-way routing and deliberately did not ride along.
+`Station.anchors: StationAnchor[]` remains the real answer for a platform that
+genuinely belongs to two ways; the 150 m proximity rule above is a proximity
+heuristic standing in for it.
 
-`SHAPE_PAIR_TERMINAL_M`, the distance within which two GTFS shapes count as
-facing each other, is 400 m and is a guess. Nobody has measured it against RTC
-Southern Nevada's real feed.
-
-A stop shared between directions by `stop_id` — a transit center, a rail
-platform — anchors only to the outward way on import, so the return trip finds
-no dwell there. The real fix is `Station.anchors: StationAnchor[]`, a schema
-change worth making only once something needs it.
-
-Splitting a line in two (`splitServiceAt`) still works on the flattened leg
-list. Trimming was made per-direction; splitting was not, because the second
-half would need its own sections rebuilt rather than merely truncated.
+Turn restrictions are honoured for ROUTING but not for the lane a service ends
+up pinned to, so a route may take a turn its eventual lane could not.
