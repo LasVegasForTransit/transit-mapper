@@ -2,7 +2,6 @@ import { lazy, Suspense, useMemo, useState } from 'react';
 import { useEditor } from '../../editor/EditorProvider';
 import { MODE_ORDER, MODES, modesForWayType } from '@transitmapper/core/model/catalog';
 import {
-  formatKm,
   pathLengthMeters,
   patternPath,
   patternLegs,
@@ -11,6 +10,7 @@ import {
   patternHasSplit,
   primaryAnchor,
 } from '@transitmapper/core/model/geo';
+import { formatDistance } from '@transitmapper/core/model/units';
 import type {
   RunDirection,
   Pattern,
@@ -34,6 +34,7 @@ import { Icon } from '../Icon';
 import { IconButton } from '../IconButton';
 import { useSim } from '../SimProvider';
 import { useSimTime } from '../useSimTime';
+import { useUnitPreference } from '../../services/userPreferences';
 import {
   GEOMETRY_OPTIONS,
   GradeChips,
@@ -100,6 +101,7 @@ export interface ServiceInspectorProps {
 }
 
 export function ServiceInspector({ id }: ServiceInspectorProps) {
+  const unitSystem = useUnitPreference();
   const service = useEditor((s) => s.system.services.find((sv) => sv.id === id));
   // Narrow selectors, not the whole `system` — that object is a fresh
   // reference on EVERY store mutation (any drag frame, any unrelated edit
@@ -215,7 +217,8 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
         />
       </div>
       <div className="insp-kind">
-        {MODES[service.modeId]?.label ?? 'Service'} · {formatKm(length)} · {totalStops} stop
+        {MODES[service.modeId]?.label ?? 'Service'} · {formatDistance(length, unitSystem)} ·{' '}
+        {totalStops} stop
         {totalStops === 1 ? '' : 's'}
       </div>
 
@@ -280,7 +283,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
           </div>
 
           <div className="stats">
-            <Stat label="Length" value={formatKm(length)} />
+            <Stat label="Length" value={formatDistance(length, unitSystem)} />
             <Stat label="Stops" value={String(totalStops)} />
           </div>
 
@@ -582,7 +585,8 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                     {p.name || (i === 0 ? 'Main' : `Branch ${i}`)}
                   </span>
                   <span className="pattern-meta">
-                    {formatKm(pathLengthMeters(patternPath(ways, p)))} · {patternLegs(p).length} way
+                    {formatDistance(pathLengthMeters(patternPath(ways, p)), unitSystem)} ·{' '}
+                    {patternLegs(p).length} way
                     {patternLegs(p).length === 1 ? '' : 's'}
                   </span>
                 </button>
