@@ -58,6 +58,9 @@ const ShortcutsDialog = lazy(() =>
 const SystemsDialog = lazy(() =>
   import('./ui/SystemsDialog').then((m) => ({ default: m.SystemsDialog })),
 );
+const SettingsDialog = lazy(() =>
+  import('./ui/SettingsDialog').then((m) => ({ default: m.SettingsDialog })),
+);
 
 const SHARE_PREFIX = '/s/';
 
@@ -383,6 +386,11 @@ export function App() {
       {activeDialog === 'systems' && (
         <LazyDialog onFailure={dialogFailed}>
           <SystemsDialog onClose={closeDialog} onCorrupt={() => setNotice(corruptOpenNotice)} />
+        </LazyDialog>
+      )}
+      {activeDialog === 'settings' && (
+        <LazyDialog onFailure={dialogFailed}>
+          <SettingsDialog onClose={closeDialog} />
         </LazyDialog>
       )}
     </div>
