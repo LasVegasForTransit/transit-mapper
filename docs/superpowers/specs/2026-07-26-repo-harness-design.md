@@ -7,19 +7,36 @@ and is not rewritten as the work lands — but a reader needs to know which
 parts describe the repository and which describe an intention, and three
 findings in Context turned out to be stale before the work started.
 
-**Shipped.** Tracks 1, 2 (in part), 3, 4, 6, 7, 8 and 10. `pnpm check` is
-the single gate and runs formatting, root and per-package lint, typecheck,
-the workspace contract, documentation links, migration append-only, project
-structure, the generated checks reference, generated Worker types, and both
-test suites. Four enforcement layers, three secret nets, a version catalog,
-one custom lint rule, three generators, the domain documentation layout, and
-a bootstrap that provisions rather than only verifying.
+**Shipped.** Tracks 1, 2 (in part), 3, 4, 5 (in part), 6, 7, 8 and 10.
+`pnpm check` is the single gate and runs formatting, root and per-package
+lint, typecheck, the workspace contract, documentation links, migration
+append-only, project structure, the generated checks reference, generated
+Worker types, and both test suites. Four enforcement layers, three secret
+nets, a version catalog, one custom lint rule, three generators, the domain
+documentation layout, and a bootstrap that provisions rather than only
+verifying.
 
-**Not shipped.** Track 5's repository governance — the organization
-transfer, rulesets, merge queue and preview deployments — because all of it
-is GitHub configuration rather than anything in this tree. Track 9's
-template extraction, which the Sequencing section already gates on the
-harness surviving contact; it has not yet run in CI even once.
+Updated 2026-07-27, when the branch landed on `main`. Track 5's governance
+is applied: the `org-standard` ruleset is active on the default branch,
+requiring a pull request and a passing `Validate` check, forbidding
+deletion and force-push. `pnpm bootstrap --doctor` reports it as matching.
+CI has now run, repeatedly and green; the claim below that it never had is
+what this paragraph replaces.
+
+**Not shipped.** Track 9's template extraction, which the Sequencing
+section gates on the harness surviving contact. The organization transfer,
+and the merge queue that depends on it. Two of the four unenforced
+invariants in `AGENTS.md` — the `/api` route shape and named-interface
+parameters — which Track 3 specified as lint rules and which remain
+enforced by nothing. The `lint-rule` generator exists to scaffold both.
+
+**Known defects, recorded rather than fixed.** A pull request branch runs
+`Validate` twice, once from `push` and once from `pull_request`. The
+spatial-grid assertion is still a wall-clock bound, mitigated by running
+verify with `--concurrency=1`. The `check()` suites and Vitest still
+coexist. The ruleset asks for zero approving reviews, because a repository
+with one collaborator cannot satisfy one; the reasoning is in
+[the enforcement model](../../development/explanation/enforcement-model.md).
 
 **Corrections to Context.** Three findings were true of the branch point and
 already fixed on `main` by the time the work landed, which was discovered
