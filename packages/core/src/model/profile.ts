@@ -189,10 +189,36 @@ export function flipProfile(profile: CrossSection): CrossSection {
   };
 }
 
-/** True when every directional lane runs the same single direction. */
-export function isOneWay(profile: CrossSection): boolean {
+/**
+ * Which directions a way with this profile may be travelled, relative to its
+ * own stored point order.
+ *
+ * A profile with no directional lanes at all is `'both'`, not "undecided": a
+ * footpath is all sidewalk, sidewalks are non-directional (see
+ * LaneKindDef.directional), and a footpath is walkable both ways. Reading that
+ * case as one-way would make the router refuse to send anyone back down a
+ * path they just walked up.
+ */
+export type Traversal = 'forward' | 'backward' | 'both';
+
+export function profileTraversal(profile: CrossSection): Traversal {
   const dirs = new Set(directionalLanes(profile).map((l) => l.direction));
-  return dirs.size === 1 && (dirs.has('forward') || dirs.has('backward'));
+  if (dirs.size !== 1) return 'both';
+  if (dirs.has('forward')) return 'forward';
+  if (dirs.has('backward')) return 'backward';
+  return 'both';
+}
+
+/** A way's traversal, from its profile. What the router asks. */
+export function wayTraversal(way: Way): Traversal {
+  return profileTraversal(way.profile);
+}
+
+/** True when every directional lane runs the same single direction.
+ *  Defined on profileTraversal rather than beside it, so "is this street
+ *  one-way" and "which way may I drive down it" cannot answer differently. */
+export function isOneWay(profile: CrossSection): boolean {
+  return profileTraversal(profile) !== 'both';
 }
 
 /** Make every directional lane run `direction` (one-way conversion) —
