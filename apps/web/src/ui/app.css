@@ -180,108 +180,44 @@ input {
   overflow: hidden;
 }
 
-/* ---- Zen mode ("Hide UI"): App.tsx sets one data-zen attribute on .app
-   when hidden, and every opted-in element below reacts to it through a
-   plain CSS attribute selector — a component becomes zen-aware by carrying
-   one of these classes, never by having uiHidden threaded into its props.
-   Sim controls and the view switcher's segmented control carry none of
-   them, so they're untouched no matter where they sit in the tree; nothing
-   here unmounts anything (see MenuCard's own comment in Workbench.tsx for
-   the one case where two elements used to be swapped by mount state and
-   are now one that resizes instead).
-
-   Two motions, both real box-model changes — never a transform standing in
-   for one, so collapsing content actually makes its neighbors reflow into
-   the freed space:
-     1. A text-bearing element collapses its own width (.zen-label) or
-        height (.zen-label-block, for the mode dock's icon-above-label
-        buttons) to zero first.
-     2. Only once that's mostly done (transition-delay staggers the two)
-        does whatever's left fade. A whole cluster (.zen-cluster) — once
-        its own labels have already collapsed above — fades the same way,
-        `pointer-events: none` once hidden, paired with `inert` in the
-        component (not shown here — inert isn't expressible in CSS) so a
-        hidden cluster can't trap keyboard focus either. ---- */
-.zen-label,
-.btn-label,
-.panel-head-title {
-  overflow: hidden;
-  white-space: nowrap;
-  max-width: 220px;
-  opacity: 1;
-  transition:
-    max-width 200ms cubic-bezier(0.2, 0.7, 0.3, 1),
-    opacity 120ms ease;
-  transition-delay: 0ms, 140ms;
+/* Wraps Workbench for the Hide-UI toggle (see App.tsx's useDelayedUnmount)
+   — opacity only. Purely a fade wrapper — Workbench.tsx (via Tailwind
+   utility classes, not CSS rules here) owns the actual responsive layout:
+   desktop's docked corner cards and mobile's bottom sheet/top bar are two
+   renderings of the SAME component and the SAME props (menuPanel,
+   supplementalPanel, primaryToolbar, viewSwitcher, modeToolbar, brand),
+   reshaped by Tailwind's md: breakpoint rather than two separate components
+   (an AppShell.tsx + this file) coordinating through matching classNames —
+   confirmed live, that indirection was exactly how a panel ended up
+   rendered nowhere near the edge it was supposed to dock to, no compiler
+   error anywhere. */
+.app-chrome[data-ui-state='open'] {
+  animation: fade-in 160ms ease;
 }
-[data-zen] .zen-label,
-[data-zen] .btn-label,
-[data-zen] .panel-head-title {
-  max-width: 0;
-  opacity: 0;
-}
-/* The mode dock's own label sits BELOW its icon, not beside it (see
-   Toolbar.tsx's .tool-btn) — collapsing height (not width) is what lets
-   the icon recenter in its fixed-size button as the label vanishes above
-   it, the same "collapse, then whatever's left fades" motion turned 90°. */
-.zen-label-block,
-.tool-btn-label {
-  overflow: hidden;
-  max-height: 16px;
-  opacity: 1;
-  transition:
-    max-height 200ms cubic-bezier(0.2, 0.7, 0.3, 1),
-    opacity 120ms ease;
-  transition-delay: 0ms, 140ms;
-}
-[data-zen] .zen-label-block,
-[data-zen] .tool-btn-label {
-  max-height: 0;
-  opacity: 0;
-}
-.zen-cluster {
-  transition:
-    opacity 160ms ease,
-    transform 160ms ease;
-}
-[data-zen] .zen-cluster {
-  opacity: 0;
-  transform: translateY(6px);
-  pointer-events: none;
-}
-/* Like .zen-cluster, but for a control that shares a flex row with
-   something exempt (sim controls) — a fade/lift alone wouldn't free the
-   width for that neighbor to reflow into, so this actually collapses its
-   own max-width first, the same motion .zen-label uses, just at cluster
-   (not text-span) scale. */
-.zen-collapse-cluster {
-  overflow: hidden;
-  max-width: 400px;
-  opacity: 1;
-  transition:
-    max-width 220ms cubic-bezier(0.2, 0.7, 0.3, 1),
-    opacity 140ms ease;
-  transition-delay: 0ms, 160ms;
-}
-[data-zen] .zen-collapse-cluster {
-  max-width: 0;
-  /* Padding is the element's own — a flex `gap` on its parent (e.g. the
-     shared view-switcher/sim-controls card) is the parent's, and can't be
-     collapsed from here; that leaves one fixed gap-width of residual space
-     even fully collapsed, an accepted, minor tradeoff for staying pure
-     reflow (no JS-timed display:none once the transition ends). */
-  padding: 0;
-  opacity: 0;
-  pointer-events: none;
+.app-chrome[data-ui-state='closed'] {
+  animation: fade-out 160ms ease-in forwards;
 }
 
-/* max-width here is load-bearing, not decorative: a CSS transition can't
-   interpolate FROM the implicit default (max-width: none, a keyword) TO a
-   length — confirmed live, that combination just snaps instantly, the same
-   failure mode as animating width toward auto (see .menu-card's own
-   comment). Giving the open state a real, generous number (comfortably
-   past any real system name) means the zen-collapsed 140px below has an
-   actual number to animate from, in both directions. */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: var(--fs-title-sm);
+  letter-spacing: -0.02em;
+}
+/* The wordmark IS the File-menu trigger — file icon + "TransitMapper" as one
+   .btn-plain surface, so hovering anywhere on it highlights the whole unit.
+   Tighter left padding than .btn's 12px keeps the file glyph at (nearly) the
+   same inset the old icon-only 34px box centered it to, preserving
+   .panel-brand's edge-alignment math. */
+.brand-btn {
+  padding: 0 10px 0 8px;
+  gap: 8px;
+  font-weight: 700;
+  font-size: var(--fs-title-sm);
+  letter-spacing: -0.02em;
+}
 .system-name {
   border: 1px solid transparent;
   border-radius: 8px;
@@ -290,8 +226,6 @@ input {
   color: var(--text);
   background: transparent;
   min-width: 128px;
-  max-width: 320px;
-  transition: max-width 200ms cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 .system-name:hover {
   border-color: var(--border);
@@ -304,35 +238,6 @@ input {
 .ro-name {
   font-size: var(--fs-body-md);
   color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 320px;
-  transition: max-width 200ms cubic-bezier(0.2, 0.7, 0.3, 1);
-}
-/* Unlike every other label above, the system name does NOT collapse to
-   nothing in zen mode — hiding the UI shouldn't also hide which system
-   you're looking at. It shrinks instead, the same way the old standalone
-   restore button capped it. */
-[data-zen] .system-name,
-[data-zen] .ro-name {
-  max-width: 140px;
-}
-/* .system-name is an <input>, not a span — confirmed live, an ancestor's
-   shrink-to-fit width calculation (MenuCard's own "auto" collapse) used
-   its UA-default intrinsic size (the ~20-character default a text input
-   gets absent a `size` attribute) rather than the CSS-capped 140px,
-   leaving the "collapsed" card over 100px wider than it should be. A
-   definite flex-basis, not just a `max-width` ceiling, is what actually
-   pins a form control's contribution to that ancestor calculation — same
-   fix as the flex-basis note on .panel-brand .system-name below, just
-   also turning off flex-grow so it doesn't re-expand to fill the
-   (measured, now much smaller) collapsed row. Scoped through .panel-brand
-   (3 selectors) rather than bare `[data-zen] .system-name` (2) — needs to
-   outrank .panel-brand .system-name's own flex-basis below on
-   specificity, not source order. */
-[data-zen] .panel-brand .system-name {
-  flex: 0 1 140px;
 }
 .spacer {
   flex: 1;
@@ -836,10 +741,6 @@ input {
   flex-direction: column;
   gap: 8px;
   flex: 0 0 auto;
-  /* Same column-flex stretch as .panel-brand-row's own comment below (this
-     is ITS parent, .menu-card, doing the same thing one level up) — this
-     box stretches to .menu-card's width by default too, which is exactly
-     as circular for the auto-width card as the row was. */
   /* 8px, not .panel-body's 16px — the File-menu icon button keeps a real
      margin from the panel's edge here, and it's the ICON GLYPH inside it
      (inset by centering in the 34px hit box) that ends up meeting
@@ -848,46 +749,19 @@ input {
   padding: 12px 8px 8px;
   border-bottom: 1px solid var(--border);
 }
-/* One row, always — FileMenu icon, then the system name filling the
-   middle (flex-grow, capped by its own max-width), then the toggle. Never
-   wraps: FileMenu is icon-only in every state (see FileMenu.tsx) and the
-   toggle is a fixed 34px, so the only thing that ever changes size here
-   is the system name itself, which just grows or shrinks within the row
-   rather than forcing a second line. margin-left:auto on .brand-hide-ui
-   (below) is what actually pins the toggle to the row's far right edge —
-   not relied on here, so this row doesn't need to reason about leftover
-   space itself. */
+/* flex-wrap:wrap is what makes this work now that Workbench.tsx's MenuCard
+   renders TopBarBrand's flat icon-row-then-name-input sequence directly
+   here (previously SidePanel split them into two explicit rows itself) —
+   .panel-brand .system-name's own width:100% (below) has nowhere to fit
+   next to the icons on the same line, so it wraps to its own full-width
+   line below them, reproducing the same two-row look without either
+   component needing to know about the other's layout. */
 .panel-brand-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  flex-wrap: nowrap;
-}
-/* .panel-brand is display:flex;flex-direction:column with align-items'
-   default (stretch) untouched — every column-flex child stretches to the
-   parent's full cross-axis (width) UNLESS it opts out, so this row was
-   always rendering at .panel-brand's width, not its own content width.
-   That's invisible normally (.panel-brand IS meant to run the panel's
-   full 280px), but once the CARD itself is trying to shrink-to-fit
-   around this row in zen mode, the stretch becomes circular padding: the
-   row measured ~90px wider than its three children's real combined
-   width, confirmed live. align-self opts this one child out of the
-   parent's stretch, same as .panel-head/.collapsible above already do in
-   their own way, so the row (and the auto-width card measuring it)
-   actually hugs its content instead. */
-[data-zen] .panel-brand-row {
-  align-self: flex-start;
-}
-[data-zen] .panel-brand {
-  align-self: flex-start;
-}
-/* Pins the Hide-UI toggle to the row's far right edge directly, rather
-   than relying on justify-content to distribute leftover space across
-   every child — the one thing that has to be true regardless of how wide
-   FileMenu or the system name end up being on either side of it. */
-.brand-hide-ui {
-  margin-left: auto;
-  flex: 0 0 auto;
+  flex-wrap: wrap;
 }
 .panel-brand-start {
   display: flex;
@@ -901,53 +775,55 @@ input {
   gap: 4px;
   flex: 0 0 auto;
 }
-/* flex-basis:128px, not flex:1's default 0% — a 0% basis reads as "I can
-   be arbitrarily small," and this is the one thing in the row that's
-   ever asked to grow, so it needs a real preferred size to grow FROM (see
-   the [data-zen] override below for the same reasoning applied to the
-   collapsed state's own, smaller basis). max-width caps how far it grows
-   in the open card, where there's real leftover width to fill. */
+.panel-brand .brand-name {
+  font-weight: 700;
+  font-size: var(--fs-title-sm);
+  letter-spacing: -0.02em;
+}
 .panel-brand .system-name {
-  flex: 1 1 128px;
-  max-width: 320px;
+  width: 100%;
 }
 
-/* ---- MenuCard ↔ zen mode's restore control, unified: this is the SAME
-   card in both states, not two elements swapped by mount state (there used
-   to be a separate .ui-restore button in the same top-left corner). Its
-   own width morphs from --panel-w down to auto instead — position never
-   changes, so it visibly shrinks in place. The toggle IconButton inside it
-   (see TopBarBrand) carries none of the zen-* classes below, so it stays
-   clickable throughout, in either direction.
-
-   `auto` below states the intent (and is what a no-JS fallback would
-   render) but ISN'T what actually produces the collapse — a `width`
-   transition can't interpolate toward `auto` at all (no numeric endpoint
-   to animate to; confirmed live, it just snaps), and separately,
-   confirmed live again, this rule's own resolved value didn't reliably
-   match the identical measurement taken through JS (a real, reproducible
-   ~90px discrepancy between the two — case not fully understood, not
-   trusted as a result). MenuCard.tsx is the actual source of truth for
-   this width for as long as the card stays collapsed: it measures the
-   real content width itself and pins that fixed pixel number via an
-   inline style (which beats this rule by specificity while it's set),
-   re-measuring on any resize of the content so a rename while collapsed
-   still tracks correctly. */
-.menu-card {
-  transition: width 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+/* ---- UI collapse: a small toggle sits in the brand row (desktop SidePanel /
+   mobile topbar-left) to hide all floating chrome; a lone floating button in
+   the same top-left corner brings it back. The toggle itself is an
+   <IconButton> now (ghost-btn icon-only) — see that component's comment for
+   why two hand-rolled variants of this same button used to exist. ---- */
+/* Icon + system name, not just a bare icon square — hiding the UI shouldn't
+   also hide which system you're looking at (the brand row it replaces
+   always showed the name too). Auto-width instead of the old fixed 36x36
+   square so the name has room; max-width keeps a very long name from
+   running into the top bar's own controls. */
+.ui-restore {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px 0 10px;
+  max-width: min(50vw, 320px);
+  border-radius: 8px;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  animation: fade-in 160ms ease;
 }
-/* The card is normally stretched full-height by design (see the comment on
-   .panel-left above) — deliberate when it's actually the Objects list, but
-   wrong for the collapsed pill: a tall, mostly-empty card would read as a
-   layout bug, not a restore button. Both the card's own stretch (a flex
-   default from its wrapper) and the wrapper's own grid-level stretch (see
-   .menu-card-slot below) need overriding, or only one of the two shrinks. */
-[data-zen] .menu-card {
-  width: auto;
-  align-self: flex-start;
+.ui-restore:hover {
+  background: var(--surface);
+  color: var(--text);
 }
-[data-zen] .menu-card-slot {
-  align-self: flex-start;
+.ui-restore-name {
+  font-size: var(--fs-title-sm);
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .panel-head {
   display: flex;
@@ -958,29 +834,6 @@ input {
      text via its own centering inset inside the 34px button. */
   padding: 8px;
   flex: 0 0 auto;
-  max-height: 60px;
-  overflow: hidden;
-  transition:
-    max-height 200ms cubic-bezier(0.2, 0.7, 0.3, 1),
-    opacity 120ms ease,
-    padding 200ms ease;
-  transition-delay: 0ms, 140ms, 0ms;
-}
-/* The Objects toggle itself is meaningless once zen mode has force-
-   collapsed the list below it — it fades along with the list rather than
-   staying as a dead control. max-width, not just max-height: the card's
-   own width is "auto" (shrink-to-fit) in zen mode, and a shrink-to-fit
-   box's preferred width still accounts for a max-height:0 descendant's
-   natural, UNwrapped content width unless that descendant is also
-   width-constrained — confirmed live, the chevron button alone was enough
-   to keep the "auto" card wide. */
-[data-zen] .panel-head {
-  max-height: 0;
-  max-width: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  opacity: 0;
-  pointer-events: none;
 }
 .panel-head-title {
   font-size: var(--fs-title-sm);
@@ -1014,13 +867,6 @@ input {
 }
 .collapsible.collapsed {
   max-height: 0;
-}
-/* Same shrink-to-fit leak as .panel-head above: the Objects list's own
-   long hint text has to lose its natural width too, not just its height,
-   or the "auto"-width card stays exactly as wide as it was before. */
-[data-zen] .collapsible {
-  max-height: 0;
-  max-width: 0;
 }
 /* flex:1 (also missing before) is the other half of that fix — this is
    what actually receives the shrunk height from .collapsible above and
@@ -2396,6 +2242,83 @@ kbd {
   min-width: 0;
 }
 
+/* ---- onboarding dialog ---- */
+.onboarding-modal {
+  width: 480px;
+}
+.onboarding-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+.onboarding-copy {
+  font-size: var(--fs-body-md);
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+.onboarding-single-preview {
+  width: 100%;
+  height: 220px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.onboarding-tri-preview {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.onboarding-tri-preview-item {
+  flex: 1;
+  height: 120px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+/* No explicit height here: this class is always combined on the same
+   element as .onboarding-single-preview/.onboarding-tri-preview-item (see
+   OnboardingPreviewMap's className merge), and a same-specificity height
+   declared here would win the cascade over theirs — collapsing the map to
+   whatever height:100% resolves to against an unsized flex parent, which is
+   nothing. Their explicit pixel heights are the only ones that should apply. */
+.onboarding-preview-map {
+  width: 100%;
+}
+.onboarding-icons {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  color: var(--text-muted);
+}
+.onboarding-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+.onboarding-dots {
+  display: flex;
+  gap: 8px;
+}
+.onboarding-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+.onboarding-dot.active {
+  background: var(--text);
+}
+
 .insp-field {
   margin-top: 8px;
 }
@@ -3044,9 +2967,17 @@ button.chip-removable-label:hover {
 .actions-collapsed .primary-btn .btn-label {
   display: none;
 }
-/* FileMenu is icon-only in every state now (see FileMenu.tsx) — nothing
-   left here to hide on a narrow screen. The Hide-UI toggle itself was
-   already unconditionally visible on mobile: it's the ONLY way to reach
-   it once zen mode has collapsed TopBarActions' overflow menu below (the
-   "Hide UI" entry there is where this used to live exclusively) — see
-   .zen-cluster's own comment. */
+.mobile-topleft .brand,
+.mobile-topleft .brand-hide-ui {
+  display: none;
+}
+/* Mobile keeps the File trigger but not the wordmark inside it — the
+   combined brand button collapses back to an icon-only square there. */
+.mobile-topleft .brand-btn {
+  padding: 0;
+  width: 34px;
+  justify-content: center;
+}
+.mobile-topleft .brand-btn .btn-label {
+  display: none;
+}

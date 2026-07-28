@@ -1,5 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type CSSProperties } from 'react';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 
 /** MD3-style emphasis, loudest last — see app.css's ".btn" comment for what
  *  each one looks like and when to reach for it. */
@@ -27,7 +27,7 @@ export type ButtonVariant = 'plain' | 'tonal' | 'bordered' | 'primary';
  * its unmeasured placeholder position instead of next to the button.
  */
 type IconButtonProps = {
-  icon: string;
+  icon: IconName;
   size?: number;
   /** e.g. a rotate transform for a chevron that flips open/closed. */
   iconStyle?: CSSProperties;

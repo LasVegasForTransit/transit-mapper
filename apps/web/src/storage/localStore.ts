@@ -9,6 +9,7 @@ import type { TransitSystem } from '@transitmapper/core/model/system';
 const LEGACY_KEY = 'transitmapper:system'; // pre-library single slot
 const LIBRARY_INDEX_KEY = 'transitmapper:library';
 const ACTIVE_ID_KEY = 'transitmapper:activeId';
+const ONBOARDING_SEEN_KEY = 'transitmapper:onboardingSeen';
 const SYSTEM_KEY_PREFIX = 'transitmapper:system:';
 const systemKey = (id: string) => `${SYSTEM_KEY_PREFIX}${id}`;
 
@@ -228,6 +229,26 @@ export function setActiveId(id: string): void {
     localStorage.setItem(ACTIVE_ID_KEY, id);
   } catch {
     // ignore
+  }
+}
+
+/** Whether this browser has dismissed the onboarding dialog before — the
+ *  only sensible meaning of "seen" with no account system: per browser, not
+ *  per person. A storage failure reads as "not seen" so onboarding shows
+ *  again rather than silently never showing at all. */
+export function hasSeenOnboarding(): boolean {
+  try {
+    return localStorage.getItem(ONBOARDING_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function markOnboardingSeen(): void {
+  try {
+    localStorage.setItem(ONBOARDING_SEEN_KEY, '1');
+  } catch {
+    // ignore — worst case onboarding shows again next launch
   }
 }
 

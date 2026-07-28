@@ -17,13 +17,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from './DropdownMenu';
-import { Icon } from './Icon';
-import { useInertRef } from './useInertRef';
-import { useUi } from './UiProvider';
+import { Icon, type IconName } from './Icon';
 import { useView } from './ViewProvider';
 
 // One dock icon per way family; unknown families fall back to the plain line.
-const FAMILY_TOOL_ICON: Record<WayFamily, string> = {
+const FAMILY_TOOL_ICON: Record<WayFamily, IconName> = {
   guideway: 'line',
   roadway: 'road',
   path: 'bike',
@@ -60,8 +58,6 @@ export function Toolbar() {
   const draftFacilityComplexMode = useEditor((s) => s.draftFacilityComplexMode);
   const setDraftFacilityComplexMode = useEditor((s) => s.setDraftFacilityComplexMode);
   const { viewMode } = useView();
-  const { uiHidden } = useUi();
-  const dockRef = useInertRef<HTMLDivElement>(uiHidden);
   // Diagram is a schematic projection, not the real system — nothing drawn
   // on it can be dragged or clicked back into a real edit (see
   // map/interactions.ts's isDiagramMode gating), so drawing/editing tools are
@@ -80,7 +76,7 @@ export function Toolbar() {
   };
 
   return (
-    <div ref={dockRef} className="toolbar-dock zen-cluster">
+    <div className="toolbar-dock">
       <div className="tool-row">
         {/* Cluster 1: selection — neither a path nor a place. */}
         <div className="tool-cluster" role="toolbar" aria-label="Select">
@@ -227,7 +223,12 @@ export function Toolbar() {
               icon={
                 draftFacilityComplexMode
                   ? 'boundary'
-                  : (facilityRender(draftFacilityTypeId).icon ?? 'plus')
+                  : // facilityRender lives in packages/core, which can't know
+                    // about this app's icon vocabulary — its `icon` field is a
+                    // plain string by necessity. The cast is the one place that
+                    // boundary is crossed; every value it can actually return
+                    // (see catalogStyle.ts's facilityRender) is a real IconName.
+                    ((facilityRender(draftFacilityTypeId).icon as IconName) ?? 'plus')
               }
               label="Facility"
               hotkey="F"
@@ -302,7 +303,7 @@ interface ToolMenuSection {
 }
 
 interface ToolButtonProps {
-  icon: string;
+  icon: IconName;
   label: string;
   hotkey?: string;
   active: boolean;

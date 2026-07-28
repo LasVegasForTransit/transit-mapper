@@ -90,8 +90,8 @@ and `apps/worker` depend on it as a workspace package.
   Pure, so the derivation is testable without a feed.
 - `diagramLayout.ts` — the Diagram view's schematic layout.
 - `cost.ts` — rough cost estimation.
-- `units.ts` — unit conversion and formatting (metric/imperial). Precise
-  constants and locale-aware display via `Intl.NumberFormat`.
+- `units.ts` — conversion and locale-aware formatting between the metric
+  values stored by the model and the units selected for display.
 - `ids.ts` — id generation.
 
 ## packages/core/src/geometry/ — derived street geometry
@@ -219,19 +219,16 @@ Everything that turns a system into something that leaves the app.
 
 See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 
-## apps/web/src/services/ — browser services and preferences
+## apps/web/src/services/ — browser preferences
 
-- `userPreferences.ts` — the central user preference system. Stores and
-  retrieves user settings (unit system: metric/imperial) from localStorage,
-  with browser locale-based defaults (imperial for en-US, my, en-LR; metric
-  everywhere else). Exports hooks (`useUserPreferences`, `useUnitPreference`)
-  for reactive preference access throughout the app.
+- `userPreferences.ts` — browser-local settings, including the selected unit
+  system. A cached external-store snapshot lets React consumers update
+  together without moving preferences into the domain model.
 
-## apps/web/src/i18n/ — internationalization and localization
+## apps/web/src/i18n/ — user-facing messages
 
-- `messages.ts` — centralized message constants for all user-facing strings,
-  organized hierarchically (settings, units, vehicle). Enables future
-  integration with proper i18n libraries without refactoring UI components.
+- `messages.ts` — strings shared by the settings and vehicle-kind surfaces,
+  grouped by the feature that owns them.
 
 ## apps/web/src/storage/ — the local library
 

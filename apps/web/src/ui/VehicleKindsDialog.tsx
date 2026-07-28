@@ -2,6 +2,12 @@ import { useState } from 'react';
 import { shortId } from '@transitmapper/core/model/ids';
 import { MODES, MODE_ORDER } from '@transitmapper/core/model/catalog';
 import type { VehicleKind } from '@transitmapper/core/model/system';
+import {
+  lengthFromMeters,
+  lengthToMeters,
+  speedFromKmh,
+  speedToKmh,
+} from '@transitmapper/core/model/units';
 import { useUnitPreference } from '../services/userPreferences';
 import { messages } from '../i18n/messages';
 import { blurOnEnter } from './formUtils';
@@ -37,25 +43,8 @@ export function VehicleKindsDialog({
 }: VehicleKindsDialogProps) {
   const [kinds, setKinds] = useState<VehicleKind[]>(vehicleKinds);
   const unitSystem = useUnitPreference();
-
-  // Conversion helpers for imperial/metric display
-  const METERS_TO_FEET = 3.28083989501312;
-  const KMH_TO_MPH = 0.62137119223733;
-
-  const displayWidth = (meters: number) =>
-    unitSystem === 'metric' ? meters : Math.round(meters * METERS_TO_FEET);
-  const toMetersFromDisplay = (display: number) =>
-    unitSystem === 'metric' ? display : display / METERS_TO_FEET;
-
-  const displayLength = (meters: number) =>
-    unitSystem === 'metric' ? meters : Math.round(meters * METERS_TO_FEET);
-  const toMetersFromDisplayLength = (display: number) =>
-    unitSystem === 'metric' ? display : display / METERS_TO_FEET;
-
-  const displaySpeed = (kmh: number) =>
-    unitSystem === 'metric' ? kmh : Math.round(kmh * KMH_TO_MPH);
-  const toKmhFromDisplay = (display: number) =>
-    unitSystem === 'metric' ? display : display / KMH_TO_MPH;
+  const widthMinimum = lengthFromMeters(0.5, unitSystem);
+  const lengthMinimum = lengthFromMeters(1, unitSystem);
 
   const commit = (next: VehicleKind[]) => {
     setKinds(next);
@@ -134,15 +123,18 @@ export function VehicleKindsDialog({
               <div className="freq-row">
                 <input
                   type="number"
-                  min={0.5}
+                  min={widthMinimum}
                   step={0.1}
                   className="freq-input"
                   aria-label={`${k.label || 'Vehicle'} width in ${unitSystem === 'metric' ? 'meters' : 'feet'}`}
-                  value={displayWidth(k.widthM)}
+                  value={Number(lengthFromMeters(k.widthM, unitSystem).toFixed(2))}
                   disabled={readOnly}
                   onChange={(e) =>
                     updateKind(k.id, {
-                      widthM: Math.max(0.5, toMetersFromDisplay(Number(e.target.value)) || 0.5),
+                      widthM: Math.max(
+                        0.5,
+                        lengthToMeters(Number(e.target.value), unitSystem) || 0.5,
+                      ),
                     })
                   }
                 />
@@ -153,15 +145,15 @@ export function VehicleKindsDialog({
                 </span>
                 <input
                   type="number"
-                  min={1}
+                  min={lengthMinimum}
                   step={0.5}
                   className="freq-input"
                   aria-label={`${k.label || 'Vehicle'} length in ${unitSystem === 'metric' ? 'meters' : 'feet'}`}
-                  value={displayLength(k.lengthM)}
+                  value={Number(lengthFromMeters(k.lengthM, unitSystem).toFixed(2))}
                   disabled={readOnly}
                   onChange={(e) =>
                     updateKind(k.id, {
-                      lengthM: Math.max(1, toMetersFromDisplayLength(Number(e.target.value)) || 1),
+                      lengthM: Math.max(1, lengthToMeters(Number(e.target.value), unitSystem) || 1),
                     })
                   }
                 />
@@ -197,14 +189,18 @@ export function VehicleKindsDialog({
                   className="freq-input"
                   aria-label={`${k.label || 'Vehicle'} top speed in ${unitSystem === 'metric' ? 'km/h' : 'mph'}`}
                   placeholder="Not set"
-                  value={k.topSpeedKmh !== undefined ? displaySpeed(k.topSpeedKmh) : ''}
+                  value={
+                    k.topSpeedKmh !== undefined
+                      ? Number(speedFromKmh(k.topSpeedKmh, unitSystem).toFixed(1))
+                      : ''
+                  }
                   disabled={readOnly}
                   onChange={(e) =>
                     updateKind(k.id, {
                       topSpeedKmh:
                         e.target.value === ''
                           ? undefined
-                          : Math.max(0, toKmhFromDisplay(Number(e.target.value))),
+                          : Math.max(0, speedToKmh(Number(e.target.value), unitSystem)),
                     })
                   }
                 />

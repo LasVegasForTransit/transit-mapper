@@ -8,6 +8,26 @@ const METERS_TO_FEET = 3.28083989501312; // exactly 1/0.3048
 const FEET_TO_METERS = 0.3048; // exactly 1 international foot
 const KMH_TO_MPH = 0.62137119223733; // km/h to mph
 
+/** Convert a stored metric dimension to the number an editable field shows. */
+export function lengthFromMeters(meters: number, system: UnitSystem): number {
+  return system === 'metric' ? meters : meters * METERS_TO_FEET;
+}
+
+/** Convert an edited dimension back to the metric value the model stores. */
+export function lengthToMeters(value: number, system: UnitSystem): number {
+  return system === 'metric' ? value : value * FEET_TO_METERS;
+}
+
+/** Convert a stored metric speed to the number an editable field shows. */
+export function speedFromKmh(kmh: number, system: UnitSystem): number {
+  return system === 'metric' ? kmh : kmh * KMH_TO_MPH;
+}
+
+/** Convert an edited speed back to the metric value the model stores. */
+export function speedToKmh(value: number, system: UnitSystem): number {
+  return system === 'metric' ? value : value / KMH_TO_MPH;
+}
+
 // Format a distance in meters, returning a string with the appropriate unit
 export function formatDistance(meters: number, system: UnitSystem): string {
   if (system === 'metric') {
@@ -44,50 +64,4 @@ export function formatDistance(meters: number, system: UnitSystem): string {
       maximumFractionDigits: 0,
     }).format(feet) + ' ft'
   );
-}
-
-// Format a length (like vehicle width/length) in meters
-export function formatLength(meters: number, system: UnitSystem): string {
-  if (system === 'metric') {
-    return (
-      new Intl.NumberFormat(undefined, {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1,
-      }).format(meters) + ' m'
-    );
-  }
-  // imperial
-  const feet = meters * METERS_TO_FEET;
-  return (
-    new Intl.NumberFormat(undefined, {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(feet) + ' ft'
-  );
-}
-
-// Format a speed in km/h
-export function formatSpeed(kmh: number, system: UnitSystem): string {
-  if (system === 'metric') {
-    return (
-      new Intl.NumberFormat(undefined, {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(kmh) + ' km/h'
-    );
-  }
-  // imperial
-  const mph = kmh * KMH_TO_MPH;
-  return (
-    new Intl.NumberFormat(undefined, {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(mph) + ' mph'
-  );
-}
-
-// Get the increment to use for a single step when adjusting a dimension in the given system
-export function getIncrementForSystem(system: UnitSystem): number {
-  // Metric: 0.1 meters, Imperial: 1 foot (0.3048 meters exactly)
-  return system === 'metric' ? 0.1 : FEET_TO_METERS;
 }

@@ -78,6 +78,7 @@ import {
   SRC_PREVIEW,
 } from '../src/map/layers';
 import { LANDMARKS, landmarksFeatureCollection } from '../src/map/landmarks';
+import { armVisibilityAwareTimeout } from '../src/map/export/visibilityAwareTimeout';
 import {
   buildOverpassQuery,
   classifyOsmWay,
@@ -255,11 +256,17 @@ import { claimOutcome, retainedShares } from '@transitmapper/core/share/claim';
 // fake can be installed after the import rather than before it.
 import {
   deleteFromLibrary,
+  hasSeenOnboarding,
   listLibrary,
   loadSystemEntry,
+  markOnboardingSeen,
   migrateLegacySingleSlot,
   saveToLibrary,
 } from '../src/storage/localStore';
+import {
+  ONBOARDING_FIXTURE_SYSTEM,
+  ONBOARDING_PATTERN_STATS,
+} from '../src/ui/onboarding/fixtureSystem';
 
 let failures = 0;
 function check(name: string, cond: boolean) {
@@ -10033,6 +10040,32 @@ function buildGrid() {
     'a failed delete leaves the system listed rather than half-removed',
     listLibrary().some((e) => e.id === 'stuck'),
   );
+
+  // The onboarding dialog's one-time flag — a plain boolean, but a bug here
+  // means either "never shows" or "shows every launch forever."
+  reset();
+  check('a fresh browser has not seen onboarding', hasSeenOnboarding() === false);
+  markOnboardingSeen();
+  check('seen persists', hasSeenOnboarding() === true);
+  reset();
+  storage.options.failWrites = 'denied';
+  check('unavailable storage reads as not-seen, not a throw', hasSeenOnboarding() === false);
+  storage.options.failWrites = null;
+}
+
+// --- onboarding fixture (ui/onboarding/fixtureSystem.ts) ---
+// The one system every onboarding slide's live preview renders. A bad
+// fixture (a dangling leg, an orphaned station) would only ever surface as a
+// silent blank preview in the dialog — nothing else exercises this data.
+{
+  check(
+    'the onboarding fixture is a real, valid system',
+    validateSystem(ONBOARDING_FIXTURE_SYSTEM).length === 0,
+  );
+  check(
+    "the fixture's one pattern actually measures to a real run",
+    ONBOARDING_PATTERN_STATS.plan !== null && ONBOARDING_PATTERN_STATS.meters > 0,
+  );
 }
 
 // --- fleet sizing and the run cycle (core/sim/fleet.ts) ---
@@ -11866,6 +11899,87 @@ function buildGrid() {
       return named?.name === 'Decatur Avenue' && named.wayIds.length === 2;
     })(),
   );
+}
+
+// --- PNG export's render timeout pauses while the tab is hidden ---
+// MapLibre's tile loading and painting run entirely on requestAnimationFrame,
+// which browsers fully suspend while a document is hidden, so the offscreen
+// export map makes zero progress until it's visible again. A flat wall-clock
+// timeout used to fire for that dead time even though the export would have
+// completed fine — this is the regression the bug fixed.
+{
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  class FakeVisibility {
+    hidden = false;
+    private listeners = new Set<() => void>();
+    addEventListener(_type: 'visibilitychange', listener: () => void): void {
+      this.listeners.add(listener);
+    }
+    removeEventListener(_type: 'visibilitychange', listener: () => void): void {
+      this.listeners.delete(listener);
+    }
+    setHidden(hidden: boolean): void {
+      this.hidden = hidden;
+      for (const listener of this.listeners) listener();
+    }
+  }
+
+  // Real timers, not a fake clock — so every margin below is generous (a
+  // 6x+ ratio for "did it fire", a 200ms+ cushion for "did it not fire")
+  // rather than tight enough for CI scheduling jitter to flip a result.
+
+  {
+    const visibility = new FakeVisibility();
+    let fired = false;
+    armVisibilityAwareTimeout(50, () => (fired = true), visibility);
+    await sleep(300);
+    check('a visible tab still times out after the full window', fired);
+  }
+
+  {
+    const visibility = new FakeVisibility();
+    visibility.hidden = true;
+    let fired = false;
+    armVisibilityAwareTimeout(50, () => (fired = true), visibility);
+    await sleep(300);
+    check('a tab that starts hidden never times out on its own', !fired);
+  }
+
+  {
+    const visibility = new FakeVisibility();
+    let fired = false;
+    let resumes = 0;
+    armVisibilityAwareTimeout(
+      250,
+      () => (fired = true),
+      visibility,
+      () => resumes++,
+    );
+    await sleep(50);
+    visibility.setHidden(true); // pause with the window mostly unelapsed
+    await sleep(300); // well past the original 250ms budget
+    check('going hidden pauses the countdown instead of firing it', !fired);
+    visibility.setHidden(false); // resume: a fresh 250ms window
+    check('becoming visible again calls onResume', resumes === 1);
+    await sleep(50);
+    check('the fresh window has not fired yet', !fired);
+    await sleep(300);
+    check('the fresh window fires once it fully elapses', fired);
+  }
+
+  {
+    const visibility = new FakeVisibility();
+    let fired = false;
+    const timeout = armVisibilityAwareTimeout(50, () => (fired = true), visibility);
+    timeout.cancel();
+    await sleep(300);
+    check('cancel stops the timeout for good', !fired);
+    visibility.setHidden(true);
+    visibility.setHidden(false);
+    await sleep(300);
+    check('cancel also detaches the visibility listener', !fired);
+  }
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);

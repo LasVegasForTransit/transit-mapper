@@ -3,6 +3,7 @@ import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { BASEMAP_STYLE } from '../basemap';
 import { landmarksFeatureCollection } from '../landmarks';
+import { armVisibilityAwareTimeout } from './visibilityAwareTimeout';
 import {
   buildFeatures,
   LAYER_SPECS,
@@ -83,6 +84,7 @@ export function renderSystemForExport(
 
     let settled = false;
     const dispose = () => {
+      timeout.cancel();
       try {
         map.remove();
       } catch {
@@ -90,14 +92,25 @@ export function renderSystemForExport(
       }
       container.remove();
     };
-    const timer = setTimeout(() => fail(new Error('Export render timed out.')), RENDER_TIMEOUT_MS);
+
     function fail(err: unknown): void {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      timeout.cancel();
       dispose();
       reject(err instanceof Error ? err : new Error(String(err)));
     }
+
+    // See visibilityAwareTimeout.ts: MapLibre's tile loading and painting run
+    // entirely on requestAnimationFrame, which browsers fully suspend while
+    // the document is hidden, so a flat wall-clock timeout fires spuriously
+    // on exports that would otherwise complete fine once the tab is visible.
+    const timeout = armVisibilityAwareTimeout(
+      RENDER_TIMEOUT_MS,
+      () => fail(new Error('Export render timed out.')),
+      document,
+      () => map.triggerRepaint(),
+    );
 
     map.on('error', (e) => fail(e.error ?? new Error('Export map error.')));
     map.on('load', () => {
@@ -166,7 +179,7 @@ export function renderSystemForExport(
         map.once('idle', () => {
           if (settled) return;
           settled = true;
-          clearTimeout(timer);
+          timeout.cancel();
           resolve({ map, canvas: map.getCanvas(), dispose });
         });
         map.triggerRepaint();

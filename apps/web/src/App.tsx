@@ -8,9 +8,11 @@ import type { TransitSystem } from '@transitmapper/core/model/system';
 import { fetchShare } from './share/api';
 import {
   getActiveId,
+  hasSeenOnboarding,
   listLibrary,
   loadSystemById,
   loadSystemEntry,
+  markOnboardingSeen,
   migrateLegacySingleSlot,
   saveToLibrary,
   setActiveId,
@@ -25,6 +27,7 @@ import { LinesPanel } from './ui/LinesPanel';
 import { SimControls, SimControlsCompact } from './ui/SimControls';
 import { Toolbar } from './ui/Toolbar';
 import { TopBarActions, TopBarBrand, ViewSwitch } from './ui/TopBar';
+import { useDelayedUnmount } from './ui/useDelayedUnmount';
 import { useSaveStatus } from './ui/SaveStatusProvider';
 import { useUi } from './ui/UiProvider';
 import { useView } from './ui/ViewProvider';
@@ -60,6 +63,9 @@ const SystemsDialog = lazy(() =>
 );
 const SettingsDialog = lazy(() =>
   import('./ui/SettingsDialog').then((m) => ({ default: m.SettingsDialog })),
+);
+const OnboardingDialog = lazy(() =>
+  import('./ui/onboarding/OnboardingDialog').then((m) => ({ default: m.OnboardingDialog })),
 );
 
 const SHARE_PREFIX = '/s/';
@@ -110,7 +116,16 @@ function LazyDialog({ children, onFailure }: LazyDialogProps) {
 
 export function App() {
   const store = useEditorStore();
-  const { shortcutsOpen, closeShortcuts, uiHidden, activeDialog, closeDialog } = useUi();
+  const name = useEditor((s) => s.system.name);
+  const {
+    shortcutsOpen,
+    closeShortcuts,
+    uiHidden,
+    toggleUi,
+    activeDialog,
+    openDialog,
+    closeDialog,
+  } = useUi();
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   // Anything worth telling the user that isn't the share-load error: a stored
@@ -164,8 +179,12 @@ export function App() {
     setActiveId(system.id);
     store.getState().setSystem(system, { readOnly: false });
     if (isBrandNew) store.getState().setTool('way');
+    // Independent of isBrandNew: that flag means "no saved system found,"
+    // which a returning user hits too (they deleted their only system) —
+    // conflating the two would re-show onboarding to someone who's seen it.
+    if (!hasSeenOnboarding()) openDialog('onboarding');
     setReady(true);
-  }, [store, report]);
+  }, [store, report, openDialog]);
 
   // Autosave the working copy into its own library entry (never a read-only
   // shared view). Switching to a different system's id updates the active
@@ -224,6 +243,11 @@ export function App() {
     }
   }, []);
 
+  // Hiding the UI used to unmount the whole chrome instantly; now it stays
+  // mounted (fading/rising out) for the CSS exit transition, and the restore
+  // button only appears once that's actually finished — avoiding an instant
+  // snap AND the two overlapping in the same top-left corner mid-transition.
+  const { mounted: chromeMounted, closing: chromeClosing } = useDelayedUnmount(!uiHidden, 160);
   const selection = useEditor((s) => s.selection);
   const multiSelection = useEditor((s) => s.multiSelection);
   const tool = useEditor((s) => s.tool);
@@ -309,13 +333,7 @@ export function App() {
   ) : null;
 
   return (
-    // data-zen cascades to every opted-in chrome element via CSS attribute
-    // selectors (see app.css's "Zen mode" block: .zen-label, .zen-cluster,
-    // and friends) — a component becomes zen-aware by adding a class, not
-    // by threading uiHidden through props. MapCanvas and the banner below
-    // sit under this same root but carry none of those classes, so they're
-    // untouched by it.
-    <div className="app" data-zen={uiHidden || undefined}>
+    <div className="app">
       {ready && <MapCanvas onBasemapUnavailable={() => setNotice(basemapNotice)} />}
       {/* Outside the chrome, like the banner above: right-clicking still has
           to offer its actions when the UI is hidden, since hiding the panels
@@ -341,18 +359,34 @@ export function App() {
           <div className="pointer-events-auto max-w-[560px]">{banner}</div>
         </div>
       )}
-      <Workbench
-        brand={<TopBarBrand />}
-        menuPanel={<LinesPanel />}
-        supplementalPanel={<Inspector />}
-        hasSupplementalContent={hasSupplementalContent}
-        primaryToolbar={<TopBarActions />}
-        viewSwitcher={<ViewSwitch />}
-        simControls={<SimControls />}
-        simControlsCompact={<SimControlsCompact />}
-        modeToolbar={<Toolbar />}
-        importStatus={<ImportProgressPill />}
-      />
+      {chromeMounted && (
+        <div data-ui-state={chromeClosing ? 'closed' : 'open'} className="app-chrome">
+          <Workbench
+            brand={<TopBarBrand />}
+            menuPanel={<LinesPanel />}
+            supplementalPanel={<Inspector />}
+            hasSupplementalContent={hasSupplementalContent}
+            primaryToolbar={<TopBarActions />}
+            viewSwitcher={<ViewSwitch />}
+            simControls={<SimControls />}
+            simControlsCompact={<SimControlsCompact />}
+            modeToolbar={<Toolbar />}
+            importStatus={<ImportProgressPill />}
+          />
+        </div>
+      )}
+      {!chromeMounted && uiHidden && (
+        <button
+          type="button"
+          className="ui-restore"
+          onClick={toggleUi}
+          title="Show UI (\\)"
+          aria-label={`Show UI — ${name}`}
+        >
+          <Icon name="sidebar" size={16} />
+          <span className="ui-restore-name">{name}</span>
+        </button>
+      )}
       {shortcutsOpen && (
         <LazyDialog
           onFailure={() => {
@@ -391,6 +425,21 @@ export function App() {
       {activeDialog === 'settings' && (
         <LazyDialog onFailure={dialogFailed}>
           <SettingsDialog onClose={closeDialog} />
+        </LazyDialog>
+      )}
+      {activeDialog === 'onboarding' && (
+        <LazyDialog
+          onFailure={() => {
+            markOnboardingSeen();
+            dialogFailed();
+          }}
+        >
+          <OnboardingDialog
+            onClose={() => {
+              markOnboardingSeen();
+              closeDialog();
+            }}
+          />
         </LazyDialog>
       )}
     </div>

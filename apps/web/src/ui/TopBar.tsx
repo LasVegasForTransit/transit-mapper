@@ -8,7 +8,6 @@ import { FileMenu } from './FileMenu';
 import { IconButton } from './IconButton';
 import { IssuesPopover } from './IssuesPopover';
 import { LayersPopover } from './LayersPopover';
-import { useInertRef } from './useInertRef';
 import { useUi } from './UiProvider';
 import { useView, type ViewMode } from './ViewProvider';
 import { Icon } from './Icon';
@@ -25,21 +24,11 @@ const MOD_LABEL = IS_MAC ? '⌘' : 'Ctrl';
 /** Persistent state of the canvas, not a transient action — kept visually
  *  distinct from TopBarActions' button cluster. Desktop: Workbench's own
  *  viewSwitcher prop. Mobile: folded into TopBarActions instead (see that
- *  component) — no room for a third floating group at that width.
- *
- *  Unlike sim controls (its constant companion in the same top-center
- *  card), this DOES collapse in zen mode — self-managed here via
- *  `.zen-collapse-cluster` + `inert` rather than threaded through
- *  Workbench, since it owns its own root element. That class shrinks its
- *  own max-width to 0 (not just a fade/lift like `.zen-cluster`) so sim
- *  controls slides into the freed width through ordinary flex reflow —
- *  no repositioning code needed for that motion. */
+ *  component) — no room for a third floating group at that width. */
 export function ViewSwitch() {
   const { viewMode, setViewMode } = useView();
-  const { uiHidden } = useUi();
-  const ref = useInertRef<HTMLDivElement>(uiHidden);
   return (
-    <div ref={ref} className="segmented zen-collapse-cluster" role="group" aria-label="View">
+    <div className="segmented" role="group" aria-label="View">
       {VIEW_MODES.map((v) => (
         <button
           key={v.mode}
@@ -63,18 +52,19 @@ export function TopBarBrand() {
   const name = useEditor((s) => s.system.name);
   const readOnly = useEditor((s) => s.readOnly);
   const setName = useEditor((s) => s.setName);
-  const { uiHidden, toggleUi } = useUi();
+  const { toggleUi } = useUi();
   return (
     <>
-      {/* One row, always, in every state: FileMenu icon at the left (a
-          read-only view has no file actions to offer, so nothing renders
-          there), the system name filling the middle, the toggle fixed at
-          the right — never three lines, never a wrap. FileMenu's own
-          "TransitMapper" wordmark doesn't render here at all (see
-          FileMenu.tsx) — the middle of this row is the system name's
-          permanently, not the app's own name conditionally collapsing
-          into it. */}
-      {!readOnly && <FileMenu />}
+      {readOnly ? (
+        <span className="brand">
+          <span className="btn-label">TransitMapper</span>
+        </span>
+      ) : (
+        <FileMenu />
+      )}
+      <span className="brand-hide-ui">
+        <IconButton icon="sidebar" size={17} label={'Hide UI (\\)'} onClick={toggleUi} />
+      </span>
       {readOnly ? (
         <span className="ro-name">{name}</span>
       ) : (
@@ -86,14 +76,6 @@ export function TopBarBrand() {
           onKeyDown={blurOnEnter}
         />
       )}
-      <span className="brand-hide-ui">
-        <IconButton
-          icon="sidebar"
-          size={17}
-          label={uiHidden ? 'Show UI (\\)' : 'Hide UI (\\)'}
-          onClick={toggleUi}
-        />
-      </span>
     </>
   );
 }
@@ -139,6 +121,9 @@ export function TopBarActions() {
       )}
       <span className="act-secondary">
         <IconButton icon="keyboard" onClick={openShortcuts} label="Keyboard shortcuts (?)" />
+      </span>
+      <span className="act-secondary">
+        <IconButton icon="play" onClick={() => openDialog('onboarding')} label="Replay intro" />
       </span>
       {readOnly ? (
         <>

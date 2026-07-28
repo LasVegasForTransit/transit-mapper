@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import type { LngLat } from '@transitmapper/core/model/system';
 
-export type DialogName = 'import' | 'gtfs' | 'export' | 'share' | 'systems' | 'settings';
+export type DialogName =
+  'import' | 'gtfs' | 'export' | 'share' | 'systems' | 'settings' | 'onboarding';
 
 /** A background import's live status — surfaced as a small non-blocking
  *  indicator (see ImportProgressPill) rather than a modal, so a long import
