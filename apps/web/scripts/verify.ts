@@ -492,12 +492,30 @@ check(
   store.getState().addWayPoint(A, [-115.1, 36.1]);
   store.getState().finishWay();
   const aId = store.getState().system.services[0].id;
-  // Route a second service along A's middle → A splits into 3 ways, the new
-  // service rides only the shared middle (bundle sizes 1 / 2 / 1 along A).
+  // Route a second service along A's MIDDLE. The way is left alone — the new
+  // service's leg just names the stretch it uses — so the through-line still
+  // rides one way end to end and the joiner draws only over the shared middle.
+  const waysBefore = store.getState().system.ways.length;
   const w = store.getState().system.ways.find((x) => x.id === A)!;
   store.getState().startRouteDraft(anchorOnWay(w, [-115.27, 36.1])!);
   store.getState().extendRouteDraft(anchorOnWay(w, [-115.13, 36.1])!);
   const bId = store.getState().commitRouteDraft()!;
+
+  check(
+    'a service terminating mid-way leaves the way whole — no split, no fragment',
+    store.getState().system.ways.length === waysBefore,
+  );
+  const bSvc = store.getState().system.services.find((sv) => sv.id === bId)!;
+  const bLeg = bSvc.patterns[0].legs[0];
+  check(
+    'the joining service names the stretch it uses instead of owning a way',
+    bSvc.patterns[0].legs.length === 1 &&
+      bLeg.wayId === A &&
+      bLeg.fromT !== undefined &&
+      bLeg.toT !== undefined &&
+      bLeg.fromT > 0 &&
+      bLeg.toT < 1,
+  );
 
   const filters = {
     visibleModes: new Set(Object.keys(MODES)),
@@ -507,10 +525,7 @@ check(
   const aFeats = net.services.features.filter((f) => f.properties?.serviceId === aId);
   const bFeats = net.services.features.filter((f) => f.properties?.serviceId === bId);
   const aOffsets = new Set(aFeats.map((f) => f.properties?.offset));
-  check(
-    'the through-line spans several ways (a shared stretch was carved out)',
-    aFeats.length >= 2,
-  );
+  check('the through-line is drawn as one unbroken run over the whole way', aFeats.length === 1);
   check(
     'a through-line keeps ONE constant offset across all its ways (no jog)',
     aOffsets.size === 1,
@@ -518,6 +533,37 @@ check(
   check(
     'the joining service takes a different offset where they share',
     bFeats.length >= 1 && !aOffsets.has(bFeats[0].properties?.offset),
+  );
+  check(
+    'the joining service is drawn only over the stretch it runs, not the whole way',
+    bFeats.length === 1 &&
+      pathLengthMeters(bFeats[0].geometry.coordinates as LngLat[]) <
+        pathLengthMeters(aFeats[0].geometry.coordinates as LngLat[]) * 0.95,
+  );
+
+  // A station out at the end of the way is on the through-line only. Riding a
+  // way is no longer the same as reaching every point on it, so "which lines
+  // serve this stop" has to ask where the line actually goes — otherwise the
+  // stop wrongly reads as an interchange.
+  store.getState().addStation([-115.295, 36.1]);
+  const withStop = buildFeatures(store.getState().system, null, [], {
+    viewMode: 'network',
+    ...filters,
+  });
+  const endStop = withStop.stations.features[0];
+  check(
+    'a stop past where a line terminates is not counted as served by it',
+    endStop.properties?.interchange === false,
+  );
+  // …and one inside the shared stretch still is.
+  store.getState().addStation([-115.2, 36.1]);
+  const shared = buildFeatures(store.getState().system, null, [], {
+    viewMode: 'network',
+    ...filters,
+  }).stations.features.find((f) => f.properties?.id !== endStop.properties?.id)!;
+  check(
+    'a stop inside the shared stretch is served by both lines',
+    shared.properties?.interchange === true,
   );
 }
 
@@ -7639,16 +7685,26 @@ function buildGrid() {
     'the routed service rides one pattern of existing ways',
     svc.patterns.length === 1 && svc.patterns[0].legs.length === res.spans.length,
   );
-  check('mid-way anchors split their ways (two new arms)', after.ways.length === waysBefore + 2);
   check(
-    'no new parallel geometry was drawn (every ridden way pre-existed or is a split arm)',
+    'routing over existing streets adds no infrastructure at all',
+    after.ways.length === waysBefore,
+  );
+  check(
+    'no new parallel geometry was drawn (every ridden way pre-existed)',
     patternWayIds(svc.patterns[0]).every((wid) =>
       after.ways.some((w) => w.id === wid && w.typeId === 'road'),
     ),
   );
-  const ridden = after.ways.filter((w) => patternWayIds(svc.patterns[0]).includes(w.id));
-  const total = ridden.reduce((m, w) => m + wayLengthMeters(w), 0);
-  check('ridden ways cover the route length', Math.abs(total - res.lengthM) < 500);
+  check(
+    'the mid-way anchors became leg extents rather than splits',
+    svc.patterns[0].legs.some((l) => l.fromT !== undefined || l.toT !== undefined),
+  );
+  // The route length is now measured off what the legs actually cover, not by
+  // summing whole ways — which is the point: the ways are longer than the ride.
+  check(
+    'the drawn line covers the route length',
+    Math.abs(pathLengthMeters(patternPath(after.ways, svc.patterns[0])) - res.lengthM) < 500,
+  );
 }
 
 // --- route draft state machine (the drawing gesture's backend) ---
@@ -7728,14 +7784,14 @@ function buildGrid() {
   check('committing a same-way route creates the service', !!svcId && sys.services.length === 1);
   const ridden = patternWayIds(sys.services[0].patterns[0]);
   check(
-    'the road was split into three arms; the line rides the middle one',
-    sys.ways.length === 3 && ridden.length === 1,
+    'the road stays one way; the line rides a stretch of it',
+    sys.ways.length === 1 && ridden.length === 1 && ridden[0] === way.id,
   );
-  const mid = sys.ways.find((w) => w.id === ridden[0])!;
+  // The clicks were at -115.27 and -115.14 on a road running -115.3 to -115.1.
+  const drawn = patternPath(sys.ways, sys.services[0].patterns[0]);
   check(
-    'the ridden arm spans exactly the clicked stretch',
-    Math.abs(mid.points[0][0] - -115.27) < 1e-6 &&
-      Math.abs(mid.points[mid.points.length - 1][0] - -115.14) < 1e-6,
+    'the drawn line spans exactly the clicked stretch',
+    Math.abs(drawn[0][0] - -115.27) < 1e-6 && Math.abs(drawn[drawn.length - 1][0] - -115.14) < 1e-6,
   );
 }
 
@@ -8299,6 +8355,16 @@ function buildGrid() {
   const pattern = { id: 'p1', legs: legsOf('w1') };
   const stops = dwellStopsForPattern(sys.stations, pattern, path, pathMeters);
   check("only stations anchored to the pattern's ways become stops", stops.length === 3);
+  // A line covering only the first 60% of w1 does not call at the stop at
+  // t=0.7. Left unfiltered that stop projects onto the nearest end of the
+  // trimmed path and stacks a phantom dwell on the terminus.
+  const trimmedStops = dwellStopsForPattern(
+    sys.stations,
+    { id: 'p2', legs: [{ wayId: 'w1', forward: true, fromT: 0, toT: 0.6 }] },
+    path,
+    pathMeters,
+  );
+  check('a stop past where the line terminates is not a dwell on it', trimmedStops.length === 2);
   check(
     'stops are ordered by distance along the path, not input order',
     stops[0].distMeters < stops[1].distMeters && stops[1].distMeters < stops[2].distMeters,

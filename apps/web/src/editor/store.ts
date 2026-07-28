@@ -37,8 +37,6 @@ import {
   resolveWayPath,
   snap,
   squareFootprint,
-  wayById,
-  wholeLegs,
   type ShapeRun,
 } from '@transitmapper/core/model/geo';
 import {
@@ -76,6 +74,7 @@ import type {
   NamedWay,
   Node,
   NodeControl,
+  PatternLeg,
   Platform,
   SchedulePeriod,
   Service,
@@ -1110,127 +1109,84 @@ function formCrossingJunctions(system: TransitSystem, wayId: string): TransitSys
 // ---- routing over existing infrastructure ----------------------------------
 // The pure router (model/routeGraph.ts) returns RouteSpans — stretches of
 // existing ways, possibly with fractional mid-way endpoints. Materializing a
-// route turns those into a clean ordered wayId list a Pattern can ride:
-// fractional endpoints become real control points, and partially-traversed
-// ways are split so each span is exactly one whole way. All topology
-// bookkeeping rides the same helpers as every other mutation.
+// route turns those into the legs a Pattern rides. A fractional endpoint is
+// the leg's extent; nothing is inserted into a way and nothing is split, so
+// routing a line over existing infrastructure leaves that infrastructure
+// exactly as it was.
 
-function insertPointIntoWay(
-  system: TransitSystem,
-  wayId: string,
-  index: number,
-  coord: LngLat,
-): TransitSystem {
-  const next = updateWayPoints(system, wayId, (pts) => [
-    ...pts.slice(0, index),
-    coord,
-    ...pts.slice(index),
-  ]);
-  return { ...next, nodes: shiftNodeRefsForInsert(next.nodes, wayId, index) };
-}
+// A span shorter than this covers no ground worth drawing — two anchors that
+// landed on effectively the same spot. Rejected rather than stored as a
+// zero-length leg nothing can render.
+const DEGENERATE_SPAN_T = 1e-9;
 
-// A fractional anchor closer than this to an existing control point reuses
-// that point instead of inserting a near-duplicate beside it.
-const ANCHOR_REUSE_M = 1;
+/**
+ * Turn a routed path into the legs a pattern runs over.
+ *
+ * This used to make the route fit the model rather than the other way round.
+ * A pattern could only name whole ways, so a span that began or ended mid-way
+ * had a control point spliced in and the way cut around it — and that cut
+ * changed the way for everyone: it extended every other rider's pattern,
+ * reanchored every station on it, reindexed every node ref, and left a
+ * fragment that never went away. Drawing a line that terminated in the middle
+ * of a boulevard permanently divided the boulevard.
+ *
+ * A span's endpoints are now just the leg's extent, so nothing is inserted,
+ * nothing is split, and the system comes back untouched — hence a pure
+ * function returning legs rather than a new system.
+ *
+ * Interior span boundaries need no extent at all: routeBetween's graph only
+ * has vertices at way endpoints and junction-referenced points, so consecutive
+ * spans already meet at a genuinely shared coordinate. Only the route's own
+ * two ends can fall mid-way, and those are exactly the splits worth not
+ * making.
+ */
+function materializeRouteSpans(system: TransitSystem, spans: RouteSpan[]): PatternLeg[] | null {
+  const legs: PatternLeg[] = [];
+  for (const s of spans) {
+    const way = system.ways.find((w) => w.id === s.wayId);
+    if (!way) return null;
+    const path = resolveWayPath(way);
+    if (path.length < 2) return null;
 
-function materializeRouteSpans(
-  system: TransitSystem,
-  spansIn: RouteSpan[],
-): { system: TransitSystem; wayIds: string[] } | null {
-  let sys = system;
-  const wayIds: string[] = [];
-  for (const spanIn of spansIn) {
-    const s = { ...spanIn };
-    const way0 = sys.ways.find((w) => w.id === s.wayId);
-    if (!way0) return null;
+    // A span reports its ends either as a raw control point or, where the
+    // route started or finished mid-way, as a coordinate. Both become a
+    // position along the resolved path, which is the ruler a leg's extent is
+    // measured against — and the same projection station anchoring uses, so a
+    // curved way's fillets are handled identically in both places.
+    const startCoord = s.fromCoord ?? way.points[s.fromPoint];
+    const endCoord = s.toCoord ?? way.points[s.toPoint];
+    if (!startCoord || !endCoord) return null;
+    const from = nearestOnPath(path, startCoord);
+    const to = nearestOnPath(path, endCoord);
+    if (!from || !to) return null;
+    if (Math.abs(from.t - to.t) < DEGENERATE_SPAN_T) return null;
 
-    // Purely-fractional span (both anchors inside one block segment): insert
-    // both coords, ordered along the segment, then split around them.
-    if (s.noInterior && s.fromCoord && s.toCoord && s.seg !== undefined) {
-      const seg = s.seg;
-      const base = way0.points[seg - 1];
-      if (!base) return null;
-      const [near, far] =
-        haversineMeters(base, s.fromCoord) <= haversineMeters(base, s.toCoord)
-          ? [s.fromCoord, s.toCoord]
-          : [s.toCoord, s.fromCoord];
-      sys = insertPointIntoWay(sys, s.wayId, seg, far);
-      sys = insertPointIntoWay(sys, s.wayId, seg, near);
-      s.fromPoint = seg;
-      s.toPoint = seg + 1;
-      s.fromCoord = undefined;
-      s.toCoord = undefined;
-      s.noInterior = undefined;
-    }
-    const forward = s.fromPoint <= s.toPoint;
-
-    // Splice fractional anchors in as real control points (higher insertion
-    // index first, so the second insert's shift is easy to account for).
-    const inserts: { at: number; coord: LngLat; role: 'from' | 'to' }[] = [];
-    if (s.fromCoord)
-      inserts.push({
-        at: forward ? s.fromPoint : s.fromPoint + 1,
-        coord: s.fromCoord,
-        role: 'from',
-      });
-    if (s.toCoord)
-      inserts.push({ at: forward ? s.toPoint + 1 : s.toPoint, coord: s.toCoord, role: 'to' });
-    inserts.sort((x, y) => y.at - x.at);
-    for (const ins of inserts) {
-      const way = sys.ways.find((w) => w.id === s.wayId)!;
-      const prev = way.points[ins.at - 1];
-      const next = way.points[ins.at];
-      if (prev && haversineMeters(prev, ins.coord) < ANCHOR_REUSE_M) {
-        if (ins.role === 'from') s.fromPoint = ins.at - 1;
-        else s.toPoint = ins.at - 1;
-        continue;
-      }
-      if (next && haversineMeters(next, ins.coord) < ANCHOR_REUSE_M) {
-        if (ins.role === 'from') s.fromPoint = ins.at;
-        else s.toPoint = ins.at;
-        continue;
-      }
-      sys = insertPointIntoWay(sys, s.wayId, ins.at, ins.coord);
-      if (s.fromPoint >= ins.at) s.fromPoint += 1;
-      if (s.toPoint >= ins.at) s.toPoint += 1;
-      if (ins.role === 'from') s.fromPoint = ins.at;
-      else s.toPoint = ins.at;
-    }
-
-    // Isolate the traversed stretch as its own way via splits.
-    const lo = Math.min(s.fromPoint, s.toPoint);
-    const hi = Math.max(s.fromPoint, s.toPoint);
-    if (lo === hi) return null; // degenerate (both anchors in one block segment)
-    const way1 = sys.ways.find((w) => w.id === s.wayId)!;
-    let spanWayId = s.wayId;
-    if (hi < way1.points.length - 1) sys = splitWay(sys, s.wayId, hi); // [0..hi] keeps the id
-    if (lo > 0) {
-      const newId = shortId();
-      sys = splitWay(sys, s.wayId, lo, newId); // [lo..hi] becomes newId
-      spanWayId = newId;
-    }
-    wayIds.push(spanWayId);
+    const forward = from.t <= to.t;
+    const lo = Math.min(from.t, to.t);
+    const hi = Math.max(from.t, to.t);
+    const whole = lo <= 0 && hi >= 1;
+    legs.push({ wayId: s.wayId, forward, ...(whole ? {} : { fromT: lo, toT: hi }) });
   }
-  return { system: sys, wayIds };
+  return legs.length > 0 ? legs : null;
 }
 
 /**
  * Realize one detected corridor-conflation run (see
- * model/geo/corridorConflation.ts's detectShapeRuns) as real infrastructure.
- * An `OnWayRun`'s two anchors land on the SAME existing way — routeBetween's
- * dedicated same-way fast path (a direct arc-length slice, no Dijkstra/bias)
- * — then materializeRouteSpans realizes it (splits, wires real junctions),
- * exactly like adoptExistingInfrastructure's own pipeline. A `FreshRun` mints
- * a new way over just that sub-range, matching gtfsImport.ts's own one-way
- * carriageway construction — a small, deliberate duplication that keeps
- * gtfsImport.ts's pure, tested transform untouched.
+ * model/geo/corridorConflation.ts's detectShapeRuns) as pattern legs. An
+ * `OnWayRun`'s two anchors land on the SAME existing way — routeBetween's
+ * dedicated same-way fast path (a direct arc-length slice, no Dijkstra/bias) —
+ * and materializeRouteSpans turns that into one leg covering just that
+ * stretch, leaving the way alone. A `FreshRun` mints a new way over the
+ * sub-range instead, matching gtfsImport.ts's own one-way carriageway
+ * construction — a small, deliberate duplication that keeps gtfsImport.ts's
+ * pure, tested transform untouched — so this one still returns a system.
  */
 function materializeShapeRun(
   system: TransitSystem,
   run: ShapeRun,
   path: LngLat[],
   wayTypeId: string,
-): { system: TransitSystem; wayIds: string[] } | null {
+): { system: TransitSystem; legs: PatternLeg[] } | null {
   const startCoord = path[run.fromIdx];
   const endCoord = path[run.toIdx];
   if (!startCoord || !endCoord) return null;
@@ -1249,7 +1205,10 @@ function materializeShapeRun(
         'forward',
       ),
     };
-    return { system: { ...system, ways: [...system.ways, way] }, wayIds: [wayId] };
+    return {
+      system: { ...system, ways: [...system.ways, way] },
+      legs: [{ wayId, forward: true }],
+    };
   }
   const way = system.ways.find((w) => w.id === run.onWayId);
   if (!way) return null;
@@ -1257,7 +1216,9 @@ function materializeShapeRun(
   const to = anchorOnWay(way, endCoord);
   if (!from || !to) return null;
   const res = routeBetween(system, from, to, { allowedTypeIds: new Set([way.typeId]) });
-  return res ? materializeRouteSpans(system, res.spans) : null;
+  if (!res) return null;
+  const legs = materializeRouteSpans(system, res.spans);
+  return legs ? { system, legs } : null;
 }
 
 /**
@@ -2252,21 +2213,23 @@ export function createEditorStore() {
     createRoutedService: (spans, modeId) => {
       const st = get();
       const resolvedModeId = modeId ?? st.draftModeId;
-      const mat = materializeRouteSpans(st.system, spans);
-      if (!mat || mat.wayIds.length === 0) return null;
+      const legs = materializeRouteSpans(st.system, spans);
+      if (!legs) return null;
       const id = shortId();
       const service: Service = {
         id,
         name: `Line ${nextLineNumber++}`,
         modeId: resolvedModeId,
         color: st.draftColor,
-        patterns: [{ id: shortId(), legs: wholeLegs(wayById(mat.system.ways), mat.wayIds) }],
+        patterns: [{ id: shortId(), legs }],
         frequencyMinutes: DEFAULT_FREQUENCY_MINUTES,
         spanStart: DEFAULT_SPAN_START,
         spanEnd: DEFAULT_SPAN_END,
       };
-      set(() => ({
-        system: touch({ ...mat.system, services: [...mat.system.services, service] }),
+      // Routing over what's already there adds no infrastructure at all now —
+      // only a service that names the stretches it uses.
+      set((s) => ({
+        system: touch({ ...s.system, services: [...s.system.services, service] }),
         selection: { kind: 'service', id },
       }));
       return id;
@@ -2302,9 +2265,9 @@ export function createEditorStore() {
           biasWeight: ADOPT_BIAS_WEIGHT,
         });
         if (!res) continue;
-        const mat = materializeRouteSpans(sys, res.spans);
-        if (!mat || mat.wayIds.length === 0) continue;
-        sys = mat.system;
+        const adoptedLegs = materializeRouteSpans(sys, res.spans);
+        if (!adoptedLegs) continue;
+        const adoptedWayIds = [...new Set(adoptedLegs.map((l) => l.wayId))];
 
         // Swap the pattern onto the adopted ways.
         sys = {
@@ -2314,9 +2277,7 @@ export function createEditorStore() {
               ? {
                   ...sv,
                   patterns: sv.patterns.map((p) =>
-                    p.id === pattern.id
-                      ? { ...p, legs: wholeLegs(wayById(sys.ways), mat.wayIds) }
-                      : p,
+                    p.id === pattern.id ? { ...p, legs: adoptedLegs } : p,
                   ),
                 }
               : sv,
@@ -2326,7 +2287,7 @@ export function createEditorStore() {
         // Stations that rode the sketch follow the service onto the adopted
         // ways (nearest within tolerance); too far away, they detach but
         // survive as free stations rather than being deleted.
-        const newWays = sys.ways.filter((w) => mat.wayIds.includes(w.id));
+        const newWays = sys.ways.filter((w) => adoptedWayIds.includes(w.id));
         sys = {
           ...sys,
           stations: sys.stations.map((stn) => {
@@ -2404,7 +2365,7 @@ export function createEditorStore() {
         // the pattern on its own way unchanged.
         if (runs.length === 1 && 'fresh' in runs[0]) continue;
 
-        const newWayIds: string[] = [];
+        const newLegs: PatternLeg[] = [];
         let ok = true;
         for (const run of runs) {
           const mat = materializeShapeRun(sys, run, path, wayTypeId);
@@ -2413,9 +2374,10 @@ export function createEditorStore() {
             break;
           }
           sys = mat.system;
-          newWayIds.push(...mat.wayIds);
+          newLegs.push(...mat.legs);
         }
-        if (!ok || newWayIds.length === 0) continue;
+        if (!ok || newLegs.length === 0) continue;
+        const newWayIds = [...new Set(newLegs.map((l) => l.wayId))];
 
         sys = {
           ...sys,
@@ -2424,9 +2386,7 @@ export function createEditorStore() {
               ? {
                   ...sv,
                   patterns: sv.patterns.map((p) =>
-                    p.id === target.patternId
-                      ? { ...p, legs: wholeLegs(wayById(sys.ways), newWayIds) }
-                      : p,
+                    p.id === target.patternId ? { ...p, legs: newLegs } : p,
                   ),
                 }
               : sv,
