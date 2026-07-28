@@ -1,18 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useEditor } from '../editor/EditorProvider';
 import { createEmptySystem, forkSystem } from '@transitmapper/core/model/serialize';
 import {
   deleteFromLibrary,
   listLibrary,
-  loadSystemById,
   loadSystemEntry,
   saveToLibrary,
-  setActiveId,
   type LibraryEntry,
-} from '../storage/localStore';
+  type SaveOutcome,
+} from '../storage/browserLibrary';
+import { setActiveId } from '../storage/localStore';
+import { deleteAfterFlush } from '../storage/deleteAfterFlush';
 import { getMyShare } from '../share/myShares';
 import { stopSharing } from '../share/api';
-import { useSaveStatus } from './SaveStatusProvider';
 import { blurOnEnter } from './formUtils';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
@@ -31,6 +31,9 @@ function relativeTime(ts: number): string {
 
 interface SystemsDialogProps {
   onClose: () => void;
+  flushPendingSave: () => void | Promise<void>;
+  recordSaveOutcome: (id: string, outcome: SaveOutcome) => void;
+  discardPendingSave: (id: string) => void;
   /** Reports a stored system that exists but won't parse, so the app can say
    *  so — the row stays in the list and its bytes stay on disk. */
   onCorrupt: () => void;
@@ -38,27 +41,63 @@ interface SystemsDialogProps {
 
 /** Replaces the old single-slot autosave with a real library: every saved
  *  system its own row, switch between them without losing anything, rename/
- *  duplicate/delete in place. See storage/localStore.ts for the storage
- *  shape this reads and writes. */
-export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
+ *  duplicate/delete in place. See storage/browserLibrary.ts for the durable
+ *  IndexedDB path and its localStorage recovery boundary. */
+export function SystemsDialog({
+  onClose,
+  onCorrupt,
+  flushPendingSave,
+  recordSaveOutcome,
+  discardPendingSave,
+}: SystemsDialogProps) {
   const currentId = useEditor((s) => s.system.id);
   const currentName = useEditor((s) => s.system.name);
   const setName = useEditor((s) => s.setName);
   const setSystem = useEditor((s) => s.setSystem);
-  // Every write below goes through this. Without it a rename or duplicate
-  // that hits a full quota simply doesn't happen, and the row silently snaps
-  // back to its old value with no explanation anywhere.
-  const { report } = useSaveStatus();
-  const [entries, setEntries] = useState<LibraryEntry[]>(() => listLibrary());
+  const [entries, setEntries] = useState<LibraryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [libraryUnavailable, setLibraryUnavailable] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
-  const refresh = () => setEntries(listLibrary());
+  const refresh = async (): Promise<LibraryEntry[] | null> => {
+    const result = await listLibrary();
+    setLoading(false);
+    if (result.status === 'unavailable') {
+      setLibraryUnavailable(true);
+      return null;
+    }
+    setLibraryUnavailable(false);
+    setEntries(result.entries);
+    return result.entries;
+  };
 
-  const open = (id: string) => {
+  useEffect(() => {
+    let disposed = false;
+    void listLibrary().then((result) => {
+      if (!disposed) {
+        setLoading(false);
+        if (result.status === 'unavailable') {
+          setLibraryUnavailable(true);
+        } else {
+          setLibraryUnavailable(false);
+          setEntries(result.entries);
+        }
+      }
+    });
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  const open = async (id: string) => {
     if (id === currentId) return;
     // A row whose bytes won't parse is listed, clickable, and used to do
     // absolutely nothing when clicked — forever, with no message.
-    const result = loadSystemEntry(id);
+    const result = await loadSystemEntry(id);
+    if (result.status === 'unavailable') {
+      setLibraryUnavailable(true);
+      return;
+    }
     if (result.status === 'corrupt') {
       onCorrupt();
       return;
@@ -75,23 +114,42 @@ export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
       setName(name);
       return;
     }
-    const system = loadSystemById(entry.id);
-    if (!system) return;
-    report(saveToLibrary({ ...system, name, updatedAt: Date.now() }));
-    refresh();
+    const updatedAt = Date.now();
+    setEntries((current) =>
+      current.map((candidate) =>
+        candidate.id === entry.id ? { ...candidate, name, updatedAt } : candidate,
+      ),
+    );
+    void (async () => {
+      const loaded = await loadSystemEntry(entry.id);
+      if (loaded.status === 'unavailable') {
+        setLibraryUnavailable(true);
+        return;
+      }
+      if (loaded.status !== 'ok') return;
+      const outcome = await saveToLibrary({ ...loaded.system, name, updatedAt });
+      recordSaveOutcome(entry.id, outcome);
+      if (outcome !== 'saved') await refresh();
+    })();
   };
 
-  const duplicate = (entry: LibraryEntry) => {
-    const system = loadSystemById(entry.id);
-    if (!system) return;
-    report(saveToLibrary(forkSystem(system)));
-    refresh();
+  const duplicate = async (entry: LibraryEntry) => {
+    const loaded = await loadSystemEntry(entry.id);
+    if (loaded.status === 'unavailable') {
+      setLibraryUnavailable(true);
+      return;
+    }
+    if (loaded.status !== 'ok') return;
+    const duplicateSystem = forkSystem(loaded.system);
+    recordSaveOutcome(duplicateSystem.id, await saveToLibrary(duplicateSystem));
+    await refresh();
   };
 
   const startNew = () => {
     const system = createEmptySystem();
-    report(saveToLibrary(system));
     setActiveId(system.id);
+    // The store transition enters the shared persistence coordinator, which
+    // saves this immutable snapshot and reports its outcome once.
     setSystem(system, { readOnly: false });
     onClose();
   };
@@ -104,25 +162,41 @@ export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
       // live, but the local record is what the icon below reflects either
       // way — surfacing a toast here isn't worth it for a secondary action.
     }
-    refresh();
+    await refresh();
   };
 
-  const confirmDelete = (id: string) => {
+  const confirmDelete = async (id: string) => {
     // Reported like any other write: a delete is how the user is told to free
     // space when storage is full, so it failing silently would leave them
     // following advice that quietly does nothing.
-    report(deleteFromLibrary(id));
-    if (id === currentId) {
-      const remaining = listLibrary();
-      const next = remaining.length > 0 ? loadSystemById(remaining[0].id) : createEmptySystem();
-      if (next) {
-        if (remaining.length === 0) report(saveToLibrary(next));
+    const outcome = await deleteAfterFlush(id, {
+      flush: flushPendingSave,
+      deleteDocument: deleteFromLibrary,
+      discardDocument: discardPendingSave,
+    });
+    if (outcome !== 'saved') recordSaveOutcome(id, outcome);
+    if (outcome === 'saved' && id === currentId) {
+      const remaining = await refresh();
+      if (!remaining) return;
+      if (remaining.length === 0) {
+        const next = createEmptySystem();
         setActiveId(next.id);
         setSystem(next, { readOnly: false });
+      } else {
+        const loaded = await loadSystemEntry(remaining[0].id);
+        if (loaded.status === 'unavailable') {
+          setLibraryUnavailable(true);
+          return;
+        }
+        if (loaded.status === 'corrupt') onCorrupt();
+        if (loaded.status === 'ok') {
+          setActiveId(loaded.system.id);
+          setSystem(loaded.system, { readOnly: false });
+        }
       }
     }
     setConfirmingId(null);
-    refresh();
+    await refresh();
   };
 
   return (
@@ -135,7 +209,16 @@ export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
         Saved on this device only — use Share to send a system to someone else.
       </p>
 
-      <ul className="systems-list">
+      <ul className="systems-list" aria-busy={loading}>
+        {loading && <li className="panel-hint">Loading saved systems…</li>}
+        {libraryUnavailable && (
+          <li className="panel-hint">
+            Saved systems are temporarily unavailable.{' '}
+            <button type="button" className="ghost-btn" onClick={() => void refresh()}>
+              Try again
+            </button>
+          </li>
+        )}
         {entries.map((entry) => {
           const isActive = entry.id === currentId;
           const isConfirming = confirmingId === entry.id;
@@ -144,7 +227,7 @@ export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
               <button
                 type="button"
                 className="systems-open"
-                onClick={() => open(entry.id)}
+                onClick={() => void open(entry.id)}
                 disabled={isActive}
                 aria-label={isActive ? 'Current system' : `Open ${entry.name || 'Untitled system'}`}
                 title={isActive ? 'Current system' : 'Open'}
@@ -174,14 +257,14 @@ export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
                 icon="copy"
                 size={16}
                 label="Duplicate"
-                onClick={() => duplicate(entry)}
+                onClick={() => void duplicate(entry)}
               />
               {isConfirming ? (
                 <span className="systems-confirm">
                   <button
                     type="button"
                     className="danger-btn systems-confirm-btn"
-                    onClick={() => confirmDelete(entry.id)}
+                    onClick={() => void confirmDelete(entry.id)}
                   >
                     Delete
                   </button>
@@ -206,7 +289,13 @@ export function SystemsDialog({ onClose, onCorrupt }: SystemsDialogProps) {
         })}
       </ul>
 
-      <button type="button" className="ghost-btn" style={{ marginTop: 8 }} onClick={startNew}>
+      <button
+        type="button"
+        className="ghost-btn"
+        style={{ marginTop: 8 }}
+        onClick={startNew}
+        disabled={libraryUnavailable}
+      >
         <Icon name="plus" size={17} /> New system
       </button>
     </Modal>

@@ -4,21 +4,25 @@ import { MapCanvas } from './map/MapCanvas';
 import { getMap } from './map/mapRef';
 import { useEditor, useEditorStore } from './editor/EditorProvider';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
-import type { TransitSystem } from '@transitmapper/core/model/system';
 import { fetchShare } from './share/api';
+import {
+  listLibrary,
+  loadSystemEntry,
+  migrateLegacySingleSlot,
+  saveToLibrary,
+  type SaveOutcome,
+} from './storage/browserLibrary';
 import {
   getActiveId,
   hasSeenOnboarding,
-  listLibrary,
-  loadSystemById,
-  loadSystemEntry,
   markOnboardingSeen,
-  migrateLegacySingleSlot,
-  saveToLibrary,
   setActiveId,
 } from './storage/localStore';
-import { attachCameraPersistence } from './camera/cameraPersistence';
-import { withLiveCamera } from './camera/liveCamera';
+import {
+  attachPersistenceCoordinator,
+  type PersistenceCoordinator,
+} from './storage/persistenceCoordinator';
+import { resolveLibraryBootstrap } from './storage/bootstrapLibrary';
 import { Icon } from './ui/Icon';
 import { ImportProgressPill } from './ui/ImportProgressPill';
 import { MapContextMenu } from './ui/MapContextMenu';
@@ -108,7 +112,24 @@ interface LazyDialogProps {
 function LazyDialog({ children, onFailure }: LazyDialogProps) {
   return (
     <ErrorBoundary label="dialog" onError={onFailure}>
-      <Suspense fallback={null}>{children}</Suspense>
+      <Suspense
+        fallback={
+          <>
+            <div className="modal-backdrop" aria-hidden="true" />
+            <div
+              className="modal lazy-dialog-loading"
+              role="status"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <span className="import-progress-spinner" aria-hidden="true" />
+              Loading dialog…
+            </div>
+          </>
+        }
+      >
+        {children}
+      </Suspense>
     </ErrorBoundary>
   );
 }
@@ -119,6 +140,8 @@ export function App() {
     useUi();
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [storageRecovery, setStorageRecovery] = useState(false);
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   // Anything worth telling the user that isn't the share-load error: a stored
   // system that wouldn't parse, a dialog that failed to load.
   const [notice, setNotice] = useState<string | null>(null);
@@ -131,12 +154,17 @@ export function App() {
   useEffect(() => {
     const path = window.location.pathname;
     if (path.startsWith(SHARE_PREFIX)) {
+      const controller = new AbortController();
       const id = path.slice(SHARE_PREFIX.length).replace(/\/$/, '');
-      fetchShare(id)
+      fetchShare(id, { signal: controller.signal })
         .then((system) => store.getState().setSystem(system, { readOnly: true }))
-        .catch((e: Error) => setLoadError(e.message))
-        .finally(() => setReady(true));
-      return;
+        .catch((e: Error) => {
+          if (e.name !== 'AbortError') setLoadError(e.message);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setReady(true);
+        });
+      return () => controller.abort();
     }
     // Load whichever system was last open; migrate the old single-slot
     // autosave if this is the first run since the library existed; fall back
@@ -150,78 +178,80 @@ export function App() {
     // app to a blank canvas and concludes their work is gone. The bytes are
     // still in storage; saying so is the difference between a bug report we
     // can act on and someone quietly leaving.
-    const activeId = getActiveId();
-    const active = activeId ? loadSystemEntry(activeId) : { status: 'missing' as const };
-    let system = active.status === 'ok' ? active.system : null;
-    if (active.status === 'corrupt') setNotice(corruptSystemNotice);
-    if (!system) system = migrateLegacySingleSlot();
-    if (!system) {
-      const entries = listLibrary();
-      if (entries.length > 0) system = loadSystemById(entries[0].id);
-    }
-    let isBrandNew = false;
-    if (!system) {
-      system = createEmptySystem();
-      isBrandNew = true;
-    }
-    // The first save is the one that proves storage works at all — a browser
-    // in private mode fails here, before the user has typed anything.
-    report(saveToLibrary(system));
-    setActiveId(system.id);
-    store.getState().setSystem(system, { readOnly: false });
-    if (isBrandNew) store.getState().setTool('way');
-    // Independent of isBrandNew: that flag means "no saved system found,"
-    // which a returning user hits too (they deleted their only system) —
-    // conflating the two would re-show onboarding to someone who's seen it.
-    if (!hasSeenOnboarding()) openDialog('onboarding');
-    setReady(true);
-  }, [store, report, openDialog]);
-
-  // Autosave the working copy into its own library entry (never a read-only
-  // shared view). Switching to a different system's id updates the active
-  // pointer immediately — no reason to debounce that, only the content save.
-  const saveTimer = useRef<number | undefined>(undefined);
-  // Mirrors whatever saveTimer is currently waiting to write, so a caller
-  // outside this effect (see flushPendingSave) can force that write early
-  // without needing its own copy of the debounce logic.
-  const pendingSave = useRef<TransitSystem | null>(null);
-  useEffect(() => {
-    const unsubscribe = store.subscribe((s, prev) => {
-      if (s.readOnly) return;
-      if (s.system === prev.system) return;
-      if (s.system.id !== prev.system.id) setActiveId(s.system.id);
-      window.clearTimeout(saveTimer.current);
-      pendingSave.current = s.system;
-      saveTimer.current = window.setTimeout(() => {
-        // Fold in the live camera at save time: interactive pan/zoom bypasses
-        // the domain store (camera/liveCamera.ts), so `pendingSave.current`'s
-        // viewport would otherwise be stale. Keeps "reload restores where I
-        // left off".
-        report(saveToLibrary(withLiveCamera(pendingSave.current!)));
-        pendingSave.current = null;
-      }, 400);
-    });
-    // The pending timer is part of this effect's state; leaving it to fire
-    // into an unmounted tree is silent today but is still a leak.
+    let disposed = false;
+    void (async () => {
+      const result = await resolveLibraryBootstrap({
+        activeId: getActiveId(),
+        library: {
+          load: loadSystemEntry,
+          list: listLibrary,
+          migrateLegacySingleSlot,
+        },
+        createSystem: createEmptySystem,
+      });
+      if (disposed) return;
+      if (result.status === 'unavailable') {
+        // Do not create a blank replacement or change activeId. IndexedDB may
+        // contain the only copy of an agency-scale document and recover on
+        // the next attempt.
+        setStorageRecovery(true);
+        setReady(false);
+        return;
+      }
+      const { system, isBrandNew } = result;
+      if (result.encounteredCorruption) setNotice(corruptSystemNotice);
+      // A loaded system is already durable, and legacy reads migrate as part
+      // of loading. Only a genuinely new document needs a bootstrap write;
+      // rewriting an RTC-sized system here would delay first paint for no
+      // additional safety.
+      if (isBrandNew) report(await saveToLibrary(system));
+      if (disposed) return;
+      setStorageRecovery(false);
+      setActiveId(system.id);
+      store.getState().setSystem(system, { readOnly: false });
+      if (isBrandNew) store.getState().setTool('way');
+      // Independent of isBrandNew: that flag means "no saved system found,"
+      // which a returning user hits too (they deleted their only system) —
+      // conflating the two would re-show onboarding to someone who's seen it.
+      if (!hasSeenOnboarding()) openDialog('onboarding');
+      setReady(true);
+    })();
     return () => {
-      window.clearTimeout(saveTimer.current);
-      unsubscribe();
+      disposed = true;
     };
-  }, [store, report]);
+  }, [store, report, openDialog, bootstrapAttempt]);
 
-  // Forces a debounced autosave write early instead of waiting out its 400ms
-  // timer — used before an update-triggered reload (see useAppUpdate below),
-  // so a new-version reload never drops the last few seconds of an edit.
-  const flushPendingSave = useCallback(() => {
-    if (pendingSave.current === null) return;
-    window.clearTimeout(saveTimer.current);
-    report(saveToLibrary(withLiveCamera(pendingSave.current)));
-    pendingSave.current = null;
-  }, [report]);
+  // Content and camera changes share one debounce/write lane. A pan that lands
+  // next to an edit therefore serializes the document once, not once for each
+  // source of state; pagehide and update reloads flush this same pending value.
+  const persistence = useRef<PersistenceCoordinator | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    const coordinator = attachPersistenceCoordinator(store, report);
+    persistence.current = coordinator;
+    return () => {
+      if (persistence.current === coordinator) persistence.current = null;
+      coordinator.detach();
+    };
+  }, [store, report, ready]);
 
-  // Live camera moves don't flow through the store (so they never trigger a
-  // rebuild), so persist them on their own debounced path.
-  useEffect(() => attachCameraPersistence(store), [store]);
+  const flushPendingSave = useCallback(() => persistence.current?.flush(), []);
+  const recordSaveOutcome = useCallback(
+    (id: string, outcome: SaveOutcome) => {
+      const coordinator = persistence.current;
+      if (coordinator) coordinator.recordOutcome(id, outcome);
+      else report(outcome);
+    },
+    [report],
+  );
+  const discardPendingSave = useCallback(
+    (id: string) => {
+      const coordinator = persistence.current;
+      if (coordinator) coordinator.discard(id);
+      else report('saved');
+    },
+    [report],
+  );
 
   // Service worker registration + update lifecycle — never wired into
   // embed's own entry point (see vite.config.ts).
@@ -268,6 +298,20 @@ export function App() {
   const banner = saveMessage ? (
     <div className="app-banner" role="alert">
       {saveMessage}
+    </div>
+  ) : storageRecovery ? (
+    <div className="app-banner app-banner-action" role="alert">
+      <span>
+        Your saved systems are temporarily unavailable. Nothing was replaced; retry when browser
+        storage is available again.
+      </span>
+      <button
+        type="button"
+        className="ghost-btn"
+        onClick={() => setBootstrapAttempt((attempt) => attempt + 1)}
+      >
+        Try again
+      </button>
     </div>
   ) : loadError ? (
     <div className="app-banner" role="alert">
@@ -317,6 +361,22 @@ export function App() {
       </button>
     </div>
   ) : null;
+
+  if (!ready) {
+    return (
+      <div className="app" data-zen={uiHidden || undefined}>
+        <div className="absolute inset-x-0 top-3 z-20 flex justify-center px-3">
+          <div className="max-w-[560px]">
+            {banner ?? (
+              <div className="app-banner" role="status" aria-live="polite">
+                Opening your saved systems…
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     // data-zen cascades to every opted-in chrome element via CSS attribute
@@ -395,7 +455,13 @@ export function App() {
       )}
       {activeDialog === 'systems' && (
         <LazyDialog onFailure={dialogFailed}>
-          <SystemsDialog onClose={closeDialog} onCorrupt={() => setNotice(corruptOpenNotice)} />
+          <SystemsDialog
+            onClose={closeDialog}
+            onCorrupt={() => setNotice(corruptOpenNotice)}
+            flushPendingSave={flushPendingSave}
+            recordSaveOutcome={recordSaveOutcome}
+            discardPendingSave={discardPendingSave}
+          />
         </LazyDialog>
       )}
       {activeDialog === 'settings' && (

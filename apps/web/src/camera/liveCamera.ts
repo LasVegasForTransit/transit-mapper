@@ -17,7 +17,7 @@ import { DEFAULT_VIEWPORT, type Viewport } from '@transitmapper/core/model/syste
 // reaching into MapLibre — and so a sensible value exists before the map has
 // emitted its first move. The saved `system.viewport` becomes the PERSISTED
 // camera, synced from this holder only at serialize points (see
-// camera/cameraPersistence.ts and currentCameraViewport below).
+// storage/persistenceCoordinator.ts and currentCameraViewport below).
 //
 // A module-level holder (not a store/context) is the right shape here: there is
 // exactly one live map per session (same rationale as map/mapRef.ts), and the
