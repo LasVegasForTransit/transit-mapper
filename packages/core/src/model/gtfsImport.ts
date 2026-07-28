@@ -9,7 +9,7 @@ import { shortId } from './ids';
 import { deriveServiceLevels, type DerivedServiceLevel } from './gtfsSchedule';
 import { defaultProfileFor, makeOneWay } from './profile';
 import { wayType } from './catalog';
-import { nearestOnPath, resolveWayPath, wholeLeg, oneSection } from './geo';
+import { haversineMeters, nearestOnPath, resolveWayPath, wholeLeg, oneSection } from './geo';
 import type { LngLat, Pattern, Service, Station, Way } from './system';
 
 export interface GtfsImportResult {
@@ -99,12 +99,105 @@ export interface GtfsFiles {
   frequencies?: string;
 }
 
+/** How far a pair's facing terminals may sit apart and still be the two ends
+ *  of one line. A couplet loops round a block at each end, so this is a block.
+ *  Not measured against a real feed yet — RTC Southern Nevada's is the one to
+ *  check it against before trusting it on anything but obvious pairs. */
+const SHAPE_PAIR_TERMINAL_M = 400;
+
+/** A short-turn shares a terminal with the full run it shortens, so only
+ *  length tells them apart. */
+const SHAPE_PAIR_LENGTH_TOLERANCE = 0.25;
+
+export interface ShapePairing {
+  /** Shapes that are the two directions of one path. */
+  couplets: { outbound: string; inbound: string }[];
+  /** Shapes with no opposite number — a branch, a short-turn, a one-way loop.
+   *  Each becomes its own undivided pattern, exactly as every shape did. */
+  singles: string[];
+}
+
+/**
+ * Which of a route's shapes are the two directions of one path.
+ *
+ * GTFS says a route runs shapes; it never says which two are a pair. Two facts
+ * together do, and neither alone is enough. `direction_id` splits the trips
+ * into the route's two directions, but a route with four shapes has two per
+ * direction and pairing them arbitrarily marries a short-turn to a full run.
+ * A pair's geometry is each other's reverse — one shape ends where the other
+ * begins, at both ends — but two genuinely different branches share a terminal
+ * too.
+ *
+ * So: bucket by direction_id, order each bucket busiest-first (the same "the
+ * dominant variant is the real one" reasoning as gtfsSchedule's
+ * dominantServiceId), and greedily pair on facing endpoints plus similar total
+ * length. A feed with no direction_id pairs nothing, which is what this did
+ * before and the only honest reading of it.
+ */
+export function pairRouteShapes(
+  shapeIds: string[],
+  shapePaths: Map<string, LngLat[]>,
+  shapeDirection: Map<string, string>,
+  shapeTripCount: Map<string, number>,
+): ShapePairing {
+  const buckets = new Map<string, string[]>();
+  for (const id of shapeIds) {
+    const dir = shapeDirection.get(id) ?? '';
+    if (!buckets.has(dir)) buckets.set(dir, []);
+    buckets.get(dir)!.push(id);
+  }
+  const dirs = [...buckets.keys()];
+  // One bucket means the feed never said which direction anything runs.
+  if (dirs.length !== 2) return { couplets: [], singles: [...shapeIds] };
+
+  const byTrips = (a: string, b: string) =>
+    (shapeTripCount.get(b) ?? 0) - (shapeTripCount.get(a) ?? 0);
+  const left = [...buckets.get(dirs[0])!].sort(byTrips);
+  const right = [...buckets.get(dirs[1])!].sort(byTrips);
+
+  const lengthOf = (id: string) => {
+    const path = shapePaths.get(id) ?? [];
+    let m = 0;
+    for (let i = 1; i < path.length; i++) m += haversineMeters(path[i - 1], path[i]);
+    return m;
+  };
+  const facingGap = (a: string, b: string): number | null => {
+    const pa = shapePaths.get(a);
+    const pb = shapePaths.get(b);
+    if (!pa || !pb || pa.length < 2 || pb.length < 2) return null;
+    return haversineMeters(pa[pa.length - 1], pb[0]) + haversineMeters(pb[pb.length - 1], pa[0]);
+  };
+
+  const couplets: ShapePairing['couplets'] = [];
+  const taken = new Set<string>();
+  for (const a of left) {
+    let best: { id: string; gap: number } | null = null;
+    for (const b of right) {
+      if (taken.has(b)) continue;
+      const gap = facingGap(a, b);
+      if (gap === null || gap > 2 * SHAPE_PAIR_TERMINAL_M) continue;
+      const la = lengthOf(a);
+      const lb = lengthOf(b);
+      const longer = Math.max(la, lb);
+      if (longer > 0 && Math.abs(la - lb) / longer > SHAPE_PAIR_LENGTH_TOLERANCE) continue;
+      if (!best || gap < best.gap) best = { id: b, gap };
+    }
+    if (!best) continue;
+    taken.add(a);
+    taken.add(best.id);
+    couplets.push({ outbound: a, inbound: best.id });
+  }
+  return { couplets, singles: shapeIds.filter((id) => !taken.has(id)) };
+}
+
 interface GtfsIndex {
   routeById: Map<string, Record<string, string>>;
   stopById: Map<string, Record<string, string>>;
   shapePaths: Map<string, LngLat[]>;
   shapeToRoute: Map<string, string>;
   shapeToTrip: Map<string, string>;
+  shapeDirection: Map<string, string>;
+  shapeTripCount: Map<string, number>;
   stopTimesByTrip: Map<string, { seq: number; stopId: string }[]>;
   /** routeId -> its shapeIds, in the order first seen — the unit a batch is drawn from. */
   routeShapeIds: Map<string, string[]>;
@@ -149,10 +242,21 @@ function buildGtfsIndex(files: GtfsFiles): GtfsIndex {
   // representative stop sequence in every feed this needs to handle.
   const shapeToRoute = new Map<string, string>();
   const shapeToTrip = new Map<string, string>();
+  /** Which of the route's two directions a shape belongs to. gtfsSchedule.ts
+   *  already reads direction_id for headway maths and throws it away; kept
+   *  here because it is half of what says two shapes are one line. */
+  const shapeDirection = new Map<string, string>();
+  /** How many trips run each shape. The other half: a route has several shapes
+   *  per direction (detours, short-turns), and pairing without this marries a
+   *  short-turn to the full run back. */
+  const shapeTripCount = new Map<string, number>();
   for (const t of trips) {
-    if (!t.shape_id || !t.route_id || shapeToRoute.has(t.shape_id)) continue;
+    if (!t.shape_id || !t.route_id) continue;
+    shapeTripCount.set(t.shape_id, (shapeTripCount.get(t.shape_id) ?? 0) + 1);
+    if (shapeToRoute.has(t.shape_id)) continue;
     shapeToRoute.set(t.shape_id, t.route_id);
     shapeToTrip.set(t.shape_id, t.trip_id);
+    shapeDirection.set(t.shape_id, String(t.direction_id ?? ''));
   }
 
   const stopTimesByTrip = new Map<string, { seq: number; stopId: string }[]>();
@@ -172,6 +276,8 @@ function buildGtfsIndex(files: GtfsFiles): GtfsIndex {
   }
 
   return {
+    shapeDirection,
+    shapeTripCount,
     routeById,
     stopById,
     shapePaths,
@@ -208,9 +314,19 @@ function piecesForRoutes(
     const kind = classifyGtfsRouteType(Number(route.route_type));
 
     const patterns: Pattern[] = [];
-    for (const shapeId of shapeIds) {
+    // Two shapes that end where the other begins are the two directions of one
+    // line, not two branches of it. Importing them as branches is what this
+    // used to do, and it is wrong in a way that reads as right: the map draws
+    // both, and the fleet maths counts each as its own out-and-back.
+    const pairing = pairRouteShapes(
+      shapeIds,
+      index.shapePaths,
+      index.shapeDirection,
+      index.shapeTripCount,
+    );
+    const mintWay = (shapeId: string): string | null => {
       const points = index.shapePaths.get(shapeId);
-      if (!points || points.length < 2) continue;
+      if (!points || points.length < 2) return null;
       const wayId = shortId();
       wayIdByShape.set(shapeId, wayId);
       ways.push({
@@ -231,6 +347,26 @@ function piecesForRoutes(
         ),
         source: `gtfs:${shapeId}`,
       });
+      return wayId;
+    };
+
+    for (const { outbound, inbound } of pairing.couplets) {
+      const outWay = mintWay(outbound);
+      const backWay = mintWay(inbound);
+      if (!outWay || !backWay) continue;
+      // Both legs run their own shape in its own point order: each shape is
+      // already drawn start→finish of the trip it describes, and each direction
+      // of a split section is read in its OWN ride order. Writing the return
+      // leg backwards here is the tempting mistake, and it would drive the
+      // return trip the wrong way down its own street.
+      patterns.push({
+        id: shortId(),
+        sections: [{ kind: 'split', outbound: [wholeLeg(outWay)], inbound: [wholeLeg(backWay)] }],
+      });
+    }
+    for (const shapeId of pairing.singles) {
+      const wayId = mintWay(shapeId);
+      if (!wayId) continue;
       // A freshly minted shape way is traversed in its own point order,
       // end to end — the one case where direction and extent need no
       // derivation at all.
