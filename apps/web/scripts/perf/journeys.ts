@@ -29,6 +29,10 @@ interface BrowserEventTimingEntry extends PerformanceEntry {
   duration: number;
 }
 
+interface EventPerformanceObserverInit extends PerformanceObserverInit {
+  durationThreshold?: number;
+}
+
 interface CanvasGeometry {
   x: number;
   y: number;
@@ -85,29 +89,24 @@ async function beginGestureCapture(page: Page): Promise<void> {
     };
     (window as PerfPageWindow).__genericPerfGesture = state;
 
-    const recordEventTimings = (entries: BrowserEventTimingEntry[]): void => {
-      if (!state.active) return;
-      for (const entry of entries) {
-        if (entry.startTime < state.startedAt) continue;
-        state.eventTimings.push({
-          name: entry.name,
-          interactionId: entry.interactionId,
-          duration: entry.duration,
-          startTime: entry.startTime,
-        });
-      }
-    };
-    new PerformanceObserver((list) => {
-      recordEventTimings(list.getEntries() as BrowserEventTimingEntry[]);
-    }).observe({
-      type: 'event',
-      buffered: true,
-      durationThreshold: 16,
-    } as PerformanceObserverInit);
-    // first-input is not subject to Event Timing's 16 ms reporting threshold.
-    new PerformanceObserver((list) => {
-      recordEventTimings(list.getEntries() as BrowserEventTimingEntry[]);
-    }).observe({ type: 'first-input', buffered: true });
+    for (const observerOptions of [
+      { type: 'event', buffered: true, durationThreshold: 16 },
+      // first-input is not subject to Event Timing's 16 ms reporting threshold.
+      { type: 'first-input', buffered: true },
+    ] satisfies EventPerformanceObserverInit[]) {
+      new PerformanceObserver((list) => {
+        if (!state.active) return;
+        for (const entry of list.getEntries() as BrowserEventTimingEntry[]) {
+          if (entry.startTime < state.startedAt) continue;
+          state.eventTimings.push({
+            name: entry.name,
+            interactionId: entry.interactionId,
+            duration: entry.duration,
+            startTime: entry.startTime,
+          });
+        }
+      }).observe(observerOptions);
+    }
 
     (window as PerfPageWindow).__genericPerfFrame = function (now: number): void {
       if (!state.active) return;
@@ -242,8 +241,12 @@ async function performEntityDrag(
   await page.mouse.click(before.point.x, before.point.y);
   const selectedStationName = page.getByLabel('Station name');
   await selectedStationName.waitFor({ state: 'visible', timeout: 30_000 });
-  if ((await selectedStationName.inputValue()) !== entity.name) {
-    throw new Error('The projected fixture target did not resolve to the expected station.');
+  const selectedName = await selectedStationName.inputValue();
+  if (selectedName !== entity.name) {
+    throw new Error(
+      `The projected fixture target "${entity.name}" (${entity.id}) at ` +
+        `${before.point.x.toFixed(1)},${before.point.y.toFixed(1)} selected "${selectedName}".`,
+    );
   }
 
   await resetGestureCapture(page);
@@ -362,31 +365,42 @@ async function performDrawAndPersistenceProof(
     await page.mouse.click(canvas.x + canvas.width * ratio, drawY);
     await page.waitForTimeout(24);
   }
+  const commitRequestedAt = await page.evaluate(() => performance.now());
   await page.keyboard.press('Enter');
   const after = await page.evaluate((stationId) => {
     const snapshot = (window as PerfPageWindow).__perfStationSnapshot?.(stationId);
     if (!snapshot) throw new Error('The system seam disappeared after drawing.');
-    return { snapshot, committedAt: performance.now() };
+    return snapshot;
   }, entityId);
   await waitForResponsePaint(page);
-  if (!drawChangedSystem(before, after.snapshot)) {
+  if (!drawChangedSystem(before, after)) {
     throw new Error('The line draw did not advance the system revision and way count.');
   }
 
   // Include validation and the shared content/camera persistence debounce.
   await page.waitForTimeout(550);
-  await page.waitForFunction(
-    (committedAt) =>
-      (window as PerfPageWindow).__perfProductionPersistence?.cycles.some(
-        (cycle) =>
-          cycle.workerStartedAt >= committedAt &&
-          cycle.workerCompletedAt !== null &&
-          cycle.indexedDbStartedAt !== null &&
-          cycle.indexedDbCompletedAt !== null,
-      ) === true,
-    after.committedAt,
-    { timeout: 30_000 },
-  );
+  try {
+    await page.waitForFunction(
+      (committedAt) =>
+        (window as PerfPageWindow).__perfProductionPersistence?.cycles.some(
+          (cycle) =>
+            cycle.workerStartedAt >= committedAt &&
+            cycle.workerCompletedAt !== null &&
+            cycle.indexedDbStartedAt !== null &&
+            cycle.indexedDbCompletedAt !== null,
+        ) === true,
+      commitRequestedAt,
+      { timeout: 30_000 },
+    );
+  } catch (error) {
+    const cycles = await page.evaluate(
+      () => (window as PerfPageWindow).__perfProductionPersistence?.cycles ?? [],
+    );
+    throw new Error(
+      `The production persistence cycle did not settle: ${JSON.stringify(cycles)}. ` +
+        `${String(error)}`,
+    );
+  }
   const durable = await page.evaluate(
     async ({ expected, storage }) => {
       const cycle = [...((window as PerfPageWindow).__perfProductionPersistence?.cycles ?? [])]
@@ -437,7 +451,7 @@ async function performDrawAndPersistenceProof(
     },
     {
       expected: {
-        committedAt: after.committedAt,
+        committedAt: commitRequestedAt,
         systemId: `perf-${scenario.fixtureId}`,
       },
       storage: PERF_STORAGE_CONTRACT,
@@ -445,14 +459,14 @@ async function performDrawAndPersistenceProof(
   );
   if (
     !durable.stored ||
-    durable.stored.revision !== after.snapshot.revision ||
-    durable.stored.wayCount !== after.snapshot.wayCount
+    durable.stored.revision !== after.revision ||
+    durable.stored.wayCount !== after.wayCount
   ) {
     throw new Error('IndexedDB did not contain the committed line draw.');
   }
   return {
     persistence: {
-      saveMs: durable.cycle.indexedDbCompletedAt! - after.committedAt,
+      saveMs: durable.cycle.indexedDbCompletedAt! - commitRequestedAt,
       workerSerializationMs: durable.cycle.workerCompletedAt! - durable.cycle.workerStartedAt,
       indexedDbWriteMs: durable.cycle.indexedDbCompletedAt! - durable.cycle.indexedDbStartedAt!,
     },

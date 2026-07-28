@@ -262,13 +262,13 @@ export async function installPerformanceInstrumentation(page: Page): Promise<voi
       const nativeWorker = Worker;
       const nativePostMessage = Worker.prototype.postMessage;
       window.Worker = new Proxy(nativeWorker, {
-        construct: (target, argumentsList, newTarget) => {
+        construct(target, argumentsList, newTarget) {
           const worker = Reflect.construct(target, argumentsList, newTarget) as Worker;
           const options = argumentsList[1] as WorkerOptions | undefined;
           if (options?.name !== storage.serializerWorkerName) return worker;
           let cycle: BrowserProductionPersistenceCycle | null = null;
           worker.postMessage = new Proxy(nativePostMessage, {
-            apply: (postTarget, thisArgument, postArguments) => {
+            apply(postTarget, thisArgument, postArguments) {
               cycle = {
                 workerStartedAt: performance.now(),
                 workerCompletedAt: null,
@@ -290,7 +290,7 @@ export async function installPerformanceInstrumentation(page: Page): Promise<voi
     if (typeof IDBDatabase !== 'undefined') {
       const nativeTransaction = IDBDatabase.prototype.transaction;
       IDBDatabase.prototype.transaction = new Proxy(nativeTransaction, {
-        apply: (target, thisArgument, argumentsList) => {
+        apply(target, thisArgument, argumentsList) {
           const transaction = Reflect.apply(target, thisArgument, argumentsList) as IDBTransaction;
           const stores =
             typeof argumentsList[0] === 'string'

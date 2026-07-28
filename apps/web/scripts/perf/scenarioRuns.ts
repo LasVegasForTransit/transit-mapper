@@ -85,7 +85,9 @@ async function runSample(options: RunSampleOptions): Promise<PerfSample | undefi
       });
     }
     const startup = await collectStartupMetrics(page);
-    const target = fixture.stations[Math.floor(fixture.stations.length / 2)];
+    // Source-order tie breaking makes the final edge station deterministic
+    // even when thousands of low-zoom hit circles overlap in the RTC fixture.
+    const target = fixture.stations.at(-1);
     const entity = target?.name ? { id: target.id, name: target.name } : undefined;
     const gesture = await runMeasuredJourney(
       page,
