@@ -11,7 +11,13 @@
 // offset. See model/system.ts CrossSection and geo.ts offsetPolyline.
 
 import { laneKind } from '../model/catalog';
-import { offsetPolyline, resolveWayPath, serviceLaneOnWay } from '../model/geo';
+import {
+  offsetPolyline,
+  patternSegments,
+  resolveWayPath,
+  serviceLaneOnWay,
+  stitchPaths,
+} from '../model/geo';
 import { profileWidthM } from '../model/profile';
 import type { LaneDirection, LngLat, Pattern, Way } from '../model/system';
 
@@ -186,15 +192,14 @@ export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLane
 /**
  * The polyline a service actually rides along `pattern`'s full route — one
  * stitched lane centerline per way (via serviceLaneOnWay/wayLaneGeometry),
- * concatenated the same way patternPath stitches plain way centerlines (each
- * way contributes its own resolved order; only the first point of every
- * subsequent segment is dropped as the shared junction coordinate — no
- * per-way reversal needed, since a lane path is just resolveWayPath offset
- * sideways and inherits its way's exact point order). Untrimmed (junction
- * carve-back is Infrastructure-view rendering detail this ambient-vehicle
- * path doesn't need). Null if any way is missing or has no resolvable lane
- * (a lane-less profile) — callers fall back to patternPath's centerline,
- * matching buildFeatures' own per-way fallback.
+ * concatenated the same way patternPath stitches plain way centerlines. A lane
+ * path always follows its way's own stored point order, so it is reversed here
+ * for any way the pattern travels backward; without that, a pattern that
+ * enters a way at its last point stitched the lane on backward and drew a
+ * full-length teleport. Untrimmed (junction carve-back is Infrastructure-view
+ * rendering detail this ambient-vehicle path doesn't need). Null if any way is
+ * missing or has no resolvable lane (a lane-less profile) — callers fall back
+ * to patternPath's centerline, matching buildFeatures' own per-way fallback.
  *
  * Named distinctly from geometry/vehicleLane.ts's patternLanePath — that one
  * resolves the lane a service's VEHICLE dot/shape rides (mode-catalog
@@ -207,15 +212,18 @@ export function serviceLanePath(
   waysById: Map<string, Way>,
   modeId: string,
 ): LngLat[] | null {
-  const path: LngLat[] = [];
-  for (let i = 0; i < pattern.wayIds.length; i++) {
-    const way = waysById.get(pattern.wayIds[i]);
-    if (!way) return null;
-    const laneId = serviceLaneOnWay(pattern, i, waysById, modeId);
+  const segments = patternSegments(waysById, pattern);
+  // A way the pattern references but that couldn't be resolved is dropped by
+  // patternSegments; the contract here is all-or-nothing, so that's a null.
+  if (segments.length !== pattern.wayIds.length) return null;
+  const lanePaths: LngLat[][] = [];
+  for (const { way, forward, wayIndex } of segments) {
+    const laneId = serviceLaneOnWay(pattern, wayIndex, waysById, modeId);
     const lane = laneId ? wayLaneGeometry(way).lanes.find((l) => l.laneId === laneId) : undefined;
     if (!lane || lane.path.length < 2) return null;
-    path.push(...(path.length ? lane.path.slice(1) : lane.path));
+    lanePaths.push(forward ? lane.path : [...lane.path].reverse());
   }
+  const path = stitchPaths(lanePaths);
   return path.length >= 2 ? path : null;
 }
 
