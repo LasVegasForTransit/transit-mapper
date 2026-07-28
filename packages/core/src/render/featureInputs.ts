@@ -1,4 +1,4 @@
-import type { TransitSystem } from "../model/system";
+import type { TransitSystem } from '../model/system';
 
 // Which TransitSystem fields buildFeatures actually reads.
 //
@@ -38,36 +38,36 @@ import type { TransitSystem } from "../model/system";
 //   - `name` is rendered only on EXPORTS (render/svg.ts titles, legends), which
 //     build through their own call into buildFeatures rather than through this
 //     gate, so they are unaffected.
-export const FEATURE_INPUT_ROLE: Record<keyof TransitSystem, "render" | "meta"> = {
-  ways: "render",
-  services: "render",
-  stations: "render",
-  facilities: "render",
-  groups: "render",
-  nodes: "render",
-  namedWays: "render",
+export const FEATURE_INPUT_ROLE: Record<keyof TransitSystem, 'render' | 'meta'> = {
+  ways: 'render',
+  services: 'render',
+  stations: 'render',
+  facilities: 'render',
+  groups: 'render',
+  nodes: 'render',
+  namedWays: 'render',
   // Read by connectorCurves for the selected node's turn guides
   // (buildFeatures.ts, the connectors collection).
-  turnRestrictions: "render",
+  turnRestrictions: 'render',
 
-  version: "meta",
-  id: "meta",
-  name: "meta",
-  description: "meta",
-  viewport: "meta",
-  createdAt: "meta",
-  updatedAt: "meta",
-  vehicleKinds: "meta",
-  palette: "meta",
-  drivingSide: "meta",
-  medians: "meta",
-  approachControls: "meta",
+  version: 'meta',
+  id: 'meta',
+  name: 'meta',
+  description: 'meta',
+  viewport: 'meta',
+  createdAt: 'meta',
+  updatedAt: 'meta',
+  vehicleKinds: 'meta',
+  palette: 'meta',
+  drivingSide: 'meta',
+  medians: 'meta',
+  approachControls: 'meta',
 };
 
 // Derived from the table above rather than written out a second time, so the
 // two can never disagree.
 const RENDER_INPUT_KEYS = (Object.keys(FEATURE_INPUT_ROLE) as (keyof TransitSystem)[]).filter(
-  (key) => FEATURE_INPUT_ROLE[key] === "render",
+  (key) => FEATURE_INPUT_ROLE[key] === 'render',
 );
 
 /** Whether anything buildFeatures reads differs between two systems.

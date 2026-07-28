@@ -728,7 +728,12 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       setMap(null);
       map.remove();
     };
-  }, [store, openShortcuts, toggleUi]);
+    // setViewMode is a useState setter from ViewProvider, and React guarantees
+    // those keep their identity for the life of the component. Naming it here
+    // therefore cannot retrigger this effect — which matters, because this
+    // effect's cleanup calls map.remove(), so a retrigger would tear down and
+    // rebuild the whole MapLibre map.
+  }, [store, openShortcuts, toggleUi, setViewMode]);
 
   return <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />;
 }
