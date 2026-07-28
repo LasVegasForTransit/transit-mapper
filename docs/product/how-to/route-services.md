@@ -86,8 +86,37 @@ tell you so.
 
 ## Direction and one-way streets
 
-Routing treats ways as traversable in both directions for now;
-direction-aware routing that respects one-way profiles is on the roadmap
-(the lane model already stores everything it needs). One-way ways a service
-runs over display travel-direction chevrons in the Network view, so couplet
-routings read correctly even before the router enforces them.
+Routing respects one-way profiles. A line cannot be routed against traffic:
+draw from the far end of a one-way street back toward its start and the route
+goes round the block instead, along whatever legally connects the two points.
+Where nothing legal exists, drawing and adoption still give you the line rather
+than swallowing the click, with the offending stretches flagged.
+
+One-way ways a service runs over display travel-direction chevrons in the
+Network view.
+
+Turn restrictions are not enforced yet, so a route may still make a turn a
+junction's lane connectors forbid.
+
+## Split a line into two one-way paths
+
+A downtown couplet — the outward trip up one street, the return down the next
+one over — is one line with two directions, not two lines.
+
+1. Select the line and open the inspector's **Route** tab.
+2. Click **Draw a separate return path**. The draft starts at the far end of
+   the outward trip.
+3. Trace the return along the streets it actually runs, back toward the start.
+4. Finish the draft.
+
+The stretch the return parallels becomes a two-direction section; everything
+before the point where the return rejoins stays shared. The Route tab then
+lists both stop sequences, since the two directions call at different stops.
+
+**Make it run both ways on one street** undoes it, keeping the streets the
+outward trip ran.
+
+Two things behave differently on a line like this. Trimming it back cuts both
+directions, finding the matching point on the return's own street. Adopting
+existing infrastructure refuses, because it replaces a pattern's whole path
+with one routed line and would silently discard the direction you drew.

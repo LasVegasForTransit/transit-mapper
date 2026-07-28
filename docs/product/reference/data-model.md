@@ -120,36 +120,72 @@ from the way family's catalog noun.
 
 A `Service` is a colored route: `name`, `modeId` (mode catalog), `color`,
 and one or more `Pattern`s. A plain line has one pattern; two or more model
-branches sharing the service's identity ("via Airport").
+branches sharing the service's identity ("via Airport"). Still branches, not
+directions — the two directions of one path are two readings of a single
+pattern, because they share a stop list, a headway and a fleet, which two
+branches do not.
 
-A pattern is an ordered list of `PatternLeg`s — one per way it runs over:
+A pattern's path is a list of sections, ordered along outbound travel, each
+holding legs — one leg per way it runs over:
 
 ```ts
+interface Pattern {
+  id: string;
+  sections: PatternSection[];
+  name?: string;
+}
+
+type PatternSection =
+  | { kind: 'shared'; legs: PatternLeg[] }
+  | { kind: 'split'; outbound: PatternLeg[]; inbound: PatternLeg[] }
+  | { kind: 'turnaround'; legs: PatternLeg[] };
+
 interface PatternLeg {
   wayId: string;
-  forward: boolean;
-  fromT?: number;
-  toT?: number;
-  laneId?: string;
+  direction: 'withPoints' | 'againstPoints';
+  extent: { kind: 'whole' } | { kind: 'stretch'; fromT: number; toT: number };
+  lane: { kind: 'auto' } | { kind: 'pinned'; laneId: string };
 }
 ```
 
-`forward` is which direction the pattern travels the way, relative to that
-way's own point order. `fromT`/`toT` are where it joins and leaves, as
-normalized arc-length along the way's resolved path — the same convention as
-`Station.anchor.t`, measured along the way rather than along travel, so
-`forward` remains the only thing that says which direction. Both are omitted
-when the pattern uses the whole way, which is the common case. `laneId` pins
-which lane it rides; unset resolves the default (see `defaultLaneFor`).
+Two axes meet here and confusing them is the mistake the naming exists to
+prevent. `direction` is about a **way**: which end of that way's own stored
+point order the leg is entered at. A section's kind is about a **line**: which
+of its two directions of service ride that stretch at all.
 
-Extents are what let a service cover part of a way. Before v10 a pattern
-named whole ways only, so a line that started or stopped mid-block was made
-to fit by splitting the way underneath it — which mutated that way for every
-other line riding it and left a permanent fragment behind.
+The outbound direction reads the sections in order, taking `legs` or
+`outbound`. The inbound direction reads them in reverse, taking `legs` or
+`inbound`, reversed within each section and each leg's travel direction
+flipped. A plain line is a single `shared` section, so its return trip is its
+outward trip reversed — which is what every line was before v12.
 
-Consecutive legs must meet; `validateSystem` reports a pattern whose route
-has a gap in it, because a leg list can express one where a bare way list
-could not.
+`split` is a one-way couplet: the outward trip up one street, the return down
+another. `turnaround` is ridden once, where the vehicle reverses — a loop round
+a block at a terminus, belonging to neither direction.
+
+Sections rather than a per-leg direction tag, because a tag in one flat array
+makes an inbound-only leg's _position_ load-bearing: place it after a shared
+leg it should precede and the return path reads discontinuous, with nothing in
+the type to say which spelling was meant. A couplet at the end of a line
+survives either spelling; a couplet in the middle does not.
+
+`extent` is where the leg joins and leaves its way, as normalized arc-length
+along that way's resolved path — the same convention as `Station.anchor.t`,
+measured along the way rather than along travel, so `direction` remains the
+only thing that says which way round. Extents are what let a service cover part
+of a way. Before v10 a pattern named whole ways only, so a line that started or
+stopped mid-block was made to fit by splitting the way underneath it — which
+mutated that way for every other line riding it and left a permanent fragment
+behind.
+
+`lane` pins which lane the leg rides; `auto` resolves the default at render
+time (see `defaultLaneFor`), which is distinct from a pin that happens to name
+today's default — re-profiling the street moves the first and leaves the second.
+
+Consecutive legs must meet **within a direction**; `validateSystem` walks each
+direction separately and reports a gap in either. A couplet's two halves are a
+street apart on purpose, so a single walk across both would call every couplet
+broken.
 
 Scheduling stays at the level of headways rather than timetables. These are
 what the simulation runs on — see [The simulation](../explanation/simulation.md):

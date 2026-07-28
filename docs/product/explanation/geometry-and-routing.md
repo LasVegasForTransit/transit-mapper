@@ -86,5 +86,33 @@ has vertices at way endpoints and junction-referenced points — consecutive
 spans already meet at a genuinely shared coordinate. Only a route's own two
 ends can land mid-way.
 
-Routing currently treats ways as bidirectional; honoring one-way profiles
-is the natural next step, since the profile already encodes direction.
+Routing honors one-way profiles. The graph reads each way's traversal from its
+lane directions and pushes only the edges that traversal permits, so a two-way
+street still gets both and a system with no one-way ways routes exactly as it
+did. Two places create traversals and both are gated: a way's own segment
+edges, and the four edges spliced in for an anchor that landed mid-block.
+
+The same-way shortcut hands off to the graph rather than refusing. Two points
+on a one-way street are still connected — by going round the block and back up
+its couplet twin — and refusing there is what would make a couplet undrawable.
+
+Callers choose how hard the rule bites. Drawing and adoption ask for
+`preferLegal`, because a bare refusal is indistinguishable from a missed click:
+they get the line with its wrong-way stretches marked. Import asks for `legal`,
+because a GTFS shape already knows its direction and a miss should fall through
+to fresh geometry.
+
+That flag is feedback for the gesture in progress and nothing persists it — a
+street made one-way _under_ an existing line never grows one. The durable
+answer has to recompute from the profile.
+
+Turn restrictions are still ignored. Honoring them needs vertex identity to
+become `(arrivingWayId, nodeId)` — an edge-expanded graph, multiplying vertices
+by junction degree and rewriting both the search state and the walk-back. That
+is a bigger change than one-way routing and should not ride along with it.
+
+A route may now cover the same way twice, as long as the two visits do not
+overlap in the same direction. Out along a street and back up a later block of
+it is ordinary, and it is what routing round a couplet produces. What stays
+rejected is two spans covering the same stretch the same way round, which would
+draw one line twice and count the stations under it twice.

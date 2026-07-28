@@ -78,6 +78,17 @@ headway behind run _i_ — including across the wrap from the last run back to
 the first, which is the seam that spacing vehicles evenly around a loop gets
 wrong.
 
+The round trip is the outward trip **plus** the return, not twice either. Each
+direction carries its own timetable, measured against its own path, because a
+one-way couplet's return trip is a different street with its own length and its
+own stops. For a line that comes back the way it went the two are equal and the
+round trip is exactly twice the one-way time, so nothing about such a line
+changed when this stopped being assumed.
+
+That is also why a returning vehicle's position is walked forward along the
+return path rather than counted down the outward one. There is no single ruler
+both directions can be measured against once they are different ground.
+
 The leftover time isn't a fudge factor. It's recovery time: a vehicle sitting
 at the end of the line before starting back, which is what actually happens.
 Every line gets at least two minutes of it, and longer lines get more.

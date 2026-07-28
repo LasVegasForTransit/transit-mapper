@@ -47,7 +47,9 @@ This phase makes a shared TransitMapper link work well anywhere it's pasted, and
   week from their last view, which keeps a map alive while people are reading it — but a system
   worth keeping shouldn't depend on someone happening to open it.
 - **An installable app.** Add TransitMapper to your home screen like a native app.
-- **Direction-aware routing.** Services respect one-way lanes instead of routing against traffic.
+- **Turn restrictions in routing.** Services respect a junction's lane connectors, not just each
+  street's direction. One-way routing and one-way couplets have shipped; this is the piece of
+  direction-aware routing still outstanding.
 - **Junction visuals.** Rounded curb returns and painted approach arrows at intersections.
 - **Richer OSM import.** Pull real lane counts and turn restrictions from map data, beyond plain
   street geometry.
