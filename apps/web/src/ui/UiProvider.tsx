@@ -49,6 +49,18 @@ interface ImportProgressState {
 
 const ImportProgressContext = createContext<ImportProgressState | null>(null);
 
+/** Where the map's action menu is open, in viewport pixels, or null. Its own
+ *  context for the same reason as import progress: every always-mounted
+ *  useUi() consumer would otherwise re-render each time a menu opens or
+ *  closes, and none of them care where the cursor was. */
+interface ContextMenuState {
+  contextMenuAt: { x: number; y: number } | null;
+  openContextMenu: (x: number, y: number) => void;
+  closeContextMenu: () => void;
+}
+
+const ContextMenuContext = createContext<ContextMenuState | null>(null);
+
 interface UiProviderProps {
   children: ReactNode;
 }
@@ -58,6 +70,9 @@ export function UiProvider({ children }: UiProviderProps) {
   const [uiHidden, setUiHidden] = useState(false);
   const [activeDialog, setActiveDialog] = useState<DialogName | null>(null);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
+  const [contextMenuAt, setContextMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const openContextMenu = useCallback((x: number, y: number) => setContextMenuAt({ x, y }), []);
+  const closeContextMenu = useCallback(() => setContextMenuAt(null), []);
   const openShortcuts = useCallback(() => setShortcutsOpen(true), []);
   const closeShortcuts = useCallback(() => setShortcutsOpen(false), []);
   const toggleUi = useCallback(() => setUiHidden((h) => !h), []);
@@ -89,10 +104,16 @@ export function UiProvider({ children }: UiProviderProps) {
     () => ({ importProgress, setImportProgress }),
     [importProgress],
   );
+  const contextMenuValue = useMemo<ContextMenuState>(
+    () => ({ contextMenuAt, openContextMenu, closeContextMenu }),
+    [contextMenuAt, openContextMenu, closeContextMenu],
+  );
   return (
     <UiContext.Provider value={value}>
       <ImportProgressContext.Provider value={importProgressValue}>
-        {children}
+        <ContextMenuContext.Provider value={contextMenuValue}>
+          {children}
+        </ContextMenuContext.Provider>
       </ImportProgressContext.Provider>
     </UiContext.Provider>
   );
@@ -101,6 +122,12 @@ export function UiProvider({ children }: UiProviderProps) {
 export function useUi(): UiState {
   const ctx = useContext(UiContext);
   if (!ctx) throw new Error('useUi must be used within <UiProvider>');
+  return ctx;
+}
+
+export function useContextMenu(): ContextMenuState {
+  const ctx = useContext(ContextMenuContext);
+  if (!ctx) throw new Error('useContextMenu must be used within <UiProvider>');
   return ctx;
 }
 

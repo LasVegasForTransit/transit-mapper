@@ -19,6 +19,7 @@ import { attachCameraPersistence } from './camera/cameraPersistence';
 import { withLiveCamera } from './camera/liveCamera';
 import { Icon } from './ui/Icon';
 import { ImportProgressPill } from './ui/ImportProgressPill';
+import { MapContextMenu } from './ui/MapContextMenu';
 import { Inspector } from './ui/Inspector';
 import { LinesPanel } from './ui/LinesPanel';
 import { SimControls, SimControlsCompact } from './ui/SimControls';
@@ -314,6 +315,11 @@ export function App() {
   return (
     <div className="app">
       {ready && <MapCanvas onBasemapUnavailable={() => setNotice(basemapNotice)} />}
+      {/* Outside the chrome, like the banner above: right-clicking still has
+          to offer its actions when the UI is hidden, since hiding the panels
+          is exactly when the menu is the only way to reach them. */}
+      <MapContextMenu />
+
       {/* Outside the chrome on purpose. This used to live in a Workbench
           slot, which meant hiding the UI with `\` also hid a failing
           autosave — the one message that must never be gated by a

@@ -4,7 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEditorStore } from '../editor/EditorProvider';
 import type { SimCommands } from '../editor/keymap';
 import { useSim, useSimClock } from '../ui/SimProvider';
-import { useUi } from '../ui/UiProvider';
+import { useContextMenu, useUi } from '../ui/UiProvider';
 import { useView } from '../ui/ViewProvider';
 import { BASEMAP_STYLE } from './basemap';
 import { attachInteractions } from './interactions';
@@ -91,6 +91,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const store = useEditorStore();
   const { openShortcuts, toggleUi } = useUi();
+  const { openContextMenu } = useContextMenu();
   const { viewMode, setViewMode, visibleModes, visibleWayTypes, showLandmarks } = useView();
   // Created once by SimProvider and injected into the animation loop below,
   // the same way the editor store is — the loop is imperative and lives
@@ -619,6 +620,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         sim: simCommands,
         isDiagramMode: () => viewRef.current.viewMode === 'diagram',
         isNetworkMode: () => viewRef.current.viewMode === 'network',
+        openContextMenu,
         // Footprints only render in the Infrastructure view — switch there
         // and zoom in, or a newly-drawn complex would be invisible right
         // where the user just drew it (the original bug report this fixes).
@@ -767,7 +769,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // session, and simCommands is a ref-held façade whose identity never
     // changes (it reads the live handlers through simCommandsRef). All are
     // listed because the effect genuinely closes over them.
-  }, [store, openShortcuts, toggleUi, setViewMode, simClock, simCommands]);
+  }, [store, openShortcuts, toggleUi, openContextMenu, setViewMode, simClock, simCommands]);
 
   return <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />;
 }

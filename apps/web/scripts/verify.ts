@@ -5620,6 +5620,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
         isDiagramMode: () => false,
         isNetworkMode: () => true,
         focusFootprint() {},
+        openContextMenu() {},
       });
       const added: number[] = [];
       let x = 400;
@@ -5695,6 +5696,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
         isDiagramMode: () => false,
         isNetworkMode: () => false,
         focusFootprint() {},
+        openContextMenu() {},
       });
 
       // Two presses lay a way running due east, which gives it a heading for
@@ -5755,6 +5757,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
         isDiagramMode: () => false,
         isNetworkMode: () => false,
         focusFootprint() {},
+        openContextMenu() {},
       });
 
       press(map, { x: 400, y: 300 });

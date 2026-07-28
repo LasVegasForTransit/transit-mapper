@@ -133,6 +133,10 @@ export interface AttachInteractionsOptions {
    *  existing compatible infrastructure when a press lands on it (snap-to-
    *  streets line drawing) instead of laying new geometry. */
   isNetworkMode: () => boolean;
+  /** Open the map's action menu at these viewport pixels. Called for a right
+   *  CLICK that placed no node and finished no draw — a right DRAG still
+   *  pans, so this never fires mid-gesture. */
+  openContextMenu: (x: number, y: number) => void;
 }
 
 /**
@@ -304,7 +308,7 @@ export function attachInteractions(
         // later press and read as "drawing is broken").
         if (st.routeDraft) st.commitRouteDraft();
         else if (st.activeWayId) st.finishWay();
-        else st.select(null);
+        else openMenuAt(ev);
       }
     };
     map.on('mousemove', onMove);
@@ -1613,6 +1617,50 @@ export function attachInteractions(
       e.preventDefault();
       finishStationLandDraft();
     }
+  };
+
+  /** What a right-click at this point is about, resolved exactly the way a
+   *  left click resolves what to select — the two must agree, or right-
+   *  clicking a line would offer actions for the street under it. */
+  const rightClickTarget = (e: MapMouseEvent): MultiSelectItem | null => {
+    const hit = featureAt(e, [
+      LYR_STATIONS,
+      LYR_FACILITIES,
+      LYR_HANDLES,
+      ...SERVICE_LAYERS,
+      ...WAY_LAYERS,
+    ]);
+    if (!hit) return null;
+    if (hit.layer.id === LYR_STATIONS) return { kind: 'station', id: hit.properties.id as string };
+    if (hit.layer.id === LYR_FACILITIES)
+      return { kind: 'facility', id: hit.properties.id as string };
+    if (hit.layer.id === LYR_HANDLES) return { kind: 'way', id: hit.properties.wayId as string };
+    if (WAY_LAYERS.includes(hit.layer.id)) return { kind: 'way', id: hit.properties.id as string };
+    return { kind: 'service', id: hit.properties.serviceId as string };
+  };
+
+  /**
+   * Open the action menu for a right-click that neither panned nor finished a
+   * draw. This is the slot that used to just clear the selection.
+   *
+   * Right-clicking something already in the selection keeps that whole
+   * selection, which is what makes "shift-click two lines, right-click either
+   * one, merge" work. Right-clicking anything else selects it first, because
+   * acting on what was selected a minute ago instead of what the cursor is
+   * pointing at is how a menu earns a reputation for being dangerous.
+   */
+  const openMenuAt = (e: MapMouseEvent) => {
+    const st = store.getState();
+    const target = rightClickTarget(e);
+    if (!target) {
+      st.select(null);
+      st.clearMultiSelection();
+      return;
+    }
+    const inGroup = st.multiSelection.some((i) => i.kind === target.kind && i.id === target.id);
+    const isSelected = st.selection?.kind === target.kind && st.selection.id === target.id;
+    if (!inGroup && !isSelected) st.select(target);
+    opts.openContextMenu(e.originalEvent.clientX, e.originalEvent.clientY);
   };
 
   const onContextMenu = (ev: Event) => ev.preventDefault();
