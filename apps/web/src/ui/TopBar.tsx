@@ -122,6 +122,9 @@ export function TopBarActions() {
       <span className="act-secondary">
         <IconButton icon="keyboard" onClick={openShortcuts} label="Keyboard shortcuts (?)" />
       </span>
+      <span className="act-secondary">
+        <IconButton icon="play" onClick={() => openDialog('onboarding')} label="Replay intro" />
+      </span>
       {readOnly ? (
         <>
           <span className="ro-badge act-secondary">

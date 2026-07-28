@@ -255,11 +255,17 @@ import { claimOutcome, retainedShares } from '@transitmapper/core/share/claim';
 // fake can be installed after the import rather than before it.
 import {
   deleteFromLibrary,
+  hasSeenOnboarding,
   listLibrary,
   loadSystemEntry,
+  markOnboardingSeen,
   migrateLegacySingleSlot,
   saveToLibrary,
 } from '../src/storage/localStore';
+import {
+  ONBOARDING_FIXTURE_SYSTEM,
+  ONBOARDING_PATTERN_STATS,
+} from '../src/ui/onboarding/fixtureSystem';
 
 let failures = 0;
 function check(name: string, cond: boolean) {
@@ -10032,6 +10038,32 @@ function buildGrid() {
   check(
     'a failed delete leaves the system listed rather than half-removed',
     listLibrary().some((e) => e.id === 'stuck'),
+  );
+
+  // The onboarding dialog's one-time flag — a plain boolean, but a bug here
+  // means either "never shows" or "shows every launch forever."
+  reset();
+  check('a fresh browser has not seen onboarding', hasSeenOnboarding() === false);
+  markOnboardingSeen();
+  check('seen persists', hasSeenOnboarding() === true);
+  reset();
+  storage.options.failWrites = 'denied';
+  check('unavailable storage reads as not-seen, not a throw', hasSeenOnboarding() === false);
+  storage.options.failWrites = null;
+}
+
+// --- onboarding fixture (ui/onboarding/fixtureSystem.ts) ---
+// The one system every onboarding slide's live preview renders. A bad
+// fixture (a dangling leg, an orphaned station) would only ever surface as a
+// silent blank preview in the dialog — nothing else exercises this data.
+{
+  check(
+    'the onboarding fixture is a real, valid system',
+    validateSystem(ONBOARDING_FIXTURE_SYSTEM).length === 0,
+  );
+  check(
+    "the fixture's one pattern actually measures to a real run",
+    ONBOARDING_PATTERN_STATS.plan !== null && ONBOARDING_PATTERN_STATS.meters > 0,
   );
 }
 

@@ -2242,6 +2242,83 @@ kbd {
   min-width: 0;
 }
 
+/* ---- onboarding dialog ---- */
+.onboarding-modal {
+  width: 480px;
+}
+.onboarding-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+.onboarding-copy {
+  font-size: var(--fs-body-md);
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+.onboarding-single-preview {
+  width: 100%;
+  height: 220px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.onboarding-tri-preview {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.onboarding-tri-preview-item {
+  flex: 1;
+  height: 120px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+/* No explicit height here: this class is always combined on the same
+   element as .onboarding-single-preview/.onboarding-tri-preview-item (see
+   OnboardingPreviewMap's className merge), and a same-specificity height
+   declared here would win the cascade over theirs — collapsing the map to
+   whatever height:100% resolves to against an unsized flex parent, which is
+   nothing. Their explicit pixel heights are the only ones that should apply. */
+.onboarding-preview-map {
+  width: 100%;
+}
+.onboarding-icons {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  color: var(--text-muted);
+}
+.onboarding-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+.onboarding-dots {
+  display: flex;
+  gap: 8px;
+}
+.onboarding-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+.onboarding-dot.active {
+  background: var(--text);
+}
+
 .insp-field {
   margin-top: 8px;
 }
