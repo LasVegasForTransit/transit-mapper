@@ -23,6 +23,7 @@ import {
   patternRunSegments,
 } from '../model/geo';
 import { nearWaysForStations, servicesByWay, visibleWaysFor } from './featureMemo';
+import { mergeAdjacentServiceLines } from './mergeServiceLines';
 import { directionalLanes, isOneWay, wayCapacity } from '../model/profile';
 import { wayIntersectsBounds, wayLaneGeometry } from '../geometry/streets';
 import {
@@ -1213,7 +1214,7 @@ function projectTopologyFeatures({
 
   return {
     ways,
-    services,
+    services: mergeAdjacentServiceLines(services),
     lanes,
     laneMarkings,
     laneArrows,
