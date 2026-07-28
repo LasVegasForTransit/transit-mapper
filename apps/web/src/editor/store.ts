@@ -90,6 +90,7 @@ import {
 } from '@transitmapper/core/model/system';
 import { withoutAlreadyImported, type ImportedNetwork } from '@transitmapper/core/model/import';
 import type {
+  RunDirection,
   PatternSection,
   CrossSection,
   DrivingSide,
@@ -509,6 +510,16 @@ export interface EditorState {
    *  service's id, or null when the cut lands on a terminus and there is
    *  nothing to split. */
   splitServiceAt: (serviceId: string, patternId: string, wayId: string, t: number) => string | null;
+  /** Stop calling at a station in ONE direction, or call there again. Only
+   *  meaningful on a stretch both directions ride: where they ride different
+   *  ways the stop derivation already tells them apart. */
+  setStopSkipped: (
+    serviceId: string,
+    patternId: string,
+    run: RunDirection,
+    stationId: string,
+    skipped: boolean,
+  ) => void;
   /** Start drawing this pattern's return path, from the far end of its
    *  outward trip. The draft routes direction-aware like any other, and
    *  committing it turns the covered stretch into a one-way couplet. */
@@ -3135,6 +3146,38 @@ export function createEditorStore() {
                     ...sv,
                     patterns: sv.patterns.map((p) => (p.id === patternId ? { ...p, sections } : p)),
                   },
+            ),
+          }),
+        };
+      }),
+
+    setStopSkipped: (serviceId, patternId, run, stationId, skipped) =>
+      set((s) => {
+        const service = s.system.services.find((sv) => sv.id === serviceId);
+        const pattern = service?.patterns.find((p) => p.id === patternId);
+        if (!pattern) return {};
+        const current = new Set(pattern.skippedStops?.[run] ?? []);
+        if (skipped) current.add(stationId);
+        else current.delete(stationId);
+        // Dropped to absent rather than left as an empty list, so a pattern
+        // nobody has skipped anything on serializes the way it always did.
+        const next: Partial<Record<RunDirection, string[]>> = {
+          ...pattern.skippedStops,
+          [run]: [...current],
+        };
+        for (const key of ['outbound', 'inbound'] as const) {
+          if ((next[key] ?? []).length === 0) delete next[key];
+        }
+        const { skippedStops: _drop, ...bare } = pattern;
+        const updated =
+          Object.keys(next).length > 0 ? { ...bare, skippedStops: next } : (bare as typeof pattern);
+        return {
+          system: touch({
+            ...s.system,
+            services: s.system.services.map((sv) =>
+              sv.id !== serviceId
+                ? sv
+                : { ...sv, patterns: sv.patterns.map((p) => (p.id === patternId ? updated : p)) },
             ),
           }),
         };
