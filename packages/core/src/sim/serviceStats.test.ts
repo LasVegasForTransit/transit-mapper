@@ -14,7 +14,10 @@ import {
 } from '../model/geo';
 import { aPattern, aRoad, aStation } from '../testing/fixtures';
 import { dwellStopsForPattern, patternStats, patternStops } from './serviceStats';
+import type { VehicleMotionProfile } from './timetable';
 import type { Pattern } from '../model/system';
+
+const profile: VehicleMotionProfile = { speedMps: 15, accelMps2: 2, decelMps2: 2 };
 
 const road = aRoad('w', [
   [-115.2, 36.1],
@@ -63,8 +66,8 @@ describe('a line terminating mid-block', () => {
   });
 
   it('reports a shorter round trip than the whole street', () => {
-    const half = patternStats(ways, allStations, halfStreet, 15)!;
-    const whole = patternStats(ways, allStations, wholeStreet, 15)!;
+    const half = patternStats(ways, allStations, halfStreet, profile)!;
+    const whole = patternStats(ways, allStations, wholeStreet, profile)!;
     expect(half.meters).toBeLessThan(whole.meters);
     expect(half.stops.map((s) => s.station.id)).toEqual(['west', 'middle']);
   });
@@ -72,25 +75,28 @@ describe('a line terminating mid-block', () => {
 
 describe('what a line amounts to', () => {
   it('reports a round trip of exactly twice the one-way time', () => {
-    const stats = patternStats(ways, allStations, wholeStreet, 15)!;
+    const stats = patternStats(ways, allStations, wholeStreet, profile)!;
     expect(stats.roundTripMs).toBe(2 * stats.oneWayMs);
   });
 
-  it('counts dwell as time standing still, on top of travel', () => {
-    const stats = patternStats(ways, allStations, wholeStreet, 15)!;
-    const moving = patternStats(ways, [], wholeStreet, 15)!;
+  it('counts dwell as time standing still, on top of travel — and each stop costs more than that alone', () => {
+    const stats = patternStats(ways, allStations, wholeStreet, profile)!;
+    const moving = patternStats(ways, [], wholeStreet, profile)!;
     expect(stats.dwellMs).toBe(60_000);
-    expect(stats.oneWayMs).toBe(moving.oneWayMs + stats.dwellMs);
+    // Splitting one leg into several doesn't just add the dwell: each stop
+    // also makes the vehicle brake to rest and accelerate again, which a
+    // single unbroken leg never has to do.
+    expect(stats.oneWayMs).toBeGreaterThan(moving.oneWayMs + stats.dwellMs);
   });
 
   it('hands back the path it measured, for callers placing positions on it', () => {
-    const stats = patternStats(ways, allStations, wholeStreet, 15)!;
+    const stats = patternStats(ways, allStations, wholeStreet, profile)!;
     expect(stats.cumLengths[stats.cumLengths.length - 1]).toBeCloseTo(stats.meters, 6);
     expect(pathLengthMeters(stats.path)).toBeCloseTo(stats.meters, 6);
   });
 
   it('claims nothing about a line whose ways resolve to no path', () => {
-    expect(patternStats([], allStations, wholeStreet, 15)).toBeNull();
+    expect(patternStats([], allStations, wholeStreet, profile)).toBeNull();
   });
 });
 

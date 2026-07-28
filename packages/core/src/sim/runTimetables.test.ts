@@ -10,9 +10,14 @@
 
 import { describe, expect, it } from 'vitest';
 import { planService, runStateAt } from './fleet';
-import { buildTimetable, metersAtElapsed, roundTripMs } from './timetable';
+import {
+  buildTimetable,
+  metersAtElapsed,
+  roundTripMs,
+  type VehicleMotionProfile,
+} from './timetable';
 
-const SPEED = 10; // m/s, so 1 km takes 100 s
+const SPEED: VehicleMotionProfile = { speedMps: 10, accelMps2: 2, decelMps2: 2 }; // m/s, so 1 km takes just over 100 s
 
 const out = buildTimetable(1000, [], SPEED);
 /** A return trip half again as long — the couplet loops a longer way back. */

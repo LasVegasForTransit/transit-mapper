@@ -206,9 +206,10 @@ import {
 } from '@transitmapper/core/sim/serviceStats';
 import {
   buildTimetable,
+  DEFAULT_MOTION_PROFILE,
   metersAtElapsed,
-  VEHICLE_SPEED_MPS,
   roundTripMs as runRoundTripMs,
+  type VehicleMotionProfile,
 } from '@transitmapper/core/sim/timetable';
 import {
   activeSchedule,
@@ -8545,61 +8546,96 @@ function buildGrid() {
   check('station markers paint above footprints', above('tm-stations', 'tm-footprints-fill'));
 }
 
-// --- dwell-time timetable math (vehicles.ts) — the vehicle animation walks
-// this instead of a plain distance/speed triangle wave once a pattern has
-// stops, so a vehicle actually pauses at each station instead of gliding
-// through it. ---
+// --- dwell-time and kinematic timetable math (vehicles.ts) — the vehicle
+// animation walks this instead of a plain distance/speed triangle wave, so a
+// vehicle actually pauses at each station instead of gliding through it, and
+// ramps up/down at the ends of each leg instead of snapping straight to top
+// speed. ---
 {
-  const totalMeters = 1100;
-  // No stops: pure constant-velocity travel, same as the old triangle wave.
-  const noStops = buildTimetable(totalMeters, []);
-  check(
-    'no-stop timetable is pure travel time',
-    noStops.oneWayMs === (totalMeters / VEHICLE_SPEED_MPS) * 1000,
-  );
-  check('no-stop position is linear in elapsed time', metersAtElapsed(noStops, 50000) === 550);
+  // Round numbers chosen so accel/cruise/decel boundaries fall on clean
+  // times and distances: top speed 10 m/s, 2 m/s² accelerating (5000ms/25m
+  // to reach it), 5 m/s² braking (2000ms/10m to shed it).
+  const profile: VehicleMotionProfile = { speedMps: 10, accelMps2: 2, decelMps2: 5 };
+  const totalMeters = 1000;
 
-  // One stop halfway (550m in), dwelling 20s.
-  const halfwayMs = (550 / VEHICLE_SPEED_MPS) * 1000; // 50000ms to reach it
-  const oneStop = buildTimetable(totalMeters, [{ distMeters: 550, dwellMs: 20000 }]);
+  // No stops: one leg, long enough to reach cruise speed. 25m accelerating +
+  // 965m cruising + 10m braking.
+  const noStops = buildTimetable(totalMeters, [], profile);
+  check('a leg long enough to cruise still ends exactly on distance', noStops.oneWayMs === 103500);
   check(
-    'timetable adds the dwell on top of travel time',
-    oneStop.oneWayMs === (totalMeters / VEHICLE_SPEED_MPS) * 1000 + 20000,
+    'still accelerating partway through the ramp-up',
+    metersAtElapsed(noStops, 2500, profile) === 6.25,
   );
   check(
-    'still approaching the stop reads as mid-travel',
-    metersAtElapsed(oneStop, halfwayMs - 10000) === 440,
+    'reaches top speed exactly where the accelerating distance says it should',
+    metersAtElapsed(noStops, 5000, profile) === 25,
   );
   check(
-    'mid-dwell holds position at the stop',
-    metersAtElapsed(oneStop, halfwayMs + 10000) === 550,
+    'cruising at top speed covers ground linearly',
+    metersAtElapsed(noStops, 55000, profile) === 525,
   );
   check(
-    'travel resumes after the dwell ends',
-    metersAtElapsed(oneStop, halfwayMs + 20000 + 10000) === 660,
+    'braking for the final stop, one second out',
+    metersAtElapsed(noStops, 102500, profile) === 997.5,
+  );
+  check(
+    "the full one-way time reaches the path's end, at rest",
+    metersAtElapsed(noStops, 103500, profile) === totalMeters,
+  );
+
+  // One stop halfway (500m in), dwelling 20s — two identical 500m legs either
+  // side of it, each 53500ms (5000 accelerating + 46500 cruising + 2000
+  // braking).
+  const oneStop = buildTimetable(totalMeters, [{ distMeters: 500, dwellMs: 20000 }], profile);
+  check('the dwell adds on top of travel time for both legs', oneStop.oneWayMs === 127000);
+  check(
+    'still approaching the stop reads as mid-brake',
+    metersAtElapsed(oneStop, 52500, profile) === 497.5,
+  );
+  check('mid-dwell holds position at the stop', metersAtElapsed(oneStop, 63500, profile) === 500);
+  check(
+    'travel resumes after the dwell ends, accelerating from rest again',
+    metersAtElapsed(oneStop, 76000, profile) === 506.25,
   );
   check(
     "the full one-way time reaches the path's end",
-    metersAtElapsed(oneStop, oneStop.oneWayMs) === totalMeters,
+    metersAtElapsed(oneStop, oneStop.oneWayMs, profile) === totalMeters,
   );
 
-  // A timetable BUILT at a custom speed must be WALKED at that same speed.
-  // vehicles.ts used to build with the vehicle kind's speed but integrate at
-  // the module default, so a fast kind ran out of path partway through its leg
-  // and sat clamped at the terminal, and a slow one never arrived at all.
-  const fastSpeed = 22; // twice VEHICLE_SPEED_MPS
-  const fast = buildTimetable(totalMeters, [{ distMeters: 550, dwellMs: 20000 }], fastSpeed);
+  // A leg too short to ever reach top speed — the case this whole model
+  // exists for: closely-spaced stops where a vehicle used to snap straight to
+  // its rated top speed. Symmetric 2 m/s² both ways over an 8m leg peaks at
+  // just 4 m/s, a fraction of this profile's 10 m/s top speed.
+  const shortHopProfile: VehicleMotionProfile = { speedMps: 10, accelMps2: 2, decelMps2: 2 };
+  const shortHop = buildTimetable(8, [], shortHopProfile);
+  check('a leg too short to reach top speed still completes', shortHop.oneWayMs === 4000);
+  check(
+    "naive constant-top-speed timing would have already arrived — the fix means it hasn't",
+    metersAtElapsed(shortHop, 800, shortHopProfile) < 8,
+  );
+  check(
+    'the peak of a too-short leg sits at its midpoint, by symmetry',
+    metersAtElapsed(shortHop, 2000, shortHopProfile) === 4,
+  );
+
+  // A timetable BUILT at a custom profile must be WALKED at that same
+  // profile. vehicles.ts used to build with the vehicle kind's speed but
+  // integrate at the module default, so a fast kind ran out of path partway
+  // through its leg and sat clamped at the terminal, and a slow one never
+  // arrived at all.
+  const fastProfile: VehicleMotionProfile = { speedMps: 20, accelMps2: 2, decelMps2: 5 };
+  const fast = buildTimetable(totalMeters, [{ distMeters: 500, dwellMs: 20000 }], fastProfile);
   check(
     'a faster vehicle kind covers the same path in less time',
     fast.oneWayMs < oneStop.oneWayMs,
   );
   check(
     'a faster vehicle kind covers more ground in the same elapsed time',
-    metersAtElapsed(fast, 10000, fastSpeed) === 220,
+    metersAtElapsed(fast, 10000, fastProfile) === 100,
   );
   check(
-    "walking a timetable at the speed it was built with lands exactly on the path's end",
-    metersAtElapsed(fast, fast.oneWayMs, fastSpeed) === totalMeters,
+    "walking a timetable at the profile it was built with lands exactly on the path's end",
+    metersAtElapsed(fast, fast.oneWayMs, fastProfile) === totalMeters,
   );
 }
 
@@ -8621,8 +8657,10 @@ function buildGrid() {
     unassigned.widthM === busDefault.widthM && unassigned.lengthM === busDefault.lengthM,
   );
   check(
-    "an unassigned service resolves to the app's default speed",
-    unassigned.speedMps === VEHICLE_SPEED_MPS,
+    "an unassigned service resolves to the app's default motion profile",
+    unassigned.profile.speedMps === DEFAULT_MOTION_PROFILE.speedMps &&
+      unassigned.profile.accelMps2 === DEFAULT_MOTION_PROFILE.accelMps2 &&
+      unassigned.profile.decelMps2 === DEFAULT_MOTION_PROFILE.decelMps2,
   );
 
   const sysWithKind: TransitSystem = {
@@ -8635,6 +8673,8 @@ function buildGrid() {
         widthM: 2.6,
         lengthM: 18,
         topSpeedKmh: 72,
+        accelMps2: 0.9,
+        decelMps2: 2.1,
       },
     ],
   };
@@ -8648,20 +8688,26 @@ function buildGrid() {
   );
   check(
     "an assigned service's top speed converts km/h to m/s",
-    Math.abs(assigned.speedMps - 20) < 1e-9,
+    Math.abs(assigned.profile.speedMps - 20) < 1e-9,
+  );
+  check(
+    "an assigned service uses its vehicle kind's own acceleration and deceleration",
+    assigned.profile.accelMps2 === 0.9 && assigned.profile.decelMps2 === 2.1,
   );
 
-  const kindNoSpeed: TransitSystem = {
+  const kindNoMotion: TransitSystem = {
     ...sysNoKinds,
-    vehicleKinds: [{ id: 'evk2', modeId: 'bus', label: 'No speed set', widthM: 3, lengthM: 20 }],
+    vehicleKinds: [{ id: 'evk2', modeId: 'bus', label: 'No motion set', widthM: 3, lengthM: 20 }],
   };
-  const assignedNoSpeed = effectiveVehicleKind(kindNoSpeed.vehicleKinds, {
+  const assignedNoMotion = effectiveVehicleKind(kindNoMotion.vehicleKinds, {
     ...busService,
     vehicleKindId: 'evk2',
   });
   check(
-    "an assigned kind with no topSpeedKmh falls back to the app's default speed",
-    assignedNoSpeed.speedMps === VEHICLE_SPEED_MPS,
+    'an assigned kind with no motion fields falls back to the app defaults for each independently',
+    assignedNoMotion.profile.speedMps === DEFAULT_MOTION_PROFILE.speedMps &&
+      assignedNoMotion.profile.accelMps2 === DEFAULT_MOTION_PROFILE.accelMps2 &&
+      assignedNoMotion.profile.decelMps2 === DEFAULT_MOTION_PROFILE.decelMps2,
   );
 
   const danglingRef = effectiveVehicleKind(sysNoKinds.vehicleKinds, {
@@ -9993,24 +10039,28 @@ function buildGrid() {
 // The point of this module: a line set to "every 10 minutes" must actually
 // serve its stops every 10 minutes. These checks are that promise.
 {
-  const speed = VEHICLE_SPEED_MPS; // 11 m/s
   const totalMeters = 11_000; // 11 km one way
-  const oneWayMs = (totalMeters / speed) * 1000; // 1,000,000 ms
-  const roundTripMs = 2 * oneWayMs;
-  const headwayMs = 10 * 60_000;
-  const timetable = buildTimetable(totalMeters, [], speed);
+  const timetable = buildTimetable(totalMeters, [], DEFAULT_MOTION_PROFILE);
   // A line that comes back the way it went: both directions are the same
   // timetable, which is what makes the round trip exactly twice the one-way
   // time and every number below unchanged from before directions existed.
   const timetables = { outbound: timetable, inbound: timetable };
+  // 16,500ms ramping (9,166.67ms accelerating at 1.2 m/s², 7,333.33ms braking
+  // at 1.5 m/s², covering 90.75m between them) + 991,750ms cruising the
+  // remaining 10,909.25m — see the kinematics block above for how a leg's
+  // time is built from its ramps.
+  const oneWayMs = timetable.oneWayMs; // 1,008,250 ms
+  const roundTripMs = 2 * oneWayMs;
+  const headwayMs = 10 * 60_000;
   const plan = planService(roundTripMs, headwayMs);
   check(
     'a line that returns the way it came has a round trip of exactly twice one way',
     runRoundTripMs(timetables) === roundTripMs,
   );
 
-  // Round trip 2,000,000 ms + a 100,000 ms minimum layover = 2,100,000, which
-  // is 3.5 headways — so four vehicles, and a 40-minute cycle.
+  // Round trip 2,016,500 ms + a 120,000 ms minimum layover (5% of the round
+  // trip is only 100,825ms, short of the floor) = 2,136,500, which is 3.56
+  // headways — so four vehicles, and a 40-minute cycle.
   check('fleet size is the round trip plus layover over the headway, rounded up', plan.fleet === 4);
   check('cycle time is a whole number of headways', plan.cycleMs === plan.fleet * headwayMs);
   check(
@@ -10022,15 +10072,26 @@ function buildGrid() {
     plan.layoverMs === (plan.cycleMs - roundTripMs) / 2,
   );
 
-  // THE check. A stop 4.4 km along the line is reached 400,000 ms into an
-  // outbound run; run i departs i headways later, so it should be there at
-  // exactly that time — which makes successive vehicles exactly one headway
-  // apart at that stop.
+  // THE check. A stop 4.4 km along the line — well past the ~50m ramp-up, so
+  // it's reached during the cruise phase — is reached at a computable time
+  // into an outbound run; run i departs i headways later, so it should be
+  // there at exactly that time — which makes successive vehicles exactly one
+  // headway apart at that stop.
   const stopMeters = 4_400;
-  const reachedAtMs = (stopMeters / speed) * 1000;
+  const accelDist =
+    (DEFAULT_MOTION_PROFILE.speedMps * DEFAULT_MOTION_PROFILE.speedMps) /
+    (2 * DEFAULT_MOTION_PROFILE.accelMps2);
+  const accelMs = (DEFAULT_MOTION_PROFILE.speedMps / DEFAULT_MOTION_PROFILE.accelMps2) * 1000;
+  const reachedAtMs = accelMs + ((stopMeters - accelDist) / DEFAULT_MOTION_PROFILE.speedMps) * 1000;
   let everyRunOnTime = true;
   for (let i = 0; i < plan.fleet; i++) {
-    const state = runStateAt(i * headwayMs + reachedAtMs, timetables, plan, i, speed);
+    const state = runStateAt(
+      i * headwayMs + reachedAtMs,
+      timetables,
+      plan,
+      i,
+      DEFAULT_MOTION_PROFILE,
+    );
     if (Math.abs(state.distMeters - stopMeters) > 1e-6 || state.phase !== 'outbound')
       everyRunOnTime = false;
   }
@@ -10039,19 +10100,37 @@ function buildGrid() {
   // The wrap is where even spacing gets it wrong: after the last vehicle, the
   // next one along is the first vehicle again, and it must arrive one headway
   // later — not after whatever is left of the cycle.
-  const afterLast = runStateAt(plan.fleet * headwayMs + reachedAtMs, timetables, plan, 0, speed);
+  const afterLast = runStateAt(
+    plan.fleet * headwayMs + reachedAtMs,
+    timetables,
+    plan,
+    0,
+    DEFAULT_MOTION_PROFILE,
+  );
   check(
     'the headway holds across the wrap from the last vehicle back to the first',
     Math.abs(afterLast.distMeters - stopMeters) < 1e-6,
   );
 
   // The rest of the cycle.
-  const atFarTerminal = runStateAt(oneWayMs + plan.layoverMs / 2, timetables, plan, 0, speed);
+  const atFarTerminal = runStateAt(
+    oneWayMs + plan.layoverMs / 2,
+    timetables,
+    plan,
+    0,
+    DEFAULT_MOTION_PROFILE,
+  );
   check(
     'a vehicle waits out its layover at the far terminal',
     atFarTerminal.phase === 'layover' && atFarTerminal.distMeters === totalMeters,
   );
-  const returning = runStateAt(oneWayMs + plan.layoverMs + reachedAtMs, timetables, plan, 0, speed);
+  const returning = runStateAt(
+    oneWayMs + plan.layoverMs + reachedAtMs,
+    timetables,
+    plan,
+    0,
+    DEFAULT_MOTION_PROFILE,
+  );
   check(
     'the return leg passes the same stop from the other direction',
     // Measured along the RETURN path from its own start, not counted down the
@@ -10060,17 +10139,36 @@ function buildGrid() {
     // anything.
     returning.phase === 'inbound' && Math.abs(returning.distMeters - stopMeters) < 1e-6,
   );
-  const backHome = runStateAt(plan.cycleMs - plan.layoverMs / 2, timetables, plan, 0, speed);
+  const backHome = runStateAt(
+    plan.cycleMs - plan.layoverMs / 2,
+    timetables,
+    plan,
+    0,
+    DEFAULT_MOTION_PROFILE,
+  );
   check(
     'a vehicle finishes its cycle waiting at the terminal it started from',
     backHome.phase === 'layover' && backHome.distMeters === totalMeters,
   );
-  const wrapped = runStateAt(plan.cycleMs + reachedAtMs, timetables, plan, 0, speed);
+  const wrapped = runStateAt(
+    plan.cycleMs + reachedAtMs,
+    timetables,
+    plan,
+    0,
+    DEFAULT_MOTION_PROFILE,
+  );
   check('the cycle repeats exactly', Math.abs(wrapped.distMeters - stopMeters) < 1e-6);
+  // Tolerance, not exact equality: reachedAtMs is a repeating decimal (it
+  // covers the cruise-phase fraction of a leg), and cycleMs + reachedAtMs
+  // taken mod cycleMs isn't guaranteed to land on the same float, bit for
+  // bit, as -cycleMs + reachedAtMs mod cycleMs — floating-point modulo on a
+  // non-integer input, not a modeling concern.
   check(
     "a run's position doesn't depend on how many cycles have passed",
-    runStateAt(-plan.cycleMs + reachedAtMs, timetables, plan, 0, speed).distMeters ===
-      wrapped.distMeters,
+    Math.abs(
+      runStateAt(-plan.cycleMs + reachedAtMs, timetables, plan, 0, DEFAULT_MOTION_PROFILE)
+        .distMeters - wrapped.distMeters,
+    ) < 1e-6,
   );
 
   // Dwelling at intermediate stops still counts toward the round trip, so the
@@ -10082,7 +10180,7 @@ function buildGrid() {
       { distMeters: 4_400, dwellMs: 30_000 },
       { distMeters: 8_000, dwellMs: 30_000 },
     ],
-    speed,
+    DEFAULT_MOTION_PROFILE,
   );
   const slowerPlan = planService(
     runRoundTripMs({ outbound: withStops, inbound: withStops }),
@@ -10224,7 +10322,7 @@ function buildGrid() {
 
   // The map and the inspector must agree by construction: same stops, same
   // timetable, same plan.
-  const viaPattern = patternStats(ways, stations, svc.patterns[0], VEHICLE_SPEED_MPS, 10)!;
+  const viaPattern = patternStats(ways, stations, svc.patterns[0], DEFAULT_MOTION_PROFILE, 10)!;
   check(
     'per-pattern and per-service measurements agree',
     viaPattern.roundTripMs === stopped.longestRoundTripMs &&

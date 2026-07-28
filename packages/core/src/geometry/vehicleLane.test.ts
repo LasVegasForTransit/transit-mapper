@@ -19,7 +19,7 @@ import {
 } from '../model/geo';
 import { serviceLaneOnWay } from '../model/geo/serviceLane';
 import { planService, runStateAt } from '../sim/fleet';
-import { buildTimetable, roundTripMs } from '../sim/timetable';
+import { buildTimetable, roundTripMs, type VehicleMotionProfile } from '../sim/timetable';
 import { aPattern, aRoad } from '../testing/fixtures';
 import { wayLaneGeometry } from './streets';
 import { patternLanePath } from './vehicleLane';
@@ -105,7 +105,7 @@ describe('two runs of one light rail line', () => {
   it('never puts two vehicles in the same place at the same time', () => {
     const long = arterial('long', 36.05, 36.25); // ~22 km, enough for a fleet
     const linePattern = aPattern('p', [long], ['long']);
-    const speedMps = 15;
+    const profile: VehicleMotionProfile = { speedMps: 15, accelMps2: 2, decelMps2: 2 };
     const legs = {
       outbound: patternLanePath([long], linePattern, 'lightRail', 'outbound'),
       inbound: patternLanePath([long], linePattern, 'lightRail', 'inbound'),
@@ -115,8 +115,8 @@ describe('two runs of one light rail line', () => {
       inbound: cumulativeLengths(legs.inbound),
     };
     const timetables = {
-      outbound: buildTimetable(cum.outbound[cum.outbound.length - 1], [], speedMps),
-      inbound: buildTimetable(cum.inbound[cum.inbound.length - 1], [], speedMps),
+      outbound: buildTimetable(cum.outbound[cum.outbound.length - 1], [], profile),
+      inbound: buildTimetable(cum.inbound[cum.inbound.length - 1], [], profile),
     };
     const plan = planService(roundTripMs(timetables), 10 * 60_000);
     expect(plan.fleet).toBeGreaterThan(1); // otherwise there is nothing to hit
@@ -129,7 +129,7 @@ describe('two runs of one light rail line', () => {
         // direction names. This used to need rescaling from the outbound
         // ruler onto the return lane, which is the arithmetic that could not
         // survive the two directions being different lengths.
-        const { distMeters, run } = runStateAt(t, timetables, plan, i, speedMps);
+        const { distMeters, run } = runStateAt(t, timetables, plan, i, profile);
         points.push(pointAtDistance(legs[run], cum[run], distMeters));
       }
       for (let a = 0; a < points.length; a++)

@@ -105,7 +105,10 @@ Both are pure and memoized; nothing here is stored. See
 ## packages/core/src/sim/ — the vehicle-motion kernel
 
 - `timetable.ts` — builds a service's timetable from path length and dwell
-  stops, and answers where a vehicle sits after a given elapsed time. Plain
+  stops, and answers where a vehicle sits after a given elapsed time. Each leg
+  between stops is its own accelerate/cruise/decelerate move rather than an
+  instant jump to top speed — a closed-form calculation, so a leg too short
+  to reach top speed costs no more than one long enough to cruise. Plain
   numbers in, plain numbers out: no DOM, no MapLibre, no store, and no
   allocation beyond the return value.
 
