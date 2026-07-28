@@ -62,6 +62,8 @@ import {
   truncateLegs,
 } from '@transitmapper/core/model/patternEdits';
 import { materializeRouteSpans } from '@transitmapper/core/model/routeLegs';
+import type { SelectionRef } from '@transitmapper/core/model/selectionActions';
+import { throughRouteServices } from '@transitmapper/core/model/throughRoute';
 import { shortId } from '@transitmapper/core/model/ids';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import {
@@ -124,8 +126,13 @@ export type Selection =
 /** One member of a multi-select group — the "nudge this whole line" /
  *  "delete these five things together" set, kept separate from `Selection`
  *  (which stays one object, driving the Inspector) rather than trying to
- *  make one field do both jobs. */
-export type MultiSelectItem = { kind: 'way' | 'station' | 'facility'; id: string };
+ *  make one field do both jobs.
+ *
+ *  Declared in core as SelectionRef because the action registry takes a
+ *  selection as its input and core cannot import from this app. A member may
+ *  be a SERVICE as well as infrastructure — see deleteMultiSelection and
+ *  nudgeSelection, which each had to decide what that means. */
+export type MultiSelectItem = SelectionRef;
 
 const FOOTPRINT_HALF_SIZE_M = 30;
 // How far a drawn station footprint's center may sit from a way and still
@@ -367,7 +374,7 @@ export interface EditorState {
   // road-network topology
   /** Form real junctions wherever this way crosses same-grade ways
    *  mid-segment — see formCrossingJunctions' doc comment. */
-  formCrossingJunctions: (wayId: string) => void;
+  formCrossingJunctions: (wayId: string, onlyWithWayId?: string) => void;
   /** End-to-end inverse of splitWayAt — see mergeWays' doc comment. */
   mergeWays: (keepWayId: string, otherWayId: string) => void;
   /** Split a two-way way into two one-way carriageway ways around a median
@@ -449,6 +456,13 @@ export interface EditorState {
    *  deleted. No-op across different modes — a bus line and a rail line
    *  can't become branches of the same physical corridor. */
   mergeServiceInto: (sourceId: string, targetId: string) => void;
+  /** Join two lines that meet end to end into ONE continuous line, keeping
+   *  `keepId`'s identity — as opposed to mergeServiceInto, which makes them
+   *  two branches of one service. Returns false and changes nothing when the
+   *  modes differ, the ends don't meet, or no infrastructure connects them;
+   *  see core's throughRouteServices for why the last one refuses rather than
+   *  leaving a gap. */
+  throughRouteInto: (keepId: string, otherId: string) => boolean;
 
   // editing a line in pieces (see model/patternEdits.ts)
   /** Cut a line back so it terminates at position `t` on one of the ways it
@@ -1136,7 +1150,16 @@ function mergeWays(system: TransitSystem, keepId: string, otherId: string): Tran
  * surface street is an overpass, not an intersection. Newly created arms are
  * re-scanned, so a way crossing three streets forms all three junctions.
  */
-function formCrossingJunctions(system: TransitSystem, wayId: string): TransitSystem {
+function formCrossingJunctions(
+  system: TransitSystem,
+  wayId: string,
+  /** Restricts junction-forming to crossings with this one way. Undefined
+   *  means every way it crosses, which is what finishing a draw wants. An
+   *  explicit "connect these two streets" wants only the street the person
+   *  picked — otherwise selecting two roads that both cross a third would
+   *  quietly junction the third as well. */
+  onlyWithWayId?: string,
+): TransitSystem {
   let next = system;
   const queue: string[] = [wayId];
   let guard = 0; // hard stop far above any real drawing's crossing count
@@ -1156,6 +1179,7 @@ function formCrossingJunctions(system: TransitSystem, wayId: string): TransitSys
     let formed = false;
     for (const b of next.ways) {
       if (b.id === aId || b.grade !== a.grade || b.points.length < 2) continue;
+      if (onlyWithWayId && b.id !== onlyWithWayId) continue;
       if (!nearby.has(b.id)) continue;
       const crossings = wayCrossings(a, b);
       if (crossings.length === 0) continue;
@@ -1477,6 +1501,10 @@ function nudgeSelection(
   dx: number,
   dy: number,
 ): TransitSystem {
+  // A selected SERVICE contributes nothing here on purpose: a line has no
+  // geometry of its own to move, and dragging one would have to move the
+  // street under it — which also carries every other line on that street.
+  // Whoever wants that selects the way.
   const wayIds = new Set(items.filter((i) => i.kind === 'way').map((i) => i.id));
   let next = updateWayPointsBatch(system, wayIds, (pts) =>
     pts.map((p): LngLat => [p[0] + dx, p[1] + dy]),
@@ -1729,8 +1757,13 @@ export function createEditorStore() {
           if (item.kind === 'way') system = removeWay(system, item.id);
           else if (item.kind === 'station')
             system = { ...system, stations: system.stations.filter((st) => st.id !== item.id) };
-          else
+          else if (item.kind === 'facility')
             system = { ...system, facilities: system.facilities.filter((f) => f.id !== item.id) };
+          else
+            // Deleting a selected LINE takes the service and leaves the street
+            // it rode standing — the infrastructure is selectable in its own
+            // right, and nobody deleting a bus route means to demolish a road.
+            system = { ...system, services: system.services.filter((sv) => sv.id !== item.id) };
         }
         return { system: touch(system), multiSelection: [] };
       }),
@@ -2234,8 +2267,8 @@ export function createEditorStore() {
 
     setDrivingSide: (side) => set((s) => ({ system: touch({ ...s.system, drivingSide: side }) })),
 
-    formCrossingJunctions: (wayId) =>
-      set((s) => ({ system: formCrossingJunctions(s.system, wayId) })),
+    formCrossingJunctions: (wayId, onlyWithWayId) =>
+      set((s) => ({ system: formCrossingJunctions(s.system, wayId, onlyWithWayId) })),
 
     mergeWays: (keepWayId, otherWayId) =>
       set((s) => ({
@@ -2925,6 +2958,20 @@ export function createEditorStore() {
 
       if (absorbed > 0) set({ system: touch(sys), multiSelection: [], selection: null });
       return absorbed;
+    },
+
+    throughRouteInto: (keepId, otherId) => {
+      const next = throughRouteServices(get().system, keepId, otherId);
+      if (!next) return false;
+      set((s) => ({
+        system: touch(next),
+        multiSelection: [],
+        // The surviving line is what the person is now looking at, and the
+        // one they picked second no longer exists to be selected.
+        selection: { kind: 'service', id: keepId },
+        cameraFocusToken: s.cameraFocusToken,
+      }));
+      return true;
     },
 
     mergeServiceInto: (sourceId, targetId) =>

@@ -1,0 +1,35 @@
+// Composition root for selection actions: this is the one place that knows
+// which providers exist and in what order they offer.
+//
+// Registration order is menu order, so the merges come before the delete
+// rather than by accident of import order.
+
+import {
+  createSelectionActionRegistry,
+  type SelectionActionRegistry,
+} from '@transitmapper/core/model/selectionActions';
+import type { EditorStore } from '../store';
+import { commonActionProvider } from './commonActions';
+import { serviceActionProvider } from './serviceActions';
+import { wayActionProvider } from './wayActions';
+
+/**
+ * Build the registry for one editor store.
+ *
+ * Read-only mode is enforced here rather than inside each provider: every
+ * action offered by any provider mutates the system, so one wrapper is both
+ * shorter and impossible to forget when the next provider is written.
+ */
+export function createSelectionActions(store: EditorStore): SelectionActionRegistry {
+  const registry = createSelectionActionRegistry();
+  const whenEditable =
+    (provider: ReturnType<typeof wayActionProvider>) => (ctx: Parameters<typeof provider>[0]) =>
+      store.getState().readOnly ? [] : provider(ctx);
+
+  registry.register(whenEditable(wayActionProvider(store)));
+  registry.register(whenEditable(serviceActionProvider(store)));
+  registry.register(whenEditable(commonActionProvider(store)));
+  return registry;
+}
+
+export { blockedMergeNote } from './blockedNotes';

@@ -1,5 +1,6 @@
 import { useRef, type ReactNode } from 'react';
 import { useEditor } from '../editor/EditorProvider';
+import { useSelectionActions } from '../editor/useSelectionActions';
 import type { MultiSelectItem, Selection } from '../editor/store';
 import { Icon } from './Icon';
 import { NodeInspector } from './NodeInspector';
@@ -69,6 +70,7 @@ const MULTI_KIND_LABEL: Record<MultiSelectItem['kind'], string> = {
   way: 'way',
   station: 'station',
   facility: 'facility',
+  service: 'line',
 };
 
 interface MultiInspectorProps {
@@ -78,13 +80,16 @@ interface MultiInspectorProps {
 // Bulk actions only — moving/deleting several objects at once as one group,
 // not editing shared properties across mixed kinds (a way and a station have
 // nothing in common to show one merged form for).
+//
+// Which actions exist is not decided here: the registry answers that from the
+// selection, and this renders whatever came back. The same list is what the
+// map's right-click menu shows, so an action can never appear in one surface
+// and not the other.
 function MultiInspector({ items }: MultiInspectorProps) {
   const readOnly = useEditor((s) => s.readOnly);
   const clearMultiSelection = useEditor((s) => s.clearMultiSelection);
-  const deleteMultiSelection = useEditor((s) => s.deleteMultiSelection);
-  const mergeWaysIntoCorridor = useEditor((s) => s.mergeWaysIntoCorridor);
+  const { actions, note } = useSelectionActions();
 
-  const selectedWayIds = items.filter((i) => i.kind === 'way').map((i) => i.id);
   const counts = new Map<MultiSelectItem['kind'], number>();
   for (const item of items) counts.set(item.kind, (counts.get(item.kind) ?? 0) + 1);
   const summary = [...counts.entries()]
@@ -106,29 +111,31 @@ function MultiInspector({ items }: MultiInspectorProps) {
         </p>
       )}
 
-      {!readOnly && selectedWayIds.length > 1 && (
-        <>
-          <button
-            type="button"
-            className="ghost-btn"
-            style={{ width: '100%', justifyContent: 'center', marginBottom: 4 }}
-            title="Fuse these into one shared corridor wherever they run along each other"
-            onClick={() => {
-              const absorbed = mergeWaysIntoCorridor(selectedWayIds);
-              if (absorbed === 0)
-                window.alert(
-                  "These don't run along each other closely enough to be one corridor. Select ways that overlap, or move them together first.",
-                );
-            }}
-          >
-            Merge into one corridor
-          </button>
-          <p className="insp-sub" style={{ marginBottom: 12 }}>
-            For a map drawn before lines shared by default: the longest is kept and the others'
-            lines move onto it. Anything not actually running alongside is left alone.
-          </p>
-        </>
+      {note && (
+        <p className="insp-sub" style={{ marginBottom: 12 }}>
+          {note}
+        </p>
       )}
+
+      {actions
+        .filter((action) => action.group !== 'destructive')
+        .map((action) => (
+          <div key={action.id}>
+            <button
+              type="button"
+              className="ghost-btn"
+              style={{ width: '100%', justifyContent: 'center', marginBottom: 4 }}
+              onClick={action.run}
+            >
+              {action.label}
+            </button>
+            {action.hint && (
+              <p className="insp-sub" style={{ marginBottom: 12 }}>
+                {action.hint}
+              </p>
+            )}
+          </div>
+        ))}
 
       <button
         type="button"
@@ -138,11 +145,14 @@ function MultiInspector({ items }: MultiInspectorProps) {
       >
         Clear selection
       </button>
-      {!readOnly && (
-        <button type="button" className="danger-btn" onClick={deleteMultiSelection}>
-          <Icon name="trash" size={18} /> Delete {items.length} objects
-        </button>
-      )}
+      {!readOnly &&
+        actions
+          .filter((action) => action.group === 'destructive')
+          .map((action) => (
+            <button key={action.id} type="button" className="danger-btn" onClick={action.run}>
+              <Icon name="trash" size={18} /> {action.label}
+            </button>
+          ))}
     </Panel>
   );
 }

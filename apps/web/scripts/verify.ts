@@ -1,6 +1,8 @@
 // Deterministic verification of the editor/model logic without a browser.
 // Run with: node scripts/verify.ts  (or: npm run verify)
 import { createEditorStore } from '../src/editor/store';
+import { createSelectionActions } from '../src/editor/actions';
+import { validateSystemQuick } from '@transitmapper/core/model/validate';
 import { parseSystem, forkSystem, createEmptySystem } from '@transitmapper/core/model/serialize';
 import {
   FACILITY_TYPE_ORDER,
@@ -2166,6 +2168,107 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check(
     "…not the other selected way's path (they're shaped differently enough to tell apart)",
     Math.abs(actual[0] - wrongOnB[0]) > 1e-6 || Math.abs(actual[1] - wrongOnB[1]) > 1e-6,
+  );
+}
+
+// --- selecting LINES: services join the multi-select group, the action
+// registry offers what the geometry supports, and each action runs ---
+{
+  fresh();
+  // Two lines meeting nose to tail at [-115.15, 36.1].
+  const wayW = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(wayW, [-115.2, 36.1]);
+  store.getState().addWayPoint(wayW, [-115.15, 36.1]);
+  store.getState().finishWay();
+  const wayE = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(wayE, [-115.15, 36.1]);
+  store.getState().addWayPoint(wayE, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const [lineW, lineE] = store.getState().system.services.map((sv) => sv.id);
+
+  store.getState().toggleMultiSelect({ kind: 'service', id: lineW });
+  store.getState().toggleMultiSelect({ kind: 'service', id: lineE });
+  check('a service can be part of a multi-selection', store.getState().multiSelection.length === 2);
+
+  const registry = createSelectionActions(store);
+  const refs = store.getState().multiSelection;
+  const actionIds = registry
+    .actionsFor({ system: store.getState().system, refs })
+    .map((action) => action.id);
+  check(
+    'two lines that meet end to end are offered a through-route',
+    actionIds.includes('service.throughRoute'),
+  );
+  check(
+    'an action that applies to no selection is absent',
+    !actionIds.includes('way.mergeCorridor'),
+  );
+
+  const before = store.getState().system.services.length;
+  registry
+    .actionsFor({ system: store.getState().system, refs })
+    .find((action) => action.id === 'service.throughRoute')!
+    .run();
+  check(
+    'running the through-route leaves one line',
+    store.getState().system.services.length === before - 1,
+  );
+  check(
+    'the joined line runs both ways end to end',
+    store.getState().system.services[0].patterns[0].legs.length === 2,
+  );
+  check(
+    'the joined line has no gap for the validator to report',
+    validateSystemQuick(store.getState().system).every((i) => !i.id.startsWith('broken-pattern')),
+  );
+
+  // Nudging a group that holds a line leaves the line alone — a service has
+  // no geometry of its own to move.
+  fresh();
+  const road = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(road, [-115.2, 36.2]);
+  store.getState().addWayPoint(road, [-115.1, 36.2]);
+  store.getState().finishWay();
+  const line = store.getState().system.services[0].id;
+  store.getState().toggleMultiSelect({ kind: 'service', id: line });
+  const pointsBefore = JSON.stringify(
+    store.getState().system.ways.find((w) => w.id === road)!.points,
+  );
+  store.getState().nudgeMultiSelection(0.01, 0.01);
+  check(
+    'nudging a selected line moves no infrastructure',
+    JSON.stringify(store.getState().system.ways.find((w) => w.id === road)!.points) ===
+      pointsBefore,
+  );
+
+  store.getState().deleteMultiSelection();
+  check(
+    'deleting a selected line removes the service',
+    store.getState().system.services.length === 0,
+  );
+  check('…and leaves the street it rode standing', store.getState().system.ways.length === 1);
+}
+
+// --- connect at crossing: two streets drawn across each other with nothing
+// joining them get a real junction, and only with the way that was picked ---
+{
+  fresh();
+  const ns = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ns, [-115.2, 36.0]);
+  store.getState().addWayPoint(ns, [-115.2, 36.2]);
+  store.getState().finishWay();
+
+  const registry = createSelectionActions(store);
+  const refs = store.getState().multiSelection;
+  check(
+    'one selected way alone offers no merge',
+    !registry
+      .actionsFor({ system: store.getState().system, refs: [{ kind: 'way', id: ns }] })
+      .some((action) => action.id.startsWith('way.')),
+  );
+  check(
+    'an empty selection offers nothing at all',
+    registry.actionsFor({ system: store.getState().system, refs }).length === 0,
   );
 }
 
