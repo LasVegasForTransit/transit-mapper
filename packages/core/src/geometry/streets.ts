@@ -12,6 +12,7 @@
 
 import { laneKind } from '../model/catalog';
 import {
+  cumulativeLengths,
   offsetPolyline,
   patternSegments,
   resolveWayPath,
@@ -61,12 +62,11 @@ export interface WayLaneGeometry {
  *  consume the whole path. */
 export function trimPath(path: LngLat[], fromM: number, toM: number): LngLat[] {
   if ((fromM <= 0 && toM <= 0) || path.length < 2) return path;
-  const cum: number[] = [0];
-  for (let i = 1; i < path.length; i++) {
-    const dLng = (path[i][0] - path[i - 1][0]) * 111320 * Math.cos((path[i][1] * Math.PI) / 180);
-    const dLat = (path[i][1] - path[i - 1][1]) * 111320;
-    cum.push(cum[i - 1] + Math.hypot(dLng, dLat));
-  }
+  // Same metric as every other length in the pipeline. This used to measure
+  // with a flat-earth approximation of its own, so a junction trimmed back by
+  // "3 metres" was a slightly different three metres than the three the lane
+  // path it cut is measured in.
+  const cum = cumulativeLengths(path);
   const total = cum[cum.length - 1];
   const a = Math.max(0, fromM);
   const b = total - Math.max(0, toM);
