@@ -275,26 +275,6 @@ input {
   pointer-events: none;
 }
 
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 700;
-  font-size: var(--fs-title-sm);
-  letter-spacing: -0.02em;
-}
-/* The wordmark IS the File-menu trigger — file icon + "TransitMapper" as one
-   .btn-plain surface, so hovering anywhere on it highlights the whole unit.
-   Tighter left padding than .btn's 12px keeps the file glyph at (nearly) the
-   same inset the old icon-only 34px box centered it to, preserving
-   .panel-brand's edge-alignment math. */
-.brand-btn {
-  padding: 0 10px 0 8px;
-  gap: 8px;
-  font-weight: 700;
-  font-size: var(--fs-title-sm);
-  letter-spacing: -0.02em;
-}
 /* max-width here is load-bearing, not decorative: a CSS transition can't
    interpolate FROM the implicit default (max-width: none, a keyword) TO a
    length — confirmed live, that combination just snaps instantly, the same
@@ -343,15 +323,16 @@ input {
    its UA-default intrinsic size (the ~20-character default a text input
    gets absent a `size` attribute) rather than the CSS-capped 140px,
    leaving the "collapsed" card over 100px wider than it should be. A
-   definite `width`, not just a `max-width` ceiling, is what actually
-   pins a form control's contribution to that ancestor calculation.
-   Scoped through .panel-brand (3 selectors) rather than bare
-   `[data-zen] .system-name` (2) — needs to outrank .panel-brand
-   .system-name's own `width: 100%` below on specificity, not source
-   order, since both apply here and source order alone would have the
-   later, unrelated rule win. */
+   definite flex-basis, not just a `max-width` ceiling, is what actually
+   pins a form control's contribution to that ancestor calculation — same
+   fix as the flex-basis note on .panel-brand .system-name below, just
+   also turning off flex-grow so it doesn't re-expand to fill the
+   (measured, now much smaller) collapsed row. Scoped through .panel-brand
+   (3 selectors) rather than bare `[data-zen] .system-name` (2) — needs to
+   outrank .panel-brand .system-name's own flex-basis below on
+   specificity, not source order. */
 [data-zen] .panel-brand .system-name {
-  width: 140px;
+  flex: 0 1 140px;
 }
 .spacer {
   flex: 1;
@@ -867,19 +848,20 @@ input {
   padding: 12px 8px 8px;
   border-bottom: 1px solid var(--border);
 }
-/* flex-wrap:wrap is what makes this work now that Workbench.tsx's MenuCard
-   renders TopBarBrand's flat icon-row-then-name-input sequence directly
-   here (previously SidePanel split them into two explicit rows itself) —
-   .panel-brand .system-name's own width:100% (below) has nowhere to fit
-   next to the icons on the same line, so it wraps to its own full-width
-   line below them, reproducing the same two-row look without either
-   component needing to know about the other's layout. */
+/* One row, always — FileMenu icon, then the system name filling the
+   middle (flex-grow, capped by its own max-width), then the toggle. Never
+   wraps: FileMenu is icon-only in every state (see FileMenu.tsx) and the
+   toggle is a fixed 34px, so the only thing that ever changes size here
+   is the system name itself, which just grows or shrinks within the row
+   rather than forcing a second line. margin-left:auto on .brand-hide-ui
+   (below) is what actually pins the toggle to the row's far right edge —
+   not relied on here, so this row doesn't need to reason about leftover
+   space itself. */
 .panel-brand-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 /* .panel-brand is display:flex;flex-direction:column with align-items'
    default (stretch) untouched — every column-flex child stretches to the
@@ -892,16 +874,20 @@ input {
    width, confirmed live. align-self opts this one child out of the
    parent's stretch, same as .panel-head/.collapsible above already do in
    their own way, so the row (and the auto-width card measuring it)
-   actually hugs its content instead. system-name has a fixed 140px in
-   zen mode rather than the 100% that wrapping (still active) exists to
-   accommodate above, so nothing here still needs to wrap once collapsed
-   either way — nowrap just removes the now-pointless wrap opportunity. */
+   actually hugs its content instead. */
 [data-zen] .panel-brand-row {
   align-self: flex-start;
-  flex-wrap: nowrap;
 }
 [data-zen] .panel-brand {
   align-self: flex-start;
+}
+/* Pins the Hide-UI toggle to the row's far right edge directly, rather
+   than relying on justify-content to distribute leftover space across
+   every child — the one thing that has to be true regardless of how wide
+   FileMenu or the system name end up being on either side of it. */
+.brand-hide-ui {
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 .panel-brand-start {
   display: flex;
@@ -915,13 +901,15 @@ input {
   gap: 4px;
   flex: 0 0 auto;
 }
-.panel-brand .brand-name {
-  font-weight: 700;
-  font-size: var(--fs-title-sm);
-  letter-spacing: -0.02em;
-}
+/* flex-basis:128px, not flex:1's default 0% — a 0% basis reads as "I can
+   be arbitrarily small," and this is the one thing in the row that's
+   ever asked to grow, so it needs a real preferred size to grow FROM (see
+   the [data-zen] override below for the same reasoning applied to the
+   collapsed state's own, smaller basis). max-width caps how far it grows
+   in the open card, where there's real leftover width to fill. */
 .panel-brand .system-name {
-  width: 100%;
+  flex: 1 1 128px;
+  max-width: 320px;
 }
 
 /* ---- MenuCard ↔ zen mode's restore control, unified: this is the SAME
@@ -3056,21 +3044,9 @@ button.chip-removable-label:hover {
 .actions-collapsed .primary-btn .btn-label {
   display: none;
 }
-.mobile-topleft .brand {
-  display: none;
-}
-/* Unlike .brand above (the "TransitMapper" wordmark, redundant with the
-   File trigger on a narrow screen), the Hide-UI toggle stays: on mobile
-   it's the ONLY way to reach the toggle once zen mode has collapsed
-   TopBarActions' overflow menu below (the "Hide UI" entry there is where
-   this used to live exclusively) — see .zen-cluster's own comment. */
-/* Mobile keeps the File trigger but not the wordmark inside it — the
-   combined brand button collapses back to an icon-only square there. */
-.mobile-topleft .brand-btn {
-  padding: 0;
-  width: 34px;
-  justify-content: center;
-}
-.mobile-topleft .brand-btn .btn-label {
-  display: none;
-}
+/* FileMenu is icon-only in every state now (see FileMenu.tsx) — nothing
+   left here to hide on a narrow screen. The Hide-UI toggle itself was
+   already unconditionally visible on mobile: it's the ONLY way to reach
+   it once zen mode has collapsed TopBarActions' overflow menu below (the
+   "Hide UI" entry there is where this used to live exclusively) — see
+   .zen-cluster's own comment. */
