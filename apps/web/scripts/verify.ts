@@ -7930,6 +7930,13 @@ function buildGrid() {
   const origin: LngLat = [-115.2, 36.1];
   store.getState().setDraftMode('bus');
 
+  // Both lines are laid as DELIBERATELY separate infrastructure, which is the
+  // state a GTFS import arrives in — importGtfs mints one way per shape and
+  // never goes through finishWay, so nothing conflates them on the way in.
+  // Drawing them by hand would now share them at commit, which is the whole
+  // point of this test: reconcile is what fixes the mess an import leaves.
+  store.getState().setDraftSeparate(true);
+
   // Trunk: a long solo-way pattern, as a freshly-imported GTFS shape would be.
   const trunk = store.getState().beginWay('road', 'straight');
   store.getState().addWayPoint(trunk, offsetMeters(origin, 0, 0));
@@ -7943,6 +7950,7 @@ function buildGrid() {
   // (offset 3m, spanning only the middle 200m) — diverges at both ends by
   // simply not covering the trunk's outer stretches, the exact "shares a
   // trunk, doesn't share termini" shape this feature targets.
+  store.getState().setDraftSeparate(true);
   const shuttle = store.getState().beginWay('road', 'straight');
   store.getState().addWayPoint(shuttle, offsetMeters(origin, 100, 3));
   store.getState().addWayPoint(shuttle, offsetMeters(origin, 300, 3));
@@ -10705,6 +10713,115 @@ function buildGrid() {
   check(
     'a way spanning many cells still finds what sits in the middle of it',
     alongLong.has('far-100'),
+  );
+}
+
+// --- a line drawn along an existing one SHARES it ---
+// The complaint this feature exists for: two lines running down the same
+// street read as two separate streets. Drawing used to adopt an existing
+// corridor only when the very first press landed on it; every stroke after
+// that laid parallel geometry no matter how exactly it tracked what was
+// already there.
+{
+  fresh();
+  const origin: LngLat = [-115.2, 36.1];
+  store.getState().setDraftMode('bus');
+
+  const first = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(first, offsetMeters(origin, 0, 0));
+  store.getState().addWayPoint(first, offsetMeters(origin, 600, 0));
+  store.getState().finishWay();
+  check('the first line lays its own road', store.getState().system.ways.length === 1);
+
+  // A second line down the same street, started in empty space a few metres
+  // off the first — which is what a mouse actually produces.
+  const second = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(second, offsetMeters(origin, 100, 4));
+  store.getState().addWayPoint(second, offsetMeters(origin, 500, 4));
+  store.getState().finishWay();
+
+  const after = store.getState().system;
+  check('a second line down the same street lays no second road', after.ways.length === 1);
+  check('both lines exist as lines', after.services.length === 2);
+  check(
+    'the second line rides the road the first one laid',
+    after.services.every((sv) => sv.patterns.every((p) => p.legs.every((l) => l.wayId === first))),
+  );
+  check(
+    'it rides only the stretch it was drawn over, not the whole road',
+    after.services
+      .flatMap((sv) => sv.patterns)
+      .some((p) => p.legs.some((l) => l.fromT !== undefined && l.fromT > 0)),
+  );
+  check(
+    'the shared road is drawn once, with both lines fanned across it',
+    buildFeatures(after, null, [], {
+      viewMode: 'network',
+      visibleModes: new Set(Object.keys(MODES)),
+      visibleWayTypes: new Set(['road']),
+    }).services.features.length === 2,
+  );
+}
+
+// --- Alt is the way out: deliberately separate infrastructure ---
+{
+  fresh();
+  const origin: LngLat = [-115.2, 36.1];
+  store.getState().setDraftMode('bus');
+  const road = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(road, offsetMeters(origin, 0, 0));
+  store.getState().addWayPoint(road, offsetMeters(origin, 600, 0));
+  store.getState().finishWay();
+
+  store.getState().setDraftSeparate(true);
+  const busway = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(busway, offsetMeters(origin, 100, 4));
+  store.getState().addWayPoint(busway, offsetMeters(origin, 500, 4));
+  store.getState().finishWay();
+
+  check(
+    'Alt lays a second, independent road beside the first',
+    store.getState().system.ways.length === 2,
+  );
+  check(
+    'and the next line drawn shares again, without having to be told',
+    store.getState().draftSeparate === false,
+  );
+}
+
+// --- how close counts as "along" is a fact about the mode ---
+// A bus is somewhere in a carriageway that is itself road-width, so 4m off
+// still means the same road. A train is on the track or it isn't, so the same
+// 4m offset is a second track.
+{
+  const origin: LngLat = [-115.2, 36.1];
+  const drawPair = (modeId: string, wayTypeId: string, offsetM: number): number => {
+    fresh();
+    store.getState().setDraftMode(modeId);
+    const a = store.getState().beginWay(wayTypeId, 'straight');
+    store.getState().addWayPoint(a, offsetMeters(origin, 0, 0));
+    store.getState().addWayPoint(a, offsetMeters(origin, 600, 0));
+    store.getState().finishWay();
+    const b = store.getState().beginWay(wayTypeId, 'straight');
+    store.getState().addWayPoint(b, offsetMeters(origin, 100, offsetM));
+    store.getState().addWayPoint(b, offsetMeters(origin, 500, offsetM));
+    store.getState().finishWay();
+    return store.getState().system.ways.length;
+  };
+  check('a bus line 4m off an existing road rides that road', drawPair('bus', 'road', 4) === 1);
+  check(
+    'a rail line 10m off an existing track is a SECOND track, not the same one',
+    drawPair('subway', 'heavyRail', 10) === 2,
+  );
+  check(
+    'a rail line drawn right on an existing track still shares it',
+    drawPair('subway', 'heavyRail', 1) === 1,
+  );
+  check(
+    'every mode declares a tolerance or takes the road-width default',
+    Object.values(MODES).every(
+      (m) => m.corridorToleranceM === undefined || m.corridorToleranceM > 0,
+    ),
   );
 }
 

@@ -596,7 +596,25 @@ export interface Mode {
    *  aren't load-bearing (a per-system custom VehicleKind, when assigned,
    *  overrides this entirely). */
   defaultFootprintM: VehicleFootprint;
+  /**
+   * How far a drawn line may sit from existing infrastructure and still count
+   * as running along it, in meters. This is a physical fact about the mode,
+   * not a UI preference: a train either is on the track or is not, so rail is
+   * tight; a bus is somewhere in a carriageway that is itself ~20 m wide, so
+   * anywhere in it means the same road.
+   *
+   * Too tight and drawing along a street mints a second street beside it. Too
+   * loose and a line drawn deliberately beside an existing one gets swallowed
+   * by it. Unset falls back to CONFLATION_TOLERANCE_M, which is the
+   * road-width figure already tuned against real GTFS data.
+   */
+  corridorToleranceM?: number;
 }
+
+/** A track is a precise line: two rail alignments a few metres apart are two
+ *  tracks, not one. Well below the road-width default, and still generous
+ *  against the hand-drawing accuracy of a mouse at city zoom. */
+const RAIL_CORRIDOR_TOLERANCE_M = 6;
 
 export const MODES: Record<string, Mode> = {
   // Heavy rail: subway and commuter rail are operationally different services
@@ -606,12 +624,14 @@ export const MODES: Record<string, Mode> = {
     label: 'Subway / metro',
     wayTypeIds: ['heavyRail'],
     defaultFootprintM: { widthM: 2.65, lengthM: 22 },
+    corridorToleranceM: RAIL_CORRIDOR_TOLERANCE_M,
   },
   commuterRail: {
     id: 'commuterRail',
     label: 'Commuter rail',
     wayTypeIds: ['heavyRail'],
     defaultFootprintM: { widthM: 2.9, lengthM: 25 },
+    corridorToleranceM: RAIL_CORRIDOR_TOLERANCE_M,
   },
   // Light rail & trams share the light-rail track standard — trams typically
   // run shorter, city-center alignments and more often street-run in a road's
@@ -622,6 +642,7 @@ export const MODES: Record<string, Mode> = {
     wayTypeIds: ['lightRail', 'road'],
     preferredLaneKindIds: ['track', 'drive'],
     defaultFootprintM: { widthM: 2.65, lengthM: 27 },
+    corridorToleranceM: RAIL_CORRIDOR_TOLERANCE_M,
   },
   tram: {
     id: 'tram',
@@ -629,12 +650,14 @@ export const MODES: Record<string, Mode> = {
     wayTypeIds: ['lightRail', 'road'],
     preferredLaneKindIds: ['track', 'drive'],
     defaultFootprintM: { widthM: 2.4, lengthM: 18 },
+    corridorToleranceM: RAIL_CORRIDOR_TOLERANCE_M,
   },
   monorail: {
     id: 'monorail',
     label: 'Monorail',
     wayTypeIds: ['monorail'],
     defaultFootprintM: { widthM: 3, lengthM: 12 },
+    corridorToleranceM: RAIL_CORRIDOR_TOLERANCE_M,
   },
   brt: {
     id: 'brt',

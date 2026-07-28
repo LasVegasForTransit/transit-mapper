@@ -161,6 +161,11 @@ export interface EditorState {
   multiSelection: MultiSelectItem[];
   /** Way currently being drawn, or null. */
   activeWayId: string | null;
+  /** Whether the line being drawn was started with Alt held: lay independent
+   *  infrastructure rather than sharing whatever it runs along. Read by
+   *  finishWay, so it has to outlive the press that set it — the express track
+   *  beside the local one is still a separate track three clicks later. */
+  draftSeparate: boolean;
   draftWayTypeId: string;
   draftModeId: string;
   draftGeometry: LineGeometry;
@@ -249,6 +254,9 @@ export interface EditorState {
    *  used by a group-drag gesture, called once per animation frame. */
   nudgeMultiSelection: (dx: number, dy: number) => void;
   setDraftWayType: (typeId: string) => void;
+  /** Arm (or disarm) "keep this line's infrastructure separate" for the draw
+   *  about to start. See draftSeparate. */
+  setDraftSeparate: (separate: boolean) => void;
   setDraftMode: (modeId: string) => void;
   setDraftGeometry: (geometry: LineGeometry) => void;
   setDraftColor: (color: string) => void;
@@ -1229,6 +1237,87 @@ function insertIndexAtT(
   return { system: insertPointIntoWay(system, wayId, ins.index, coord), index: ins.index };
 }
 
+// ---- sharing what is already there ----------------------------------------
+
+/**
+ * Rebind one pattern onto the infrastructure it already runs along.
+ *
+ * Where the pattern's own path tracks a compatible existing way, it stops
+ * riding its own geometry and starts riding that way; where it covers ground
+ * nothing is built on, it keeps (or mints) geometry of its own. Sketch ways
+ * left carrying nothing are removed — but never one that was imported or
+ * deliberately named, which is somebody's real infrastructure rather than a
+ * by-product of drawing.
+ *
+ * Returns the updated system, or null when there was nothing to share: no
+ * compatible neighbour, or a run that couldn't be realized. Callers treat null
+ * as "leave it alone", never as an error.
+ *
+ * One implementation for two callers that want the same thing for different
+ * reasons — a GTFS import collapsing ten routes down a boulevard onto one
+ * boulevard, and a line drawn along a street that should ride the street.
+ */
+function conflatePatternOntoExisting(
+  system: TransitSystem,
+  serviceId: string,
+  patternId: string,
+): TransitSystem | null {
+  let sys = system;
+  const service = sys.services.find((sv) => sv.id === serviceId);
+  const pattern = service?.patterns.find((p) => p.id === patternId);
+  if (!service || !pattern) return null;
+  const oldWayIds = [...new Set(patternWayIds(pattern))];
+  const path = patternPath(sys.ways, pattern);
+  if (path.length < 2) return null;
+  const wayTypeId = sys.ways.find((w) => w.id === oldWayIds[0])?.typeId;
+  if (!wayTypeId) return null;
+
+  const modeSpec = mode(service.modeId);
+  const allowed = new Set(modeSpec.wayTypeIds);
+  const exclude = new Set(oldWayIds);
+  const candidates = sys.ways.filter((w) => allowed.has(w.typeId) && !exclude.has(w.id));
+  // How close counts as "along" is a fact about the mode, not a constant: a
+  // train is on the track or it isn't, while a bus is somewhere in a
+  // carriageway that is itself road-width. See Mode.corridorToleranceM.
+  const runs = detectShapeRuns(path, candidates, { toleranceM: modeSpec.corridorToleranceM });
+  // Nothing matched anywhere — the line is on new ground and stays there.
+  if (runs.length === 1 && 'fresh' in runs[0]) return null;
+
+  const newLegs: PatternLeg[] = [];
+  for (const run of runs) {
+    const mat = materializeShapeRun(sys, run, path, wayTypeId);
+    if (!mat) return null;
+    sys = mat.system;
+    newLegs.push(...mat.legs);
+  }
+  if (newLegs.length === 0) return null;
+  const newWayIds = new Set(newLegs.map((l) => l.wayId));
+
+  sys = {
+    ...sys,
+    services: sys.services.map((sv) =>
+      sv.id === serviceId
+        ? {
+            ...sv,
+            patterns: sv.patterns.map((p) => (p.id === patternId ? { ...p, legs: newLegs } : p)),
+          }
+        : sv,
+    ),
+  };
+
+  for (const oldId of oldWayIds) {
+    if (newWayIds.has(oldId)) continue;
+    const way = sys.ways.find((w) => w.id === oldId);
+    if (!way || way.source) continue; // imported infrastructure is not a by-product
+    if (sys.namedWays.some((n) => n.wayIds.includes(oldId))) continue; // somebody named it
+    const stillRidden = sys.services.some((sv) =>
+      sv.patterns.some((p) => p.legs.some((l) => l.wayId === oldId)),
+    );
+    if (!stillRidden) sys = removeWay(sys, oldId);
+  }
+  return sys;
+}
+
 // ---- routing over existing infrastructure ----------------------------------
 // The pure router (model/routeGraph.ts) returns RouteSpans — stretches of
 // existing ways, possibly with fractional mid-way endpoints. Materializing a
@@ -1452,6 +1541,7 @@ export function createEditorStore() {
     focusNameStationId: null,
     multiSelection: [],
     activeWayId: null,
+    draftSeparate: false,
     draftWayTypeId: INITIAL_DRAFT.wayTypeId,
     draftModeId: INITIAL_DRAFT.modeId,
     draftGeometry: INITIAL_DRAFT.geometry,
@@ -1617,6 +1707,8 @@ export function createEditorStore() {
       }),
     nudgeMultiSelection: (dx, dy) =>
       set((s) => ({ system: nudgeSelection(s.system, s.multiSelection, dx, dy) })),
+
+    setDraftSeparate: (separate) => set({ draftSeparate: separate }),
 
     setDraftWayType: (typeId) =>
       set((s) => {
@@ -1858,13 +1950,40 @@ export function createEditorStore() {
         }
         return { activeWayId: null };
       });
+      // Share what's already there. A line drawn along an existing street is
+      // expected to RIDE that street, not to lay a second one beside it — so
+      // on commit, every stretch of the finished line that tracks compatible
+      // infrastructure is rebound onto it, and only genuinely new ground keeps
+      // geometry of its own.
+      //
+      // Run at commit rather than per node: conflation needs the whole stroke
+      // to tell a real shared run from a coincidental crossing (see
+      // detectShapeRuns' minRunM), and mutating infrastructure mid-gesture
+      // would rebuild the snap grid on every point placed.
+      //
+      // `draftSeparate` (Alt) is the opt-out, for the express track beside the
+      // local one and the busway beside the road.
+      if (!get().draftSeparate) {
+        for (const svc of get().system.services) {
+          const pattern = svc.patterns.find((p) => p.legs.some((l) => l.wayId === finishedWayId));
+          if (!pattern) continue;
+          const next = conflatePatternOntoExisting(get().system, svc.id, pattern.id);
+          if (next) set({ system: touch(next) });
+          break;
+        }
+      }
       // The SimCity moment, wired to every commit path (double-click, Enter,
       // tool switch): a newly finished way crossing same-grade ways forms
-      // real junctions there. The stub-discard path above removed the way,
-      // so the existence check makes this a no-op for it.
+      // real junctions there. The stub-discard path above removed the way, and
+      // conflation may have absorbed it into a way that already existed, so
+      // the existence check makes this a no-op in both cases.
       if (get().system.ways.some((w) => w.id === finishedWayId)) {
         get().formCrossingJunctions(finishedWayId);
       }
+      // Disarmed here rather than where the press set it: it has to survive
+      // every node of the gesture, and the next line drawn shares by default
+      // again unless its own first press asks otherwise.
+      set({ draftSeparate: false });
     },
 
     setWayGeometry: (id, geometry) =>
@@ -2469,64 +2588,9 @@ export function createEditorStore() {
 
       let reconciled = 0;
       for (const target of targets) {
-        // Re-fetch from the CURRENT (possibly already-grown) system — a later
-        // target must see ways an earlier one in this same pass just created.
-        const service = sys.services.find((sv) => sv.id === target.serviceId);
-        const pattern = service?.patterns.find((p) => p.id === target.patternId);
-        if (!service || !pattern) continue;
-        const oldWayIds = [...new Set(patternWayIds(pattern))];
-        const path = patternPath(sys.ways, pattern);
-        if (path.length < 2) continue;
-        const wayTypeId = sys.ways.find((w) => w.id === oldWayIds[0])?.typeId;
-        if (!wayTypeId) continue;
-
-        const allowed = new Set(mode(service.modeId).wayTypeIds);
-        const exclude = new Set(oldWayIds);
-        const candidates = sys.ways.filter((w) => allowed.has(w.typeId) && !exclude.has(w.id));
-        const runs = detectShapeRuns(path, candidates);
-        // A single run covering the whole shape with nothing matched — leave
-        // the pattern on its own way unchanged.
-        if (runs.length === 1 && 'fresh' in runs[0]) continue;
-
-        const newLegs: PatternLeg[] = [];
-        let ok = true;
-        for (const run of runs) {
-          const mat = materializeShapeRun(sys, run, path, wayTypeId);
-          if (!mat) {
-            ok = false;
-            break;
-          }
-          sys = mat.system;
-          newLegs.push(...mat.legs);
-        }
-        if (!ok || newLegs.length === 0) continue;
-        const newWayIds = [...new Set(newLegs.map((l) => l.wayId))];
-
-        sys = {
-          ...sys,
-          services: sys.services.map((sv) =>
-            sv.id === target.serviceId
-              ? {
-                  ...sv,
-                  patterns: sv.patterns.map((p) =>
-                    p.id === target.patternId ? { ...p, legs: newLegs } : p,
-                  ),
-                }
-              : sv,
-          ),
-        };
-
-        // Unlike adoptExistingInfrastructure's cleanup (which protects a
-        // user's hand-drawn sketch via its `source` check), a superseded
-        // GTFS-shape-way exists solely to have seeded this reconciliation and
-        // is always safe to remove once no pattern rides it anymore.
-        for (const oldId of oldWayIds) {
-          if (newWayIds.includes(oldId)) continue;
-          const stillRidden = sys.services.some((sv) =>
-            sv.patterns.some((p) => p.legs.some((l) => l.wayId === oldId)),
-          );
-          if (!stillRidden) sys = removeWay(sys, oldId);
-        }
+        const next = conflatePatternOntoExisting(sys, target.serviceId, target.patternId);
+        if (!next) continue;
+        sys = next;
         reconciled++;
       }
 
