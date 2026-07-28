@@ -2306,6 +2306,27 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check('and merging leaves a single street', store.getState().system.ways.length === 1);
 }
 
+// --- picking up the Lines tool drops an infrastructure selection ---
+{
+  fresh();
+  const w = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(w, [-115.2, 36.1]);
+  store.getState().addWayPoint(w, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const svc = store.getState().system.services[0].id;
+  store.getState().setTool('select');
+  store.getState().toggleMultiSelect({ kind: 'way', id: w });
+  store.getState().toggleMultiSelect({ kind: 'service', id: svc });
+  check('the group holds both kinds first', store.getState().multiSelection.length === 2);
+  store.getState().setTool('lines');
+  check(
+    'the Lines tool keeps only the lines, so its marquee cannot build a group nothing applies to',
+    store.getState().multiSelection.length === 1 &&
+      store.getState().multiSelection[0].kind === 'service',
+  );
+  store.getState().setTool('select');
+}
+
 // --- selecting LINES: services join the multi-select group, the action
 // registry offers what the geometry supports, and each action runs ---
 {

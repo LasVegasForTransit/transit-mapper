@@ -2006,7 +2006,19 @@ export function createEditorStore() {
 
     setTool: (tool) => {
       get().finishWay();
-      set({ tool });
+      set((s) => {
+        // The Lines tool selects services and nothing else, so carrying an
+        // infrastructure selection into it produces a mixed group that no
+        // action applies to — a marquee only ever ADDS, so those ways would
+        // sit there until cleared by hand. Switching tools is the moment to
+        // drop them.
+        if (tool !== 'lines' || s.tool === 'lines') return { tool };
+        return {
+          tool,
+          multiSelection: s.multiSelection.filter((i) => i.kind === 'service'),
+          selection: s.selection?.kind === 'service' ? s.selection : null,
+        };
+      });
     },
 
     select: (selection) => set({ selection, multiSelection: [] }),
