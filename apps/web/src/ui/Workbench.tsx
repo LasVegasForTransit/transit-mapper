@@ -3,6 +3,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type PointerEvent,
   type ReactNode,
 } from 'react';
@@ -13,12 +14,43 @@ import { Panel } from './Panel';
 import { useInertRef } from './useInertRef';
 import { useUi } from './UiProvider';
 
+// Tailwind's `md` breakpoint is min-width: 768px. The component tree must use
+// the same boundary as the CSS: mounting both trees and hiding one with
+// display utilities leaves every hidden panel subscribed to the editor store.
+const MOBILE_QUERY = '(max-width: 767px)';
+
+function mobileSnapshot(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia?.(MOBILE_QUERY).matches === true;
+}
+
+function subscribeMobile(listener: () => void): () => void {
+  if (typeof window === 'undefined' || !window.matchMedia) return () => {};
+  const query = window.matchMedia(MOBILE_QUERY);
+  const onChange = () => listener();
+  if (query.addEventListener) {
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }
+  // Safari < 14. The app does not target it deliberately, but this fallback
+  // costs nothing and makes the subscription safe in older embedded browsers.
+  query.addListener(onChange);
+  return () => query.removeListener(onChange);
+}
+
+function useMobileLayout(): boolean {
+  // This app is client-rendered rather than hydrated. Reusing the guarded live
+  // snapshot for the server argument also makes static render tests represent
+  // the media environment they install without introducing a second default.
+  return useSyncExternalStore(subscribeMobile, mobileSnapshot, mobileSnapshot);
+}
+
 export interface WorkbenchProps {
   /** File menu / system name / Hide-UI toggle. Docks into the menu panel's
    *  own header on desktop; mobile has nowhere else for it to live, since
    *  the menu panel itself becomes a bottom sheet there, so it renders in
    *  the top bar instead. One prop, two positions — Workbench decides
-   *  which via Tailwind's md: breakpoint, not the caller. */
+   *  which through the media query matching Tailwind's md breakpoint, not
+   *  the caller. */
   brand: ReactNode;
   /** The Objects list — desktop wraps it in a collapsible card with `brand`
    *  above it; mobile wraps it in the bottom sheet instead. */
@@ -61,9 +93,10 @@ export interface WorkbenchProps {
 /**
  * THE single owner of where every floating card sits over the full-bleed
  * map, at every viewport width — desktop's docked corner cards and
- * mobile's bottom sheet are two Tailwind-responsive renderings of the same
- * seven slots above, not two competing components independently guessing
- * each other's sizes. (This replaced an earlier version of this idea split
+ * mobile's bottom sheet are two responsive layouts of the same seven slots
+ * above, with only the active layout mounted. CSS-hiding both copies left
+ * every hidden panel subscribed to the editor and doubled validation/list
+ * work on each drag. (This replaced an earlier version of this idea split
  * across App.tsx + a separate AppShell.tsx + this file, coordinating
  * through matching classNames a card had to remember to carry — confirmed
  * live, that indirection was exactly how a panel ended up rendered nowhere
@@ -89,6 +122,7 @@ export function Workbench({
   modeToolbar,
   importStatus,
 }: WorkbenchProps) {
+  const mobile = useMobileLayout();
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const clearSelection = useEditor((s) => s.select);
   const backToSelectTool = useEditor((s) => s.setTool);
@@ -114,7 +148,7 @@ export function Workbench({
           straight through to it; only cells with a real card in them
           intercept — the standard "controls float over a canvas" trick. */}
       <div
-        className="pointer-events-none absolute inset-2 md:grid md:gap-2"
+        className={`pointer-events-none absolute inset-2 ${mobile ? '' : 'grid gap-2'}`}
         style={{
           gridTemplateColumns: 'auto 1fr auto',
           gridTemplateRows: `auto 1fr var(--controls-clearance)`,
@@ -134,21 +168,23 @@ export function Workbench({
             the right column is `.actions-collapsed`, whose CSS keeps only
             the primary actions and reveals the ⋯ overflow that carries the
             rest (see TopBarActions). */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 md:hidden">
-          <div className="pointer-events-auto min-w-0 flex-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 shadow-[var(--shadow)]">
-            <div className="mobile-topleft">
-              <div className="mobile-topleft-row">{brand}</div>
-              {viewSwitcher}
-              {simControlsCompact}
+        {mobile && (
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2">
+            <div className="pointer-events-auto min-w-0 flex-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 shadow-[var(--shadow)]">
+              <div className="mobile-topleft">
+                <div className="mobile-topleft-row">{brand}</div>
+                {viewSwitcher}
+                {simControlsCompact}
+              </div>
+            </div>
+            <div
+              ref={actionsCollapsedRef}
+              className="actions-collapsed zen-cluster pointer-events-auto flex shrink-0 flex-col items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-1 shadow-[var(--shadow)]"
+            >
+              {primaryToolbar}
             </div>
           </div>
-          <div
-            ref={actionsCollapsedRef}
-            className="actions-collapsed zen-cluster pointer-events-auto flex shrink-0 flex-col items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-1 shadow-[var(--shadow)]"
-          >
-            {primaryToolbar}
-          </div>
-        </div>
+        )}
 
         {/* ---- desktop-only docked cards. The Objects panel and the
             supplemental panel are the two that genuinely want a grid cell:
@@ -158,20 +194,24 @@ export function Workbench({
             within the leftover middle track, which is the true screen center
             only when both side columns happen to match width, and they
             almost never do. ---- */}
-        <div
-          className="menu-card-slot pointer-events-auto hidden self-stretch justify-self-start md:flex"
-          style={{ gridArea: '1 / 1 / 4 / 2' }}
-        >
-          <MenuCard brand={brand}>{menuPanel}</MenuCard>
-        </div>
-        {showingSupplemental && (
-          <div
-            ref={supplementalRef}
-            className="pointer-events-auto hidden self-stretch justify-self-end zen-cluster md:flex"
-            style={{ gridArea: '2 / 3 / 3 / 4' }}
-          >
-            {supplementalPanel}
-          </div>
+        {!mobile && (
+          <>
+            <div
+              className="menu-card-slot pointer-events-auto flex self-stretch justify-self-start"
+              style={{ gridArea: '1 / 1 / 4 / 2' }}
+            >
+              <MenuCard brand={brand}>{menuPanel}</MenuCard>
+            </div>
+            {showingSupplemental && (
+              <div
+                ref={supplementalRef}
+                className="zen-cluster pointer-events-auto flex self-stretch justify-self-end"
+                style={{ gridArea: '2 / 3 / 3 / 4' }}
+              >
+                {supplementalPanel}
+              </div>
+            )}
+          </>
         )}
 
         {/* ---- the top row: spacer | canvas state | actions.
@@ -206,39 +246,47 @@ export function Workbench({
             card wraps to ~220px tall. Placing this row in the grid for real
             makes row 1 size to whatever it actually renders at, so row 2
             gets pushed down instead of covered, at every width. ---- */}
-        <div
-          className="pointer-events-none hidden items-start gap-2 md:flex"
-          style={{ gridColumn: '1 / -1', gridRow: '1' }}
-        >
-          <div className="flex-1" style={{ minWidth: 'var(--panel-w)' }} aria-hidden="true" />
-          <div className="pointer-events-auto flex min-w-0 flex-wrap items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 shadow-[var(--shadow)]">
-            {viewSwitcher}
-            {simControls}
-          </div>
-          <div className="flex flex-1 justify-end">
-            <div
-              ref={actionsFullRef}
-              className="actions-full zen-cluster pointer-events-auto flex max-w-[900px] flex-wrap items-center justify-end gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 shadow-[var(--shadow)]"
-            >
-              {primaryToolbar}
+        {!mobile && (
+          <div
+            className="pointer-events-none flex items-start gap-2"
+            style={{ gridColumn: '1 / -1', gridRow: '1' }}
+          >
+            <div className="flex-1" style={{ minWidth: 'var(--panel-w)' }} aria-hidden="true" />
+            <div className="pointer-events-auto flex min-w-0 flex-wrap items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 shadow-[var(--shadow)]">
+              {viewSwitcher}
+              {simControls}
+            </div>
+            <div className="flex flex-1 justify-end">
+              <div
+                ref={actionsFullRef}
+                className="actions-full zen-cluster pointer-events-auto flex max-w-[900px] flex-wrap items-center justify-end gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 shadow-[var(--shadow)]"
+              >
+                {primaryToolbar}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* ---- tool dock: same flex-centering as the view switch above.
             The fade-while-expanded below is a MOBILE-only concern (so the
             dock doesn't sit under the sheet's own content) — sheetExpanded
             itself isn't mobile-gated (any selection sets it, desktop
             included, so the Details sheet is already open if the user
-            later shrinks the window), so the md: overrides here are load-
-            bearing: without them the dock silently vanishes on desktop the
-            moment anything gets selected. Confirmed live — this exact
-            regression is why they're called out instead of assumed. ---- */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 pb-14 md:pb-0">
+            later shrinks the window), so `mobile &&` is load-bearing here:
+            without it the dock silently vanishes on desktop the moment
+            anything gets selected. Confirmed live — this exact regression
+            is why it is called out instead of assumed. ---- */}
+        <div
+          className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 ${
+            mobile ? 'pb-14' : 'pb-0'
+          }`}
+        >
           {importStatus && <div className="pointer-events-auto">{importStatus}</div>}
           <div
-            className={`transition-opacity duration-150 md:pointer-events-auto md:opacity-100 ${
-              sheetExpanded ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'
+            className={`transition-opacity duration-150 ${
+              mobile && sheetExpanded
+                ? 'pointer-events-none opacity-0'
+                : 'pointer-events-auto opacity-100'
             }`}
           >
             {modeToolbar}
@@ -246,46 +294,47 @@ export function Workbench({
         </div>
       </div>
 
-      {/* ---- mobile-only bottom sheet — the menu/supplemental panels'
-          other rendering, swapped in via Tailwind display utilities
-          instead of a second component tree. Zen mode collapses it flush
-          with the bottom edge (below its own peek height) rather than
+      {/* ---- mobile-only bottom sheet — the one active rendering of the
+          menu/supplemental panel at this breakpoint. Zen mode collapses it
+          flush with the bottom edge (below its own peek height) rather than
           unmounting it — same "shrink in place" treatment as MenuCard. ---- */}
-      <div
-        ref={sheetRef}
-        className={`absolute inset-x-0 bottom-0 z-[5] flex flex-col rounded-t-2xl border-t border-[var(--border)] bg-[var(--bg)] shadow-[0_-6px_20px_rgba(25,26,23,0.12)] transition-[max-height,opacity] duration-200 ease-[cubic-bezier(0.2,0.7,0.3,1)] md:hidden ${
-          uiHidden
-            ? 'pointer-events-none max-h-0 overflow-hidden opacity-0'
-            : sheetExpanded
-              ? 'max-h-[62vh]'
-              : 'max-h-14 overflow-hidden'
-        }`}
-      >
-        <SheetHandle
-          expanded={sheetExpanded}
-          setExpanded={setSheetExpanded}
-          title={showingSupplemental ? 'Details' : 'Objects'}
-        />
-        {showingSupplemental && (
-          // Whichever put supplementalPanel here — a selection, an armed
-          // tool, or (rarely) both — clears both. Each is a no-op on
-          // whichever wasn't actually active, so this works regardless of
-          // which case is showing right now.
-          <button
-            type="button"
-            className="sheet-back"
-            onClick={() => {
-              clearSelection(null);
-              backToSelectTool('select');
-            }}
-          >
-            <Icon name="chevronDown" size={15} style={{ transform: 'rotate(90deg)' }} /> Objects
-          </button>
-        )}
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {showingSupplemental ? supplementalPanel : menuPanel}
+      {mobile && (
+        <div
+          ref={sheetRef}
+          className={`absolute inset-x-0 bottom-0 z-[5] flex flex-col rounded-t-2xl border-t border-[var(--border)] bg-[var(--bg)] shadow-[0_-6px_20px_rgba(25,26,23,0.12)] transition-[max-height,opacity] duration-200 ease-[cubic-bezier(0.2,0.7,0.3,1)] ${
+            uiHidden
+              ? 'pointer-events-none max-h-0 overflow-hidden opacity-0'
+              : sheetExpanded
+                ? 'max-h-[62vh]'
+                : 'max-h-14 overflow-hidden'
+          }`}
+        >
+          <SheetHandle
+            expanded={sheetExpanded}
+            setExpanded={setSheetExpanded}
+            title={showingSupplemental ? 'Details' : 'Objects'}
+          />
+          {showingSupplemental && (
+            // Whichever put supplementalPanel here — a selection, an armed
+            // tool, or (rarely) both — clears both. Each is a no-op on
+            // whichever wasn't actually active, so this works regardless of
+            // which case is showing right now.
+            <button
+              type="button"
+              className="sheet-back"
+              onClick={() => {
+                clearSelection(null);
+                backToSelectTool('select');
+              }}
+            >
+              <Icon name="chevronDown" size={15} style={{ transform: 'rotate(90deg)' }} /> Objects
+            </button>
+          )}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {showingSupplemental ? supplementalPanel : menuPanel}
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }
