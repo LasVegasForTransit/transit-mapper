@@ -3105,11 +3105,15 @@ export function createEditorStore() {
       const service = st.system.services.find((sv) => sv.id === serviceId);
       const pattern = service?.patterns.find((p) => p.id === patternId);
       if (!service || !pattern) return null;
-      const legIndex = patternLegs(pattern).findIndex((l) => l.wayId === wayId);
-      if (legIndex < 0) return null;
-      const [near, far] = splitLegsAt(patternLegs(pattern), legIndex, t);
+      // Cutting a line in two is trimming it twice, from opposite ends — which
+      // means a couplet's halves are each cut on both their streets, and each
+      // half comes out a couplet in its own right. Doing it on the flattened
+      // leg list, as this used to, would have handed back two flat lines and
+      // silently thrown the direction structure away.
+      const near = trimSectionsTo(st.system.ways, pattern.sections, wayId, t, 'end');
+      const far = trimSectionsTo(st.system.ways, pattern.sections, wayId, t, 'start');
       // A cut on a terminus leaves nothing on one side — not a split.
-      if (near.length === 0 || far.length === 0) return null;
+      if (!near || !far || near.length === 0 || far.length === 0) return null;
       const newId = shortId();
       // The far half keeps everything about the line except its identity: same
       // mode, same schedule, same vehicle. A new colour, because two lines
@@ -3119,7 +3123,7 @@ export function createEditorStore() {
         id: newId,
         name: `${service.name} (south)`,
         color: unusedPaletteColor(st.system, service.modeId),
-        patterns: [{ ...pattern, id: shortId(), sections: oneSection(far) }],
+        patterns: [{ ...pattern, id: shortId(), sections: far }],
       };
       set((s) => ({
         system: touch({
@@ -3131,7 +3135,7 @@ export function createEditorStore() {
                 : {
                     ...sv,
                     patterns: sv.patterns.map((p) =>
-                      p.id === patternId ? { ...p, sections: oneSection(near) } : p,
+                      p.id === patternId ? { ...p, sections: near } : p,
                     ),
                   },
             ),

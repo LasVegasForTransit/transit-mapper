@@ -3,9 +3,18 @@
 // two implementations and disagreed about how much of a way a line covers.
 
 import { describe, expect, it } from 'vitest';
-import { pathLengthMeters, patternPath, stretchLeg, oneSection, patternLegs } from '../model/geo';
+import {
+  pathLengthMeters,
+  patternPath,
+  patternRunPath,
+  stretchLeg,
+  oneSection,
+  patternLegs,
+  wholeLeg,
+} from '../model/geo';
 import { aPattern, aRoad, aStation } from '../testing/fixtures';
 import { patternStats, patternStops } from './serviceStats';
+import type { Pattern } from '../model/system';
 
 const road = aRoad('w', [
   [-115.2, 36.1],
@@ -82,5 +91,76 @@ describe('what a line amounts to', () => {
 
   it('claims nothing about a line whose ways resolve to no path', () => {
     expect(patternStats([], allStations, wholeStreet, 15)).toBeNull();
+  });
+});
+
+describe('a platform both directions of a couplet use', () => {
+  // A transit center, or a rail platform: ONE station record, anchored to one
+  // of the two streets. A feed that reuses a stop_id for both directions
+  // imports exactly this, and the return trip used to drive straight past it.
+  const A = aRoad('outward', [
+    [-115.2, 36.1],
+    [-115.2, 36.12],
+  ]);
+  // ~90 m east — inside touching distance of the outward street.
+  const B = aRoad('return', [
+    [-115.199, 36.12],
+    [-115.199, 36.1],
+  ]);
+  const couplet: Pattern = {
+    id: 'cp',
+    sections: [{ kind: 'split', outbound: [wholeLeg('outward')], inbound: [wholeLeg('return')] }],
+  };
+  const shared = aStation('centre', [-115.2, 36.11], { wayId: 'outward', t: 0.5 });
+  const ways = [A, B];
+
+  const idsOn = (run: 'outbound' | 'inbound') =>
+    patternStops(
+      [shared],
+      couplet,
+      patternRunPath(ways, couplet, run),
+      pathLengthMeters(patternRunPath(ways, couplet, run)),
+      run,
+    ).map((s) => s.station.id);
+
+  it('is called at by the direction it is anchored to', () => {
+    expect(idsOn('outbound')).toEqual(['centre']);
+  });
+
+  it('is called at by the other direction too', () => {
+    expect(idsOn('inbound')).toEqual(['centre']);
+  });
+
+  it('is not counted twice in either direction', () => {
+    expect(idsOn('outbound').length).toBe(1);
+    expect(idsOn('inbound').length).toBe(1);
+  });
+});
+
+describe('a stop on the far half of a wide couplet', () => {
+  // Same shape, but the two streets are ~900 m apart. A stop on one is a
+  // different stop from anything on the other, and claiming otherwise would
+  // put a dwell where no vehicle stops.
+  const A = aRoad('outward', [
+    [-115.2, 36.1],
+    [-115.2, 36.12],
+  ]);
+  const B = aRoad('return', [
+    [-115.19, 36.12],
+    [-115.19, 36.1],
+  ]);
+  const couplet: Pattern = {
+    id: 'wide',
+    sections: [{ kind: 'split', outbound: [wholeLeg('outward')], inbound: [wholeLeg('return')] }],
+  };
+  const onReturn = aStation('east', [-115.19, 36.11], { wayId: 'return', t: 0.5 });
+  const ways = [A, B];
+
+  it('is not claimed by the direction that never goes near it', () => {
+    const path = patternRunPath(ways, couplet, 'outbound');
+    const ids = patternStops([onReturn], couplet, path, pathLengthMeters(path), 'outbound').map(
+      (s) => s.station.id,
+    );
+    expect(ids).toEqual([]);
   });
 });

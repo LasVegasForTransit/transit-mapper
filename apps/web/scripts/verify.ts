@@ -10949,6 +10949,45 @@ function buildGrid() {
     );
   }
 
+  // Cutting a couplet in two has to leave two couplets. Doing it on the
+  // flattened leg list would hand back two flat lines and lose the direction
+  // structure without saying so.
+  {
+    const beforeCount = store.getState().system.services.length;
+    // 0.25, not 0.5: the trim above already cut `up` back to [0, 0.5], so 0.5
+    // is now this line's terminus and cutting there is correctly refused.
+    const spawnedId = store.getState().splitServiceAt(svc, trimmedCp.id, 'up', 0.25);
+    const after = store.getState().system;
+    check('cutting a couplet in two produces a second line', !!spawnedId);
+    check('cutting a couplet adds exactly one line', after.services.length === beforeCount + 1);
+    const halves = after.services.filter((sv) => sv.id === svc || sv.id === spawnedId);
+    check(
+      'both halves of a cut couplet are still couplets',
+      halves.length === 2 && halves.every((sv) => patternHasSplit(sv.patterns[0])),
+    );
+    check(
+      'each half still runs its outward trip on the outward street',
+      halves.every((sv) =>
+        patternRunLegs(sv.patterns[0], 'outbound')
+          .map((r) => r.leg.wayId)
+          .includes('up'),
+      ),
+    );
+    check(
+      'each half still has a return trip on its own streets',
+      halves.every((sv) => {
+        const back = patternRunLegs(sv.patterns[0], 'inbound').map((r) => r.leg.wayId);
+        return back.length > 0 && !back.includes('up');
+      }),
+    );
+    check(
+      'neither half of a cut couplet is reported as broken',
+      !validateSystem(after).some((i) => i.id.startsWith('broken-pattern-')),
+    );
+    // Put the spawned half back so the checks below still see one line.
+    store.getState().deleteService(spawnedId!);
+  }
+
   // And it can be undone.
   store.getState().makePatternTwoWay(svc, trimmedCp.id);
   const flat = store.getState().system.services.find((sv) => sv.id === svc)!.patterns[0];
