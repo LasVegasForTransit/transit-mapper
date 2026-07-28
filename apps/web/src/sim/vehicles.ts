@@ -110,18 +110,54 @@ class ScheduleResolver {
   }
 }
 
-interface PatternGeometry {
+/** One run's drawable geometry. The two legs are distinct polylines, not one
+ *  line read backwards: on real infrastructure the return rides the lane on
+ *  the other side of the street, and even the schematic centerline needs its
+ *  own point order so a position measured from the START of a leg means the
+ *  same thing for both. */
+interface LegGeometry {
   path: LngLat[];
-  meters: number;
-  timetable: Timetable;
   /** Prefix-sum arc lengths for `path` (see cumulativeLengths) — precomputed
    *  once here so the per-tick position lookup is an O(log n) binary search
    *  (pointAtDistance) instead of re-walking the whole path every frame. */
   cumLengths: Float64Array;
-  /** Axis-aligned bounds [minLng, minLat, maxLng, maxLat] of the full path.
-   *  Every possible vehicle position lies inside it, so a pattern whose bbox is
-   *  off-screen can be culled wholesale before computing any of its vehicles. */
+  meters: number;
+}
+
+interface PatternGeometry {
+  outbound: LegGeometry;
+  inbound: LegGeometry;
+  /** The outbound leg's length: the coordinate system runStateAt reports
+   *  distances in, and what the timetable was built from. A return leg is a
+   *  different lane, whose own length differs by a metre or two where an
+   *  offset cuts a corner differently, so a position crosses onto it as a
+   *  FRACTION rather than as a raw distance — otherwise the return arrives
+   *  early and sits clamped at its terminal. */
+  meters: number;
+  timetable: Timetable;
+  /** Axis-aligned bounds [minLng, minLat, maxLng, maxLat] of the outbound
+   *  path, so an off-screen pattern is culled wholesale before any of its
+   *  vehicles are computed. The return leg sits a lane width outside this in
+   *  places, which the cull's half-viewport margin swallows many times over. */
   bbox: [number, number, number, number];
+}
+
+function legFrom(path: LngLat[]): LegGeometry {
+  const cumLengths = cumulativeLengths(path);
+  return { path, cumLengths, meters: cumLengths[cumLengths.length - 1] };
+}
+
+/** The schematic centerline read the other way. Network view has no lanes to
+ *  put a return run in, so its two legs are the same line — but the arc-length
+ *  table has to be rebuilt for the reversed point order, and subtracting the
+ *  forward table from its total does that without re-running a haversine per
+ *  point. Worth it: this runs for every pattern on every cache miss, and a
+ *  drag misses for all of them. */
+function reversedLeg(leg: LegGeometry): LegGeometry {
+  const n = leg.path.length;
+  const cumLengths = new Float64Array(n);
+  for (let i = 0; i < n; i++) cumLengths[i] = leg.meters - leg.cumLengths[n - 1 - i];
+  return { path: [...leg.path].reverse(), cumLengths, meters: leg.meters };
 }
 
 // Keyed by the Pattern object's own reference, but a Pattern only holds
@@ -176,12 +212,17 @@ function resolvePatternGeometry(
     return cached;
   const path =
     modeId !== undefined
-      ? patternLanePath(system.ways, pattern, modeId)
+      ? patternLanePath(system.ways, pattern, modeId, 'outbound')
       : patternPath(system.ways, pattern);
   if (path.length < 2) return null;
-  const cumLengths = cumulativeLengths(path);
-  const meters = cumLengths[cumLengths.length - 1];
+  const outbound = legFrom(path);
+  const meters = outbound.meters;
   if (meters === 0) return null;
+  // Infrastructure view's return leg is a genuinely different polyline — the
+  // lane on the other side of the street — so it is resolved, not mirrored.
+  const backPath =
+    modeId !== undefined ? patternLanePath(system.ways, pattern, modeId, 'inbound') : null;
+  const inbound = backPath && backPath.length >= 2 ? legFrom(backPath) : reversedLeg(outbound);
   let minLng = Infinity,
     minLat = Infinity,
     maxLng = -Infinity,
@@ -195,10 +236,10 @@ function resolvePatternGeometry(
   const stops = dwellStopsForPattern(system.stations, pattern, path, meters);
   const timetable = buildTimetable(meters, stops, speedMps);
   const geometry: CachedPatternGeometry = {
-    path,
+    outbound,
+    inbound,
     meters,
     timetable,
-    cumLengths,
     bbox: [minLng, minLat, maxLng, maxLat],
     forWays: system.ways,
     forStations: system.stations,
@@ -354,7 +395,7 @@ export function attachVehicleAnimation(
           // per-tick cost with ON-SCREEN patterns instead of all of them.
           const bb = geometry.bbox;
           if (bb[2] < cullW || bb[0] > cullE || bb[3] < cullS || bb[1] > cullN) continue;
-          const { path, meters, timetable, cumLengths } = geometry;
+          const { meters, timetable } = geometry;
           // The cycle is built FROM the headway (see core/sim/fleet.ts), so
           // vehicles pass every stop exactly one headway apart instead of
           // approximately. Fleet size falls out of it.
@@ -376,22 +417,25 @@ export function attachVehicleAnimation(
             // `speedMps` is load-bearing, not decorative: the timetable was
             // BUILT at this vehicle kind's own speed, so walking it at the
             // module default instead would have the two disagree.
-            const { distMeters: distFromStart } = runStateAt(
-              simMs,
-              timetable,
-              meters,
-              plan,
-              i,
-              speedMps,
-            );
+            const { distMeters, leg } = runStateAt(simMs, timetable, meters, plan, i, speedMps);
+            // runStateAt measures from the start of the OUTBOUND path whichever
+            // way the vehicle faces, so a return-leg vehicle counts down. Flip
+            // it into progress along the leg the vehicle is actually on, then
+            // carry it across as a FRACTION: the two legs are separate
+            // polylines of slightly different length, and a raw distance would
+            // leave the return arriving short of its terminal.
+            const { path, cumLengths, meters: legMeters } = geometry[leg];
+            const t = leg === 'outbound' ? distMeters / meters : (meters - distMeters) / meters;
             // Distance → coordinate is an O(log n) binary search over precomputed
             // arc lengths, not a full-path re-walk (pointAtT).
+            const center = pointAtDistance(path, cumLengths, t * legMeters);
             if (viewMode === 'network') {
-              emit(pointAtDistance(path, cumLengths, distFromStart), service.color);
+              emit(center, service.color);
             } else {
-              const t = meters === 0 ? 0 : distFromStart / meters;
-              const center = pointAtDistance(path, cumLengths, distFromStart);
-              const bearing = bearingAtT(path, t, meters);
+              // Both legs run point-order-along-travel, so the path's own
+              // bearing is the direction the vehicle faces — a return-leg train
+              // is drawn nose-first, not reversed.
+              const bearing = bearingAtT(path, t, legMeters);
               infraFeatures.push({
                 type: 'Feature',
                 properties: { color: service.color },

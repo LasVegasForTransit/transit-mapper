@@ -20,14 +20,29 @@ export function preferredLaneKinds(modeId: string): readonly string[] {
 /**
  * The LaneSpec id a service of mode `modeId` rides on `pattern.legs[wayIndex]`:
  * the leg's own pin if set, else the default resolved from the way's
- * cross-section, the leg's travel direction, and the mode's preferred lane
+ * cross-section, the direction of travel, and the mode's preferred lane
  * kinds. Null only for a lane-less profile.
+ *
+ * This is the ONLY answer to "which lane" in the app: the service line
+ * buildFeatures draws and the vehicles geometry/vehicleLane.ts runs along it
+ * both come from here. They used to resolve it separately — the line taking
+ * the curb lane for its direction, the vehicles taking whichever lane sat
+ * nearest the centerline — and diverged by exactly one lane width on any road
+ * with more than one lane each way. The trains visibly did not run on their
+ * own line.
+ *
+ * `forward` overrides the leg's own direction, for the RETURN run: the same
+ * leg travelled the other way resolves to the lane on the other side of the
+ * street. A leg's `laneId` pin is not per-direction, so a pinned leg puts both
+ * runs in the one lane the planner named. That is single-track running, and it
+ * is what they asked for.
  */
 export function serviceLaneOnWay(
   pattern: Pattern,
   wayIndex: number,
   waysById: Map<string, Way>,
   modeId: string,
+  forward?: boolean,
 ): string | null {
   const leg = pattern.legs[wayIndex];
   if (!leg) return null;
@@ -36,7 +51,7 @@ export function serviceLaneOnWay(
   if (leg.laneId) return leg.laneId;
   return defaultLaneFor(
     way.profile,
-    leg.forward ? 'forward' : 'backward',
+    (forward ?? leg.forward) ? 'forward' : 'backward',
     preferredLaneKinds(modeId),
   );
 }

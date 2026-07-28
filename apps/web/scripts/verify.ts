@@ -35,6 +35,7 @@ import {
   deriveLegDirections,
   patternPath,
   patternSegments,
+  patternRunSegments,
   patternWayIds,
   serviceLaneOnWay,
   wholeLegs,
@@ -136,11 +137,7 @@ import {
   wayLaneGeometry,
   wayIntersectsBounds,
 } from '@transitmapper/core/geometry/streets';
-import {
-  patternWayTraversals,
-  selectVehicleLane,
-  patternLanePath,
-} from '@transitmapper/core/geometry/vehicleLane';
+import { patternLanePath } from '@transitmapper/core/geometry/vehicleLane';
 import { bearingAtT, rotatedRectPolygon } from '@transitmapper/core/model/geo';
 import {
   classifyTurn,
@@ -6864,12 +6861,11 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     ],
     profile: { lanes: [] },
   };
-  const traversals = patternWayTraversals([wayA, wayB], {
-    id: 'p1',
-    legs: wholeLegs(wayById([wayA, wayB]), ['va', 'vb']),
-  });
-  check('first way in a pattern defaults to forward', traversals[0].forward === true);
-  check('a way continuing in its own stored order is forward', traversals[1].forward === true);
+  const twoWayIds = wayById([wayA, wayB]);
+  const straightOn = { id: 'p1', legs: wholeLegs(twoWayIds, ['va', 'vb']) };
+  const segs = patternSegments(twoWayIds, straightOn);
+  check('first way in a pattern defaults to forward', segs[0].forward === true);
+  check('a way continuing in its own stored order is forward', segs[1].forward === true);
 
   // way C's own points run the OPPOSITE direction of travel (start where
   // way A ends up, at the far end) — traversing it means walking it backward.
@@ -6884,13 +6880,29 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     ],
     profile: { lanes: [] },
   };
-  const reversedTraversals = patternWayTraversals([wayA, wayC], {
+  const reversedIds = wayById([wayA, wayC]);
+  const reversedSegs = patternSegments(reversedIds, {
     id: 'p2',
-    legs: wholeLegs(wayById([wayA, wayC]), ['va', 'vc']),
+    legs: wholeLegs(reversedIds, ['va', 'vc']),
   });
   check(
     'a way stored opposite the direction of travel is detected as backward',
-    reversedTraversals[1].forward === false,
+    reversedSegs[1].forward === false,
+  );
+
+  // The return run is the outbound one mirrored — same ways in reverse order,
+  // each traversed the other way round — so the two cannot disagree.
+  const backSegs = patternRunSegments(
+    reversedIds,
+    { id: 'p2', legs: wholeLegs(reversedIds, ['va', 'vc']) },
+    'inbound',
+  );
+  const mirrored = [...reversedSegs].reverse();
+  check(
+    'the return run mirrors the outbound one',
+    backSegs.length === mirrored.length &&
+      backSegs.every((seg, i) => seg.wayIndex === mirrored[i].wayIndex) &&
+      backSegs.every((seg, i) => seg.forward === !mirrored[i].forward),
   );
 
   // A 4-lane road: sidewalk, 2 backward drive, 1 forward bus, 1 forward
@@ -6916,45 +6928,34 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       ],
     },
   };
-  const busLane = selectVehicleLane(road, true, 'bus');
+  const roadIds = wayById([road]);
+  const roadPattern = { id: 'vp', legs: wholeLegs(roadIds, ['vroad']) };
+  const laneOf = (forward: boolean, modeId: string) =>
+    road.profile.lanes.find(
+      (l) => l.id === serviceLaneOnWay(roadPattern, 0, roadIds, modeId, forward),
+    );
+
+  // Lane choice is serviceLaneOnWay's, the same call that places the drawn
+  // line. The vehicles used to select their own and land one lane inboard.
   check(
     'a bus prefers the dedicated bus lane over a general drive lane',
-    busLane?.kindId === 'bus',
-  );
-
-  const brtLane = selectVehicleLane(road, true, 'brt');
-  check("BRT also prefers the bus lane (shares bus's preference list)", brtLane?.kindId === 'bus');
-
-  const carModeLane = selectVehicleLane(road, true, 'subway'); // subway has no preferredLaneKindIds
-  check(
-    'a mode with no lane preference falls back to whichever direction-matching lane is nearest centerline (here, the bus lane at offset 1.65m beats the drive lane at 5.1m)',
-    carModeLane?.kindId === 'bus',
-  );
-
-  const backwardLane = selectVehicleLane(road, false, 'bus');
-  check(
-    'no bus lane going backward on this road — falls back to a backward drive lane',
-    backwardLane?.kindId === 'drive',
+    laneOf(true, 'bus')?.kindId === 'bus',
   );
   check(
-    'the backward fallback is the one closest to centerline, not the outer one',
-    backwardLane?.laneId === 'd2',
+    "BRT also prefers the bus lane (shares bus's preference list)",
+    laneOf(true, 'brt')?.kindId === 'bus',
   );
-
-  const noProfileWay: Way = {
-    id: 'vempty',
-    typeId: 'road',
-    geometry: 'straight',
-    grade: 'atGrade',
-    points: [
-      [-115.2, 36.1],
-      [-115.19, 36.1],
-    ],
-    profile: { lanes: [] },
-  };
   check(
-    'a way with no profile at all returns no lane (caller falls back to centerline)',
-    selectVehicleLane(noProfileWay, true, 'bus') === null,
+    'no bus lane going the other way on this road — the return run takes a backward drive lane',
+    laneOf(false, 'bus')?.kindId === 'drive',
+  );
+  check(
+    'the return run takes the CURB lane for its direction, the one the line is drawn in',
+    laneOf(false, 'bus')?.id === 'd1',
+  );
+  check(
+    'the two runs never share a lane on a street that has one for each direction',
+    laneOf(true, 'bus')?.id !== laneOf(false, 'bus')?.id,
   );
 
   const lpWayA: Way = {

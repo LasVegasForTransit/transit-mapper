@@ -15,6 +15,7 @@ packages/
       model/     Pure domain: types, catalogs, geometry math, routing.
       geometry/  Pure derived geometry: lane offsets, junction footprints.
       sim/       Pure vehicle-motion kernel. No DOM; the host lives in web.
+      testing/   Typed fixture builders for the test suites.
       share/     contract.ts — the wire shapes both the app and worker use.
                  claim.ts/ownership.ts are accounts groundwork (see below).
       auth/      Accounts groundwork: NOT WIRED UP (see below).
@@ -113,6 +114,13 @@ arithmetic and lives here so it can be tested directly and ported to
 WebAssembly later without dragging a browser dependency along; the
 requestAnimationFrame and MapLibre host that drives it is
 `apps/web/src/sim/vehicles.ts`.
+
+## packages/core/src/testing/ — fixtures for the test suites
+
+- `fixtures.ts` — typed builders (`aRoad`, `aPattern`, `aStation`) so a test
+  never reaches for `as unknown as Way`. A double cast disables the compiler
+  exactly where a test asserts behaviour: a cast fixture keeps compiling after
+  a record gains a required field, describing something that cannot exist.
 
 ## packages/core/src/render/ — drawing a system without a map
 

@@ -50,9 +50,16 @@ export interface ServicePlan {
 export type RunPhase = 'outbound' | 'inbound' | 'layover';
 
 export interface RunState {
-  /** Distance along the pattern path from its start, in meters. */
+  /** Distance along the pattern path from its start, in meters. Always
+   *  measured along the OUTBOUND path, whichever leg the vehicle is on, so one
+   *  number describes a position on the line regardless of heading. */
   distMeters: number;
   phase: RunPhase;
+  /** Which leg the vehicle is running. The return leg rides the opposite lane
+   *  — a different polyline on real infrastructure — so a caller drawing the
+   *  vehicle needs this to pick the right one. A vehicle laying over at a
+   *  terminal is on the leg it just finished. */
+  leg: 'outbound' | 'inbound';
 }
 
 function minimumLayoverMs(roundTripMs: number): number {
@@ -106,11 +113,12 @@ export function runStateAt(
     return {
       distMeters: metersAtElapsed(totalMeters, timetable, intoCycle, speedMps),
       phase: 'outbound',
+      leg: 'outbound',
     };
   }
   const afterOutbound = intoCycle - oneWayMs;
   if (afterOutbound < layoverMs) {
-    return { distMeters: totalMeters, phase: 'layover' };
+    return { distMeters: totalMeters, phase: 'layover', leg: 'outbound' };
   }
   const intoReturn = afterOutbound - layoverMs;
   if (intoReturn < oneWayMs) {
@@ -119,7 +127,8 @@ export function runStateAt(
     return {
       distMeters: totalMeters - metersAtElapsed(totalMeters, timetable, intoReturn, speedMps),
       phase: 'inbound',
+      leg: 'inbound',
     };
   }
-  return { distMeters: 0, phase: 'layover' };
+  return { distMeters: 0, phase: 'layover', leg: 'inbound' };
 }

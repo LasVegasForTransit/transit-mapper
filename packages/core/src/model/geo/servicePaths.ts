@@ -153,6 +153,29 @@ export function patternSegments(waysById: Map<string, Way>, pattern: Pattern): P
   return segments;
 }
 
+/** Which of a pattern's two runs is being resolved. */
+export type RunDirection = 'outbound' | 'inbound';
+
+/**
+ * A pattern's segments for one run.
+ *
+ * The return run is the outbound list MIRRORED — reversed order, each segment
+ * reversed and its direction flipped — rather than resolved a second time, so
+ * the two runs cannot disagree about a way. It is a genuinely different piece
+ * of ground once lanes are involved: the far curb of a two-way street.
+ */
+export function patternRunSegments(
+  waysById: Map<string, Way>,
+  pattern: Pattern,
+  run: RunDirection = 'outbound',
+): PatternSegment[] {
+  const outbound = patternSegments(waysById, pattern);
+  if (run === 'outbound') return outbound;
+  return outbound
+    .map((s) => ({ ...s, forward: !s.forward, path: [...s.path].reverse() }))
+    .reverse();
+}
+
 /**
  * Which direction each of an ordered list of ways is travelled, derived by
  * continuity — for callers that build a path from geometry and have no
