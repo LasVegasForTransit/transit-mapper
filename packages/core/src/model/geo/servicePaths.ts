@@ -47,6 +47,9 @@ export function oneSection(legs: PatternLeg[]): PatternSection[] {
   return [{ kind: 'shared', legs }];
 }
 
+/** Both directions, in the order anything walking them should. */
+export const PATTERN_RUNS: readonly RunDirection[] = ['outbound', 'inbound'];
+
 /** One leg as a given direction of service rides it. */
 export interface RunLeg {
   leg: PatternLeg;

@@ -6,8 +6,11 @@ import {
   pathLengthMeters,
   patternPath,
   patternLegs,
+  patternRunPath,
+  patternHasSplit,
 } from '@transitmapper/core/model/geo';
 import type {
+  RunDirection,
   Pattern,
   ScheduleDayScope,
   Service,
@@ -76,12 +79,18 @@ function formatSpan(start: string, end: string): string {
   return `${start}–${end}`;
 }
 
-/** One pattern's stops, in ride order. Resolves the pattern's path to project
- *  against — cheap here, since only the selected service is ever inspected. */
-function stopsOnPattern(ways: Way[], stations: Station[], pattern: Pattern): Station[] {
-  const path = patternPath(ways, pattern);
+/** One direction's stops, in the order a rider on that trip reaches them.
+ *  Resolves the path to project against — cheap here, since only the selected
+ *  service is ever inspected. */
+function stopsOnPattern(
+  ways: Way[],
+  stations: Station[],
+  pattern: Pattern,
+  run: RunDirection = 'outbound',
+): Station[] {
+  const path = patternRunPath(ways, pattern, run);
   if (path.length < 2) return [];
-  return patternStops(stations, pattern, path, pathLengthMeters(path)).map((s) => s.station);
+  return patternStops(stations, pattern, path, pathLengthMeters(path), run).map((s) => s.station);
 }
 
 export interface ServiceInspectorProps {
@@ -165,7 +174,11 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
     // lists only stops on its own ways; reconstructing "which trunk stops feed
     // this branch" needs graph traversal through junctions, out of scope for
     // this display.
-    stops: stopsOnPattern(ways, stations, p),
+    stops: stopsOnPattern(ways, stations, p, 'outbound'),
+    // Only worth showing separately when the two directions are different
+    // ground. A line that comes back the way it went would just list the same
+    // stations backwards, which tells a planner nothing they can act on.
+    returnStops: patternHasSplit(p) ? stopsOnPattern(ways, stations, p, 'inbound') : [],
   }));
   const totalStops = new Set(patternStops.flatMap(({ stops }) => stops.map((st) => st.id))).size;
   const isAddingBranch = addingPatternForServiceId === id;
@@ -641,7 +654,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
           </>
         )}
 
-        {patternStops.map(({ pattern, stops }, i) =>
+        {patternStops.map(({ pattern, stops, returnStops }, i) =>
           stops.length > 0 ? (
             <div key={pattern.id}>
               <label className="field-label">
@@ -710,6 +723,29 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                   </li>
                 ))}
               </ol>
+              {returnStops.length > 0 && (
+                <>
+                  <label className="field-label">Return trip</label>
+                  <p className="insp-sub">
+                    This line&rsquo;s two directions run different streets, so the return trip calls
+                    at its own stops in its own order.
+                  </p>
+                  <ol className="stop-list">
+                    {returnStops.map((st) => (
+                      <li key={st.id} className="stop-row">
+                        <button
+                          type="button"
+                          className="stop-open"
+                          onClick={() => selectAndFocus({ kind: 'station', id: st.id })}
+                        >
+                          <span className="dot ring" />
+                          <span className="stop-name">{st.name || 'Unnamed stop'}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              )}
             </div>
           ) : null,
         )}

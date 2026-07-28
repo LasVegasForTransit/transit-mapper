@@ -14,11 +14,12 @@ import {
   resolveWayPath,
   serviceCoversWayAt,
   serviceHasPartialLeg,
+  PATTERN_RUNS,
+  patternRunLegs,
   serviceLaneOnWay,
   serviceRangesOnWay,
   slicePathByT,
   wayById,
-  patternLegs,
 } from '../model/geo';
 import { nearWaysForStations, servicesByWay, visibleWaysFor } from './featureMemo';
 import { directionalLanes, isOneWay, wayCapacity } from '../model/profile';
@@ -120,6 +121,11 @@ interface WayPatternEntry {
   svc: Service;
   pattern: Pattern;
   wayIdx: number;
+  /** RIDE direction for the one direction of service this entry stands for.
+   *  One entry per (leg × direction that rides it): a leg both directions
+   *  share yields two, with opposite `forward`, which is how a two-way service
+   *  claims both curbs. A leg only one direction rides yields one. */
+  forward: boolean;
 }
 const wayPatternIndexCache = new WeakMap<Map<string, Service[]>, Map<string, WayPatternEntry[]>>();
 function wayPatternIndex(byWay: Map<string, Service[]>): Map<string, WayPatternEntry[]> {
@@ -132,11 +138,18 @@ function wayPatternIndex(byWay: Map<string, Service[]>): Map<string, WayPatternE
       if (seen.has(svc.id)) continue;
       seen.add(svc.id);
       for (const pattern of svc.patterns) {
-        patternLegs(pattern).forEach((leg, wayIdx) => {
-          let arr = index.get(leg.wayId);
-          if (!arr) index.set(leg.wayId, (arr = []));
-          arr.push({ svc, pattern, wayIdx });
-        });
+        // Walked per direction rather than over the flat leg list, so the
+        // entries say which lanes are ACTUALLY ridden. The list used to be
+        // walked once and each leg drawn on both curbs, which is right for a
+        // two-way street and wrong for a one-way couplet — it would paint the
+        // outward street's return curb with a line no vehicle ever runs on.
+        for (const run of PATTERN_RUNS) {
+          for (const { leg, index: wayIdx, forward } of patternRunLegs(pattern, run)) {
+            let arr = index.get(leg.wayId);
+            if (!arr) index.set(leg.wayId, (arr = []));
+            arr.push({ svc, pattern, wayIdx, forward });
+          }
+        }
       }
     }
   }
@@ -577,22 +590,16 @@ export function buildFeatures(
       // pattern list per way.
       const byLane = new Map<string, Service[]>();
       const resolved = new Set<string>();
-      for (const { svc, pattern, wayIdx } of wayPatternIndex(byWay).get(way.id) ?? []) {
-        // BOTH runs, because a service occupies both curb lanes of a two-way
-        // street and its return-run vehicles ride the second one. Draw only
-        // the leg's own direction and half the line's trains run on bare
-        // asphalt, which reads as the vehicles having come off their route.
-        for (const forward of [true, false]) {
-          const laneId = serviceLaneOnWay(pattern, wayIdx, waysById, svc.modeId, forward);
-          if (!laneId || !laneById.has(laneId)) continue;
-          resolved.add(svc.id);
-          let arr = byLane.get(laneId);
-          if (!arr) byLane.set(laneId, (arr = []));
-          // A service can land on the SAME lane twice — via two of its own
-          // patterns, or because a single track (or a pinned leg) carries both
-          // its runs. Don't double-emit it there.
-          if (!arr.some((s) => s.id === svc.id)) arr.push(svc);
-        }
+      for (const { svc, pattern, wayIdx, forward } of wayPatternIndex(byWay).get(way.id) ?? []) {
+        const laneId = serviceLaneOnWay(pattern, wayIdx, waysById, svc.modeId, forward);
+        if (!laneId || !laneById.has(laneId)) continue;
+        resolved.add(svc.id);
+        let arr = byLane.get(laneId);
+        if (!arr) byLane.set(laneId, (arr = []));
+        // A service can land on the SAME lane twice — via two of its own
+        // patterns, or because a single track (or a pinned leg) carries both
+        // its directions. Don't double-emit it there.
+        if (!arr.some((s) => s.id === svc.id)) arr.push(svc);
       }
       // A bundle rider with no lane resolved anywhere on this way (a lane-less
       // profile) falls back to the centerline.
