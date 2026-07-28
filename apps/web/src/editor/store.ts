@@ -270,12 +270,12 @@ export interface EditorState {
   undo: () => void;
   redo: () => void;
   /** For pointer-gesture code (see map/interactions.ts): call at gesture
-   *  start, then commitHistoryCheckpoint() at gesture end (however it ends —
-   *  a normal mouseup or an Escape-cancel). Safe/no-op if system ends up
-   *  value-equal to how it started (e.g. a cancel that fully reverted, or a
-   *  click that never actually moved anything). */
+   *  start, then commitHistoryCheckpoint() on a normal end or
+   *  cancelHistoryCheckpoint() on Escape. The explicit cancel restores the
+   *  exact immutable starting snapshot without scanning agency-scale arrays. */
   beginHistoryCheckpoint: () => void;
   commitHistoryCheckpoint: () => void;
+  cancelHistoryCheckpoint: () => void;
 
   // tools & selection
   setTool: (tool: Tool) => void;
@@ -654,41 +654,9 @@ function touch(system: TransitSystem): TransitSystem {
   // separating carriageways. Missing one leaves an invisible entry that a
   // later lane reusing the id silently inherits, and that survives a save.
   // Free when nothing is restricted, which is the overwhelming common case —
-  // prunedToLiveLanes returns the same reference when every key is live, so
-  // this also preserves the reference-equality that commitHistoryCheckpoint's
-  // no-op detection depends on.
+  // prunedToLiveLanes returns the same reference when every key is live.
   const turnRestrictions = prunedToLiveLanes(system.turnRestrictions, system.ways);
   return { ...system, turnRestrictions, updatedAt: Date.now() };
-}
-
-// Field-wise content equality for commitHistoryCheckpoint's no-op detection.
-// Every top-level TransitSystem field keeps its exact reference across a
-// mutation that doesn't touch it (the immutable-replacement convention this
-// whole store relies on), so a field whose reference is unchanged is
-// guaranteed content-unchanged too — only fields with a NEW reference need
-// an actual JSON comparison. For a typical drag gesture that's `ways` (and
-// sometimes `stations`) out of 16 fields, instead of serializing the whole
-// system (which used to run on every single gesture end, not just reverts —
-// confirmed live as the single highest-frequency expensive call in the
-// editing loop).
-//
-// Iterates the UNION of before's and after's own keys, not just before's —
-// TransitSystem.description is optional, and createEmptySystem() never sets
-// it while the deserialize path always does (even to `undefined`), so a
-// `before` snapshot from a fresh system and an `after` with description set
-// have genuinely different key sets. Checking only `before`'s keys would
-// silently skip comparing a field that only exists on `after`, treating a
-// real change as a no-op revert (confirmed reachable, not just theoretical).
-function systemContentEqual(before: TransitSystem, after: TransitSystem): boolean {
-  const keys = new Set([...Object.keys(before), ...Object.keys(after)]) as Set<keyof TransitSystem>;
-  for (const key of keys) {
-    if (key === 'updatedAt') continue;
-    const b = before[key];
-    const a = after[key];
-    if (b === a) continue;
-    if (JSON.stringify(b) !== JSON.stringify(a)) return false;
-  }
-  return true;
 }
 
 // Recompute the coords of every station riding `wayId`, so they follow the
@@ -733,10 +701,9 @@ function updateWayPointsBatch(
     changedWays.set(w.id, next);
     return next;
   });
-  // Only allocate a new `stations` array when something actually reanchors —
-  // keeps the reference stable for a group of ways nothing is anchored to,
-  // which is what lets commitHistoryCheckpoint's reference-equality fast
-  // path skip comparing `stations` at all for that case.
+  // Only allocate a new `stations` array when something actually reanchors.
+  // Map projection and simulation caches use these immutable collection
+  // identities to skip unrelated work after a group drag.
   let stationsChanged = false;
   const stations = system.stations.map((s) => {
     const anchor = primaryAnchor(s);
@@ -2035,17 +2002,25 @@ export function createEditorStore() {
       if (before === null) return;
       const after = get().system;
       if (after === before) return; // e.g. a click that never moved anything
-      // A cancelled gesture (Escape) reverts by calling the same actions
-      // again with the original values — same content, new object identity —
-      // so a reference check alone can't tell "reverted" from "changed".
-      // systemContentEqual excludes updatedAt (every mutating action bumps
-      // it via touch(), so it always differs even when nothing else does)
-      // and skips any field whose reference didn't change.
-      if (systemContentEqual(before, after)) return;
       past.push(before);
       if (past.length > HISTORY_LIMIT) past.shift();
       future = [];
       set({ canUndo: true, canRedo: false });
+    },
+
+    cancelHistoryCheckpoint: () => {
+      if (checkpointDepth === 0) return;
+      const before = checkpointBefore;
+      checkpointBefore = null;
+      checkpointDepth = 0;
+      if (before === null || get().system === before) return;
+      // Restore the exact immutable snapshot. Replaying inverse actions would
+      // allocate new RTC-sized collections and force commit to deep-compare
+      // them; this is O(1), produces no phantom undo step, and preserves every
+      // field (including updatedAt) exactly as it was before the gesture.
+      skipHistory = true;
+      set({ system: before });
+      skipHistory = false;
     },
 
     newSystem: () => {
