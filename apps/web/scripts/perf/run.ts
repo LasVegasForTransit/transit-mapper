@@ -972,19 +972,20 @@ async function runCalibration(browser: Browser): Promise<PerfCalibration> {
       rate: activeProtocol.cpuThrottlingRate,
     });
     const samplesMs = await page.evaluate(() => {
-      const measure = (): number => {
+      const measurements: number[] = [];
+      for (let run = 0; run < 6; run += 1) {
         let value = 0x9e3779b9;
         const startedAt = performance.now();
         for (let index = 0; index < 2_000_000; index += 1) {
           value = Math.imul(value ^ index, 0x85ebca6b);
           value ^= value >>> 13;
         }
-        const duration = performance.now() - startedAt;
-        if (Number.isNaN(value)) throw new Error('Unreachable calibration guard.');
-        return duration;
-      };
-      measure();
-      return Array.from({ length: 5 }, () => measure());
+        if (!Number.isFinite(value)) {
+          throw new Error('The calibration loop produced an invalid result.');
+        }
+        if (run > 0) measurements.push(performance.now() - startedAt);
+      }
+      return measurements;
     });
     const sorted = [...samplesMs].sort((left, right) => left - right);
     return {
@@ -1018,6 +1019,19 @@ async function verifyCacheEvictedOfflineReload(
     await page.goto(`${previewUrl}/`, { waitUntil: 'load', timeout: 60_000 });
     const name = page.getByLabel('System name');
     await name.waitFor({ state: 'visible', timeout: 60_000 });
+    const initialDocumentName = await name.inputValue();
+    if (initialDocumentName !== fixture.name) {
+      const storageState = await page.evaluate(() => ({
+        activeId: localStorage.getItem('transitmapper:activeId'),
+        activeSystem: localStorage
+          .getItem(`transitmapper:system:${localStorage.getItem('transitmapper:activeId') ?? ''}`)
+          ?.slice(0, 80),
+      }));
+      throw new Error(
+        `The online PWA bootstrap restored "${initialDocumentName}" instead of ` +
+          `"${fixture.name}" (${JSON.stringify(storageState)}).`,
+      );
+    }
     await page.evaluate(async () => navigator.serviceWorker.ready);
     if (!(await page.evaluate(() => navigator.serviceWorker.controller !== null))) {
       await page.reload({ waitUntil: 'load', timeout: 60_000 });
@@ -1034,7 +1048,10 @@ async function verifyCacheEvictedOfflineReload(
     await name.waitFor({ state: 'visible', timeout: 60_000 });
     const documentName = await name.inputValue();
     if (documentName !== fixture.name) {
-      throw new Error('The cache-evicted offline reload did not restore the saved editor.');
+      throw new Error(
+        `The cache-evicted offline reload restored "${documentName}" instead of ` +
+          `"${fixture.name}".`,
+      );
     }
     const report: OfflineRuntimeReport = {
       schemaVersion: 1,

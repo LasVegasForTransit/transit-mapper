@@ -69,6 +69,11 @@ import {
   type GestureProjectionResult,
 } from './gestureProjection';
 import { buildGestureLayerMaskPlan, maskedGestureFilter } from './gestureLayerMask';
+import {
+  ALL_SYSTEM_FEATURE_SOURCES,
+  sourceUploadsForSystemChange,
+  type SystemFeatureSourceId,
+} from './sourceUploadPlan';
 import { landmarksFeatureCollection } from './landmarks';
 import { getMap, setMap } from './mapRef';
 import { initLiveCamera, setLiveCamera } from '../camera/liveCamera';
@@ -531,21 +536,52 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     let gestureProjectionAborted = false;
     let gesturePreviewVisible = false;
     let fullAfterGesture = false;
+    type SourceUploadRequest = 'all' | readonly SystemFeatureSourceId[];
+    const pendingSourceUploads = new Set<SystemFeatureSourceId>();
+    let allSourcesPending = false;
+
+    const queueSourceUploads = (request: SourceUploadRequest) => {
+      if (request === 'all') {
+        allSourcesPending = true;
+        pendingSourceUploads.clear();
+        return;
+      }
+      if (allSourcesPending) return;
+      for (const sourceId of request) pendingSourceUploads.add(sourceId);
+    };
+
+    const takeQueuedSourceUploads = (): readonly SystemFeatureSourceId[] => {
+      const sourceIds = allSourcesPending
+        ? ALL_SYSTEM_FEATURE_SOURCES
+        : ALL_SYSTEM_FEATURE_SOURCES.filter((sourceId) => pendingSourceUploads.has(sourceId));
+      allSourcesPending = false;
+      pendingSourceUploads.clear();
+      return sourceIds;
+    };
 
     if (import.meta.env.DEV) {
       window.__mapProjectionCounts = () => ({ ...projectionCounts });
     }
 
-    const pushData = () => {
+    const pushData = (requestedSources: readonly SystemFeatureSourceId[]) => {
       if (gestureActive) {
+        queueSourceUploads(requestedSources);
         fullAfterGesture = true;
         return;
       }
       // Self-heal before pushing — a missing source would otherwise silently
       // swallow this update (every setData below is optional-chained).
-      if (!map.getSource(SRC_WAYS) || !map.getLayer(LAYER_SPECS[0].id)) {
+      const overlayNeedsHealing =
+        ALL_SOURCES.some((sourceId) => !map.getSource(sourceId)) ||
+        LAYER_SPECS.some((layer) => !map.getLayer(layer.id));
+      let sourceIds = requestedSources;
+      if (overlayNeedsHealing) {
         if (!ensureOverlay()) return;
+        // A repaired style has fresh, empty sources. Repopulate every derived
+        // collection even if the store change that exposed it was narrow.
+        sourceIds = ALL_SYSTEM_FEATURE_SOURCES;
       }
+      if (sourceIds.length === 0) return;
       const { system, selection } = store.getState();
       const renderSystem =
         viewRef.current.viewMode === 'diagram' ? computeDiagramSystem(system) : system;
@@ -575,28 +611,28 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         physicalHandleStationId(),
         physicalHandleGroupId(),
       );
-      const sourceData: Array<[string, GeoJSON.FeatureCollection]> = [
-        [SRC_LANES, fc.lanes],
-        [SRC_LANE_MARKINGS, fc.laneMarkings],
-        [SRC_LANE_ARROWS, fc.laneArrows],
-        [SRC_SERVICE_ARROWS, fc.serviceArrows],
-        [SRC_JUNCTIONS, fc.junctions],
-        [SRC_CONNECTORS, fc.connectors],
-        [SRC_WAY_LABELS, fc.wayLabels],
-        [SRC_WAYS, fc.ways],
-        [SRC_SERVICES, fc.services],
-        [SRC_STATIONS, fc.stations],
-        [SRC_HANDLES, fc.handles],
-        [SRC_FOOTPRINTS, fc.footprints],
-        [SRC_PLATFORMS, fc.platforms],
-        [SRC_FACILITIES, fc.facilities],
-        [SRC_PHYSICAL_HANDLES, fc.physicalHandles],
-      ];
+      const sourceData: Record<SystemFeatureSourceId, GeoJSON.FeatureCollection> = {
+        [SRC_WAYS]: fc.ways,
+        [SRC_SERVICES]: fc.services,
+        [SRC_STATIONS]: fc.stations,
+        [SRC_HANDLES]: fc.handles,
+        [SRC_FOOTPRINTS]: fc.footprints,
+        [SRC_PLATFORMS]: fc.platforms,
+        [SRC_FACILITIES]: fc.facilities,
+        [SRC_PHYSICAL_HANDLES]: fc.physicalHandles,
+        [SRC_LANES]: fc.lanes,
+        [SRC_LANE_MARKINGS]: fc.laneMarkings,
+        [SRC_LANE_ARROWS]: fc.laneArrows,
+        [SRC_SERVICE_ARROWS]: fc.serviceArrows,
+        [SRC_JUNCTIONS]: fc.junctions,
+        [SRC_CONNECTORS]: fc.connectors,
+        [SRC_WAY_LABELS]: fc.wayLabels,
+      };
       let sourceUploads = 0;
-      for (const [sourceId, data] of sourceData) {
+      for (const sourceId of sourceIds) {
         const source = map.getSource(sourceId) as GeoJSONSource | undefined;
         if (!source) continue;
-        source.setData(data);
+        source.setData(sourceData[sourceId]);
         sourceUploads++;
       }
       recordFullProjection(projectionCounts, sourceUploads);
@@ -612,7 +648,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // Reading store.getState() fresh inside pushData means a coalesced call
     // still reflects the LATEST merged state, not a stale snapshot.
     let pushDataRaf: number | null = null;
-    const schedulePushData = () => {
+    const schedulePushData = (request: SourceUploadRequest = 'all') => {
+      queueSourceUploads(request);
       if (gestureActive) {
         fullAfterGesture = true;
         return;
@@ -620,10 +657,12 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       if (pushDataRaf !== null) return;
       pushDataRaf = requestAnimationFrame(() => {
         pushDataRaf = null;
-        pushData();
+        pushData(takeQueuedSourceUploads());
       });
     };
-    schedulePushDataRef.current = schedulePushData;
+    // React view changes invalidate all derived collections, while store
+    // content changes below pass a dependency-filtered source list.
+    schedulePushDataRef.current = () => schedulePushData('all');
 
     const gestureFilterRestores = new Map<string, FilterSpecification | undefined>();
     const gestureVisibilityRestores = new Map<string, unknown>();
@@ -711,6 +750,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       if (selectionRaf !== null) {
         cancelAnimationFrame(selectionRaf);
         selectionRaf = null;
+        queueSourceUploads('all');
         fullAfterGesture = true;
       }
       applyGestureProjectionResult(gestureProjection.project(baseline));
@@ -726,7 +766,13 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       gestureProjectionAborted = false;
       const needsFullProjection = finish.rebuild || fullAfterGesture;
       fullAfterGesture = false;
-      if (needsFullProjection) schedulePushData();
+      if (needsFullProjection) {
+        const hasQueuedSources = allSourcesPending || pendingSourceUploads.size > 0;
+        // Gesture store commits already contributed their exact dependency
+        // union. Fall back to all only for a canceled/aborted path that did not
+        // expose a classifiable system change.
+        schedulePushData(hasQueuedSources ? [] : 'all');
+      }
     };
 
     // Selection-only fast path (system unchanged): update halos via feature-state
@@ -785,7 +831,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     const scheduleLaneRefresh = () => {
       window.clearTimeout(laneRefreshTimer);
       laneRefreshTimer = window.setTimeout(() => {
-        if (map.getSource(SRC_LANES)) schedulePushData();
+        if (map.getSource(SRC_LANES)) schedulePushData('all');
       }, LANE_REFRESH_DEBOUNCE_MS);
     };
 
@@ -801,7 +847,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         ?.classList.remove('maplibregl-compact-show');
       registerMapIcons(map);
       ensureOverlay();
-      pushData();
+      pushData(ALL_SYSTEM_FEATURE_SOURCES);
       detachInteractions = attachInteractions(map, store, {
         openShortcuts,
         toggleUi,
@@ -861,27 +907,30 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       // features — and renames arrive one per keystroke. See
       // core/render/featureInputs.ts for the classification and its guarantees.
       if (featureInputsChanged(prev.system, s.system)) {
+        const changedSources = sourceUploadsForSystemChange(prev.system, s.system);
         if (gestureActive) {
+          queueSourceUploads(changedSources);
           if (!gestureProjectionAborted && gestureProjection)
             applyGestureProjectionResult(gestureProjection.project(s.system));
           else fullAfterGesture = true;
         } else if (map.getSource(SRC_SERVICES)) {
-          // Committed content changed — full rebuild (which re-applies
-          // selection state). Active gestures take the one-source path above.
-          schedulePushData();
+          // The feature build is still monolithic, but only dependencies whose
+          // GeoJSON may differ cross the expensive MapLibre setData boundary.
+          schedulePushData(changedSources);
         }
       } else if (
         (s.selection !== prev.selection || s.activeWayId !== prev.activeWayId) &&
         map.getSource(SRC_SERVICES)
       ) {
         if (gestureActive) {
+          queueSourceUploads('all');
           fullAfterGesture = true;
         } else {
           // Only the selection/active way changed. Node selection rides the
           // junctions `selected` filter, so it still needs a rebuild; everything
           // else takes the feature-state fast path.
           const involvesNode = s.selection?.kind === 'node' || prev.selection?.kind === 'node';
-          if (involvesNode) schedulePushData();
+          if (involvesNode) schedulePushData('all');
           else scheduleSelectionUpdate();
         }
       }
