@@ -841,9 +841,15 @@ input {
 }
 /* Animates the Objects section open/closed via max-height instead of an
    instant show/hide. flex:1 lets it fill whatever space remains in the
-   (possibly viewport-clamped) card when expanded; the 640px ceiling is a
-   generous sentinel that rarely binds on its own — max-height:0 when
-   collapsed overrides it regardless, which is what actually animates. */
+   (possibly viewport-clamped) card when expanded; max-height:0 when
+   collapsed overrides that, which is what actually animates. The expanded
+   ceiling was a flat 640px until it was confirmed live to bind on any panel
+   taller than ~740px — not rare at all on a normal laptop screen — leaving
+   the Objects list scroll-capped inside 640px of its own box, with the
+   rest of the (correctly full-height) card sitting empty below it. 100%
+   resolves against .panel's own height, which is definite here (stretched
+   by the grid), so the transition still animates a concrete value — it
+   just stops tracking the viewport instead of a guessed constant. */
 .collapsible {
   /* display:flex here (missing before) is what makes .collapsible-inner
      actually shrink to fit whatever height this ends up with, instead of
@@ -855,7 +861,7 @@ input {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  max-height: 640px;
+  max-height: 100%;
   overflow: hidden;
   transition: max-height 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
 }
