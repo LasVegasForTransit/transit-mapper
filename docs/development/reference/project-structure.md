@@ -217,6 +217,20 @@ Everything that turns a system into something that leaves the app.
 
 See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 
+## apps/web/src/services/ — browser services and preferences
+
+- `userPreferences.ts` — the central user preference system. Stores and
+  retrieves user settings (unit system: metric/imperial) from localStorage,
+  with browser locale-based defaults (imperial for en-US, my, en-LR; metric
+  everywhere else). Exports hooks (`useUserPreferences`, `useUnitPreference`)
+  for reactive preference access throughout the app.
+
+## apps/web/src/i18n/ — internationalization and localization
+
+- `messages.ts` — centralized message constants for all user-facing strings,
+  organized hierarchically (settings, units, vehicle). Enables future
+  integration with proper i18n libraries without refactoring UI components.
+
 ## apps/web/src/storage/ — the local library
 
 - `localStore.ts` — a library of saved systems in `localStorage`, replacing

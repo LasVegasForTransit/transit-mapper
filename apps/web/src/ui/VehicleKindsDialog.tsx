@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { shortId } from '@transitmapper/core/model/ids';
 import { MODES, MODE_ORDER } from '@transitmapper/core/model/catalog';
 import type { VehicleKind } from '@transitmapper/core/model/system';
+import { useUnitPreference } from '../services/userPreferences';
+import { messages } from '../i18n/messages';
 import { blurOnEnter } from './formUtils';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
@@ -34,6 +36,7 @@ export function VehicleKindsDialog({
   onClose,
 }: VehicleKindsDialogProps) {
   const [kinds, setKinds] = useState<VehicleKind[]>(vehicleKinds);
+  const unitSystem = useUnitPreference();
 
   const commit = (next: VehicleKind[]) => {
     setKinds(next);
@@ -122,20 +125,28 @@ export function VehicleKindsDialog({
                     updateKind(k.id, { widthM: Math.max(0.5, Number(e.target.value) || 0.5) })
                   }
                 />
-                <span className="freq-suffix">m wide</span>
+                <span className="freq-suffix">
+                  {unitSystem === 'metric'
+                    ? messages.vehicle.widthMetric
+                    : messages.vehicle.widthImperial}
+                </span>
                 <input
                   type="number"
                   min={1}
                   step={0.5}
                   className="freq-input"
-                  aria-label={`${k.label || 'Vehicle'} length in meters`}
+                  aria-label={`${k.label || 'Vehicle'} length in ${unitSystem === 'metric' ? 'meters' : 'feet'}`}
                   value={k.lengthM}
                   disabled={readOnly}
                   onChange={(e) =>
                     updateKind(k.id, { lengthM: Math.max(1, Number(e.target.value) || 1) })
                   }
                 />
-                <span className="freq-suffix">m long</span>
+                <span className="freq-suffix">
+                  {unitSystem === 'metric'
+                    ? messages.vehicle.lengthMetric
+                    : messages.vehicle.lengthImperial}
+                </span>
               </div>
 
               <div className="freq-row">
@@ -161,7 +172,7 @@ export function VehicleKindsDialog({
                   type="number"
                   min={0}
                   className="freq-input"
-                  aria-label={`${k.label || 'Vehicle'} top speed in km/h`}
+                  aria-label={`${k.label || 'Vehicle'} top speed in ${unitSystem === 'metric' ? 'km/h' : 'mph'}`}
                   placeholder="Not set"
                   value={k.topSpeedKmh ?? ''}
                   disabled={readOnly}
@@ -172,7 +183,11 @@ export function VehicleKindsDialog({
                     })
                   }
                 />
-                <span className="freq-suffix">km/h top speed</span>
+                <span className="freq-suffix">
+                  {unitSystem === 'metric'
+                    ? messages.vehicle.speedMetric
+                    : messages.vehicle.speedImperial}
+                </span>
               </div>
 
               <div className="freq-row">
