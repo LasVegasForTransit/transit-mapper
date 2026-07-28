@@ -147,8 +147,9 @@ export interface AttachInteractionsOptions {
   onEditGestureStart?: (targets: EditGestureTargets) => void;
   onEditGestureEnd?: () => void;
   /** Pointer-down boundaries for any continuous manipulation, including
-   * camera pans. Ambient rendering can yield until the user's hand releases
-   * without conflating a camera move with an editable history checkpoint. */
+   * camera pans. Ambient rendering uses this to hold expensive derived
+   * geometry on its last committed snapshot while continuous feedback keeps
+   * painting, without conflating a camera move with an editable checkpoint. */
   onDirectManipulationStart?: () => void;
   onDirectManipulationEnd?: () => void;
 }
