@@ -4,6 +4,7 @@ import type { EditorStore } from '../editor/store';
 import {
   bearingAtT,
   cumulativeLengths,
+  patternWayIds,
   pointAtDistance,
   rotatedRectPolygon,
 } from '@transitmapper/core/model/geo';
@@ -35,8 +36,10 @@ import { effectiveVehicleKind, patternStats } from '@transitmapper/core/sim/serv
 import { planService, runStateAt } from '@transitmapper/core/sim/fleet';
 import {
   activeSchedule,
+  advanceSimMs,
   dayScopeAt,
   minutesOfDay,
+  simSpeed,
   type ActiveSchedule,
 } from '@transitmapper/core/sim/clock';
 
@@ -78,6 +81,10 @@ export interface VehicleGate {
    *  service then runs that period's configuration regardless of the clock.
    *  Undefined means follow the clock. */
   pinnedPeriod: () => string | undefined;
+  /** Presentation state lives outside the editor store. Publish view, mode
+   *  filter, and pinned-period changes here so an inactive animation can stop
+   *  completely instead of polling those getters forever. */
+  subscribe: (listener: () => void) => () => void;
 }
 
 /**
@@ -160,30 +167,32 @@ function reversedLeg(leg: LegGeometry): LegGeometry {
   return { path: [...leg.path].reverse(), cumLengths, meters: leg.meters };
 }
 
-// Keyed by the Pattern object's own reference, but a Pattern only holds
-// {id, wayIds, name} — reshaping a way (drag) or moving/editing a station
-// replaces system.ways/stations, NOT the Pattern object those ways/stations
-// belong to, so keying on Pattern reference alone never invalidates for
-// either edit: the cache entry also records which `ways`/`stations` array
-// references it was computed against, and a hit is only trusted if BOTH
-// still match the current system — otherwise it's recomputed (and the entry
-// updated) same as a miss. Without the caching at all, the animation tick
+// Keyed by the Pattern object's own reference, plus the objects that can
+// actually change its geometry: the ways its legs reference and stations
+// anchored to those ways. Store edits replace the top-level ways/stations
+// arrays even when they touch something on the other side of town; treating
+// those array identities as dependencies made every pattern miss during every
+// drag. The indexes below are rebuilt once per new top-level array, then each
+// pattern compares only its own small dependency lists by object identity.
+//
+// Without the caching at all, the animation tick
 // (every frame) redid the full path-stitching + arc-length + stop-lookup
 // work for every pattern; fine at a few dozen hand-drawn patterns, but a
 // real GTFS import (hundreds of patterns, each with a long, detailed
 // street-following path) turned that into a sustained ~150ms/frame cost — a
 // permanently janky tab, not just a slow first render. Confirmed live
-// against RTC Southern Nevada's real feed. The ways/stations check means an
-// active drag (any drag, not just one touching this pattern's own ways —
-// `system.ways`/`stations` get a fresh top-level array reference on every
-// store mutation regardless of which way was touched) invalidates every
-// pattern's cache for that frame, same cost as no caching at all — but only
-// for the duration of the drag gesture; once it ends the cache re-warms and
-// stays warm until the next edit. Correct-but-momentarily-uncached during an
-// edit beats fast-but-visibly-wrong (a vehicle stuck on a pre-edit alignment)
-// for however long the pattern stays on screen afterward.
+// against RTC Southern Nevada's real feed. A drag now invalidates the
+// patterns riding the changed way or station, while unrelated patterns keep
+// their warm entries. Object identity still makes a relevant edit invalidate
+// immediately, so a vehicle never remains stuck on a pre-edit alignment.
 interface CachedPatternGeometry extends PatternGeometry {
-  forWays: Way[];
+  // The top-level collection identities are the zero-allocation fast path.
+  // Most ticks see exactly these arrays and return before reconstructing any
+  // pattern-local Set or dependency array. When an edit replaces one, the
+  // smaller object-reference lists below decide whether this pattern changed.
+  forWayArray: Way[];
+  forStationArray: Station[];
+  forWays: Array<Way | undefined>;
   forStations: Station[];
   // Compared field-by-field rather than by object identity: effectiveVehicleKind
   // builds a fresh VehicleMotionProfile object every call, so `===` on the
@@ -200,6 +209,68 @@ interface CachedPatternGeometry extends PatternGeometry {
   forModeId: string | undefined;
 }
 const patternGeometryCache = new WeakMap<Pattern, CachedPatternGeometry>();
+const patternWayIdCache = new WeakMap<Pattern, string[]>();
+const wayIndexCache = new WeakMap<Way[], Map<string, Way>>();
+const stationIndexCache = new WeakMap<Station[], Map<string, Station[]>>();
+
+function indexedWays(ways: Way[]): Map<string, Way> {
+  let index = wayIndexCache.get(ways);
+  if (index) return index;
+  index = new Map(ways.map((way) => [way.id, way]));
+  wayIndexCache.set(ways, index);
+  return index;
+}
+
+function indexedStations(stations: Station[]): Map<string, Station[]> {
+  let index = stationIndexCache.get(stations);
+  if (index) return index;
+  index = new Map();
+  for (const station of stations) {
+    for (const anchor of station.anchors) {
+      const onWay = index.get(anchor.wayId);
+      if (onWay) onWay.push(station);
+      else index.set(anchor.wayId, [station]);
+    }
+  }
+  stationIndexCache.set(stations, index);
+  return index;
+}
+
+interface PatternDependencies {
+  ways: Array<Way | undefined>;
+  stations: Station[];
+}
+
+function dependencyWayIds(pattern: Pattern): string[] {
+  let ids = patternWayIdCache.get(pattern);
+  if (ids) return ids;
+  ids = [...new Set(patternWayIds(pattern))];
+  patternWayIdCache.set(pattern, ids);
+  return ids;
+}
+
+function patternDependencies(system: TransitSystem, pattern: Pattern): PatternDependencies {
+  const wayIds = dependencyWayIds(pattern);
+  const waysById = indexedWays(system.ways);
+  const stationsByWay = indexedStations(system.stations);
+  const stations: Station[] = [];
+  const seenStations = new Set<Station>();
+  for (const wayId of wayIds) {
+    for (const station of stationsByWay.get(wayId) ?? []) {
+      if (seenStations.has(station)) continue;
+      seenStations.add(station);
+      stations.push(station);
+    }
+  }
+  return {
+    ways: wayIds.map((id) => waysById.get(id)),
+    stations,
+  };
+}
+
+function sameReferences<T>(left: T[], right: T[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
 
 function resolvePatternGeometry(
   system: TransitSystem,
@@ -208,16 +279,33 @@ function resolvePatternGeometry(
   modeId?: string,
 ): PatternGeometry | null {
   const cached = patternGeometryCache.get(pattern);
-  if (
-    cached &&
-    cached.forWays === system.ways &&
-    cached.forStations === system.stations &&
-    cached.forSpeedMps === profile.speedMps &&
+  const profileMatches =
+    cached?.forSpeedMps === profile.speedMps &&
     cached.forAccelMps2 === profile.accelMps2 &&
     cached.forDecelMps2 === profile.decelMps2 &&
-    cached.forModeId === modeId
-  )
+    cached.forModeId === modeId;
+  const collectionReferencesMatch =
+    cached?.forWayArray === system.ways && cached.forStationArray === system.stations;
+  if (cached && profileMatches && collectionReferencesMatch) return cached;
+
+  // A profile/view change can reuse the already-resolved dependencies. An
+  // editor change replaces one of the collections, so resolve local
+  // references once for that edit and then install the new collection
+  // identities as the next tick's fast path.
+  const dependencies =
+    cached && collectionReferencesMatch
+      ? { ways: cached.forWays, stations: cached.forStations }
+      : patternDependencies(system, pattern);
+  if (
+    cached &&
+    sameReferences(cached.forWays, dependencies.ways) &&
+    sameReferences(cached.forStations, dependencies.stations) &&
+    profileMatches
+  ) {
+    cached.forWayArray = system.ways;
+    cached.forStationArray = system.stations;
     return cached;
+  }
   // The measurement — path, stops, timetable — comes from the same call the
   // Service inspector makes, so what a planner reads and what the map runs are
   // one object rather than two that agree. Lane geometry below is for DRAWING
@@ -260,8 +348,10 @@ function resolvePatternGeometry(
     inbound,
     timetables: stats.timetables,
     bbox: [minLng, minLat, maxLng, maxLat],
-    forWays: system.ways,
-    forStations: system.stations,
+    forWayArray: system.ways,
+    forStationArray: system.stations,
+    forWays: dependencies.ways,
+    forStations: dependencies.stations,
     forSpeedMps: profile.speedMps,
     forAccelMps2: profile.accelMps2,
     forDecelMps2: profile.decelMps2,
@@ -303,6 +393,7 @@ interface VehicleProps {
   color: string;
 }
 type VehicleFeature = Feature<Point, VehicleProps>;
+type InfrastructureVehicleFeature = Feature<Polygon, VehicleProps>;
 
 export function attachVehicleAnimation(
   map: MLMap,
@@ -310,8 +401,14 @@ export function attachVehicleAnimation(
   clock: SimClock,
   gate: VehicleGate,
 ): () => void {
-  let frame: number;
+  let frame: number | null = null;
+  let detached = false;
+  let paintPausedFrame = false;
+  let advancingClock = false;
+  let idle = false;
   let lastUpdate = -Infinity;
+  let lastRealNow = performance.now();
+  let previousClockSettings = clock.settings();
   const schedules = new ScheduleResolver();
 
   // Reused across ticks so a frame allocates no vehicle features or coordinate
@@ -323,53 +420,148 @@ export function attachVehicleAnimation(
     type: 'FeatureCollection',
     features: [],
   };
+  const infrastructurePool: InfrastructureVehicleFeature[] = [];
+  const infrastructureCollection: FeatureCollection<Polygon, VehicleProps> = {
+    type: 'FeatureCollection',
+    features: [],
+  };
+  let networkHasData = false;
+  let infrastructureHasData = false;
 
-  const tick = () => {
+  interface RenderInputs {
+    system: TransitSystem;
+    source: GeoJSONSource | undefined;
+    infraSource: GeoJSONSource | undefined;
+    viewMode: ReturnType<VehicleGate['viewMode']>;
+    pinnedPeriod: string | undefined;
+    visibleServices: Service[];
+    bounds: [number, number, number, number];
+    disabledForPerf: boolean;
+  }
+
+  const readRenderInputs = (): RenderInputs => {
+    const { system } = store.getState();
+    const bounds = map.getBounds();
+    const visibleServices = system.services.filter((service) => gate.isVisible(service));
+    return {
+      system,
+      source: map.getSource(SRC_VEHICLES) as GeoJSONSource | undefined,
+      infraSource: map.getSource(SRC_VEHICLES_INFRA) as GeoJSONSource | undefined,
+      viewMode: gate.viewMode(),
+      pinnedPeriod: gate.pinnedPeriod(),
+      visibleServices,
+      bounds: [bounds.getWest(), bounds.getEast(), bounds.getSouth(), bounds.getNorth()],
+      disabledForPerf: vehiclesDisabledForPerf(),
+    };
+  };
+
+  const cancelScheduled = () => {
+    if (frame !== null) {
+      cancelAnimationFrame(frame);
+      frame = null;
+    }
+  };
+  const scheduleFrame = (allowPaused = false) => {
+    if (allowPaused) paintPausedFrame = true;
+    if (detached || frame !== null || (clock.settings().paused && !allowPaused)) return;
     frame = requestAnimationFrame(tick);
+  };
+  const wake = (allowPaused = false) => {
+    if (detached || (clock.settings().paused && !allowPaused)) return;
+    scheduleFrame(allowPaused);
+  };
+  const setNetworkData = (
+    source: GeoJSONSource | undefined,
+    features: FeatureCollection<Point, VehicleProps>,
+  ) => {
+    const hasData = features.features.length > 0;
+    if (hasData || networkHasData) source?.setData(features);
+    networkHasData = hasData;
+  };
+  const setInfrastructureData = (
+    source: GeoJSONSource | undefined,
+    features: FeatureCollection<Polygon, VehicleProps>,
+  ) => {
+    const hasData = features.features.length > 0;
+    if (hasData || infrastructureHasData) source?.setData(features);
+    infrastructureHasData = hasData;
+  };
+  const clearSources = (source?: GeoJSONSource, infraSource?: GeoJSONSource) => {
+    if (collection.features.length !== 0) collection.features.length = 0;
+    if (infrastructureCollection.features.length !== 0)
+      infrastructureCollection.features.length = 0;
+    setNetworkData(source, collection);
+    setInfrastructureData(infraSource, infrastructureCollection);
+  };
+
+  function tick() {
+    frame = null;
+    const paused = clock.settings().paused;
+    const canPaintPaused = paintPausedFrame;
+    paintPausedFrame = false;
+    if (detached || (paused && !canPaintPaused)) return;
+    const wokeFromIdle = idle;
+    idle = false;
     const realNow = performance.now();
     const sinceLast = realNow - lastUpdate;
-    if (sinceLast < VEHICLE_UPDATE_INTERVAL_MS) return; // fixed-timestep throttle
+    if (!paused && sinceLast < VEHICLE_UPDATE_INTERVAL_MS) {
+      // Preserve this across the cadence-only frame so the next real update
+      // still catches up visible time spent intentionally unscheduled.
+      idle = wokeFromIdle;
+      scheduleFrame();
+      return;
+    }
     lastUpdate = realNow;
     // Real elapsed time drives the simulated clock — but clamped, because rAF
-    // stops entirely while the tab is hidden, so `sinceLast` on the first tick
+    // stops entirely while the tab is hidden, so `realDelta` on the first tick
     // back can be minutes. At 4x that would silently skip most of a simulated
     // day the moment someone returned to the tab. The simulation advances
     // while it's being watched; it doesn't run in the background and present
-    // a fait accompli. (The very first tick's delta is Infinity, and is
-    // clamped by the same rule.)
-    const simMs = clock.advance(Math.min(sinceLast, MAX_TICK_ADVANCE_MS));
-    const source = map.getSource(SRC_VEHICLES) as GeoJSONSource | undefined;
-    const infraSource = map.getSource(SRC_VEHICLES_INFRA) as GeoJSONSource | undefined;
-    if (!source && !infraSource) return;
-
-    // DEV A/B: `__perf.vehicles = false` clears the dots so the pan benchmark
-    // can measure the loop's share of the frame budget. No-op in production.
-    if (vehiclesDisabledForPerf()) {
-      if (collection.features.length !== 0) {
-        collection.features.length = 0;
-        source?.setData(collection);
-      }
-      infraSource?.setData({ type: 'FeatureCollection', features: [] });
+    // a fait accompli. The first tick starts at zero elapsed time so attaching
+    // the renderer never jumps the clock merely to paint its initial frame.
+    const realDelta = Math.max(0, realNow - lastRealNow);
+    lastRealNow = realNow;
+    advancingClock = !paused;
+    const simMs = paused
+      ? clock.now()
+      : clock.advance(wokeFromIdle ? realDelta : Math.min(realDelta, MAX_TICK_ADVANCE_MS));
+    advancingClock = false;
+    const inputs = readRenderInputs();
+    const { source, infraSource } = inputs;
+    if (!source && !infraSource) {
+      idle = true;
       return;
     }
 
-    const { system } = store.getState();
-    const viewMode = gate.viewMode();
-    const infraFeatures: Feature<Polygon>[] = [];
+    // DEV A/B: `__perf.vehicles = false` clears the dots so the pan benchmark
+    // can measure the loop's share of the frame budget. No-op in production.
+    if (inputs.disabledForPerf) {
+      clearSources(source, infraSource);
+      idle = true;
+      return;
+    }
+
+    const { system, viewMode } = inputs;
+    if (viewMode === 'diagram') {
+      clearSources(source, infraSource);
+      idle = true;
+      return;
+    }
 
     // Viewport cull bounds (read once/tick): the visible extent expanded by half
     // a viewport on each side, so a vehicle whose route edge is just off-screen
     // pops in with margin rather than at the bezel. Vegas is nowhere near the
     // antimeridian, so plain axis-aligned bbox intersection is safe.
-    const vb = map.getBounds();
-    const spanLng = vb.getEast() - vb.getWest();
-    const spanLat = vb.getNorth() - vb.getSouth();
-    const cullW = vb.getWest() - spanLng * 0.5;
-    const cullE = vb.getEast() + spanLng * 0.5;
-    const cullS = vb.getSouth() - spanLat * 0.5;
-    const cullN = vb.getNorth() + spanLat * 0.5;
+    const [west, east, south, north] = inputs.bounds;
+    const spanLng = east - west;
+    const spanLat = north - south;
+    const cullW = west - spanLng * 0.5;
+    const cullE = east + spanLng * 0.5;
+    const cullS = south - spanLat * 0.5;
+    const cullN = north + spanLat * 0.5;
 
     let used = 0;
+    let infrastructureUsed = 0;
     const emit = (coord: LngLat, color: string) => {
       const existing = pool[used];
       if (existing) {
@@ -385,87 +577,116 @@ export function attachVehicleAnimation(
       }
       used++;
     };
+    const emitInfrastructure = (
+      coord: LngLat,
+      bearing: number,
+      widthM: number,
+      lengthM: number,
+      color: string,
+    ) => {
+      const ring = rotatedRectPolygon(coord, bearing, widthM, lengthM);
+      const existing = infrastructurePool[infrastructureUsed];
+      if (existing) {
+        existing.properties.color = color;
+        const target = existing.geometry.coordinates[0];
+        target.length = ring.length;
+        for (let i = 0; i < ring.length; i++) {
+          const point = target[i];
+          if (point) {
+            point[0] = ring[i][0];
+            point[1] = ring[i][1];
+          } else {
+            target[i] = [ring[i][0], ring[i][1]];
+          }
+        }
+      } else {
+        infrastructurePool[infrastructureUsed] = {
+          type: 'Feature',
+          properties: { color },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [ring],
+          },
+        };
+      }
+      infrastructureUsed++;
+    };
 
-    if (viewMode === 'network' || viewMode === 'infrastructure') {
-      // What's running at this simulated moment. Resolved once for the whole
-      // system rather than per service per pattern, and reused across frames
-      // until the simulated minute changes.
-      const running = schedules.resolve(
-        system.services,
-        minutesOfDay(simMs),
-        dayScopeAt(simMs),
-        gate.pinnedPeriod(),
-      );
-      for (const service of system.services) {
-        if (!gate.isVisible(service)) continue;
-        // A service outside its span of service isn't running, so it costs
-        // nothing — this check comes before geometry resolution on purpose.
-        const active = running.get(service.id);
-        if (!active) continue;
-        const headwayMinutes = active.headwayMinutes;
-        const { widthM, lengthM, profile } = effectiveVehicleKind(system.vehicleKinds, service);
-        for (const pattern of service.patterns) {
-          const geometry = resolvePatternGeometry(
-            system,
-            pattern,
-            profile,
-            viewMode === 'infrastructure' ? service.modeId : undefined,
-          );
-          if (!geometry) continue;
-          // Viewport cull: skip patterns whose whole path is off-screen — scales
-          // per-tick cost with ON-SCREEN patterns instead of all of them.
-          const bb = geometry.bbox;
-          if (bb[2] < cullW || bb[0] > cullE || bb[3] < cullS || bb[1] > cullN) continue;
-          const { timetables } = geometry;
-          // The cycle is built FROM the headway (see core/sim/fleet.ts), so
-          // vehicles pass every stop exactly one headway apart instead of
-          // approximately. Fleet size falls out of it.
-          const plan = planService(
-            roundTripMs(timetables),
-            headwayMinutes === undefined ? undefined : headwayMinutes * 60_000,
-          );
-          // A rendering cap, NOT a modeling one: the plan keeps its true cycle
-          // and headway, and we simply draw the first N runs. Clamping the
-          // fleet itself would shorten the cycle below the round trip, which
-          // no vehicle could actually run. Frequent service on a long line
-          // therefore shows gaps at this cap rather than wrong spacing.
-          const shown = Math.min(plan.fleet, MAX_VEHICLES_PER_PATTERN);
-          if (shown < plan.fleet) noteClampedFleet(pattern.id, service.name, plan.fleet);
-          for (let i = 0; i < shown; i++) {
-            // Resolved against SIMULATED time, so the speed control and pause
-            // work — and so a vehicle's position depends only on what time it
-            // is in the simulation, not on how long this tab has been open.
-            // `profile` is load-bearing, not decorative: the timetable was
-            // BUILT at this vehicle kind's own profile, so walking it at the
-            // module default instead would have the two disagree.
-            const { distMeters, run } = runStateAt(simMs, timetables, plan, i, profile);
-            // distMeters is measured along the path `run` names, so it is used
-            // directly. This used to rescale a position off the outbound ruler
-            // onto the return lane as a fraction, which was the only way to
-            // cope with one ruler describing two polylines — and could not
-            // have coped with two polylines of genuinely different length.
-            const { path, cumLengths, meters: legMeters } = geometry[run];
-            const along = Math.min(distMeters, legMeters);
-            const t = legMeters > 0 ? along / legMeters : 0;
-            // Distance → coordinate is an O(log n) binary search over precomputed
-            // arc lengths, not a full-path re-walk (pointAtT).
-            const center = pointAtDistance(path, cumLengths, along);
-            if (viewMode === 'network') {
-              emit(center, service.color);
-            } else {
-              // Both legs run point-order-along-travel, so the path's own
-              // bearing is the direction the vehicle faces — a return-leg train
-              // is drawn nose-first, not reversed.
-              const bearing = bearingAtT(path, t, legMeters);
-              infraFeatures.push({
-                type: 'Feature',
-                properties: { color: service.color },
-                geometry: {
-                  type: 'Polygon',
-                  coordinates: [rotatedRectPolygon(center, bearing, widthM, lengthM)],
-                },
-              });
-            }
+    // What's running at this simulated moment. Resolved once for the whole
+    // system rather than per service per pattern, and reused across frames
+    // until the simulated minute changes.
+    const running = schedules.resolve(
+      system.services,
+      minutesOfDay(simMs),
+      dayScopeAt(simMs),
+      inputs.pinnedPeriod,
+    );
+    for (const service of inputs.visibleServices) {
+      // A service outside its span of service isn't running, so it costs
+      // nothing — this check comes before geometry resolution on purpose.
+      const active = running.get(service.id);
+      if (!active) continue;
+      const headwayMinutes = active.headwayMinutes;
+      const { widthM, lengthM, profile } = effectiveVehicleKind(system.vehicleKinds, service);
+      for (const pattern of service.patterns) {
+        const geometry = resolvePatternGeometry(
+          system,
+          pattern,
+          profile,
+          viewMode === 'infrastructure' ? service.modeId : undefined,
+        );
+        if (!geometry) continue;
+        // Viewport cull: skip patterns whose whole path is off-screen — scales
+        // per-tick cost with ON-SCREEN patterns instead of all of them.
+        const bb = geometry.bbox;
+        if (bb[2] < cullW || bb[0] > cullE || bb[3] < cullS || bb[1] > cullN) continue;
+        const { timetables } = geometry;
+        // The cycle is built FROM the headway (see core/sim/fleet.ts), so
+        // vehicles pass every stop exactly one headway apart instead of
+        // approximately. Fleet size falls out of it.
+        const plan = planService(
+          roundTripMs(timetables),
+          headwayMinutes === undefined ? undefined : headwayMinutes * 60_000,
+        );
+        // A rendering cap, NOT a modeling one: the plan keeps its true cycle
+        // and headway, and we simply draw the first N runs. Clamping the
+        // fleet itself would shorten the cycle below the round trip, which
+        // no vehicle could actually run. Frequent service on a long line
+        // therefore shows gaps at this cap rather than wrong spacing.
+        const shown = Math.min(plan.fleet, MAX_VEHICLES_PER_PATTERN);
+        if (shown < plan.fleet) noteClampedFleet(pattern.id, service.name, plan.fleet);
+        for (let i = 0; i < shown; i++) {
+          // Resolved against SIMULATED time, so the speed control and pause
+          // work — and so a vehicle's position depends only on what time it
+          // is in the simulation, not on how long this tab has been open.
+          // `profile` is load-bearing, not decorative: the timetable was
+          // BUILT at this vehicle kind's own profile, so walking it at the
+          // module default instead would have the two disagree.
+          const { distMeters, run } = runStateAt(simMs, timetables, plan, i, profile);
+          // distMeters is measured along the path `run` names, so it is used
+          // directly. This used to rescale a position off the outbound ruler
+          // onto the return lane as a fraction, which was the only way to
+          // cope with one ruler describing two polylines — and could not
+          // have coped with two polylines of genuinely different length.
+          const { path, cumLengths, meters: legMeters } = geometry[run];
+          const along = Math.min(distMeters, legMeters);
+          const t = legMeters > 0 ? along / legMeters : 0;
+          // Distance → coordinate is an O(log n) binary search over precomputed
+          // arc lengths, not a full-path re-walk (pointAtT).
+          const center = pointAtDistance(path, cumLengths, along);
+          if (viewMode === 'network') {
+            emit(center, service.color);
+          } else {
+            // Both legs run point-order-along-travel, so the path's own
+            // bearing is the direction the vehicle faces — a return-leg train
+            // is drawn nose-first, not reversed.
+            emitInfrastructure(
+              center,
+              bearingAtT(path, t, legMeters),
+              widthM,
+              lengthM,
+              service.color,
+            );
           }
         }
       }
@@ -473,9 +694,89 @@ export function attachVehicleAnimation(
 
     if (collection.features.length !== used) collection.features.length = used;
     for (let i = 0; i < used; i++) collection.features[i] = pool[i];
-    source?.setData(collection);
-    infraSource?.setData({ type: 'FeatureCollection', features: infraFeatures });
+    if (infrastructureCollection.features.length !== infrastructureUsed)
+      infrastructureCollection.features.length = infrastructureUsed;
+    for (let i = 0; i < infrastructureUsed; i++)
+      infrastructureCollection.features[i] = infrastructurePool[i];
+    setNetworkData(source, collection);
+    setInfrastructureData(infraSource, infrastructureCollection);
+    if (paused || (used === 0 && infrastructureUsed === 0)) idle = true;
+    else scheduleFrame();
+  }
+
+  const unsubscribeSettings = clock.subscribeSettings((settings) => {
+    const realNow = performance.now();
+    if (!previousClockSettings.paused) {
+      // The settings notification arrives after SimClock installs `settings`.
+      // Settle the visible interval under the PREVIOUS speed before pausing or
+      // changing speed; otherwise a long event-driven idle interval silently
+      // disappears at the click that changes those settings.
+      const before = clock.now();
+      const caughtUp = advanceSimMs(
+        before,
+        Math.max(0, realNow - lastRealNow),
+        simSpeed(previousClockSettings.speedId).simPerReal,
+      );
+      if (caughtUp !== before) {
+        advancingClock = true;
+        clock.setTime(caughtUp);
+        advancingClock = false;
+      }
+    }
+    previousClockSettings = settings;
+    lastRealNow = realNow;
+    lastUpdate = -Infinity;
+    cancelScheduled();
+    if (settings.paused) {
+      scheduleFrame(true);
+      return;
+    }
+    wake();
+  });
+  const unsubscribeTime = clock.subscribe(() => {
+    if (advancingClock) return;
+    // setTime defines the simulated instant at this real moment. Do not add
+    // elapsed idle time from before that explicit jump on the next frame.
+    lastRealNow = performance.now();
+    lastUpdate = -Infinity;
+    wake(clock.settings().paused);
+  });
+  let previousSystem = store.getState().system;
+  const unsubscribeStore = store.subscribe((state) => {
+    if (state.system === previousSystem) return;
+    previousSystem = state.system;
+    wake(true);
+  });
+  const wakeForCamera = () => wake(true);
+  map.on('moveend', wakeForCamera);
+  map.on('zoomend', wakeForCamera);
+  const unsubscribeGate = gate.subscribe(() => wake(true));
+  const onVisibilityChange = () => {
+    const realNow = performance.now();
+    if (document.visibilityState === 'hidden' && !clock.settings().paused) {
+      // Capture the visible part of an idle interval before backgrounding.
+      // Showing the tab resets the baseline below, preserving the rule that
+      // hidden time never turns into a giant simulation jump.
+      advancingClock = true;
+      clock.advance(Math.max(0, realNow - lastRealNow));
+      advancingClock = false;
+    }
+    lastRealNow = realNow;
+    lastUpdate = -Infinity;
   };
-  frame = requestAnimationFrame(tick);
-  return () => cancelAnimationFrame(frame);
+  if (typeof document !== 'undefined')
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  scheduleFrame(clock.settings().paused);
+  return () => {
+    detached = true;
+    cancelScheduled();
+    unsubscribeSettings();
+    unsubscribeTime();
+    unsubscribeStore();
+    unsubscribeGate();
+    map.off('moveend', wakeForCamera);
+    map.off('zoomend', wakeForCamera);
+    if (typeof document !== 'undefined')
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+  };
 }

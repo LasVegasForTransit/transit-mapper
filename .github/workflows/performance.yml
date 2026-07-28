@@ -1,0 +1,97 @@
+name: Performance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'packages/core/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/performance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    name: Fixed Chrome protocol
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CURRENT_ARTIFACT: ${{ runner.temp }}/transitmapper-performance-current
+      BASELINE_ARTIFACT: ${{ runner.temp }}/transitmapper-performance-baseline
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Checkout base revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.repository.default_branch }}
+          path: .performance-baseline
+          persist-credentials: false
+
+      - name: Setup candidate Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Confirm stable Chrome and virtual display
+        run: |
+          google-chrome --version
+          command -v xvfb-run
+
+      # The first change that introduces this workflow has no harness on its
+      # base revision. It establishes absolute-budget evidence; every later
+      # change records the base on the same runner and gets the 10% regression
+      # comparison too.
+      - name: Detect a measurable base revision
+        id: baseline
+        run: |
+          if test -f .performance-baseline/apps/web/scripts/perf/run.ts; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install base revision
+        if: steps.baseline.outputs.available == 'true'
+        working-directory: .performance-baseline
+        run: pnpm install --frozen-lockfile
+
+      - name: Record base revision
+        if: steps.baseline.outputs.available == 'true'
+        working-directory: .performance-baseline
+        run: xvfb-run -a pnpm perf:record -- --output "$BASELINE_ARTIFACT"
+
+      - name: Record candidate and enforce budgets
+        env:
+          BASELINE_AVAILABLE: ${{ steps.baseline.outputs.available }}
+        run: |
+          if test "$BASELINE_AVAILABLE" = "true"; then
+            xvfb-run -a pnpm perf:record -- \
+              --output "$CURRENT_ARTIFACT" \
+              --baseline "$BASELINE_ARTIFACT/report.json" \
+              --require-baseline
+          else
+            echo "::notice::No performance harness exists on the base revision; enforcing absolute budgets only."
+            xvfb-run -a pnpm perf:record -- --output "$CURRENT_ARTIFACT"
+          fi
+
+      - name: Upload reports and Chrome traces
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: performance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.CURRENT_ARTIFACT }}
+            ${{ env.BASELINE_ARTIFACT }}
+          if-no-files-found: warn
+          retention-days: 14

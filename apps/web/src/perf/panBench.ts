@@ -1,5 +1,6 @@
 import type { Map as MLMap } from 'maplibre-gl';
 import { formatFrameStats, summarizeFrames, type FrameStats } from './frameStats';
+import type { RawGestureMeasurements } from './gestureStats';
 
 export interface PanBenchOptions {
   /** Number of pan increments (one per frame). */
@@ -43,6 +44,67 @@ export async function runPanBench(map: MLMap, opts: PanBenchOptions = {}): Promi
 
   console.log(`[panBench] steps=${steps} dx=${dx} → ${formatFrameStats(stats)}`);
   return stats;
+}
+
+/**
+ * The CI counterpart to runPanBench. It retains the raw painted-frame and
+ * command-to-render samples so the report can enforce p95 and tail gates,
+ * while the console-oriented benchmark above keeps its compact FrameStats API.
+ */
+export async function runPanGestureBench(
+  map: MLMap,
+  sourceUploadCount: () => number,
+  opts: PanBenchOptions = {},
+): Promise<RawGestureMeasurements> {
+  const { steps = 80, dx = 8, dy = 0 } = opts;
+  const paintedFrameMs: number[] = [];
+  const inputToNextPaintMs: number[] = [];
+  const longTaskMs: number[] = [];
+  const uploadsBefore = sourceUploadCount();
+  let lastPaint = performance.now();
+  const onRender = () => {
+    const now = performance.now();
+    paintedFrameMs.push(now - lastPaint);
+    lastPaint = now;
+  };
+  map.on('render', onRender);
+
+  let longTaskObserver: PerformanceObserver | undefined;
+  try {
+    longTaskObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) longTaskMs.push(entry.duration);
+    });
+    longTaskObserver.observe({ type: 'longtask', buffered: false });
+  } catch {
+    // Older Chrome builds without Long Tasks still produce the direct
+    // manipulation metrics. The fixed CI channel makes this exceptional.
+  }
+
+  lastPaint = performance.now();
+  try {
+    for (let step = 0; step < steps; step += 1) {
+      const painted = new Promise<void>((resolve) => {
+        map.once('render', () => resolve());
+      });
+      const inputAt = performance.now();
+      map.panBy([dx, dy], { duration: 0 });
+      await painted;
+      inputToNextPaintMs.push(performance.now() - inputAt);
+      await nextFrame();
+    }
+  } finally {
+    longTaskObserver?.disconnect();
+    map.off('render', onRender);
+  }
+
+  // The first two paints include listener and renderer warm-up. The scenario
+  // itself already gets a whole warm-up run too; neither belongs in the gate.
+  return {
+    inputToNextPaintMs: inputToNextPaintMs.slice(2),
+    paintedFrameMs: paintedFrameMs.slice(2),
+    longTaskMs,
+    sourceUploadCount: sourceUploadCount() - uploadsBefore,
+  };
 }
 
 export interface ZoomBenchOptions {

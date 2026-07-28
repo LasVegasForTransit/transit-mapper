@@ -22,13 +22,22 @@ export default defineConfig({
       manifest: false,
       strategies: 'generateSW',
       workbox: {
-        // Precache ONLY the editor's own entry. The default globPatterns
-        // would glob this whole dist/ output, including embed.html and its
-        // bundle (MapLibre included) — exactly the cross-contamination the
-        // two-entry build below exists to avoid. index.html's own hashed
-        // script src already changes on every deploy, which is all Workbox
-        // needs to detect a new build; nothing else needs precaching for that.
-        globPatterns: ['index.html'],
+        // A person can reopen the installed editor after the HTTP cache has
+        // been evicted. Cache the editor's eager and lazy chunks plus the
+        // locally hosted install assets, not merely its HTML shell. The
+        // deterministic post-build verifier walks Vite's manifest and proves
+        // this glob still covers the complete editor graph.
+        globPatterns: [
+          'index.html',
+          'manifest.json',
+          'favicon.svg',
+          'favicon-*.png',
+          'apple-touch-icon.png',
+          'assets/**/*.{js,css,png,svg,webp,woff,woff2}',
+        ],
+        // embed.html is a separate product surface. Its entry remains
+        // network-fetched, while chunks shared with the editor are naturally
+        // cached because the editor needs them too.
         globIgnores: ['embed.html', '**/embed-*'],
         directoryIndex: null,
         // generateSW registers an offline navigateFallback to the precached
@@ -57,6 +66,10 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    // The post-build performance reporter walks each entry's full import
+    // closure from this manifest. Console chunk warnings cannot tell whether
+    // a byte is paid by the editor, the embed, or both.
+    manifest: true,
     rollupOptions: {
       // Two entries, not one. embed.html is the read-only map that gets
       // iframed into other people's pages (/e/:id) — it deliberately shares

@@ -3,6 +3,7 @@ import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { ViewOptions } from '../map/layers';
 import { getMap } from '../map/mapRef';
 import { renderSystemForExport } from '../map/export/exportRenderer';
+import { waitForExportFrame } from './exportOperation';
 import { singleFlight } from './singleFlight';
 import { legendEntriesFor, type LegendEntry } from './exportLegend';
 import { scaleBarSpec } from './exportScale';
@@ -144,11 +145,16 @@ export function exportPngFromMap(
   map: MLMap,
   opts: ComposeOptions,
   filename = 'transit-system.png',
-): void {
-  map.once('idle', () => {
+  signal?: AbortSignal,
+): Promise<void> {
+  return waitForExportFrame(map, { signal }).then(() => {
+    if (signal?.aborted) {
+      throw signal.reason instanceof Error
+        ? signal.reason
+        : new DOMException('Export was canceled.', 'AbortError');
+    }
     downloadDataUrl(composeCanvas(map.getCanvas(), map, opts).toDataURL('image/png'), filename);
   });
-  map.triggerRepaint();
 }
 
 /** Quick-export path: render the whole system's extent on a dedicated OFFSCREEN

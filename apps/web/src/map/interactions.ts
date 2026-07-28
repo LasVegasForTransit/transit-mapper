@@ -19,6 +19,7 @@ import {
 import { facilityType, mode } from '@transitmapper/core/model/catalog';
 import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
 import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
+import type { EditGestureTargets } from './gestureProjection';
 import {
   LYR_FACILITIES,
   LYR_HANDLES,
@@ -139,6 +140,12 @@ export interface AttachInteractionsOptions {
    *  CLICK that placed no node and finished no draw — a right DRAG still
    *  pans, so this never fires mid-gesture. */
   openContextMenu: (x: number, y: number, at: LngLat) => void;
+  /** MapCanvas uses these exact pointer-gesture boundaries to switch from the
+   *  full derived map to its one-source manipulation projection, then rebuild
+   *  the settled map once on commit/cancel. Optional for non-rendering callers
+   *  such as interaction unit tests. */
+  onEditGestureStart?: (targets: EditGestureTargets) => void;
+  onEditGestureEnd?: () => void;
 }
 
 /**
@@ -339,12 +346,15 @@ export function attachInteractions(
     };
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
-    beginGesture(() => {
-      throttled.cancel();
-      map.off('mousemove', onMove);
-      map.off('mouseup', onUp);
-      if (original) store.getState().moveWayPoint(wayId, index, original); // revert the live edit
-    });
+    beginGesture(
+      () => {
+        throttled.cancel();
+        map.off('mousemove', onMove);
+        map.off('mouseup', onUp);
+        if (original) store.getState().moveWayPoint(wayId, index, original); // revert the live edit
+      },
+      { wayPoints: [{ wayId, pointIndex: index }] },
+    );
   };
 
   // Ctrl/Cmd-dragging a way's OPEN END (LYR_WAY_ENDPOINTS, not a regular
@@ -415,12 +425,15 @@ export function attachInteractions(
     };
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
-    beginGesture(() => {
-      throttled.cancel();
-      map.off('mousemove', onMove);
-      map.off('mouseup', onUp);
-      if (originalCoord) store.getState().moveStation(id, originalCoord, originalAnchor); // revert
-    });
+    beginGesture(
+      () => {
+        throttled.cancel();
+        map.off('mousemove', onMove);
+        map.off('mouseup', onUp);
+        if (originalCoord) store.getState().moveStation(id, originalCoord, originalAnchor); // revert
+      },
+      { stationIds: [id] },
+    );
   };
 
   const startFacilityDrag = (id: string) => {
@@ -440,13 +453,16 @@ export function attachInteractions(
     };
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
-    beginGesture(() => {
-      throttled.cancel();
-      map.off('mousemove', onMove);
-      map.off('mouseup', onUp);
-      if (original && !Array.isArray(original[0]))
-        store.getState().moveFacility(id, original as LngLat); // revert
-    });
+    beginGesture(
+      () => {
+        throttled.cancel();
+        map.off('mousemove', onMove);
+        map.off('mouseup', onUp);
+        if (original && !Array.isArray(original[0]))
+          store.getState().moveFacility(id, original as LngLat); // revert
+      },
+      { facilityIds: [id] },
+    );
   };
 
   // The 4 open corners of an axis-aligned (true north/east) rectangle between
@@ -657,13 +673,22 @@ export function attachInteractions(
     };
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
-    beginGesture(() => {
-      map.off('mousemove', onMove);
-      map.off('mouseup', onUp);
-      if (frame !== null) cancelAnimationFrame(frame);
-      flush(); // apply whatever hadn't been flushed yet, so `total` matches the store
-      if (totalDx !== 0 || totalDy !== 0) store.getState().nudgeMultiSelection(-totalDx, -totalDy); // revert
-    });
+    const selected = store.getState().multiSelection;
+    beginGesture(
+      () => {
+        map.off('mousemove', onMove);
+        map.off('mouseup', onUp);
+        if (frame !== null) cancelAnimationFrame(frame);
+        flush(); // apply whatever hadn't been flushed yet, so `total` matches the store
+        if (totalDx !== 0 || totalDy !== 0)
+          store.getState().nudgeMultiSelection(-totalDx, -totalDy); // revert
+      },
+      {
+        wayIds: selected.filter((item) => item.kind === 'way').map((item) => item.id),
+        stationIds: selected.filter((item) => item.kind === 'station').map((item) => item.id),
+        facilityIds: selected.filter((item) => item.kind === 'facility').map((item) => item.id),
+      },
+    );
   };
 
   // True once 2+ items are multi-selected AND this one is among them — the
@@ -702,12 +727,15 @@ export function attachInteractions(
       };
       map.on('mousemove', onMove);
       map.once('mouseup', onUp);
-      beginGesture(() => {
-        throttled.cancel();
-        map.off('mousemove', onMove);
-        map.off('mouseup', onUp);
-        if (original) apply(original);
-      });
+      beginGesture(
+        () => {
+          throttled.cancel();
+          map.off('mousemove', onMove);
+          map.off('mouseup', onUp);
+          if (original) apply(original);
+        },
+        { groupIds: [groupId] },
+      );
       return;
     }
 
@@ -736,12 +764,15 @@ export function attachInteractions(
     };
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
-    beginGesture(() => {
-      throttled.cancel();
-      map.off('mousemove', onMove);
-      map.off('mouseup', onUp);
-      if (original) apply(original);
-    });
+    beginGesture(
+      () => {
+        throttled.cancel();
+        map.off('mousemove', onMove);
+        map.off('mouseup', onUp);
+        if (original) apply(original);
+      },
+      { stationIds: [stationId] },
+    );
   };
 
   /**
@@ -967,7 +998,7 @@ export function attachInteractions(
     let started = false;
     let wayId = '';
     let lastPt = startPt;
-    const onMove = (ev: MapMouseEvent) => {
+    const moveThrottle = rafThrottle((ev: MapMouseEvent) => {
       if (!started) {
         if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) < DRAG_PX) return;
         started = true;
@@ -980,25 +1011,32 @@ export function attachInteractions(
       if (Math.hypot(ev.point.x - lastPt.x, ev.point.y - lastPt.y) < FREEHAND_SAMPLE_PX) return;
       lastPt = ev.point;
       store.getState().addWayPoint(wayId, lngLatOf(ev));
-    };
+    });
+    const onMove = (ev: MapMouseEvent) => moveThrottle.call(ev);
     const onUp = (ev: MapMouseEvent) => {
       map.off('mousemove', onMove);
+      moveThrottle.flush();
       if (started) {
         // Still inside the checkpoint (endGesture is below) so the final
         // point + finishWay coalesce with the sampled points from onMove
         // into the one undo step this whole freehand stroke should be.
-        store.getState().addWayPoint(wayId, lngLatOf(ev));
+        if (Math.hypot(ev.point.x - lastPt.x, ev.point.y - lastPt.y) > 0)
+          store.getState().addWayPoint(wayId, lngLatOf(ev));
         store.getState().finishWay();
       }
       endGesture();
     };
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
-    beginGesture(() => {
-      map.off('mousemove', onMove);
-      map.off('mouseup', onUp);
-      if (started) store.getState().deleteWay(wayId); // discard whatever was sampled so far
-    });
+    beginGesture(
+      () => {
+        moveThrottle.cancel();
+        map.off('mousemove', onMove);
+        map.off('mouseup', onUp);
+        if (started) store.getState().deleteWay(wayId); // discard whatever was sampled so far
+      },
+      { discoverNewWay: true },
+    );
   };
 
   // Draw like laying track: each click OR drag places ONE node. The first
@@ -1308,36 +1346,62 @@ export function attachInteractions(
   // as any other gesture; see beginGesture/endGesture).
   const startErase = (firstHandle: MapGeoJSONFeature) => {
     suppressClick = true;
+    const wayId = firstHandle.properties.wayId as string;
+    let moved = false;
+    const eraseThrottle = rafThrottle((ev: MapMouseEvent) => {
+      const f = featureAt(ev, [LYR_HANDLES, LYR_WAY_ENDPOINTS]);
+      if (f)
+        store.getState().deleteWayPoint(f.properties.wayId as string, f.properties.index as number);
+    });
+    const onMove = (ev: MapMouseEvent) => {
+      moved = true;
+      eraseThrottle.call(ev);
+    };
+    const onUp = (ev: MapMouseEvent) => {
+      if (moved) {
+        eraseThrottle.call(ev);
+        eraseThrottle.flush();
+      } else {
+        eraseThrottle.cancel();
+      }
+      endGesture();
+      map.off('mousemove', onMove);
+    };
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
+    beginGesture(
+      () => {
+        eraseThrottle.cancel();
+        map.off('mousemove', onMove);
+        map.off('mouseup', onUp);
+      },
+      {
+        wayIds: [wayId],
+        nodeIds: store
+          .getState()
+          .system.nodes.filter((node) => node.refs.some((ref) => ref.wayId === wayId))
+          .map((node) => node.id),
+      },
+    );
+    // This first deletion belongs inside the same checkpoint and projection
+    // boundary as the subsequent frame-coalesced sweep.
     store
       .getState()
       .deleteWayPoint(
         firstHandle.properties.wayId as string,
         firstHandle.properties.index as number,
       );
-    const onMove = (ev: MapMouseEvent) => {
-      const f = featureAt(ev, [LYR_HANDLES, LYR_WAY_ENDPOINTS]);
-      if (f)
-        store.getState().deleteWayPoint(f.properties.wayId as string, f.properties.index as number);
-    };
-    const onUp = () => {
-      endGesture();
-      map.off('mousemove', onMove);
-    };
-    map.on('mousemove', onMove);
-    map.once('mouseup', onUp);
-    beginGesture(() => {
-      map.off('mousemove', onMove);
-      map.off('mouseup', onUp);
-    });
   };
 
-  function beginGesture(cancel: () => void) {
+  function beginGesture(cancel: () => void, targets: EditGestureTargets = {}) {
     cancelActiveGesture = cancel;
+    opts.onEditGestureStart?.(targets);
     store.getState().beginHistoryCheckpoint();
   }
   function endGesture() {
     cancelActiveGesture = null;
     store.getState().commitHistoryCheckpoint();
+    opts.onEditGestureEnd?.();
   }
 
   // ---- mousedown: dispatch by button, modifier, tool, target --------------
@@ -1712,6 +1776,7 @@ export function attachInteractions(
       cancel(); // reverts the live edit — its own set() calls stay coalesced
       // since the checkpoint is still open until the next line
       store.getState().commitHistoryCheckpoint(); // no-op if the revert left system unchanged
+      opts.onEditGestureEnd?.();
       return;
     }
     if (facilityBoundaryDraft) {

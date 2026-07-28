@@ -161,6 +161,24 @@ export interface SetSystemOptions {
   readOnly?: boolean;
 }
 
+export interface ApplyImportedReconciliation {
+  /** Main-thread object identity captured before the Worker started. */
+  expectedSystem: TransitSystem;
+  result: ReconcileImportedSystemResult;
+}
+
+export interface GtfsImportPieces {
+  ways: Way[];
+  services: Service[];
+  stations: Station[];
+}
+
+export interface ApplyGtfsImportBatch {
+  /** Document that owned the import when the background operation began. */
+  targetSystemId: string;
+  pieces: GtfsImportPieces;
+}
+
 export interface EditorState {
   system: TransitSystem;
   tool: Tool;
@@ -362,7 +380,11 @@ export interface EditorState {
    *  system as a comparison baseline) — unlike importWays, this DOES create
    *  services/stations, since a GTFS feed is already a real rideable
    *  system, not bare infrastructure to draw over. */
-  importGtfs: (pieces: { ways: Way[]; services: Service[]; stations: Station[] }) => void;
+  importGtfs: (pieces: GtfsImportPieces) => void;
+  /** Apply a background batch only while its original document is active.
+   * Switching systems cancels the import instead of contaminating the newly
+   * opened document with a late Worker message. */
+  applyGtfsImportBatch: (request: ApplyGtfsImportBatch) => boolean;
 
   // cross-sections (lane-level editing — see model/profile.ts)
   /** Replace a way's whole cross-section (the lane editor's setter). */
@@ -455,6 +477,8 @@ export interface EditorState {
    *  route seeds the canonical shared way. Returns how many patterns were
    *  reconciled onto shared infrastructure. */
   reconcileImportedServices: (serviceIds: string[]) => number;
+  /** Commit a Worker result only when no edit replaced its input snapshot. */
+  applyImportedReconciliation: (request: ApplyImportedReconciliation) => boolean;
 
   // services (colored routes over ways). Returns null when the way's type has
   // no compatible service modes (e.g. bike infrastructure carries no service).
@@ -1769,6 +1793,54 @@ function materializeShapeRun(
   return legs ? { system, legs } : null;
 }
 
+export interface ReconcileImportedSystemResult {
+  system: TransitSystem;
+  reconciled: number;
+}
+
+/** Pure import reconciliation. Kept outside the Zustand action so the GTFS
+ * pipeline can run it in a short-lived Worker and apply the result only if the
+ * editor snapshot it started from is still current. */
+export function reconcileImportedSystem(
+  system: TransitSystem,
+  serviceIds: string[],
+): ReconcileImportedSystemResult {
+  let next = system;
+  const targets: { serviceId: string; patternId: string; length: number }[] = [];
+  for (const serviceId of serviceIds) {
+    const service = next.services.find((candidate) => candidate.id === serviceId);
+    if (!service) continue;
+    for (const pattern of service.patterns) {
+      targets.push({
+        serviceId,
+        patternId: pattern.id,
+        length: pathLengthMeters(patternPath(next.ways, pattern)),
+      });
+    }
+  }
+  targets.sort((a, b) => b.length - a.length);
+
+  const established = new Set<string>();
+  let reconciled = 0;
+  for (const target of targets) {
+    const reconciledSystem = conflatePatternOntoExisting(
+      next,
+      target.serviceId,
+      target.patternId,
+      established,
+    );
+    if (reconciledSystem) {
+      next = reconciledSystem;
+      reconciled++;
+    }
+    const service = next.services.find((candidate) => candidate.id === target.serviceId);
+    const pattern = service?.patterns.find((candidate) => candidate.id === target.patternId);
+    for (const leg of pattern ? patternLegs(pattern) : []) established.add(leg.wayId);
+  }
+
+  return { system: next, reconciled };
+}
+
 /**
  * Translates a whole multi-select group by a fixed lng/lat delta — "nudge
  * this whole line" without redrawing it point by point. A selected way's
@@ -2492,6 +2564,23 @@ export function createEditorStore() {
         }),
       })),
 
+    applyGtfsImportBatch: ({ targetSystemId, pieces }) => {
+      let applied = false;
+      set((s) => {
+        if (s.system.id !== targetSystemId) return s;
+        applied = true;
+        return {
+          system: touch({
+            ...s.system,
+            ways: [...s.system.ways, ...pieces.ways],
+            services: [...s.system.services, ...pieces.services],
+            stations: [...s.system.stations, ...pieces.stations],
+          }),
+        };
+      });
+      return applied;
+    },
+
     setWayProfile: (id, profile) =>
       set((s) => {
         // Lanes that vanished from the profile take their junction connectors
@@ -3049,52 +3138,15 @@ export function createEditorStore() {
     },
 
     reconcileImportedServices: (serviceIds) => {
-      const st = get();
-      let sys = st.system;
+      const result = reconcileImportedSystem(get().system, serviceIds);
+      if (result.reconciled > 0) set({ system: touch(result.system) });
+      return result.reconciled;
+    },
 
-      // Flatten to (service, pattern) targets and process LONGEST-first, so a
-      // long trunk route seeds the canonical shared way and shorter
-      // branches/shuttles conflate onto it rather than the reverse.
-      const targets: { serviceId: string; patternId: string; length: number }[] = [];
-      for (const serviceId of serviceIds) {
-        const service = sys.services.find((sv) => sv.id === serviceId);
-        if (!service) continue;
-        for (const pattern of service.patterns) {
-          targets.push({
-            serviceId,
-            patternId: pattern.id,
-            length: pathLengthMeters(patternPath(sys.ways, pattern)),
-          });
-        }
-      }
-      targets.sort((a, b) => b.length - a.length);
-
-      // Only ever fuse onto a corridor already established this pass. Ordering
-      // targets longest-first is not on its own enough to stop a trunk being
-      // rebound onto a shuttle that happens to lie along part of it — the
-      // matcher is happy to report that the trunk runs along the shuttle,
-      // because it does. What makes the trunk canonical is that when its turn
-      // comes there is nothing yet to join.
-      const established = new Set<string>();
-      let reconciled = 0;
-      for (const target of targets) {
-        const next = conflatePatternOntoExisting(
-          sys,
-          target.serviceId,
-          target.patternId,
-          established,
-        );
-        if (next) {
-          sys = next;
-          reconciled++;
-        }
-        const service = sys.services.find((sv) => sv.id === target.serviceId);
-        const pattern = service?.patterns.find((p) => p.id === target.patternId);
-        for (const leg of pattern ? patternLegs(pattern) : []) established.add(leg.wayId);
-      }
-
-      if (reconciled > 0) set({ system: touch(sys) });
-      return reconciled;
+    applyImportedReconciliation: ({ expectedSystem, result }) => {
+      if (get().system !== expectedSystem) return false;
+      if (result.reconciled > 0) set({ system: touch(result.system) });
+      return true;
     },
 
     addServiceToWay: (wayId) => {

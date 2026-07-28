@@ -66,6 +66,38 @@ export interface RouteResult {
   lengthM: number;
 }
 
+/** Deterministic search work for one routeBetween call. The caller supplies
+ *  the mutable record through RouteGraphOptions; routeBetween resets it before
+ *  starting, then accumulates both passes when `preferLegal` falls back. */
+export interface RouteOperationCounts {
+  topologyCacheHits: number;
+  topologyCacheMisses: number;
+  searches: number;
+  statesDiscovered: number;
+  statesSettled: number;
+  edgesScanned: number;
+  queuePushes: number;
+  queuePops: number;
+  queueComparisons: number;
+  staleQueuePops: number;
+}
+
+/** A correctly initialized operation record for RouteGraphOptions. */
+export function createRouteOperationCounts(): RouteOperationCounts {
+  return {
+    topologyCacheHits: 0,
+    topologyCacheMisses: 0,
+    searches: 0,
+    statesDiscovered: 0,
+    statesSettled: 0,
+    edgesScanned: 0,
+    queuePushes: 0,
+    queuePops: 0,
+    queueComparisons: 0,
+    staleQueuePops: 0,
+  };
+}
+
 /** Project a map coordinate onto a way as a route anchor, or null when the
  *  way can't host one (fewer than 2 points). */
 export function anchorOnWay(way: Way, coord: LngLat): RouteAnchor | null {
@@ -80,6 +112,57 @@ interface Vertex {
   key: string;
   coord: LngLat;
   edges: { to: string; costM: number; span: RouteSpan }[];
+}
+
+interface BuiltGraph {
+  vertices: Map<string, Vertex>;
+  nodeAt: Map<string, string>;
+  nodesByWay: Map<string, number[]>;
+  waysById: Map<string, Way>;
+  nodesById: Map<string, Node>;
+}
+
+interface TopologyIndexes {
+  nodeAt: Map<string, string>;
+  nodesByWay: Map<string, number[]>;
+  waysById: Map<string, Way>;
+  nodesById: Map<string, Node>;
+}
+
+const topologyIndexCache = new WeakMap<Way[], WeakMap<Node[], TopologyIndexes>>();
+
+function topologyIndexes(
+  system: TransitSystem,
+  operations: RouteOperationCounts | undefined,
+): TopologyIndexes {
+  let byNodes = topologyIndexCache.get(system.ways);
+  const cached = byNodes?.get(system.nodes);
+  if (cached) {
+    if (operations) operations.topologyCacheHits++;
+    return cached;
+  }
+  if (operations) operations.topologyCacheMisses++;
+
+  const nodeAt = new Map<string, string>();
+  const nodesByWay = new Map<string, number[]>();
+  for (const node of system.nodes) {
+    for (const ref of node.refs) {
+      nodeAt.set(`${ref.wayId}:${ref.pointIndex}`, node.id);
+      const indexes = nodesByWay.get(ref.wayId) ?? [];
+      indexes.push(ref.pointIndex);
+      nodesByWay.set(ref.wayId, indexes);
+    }
+  }
+  const indexes: TopologyIndexes = {
+    nodeAt,
+    nodesByWay,
+    waysById: new Map(system.ways.map((way) => [way.id, way])),
+    nodesById: new Map(system.nodes.map((node) => [node.id, node])),
+  };
+  byNodes ??= new WeakMap<Node[], TopologyIndexes>();
+  byNodes.set(system.nodes, indexes);
+  topologyIndexCache.set(system.ways, byNodes);
+  return indexes;
 }
 
 /** Anchor indexes on a way: endpoints + every junction-referenced point. */
@@ -129,6 +212,9 @@ export interface RouteGraphOptions {
   /** Defaults to `'legal'`. A system with no one-way ways routes identically
    *  under all three, since a two-way profile admits both edges either way. */
   travel?: TravelRule;
+  /** Optional deterministic instrumentation. Reset and populated by each
+   *  routeBetween call; it never changes route selection. */
+  operations?: RouteOperationCounts;
 }
 
 /** Whether a way whose profile permits `traversal` may be ridden in the
@@ -215,22 +301,9 @@ function junctionIdOf(vertexKey: string): string | null {
   return vertexKey.startsWith('e:') || vertexKey.startsWith('@') ? null : vertexKey;
 }
 
-function buildGraph(
-  system: TransitSystem,
-  opts: RouteGraphOptions,
-  rule: TravelRule,
-): { vertices: Map<string, Vertex>; nodeAt: Map<string, string> } {
+function buildGraph(system: TransitSystem, opts: RouteGraphOptions, rule: TravelRule): BuiltGraph {
   const vertices = new Map<string, Vertex>();
-  const nodeAt = new Map<string, string>(); // "wayId:pointIndex" -> nodeId
-  const nodesByWay = new Map<string, number[]>();
-  for (const node of system.nodes) {
-    for (const ref of node.refs) {
-      nodeAt.set(`${ref.wayId}:${ref.pointIndex}`, node.id);
-      const arr = nodesByWay.get(ref.wayId) ?? [];
-      arr.push(ref.pointIndex);
-      nodesByWay.set(ref.wayId, arr);
-    }
-  }
+  const { nodeAt, nodesByWay, waysById, nodesById } = topologyIndexes(system, opts.operations);
 
   const ensure = (key: string, coord: LngLat): Vertex => {
     let v = vertices.get(key);
@@ -266,10 +339,65 @@ function buildGraph(
         vb.edges.push({ to: keyA, costM: cost, span: { wayId: way.id, fromPoint: b, toPoint: a } });
     }
   }
-  return { vertices, nodeAt };
+  return { vertices, nodeAt, nodesByWay, waysById, nodesById };
 }
 
 // ---- shortest path ----------------------------------------------------------
+
+interface QueueEntry {
+  key: string;
+  distance: number;
+  /** First-discovery order mirrors Map iteration's tie-breaking in the
+   *  previous Dijkstra implementation, including after a decrease-key. */
+  order: number;
+}
+
+/** Binary min-heap ordered by distance, then stable state-discovery order. */
+class StatePriorityQueue {
+  private readonly entries: QueueEntry[] = [];
+
+  constructor(private readonly operations: RouteOperationCounts | undefined) {}
+
+  push(entry: QueueEntry): void {
+    if (this.operations) this.operations.queuePushes++;
+    this.entries.push(entry);
+    let index = this.entries.length - 1;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (!this.before(this.entries[index], this.entries[parent])) break;
+      [this.entries[index], this.entries[parent]] = [this.entries[parent], this.entries[index]];
+      index = parent;
+    }
+  }
+
+  pop(): QueueEntry | undefined {
+    if (this.entries.length === 0) return undefined;
+    if (this.operations) this.operations.queuePops++;
+    const first = this.entries[0];
+    const last = this.entries.pop()!;
+    if (this.entries.length === 0) return first;
+    this.entries[0] = last;
+    let index = 0;
+    while (true) {
+      const left = index * 2 + 1;
+      if (left >= this.entries.length) break;
+      const right = left + 1;
+      let next = left;
+      if (right < this.entries.length && this.before(this.entries[right], this.entries[left])) {
+        next = right;
+      }
+      if (!this.before(this.entries[next], this.entries[index])) break;
+      [this.entries[index], this.entries[next]] = [this.entries[next], this.entries[index]];
+      index = next;
+    }
+    return first;
+  }
+
+  private before(a: QueueEntry, b: QueueEntry): boolean {
+    if (this.operations) this.operations.queueComparisons++;
+    return a.distance < b.distance || (a.distance === b.distance && a.order < b.order);
+  }
+}
 
 /**
  * Shortest route between two anchors over existing infrastructure. Returns
@@ -285,6 +413,7 @@ export function routeBetween(
   to: RouteAnchor,
   opts: RouteGraphOptions,
 ): RouteResult | null {
+  if (opts.operations) Object.assign(opts.operations, createRouteOperationCounts());
   const rule = opts.travel ?? 'legal';
   const legal = routeWithRule(system, from, to, opts, rule === 'ignore' ? 'ignore' : 'legal');
   if (legal || rule !== 'preferLegal') return legal;
@@ -400,9 +529,8 @@ function routeOverGraph(
   opts: RouteGraphOptions,
   rule: TravelRule,
 ): RouteResult | null {
-  const { vertices, nodeAt } = buildGraph(system, opts, rule);
-  const waysById = new Map(system.ways.map((w) => [w.id, w]));
-  const nodesById = new Map(system.nodes.map((n) => [n.id, n]));
+  if (opts.operations) opts.operations.searches++;
+  const { vertices, nodeAt, nodesByWay, waysById, nodesById } = buildGraph(system, opts, rule);
 
   // Splice a virtual vertex for an anchor into its way's enclosing segment.
   const splice = (anchor: RouteAnchor, key: string, isFrom: boolean): boolean => {
@@ -414,15 +542,6 @@ function routeOverGraph(
       way.points.length < 2
     )
       return false;
-    const nodesByWay = new Map<string, number[]>();
-    for (const node of system.nodes) {
-      for (const ref of node.refs) {
-        if (ref.wayId !== way.id) continue;
-        const arr = nodesByWay.get(way.id) ?? [];
-        arr.push(ref.pointIndex);
-        nodesByWay.set(way.id, arr);
-      }
-    }
     const anchors = anchorIndexes(way, nodesByWay);
     // The anchor sits between raw points insertIndex-1 and insertIndex; find
     // the enclosing anchor pair [a, b].
@@ -502,20 +621,25 @@ function routeOverGraph(
   const at = new Map<string, { vertexKey: string; viaWayId: string }>();
   const prev = new Map<string, { key: string; span: RouteSpan; costM: number }>();
   const visited = new Set<string>();
+  const discoveryOrder = new Map<string, number>();
+  const queue = new StatePriorityQueue(opts.operations);
   dist.set(START, 0);
   at.set(START, { vertexKey: FROM, viaWayId: '' });
+  discoveryOrder.set(START, 0);
+  queue.push({ key: START, distance: 0, order: 0 });
+  if (opts.operations) opts.operations.statesDiscovered++;
 
   let goal: string | null = null;
   while (true) {
-    let cur: string | null = null;
-    let best = Infinity;
-    for (const [k, d] of dist) {
-      if (!visited.has(k) && d < best) {
-        best = d;
-        cur = k;
-      }
+    const candidate = queue.pop();
+    if (!candidate) return null; // exhausted without reaching TO
+    const cur = candidate.key;
+    if (visited.has(cur) || candidate.distance !== dist.get(cur)) {
+      if (opts.operations) opts.operations.staleQueuePops++;
+      continue;
     }
-    if (cur === null) return null; // exhausted without reaching TO
+    const best = candidate.distance;
+    if (opts.operations) opts.operations.statesSettled++;
     const here = at.get(cur)!;
     if (here.vertexKey === TO) {
       goal = cur;
@@ -527,6 +651,7 @@ function routeOverGraph(
     const junction = junctionIdOf(here.vertexKey);
     const node = junction ? nodesById.get(junction) : undefined;
     for (const e of v.edges) {
+      if (opts.operations) opts.operations.edgesScanned++;
       // A turn is only restrictable where the route is actually at a junction
       // and is changing ways. Leaving the start anchor has no arriving way and
       // so cannot be a turn.
@@ -546,9 +671,16 @@ function routeOverGraph(
       const nextKey = stateKey(e.to, nextVia);
       const nd = best + e.costM;
       if (nd < (dist.get(nextKey) ?? Infinity)) {
+        let order = discoveryOrder.get(nextKey);
+        if (order === undefined) {
+          order = discoveryOrder.size;
+          discoveryOrder.set(nextKey, order);
+          if (opts.operations) opts.operations.statesDiscovered++;
+        }
         dist.set(nextKey, nd);
         at.set(nextKey, { vertexKey: e.to, viaWayId: nextVia });
         prev.set(nextKey, { key: cur, span: e.span, costM: e.costM });
+        queue.push({ key: nextKey, distance: nd, order });
       }
     }
   }
@@ -559,9 +691,10 @@ function routeOverGraph(
   while (cursor !== START) {
     const p = prev.get(cursor);
     if (!p) return null;
-    raw.unshift(p.span);
+    raw.push(p.span);
     cursor = p.key;
   }
+  raw.reverse();
   const spans: RouteSpan[] = [];
   for (const s of raw) {
     const last = spans[spans.length - 1];

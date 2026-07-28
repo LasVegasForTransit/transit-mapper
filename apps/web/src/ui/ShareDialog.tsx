@@ -27,9 +27,10 @@ export function ShareDialog({ onClose }: ShareDialogProps) {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     // Fold in the live camera so the shared link opens where the user is now —
     // interactive pan/zoom bypasses the store, so system.viewport lags it.
-    getOrCreateShare(withLiveCamera(system))
+    getOrCreateShare(withLiveCamera(system), { signal: controller.signal })
       .then((sharedUrl) => {
         if (cancelled) return;
         setUrl(sharedUrl);
@@ -43,6 +44,7 @@ export function ShareDialog({ onClose }: ShareDialogProps) {
       });
     return () => {
       cancelled = true;
+      controller.abort(new DOMException('Share dialog closed.', 'AbortError'));
     };
     // Snapshot is taken once when the dialog opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps

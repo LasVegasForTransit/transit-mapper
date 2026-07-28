@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import maplibregl, { type GeoJSONSource } from 'maplibre-gl';
+import maplibregl, { type FilterSpecification, type GeoJSONSource } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEditorStore } from '../editor/EditorProvider';
 import type { SimCommands } from '../editor/keymap';
@@ -36,6 +36,7 @@ import {
   SRC_ENDPOINT_HINT,
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
+  SRC_GESTURE,
   SRC_HANDLES,
   SRC_CONNECTORS,
   SRC_JUNCTIONS,
@@ -57,6 +58,17 @@ import {
   SRC_STATIONS,
   type ViewOptions,
 } from './layers';
+import {
+  createGestureProjectionController,
+  createProjectionOperationCounts,
+  recordFullProjection,
+  recordSourceUpload,
+  type EditGestureTargets,
+  type GestureAffectedEntities,
+  type GestureProjectionController,
+  type GestureProjectionResult,
+} from './gestureProjection';
+import { buildGestureLayerMaskPlan, maskedGestureFilter } from './gestureLayerMask';
 import { landmarksFeatureCollection } from './landmarks';
 import { getMap, setMap } from './mapRef';
 import { initLiveCamera, setLiveCamera } from '../camera/liveCamera';
@@ -124,13 +136,28 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   // Read live by the animation loop each tick, for the same reason.
   const pinnedPeriodRef = useRef<string | undefined>(pinnedPeriod);
   pinnedPeriodRef.current = pinnedPeriod;
+  const vehicleGateListenersRef = useRef(new Set<() => void>());
+
+  useEffect(() => {
+    // Pinned periods are React presentation state, so the imperative vehicle
+    // host cannot observe this change through the editor store. Publish it
+    // explicitly; an inactive host has no polling timer to discover it later.
+    for (const listener of vehicleGateListenersRef.current) listener();
+  }, [pinnedPeriod]);
 
   const viewRef = useRef<ViewOptions>({ viewMode, visibleModes, visibleWayTypes });
   const schedulePushDataRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const prevMode = viewRef.current.viewMode;
+    const prevVisibleModes = viewRef.current.visibleModes;
     viewRef.current = { viewMode, visibleModes, visibleWayTypes };
+    if (prevMode !== viewMode || prevVisibleModes !== visibleModes) {
+      // View mode and mode visibility determine whether the vehicle host has
+      // any work. An explicit invalidation lets Diagram/fully-filtered states
+      // remain completely unscheduled until one of these values changes.
+      for (const listener of vehicleGateListenersRef.current) listener();
+    }
     // Scheduled rather than called inline: a synchronous 14-collection build
     // here blocks the React commit that the user's own click just triggered,
     // which is the most visible place in the app to spend a frame. The rAF
@@ -279,6 +306,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       SRC_STATIONS,
       SRC_HANDLES,
       SRC_PREVIEW,
+      SRC_GESTURE,
       SRC_SHARING,
       SRC_ENDPOINT_HINT,
       SRC_MARQUEE,
@@ -440,6 +468,14 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       LYR_FACILITIES,
     ];
     const setHover = (next: { source: string; id: string } | null) => {
+      if (
+        (hovered === null && next === null) ||
+        (hovered !== null &&
+          next !== null &&
+          hovered.source === next.source &&
+          hovered.id === next.id)
+      )
+        return;
       if (hovered && (!next || hovered.source !== next.source || hovered.id !== next.id)) {
         map.removeFeatureState(hovered, 'hover');
         hovered = null;
@@ -451,7 +487,13 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       updateHaloVisibility();
       map.triggerRepaint();
     };
-    const onHoverMove = (e: maplibregl.MapMouseEvent) => {
+    let pendingHover: maplibregl.MapMouseEvent | null = null;
+    let hoverRaf: number | null = null;
+    const flushHover = () => {
+      hoverRaf = null;
+      const e = pendingHover;
+      pendingHover = null;
+      if (!e) return;
       // Skip while a pan is in flight (isMoving) OR while any mouse button is
       // held — a held button means a DRAG is underway (dragging a handle/point,
       // a station, a marquee…). The map isn't "moving" during a handle drag, so
@@ -468,10 +510,37 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           : null,
       );
     };
+    const onHoverMove = (e: maplibregl.MapMouseEvent) => {
+      pendingHover = e;
+      if (hoverRaf === null) hoverRaf = requestAnimationFrame(flushHover);
+    };
+    const onHoverOut = () => {
+      pendingHover = null;
+      if (hoverRaf !== null) {
+        cancelAnimationFrame(hoverRaf);
+        hoverRaf = null;
+      }
+      setHover(null);
+    };
     map.on('mousemove', onHoverMove);
-    map.on('mouseout', () => setHover(null));
+    map.on('mouseout', onHoverOut);
+
+    const projectionCounts = createProjectionOperationCounts();
+    let gestureActive = false;
+    let gestureProjection: GestureProjectionController | null = null;
+    let gestureProjectionAborted = false;
+    let gesturePreviewVisible = false;
+    let fullAfterGesture = false;
+
+    if (import.meta.env.DEV) {
+      window.__mapProjectionCounts = () => ({ ...projectionCounts });
+    }
 
     const pushData = () => {
+      if (gestureActive) {
+        fullAfterGesture = true;
+        return;
+      }
       // Self-heal before pushing — a missing source would otherwise silently
       // swallow this update (every setData below is optional-chained).
       if (!map.getSource(SRC_WAYS) || !map.getLayer(LAYER_SPECS[0].id)) {
@@ -506,23 +575,31 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         physicalHandleStationId(),
         physicalHandleGroupId(),
       );
-      (map.getSource(SRC_LANES) as GeoJSONSource | undefined)?.setData(fc.lanes);
-      (map.getSource(SRC_LANE_MARKINGS) as GeoJSONSource | undefined)?.setData(fc.laneMarkings);
-      (map.getSource(SRC_LANE_ARROWS) as GeoJSONSource | undefined)?.setData(fc.laneArrows);
-      (map.getSource(SRC_SERVICE_ARROWS) as GeoJSONSource | undefined)?.setData(fc.serviceArrows);
-      (map.getSource(SRC_JUNCTIONS) as GeoJSONSource | undefined)?.setData(fc.junctions);
-      (map.getSource(SRC_CONNECTORS) as GeoJSONSource | undefined)?.setData(fc.connectors);
-      (map.getSource(SRC_WAY_LABELS) as GeoJSONSource | undefined)?.setData(fc.wayLabels);
-      (map.getSource(SRC_WAYS) as GeoJSONSource | undefined)?.setData(fc.ways);
-      (map.getSource(SRC_SERVICES) as GeoJSONSource | undefined)?.setData(fc.services);
-      (map.getSource(SRC_STATIONS) as GeoJSONSource | undefined)?.setData(fc.stations);
-      (map.getSource(SRC_HANDLES) as GeoJSONSource | undefined)?.setData(fc.handles);
-      (map.getSource(SRC_FOOTPRINTS) as GeoJSONSource | undefined)?.setData(fc.footprints);
-      (map.getSource(SRC_PLATFORMS) as GeoJSONSource | undefined)?.setData(fc.platforms);
-      (map.getSource(SRC_FACILITIES) as GeoJSONSource | undefined)?.setData(fc.facilities);
-      (map.getSource(SRC_PHYSICAL_HANDLES) as GeoJSONSource | undefined)?.setData(
-        fc.physicalHandles,
-      );
+      const sourceData: Array<[string, GeoJSON.FeatureCollection]> = [
+        [SRC_LANES, fc.lanes],
+        [SRC_LANE_MARKINGS, fc.laneMarkings],
+        [SRC_LANE_ARROWS, fc.laneArrows],
+        [SRC_SERVICE_ARROWS, fc.serviceArrows],
+        [SRC_JUNCTIONS, fc.junctions],
+        [SRC_CONNECTORS, fc.connectors],
+        [SRC_WAY_LABELS, fc.wayLabels],
+        [SRC_WAYS, fc.ways],
+        [SRC_SERVICES, fc.services],
+        [SRC_STATIONS, fc.stations],
+        [SRC_HANDLES, fc.handles],
+        [SRC_FOOTPRINTS, fc.footprints],
+        [SRC_PLATFORMS, fc.platforms],
+        [SRC_FACILITIES, fc.facilities],
+        [SRC_PHYSICAL_HANDLES, fc.physicalHandles],
+      ];
+      let sourceUploads = 0;
+      for (const [sourceId, data] of sourceData) {
+        const source = map.getSource(sourceId) as GeoJSONSource | undefined;
+        if (!source) continue;
+        source.setData(data);
+        sourceUploads++;
+      }
+      recordFullProjection(projectionCounts, sourceUploads);
       // setData above cleared feature-state — re-apply the current selection.
       applySelectionState();
     };
@@ -536,6 +613,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // still reflects the LATEST merged state, not a stale snapshot.
     let pushDataRaf: number | null = null;
     const schedulePushData = () => {
+      if (gestureActive) {
+        fullAfterGesture = true;
+        return;
+      }
       if (pushDataRaf !== null) return;
       pushDataRaf = requestAnimationFrame(() => {
         pushDataRaf = null;
@@ -543,6 +624,110 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       });
     };
     schedulePushDataRef.current = schedulePushData;
+
+    const gestureFilterRestores = new Map<string, FilterSpecification | undefined>();
+    const gestureVisibilityRestores = new Map<string, unknown>();
+
+    const applyGestureMask = (affected: GestureAffectedEntities) => {
+      const plan = buildGestureLayerMaskPlan(affected);
+      for (const rule of plan.filterRules) {
+        if (!map.getLayer(rule.layerId)) continue;
+        if (!gestureFilterRestores.has(rule.layerId))
+          gestureFilterRestores.set(
+            rule.layerId,
+            map.getFilter(rule.layerId) as FilterSpecification | undefined,
+          );
+        map.setFilter(
+          rule.layerId,
+          maskedGestureFilter(gestureFilterRestores.get(rule.layerId), rule.exclusions),
+        );
+      }
+      for (const layerId of plan.hiddenLayerIds) {
+        if (!map.getLayer(layerId)) continue;
+        if (!gestureVisibilityRestores.has(layerId))
+          gestureVisibilityRestores.set(layerId, map.getLayoutProperty(layerId, 'visibility'));
+        map.setLayoutProperty(layerId, 'visibility', 'none');
+      }
+    };
+
+    const restoreGestureMask = () => {
+      for (const [layerId, filter] of gestureFilterRestores) {
+        if (map.getLayer(layerId)) map.setFilter(layerId, filter ?? null);
+      }
+      gestureFilterRestores.clear();
+      for (const [layerId, visibility] of gestureVisibilityRestores) {
+        if (map.getLayer(layerId))
+          map.setLayoutProperty(layerId, 'visibility', visibility ?? 'visible');
+      }
+      gestureVisibilityRestores.clear();
+    };
+
+    const clearGesturePreview = () => {
+      if (!gesturePreviewVisible) return;
+      const source = map.getSource(SRC_GESTURE) as GeoJSONSource | undefined;
+      if (source) {
+        source.setData(emptyFC);
+        recordSourceUpload(projectionCounts);
+      }
+      gesturePreviewVisible = false;
+    };
+
+    const abortGestureProjection = () => {
+      gestureProjectionAborted = true;
+      fullAfterGesture = true;
+      clearGesturePreview();
+      restoreGestureMask();
+    };
+
+    const applyGestureProjectionResult = (result: GestureProjectionResult) => {
+      if (result.kind === 'abort') {
+        abortGestureProjection();
+        return;
+      }
+      if (result.kind !== 'preview') return;
+      const source = map.getSource(SRC_GESTURE) as GeoJSONSource | undefined;
+      if (!source) {
+        abortGestureProjection();
+        return;
+      }
+      source.setData(result.projection.data);
+      recordSourceUpload(projectionCounts);
+      gesturePreviewVisible = true;
+      applyGestureMask(result.projection.affected);
+    };
+
+    const beginGestureProjection = (targets: EditGestureTargets) => {
+      if (gestureActive) return;
+      gestureActive = true;
+      gestureProjectionAborted = false;
+      fullAfterGesture = false;
+      const baseline = store.getState().system;
+      gestureProjection = createGestureProjectionController(baseline, targets, projectionCounts);
+      if (pushDataRaf !== null) {
+        cancelAnimationFrame(pushDataRaf);
+        pushDataRaf = null;
+        fullAfterGesture = true;
+      }
+      if (selectionRaf !== null) {
+        cancelAnimationFrame(selectionRaf);
+        selectionRaf = null;
+        fullAfterGesture = true;
+      }
+      applyGestureProjectionResult(gestureProjection.project(baseline));
+    };
+
+    const endGestureProjection = () => {
+      if (!gestureActive) return;
+      const finish = gestureProjection?.finish() ?? { rebuild: false, hadPreview: false };
+      clearGesturePreview();
+      restoreGestureMask();
+      gestureActive = false;
+      gestureProjection = null;
+      gestureProjectionAborted = false;
+      const needsFullProjection = finish.rebuild || fullAfterGesture;
+      fullAfterGesture = false;
+      if (needsFullProjection) schedulePushData();
+    };
 
     // Selection-only fast path (system unchanged): update halos via feature-state
     // and refresh only the small handle sources — never re-tessellating the big
@@ -600,7 +785,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     const scheduleLaneRefresh = () => {
       window.clearTimeout(laneRefreshTimer);
       laneRefreshTimer = window.setTimeout(() => {
-        if (map.getSource(SRC_LANES)) pushData();
+        if (map.getSource(SRC_LANES)) schedulePushData();
       }, LANE_REFRESH_DEBOUNCE_MS);
     };
 
@@ -624,6 +809,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         isDiagramMode: () => viewRef.current.viewMode === 'diagram',
         isNetworkMode: () => viewRef.current.viewMode === 'network',
         openContextMenu,
+        onEditGestureStart: beginGestureProjection,
+        onEditGestureEnd: endGestureProjection,
         // Footprints only render in the Infrastructure view — switch there
         // and zoom in, or a newly-drawn complex would be invisible right
         // where the user just drew it (the original bug report this fixes).
@@ -652,6 +839,12 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         isVisible: (service) => viewRef.current.visibleModes.has(service.modeId),
         viewMode: () => viewRef.current.viewMode,
         pinnedPeriod: () => pinnedPeriodRef.current,
+        subscribe: (listener) => {
+          vehicleGateListenersRef.current.add(listener);
+          return () => {
+            vehicleGateListenersRef.current.delete(listener);
+          };
+        },
       });
       detachPerf = attachPerfHarness(map); // DEV-only frame-time overlay + __panBench() + __perf toggles
       detachSimDev = attachSimDevHandle(simClock); // DEV-only __sim.setTime()/__sim.step() clock driver
@@ -668,18 +861,29 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       // features — and renames arrive one per keystroke. See
       // core/render/featureInputs.ts for the classification and its guarantees.
       if (featureInputsChanged(prev.system, s.system)) {
-        // Content changed — full rebuild (which re-applies selection state).
-        if (map.getSource(SRC_SERVICES)) schedulePushData();
+        if (gestureActive) {
+          if (!gestureProjectionAborted && gestureProjection)
+            applyGestureProjectionResult(gestureProjection.project(s.system));
+          else fullAfterGesture = true;
+        } else if (map.getSource(SRC_SERVICES)) {
+          // Committed content changed — full rebuild (which re-applies
+          // selection state). Active gestures take the one-source path above.
+          schedulePushData();
+        }
       } else if (
         (s.selection !== prev.selection || s.activeWayId !== prev.activeWayId) &&
         map.getSource(SRC_SERVICES)
       ) {
-        // Only the selection/active way changed. Node selection rides the
-        // junctions `selected` filter, so it still needs a rebuild; everything
-        // else takes the feature-state fast path.
-        const involvesNode = s.selection?.kind === 'node' || prev.selection?.kind === 'node';
-        if (involvesNode) schedulePushData();
-        else scheduleSelectionUpdate();
+        if (gestureActive) {
+          fullAfterGesture = true;
+        } else {
+          // Only the selection/active way changed. Node selection rides the
+          // junctions `selected` filter, so it still needs a rebuild; everything
+          // else takes the feature-state fast path.
+          const involvesNode = s.selection?.kind === 'node' || prev.selection?.kind === 'node';
+          if (involvesNode) schedulePushData();
+          else scheduleSelectionUpdate();
+        }
       }
       // Route drafting (Network view snap-to-streets drawing): show the
       // committed legs as the standard dashed draw preview.
@@ -740,7 +944,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       // subscription below → full-system buildFeatures + 13 setData + selector
       // fan-out + autosave, once per coalesced drag frame (panBy(duration:0)
       // fires moveend per mousemove). Camera persistence is handled separately
-      // and debounced (camera/cameraPersistence.ts).
+      // and debounced (storage/persistenceCoordinator.ts).
       setLiveCamera({ center: [c.lng, c.lat], zoom: map.getZoom() });
       // Debounced — a lane-detail pan rebuilds once it settles, not per
       // mouse-move (moveend fires per mouse-move from panBy(duration:0)).
@@ -751,6 +955,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     return () => {
       ro.disconnect();
       unsub();
+      pendingHover = null;
+      if (hoverRaf !== null) cancelAnimationFrame(hoverRaf);
+      map.off('mousemove', onHoverMove);
+      map.off('mouseout', onHoverOut);
       if (pushDataRaf !== null) cancelAnimationFrame(pushDataRaf);
       if (selectionRaf !== null) cancelAnimationFrame(selectionRaf);
       window.clearTimeout(laneRefreshTimer);
@@ -760,6 +968,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       detachVehicles?.();
       detachPerf?.();
       detachSimDev?.();
+      clearGesturePreview();
+      restoreGestureMask();
+      if (import.meta.env.DEV) delete window.__mapProjectionCounts;
       schedulePushDataRef.current = null;
       setMap(null);
       map.remove();

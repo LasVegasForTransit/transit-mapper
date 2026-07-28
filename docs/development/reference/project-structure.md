@@ -237,6 +237,27 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
   there was. Each system has its own key so switching never touches the
   others, and a small index holds just id, name and timestamp so the list
   renders without loading every system in full.
+- `persistenceCoordinator.ts` — coalesces content and camera changes into
+  bounded saves. Camera movement is presentation state and does not change a
+  library entry's `updatedAt`; content edits do.
+
+## apps/web/src/import/ — bounded browser imports
+
+Large GTFS archives are downloaded once and transferred to `gtfs.worker.ts`,
+which parses them and emits bounded batches so store commits can yield between
+them. Reconciliation runs in a second Worker because corridor matching is also
+CPU-heavy. The protocol files contain the typed message boundaries; the
+`streamRtcGtfs.ts` and `reconcileRtcGtfs.ts` hosts own cancellation, timeouts,
+progress, and Worker cleanup.
+
+This boundary keeps archive parsing and reconciliation off the main thread
+without moving domain rules out of `packages/core`.
+
+## apps/web/src/network/ — cancellable requests
+
+- `fetchWithTimeout.ts` — combines a caller's abort signal with a hard request
+  deadline. Share, embed, and import callers use the same behavior so a stalled
+  Worker, proxy, or upstream request cannot leave an interaction busy forever.
 
 ## apps/web/src/sim/ — the running simulation
 
@@ -296,16 +317,14 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 - `liveCamera.ts` — the live map camera, held in a module-level holder
   outside the domain `system`. There is one map per session, and the value
   mirrors that map, so a store or a context would buy nothing.
-- `cameraPersistence.ts` — folds the live camera into the saved library
-  entry on a debounce, and does not touch `updatedAt`.
 
 The camera is presentation state, not domain data, and separating the two
 is a performance decision as much as a modelling one. While the camera
 lived in `system`, every pan minted a new `system` reference, which made a
 drag frame look like a content edit to the renderer subscription, every
 mounted selector, and autosave alike. Moving it out cost the saved-viewport
-behaviour, which `cameraPersistence.ts` restores deliberately rather than
-by making the camera reactive again.
+behaviour, which `storage/persistenceCoordinator.ts` restores deliberately
+rather than by making the camera reactive again.
 
 ## apps/web/src/perf/ — measuring frames
 
@@ -318,11 +337,17 @@ by making the camera reactive again.
 - `panBench.ts` — a scripted pan and zoom in the same shape as a real drag.
   Deterministic input is what makes two runs comparable, so "feels
   smoother" becomes a number.
+- `fixtures.ts`, `scenarios.ts`, `report.ts`, `budget.ts` — deterministic
+  small, dense, and agency-scale systems; the measurement protocol; stable
+  reports; and absolute/regression budget evaluation.
+- `bundleBudget.ts`, `pwaPrecache.ts` — inspect production build output so
+  bundle growth and accidental precaching of large lazy chunks fail visibly.
 - `index.ts` — wires the above to `window.__panBench`, `window.__perf` and
   friends for use from devtools.
 
-None of this ships enabled. The only caller guards on the DEV flag and
-`index.ts` no-ops again on its own.
+Interactive instrumentation remains development-only. `perf.config.ts`,
+`scripts/perf/`, and `.github/workflows/performance.yml` run the repeatable
+browser and build measurements in CI.
 
 ## apps/web/src/ui/ — components
 

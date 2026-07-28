@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from 'react';
 import type { LngLat } from '@transitmapper/core/model/system';
 
 export type DialogName =
@@ -9,10 +18,14 @@ export type DialogName =
  *  (GTFS: dozens of routes streamed in over several seconds) never traps the
  *  user behind a dialog they can't interact past. */
 export interface ImportProgress {
+  /** Identifies one run so an old cleanup timer cannot hide a newer import. */
+  operationId: number;
   label: string;
   done: number;
   total: number;
-  state: 'loading' | 'done' | 'error';
+  state: 'loading' | 'done' | 'error' | 'canceled';
+  /** Present only while the background operation can still be interrupted. */
+  cancel?: () => void;
 }
 
 // Ephemeral UI state (dialogs, overlays), kept separate from the editor/domain
@@ -46,7 +59,7 @@ const UiContext = createContext<UiState | null>(null);
 // ImportProgressPill and GtfsImportDialog need this.
 interface ImportProgressState {
   importProgress: ImportProgress | null;
-  setImportProgress: (p: ImportProgress | null) => void;
+  setImportProgress: Dispatch<SetStateAction<ImportProgress | null>>;
 }
 
 const ImportProgressContext = createContext<ImportProgressState | null>(null);

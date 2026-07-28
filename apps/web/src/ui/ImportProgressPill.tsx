@@ -10,7 +10,7 @@ import { useImportProgress } from './UiProvider';
 export function ImportProgressPill() {
   const { importProgress } = useImportProgress();
   if (!importProgress) return null;
-  const { label, done, total, state } = importProgress;
+  const { label, done, total, state, cancel } = importProgress;
 
   return (
     <div className={`import-progress-pill ${state}`} role="status" aria-live="polite">
@@ -19,6 +19,11 @@ export function ImportProgressPill() {
         {label}
         {state === 'loading' && total > 0 ? ` — ${done}/${total} routes` : ''}
       </span>
+      {state === 'loading' && cancel && (
+        <button type="button" className="import-progress-cancel" onClick={cancel}>
+          Cancel
+        </button>
+      )}
     </div>
   );
 }

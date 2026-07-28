@@ -1,4 +1,4 @@
-import maplibregl, { type GeoJSONSource } from 'maplibre-gl';
+import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import { systemBounds } from '@transitmapper/core/model/geo';
@@ -8,7 +8,6 @@ import type { GetShareResponse } from '@transitmapper/core/share/contract';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { BASEMAP_STYLE } from '../map/basemap';
 import {
-  LAYER_SPECS,
   registerMapIcons,
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
@@ -17,6 +16,8 @@ import {
   SRC_STATIONS,
   SRC_WAYS,
 } from '../map/layers';
+import { fetchWithTimeout } from '../network/fetchWithTimeout';
+import { EMBED_LAYER_SPECS, EMBED_SOURCE_IDS } from './config';
 
 // The embedded map: a live, read-only view of one shared system, meant to sit
 // in someone else's article. Deliberately NOT the editor with its chrome
@@ -33,11 +34,8 @@ const EMBED_VIEW: ViewOptions = {
   visibleWayTypes: new Set(WAY_TYPE_ORDER),
 };
 
-// Only the sources a read-only schematic actually feeds. The editor's handle,
-// preview, marquee and lane-detail sources have no meaning here, but the
-// shared LAYER_SPECS reference them, so they're still created (empty) — a
-// layer whose source is missing is a hard MapLibre error.
-const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
+const MAP_LOAD_TIMEOUT_MS = 20_000;
+const SYSTEM_PAINT_TIMEOUT_MS = 10_000;
 
 function shareIdFromPath(pathname: string): string | null {
   const match = /^\/e\/([0-9a-z]{1,32})\/?$/.exec(pathname);
@@ -52,23 +50,22 @@ function fail(message: string): void {
   }
 }
 
-async function loadSystem(id: string): Promise<TransitSystem> {
-  const res = await fetch(`/api/systems/${encodeURIComponent(id)}`);
+async function loadSystem(id: string, signal: AbortSignal): Promise<TransitSystem> {
+  const res = await fetchWithTimeout(`/api/systems/${encodeURIComponent(id)}`, {}, { signal });
   if (res.status === 404) throw new Error('This shared system was not found.');
   if (!res.ok) throw new Error(`Couldn't load this system (${res.status}).`);
   const data = (await res.json()) as GetShareResponse;
   return parseSystem(data.system);
 }
 
-function mount(system: TransitSystem): void {
-  const container = document.getElementById('map');
-  if (!container) return;
-
+function createMap(container: HTMLElement): MLMap {
   const map = new maplibregl.Map({
     container,
     style: BASEMAP_STYLE,
-    center: system.viewport.center,
-    zoom: system.viewport.zoom,
+    // The real camera is fitted once the snapshot arrives. Starting the style
+    // now lets its network/worker setup overlap the independent API request.
+    center: [0, 0],
+    zoom: 1,
     // An embed is a reading surface, not an editing one: pan and zoom are
     // welcome, rotation and pitch just let a reader get lost.
     dragRotate: false,
@@ -94,55 +91,90 @@ function mount(system: TransitSystem): void {
   // which is the worst possible failure mode for something running inside
   // someone else's page.
   map.on('error', (e) => console.error('[transitmapper embed]', e.error ?? e));
+  return map;
+}
 
-  map.on('load', () => {
-    // Everything below runs inside MapLibre's own event dispatch, which
-    // swallows what it catches — an exception here would otherwise leave a
-    // half-drawn map and no explanation anywhere.
-    try {
-      registerMapIcons(map);
-
-      // Same add-then-anchor ordering the editor uses (see MapCanvas), minus
-      // the self-healing: nothing here mutates the style after setup, so
-      // there's no torn state to heal. Sources are derived from the specs
-      // themselves rather than listed by hand, so a layer can never reference
-      // a source this forgot to create.
-      const sources = new Set(
-        LAYER_SPECS.map((spec) => ('source' in spec ? (spec.source as string) : '')).filter(
-          Boolean,
-        ),
-      );
-      for (const src of sources) {
-        if (!map.getSource(src)) map.addSource(src, { type: 'geojson', data: EMPTY_FC });
-      }
-      for (const spec of LAYER_SPECS) {
-        if (!map.getLayer(spec.id)) map.addLayer(spec);
-      }
-
-      const fc = buildFeatures(system, null, [], EMBED_VIEW);
-      const setData = (id: string, data: GeoJSON.FeatureCollection) => {
-        const source = map.getSource(id) as GeoJSONSource | undefined;
-        if (!source) throw new Error(`Embed source "${id}" was never created`);
-        source.setData(data);
-      };
-      setData(SRC_WAYS, fc.ways);
-      setData(SRC_SERVICES, fc.services);
-      setData(SRC_STATIONS, fc.stations);
-      setData(SRC_FOOTPRINTS, fc.footprints);
-      setData(SRC_PLATFORMS, fc.platforms);
-      setData(SRC_FACILITIES, fc.facilities);
-
-      // Resize before framing, never after: fitBounds solves for the viewport
-      // it's told about, so fitting against a stale size frames the wrong extent.
-      map.resize();
-      const bounds = systemBounds(system);
-      if (bounds) map.fitBounds(bounds, { padding: 40, animate: false });
-      map.triggerRepaint();
-    } catch (e) {
-      console.error('[transitmapper embed]', e);
-      fail(`Couldn't draw this map: ${(e as Error).message}`);
-    }
+function waitForMapLoad(map: MLMap): Promise<void> {
+  if (map.loaded()) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Timed out loading the map style.'));
+    }, MAP_LOAD_TIMEOUT_MS);
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      map.off('load', onLoad);
+      map.off('remove', onRemove);
+    };
+    const onLoad = () => {
+      cleanup();
+      resolve();
+    };
+    const onRemove = () => {
+      cleanup();
+      reject(new Error('The map was closed before it loaded.'));
+    };
+    map.on('load', onLoad);
+    map.on('remove', onRemove);
   });
+}
+
+function waitForSystemPaint(map: MLMap): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Timed out drawing the system.'));
+    }, SYSTEM_PAINT_TIMEOUT_MS);
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      map.off('render', onRender);
+      map.off('remove', onRemove);
+    };
+    const onRender = () => {
+      if (![...EMBED_SOURCE_IDS].every((sourceId) => map.isSourceLoaded(sourceId))) return;
+      cleanup();
+      resolve();
+    };
+    const onRemove = () => {
+      cleanup();
+      reject(new Error('The map was closed before the system painted.'));
+    };
+    map.on('render', onRender);
+    map.on('remove', onRemove);
+    map.triggerRepaint();
+  });
+}
+
+async function drawSystem(
+  map: MLMap,
+  system: TransitSystem,
+  features: ReturnType<typeof buildFeatures>,
+): Promise<void> {
+  registerMapIcons(map);
+  const dataBySource: Record<string, GeoJSON.FeatureCollection> = {
+    [SRC_WAYS]: features.ways,
+    [SRC_SERVICES]: features.services,
+    [SRC_STATIONS]: features.stations,
+    [SRC_FOOTPRINTS]: features.footprints,
+    [SRC_PLATFORMS]: features.platforms,
+    [SRC_FACILITIES]: features.facilities,
+  };
+  for (const sourceId of EMBED_SOURCE_IDS) {
+    const heavy = sourceId === SRC_WAYS || sourceId === SRC_SERVICES;
+    map.addSource(sourceId, {
+      type: 'geojson',
+      data: dataBySource[sourceId],
+      ...(heavy ? { tolerance: 1 } : {}),
+    });
+  }
+  for (const spec of EMBED_LAYER_SPECS) map.addLayer(spec);
+
+  // Resize before framing, never after: fitBounds solves for the viewport
+  // it's told about, so fitting against a stale size frames the wrong extent.
+  map.resize();
+  const bounds = systemBounds(system);
+  if (bounds) map.fitBounds(bounds, { padding: 40, animate: false });
+  await waitForSystemPaint(map);
 }
 
 async function start(): Promise<void> {
@@ -152,8 +184,22 @@ async function start(): Promise<void> {
     return;
   }
 
+  const container = document.getElementById('map');
+  if (!container) {
+    fail('No map container was found.');
+    return;
+  }
+  const controller = new AbortController();
+  const cancel = () => controller.abort(new DOMException('Embed closed.', 'AbortError'));
+  window.addEventListener('pagehide', cancel, { once: true });
+  const map = createMap(container);
+
   try {
-    const system = await loadSystem(id);
+    const systemAndFeatures = loadSystem(id, controller.signal).then((system) => ({
+      system,
+      features: buildFeatures(system, null, [], EMBED_VIEW),
+    }));
+    const [{ system, features }] = await Promise.all([systemAndFeatures, waitForMapLoad(map)]);
     document.title = `${system.name || 'Transit system'} · TransitMapper`;
 
     // The credit link doubles as the way out of the iframe — a reader who
@@ -164,12 +210,14 @@ async function start(): Promise<void> {
       credit.textContent = system.name ? `${system.name} · TransitMapper` : 'Open in TransitMapper';
     }
 
+    await drawSystem(map, system, features);
     const status = document.getElementById('embed-status');
     if (status) status.hidden = true;
-
-    mount(system);
   } catch (e) {
+    map.remove();
     fail((e as Error).message);
+  } finally {
+    window.removeEventListener('pagehide', cancel);
   }
 }
 

@@ -1,5 +1,7 @@
-import { useEditor } from '../editor/EditorProvider';
-import { streamRtcGtfsBatches } from '@transitmapper/core/model/gtfsImport';
+import { useEditor, useEditorStore } from '../editor/EditorProvider';
+import { streamRtcGtfsBatches } from '../import/streamRtcGtfs';
+import { reconcileRtcGtfs } from '../import/reconcileRtcGtfs';
+import { waitForQuiet } from '../import/waitForQuiet';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
 import { useImportProgress } from './UiProvider';
@@ -7,6 +9,8 @@ import { useImportProgress } from './UiProvider';
 interface GtfsImportDialogProps {
   onClose: () => void;
 }
+
+let nextImportOperationId = 0;
 
 /** RTC Southern Nevada's real, current bus network — imported whole (no
  *  bbox/category picker like street import: it's one fixed feed) as a
@@ -16,25 +20,71 @@ interface GtfsImportDialogProps {
  *  several seconds, and nothing about that should trap the user behind a
  *  modal — see streamRtcGtfsBatches for why it's batched at all. */
 export function GtfsImportDialog({ onClose }: GtfsImportDialogProps) {
-  const importGtfs = useEditor((s) => s.importGtfs);
-  const reconcileImportedServices = useEditor((s) => s.reconcileImportedServices);
-  const { setImportProgress } = useImportProgress();
+  const applyGtfsImportBatch = useEditor((s) => s.applyGtfsImportBatch);
+  const applyImportedReconciliation = useEditor((s) => s.applyImportedReconciliation);
+  const store = useEditorStore();
+  const { importProgress, setImportProgress } = useImportProgress();
 
   const run = () => {
+    if (importProgress?.state === 'loading') return;
+    const operationId = ++nextImportOperationId;
+    const targetSystemId = store.getState().system.id;
+    const controller = new AbortController();
+    const cancel = () =>
+      controller.abort(new DOMException('RTC import canceled by the user.', 'AbortError'));
+    const unsubscribeTarget = store.subscribe((state) => {
+      if (state.system.id === targetSystemId || controller.signal.aborted) return;
+      controller.abort(
+        new DOMException('RTC import stopped because a different system was opened.', 'AbortError'),
+      );
+    });
+    setImportProgress({
+      operationId,
+      label: 'Downloading RTC system…',
+      done: 0,
+      total: 0,
+      state: 'loading',
+      cancel,
+    });
     onClose();
     (async () => {
       try {
         let routesTotal = 0;
         const importedServiceIds: string[] = [];
-        for await (const { pieces, routesDone, routesTotal: total } of streamRtcGtfsBatches()) {
-          importGtfs(pieces);
+        for await (const { pieces, routesDone, routesTotal: total } of streamRtcGtfsBatches({
+          signal: controller.signal,
+          onPhase: (phase) => {
+            if (phase === 'downloading') return;
+            setImportProgress({
+              operationId,
+              label:
+                phase === 'inflate-and-index'
+                  ? 'Preparing RTC route data…'
+                  : 'Building RTC routes…',
+              done: 0,
+              total: routesTotal,
+              state: 'loading',
+              cancel,
+            });
+          },
+        })) {
+          if (!applyGtfsImportBatch({ targetSystemId, pieces })) {
+            const reason = new DOMException(
+              'RTC import stopped because a different system was opened.',
+              'AbortError',
+            );
+            controller.abort(reason);
+            throw reason;
+          }
           importedServiceIds.push(...pieces.services.map((s) => s.id));
           routesTotal = total;
           setImportProgress({
+            operationId,
             label: 'Importing RTC system',
             done: routesDone,
             total,
             state: 'loading',
+            cancel,
           });
         }
         // Corridor conflation: many of these routes share the same physical
@@ -43,27 +93,77 @@ export function GtfsImportDialog({ onClose }: GtfsImportDialogProps) {
         // infrastructure even when they land in different batches (batching
         // is by route order for progressive UI, not by geography).
         setImportProgress({
+          operationId,
           label: 'Merging shared infrastructure…',
           done: routesTotal,
           total: routesTotal,
           state: 'loading',
+          cancel,
         });
-        reconcileImportedServices(importedServiceIds);
+        for (;;) {
+          if (controller.signal.aborted) throw controller.signal.reason;
+          const expectedSystem = store.getState().system;
+          const attempt = new AbortController();
+          const relayCancel = () => attempt.abort(controller.signal.reason);
+          controller.signal.addEventListener('abort', relayCancel, { once: true });
+          const unsubscribe = store.subscribe((state) => {
+            if (state.system !== expectedSystem) {
+              attempt.abort(new DOMException('Editing superseded this snapshot.', 'AbortError'));
+            }
+          });
+          try {
+            const result = await reconcileRtcGtfs(expectedSystem, importedServiceIds, {
+              signal: attempt.signal,
+            });
+            if (applyImportedReconciliation({ expectedSystem, result })) break;
+          } catch (error) {
+            if (controller.signal.aborted) throw controller.signal.reason;
+            if (!attempt.signal.aborted) throw error;
+          } finally {
+            unsubscribe();
+            controller.signal.removeEventListener('abort', relayCancel);
+          }
+          // A user edit replaced the snapshot while the Worker was running.
+          // Terminate it rather than merely discarding its eventual result,
+          // then wait for a complete quiet window before cloning another
+          // large document into a replacement Worker.
+          setImportProgress({
+            operationId,
+            label: 'Waiting for editing to settle before merging routes…',
+            done: routesTotal,
+            total: routesTotal,
+            state: 'loading',
+            cancel,
+          });
+          await waitForQuiet(store, { quietMs: 500, signal: controller.signal });
+        }
         setImportProgress({
+          operationId,
           label: `Imported RTC's ${routesTotal} routes`,
           done: routesTotal,
           total: routesTotal,
           state: 'done',
         });
       } catch (e) {
+        const canceled = controller.signal.aborted;
         setImportProgress({
-          label: e instanceof Error ? e.message : 'RTC import failed.',
+          operationId,
+          label: canceled
+            ? `${e instanceof Error ? e.message : 'RTC import canceled.'} Routes already added remain in the original system.`
+            : e instanceof Error
+              ? e.message
+              : 'RTC import failed.',
           done: 0,
           total: 0,
-          state: 'error',
+          state: canceled ? 'canceled' : 'error',
         });
       } finally {
-        setTimeout(() => setImportProgress(null), 4000);
+        unsubscribeTarget();
+        setTimeout(
+          () =>
+            setImportProgress((current) => (current?.operationId === operationId ? null : current)),
+          4000,
+        );
       }
     })();
   };
@@ -78,8 +178,12 @@ export function GtfsImportDialog({ onClose }: GtfsImportDialogProps) {
           className="primary-btn"
           style={{ marginTop: 16, width: '100%', justifyContent: 'center' }}
           onClick={run}
+          disabled={importProgress?.state === 'loading'}
         >
-          <Icon name="download" size={18} /> Import into this system
+          <Icon name="download" size={18} />{' '}
+          {importProgress?.state === 'loading'
+            ? 'Import already running'
+            : 'Import into this system'}
         </button>
       }
     >

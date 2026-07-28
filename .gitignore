@@ -8,6 +8,7 @@ dev-dist/
 .superpowers/
 *.tsbuildinfo
 .turbo/
+apps/web/artifacts/
 
 # Agent configuration. settings.json is committed team policy;
 # settings.local.json is personal and must never be. Both of these were

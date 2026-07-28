@@ -4,7 +4,6 @@ import { MapCanvas } from './map/MapCanvas';
 import { getMap } from './map/mapRef';
 import { useEditor, useEditorStore } from './editor/EditorProvider';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
-import type { TransitSystem } from '@transitmapper/core/model/system';
 import { fetchShare } from './share/api';
 import {
   getActiveId,
@@ -17,8 +16,10 @@ import {
   saveToLibrary,
   setActiveId,
 } from './storage/localStore';
-import { attachCameraPersistence } from './camera/cameraPersistence';
-import { withLiveCamera } from './camera/liveCamera';
+import {
+  attachPersistenceCoordinator,
+  type PersistenceCoordinator,
+} from './storage/persistenceCoordinator';
 import { Icon } from './ui/Icon';
 import { ImportProgressPill } from './ui/ImportProgressPill';
 import { MapContextMenu } from './ui/MapContextMenu';
@@ -108,7 +109,24 @@ interface LazyDialogProps {
 function LazyDialog({ children, onFailure }: LazyDialogProps) {
   return (
     <ErrorBoundary label="dialog" onError={onFailure}>
-      <Suspense fallback={null}>{children}</Suspense>
+      <Suspense
+        fallback={
+          <>
+            <div className="modal-backdrop" aria-hidden="true" />
+            <div
+              className="modal lazy-dialog-loading"
+              role="status"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <span className="import-progress-spinner" aria-hidden="true" />
+              Loading dialog…
+            </div>
+          </>
+        }
+      >
+        {children}
+      </Suspense>
     </ErrorBoundary>
   );
 }
@@ -131,12 +149,17 @@ export function App() {
   useEffect(() => {
     const path = window.location.pathname;
     if (path.startsWith(SHARE_PREFIX)) {
+      const controller = new AbortController();
       const id = path.slice(SHARE_PREFIX.length).replace(/\/$/, '');
-      fetchShare(id)
+      fetchShare(id, { signal: controller.signal })
         .then((system) => store.getState().setSystem(system, { readOnly: true }))
-        .catch((e: Error) => setLoadError(e.message))
-        .finally(() => setReady(true));
-      return;
+        .catch((e: Error) => {
+          if (e.name !== 'AbortError') setLoadError(e.message);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setReady(true);
+        });
+      return () => controller.abort();
     }
     // Load whichever system was last open; migrate the old single-slot
     // autosave if this is the first run since the library existed; fall back
@@ -177,51 +200,20 @@ export function App() {
     setReady(true);
   }, [store, report, openDialog]);
 
-  // Autosave the working copy into its own library entry (never a read-only
-  // shared view). Switching to a different system's id updates the active
-  // pointer immediately — no reason to debounce that, only the content save.
-  const saveTimer = useRef<number | undefined>(undefined);
-  // Mirrors whatever saveTimer is currently waiting to write, so a caller
-  // outside this effect (see flushPendingSave) can force that write early
-  // without needing its own copy of the debounce logic.
-  const pendingSave = useRef<TransitSystem | null>(null);
+  // Content and camera changes share one debounce/write lane. A pan that lands
+  // next to an edit therefore serializes the document once, not once for each
+  // source of state; pagehide and update reloads flush this same pending value.
+  const persistence = useRef<PersistenceCoordinator | null>(null);
   useEffect(() => {
-    const unsubscribe = store.subscribe((s, prev) => {
-      if (s.readOnly) return;
-      if (s.system === prev.system) return;
-      if (s.system.id !== prev.system.id) setActiveId(s.system.id);
-      window.clearTimeout(saveTimer.current);
-      pendingSave.current = s.system;
-      saveTimer.current = window.setTimeout(() => {
-        // Fold in the live camera at save time: interactive pan/zoom bypasses
-        // the domain store (camera/liveCamera.ts), so `pendingSave.current`'s
-        // viewport would otherwise be stale. Keeps "reload restores where I
-        // left off".
-        report(saveToLibrary(withLiveCamera(pendingSave.current!)));
-        pendingSave.current = null;
-      }, 400);
-    });
-    // The pending timer is part of this effect's state; leaving it to fire
-    // into an unmounted tree is silent today but is still a leak.
+    const coordinator = attachPersistenceCoordinator(store, report);
+    persistence.current = coordinator;
     return () => {
-      window.clearTimeout(saveTimer.current);
-      unsubscribe();
+      if (persistence.current === coordinator) persistence.current = null;
+      coordinator.detach();
     };
   }, [store, report]);
 
-  // Forces a debounced autosave write early instead of waiting out its 400ms
-  // timer — used before an update-triggered reload (see useAppUpdate below),
-  // so a new-version reload never drops the last few seconds of an edit.
-  const flushPendingSave = useCallback(() => {
-    if (pendingSave.current === null) return;
-    window.clearTimeout(saveTimer.current);
-    report(saveToLibrary(withLiveCamera(pendingSave.current)));
-    pendingSave.current = null;
-  }, [report]);
-
-  // Live camera moves don't flow through the store (so they never trigger a
-  // rebuild), so persist them on their own debounced path.
-  useEffect(() => attachCameraPersistence(store), [store]);
+  const flushPendingSave = useCallback(() => persistence.current?.flush(), []);
 
   // Service worker registration + update lifecycle — never wired into
   // embed's own entry point (see vite.config.ts).

@@ -986,6 +986,78 @@ const OVERPASS_ENDPOINTS = [
  * network error.
  */
 const OVERPASS_RETRYABLE = new Set([429, 502, 503, 504]);
+const OVERPASS_ENDPOINT_TIMEOUT_MS = 15_000;
+
+export interface ImportOsmOptions {
+  signal?: AbortSignal;
+  endpointTimeoutMs?: number;
+  /** Injectable for deterministic network-boundary tests. */
+  fetcher?: typeof fetch;
+}
+
+type OverpassFetchResult =
+  { ok: true; status: number; elements: OsmWayElement[] } | { ok: false; status: number };
+
+async function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () =>
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new DOMException('OSM import canceled.', 'AbortError'),
+      );
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    if (onAbort) signal.removeEventListener('abort', onAbort);
+  }
+}
+
+async function fetchOverpass(
+  endpoint: string,
+  query: string,
+  options: ImportOsmOptions,
+): Promise<OverpassFetchResult> {
+  if (options.signal?.aborted) {
+    throw options.signal.reason instanceof Error
+      ? options.signal.reason
+      : new DOMException('OSM import canceled.', 'AbortError');
+  }
+  const controller = new AbortController();
+  const relayAbort = () => controller.abort(options.signal?.reason);
+  options.signal?.addEventListener('abort', relayAbort, { once: true });
+  const timer = setTimeout(
+    () => controller.abort(new DOMException('Overpass request timed out.', 'TimeoutError')),
+    options.endpointTimeoutMs ?? OVERPASS_ENDPOINT_TIMEOUT_MS,
+  );
+  try {
+    const response = await withAbort(
+      (options.fetcher ?? fetch)(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'text/plain' },
+        body: query,
+        signal: controller.signal,
+      }),
+      controller.signal,
+    );
+    if (!response.ok) return { ok: false, status: response.status };
+    // Response headers are not completion. Keep the endpoint deadline and
+    // caller cancellation connected while a busy mirror dribbles or stalls
+    // its JSON body.
+    const data = await withAbort(
+      response.json() as Promise<{ elements?: OsmWayElement[] }>,
+      controller.signal,
+    );
+    return { ok: true, status: response.status, elements: data.elements ?? [] };
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener('abort', relayAbort);
+  }
+}
 
 /** An import filtered against what a system already holds, plus how much was
  *  dropped — the dialog reports it, since "imported 0 ways" and "all 149 of
@@ -1156,6 +1228,7 @@ export async function importOsmWays(
   bbox: ImportBBox,
   categories: ImportCategory[],
   drivingSide: DrivingSide = 'right',
+  options: ImportOsmOptions = {},
 ): Promise<ImportedNetwork> {
   if (categories.length === 0)
     return { ways: [], nodes: [], namedWays: [], medians: [], turnRestrictions: [] };
@@ -1163,24 +1236,22 @@ export async function importOsmWays(
 
   let lastError = '';
   for (const endpoint of OVERPASS_ENDPOINTS) {
-    let res: Response;
+    let res: OverpassFetchResult;
     try {
-      res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'content-type': 'text/plain' },
-        body: query,
-      });
+      res = await fetchOverpass(endpoint, query, options);
     } catch {
+      if (options.signal?.aborted) {
+        throw options.signal.reason instanceof Error
+          ? options.signal.reason
+          : new DOMException('OSM import canceled.', 'AbortError');
+      }
       // No status to read: offline, or — far more often — a busy Overpass
       // whose error page dropped the CORS headers. Both look identical from
       // here, so the message stays honest about not knowing which.
       lastError = 'no OpenStreetMap server answered';
       continue;
     }
-    if (res.ok) {
-      const data = (await res.json()) as { elements?: OsmWayElement[] };
-      return osmElementsToNetwork(data.elements ?? [], drivingSide);
-    }
+    if (res.ok) return osmElementsToNetwork(res.elements, drivingSide);
     if (!OVERPASS_RETRYABLE.has(res.status)) throw new Error(`OSM import failed (${res.status}).`);
     lastError = `every OpenStreetMap server is busy (${res.status})`;
   }

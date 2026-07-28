@@ -1,18 +1,42 @@
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type {
-  CreateShareRequest,
   CreateShareResponse,
   GetShareResponse,
+  SerializedShareRequest,
 } from '@transitmapper/core/share/contract';
+import { serializeShareRequest, shareRequestFits } from '@transitmapper/core/share/contract';
 import { renderPreviewPng, toBase64 } from './previewImage';
 import { getMyShare, removeMyShare, setMyShare } from './myShares';
+import { fetchWithTimeout } from '../network/fetchWithTimeout';
+import {
+  createCancelableFlight,
+  joinCancelableFlight,
+  type CancelableFlight,
+} from '../network/cancelableFlight';
+import { addPreviewToSharePayload, ShareTooLargeError } from './publish';
 
-async function sharePayload(system: TransitSystem): Promise<{ body: string; data: string }> {
-  const png = await renderPreviewPng(system);
-  const data = JSON.stringify(system);
-  const body: CreateShareRequest = { system, ...(png ? { preview: toBase64(png) } : {}) };
-  return { body: JSON.stringify(body), data };
+export interface ShareRequestOptions {
+  signal?: AbortSignal;
+}
+
+interface ShareFlight extends CancelableFlight<string> {
+  data: string;
+}
+
+const shareFlights = new Map<string, ShareFlight>();
+
+async function sharePayload(
+  request: SerializedShareRequest,
+  signal: AbortSignal,
+): Promise<SerializedShareRequest> {
+  return addPreviewToSharePayload(request, {
+    signal,
+    renderPreview: async () => {
+      const png = await renderPreviewPng(request.data, { signal });
+      return png ? toBase64(png) : null;
+    },
+  });
 }
 
 /** POST a system snapshot; returns the share id and, if this request
@@ -22,36 +46,46 @@ async function sharePayload(system: TransitSystem): Promise<{ body: string; data
  *  system — the Worker can't afford to draw it (see share/previewImage.ts).
  *  Best-effort: if rasterizing fails, the share is created without one rather
  *  than failing outright. */
-async function createShare(system: TransitSystem): Promise<CreateShareResponse & { data: string }> {
-  const { body, data } = await sharePayload(system);
-  const res = await fetch('/api/systems', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body,
-  });
+async function createShare(
+  request: SerializedShareRequest,
+  signal: AbortSignal,
+): Promise<CreateShareResponse & { data: string }> {
+  const res = await fetchWithTimeout(
+    '/api/systems',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: request.body,
+    },
+    { signal },
+  );
   if (!res.ok) {
     const msg = await res.text().catch(() => res.statusText);
     throw new Error(`Share failed (${res.status}): ${msg}`);
   }
-  return { ...((await res.json()) as CreateShareResponse), data };
+  return { ...((await res.json()) as CreateShareResponse), data: request.data };
 }
 
 async function updateShare(
   shareId: string,
   editToken: string,
-  system: TransitSystem,
+  request: SerializedShareRequest,
+  signal: AbortSignal,
 ): Promise<string> {
-  const { body, data } = await sharePayload(system);
-  const res = await fetch(`/api/systems/${encodeURIComponent(shareId)}`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json', 'x-edit-token': editToken },
-    body,
-  });
+  const res = await fetchWithTimeout(
+    `/api/systems/${encodeURIComponent(shareId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-edit-token': editToken },
+      body: request.body,
+    },
+    { signal },
+  );
   if (!res.ok) {
     const msg = await res.text().catch(() => res.statusText);
     throw new Error(`Updating the share failed (${res.status}): ${msg}`);
   }
-  return data;
+  return request.data;
 }
 
 function shareUrl(id: string): string {
@@ -65,19 +99,23 @@ function shareUrl(id: string): string {
  * is shared (or if this browser has never held its edit token — see
  * myShares.ts).
  */
-export async function getOrCreateShare(system: TransitSystem): Promise<string> {
+async function publishShare(
+  system: TransitSystem,
+  initialRequest: SerializedShareRequest,
+  signal: AbortSignal,
+): Promise<string> {
   const existing = getMyShare(system.id);
-  const data = JSON.stringify(system);
-
-  if (existing && existing.lastSharedData === data) return shareUrl(existing.shareId);
+  if (existing && existing.lastSharedData === initialRequest.data)
+    return shareUrl(existing.shareId);
+  const request = await sharePayload(initialRequest, signal);
 
   if (existing) {
-    await updateShare(existing.shareId, existing.editToken, system);
-    setMyShare({ ...existing, lastSharedData: data, updatedAt: Date.now() });
+    await updateShare(existing.shareId, existing.editToken, request, signal);
+    setMyShare({ ...existing, lastSharedData: request.data, updatedAt: Date.now() });
     return shareUrl(existing.shareId);
   }
 
-  const created = await createShare(system);
+  const created = await createShare(request, signal);
   if (created.editToken) {
     setMyShare({
       documentId: system.id,
@@ -90,17 +128,59 @@ export async function getOrCreateShare(system: TransitSystem): Promise<string> {
   return shareUrl(created.id);
 }
 
+/** Publishing is latest-wins per document. Reopening the dialog for an
+ * unchanged snapshot joins the in-flight request; asking to publish a newer
+ * snapshot cancels the obsolete preview/upload before starting another. */
+export function getOrCreateShare(
+  system: TransitSystem,
+  options: ShareRequestOptions = {},
+): Promise<string> {
+  const initialRequest = serializeShareRequest(system);
+  if (!shareRequestFits(initialRequest)) {
+    return Promise.reject(new ShareTooLargeError(initialRequest.byteLength));
+  }
+  if (options.signal?.aborted) {
+    return Promise.reject(
+      options.signal.reason instanceof Error
+        ? options.signal.reason
+        : new DOMException('The operation was canceled.', 'AbortError'),
+    );
+  }
+
+  const active = shareFlights.get(system.id);
+  if (active?.data === initialRequest.data && !active.controller.signal.aborted) {
+    return joinCancelableFlight(active, options.signal);
+  }
+  active?.controller.abort(new DOMException('Superseded by a newer share.', 'AbortError'));
+
+  const base = createCancelableFlight((signal) => publishShare(system, initialRequest, signal));
+  const flight: ShareFlight = { data: initialRequest.data, ...base };
+  shareFlights.set(system.id, flight);
+  const remove = () => {
+    if (shareFlights.get(system.id) === flight) shareFlights.delete(system.id);
+  };
+  flight.promise.then(remove, remove);
+  return joinCancelableFlight(flight, options.signal);
+}
+
 /** Revokes the share this browser holds for a document, if any. A no-op
  *  (returns false) when there's nothing this browser can authorize revoking —
  *  either it was never shared from here, or the share came back deduped onto
  *  someone else's row (see CreateShareResponse.editToken). */
-export async function stopSharing(documentId: string): Promise<boolean> {
+export async function stopSharing(
+  documentId: string,
+  options: ShareRequestOptions = {},
+): Promise<boolean> {
   const existing = getMyShare(documentId);
   if (!existing) return false;
-  const res = await fetch(`/api/systems/${encodeURIComponent(existing.shareId)}`, {
-    method: 'DELETE',
-    headers: { 'x-edit-token': existing.editToken },
-  });
+  const res = await fetchWithTimeout(
+    `/api/systems/${encodeURIComponent(existing.shareId)}`,
+    {
+      method: 'DELETE',
+      headers: { 'x-edit-token': existing.editToken },
+    },
+    options,
+  );
   if (!res.ok && res.status !== 404) {
     const msg = await res.text().catch(() => res.statusText);
     throw new Error(`Couldn't stop sharing (${res.status}): ${msg}`);
@@ -110,8 +190,11 @@ export async function stopSharing(documentId: string): Promise<boolean> {
 }
 
 /** Fetch a shared system by id and validate it. */
-export async function fetchShare(id: string): Promise<TransitSystem> {
-  const res = await fetch(`/api/systems/${encodeURIComponent(id)}`);
+export async function fetchShare(
+  id: string,
+  options: ShareRequestOptions = {},
+): Promise<TransitSystem> {
+  const res = await fetchWithTimeout(`/api/systems/${encodeURIComponent(id)}`, {}, options);
   if (res.status === 404) throw new Error('This shared system was not found.');
   if (!res.ok) throw new Error(`Failed to load shared system (${res.status}).`);
   const data = (await res.json()) as GetShareResponse;

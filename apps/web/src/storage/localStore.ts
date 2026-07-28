@@ -106,6 +106,20 @@ function readIndex(): LibraryEntry[] {
  */
 export type SaveOutcome = 'saved' | 'full' | 'unavailable';
 
+export interface SaveMeasurement {
+  documentBytes: number;
+  serializeMs: number;
+  documentWriteMs: number;
+  indexWriteMs: number;
+  outcome: SaveOutcome;
+}
+
+export interface SaveToLibraryOptions {
+  onMeasure?: (measurement: SaveMeasurement) => void;
+  /** Deterministic clock seam for tests; performance.now in real measurements. */
+  now?: () => number;
+}
+
 /** Quota exhaustion reports differently across browsers, and pre-DOMException
  *  Firefox used its own name — check every spelling rather than assume. */
 function outcomeFor(error: unknown): SaveOutcome {
@@ -185,16 +199,45 @@ export function loadSystemById(id: string): TransitSystem | null {
  *  reported rather than swallowed. The index write is reported too: a system
  *  stored under a key no index entry points at is invisible in "My systems"
  *  and consumes quota forever, which is its own kind of loss. */
-export function saveToLibrary(system: TransitSystem): SaveOutcome {
+export function saveToLibrary(
+  system: TransitSystem,
+  options: SaveToLibraryOptions = {},
+): SaveOutcome {
+  const measuring = options.onMeasure !== undefined;
+  const now = options.now ?? (() => performance.now());
+  const startedAt = measuring ? now() : 0;
+  let serialized = '';
+  let serializedAt = startedAt;
+  let documentWrittenAt = startedAt;
   try {
-    localStorage.setItem(systemKey(system.id), JSON.stringify(system));
+    serialized = JSON.stringify(system);
+    serializedAt = measuring ? now() : 0;
+    localStorage.setItem(systemKey(system.id), serialized);
+    documentWrittenAt = measuring ? now() : 0;
   } catch (e) {
-    return outcomeFor(e);
+    const outcome = outcomeFor(e);
+    options.onMeasure?.({
+      documentBytes: serialized ? new TextEncoder().encode(serialized).byteLength : 0,
+      serializeMs: Math.max(0, serializedAt - startedAt),
+      documentWriteMs: Math.max(0, documentWrittenAt - serializedAt),
+      indexWriteMs: 0,
+      outcome,
+    });
+    return outcome;
   }
-  return writeIndex([
+  const outcome = writeIndex([
     ...readIndex().filter((e) => e.id !== system.id),
     { id: system.id, name: system.name, updatedAt: system.updatedAt },
   ]);
+  const completedAt = measuring ? now() : 0;
+  options.onMeasure?.({
+    documentBytes: new TextEncoder().encode(serialized).byteLength,
+    serializeMs: serializedAt - startedAt,
+    documentWriteMs: documentWrittenAt - serializedAt,
+    indexWriteMs: completedAt - documentWrittenAt,
+    outcome,
+  });
+  return outcome;
 }
 
 /**
