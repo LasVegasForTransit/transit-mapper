@@ -66,25 +66,15 @@ export function TopBarBrand() {
   const { uiHidden, toggleUi } = useUi();
   return (
     <>
-      {readOnly ? (
-        <span className="brand">
-          <span className="btn-label">TransitMapper</span>
-        </span>
-      ) : (
-        <FileMenu />
-      )}
-      {/* This one button now does both jobs the old separate .ui-restore
-          button and this toggle used to split between them — its own card
-          (MenuCard) shrinks around it instead of the two ever swapping —
-          so its label has to say whichever direction it currently does. */}
-      <span className="brand-hide-ui">
-        <IconButton
-          icon="sidebar"
-          size={17}
-          label={uiHidden ? 'Show UI (\\)' : 'Hide UI (\\)'}
-          onClick={toggleUi}
-        />
-      </span>
+      {/* One row, always, in every state: FileMenu icon at the left (a
+          read-only view has no file actions to offer, so nothing renders
+          there), the system name filling the middle, the toggle fixed at
+          the right — never three lines, never a wrap. FileMenu's own
+          "TransitMapper" wordmark doesn't render here at all (see
+          FileMenu.tsx) — the middle of this row is the system name's
+          permanently, not the app's own name conditionally collapsing
+          into it. */}
+      {!readOnly && <FileMenu />}
       {readOnly ? (
         <span className="ro-name">{name}</span>
       ) : (
@@ -96,6 +86,14 @@ export function TopBarBrand() {
           onKeyDown={blurOnEnter}
         />
       )}
+      <span className="brand-hide-ui">
+        <IconButton
+          icon="sidebar"
+          size={17}
+          label={uiHidden ? 'Show UI (\\)' : 'Hide UI (\\)'}
+          onClick={toggleUi}
+        />
+      </span>
     </>
   );
 }

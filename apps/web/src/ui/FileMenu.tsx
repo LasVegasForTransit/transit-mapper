@@ -6,9 +6,10 @@ import { useUi } from './UiProvider';
 
 /** Figma-style file menu: New/Import/Export, tucked behind one trigger in
  *  the left panel instead of sitting loose among the top bar's action
- *  buttons — these are whole-document actions, not in-place edits. The
- *  trigger is the app wordmark itself: icon + "TransitMapper" as ONE
- *  surface with one hover, not a lone icon square next to a dead label. */
+ *  buttons — these are whole-document actions, not in-place edits.
+ *  Icon-only trigger, no "TransitMapper" wordmark: the brand row's middle
+ *  slot belongs to the system name (see TopBarBrand), not the app's own
+ *  name, in every state — not just once zen mode collapses it away. */
 export function FileMenu() {
   // Mounted the whole session (it's the top-bar brand button), so it must
   // NOT subscribe to `system` — that's a fresh reference on every store
@@ -29,12 +30,11 @@ export function FileMenu() {
       trigger={
         <button
           type="button"
-          className="btn btn-plain brand-btn"
+          className="btn btn-plain icon-only"
           title="File menu"
           aria-label="File menu"
         >
           <Icon name="file" size={17} />
-          <span className="btn-label brand-name">TransitMapper</span>
         </button>
       }
     >
