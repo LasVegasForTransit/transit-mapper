@@ -5,6 +5,7 @@ import {
   patternRunSegments,
   serviceWayIds,
   wayById,
+  wrongWayLegs,
 } from './geo';
 import type { LngLat, Pattern, PatternSection, RunDirection, TransitSystem, Way } from './system';
 
@@ -27,6 +28,39 @@ export interface Issue {
   /** What clicking this issue should select, if anything. */
   target?:
     { kind: 'way'; id: string } | { kind: 'station'; id: string } | { kind: 'service'; id: string };
+}
+
+/**
+ * A line running against the traffic on a street it rides.
+ *
+ * The router refuses to DRAW one, so this is not about drawing: it is about a
+ * street that became one-way after a line was already on it. Nothing re-routes
+ * an existing line when its infrastructure changes under it, so without this
+ * the map simply shows a bus going the wrong way up a street and says nothing.
+ *
+ * Recomputed from the profile rather than stored, which is the whole point —
+ * a stored flag would go stale the moment the street changed again, in either
+ * direction.
+ */
+function wrongWayIssues(
+  waysById: Map<string, Way>,
+  service: { id: string; name: string },
+  pattern: Pattern,
+): Issue[] {
+  const runs: RunDirection[] = patternHasSplit(pattern) ? ['outbound', 'inbound'] : ['outbound'];
+  const offending = new Set<string>();
+  for (const run of runs) {
+    for (const leg of wrongWayLegs(waysById, pattern, run)) offending.add(leg.wayId);
+  }
+  if (offending.size === 0) return [];
+  const n = offending.size;
+  return [
+    {
+      id: `wrong-way-${service.id}-${pattern.id}`,
+      message: `"${service.name}" runs against the traffic on ${n} one-way ${n === 1 ? 'street' : 'streets'}.`,
+      target: { kind: 'service', id: service.id },
+    },
+  ];
 }
 
 /** How far apart the two halves of a one-way couplet may sit where they meet.
@@ -163,6 +197,7 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
         }
       }
       issues.push(...splitGapIssues(waysById, service, pattern));
+      issues.push(...wrongWayIssues(waysById, service, pattern));
     }
   }
 

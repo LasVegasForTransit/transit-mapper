@@ -684,20 +684,21 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       // Route drafting (Network view snap-to-streets drawing): show the
       // committed legs as the standard dashed draw preview.
       if (s.routeDraft !== prev.routeDraft) {
-        const path = s.routeDraft ? routePath(s.system, s.routeDraft.spans) : [];
+        // One feature per SPAN rather than one for the whole route, so a
+        // stretch the router had to run against traffic can say so. Under
+        // `preferLegal` the draft is given the line rather than a refusal —
+        // which is only half an answer if nothing shows what is wrong with it.
+        const spans = s.routeDraft?.spans ?? [];
+        const features = spans
+          .map((span) => ({ span, path: routePath(s.system, [span]) }))
+          .filter(({ path }) => path.length >= 2)
+          .map(({ span, path }) => ({
+            type: 'Feature' as const,
+            properties: { wrongWay: span.wrongWay === true },
+            geometry: { type: 'LineString' as const, coordinates: path },
+          }));
         (map.getSource(SRC_PREVIEW) as GeoJSONSource | undefined)?.setData(
-          path.length >= 2
-            ? {
-                type: 'FeatureCollection',
-                features: [
-                  {
-                    type: 'Feature',
-                    properties: {},
-                    geometry: { type: 'LineString', coordinates: path },
-                  },
-                ],
-              }
-            : emptyFC,
+          features.length > 0 ? { type: 'FeatureCollection', features } : emptyFC,
         );
       }
       if (s.system.id !== lastSystemId) {
