@@ -2,6 +2,52 @@
 // client and the Cloudflare Worker so the wire format stays in one place.
 import type { TransitSystem } from '../model/system';
 
+/** The Worker rejects request bodies above this exact UTF-8 byte count.
+ * Exported as part of the wire contract so clients can refuse an oversized
+ * document before rendering a preview or starting an upload. */
+export const MAX_SHARE_BODY_BYTES = 1_000_000;
+
+export interface SerializedShareRequest {
+  /** Canonical system JSON, reused for local change detection. */
+  data: string;
+  /** Complete POST/PATCH request body. */
+  body: string;
+  /** UTF-8 bytes, matching the Worker's enforcement rather than JS length. */
+  byteLength: number;
+}
+
+/** Serialize a share without traversing a large system twice. Constructing
+ * the small envelope around the already-serialized value is valid JSON and
+ * leaves the Worker as the authority that parses and validates the document. */
+export function serializeShareRequest(
+  system: TransitSystem,
+  preview?: string,
+): SerializedShareRequest {
+  return serializeShareRequestFromData(JSON.stringify(system), preview);
+}
+
+/** Add the request envelope to system JSON that was already produced for
+ * change detection. The caller is responsible for passing JSON created from a
+ * TransitSystem; the Worker still parses and validates it at the trust boundary. */
+export function serializeShareRequestFromData(
+  data: string,
+  preview?: string,
+): SerializedShareRequest {
+  const body =
+    preview === undefined
+      ? `{"system":${data}}`
+      : `{"system":${data},"preview":${JSON.stringify(preview)}}`;
+  return {
+    data,
+    body,
+    byteLength: new TextEncoder().encode(body).byteLength,
+  };
+}
+
+export function shareRequestFits(request: SerializedShareRequest): boolean {
+  return request.byteLength <= MAX_SHARE_BODY_BYTES;
+}
+
 export interface CreateShareRequest {
   system: TransitSystem;
   /**
