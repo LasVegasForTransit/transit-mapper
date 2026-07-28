@@ -131,3 +131,45 @@ describe('joining two lines into a through-route', () => {
     expect(throughRouteServices(system, 'a', 'b')).toBeNull();
   });
 });
+
+describe('a line whose two directions run different streets', () => {
+  // Through-routing splices one line into the middle of another, and the joint
+  // is exactly where a couplet's two halves would have to be re-paired against
+  // the other line's. Nothing here knows how to do that, so the alternative to
+  // refusing is quietly rebuilding it as one undivided path — deleting the
+  // direction structure the planner drew on purpose.
+  const couplet = () => {
+    const sys = tailToHead();
+    return {
+      ...sys,
+      services: sys.services.map((sv) =>
+        sv.id !== 'a'
+          ? sv
+          : {
+              ...sv,
+              patterns: sv.patterns.map((pt) => ({
+                ...pt,
+                sections: [
+                  {
+                    kind: 'split' as const,
+                    outbound: patternLegs(pt),
+                    inbound: patternLegs(pt),
+                  },
+                ],
+              })),
+            },
+      ),
+    };
+  };
+
+  it('is not joined into a through-route', () => {
+    expect(throughRouteServices(couplet(), 'a', 'b')).toBeNull();
+  });
+
+  it('is left exactly as it was when the join is refused', () => {
+    const before = couplet();
+    throughRouteServices(before, 'a', 'b');
+    const still = before.services.find((sv) => sv.id === 'a')!.patterns[0];
+    expect(still.sections[0].kind).toBe('split');
+  });
+});
