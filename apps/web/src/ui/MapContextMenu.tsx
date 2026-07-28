@@ -21,7 +21,7 @@ import { useContextMenu } from './UiProvider';
  */
 export function MapContextMenu() {
   const { contextMenuAt, closeContextMenu } = useContextMenu();
-  const { actions } = useSelectionActions();
+  const { actions } = useSelectionActions(contextMenuAt?.at);
 
   if (!contextMenuAt || actions.length === 0) return null;
 

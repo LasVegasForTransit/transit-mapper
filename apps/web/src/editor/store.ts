@@ -341,6 +341,12 @@ export interface EditorState {
   /** Splits a way in two at control point `index`, each half keeping the
    *  original's type/grade/class/capacity — see splitWay's doc comment. */
   splitWayAt: (wayId: string, index: number) => void;
+  /** Divide a way at an arbitrary position along its resolved path, splicing
+   *  a control point in first when the position falls between two. The
+   *  index-based splitWayAt could only cut at a drag handle, which meant a
+   *  street could not be divided where you clicked. No-op at either end,
+   *  where there is nothing to cut off. */
+  splitWayAtT: (wayId: string, t: number) => void;
   /** Append an OSM import's ways, the junctions between them, and the street
    *  identities spanning them as bare infrastructure — no service is
    *  auto-created, since imported streets/rail are real physical context to
@@ -1387,6 +1393,32 @@ function insertIndexAtT(
  * reasons — a GTFS import collapsing ten routes down a boulevard onto one
  * boulevard, and a line drawn along a street that should ride the street.
  */
+/** A hand-picked merge will reach this far and no further. Past it the two
+ *  alignments are different places, whatever the person clicked. */
+const MERGE_MAX_TOLERANCE_M = 60;
+
+/** The widest gap between two ways along the stretch where they run together —
+ *  what an explicit merge has to be able to bridge. Null when either way has
+ *  no resolvable path. */
+function maxSeparationM(a: Way, b: Way): number | null {
+  const pathB = resolveWayPath(b);
+  if (pathB.length < 2) return null;
+  // Densified, because a straight way is two points and its endpoints project
+  // onto the ends of the other one — sampling only those measures nothing.
+  const pathA = densifyForMatching(resolveWayPath(a), CONFLATION_TOLERANCE_M);
+  if (pathA.length < 2) return null;
+  let worst = 0;
+  for (const point of pathA) {
+    const near = nearestOnPath(pathB, point);
+    if (!near) continue;
+    // Only where they overlap: an overhanging tail is not what is being fused,
+    // and letting it set the tolerance would open the merge up to the world.
+    if (near.t <= 0 || near.t >= 1) continue;
+    if (near.distMeters > worst) worst = near.distMeters;
+  }
+  return worst;
+}
+
 function conflatePatternOntoExisting(
   system: TransitSystem,
   serviceId: string,
@@ -1396,6 +1428,13 @@ function conflatePatternOntoExisting(
    *  "fuse these two ways" wants only the ways the user picked, so that
    *  reaching for it near a third corridor doesn't quietly rope that in. */
   ontoWayIds?: Set<string>,
+  /** Overrides the mode's own corridor tolerance. Only an EXPLICIT "these two
+   *  are one corridor" passes this: the strict mode tolerance exists to stop
+   *  automatic conflation from fusing a frontage road into a boulevard, and
+   *  that caution is exactly wrong once a person has pointed at both and said
+   *  they are the same street. Without it, the recovery for a duplicate would
+   *  be judged by the same rule that created the duplicate, and do nothing. */
+  toleranceOverrideM?: number,
 ): TransitSystem | null {
   let sys = system;
   const service = sys.services.find((sv) => sv.id === serviceId);
@@ -1408,7 +1447,7 @@ function conflatePatternOntoExisting(
   if (!wayTypeId) return null;
 
   const modeSpec = mode(service.modeId);
-  const toleranceM = modeSpec.corridorToleranceM ?? CONFLATION_TOLERANCE_M;
+  const toleranceM = toleranceOverrideM ?? modeSpec.corridorToleranceM ?? CONFLATION_TOLERANCE_M;
   // Hand-drawn geometry can be two points a kilometre apart, and the matcher
   // judges a segment only as a whole — so without this, a line that runs along
   // a street and then turns off matches nothing at all. Densifying costs
@@ -2378,6 +2417,12 @@ export function createEditorStore() {
       })),
 
     splitWayAt: (wayId, index) => set((s) => ({ system: splitWay(s.system, wayId, index) })),
+
+    splitWayAtT: (wayId, t) =>
+      set((s) => {
+        const at = insertIndexAtT(s.system, wayId, t);
+        return at ? { system: splitWay(at.system, wayId, at.index) } : {};
+      }),
 
     // Safe to append without renumbering refs: every id is a fresh shortId()
     // and every ref points at a way created in this same import, so no
@@ -3449,10 +3494,22 @@ export function createEditorStore() {
       const keepers = new Set<string>([ordered[0].id]);
       let absorbed = 0;
       for (const way of ordered.slice(1)) {
+        // How far apart these two actually are, so an explicit merge is judged
+        // by the ways the user pointed at rather than by the mode's automatic
+        // caution. Without this the recovery for a duplicate street is refused
+        // by the very tolerance that let the duplicate exist: a rail line 12 m
+        // off a track is not conflated automatically (8 m), so asking for the
+        // merge by hand would report "nothing to do".
+        // Measured from the way being absorbed onto the keeper, not the other
+        // way round: the keeper is the longer one, and its ends project past
+        // the shorter way entirely.
+        const separationM = maxSeparationM(way, ordered[0]);
+        const toleranceM =
+          separationM === null ? undefined : Math.min(separationM * 1.5 + 5, MERGE_MAX_TOLERANCE_M);
         for (const svc of sys.services) {
           for (const pattern of svc.patterns) {
             if (!patternLegs(pattern).some((l) => l.wayId === way.id)) continue;
-            const next = conflatePatternOntoExisting(sys, svc.id, pattern.id, keepers);
+            const next = conflatePatternOntoExisting(sys, svc.id, pattern.id, keepers, toleranceM);
             if (next) sys = next;
           }
         }
