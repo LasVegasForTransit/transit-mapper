@@ -38,6 +38,7 @@ import {
   patternWayIds,
   serviceLaneOnWay,
   wholeLegs,
+  candidateWayIdsAlong,
   detectShapeRuns,
   snap,
   MAX_GRID_CELLS,
@@ -10640,6 +10641,70 @@ function buildGrid() {
   check(
     'the surviving system has no route with a gap in it',
     validateSystem(after).every((i) => !i.id.startsWith('broken-pattern')),
+  );
+}
+
+// --- the crossing scan only looks at ways that could actually cross ---
+// wayCrossings compares every segment of one way against every segment of
+// another, with no bbox reject, and formCrossingJunctions runs it on every
+// finishWay. Unfiltered that is the whole system per commit. The filter has to
+// be exact, not merely cheap: a dropped candidate is a junction that silently
+// never forms.
+{
+  const grid: Way[] = [];
+  // A field of short ways spread over ~1° — far apart in grid terms.
+  for (let i = 0; i < 200; i++) {
+    const lng = -115.5 + i * 0.005;
+    grid.push({
+      id: `far-${i}`,
+      typeId: 'road',
+      points: [
+        [lng, 36.5],
+        [lng + 0.001, 36.5],
+      ],
+      geometry: 'straight',
+      grade: 'atGrade',
+      profile: { lanes: [] },
+    });
+  }
+  // One way that genuinely crosses exactly one of them.
+  const crosser: Way = {
+    id: 'crosser',
+    typeId: 'road',
+    points: [
+      [-115.4995, 36.499],
+      [-115.4995, 36.501],
+    ],
+    geometry: 'straight',
+    grade: 'atGrade',
+    profile: { lanes: [] },
+  };
+  const all = [...grid, crosser];
+  const candidates = candidateWayIdsAlong(resolveWayPath(crosser), all);
+  check('the crossing scan keeps the way that is actually crossed', candidates.has('far-0'));
+  check(
+    'the crossing scan discards ways nowhere near it',
+    !candidates.has('far-100') && candidates.size < 20,
+  );
+
+  // A way spanning many cells must still find everything along its whole
+  // length, not just near its endpoints — the failure sampling by coordinate
+  // would have.
+  const long: Way = {
+    id: 'long',
+    typeId: 'road',
+    points: [
+      [-115.5, 36.4999],
+      [-114.5, 36.4999],
+    ],
+    geometry: 'straight',
+    grade: 'atGrade',
+    profile: { lanes: [] },
+  };
+  const alongLong = candidateWayIdsAlong(resolveWayPath(long), all);
+  check(
+    'a way spanning many cells still finds what sits in the middle of it',
+    alongLong.has('far-100'),
   );
 }
 

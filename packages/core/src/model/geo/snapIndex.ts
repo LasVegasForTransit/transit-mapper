@@ -295,6 +295,47 @@ export function candidateWayIdsNear(coord: LngLat, ways: Way[], maxMeters: numbe
   return ids;
 }
 
+/**
+ * Candidate way ids for "what could this whole path touch" — every way with a
+ * segment sharing a grid cell with one of `path`'s own segments.
+ *
+ * The single-coordinate query above cannot answer this: sampling a long
+ * segment only at its endpoints misses everything crossing the middle of it.
+ * This walks exactly the cells the segment's bounding box spans, which is the
+ * same expansion buildSegmentGrid used to insert, so any segment that really
+ * does cross `path` is in the result.
+ *
+ * `path` itself is not in `ways`' grid unless the caller put it there, and its
+ * own id (if any) is not filtered out — the caller knows whether it is
+ * comparing a way against itself.
+ */
+export function candidateWayIdsAlong(path: LngLat[], ways: Way[]): Set<string> {
+  const grid = gridFor(ways);
+  const ids = new Set<string>();
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1];
+    const b = path[i];
+    const cx0 = Math.floor(Math.min(a[0], b[0]) / CELL_DEG);
+    const cx1 = Math.floor(Math.max(a[0], b[0]) / CELL_DEG);
+    const cy0 = Math.floor(Math.min(a[1], b[1]) / CELL_DEG);
+    const cy1 = Math.floor(Math.max(a[1], b[1]) / CELL_DEG);
+    // A segment too big to have been indexed is too big to expand here
+    // either; the oversize sweep below covers what it might meet.
+    if ((cx1 - cx0 + 1) * (cy1 - cy0 + 1) > MAX_SEGMENT_CELLS) continue;
+    for (let cx = cx0; cx <= cx1; cx++) {
+      for (let cy = cy0; cy <= cy1; cy++) {
+        const bucket = grid.cells.get(cellKey(cx, cy));
+        if (!bucket) continue;
+        for (const seg of bucket) ids.add(seg.wayId);
+      }
+    }
+  }
+  // Segments held out of the grid are candidates for every query — that's what
+  // keeps this exact rather than merely fast.
+  for (const seg of grid.oversize) ids.add(seg.wayId);
+  return ids;
+}
+
 /** IDs of every way whose path passes within maxMeters of a coordinate. */
 export function servedWayIds(coord: LngLat, ways: Way[], maxMeters: number): string[] {
   const grid = gridFor(ways);
