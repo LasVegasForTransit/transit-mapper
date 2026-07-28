@@ -190,7 +190,6 @@ const fullSystemPngFlight = singleFlight(
         rendered.dispose();
       }
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error('PNG export failed:', e);
     }
   },

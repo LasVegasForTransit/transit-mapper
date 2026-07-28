@@ -4191,15 +4191,13 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 
   fresh();
-  store
-    .getState()
-    .importWays({
-      ways: overpass.map((w) => ({ ...w, grade: 'atGrade' as const })),
-      nodes: [],
-      namedWays: [],
-      medians: [],
-      turnRestrictions: [],
-    });
+  store.getState().importWays({
+    ways: overpass.map((w) => ({ ...w, grade: 'atGrade' as const })),
+    nodes: [],
+    namedWays: [],
+    medians: [],
+    turnRestrictions: [],
+  });
   check(
     'the same two ways at one grade are still flagged',
     validateSystem(store.getState().system).some((i) => i.id.startsWith('crossing-')),
@@ -6330,11 +6328,9 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     store.getState().system.nodes[0].connectors?.length === 1,
   );
   // Deleting a referenced lane prunes its connectors.
-  store
-    .getState()
-    .setWayProfile(armA.id, {
-      lanes: armA.profile.lanes.filter((l) => l.id !== armA.profile.lanes[1].id),
-    });
+  store.getState().setWayProfile(armA.id, {
+    lanes: armA.profile.lanes.filter((l) => l.id !== armA.profile.lanes[1].id),
+  });
   check(
     'removing a lane prunes connectors that referenced it',
     !store.getState().system.nodes[0].connectors,
@@ -6360,14 +6356,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   store.getState().formCrossingJunctions(b);
   const arms = store.getState().system.ways;
   const nodeId = store.getState().system.nodes[0].id;
-  store
-    .getState()
-    .setNodeConnectors(nodeId, [
-      {
-        from: { wayId: arms[0].id, laneId: arms[0].profile.lanes[1].id },
-        to: { wayId: arms[1].id, laneId: arms[1].profile.lanes[1].id },
-      },
-    ]);
+  store.getState().setNodeConnectors(nodeId, [
+    {
+      from: { wayId: arms[0].id, laneId: arms[0].profile.lanes[1].id },
+      to: { wayId: arms[1].id, laneId: arms[1].profile.lanes[1].id },
+    },
+  ]);
   store.getState().nameWay(arms[0].id, 'Sahara Ave');
   store.getState().deleteWay(arms[0].id);
   const sys = store.getState().system;

@@ -27,7 +27,9 @@ export interface SingleFlight<A extends unknown[]> {
 /** Wrap an async operation so at most one runs at a time, and at most one is
  *  queued behind it. `run` is expected to report its own failures; a rejection
  *  is swallowed here only so it cannot wedge the gate shut forever. */
-export function singleFlight<A extends unknown[]>(run: (...args: A) => Promise<unknown>): SingleFlight<A> {
+export function singleFlight<A extends unknown[]>(
+  run: (...args: A) => Promise<unknown>,
+): SingleFlight<A> {
   let busy = false;
   let queued: A | null = null;
 
