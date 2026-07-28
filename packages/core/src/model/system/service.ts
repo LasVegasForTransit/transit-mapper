@@ -1,20 +1,52 @@
 import type { ScheduleDayScope } from './valueTypes';
 
+/**
+ * One way in a pattern's path, and how much of it the pattern uses.
+ *
+ * A leg exists so a service can cover PART of a way. Before it, a pattern held
+ * a bare list of way ids, so a service that started or stopped mid-block had
+ * to be made to fit by splitting the way underneath it — which mutated that
+ * way for every other service riding it, reanchored every station on it, and
+ * left a permanent fragment behind. A corridor carrying many lines
+ * accumulated one fragment per line that terminated on it. Extents are how a
+ * service stops doing that.
+ */
+export interface PatternLeg {
+  wayId: string;
+  /** Traversed with increasing point index. Stored rather than derived: the
+   *  geometry cannot always determine it (a single-way pattern, a neighbour
+   *  sharing both endpoints), and a wrong guess used to mean "wrong lane" but
+   *  now means "the wrong half of the way". geo/servicePaths.ts's
+   *  deriveLegDirections supplies it wherever a caller has only geometry. */
+  forward: boolean;
+  /** Where the pattern enters and leaves this way, as normalized arc-length
+   *  along the way's own resolved path — the same 0-at-the-first-point
+   *  convention as StationAnchor.t, NOT travel order, so `forward` stays the
+   *  only thing that says which direction. Undefined means the way's own
+   *  start/end, which is the normal case: only a leg where the pattern
+   *  genuinely begins or ends mid-way carries them. */
+  fromT?: number;
+  toT?: number;
+  /** Which lane of this way the pattern rides (a LaneSpec.id). Undefined →
+   *  resolve the default at render time (the rightmost travel lane in the
+   *  direction of travel, or a dedicated bus lane / the direction's track —
+   *  see profile.ts `defaultLaneFor`). Set only where the user or an import
+   *  pinned a non-default lane. */
+  laneId?: string;
+}
+
 /** One path a service runs — more than one on the same service models a
  *  branch/variant sharing that service's identity (name/color/mode), e.g. a
  *  trunk splitting into an airport branch and a downtown branch. */
 export interface Pattern {
   id: string;
-  /** Ordered ways this pattern runs over (its path; may span way types). */
-  wayIds: string[];
+  /** Ordered ways this pattern runs over, with the stretch of each it uses
+   *  (its path; may span way types). Consecutive legs must meet: validate.ts
+   *  checks that, since a leg list can express a gap that a bare way-id list
+   *  could not. */
+  legs: PatternLeg[];
   /** Optional label for a specific branch/variant, e.g. "via Airport". */
   name?: string;
-  /** Which lane of a way this pattern rides, keyed by wayId → LaneSpec.id.
-   *  Missing/absent for a way → resolve the default at render time (the
-   *  rightmost travel lane in the direction of travel, or a dedicated bus
-   *  lane / the direction's track — see profile.ts `defaultLaneFor`). Kept
-   *  sparse: only ways the user (or import) pinned to a non-default lane. */
-  lanes?: Record<string, string>;
 }
 
 /** One named headway period within a service's full schedule — "Peak",

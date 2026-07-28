@@ -215,7 +215,7 @@ export function serviceLanePath(
   const segments = patternSegments(waysById, pattern);
   // A way the pattern references but that couldn't be resolved is dropped by
   // patternSegments; the contract here is all-or-nothing, so that's a null.
-  if (segments.length !== pattern.wayIds.length) return null;
+  if (segments.length !== pattern.legs.length) return null;
   const lanePaths: LngLat[][] = [];
   for (const { way, forward, wayIndex } of segments) {
     const laneId = serviceLaneOnWay(pattern, wayIndex, waysById, modeId);

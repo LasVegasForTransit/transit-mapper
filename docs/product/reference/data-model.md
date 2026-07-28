@@ -8,14 +8,14 @@ and many services can share one way.
 
 All kind fields (`typeId`, `modeId`, `kindId`, and so on) are string ids
 into the catalogs; see [Catalogs](catalogs.md). The schema is versioned
-(currently v9) and migrated on load in `packages/core/src/model/serialize.ts`, so older
+(currently v10) and migrated on load in `packages/core/src/model/serialize.ts`, so older
 saves and shared snapshots keep working.
 
 ## TransitSystem
 
 | Field                       | Meaning                                                         |
 | --------------------------- | --------------------------------------------------------------- |
-| `version`                   | Schema version (9).                                             |
+| `version`                   | Schema version (10).                                            |
 | `id`, `name`, `description` | Identity.                                                       |
 | `viewport`                  | Saved camera (`center`, `zoom`).                                |
 | `ways`                      | Physical infrastructure.                                        |
@@ -119,9 +119,37 @@ from the way family's catalog noun.
 ## Service, Pattern, SchedulePeriod
 
 A `Service` is a colored route: `name`, `modeId` (mode catalog), `color`,
-and one or more `Pattern`s. Each pattern is an ordered list of `wayIds`:
-a plain line has one pattern; two or more model branches sharing the
-service's identity ("via Airport").
+and one or more `Pattern`s. A plain line has one pattern; two or more model
+branches sharing the service's identity ("via Airport").
+
+A pattern is an ordered list of `PatternLeg`s — one per way it runs over:
+
+```ts
+interface PatternLeg {
+  wayId: string;
+  forward: boolean;
+  fromT?: number;
+  toT?: number;
+  laneId?: string;
+}
+```
+
+`forward` is which direction the pattern travels the way, relative to that
+way's own point order. `fromT`/`toT` are where it joins and leaves, as
+normalized arc-length along the way's resolved path — the same convention as
+`Station.anchor.t`, measured along the way rather than along travel, so
+`forward` remains the only thing that says which direction. Both are omitted
+when the pattern uses the whole way, which is the common case. `laneId` pins
+which lane it rides; unset resolves the default (see `defaultLaneFor`).
+
+Extents are what let a service cover part of a way. Before v10 a pattern
+named whole ways only, so a line that started or stopped mid-block was made
+to fit by splitting the way underneath it — which mutated that way for every
+other line riding it and left a permanent fragment behind.
+
+Consecutive legs must meet; `validateSystem` reports a pattern whose route
+has a gap in it, because a leg list can express one where a bare way list
+could not.
 
 Scheduling stays at the level of headways rather than timetables. These are
 what the simulation runs on — see [The simulation](../explanation/simulation.md):

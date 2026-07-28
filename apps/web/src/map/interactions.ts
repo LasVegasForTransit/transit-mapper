@@ -965,7 +965,7 @@ export function attachInteractions(
         extendAtStart = resume.end === 'start';
         st.resumeWay(wayId);
         const ridingService = st.system.services.find((sv) =>
-          sv.patterns.some((p) => p.wayIds.includes(wayId)),
+          sv.patterns.some((p) => p.legs.some((l) => l.wayId === wayId)),
         );
         st.select(
           ridingService ? { kind: 'service', id: ridingService.id } : { kind: 'way', id: wayId },

@@ -1,6 +1,13 @@
 import type { Grade } from './catalog';
-import { serviceWayIds } from './geo';
+import { haversineMeters, patternSegments, serviceWayIds, wayById } from './geo';
 import type { LngLat, TransitSystem, Way } from './system';
+
+/** How far apart two consecutive legs' join coordinates may sit before the
+ *  route counts as broken. Junctions are formed from exactly-coincident
+ *  control points, and mergeWays already refuses a join looser than 0.75 m, so
+ *  a metre is generous — it absorbs the float drift of a coordinate round-trip
+ *  without accepting a gap anyone would notice. */
+const LEG_JOIN_TOLERANCE_M = 1;
 
 export interface Issue {
   id: string;
@@ -30,6 +37,7 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
     }
   }
 
+  const waysById = wayById(system.ways);
   for (const service of system.services) {
     if (serviceWayIds(service).length === 0) {
       issues.push({
@@ -37,6 +45,25 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
         message: `"${service.name}" doesn't run over any way.`,
         target: { kind: 'service', id: service.id },
       });
+    }
+    // A pattern used to be a bare list of way ids, and consecutive ways met by
+    // construction — a service could not describe a path with a hole in it.
+    // Legs can, so the check that used to be structural has to be an explicit
+    // one. A break here means some edit rewrote the legs without keeping them
+    // joined, and the line will render as two disconnected pieces.
+    for (const pattern of service.patterns) {
+      const segments = patternSegments(waysById, pattern);
+      for (let i = 1; i < segments.length; i++) {
+        const prevEnd = segments[i - 1].path[segments[i - 1].path.length - 1];
+        const nextStart = segments[i].path[0];
+        if (haversineMeters(prevEnd, nextStart) <= LEG_JOIN_TOLERANCE_M) continue;
+        issues.push({
+          id: `broken-pattern-${service.id}-${pattern.id}-${i}`,
+          message: `"${service.name}" has a gap in its route where it leaves one way and joins the next.`,
+          target: { kind: 'service', id: service.id },
+        });
+        break; // one report per pattern; the first break is the useful one
+      }
     }
   }
 

@@ -31,11 +31,14 @@ import {
   offsetPolyline,
   pathLengthMeters,
   patternPath,
+  patternWayIds,
   pointAtT,
   pointInPolygon,
   resolveWayPath,
   snap,
   squareFootprint,
+  wayById,
+  wholeLegs,
   type ShapeRun,
 } from '@transitmapper/core/model/geo';
 import {
@@ -45,6 +48,7 @@ import {
   type RouteSpan,
 } from '@transitmapper/core/model/routeGraph';
 import { wayCrossings } from '@transitmapper/core/model/validate';
+import { mergeLegs, splitLegs } from '@transitmapper/core/model/patternEdits';
 import { shortId } from '@transitmapper/core/model/ids';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import {
@@ -652,8 +656,8 @@ function removeWay(system: TransitSystem, wayId: string): TransitSystem {
     .map((s) => ({
       ...s,
       patterns: s.patterns
-        .map((p) => ({ ...p, wayIds: p.wayIds.filter((id) => id !== wayId) }))
-        .filter((p) => p.wayIds.length > 0),
+        .map((p) => ({ ...p, legs: p.legs.filter((l) => l.wayId !== wayId) }))
+        .filter((p) => p.legs.length > 0),
     }))
     .filter((s) => s.patterns.length > 0);
   return {
@@ -867,17 +871,28 @@ function splitWay(
     ];
   }
 
+  const pathA = resolveWayPath(wayA);
+  const pathB = resolveWayPath(wayB);
+
+  // Where the split fell along the ORIGINAL way, as a fraction of its length.
+  // Measured off the resolved path rather than computed from the control-point
+  // index, because a curved way's rendered length isn't a straight sum over
+  // its control points — and a leg's extent is measured against that rendered
+  // length. Falls back to the pure length ratio if the projection fails, which
+  // it can't for a way with two resolvable halves.
+  const originalPath = resolveWayPath(way);
+  const tSplit =
+    nearestOnPath(originalPath, way.points[index])?.t ??
+    pathLengthMeters(pathA) / Math.max(1e-9, pathLengthMeters(originalPath));
   const services = system.services.map((sv) => ({
     ...sv,
     patterns: sv.patterns.map((p) =>
-      p.wayIds.includes(wayId)
-        ? { ...p, wayIds: p.wayIds.flatMap((wid) => (wid === wayId ? [wayId, newWayId] : [wid])) }
+      p.legs.some((l) => l.wayId === wayId)
+        ? { ...p, legs: splitLegs(p.legs, wayId, newWayId, tSplit) }
         : p,
     ),
   }));
 
-  const pathA = resolveWayPath(wayA);
-  const pathB = resolveWayPath(wayB);
   const stations = system.stations.map((st) => {
     if (st.anchor?.wayId !== wayId) return st;
     const onA = nearestOnPath(pathA, st.coord);
@@ -1001,18 +1016,33 @@ function mergeWays(system: TransitSystem, keepId: string, otherId: string): Tran
   // cross-section), so connectors referencing them can't survive.
   nodes = pruneConnectorsForWay(nodes, otherId);
 
-  // Services: the pair becomes the one merged way; collapse the adjacency.
+  const mergedPath = resolveWayPath(mergedWay);
+
+  // Services: the pair becomes the one merged way; collapse the adjacency and
+  // remeasure every extent against the merged length. Positions are carried
+  // across by coordinate — the same round-trip the station reanchor below
+  // uses — rather than by arithmetic on the point-index maps, because that
+  // holds whether or not the merge reversed a way and whether or not either
+  // way is curved.
+  const oldPaths = new Map([
+    [keepId, resolveWayPath(a)],
+    [otherId, resolveWayPath(b)],
+  ]);
+  const bReversed = combos[0].key === 'abR' || combos[0].key === 'bRa';
   const services = system.services.map((sv) => ({
     ...sv,
-    patterns: sv.patterns.map((p) => {
-      const wayIds = p.wayIds
-        .map((id) => (id === otherId ? keepId : id))
-        .filter((id, i, arr) => i === 0 || !(id === keepId && arr[i - 1] === keepId));
-      return { ...p, wayIds };
-    }),
+    patterns: sv.patterns.map((p) => ({
+      ...p,
+      legs: mergeLegs(p.legs, keepId, otherId, {
+        positionOf: (wayId, t) => {
+          const old = oldPaths.get(wayId);
+          if (!old || old.length < 2) return t;
+          return nearestOnPath(mergedPath, pointAtT(old, t))?.t ?? t;
+        },
+        reversed: (wayId) => wayId === otherId && bReversed,
+      }),
+    })),
   }));
-
-  const mergedPath = resolveWayPath(mergedWay);
   const stations = system.stations.map((st) => {
     if (st.anchor?.wayId !== keepId && st.anchor?.wayId !== otherId) return st;
     const on = nearestOnPath(mergedPath, st.coord);
@@ -1612,7 +1642,7 @@ export function createEditorStore() {
               name: `Line ${nextLineNumber++}`,
               modeId,
               color: color ?? st.draftColor,
-              patterns: [{ id: shortId(), wayIds: [wayId] }],
+              patterns: [{ id: shortId(), legs: [{ wayId, forward: true }] }],
               frequencyMinutes: DEFAULT_FREQUENCY_MINUTES,
               spanStart: DEFAULT_SPAN_START,
               spanEnd: DEFAULT_SPAN_END,
@@ -1726,7 +1756,13 @@ export function createEditorStore() {
         if (addingPatternForServiceId) {
           const services = s.system.services.map((sv) =>
             sv.id === addingPatternForServiceId
-              ? { ...sv, patterns: [...sv.patterns, { id: shortId(), wayIds: [activeWayId] }] }
+              ? {
+                  ...sv,
+                  patterns: [
+                    ...sv.patterns,
+                    { id: shortId(), legs: [{ wayId: activeWayId, forward: true }] },
+                  ],
+                }
               : sv,
           );
           return {
@@ -2224,7 +2260,7 @@ export function createEditorStore() {
         name: `Line ${nextLineNumber++}`,
         modeId: resolvedModeId,
         color: st.draftColor,
-        patterns: [{ id: shortId(), wayIds: mat.wayIds }],
+        patterns: [{ id: shortId(), legs: wholeLegs(wayById(mat.system.ways), mat.wayIds) }],
         frequencyMinutes: DEFAULT_FREQUENCY_MINUTES,
         spanStart: DEFAULT_SPAN_START,
         spanEnd: DEFAULT_SPAN_END,
@@ -2245,7 +2281,7 @@ export function createEditorStore() {
       let rebound = 0;
 
       for (const pattern of service.patterns) {
-        const oldWayIds = [...new Set(pattern.wayIds)];
+        const oldWayIds = [...new Set(patternWayIds(pattern))];
         const sketchPath = patternPath(sys.ways, pattern);
         if (sketchPath.length < 2) continue;
         const exclude = new Set(oldWayIds);
@@ -2278,7 +2314,9 @@ export function createEditorStore() {
               ? {
                   ...sv,
                   patterns: sv.patterns.map((p) =>
-                    p.id === pattern.id ? { ...p, wayIds: mat.wayIds } : p,
+                    p.id === pattern.id
+                      ? { ...p, legs: wholeLegs(wayById(sys.ways), mat.wayIds) }
+                      : p,
                   ),
                 }
               : sv,
@@ -2312,7 +2350,7 @@ export function createEditorStore() {
           const w = sys.ways.find((x) => x.id === oldId);
           if (!w || w.source) continue;
           const ridden = sys.services.some((sv) =>
-            sv.patterns.some((p) => p.wayIds.includes(oldId)),
+            sv.patterns.some((p) => p.legs.some((l) => l.wayId === oldId)),
           );
           const named = sys.namedWays.some((n) => n.wayIds.includes(oldId));
           if (!ridden && !named) sys = removeWay(sys, oldId);
@@ -2352,7 +2390,7 @@ export function createEditorStore() {
         const service = sys.services.find((sv) => sv.id === target.serviceId);
         const pattern = service?.patterns.find((p) => p.id === target.patternId);
         if (!service || !pattern) continue;
-        const oldWayIds = [...new Set(pattern.wayIds)];
+        const oldWayIds = [...new Set(patternWayIds(pattern))];
         const path = patternPath(sys.ways, pattern);
         if (path.length < 2) continue;
         const wayTypeId = sys.ways.find((w) => w.id === oldWayIds[0])?.typeId;
@@ -2386,7 +2424,9 @@ export function createEditorStore() {
               ? {
                   ...sv,
                   patterns: sv.patterns.map((p) =>
-                    p.id === target.patternId ? { ...p, wayIds: newWayIds } : p,
+                    p.id === target.patternId
+                      ? { ...p, legs: wholeLegs(wayById(sys.ways), newWayIds) }
+                      : p,
                   ),
                 }
               : sv,
@@ -2400,7 +2440,7 @@ export function createEditorStore() {
         for (const oldId of oldWayIds) {
           if (newWayIds.includes(oldId)) continue;
           const stillRidden = sys.services.some((sv) =>
-            sv.patterns.some((p) => p.wayIds.includes(oldId)),
+            sv.patterns.some((p) => p.legs.some((l) => l.wayId === oldId)),
           );
           if (!stillRidden) sys = removeWay(sys, oldId);
         }
@@ -2435,7 +2475,7 @@ export function createEditorStore() {
         name: `Line ${nextLineNumber++}`,
         modeId,
         color,
-        patterns: [{ id: shortId(), wayIds: [wayId] }],
+        patterns: [{ id: shortId(), legs: [{ wayId, forward: true }] }],
         frequencyMinutes: DEFAULT_FREQUENCY_MINUTES,
         spanStart: DEFAULT_SPAN_START,
         spanEnd: DEFAULT_SPAN_END,
