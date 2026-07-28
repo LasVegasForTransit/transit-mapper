@@ -325,7 +325,12 @@ export function App() {
             uiHidden ? 'top-3' : 'top-[136px] md:top-[68px]'
           }`}
         >
-          <div className="pointer-events-auto w-full max-w-[560px]">{banner}</div>
+          {/* Sized by its content, capped at 560px — not `w-full`. Two of the
+              four banners are one-liners, and forcing every one to 560px left
+              a short message hugging the left edge with a dead half-card of
+              empty space beside it. A long notice still fills 560 and wraps
+              there, which is what the cap is for. */}
+          <div className="pointer-events-auto max-w-[560px]">{banner}</div>
         </div>
       )}
       {chromeMounted && (
