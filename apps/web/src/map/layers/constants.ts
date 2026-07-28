@@ -43,6 +43,8 @@ export const LYR_SERVICES_ELEVATED = 'tm-services-elevated';
 export const LYR_SERVICE_SELECTED = 'tm-service-selected';
 export const LYR_SERVICES_SOLID = 'tm-services-solid';
 export const LYR_SERVICES_UNDERGROUND = 'tm-services-underground';
+/** Invisible per-occurrence geometry used only for exact service actions. */
+export const LYR_SERVICES_HIT = 'tm-services-hit';
 export const LYR_STATIONS = 'tm-stations';
 export const LYR_STATION_SELECTED = 'tm-station-selected';
 export const LYR_VEHICLES = 'tm-vehicles';

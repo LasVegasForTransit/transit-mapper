@@ -1,6 +1,7 @@
 // Deterministic verification of the editor/model logic without a browser.
 // Run with: node scripts/verify.ts  (or: npm run verify)
 import { createEditorStore, type MultiSelectItem } from '../src/editor/store';
+import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
 import { createSelectionActions } from '../src/editor/actions';
 import { validateSystemQuick } from '@transitmapper/core/model/validate';
 import { parseSystem, forkSystem, createEmptySystem } from '@transitmapper/core/model/serialize';
@@ -2250,7 +2251,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   const extent = legs[0].extent;
   check(
     'ending the line at the clicked point shortens it there',
-    legs.length === 1 && extent.kind === 'stretch' && extent.toT < 0.6,
+    legs.length === 1 && extent.kind === 'stretch' && (extent.toT < 0.6 || extent.fromT > 0.4),
   );
   check('…and leaves the street it ran on alone', store.getState().system.ways.length === 1);
 
@@ -11072,8 +11073,9 @@ function buildGrid() {
   const pattern = line.patterns[0];
   const fullLength = pathLengthMeters(patternPath(store.getState().system.ways, pattern));
 
-  store.getState().trimPatternTo(line.id, pattern.id, road, 0.5, 'end');
+  const trimmedCommitted = store.getState().trimPatternTo(line.id, pattern.id, road, 0.5, 'end');
   const trimmed = store.getState().system;
+  check('trimming a line reports a committed service-path edit', trimmedCommitted);
   check(
     'trimming a line leaves the road it ran on completely alone',
     trimmed.ways.length === 1 && trimmed.ways[0].points.length === 2,
@@ -11110,6 +11112,196 @@ function buildGrid() {
   check(
     'the new half takes a colour of its own',
     afterSplit.services[0].color !== afterSplit.services[1].color,
+  );
+  check(
+    'the new half gets the next service name',
+    afterSplit.services[1].name === `${line.name} 2`,
+  );
+}
+
+// --- dividing one branch leaves its siblings on the original service ---
+{
+  fresh();
+  const P = (lng: number, lat: number): LngLat => [lng, lat];
+  const a = P(-115.2, 36.1);
+  const b = P(-115.17, 36.1);
+  const c = P(-115.16, 36.1);
+  const d = P(-115.2, 36.11);
+  const e = P(-115.19, 36.11);
+  store.getState().setSystem(
+    parseSystem({
+      version: 3,
+      palette: ['#2ea44f'],
+      ways: [
+        { id: 'long', typeId: 'road', points: [a, b], geometry: 'straight', grade: 'atGrade' },
+        { id: 'short', typeId: 'road', points: [b, c], geometry: 'straight', grade: 'atGrade' },
+        {
+          id: 'sibling-way',
+          typeId: 'road',
+          points: [d, e],
+          geometry: 'straight',
+          grade: 'atGrade',
+        },
+      ],
+      stations: [],
+      services: [
+        {
+          id: 'main',
+          name: 'Main',
+          modeId: 'bus',
+          color: '#2ea44f',
+          patterns: [
+            { id: 'focused', sections: oneSection(legsOf('long', 'short')) },
+            { id: 'sibling', sections: oneSection(legsOf('sibling-way')) },
+          ],
+        },
+      ],
+    }),
+  );
+  const before = store.getState().system;
+  const sibling = before.services[0].patterns[1];
+  const position = patternPositionAt(
+    before.ways,
+    before.services[0].patterns[0],
+    'outbound',
+    0,
+    0.8,
+  )!;
+  const dividedId = store.getState().divideServiceAt('main', position);
+  const after = store.getState().system;
+  const main = after.services.find((service) => service.id === 'main')!;
+  const divided = after.services.find((service) => service.id === dividedId)!;
+  check(
+    'dividing a focused branch creates one new service',
+    !!dividedId && after.services.length === 2,
+  );
+  check(
+    'dividing keeps sibling branches on the original service',
+    main.patterns.length === 2 && main.patterns[1] === sibling,
+  );
+  check(
+    'the original service keeps the longer focused half',
+    patternRunLegs(main.patterns[0], 'outbound')
+      .map((entry) => entry.leg.wayId)
+      .join('|') === 'long',
+  );
+  check(
+    'the shorter half gets a numbered name and distinct color',
+    divided.name === 'Main 2' && divided.color !== main.color,
+  );
+  check('dividing a service does not split any way', after.ways.length === before.ways.length);
+}
+
+// --- ending a line at the displayed occurrence keeps its longer side ---
+{
+  fresh();
+  const P = (lng: number, lat: number): LngLat => [lng, lat];
+  const a = P(-115.2, 36.1);
+  const b = P(-115.19, 36.1);
+  const c = P(-115.18, 36.1);
+  store.getState().setSystem(
+    parseSystem({
+      version: 3,
+      ways: [
+        { id: 'out', typeId: 'road', points: [a, b], geometry: 'straight', grade: 'atGrade' },
+        { id: 'return', typeId: 'road', points: [b, c], geometry: 'straight', grade: 'atGrade' },
+      ],
+      stations: [],
+      services: [
+        {
+          id: 'loop-line',
+          name: 'Loop line',
+          modeId: 'bus',
+          color: '#e4572e',
+          patterns: [
+            {
+              id: 'loop-pattern',
+              sections: oneSection([
+                wholeLeg('out'),
+                wholeLeg('return'),
+                wholeLeg('out', 'againstPoints'),
+              ]),
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  const before = store.getState().system;
+  const position = patternPositionAt(
+    before.ways,
+    before.services[0].patterns[0],
+    'outbound',
+    1,
+    0.25,
+  )!;
+  const ended = store.getState().endPatternAt('loop-line', position);
+  check('ending a line at an exact occurrence commits', ended);
+  check(
+    'ending a line keeps the longer side of a repeated corridor',
+    patternRunLegs(store.getState().system.services[0].patterns[0], 'outbound')
+      .map((entry) => entry.leg.wayId)
+      .join('|') === 'return|out',
+  );
+}
+
+// --- extending a service path keeps physical infrastructure untouched ---
+{
+  fresh();
+  const P = (lng: number, lat: number): LngLat => [lng, lat];
+  const z = P(-115.21, 36.1);
+  const a = P(-115.2, 36.1);
+  const b = P(-115.19, 36.1);
+  const c = P(-115.18, 36.1);
+  store.getState().setSystem(
+    parseSystem({
+      version: 3,
+      ways: [
+        { id: 'z-a', typeId: 'road', points: [z, a], geometry: 'straight', grade: 'atGrade' },
+        { id: 'a-b', typeId: 'road', points: [a, b], geometry: 'straight', grade: 'atGrade' },
+        { id: 'b-c', typeId: 'road', points: [b, c], geometry: 'straight', grade: 'atGrade' },
+      ],
+      stations: [{ id: 'at-b', coord: b, anchors: [{ wayId: 'a-b', t: 1 }] }],
+      services: [
+        {
+          id: 'line',
+          name: 'Line',
+          modeId: 'bus',
+          color: '#e4572e',
+          patterns: [{ id: 'focused', sections: oneSection(legsOf('a-b')) }],
+        },
+      ],
+    }),
+  );
+  const before = store.getState().system;
+  const extended = store
+    .getState()
+    .extendPatternTerminus('line', 'focused', 'end', [{ wayId: 'b-c', fromPoint: 0, toPoint: 1 }]);
+  const after = store.getState().system;
+  check('extending a line commits a service-path edit', extended);
+  check(
+    'extending a line leaves ways and stations as the same objects',
+    after.ways[0] === before.ways[0] && after.stations[0] === before.stations[0],
+  );
+  check(
+    'extending a line adds only a shared path section',
+    after.services[0].patterns[0].sections.length === 2 &&
+      after.services[0].patterns[0].sections[1].kind === 'shared',
+  );
+  const extendedAtStart = store
+    .getState()
+    .extendPatternTerminus('line', 'focused', 'start', [
+      { wayId: 'z-a', fromPoint: 1, toPoint: 0 },
+    ]);
+  check('extending a line from its other terminus commits too', extendedAtStart);
+  check(
+    'a start-side extension reverses the route drawn outward from the old terminus',
+    patternRunLegs(store.getState().system.services[0].patterns[0], 'outbound')[0].forward,
+  );
+  check(
+    'both terminus extensions leave physical objects untouched',
+    store.getState().system.ways[0] === before.ways[0] &&
+      store.getState().system.stations[0] === before.stations[0],
   );
 }
 

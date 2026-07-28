@@ -10,7 +10,8 @@
 // into the `t` those actions were already written to accept.
 
 import { nearestOnPath, resolveWayPath } from '@transitmapper/core/model/geo';
-import { patternWayIds } from '@transitmapper/core/model/geo';
+import { patternRunLegs } from '@transitmapper/core/model/geo';
+import { patternPositionAt, type PatternPosition } from '@transitmapper/core/model/serviceEdits';
 import {
   refIds,
   type ActionContext,
@@ -56,22 +57,41 @@ function pointOnService(
   system: TransitSystem,
   serviceId: string,
   at: LngLat,
-): (PointOnWay & { patternId: string }) | null {
+  renderedHit: ActionContext['serviceHit'],
+): { position: PatternPosition } | null {
   const service = system.services.find((s) => s.id === serviceId);
   if (!service) return null;
-  let best: (PointOnWay & { patternId: string; distMeters: number }) | null = null;
+  if (renderedHit?.serviceId === serviceId) {
+    const pattern = service.patterns.find((candidate) => candidate.id === renderedHit.patternId);
+    if (!pattern) return null;
+    const leg = patternRunLegs(pattern, renderedHit.run)[renderedHit.legIndex];
+    const way = leg && system.ways.find((candidate) => candidate.id === leg.leg.wayId);
+    const near = way && nearestOnPath(resolveWayPath(way), at);
+    if (!near || near.t <= END_T || near.t >= 1 - END_T) return null;
+    const position = patternPositionAt(
+      system.ways,
+      pattern,
+      renderedHit.run,
+      renderedHit.legIndex,
+      near.t,
+    );
+    return position ? { position } : null;
+  }
+  let best: { position: PatternPosition; distMeters: number } | null = null;
   for (const pattern of service.patterns) {
-    for (const wayId of patternWayIds(pattern)) {
-      const way = system.ways.find((w) => w.id === wayId);
-      if (!way) continue;
-      const near = nearestOnPath(resolveWayPath(way), at);
-      if (!near) continue;
-      if (near.t <= END_T || near.t >= 1 - END_T) continue;
-      if (best && best.distMeters <= near.distMeters) continue;
-      best = { wayId, t: near.t, patternId: pattern.id, distMeters: near.distMeters };
+    for (const run of ['outbound', 'inbound'] as const) {
+      for (const [legIndex, { leg }] of patternRunLegs(pattern, run).entries()) {
+        const way = system.ways.find((candidate) => candidate.id === leg.wayId);
+        if (!way) continue;
+        const near = nearestOnPath(resolveWayPath(way), at);
+        if (!near || near.t <= END_T || near.t >= 1 - END_T) continue;
+        const position = patternPositionAt(system.ways, pattern, run, legIndex, near.t);
+        if (!position || (best && best.distMeters <= near.distMeters)) continue;
+        best = { position, distMeters: near.distMeters };
+      }
     }
   }
-  return best;
+  return best ? { position: best.position } : null;
 }
 
 /**
@@ -82,36 +102,34 @@ function pointOnService(
  * stretch in the middle comes out: cut at both ends, delete the middle.
  */
 export function servicePointActionProvider(store: EditorStore): SelectionActionProvider {
-  return ({ system, refs, at }: ActionContext) => {
+  return ({ system, refs, at, serviceHit }: ActionContext) => {
     if (!at) return [];
     const [serviceId] = refIds(refs, 'service');
     if (!serviceId || refs.length !== 1) return [];
-    const hit = pointOnService(system, serviceId, at);
+    const hit = pointOnService(system, serviceId, at, serviceHit);
     if (!hit) return [];
 
     const actions: SelectionAction[] = [
       {
         id: 'service.cutHere',
-        label: 'Cut the line here',
+        label: 'Divide line here',
         hint: 'Two lines over the same track; delete either half',
         group: 'cut',
-        run: () => store.getState().splitServiceAt(serviceId, hit.patternId, hit.wayId, hit.t),
+        run: () => store.getState().divideServiceAt(serviceId, hit.position),
       },
       {
         id: 'service.startHere',
         label: 'Start the line here',
         hint: 'Drops everything before this point',
         group: 'cut',
-        run: () =>
-          store.getState().trimPatternTo(serviceId, hit.patternId, hit.wayId, hit.t, 'start'),
+        run: () => store.getState().trimPatternAt(serviceId, hit.position, 'start'),
       },
       {
         id: 'service.endHere',
-        label: 'End the line here',
+        label: 'End line here',
         hint: 'Drops everything after this point',
         group: 'cut',
-        run: () =>
-          store.getState().trimPatternTo(serviceId, hit.patternId, hit.wayId, hit.t, 'end'),
+        run: () => store.getState().endPatternAt(serviceId, hit.position),
       },
     ];
     return actions;

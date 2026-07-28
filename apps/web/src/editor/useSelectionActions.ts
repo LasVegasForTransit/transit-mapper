@@ -1,5 +1,9 @@
 import { useMemo } from 'react';
-import type { SelectionAction, SelectionRef } from '@transitmapper/core/model/selectionActions';
+import type {
+  SelectionAction,
+  SelectionRef,
+  ServiceActionHit,
+} from '@transitmapper/core/model/selectionActions';
 import type { LngLat } from '@transitmapper/core/model/system';
 import { blockedMergeNote } from './actions';
 import { useEditor, useSelectionActionRegistry } from './EditorProvider';
@@ -32,7 +36,10 @@ function refsOfSelection(selection: Selection): SelectionRef[] {
  * The inspector passes nothing, so actions anchored to a POINT — cut this line
  * where you clicked — never appear in a panel that points at nowhere.
  */
-export function useSelectionActions(at?: LngLat): SelectionActionsView {
+export function useSelectionActions(
+  at?: LngLat,
+  serviceHit?: ServiceActionHit,
+): SelectionActionsView {
   const registry = useSelectionActionRegistry();
   const system = useEditor((s) => s.system);
   const multiSelection = useEditor((s) => s.multiSelection);
@@ -44,8 +51,8 @@ export function useSelectionActions(at?: LngLat): SelectionActionsView {
     if (refs.length === 0) return { refs, actions: [], note: null };
     return {
       refs,
-      actions: registry.actionsFor({ system, refs, at }),
+      actions: registry.actionsFor({ system, refs, at, serviceHit }),
       note: readOnly ? null : blockedMergeNote(system, refs),
     };
-  }, [registry, system, multiSelection, selection, readOnly, at]);
+  }, [registry, system, multiSelection, selection, readOnly, at, serviceHit]);
 }

@@ -72,6 +72,13 @@ import {
   pruneSections,
   normalizeSections,
 } from '@transitmapper/core/model/patternEdits';
+import {
+  dividePatternAtPosition,
+  endPatternAtPosition,
+  extendPatternTerminus as extendPatternTerminusInCore,
+  trimPatternAtPosition,
+  type PatternPosition,
+} from '@transitmapper/core/model/serviceEdits';
 import { materializeRouteSpans } from '@transitmapper/core/model/routeLegs';
 import type { SelectionRef } from '@transitmapper/core/model/selectionActions';
 import { throughRouteServices } from '@transitmapper/core/model/throughRoute';
@@ -535,8 +542,24 @@ export interface EditorState {
     wayId: string,
     t: number,
     side: 'start' | 'end',
-  ) => void;
-  /** Cut a line in two at position `t` on one of its ways. The far half
+  ) => boolean;
+  /** Exact-occurrence counterpart for a rendered line gesture. */
+  trimPatternAt: (serviceId: string, position: PatternPosition, side: 'start' | 'end') => boolean;
+  /** Add routed legs beyond one terminus without changing the infrastructure
+   * those legs run over. Returns false when the route cannot materialize. */
+  extendPatternTerminus: (
+    serviceId: string,
+    patternId: string,
+    side: 'start' | 'end',
+    spans: RouteSpan[],
+  ) => boolean;
+  /** End one pattern at an exact displayed occurrence, keeping the longer
+   * operating half. Returns false when that hit cannot make two valid halves. */
+  endPatternAt: (serviceId: string, position: PatternPosition) => boolean;
+  /** Divide the focused pattern at its exact displayed occurrence. The longer
+   * half remains on this service; the shorter becomes a selected new service. */
+  divideServiceAt: (serviceId: string, position: PatternPosition) => string | null;
+  /** Cut a line in two at position `t` on one of its ways. The shorter half
    *  becomes a new service with its own name and colour, riding the same
    *  infrastructure; both halves keep their schedule. Returns the new
    *  service's id, or null when the cut lands on a terminus and there is
@@ -1310,11 +1333,25 @@ function formCrossingJunctions(
 const MIN_STRETCH_T = 1e-3;
 
 /** A colour no service on this system is already using, so two lines are never
- *  indistinguishable. Falls back to the mode's catalog default once the
- *  palette is exhausted — a duplicate colour beats no colour. */
+ *  indistinguishable. The configured palette is preferred, but edits must not
+ *  collapse two services onto the mode default once that palette is exhausted. */
 function unusedPaletteColor(system: TransitSystem, modeId: string): string {
   const used = new Set(system.services.map((s) => s.color.toLowerCase()));
-  return system.palette.find((c) => !used.has(c.toLowerCase())) ?? modeRender(modeId).color;
+  const paletteColor = system.palette.find((color) => !used.has(color.toLowerCase()));
+  if (paletteColor) return paletteColor;
+  const modeColor = modeRender(modeId).color;
+  if (!used.has(modeColor.toLowerCase())) return modeColor;
+
+  // The palette is a preference, not a cap on how many distinct services can
+  // exist. Start at a stable value derived from the mode and probe the RGB
+  // space, so the same document state always receives the same next colour.
+  let start = 0;
+  for (const char of modeId) start = (start * 31 + char.charCodeAt(0)) & 0xffffff;
+  for (let offset = 0; offset <= 0xffffff; offset += 1) {
+    const color = `#${((start + offset) & 0xffffff).toString(16).padStart(6, '0')}`;
+    if (!used.has(color)) return color;
+  }
+  throw new Error('No unused service color remains.');
 }
 
 /** Whether two consecutive legs actually join on the ground. Resolving them as
@@ -3238,32 +3275,146 @@ export function createEditorStore() {
         }),
       })),
 
-    trimPatternTo: (serviceId, patternId, wayId, t, side) =>
-      set((s) => {
-        const service = s.system.services.find((sv) => sv.id === serviceId);
-        const pattern = service?.patterns.find((p) => p.id === patternId);
-        if (!pattern) return {};
-        // Trim at the leg NEAREST the end being moved, so dragging a terminus
-        // back over a way the line visits twice shortens the right visit. On a
-        // couplet this cuts both directions: the return trip's matching point
-        // is found on its own street rather than assumed to be the same leg.
-        const sections = trimSectionsTo(s.system.ways, pattern.sections, wayId, t, side);
-        // Trimming a line away entirely is a deletion the user didn't ask for.
-        if (!sections || sections.length === 0) return {};
-        return {
-          system: touch({
-            ...s.system,
-            services: s.system.services.map((sv) =>
-              sv.id !== serviceId
-                ? sv
+    extendPatternTerminus: (serviceId, patternId, side, spans) => {
+      const st = get();
+      const service = st.system.services.find((candidate) => candidate.id === serviceId);
+      const pattern = service?.patterns.find((candidate) => candidate.id === patternId);
+      const legs = materializeRouteSpans(st.system, spans);
+      const extended = pattern && legs ? extendPatternTerminusInCore(pattern, side, legs) : null;
+      if (!extended) return false;
+      set((state) => ({
+        system: touch({
+          ...state.system,
+          services: state.system.services.map((candidate) =>
+            candidate.id !== serviceId
+              ? candidate
+              : {
+                  ...candidate,
+                  patterns: candidate.patterns.map((current) =>
+                    current.id === patternId ? extended : current,
+                  ),
+                },
+          ),
+        }),
+      }));
+      return true;
+    },
+
+    endPatternAt: (serviceId, position) => {
+      const st = get();
+      const service = st.system.services.find((candidate) => candidate.id === serviceId);
+      const pattern = service?.patterns.find((candidate) => candidate.id === position.patternId);
+      const ended = pattern ? endPatternAtPosition(st.system.ways, pattern, position) : null;
+      if (!ended) return false;
+      set((state) => ({
+        system: touch({
+          ...state.system,
+          services: state.system.services.map((candidate) =>
+            candidate.id !== serviceId
+              ? candidate
+              : {
+                  ...candidate,
+                  patterns: candidate.patterns.map((current) =>
+                    current.id === position.patternId ? ended.pattern : current,
+                  ),
+                },
+          ),
+        }),
+      }));
+      return true;
+    },
+
+    divideServiceAt: (serviceId, position) => {
+      const st = get();
+      const service = st.system.services.find((candidate) => candidate.id === serviceId);
+      const pattern = service?.patterns.find((candidate) => candidate.id === position.patternId);
+      const division = pattern ? dividePatternAtPosition(st.system.ways, pattern, position) : null;
+      if (!service || !division) return null;
+      const newId = shortId();
+      const spawned: Service = {
+        ...service,
+        id: newId,
+        name: `${service.name} 2`,
+        color: unusedPaletteColor(st.system, service.modeId),
+        patterns: [{ ...division.divided, id: shortId() }],
+      };
+      set((state) => ({
+        system: touch({
+          ...state.system,
+          services: [
+            ...state.system.services.map((candidate) =>
+              candidate.id !== serviceId
+                ? candidate
                 : {
-                    ...sv,
-                    patterns: sv.patterns.map((p) => (p.id === patternId ? { ...p, sections } : p)),
+                    ...candidate,
+                    patterns: candidate.patterns.map((current) =>
+                      current.id === position.patternId ? division.remaining : current,
+                    ),
                   },
             ),
-          }),
-        };
-      }),
+            spawned,
+          ],
+        }),
+        selection: { kind: 'service', id: newId },
+      }));
+      return newId;
+    },
+
+    trimPatternAt: (serviceId, position, side) => {
+      const st = get();
+      const service = st.system.services.find((candidate) => candidate.id === serviceId);
+      const pattern = service?.patterns.find((candidate) => candidate.id === position.patternId);
+      const trimmed = pattern
+        ? trimPatternAtPosition(st.system.ways, pattern, position, side)
+        : null;
+      if (!trimmed) return false;
+      set((state) => ({
+        system: touch({
+          ...state.system,
+          services: state.system.services.map((candidate) =>
+            candidate.id !== serviceId
+              ? candidate
+              : {
+                  ...candidate,
+                  patterns: candidate.patterns.map((current) =>
+                    current.id === position.patternId ? trimmed : current,
+                  ),
+                },
+          ),
+        }),
+      }));
+      return true;
+    },
+
+    trimPatternTo: (serviceId, patternId, wayId, t, side) => {
+      const st = get();
+      const service = st.system.services.find((candidate) => candidate.id === serviceId);
+      const pattern = service?.patterns.find((candidate) => candidate.id === patternId);
+      if (!pattern) return false;
+      // Trim at the leg NEAREST the end being moved, so dragging a terminus
+      // back over a way the line visits twice shortens the right visit. On a
+      // couplet this cuts both directions: the return trip's matching point
+      // is found on its own street rather than assumed to be the same leg.
+      const sections = trimSectionsTo(st.system.ways, pattern.sections, wayId, t, side);
+      // Trimming a line away entirely is a deletion the user didn't ask for.
+      if (!sections || sections.length === 0) return false;
+      set((state) => ({
+        system: touch({
+          ...state.system,
+          services: state.system.services.map((candidate) =>
+            candidate.id !== serviceId
+              ? candidate
+              : {
+                  ...candidate,
+                  patterns: candidate.patterns.map((current) =>
+                    current.id === patternId ? { ...current, sections } : current,
+                  ),
+                },
+          ),
+        }),
+      }));
+      return true;
+    },
 
     setStopSkipped: (serviceId, patternId, run, stationId, skipped) =>
       set((s) => {
@@ -3311,16 +3462,28 @@ export function createEditorStore() {
       const far = trimSectionsTo(st.system.ways, pattern.sections, wayId, t, 'start');
       // A cut on a terminus leaves nothing on one side — not a split.
       if (!near || !far || near.length === 0 || far.length === 0) return null;
+      const nearPattern = { ...pattern, sections: near };
+      const farPattern = { ...pattern, sections: far };
+      const operatingMeters = (candidate: typeof pattern) =>
+        pathLengthMeters(patternRunPath(st.system.ways, candidate, 'outbound')) +
+        pathLengthMeters(patternRunPath(st.system.ways, candidate, 'inbound'));
+      // A divide is asymmetric on purpose: the original service's identity
+      // stays with the longer branch, while the shorter one becomes a new
+      // line. Keeping the choice here also preserves couplet sections intact.
+      const [remaining, divided] =
+        operatingMeters(nearPattern) >= operatingMeters(farPattern)
+          ? [nearPattern, farPattern]
+          : [farPattern, nearPattern];
       const newId = shortId();
-      // The far half keeps everything about the line except its identity: same
-      // mode, same schedule, same vehicle. A new colour, because two lines
-      // sharing one are two lines nobody can tell apart.
+      // The shorter half keeps everything about the line except its identity:
+      // same mode, schedule, and vehicle. A new colour keeps the two lines
+      // distinguishable once they share a corridor.
       const spawned: Service = {
         ...service,
         id: newId,
-        name: `${service.name} (south)`,
+        name: `${service.name} 2`,
         color: unusedPaletteColor(st.system, service.modeId),
-        patterns: [{ ...pattern, id: shortId(), sections: far }],
+        patterns: [{ ...divided, id: shortId() }],
       };
       set((s) => ({
         system: touch({
@@ -3331,9 +3494,7 @@ export function createEditorStore() {
                 ? sv
                 : {
                     ...sv,
-                    patterns: sv.patterns.map((p) =>
-                      p.id === patternId ? { ...p, sections: near } : p,
-                    ),
+                    patterns: sv.patterns.map((p) => (p.id === patternId ? remaining : p)),
                   },
             ),
             spawned,

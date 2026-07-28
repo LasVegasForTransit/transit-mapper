@@ -10,6 +10,7 @@ import {
 } from '../style/catalogStyle';
 import {
   nearestOnPath,
+  legRange,
   pathLengthMeters,
   resolveWayPath,
   serviceCoversWayAt,
@@ -139,6 +140,33 @@ interface WayPatternEntry {
    *  share yields two, with opposite `forward`, which is how a two-way service
    *  claims both curbs. A leg only one direction rides yields one. */
   forward: boolean;
+}
+
+/** One rendered pass through a way. A transparent hit feature keeps this
+ * identity for editing while the painted line can still merge through bends. */
+interface ServiceWayOccurrence {
+  patternId: string;
+  run: RunDirection;
+  legIndex: number;
+  range: [number, number];
+  /** Shared sections present the same leg object in both runs; one visual
+   * feature is enough because editing either occurrence changes both. */
+  leg: PatternLeg;
+}
+
+function serviceWayOccurrences(service: Service, wayId: string): ServiceWayOccurrence[] {
+  const occurrences: ServiceWayOccurrence[] = [];
+  const seenLegs = new Set<PatternLeg>();
+  for (const pattern of service.patterns) {
+    for (const run of PATTERN_RUNS) {
+      patternRunLegs(pattern, run).forEach(({ leg }, legIndex) => {
+        if (leg.wayId !== wayId || seenLegs.has(leg)) return;
+        seenLegs.add(leg);
+        occurrences.push({ patternId: pattern.id, run, legIndex, range: legRange(leg), leg });
+      });
+    }
+  }
+  return occurrences;
 }
 const wayPatternIndexCache = new WeakMap<Map<string, Service[]>, Map<string, WayPatternEntry[]>>();
 function wayPatternIndex(byWay: Map<string, Service[]>): Map<string, WayPatternEntry[]> {
@@ -873,6 +901,7 @@ function projectTopologyFeatures({
 
   const ways: Feature<LineString>[] = [];
   const services: Feature<LineString>[] = [];
+  const serviceHits: Feature<LineString>[] = [];
   const lanes: Feature<LineString>[] = [];
   const laneMarkings: Feature<LineString>[] = [];
   const laneArrows: Feature<LineString>[] = [];
@@ -1098,6 +1127,8 @@ function projectTopologyFeatures({
         coords: LngLat[],
         offset: number,
         w14?: number,
+        occurrence?: ServiceWayOccurrence,
+        hitTarget?: boolean,
       ): Feature<LineString> => ({
         type: 'Feature',
         // w14 present ⇒ a lane-detail overlay: the service layer grows it with
@@ -1112,9 +1143,36 @@ function projectTopologyFeatures({
           elevated,
           offset,
           ...(w14 !== undefined ? { w14 } : {}),
+          ...(occurrence
+            ? {
+                patternId: occurrence.patternId,
+                run: occurrence.run,
+                legIndex: occurrence.legIndex,
+              }
+            : {}),
+          ...(hitTarget ? { hitTarget: true } : {}),
         },
         geometry: { type: 'LineString', coordinates: coords },
       });
+      const addServiceHitFeatures = (
+        svc: Service,
+        on: LngLat[],
+        offset: number,
+        w14: number | undefined,
+        tOnPath: (t: number) => number = (t) => t,
+      ) => {
+        const occurrences = serviceWayOccurrences(svc, way.id);
+        if (occurrences.length < 2) return;
+        for (const occurrence of occurrences) {
+          const piece = slicePathByT(
+            on,
+            tOnPath(occurrence.range[0]),
+            tOnPath(occurrence.range[1]),
+          );
+          if (piece.length >= 2)
+            serviceHits.push(svcFeature(svc, piece, offset, w14, occurrence, true));
+        }
+      };
       // Constant per-service offset on the CENTERLINE — no jog at shared-segment
       // boundaries (see bundleSlots). This is the Network schematic and the
       // lane-detail fallback when a lane can't be resolved.
@@ -1126,6 +1184,7 @@ function projectTopologyFeatures({
       // a system nobody has trimmed produces byte-identical output.
       const centerlineFeatures = (svc: Service, on: LngLat[] = path): Feature<LineString>[] => {
         const offset = (slots.get(svc.id) ?? 0) * BUNDLE_SPACING_PX;
+        addServiceHitFeatures(svc, on, offset, undefined);
         const ranges = serviceRangesOnWay(svc, way.id);
         if (ranges.length === 1 && ranges[0][0] <= 0 && ranges[0][1] >= 1)
           return [svcFeature(svc, on, offset)];
@@ -1195,6 +1254,7 @@ function projectTopologyFeatures({
           const n = svcs.length; // lone service sits dead-centre on its lane
           svcs.forEach((svc, i) => {
             const offset = (i - (n - 1) / 2) * WITHIN_LANE_SPACING_PX;
+            addServiceHitFeatures(svc, lane.path, offset, w14, ontoLane);
             const ranges = serviceRangesOnWay(svc, way.id);
             if (ranges.length === 1 && ranges[0][0] <= 0 && ranges[0][1] >= 1) {
               services.push(svcFeature(svc, lane.path, offset, w14));
@@ -1214,7 +1274,9 @@ function projectTopologyFeatures({
 
   return {
     ways,
-    services: mergeAdjacentServiceLines(services),
+    // Paint stays continuity-merged through bends. Only the transparent hit
+    // surface remains per-occurrence, so an ambiguous right-click is exact.
+    services: [...mergeAdjacentServiceLines(services), ...serviceHits],
     lanes,
     laneMarkings,
     laneArrows,
