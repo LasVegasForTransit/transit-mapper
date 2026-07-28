@@ -30,6 +30,41 @@ export interface Issue {
     { kind: 'way'; id: string } | { kind: 'station'; id: string } | { kind: 'service'; id: string };
 }
 
+/** Deterministic work performed by one chunked crossing scan. */
+export interface CrossingOperationCounts {
+  gridSegments: number;
+  gridCellEntries: number;
+  querySegments: number;
+  queryCells: number;
+  candidateChecks: number;
+  yields: number;
+  cancellations: number;
+}
+
+/** A correctly initialized operation record for CrossingScanOptions. */
+export function createCrossingOperationCounts(): CrossingOperationCounts {
+  return {
+    gridSegments: 0,
+    gridCellEntries: 0,
+    querySegments: 0,
+    queryCells: 0,
+    candidateChecks: 0,
+    yields: 0,
+    cancellations: 0,
+  };
+}
+
+export interface CrossingScanOptions {
+  /** Maximum deterministic work units between event-loop yields. */
+  operationBudget?: number;
+  /** Optional instrumentation, reset and populated by each scan. */
+  operations?: CrossingOperationCounts;
+  /** Cancellation is checked at least once per operation budget. */
+  signal?: AbortSignal;
+  /** Host scheduler hook. Defaults to `setTimeout(0)` in either runtime. */
+  yieldControl?: () => Promise<void>;
+}
+
 /**
  * A line running against the traffic on a street it rides.
  *
@@ -308,6 +343,7 @@ const MAX_CROSS_SEGMENT_CELLS = 4096;
  *  genuine data uses more of the budget here. */
 const MAX_CROSS_GRID_CELLS = 2_000_000;
 const MAX_CROSS_OVERSIZE_SEGMENTS = 512;
+const CROSSING_OPERATION_BUDGET = 1024;
 
 interface CrossGrid {
   cells: Map<string, CrossSegment[]>;
@@ -321,6 +357,56 @@ interface CrossGrid {
    *  one whole pass so the cost is bounded per document rather than per
    *  segment. See crossingIssuesForSegment. */
   wideScansLeft: number;
+}
+
+function yieldCrossingControl(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Counts fixed work units rather than milliseconds, so a dense bucket or a
+ *  large bbox expansion cannot hide inside one supposedly short chunk. */
+class CooperativeCrossingWork {
+  private readonly budget: number;
+  private readonly operations: CrossingOperationCounts | undefined;
+  private readonly signal: AbortSignal | undefined;
+  private readonly yieldControl: () => Promise<void>;
+  private remaining: number;
+  private cancellationRecorded = false;
+  pauses = 0;
+
+  constructor(options: CrossingScanOptions) {
+    const requested = options.operationBudget ?? CROSSING_OPERATION_BUDGET;
+    this.budget =
+      Number.isFinite(requested) && requested >= 1
+        ? Math.floor(requested)
+        : CROSSING_OPERATION_BUDGET;
+    this.remaining = this.budget;
+    this.operations = options.operations;
+    this.signal = options.signal;
+    this.yieldControl = options.yieldControl ?? yieldCrossingControl;
+  }
+
+  spend(): boolean {
+    this.remaining--;
+    return this.remaining <= 0;
+  }
+
+  async pause(): Promise<boolean> {
+    this.remaining = this.budget;
+    this.pauses++;
+    if (this.operations) this.operations.yields++;
+    await this.yieldControl();
+    return !this.cancelled();
+  }
+
+  cancelled(): boolean {
+    if (!this.signal?.aborted) return false;
+    if (!this.cancellationRecorded) {
+      this.cancellationRecorded = true;
+      if (this.operations) this.operations.cancellations++;
+    }
+    return true;
+  }
 }
 
 function cellSpan(a: LngLat, b: LngLat): number {
@@ -363,6 +449,79 @@ function buildCrossGrid(ways: Way[]): CrossGrid {
   return { cells, oversize, all, wideScansLeft: MAX_CROSS_OVERSIZE_SEGMENTS };
 }
 
+async function buildCrossGridChunked(
+  ways: Way[],
+  work: CooperativeCrossingWork,
+  operations: CrossingOperationCounts | undefined,
+): Promise<CrossGrid | null> {
+  const cells = new Map<string, CrossSegment[]>();
+  const oversize: CrossSegment[] = [];
+  const all: CrossSegment[] = [];
+  let cellsUsed = 0;
+  for (const way of ways) {
+    for (let i = 0; i < way.points.length - 1; i++) {
+      if (work.cancelled()) return null;
+      const seg: CrossSegment = {
+        wayId: way.id,
+        typeId: way.typeId,
+        grade: way.grade,
+        a: way.points[i],
+        b: way.points[i + 1],
+      };
+      all.push(seg);
+      if (operations) operations.gridSegments++;
+      if (work.spend() && !(await work.pause())) return null;
+
+      const { cx0, cx1, cy0, cy1 } = crossBboxCells(seg.a, seg.b);
+      const span = (cx1 - cx0 + 1) * (cy1 - cy0 + 1);
+      if (span > MAX_CROSS_SEGMENT_CELLS || cellsUsed + span > MAX_CROSS_GRID_CELLS) {
+        if (oversize.length < MAX_CROSS_OVERSIZE_SEGMENTS) oversize.push(seg);
+        continue;
+      }
+      cellsUsed += span;
+      for (let cx = cx0; cx <= cx1; cx++) {
+        for (let cy = cy0; cy <= cy1; cy++) {
+          const key = crossCellKey(cx, cy);
+          const bucket = cells.get(key);
+          if (bucket) bucket.push(seg);
+          else cells.set(key, [seg]);
+          if (operations) operations.gridCellEntries++;
+          if (work.spend() && !(await work.pause())) return null;
+        }
+      }
+    }
+  }
+  return { cells, oversize, all, wideScansLeft: MAX_CROSS_OVERSIZE_SEGMENTS };
+}
+
+interface CrossConsideration {
+  way: Way;
+  a1: LngLat;
+  a2: LngLat;
+  joined: Set<string>;
+  flagged: Set<string>;
+  issues: Issue[];
+}
+
+function considerCrossSegment(context: CrossConsideration, other: CrossSegment): void {
+  const { way, a1, a2, joined, flagged, issues } = context;
+  if (other.wayId === way.id) return;
+  const key = pairKey(way.id, other.wayId);
+  if (flagged.has(key) || joined.has(key)) return;
+  // Different grades don't meet: an elevated way passing over a surface
+  // street is a bridge, not a missing junction. Without this every
+  // overpass reads as an error the user can never resolve, since joining
+  // them would be wrong.
+  if (other.grade !== way.grade) return;
+  if (!segmentsCross(a1, a2, other.a, other.b)) return;
+  flagged.add(key);
+  issues.push({
+    id: `crossing-${key}`,
+    message: `A ${way.typeId} way crosses a ${other.typeId} way without joining — check whether they should share a junction.`,
+    target: { kind: 'way', id: way.id },
+  });
+}
+
 function crossingIssuesForSegment(
   way: Way,
   a1: LngLat,
@@ -372,23 +531,7 @@ function crossingIssuesForSegment(
   flagged: Set<string>,
 ): Issue[] {
   const issues: Issue[] = [];
-  const consider = (other: CrossSegment) => {
-    if (other.wayId === way.id) return;
-    const key = pairKey(way.id, other.wayId);
-    if (flagged.has(key) || joined.has(key)) return;
-    // Different grades don't meet: an elevated way passing over a surface
-    // street is a bridge, not a missing junction. Without this every
-    // overpass reads as an error the user can never resolve, since joining
-    // them would be wrong.
-    if (other.grade !== way.grade) return;
-    if (!segmentsCross(a1, a2, other.a, other.b)) return;
-    flagged.add(key);
-    issues.push({
-      id: `crossing-${key}`,
-      message: `A ${way.typeId} way crosses a ${other.typeId} way without joining — check whether they should share a junction.`,
-      target: { kind: 'way', id: way.id },
-    });
-  };
+  const context: CrossConsideration = { way, a1, a2, joined, flagged, issues };
 
   // The query side amplifies exactly like the build side did: walking the
   // cells a segment spans is only cheap while that span is small. A segment
@@ -405,9 +548,9 @@ function crossingIssuesForSegment(
   if (cellSpan(a1, a2) > MAX_CROSS_SEGMENT_CELLS) {
     if (grid.wideScansLeft > 0) {
       grid.wideScansLeft--;
-      for (const other of grid.all) consider(other);
+      for (const other of grid.all) considerCrossSegment(context, other);
     } else {
-      for (const other of grid.oversize) consider(other);
+      for (const other of grid.oversize) considerCrossSegment(context, other);
     }
     return issues;
   }
@@ -417,13 +560,66 @@ function crossingIssuesForSegment(
     for (let cy = cy0; cy <= cy1; cy++) {
       const bucket = grid.cells.get(crossCellKey(cx, cy));
       if (!bucket) continue;
-      for (const other of bucket) consider(other);
+      for (const other of bucket) considerCrossSegment(context, other);
     }
   }
   // Segments held out of the grid are in no cell, so a normal query would
   // never see them. Checking them here is what keeps the result exact.
-  for (const other of grid.oversize) consider(other);
+  for (const other of grid.oversize) considerCrossSegment(context, other);
   return issues;
+}
+
+async function crossingIssuesForSegmentChunked(
+  way: Way,
+  a1: LngLat,
+  a2: LngLat,
+  grid: CrossGrid,
+  joined: Set<string>,
+  flagged: Set<string>,
+  work: CooperativeCrossingWork,
+  operations: CrossingOperationCounts | undefined,
+): Promise<Issue[] | null> {
+  if (work.cancelled()) return null;
+  if (operations) operations.querySegments++;
+  if (work.spend() && !(await work.pause())) return null;
+
+  const issues: Issue[] = [];
+  const context: CrossConsideration = { way, a1, a2, joined, flagged, issues };
+  const consider = (other: CrossSegment): boolean => {
+    if (operations) operations.candidateChecks++;
+    considerCrossSegment(context, other);
+    return work.spend();
+  };
+  if (cellSpan(a1, a2) > MAX_CROSS_SEGMENT_CELLS) {
+    let candidates: CrossSegment[];
+    if (grid.wideScansLeft > 0) {
+      grid.wideScansLeft--;
+      candidates = grid.all;
+    } else {
+      candidates = grid.oversize;
+    }
+    for (const other of candidates) {
+      if (consider(other) && !(await work.pause())) return null;
+    }
+    return work.cancelled() ? null : issues;
+  }
+
+  const { cx0, cx1, cy0, cy1 } = crossBboxCells(a1, a2);
+  for (let cx = cx0; cx <= cx1; cx++) {
+    for (let cy = cy0; cy <= cy1; cy++) {
+      if (operations) operations.queryCells++;
+      if (work.spend() && !(await work.pause())) return null;
+      const bucket = grid.cells.get(crossCellKey(cx, cy));
+      if (!bucket) continue;
+      for (const other of bucket) {
+        if (consider(other) && !(await work.pause())) return null;
+      }
+    }
+  }
+  for (const other of grid.oversize) {
+    if (consider(other) && !(await work.pause())) return null;
+  }
+  return work.cancelled() ? null : issues;
 }
 
 function crossingIssuesForWay(
@@ -465,23 +661,14 @@ export function findCrossingsWithoutJoining(system: TransitSystem): Issue[] {
   return issues;
 }
 
-// Wall-clock budget per chunk, not a fixed way/segment count — a fixed
-// count still let one chunk land entirely inside a dense shared-corridor
-// hotspot (see findCrossingsWithoutJoining's note) and block for hundreds of
-// ms; checking elapsed time between individual SEGMENTS instead bounds every
-// chunk to roughly this budget regardless of how the work is distributed.
-// Confirmed against RTC Southern Nevada's real feed: a fixed 6-ways-per-
-// chunk version still produced a ~400ms chunk on a busy downtown corridor.
-const CROSSING_CHUNK_BUDGET_MS = 8;
-
 /**
  * Same crossing detection as findCrossingsWithoutJoining, but split into
- * time-budgeted chunks with a `setTimeout(0)` yield between them (not
- * `requestAnimationFrame` — rAF pauses indefinitely on a backgrounded tab,
- * the same reasoning as gtfsImport.ts's streamRtcGtfsBatches) — so
- * IssuesPopover's live badge stays accurate WITHOUT ever blocking a frame,
- * on a check that can otherwise run several seconds straight on a large real
- * import.
+ * operation-budgeted chunks with a `setTimeout(0)` yield between them (not
+ * `requestAnimationFrame` — rAF pauses indefinitely on a backgrounded tab).
+ * The budget is charged while building grid cells, walking query cells, and
+ * checking candidates, so neither construction nor one dense bucket can
+ * become an uninterruptible chunk. An AbortSignal is observed at the same
+ * boundaries.
  *
  * Already Worker-shaped: an async generator yielding per-chunk is exactly
  * the pattern a Web Worker would use too (post a progress message per yield
@@ -491,25 +678,40 @@ const CROSSING_CHUNK_BUDGET_MS = 8;
  */
 export async function* crossingsWithoutJoiningChunked(
   system: TransitSystem,
+  options: CrossingScanOptions = {},
 ): AsyncGenerator<Issue[]> {
+  const operations = options.operations;
+  if (operations) Object.assign(operations, createCrossingOperationCounts());
+  const work = new CooperativeCrossingWork(options);
+  if (work.cancelled()) return;
+
   const joined = jointWayPairs(system);
   const ways = system.ways.filter((w) => w.points.length >= 2);
-  const grid = buildCrossGrid(ways);
+  const grid = await buildCrossGridChunked(ways, work, operations);
+  if (!grid) return;
   const flagged = new Set<string>();
   let chunkIssues: Issue[] = [];
-  let chunkStart = performance.now();
+  let batchPause = work.pauses;
   for (const way of ways) {
     for (let i = 0; i < way.points.length - 1; i++) {
-      chunkIssues.push(
-        ...crossingIssuesForSegment(way, way.points[i], way.points[i + 1], grid, joined, flagged),
+      const segmentIssues = await crossingIssuesForSegmentChunked(
+        way,
+        way.points[i],
+        way.points[i + 1],
+        grid,
+        joined,
+        flagged,
+        work,
+        operations,
       );
-      if (performance.now() - chunkStart < CROSSING_CHUNK_BUDGET_MS) continue;
+      if (!segmentIssues) return;
+      chunkIssues.push(...segmentIssues);
+      if (work.pauses === batchPause) continue;
+      batchPause = work.pauses;
       if (chunkIssues.length > 0) {
         yield chunkIssues;
         chunkIssues = [];
       }
-      await new Promise((r) => setTimeout(r, 0));
-      chunkStart = performance.now();
     }
   }
   if (chunkIssues.length > 0) yield chunkIssues;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useEditor } from '../editor/EditorProvider';
+import { useEditor, useEditorStore } from '../editor/EditorProvider';
 import {
   crossingsWithoutJoiningChunked,
   validateSystemQuick,
@@ -10,6 +10,17 @@ import { IconButton } from './IconButton';
 import { Popover } from './Popover';
 import { useListboxKeyboardNav } from './useListboxKeyboardNav';
 
+function useDebouncedSystem(system: TransitSystem, delayMs: number): TransitSystem {
+  const [debounced, setDebounced] = useState<TransitSystem>(system);
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setDebounced(system), delayMs);
+    return () => window.clearTimeout(timer.current);
+  }, [delayMs, system]);
+  return debounced;
+}
+
 /**
  * A pure sanity check surfaced as UI: ghost ways/services, orphaned stations,
  * and ways that cross without joining (see model/validate.ts). Hidden
@@ -17,21 +28,30 @@ import { useListboxKeyboardNav } from './useListboxKeyboardNav';
  * that's always present and usually empty.
  */
 export function IssuesPopover() {
-  const system = useEditor((s) => s.system);
+  const store = useEditorStore();
+  // Quick validation reads ways/services/stations; crossing detection reads
+  // only ways/nodes. System name, viewport, palette, facilities, and other
+  // unrelated changes retain those references and restart neither pass.
+  const ways = useEditor((s) => s.system.ways);
+  const services = useEditor((s) => s.system.services);
+  const stations = useEditor((s) => s.system.stations);
+  const nodes = useEditor((s) => s.system.nodes);
+  const quickSource = useMemo<TransitSystem>(
+    () => ({ ...store.getState().system, ways, services, stations }),
+    [store, ways, services, stations],
+  );
+  const crossingSource = useMemo<TransitSystem>(
+    () => ({ ...store.getState().system, ways, nodes }),
+    [store, ways, nodes],
+  );
   const selectAndFocus = useEditor((s) => s.selectAndFocus);
   // This component is mounted the whole session (top-bar indicator), and
-  // `system` is a fresh reference on every store mutation — a drag frame, an
+  // Top-level system identity is fresh on every mutation — a drag frame, an
   // unrelated edit, a GTFS batch. The badge doesn't need sub-frame freshness,
-  // so debounce the value validation actually runs against instead of
-  // re-running it (and re-rendering this) on every single one of those.
-  const [debounced, setDebounced] = useState<TransitSystem>(system);
-  const timer = useRef<number | undefined>(undefined);
-  useEffect(() => {
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setDebounced(system), 400);
-    return () => window.clearTimeout(timer.current);
-  }, [system]);
-  const quickIssues = useMemo(() => validateSystemQuick(debounced), [debounced]);
+  // so debounce only the dependency snapshots each validation tier reads.
+  const debouncedQuick = useDebouncedSystem(quickSource, 400);
+  const debouncedCrossings = useDebouncedSystem(crossingSource, 400);
+  const quickIssues = useMemo(() => validateSystemQuick(debouncedQuick), [debouncedQuick]);
 
   // Crossing-without-joining detection is the expensive half of validation
   // (see validate.ts's note — real routes sharing street corridors keep this
@@ -41,18 +61,23 @@ export function IssuesPopover() {
   // — the exact same batch+yield shape as the GTFS import itself.
   const [crossingIssues, setCrossingIssues] = useState<Issue[]>([]);
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     setCrossingIssues([]);
     (async () => {
-      for await (const batch of crossingsWithoutJoiningChunked(debounced)) {
-        if (cancelled) return;
+      for await (const batch of crossingsWithoutJoiningChunked(debouncedCrossings, {
+        signal: controller.signal,
+      })) {
+        if (controller.signal.aborted) return;
         setCrossingIssues((prev) => [...prev, ...batch]);
       }
     })();
     return () => {
-      cancelled = true;
+      // A boolean would suppress stale results but leave the old dense pass
+      // consuming main-thread slices beside the replacement. Abort at the
+      // core operation boundaries so only the newest document keeps working.
+      controller.abort();
     };
-  }, [debounced]);
+  }, [debouncedCrossings]);
 
   const issues = useMemo(() => [...quickIssues, ...crossingIssues], [quickIssues, crossingIssues]);
   const { containerRef, onKeyDown } = useListboxKeyboardNav<HTMLDivElement>();
