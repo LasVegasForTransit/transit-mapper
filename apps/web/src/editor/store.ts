@@ -51,6 +51,8 @@ import {
   patternRunPath,
   patternRunLegs,
   patternHasSplit,
+  anchorOnWayId,
+  primaryAnchor,
 } from '@transitmapper/core/model/geo';
 import {
   anchorOnWay,
@@ -667,7 +669,7 @@ function reanchorStations(system: TransitSystem, wayId: string): Station[] {
   const path = resolveWayPath(way);
   if (path.length < 2) return system.stations;
   return system.stations.map((s) =>
-    s.anchor?.wayId === wayId ? { ...s, coord: pointAtT(path, s.anchor.t) } : s,
+    anchorOnWayId(s, wayId) ? { ...s, coord: pointAtT(path, anchorOnWayId(s, wayId)!.t) } : s,
   );
 }
 
@@ -707,7 +709,7 @@ function updateWayPointsBatch(
   // path skip comparing `stations` at all for that case.
   let stationsChanged = false;
   const stations = system.stations.map((s) => {
-    const anchor = s.anchor;
+    const anchor = primaryAnchor(s);
     const way = anchor && changedWays.get(anchor.wayId);
     if (!way || !anchor) return s;
     const path = resolveWayPath(way);
@@ -776,6 +778,21 @@ function pruneConnectorsForWay(nodes: Node[], wayId: string): Node[] {
 // removes the line, which is what the way tool's own delete has always meant.
 // Cutting a line deliberately and keeping BOTH halves is deleteWayStretch's
 // job, not this one.
+/**
+ * A station's anchors with the one on `replacedWayId` swapped for `next`, or
+ * `next` appended when it rode no such way.
+ *
+ * Anchors are a list now, and `{ ...station, anchor: x }` silently writes a
+ * dead property while the real list keeps a stale entry pointing at a way that
+ * is about to stop existing. Every re-anchor goes through here so that cannot
+ * happen — and so a station riding a SECOND way keeps that anchor, which is
+ * the whole reason the list exists.
+ */
+function reanchored(station: Station, replacedWayId: string, next: StationAnchor): StationAnchor[] {
+  const kept = station.anchors.filter((a) => a.wayId !== replacedWayId && a.wayId !== next.wayId);
+  return [next, ...kept];
+}
+
 function removeWay(system: TransitSystem, wayId: string): TransitSystem {
   const ways = system.ways.filter((w) => w.id !== wayId);
   const services = system.services
@@ -809,7 +826,13 @@ function removeWay(system: TransitSystem, wayId: string): TransitSystem {
     ...system,
     ways,
     services,
-    stations: system.stations.filter((s) => s.anchor?.wayId !== wayId),
+    // A station riding another way as well survives, losing only this anchor —
+    // deleting one carriageway must not delete a platform the other still serves.
+    stations: system.stations
+      .filter((s) => !(s.anchors.length === 1 && s.anchors[0].wayId === wayId))
+      .map((s) =>
+        anchorOnWayId(s, wayId) ? { ...s, anchors: s.anchors.filter((a) => a.wayId !== wayId) } : s,
+      ),
     nodes: pruneConnectorsForWay(removeNodeRefsForWay(system.nodes, wayId), wayId),
     namedWays: pruneNamedWays(system.namedWays, wayId),
   };
@@ -1044,13 +1067,13 @@ function splitWay(
   }));
 
   const stations = system.stations.map((st) => {
-    if (st.anchor?.wayId !== wayId) return st;
+    if (!anchorOnWayId(st, wayId)) return st;
     const onA = nearestOnPath(pathA, st.coord);
     const onB = nearestOnPath(pathB, st.coord);
     if (!onA && !onB) return st;
     const useB = !!onB && (!onA || onB.distMeters < onA.distMeters);
     const best = (useB ? onB : onA)!;
-    return { ...st, anchor: { wayId: useB ? newWayId : wayId, t: best.t } };
+    return { ...st, anchors: reanchored(st, wayId, { wayId: useB ? newWayId : wayId, t: best.t }) };
   });
 
   // Both halves keep the original's lane ids (the profile is shared), so a
@@ -1202,9 +1225,9 @@ function mergeWays(system: TransitSystem, keepId: string, otherId: string): Tran
     })),
   }));
   const stations = system.stations.map((st) => {
-    if (st.anchor?.wayId !== keepId && st.anchor?.wayId !== otherId) return st;
+    if (!anchorOnWayId(st, keepId) && !anchorOnWayId(st, otherId)) return st;
     const on = nearestOnPath(mergedPath, st.coord);
-    return on ? { ...st, anchor: { wayId: keepId, t: on.t } } : st;
+    return on ? { ...st, anchors: reanchored(st, otherId, { wayId: keepId, t: on.t }) } : st;
   });
 
   const namedWays = pruneNamedWays(system.namedWays, otherId);
@@ -1736,7 +1759,7 @@ function nudgeSelection(
     next = {
       ...next,
       stations: next.stations.map((st) => {
-        if (!stationIds.has(st.id) || (st.anchor && wayIds.has(st.anchor.wayId))) return st;
+        if (!stationIds.has(st.id) || st.anchors.some((a) => wayIds.has(a.wayId))) return st;
         return { ...st, coord: [st.coord[0] + dx, st.coord[1] + dy] };
       }),
     };
@@ -2643,9 +2666,11 @@ export function createEditorStore() {
         // same rescue mergeWays performs when it collapses two ways into one.
         const keeperPath = resolveWayPath(keeper);
         const stations = s.system.stations.map((st) => {
-          if (st.anchor?.wayId !== other.id) return st;
+          if (!anchorOnWayId(st, other.id)) return st;
           const on = nearestOnPath(keeperPath, st.coord);
-          return on ? { ...st, anchor: { wayId: keeper.id, t: on.t } } : st;
+          return on
+            ? { ...st, anchors: reanchored(st, other.id, { wayId: keeper.id, t: on.t }) }
+            : st;
         });
 
         // A carriageway pair from separateCarriageways is index-aligned
@@ -2929,7 +2954,7 @@ export function createEditorStore() {
         sys = {
           ...sys,
           stations: sys.stations.map((stn) => {
-            if (!stn.anchor || !exclude.has(stn.anchor.wayId)) return stn;
+            if (!stn.anchors.some((a) => exclude.has(a.wayId))) return stn;
             let best: StationAnchor | undefined;
             let bestD = ADOPT_STATION_REANCHOR_M;
             for (const nw of newWays) {
@@ -2939,7 +2964,12 @@ export function createEditorStore() {
                 best = { wayId: nw.id, t: on.t };
               }
             }
-            return { ...stn, anchor: best };
+            // Too far from anything adopted: the station drops the anchors
+            // that named the sketch and survives free, rather than being
+            // deleted. Anchors on ways NOT being replaced are untouched.
+            const detached = stn.anchors.filter((a) => !exclude.has(a.wayId));
+            if (!best) return { ...stn, anchors: detached };
+            return { ...stn, anchors: [best, ...detached.filter((a) => a.wayId !== best.wayId)] };
           }),
         };
 
@@ -3509,7 +3539,7 @@ export function createEditorStore() {
       const station: Station = {
         id,
         coord,
-        ...(hit ? { anchor: { wayId: hit.wayId, t: hit.t } } : {}),
+        anchors: hit ? [{ wayId: hit.wayId, t: hit.t }] : [],
         footprint,
       };
       set((s) => ({

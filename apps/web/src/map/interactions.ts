@@ -14,6 +14,7 @@ import {
   squareFootprint,
   type ShapeRun,
   patternLegs,
+  primaryAnchor,
 } from '@transitmapper/core/model/geo';
 import { facilityType, mode } from '@transitmapper/core/model/catalog';
 import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
@@ -399,7 +400,7 @@ export function attachInteractions(
     suppressClick = true;
     const st0 = store.getState().system.stations.find((s) => s.id === id);
     const originalCoord = st0?.coord;
-    const originalAnchor = st0?.anchor;
+    const originalAnchor = st0 ? primaryAnchor(st0) : undefined;
     let moved = false;
     const throttled = rafThrottle((c: LngLat) => placeOrSnapStation(id, c));
     const onMove = (ev: MapMouseEvent) => {

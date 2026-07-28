@@ -22,8 +22,20 @@ export interface Station {
   name?: string;
   /** Position as a network node, snapped onto its way's path. */
   coord: LngLat;
-  /** The way this station rides, if any (unsnapped stations are free). */
-  anchor?: StationAnchor;
+  /**
+   * The ways this station rides. Empty for a free-floating station.
+   *
+   * A list, because one platform can genuinely belong to two ways: a transit
+   * centre both halves of a one-way couplet pull into, or an island platform
+   * between the two tracks of a line. With a single anchor the station bound
+   * to whichever way was nearest when it was placed, and every line on the
+   * other one drove past a stop it plainly calls at — which a GTFS feed
+   * reusing one stop_id for both directions produces on every import.
+   *
+   * Ordered: the first is the one a bare "which way is this on" question gets,
+   * and the one whose alignment moves the station when it is reshaped.
+   */
+  anchors: StationAnchor[];
   /** Physical boundary polygon, drawn in the infrastructure view. */
   footprint?: LngLat[];
   /** Platform geometry inside the station (infrastructure view). */
@@ -47,5 +59,5 @@ export interface Station {
  *  Station literal gets constructed, so every call site (editor/store.ts's
  *  addStation, any future importer) builds the identical shape. */
 export function createStation(coord: LngLat, anchor?: StationAnchor): Station {
-  return { id: shortId(), coord, ...(anchor ? { anchor } : {}) };
+  return { id: shortId(), coord, anchors: anchor ? [anchor] : [] };
 }

@@ -59,6 +59,7 @@ import {
   patternRunLegs,
   patternRunPath,
   patternHasCouplet,
+  primaryAnchor,
 } from '@transitmapper/core/model/geo';
 import { computeDiagramSystem } from '@transitmapper/core/model/diagramLayout';
 import {
@@ -1307,7 +1308,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   const round = parseSystem(JSON.parse(JSON.stringify(before)));
   check('parse round-trips ways', round.ways.length === before.ways.length);
   check('parse round-trips services', round.services.length === 2);
-  check('parse round-trips station anchor (wayId)', round.stations[0].anchor?.wayId === pc);
+  check('parse round-trips station anchor (wayId)', primaryAnchor(round.stations[0])?.wayId === pc);
 }
 
 // --- migration: v2 corridors infer heavyRail/lightRail/monorail/road from the service mode ---
@@ -1416,7 +1417,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     'legacy service keeps color/name',
     m.services[0].color === '#e4572e' && m.services[0].name === 'Old Line',
   );
-  check('legacy station anchor migrated lineId → wayId', m.stations[0].anchor?.wayId === 'l1');
+  check(
+    'legacy station anchor migrated lineId → wayId',
+    primaryAnchor(m.stations[0])?.wayId === 'l1',
+  );
 }
 
 // --- modes + grade (infrastructure vertical alignment) ---
@@ -2392,10 +2396,13 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   const west = s.stations.find((st) => st.id === westStop)!;
   const east = s.stations.find((st) => st.id === eastStop)!;
-  check('a station west of the split re-snaps onto the first half', west.anchor?.wayId === trunk);
+  check(
+    'a station west of the split re-snaps onto the first half',
+    primaryAnchor(west)?.wayId === trunk,
+  );
   check(
     'a station east of the split re-snaps onto the second half',
-    east.anchor?.wayId === wayB.id,
+    primaryAnchor(east)?.wayId === wayB.id,
   );
 
   // Moving the shared split point still cascades to both halves (it's a
@@ -4726,7 +4733,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check(
     "both stops become stations, anchored onto the shape's way",
     pieces.stations.length === 2 &&
-      pieces.stations.every((s) => s.anchor?.wayId === pieces.ways[0].id),
+      pieces.stations.every((s) => primaryAnchor(s)?.wayId === pieces.ways[0].id),
   );
   check(
     'stations keep their GTFS stop names',
@@ -6703,7 +6710,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
   check(
     'and re-anchors it onto the surviving centerline',
-    after.stations.find((st) => st.id === stId)?.anchor?.wayId === survivor.id,
+    primaryAnchor(after.stations.find((st) => st.id === stId)!)?.wayId === survivor.id,
   );
   check('combining keeps the junction the cross street made', after.nodes.length === nodesBefore);
   check(
@@ -8036,7 +8043,8 @@ function buildGrid() {
   const station = after.stations.find((s2) => s2.id === st1)!;
   check(
     'the station followed onto an adopted way',
-    !!station.anchor && patternWayIds(adopted.patterns[0]).includes(station.anchor.wayId),
+    !!primaryAnchor(station) &&
+      patternWayIds(adopted.patterns[0]).includes(primaryAnchor(station)!.wayId),
   );
 }
 
@@ -8328,7 +8336,7 @@ function buildGrid() {
   const sid = store.getState().addDrawnStation(fp);
   const st1 = store.getState().system.stations.find((x) => x.id === sid)!;
   check('drawn station carries its footprint', st1.footprint === fp);
-  check('drawn station anchors onto the way it straddles', st1.anchor?.wayId === r);
+  check('drawn station anchors onto the way it straddles', primaryAnchor(st1)?.wayId === r);
   check("drawn station's coord sits on the way", Math.abs(st1.coord[1] - 36.1) < 1e-6);
   // Read the selection once: two separate getState() calls can't be narrowed
   // together, and the second was reading through a possibly-null value.
@@ -8344,7 +8352,7 @@ function buildGrid() {
   const st2 = store.getState().system.stations.find((x) => x.id === sid2)!;
   check(
     'a footprint away from any way makes a free station',
-    st2.anchor === undefined && st2.footprint === fp2,
+    st2.anchors.length === 0 && st2.footprint === fp2,
   );
 }
 
@@ -8550,11 +8558,16 @@ function buildGrid() {
   ];
   const sys = createEmptySystem();
   sys.stations = [
-    { id: 'near-end', coord: [-115.19, 36.1], anchor: { wayId: 'w1', t: 0.7 } },
-    { id: 'near-start', coord: [-115.22, 36.1], anchor: { wayId: 'w1', t: 0.2 } },
-    { id: 'custom-dwell', coord: [-115.2, 36.1], anchor: { wayId: 'w1', t: 0.5 }, dwellSeconds: 5 },
-    { id: 'other-way', coord: [-115.2, 36.1005], anchor: { wayId: 'w2', t: 0.5 } },
-    { id: 'unanchored', coord: [-115.2, 36.1] },
+    { id: 'near-end', coord: [-115.19, 36.1], anchors: [{ wayId: 'w1', t: 0.7 }] },
+    { id: 'near-start', coord: [-115.22, 36.1], anchors: [{ wayId: 'w1', t: 0.2 }] },
+    {
+      id: 'custom-dwell',
+      coord: [-115.2, 36.1],
+      anchors: [{ wayId: 'w1', t: 0.5 }],
+      dwellSeconds: 5,
+    },
+    { id: 'other-way', coord: [-115.2, 36.1005], anchors: [{ wayId: 'w2', t: 0.5 }] },
+    { id: 'unanchored', coord: [-115.2, 36.1], anchors: [] },
   ];
   const pathMeters = haversineMeters(path[0], path[1]);
   const pattern = { id: 'p1', sections: oneSection(legsOf('w1')) };
@@ -10015,8 +10028,8 @@ function buildGrid() {
   // Stops lengthen the round trip. That is the coupling the dwell field
   // claims and the inspector now shows.
   const stations: Station[] = [
-    { id: 'ss-a', coord: [-115.27, 36.2], anchor: { wayId: 'ss-w', t: 0.1 } },
-    { id: 'ss-b', coord: [-115.25, 36.2], anchor: { wayId: 'ss-w', t: 0.5 } },
+    { id: 'ss-a', coord: [-115.27, 36.2], anchors: [{ wayId: 'ss-w', t: 0.1 }] },
+    { id: 'ss-b', coord: [-115.25, 36.2], anchors: [{ wayId: 'ss-w', t: 0.5 }] },
   ];
   const stopped = serviceStats(ways, stations, [], svc, 10)!;
   check('stations on a line become stops', stopped.patterns[0].stops.length === 2);
@@ -10613,12 +10626,13 @@ function buildGrid() {
         patterns: [{ id: 'pb', sections: oneSection(legsOf(otherWay.id)) }],
       },
     ];
-    const stop: Station = { id: 'st-here', coord: [-115.2, 36.1] };
+    const stop: Station = { id: 'st-here', coord: [-115.2, 36.1], anchors: [] };
     const here = servicesAtStation(sys.ways, sys.services, stop);
     check('a service running past a stop serves it', here.length === 1 && here[0].id === 'sv-on');
     const nowhere = servicesAtStation(sys.ways, sys.services, {
       id: 'st-far',
       coord: [-115.2, 36.3],
+      anchors: [],
     });
     check('a stop nowhere near any line is served by nothing', nowhere.length === 0);
   }
@@ -10862,6 +10876,84 @@ function buildGrid() {
     parseSystem(JSON.parse(JSON.stringify(store.getState().system)))
       .services.find((sv) => sv.id === tSvc)!
       .patterns[0].sections.some((x) => x.kind === 'turnaround'),
+  );
+}
+
+// --- a platform on more than one way ---
+// A transit centre both halves of a couplet pull into is ONE station riding
+// TWO ways. With a single anchor it bound to whichever was nearest when it was
+// placed, and every line on the other drove past a stop it plainly calls at.
+{
+  fresh();
+  store.getState().setDraftMode('bus');
+  store.getState().setSystem(
+    parseSystem({
+      version: 3,
+      ways: [
+        {
+          id: 'northbound',
+          typeId: 'road',
+          points: [
+            [-115.2, 36.1],
+            [-115.2, 36.14],
+          ],
+          geometry: 'straight',
+          grade: 'atGrade',
+        },
+        {
+          id: 'southbound',
+          typeId: 'road',
+          points: [
+            [-115.199, 36.14],
+            [-115.199, 36.1],
+          ],
+          geometry: 'straight',
+          grade: 'atGrade',
+        },
+      ],
+      services: [],
+      stations: [],
+    }),
+  );
+  const centreId = store.getState().addStation([-115.2, 36.12], { wayId: 'northbound', t: 0.5 })!;
+  // The same platform is reached from the other carriageway too.
+  store.getState().setSystem({
+    ...store.getState().system,
+    stations: store
+      .getState()
+      .system.stations.map((st) =>
+        st.id !== centreId
+          ? st
+          : { ...st, anchors: [...st.anchors, { wayId: 'southbound', t: 0.5 }] },
+      ),
+  });
+  const northSvc = store.getState().addServiceToWay('northbound')!;
+  const southSvc = store.getState().addServiceToWay('southbound')!;
+
+  const callsAt = (svcId: string) => {
+    const sys = store.getState().system;
+    const pt = sys.services.find((sv) => sv.id === svcId)!.patterns[0];
+    const path = patternRunPath(sys.ways, pt, 'outbound');
+    return patternStops(sys.stations, pt, path, pathLengthMeters(path), 'outbound').some(
+      (x) => x.station.id === centreId,
+    );
+  };
+  check('a line on the first way calls at the shared platform', callsAt(northSvc));
+  check('a line on the second way calls at it too', callsAt(southSvc));
+
+  const reloaded = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
+  check(
+    'both anchors survive a save and a reload',
+    reloaded.stations.find((st) => st.id === centreId)!.anchors.length === 2,
+  );
+
+  // Deleting one carriageway must not delete a platform the other still serves.
+  store.getState().deleteWay('southbound');
+  const after = store.getState().system.stations.find((st) => st.id === centreId);
+  check('deleting one of its ways keeps the station', !!after);
+  check(
+    'and drops only the anchor that named the deleted way',
+    !!after && after.anchors.length === 1 && after.anchors[0].wayId === 'northbound',
   );
 }
 

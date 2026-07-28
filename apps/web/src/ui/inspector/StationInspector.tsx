@@ -101,7 +101,7 @@ export function StationInspector({ id }: StationInspectorProps) {
 
       {tab === 'stop' && (
         <div className="insp-section" role="tabpanel">
-          {!station.anchor && (
+          {station.anchors.length === 0 && (
             <div className="panel-hint">Free station — drag it onto a way to attach it.</div>
           )}
           <label className="field-label">Served by</label>

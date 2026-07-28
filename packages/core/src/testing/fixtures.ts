@@ -63,5 +63,5 @@ export function aStation(
   anchor?: { wayId: string; t: number },
   overrides: Partial<Station> = {},
 ): Station {
-  return { id, coord, ...(anchor ? { anchor } : {}), ...overrides };
+  return { id, coord, anchors: anchor ? [anchor] : [], ...overrides };
 }

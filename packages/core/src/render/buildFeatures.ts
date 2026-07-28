@@ -130,6 +130,9 @@ interface WayPatternEntry {
   svc: Service;
   pattern: Pattern;
   wayIdx: number;
+  /** The way this leg leads on to in ride order, if any — what the turn out
+   *  of this junction is, and so which lanes may legally be in. */
+  nextWayId?: string;
   /** RIDE direction for the one direction of service this entry stands for.
    *  One entry per (leg × direction that rides it): a leg both directions
    *  share yields two, with opposite `forward`, which is how a two-way service
@@ -153,11 +156,13 @@ function wayPatternIndex(byWay: Map<string, Service[]>): Map<string, WayPatternE
         // two-way street and wrong for a one-way couplet — it would paint the
         // outward street's return curb with a line no vehicle ever runs on.
         for (const run of PATTERN_RUNS) {
-          for (const { leg, index: wayIdx, forward } of patternRunLegs(pattern, run)) {
+          const ordered = patternRunLegs(pattern, run);
+          ordered.forEach(({ leg, index: wayIdx, forward }, i) => {
             let arr = index.get(leg.wayId);
             if (!arr) index.set(leg.wayId, (arr = []));
-            arr.push({ svc, pattern, wayIdx, forward });
-          }
+            const next = ordered[i + 1]?.leg.wayId;
+            arr.push({ svc, pattern, wayIdx, forward, ...(next ? { nextWayId: next } : {}) });
+          });
         }
       }
     }
@@ -684,8 +689,17 @@ export function buildFeatures(
       // pattern list per way.
       const byLane = new Map<string, Service[]>();
       const resolved = new Set<string>();
-      for (const { svc, pattern, wayIdx, forward } of wayPatternIndex(byWay).get(way.id) ?? []) {
-        const laneId = serviceLaneOnWay(pattern, wayIdx, waysById, svc.modeId, forward);
+      for (const { svc, pattern, wayIdx, forward, nextWayId } of wayPatternIndex(byWay).get(
+        way.id,
+      ) ?? []) {
+        const laneId = serviceLaneOnWay(
+          pattern,
+          wayIdx,
+          waysById,
+          svc.modeId,
+          forward,
+          nextWayId ? { nextWayId, turnRestrictions: system.turnRestrictions } : undefined,
+        );
         if (!laneId || !laneById.has(laneId)) continue;
         resolved.add(svc.id);
         let arr = byLane.get(laneId);
@@ -764,8 +778,12 @@ export function buildFeatures(
         if (reaches(sv, wid, s.coord)) servingServiceSet.add(sv);
       }
     const servingServices = [...servingServiceSet];
-    const anchorServices = s.anchor
-      ? (byWay.get(s.anchor.wayId) ?? []).filter((sv) => reaches(sv, s.anchor!.wayId, s.coord))
+    // Every way it rides, not just one. A platform shared between the two
+    // halves of a couplet belongs to the lines on both.
+    const anchorServices = s.anchors.length
+      ? s.anchors.flatMap((a) =>
+          (byWay.get(a.wayId) ?? []).filter((sv) => reaches(sv, a.wayId, s.coord)),
+        )
       : [];
     const color = anchorServices[0]?.color ?? servingServices[0]?.color ?? NEUTRAL_STATION;
     const interchange = servingServices.length > 1;

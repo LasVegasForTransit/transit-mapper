@@ -6,8 +6,9 @@
 // system/service.ts) and fed to profile.ts's defaultLaneFor.
 
 import { mode } from '../catalog';
+import { getComponent, laneRefKey, type ComponentMap } from '../components';
 import { defaultLaneFor } from '../profile';
-import type { Pattern, Way } from '../system';
+import type { Pattern, TurnRestriction, Way } from '../system';
 import { legPinnedLane, legRunsWithPoints, patternLegs } from './servicePaths';
 
 /** The lane kinds a mode prefers, most-preferred first — a bus wants a
@@ -44,6 +45,12 @@ export function serviceLaneOnWay(
   waysById: Map<string, Way>,
   modeId: string,
   forward?: boolean,
+  /** The way this leg leads on to, and the restrictions that govern getting
+   *  there. Given both, a lane that cannot make that turn is not chosen —
+   *  routing already refuses the turn itself, and putting the vehicle in a
+   *  lane that could not make it would draw a line doing something the router
+   *  had just ruled out. */
+  turn?: { nextWayId: string; turnRestrictions: ComponentMap<TurnRestriction> },
 ): string | null {
   const leg = patternLegs(pattern)[wayIndex];
   if (!leg) return null;
@@ -51,9 +58,17 @@ export function serviceLaneOnWay(
   if (!way) return null;
   const pinned = legPinnedLane(leg);
   if (pinned) return pinned;
+  const permits = turn
+    ? (laneId: string) => {
+        const restriction = getComponent(turn.turnRestrictions, laneRefKey(way.id, laneId));
+        // No restriction on a lane means it is unrestricted, not blocked.
+        return !restriction || restriction.allowedTargets.includes(turn.nextWayId);
+      }
+    : undefined;
   return defaultLaneFor(
     way.profile,
     (forward ?? legRunsWithPoints(leg)) ? 'forward' : 'backward',
     preferredLaneKinds(modeId),
+    permits,
   );
 }
