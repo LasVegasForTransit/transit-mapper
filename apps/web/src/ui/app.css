@@ -482,7 +482,8 @@ input {
   white-space: nowrap;
   animation: rise-in 160ms ease;
 }
-.import-progress-pill.done {
+.import-progress-pill.done,
+.import-progress-pill.canceled {
   color: var(--text-muted);
 }
 .import-progress-pill.error {
@@ -498,6 +499,19 @@ input {
   border: 2px solid var(--border-strong);
   border-top-color: var(--ink);
   animation: spin 700ms linear infinite;
+}
+.import-progress-cancel {
+  border: 0;
+  border-left: 1px solid var(--border);
+  padding: 2px 0 2px 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.import-progress-cancel:hover {
+  text-decoration: underline;
 }
 @keyframes spin {
   to {
@@ -2292,6 +2306,14 @@ input {
 }
 .modal:focus-visible {
   outline: none;
+}
+.lazy-dialog-loading {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: var(--fs-body-md);
 }
 .modal-head {
   display: flex;

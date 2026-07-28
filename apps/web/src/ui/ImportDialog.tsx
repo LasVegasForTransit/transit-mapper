@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEditor } from '../editor/EditorProvider';
 import { getMap } from '../map/mapRef';
 import {
@@ -28,6 +28,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
   const [count, setCount] = useState(0);
   const [skipped, setSkipped] = useState(0);
   const [error, setError] = useState('');
+  const request = useRef<AbortController | null>(null);
 
   const toggle = (c: ImportCategory) =>
     setCategories((prev) => {
@@ -54,12 +55,24 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
       map.off('zoomend', onZoom);
     };
   }, []);
+  useEffect(
+    () => () => {
+      request.current?.abort(new DOMException('Import dialog unmounted.', 'AbortError'));
+    },
+    [],
+  );
 
   const zoomIn = () => getMap()?.zoomTo(MIN_IMPORT_ZOOM, { duration: 300 });
+  const close = () => {
+    request.current?.abort(new DOMException('Import dialog closed.', 'AbortError'));
+    onClose();
+  };
 
   const run = async () => {
     const map = getMap();
     if (!map || categories.size === 0) return;
+    const controller = new AbortController();
+    request.current = controller;
     setStatus('loading');
     setError('');
     try {
@@ -68,14 +81,18 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
         { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() },
         [...categories],
         drivingSide,
+        { signal: controller.signal },
       );
       const { added, skipped: alreadyHere } = importWays(network);
       setCount(added);
       setSkipped(alreadyHere);
       setStatus('done');
     } catch (e) {
+      if (controller.signal.aborted) return;
       setError(e instanceof Error ? e.message : 'Import failed.');
       setStatus('error');
+    } finally {
+      if (request.current === controller) request.current = null;
     }
   };
 
@@ -83,7 +100,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
     <Modal
       title="Import real streets"
       description="Pull OpenStreetMap infrastructure within the current map view into ways you can build services over."
-      onClose={onClose}
+      onClose={close}
       footer={
         <button
           className="primary-btn"
