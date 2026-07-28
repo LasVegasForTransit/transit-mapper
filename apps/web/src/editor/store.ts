@@ -31,12 +31,14 @@ import {
   offsetPolyline,
   pathLengthMeters,
   patternPath,
+  patternSegments,
   patternWayIds,
   pointAtT,
   pointInPolygon,
   resolveWayPath,
   snap,
   squareFootprint,
+  wayById,
   type ShapeRun,
 } from '@transitmapper/core/model/geo';
 import {
@@ -46,7 +48,14 @@ import {
   type RouteSpan,
 } from '@transitmapper/core/model/routeGraph';
 import { wayCrossings } from '@transitmapper/core/model/validate';
-import { mergeLegs, splitLegs } from '@transitmapper/core/model/patternEdits';
+import {
+  mergeLegs,
+  removeStretchFromLegs,
+  splitLegs,
+  splitLegsAt,
+  splitLegsIntoRuns,
+  truncateLegs,
+} from '@transitmapper/core/model/patternEdits';
 import { shortId } from '@transitmapper/core/model/ids';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import {
@@ -427,6 +436,31 @@ export interface EditorState {
    *  can't become branches of the same physical corridor. */
   mergeServiceInto: (sourceId: string, targetId: string) => void;
 
+  // editing a line in pieces (see model/patternEdits.ts)
+  /** Cut a line back so it terminates at position `t` on one of the ways it
+   *  runs over, dropping the stretch beyond that in ride order. The
+   *  infrastructure is untouched — this shortens the line, not the street.
+   *  `side` is which end of the line moves. */
+  trimPatternTo: (
+    serviceId: string,
+    patternId: string,
+    wayId: string,
+    t: number,
+    side: 'start' | 'end',
+  ) => void;
+  /** Cut a line in two at position `t` on one of its ways. The far half
+   *  becomes a new service with its own name and colour, riding the same
+   *  infrastructure; both halves keep their schedule. Returns the new
+   *  service's id, or null when the cut lands on a terminus and there is
+   *  nothing to split. */
+  splitServiceAt: (serviceId: string, patternId: string, wayId: string, t: number) => string | null;
+  /** Take a stretch of a way out of existence: the way is cut around it and
+   *  the middle removed, and every line riding it is trimmed to match. A line
+   *  the stretch cut through survives as two patterns on the same service
+   *  rather than losing whichever half was shorter. Returns how many patterns
+   *  were affected. */
+  deleteWayStretch: (wayId: string, fromT: number, toT: number) => number;
+
   // stations (ride on ways)
   addStation: (coord: LngLat, anchor?: StationAnchor) => string;
   /** The Station tool's DRAW gesture: a dragged-out footprint becomes a real
@@ -648,20 +682,39 @@ function pruneConnectorsForWay(nodes: Node[], wayId: string): Node[] {
   });
 }
 
-// Remove a way, detach it from every service's patterns (dropping now-empty
-// patterns, then now-patternless services), and delete the stations that rode it.
+// Remove a way, detach it from every service's patterns, and delete the
+// stations that rode it.
+//
+// A pattern is TRIMMED rather than merely stripped of the way: dropping a leg
+// out of the middle of a route leaves the two halves unjoined, and a pattern
+// that describes a path with a hole in it is one validateSystem reports. The
+// longer surviving run is kept, so deleting one block of a long line shortens
+// the line instead of destroying it — and deleting a line's only way still
+// removes the line, which is what the way tool's own delete has always meant.
+// Cutting a line deliberately and keeping BOTH halves is deleteWayStretch's
+// job, not this one.
 function removeWay(system: TransitSystem, wayId: string): TransitSystem {
+  const ways = system.ways.filter((w) => w.id !== wayId);
   const services = system.services
     .map((s) => ({
       ...s,
       patterns: s.patterns
-        .map((p) => ({ ...p, legs: p.legs.filter((l) => l.wayId !== wayId) }))
+        .map((p) => {
+          const legs = p.legs.filter((l) => l.wayId !== wayId);
+          if (legs.length === p.legs.length) return p;
+          const runs = splitLegsIntoRuns(legs, (a, b) => legsMeet(ways, a, b));
+          const longest = runs.reduce(
+            (best, run) => (run.length > best.length ? run : best),
+            [] as PatternLeg[],
+          );
+          return { ...p, legs: longest };
+        })
         .filter((p) => p.legs.length > 0),
     }))
     .filter((s) => s.patterns.length > 0);
   return {
     ...system,
-    ways: system.ways.filter((w) => w.id !== wayId),
+    ways,
     services,
     stations: system.stations.filter((s) => s.anchor?.wayId !== wayId),
     nodes: pruneConnectorsForWay(removeNodeRefsForWay(system.nodes, wayId), wayId),
@@ -1104,6 +1157,66 @@ function formCrossingJunctions(system: TransitSystem, wayId: string): TransitSys
     if (!formed) continue;
   }
   return next;
+}
+
+// ---- editing a line in pieces ----------------------------------------------
+
+/** A stretch shorter than this is a mis-click, not a request. 0.1% of a way. */
+const MIN_STRETCH_T = 1e-3;
+
+/** A colour no service on this system is already using, so two lines are never
+ *  indistinguishable. Falls back to the mode's catalog default once the
+ *  palette is exhausted — a duplicate colour beats no colour. */
+function unusedPaletteColor(system: TransitSystem, modeId: string): string {
+  const used = new Set(system.services.map((s) => s.color.toLowerCase()));
+  return system.palette.find((c) => !used.has(c.toLowerCase())) ?? modeRender(modeId).color;
+}
+
+/** Whether two consecutive legs actually join on the ground. Resolving them as
+ *  a throwaway pattern reuses the one trimming-and-orienting implementation
+ *  rather than repeating it; this runs on an explicit delete, not per frame. */
+function legsMeet(ways: Way[], a: PatternLeg, b: PatternLeg): boolean {
+  const segs = patternSegments(wayById(ways), { id: 'probe', legs: [a, b] });
+  if (segs.length < 2) return false;
+  const end = segs[0].path[segs[0].path.length - 1];
+  const start = segs[1].path[0];
+  return haversineMeters(end, start) <= JOIN_REUSE_TOLERANCE_M;
+}
+
+function insertPointIntoWay(
+  system: TransitSystem,
+  wayId: string,
+  index: number,
+  coord: LngLat,
+): TransitSystem {
+  const next = updateWayPoints(system, wayId, (pts) => [
+    ...pts.slice(0, index),
+    coord,
+    ...pts.slice(index),
+  ]);
+  return { ...next, nodes: shiftNodeRefsForInsert(next.nodes, wayId, index) };
+}
+
+/** A real control-point index at normalized position `t` along a way, splicing
+ *  one in when no existing point is already there — what splitWay needs, since
+ *  it cuts at a control point rather than at an arbitrary position. Returns
+ *  null when `t` lands on a way end, where there is nothing to cut. */
+function insertIndexAtT(
+  system: TransitSystem,
+  wayId: string,
+  t: number,
+): { system: TransitSystem; index: number } | null {
+  const way = system.ways.find((w) => w.id === wayId);
+  if (!way) return null;
+  const path = resolveWayPath(way);
+  if (path.length < 2) return null;
+  const coord = pointAtT(path, t);
+  const existing = way.points.findIndex((p) => haversineMeters(p, coord) < JOIN_REUSE_TOLERANCE_M);
+  if (existing > 0 && existing < way.points.length - 1) return { system, index: existing };
+  if (existing === 0 || existing === way.points.length - 1) return null;
+  const ins = nearestInsertionPoint(way.points, coord);
+  if (!ins || ins.index <= 0 || ins.index > way.points.length - 1) return null;
+  return { system: insertPointIntoWay(system, wayId, ins.index, coord), index: ins.index };
 }
 
 // ---- routing over existing infrastructure ----------------------------------
@@ -2420,10 +2533,7 @@ export function createEditorStore() {
       const modeId = compatible.some((m) => m.id === st.draftModeId)
         ? st.draftModeId
         : compatible[0].id;
-      const usedColors = new Set(st.system.services.map((s) => s.color.toLowerCase()));
-      // Offer a color that isn't already on this system, falling back to the mode default.
-      const color =
-        st.system.palette.find((c) => !usedColors.has(c.toLowerCase())) ?? modeRender(modeId).color;
+      const color = unusedPaletteColor(st.system, modeId);
       // A freshly-drawn line gets a working default schedule immediately —
       // "drag a line, see a system running" shouldn't require a trip to the
       // Inspector first. DEFAULT_FREQUENCY_MINUTES/DEFAULT_SPAN mirror the
@@ -2527,6 +2637,134 @@ export function createEditorStore() {
           ),
         }),
       })),
+
+    trimPatternTo: (serviceId, patternId, wayId, t, side) =>
+      set((s) => {
+        const service = s.system.services.find((sv) => sv.id === serviceId);
+        const pattern = service?.patterns.find((p) => p.id === patternId);
+        if (!pattern) return {};
+        // Trim at the leg NEAREST the end being moved, so dragging a terminus
+        // back over a way the line visits twice shortens the right visit.
+        const matching = pattern.legs.flatMap((l, i) => (l.wayId === wayId ? [i] : []));
+        const legIndex = (side === 'start' ? matching[0] : matching[matching.length - 1]) ?? -1;
+        if (legIndex < 0) return {};
+        const legs = truncateLegs(pattern.legs, legIndex, t, side);
+        // Trimming a line away entirely is a deletion the user didn't ask for.
+        if (legs.length === 0) return {};
+        return {
+          system: touch({
+            ...s.system,
+            services: s.system.services.map((sv) =>
+              sv.id !== serviceId
+                ? sv
+                : {
+                    ...sv,
+                    patterns: sv.patterns.map((p) => (p.id === patternId ? { ...p, legs } : p)),
+                  },
+            ),
+          }),
+        };
+      }),
+
+    splitServiceAt: (serviceId, patternId, wayId, t) => {
+      const st = get();
+      const service = st.system.services.find((sv) => sv.id === serviceId);
+      const pattern = service?.patterns.find((p) => p.id === patternId);
+      if (!service || !pattern) return null;
+      const legIndex = pattern.legs.findIndex((l) => l.wayId === wayId);
+      if (legIndex < 0) return null;
+      const [near, far] = splitLegsAt(pattern.legs, legIndex, t);
+      // A cut on a terminus leaves nothing on one side — not a split.
+      if (near.length === 0 || far.length === 0) return null;
+      const newId = shortId();
+      // The far half keeps everything about the line except its identity: same
+      // mode, same schedule, same vehicle. A new colour, because two lines
+      // sharing one are two lines nobody can tell apart.
+      const spawned: Service = {
+        ...service,
+        id: newId,
+        name: `${service.name} (south)`,
+        color: unusedPaletteColor(st.system, service.modeId),
+        patterns: [{ ...pattern, id: shortId(), legs: far }],
+      };
+      set((s) => ({
+        system: touch({
+          ...s.system,
+          services: [
+            ...s.system.services.map((sv) =>
+              sv.id !== serviceId
+                ? sv
+                : {
+                    ...sv,
+                    patterns: sv.patterns.map((p) =>
+                      p.id === patternId ? { ...p, legs: near } : p,
+                    ),
+                  },
+            ),
+            spawned,
+          ],
+        }),
+        selection: { kind: 'service', id: newId },
+      }));
+      return newId;
+    },
+
+    deleteWayStretch: (wayId, fromT, toT) => {
+      const st = get();
+      const way = st.system.ways.find((w) => w.id === wayId);
+      if (!way) return 0;
+      const path = resolveWayPath(way);
+      if (path.length < 2) return 0;
+      const lo = Math.max(0, Math.min(1, Math.min(fromT, toT)));
+      const hi = Math.max(0, Math.min(1, Math.max(fromT, toT)));
+      if (hi - lo < MIN_STRETCH_T) return 0;
+
+      // Every riding pattern is trimmed FIRST, against the way as it still is
+      // — the extents are measured in its current parameterization, and the
+      // splits below change that.
+      let affected = 0;
+      let sys: TransitSystem = {
+        ...st.system,
+        services: st.system.services.map((sv) => ({
+          ...sv,
+          patterns: sv.patterns.flatMap((p) => {
+            const legs = removeStretchFromLegs(p.legs, wayId, lo, hi);
+            if (legs.length === p.legs.length && legs.every((l, i) => l === p.legs[i])) return [p];
+            affected++;
+            if (legs.length === 0) return [];
+            // Taking a stretch out from under a line can leave it in two
+            // disconnected halves. Both survive, as two patterns of the one
+            // service — dropping the shorter half would be throwing away half
+            // a line without asking.
+            // Against the ways as they still are: the splits below have not
+            // happened yet, and these extents are in the current geometry.
+            const runs = splitLegsIntoRuns(legs, (a, b) => legsMeet(st.system.ways, a, b));
+            return runs.map((run, i) => ({
+              ...p,
+              id: i === 0 ? p.id : shortId(),
+              legs: run,
+            }));
+          }),
+        })),
+      };
+      sys = { ...sys, services: sys.services.filter((sv) => sv.patterns.length > 0) };
+
+      // Then cut the way itself: split at both ends of the stretch and remove
+      // the middle. The HIGH end first — splitting there leaves the low end's
+      // position untouched on the piece that keeps the original id, whereas
+      // cutting low-first would move the high end onto a different way.
+      const atHi = insertIndexAtT(sys, wayId, hi);
+      if (atHi) sys = splitWay(atHi.system, wayId, atHi.index);
+      const atLo = insertIndexAtT(sys, wayId, lo);
+      // No cut at the low end means the stretch reaches the way's own start,
+      // so the piece to remove is simply what is left holding the id.
+      const middleId = shortId();
+      if (atLo) sys = splitWay(atLo.system, wayId, atLo.index, middleId);
+      sys = removeWay(sys, atLo ? middleId : wayId);
+
+      set({ system: touch(sys) });
+      return affected;
+    },
 
     mergeServiceInto: (sourceId, targetId) =>
       set((s) => {

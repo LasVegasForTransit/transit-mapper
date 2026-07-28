@@ -1,4 +1,5 @@
-// How a pattern's legs survive edits to the infrastructure underneath them.
+// How a pattern's legs change — both when the infrastructure underneath them
+// moves, and when someone edits the line itself.
 //
 // A leg names a stretch of a way as a fraction of that way's length, so any
 // edit that changes what a way IS — splitting it, merging it with its
@@ -7,10 +8,15 @@
 // edit has to rescale the stretch too, or a service that covered the middle
 // of a block silently jumps to covering the start of it.
 //
+// The same arithmetic is what makes a line editable in pieces: trimming a line
+// back, cutting one in two, and taking a stretch of road out from under one
+// are all the same operation on a leg's range.
+//
 // Pure and geometry-free: the store supplies the one measurement each
 // operation needs (where the split fell, where an old position landed on the
-// merged way) and this decides what the legs become. That keeps the arithmetic
-// testable without building a system to test it against.
+// merged way, where the user clicked) and this decides what the legs become.
+// That keeps the arithmetic testable without building a system to test it
+// against.
 
 import { legRange } from './geo/servicePaths';
 import type { PatternLeg } from './system';
@@ -118,4 +124,111 @@ export function mergeLegs(
     out.push(leg);
   }
   return out;
+}
+
+/** A leg covering less ground than this is not worth keeping — the user
+ *  dragged a terminus onto a junction, or a deleted stretch consumed almost
+ *  all of it. Dropping it beats storing a leg nothing can draw. */
+const MIN_LEG_T = 1e-6;
+
+function legIsDegenerate(leg: PatternLeg): boolean {
+  const [lo, hi] = legRange(leg);
+  return hi - lo < MIN_LEG_T;
+}
+
+/**
+ * Cut a pattern back so it begins — or ends — at position `t` on the leg at
+ * `legIndex`, dropping everything beyond that point in RIDE order.
+ *
+ * `t` is measured along the way, so which end of the leg's range survives
+ * depends on which direction the pattern travels it. Cutting the start of a
+ * pattern that runs a way backward keeps the low end of that way, not the
+ * high one.
+ *
+ * This is what "drag a line's terminus back past two stations" and "terminate
+ * here" both come down to.
+ */
+export function truncateLegs(
+  legs: PatternLeg[],
+  legIndex: number,
+  t: number,
+  side: 'start' | 'end',
+): PatternLeg[] {
+  const leg = legs[legIndex];
+  if (!leg) return legs;
+  const [lo, hi] = legRange(leg);
+  const at = Math.max(lo, Math.min(hi, t));
+  const keepsLowEnd = side === 'end' ? leg.forward : !leg.forward;
+  const trimmed = keepsLowEnd ? withRange(leg, lo, at) : withRange(leg, at, hi);
+  const kept = side === 'start' ? legs.slice(legIndex + 1) : legs.slice(0, legIndex);
+  const withTrimmed = side === 'start' ? [trimmed, ...kept] : [...kept, trimmed];
+  return withTrimmed.filter((l) => !legIsDegenerate(l));
+}
+
+/**
+ * Cut a pattern in two at position `t` on the leg at `legIndex`: everything up
+ * to that point, and everything from it on. Either half comes back empty when
+ * the cut lands on a terminus, which the caller should treat as "nothing to
+ * split" rather than as a service with no route.
+ */
+export function splitLegsAt(
+  legs: PatternLeg[],
+  legIndex: number,
+  t: number,
+): [PatternLeg[], PatternLeg[]] {
+  return [truncateLegs(legs, legIndex, t, 'end'), truncateLegs(legs, legIndex, t, 'start')];
+}
+
+/**
+ * Remove the stretch `[fromT, toT]` of `wayId` from a pattern's legs — what a
+ * line does when the road under part of it is taken away.
+ *
+ * A leg the stretch cuts through yields the pieces on either side, so the
+ * result can describe a route with a hole in it. That is deliberate: the
+ * alternative is silently discarding whichever half is shorter, and half a
+ * line is not something to throw away without saying so. The caller splits the
+ * result into separate patterns — see how the store uses it — so a system is
+ * never left holding a pattern validateSystem would flag.
+ */
+export function removeStretchFromLegs(
+  legs: PatternLeg[],
+  wayId: string,
+  fromT: number,
+  toT: number,
+): PatternLeg[] {
+  const cutLo = Math.max(0, Math.min(1, Math.min(fromT, toT)));
+  const cutHi = Math.max(0, Math.min(1, Math.max(fromT, toT)));
+  return legs
+    .flatMap((leg): PatternLeg[] => {
+      if (leg.wayId !== wayId) return [leg];
+      const [lo, hi] = legRange(leg);
+      if (cutHi <= lo || cutLo >= hi) return [leg]; // the cut misses this leg
+      const before = lo < cutLo ? withRange(leg, lo, cutLo) : null;
+      const after = cutHi < hi ? withRange(leg, cutHi, hi) : null;
+      const pieces = [before, after].filter((l): l is PatternLeg => l !== null);
+      // Ride order: travelling the way backward reaches the high piece first.
+      return leg.forward ? pieces : pieces.reverse();
+    })
+    .filter((l) => !legIsDegenerate(l));
+}
+
+/**
+ * Break a leg list into the runs that are actually joined, given a test for
+ * whether two consecutive legs meet on the ground.
+ *
+ * A pattern must describe one continuous path, so an edit that leaves a hole
+ * has to become two patterns rather than one broken one. The store supplies
+ * the continuity test because answering it needs geometry.
+ */
+export function splitLegsIntoRuns(
+  legs: PatternLeg[],
+  joined: (a: PatternLeg, b: PatternLeg) => boolean,
+): PatternLeg[][] {
+  const runs: PatternLeg[][] = [];
+  for (const leg of legs) {
+    const current = runs[runs.length - 1];
+    if (current && joined(current[current.length - 1], leg)) current.push(leg);
+    else runs.push([leg]);
+  }
+  return runs;
 }
