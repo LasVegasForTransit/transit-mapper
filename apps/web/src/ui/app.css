@@ -2861,6 +2861,20 @@ button.chip-removable-label:hover {
    shows everything and hides the ⋯ overflow; mobile's vertical column
    (.actions-collapsed) keeps only the primary actions + ⋯. The mobile
    top-left card hides the brand's non-title pieces the same way. */
+/* pointer-events opts in per BUTTON, not for the card's own box — .actions-
+   full wraps onto multiple rows once it runs out of width (see Workbench's
+   top row), and a flex-wrap row's own padding/gaps don't line up with any
+   button once that happens, so a blanket pointer-events:auto on the card
+   turned that dead space into a silent click/drag trap over the map
+   underneath — confirmed live at 768px, where the card is a tall narrow
+   column with real gaps between its rows. The card itself now falls through
+   like the rest of the empty overlay; only its actual children opt back in. */
+.actions-full {
+  pointer-events: none;
+}
+.actions-full > * {
+  pointer-events: auto;
+}
 .actions-full .act-overflow {
   display: none;
 }
