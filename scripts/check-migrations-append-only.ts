@@ -84,8 +84,8 @@ function main(): void {
     for (const o of offences) console.error(`  ${describe(o.status)}: ${o.path}`);
     console.error(
       '\n  Wrangler records applied migrations by name and never re-runs one it' +
-        '\n  has seen, so an edit applies to nothing that already exists and in' +
-        '\n  full to anything created later. The environments diverge silently.' +
+        '\n  has seen. An edit therefore applies to no existing environment and' +
+        '\n  in full to every new one.' +
         '\n\n  fix:  restore the file and add a new migration with the change\n',
     );
     process.exit(1);

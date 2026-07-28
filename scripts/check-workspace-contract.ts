@@ -94,12 +94,10 @@ interface Failure {
  *  fix for *that* failure; a generic footer sends people down the wrong path. */
 const REMEDIATION: Record<Failure['kind'], string> = {
   task:
-    'A package without one of these is skipped by Turborepo without an error,\n' +
-    'so CI passes while the package goes unchecked.\n' +
+    '  Turborepo skips a package that does not define the task, without an error.\n' +
     '  fix:  add the missing script to that package.json',
   catalog:
-    'Versions live in one place so two packages cannot drift apart unnoticed.\n' +
-    '  fix:  set the range to "catalog:" and add it under `catalog:` in\n' +
+    '  fix:  set the range to "catalog:", add it under `catalog:` in\n' +
     '        pnpm-workspace.yaml, then run `pnpm install`',
 };
 
