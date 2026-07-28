@@ -11925,11 +11925,15 @@ function buildGrid() {
     }
   }
 
+  // Real timers, not a fake clock — so every margin below is generous (a
+  // 6x+ ratio for "did it fire", a 200ms+ cushion for "did it not fire")
+  // rather than tight enough for CI scheduling jitter to flip a result.
+
   {
     const visibility = new FakeVisibility();
     let fired = false;
-    armVisibilityAwareTimeout(30, () => (fired = true), visibility);
-    await sleep(60);
+    armVisibilityAwareTimeout(50, () => (fired = true), visibility);
+    await sleep(300);
     check('a visible tab still times out after the full window', fired);
   }
 
@@ -11937,8 +11941,8 @@ function buildGrid() {
     const visibility = new FakeVisibility();
     visibility.hidden = true;
     let fired = false;
-    armVisibilityAwareTimeout(30, () => (fired = true), visibility);
-    await sleep(60);
+    armVisibilityAwareTimeout(50, () => (fired = true), visibility);
+    await sleep(300);
     check('a tab that starts hidden never times out on its own', !fired);
   }
 
@@ -11947,33 +11951,33 @@ function buildGrid() {
     let fired = false;
     let resumes = 0;
     armVisibilityAwareTimeout(
-      40,
+      250,
       () => (fired = true),
       visibility,
       () => resumes++,
     );
-    await sleep(15);
-    visibility.setHidden(true); // pause with the window ~2/3 unelapsed
-    await sleep(80); // well past the original 40ms budget
+    await sleep(50);
+    visibility.setHidden(true); // pause with the window mostly unelapsed
+    await sleep(300); // well past the original 250ms budget
     check('going hidden pauses the countdown instead of firing it', !fired);
-    visibility.setHidden(false); // resume: a fresh 40ms window
+    visibility.setHidden(false); // resume: a fresh 250ms window
     check('becoming visible again calls onResume', resumes === 1);
-    await sleep(20);
+    await sleep(50);
     check('the fresh window has not fired yet', !fired);
-    await sleep(30);
+    await sleep(300);
     check('the fresh window fires once it fully elapses', fired);
   }
 
   {
     const visibility = new FakeVisibility();
     let fired = false;
-    const timeout = armVisibilityAwareTimeout(20, () => (fired = true), visibility);
+    const timeout = armVisibilityAwareTimeout(50, () => (fired = true), visibility);
     timeout.cancel();
-    await sleep(40);
+    await sleep(300);
     check('cancel stops the timeout for good', !fired);
     visibility.setHidden(true);
     visibility.setHidden(false);
-    await sleep(40);
+    await sleep(300);
     check('cancel also detaches the visibility listener', !fired);
   }
 }
