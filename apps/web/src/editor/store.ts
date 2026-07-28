@@ -25,7 +25,10 @@ import { modeRender } from '@transitmapper/core/style/catalogStyle';
 import { liveCamera } from '../camera/liveCamera';
 import {
   candidateWayIdsAlong,
+  CONFLATION_TOLERANCE_M,
+  densifyForMatching,
   detectShapeRuns,
+  dropCollinearPoints,
   haversineMeters,
   nearestInsertionPoint,
   nearestOnPath,
@@ -40,6 +43,7 @@ import {
   snap,
   squareFootprint,
   wayById,
+  wayLengthMeters,
   type ShapeRun,
 } from '@transitmapper/core/model/geo';
 import {
@@ -469,6 +473,13 @@ export interface EditorState {
    *  rather than losing whichever half was shorter. Returns how many patterns
    *  were affected. */
   deleteWayStretch: (wayId: string, fromT: number, toT: number) => number;
+  /** Fuse the given ways into shared infrastructure wherever they run along
+   *  each other — for a map drawn before lines shared by default, where the
+   *  same corridor exists two or three times over. The longest way is kept and
+   *  the others' lines are rebound onto it; a way nothing rides afterwards is
+   *  removed, unless it was imported or named. Ways that don't actually run
+   *  along each other are left alone. Returns how many were absorbed. */
+  mergeWaysIntoCorridor: (wayIds: string[]) => number;
 
   // stations (ride on ways)
   addStation: (coord: LngLat, anchor?: StationAnchor) => string;
@@ -1261,36 +1272,52 @@ function conflatePatternOntoExisting(
   system: TransitSystem,
   serviceId: string,
   patternId: string,
+  /** Restricts what the pattern may be absorbed into. Undefined means anything
+   *  compatible, which is what drawing and importing want. An explicit
+   *  "fuse these two ways" wants only the ways the user picked, so that
+   *  reaching for it near a third corridor doesn't quietly rope that in. */
+  ontoWayIds?: Set<string>,
 ): TransitSystem | null {
   let sys = system;
   const service = sys.services.find((sv) => sv.id === serviceId);
   const pattern = service?.patterns.find((p) => p.id === patternId);
   if (!service || !pattern) return null;
   const oldWayIds = [...new Set(patternWayIds(pattern))];
-  const path = patternPath(sys.ways, pattern);
-  if (path.length < 2) return null;
+  const rawPath = patternPath(sys.ways, pattern);
+  if (rawPath.length < 2) return null;
   const wayTypeId = sys.ways.find((w) => w.id === oldWayIds[0])?.typeId;
   if (!wayTypeId) return null;
 
   const modeSpec = mode(service.modeId);
+  const toleranceM = modeSpec.corridorToleranceM ?? CONFLATION_TOLERANCE_M;
+  // Hand-drawn geometry can be two points a kilometre apart, and the matcher
+  // judges a segment only as a whole — so without this, a line that runs along
+  // a street and then turns off matches nothing at all. Densifying costs
+  // nothing on an imported shape, whose segments are already short.
+  const path = densifyForMatching(rawPath, toleranceM);
   const allowed = new Set(modeSpec.wayTypeIds);
   const exclude = new Set(oldWayIds);
-  const candidates = sys.ways.filter((w) => allowed.has(w.typeId) && !exclude.has(w.id));
+  const candidates = sys.ways.filter(
+    (w) => allowed.has(w.typeId) && !exclude.has(w.id) && (!ontoWayIds || ontoWayIds.has(w.id)),
+  );
   // How close counts as "along" is a fact about the mode, not a constant: a
   // train is on the track or it isn't, while a bus is somewhere in a
   // carriageway that is itself road-width. See Mode.corridorToleranceM.
-  const runs = detectShapeRuns(path, candidates, { toleranceM: modeSpec.corridorToleranceM });
+  const runs = detectShapeRuns(path, candidates, { toleranceM });
   // Nothing matched anywhere — the line is on new ground and stays there.
   if (runs.length === 1 && 'fresh' in runs[0]) return null;
 
   const newLegs: PatternLeg[] = [];
+  const minted = new Set<string>();
   for (const run of runs) {
     const mat = materializeShapeRun(sys, run, path, wayTypeId);
     if (!mat) return null;
+    if ('fresh' in run) for (const leg of mat.legs) minted.add(leg.wayId);
     sys = mat.system;
     newLegs.push(...mat.legs);
   }
   if (newLegs.length === 0) return null;
+
   const newWayIds = new Set(newLegs.map((l) => l.wayId));
 
   sys = {
@@ -1305,6 +1332,14 @@ function conflatePatternOntoExisting(
     ),
   };
 
+  // Where the line leaves the corridor and returns to its own alignment, the
+  // two legs meet at points a few metres apart — the corridor's centreline is
+  // not where the line was drawn. That is a route with a hole in it, which
+  // validateSystem reports and a rider could not travel. Close it by moving
+  // the FRESHLY MINTED end onto the shared one; existing infrastructure is
+  // never dragged to fit a line that joined it.
+  sys = stitchFreshLegEnds(sys, serviceId, patternId, minted);
+
   for (const oldId of oldWayIds) {
     if (newWayIds.has(oldId)) continue;
     const way = sys.ways.find((w) => w.id === oldId);
@@ -1314,6 +1349,56 @@ function conflatePatternOntoExisting(
       sv.patterns.some((p) => p.legs.some((l) => l.wayId === oldId)),
     );
     if (!stillRidden) sys = removeWay(sys, oldId);
+  }
+  return sys;
+}
+
+/**
+ * Pull newly minted geometry onto the corridor it hands over to.
+ *
+ * Conflation leaves a seam wherever a line steps between its own alignment and
+ * a shared one, because those alignments are a few metres apart — that is what
+ * made them different ways in the first place. Only ways minted by this same
+ * pass are moved: a street somebody else drew does not get bent to meet a line
+ * that just joined it.
+ */
+function stitchFreshLegEnds(
+  system: TransitSystem,
+  serviceId: string,
+  patternId: string,
+  minted: Set<string>,
+): TransitSystem {
+  if (minted.size === 0) return system;
+  let sys = system;
+  for (let guard = 0; guard < minted.size + 1; guard++) {
+    const service = sys.services.find((sv) => sv.id === serviceId);
+    const pattern = service?.patterns.find((p) => p.id === patternId);
+    if (!pattern) return sys;
+    const segments = patternSegments(wayById(sys.ways), pattern);
+    let moved = false;
+    for (let i = 1; i < segments.length && !moved; i++) {
+      const prev = segments[i - 1];
+      const next = segments[i];
+      const prevEnd = prev.path[prev.path.length - 1];
+      const nextStart = next.path[0];
+      if (haversineMeters(prevEnd, nextStart) <= JOIN_REUSE_TOLERANCE_M) continue;
+      // Move whichever side this pass created; prefer the later one, so a run
+      // of fresh legs walks forward onto the corridor rather than backward.
+      const target = minted.has(next.leg.wayId)
+        ? { wayId: next.leg.wayId, forward: next.forward, toStart: true, coord: prevEnd }
+        : minted.has(prev.leg.wayId)
+          ? { wayId: prev.leg.wayId, forward: prev.forward, toStart: false, coord: nextStart }
+          : null;
+      if (!target) continue;
+      sys = updateWayPoints(sys, target.wayId, (pts) => {
+        const atFirst = target.toStart === target.forward;
+        const next = [...pts];
+        next[atFirst ? 0 : next.length - 1] = target.coord;
+        return next;
+      });
+      moved = true;
+    }
+    if (!moved) return sys;
   }
   return sys;
 }
@@ -1403,7 +1488,10 @@ function materializeShapeRun(
   const endCoord = path[run.toIdx];
   if (!startCoord || !endCoord) return null;
   if ('fresh' in run) {
-    const points = path.slice(run.fromIdx, run.toIdx + 1);
+    // Straight back down to the corners actually drawn: the path handed in may
+    // have been subdivided for matching, and that is no reason for a two-click
+    // line to come back with fifty drag handles.
+    const points = dropCollinearPoints(path.slice(run.fromIdx, run.toIdx + 1));
     if (points.length < 2) return null;
     const wayId = shortId();
     const way: Way = {
@@ -2586,12 +2674,28 @@ export function createEditorStore() {
       }
       targets.sort((a, b) => b.length - a.length);
 
+      // Only ever fuse onto a corridor already established this pass. Ordering
+      // targets longest-first is not on its own enough to stop a trunk being
+      // rebound onto a shuttle that happens to lie along part of it — the
+      // matcher is happy to report that the trunk runs along the shuttle,
+      // because it does. What makes the trunk canonical is that when its turn
+      // comes there is nothing yet to join.
+      const established = new Set<string>();
       let reconciled = 0;
       for (const target of targets) {
-        const next = conflatePatternOntoExisting(sys, target.serviceId, target.patternId);
-        if (!next) continue;
-        sys = next;
-        reconciled++;
+        const next = conflatePatternOntoExisting(
+          sys,
+          target.serviceId,
+          target.patternId,
+          established,
+        );
+        if (next) {
+          sys = next;
+          reconciled++;
+        }
+        const service = sys.services.find((sv) => sv.id === target.serviceId);
+        const pattern = service?.patterns.find((p) => p.id === target.patternId);
+        for (const leg of pattern?.legs ?? []) established.add(leg.wayId);
       }
 
       if (reconciled > 0) set({ system: touch(sys) });
@@ -2838,6 +2942,48 @@ export function createEditorStore() {
 
       set({ system: touch(sys) });
       return affected;
+    },
+
+    mergeWaysIntoCorridor: (wayIds) => {
+      const st = get();
+      let sys = st.system;
+      // Longest first, for the same reason import conflation works that way: a
+      // long trunk should be the corridor everything else joins, not a short
+      // shuttle that happens to be processed first.
+      const ordered = wayIds
+        .map((id) => sys.ways.find((w) => w.id === id))
+        .filter((w): w is Way => !!w)
+        .sort((a, b) => wayLengthMeters(b) - wayLengthMeters(a));
+      if (ordered.length < 2) return 0;
+
+      // Grows as ways are kept: the second way fuses onto the first, and the
+      // third onto whatever the first two became.
+      const keepers = new Set<string>([ordered[0].id]);
+      let absorbed = 0;
+      for (const way of ordered.slice(1)) {
+        for (const svc of sys.services) {
+          for (const pattern of svc.patterns) {
+            if (!pattern.legs.some((l) => l.wayId === way.id)) continue;
+            const next = conflatePatternOntoExisting(sys, svc.id, pattern.id, keepers);
+            if (next) sys = next;
+          }
+        }
+        // Absorbed means THIS way is gone — not that the system got smaller.
+        // Fusing a way that overhangs its corridor removes it and mints a stub
+        // for the part that genuinely isn't shared, leaving the count the same
+        // while the merge did exactly what was asked.
+        if (sys.ways.some((w) => w.id === way.id)) {
+          // Nothing took it: not co-aligned with a keeper, or deliberately
+          // named. It becomes a keeper itself, so a later way can still fuse
+          // onto it.
+          keepers.add(way.id);
+        } else {
+          absorbed++;
+        }
+      }
+
+      if (absorbed > 0) set({ system: touch(sys), multiSelection: [], selection: null });
+      return absorbed;
     },
 
     mergeServiceInto: (sourceId, targetId) =>

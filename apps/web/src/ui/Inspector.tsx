@@ -82,7 +82,9 @@ function MultiInspector({ items }: MultiInspectorProps) {
   const readOnly = useEditor((s) => s.readOnly);
   const clearMultiSelection = useEditor((s) => s.clearMultiSelection);
   const deleteMultiSelection = useEditor((s) => s.deleteMultiSelection);
+  const mergeWaysIntoCorridor = useEditor((s) => s.mergeWaysIntoCorridor);
 
+  const selectedWayIds = items.filter((i) => i.kind === 'way').map((i) => i.id);
   const counts = new Map<MultiSelectItem['kind'], number>();
   for (const item of items) counts.set(item.kind, (counts.get(item.kind) ?? 0) + 1);
   const summary = [...counts.entries()]
@@ -102,6 +104,30 @@ function MultiInspector({ items }: MultiInspectorProps) {
           Drag any selected way, station, or facility to move the whole group · Shift-click to add
           or remove one
         </p>
+      )}
+
+      {!readOnly && selectedWayIds.length > 1 && (
+        <>
+          <button
+            type="button"
+            className="ghost-btn"
+            style={{ width: '100%', justifyContent: 'center', marginBottom: 4 }}
+            title="Fuse these into one shared corridor wherever they run along each other"
+            onClick={() => {
+              const absorbed = mergeWaysIntoCorridor(selectedWayIds);
+              if (absorbed === 0)
+                window.alert(
+                  "These don't run along each other closely enough to be one corridor. Select ways that overlap, or move them together first.",
+                );
+            }}
+          >
+            Merge into one corridor
+          </button>
+          <p className="insp-sub" style={{ marginBottom: 12 }}>
+            For a map drawn before lines shared by default: the longest is kept and the others'
+            lines move onto it. Anything not actually running alongside is left alone.
+          </p>
+        </>
       )}
 
       <button

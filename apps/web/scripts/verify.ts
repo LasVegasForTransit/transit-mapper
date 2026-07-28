@@ -10825,5 +10825,96 @@ function buildGrid() {
   );
 }
 
+// --- fusing corridors that were already drawn separately ---
+// Drawing shares by default now, but a map made before that has the same
+// corridor two or three times over. This is the explicit repair — never
+// automatic, because silently rewriting a saved system is not acceptable.
+{
+  const origin: LngLat = [-115.2, 36.1];
+  const twoParallelLines = (offsetM: number, secondFrom: number, secondTo: number): string[] => {
+    fresh();
+    store.getState().setDraftMode('bus');
+    const ids: string[] = [];
+    for (const [from, to, off] of [
+      [0, 600, 0],
+      [secondFrom, secondTo, offsetM],
+    ] as [number, number, number][]) {
+      store.getState().setDraftSeparate(true); // as a map drawn before sharing
+      const w = store.getState().beginWay('road', 'straight');
+      store.getState().addWayPoint(w, offsetMeters(origin, from, off));
+      store.getState().addWayPoint(w, offsetMeters(origin, to, off));
+      store.getState().finishWay();
+      ids.push(w);
+    }
+    return ids;
+  };
+
+  // The common case for a map drawn before sharing: the same corridor drawn
+  // twice, the second one within the first.
+  const doubled = twoParallelLines(4, 100, 500);
+  check(
+    'two lines drawn separately really are two roads',
+    store.getState().system.ways.length === 2,
+  );
+  const absorbed = store.getState().mergeWaysIntoCorridor(doubled);
+  const after = store.getState().system;
+  check('merging reports what it absorbed', absorbed === 1);
+  check('the two roads become one', after.ways.length === 1);
+  check('both lines survive the merge', after.services.length === 2);
+  check(
+    'both lines now ride the one remaining road',
+    after.services.every((sv) =>
+      sv.patterns.every((p) => p.legs.every((l) => l.wayId === after.ways[0].id)),
+    ),
+  );
+  check(
+    'the shorter line rides only the stretch of it that it covered',
+    after.services
+      .flatMap((sv) => sv.patterns)
+      .some((pt) => pt.legs.some((l) => l.fromT !== undefined && l.fromT > 0 && l.toT! < 1)),
+  );
+
+  // A line that runs along the corridor and then carries on past the end of it
+  // fuses the shared part and keeps its own geometry for the rest — the stub
+  // is the stretch that genuinely is not the same road.
+  const overhanging = twoParallelLines(4, 300, 900);
+  check(
+    'an overhanging line still counts as absorbed',
+    store.getState().mergeWaysIntoCorridor(overhanging) === 1,
+  );
+  const partial = store.getState().system;
+  check(
+    'the corridor it ran along is kept, and only its overhang stays separate',
+    partial.ways.length === 2 && partial.ways.some((w) => w.id === overhanging[0]),
+  );
+  check(
+    'the overhanging line rides both the shared corridor and its own tail',
+    partial.services
+      .flatMap((sv) => sv.patterns)
+      .some((pt) => pt.legs.length === 2 && pt.legs.some((l) => l.wayId === overhanging[0])),
+  );
+  check(
+    'the fused line has no route with a gap in it',
+    validateSystem(partial).every((i) => !i.id.startsWith('broken-pattern')),
+  );
+  check(
+    'a two-click line does not come back with a pile of extra drag handles',
+    partial.ways.every((w) => w.points.length <= 3),
+  );
+
+  // Far apart is not one corridor, and saying so is better than fusing things
+  // that aren't the same street.
+  const apart = twoParallelLines(300, 100, 500);
+  check(
+    'ways that are nowhere near each other are left alone',
+    store.getState().mergeWaysIntoCorridor(apart) === 0 &&
+      store.getState().system.ways.length === 2,
+  );
+  check(
+    'merging needs at least two ways',
+    store.getState().mergeWaysIntoCorridor([apart[0]]) === 0,
+  );
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

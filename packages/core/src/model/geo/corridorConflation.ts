@@ -217,3 +217,65 @@ export function detectShapeRuns(
       : { onWayId: r.value, fromIdx: r.segFrom, toIdx: r.segToExcl },
   );
 }
+
+/** Longest segment the matcher can judge fairly, as a multiple of the
+ *  tolerance. matchOneSegment requires BOTH ends of a segment to sit within
+ *  tolerance of the same way, which is a fair test for a segment about as long
+ *  as the tolerance and a useless one for a segment a hundred times longer. */
+const MAX_MATCH_SEGMENT_TOLERANCES = 2;
+
+/**
+ * Split a polyline's long segments so corridor matching can judge them.
+ *
+ * A GTFS shape carries a point every few metres, so its segments are already
+ * far shorter than any tolerance and this does nothing. A hand-drawn way can
+ * be two points a kilometre apart — and since a segment only matches when BOTH
+ * its ends are near the same way, such a segment is all-or-nothing: a line
+ * that runs along a street for half its length and then turns off matches
+ * nothing at all. Subdividing lets the part that really does run along the
+ * street match, and the part that leaves be fresh.
+ *
+ * Interpolating in lng/lat rather than along a great circle: at the scale of a
+ * few tolerance-widths the difference is far below the tolerance itself.
+ */
+export function densifyForMatching(path: LngLat[], toleranceM: number): LngLat[] {
+  const maxSegM = Math.max(1, toleranceM * MAX_MATCH_SEGMENT_TOLERANCES);
+  const out: LngLat[] = [];
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1];
+    const b = path[i];
+    out.push(a);
+    const steps = Math.ceil(haversineMeters(a, b) / maxSegM);
+    for (let s = 1; s < steps; s++) {
+      const f = s / steps;
+      out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
+    }
+  }
+  if (path.length > 0) out.push(path[path.length - 1]);
+  return out;
+}
+
+/** How far off the straight line between its neighbours a point may sit and
+ *  still count as adding nothing. Well under a metre: this only removes points
+ *  that densifyForMatching itself interpolated, never a corner someone drew. */
+const COLLINEAR_TOLERANCE_M = 0.25;
+
+/**
+ * Drop points that lie on the straight line between their neighbours.
+ *
+ * The companion to densifyForMatching: geometry minted from a densified path
+ * would otherwise carry every interpolated point, so a straight line drawn
+ * with two clicks would come back with fifty vertices and fifty drag handles.
+ */
+export function dropCollinearPoints(path: LngLat[]): LngLat[] {
+  if (path.length < 3) return path;
+  const out: LngLat[] = [path[0]];
+  for (let i = 1; i < path.length - 1; i++) {
+    const prev = out[out.length - 1];
+    const next = path[i + 1];
+    const { point } = projectOnSegment(path[i], prev, next);
+    if (haversineMeters(path[i], point) > COLLINEAR_TOLERANCE_M) out.push(path[i]);
+  }
+  out.push(path[path.length - 1]);
+  return out;
+}
