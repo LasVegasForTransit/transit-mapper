@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { makeOneWay } from './profile';
-import { anchorOnWay, routeBetween } from './routeGraph';
+import { anchorOnWay, createRouteOperationCounts, routeBetween } from './routeGraph';
 import { createEmptySystem } from './serialize';
 import { preferredLaneKinds, serviceLaneOnWay } from './geo/serviceLane';
 import { oneSection, wholeLeg, wayById } from './geo';
@@ -159,6 +159,88 @@ describe('a two-way system is unaffected', () => {
     expect(up).not.toBeNull();
     expect(down).not.toBeNull();
     expect(up!.lengthM).toBeCloseTo(down!.lengthM, 5);
+  });
+});
+
+function squareGrid(size: number): TransitSystem {
+  const x = (column: number): number => -115.2 + column * 0.001;
+  const y = (row: number): number => 36.1 + row * 0.001;
+  const rows = Array.from({ length: size }, (_, row) =>
+    aRoad(
+      `row-${row}`,
+      Array.from({ length: size }, (__, column): LngLat => [x(column), y(row)]),
+    ),
+  );
+  const columns = Array.from({ length: size }, (_, column) =>
+    aRoad(
+      `column-${column}`,
+      Array.from({ length: size }, (__, row): LngLat => [x(column), y(row)]),
+    ),
+  );
+  const nodes = Array.from({ length: size * size }, (_, index): Node => {
+    const row = Math.floor(index / size);
+    const column = index % size;
+    return {
+      id: `node-${row}-${column}`,
+      coord: [x(column), y(row)],
+      refs: [
+        { wayId: `row-${row}`, pointIndex: column },
+        { wayId: `column-${column}`, pointIndex: row },
+      ],
+    };
+  });
+  return { ...createEmptySystem(), ways: [...rows, ...columns], nodes };
+}
+
+describe('routing work on a large graph', () => {
+  it('selects states with logarithmically bounded queue work', () => {
+    const size = 12;
+    const sys = squareGrid(size);
+    const operations = createRouteOperationCounts();
+    const result = routeBetween(
+      sys,
+      anchor(sys, 'row-0', [-115.19975, 36.1]),
+      anchor(sys, `row-${size - 1}`, [-115.18925, 36.111]),
+      { ...ROADS, operations },
+    );
+
+    expect(result).not.toBeNull();
+    expect(operations.statesSettled).toBeGreaterThan(size * size);
+    const heapLevels = Math.ceil(Math.log2(operations.queuePushes));
+    expect(operations.queueComparisons).toBeLessThanOrEqual(
+      3 * (operations.queuePushes + operations.queuePops) * heapLevels,
+    );
+  });
+
+  it('reuses topology indexes while preserving deterministic search work', () => {
+    const size = 8;
+    const sys = squareGrid(size);
+    const firstOperations = createRouteOperationCounts();
+    const secondOperations = createRouteOperationCounts();
+
+    const first = routeBetween(
+      sys,
+      anchor(sys, 'row-0', [-115.19975, 36.1]),
+      anchor(sys, `row-${size - 1}`, [-115.19325, 36.107]),
+      { ...ROADS, operations: firstOperations },
+    );
+    const second = routeBetween(
+      sys,
+      anchor(sys, 'row-0', [-115.19975, 36.1]),
+      anchor(sys, `row-${size - 1}`, [-115.19325, 36.107]),
+      { ...ROADS, operations: secondOperations },
+    );
+
+    expect(second).toEqual(first);
+    expect(firstOperations.topologyCacheMisses).toBe(1);
+    expect(firstOperations.topologyCacheHits).toBe(0);
+    expect(secondOperations.topologyCacheMisses).toBe(0);
+    expect(secondOperations.topologyCacheHits).toBe(1);
+    expect({
+      ...secondOperations,
+      topologyCacheHits: 0,
+      topologyCacheMisses: 1,
+    }).toEqual(firstOperations);
   });
 });
 
