@@ -73,6 +73,11 @@ and `apps/worker` depend on it as a workspace package.
 - `serialize.ts` — versioned save/load with migrations (v3 → current).
 - `import.ts` — OpenStreetMap import: pure tag classification plus the one
   Overpass fetch.
+- `gtfsImport.ts` — GTFS import: shapes to ways, routes to services, stops to
+  stations, batched so a large feed streams in rather than freezing the tab.
+- `gtfsSchedule.ts` — how often an imported route runs, from `frequencies.txt`
+  when the feed states it and from `stop_times.txt` departure times otherwise.
+  Pure, so the derivation is testable without a feed.
 - `diagramLayout.ts` — the Diagram view's schematic layout.
 - `cost.ts` — rough cost estimation.
 - `ids.ts` — id generation.

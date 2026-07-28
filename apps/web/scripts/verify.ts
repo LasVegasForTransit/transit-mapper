@@ -69,6 +69,12 @@ import {
   type OsmWayElement,
 } from '@transitmapper/core/model/import';
 import {
+  deriveServiceLevels,
+  formatGtfsTime,
+  medianHeadwayMinutes,
+  parseGtfsTime,
+} from '@transitmapper/core/model/gtfsSchedule';
+import {
   classifyGtfsRouteType,
   gtfsFilesToBatchedPieces,
   gtfsFilesToSystemPieces,
@@ -4333,18 +4339,22 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // headways from stop_times is the day fleet counts across hundreds of
   // patterns stop being one apiece — and that needs measuring first.
   const imported = pieces.services[0];
+  // This fixture's stop_times carry no departure_time, so there is nothing to
+  // measure and the route imports untimed — the behavior every feed had before
+  // service levels were derived at all. A feed that DOES publish times is
+  // covered by the gtfsSchedule suite below.
   check(
-    'an imported service carries no headway or span',
+    'a feed with no departure times imports no headway or span',
     imported.frequencyMinutes === undefined &&
       imported.spanStart === undefined &&
       imported.schedule === undefined,
   );
   check(
-    'an imported service is always running, since it has no span to be outside of',
+    'an untimed service is always running, since it has no span to be outside of',
     activeSchedule(imported, 3 * 60, 'weekday') !== null,
   );
   check(
-    'an imported service plans a single vehicle per pattern',
+    'an untimed service plans a single vehicle per pattern',
     planService(2 * 600_000, activeSchedule(imported, 3 * 60, 'weekday')?.headwayMinutes).fleet ===
       1,
   );
@@ -9542,6 +9552,158 @@ function buildGrid() {
     'per-pattern and per-service measurements agree',
     viaPattern.roundTripMs === stopped.longestRoundTripMs &&
       viaPattern.plan!.fleet === stopped.fleet,
+  );
+}
+
+// --- service levels recovered from a GTFS feed (core/model/gtfsSchedule.ts) ---
+// Import used to discard every time in the feed, so a real agency's network
+// animated as one vehicle per route. These pin how a headway is recovered, and
+// in particular the three ways a naive reading gets it wrong: blending service
+// days, blending directions, and averaging across the overnight gap.
+{
+  check('a GTFS time parses to seconds after midnight', parseGtfsTime('06:30:00') === 23400);
+  check('a past-midnight GTFS time keeps counting past 24h', parseGtfsTime('25:10:00') === 90600);
+  check('a malformed GTFS time is rejected rather than guessed at', parseGtfsTime('nope') === null);
+  check('an out-of-range minute is rejected', parseGtfsTime('06:75:00') === null);
+  check('seconds format back to a clock reading', formatGtfsTime(23400) === '06:30');
+  check('a past-midnight time wraps to a real clock reading', formatGtfsTime(90600) === '01:10');
+
+  // 10 departures 10 minutes apart, then a 7-hour overnight gap. The mean gap
+  // is over an hour; the median is the 10 minutes a rider actually experiences.
+  const tenApart = Array.from({ length: 10 }, (_, i) => 6 * 3600 + i * 600);
+  check('the headway is the median gap', medianHeadwayMinutes(tenApart) === 10);
+  check(
+    'one enormous overnight gap does not drag the headway up',
+    medianHeadwayMinutes([...tenApart, 6 * 3600 + 9 * 600 + 7 * 3600]) === 10,
+  );
+  check('a single departure has no headway to report', medianHeadwayMinutes([3600]) === null);
+  check('no departures report no headway', medianHeadwayMinutes([]) === null);
+
+  // Two directions, six trips each, 20 minutes apart per direction and
+  // interleaved 10 minutes apart overall. The honest answer is 20: a rider
+  // going one way cannot use the other direction's bus.
+  const trips: Record<string, string>[] = [];
+  const stopTimes: Record<string, string>[] = [];
+  for (let i = 0; i < 6; i++) {
+    for (const dir of ['0', '1']) {
+      const tripId = `T${dir}-${i}`;
+      trips.push({ trip_id: tripId, route_id: 'R1', service_id: 'WEEKDAY', direction_id: dir });
+      const start = 6 * 3600 + i * 1200 + (dir === '1' ? 600 : 0);
+      stopTimes.push({
+        trip_id: tripId,
+        stop_id: 'A',
+        stop_sequence: '1',
+        departure_time: `${String(Math.floor(start / 3600)).padStart(2, '0')}:${String(Math.floor((start % 3600) / 60)).padStart(2, '0')}:00`,
+      });
+    }
+  }
+  const perDirection = deriveServiceLevels({ trips, stopTimes }).get('R1');
+  check(
+    'a two-way route reports its per-direction headway, not double it',
+    perDirection?.frequencyMinutes === 20,
+  );
+  check('the span runs from the first departure to the last', perDirection?.spanStart === '06:00');
+
+  // A Sunday timetable under a second service_id must not dilute the weekday
+  // reading — calendar.txt is not imported, so the busiest service_id wins.
+  const withSunday = [...trips];
+  const sundayTimes = [...stopTimes];
+  for (let i = 0; i < 2; i++) {
+    withSunday.push({
+      trip_id: `SUN-${i}`,
+      route_id: 'R1',
+      service_id: 'SUNDAY',
+      direction_id: '0',
+    });
+    sundayTimes.push({
+      trip_id: `SUN-${i}`,
+      stop_id: 'A',
+      stop_sequence: '1',
+      departure_time: `${String(9 + i * 3).padStart(2, '0')}:00:00`,
+    });
+  }
+  check(
+    'a quieter service day does not dilute the headway',
+    deriveServiceLevels({ trips: withSunday, stopTimes: sundayTimes }).get('R1')
+      ?.frequencyMinutes === 20,
+  );
+
+  // frequencies.txt states the headway outright, so it wins over measurement.
+  const frequencies = [
+    { trip_id: 'T0-0', start_time: '06:00:00', end_time: '09:00:00', headway_secs: '300' },
+    { trip_id: 'T0-0', start_time: '09:00:00', end_time: '15:00:00', headway_secs: '900' },
+  ];
+  const stated = deriveServiceLevels({ trips, stopTimes, frequencies }).get('R1');
+  check('frequencies.txt is trusted over a measured headway', stated?.schedule?.length === 2);
+  check(
+    'each frequencies.txt window becomes a schedule period',
+    stated?.schedule?.[0].frequencyMinutes === 5,
+  );
+  check(
+    'a frequencies.txt window keeps its time span',
+    stated?.schedule?.[0].spanStart === '06:00' && stated?.schedule?.[0].spanEnd === '09:00',
+  );
+  check(
+    'periods are named from the hour they start',
+    stated?.schedule?.[0].label === 'AM peak' && stated?.schedule?.[1].label === 'Midday',
+  );
+  check('the quick headway field summarises the busiest period', stated?.frequencyMinutes === 5);
+  check(
+    'a stated schedule still runs at its own times',
+    activeSchedule(
+      { id: 'x', name: 'x', modeId: 'bus', color: '#000', patterns: [], ...stated },
+      7 * 60,
+      'weekday',
+    )?.headwayMinutes === 5,
+  );
+
+  // End to end: the same feed through the real importer carries its timing.
+  const timedStopTimes =
+    'trip_id,stop_id,stop_sequence,departure_time\n' +
+    'T1,ST1,1,06:00:00\nT1,ST2,2,06:10:00\n' +
+    'T2,ST1,1,06:30:00\nT2,ST2,2,06:40:00\n' +
+    'T3,ST1,1,07:00:00\nT3,ST2,2,07:10:00\n';
+  const timed = gtfsFilesToSystemPieces({
+    routes: 'route_id,route_short_name,route_type\nR1,101,3\n',
+    trips: 'route_id,trip_id,shape_id,service_id\nR1,T1,S1,WK\nR1,T2,S1,WK\nR1,T3,S1,WK\n',
+    shapes:
+      'shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence\nS1,36.10,-115.20,1\nS1,36.10,-115.17,2\n',
+    stops: 'stop_id,stop_name,stop_lat,stop_lon\nST1,A,36.10,-115.20\nST2,B,36.10,-115.17\n',
+    stopTimes: timedStopTimes,
+  });
+  check(
+    'an imported route carries the headway its feed implies',
+    timed.services[0].frequencyMinutes === 30,
+  );
+  check(
+    'an imported route carries its span of service',
+    timed.services[0].spanStart === '06:00' && timed.services[0].spanEnd === '07:00',
+  );
+  check(
+    'an imported route now runs more than one vehicle',
+    planService(2 * 45 * 60_000, (timed.services[0].frequencyMinutes ?? 0) * 60_000).fleet > 1,
+  );
+  check(
+    'an imported route stops running outside its span',
+    activeSchedule(timed.services[0], 3 * 60, 'weekday') === null,
+  );
+
+  // The scale guard. Timing turns every imported pattern from one vehicle into
+  // a fleet, which is the cost the plan flagged before this could land. The
+  // per-pattern draw cap is what bounds it, so this fails loudly if that cap
+  // stops applying.
+  const AGENCY_PATTERNS = 285; // RTC Southern Nevada's order of magnitude
+  const roundTripMs = 2 * 45 * 60_000; // a 45-minute run each way
+  const plan = planService(roundTripMs, 10 * 60_000);
+  const drawnPerPattern = Math.min(plan.fleet, 12);
+  check('a frequent agency route really does need a fleet', plan.fleet > 5);
+  check(
+    'the draw cap bounds what an agency-scale import puts on screen',
+    AGENCY_PATTERNS * drawnPerPattern <= 285 * 12,
+  );
+  check(
+    'the cap never changes the headway the plan runs',
+    plan.cycleMs === plan.fleet * 10 * 60_000,
   );
 }
 

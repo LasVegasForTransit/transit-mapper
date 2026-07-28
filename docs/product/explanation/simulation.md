@@ -88,8 +88,9 @@ Some consequences worth expecting:
   which means more vehicles to hold the same headway.
 - **A headway longer than the round trip is fine.** One vehicle, waiting a
   long time at the terminal — an hourly service on a 25-minute loop.
-- **A service with no headway set runs a single vehicle.** That is every
-  GTFS-imported route today, since import brings in no timing.
+- **A service with no headway set runs a single vehicle.** That is any route
+  whose timing couldn't be established — including an imported one whose feed
+  publishes no departure times.
 
 The map draws at most twelve vehicles per pattern. That is a **rendering** cap,
 not a modeling one: the plan keeps its true fleet and headway and only the
@@ -160,8 +161,8 @@ The rules, in the order they apply:
    is what the line runs. An hour no period covers is an hour with no service.
 2. Otherwise `frequencyMinutes`, bounded by `spanStart`/`spanEnd`.
 3. A service with nothing set at all runs all day at no stated frequency — one
-   vehicle. That is every GTFS-imported route, since import brings in no
-   timing, and it is deliberately unchanged.
+   vehicle. That is the fallback for anything whose timing is unknown, and it
+   is deliberately unchanged.
 
 The simulated week is Monday-to-Sunday, which is the shortest cycle that can
 express the weekday/weekend split `ScheduleDayScope` models. Nothing here
@@ -266,18 +267,40 @@ and skips whole patterns whose path is off-screen. Two things keep it cheap:
 - Schedule resolution — walking each service's periods and parsing their spans
   — is redone only when the simulated **minute** changes, not every frame.
 
-At agency scale the honest position is this: **an imported GTFS feed costs the
-same as it did before any of this landed**, because import brings in no timing,
-so every pattern plans exactly one vehicle. That relationship is pinned by a
-check in the verify suite rather than left as an assumption.
+At agency scale, imported feeds now carry real service levels (see below), so
+every pattern plans a real fleet rather than a single vehicle. What bounds the
+cost on screen is the per-pattern draw cap: the plan keeps its true fleet and
+headway, and only the first twelve runs are drawn. A verify check pins that
+relationship at RTC's order of magnitude.
 
-It is also the thing to watch. The moment headways are derived from a real feed
-(the natural next step), hundreds of patterns stop running one vehicle each and
-start running as many as their headway implies. **That change must not land
-without a before/after measurement** — `__panBench` / `__zoomBench` with
-`__perf.vehicles` toggled, on a real machine with the tab focused. A headless
-browser parks `requestAnimationFrame`, so those numbers cannot be taken there,
-and none have been taken for this work.
+**The before/after measurement on a real machine still has not been taken.**
+`__panBench` / `__zoomBench` with `__perf.vehicles` toggled, tab focused — a
+headless browser parks `requestAnimationFrame`, so those numbers cannot be
+taken there. That is the one piece of this work with no evidence behind it.
+
+## Service levels from an imported feed
+
+A GTFS feed knows how often its routes run, and import used to throw all of it
+away. It now recovers a headway and a span per route, from whichever source the
+feed offers:
+
+1. **`frequencies.txt`, when present.** That file is a headway plus a time
+   window, stated by the agency — it maps onto schedule periods exactly, named
+   for the hour they start (AM peak, Midday, PM peak, Evening, Night).
+2. **Otherwise the departure times in `stop_times.txt`**, which is a
+   measurement rather than a statement, so three things it would be easy to get
+   wrong are handled deliberately:
+   - **The median gap, not the mean.** Departures aren't evenly spread, and
+     there is an enormous gap overnight. A mean is dragged upward by it; the
+     median is what a rider waits for most of the day.
+   - **Per direction.** Counting both directions together reports twice the
+     real frequency, since a rider going one way can't use the other.
+   - **One service day.** `calendar.txt` isn't imported, so trips are measured
+     under the busiest `service_id` — in practice the ordinary weekday — rather
+     than blending a weekday peak with a Sunday timetable.
+
+A feed that publishes no usable times still imports untimed, and those routes
+keep the single-vehicle behavior described above.
 
 ## Driving the clock during development
 
