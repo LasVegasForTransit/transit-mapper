@@ -15,19 +15,38 @@
 // ever needs to run on a system too large to iterate 60 times synchronously
 // on the main thread.
 import { metersFromOrigin, offsetMeters, pointAtT, primaryAnchor, resolveWayPath } from './geo';
-import type { LngLat, TransitSystem, Way } from './system';
+import type { LngLat, Node, Station, TransitSystem, Way } from './system';
 
-const cache = new WeakMap<TransitSystem, TransitSystem>();
+export interface DiagramLayoutOperationCounts {
+  diagramTopologyBuildCount: number;
+  diagramTopologyCacheHitCount: number;
+  diagramStationBuildCount: number;
+  diagramStationCacheHitCount: number;
+}
 
-/** The schematic-layout projection of `system`, memoized by object identity —
- *  ways are immutably replaced on every store mutation (see geo.ts's
- *  wayPathCache comment), so caching by that reference is safe. */
-export function computeDiagramSystem(system: TransitSystem): TransitSystem {
-  const cached = cache.get(system);
+const topologyCache = new WeakMap<Way[], WeakMap<Node[], Way[]>>();
+const stationCache = new WeakMap<Station[], WeakMap<Way[], Station[]>>();
+const systemCache = new WeakMap<TransitSystem, TransitSystem>();
+
+/** The schematic-layout projection of `system`, memoized by the immutable
+ * collections each stage actually reads. A facility/service/meta edit creates
+ * a new TransitSystem wrapper but keeps `ways` and `nodes`; it must not rerun
+ * sixty relaxation passes. Station placement is cached separately so a stop
+ * edit remaps stops onto the already-schematic ways without rebuilding the
+ * topology. */
+export function computeDiagramSystem(
+  system: TransitSystem,
+  counts?: DiagramLayoutOperationCounts,
+): TransitSystem {
+  const cached = systemCache.get(system);
   if (cached) return cached;
-  const result = buildDiagramSystem(system);
-  cache.set(system, result);
-  return result;
+  const ways = diagramWaysFor(system.ways, system.nodes, counts);
+  const stations =
+    ways === system.ways ? system.stations : diagramStationsFor(system.stations, ways, counts);
+  const projected =
+    ways === system.ways && stations === system.stations ? system : { ...system, ways, stations };
+  systemCache.set(system, projected);
+  return projected;
 }
 
 interface WayVertex {
@@ -44,8 +63,25 @@ const ITERATIONS = 60;
 const EASE = 0.35;
 const MIN_EDGE_METERS = 10; // numerical floor only, not a stylistic minimum
 
-function buildDiagramSystem(system: TransitSystem): TransitSystem {
-  if (system.ways.length === 0) return system;
+function diagramWaysFor(ways: Way[], nodes: Node[], counts?: DiagramLayoutOperationCounts): Way[] {
+  let byNodes = topologyCache.get(ways);
+  if (!byNodes) {
+    byNodes = new WeakMap();
+    topologyCache.set(ways, byNodes);
+  }
+  const cached = byNodes.get(nodes);
+  if (cached) {
+    if (counts) counts.diagramTopologyCacheHitCount++;
+    return cached;
+  }
+  if (counts) counts.diagramTopologyBuildCount++;
+  const projected = buildDiagramWays(ways, nodes);
+  byNodes.set(nodes, projected);
+  return projected;
+}
+
+function buildDiagramWays(ways: Way[], nodes: Node[]): Way[] {
+  if (ways.length === 0) return ways;
 
   // One pass over system.nodes instead of scanning it once per way to find
   // junction indices AND again per vertex to resolve each one's node key —
@@ -54,7 +90,7 @@ function buildDiagramSystem(system: TransitSystem): TransitSystem {
   // each edit still paid the double O(ways × nodes) scan this replaces.
   const nodeKeyByWayPoint = new Map<string, string>(); // "wayId:index" -> "node:<id>"
   const nodeIndicesByWay = new Map<string, number[]>();
-  for (const node of system.nodes) {
+  for (const node of nodes) {
     for (const ref of node.refs) {
       nodeKeyByWayPoint.set(`${ref.wayId}:${ref.pointIndex}`, `node:${node.id}`);
       const list = nodeIndicesByWay.get(ref.wayId);
@@ -70,7 +106,7 @@ function buildDiagramSystem(system: TransitSystem): TransitSystem {
   const wayVertices = new Map<string, WayVertex[]>();
   const vertexSeed = new Map<string, LngLat>();
 
-  for (const way of system.ways) {
+  for (const way of ways) {
     if (way.points.length < 2) continue;
     const indices = new Set<number>([0, way.points.length - 1]);
     for (const index of nodeIndicesByWay.get(way.id) ?? []) {
@@ -88,7 +124,7 @@ function buildDiagramSystem(system: TransitSystem): TransitSystem {
     }
   }
 
-  if (vertexSeed.size === 0) return system;
+  if (vertexSeed.size === 0) return ways;
 
   // Project every seed into local planar meters around the graph's centroid.
   let sumLng = 0;
@@ -139,7 +175,7 @@ function buildDiagramSystem(system: TransitSystem): TransitSystem {
   const finalCoord = new Map<string, LngLat>();
   for (const [key, [x, y]] of pos) finalCoord.set(key, offsetMeters(origin, x, y));
 
-  const newWays: Way[] = system.ways.map((way) => {
+  return ways.map((way) => {
     const vertices = wayVertices.get(way.id);
     if (!vertices) return way;
     return {
@@ -148,14 +184,31 @@ function buildDiagramSystem(system: TransitSystem): TransitSystem {
       geometry: 'straight',
     };
   });
-  const wayById = new Map(newWays.map((w) => [w.id, w]));
+}
 
-  const newStations = system.stations.map((st) => {
+function diagramStationsFor(
+  stations: Station[],
+  ways: Way[],
+  counts?: DiagramLayoutOperationCounts,
+): Station[] {
+  let byWays = stationCache.get(stations);
+  if (!byWays) {
+    byWays = new WeakMap();
+    stationCache.set(stations, byWays);
+  }
+  const cached = byWays.get(ways);
+  if (cached) {
+    if (counts) counts.diagramStationCacheHitCount++;
+    return cached;
+  }
+  if (counts) counts.diagramStationBuildCount++;
+  const waysById = new Map(ways.map((way) => [way.id, way]));
+  const projected = stations.map((st) => {
     // The FIRST anchor: a station on two ways is moved by the alignment it
     // was primarily placed on, not by whichever happens to be iterated first.
     const anchor = primaryAnchor(st);
     if (!anchor) return st;
-    const way = wayById.get(anchor.wayId);
+    const way = waysById.get(anchor.wayId);
     if (!way || way.points.length < 2) return st;
     // A station's t is a fraction of the way's RESOLVED path — that is what
     // anchoring measured it against — so that is the ruler to place it with.
@@ -167,6 +220,6 @@ function buildDiagramSystem(system: TransitSystem): TransitSystem {
     // polyline through its vertices and every station would sit early.
     return { ...st, coord: pointAtT(resolveWayPath(way), anchor.t) };
   });
-
-  return { ...system, ways: newWays, stations: newStations };
+  byWays.set(ways, projected);
+  return projected;
 }
