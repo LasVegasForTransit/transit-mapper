@@ -1,5 +1,5 @@
-import { previewSvg, PREVIEW_HEIGHT, PREVIEW_WIDTH } from '@transitmapper/core/render/preview';
-import type { TransitSystem } from '@transitmapper/core/model/system';
+import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from '@transitmapper/core/render/preview';
+import { renderPreviewMarkup, type RenderPreviewMarkupOptions } from './previewWorker';
 
 // Rasterizing the share card, in the browser, at share time.
 //
@@ -15,8 +15,25 @@ import type { TransitSystem } from '@transitmapper/core/model/system';
 /** How long to wait for the browser to decode our own SVG before giving up.
  *  Share creation must not hang on a preview that isn't essential. */
 const DECODE_TIMEOUT_MS = 5000;
+const PNG_ENCODE_TIMEOUT_MS = 5000;
 
-function decodeSvg(markup: string): Promise<HTMLImageElement> {
+export interface CanvasPngSource {
+  toBlob(callback: (blob: Blob | null) => void, type?: string, quality?: number): void;
+}
+
+export interface CanvasToPngBlobOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+function abortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('Preview rendering was canceled.', 'AbortError');
+}
+
+function decodeSvg(markup: string, signal?: AbortSignal): Promise<HTMLImageElement> {
+  if (signal?.aborted) return Promise.reject(abortError(signal));
   // A blob: URL rather than a data: URL — same-origin, no base64 round-trip,
   // and revocable. The card contains no external references (and, at unfurl
   // size, no text at all), so nothing here reaches the network or taints the
@@ -24,21 +41,60 @@ function decodeSvg(markup: string): Promise<HTMLImageElement> {
   const url = URL.createObjectURL(new Blob([markup], { type: 'image/svg+xml' }));
   return new Promise((resolve, reject) => {
     const image = new Image();
+    let settled = false;
+    const finish = (outcome: { image: HTMLImageElement } | { error: Error }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      URL.revokeObjectURL(url);
+      image.onload = null;
+      image.onerror = null;
+      if ('image' in outcome) resolve(outcome.image);
+      else reject(outcome.error);
+    };
+    const onAbort = () => finish({ error: abortError(signal!) });
     const timer = setTimeout(() => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Timed out rasterizing the preview image'));
+      finish({ error: new Error('Timed out rasterizing the preview image') });
     }, DECODE_TIMEOUT_MS);
-    image.onload = () => {
-      clearTimeout(timer);
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-    image.onerror = () => {
-      clearTimeout(timer);
-      URL.revokeObjectURL(url);
-      reject(new Error('Could not rasterize the preview image'));
-    };
+    image.onload = () => finish({ image });
+    image.onerror = () => finish({ error: new Error('Could not rasterize the preview image') });
+    signal?.addEventListener('abort', onAbort, { once: true });
     image.src = url;
+  });
+}
+
+/** Canvas encoding has a callback-only browser API, and some failed/lost
+ * contexts never invoke that callback. The preview is optional, so a bounded
+ * rejection is safer than leaving the entire share operation pending. */
+export function canvasToPngBlob(
+  canvas: CanvasPngSource,
+  options: CanvasToPngBlobOptions = {},
+): Promise<Blob | null> {
+  if (options.signal?.aborted) return Promise.reject(abortError(options.signal));
+  return new Promise<Blob | null>((resolve, reject) => {
+    let settled = false;
+    const finish = (outcome: { blob: Blob | null } | { error: Error }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      options.signal?.removeEventListener('abort', onAbort);
+      if ('blob' in outcome) resolve(outcome.blob);
+      else reject(outcome.error);
+    };
+    const onAbort = () => finish({ error: abortError(options.signal!) });
+    const timer = setTimeout(
+      () => finish({ error: new Error('Timed out encoding the preview image') }),
+      options.timeoutMs ?? PNG_ENCODE_TIMEOUT_MS,
+    );
+    options.signal?.addEventListener('abort', onAbort, { once: true });
+    try {
+      canvas.toBlob((blob) => finish({ blob }), 'image/png');
+    } catch (error) {
+      finish({
+        error: error instanceof Error ? error : new Error('Could not encode the preview image'),
+      });
+    }
   });
 }
 
@@ -48,9 +104,13 @@ function decodeSvg(markup: string): Promise<HTMLImageElement> {
  * — the share still works, and its link just falls back to the site-wide
  * image — so every caller should treat this as best-effort.
  */
-export async function renderPreviewPng(system: TransitSystem): Promise<Uint8Array | null> {
+export async function renderPreviewPng(
+  systemData: string,
+  options: RenderPreviewMarkupOptions = {},
+): Promise<Uint8Array | null> {
   try {
-    const image = await decodeSvg(previewSvg(system));
+    const markup = await renderPreviewMarkup(systemData, options);
+    const image = await decodeSvg(markup, options.signal);
     const canvas = document.createElement('canvas');
     canvas.width = PREVIEW_WIDTH;
     canvas.height = PREVIEW_HEIGHT;
@@ -61,10 +121,12 @@ export async function renderPreviewPng(system: TransitSystem): Promise<Uint8Arra
     // no sharpness because the source is vector.
     ctx.drawImage(image, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
 
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    const blob = await canvasToPngBlob(canvas, { signal: options.signal });
+    if (options.signal?.aborted) throw abortError(options.signal);
     if (!blob) return null;
     return new Uint8Array(await blob.arrayBuffer());
   } catch {
+    if (options.signal?.aborted) throw abortError(options.signal);
     return null;
   }
 }
