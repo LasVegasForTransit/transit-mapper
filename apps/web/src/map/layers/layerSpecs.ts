@@ -26,6 +26,10 @@ import {
   LYR_FACILITY_SELECTED,
   LYR_FOOTPRINTS_FILL,
   LYR_FOOTPRINTS_STROKE,
+  LYR_GESTURE_FILL,
+  LYR_GESTURE_LINE,
+  LYR_GESTURE_POINT,
+  LYR_GESTURE_STROKE,
   LYR_HANDLES,
   LYR_JUNCTIONS,
   LYR_JUNCTION_SELECTED,
@@ -63,6 +67,7 @@ import {
   SRC_ENDPOINT_HINT,
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
+  SRC_GESTURE,
   SRC_HANDLES,
   SRC_JUNCTIONS,
   SRC_LANDMARKS,
@@ -708,6 +713,50 @@ export const LAYER_SPECS: LayerSpecification[] = [
       'icon-size': 0.28,
       'icon-allow-overlap': true,
       'icon-ignore-placement': true,
+    },
+  },
+  {
+    // During direct manipulation, the full settled projection stays frozen and
+    // this tiny source carries only the geometry under the pointer. It is
+    // intentionally simplified; release restores the exact derived rendering.
+    id: LYR_GESTURE_FILL,
+    type: 'fill',
+    source: SRC_GESTURE,
+    filter: ['==', ['geometry-type'], 'Polygon'],
+    paint: {
+      'fill-color': ['coalesce', ['get', 'color'], '#ffffff'],
+      'fill-opacity': 0.72,
+    },
+  },
+  {
+    id: LYR_GESTURE_STROKE,
+    type: 'line',
+    source: SRC_GESTURE,
+    filter: ['==', ['geometry-type'], 'Polygon'],
+    paint: {
+      'line-color': '#191a17',
+      'line-width': 2,
+      'line-dasharray': [2, 1.5],
+    },
+  },
+  {
+    id: LYR_GESTURE_LINE,
+    type: 'line',
+    source: SRC_GESTURE,
+    filter: ['==', ['get', 'kind'], 'way'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': '#191a17', 'line-width': 3.5, 'line-opacity': 0.9 },
+  },
+  {
+    id: LYR_GESTURE_POINT,
+    type: 'circle',
+    source: SRC_GESTURE,
+    filter: ['==', ['geometry-type'], 'Point'],
+    paint: {
+      'circle-radius': ['case', ['==', ['get', 'kind'], 'control'], 5, 7],
+      'circle-color': '#ffffff',
+      'circle-stroke-width': 2.5,
+      'circle-stroke-color': '#191a17',
     },
   },
   {

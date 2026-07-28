@@ -9,6 +9,9 @@ export const SRC_SERVICES = 'tm-services';
 export const SRC_STATIONS = 'tm-stations';
 export const SRC_HANDLES = 'tm-handles';
 export const SRC_PREVIEW = 'tm-preview';
+/** Small, gesture-only geometry. Direct manipulation writes only this source
+ *  until release instead of rebuilding and uploading every derived source. */
+export const SRC_GESTURE = 'tm-gesture';
 /** Stretches of existing infrastructure the in-progress stroke will be
  *  absorbed onto when it commits. See interactions.ts's setSharingPreview. */
 export const SRC_SHARING = 'tm-sharing';
@@ -51,6 +54,10 @@ export const LYR_FACILITY_LABELS = 'tm-facility-labels';
 export const LYR_HANDLES = 'tm-handles';
 export const LYR_WAY_ENDPOINTS = 'tm-way-endpoints';
 export const LYR_PREVIEW = 'tm-preview';
+export const LYR_GESTURE_FILL = 'tm-gesture-fill';
+export const LYR_GESTURE_STROKE = 'tm-gesture-stroke';
+export const LYR_GESTURE_LINE = 'tm-gesture-line';
+export const LYR_GESTURE_POINT = 'tm-gesture-point';
 export const LYR_SHARING = 'tm-sharing';
 export const LYR_FOOTPRINTS_FILL = 'tm-footprints-fill';
 export const LYR_FOOTPRINTS_STROKE = 'tm-footprints-stroke';
