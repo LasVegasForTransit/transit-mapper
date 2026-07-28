@@ -132,7 +132,10 @@ requestAnimationFrame and MapLibre host that drives it is
 
 - `buildFeatures.ts` — the system-to-styled-GeoJSON projector. Shared by the
   editor map, the embed, image exports and the share card, so none of them can
-  drift from the others.
+  drift from the others. Its public coordinator selects named topology,
+  station, selection-handle, physical-detail, label, and facility phases; a
+  partial live-map refresh does not weave source-specific conditions through
+  one monolithic projection pass.
 - `project.ts` — Web Mercator projection and `fitBounds`, matching MapLibre's
   conventions but needing no map. What a card is projected through.
 - `svg.ts` — the vector composition (geometry plus title, legend, north arrow,
@@ -260,21 +263,24 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 `src/perf/` owns deterministic small, dense, and RTC-shaped fixtures; the
 named report schemas; pure statistics and budget evaluation; bundle/PWA graph
 policy; direct-manipulation instrumentation; and the large-document storage
-thresholds. The production harness remains inert unless the runner sets its
-private per-navigation flag. Normal users do not pay for the developer overlay
-or automated counters. `frameMeter.ts` and `paintedFrameCapture.ts` sample
+thresholds. Vite includes the browser harness only in development or when the
+runner builds with `VITE_PERF_BUILD=1`; a private per-navigation flag then
+selects automated measurement instead of the developer overlay. Ordinary
+production bundles do not include that harness. `frameMeter.ts` and
+`paintedFrameCapture.ts` sample
 actual MapLibre renders rather than idle animation frames; `panBench.ts`
 retains a deterministic attribution path alongside the trusted-input gate.
 
-`scripts/perf/run.ts` owns the stateful edge: stable headed Chrome, CPU/network
-emulation, cold and warm navigations, share/embed request fixtures, trusted
-pointer input, traces, CPU/display calibration, a diagnostic legacy-storage
-boundary probe, production Worker/IndexedDB save timing, offline migration and
-reload, and the ten-minute leak soak with real PNG/SVG downloads. The
-diagnostic probe keeps compatibility parse, stringify, and `localStorage`
-write costs separate; editor journeys seed and read back real IndexedDB
-records. `report-bundle.ts` and
-`verify-pwa-output.ts` inspect production output after Vite builds it.
+`scripts/perf/run.ts` is a small process entry. `orchestrator.ts` sequences the
+fixed suite; `cli.ts` and `process.ts` own arguments and preview-process
+lifecycle; `browser.ts` and `browserContract.ts` own Chrome protocol and page
+instrumentation; `journeys.ts` and `scenarioRuns.ts` own trusted interactions
+and cold/warm repetitions; `offline.ts` and `soak.ts` own their specialized
+proofs; and `artifacts.ts` writes reports and checked baselines. The diagnostic
+storage probe keeps compatibility parse, stringify, and `localStorage` write
+costs separate; editor journeys seed and read back real IndexedDB records.
+`report-bundle.ts` and `verify-pwa-output.ts` inspect production output after
+Vite builds it.
 
 The checked reports in `apps/web/perf/` are reviewable comparison evidence.
 Generated traces and current reports live under
@@ -305,10 +311,13 @@ without moving domain rules out of `packages/core`.
 - `simClock.ts` — the `SimClock`: simulated time, and the only value in the
   app that changes 30 times a second. Created by `ui/SimProvider.tsx` and
   injected, never a module-level singleton.
-- `vehicles.ts` — the animation host. Advances the clock, asks
-  `packages/core/src/sim/` where every vehicle is, and writes a GeoJSON source
-  directly rather than going through React, because it updates every frame and
-  reconciliation at that rate is the thing that would make it stutter.
+- `vehicles.ts` — the stable animation API facade.
+- `vehicleAnimationHost.ts` — advances the clock and writes GeoJSON directly
+  to MapLibre, avoiding React reconciliation on the 30 Hz path.
+- `patternGeometry.ts` — dependency-aware pattern geometry and timetable
+  caches. Unrelated way/station edits preserve warm entries.
+- `serviceSchedule.ts` — minute-level schedule resolution and the next wake-up
+  calculation for an idle simulation.
 - `devHandle.ts` — `window.__sim`, a development-only clock driver.
 
 The pure half lives in `packages/core/src/sim/` (`clock.ts`, `timetable.ts`),

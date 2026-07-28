@@ -41,8 +41,8 @@ interface SystemsDialogProps {
 
 /** Replaces the old single-slot autosave with a real library: every saved
  *  system its own row, switch between them without losing anything, rename/
- *  duplicate/delete in place. See storage/localStore.ts for the storage
- *  shape this reads and writes. */
+ *  duplicate/delete in place. See storage/browserLibrary.ts for the durable
+ *  IndexedDB path and its localStorage recovery boundary. */
 export function SystemsDialog({
   onClose,
   onCorrupt,

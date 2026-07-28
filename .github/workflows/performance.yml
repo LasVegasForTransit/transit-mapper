@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   browser:
-    name: Fixed Chrome protocol (${{ matrix.profile }})
+    name: Chrome responsiveness (${{ matrix.profile }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -58,10 +58,8 @@ jobs:
           google-chrome --version
           command -v xvfb-run
 
-      # The first change that introduces this workflow has no harness on its
-      # base revision. It establishes absolute-budget evidence; every later
-      # change records the base on the same runner and gets the 10% regression
-      # comparison too.
+      # A pull request compares only the hard-gate RTC journey on the same
+      # runner. Nightly/manual runs below record the complete matrix.
       - name: Detect a measurable base revision
         id: baseline
         run: |
@@ -77,36 +75,46 @@ jobs:
         working-directory: .performance-baseline
         run: pnpm install --frozen-lockfile
 
-      - name: Record base revision
+      - name: Measure base RTC journey
         if: steps.baseline.outputs.available == 'true'
         # A pre-existing absolute violation must not prevent collecting the
         # comparison data. The candidate run below remains the hard gate.
         continue-on-error: true
         working-directory: .performance-baseline
         run: >-
-          xvfb-run -a --server-args="$XVFB_ARGS" pnpm perf:record --
+          xvfb-run -a --server-args="$XVFB_ARGS" pnpm perf --
           --profile "${{ matrix.profile }}"
+          --scenario rtc
           --output "$BASELINE_ARTIFACT"
 
-      - name: Record candidate and enforce budgets
+      - name: Measure candidate RTC journey
+        if: github.event_name == 'pull_request'
         env:
           BASELINE_AVAILABLE: ${{ steps.baseline.outputs.available }}
         run: |
           if test "$BASELINE_AVAILABLE" = "true"; then
-            xvfb-run -a --server-args="$XVFB_ARGS" pnpm perf:record -- \
+            xvfb-run -a --server-args="$XVFB_ARGS" pnpm perf -- \
               --profile "${{ matrix.profile }}" \
+              --scenario rtc \
               --output "$CURRENT_ARTIFACT" \
               --baseline "$BASELINE_ARTIFACT/report.json" \
               --require-baseline
           else
-            echo "::notice::Using the checked-in calibrated baseline."
-            xvfb-run -a --server-args="$XVFB_ARGS" pnpm perf:record -- \
+            echo "::notice::No compatible base harness; enforcing absolute RTC budgets."
+            xvfb-run -a --server-args="$XVFB_ARGS" pnpm perf -- \
               --profile "${{ matrix.profile }}" \
-              --output "$CURRENT_ARTIFACT" \
-              --require-baseline
+              --scenario rtc \
+              --output "$CURRENT_ARTIFACT"
           fi
 
-      - name: Upload reports and Chrome traces
+      - name: Record complete candidate matrix
+        if: github.event_name != 'pull_request'
+        run: >-
+          xvfb-run -a --server-args="$XVFB_ARGS" pnpm perf:record --
+          --profile "${{ matrix.profile }}"
+          --output "$CURRENT_ARTIFACT"
+
+      - name: Upload reports and recorded Chrome traces
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

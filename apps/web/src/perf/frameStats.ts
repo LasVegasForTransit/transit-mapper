@@ -1,5 +1,5 @@
-// DEV-only performance instrumentation. None of perf/* ships enabled — the
-// harness is wired in only under import.meta.env.DEV (see perf/index.ts).
+// Development/performance-build instrumentation. Ordinary production builds
+// compile out the harness at the MapCanvas boundary (see perf/index.ts).
 
 /** Summary of a set of frame durations (milliseconds between painted frames). */
 export interface FrameStats {
