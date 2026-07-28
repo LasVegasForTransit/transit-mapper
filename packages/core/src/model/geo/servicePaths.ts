@@ -1,4 +1,4 @@
-import type { LngLat, Pattern, PatternLeg, Service, Way } from '../system';
+import type { LegDirection, LngLat, Pattern, PatternLeg, Service, Way } from '../system';
 import { slicePathByT } from './measurement';
 import { haversineMeters } from './spherical';
 import { resolveWayPath, wayById } from './wayPath';
@@ -27,16 +27,46 @@ export function serviceWayIds(service: Service): string[] {
 /** The stretch of its way a leg covers, as an ordered [lo, hi] pair in the
  *  WAY's own parameterization (not travel order). */
 export function legRange(leg: PatternLeg): [number, number] {
-  const a = leg.fromT ?? 0;
-  const b = leg.toT ?? 1;
-  return a <= b ? [a, b] : [b, a];
+  if (leg.extent.kind === 'whole') return [0, 1];
+  const { fromT, toT } = leg.extent;
+  return fromT <= toT ? [fromT, toT] : [toT, fromT];
 }
 
 /** Whether a leg covers the whole of its way — the common case, and the one
- *  where slicing can be skipped entirely. */
+ *  where slicing can be skipped entirely. A `stretch` that happens to span
+ *  [0, 1] counts, so a leg widened back to full behaves like one that never
+ *  was trimmed even before withRange normalizes it. */
 export function legIsWhole(leg: PatternLeg): boolean {
+  if (leg.extent.kind === 'whole') return true;
   const [lo, hi] = legRange(leg);
   return lo <= 0 && hi >= 1;
+}
+
+/** Whether a leg runs its way with the way's own point order. The boolean the
+ *  path-orientation code wants, named once rather than spelled out at every
+ *  comparison. */
+export function legRunsWithPoints(leg: PatternLeg): boolean {
+  return leg.direction === 'withPoints';
+}
+
+/** The lane a leg is pinned to, or null when it resolves at render time. */
+export function legPinnedLane(leg: PatternLeg): string | null {
+  return leg.lane.kind === 'pinned' ? leg.lane.laneId : null;
+}
+
+/** A leg running the whole of a way in the way's own point order, lane
+ *  unresolved — what almost every construction site wants, and short enough
+ *  that nobody is tempted to write the record out by hand and get a field
+ *  wrong. */
+export function wholeLeg(wayId: string, direction: LegDirection = 'withPoints'): PatternLeg {
+  return { wayId, direction, extent: { kind: 'whole' }, lane: { kind: 'auto' } };
+}
+
+/** The same leg cut back to `[fromT, toT]` of its way. `fromT`/`toT` are in
+ *  the WAY's own parameterization, not travel order, so this reads the same
+ *  whichever way round the leg runs. */
+export function stretchLeg(leg: PatternLeg, fromT: number, toT: number): PatternLeg {
+  return { ...leg, extent: { kind: 'stretch', fromT, toT } };
 }
 
 /** Does this pattern actually reach position `t` on `wayId`? The extent-aware
@@ -140,12 +170,13 @@ export function patternSegments(waysById: Map<string, Way>, pattern: Pattern): P
     const [lo, hi] = legRange(leg);
     const trimmed = legIsWhole(leg) ? raw : slicePathByT(raw, lo, hi);
     if (trimmed.length < 2) return;
+    const forward = legRunsWithPoints(leg);
     segments.push({
       wayIndex,
       leg,
       way,
-      forward: leg.forward,
-      path: leg.forward ? trimmed : [...trimmed].reverse(),
+      forward,
+      path: forward ? trimmed : [...trimmed].reverse(),
     });
   });
 
@@ -239,7 +270,10 @@ export function wholeLegs(
   const dirs = deriveLegDirections(waysById, wayIds);
   return wayIds.map((wayId, i) => {
     const laneId = lanes?.[wayId];
-    return { wayId, forward: dirs[i], ...(laneId ? { laneId } : {}) };
+    return {
+      ...wholeLeg(wayId, dirs[i] ? 'withPoints' : 'againstPoints'),
+      ...(laneId ? { lane: { kind: 'pinned' as const, laneId } } : {}),
+    };
   });
 }
 

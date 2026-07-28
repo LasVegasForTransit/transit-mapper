@@ -42,8 +42,10 @@ import {
   resolveWayPath,
   snap,
   squareFootprint,
+  stretchLeg,
   wayById,
   wayLengthMeters,
+  wholeLeg,
   type ShapeRun,
 } from '@transitmapper/core/model/geo';
 import {
@@ -1482,7 +1484,7 @@ function materializeShapeRun(
     };
     return {
       system: { ...system, ways: [...system.ways, way] },
-      legs: [{ wayId, forward: true }],
+      legs: [wholeLeg(wayId)],
     };
   }
   const way = system.ways.find((w) => w.id === run.onWayId);
@@ -1929,7 +1931,7 @@ export function createEditorStore() {
               name: `Line ${nextLineNumber++}`,
               modeId,
               color: color ?? st.draftColor,
-              patterns: [{ id: shortId(), legs: [{ wayId, forward: true }] }],
+              patterns: [{ id: shortId(), legs: [wholeLeg(wayId)] }],
               frequencyMinutes: DEFAULT_FREQUENCY_MINUTES,
               spanStart: DEFAULT_SPAN_START,
               spanEnd: DEFAULT_SPAN_END,
@@ -2045,10 +2047,7 @@ export function createEditorStore() {
             sv.id === addingPatternForServiceId
               ? {
                   ...sv,
-                  patterns: [
-                    ...sv.patterns,
-                    { id: shortId(), legs: [{ wayId: activeWayId, forward: true }] },
-                  ],
+                  patterns: [...sv.patterns, { id: shortId(), legs: [wholeLeg(activeWayId)] }],
                 }
               : sv,
           );
@@ -2763,7 +2762,7 @@ export function createEditorStore() {
         name: `Line ${nextLineNumber++}`,
         modeId,
         color,
-        patterns: [{ id: shortId(), legs: [{ wayId, forward: true }] }],
+        patterns: [{ id: shortId(), legs: [wholeLeg(wayId)] }],
         frequencyMinutes: DEFAULT_FREQUENCY_MINUTES,
         spanStart: DEFAULT_SPAN_START,
         spanEnd: DEFAULT_SPAN_END,

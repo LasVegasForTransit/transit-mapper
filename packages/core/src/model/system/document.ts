@@ -11,7 +11,7 @@ import type { Way } from './way';
 
 export interface TransitSystem {
   /** Schema version, for migrations. */
-  version: 10;
+  version: 11;
   id: string;
   name: string;
   description?: string;

@@ -11,28 +11,46 @@ import type { ScheduleDayScope } from './valueTypes';
  * accumulated one fragment per line that terminated on it. Extents are how a
  * service stops doing that.
  */
+/** Which way round a leg runs its way, relative to that way's own stored
+ *  point order. Stored rather than derived: the geometry cannot always
+ *  determine it (a single-way pattern, a neighbour sharing both endpoints),
+ *  and a wrong guess used to mean "wrong lane" but now means "the wrong half
+ *  of the way". geo/servicePaths.ts's deriveLegDirections supplies it wherever
+ *  a caller has only geometry. */
+export type LegDirection = 'withPoints' | 'againstPoints';
+
+/**
+ * How much of its way a leg uses.
+ *
+ * A union rather than a pair of optional numbers, because "covers the whole
+ * way" is a real state and not an absence: patternEdits' withRange drops the
+ * numbers entirely when a leg grows to cover everything, precisely so the
+ * common case round-trips through serialization without numbers that mean "no
+ * trim". Two independent optionals also admit a `fromT` with no `toT`, which
+ * has never meant anything.
+ *
+ * `fromT`/`toT` are normalized arc-length along the way's OWN resolved path —
+ * the same 0-at-the-first-point convention as StationAnchor.t, not travel
+ * order — so `direction` stays the only thing that says which way round.
+ */
+export type LegExtent = { kind: 'whole' } | { kind: 'stretch'; fromT: number; toT: number };
+
+/**
+ * Which lane of its way a leg rides.
+ *
+ * `'auto'` resolves at render time to the rightmost travel lane in the
+ * direction of travel, or a dedicated bus lane / the direction's track — see
+ * profile.ts's `defaultLaneFor`. It is distinct from a pin that happens to
+ * name today's default: re-profiling the street moves an `'auto'` leg with it
+ * and leaves a pinned one where the user put it.
+ */
+export type LegLane = { kind: 'auto' } | { kind: 'pinned'; laneId: string };
+
 export interface PatternLeg {
   wayId: string;
-  /** Traversed with increasing point index. Stored rather than derived: the
-   *  geometry cannot always determine it (a single-way pattern, a neighbour
-   *  sharing both endpoints), and a wrong guess used to mean "wrong lane" but
-   *  now means "the wrong half of the way". geo/servicePaths.ts's
-   *  deriveLegDirections supplies it wherever a caller has only geometry. */
-  forward: boolean;
-  /** Where the pattern enters and leaves this way, as normalized arc-length
-   *  along the way's own resolved path — the same 0-at-the-first-point
-   *  convention as StationAnchor.t, NOT travel order, so `forward` stays the
-   *  only thing that says which direction. Undefined means the way's own
-   *  start/end, which is the normal case: only a leg where the pattern
-   *  genuinely begins or ends mid-way carries them. */
-  fromT?: number;
-  toT?: number;
-  /** Which lane of this way the pattern rides (a LaneSpec.id). Undefined →
-   *  resolve the default at render time (the rightmost travel lane in the
-   *  direction of travel, or a dedicated bus lane / the direction's track —
-   *  see profile.ts `defaultLaneFor`). Set only where the user or an import
-   *  pinned a non-default lane. */
-  laneId?: string;
+  direction: LegDirection;
+  extent: LegExtent;
+  lane: LegLane;
 }
 
 /** One path a service runs — more than one on the same service models a

@@ -8,7 +8,13 @@
 // resolved "which lane" with their own code — so both are pinned here.
 
 import { describe, expect, it } from 'vitest';
-import { cumulativeLengths, haversineMeters, pointAtDistance, wayById } from '../model/geo';
+import {
+  cumulativeLengths,
+  haversineMeters,
+  pointAtDistance,
+  stretchLeg,
+  wayById,
+} from '../model/geo';
 import { serviceLaneOnWay } from '../model/geo/serviceLane';
 import { planService, runStateAt } from '../sim/fleet';
 import { buildTimetable } from '../sim/timetable';
@@ -79,7 +85,7 @@ describe('the lane a pattern rides', () => {
     // offset sideways, so without trimming it the vehicles ran the whole
     // street while the drawn line stopped where it should.
     const half = aPattern('p4', [road], ['w']);
-    half.legs[0] = { ...half.legs[0], fromT: 0, toT: 0.5 };
+    half.legs[0] = stretchLeg(half.legs[0], 0, 0.5);
     const whole = patternLanePath([road], pattern, 'lightRail', 'outbound');
     const partial = patternLanePath([road], half, 'lightRail', 'outbound');
     const lengthOf = (p: [number, number][]) => {

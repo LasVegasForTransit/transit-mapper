@@ -9,7 +9,7 @@
 // same conversion to bridge the gap between their termini. It was already
 // pure, so moving it here cost nothing and stopped a second copy existing.
 
-import { nearestOnPath, resolveWayPath } from './geo';
+import { nearestOnPath, resolveWayPath, wholeLeg, stretchLeg } from './geo';
 import type { RouteSpan } from './routeGraph';
 import type { PatternLeg, TransitSystem } from './system';
 
@@ -67,7 +67,8 @@ export function materializeRouteSpans(
     const lo = Math.min(from.t, to.t);
     const hi = Math.max(from.t, to.t);
     const whole = lo <= 0 && hi >= 1;
-    legs.push({ wayId: s.wayId, forward, ...(whole ? {} : { fromT: lo, toT: hi }) });
+    const leg = wholeLeg(s.wayId, forward ? 'withPoints' : 'againstPoints');
+    legs.push(whole ? leg : stretchLeg(leg, lo, hi));
   }
   return legs.length > 0 ? legs : null;
 }

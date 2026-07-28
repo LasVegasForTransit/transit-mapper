@@ -18,8 +18,8 @@
 // That keeps the arithmetic testable without building a system to test it
 // against.
 
-import { legRange } from './geo/servicePaths';
-import type { PatternLeg } from './system';
+import { legRange, legRunsWithPoints } from './geo/servicePaths';
+import type { LegDirection, PatternLeg } from './system';
 
 /** Two extents this close (as a fraction of the way) are treated as touching.
  *  Legs that were adjacent by construction come back from a coordinate
@@ -28,15 +28,18 @@ import type { PatternLeg } from './system';
  *  5 m — far below anything a person drew on purpose. */
 const TOUCH_T = 1e-3;
 
-/** A leg covering `[lo, hi]` of its way, with the extent dropped entirely when
- *  it covers the whole thing — so the common case stays free of numbers that
- *  mean "no trim" and round-trips through serialization unchanged. */
+/** A leg covering `[lo, hi]` of its way, normalized back to `'whole'` when it
+ *  covers everything — so a leg widened to full length is indistinguishable
+ *  from one that was never trimmed, rather than carrying a pair of numbers
+ *  that mean "no trim". */
 function withRange(leg: PatternLeg, lo: number, hi: number): PatternLeg {
   const clampedLo = Math.max(0, Math.min(1, Math.min(lo, hi)));
   const clampedHi = Math.max(0, Math.min(1, Math.max(lo, hi)));
   const whole = clampedLo <= 0 && clampedHi >= 1;
-  const { fromT: _fromT, toT: _toT, ...rest } = leg;
-  return whole ? rest : { ...rest, fromT: clampedLo, toT: clampedHi };
+  return {
+    ...leg,
+    extent: whole ? { kind: 'whole' } : { kind: 'stretch', fromT: clampedLo, toT: clampedHi },
+  };
 }
 
 /**
@@ -71,7 +74,7 @@ export function splitLegs(
       return [withRange({ ...leg, wayId: newWayId }, ontoSecond(lo), ontoSecond(hi))];
     const first = withRange(leg, ontoFirst(lo), 1);
     const second = withRange({ ...leg, wayId: newWayId }, 0, ontoSecond(hi));
-    return leg.forward ? [first, second] : [second, first];
+    return legRunsWithPoints(leg) ? [first, second] : [second, first];
   });
 }
 
@@ -106,14 +109,17 @@ export function mergeLegs(
     const [lo, hi] = legRange(leg);
     const a = remap.positionOf(leg.wayId, lo);
     const b = remap.positionOf(leg.wayId, hi);
-    const forward = remap.reversed(leg.wayId) ? !leg.forward : leg.forward;
-    return withRange({ ...leg, wayId: keepId, forward }, a, b);
+    // Reversing a way's points changes which way round the leg runs it.
+    const flip = remap.reversed(leg.wayId);
+    const direction: LegDirection =
+      flip === legRunsWithPoints(leg) ? 'againstPoints' : 'withPoints';
+    return withRange({ ...leg, wayId: keepId, direction }, a, b);
   });
 
   const out: PatternLeg[] = [];
   for (const leg of remapped) {
     const last = out[out.length - 1];
-    if (last && last.wayId === leg.wayId && last.forward === leg.forward) {
+    if (last && last.wayId === leg.wayId && last.direction === leg.direction) {
       const [lastLo, lastHi] = legRange(last);
       const [lo, hi] = legRange(leg);
       if (Math.min(lastHi, hi) >= Math.max(lastLo, lo) - TOUCH_T) {
@@ -158,7 +164,7 @@ export function truncateLegs(
   if (!leg) return legs;
   const [lo, hi] = legRange(leg);
   const at = Math.max(lo, Math.min(hi, t));
-  const keepsLowEnd = side === 'end' ? leg.forward : !leg.forward;
+  const keepsLowEnd = side === 'end' ? legRunsWithPoints(leg) : !legRunsWithPoints(leg);
   const trimmed = keepsLowEnd ? withRange(leg, lo, at) : withRange(leg, at, hi);
   const kept = side === 'start' ? legs.slice(legIndex + 1) : legs.slice(0, legIndex);
   const withTrimmed = side === 'start' ? [trimmed, ...kept] : [...kept, trimmed];
@@ -207,7 +213,7 @@ export function removeStretchFromLegs(
       const after = cutHi < hi ? withRange(leg, cutHi, hi) : null;
       const pieces = [before, after].filter((l): l is PatternLeg => l !== null);
       // Ride order: travelling the way backward reaches the high piece first.
-      return leg.forward ? pieces : pieces.reverse();
+      return legRunsWithPoints(leg) ? pieces : pieces.reverse();
     })
     .filter((l) => !legIsDegenerate(l));
 }

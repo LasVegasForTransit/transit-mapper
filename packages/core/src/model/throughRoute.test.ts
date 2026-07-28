@@ -66,7 +66,7 @@ describe('joining two lines into a through-route', () => {
     const joined = next!.services[0].patterns[0];
     expect(joined.legs.map((l) => l.wayId)).toEqual(['west', 'east']);
     // Travelling east means running `east` against its own point order.
-    expect(joined.legs[1].forward).toBe(false);
+    expect(joined.legs[1].direction).toBe('againstPoints');
     const path = patternPath(next!.ways, joined);
     expect(path[0][0]).toBeCloseTo(-115.21, 5);
     expect(path[path.length - 1][0]).toBeCloseTo(-115.19, 5);

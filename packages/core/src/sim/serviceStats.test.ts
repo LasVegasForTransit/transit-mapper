@@ -3,7 +3,7 @@
 // two implementations and disagreed about how much of a way a line covers.
 
 import { describe, expect, it } from 'vitest';
-import { pathLengthMeters, patternPath } from '../model/geo';
+import { pathLengthMeters, patternPath, stretchLeg } from '../model/geo';
 import { aPattern, aRoad, aStation } from '../testing/fixtures';
 import { patternStats, patternStops } from './serviceStats';
 
@@ -47,7 +47,7 @@ describe('a line terminating mid-block', () => {
   // it — but the inspector's own copy of this filtered on way id alone and
   // listed it anyway, while the vehicle correctly drove past.
   const halfStreet = aPattern('p2', ways, ['w']);
-  halfStreet.legs[0] = { ...halfStreet.legs[0], fromT: 0, toT: 0.6 };
+  halfStreet.legs[0] = stretchLeg(halfStreet.legs[0], 0, 0.6);
 
   it('does not call at a station past where it stops', () => {
     expect(stopsOf(halfStreet).map((s) => s.station.id)).toEqual(['west', 'middle']);

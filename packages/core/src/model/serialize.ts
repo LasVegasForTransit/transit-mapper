@@ -16,6 +16,9 @@ import {
   type Node,
   type NodeControl,
   type Pattern,
+  type LegDirection,
+  type LegExtent,
+  type LegLane,
   type PatternLeg,
   type ScheduleDayScope,
   type SchedulePeriod,
@@ -30,7 +33,7 @@ import {
 
 export function createEmptySystem(now = Date.now()): TransitSystem {
   return {
-    version: 10, // v10 adds per-leg service extents (see model/system/service.ts)
+    version: 11, // v11 gives a leg typed direction/extent/lane (see model/system/service.ts)
     id: shortId(),
     name: 'Untitled system',
     viewport: { ...DEFAULT_VIEWPORT },
@@ -407,10 +410,10 @@ function parseLaneMap(raw: unknown, wayIds: string[]): Record<string, string> | 
 }
 
 /** A leg whose direction isn't known yet. v9 and earlier stored no direction
- *  at all, so a migrated leg leaves `forward` unset and `finish` derives it
+ *  at all, so a migrated leg leaves `direction` unset and `finish` derives it
  *  from the parsed ways — which only exist once the whole document is
  *  assembled, hence the two-step. */
-type DraftLeg = Omit<PatternLeg, 'forward'> & { forward?: boolean };
+type DraftLeg = Omit<PatternLeg, 'direction'> & { direction?: LegDirection };
 interface DraftPattern {
   id: string;
   legs: DraftLeg[];
@@ -425,20 +428,56 @@ function normalizedT(raw: unknown): number | undefined {
   return Math.max(0, Math.min(1, raw));
 }
 
+/** A leg with nothing said about how much of its way it covers or which lane
+ *  it rides — every leg in a document written before extents existed. */
+function draftWholeLeg(wayId: string): DraftLeg {
+  return { wayId, extent: { kind: 'whole' }, lane: { kind: 'auto' } };
+}
+
+/** v11 names the direction; v10 stored a `forward` boolean; anything older
+ *  stored nothing and leaves this absent for finish() to derive. */
+function parseLegDirection(r: Record<string, unknown>): { direction?: LegDirection } {
+  if (r.direction === 'withPoints' || r.direction === 'againstPoints')
+    return { direction: r.direction };
+  if (typeof r.forward === 'boolean')
+    return { direction: r.forward ? 'withPoints' : 'againstPoints' };
+  return {};
+}
+
+/** v11 stores the extent as a tagged value; v10 stored a `fromT`/`toT` pair
+ *  that was absent when the leg covered everything. A v10 leg carrying only
+ *  one of the two was expressible and meant nothing — it reads as whole. */
+function parseLegExtent(r: Record<string, unknown>): LegExtent {
+  const raw = r.extent as Record<string, unknown> | undefined;
+  if (raw?.kind === 'whole') return { kind: 'whole' };
+  const fromT = normalizedT(raw?.kind === 'stretch' ? raw.fromT : r.fromT);
+  const toT = normalizedT(raw?.kind === 'stretch' ? raw.toT : r.toT);
+  if (fromT === undefined || toT === undefined) return { kind: 'whole' };
+  return fromT <= 0 && toT >= 1 ? { kind: 'whole' } : { kind: 'stretch', fromT, toT };
+}
+
+/** v11 stores the lane as a tagged value; v9/v10 stored a bare `laneId` that
+ *  was absent when the lane resolved at render time. */
+function parseLegLane(r: Record<string, unknown>): LegLane {
+  const raw = r.lane as Record<string, unknown> | undefined;
+  if (raw?.kind === 'pinned' && typeof raw.laneId === 'string')
+    return { kind: 'pinned', laneId: raw.laneId };
+  if (raw?.kind === 'auto') return { kind: 'auto' };
+  if (typeof r.laneId === 'string') return { kind: 'pinned', laneId: r.laneId };
+  return { kind: 'auto' };
+}
+
 function parseLegs(raw: unknown): DraftLeg[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .map((l): DraftLeg | null => {
       const r = l as Record<string, unknown>;
       if (!r || typeof r.wayId !== 'string') return null;
-      const fromT = normalizedT(r.fromT);
-      const toT = normalizedT(r.toT);
       return {
         wayId: r.wayId,
-        ...(typeof r.forward === 'boolean' ? { forward: r.forward } : {}),
-        ...(fromT !== undefined ? { fromT } : {}),
-        ...(toT !== undefined ? { toT } : {}),
-        ...(typeof r.laneId === 'string' ? { laneId: r.laneId } : {}),
+        ...parseLegDirection(r),
+        extent: parseLegExtent(r),
+        lane: parseLegLane(r),
       };
     })
     .filter((l): l is DraftLeg => l !== null);
@@ -462,7 +501,10 @@ function parsePatterns(raw: unknown, legacyWayIds: unknown): DraftPattern[] {
           id: r.id,
           legs: wayIds.map((wayId) => ({
             wayId,
-            ...(lanes?.[wayId] ? { laneId: lanes[wayId] } : {}),
+            extent: { kind: 'whole' as const },
+            lane: lanes?.[wayId]
+              ? ({ kind: 'pinned', laneId: lanes[wayId] } as const)
+              : ({ kind: 'auto' } as const),
           })),
           name,
         };
@@ -470,7 +512,9 @@ function parsePatterns(raw: unknown, legacyWayIds: unknown): DraftPattern[] {
       .filter((p): p is DraftPattern => p !== null);
   }
   const wayIds = strings(legacyWayIds);
-  return wayIds.length > 0 ? [{ id: shortId(), legs: wayIds.map((wayId) => ({ wayId })) }] : [];
+  return wayIds.length > 0
+    ? [{ id: shortId(), legs: wayIds.map((wayId) => draftWholeLeg(wayId)) }]
+    : [];
 }
 
 /** Fill in the direction of every leg a pre-v10 document couldn't record,
@@ -480,14 +524,17 @@ function parsePatterns(raw: unknown, legacyWayIds: unknown): DraftPattern[] {
 function resolveLegDirections(patterns: DraftPattern[], ways: Way[]): Pattern[] {
   const byId = wayById(ways);
   return patterns.map((p) => {
-    if (p.legs.every((l) => l.forward !== undefined)) return p as Pattern;
+    if (p.legs.every((l) => l.direction !== undefined)) return p as Pattern;
     const derived = deriveLegDirections(
       byId,
       p.legs.map((l) => l.wayId),
     );
     return {
       ...p,
-      legs: p.legs.map((l, i) => ({ ...l, forward: l.forward ?? derived[i] })),
+      legs: p.legs.map((l, i) => ({
+        ...l,
+        direction: l.direction ?? (derived[i] ? 'withPoints' : 'againstPoints'),
+      })),
     };
   });
 }
@@ -728,7 +775,7 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
         name: typeof r.name === 'string' ? r.name : 'Service',
         modeId: typeof r.mode === 'string' ? r.mode : 'bus',
         color: typeof r.color === 'string' ? r.color : '#2ea44f',
-        patterns: [{ id: shortId(), legs: [{ wayId: r.id }] }],
+        patterns: [{ id: shortId(), legs: [draftWholeLeg(r.id)] }],
       });
     }
   }
@@ -793,7 +840,7 @@ function finish(
 
   const now = Date.now();
   return {
-    version: 10,
+    version: 11,
     id: typeof o.id === 'string' ? o.id : shortId(),
     name: typeof o.name === 'string' ? o.name : 'Untitled system',
     description: typeof o.description === 'string' ? o.description : undefined,

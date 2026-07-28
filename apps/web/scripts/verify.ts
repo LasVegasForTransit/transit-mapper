@@ -41,6 +41,12 @@ import {
   patternWayIds,
   serviceLaneOnWay,
   wholeLegs,
+  wholeLeg,
+  stretchLeg,
+  legRange,
+  legIsWhole,
+  legPinnedLane,
+  legRunsWithPoints,
   candidateWayIdsAlong,
   detectShapeRuns,
   snap,
@@ -253,8 +259,11 @@ function check(name: string, cond: boolean) {
 /** Whole-way legs in stored point order — the shape a hand-built fixture wants
  *  when direction and extent aren't what it's testing. Use wholeLegs when the
  *  fixture's ways genuinely need their direction derived from geometry. */
-const legsOf = (...wayIds: string[]): PatternLeg[] =>
-  wayIds.map((wayId) => ({ wayId, forward: true }));
+const legsOf = (...wayIds: string[]): PatternLeg[] => wayIds.map((wayId) => wholeLeg(wayId));
+
+/** A leg's covered stretch, for assertions that used to read fromT/toT. */
+const legFrom = (l: PatternLeg): number => legRange(l)[0];
+const legTo = (l: PatternLeg): number => legRange(l)[1];
 
 const store = createEditorStore();
 const ed = store.getState();
@@ -414,7 +423,9 @@ check(
         ...svc,
         patterns: svc.patterns.map((p) => ({
           ...p,
-          legs: p.legs.map((l) => (l.wayId === w ? { ...l, laneId } : l)),
+          legs: p.legs.map((l) =>
+            l.wayId === w ? { ...l, lane: { kind: 'pinned' as const, laneId } } : l,
+          ),
         })),
       },
     ],
@@ -422,7 +433,7 @@ check(
   const reparsed = parseSystem(JSON.parse(JSON.stringify(withLanes)));
   check(
     "a leg's lane pin survives a serialize/parse round-trip",
-    reparsed.services[0].patterns[0].legs[0].laneId === laneId,
+    legPinnedLane(reparsed.services[0].patterns[0].legs[0]) === laneId,
   );
   // v9 kept lane pins in a wayId-keyed map on the pattern; they migrate onto
   // the leg for the way they named, and a pin naming a way the pattern doesn't
@@ -444,7 +455,7 @@ check(
   const fromV9 = parseSystem(JSON.parse(JSON.stringify(v9Shape)));
   check(
     "a v9 pattern's lane map migrates onto the leg for that way",
-    fromV9.services[0].patterns[0].legs[0].laneId === laneId,
+    legPinnedLane(fromV9.services[0].patterns[0].legs[0]) === laneId,
   );
   check(
     'a v9 lane pin naming a way the pattern never runs over is dropped',
@@ -517,10 +528,9 @@ check(
     'the joining service names the stretch it uses instead of owning a way',
     bSvc.patterns[0].legs.length === 1 &&
       bLeg.wayId === A &&
-      bLeg.fromT !== undefined &&
-      bLeg.toT !== undefined &&
-      bLeg.fromT > 0 &&
-      bLeg.toT < 1,
+      !legIsWhole(bLeg) &&
+      legFrom(bLeg) > 0 &&
+      legTo(bLeg) < 1,
   );
 
   const filters = {
@@ -701,13 +711,10 @@ check(
 // the corridor — so the arithmetic is checked directly rather than only
 // through the store.
 {
-  const whole = (wayId: string, forward = true): PatternLeg => ({ wayId, forward });
-  const part = (wayId: string, fromT: number, toT: number, forward = true): PatternLeg => ({
-    wayId,
-    forward,
-    fromT,
-    toT,
-  });
+  const whole = (wayId: string, forward = true): PatternLeg =>
+    wholeLeg(wayId, forward ? 'withPoints' : 'againstPoints');
+  const part = (wayId: string, fromT: number, toT: number, forward = true): PatternLeg =>
+    stretchLeg(whole(wayId, forward), fromT, toT);
   const half = 0.5;
 
   const splitWhole = splitLegs([whole('w')], 'w', 'w2', half);
@@ -716,7 +723,7 @@ check(
     splitWhole.length === 2 &&
       splitWhole[0].wayId === 'w' &&
       splitWhole[1].wayId === 'w2' &&
-      splitWhole.every((l) => l.fromT === undefined && l.toT === undefined),
+      splitWhole.every(legIsWhole),
   );
 
   const beforeSplit = splitLegs([part('w', 0.1, 0.3)], 'w', 'w2', half);
@@ -724,8 +731,8 @@ check(
     'a leg wholly before the split stays on the first half, rescaled to it',
     beforeSplit.length === 1 &&
       beforeSplit[0].wayId === 'w' &&
-      Math.abs(beforeSplit[0].fromT! - 0.2) < 1e-9 &&
-      Math.abs(beforeSplit[0].toT! - 0.6) < 1e-9,
+      Math.abs(legFrom(beforeSplit[0]) - 0.2) < 1e-9 &&
+      Math.abs(legTo(beforeSplit[0]) - 0.6) < 1e-9,
   );
 
   const afterSplit = splitLegs([part('w', 0.6, 0.9)], 'w', 'w2', half);
@@ -733,18 +740,18 @@ check(
     'a leg wholly after the split moves to the second half, rescaled to it',
     afterSplit.length === 1 &&
       afterSplit[0].wayId === 'w2' &&
-      Math.abs(afterSplit[0].fromT! - 0.2) < 1e-9 &&
-      Math.abs(afterSplit[0].toT! - 0.8) < 1e-9,
+      Math.abs(legFrom(afterSplit[0]) - 0.2) < 1e-9 &&
+      Math.abs(legTo(afterSplit[0]) - 0.8) < 1e-9,
   );
 
   const straddle = splitLegs([part('w', 0.25, 0.75)], 'w', 'w2', half);
   check(
     'a leg spanning the split becomes two, each rescaled to its own half',
     straddle.length === 2 &&
-      Math.abs(straddle[0].fromT! - 0.5) < 1e-9 &&
-      straddle[0].toT === 1 &&
-      straddle[1].fromT === 0 &&
-      Math.abs(straddle[1].toT! - 0.5) < 1e-9,
+      Math.abs(legFrom(straddle[0]) - 0.5) < 1e-9 &&
+      legTo(straddle[0]) === 1 &&
+      legFrom(straddle[1]) === 0 &&
+      Math.abs(legTo(straddle[1]) - 0.5) < 1e-9,
   );
 
   const straddleBack = splitLegs([part('w', 0.25, 0.75, false)], 'w', 'w2', half);
@@ -755,9 +762,12 @@ check(
 
   check(
     "a split carries the leg's lane pin onto both halves",
-    splitLegs([{ wayId: 'w', forward: true, laneId: 'lane-1' }], 'w', 'w2', half).every(
-      (l) => l.laneId === 'lane-1',
-    ),
+    splitLegs(
+      [{ ...wholeLeg('w'), lane: { kind: 'pinned', laneId: 'lane-1' } }],
+      'w',
+      'w2',
+      half,
+    ).every((l) => legPinnedLane(l) === 'lane-1'),
   );
 
   const untouched = [part('w', 0.2, 0.8)];
@@ -776,10 +786,7 @@ check(
   });
   check(
     'merging two ways a pattern rode end-to-end collapses them into one whole leg',
-    merged.length === 1 &&
-      merged[0].wayId === 'keep' &&
-      merged[0].fromT === undefined &&
-      merged[0].toT === undefined,
+    merged.length === 1 && merged[0].wayId === 'keep' && legIsWhole(merged[0]),
   );
 
   const partialMerge = mergeLegs([part('other', 0.5, 1)], 'keep', 'other', {
@@ -789,8 +796,8 @@ check(
   check(
     'a leg that covered part of the absorbed way keeps that stretch on the merged one',
     partialMerge.length === 1 &&
-      Math.abs(partialMerge[0].fromT! - 0.7) < 1e-9 &&
-      Math.abs(partialMerge[0].toT! - 1) < 1e-9,
+      Math.abs(legFrom(partialMerge[0]) - 0.7) < 1e-9 &&
+      Math.abs(legTo(partialMerge[0]) - 1) < 1e-9,
   );
 
   const flipped = mergeLegs([whole('other')], 'keep', 'other', {
@@ -799,7 +806,7 @@ check(
   });
   check(
     'a leg on a way the merge reversed now travels the merged way the other way round',
-    flipped.length === 1 && flipped[0].forward === false,
+    flipped.length === 1 && !legRunsWithPoints(flipped[0]),
   );
 }
 
@@ -830,7 +837,7 @@ check(
   check(
     'serviceLaneOnWay: an explicit pattern.lanes pin overrides the default',
     serviceLaneOnWay(
-      { id: 'p', legs: [{ wayId: 'w', forward: true, laneId: pinId }] },
+      { id: 'p', legs: [{ ...wholeLeg('w'), lane: { kind: 'pinned', laneId: pinId } }] },
       0,
       roadMap,
       'bus',
@@ -6252,7 +6259,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     'a v8 system migrates with an empty vehicleKinds list',
     Array.isArray(legacy.vehicleKinds) && legacy.vehicleKinds.length === 0,
   );
-  check('a v8 system migrates to the current version', legacy.version === 10);
+  // Read the current version rather than restating it: a schema bump should
+  // not need this file edited to keep passing.
+  check(
+    'a v8 system migrates to the current version',
+    legacy.version === createEmptySystem().version,
+  );
 
   const withKinds = parseSystem({
     ...legacy,
@@ -6327,7 +6339,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     medians: {},
     approachControls: {},
   });
-  check('a v9 document parses to the current version', v9.version === 10);
+  check('a v9 document parses to the current version', v9.version === createEmptySystem().version);
   const v9Legs = v9.services[0].patterns[0].legs;
   check(
     'a v9 pattern migrates to one leg per way, in the same order',
@@ -6335,11 +6347,11 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
   check(
     'the migration recovers the direction v9 could not record',
-    v9Legs[0].forward === true && v9Legs[1].forward === false,
+    legRunsWithPoints(v9Legs[0]) && !legRunsWithPoints(v9Legs[1]),
   );
   check(
     'every migrated leg covers its whole way, since v9 could not say otherwise',
-    v9Legs.every((l) => l.fromT === undefined && l.toT === undefined),
+    v9Legs.every(legIsWhole),
   );
   check(
     "the migrated line's shape is the one v9 drew, end to end and unbroken",
@@ -6352,7 +6364,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   const reparsed = parseSystem(JSON.parse(JSON.stringify(v9)));
   check(
     'a v10 document keeps the directions it already stores',
-    reparsed.services[0].patterns[0].legs.every((l, i) => l.forward === v9Legs[i].forward),
+    reparsed.services[0].patterns[0].legs.every((l, i) => l.direction === v9Legs[i].direction),
   );
 }
 
@@ -7841,7 +7853,7 @@ function buildGrid() {
   );
   check(
     'the mid-way anchors became leg extents rather than splits',
-    svc.patterns[0].legs.some((l) => l.fromT !== undefined || l.toT !== undefined),
+    svc.patterns[0].legs.some((l) => !legIsWhole(l)),
   );
   // The route length is now measured off what the legs actually cover, not by
   // summing whole ways — which is the point: the ways are longer than the ride.
@@ -8512,7 +8524,7 @@ function buildGrid() {
   // trimmed path and stacks a phantom dwell on the terminus.
   const trimmedStops = dwellStopsForPattern(
     sys.stations,
-    { id: 'p2', legs: [{ wayId: 'w1', forward: true, fromT: 0, toT: 0.6 }] },
+    { id: 'p2', legs: [stretchLeg(wholeLeg('w1'), 0, 0.6)] },
     path,
     pathMeters,
   );
@@ -10638,31 +10650,31 @@ function buildGrid() {
 // ways, so the only way to shorten a line was to delete it.
 {
   const legsFor = (...specs: [string, boolean, number?, number?][]): PatternLeg[] =>
-    specs.map(([wayId, forward, fromT, toT]) => ({
-      wayId,
-      forward,
-      ...(fromT !== undefined ? { fromT } : {}),
-      ...(toT !== undefined ? { toT } : {}),
-    }));
+    specs.map(([wayId, forward, fromT, toT]) => {
+      const leg = wholeLeg(wayId, forward ? 'withPoints' : 'againstPoints');
+      return fromT !== undefined && toT !== undefined ? stretchLeg(leg, fromT, toT) : leg;
+    });
 
   // Trimming the END of a forward leg keeps the low end of the way.
   const trimEnd = truncateLegs(legsFor(['w', true]), 0, 0.6, 'end');
   check(
     'trimming a line back leaves it running only up to that point',
-    trimEnd.length === 1 && trimEnd[0].fromT === 0 && Math.abs(trimEnd[0].toT! - 0.6) < 1e-9,
+    trimEnd.length === 1 && legFrom(trimEnd[0]) === 0 && Math.abs(legTo(trimEnd[0]) - 0.6) < 1e-9,
   );
   // …and trimming the START of that same leg keeps the high end.
   const trimStart = truncateLegs(legsFor(['w', true]), 0, 0.6, 'start');
   check(
     'trimming the other end of a line keeps the far side',
-    trimStart.length === 1 && Math.abs(trimStart[0].fromT! - 0.6) < 1e-9 && trimStart[0].toT === 1,
+    trimStart.length === 1 &&
+      Math.abs(legFrom(trimStart[0]) - 0.6) < 1e-9 &&
+      legTo(trimStart[0]) === 1,
   );
   // A BACKWARD leg rides the way high-to-low, so "the start of the line" is
   // the way's high end. Getting this backward would trim the wrong half.
   const trimBackward = truncateLegs(legsFor(['w', false]), 0, 0.6, 'start');
   check(
     'trimming the start of a line that runs its way backward keeps the low end',
-    trimBackward.length === 1 && trimBackward[0].fromT === 0,
+    trimBackward.length === 1 && legFrom(trimBackward[0]) === 0,
   );
   // Trimming into the middle of a multi-way line drops the legs beyond it.
   const trimMulti = truncateLegs(legsFor(['a', true], ['b', true], ['c', true]), 1, 0.4, 'end');
@@ -10675,9 +10687,9 @@ function buildGrid() {
   check(
     'cutting a line in two gives each half the stretch on its own side',
     near.length === 1 &&
-      Math.abs(near[0].toT! - 0.5) < 1e-9 &&
+      Math.abs(legTo(near[0]) - 0.5) < 1e-9 &&
       far.length === 2 &&
-      Math.abs(far[0].fromT! - 0.5) < 1e-9,
+      Math.abs(legFrom(far[0]) - 0.5) < 1e-9,
   );
   const [onEnd] = splitLegsAt(legsFor(['a', true]), 0, 0);
   check('cutting a line at its own terminus splits nothing off', onEnd.length === 0);
@@ -10687,12 +10699,12 @@ function buildGrid() {
   check(
     'removing a stretch from under a line leaves the pieces on both sides',
     holed.length === 2 &&
-      Math.abs(holed[0].toT! - 0.4) < 1e-9 &&
-      Math.abs(holed[1].fromT! - 0.6) < 1e-9,
+      Math.abs(legTo(holed[0]) - 0.4) < 1e-9 &&
+      Math.abs(legFrom(holed[1]) - 0.6) < 1e-9,
   );
   check(
     'a line running the way backward gets those pieces in ride order',
-    removeStretchFromLegs(legsFor(['w', false]), 'w', 0.4, 0.6)[0].fromT === 0.6,
+    legFrom(removeStretchFromLegs(legsFor(['w', false]), 'w', 0.4, 0.6)[0]) === 0.6,
   );
   check(
     'removing a stretch a line does not reach leaves it alone',
@@ -10886,9 +10898,7 @@ function buildGrid() {
   );
   check(
     'it rides only the stretch it was drawn over, not the whole road',
-    after.services
-      .flatMap((sv) => sv.patterns)
-      .some((p) => p.legs.some((l) => l.fromT !== undefined && l.fromT > 0)),
+    after.services.flatMap((sv) => sv.patterns).some((p) => p.legs.some((l) => legFrom(l) > 0)),
   );
   check(
     'the shared road is drawn once, with both lines fanned across it',
@@ -11008,7 +11018,7 @@ function buildGrid() {
     'the shorter line rides only the stretch of it that it covered',
     after.services
       .flatMap((sv) => sv.patterns)
-      .some((pt) => pt.legs.some((l) => l.fromT !== undefined && l.fromT > 0 && l.toT! < 1)),
+      .some((pt) => pt.legs.some((l) => legFrom(l) > 0 && legTo(l) < 1)),
   );
 
   // A line that runs along the corridor and then carries on past the end of it

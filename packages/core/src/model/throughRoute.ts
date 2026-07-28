@@ -16,7 +16,7 @@
  */
 
 import { mode } from './catalog';
-import { haversineMeters, patternPath } from './geo';
+import { haversineMeters, patternPath, legRunsWithPoints } from './geo';
 import { materializeRouteSpans } from './routeLegs';
 import { anchorOnWay, routeBetween } from './routeGraph';
 import type { Pattern, PatternLeg, Service, TransitSystem, Way } from './system';
@@ -24,11 +24,14 @@ import { LEG_JOIN_TOLERANCE_M } from './validate';
 import { terminiMeet, type TerminusMeeting } from './selectionRelations';
 
 /** A leg list traversed the other way round: the order reverses, and each
- *  leg's direction of travel flips. The extent is left alone — fromT/toT
- *  measure along the WAY's own path, not along travel, so which end of the
- *  stretch you enter first is exactly what `forward` says. */
+ *  leg's direction of travel flips. The extent is left alone — it measures
+ *  along the WAY's own path, not along travel, so which end of the stretch you
+ *  enter first is exactly what `direction` says. */
 function reverseLegs(legs: PatternLeg[]): PatternLeg[] {
-  return [...legs].reverse().map((leg) => ({ ...leg, forward: !leg.forward }));
+  return [...legs].reverse().map((leg) => ({
+    ...leg,
+    direction: legRunsWithPoints(leg) ? ('againstPoints' as const) : ('withPoints' as const),
+  }));
 }
 
 /** Legs oriented so that `end` is the last thing travelled. */

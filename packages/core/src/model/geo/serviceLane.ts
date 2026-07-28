@@ -8,6 +8,7 @@
 import { mode } from '../catalog';
 import { defaultLaneFor } from '../profile';
 import type { Pattern, Way } from '../system';
+import { legPinnedLane, legRunsWithPoints } from './servicePaths';
 
 /** The lane kinds a mode prefers, most-preferred first — a bus wants a
  *  dedicated bus lane then a drive lane; rail wants its track. Fed to
@@ -33,7 +34,7 @@ export function preferredLaneKinds(modeId: string): readonly string[] {
  *
  * `forward` overrides the leg's own direction, for the RETURN run: the same
  * leg travelled the other way resolves to the lane on the other side of the
- * street. A leg's `laneId` pin is not per-direction, so a pinned leg puts both
+ * street. A leg's lane pin is not per-direction, so a pinned leg puts both
  * runs in the one lane the planner named. That is single-track running, and it
  * is what they asked for.
  */
@@ -48,10 +49,11 @@ export function serviceLaneOnWay(
   if (!leg) return null;
   const way = waysById.get(leg.wayId);
   if (!way) return null;
-  if (leg.laneId) return leg.laneId;
+  const pinned = legPinnedLane(leg);
+  if (pinned) return pinned;
   return defaultLaneFor(
     way.profile,
-    (forward ?? leg.forward) ? 'forward' : 'backward',
+    (forward ?? legRunsWithPoints(leg)) ? 'forward' : 'backward',
     preferredLaneKinds(modeId),
   );
 }
