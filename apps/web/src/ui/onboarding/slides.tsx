@@ -1,4 +1,5 @@
 import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
+import type { IconName } from '../Icon';
 
 /** How a slide illustrates itself. `triPreview` and `singlePreview` both
  *  render a live `OnboardingPreviewMap` against the shared fixture system —
@@ -7,7 +8,7 @@ import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 export type OnboardingSlideVisual =
   | { kind: 'triPreview' }
   | { kind: 'singlePreview'; viewMode: ViewOptions['viewMode']; animateVehicle?: boolean }
-  | { kind: 'icons'; icons: [string, string] };
+  | { kind: 'icons'; icons: [IconName, IconName] };
 
 export interface OnboardingSlideData {
   title: string;
