@@ -93,6 +93,11 @@ export function LinesPanel() {
   const nameByWayId = useMemo(() => {
     const out = new Map<string, string>();
     for (const identity of namedWays) {
+      // An identity can exist without a name — separateCarriageways mints one
+      // to hold the two halves of a street together. Numbering a blank name
+      // yields rows reading " 1" and " 2", so such an identity contributes no
+      // label at all and its ways fall back to their own.
+      if (!identity.name) continue;
       identity.wayIds.forEach((id, i) =>
         out.set(id, identity.wayIds.length > 1 ? `${identity.name} ${i + 1}` : identity.name),
       );

@@ -78,6 +78,14 @@ drives every compatibility check (the mode picker, route drawing, adoption):
 Light rail and trams list `road` because they street-run in a road's
 right-of-way (a road's cross-section can include `track` lanes).
 
+A mode also declares `corridorToleranceM`: how far a drawn line may sit from
+existing infrastructure and still count as running along it. This is a
+physical fact about the mode rather than a UI preference — a train is on the
+track or it is not, so the rail modes use 6 m, while road and water modes take
+the 20 m default that was tuned against real GTFS data. Too tight and drawing
+along a street mints a second street beside it; too loose and a line drawn
+deliberately beside an existing one gets swallowed by it.
+
 ## Grades (`GRADES`)
 
 `underground`, `atGrade`, `elevated`. Grade decides junction formation:

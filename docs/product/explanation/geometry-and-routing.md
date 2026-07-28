@@ -66,11 +66,25 @@ Dijkstra's algorithm, with two refinements:
   sketch by discounting edges close to the sketched path, so among many
   plausible street routings the one following the user's drawing wins.
 
-Committing a route _materializes_ it: anchors that fall mid-way become real
-control points, ways are split there, and the service's patterns list the
-resulting ways in travel order. Materializing rather than storing fractional
-positions keeps the service model uniform: a routed service and a sketched
-one end up the same shape.
+Committing a route turns it into the line's **legs** — one per way it runs
+over, each naming which direction it travels that way and, where the route
+begins or ends mid-block, how much of it the route covers. No control points
+are inserted and no way is split, so routing a line over existing streets
+leaves those streets exactly as they were.
+
+This reverses an earlier decision, and it is worth saying why. Routing used to
+materialize a mid-way anchor by splicing in a real control point and splitting
+the way around it, so a pattern could go on naming whole ways. That kept the
+service model uniform at the cost of changing the infrastructure: every split
+extended every other rider's pattern, reanchored every station on the way, and
+left a fragment behind for good. A busy corridor accumulated one fragment per
+line that terminated on it, which is most of why a street carrying several
+lines stopped reading as one street. Uniformity was the wrong thing to buy.
+
+Interior span boundaries still need no extent, because the routing graph only
+has vertices at way endpoints and junction-referenced points — consecutive
+spans already meet at a genuinely shared coordinate. Only a route's own two
+ends can land mid-way.
 
 Routing currently treats ways as bidirectional; honoring one-way profiles
 is the natural next step, since the profile already encodes direction.
