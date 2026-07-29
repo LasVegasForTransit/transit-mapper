@@ -3,7 +3,7 @@ import {
   settleSourceMutationAfterRender,
   type SourceMutationSettlementHost,
   type SettledSourceDataEvent,
-} from './sourceMutationSettlement';
+} from '../../src/map/sourceMutationSettlement';
 
 function createHost() {
   const loadingListeners = new Set<(sourceId: string) => void>();

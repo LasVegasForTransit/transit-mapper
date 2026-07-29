@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SRC_STATIONS } from './layers';
-import { createStationGestureSettlementController } from './stationGestureSettlement';
+import { SRC_STATIONS } from '../../src/map/layers';
+import { createStationGestureSettlementController } from '../../src/map/stationGestureSettlement';
 import type {
   SettledSourceDataEvent,
   SourceMutationSettlementHost,
-} from './sourceMutationSettlement';
+} from '../../src/map/sourceMutationSettlement';
 
 function createSettlementHost() {
   const loadingListeners = new Set<(sourceId: string) => void>();

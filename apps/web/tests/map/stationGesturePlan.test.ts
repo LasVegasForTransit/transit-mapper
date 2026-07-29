@@ -5,12 +5,12 @@ import {
   SRC_PLATFORMS,
   SRC_STATIONS,
   SRC_WAYS,
-} from './layers';
-import type { SystemFeatureSourceId } from './sourceUploadPlan';
+} from '../../src/map/layers';
+import type { SystemFeatureSourceId } from '../../src/map/sourceUploadPlan';
 import {
   planStationGestureSettlement,
   type StationGestureSettlementOptions,
-} from './stationGesturePlan';
+} from '../../src/map/stationGesturePlan';
 
 const stationSources = [
   SRC_STATIONS,
