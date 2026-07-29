@@ -1,19 +1,24 @@
-# Dragging a route's end onto another corridor
+# Dragging a branch terminus onto another corridor
 
-For whoever next touches route drafting, the terminus handles, or
+> **Status.** Historical design note. The current branch-specific behavior and
+> vocabulary are normative in
+> [Editor interactions](../../product/reference/editor-interactions.md). The
+> first implementation's simple-`Pattern` restriction described below was
+> superseded by dedicated termini for both ends of every branch.
+
+For whoever next touches service-path drafting, the terminus handles, or
 `routeGraph.ts`. When you finish this you should know why the drag reuses
 `routeBetween` directly instead of the click-based `routeDraft` state, and why
-a failed drag leaves the pattern untouched rather than extending partway.
+a failed drag leaves the branch untouched rather than extending partway.
 
 ## The problem
 
-A pattern's start and end are only editable today by re-drawing: pick the Line
-tool, click along the corridor you want to add, commit. There is no way to
-grab the visible end of an existing line and pull it further — the map has
-drag handles for a WAY's endpoint (`startHandleDrag`/`startExtendDrag` in
-`interactions.ts`, which reshape or grow the street itself) but none for a
-PATTERN's terminus, which is a different thing: where a service's own coverage
-of the network currently stops.
+A branch's termini were only editable by re-drawing: pick the Line tool, click
+along the corridor you want to add, commit. There was no way to grab the
+visible end of an existing line and pull it further. The map had handles for a
+corridor endpoint (`startHandleDrag`/`startExtendDrag` in `interactions.ts`,
+which reshape or grow the physical corridor) but none for a service terminus,
+which is a different thing: where one branch's service path stops.
 
 This surfaced alongside a rendering bug (bundled service lines visibly
 separating at a bend, fixed separately in `mergeServiceLines.ts`) because the
@@ -23,12 +28,12 @@ because nothing does anything.
 
 ## The decision
 
-A new draggable handle at each simple pattern's start and end. Dragging it
-runs the SAME pathfinder route-drawing already uses (`routeBetween` in
-`model/routeGraph.ts`) from the pattern's current terminus to the cursor, live,
-on every frame; dropping it extends the pattern's own legs to cover whatever
-path was found. The service's identity, color, and schedule are untouched —
-only its coverage grows.
+A new draggable handle at each simple branch's start and end, derived from its
+`Pattern`. Dragging it runs the same pathfinder route drawing already uses
+(`routeBetween` in
+`model/routeGraph.ts`) from the branch's current terminus to the cursor, live,
+on every frame; dropping it extends the branch's service path to cover whatever
+path was found. The service's identity, color, and schedule are untouched.
 
 **Stateless per-frame query, not the click-based draft.** `startRouteDraft`/
 `extendRouteDraft`/`commitRouteDraft` exist for building a route up over
@@ -57,7 +62,7 @@ All three clear the instant a frame finds no legal path — the absence of the
 ring/highlight/preview line IS the "this will not connect" signal. Nothing new
 to build for the "this won't work" case.
 
-**A failed drop leaves the pattern exactly as it was.** The real pattern data
+**A failed drop leaves the branch exactly as it was.** The real `Pattern` data
 is never touched during the drag — only the preview sources are — so "snap
 back" costs nothing to implement: `onUp` either commits (a hint was showing)
 or does nothing (it wasn't). No revert path to write, no partial extension to
@@ -105,8 +110,8 @@ for editing the physical street itself, where dragging an endpoint already
 means something else (`startHandleDrag`/`startExtendDrag`). The terminus
 handle simply isn't rendered in Infrastructure view.
 
-**Only patterns with a single `shared` section** — `!patternHasSplit(pattern)`
-— get a terminus handle. A couplet's outward and return trips meet at a
+**The first pass limited handles to patterns with a single `shared` section**
+(`!patternHasSplit(pattern)`). A couplet's outward and return trips meet at a
 turnaround or diverge into a split; growing "the end" of a pattern like that
 means picking which leg of a fork to extend, and there's no single terminus
 coordinate to anchor the drag preview on in the first place. Extending a
@@ -114,10 +119,10 @@ couplet's own branches is a real feature, just not this one — it needs its own
 design once there's a concrete case to build it against, rather than guessing
 at the interaction now.
 
-**Both ends of every pattern**, not just the service's outermost stops — a
-branched service (several patterns) gets a handle at each pattern's own start
-and end, consistent with how the rest of the pattern-legs model treats a
-branch as a first-class route with its own extent.
+**Both ends of every branch**, not just the service's outermost stops — a
+branched service (several `Pattern` records) gets a handle at each branch's own
+start and end, consistent with how the model treats a branch as a first-class
+service path with its own extent.
 
 ## What was rejected
 

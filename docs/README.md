@@ -34,6 +34,8 @@ deepens.
 ## Reference
 
 - [Data model](product/reference/data-model.md) — every record in a saved system.
+- [Editor interactions](product/reference/editor-interactions.md) — normative
+  vocabulary, pointer cursors, badges, previews, and results.
 - [Catalogs](product/reference/catalogs.md) — way types, modes, lane kinds,
   facility types, presets, and how to extend them.
 - [Keyboard shortcuts](product/reference/keyboard-shortcuts.md).
