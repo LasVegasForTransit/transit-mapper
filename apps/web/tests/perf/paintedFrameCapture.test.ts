@@ -37,4 +37,17 @@ describe('painted frame capture', () => {
     capture.detach();
     expect(map.listener).toBeNull();
   });
+
+  it('retains very slow painted frames instead of hiding user-visible stalls', () => {
+    const map = new FakeRenderMap();
+    const now = vi.spyOn(performance, 'now');
+    const capture = attachPaintedFrameCapture(map);
+
+    now.mockReturnValueOnce(100).mockReturnValueOnce(750);
+    capture.start();
+    map.render();
+    map.render();
+
+    expect(capture.stop()).toEqual([650]);
+  });
 });

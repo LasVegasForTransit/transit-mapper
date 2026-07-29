@@ -9,8 +9,6 @@ export interface PaintedFrameCapture {
   detach: () => void;
 }
 
-const MAX_ACTIVE_FRAME_GAP_MS = 500;
-
 /** Capture MapLibre render intervals only while a measured pointer sequence is
  * active. */
 export function attachPaintedFrameCapture(map: RenderEventMap): PaintedFrameCapture {
@@ -22,7 +20,9 @@ export function attachPaintedFrameCapture(map: RenderEventMap): PaintedFrameCapt
     const now = performance.now();
     if (lastPaintAt !== null) {
       const duration = now - lastPaintAt;
-      if (duration > 0 && duration < MAX_ACTIVE_FRAME_GAP_MS) durations.push(duration);
+      // The capture is already bounded by start/stop. An upper cutoff would
+      // erase the exact unresponsive frames this harness is meant to expose.
+      if (duration > 0) durations.push(duration);
     }
     lastPaintAt = now;
   };
