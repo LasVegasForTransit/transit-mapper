@@ -8,13 +8,18 @@ import { LVBT } from '@transitmapper/core/style/lvbtBrand';
 import {
   appIconPng,
   appIconSvg,
-  appleTouchIconPng,
+  appleTouchIconLayerPng,
   type AppIconKind,
   type AppIconTheme,
 } from './app-icon';
 
 const PUBLIC_DIRECTORY = resolve(import.meta.dirname, '../public');
 const OPEN_GRAPH_PATH = resolve(PUBLIC_DIRECTORY, 'og-image.png');
+const ICON_COMPOSER_LAYER_PATH = resolve(
+  import.meta.dirname,
+  'transit-mapper.icon/Assets/apple-touch-icon-layer.png',
+);
+const ICON_COMPOSER_EXPORT_PATH = resolve(import.meta.dirname, 'apple-touch-icon-source.png');
 const CHECK_ONLY = process.argv.includes('--check');
 
 interface RasterAsset {
@@ -63,9 +68,15 @@ async function generatedAssets(): Promise<GeneratedAsset[]> {
     });
   }
 
+  const appleSource = await readFile(ICON_COMPOSER_EXPORT_PATH).catch(() => null);
+  if (!appleSource) {
+    throw new Error(
+      `Missing Icon Composer export: ${ICON_COMPOSER_EXPORT_PATH}. Export a flattened 1024px PNG from transit-mapper.icon.`,
+    );
+  }
   assets.push({
     name: 'apple-touch-icon.png',
-    contents: await appleTouchIconPng(180),
+    contents: await sharp(appleSource).resize(180, 180).png({ compressionLevel: 9 }).toBuffer(),
   });
 
   return assets;
@@ -114,6 +125,9 @@ async function verifyOrWrite(path: string, expected: Buffer): Promise<boolean> {
 
 async function main(): Promise<void> {
   const stale: string[] = [];
+  if (!(await verifyOrWrite(ICON_COMPOSER_LAYER_PATH, await appleTouchIconLayerPng()))) {
+    stale.push('scripts/transit-mapper.icon/Assets/apple-touch-icon-layer.png');
+  }
   for (const asset of await generatedAssets()) {
     const path = resolve(PUBLIC_DIRECTORY, asset.name);
     if (!(await verifyOrWrite(path, asset.contents))) stale.push(asset.name);

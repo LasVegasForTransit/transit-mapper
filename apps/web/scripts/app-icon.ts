@@ -126,83 +126,29 @@ export async function appIconPng(options: AppIconPngOptions): Promise<Buffer> {
 }
 
 /**
- * Safari accepts a flattened Apple touch icon, not Icon Composer's layered
- * native-app format. This Apple-only rendering suggests the same material with
- * a translucent body, a restrained refracted edge, and a top-lit specular
- * highlight while the LVBT Ember field stays fully solid.
+ * Icon Composer expects flat, effect-free source art and applies Liquid Glass
+ * itself. The SVG preserves the exact Lucide geometry; rasterizing it once
+ * below unions intersecting strokes into one alpha silhouette before Icon
+ * Composer sees them.
  */
-export function appleTouchIconSvg(): string {
+function appleTouchIconLayerSvg(): string {
   const transform = `translate(${GLYPH_OFFSET} ${GLYPH_OFFSET}) translate(12 12) scale(${GLYPH_SCALE.regular}) translate(-12 -12) rotate(45 12 12)`;
-  const nodes = iconNodeMarkup(ICONS_LINE);
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ICON_SIZE} ${ICON_SIZE}">
-  <defs>
-    <linearGradient id="glass-body" x1="0" y1="0" x2="0.72" y2="1">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.96" />
-      <stop offset="0.38" stop-color="${LVBT.light.onPrimary}" stop-opacity="0.82" />
-      <stop offset="0.72" stop-color="#FFD2C4" stop-opacity="0.66" />
-      <stop offset="1" stop-color="${LVBT.light.onPrimary}" stop-opacity="0.78" />
-    </linearGradient>
-    <linearGradient id="specular-fade" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF" />
-      <stop offset="0.48" stop-color="#FFFFFF" stop-opacity="0.28" />
-      <stop offset="0.7" stop-color="#000000" stop-opacity="0" />
-    </linearGradient>
-    <mask id="specular-mask">
-      <rect width="${ICON_SIZE}" height="${ICON_SIZE}" fill="url(#specular-fade)" />
-    </mask>
-    <filter id="glass-elevation" x="-40%" y="-40%" width="180%" height="190%" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="0.9" stdDeviation="0.72" flood-color="#541A0A" flood-opacity="0.34" />
-    </filter>
-    <filter id="refracted-edge" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="0.18" />
-    </filter>
-  </defs>
-  <rect width="${ICON_SIZE}" height="${ICON_SIZE}" fill="${LVBT.light.primary}" />
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 ${ICON_SIZE} ${ICON_SIZE}">
   <g
     transform="${transform}"
     fill="none"
-    stroke="#FFB39C"
-    stroke-width="2.8"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    opacity="0.3"
-    filter="url(#refracted-edge)"
-  >
-      ${nodes}
-  </g>
-  <g
-    transform="${transform}"
-    fill="none"
-    stroke="url(#glass-body)"
+    stroke="${LVBT.light.onPrimary}"
     stroke-width="2"
     stroke-linecap="round"
     stroke-linejoin="round"
-    filter="url(#glass-elevation)"
   >
-      ${nodes}
-  </g>
-  <g
-    transform="${transform}"
-    fill="none"
-    stroke="#FFFFFF"
-    stroke-width="0.58"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    opacity="0.8"
-    mask="url(#specular-mask)"
-  >
-      ${nodes}
+      ${iconNodeMarkup(ICONS_LINE)}
   </g>
 </svg>
 `;
 }
 
-export async function appleTouchIconPng(size: number): Promise<Buffer> {
-  validateRasterSize(size);
-
-  return sharp(Buffer.from(appleTouchIconSvg()))
-    .resize(size, size)
-    .png({ compressionLevel: 9 })
-    .toBuffer();
+export async function appleTouchIconLayerPng(): Promise<Buffer> {
+  return sharp(Buffer.from(appleTouchIconLayerSvg())).png({ compressionLevel: 9 }).toBuffer();
 }
