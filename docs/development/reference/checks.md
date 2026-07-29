@@ -10,20 +10,20 @@ pnpm check        # all of it
 pnpm check --fix  # everything a machine can repair
 ```
 
-| Check               | Fails when                                                                                              | Fix                                                                                        |
-| ------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `format:check`      | a file is not Prettier-formatted                                                                        | `pnpm format`                                                                              |
-| `lint`              | a lint rule is violated, including the repository-specific ones                                         | `pnpm lint:fix`                                                                            |
-| `typecheck:scripts` | a file under scripts/ does not compile                                                                  | `fix the type error; do not add `any``                                                     |
-| `check:contract`    | a package is missing lint, typecheck or verify, or pins a literal version instead of catalog:           | `add the script, or move the version into the catalog in pnpm-workspace.yaml`              |
-| `check:docs`        | a relative link or anchor in docs/ does not resolve                                                     | `correct the link, or write the page it points at`                                         |
-| `check:migrations`  | a migration that already exists was edited, renamed or deleted                                          | `restore the file and add a new migration with the change`                                 |
-| `check:structure`   | a source directory has no section in project-structure.md, or a described one is gone                   | `write the section, or remove the stale entry`                                             |
-| `check:documents`   | a required document is missing, lacks a required section, has them out of order, or uses a stock phrase | `add the section or cut the phrase — see docs/development/reference/document-standards.md` |
-| `check:reference`   | this page no longer matches the registry it is generated from                                           | `pnpm gen:checks`                                                                          |
-| `check:types`       | worker-configuration.d.ts no longer matches wrangler.toml                                               | `pnpm --filter @transitmapper/worker types`                                                |
-| `typecheck`         | TypeScript rejects the code in any package                                                              | `fix the type error`                                                                       |
-| `verify`            | a test fails                                                                                            | `fix the code, or the test if the test was wrong`                                          |
+| Check               | Fails when                                                                                                                    | Fix                                                                                        |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `format:check`      | a file is not Prettier-formatted                                                                                              | `pnpm format`                                                                              |
+| `lint`              | a lint rule is violated, including the repository-specific ones                                                               | `pnpm lint:fix`                                                                            |
+| `typecheck:scripts` | a file under scripts/ does not compile                                                                                        | `fix the type error; do not add `any``                                                     |
+| `check:contract`    | a package is missing a required task, pins a version outside the catalog, or keeps test material outside its tests/ directory | `add the script, use the catalog, or move the test under the owning package tests/ tree`   |
+| `check:docs`        | a relative link or anchor in docs/ does not resolve                                                                           | `correct the link, or write the page it points at`                                         |
+| `check:migrations`  | a migration that already exists was edited, renamed or deleted                                                                | `restore the file and add a new migration with the change`                                 |
+| `check:structure`   | a source directory has no section in project-structure.md, or a described one is gone                                         | `write the section, or remove the stale entry`                                             |
+| `check:documents`   | a required document is missing, lacks a required section, has them out of order, or uses a stock phrase                       | `add the section or cut the phrase — see docs/development/reference/document-standards.md` |
+| `check:reference`   | this page no longer matches the registry it is generated from                                                                 | `pnpm gen:checks`                                                                          |
+| `check:types`       | worker-configuration.d.ts no longer matches wrangler.toml                                                                     | `pnpm --filter @transitmapper/worker types`                                                |
+| `typecheck`         | TypeScript rejects the code in any package                                                                                    | `fix the type error`                                                                       |
+| `verify`            | a test fails                                                                                                                  | `fix the code, or the test if the test was wrong`                                          |
 
 ## Checks that run elsewhere
 

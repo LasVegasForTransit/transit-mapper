@@ -15,11 +15,14 @@
  */
 import { execFileSync } from 'node:child_process';
 import { readFile, readdir } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
 
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
+const TEST_FILE = /\.(?:test|spec)\.(?:[cm]?[jt]sx?)$/;
+const TEST_DIRECTORIES = new Set(['test', 'tests', 'testing', '__tests__']);
+const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', '.turbo', '.wrangler', 'artifacts']);
 
 /**
  * Whether a package ships code at all.
@@ -44,6 +47,36 @@ async function shipsCode(path: string): Promise<boolean> {
       !e.parentPath.includes('dist') &&
       SOURCE_EXTENSIONS.some((ext) => e.name.endsWith(ext)),
   );
+}
+
+function packageRelativePath(packagePath: string, parentPath: string, name: string): string {
+  return relative(resolve(ROOT, packagePath), resolve(parentPath, name)).replaceAll('\\', '/');
+}
+
+async function misplacedTestMaterial(packagePath: string): Promise<string[]> {
+  const entries = await readdir(resolve(ROOT, packagePath), {
+    recursive: true,
+    withFileTypes: true,
+  });
+
+  return entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => packageRelativePath(packagePath, entry.parentPath, entry.name))
+    .filter((path) => {
+      const parts = path.split('/');
+      if (parts.some((part) => IGNORED_DIRECTORIES.has(part))) return false;
+      const directoryLooksLikeTests = parts.slice(0, -1).some((part) => TEST_DIRECTORIES.has(part));
+      return (
+        (TEST_FILE.test(parts.at(-1) ?? '') || directoryLooksLikeTests) && parts[0] !== 'tests'
+      );
+    })
+    .sort();
+}
+
+function directVerifyEntries(command: string): string[] {
+  return [...command.matchAll(/\btsx\s+([^\s;&|]+)/g)]
+    .map((match) => match[1].replace(/^['"]|['"]$/g, ''))
+    .filter((path) => /\.[cm]?[jt]sx?$/.test(path));
 }
 
 /**
@@ -86,7 +119,7 @@ interface Manifest {
 
 interface Failure {
   /** Groups failures so each kind prints its own remediation. */
-  kind: 'task' | 'catalog';
+  kind: 'task' | 'catalog' | 'test-layout';
   message: string;
 }
 
@@ -99,6 +132,9 @@ const REMEDIATION: Record<Failure['kind'], string> = {
   catalog:
     '  fix:  set the range to "catalog:", add it under `catalog:` in\n' +
     '        pnpm-workspace.yaml, then run `pnpm install`',
+  'test-layout':
+    "  Tests and test-only support belong under the owning package's tests/ directory.\n" +
+    '  fix:  move each path to <package>/tests/, mirror its source area, and update imports',
 };
 
 async function main(): Promise<void> {
@@ -127,6 +163,21 @@ async function main(): Promise<void> {
           });
         }
       }
+
+      const misplacedTests = new Set(await misplacedTestMaterial(path));
+
+      for (const entry of directVerifyEntries(scripts.verify ?? '')) {
+        const normalized = entry.replace(/^\.\//, '');
+        if (normalized === 'tests' || normalized.startsWith('tests/')) continue;
+        misplacedTests.add(normalized);
+      }
+
+      for (const misplaced of [...misplacedTests].sort()) {
+        failures.push({
+          kind: 'test-layout',
+          message: `${name} keeps test material outside ${path}/tests/: ${path}/${misplaced}`,
+        });
+      }
     }
 
     // Every external dependency resolves through the catalog in
@@ -146,7 +197,7 @@ async function main(): Promise<void> {
 
   if (failures.length > 0) {
     console.error('\nworkspace contract: the repository is out of contract.');
-    for (const kind of ['task', 'catalog'] as const) {
+    for (const kind of ['task', 'catalog', 'test-layout'] as const) {
       const group = failures.filter((f) => f.kind === kind);
       if (group.length === 0) continue;
       console.error('');
@@ -158,7 +209,9 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  console.log('workspace contract: all packages declare every required task.');
+  console.log(
+    'workspace contract: package tasks, dependency versions, and test layouts are valid.',
+  );
 }
 
 main().catch((err: unknown) => {

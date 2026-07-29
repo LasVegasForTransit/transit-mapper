@@ -11,8 +11,8 @@
  * then removes what it made, which is rude to do underneath someone's
  * uncommitted work. CI runs it, where the tree is disposable.
  */
-import { execFileSync } from 'node:child_process';
-import { rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { rmSync, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -46,7 +46,7 @@ const SCENARIOS: Scenario[] = [
     args: ['no-gencheck-placeholder', 'A rule generated to verify the generator'],
     creates: [
       'packages/eslint-plugin/src/no-gencheck-placeholder.ts',
-      'packages/eslint-plugin/src/no-gencheck-placeholder.test.ts',
+      'packages/eslint-plugin/tests/no-gencheck-placeholder.test.ts',
     ],
   },
 ];
@@ -58,6 +58,27 @@ function run(command: string, args: string[]): void {
 function cleanUp(paths: string[], originals: Map<string, string>): void {
   for (const p of paths) rmSync(resolve(ROOT, p), { recursive: true, force: true });
   for (const [p, contents] of originals) writeFileSync(resolve(ROOT, p), contents, 'utf8');
+}
+
+function assertTestLayoutGuard(): void {
+  const allowed = resolve(ROOT, 'packages/gencheck/tests/index.test.ts');
+  const misplaced = resolve(ROOT, 'packages/gencheck/src/index.test.ts');
+
+  renameSync(allowed, misplaced);
+  try {
+    const result = spawnSync('pnpm', ['check:contract'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    });
+    if (result.error) throw result.error;
+
+    const output = `${result.stdout}${result.stderr}`;
+    if (result.status === 0 || !output.includes('packages/gencheck/src/index.test.ts')) {
+      throw new Error('check:contract did not reject packages/gencheck/src/index.test.ts');
+    }
+  } finally {
+    renameSync(misplaced, allowed);
+  }
 }
 
 function main(): void {
@@ -82,6 +103,7 @@ function main(): void {
     // A generated package is only linked into the workspace after an install.
     run('pnpm', ['install', '--no-frozen-lockfile']);
     run('pnpm', ['check']);
+    assertTestLayoutGuard();
 
     console.log(`generators: ${SCENARIOS.length} scenarios, output passes pnpm check unmodified.`);
   } catch (err) {
