@@ -13,7 +13,7 @@ import {
   type D1Migration,
 } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
-import worker from './index';
+import worker from '../src/index';
 
 // The real bindings come from worker-configuration.d.ts, which
 // `wrangler types` generates from wrangler.toml — so DB, ASSETS, SITE_URL
