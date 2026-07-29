@@ -308,9 +308,23 @@ or standalone launch suppresses the invitation permanently. `Workbench`
 owns the invitation's slot directly below top chrome, so responsive toolbar
 height pushes the card down rather than letting it overlap editor controls.
 
-The manifest carries stable identity, scope, and 192/512px normal and
-maskable icons. The production PWA verifier includes every install asset in
-the editor's precache proof. Settings also offers an explicit request for
+The manifest carries stable identity and scope plus adaptive SVG and
+192/512px raster fallback icons in normal and maskable forms. Every mark is
+generated from the same Lucide Route nodes as the editor's Line tool, rotated
+for the app identity rather than maintained as another drawing. SVG icons and
+browser theme metadata select the LVBT light or dark palette from the device's
+preferred color scheme; a platform may capture that SVG state at installation
+instead of updating an already-installed icon when the preference later
+changes. Static raster fallbacks therefore use the light brand pair. The
+Apple touch icon is the one deliberate platform-specific raster: it keeps the
+solid Ember field and renders the same Route geometry as a flattened,
+top-lit glass glyph because Safari web apps cannot consume Apple's layered
+Icon Composer format.
+
+`pnpm --filter @transitmapper/web generate:icons` regenerates the favicon,
+install assets, and generic social-card mark. Its `--check` form runs in the
+web verifier, while the production PWA verifier includes every install asset
+in the editor's precache proof. Settings also offers an explicit request for
 persistent browser storage; that is a best-effort eviction-resistance request,
 not a claim that storage can never be cleared.
 

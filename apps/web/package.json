@@ -6,12 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && tsx scripts/perf/report-bundle.ts && tsx scripts/perf/verify-pwa-output.ts",
+    "generate:icons": "tsx scripts/generate-app-icons.ts",
     "preview": "vite preview",
     "perf": "tsx scripts/perf/run.ts",
     "perf:record": "tsx scripts/perf/run.ts --record",
     "perf:soak": "tsx scripts/perf/run.ts --soak",
     "typecheck": "tsc -b --noEmit && tsc -p tsconfig.scripts.json",
-    "verify": "tsx tests/verify.test.ts && tsx tests/verify-maskable-icon.test.ts && vitest run",
+    "verify": "tsx tests/verify.test.ts && tsx scripts/generate-app-icons.ts --check && vitest run",
     "lint": "eslint ."
   },
   "dependencies": {
@@ -36,6 +37,7 @@
     "@vitejs/plugin-react": "catalog:",
     "jsdom": "catalog:",
     "playwright-core": "catalog:",
+    "sharp": "catalog:",
     "terser": "catalog:",
     "tsx": "catalog:",
     "vite": "catalog:",

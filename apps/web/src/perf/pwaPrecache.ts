@@ -20,11 +20,15 @@ const EDITOR_PUBLIC_ASSETS = [
   'apple-touch-icon.png',
   'favicon-16x16.png',
   'favicon-32x32.png',
+  'favicon-dark-16x16.png',
+  'favicon-dark-32x32.png',
   'favicon.svg',
   'icon-192.png',
   'icon-512.png',
+  'icon-maskable.svg',
   'icon-maskable-192.png',
   'icon-maskable-512.png',
+  'icon.svg',
   'manifest.json',
 ] as const;
 
