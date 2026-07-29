@@ -23,6 +23,11 @@ const diagramView: ViewOptions = {
   visibleWayTypes: new Set(['road']),
 };
 
+const networkView: ViewOptions = {
+  ...diagramView,
+  viewMode: 'network',
+};
+
 function fixture(): TransitSystem {
   return {
     ...createEmptySystem(1),
@@ -157,6 +162,35 @@ describe('MapLibre source feature projection', () => {
       diagramStationBuildCount: 1,
       diagramStationCacheHitCount: 0,
     });
+  });
+
+  it('forwards a targeted station projection without changing its settled feature', () => {
+    const system = fixture();
+    system.stations.push({
+      id: 'other-station',
+      coord: [-114.9, 36.3],
+      anchors: [],
+    });
+    const full = buildFeaturesForSources({
+      system,
+      selection: null,
+      handleWayIds: [],
+      view: networkView,
+      sourceIds: [SRC_STATIONS],
+    });
+
+    const targeted = buildFeaturesForSources({
+      system,
+      selection: null,
+      handleWayIds: [],
+      view: networkView,
+      sourceIds: [SRC_STATIONS],
+      stationIds: ['station'],
+    });
+
+    expect(targeted.stations.features).toEqual([
+      full.stations.features.find((feature) => feature.properties?.id === 'station'),
+    ]);
   });
 
   it('builds every collection for initial, view, and repaired-style source plans', () => {

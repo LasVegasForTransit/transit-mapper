@@ -192,6 +192,33 @@ describe('partial system feature projection', () => {
     });
   });
 
+  it('projects selected stations exactly without deriving every station', () => {
+    const system = fixture();
+    system.stations.push({
+      id: 'other-station',
+      name: 'Other station',
+      coord: [-114.9, 36.3],
+      anchors: [],
+    });
+    const full = buildFeatures(system, null, [], view);
+    const counts = operationCounts();
+
+    const projected = buildFeatures(system, null, [], view, null, null, {
+      requestedFeatures: ['stations'],
+      stationIds: ['station'],
+      counts,
+    });
+
+    expect(projected.stations.features).toEqual([
+      full.stations.features.find((feature) => feature.properties?.id === 'station'),
+    ]);
+    expect(counts).toMatchObject({
+      featureCollectionBuildCount: 1,
+      featureStationPassCount: 1,
+      featureStationVisitCount: 1,
+    });
+  });
+
   it('builds service-dependent sources without allocating physical detail or way labels', () => {
     const system = fixture();
     const full = buildFeatures(system, null, ['road'], view);
