@@ -14,6 +14,7 @@ function recoveryHarness(overlayReady = true) {
       return overlayReady;
     }),
     restoreFeatureData: step('feature data and selection'),
+    restoreGesturePreview: step('gesture preview'),
     restoreHover: step('hover'),
     restoreHaloVisibility: step('halos'),
     restoreRouteFocus: step('route focus'),
@@ -34,6 +35,7 @@ describe('map style recovery', () => {
       'icons',
       'overlay',
       'feature data and selection',
+      'gesture preview',
       'hover',
       'halos',
       'route focus',

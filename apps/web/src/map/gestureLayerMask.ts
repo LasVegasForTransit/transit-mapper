@@ -45,6 +45,7 @@ export interface GestureLayerMaskMap {
 
 export interface GestureLayerMaskController {
   apply: (affected: GestureAffectedEntities) => void;
+  invalidate: () => void;
   restore: () => void;
 }
 
@@ -155,6 +156,16 @@ export function createGestureLayerMaskController(
         map.setLayoutProperty(layerId, 'visibility', 'none');
       }
       appliedKey = key;
+    },
+
+    invalidate() {
+      // A style replacement creates new layer objects. Forget the old
+      // ownership without writing its filters into the replacement style;
+      // the next apply captures that style's own filters as its baseline.
+      filterRestores.clear();
+      appliedFilterKeys.clear();
+      visibilityRestores.clear();
+      appliedKey = null;
     },
 
     restore() {
