@@ -308,36 +308,24 @@ or standalone launch suppresses the invitation permanently. `Workbench`
 owns the invitation's slot directly below top chrome, so responsive toolbar
 height pushes the card down rather than letting it overlap editor controls.
 
-The manifest carries stable identity and scope plus adaptive SVG and
-192/512px raster fallback icons in normal and maskable forms. Every mark is
-generated from the same Lucide Route nodes as the editor's Line tool, rotated
-for the app identity rather than maintained as another drawing. SVG icons and
-browser theme metadata select the LVBT light or dark palette from the device's
-preferred color scheme; a platform may capture that SVG state at installation
-instead of updating an already-installed icon when the preference later
-changes. Static raster fallbacks therefore use the light brand pair. The
-Apple touch icon is the one deliberate platform-specific raster. The generator
-rasterizes the same Route geometry into one flat, effect-free alpha silhouette
-inside the committed `transit-mapper.icon` source. That unioned layer prevents
-intersecting Route segments from becoming separate glass surfaces. Icon
-Composer applies a solid Ember background and Combined Liquid Glass mode, and
-its committed 1024px flattened export is then resized to the 180px web asset.
-Safari web apps cannot consume the layered Icon Composer format directly, so
-changing this icon requires running the generator once to update the native
-document's Route layer, re-exporting `apple-touch-icon-source.png` in Icon
-Composer, then rerunning the generator with `--record-apple-export`. The
-committed provenance record fingerprints the Icon Composer document, generated
-layer, and flattened export. This lets the cross-platform repository check
-reject a stale manual export without trying to reproduce Apple's proprietary
-Liquid Glass renderer.
+The manifest carries content-versioned adaptive SVG and raster fallback icons
+in regular and maskable forms. Every mark is generated from the same Lucide
+Route nodes as the editor's Line tool, rotated for the app identity rather
+than maintained as another drawing. SVG icons and browser theme metadata
+select the LVBT light or dark palette from the device preference; a platform
+may capture that state at installation instead of changing an installed icon
+when the preference later changes. Static raster fallbacks use the light
+brand pair.
 
-`pnpm --filter @transitmapper/web generate:icons` regenerates the favicon,
-install assets, and generic social-card mark. The root repository check runs
-its `--check` form as a generated-asset invariant rather than treating the
-generator as test code. The production PWA verifier includes every install
-asset in the editor's precache proof. Settings also offers an explicit request
-for persistent browser storage; that is a best-effort eviction-resistance
-request, not a claim that storage can never be cleared.
+The Apple touch icon is the deliberate platform-specific boundary. Apple's
+Icon Composer applies Liquid Glass to one unioned Route silhouette, while the
+repository records enough provenance to reject a stale manual export. The
+[application icon how-to](../how-to/update-application-icons.md) owns the
+generation, native export, installed-update, and verification procedures.
+The production PWA verifier derives install assets from the manifest and
+proves that the editor precaches them. Settings also offers an explicit
+request for persistent browser storage; that is a best-effort
+eviction-resistance request, not a claim that storage can never be cleared.
 
 ## 6. Runtime View
 

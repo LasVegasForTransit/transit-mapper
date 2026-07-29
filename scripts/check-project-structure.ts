@@ -1,7 +1,8 @@
 #!/usr/bin/env tsx
 /**
- * Every source directory is described in docs/development/reference/project-structure.md,
- * and every directory that document describes still exists.
+ * The project map follows the workspace's package and module hierarchy, every
+ * source module is described beneath its owner, and every locator still
+ * exists.
  *
  * AGENTS.md asks that a change adding a subsystem write down how it works and
  * where it lives. That instruction had no teeth: four directories —
@@ -9,9 +10,9 @@
  * packages/core/src/share — existed with nothing said about any of them, and
  * nothing reported it.
  *
- * The check runs in both directions on purpose. A directory with no entry is
- * a subsystem whose design can only be recovered by reading every file that
- * touches it. An entry with no directory is a map of a place that no longer
+ * Coverage runs in both directions on purpose. A module with no entry is a
+ * subsystem whose design can only be recovered by reading every file that
+ * touches it. An entry with no module is a map of a place that no longer
  * exists, which is worse than no map.
  */
 import { execFileSync } from 'node:child_process';
@@ -85,56 +86,188 @@ function sourceDirectories(): string[] {
   return found.sort();
 }
 
-/** Paths the document names anywhere, not only in headings — a directory
- *  described inside a neighbouring section still counts as documented. */
-function documentedPaths(source: string): Set<string> {
-  const paths = new Set<string>();
-  for (const match of source.matchAll(
-    /\b((?:apps|packages)\/[A-Za-z0-9_.-]+\/src\/[A-Za-z0-9_.-]+)/g,
-  )) {
-    paths.add(match[1]);
+interface Heading {
+  level: number;
+  title: string;
+  start: number;
+  end: number;
+  ancestors: string[];
+}
+
+const REQUIRED_HEADINGS = [
+  ['Workspace'],
+  ['Workspace', 'Dependency direction'],
+  ['Workspace', 'Tree'],
+  ['Packages'],
+  ['Packages', 'Core'],
+  ['Packages', 'Core', 'Domain model'],
+  ['Packages', 'Core', 'Geometry'],
+  ['Packages', 'Core', 'Rendering'],
+  ['Packages', 'Core', 'Simulation'],
+  ['Packages', 'Core', 'Sharing'],
+  ['Packages', 'Core', 'Account groundwork'],
+  ['Packages', 'PWA updater'],
+  ['Packages', 'PWA updater', 'Update lifecycle'],
+  ['Packages', 'ESLint plugin'],
+  ['Packages', 'ESLint plugin', 'Repository rules'],
+  ['Packages', 'TypeScript configuration'],
+  ['Applications'],
+  ['Applications', 'Web'],
+  ['Applications', 'Web', 'Editing'],
+  ['Applications', 'Web', 'Map rendering'],
+  ['Applications', 'Web', 'UI'],
+  ['Applications', 'Web', 'Storage'],
+  ['Applications', 'Web', 'Imports and networking'],
+  ['Applications', 'Web', 'Simulation host'],
+  ['Applications', 'Web', 'Sharing and embedding'],
+  ['Applications', 'Web', 'Platform integration'],
+  ['Applications', 'Web', 'Performance'],
+  ['Applications', 'Worker'],
+  ['Applications', 'Worker', 'HTTP delivery'],
+  ['Applications', 'Worker', 'Persistence'],
+  ['Repository support'],
+  ['Repository support', 'Tests'],
+  ['Repository support', 'Generators and checks'],
+  ['Repository support', 'Performance tooling'],
+] as const;
+
+const REQUIRED_GROUPS = ['Workspace', 'Packages', 'Applications', 'Repository support'] as const;
+
+function parseHeadings(source: string): Heading[] {
+  const parsed: Heading[] = [];
+  const stack: Heading[] = [];
+
+  for (const match of source.matchAll(/^(#{1,6}) +(.+?)\s*$/gm)) {
+    const level = match[1]?.length ?? 0;
+    const title = match[2]?.trim() ?? '';
+    while (stack.length > 0 && (stack.at(-1)?.level ?? 0) >= level) stack.pop();
+    const heading: Heading = {
+      level,
+      title,
+      start: match.index,
+      end: source.length,
+      ancestors: stack.map((parent) => parent.title),
+    };
+    parsed.push(heading);
+    stack.push(heading);
   }
-  return paths;
+
+  for (const [index, heading] of parsed.entries()) {
+    heading.end =
+      parsed.slice(index + 1).find((next) => next.level <= heading.level)?.start ?? source.length;
+  }
+  return parsed;
 }
 
-/** Workspace package paths the document names. */
-function documentedPackages(source: string): Set<string> {
-  return new Set([...source.matchAll(/\b((?:apps|packages)\/[A-Za-z0-9_.-]+)/g)].map((m) => m[1]));
+function hierarchyPath(heading: Heading): string[] {
+  return [...heading.ancestors, heading.title].filter((title) => title !== 'Project structure');
 }
 
-/**
- * Every workspace package is named somewhere in the document.
- *
- * Checking directories under `src/` is not enough on its own: a package whose
- * `src/` holds files and no subdirectories contributes no directories to
- * check, so an entire package can be added without the check noticing.
- * `packages/pwa-updater` did exactly that.
- */
-function undocumentedPackages(source: string): string[] {
-  const documented = documentedPackages(source);
-  return listPackagePaths()
-    .filter((p) => !documented.has(p))
-    .sort();
+function hierarchyProblems(source: string, headings: Heading[]): string[] {
+  const problems: string[] = [];
+  const h2 = headings.filter((heading) => heading.level === 2).map((heading) => heading.title);
+  if (h2.join('\0') !== REQUIRED_GROUPS.join('\0')) {
+    problems.push(`top-level groups must be ${REQUIRED_GROUPS.join(' → ')}`);
+  }
+
+  const present = new Set(headings.map((heading) => hierarchyPath(heading).join('\0')));
+  for (const path of REQUIRED_HEADINGS) {
+    if (!present.has(path.join('\0')))
+      problems.push(`missing heading hierarchy: ${path.join(' → ')}`);
+  }
+
+  for (const heading of headings.filter((candidate) => candidate.level > 1)) {
+    if (
+      /\b(?:apps|packages)\//.test(heading.title) ||
+      /\b[A-Za-z0-9_.-]+\.(?:css|html|js|json|md|mjs|png|sql|svg|toml|ts|tsx)\b/.test(heading.title)
+    ) {
+      problems.push(`heading "${heading.title}" names a path or file instead of a module`);
+    }
+  }
+
+  for (const [index, line] of source.split('\n').entries()) {
+    if (/^\s*-\s+`[^`]*\.[A-Za-z0-9]+`\s+(?:—|-)/.test(line)) {
+      problems.push(`line ${index + 1} is a filename-led inventory item`);
+    }
+  }
+  return problems;
+}
+
+function packageSections(headings: Heading[]): Heading[] {
+  return headings.filter(
+    (heading) =>
+      heading.level === 3 &&
+      (heading.ancestors.at(-1) === 'Packages' || heading.ancestors.at(-1) === 'Applications'),
+  );
+}
+
+function owningSection(
+  source: string,
+  sections: Heading[],
+  packagePath: string,
+): Heading | undefined {
+  const group = packagePath.startsWith('packages/') ? 'Packages' : 'Applications';
+  return sections.find(
+    (section) =>
+      section.ancestors.at(-1) === group &&
+      source.slice(section.start, section.end).includes(packagePath),
+  );
+}
+
+function documentedSourcePaths(source: string): string[] {
+  return [...source.matchAll(/\b((?:apps|packages)\/[A-Za-z0-9_.-]+\/src\/[A-Za-z0-9_.-]+)/g)].map(
+    (match) => match[1],
+  );
+}
+
+function documentedPackagePaths(source: string, sections: Heading[]): string[] {
+  return [
+    ...new Set(
+      sections.flatMap((section) =>
+        [
+          ...source
+            .slice(section.start, section.end)
+            .matchAll(/\b((?:apps|packages)\/[A-Za-z0-9_.-]+)/g),
+        ].map((match) => match[1]),
+      ),
+    ),
+  ];
 }
 
 function main(): void {
   const source = readFileSync(DOC, 'utf8');
-  const documented = documentedPaths(source);
+  const headings = parseHeadings(source);
+  const sections = packageSections(headings);
   const actual = sourceDirectories();
   const docRelative = relative(ROOT, DOC);
+  const packagePaths = listPackagePaths();
+  const orphanPackages = packagePaths
+    .filter((path) => !owningSection(source, sections, path))
+    .sort();
+  const undocumented = actual
+    .filter((path) => {
+      const packagePath = path.split('/').slice(0, 2).join('/');
+      const section = owningSection(source, sections, packagePath);
+      return !section || !source.slice(section.start, section.end).includes(path);
+    })
+    .sort();
 
-  const undocumented = actual.filter((d) => !documented.has(d));
-
-  // A documented path that looks like a directory but is not one. File paths
-  // are filtered out: the document cites individual modules constantly.
-  const missing = [...documented]
+  const missingPackages = documentedPackagePaths(source, sections)
+    .filter((path) => !existsSync(resolve(ROOT, path)))
+    .sort();
+  const missingSources = documentedSourcePaths(source)
     .filter((p) => !p.includes('.'))
     .filter((p) => !existsSync(resolve(ROOT, p)))
     .sort();
+  const structure = hierarchyProblems(source, headings);
 
-  const orphanPackages = undocumentedPackages(source);
-
-  if (undocumented.length === 0 && missing.length === 0 && orphanPackages.length === 0) {
+  if (
+    undocumented.length === 0 &&
+    missingPackages.length === 0 &&
+    missingSources.length === 0 &&
+    orphanPackages.length === 0 &&
+    structure.length === 0
+  ) {
     console.log(`project structure: ${actual.length} source directories, all described.`);
     return;
   }
@@ -142,21 +275,31 @@ function main(): void {
   console.error(`\n${docRelative} no longer matches the source tree.\n`);
 
   if (orphanPackages.length > 0) {
-    console.error('  Workspace packages not mentioned in the document:');
+    console.error('  Workspace packages not described under their owning group:');
     for (const p of orphanPackages) console.error(`    ${p}`);
-    console.error(`\n    fix:  add each to the tree and give it a section in ${docRelative}\n`);
+    console.error(
+      `\n    fix:  describe each as a package or application module in ${docRelative}\n`,
+    );
   }
 
   if (undocumented.length > 0) {
-    console.error('  Source directories not mentioned in the document:');
+    console.error('  Source modules not described beneath their owning package:');
     for (const d of undocumented) console.error(`    ${d}`);
-    console.error(`\n    fix:  add a section for each to ${docRelative}\n`);
+    console.error(`\n    fix:  describe each beneath its owning package in ${docRelative}\n`);
   }
 
-  if (missing.length > 0) {
-    console.error('  Described in the document, but not present on disk:');
-    for (const p of missing) console.error(`    ${p}`);
+  if (missingPackages.length > 0 || missingSources.length > 0) {
+    console.error('  Described in an owning section, but not present on disk:');
+    for (const p of [...missingPackages, ...missingSources]) console.error(`    ${p}`);
     console.error(`\n    fix:  remove or update each entry in ${docRelative}\n`);
+  }
+
+  if (structure.length > 0) {
+    console.error('  Module hierarchy violations:');
+    for (const problem of structure) console.error(`    ${problem}`);
+    console.error(
+      `\n    fix:  organize packages and modules with the required heading hierarchy\n`,
+    );
   }
 
   process.exit(1);

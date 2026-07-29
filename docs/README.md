@@ -63,6 +63,9 @@ For people changing the code rather than using the app.
   does, and the fix for each failure.
 - [Measure browser performance](development/how-to/measure-performance.md) —
   the fixed Chrome protocol, hard gates, baselines, offline proof, and leak soak.
+- [Update application icons](development/how-to/update-application-icons.md) —
+  generate browser assets, export Apple's Liquid Glass icon, and publish an
+  installed-app identity update.
 - [Write a test](development/how-to/write-a-test.md) — the two suites, and
   which one new work belongs in.
 - [Add a package](development/how-to/add-a-package.md) — the generator, and

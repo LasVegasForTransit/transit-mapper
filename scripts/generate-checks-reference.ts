@@ -65,8 +65,9 @@ const CHECKS: Check[] = [
   },
   {
     command: 'check:structure',
-    fails: 'a source directory has no section in project-structure.md, or a described one is gone',
-    fix: 'write the section, or remove the stale entry',
+    fails:
+      'the project map hierarchy is malformed, a source module is missing beneath its owner, or a described path is gone',
+    fix: 'describe the module beneath its package or application, or remove the stale locator',
   },
   {
     command: 'check:documents',

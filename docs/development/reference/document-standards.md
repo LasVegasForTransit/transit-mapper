@@ -112,12 +112,23 @@ might seem to fit:
 
 ### `development/reference/project-structure.md`
 
-| Section                | Contents                                                 |
-| ---------------------- | -------------------------------------------------------- |
-| Tree                   | Directory tree, one line per entry                       |
-| _per source directory_ | `##` per directory: its files and their responsibilities |
+The document is organized by ownership, not by literal directory names.
 
-`check:structure` enforces the per-directory sections in both directions.
+| Level  | Contents                                                                |
+| ------ | ----------------------------------------------------------------------- |
+| `##`   | Workspace groups: Workspace, Packages, Applications, Repository support |
+| `###`  | A package, application, or repository-support area beneath its group    |
+| `####` | An internal module beneath the package or application that owns it      |
+
+`Workspace` contains dependency direction and the navigation tree. `Packages`
+and `Applications` explain responsibility, dependencies, runtime constraints,
+and ownership boundaries. Source paths appear as short locator notes within
+their owning sections; paths and filenames do not become headings.
+
+Filename-led inventories are excluded. A file is named only when it is an
+entry point, generated artifact, or external contract whose identity matters
+to the explanation. `check:structure` enforces the group hierarchy and
+bidirectional coverage between workspace modules and source directories.
 
 ### `development/explanation/enforcement-model.md`
 

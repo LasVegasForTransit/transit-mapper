@@ -24,7 +24,7 @@ interface PackageAnswers {
 }
 
 /**
- * Writes the new package into the project map.
+ * Adds the new package to the project map.
  *
  * `check:structure` requires every workspace package to appear there, so a
  * generated package fails `pnpm check` the moment it exists unless this runs.
@@ -44,11 +44,11 @@ function documentPackage(answers: unknown, _config: unknown, plop: PlopTypes.Nod
   const label = `  ${name}/`.padEnd(TREE_COLUMN, ' ');
   source = source.replace(/^apps\/$/m, `${label}${purpose}\napps/`);
 
-  // As a section before Testing, which is the tail of the document and not a
-  // directory anyone would look for a package under.
+  // As a package beneath the Packages group. The purpose is the package's
+  // initial responsibility statement, not a generated inventory of its files.
   source = source.replace(
-    /^## Testing$/m,
-    `## ${path}/ — ${purpose}\n\n- \`src/index.ts\` — replace this line with what the package holds.\n- \`tests/index.test.ts\` — the package's initial contract test.\n\n## Testing`,
+    /^## Applications$/m,
+    `### @transitmapper/${name}\n\n\`${path}\` owns ${purpose.trim().replace(/[.!?]+$/, '')}.\n\n## Applications`,
   );
 
   writeFileSync(doc, source, 'utf8');
