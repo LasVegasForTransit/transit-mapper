@@ -244,11 +244,37 @@ async function performEntityDrag(
     );
   }
 
+  // Selecting an entity intentionally expands the mobile Details sheet over
+  // most of the map. Collapse that real UI before the measured drag, exactly
+  // as a user must, then project again after the responsive layout settles.
+  // Reusing the pre-selection point made the script drag the sheet instead of
+  // the station on phones, while desktop happened to keep the point stable.
+  const collapsePanel = page.getByRole('button', { name: 'Collapse panel' });
+  if (await collapsePanel.isVisible()) {
+    await collapsePanel.click();
+    await page.getByRole('button', { name: 'Expand panel' }).waitFor({ state: 'visible' });
+    await waitForResponsePaint(page);
+  }
+  const dragPoint = await page.evaluate((coord) => {
+    const project = (window as PerfPageWindow).__perfProjectLngLat;
+    if (!project) throw new Error('The live station projection disappeared.');
+    return project(coord);
+  }, before.snapshot.coord);
+  const currentCanvas = await canvasGeometry(page);
+  if (
+    dragPoint.x < currentCanvas.x ||
+    dragPoint.x > currentCanvas.x + currentCanvas.width ||
+    dragPoint.y < currentCanvas.y ||
+    dragPoint.y > currentCanvas.y + currentCanvas.height
+  ) {
+    throw new Error('The selected station drag target is outside the current map viewport.');
+  }
+
   await resetGestureCapture(page);
   await recorder.startAction();
-  await page.mouse.move(before.point.x, before.point.y);
+  await page.mouse.move(dragPoint.x, dragPoint.y);
   await page.mouse.down();
-  await page.mouse.move(before.point.x + 32, before.point.y + 18, { steps: 8 });
+  await page.mouse.move(dragPoint.x + 32, dragPoint.y + 18, { steps: 8 });
   await page.mouse.up();
   await waitForResponsePaint(page);
   await recorder.stopAction();
