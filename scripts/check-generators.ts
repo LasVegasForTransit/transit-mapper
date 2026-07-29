@@ -21,7 +21,7 @@ import {
   rmdirSync,
   writeFileSync,
 } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
 
@@ -97,6 +97,29 @@ function assertContractAccepts(description: string): void {
   }
 }
 
+function checkFilenames(): ContractResult {
+  const result = spawnSync('pnpm', ['check:filenames'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  });
+  if (result.error) throw result.error;
+  return { status: result.status, output: `${result.stdout}${result.stderr}` };
+}
+
+function assertFilenamesReject(expected: string): void {
+  const result = checkFilenames();
+  if (result.status === 0 || !result.output.includes(expected)) {
+    throw new Error(`check:filenames did not reject ${expected}\n${result.output}`);
+  }
+}
+
+function assertFilenamesAccept(description: string): void {
+  const result = checkFilenames();
+  if (result.status !== 0) {
+    throw new Error(`check:filenames rejected ${description}\n${result.output}`);
+  }
+}
+
 function assertTestLayoutGuard(): void {
   const allowed = resolve(ROOT, 'packages/gencheck/tests/index.test.ts');
   const misplaced = resolve(ROOT, 'packages/gencheck/src/index.test.ts');
@@ -121,6 +144,65 @@ function assertNonCodePackageLayoutGuard(): void {
   } finally {
     rmSync(fixture, { force: true });
     if (!directoryExisted) rmdirSync(directory);
+  }
+}
+
+function assertTestFilenameGuard(): void {
+  const source = resolve(ROOT, 'packages/gencheck/src');
+  const tests = resolve(ROOT, 'packages/gencheck/tests');
+  const e2e = resolve(tests, 'e2e');
+  const supportFixture = resolve(tests, 'support/fixture.test.ts');
+  const allowed = [
+    resolve(source, 'worker.ts'),
+    resolve(tests, 'component.test.ts'),
+    resolve(tests, 'component.test.tsx'),
+    resolve(tests, 'verify.test.ts'),
+    supportFixture,
+    resolve(e2e, 'journey.spec.ts'),
+    resolve(e2e, 'journey.spec.tsx'),
+  ];
+  const rejected = [
+    resolve(source, 'worker.thread.ts'),
+    resolve(tests, 'README.md'),
+    resolve(tests, 'component.test.js'),
+    resolve(tests, 'verify.ts'),
+    resolve(tests, 'component.partial.test.ts'),
+    resolve(tests, 'journey.spec.ts'),
+    resolve(e2e, 'journey.test.ts'),
+    resolve(tests, 'artifacts/report.json'),
+  ];
+
+  mkdirSync(e2e, { recursive: true });
+  try {
+    mkdirSync(dirname(supportFixture), { recursive: true });
+    writeFileSync(supportFixture, 'export {};\n', 'utf8');
+    run('pnpm', ['--filter', '@transitmapper/gencheck', 'verify']);
+
+    for (const path of allowed) {
+      if (path === supportFixture) continue;
+      mkdirSync(dirname(path), { recursive: true });
+      const contents = path.includes('.test.')
+        ? "import { expect, it } from 'vitest';\nit('runs a generated test', () => expect(true).toBe(true));\n"
+        : 'export {};\n';
+      writeFileSync(path, contents, 'utf8');
+    }
+    assertFilenamesAccept('two-part source and three-part test filenames');
+    run('pnpm', ['--filter', '@transitmapper/gencheck', 'verify']);
+
+    for (const path of rejected) {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, 'export {};\n', 'utf8');
+      try {
+        assertFilenamesReject(relative(ROOT, path).replaceAll('\\', '/'));
+      } finally {
+        rmSync(path, { force: true });
+      }
+    }
+  } finally {
+    for (const path of allowed) rmSync(path, { force: true });
+    rmSync(e2e, { recursive: true, force: true });
+    rmSync(resolve(tests, 'support'), { recursive: true, force: true });
+    rmSync(resolve(tests, 'artifacts'), { recursive: true, force: true });
   }
 }
 
@@ -206,6 +288,7 @@ function main(): void {
     run('pnpm', ['check']);
     assertTestLayoutGuard();
     assertNonCodePackageLayoutGuard();
+    assertTestFilenameGuard();
     assertDirectVerifierLayoutGuard();
 
     console.log(`generators: ${SCENARIOS.length} scenarios, output passes pnpm check unmodified.`);

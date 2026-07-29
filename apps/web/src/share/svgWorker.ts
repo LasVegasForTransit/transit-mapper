@@ -16,7 +16,7 @@ export interface SvgWorkerOptions {
 }
 
 function defaultWorkerFactory(): SvgRenderWorker {
-  return new Worker(new URL('./svg.worker.ts', import.meta.url), {
+  return new Worker(new URL('./svgWorkerEntry.ts', import.meta.url), {
     type: 'module',
     name: 'transitmapper-svg-export',
   });

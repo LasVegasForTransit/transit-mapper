@@ -15,7 +15,7 @@ import {
   profileTraversal,
   wayTraversal,
 } from '../../src/model/profile';
-import { aRoad } from '../support/fixtures';
+import { aRoad } from '../support/fixtures.test';
 import type { CrossSection } from '../../src/model/system';
 
 const road = defaultProfileFor('road');

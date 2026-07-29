@@ -31,13 +31,13 @@ the tool that failed and the command that resolves it.
 
 ## Layers
 
-| Layer          | What runs                              | Blocks on                   |
-| -------------- | -------------------------------------- | --------------------------- |
-| 0 — agent      | format-on-edit hook in `.claude/`      | nothing                     |
-| 1 — pre-commit | `lint-staged`, plus a secret scan      | nothing a machine can fix   |
-| 2 — pre-push   | `pnpm check`                           | everything                  |
-| 3 — CI         | `pnpm check`, plus a full secret scan  | everything, authoritatively |
-| 4 — the branch | a GitHub ruleset on the default branch | a merge that skipped CI     |
+| Layer          | What runs                                          | Blocks on                   |
+| -------------- | -------------------------------------------------- | --------------------------- |
+| 0 — agent      | format-on-edit hook in `.claude/`                  | nothing                     |
+| 1 — pre-commit | `lint-staged`, staged filename validation, secrets | nothing a machine can fix   |
+| 2 — pre-push   | `pnpm check`                                       | everything                  |
+| 3 — CI         | `pnpm check`, plus a full secret scan              | everything, authoritatively |
+| 4 — the branch | a GitHub ruleset on the default branch             | a merge that skipped CI     |
 
 Layers 0 to 2 are conveniences and they are bypassable on purpose.
 `--no-verify` exists, and a hook that is slow or that scolds gets bypassed
@@ -82,6 +82,21 @@ agent configuration at all.
 
 ## Rules
 
+### file-names
+
+`check:filenames` gives module source and test trees one exact grammar. A file
+under `<module>/src/` has one stem and one extension, such as `store.ts`,
+`App.tsx`, or `0001_init.sql`. A file under `<module>/tests/` has exactly the
+form `<name>.test.ts` or `<name>.test.tsx`. End-to-end files under
+`tests/e2e/` use `<name>.spec.ts` or `<name>.spec.tsx`; `spec` is rejected
+outside that tree, and `test` is rejected inside it.
+
+The normal command reads tracked and non-ignored untracked files from Git so
+new files fail before they are added. Pre-commit runs the same validator with
+`--staged`, checking the exact index rather than unrelated working-tree edits.
+
+**If it fires:** rename the file to the displayed shape and update its imports.
+
 ### test-layout
 
 Vitest globs alone cannot enforce the test boundary: a test placed elsewhere
@@ -97,6 +112,9 @@ test support under `tests/support/` as a human rule.
 
 **If it fires:** move the path under `<package>/tests/`, mirroring the source
 area it covers, and update imports to cross explicitly into `src/`.
+
+`check:filenames` independently validates every filename in the module trees
+before `check:contract` validates test placement and package ownership.
 
 ### core-runtime-purity
 

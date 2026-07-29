@@ -16,7 +16,7 @@ export interface SerializeSystemOptions {
 }
 
 function defaultWorkerFactory(): StorageSerializerWorker {
-  return new Worker(new URL('./storageSerializer.worker.ts', import.meta.url), {
+  return new Worker(new URL('./storageSerializerWorker.ts', import.meta.url), {
     type: 'module',
     name: 'transitmapper-storage-serializer',
   });

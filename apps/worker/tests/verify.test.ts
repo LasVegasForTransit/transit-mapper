@@ -7,7 +7,7 @@
 // executed by a test. That is the wrong half to leave uncovered: this file is
 // the only code in the project that reads bytes from strangers.
 //
-// Same shape as apps/web/tests/verify.ts on purpose: no framework, one
+// Same shape as apps/web/tests/verify.test.ts on purpose: no framework, one
 // `check()` per rule, the name *is* the failure message.
 //
 // Run with: pnpm --filter @transitmapper/worker verify

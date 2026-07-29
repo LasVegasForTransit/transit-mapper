@@ -5,7 +5,7 @@ interchangeable.
 
 ## Adding to an existing suite
 
-`apps/web/tests/verify.ts` and `apps/worker/tests/verify.ts` are
+`apps/web/tests/verify.test.ts` and `apps/worker/tests/verify.test.ts` are
 sequential scripts. One store is built at module scope and mutated in order,
 so each section depends on the state the sections above it left behind.
 
@@ -40,6 +40,12 @@ Test support belongs in `tests/support/`. Test imports cross explicitly into
 test in `tests/share/claim.test.ts` imports its subject from
 `../../src/share/claim`.
 
+Every file under `tests/` uses exactly `<name>.test.ts` or
+`<name>.test.tsx`, including sequential verifiers and support modules.
+End-to-end files under `tests/e2e/` instead use exactly `<name>.spec.ts` or
+`<name>.spec.tsx`. A filename cannot contain another dot, and no other file
+type belongs under `tests/`.
+
 Write the case as ordinary isolated Vitest:
 
 ```ts
@@ -52,9 +58,11 @@ describe('claimOutcome', () => {
 });
 ```
 
-Web discovers `tests/**/*.test.{ts,tsx}`. TypeScript-only modules discover
-`tests/**/*.test.ts`. Keeping all test material under this one boundary makes
-the runner configuration and the repository check agree about what must run.
+Every Vitest config discovers `tests/**/*.test.{ts,tsx}`. The configs
+explicitly exclude the sequential verifiers and `tests/support/`, which are
+executed directly or imported by tests. Keeping all test material under this
+one boundary makes the runner configuration and the repository check agree
+about what must run. These Vitest globs deliberately exclude end-to-end specs.
 
 ## Testing the Worker
 

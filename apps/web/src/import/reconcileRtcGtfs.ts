@@ -18,7 +18,7 @@ export interface ReconcileRtcGtfsOptions {
 }
 
 function defaultWorkerFactory(): ReconcileWorker {
-  return new Worker(new URL('./gtfsReconcile.worker.ts', import.meta.url), {
+  return new Worker(new URL('./gtfsReconcileWorker.ts', import.meta.url), {
     type: 'module',
     name: 'transitmapper-gtfs-reconcile',
   });

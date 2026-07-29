@@ -3,7 +3,7 @@ import { MODE_ORDER, mode } from '../../src/model/catalog';
 import { defaultProfileFor } from '../../src/model/profile';
 import { patternPositionAt } from '../../src/model/serviceEdits';
 import { planTerminusGesture } from '../../src/model/serviceGestures';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures';
+import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
 import type { Way } from '../../src/model/system';
 
 const A: [number, number] = [-115.2, 36.1];

@@ -16,7 +16,7 @@ export interface RenderPreviewMarkupOptions {
 }
 
 function defaultWorkerFactory(): PreviewWorker {
-  return new Worker(new URL('./preview.worker.ts', import.meta.url), {
+  return new Worker(new URL('./previewWorkerEntry.ts', import.meta.url), {
     type: 'module',
     name: 'transitmapper-share-preview',
   });

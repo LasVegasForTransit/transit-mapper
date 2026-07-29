@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { wrongWayLegs } from '../../src/model/geo';
 import { makeOneWay, makeTwoWay } from '../../src/model/profile';
 import { validateSystemQuick } from '../../src/model/validate';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
 import { wayById } from '../../src/model/geo';
 import type { LngLat, TransitSystem, Way } from '../../src/model/system';
 

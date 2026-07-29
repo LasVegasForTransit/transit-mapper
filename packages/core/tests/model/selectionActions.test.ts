@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createSelectionActionRegistry, isExactly, refIds } from '../../src/model/selectionActions';
 import type { ActionContext, SelectionAction } from '../../src/model/selectionActions';
-import { aSystem } from '../support/fixtures';
+import { aSystem } from '../support/fixtures.test';
 
 const ctx: ActionContext = {
   system: aSystem(),

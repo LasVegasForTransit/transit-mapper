@@ -20,7 +20,7 @@ import {
   patternRunPath,
   wholeLeg,
 } from '../../src/model/geo/servicePaths';
-import { aRoad } from '../support/fixtures';
+import { aRoad } from '../support/fixtures.test';
 import type { LngLat, Pattern, Way } from '../../src/model/system';
 
 // A north-south trunk in two halves, with a one-block couplet between them:
