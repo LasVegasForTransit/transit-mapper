@@ -1229,7 +1229,10 @@ function projectTopologyFeatures({
                 legIndex: occurrence.legIndex,
               }
             : {}),
-          ...(hitTarget ? { hitTarget: true } : {}),
+          // MapLibre's boolean filters do not coerce an absent property:
+          // `!get(hitTarget)` receives null and rejects the painted feature.
+          // Keep the paint/hit partition explicit on both sides.
+          hitTarget: hitTarget === true,
         },
         geometry: { type: 'LineString', coordinates: coords },
       });

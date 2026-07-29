@@ -100,6 +100,33 @@ describe('buildFeatures service lines', () => {
       hits.every((feature) => feature.properties?.offset === painted[0].properties?.offset),
     ).toBe(true);
   });
+
+  it('marks painted service features as non-hit targets for MapLibre filters', () => {
+    const way = aRoad('way', [
+      [-115.2, 36.14],
+      [-115.16, 36.14],
+    ]);
+    const system = aSystem({
+      ways: [way],
+      services: [
+        aService('svc', [
+          {
+            id: 'pattern',
+            sections: oneSection([wholeLeg('way')]),
+          },
+        ]),
+      ],
+    });
+
+    const features = buildFeatures(system, null, [], NETWORK_VIEW).services.features;
+    const painted = features.filter((feature) => feature.properties?.hitTarget !== true);
+
+    // MapLibre's boolean `!` filter does not coerce a missing property to
+    // false. Every painted feature therefore carries the explicit complement
+    // of the transparent interaction surface's `true` value.
+    expect(painted).not.toHaveLength(0);
+    expect(painted.every((feature) => feature.properties?.hitTarget === false)).toBe(true);
+  });
 });
 
 describe('service editing affordances', () => {
