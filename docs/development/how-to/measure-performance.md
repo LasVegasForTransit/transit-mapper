@@ -69,6 +69,10 @@ RTC scale belongs to the editor: the production share API refuses request
 bodies above 1 MB. The share page and dedicated embed instead use a roughly
 715 kB request fixture, large enough to exercise their real work while leaving
 ordinary model-growth headroom beneath the publishing contract.
+Their mocked API response negotiates precomputed gzip when Chrome accepts it,
+matching the encoded-byte semantics of the transfer metric and production edge
+compression without charging compression work to the browser trace. Chrome
+still decodes and parses the complete JSON response.
 
 The manually dispatched workflow also runs the 390 × 844, device-pixel-ratio 3
 mobile profile:

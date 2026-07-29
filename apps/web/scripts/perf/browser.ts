@@ -20,6 +20,7 @@ import {
   type PerfPageWindow,
   PERF_STORAGE_CONTRACT,
 } from './browserContract';
+import { createEncodedJsonResponses, selectEncodedJsonResponse } from './compressedJsonResponse';
 import { APP_ROOT } from './process';
 
 const DISPLAY_CADENCE_SAMPLE_COUNT = 60;
@@ -328,12 +329,18 @@ export async function configureSurfaceRoutes(
 ): Promise<void> {
   if (scenario.surface === 'editor') return;
   const shareId = scenario.surface === 'share' ? 'perfshare' : 'perfembed';
+  const apiResponse = createEncodedJsonResponses(
+    `{"id":"${shareId}","system":${serializedSystem},"createdAt":0}`,
+  );
   await page.route(`**/api/systems/${shareId}`, async (route) => {
+    const response = selectEncodedJsonResponse(
+      apiResponse,
+      await route.request().headerValue('accept-encoding'),
+    );
     await route.fulfill({
       status: 200,
-      contentType: 'application/json',
-      headers: { 'cache-control': 'no-store' },
-      body: `{"id":"${shareId}","system":${serializedSystem},"createdAt":0}`,
+      headers: response.headers,
+      body: response.body,
     });
   });
   if (scenario.surface === 'embed') {
