@@ -113,4 +113,25 @@ describe('station settlement preview composition', () => {
     preview.releaseStations();
     expect(renders.at(-1)).toEqual(stationProjection('station-b', [2, 2]));
   });
+
+  it('replays a retained station after its map style is replaced', () => {
+    const renders: Array<GestureProjection | null> = [];
+    const preview = createStationGesturePreviewController({
+      render(projection) {
+        renders.push(projection);
+        return true;
+      },
+    });
+
+    preview.retainCommitted(['station-a'], [stationFeature('station-a', [1, 1])]);
+    const retainedProjection = renders.at(-1);
+
+    expect(preview.refresh()).toBe(true);
+    expect(renders).toEqual([retainedProjection, retainedProjection]);
+    expect(renders.at(-1)?.affected.stationIds).toEqual(['station-a']);
+    expect(renders.at(-1)?.data.features[0]?.geometry).toEqual({
+      type: 'Point',
+      coordinates: [1, 1],
+    });
+  });
 });

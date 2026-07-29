@@ -210,4 +210,42 @@ describe('gesture settled-layer mask', () => {
     expect(filterCalls).toEqual([{ layerId: LYR_WAYS_SOLID, filter: originalWayFilter }]);
     expect(visibilityCalls).toEqual([{ layerId: LYR_WAY_LABELS, value: 'visible' }]);
   });
+
+  it('rebuilds the same mask from replacement style layers', () => {
+    const fixture = createStatefulMaskMap();
+    const controller = createGestureLayerMaskController(fixture.map);
+    const affected = {
+      wayIds: [],
+      stationIds: ['station-a'],
+      facilityIds: [],
+      groupIds: [],
+      nodeIds: [],
+    };
+
+    controller.apply(affected);
+
+    const replacementFilter = ['get', 'station-visible-dark'] as FilterSpecification;
+    fixture.filters.set(LYR_STATIONS, replacementFilter);
+    fixture.filterCalls.length = 0;
+
+    controller.invalidate();
+    controller.apply(affected);
+
+    expect(fixture.filterCalls).toEqual([
+      {
+        layerId: LYR_STATIONS,
+        filter: [
+          'all',
+          replacementFilter,
+          ['!', ['in', ['get', 'id'], ['literal', ['station-a']]]],
+        ],
+      },
+    ]);
+
+    controller.restore();
+    expect(fixture.filterCalls.at(-1)).toEqual({
+      layerId: LYR_STATIONS,
+      filter: replacementFilter,
+    });
+  });
 });

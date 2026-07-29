@@ -2,6 +2,7 @@ export interface MapStyleRecoverySteps {
   registerIcons: () => void;
   ensureOverlay: () => boolean;
   restoreFeatureData: () => void;
+  restoreGesturePreview: () => void;
   restoreHover: () => void;
   restoreHaloVisibility: () => void;
   restoreRouteFocus: () => void;
@@ -20,6 +21,7 @@ export function recoverMapStyleState(steps: MapStyleRecoverySteps): boolean {
   steps.registerIcons();
   if (!steps.ensureOverlay()) return false;
   steps.restoreFeatureData();
+  steps.restoreGesturePreview();
   steps.restoreHover();
   steps.restoreHaloVisibility();
   steps.restoreRouteFocus();

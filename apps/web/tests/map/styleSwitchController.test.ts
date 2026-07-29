@@ -52,6 +52,32 @@ describe('style switch controller', () => {
     expect(map.setStyle).toHaveBeenCalledOnce();
   });
 
+  it('keeps a deferred change queued until committed preview geometry has painted', async () => {
+    const map = createMap();
+    let gestureActive = true;
+    let settlementOwnsPreview = false;
+    const fetchStyle = vi.fn(async () => style('dark'));
+    const controller = createStyleSwitchController({
+      map,
+      fetchStyle,
+      isInteractionActive: () => gestureActive || settlementOwnsPreview,
+    });
+
+    await controller.request('dark');
+    gestureActive = false;
+    settlementOwnsPreview = true;
+    await controller.flush();
+
+    expect(fetchStyle).not.toHaveBeenCalled();
+    expect(map.setStyle).not.toHaveBeenCalled();
+
+    settlementOwnsPreview = false;
+    await controller.flush();
+
+    expect(fetchStyle).toHaveBeenCalledOnce();
+    expect(map.setStyle).toHaveBeenCalledOnce();
+  });
+
   it('drops a deferred change that reverses to the already-applied scheme', async () => {
     const map = createMap();
     let active = true;

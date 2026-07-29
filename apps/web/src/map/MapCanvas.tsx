@@ -828,6 +828,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       // covers the full-setData fallback without exposing an unselected frame.
       applySelectionState();
       gesturePreview.releaseStations();
+      void styleSwitchControllerRef.current?.flush();
     };
 
     const stationSettlementHost: SourceMutationSettlementHost = {
@@ -911,8 +912,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       applyGestureProjectionResult(gestureProjection.project(baseline));
     };
 
-    const endGestureProjection = () => {
-      if (!gestureActive) return;
+    const settleGestureProjection = () => {
       const affected = gestureProjection?.affected() ?? {
         wayIds: [],
         stationIds: [],
@@ -1003,7 +1003,17 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       } else {
         gesturePreview.clearActive();
       }
-      void styleSwitchControllerRef.current?.flush();
+    };
+
+    const endGestureProjection = () => {
+      if (!gestureActive) return;
+      try {
+        settleGestureProjection();
+      } finally {
+        // A queued system-theme change may proceed only after either the live
+        // gesture or its committed-paint handoff has released map ownership.
+        void styleSwitchControllerRef.current?.flush();
+      }
     };
 
     // Selection-only fast path (system unchanged): update halos via feature-state
@@ -1079,6 +1089,12 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         registerIcons: () => registerMapIcons(map, activeMapScheme),
         ensureOverlay,
         restoreFeatureData: () => pushData(ALL_SYSTEM_FEATURE_SOURCES),
+        restoreGesturePreview: () => {
+          // Style replacement creates fresh layer/source objects. Replay any
+          // active or settling preview and rebuild its mask from those objects.
+          gestureMask.invalidate();
+          gesturePreview.refresh();
+        },
         // A full style rebuild creates fresh feature-state tables. pushData
         // reapplies selection after setData; restore the stationary hover too
         // so the pointer does not lose its affordance until it moves again.
@@ -1114,6 +1130,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         return (
           gestureActive ||
           directManipulationActive ||
+          stationSettlement.ownsPreview() ||
           state.activeWayId !== null ||
           state.routeDraft !== null
         );

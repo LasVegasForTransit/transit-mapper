@@ -12,6 +12,7 @@ export interface StationGesturePreviewController {
   retainCommitted(stationIds: readonly string[], features: readonly Feature<Point>[]): boolean;
   retainActiveStations(stationIds: readonly string[]): boolean;
   syncStations(system: TransitSystem): boolean;
+  refresh(): boolean;
   releaseStations(): boolean;
   clear(): boolean;
 }
@@ -131,6 +132,7 @@ export function createStationGesturePreviewController({
       }
       return renderCurrent();
     },
+    refresh: renderCurrent,
     releaseStations() {
       settlingIds.clear();
       settlingFeatures.clear();
