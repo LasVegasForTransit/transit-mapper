@@ -83,6 +83,17 @@ const SERVICE_LAYERS = [LYR_SERVICES_HIT, LYR_SERVICES_SOLID, LYR_SERVICES_UNDER
 // Lane surfaces stand in for the fan at lane-detail zooms — they carry the
 // same `id` property, so way hit-testing works in both rendering modes.
 const WAY_LAYERS = [LYR_WAYS_SOLID, LYR_WAYS_DASHED, LYR_LANE_SURFACES];
+const HIT_TEST_LAYERS = [
+  LYR_SERVICE_TERMINI_HIT,
+  LYR_WAY_ENDPOINTS,
+  LYR_HANDLES,
+  LYR_PHYSICAL_HANDLES,
+  LYR_STATIONS,
+  LYR_FACILITIES,
+  LYR_JUNCTIONS,
+  ...SERVICE_LAYERS,
+  ...WAY_LAYERS,
+];
 
 // Coalesces a fast-firing callback to at most once per animation frame,
 // keeping only the latest call's arguments. Raw "mousemove" fires far faster
@@ -291,13 +302,30 @@ export function attachInteractions(
 
   const lngLatOf = (e: MapMouseEvent): LngLat => [e.lngLat.lng, e.lngLat.lat];
 
-  const featureAt = (e: MapMouseEvent, layers: string[]): MapGeoJSONFeature | undefined => {
-    const b: [[number, number], [number, number]] = [
+  // A press is classified several ways (presentation intent, then dispatch,
+  // then sometimes selection), but MapLibre's rendered-feature query is the
+  // expensive part and the map cannot change within one event callback. Read
+  // the complete hit stack once and let each classifier apply its own layer
+  // priority to that immutable result.
+  const hitStackByEvent = new WeakMap<MapMouseEvent, MapGeoJSONFeature[]>();
+  const hitStack = (e: MapMouseEvent): MapGeoJSONFeature[] => {
+    const cached = hitStackByEvent.get(e);
+    if (cached) return cached;
+    const layers = HIT_TEST_LAYERS.filter((layer) => map.getLayer(layer));
+    const box: [[number, number], [number, number]] = [
       [e.point.x - HIT_PX, e.point.y - HIT_PX],
       [e.point.x + HIT_PX, e.point.y + HIT_PX],
     ];
+    const features = layers.length ? map.queryRenderedFeatures(box, { layers }) : [];
+    hitStackByEvent.set(e, features);
+    return features;
+  };
+
+  const featureAt = (e: MapMouseEvent, layers: string[]): MapGeoJSONFeature | undefined => {
     const existing = layers.filter((l) => map.getLayer(l));
-    const candidates = existing.length ? map.queryRenderedFeatures(b, { layers: existing }) : [];
+    const candidates = existing.length
+      ? hitStack(e).filter((feature) => existing.includes(feature.layer.id))
+      : [];
     const squaredDistance = (feature: MapGeoJSONFeature): number => {
       if (feature.geometry.type === 'Point') {
         const p = map.project(feature.geometry.coordinates as [number, number]);
