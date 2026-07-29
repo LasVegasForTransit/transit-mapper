@@ -351,15 +351,24 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
   re-anchoring, and NamedWay upkeep all live in the actions.
 - `keymap.ts` — the declarative keyboard table
   ([Keyboard shortcuts](../../product/reference/keyboard-shortcuts.md)).
+- `pointerIntent.ts` — the browser-free pointer grammar. It translates a
+  view, tool, rendered-target category, modifier state, and gesture lock into
+  one operation, cursor, badge, and preview/anchor instruction. The map layer
+  calls it for both hover presentation and pointer dispatch so those two
+  surfaces cannot promise different actions.
 
 ## apps/web/src/map/ — MapLibre
 
 - `layers.ts` — turns the system into GeoJSON sources and layers per view;
   owns paint order (street surfaces below footprints, labels on top).
 - `interactions.ts` — the pointer state machine: drawing, dragging,
-  snapping, route drafting, station-land drawing.
+  snapping, route drafting, station-land drawing; adapts MapLibre feature
+  hits into the editor pointer-intent grammar and owns the pointer-down lock.
 - `MapCanvas.tsx` — the map component; keeps sources in sync with the store
-  and heals overlay layers if the style reloads.
+  and heals overlay layers if the style reloads; renders the pointer-intent
+  badge beside the native cursor.
+- `PointerBadge.tsx` — the pointer-transparent icon badge, using the shared
+  UI icon vocabulary rather than a second map-specific icon set.
 - `initialStyleFallback.ts` — bounds initial third-party style loading and
   switches failures to a local blank style so system geometry and pointer
   interactions still initialize offline.

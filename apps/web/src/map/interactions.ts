@@ -1,6 +1,14 @@
 import type { Map as MLMap, MapMouseEvent, MapGeoJSONFeature, GeoJSONSource } from 'maplibre-gl';
-import type { EditorStore, MultiSelectItem } from '../editor/store';
+import type { EditorState, EditorStore, MultiSelectItem } from '../editor/store';
 import { attachKeyboard, type SimCommands } from '../editor/keymap';
+import {
+  resolvePointerIntent,
+  type ModifierState,
+  type PointerIntent,
+  type PointerIntentInput,
+  type PointerOperation,
+  type PointerTarget,
+} from '../editor/pointerIntent';
 import {
   CONFLATION_TOLERANCE_M,
   densifyForMatching,
@@ -154,6 +162,16 @@ export interface AttachInteractionsOptions {
    * painting, without conflating a camera move with an editable checkpoint. */
   onDirectManipulationStart?: () => void;
   onDirectManipulationEnd?: () => void;
+  /** Presentation is a consumer of the exact same pure decision that pointer
+   * dispatch uses. Keeping it outside this imperative controller lets React
+   * render the badge without the map owning a second cursor vocabulary. */
+  onPointerIntent?: (intent: PointerIntent | null, x: number, y: number) => void;
+  /** Presentation must remain silent while the map's action menu owns focus;
+   * otherwise stationary key events can revive a stale hover beneath it. */
+  isContextMenuOpen?: () => boolean;
+  /** Lets view state invalidate a stationary hover without recreating the map
+   * controller. The registration is optional for browser-free tests. */
+  registerPointerIntentRefresh?: (refresh: () => void) => () => void;
 }
 
 /**
@@ -188,6 +206,9 @@ export function attachInteractions(
 ): () => void {
   const canvas = map.getCanvas();
   let spaceHeld = false;
+  let lastPointer: MapMouseEvent | null = null;
+  let lockedPrimaryOperation: PointerOperation | undefined;
+  let pointerIntentSuppressedByMenu = false;
   /**
    * Set by a gesture that already handled the current press itself, so onClick
    * doesn't act on that same press a second time.
@@ -243,6 +264,139 @@ export function attachInteractions(
     return existing.length ? map.queryRenderedFeatures(b, { layers: existing })[0] : undefined;
   };
 
+  const modifierState = (event: {
+    altKey?: boolean;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    shiftKey?: boolean;
+    button?: number;
+  }): ModifierState => ({
+    space: spaceHeld,
+    shift: event.shiftKey,
+    alt: event.altKey,
+    ctrlOrMeta: event.ctrlKey || event.metaKey,
+    rightButton: event.button === 2,
+  });
+
+  /** The one definition of a corridor a Network line may route over. Both
+   * rendered-hit classification and startDraw use it, so an icon never says
+   * "connect" for a way that the press will turn into new geometry instead. */
+  const networkCandidates = (state: Pick<EditorState, 'system' | 'draftModeId'>) => {
+    const allowed = new Set(mode(state.draftModeId).wayTypeIds);
+    return state.system.ways.filter((way) => allowed.has(way.typeId));
+  };
+
+  const networkWayId = (feature: MapGeoJSONFeature | undefined): string | undefined => {
+    if (!feature) return undefined;
+    const wayId = feature.properties.wayId ?? feature.properties.id;
+    return typeof wayId === 'string' ? wayId : undefined;
+  };
+
+  const isCompatibleNetworkWay = (
+    state: Pick<EditorState, 'system' | 'draftModeId'>,
+    wayId: string | undefined,
+  ) => Boolean(wayId && networkCandidates(state).some((way) => way.id === wayId));
+
+  /** Translate the rendered hit stack into the editor-level vocabulary once.
+   * The resolver deliberately does not know MapLibre layer ids. */
+  const pointerTargetAt = (e: MapMouseEvent): PointerTarget => {
+    const state = store.getState();
+    // Once a fresh way has a seed, the next hover controls its rubber-band
+    // preview. Existing corridors below it are no longer a route-start target.
+    if (opts.isNetworkMode() && state.tool === 'way' && state.activeWayId) return 'empty';
+    if (opts.isNetworkMode() && state.tool === 'way' && networkOpenEndpointAt(e))
+      return state.routeDraft ? 'compatible-corridor' : 'endpoint';
+    const endpoint = featureAt(e, [LYR_WAY_ENDPOINTS]);
+    if (endpoint) return 'endpoint';
+    const handle = featureAt(e, [LYR_HANDLES]);
+    if (handle) {
+      const wayId = handle.properties.wayId as string;
+      const index = handle.properties.index as number;
+      const pointCount = store.getState().system.ways.find((way) => way.id === wayId)
+        ?.points.length;
+      return index === 0 || (pointCount !== undefined && index === pointCount - 1)
+        ? 'endpoint'
+        : 'interior-point';
+    }
+    if (featureAt(e, [LYR_PHYSICAL_HANDLES])) return 'control-point';
+    if (featureAt(e, [LYR_STATIONS])) return 'station';
+    if (featureAt(e, [LYR_FACILITIES])) return 'facility';
+    const serviceLine = featureAt(e, SERVICE_LAYERS);
+    const wayLine = featureAt(e, WAY_LAYERS);
+    if (!serviceLine && !wayLine) {
+      // The endpoint ring has a larger snap radius than a rendered stroke.
+      // It is still a real route/resume target, so classify it with the same
+      // candidates startDraw will inspect rather than advertising a new line.
+      if (opts.isNetworkMode() && state.tool === 'way' && networkRouteAnchorAt(e) !== null)
+        return 'compatible-corridor';
+      return 'empty';
+    }
+    if (opts.isNetworkMode() && state.tool === 'select') return 'line-body';
+    if (opts.isNetworkMode() && state.tool === 'way') {
+      // Service paint sits above its carrier. Its feature retains `wayId`, so
+      // use that exact carrier rather than treating a colored overlay as an
+      // unrelated line body or guessing from whatever layer drew first.
+      const wayId = networkWayId(serviceLine) ?? networkWayId(wayLine);
+      return isCompatibleNetworkWay(state, wayId) ? 'compatible-corridor' : 'empty';
+    }
+    return 'corridor';
+  };
+
+  const intentAt = (
+    e: MapMouseEvent,
+    modifierOverride?: ModifierState,
+    gestureActive = lockedPrimaryOperation !== undefined,
+  ): PointerIntent => {
+    const state = store.getState();
+    const view: PointerIntentInput['view'] = opts.isDiagramMode()
+      ? 'diagram'
+      : opts.isNetworkMode()
+        ? 'network'
+        : 'infrastructure';
+    return resolvePointerIntent({
+      view,
+      tool: state.tool,
+      target: pointerTargetAt(e),
+      modifiers: modifierOverride ?? modifierState(e.originalEvent),
+      readOnly: state.readOnly,
+      // Network terminus/connection handles are added in later tasks. Until a
+      // real hit can identify one, active drafts keep their existing drawing
+      // behavior instead of advertising a future loop/connect gesture.
+      armed: 'none',
+      gestureActive,
+      lockedPrimaryOperation,
+      routeDraftActive: Boolean(state.routeDraft),
+    });
+  };
+
+  const publishPointerIntent = (
+    e: MapMouseEvent,
+    modifierOverride?: ModifierState,
+    gestureActive?: boolean,
+  ): PointerIntent => {
+    lastPointer = e;
+    const pointerIntent = intentAt(e, modifierOverride, gestureActive);
+    if (opts.isContextMenuOpen?.()) {
+      pointerIntentSuppressedByMenu = true;
+      clearPointerIntent();
+      return pointerIntent;
+    }
+    if (pointerIntentSuppressedByMenu) {
+      pointerIntentSuppressedByMenu = false;
+      clearPointerIntent();
+      return pointerIntent;
+    }
+    canvas.style.cursor = pointerIntent.cursor;
+    opts.onPointerIntent?.(pointerIntent, e.originalEvent.clientX, e.originalEvent.clientY);
+    return pointerIntent;
+  };
+
+  const clearPointerIntent = () => opts.onPointerIntent?.(null, 0, 0);
+  const refreshPointerIntent = () => {
+    if (lastPointer) publishPointerIntent(lastPointer, undefined, false);
+    else clearPointerIntent();
+  };
+
   const metersPerPixel = () =>
     (156543.03392 * Math.cos((map.getCenter().lat * Math.PI) / 180)) / 2 ** map.getZoom();
 
@@ -265,6 +419,14 @@ export function attachInteractions(
    */
   const MAX_SNAP_M = 50;
   const snapMeters = (px: number) => Math.min(px * metersPerPixel(), MAX_SNAP_M);
+
+  const networkRouteAnchorAt = (e: MapMouseEvent): LngLat | null => {
+    const hit = snap(networkCandidates(store.getState()), lngLatOf(e), snapMeters(SNAP_PX));
+    return hit?.coord ?? null;
+  };
+
+  const networkOpenEndpointAt = (e: MapMouseEvent) =>
+    nearestOpenEndpoint(networkCandidates(store.getState()), lngLatOf(e), snapMeters(SNAP_PX));
 
   // ---- pan (right-drag or space+left-drag) --------------------------------
   // Not part of the cancel system: it never mutates the system, so there's
@@ -335,7 +497,7 @@ export function attachInteractions(
   };
 
   // ---- dragging an existing thing -----------------------------------------
-  const startHandleDrag = (feature: MapGeoJSONFeature, shift: boolean) => {
+  const startHandleDrag = (feature: MapGeoJSONFeature) => {
     suppressClick = true;
     const wayId = feature.properties.wayId as string;
     const index = feature.properties.index as number;
@@ -345,7 +507,11 @@ export function attachInteractions(
     const onMove = (ev: MapMouseEvent) => {
       moved = true;
       let c = lngLatOf(ev);
-      if (shift) c = constrainToNeighbor(wayId, index, c);
+      // The pointer-down verb is already locked to moving this point. Shift is
+      // the sole modifier permitted to alter it mid-drag, and only changes the
+      // geometric constraint — Alt/Ctrl/Cmd cannot turn the drag into erase/
+      // split/extend after its start.
+      if (ev.originalEvent.shiftKey) c = constrainToNeighbor(wayId, index, c);
       throttled.call(c);
     };
     const onUp = () => {
@@ -1062,8 +1228,36 @@ export function attachInteractions(
   // an existing compatible corridor is right here — the "explicitly separated"
   // escape hatch to the share-by-default behavior below (express/local tracks,
   // a busway beside a road).
-  const startDraw = (e: MapMouseEvent, forceSeparate = false) => {
+  const startDraw = (
+    e: MapMouseEvent,
+    operation: Extract<
+      PointerOperation,
+      | 'route-service'
+      | 'resume-service-and-corridor'
+      | 'draw-service-and-corridor'
+      | 'draw-separate-corridor'
+    > = 'draw-service-and-corridor',
+  ) => {
     const st = store.getState();
+    const forceSeparate = operation === 'draw-separate-corridor';
+    const routeExisting = operation === 'route-service';
+    const resumeExisting = operation === 'resume-service-and-corridor';
+    const candidates = opts.isNetworkMode() ? networkCandidates(st) : null;
+    // A route draft is an armed routing gesture, not a partial physical way.
+    // Keep every compatible press inside that draft so Alt cannot manufacture
+    // an active way beside it; non-routing operations are invalid until the
+    // draft is committed or cancelled.
+    if (st.routeDraft) {
+      if (!routeExisting || !candidates) return;
+      suppressClick = true;
+      const hit = snap(candidates, lngLatOf(e), snapMeters(SNAP_PX));
+      if (hit) {
+        const way = candidates.find((w) => w.id === hit.wayId);
+        const anchor = way ? anchorOnWay(way, hit.coord) : null;
+        if (anchor) st.extendRouteDraft(anchor);
+      }
+      return;
+    }
     // Remember it for the whole gesture: finishWay is what decides whether the
     // committed line rides existing infrastructure or keeps its own, and by
     // then this press is long gone. Only the press that STARTS a line arms it,
@@ -1083,31 +1277,18 @@ export function attachInteractions(
     // covers both lightRail and road), wider than the single draftWayTypeId
     // Infrastructure view draws with, so the resume check has to share this
     // set rather than filter by draftWayTypeId alone.
-    const networkCandidates = opts.isNetworkMode()
-      ? st.system.ways.filter((w) => mode(st.draftModeId).wayTypeIds.includes(w.typeId))
-      : null;
-    if (networkCandidates && !st.activeWayId && !forceSeparate) {
-      if (st.routeDraft) {
-        suppressClick = true;
-        const hit = snap(networkCandidates, lngLatOf(e), snapMeters(SNAP_PX));
-        if (hit) {
-          const way = networkCandidates.find((w) => w.id === hit.wayId);
-          const anchor = way ? anchorOnWay(way, hit.coord) : null;
-          if (anchor) st.extendRouteDraft(anchor);
-        }
-        return;
-      }
+    if (candidates && !st.activeWayId && !forceSeparate) {
       // A press on one of these candidates' own open end must win over
       // starting a route draft along it — an end sits at distance 0 on its
       // own path, so the corridor snap below would otherwise always fire
       // first and swallow the press before the extend-drag handlers (added
       // further down) ever get registered.
       const onOwnEndpoint =
-        nearestOpenEndpoint(networkCandidates, lngLatOf(e), snapMeters(SNAP_PX)) !== null;
-      if (!onOwnEndpoint) {
-        const hit = snap(networkCandidates, lngLatOf(e), snapMeters(SNAP_PX));
+        nearestOpenEndpoint(candidates, lngLatOf(e), snapMeters(SNAP_PX)) !== null;
+      if (routeExisting && !onOwnEndpoint) {
+        const hit = snap(candidates, lngLatOf(e), snapMeters(SNAP_PX));
         if (hit) {
-          const way = networkCandidates.find((w) => w.id === hit.wayId);
+          const way = candidates.find((w) => w.id === hit.wayId);
           const anchor = way ? anchorOnWay(way, hit.coord) : null;
           if (anchor) {
             suppressClick = true;
@@ -1137,8 +1318,8 @@ export function attachInteractions(
       // fail to resume it here and silently start an unrelated new way.
       const resume = forceSeparate
         ? null
-        : networkCandidates
-          ? nearestOpenEndpoint(networkCandidates, startCoord, snapMeters(SNAP_PX))
+        : candidates && resumeExisting
+          ? nearestOpenEndpoint(candidates, startCoord, snapMeters(SNAP_PX))
           : nearestOpenEndpoint(st.system.ways, startCoord, snapMeters(SNAP_PX), st.draftWayTypeId);
       if (resume) {
         wayId = resume.wayId;
@@ -1305,10 +1486,16 @@ export function attachInteractions(
   // O(ways) scan (nearestOpenEndpoint) — at native mousemove frequency that
   // ran far more often than the map could paint. A single rAF frame of
   // latency on a hover affordance is imperceptible.
-  const onHoverMoveImpl = (ev: MapMouseEvent) => {
+  const onHoverMoveImpl = (ev: MapMouseEvent, pointerIntent: PointerIntent) => {
     const st = store.getState();
     if (st.tool === 'way' && st.activeWayId) {
-      previewEnd(st.activeWayId, activeExtendAtStart, lngLatOf(ev), ev.originalEvent.shiftKey);
+      // Infrastructure's Way tool predates Network's route/new/separate
+      // vocabulary, so it has no resolver preview kind to consume yet. Its
+      // established rubber band remains unconditional; Network drafts are
+      // gated by the resolved presentation contract.
+      if (!opts.isNetworkMode() || pointerIntent.anchor === 'preview')
+        previewEnd(st.activeWayId, activeExtendAtStart, lngLatOf(ev), ev.originalEvent.shiftKey);
+      else clearPreviews();
       setEndpointHint(null);
       return;
     }
@@ -1321,25 +1508,36 @@ export function attachInteractions(
       return;
     }
     clearPreviews();
-    if (st.tool === 'way' && !st.readOnly) {
-      // Mirror startDraw's compatibility rule exactly: Network view draws a
-      // MODE, whose compatible carriers can be wider than the one way type
-      // currently selected for new infrastructure. The ring must promise the
-      // same endpoint the subsequent press will actually resume.
-      const resume = opts.isNetworkMode()
-        ? nearestOpenEndpoint(
-            st.system.ways.filter((way) => mode(st.draftModeId).wayTypeIds.includes(way.typeId)),
-            lngLatOf(ev),
-            snapMeters(SNAP_PX),
-          )
-        : nearestOpenEndpoint(st.system.ways, lngLatOf(ev), snapMeters(SNAP_PX), st.draftWayTypeId);
-      setEndpointHint(resume ? resume.coord : null);
+    if (
+      st.tool === 'way' &&
+      !st.readOnly &&
+      (pointerIntent.primaryOperation === 'route-service' ||
+        pointerIntent.primaryOperation === 'resume-service-and-corridor') &&
+      pointerIntent.anchor === 'target'
+    ) {
+      // The resolver's target presentation is not merely decorative: this is
+      // the same visible anchor the resolved route-service press will start
+      // from. New/separate previews deliberately clear it instead.
+      setEndpointHint(networkRouteAnchorAt(ev));
     } else {
       setEndpointHint(null);
     }
   };
-  const hoverThrottle = rafThrottle(onHoverMoveImpl);
-  const onHoverMove = (ev: MapMouseEvent) => hoverThrottle.call(ev);
+  const hoverThrottle = rafThrottle((ev: MapMouseEvent) => {
+    const pointerIntent = publishPointerIntent(ev);
+    if (opts.isContextMenuOpen?.()) {
+      clearPreviews();
+      setEndpointHint(null);
+      return;
+    }
+    onHoverMoveImpl(ev, pointerIntent);
+  });
+  const onHoverMove = (ev: MapMouseEvent) => {
+    // Retain the pointer immediately for stationary key transitions, but defer
+    // every rendered-feature query and presentation update to the frame.
+    lastPointer = ev;
+    hoverThrottle.call(ev);
+  };
 
   const placeOrSnapStation = (id: string, coord: LngLat) => {
     const ways = store.getState().system.ways;
@@ -1414,6 +1612,7 @@ export function attachInteractions(
     store.getState().commitHistoryCheckpoint();
     opts.onEditGestureEnd?.();
     opts.onDirectManipulationEnd?.();
+    clearPointerIntent();
   }
 
   // ---- mousedown: dispatch by button, modifier, tool, target --------------
@@ -1423,6 +1622,10 @@ export function attachInteractions(
     // A new press owns the flag outright: whatever the previous one armed is
     // spent by now, whether or not a click ever arrived to consume it.
     suppressClick = false;
+    const pointerIntent = publishPointerIntent(e, undefined, false);
+    // This is captured before dispatch so the operation chosen by the press
+    // cannot be rewritten by later modifier events while the button is held.
+    lockedPrimaryOperation = pointerIntent.primaryOperation;
     if (oe.button === 2 || (oe.button === 0 && spaceHeld)) {
       startPan(e, oe.button === 2);
       return;
@@ -1434,6 +1637,13 @@ export function attachInteractions(
     const physicalHandle = featureAt(e, [LYR_PHYSICAL_HANDLES]);
     const station = featureAt(e, [LYR_STATIONS]);
     const facility = featureAt(e, [LYR_FACILITIES]);
+
+    if (
+      pointerIntent.primaryOperation === 'refuse' ||
+      pointerIntent.primaryOperation === 'refuse-edit'
+    ) {
+      return;
+    }
 
     if (st.readOnly || opts.isDiagramMode()) {
       // Nothing is editable, but empty-space left-drag still pans — matching
@@ -1447,6 +1657,90 @@ export function attachInteractions(
     // sloppy click can't accidentally move the very thing being targeted.
     // onClick (below) resolves the actual pick once the button is released.
     if (st.pickingMemberForGroupId) return;
+
+    // Network drawing is dispatched from the resolved verb, not a second
+    // modifier/target decision below. That keeps the corridor badge, cursor,
+    // and press semantics one contract while Tasks 3/4 add their own future
+    // terminus and connection targets.
+    if (
+      (pointerIntent.primaryOperation === 'route-service' ||
+        pointerIntent.primaryOperation === 'resume-service-and-corridor' ||
+        pointerIntent.primaryOperation === 'draw-service-and-corridor' ||
+        pointerIntent.primaryOperation === 'draw-separate-corridor') &&
+      st.tool === 'way' &&
+      !isDoubleClickFinish(oe.detail)
+    ) {
+      startDraw(e, pointerIntent.primaryOperation);
+      return;
+    }
+
+    if (opts.isNetworkMode() && st.tool === 'select') {
+      if (pointerIntent.primaryOperation === 'delete-station' && station) {
+        st.deleteStation(station.properties.id as string);
+        suppressClick = true;
+        return;
+      }
+      if (pointerIntent.primaryOperation === 'delete-facility' && facility) {
+        st.deleteFacility(facility.properties.id as string);
+        suppressClick = true;
+        return;
+      }
+      // Shift-click and a 2+ item group are established Select gestures. Let
+      // their branch below own the press rather than turning a resolved
+      // station/facility move into a single-item drag before it gets there.
+      if (
+        pointerIntent.primaryOperation === 'move-station' &&
+        station &&
+        !oe.shiftKey &&
+        !isGroupMember('station', station.properties.id as string)
+      ) {
+        startStationDrag(station.properties.id as string);
+        return;
+      }
+      if (
+        pointerIntent.primaryOperation === 'move-facility' &&
+        facility &&
+        !oe.shiftKey &&
+        !isGroupMember('facility', facility.properties.id as string)
+      ) {
+        startFacilityDrag(facility.properties.id as string);
+        return;
+      }
+      // The Network resolver names empty-space pan explicitly. Handles are
+      // normally absent from that projection, but preserving their existing
+      // edit dispatch here keeps a transient layer refresh from converting a
+      // real control-point press into a camera gesture.
+      if (pointerIntent.primaryOperation === 'pan' && pointerTargetAt(e) === 'empty') {
+        startPan(e, false);
+        return;
+      }
+      if (pointerIntent.primaryOperation === 'select-line-and-branch') return;
+    }
+
+    if (pointerIntent.primaryOperation === 'erase-points' && handle) {
+      startErase(handle);
+      return;
+    }
+
+    if (pointerIntent.primaryOperation === 'split-corridor' && handle && !endpoint) {
+      st.splitWayAt(handle.properties.wayId as string, handle.properties.index as number);
+      suppressClick = true;
+      return;
+    }
+
+    if (pointerIntent.primaryOperation === 'extend-corridor' && endpoint) {
+      startExtendDrag(endpoint);
+      return;
+    }
+
+    if (
+      (pointerIntent.primaryOperation === 'move-point' ||
+        pointerIntent.primaryOperation === 'constrained-move') &&
+      handle
+    ) {
+      startHandleDrag(handle);
+      return;
+    }
 
     if (oe.altKey) {
       if (physicalHandle) {
@@ -1476,7 +1770,7 @@ export function attachInteractions(
       ) {
         // Alt on empty space in the Way tool draws SEPARATE infrastructure,
         // opting out of share-by-default corridor snapping (see startDraw).
-        startDraw(e, true);
+        startDraw(e, 'draw-separate-corridor');
       }
       return;
     }
@@ -1487,22 +1781,11 @@ export function attachInteractions(
     // needs its own deliberate gesture instead of being the unmodified
     // default. This target was otherwise a no-op under Ctrl/Cmd (nothing to
     // split off an endpoint), which is exactly why it was free to repurpose.
-    if ((oe.ctrlKey || oe.metaKey) && endpoint && st.tool === 'select') {
-      startExtendDrag(endpoint);
-      return;
-    }
-
     // Ctrl/Cmd-click an interior handle splits the way there — each half
     // keeps the original's type/grade/class/capacity and can then be edited
     // independently (see store.ts's splitWayAt doc comment). A no-op on an
     // endpoint (nothing to split off) or any other target.
-    if (oe.ctrlKey || oe.metaKey) {
-      if (handle && !endpoint) {
-        st.splitWayAt(handle.properties.wayId as string, handle.properties.index as number);
-        suppressClick = true;
-      }
-      return;
-    }
+    if (oe.ctrlKey || oe.metaKey) return;
 
     switch (st.tool) {
       case 'select':
@@ -1550,8 +1833,8 @@ export function attachInteractions(
         // instead to extend the way with a new point (handled above, before
         // the tool switch, since it needs to run even though this case does
         // too little to reach otherwise).
-        else if (endpoint) startHandleDrag(endpoint, oe.shiftKey);
-        else if (handle) startHandleDrag(handle, oe.shiftKey);
+        else if (endpoint) startHandleDrag(endpoint);
+        else if (handle) startHandleDrag(handle);
         else if (facility && isGroupMember('facility', facility.properties.id as string))
           startGroupDrag(e);
         else if (facility) startFacilityDrag(facility.properties.id as string);
@@ -1592,7 +1875,7 @@ export function attachInteractions(
         // on a handle) — reshaping handles is a Select-tool action — EXCEPT
         // the second press of a double-click, which exists only to trigger
         // the dblclick->finishWay that follows it. See isDoubleClickFinish.
-        if (!isDoubleClickFinish(oe.detail)) startDraw(e);
+        if (!isDoubleClickFinish(oe.detail)) startDraw(e, 'draw-service-and-corridor');
         break;
       case 'station':
         if (station) startStationDrag(station.properties.id as string);
@@ -1772,6 +2055,7 @@ export function attachInteractions(
    * pointing at is how a menu earns a reputation for being dangerous.
    */
   const openMenuAt = (e: MapMouseEvent) => {
+    clearPointerIntent();
     const st = store.getState();
     const hit = rightClickTarget(e);
     if (!hit) {
@@ -1806,6 +2090,8 @@ export function attachInteractions(
       store.getState().cancelHistoryCheckpoint(); // restores the exact pre-gesture system
       opts.onEditGestureEnd?.();
       opts.onDirectManipulationEnd?.();
+      lockedPrimaryOperation = undefined;
+      clearPointerIntent();
       return;
     }
     if (facilityBoundaryDraft) {
@@ -1831,11 +2117,32 @@ export function attachInteractions(
     sim: opts.sim,
     setPanKeyHeld: (held) => {
       spaceHeld = held;
-      canvas.style.cursor = held ? 'grab' : cursorFor();
+      if (lastPointer)
+        publishPointerIntent(
+          lastPointer,
+          { ...modifierState(lastPointer.originalEvent), space: held },
+          false,
+        );
+      else canvas.style.cursor = held ? 'grab' : cursorFor();
     },
   });
 
+  // Modifier key transitions occur independently of pointer movement. Reuse
+  // the last real map hit so a held Shift/Alt/Ctrl immediately updates the
+  // cursor badge while the pointer is stationary.
+  const onModifierChange = (event: KeyboardEvent) => {
+    if (!lastPointer) return;
+    publishPointerIntent(lastPointer, modifierState(event));
+  };
+  window.addEventListener('keydown', onModifierChange);
+  window.addEventListener('keyup', onModifierChange);
+  const unregisterPointerIntentRefresh = opts.registerPointerIntentRefresh?.(refreshPointerIntent);
+
   function cursorFor(): string {
+    // Hover presentation and press dispatch share resolvePointerIntent. The
+    // fallback below only serves initial mount, before MapLibre has delivered
+    // a real pointer position to classify.
+    if (lastPointer) return intentAt(lastPointer, undefined, false).cursor;
     if (spaceHeld) return 'grab';
     // Diagram mode ignores the active tool entirely (nothing is drawable
     // there) — always the plain pan affordance, never a crosshair promising
@@ -1882,11 +2189,24 @@ export function attachInteractions(
     else if (store.getState().tool === 'select') canvas.style.cursor = 'default';
   };
   const onLeaveFeature = () => {
+    clearPointerIntent();
     canvas.style.cursor = cursorFor();
   };
 
+  const onPointerUp = () => {
+    lockedPrimaryOperation = undefined;
+    canvas.style.cursor = cursorFor();
+    clearPointerIntent();
+  };
+  const onPointerOut = () => {
+    lastPointer = null;
+    clearPointerIntent();
+  };
+
   map.on('mousedown', onMouseDown);
+  map.on('mouseup', onPointerUp);
   map.on('mousemove', onHoverMove);
+  map.on('mouseout', onPointerOut);
   map.on('click', onClick);
   map.on('dblclick', onDblClick);
   map.on('mouseenter', LYR_STATIONS, onEnterHandle);
@@ -1903,10 +2223,12 @@ export function attachInteractions(
 
   let lastTool = store.getState().tool;
   let lastActive = store.getState().activeWayId;
+  let lastReadOnly = store.getState().readOnly;
   const unsubTool = store.subscribe((s) => {
     if (s.tool !== lastTool) {
       lastTool = s.tool;
       canvas.style.cursor = cursorFor();
+      clearPointerIntent();
       if (s.tool !== 'way') {
         clearPreviews();
         setEndpointHint(null);
@@ -1918,7 +2240,15 @@ export function attachInteractions(
       if (!s.activeWayId) {
         clearPreviews(); // clear rubber-band when a draw ends
         activeExtendAtStart = false;
+        clearPointerIntent();
       }
+    }
+    if (s.readOnly !== lastReadOnly) {
+      lastReadOnly = s.readOnly;
+      // A transition to a shared snapshot invalidates a previously editable
+      // hover even when the active tool happened to remain Select.
+      clearPointerIntent();
+      canvas.style.cursor = cursorFor();
     }
   });
   canvas.style.cursor = cursorFor();
@@ -1926,7 +2256,9 @@ export function attachInteractions(
   return () => {
     hoverThrottle.cancel();
     map.off('mousedown', onMouseDown);
+    map.off('mouseup', onPointerUp);
     map.off('mousemove', onHoverMove);
+    map.off('mouseout', onPointerOut);
     map.off('click', onClick);
     map.off('dblclick', onDblClick);
     map.off('mouseenter', LYR_STATIONS, onEnterHandle);
@@ -1941,6 +2273,9 @@ export function attachInteractions(
     map.off('mouseleave', LYR_PHYSICAL_HANDLES, onLeaveFeature);
     canvas.removeEventListener('contextmenu', onContextMenu);
     window.removeEventListener('keydown', onEscapeCapture, true);
+    window.removeEventListener('keydown', onModifierChange);
+    window.removeEventListener('keyup', onModifierChange);
+    unregisterPointerIntentRefresh?.();
     detachKeyboard();
     unsubTool();
   };
