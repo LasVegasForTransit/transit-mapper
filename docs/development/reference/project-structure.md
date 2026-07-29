@@ -432,6 +432,12 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
   renderer's named collections onto independently uploaded sources. Service
   termini are their own source because a branch end is an operational line
   affordance, not a control point on the corridor it follows.
+- `gestureProjection.ts`, `stationGesturePlan.ts`,
+  `stationGesturePreview.ts`, `stationGestureSettlement.ts`, and
+  `sourceMutationSettlement.ts` — keep direct manipulation on a bounded scratch
+  source, choose the conservative station-only diff, compose overlapping
+  previews, and retain them until committed data has painted. Uncertain
+  ownership or dependencies fall back to the complete source plan.
 - `interactions.ts` — the pointer state machine: drawing, dragging,
   snapping, route drafting, branch-terminus gestures, connection choices, and
   station-land drawing. It adapts MapLibre feature hits into the editor

@@ -351,6 +351,14 @@ their neighbours. Dependency revisions select only the MapLibre sources whose
 data can have changed; unrequested feature-building phases do not traverse
 their collections.
 
+An isolated station move in Network view is narrower still: core derives the
+exact changed station feature and MapLibre replaces it by its promoted stable
+ID. The scratch point stays visible and participates in ordinary station
+hit-testing until the committed source has loaded and painted, so immediate
+repeat drags remain available. A missing ID, overlapping dependency, view or
+document change, source error, or timeout returns to the complete source
+refresh path.
+
 Neighbours are the part people miss. Editing one way moves the junctions at
 both its ends, and that retrims every other way meeting those junctions. An
 edit is never local to the thing edited.
