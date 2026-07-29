@@ -164,12 +164,15 @@ function terminusFeature(
   } as unknown as MapGeoJSONFeature;
 }
 
-function stationFeature(id: string): MapGeoJSONFeature {
+function stationFeature(
+  id: string,
+  coordinates: [number, number] = [-115.2, 36.1],
+): MapGeoJSONFeature {
   return {
     type: 'Feature',
     id: `station-${id}`,
     properties: { id },
-    geometry: { type: 'Point', coordinates: [-115.2, 36.1] },
+    geometry: { type: 'Point', coordinates },
     source: 'tm-stations',
     sourceLayer: '',
     layer: { id: LYR_STATIONS, type: 'circle', source: 'tm-stations' },
@@ -200,6 +203,7 @@ function createMap(initialFeatures: MapGeoJSONFeature | MapGeoJSONFeature[] | nu
   const sourceData = new Map<string, unknown>();
   const panCalls: unknown[][] = [];
   let renderedFeatureQueries = 0;
+  let projectedCoordinates = 0;
   const canvas = {
     style: { cursor: '' },
     addEventListener() {},
@@ -235,10 +239,17 @@ function createMap(initialFeatures: MapGeoJSONFeature | MapGeoJSONFeature[] | nu
       return features.filter((feature) => options.layers.includes(feature.layer.id));
     },
     renderedFeatureQueryCount: () => renderedFeatureQueries,
-    project: (coord: [number, number]): Point => ({
-      x: (coord[0] + 115.3) * 10_000,
-      y: (36.2 - coord[1]) * 10_000,
-    }),
+    projectedCoordinateCount: () => projectedCoordinates,
+    resetProjectedCoordinateCount() {
+      projectedCoordinates = 0;
+    },
+    project: (coord: [number, number]): Point => {
+      projectedCoordinates++;
+      return {
+        x: (coord[0] + 115.3) * 10_000,
+        y: (36.2 - coord[1]) * 10_000,
+      };
+    },
     unproject: (point: Point) => ({
       lng: -115.3 + point.x / 10_000,
       lat: 36.2 - point.y / 10_000,
@@ -395,6 +406,45 @@ describe('pointer work coalescing', () => {
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
 
     expect(map.renderedFeatureQueryCount()).toBe(1);
+    detach();
+  });
+
+  it('projects each rendered segment once when one press classifies and dispatches it', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.ways = [erasableWay()];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Service',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [
+          { id: 'near', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
+          { id: 'far', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
+        ],
+      },
+    ];
+    store.getState().setSystem(system);
+    const map = createMap([
+      serviceFeatureFor('far', [
+        [-115.25, 36.1005],
+        [-115.2, 36.1005],
+      ]),
+      serviceFeatureFor('near', [
+        [-115.25, 36.1],
+        [-115.2, 36.1],
+      ]),
+    ]);
+    const detach = attach(map, store, undefined, undefined, undefined, false);
+    const event = mouseEvent(map, { x: 700, y: 1000 }, { shiftKey: true });
+    map.resetProjectedCoordinateCount();
+
+    map.fire('mousedown', event);
+
+    expect(map.projectedCoordinateCount()).toBe(4);
+    expect(store.getState().multiSelection).toEqual([{ kind: 'service', id: 'service' }]);
     detach();
   });
 
@@ -1360,6 +1410,68 @@ describe('pointer work coalescing', () => {
     map.fire('click', mouseEvent(map, map.project([-115.23, 36.1002])));
 
     expect(store.getState().activePatternId).toBe('near');
+    detach();
+  });
+
+  it('keeps point-layer priority over a geometrically nearer line', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.ways = [erasableWay()];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Service',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] }],
+      },
+    ];
+    store.getState().setSystem(system);
+    const stationId = store.getState().addStation([-115.23, 36.1008]);
+    const map = createMap([
+      serviceFeature('erasable'),
+      stationFeature(stationId, [-115.23, 36.1008]),
+    ]);
+    const detach = attach(map, store);
+
+    map.fire('click', mouseEvent(map, map.project([-115.23, 36.1])));
+
+    expect(store.getState().selection).toEqual({ kind: 'station', id: stationId });
+    detach();
+  });
+
+  it('keeps the first rendered line when same-layer distances tie', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.ways = [erasableWay()];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Service',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [
+          { id: 'first', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
+          { id: 'second', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
+        ],
+      },
+    ];
+    store.getState().setSystem(system);
+    const coordinates: [number, number][] = [
+      [-115.25, 36.1],
+      [-115.2, 36.1],
+    ];
+    const map = createMap([
+      serviceFeatureFor('first', coordinates),
+      serviceFeatureFor('second', coordinates),
+    ]);
+    const detach = attach(map, store);
+
+    map.fire('click', mouseEvent(map, map.project([-115.23, 36.1])));
+
+    expect(store.getState().activePatternId).toBe('first');
     detach();
   });
 
