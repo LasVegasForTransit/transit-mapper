@@ -189,9 +189,6 @@ export function Workbench({
                 {primaryToolbar}
               </div>
             </div>
-            {installBanner && (
-              <div className="pointer-events-auto max-w-[560px]">{installBanner}</div>
-            )}
           </div>
         )}
 
@@ -278,8 +275,8 @@ export function Workbench({
 
         {!mobile && installBanner && (
           <div
-            className="pointer-events-auto z-[1] max-w-[560px] justify-self-center"
-            style={{ gridColumn: '1 / -1', gridRow: '2' }}
+            className="pointer-events-auto z-[1] w-full min-w-0 max-w-[560px] justify-self-center"
+            style={{ gridColumn: '2 / 3', gridRow: '2' }}
           >
             {installBanner}
           </div>

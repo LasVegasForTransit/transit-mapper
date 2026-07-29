@@ -37,6 +37,7 @@ import { useView } from './ui/ViewProvider';
 import { Workbench } from './ui/Workbench';
 import { InstallBanner } from './ui/InstallBanner';
 import { useInstall } from './pwa/InstallProvider';
+import { shouldShowInstallBanner } from './pwa/install';
 import { useAppUpdate } from '@transitmapper/pwa-updater/useAppUpdate';
 import './ui/app.css';
 
@@ -435,7 +436,13 @@ export function App() {
         modeToolbar={<Toolbar />}
         importStatus={<ImportProgressPill />}
         installBanner={
-          installState.eligible && !uiHidden && !readOnly ? <InstallBanner /> : undefined
+          shouldShowInstallBanner({
+            eligible: installState.eligible,
+            uiHidden,
+            readOnly,
+          }) ? (
+            <InstallBanner />
+          ) : undefined
         }
       />
       {shortcutsOpen && (
