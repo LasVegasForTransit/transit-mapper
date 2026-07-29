@@ -309,7 +309,11 @@ The checked reports in `apps/web/perf/` are reviewable comparison evidence.
 Generated traces and current reports live under
 `apps/web/artifacts/performance/` and are ignored. This suite is deliberately
 outside `pnpm check`, whose browser-free and network-free contract remains
-unchanged. See [Measure browser performance](../how-to/measure-performance.md).
+unchanged. Pull requests run one candidate-only RTC smoke; repeated numeric
+audits, mobile coverage, traces, and the leak soak are deliberate manual
+workflow runs. Raw bundle size is reported for diagnosis, while gzip and
+Brotli delivery size remain the absolute bundle gates. See
+[Measure browser performance](../how-to/measure-performance.md).
 
 ## apps/web/src/import/ — bounded browser imports
 

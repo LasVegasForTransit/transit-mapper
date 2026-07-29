@@ -223,11 +223,11 @@ describe('performance budgets', () => {
     );
   });
 
-  it('fails a bundle regression greater than ten percent', () => {
+  it('fails a delivered bundle regression greater than ten percent', () => {
     const baseline = report(100);
     baseline.bundles = [{ entry: 'main', rawBytes: 1_000, gzipBytes: 500, brotliBytes: 400 }];
     const actual = report(100);
-    actual.bundles = [{ entry: 'main', rawBytes: 1_101, gzipBytes: 500, brotliBytes: 400 }];
+    actual.bundles = [{ entry: 'main', rawBytes: 1_000, gzipBytes: 551, brotliBytes: 400 }];
 
     const result = evaluatePerfBudgets({
       report: actual,
@@ -240,10 +240,48 @@ describe('performance budgets', () => {
       expect.objectContaining({
         kind: 'bundle-regression',
         bundleEntry: 'main',
-        bundleEncoding: 'raw',
-        actual: 1_101,
-        limit: 1_100,
+        bundleEncoding: 'gzip',
+        actual: 551,
+        limit: 550,
       }),
+    );
+  });
+
+  it('reports raw bundle growth without making it a performance violation', () => {
+    const baseline = report(100);
+    baseline.bundles = [{ entry: 'main', rawBytes: 1_000, gzipBytes: 500, brotliBytes: 400 }];
+    const actual = report(100);
+    actual.bundles = [{ entry: 'main', rawBytes: 9_000, gzipBytes: 500, brotliBytes: 400 }];
+
+    const result = evaluatePerfBudgets({
+      report: actual,
+      baseline,
+      scenarios: [PERF_SCENARIOS.small],
+      maxRegressionRatio: 0.1,
+    });
+
+    expect(result.violations).not.toContainEqual(
+      expect.objectContaining({
+        kind: 'bundle-regression',
+        bundleEncoding: 'raw',
+      }),
+    );
+  });
+
+  it('treats a smoke as functional evidence rather than one-sample timing statistics', () => {
+    const actual = report(10_000);
+
+    const result = evaluatePerfBudgets({
+      report: actual,
+      scenarios: [PERF_SCENARIOS.small],
+      maxRegressionRatio: 0.1,
+      enforceNumericBudgets: false,
+    });
+
+    expect(result.status).toBe('pass');
+    expect(result.violations).toEqual([]);
+    expect(result.notices).toContain(
+      'Smoke mode proves the production build and browser journey; numeric budgets require a full audit.',
     );
   });
 

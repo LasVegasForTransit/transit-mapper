@@ -21,12 +21,18 @@ capability is disabled.
 | Share    | RTC-shaped               | Cold/warm load and camera drag                      | LCP, CLS, transfer, meaningful system paint, input-to-paint, and MapLibre frames                             |
 | Embed    | RTC-shaped               | Cold/warm load and camera drag                      | LCP, CLS, transfer, meaningful system paint, and input-to-paint                                              |
 | PWA      | Small                    | Install, clear HTTP cache, disconnect, reload, edit | Cached editor graph, local blank-map fallback, populated system overlay, and a committed model edit          |
-| Delivery | All entries              | Production build                                    | Complete dynamic import graph, raw/gzip/Brotli budgets, and PWA graph verification                           |
+| Delivery | All entries              | Production build                                    | Complete dynamic import graph, raw-size reporting, gzip/Brotli budgets, and PWA graph verification           |
 
 Chrome Stable runs headed at 1440 × 900, device-pixel ratio 1, four-times CPU
 slowdown, and Fast 4G for cold loads. Mobile uses 390 × 844 at device-pixel
 ratio 3. The exact budgets and repetition policy are in
 [Measure browser performance](../how-to/measure-performance.md).
+
+Pull requests run one candidate-only cold/warm RTC smoke. That smoke proves
+the production graph and critical browser journey complete, but it is not
+treated as statistical timing evidence. The five-run desktop/mobile matrix and
+ten-minute leak audit run only when the Performance workflow is deliberately
+dispatched.
 
 Empty editor startup remains a required release row but is not yet in the
 fixed automated fixture union. Record it with the manual startup-and-recovery

@@ -9,6 +9,7 @@ export interface PerfCliOptions {
   baselinePath?: string;
   requireBaseline: boolean;
   skipBuild: boolean;
+  smoke: boolean;
   profile: PerfProfileId;
   scenarioId?: PerfScenario['id'];
   soak: boolean;
@@ -26,6 +27,7 @@ export function perfUsage(): string {
     '  --require-baseline     Fail when --baseline is absent or unavailable',
     '  --profile <name>        desktop (default) or mobile',
     '  --scenario <id>         Run one scenario for local diagnosis',
+    '  --smoke                 Run one functional sample without numeric timing gates',
     '  --soak                  Run the ten-minute RTC leak gate',
     '  --soak-duration <ms>    Shorter local soak smoke (default 600000)',
     '  --skip-build           Reuse the current dist/ output',
@@ -46,6 +48,7 @@ export function parsePerfCliOptions(args: string[]): PerfCliOptions {
   let baseline: string | undefined;
   let requireBaseline = false;
   let skipBuild = false;
+  let smoke = false;
   let profile: PerfProfileId = 'desktop';
   let scenarioId: PerfScenario['id'] | undefined;
   let soak = false;
@@ -56,6 +59,7 @@ export function parsePerfCliOptions(args: string[]): PerfCliOptions {
     const argument = args[index];
     if (argument === '--') continue;
     if (argument === '--record') record = true;
+    else if (argument === '--smoke') smoke = true;
     else if (argument === '--soak') soak = true;
     else if (argument === '--soak-duration') {
       const value = Number(optionValue(args, index, argument));
@@ -102,6 +106,7 @@ export function parsePerfCliOptions(args: string[]): PerfCliOptions {
     baselinePath: baseline ? resolve(APP_ROOT, baseline) : undefined,
     requireBaseline,
     skipBuild,
+    smoke,
     profile,
     scenarioId,
     soak,

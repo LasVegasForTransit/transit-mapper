@@ -33,6 +33,20 @@ pnpm perf -- --scenario embed
 `--scenario` cannot be combined with `perf:record`, because a partial report
 must never replace the complete baseline.
 
+A pull request runs one candidate-only RTC smoke:
+
+```bash
+pnpm perf -- --smoke --scenario rtc
+```
+
+The smoke still builds the production graph and completes one cold and warm
+agency-scale journey, including camera movement, station drag, line draw, and
+durable persistence. It fails when the build, Chrome, or any required journey
+proof fails. One sample is not enough evidence for a timing verdict, so smoke
+mode does not enforce numeric timing or regression budgets. It also does not
+build or measure the base revision. Use the full fixed protocol above when a
+change needs statistical performance evidence.
+
 The protocol is fixed in `apps/web/src/perf/scenarios.ts`:
 
 - stable, headed Google Chrome;
@@ -51,8 +65,8 @@ a station target. Until those pieces land, record empty startup separately and
 do not describe `pnpm perf` as covering it.
 
 The share page and the dedicated embed entry both use the RTC-shaped fixture.
-The nightly workflow also runs the 390 × 844, device-pixel-ratio 3 mobile
-profile:
+The manually dispatched workflow also runs the 390 × 844,
+device-pixel-ratio 3 mobile profile:
 
 ```bash
 pnpm perf -- --profile mobile
@@ -130,7 +144,10 @@ deterministic four-times-throttled CPU calibration; absolute user-facing gates
 are never normalized. Calibration also records 60 consecutive rAF intervals,
 their median, and the inferred display refresh rate so the headed environment
 is auditable. Display cadence is diagnostic only and never changes a budget or
-normalizes a regression. Bundle bytes get the same 10% regression check.
+normalizes a regression. Gzip and Brotli delivery bytes get the same 10%
+regression check during a full audit. Raw graph size remains in the report for
+diagnosis, but it is not an absolute or regression gate; browser measurements
+own parse and responsiveness costs.
 
 Missing Chrome produces an `unavailable` report and a non-zero exit. The
 harness never writes placeholder timings.
@@ -161,7 +178,7 @@ the real compatibility write reports quota exhaustion or unavailability.
 
 ## Run the leak soak
 
-The nightly workflow also runs:
+The manually dispatched workflow also runs:
 
 ```bash
 pnpm perf:soak
@@ -178,7 +195,7 @@ contexts created minus observed `webglcontextlost` events; the report names
 that source because the browser does not expose a general live-context census.
 Its evidence is `soak-report.json`. A shorter
 `--soak-duration <milliseconds>` is available only to smoke-test the
-mechanism; CI always uses the ten-minute default.
+mechanism; a manually dispatched CI audit uses the ten-minute default.
 
 ## What “offline” means
 

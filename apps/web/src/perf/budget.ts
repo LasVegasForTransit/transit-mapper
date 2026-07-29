@@ -125,10 +125,9 @@ function regressionViolations(options: EvaluatePerfBudgetsOptions): PerfBudgetVi
   return violations;
 }
 
-type BundleEncoding = 'raw' | 'gzip' | 'brotli';
+type DeliveredBundleEncoding = 'gzip' | 'brotli';
 
-function bundleValue(entry: PerfBundleEntry, encoding: BundleEncoding): number {
-  if (encoding === 'raw') return entry.rawBytes;
+function bundleValue(entry: PerfBundleEntry, encoding: DeliveredBundleEncoding): number {
   if (encoding === 'gzip') return entry.gzipBytes;
   return entry.brotliBytes;
 }
@@ -139,7 +138,7 @@ function bundleRegressionViolations(
   maxRegressionRatio: number,
 ): PerfBudgetViolation[] {
   const violations: PerfBudgetViolation[] = [];
-  const encodings: BundleEncoding[] = ['raw', 'gzip', 'brotli'];
+  const encodings: DeliveredBundleEncoding[] = ['gzip', 'brotli'];
 
   for (const entry of report.bundles) {
     const baselineEntry = baseline.bundles.find((candidate) => candidate.entry === entry.entry);
@@ -171,6 +170,16 @@ export function evaluatePerfBudgets(options: EvaluatePerfBudgetsOptions): PerfBu
       status: 'unavailable',
       violations: [],
       notices: [options.report.unavailableReason ?? 'The performance run is unavailable.'],
+    };
+  }
+
+  if (options.enforceNumericBudgets === false) {
+    return {
+      status: 'pass',
+      violations: [],
+      notices: [
+        'Smoke mode proves the production build and browser journey; numeric budgets require a full audit.',
+      ],
     };
   }
 

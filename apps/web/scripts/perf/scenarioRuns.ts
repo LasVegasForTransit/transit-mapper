@@ -182,8 +182,10 @@ async function runSample(options: RunSampleOptions): Promise<PerfSample | undefi
 }
 
 export async function runScenario(options: RunScenarioOptions): Promise<PerfSample[]> {
-  console.log(`perf ${options.scenario.id}: warm-up`);
-  await runSample(options);
+  for (let run = 1; run <= options.protocol.warmupRuns; run += 1) {
+    console.log(`perf ${options.scenario.id}: warm-up ${run}/${options.protocol.warmupRuns}`);
+    await runSample(options);
+  }
 
   const samples: PerfSample[] = [];
   for (let run = 1; run <= options.protocol.measuredRuns; run += 1) {

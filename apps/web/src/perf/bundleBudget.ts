@@ -9,7 +9,6 @@ export interface BundleEntrySize {
 
 export interface BundleBudget {
   entry: string;
-  maximumRawBytes: number;
   maximumGzipBytes: number;
   maximumBrotliBytes: number;
 }
@@ -23,18 +22,13 @@ export interface BundleBudgetViolation {
 }
 
 interface EncodingBudget {
-  encoding: BundleEncoding;
+  encoding: Exclude<BundleEncoding, 'raw'>;
   actualBytes: number;
   maximumBytes: number;
 }
 
 function encodingBudgets(size: BundleEntrySize, budget: BundleBudget): EncodingBudget[] {
   return [
-    {
-      encoding: 'raw',
-      actualBytes: size.rawBytes,
-      maximumBytes: budget.maximumRawBytes,
-    },
     {
       encoding: 'gzip',
       actualBytes: size.gzipBytes,
