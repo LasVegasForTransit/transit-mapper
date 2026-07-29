@@ -69,6 +69,7 @@ describe('terminus closures', () => {
   const ways = [
     aRoad('a-b', [a, b]),
     aRoad('b-c', [b, c]),
+    aRoad('a-d', [a, d]),
     aRoad('c-d', [c, d]),
     aRoad('d-b', [d, b]),
   ];
@@ -91,6 +92,23 @@ describe('terminus closures', () => {
         outbound: [wholeLeg('b-c')],
         inbound: [wholeLeg('c-d'), wholeLeg('d-b')],
       },
+    ]);
+  });
+
+  it('turns the head into a couplet when the start terminus closes onto the line', () => {
+    const atB = patternPositionAt(ways, pattern, 'outbound', 1, 0)!;
+    const closed = closePatternTerminus(ways, pattern, 'start', atB, [
+      wholeLeg('a-d'),
+      wholeLeg('d-b'),
+    ]);
+
+    expect(closed?.sections).toEqual([
+      {
+        kind: 'split',
+        outbound: [wholeLeg('a-d'), wholeLeg('d-b')],
+        inbound: [wholeLeg('a-b', 'againstPoints')],
+      },
+      { kind: 'shared', legs: [wholeLeg('b-c')] },
     ]);
   });
 

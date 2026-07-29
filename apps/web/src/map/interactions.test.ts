@@ -4,6 +4,7 @@ import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { wholeLeg } from '@transitmapper/core/model/geo';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import type { Way } from '@transitmapper/core/model/system';
+import { aPattern, aRoad, aService, aSystem } from '@transitmapper/core/testing/fixtures';
 import type {
   CorridorActionHit,
   ServiceActionHit,
@@ -19,7 +20,7 @@ import {
   LYR_WAYS_SOLID,
   SRC_ENDPOINT_HINT,
 } from './layers';
-import { attachInteractions } from './interactions';
+import { attachInteractions, type AttachInteractionsOptions } from './interactions';
 import type { PointerIntent } from '../editor/pointerIntent';
 import type { EditGestureTargets } from './gestureProjection';
 
@@ -127,6 +128,25 @@ function serviceFeatureFor(patternId: string, coordinates: [number, number][]): 
   return feature;
 }
 
+function serviceOccurrenceFeature(
+  serviceId: string,
+  patternId: string,
+  wayId: string,
+  legIndex: number,
+  coordinates: [number, number][],
+): MapGeoJSONFeature {
+  const feature = serviceFeatureFor(patternId, coordinates);
+  feature.properties = {
+    ...feature.properties,
+    serviceId,
+    patternId,
+    wayId,
+    run: 'outbound',
+    legIndex,
+  };
+  return feature;
+}
+
 function terminusFeature(
   patternId: string,
   side: 'start' | 'end',
@@ -171,7 +191,7 @@ function facilityFeature(id: string): MapGeoJSONFeature {
 }
 
 function createMap(initialFeatures: MapGeoJSONFeature | MapGeoJSONFeature[] | null = null) {
-  const features = initialFeatures
+  let features = initialFeatures
     ? Array.isArray(initialFeatures)
       ? initialFeatures
       : [initialFeatures]
@@ -196,6 +216,9 @@ function createMap(initialFeatures: MapGeoJSONFeature | MapGeoJSONFeature[] | nu
       },
     }),
     sourceData,
+    setFeatures(next: MapGeoJSONFeature | MapGeoJSONFeature[] | null) {
+      features = next ? (Array.isArray(next) ? next : [next]) : [];
+    },
     panCalls,
     getBounds: () => ({
       getWest: () => -116,
@@ -306,6 +329,9 @@ function attach(
   isContextMenuOpen?: () => boolean,
   contextMenu?: ContextMenuProbe,
   onPointerRefresh?: (refresh: () => void) => void,
+  openTerminusConnectionChoice?: NonNullable<
+    AttachInteractionsOptions['openTerminusConnectionChoice']
+  >,
 ) {
   return attachInteractions(map as unknown as MLMap, store, {
     openShortcuts() {},
@@ -329,6 +355,7 @@ function attach(
           return () => {};
         }
       : undefined,
+    openTerminusConnectionChoice,
   });
 }
 
@@ -355,6 +382,487 @@ afterEach(() => {
 });
 
 describe('pointer work coalescing', () => {
+  it('dispatches a selected service terminus drag through the resolved extension intent', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const trunk = erasableWay();
+    trunk.id = 'trunk';
+    trunk.points = [
+      [-115.25, 36.1],
+      [-115.23, 36.1],
+    ];
+    const extension = erasableWay();
+    extension.id = 'extension';
+    extension.points = [
+      [-115.23, 36.1],
+      [-115.2, 36.1],
+    ];
+    const system = createEmptySystem();
+    system.ways = [trunk, extension];
+    system.nodes = [
+      {
+        id: 'joint',
+        coord: [-115.23, 36.1],
+        refs: [
+          { wayId: 'trunk', pointIndex: 1 },
+          { wayId: 'extension', pointIndex: 0 },
+        ],
+      },
+    ];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Service',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('trunk')] }] }],
+      },
+    ];
+    store.getState().setSystem(system);
+    store.getState().select({ kind: 'service', id: 'service' });
+    store.getState().setActivePattern('branch');
+    const map = createMap(terminusFeature('branch', 'end', [-115.23, 36.1]));
+    const shown: Array<PointerIntent | null> = [];
+    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+
+    map.fire('mousedown', mouseEvent(map, map.project([-115.23, 36.1])));
+    map.setFeatures(wayFeature('extension'));
+    map.fire('mousemove', mouseEvent(map, map.project([-115.2, 36.1])));
+    scheduler.pump();
+
+    expect(shown.at(-1)).toMatchObject({
+      primaryOperation: 'extend-branch',
+      cursor: 'grabbing',
+      anchor: 'preview',
+    });
+    expect(map.sourceData.get('tm-preview')).toMatchObject({
+      features: [{ geometry: { type: 'LineString' } }],
+    });
+
+    map.fire('mouseup', mouseEvent(map, map.project([-115.2, 36.1])));
+    expect(store.getState().system.services[0].patterns[0].sections).toHaveLength(2);
+    store.getState().undo();
+    expect(store.getState().system).toBe(system);
+    detach();
+  });
+
+  it('keeps Select active while an armed terminus draws and commits a one-way return', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const a = erasableWay();
+    a.id = 'a-b';
+    a.points = [
+      [-115.25, 36.1],
+      [-115.23, 36.1],
+    ];
+    const b = erasableWay();
+    b.id = 'b-c';
+    b.points = [
+      [-115.23, 36.1],
+      [-115.21, 36.1],
+    ];
+    const c = erasableWay();
+    c.id = 'c-d';
+    c.points = [
+      [-115.21, 36.1],
+      [-115.22, 36.11],
+    ];
+    const d = erasableWay();
+    d.id = 'd-b';
+    d.points = [
+      [-115.22, 36.11],
+      [-115.23, 36.1],
+    ];
+    const system = createEmptySystem();
+    system.ways = [a, b, c, d];
+    system.nodes = [
+      {
+        id: 'b',
+        coord: [-115.23, 36.1],
+        refs: [
+          { wayId: 'a-b', pointIndex: 1 },
+          { wayId: 'b-c', pointIndex: 0 },
+          { wayId: 'd-b', pointIndex: 1 },
+        ],
+      },
+      {
+        id: 'c',
+        coord: [-115.21, 36.1],
+        refs: [
+          { wayId: 'b-c', pointIndex: 1 },
+          { wayId: 'c-d', pointIndex: 0 },
+        ],
+      },
+      {
+        id: 'd',
+        coord: [-115.22, 36.11],
+        refs: [
+          { wayId: 'c-d', pointIndex: 1 },
+          { wayId: 'd-b', pointIndex: 0 },
+        ],
+      },
+    ];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Service',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [
+          {
+            id: 'branch',
+            sections: [{ kind: 'shared', legs: [wholeLeg('a-b'), wholeLeg('b-c')] }],
+          },
+        ],
+      },
+    ];
+    store.getState().setSystem(system);
+    store.getState().select({ kind: 'service', id: 'service' });
+    const position = {
+      patternId: 'branch',
+      run: 'outbound' as const,
+      legIndex: 1,
+      wayId: 'b-c',
+      t: 1,
+      distanceMeters: 1,
+    };
+    store.getState().armTerminus({
+      serviceId: 'service',
+      patternId: 'branch',
+      side: 'end',
+      position,
+    });
+    const map = createMap(terminusFeature('branch', 'end', [-115.21, 36.1]));
+    const shown: Array<PointerIntent | null> = [];
+    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+
+    map.fire('mousemove', mouseEvent(map, map.project([-115.21, 36.1])));
+    scheduler.pump();
+    expect(shown.at(-1)).toMatchObject({
+      primaryOperation: 'draw-inbound-side',
+      badge: 'one-way-return',
+    });
+    expect(store.getState().tool).toBe('select');
+
+    map.fire('mousedown', mouseEvent(map, map.project([-115.21, 36.1])));
+    map.setFeatures(
+      serviceOccurrenceFeature('service', 'branch', 'a-b', 0, [
+        [-115.25, 36.1],
+        [-115.23, 36.1],
+      ]),
+    );
+    map.fire('mousemove', mouseEvent(map, map.project([-115.23, 36.1])));
+    scheduler.pump();
+    expect(shown.at(-1)).toMatchObject({
+      primaryOperation: 'draw-inbound-side',
+      badge: 'one-way-return',
+      anchor: 'preview',
+    });
+    expect(map.sourceData.get('tm-preview')).toMatchObject({
+      features: [{ properties: { oneWayReturn: true } }],
+    });
+
+    map.fire('mouseup', mouseEvent(map, map.project([-115.23, 36.1])));
+    expect(store.getState().armedTerminus).toBeNull();
+    expect(store.getState().system.services[0].patterns[0].sections).toMatchObject([
+      { kind: 'shared' },
+      { kind: 'split' },
+    ]);
+    detach();
+  });
+
+  it('dispatches an exact same-branch interior drop as a directional loop', () => {
+    const scheduler = installBrowserGlobals();
+    const a: [number, number] = [-115.25, 36.1];
+    const b: [number, number] = [-115.23, 36.1];
+    const c: [number, number] = [-115.21, 36.1];
+    const d: [number, number] = [-115.22, 36.11];
+    const ways = [
+      aRoad('a-b', [a, b]),
+      aRoad('b-c', [b, c]),
+      aRoad('c-d', [c, d]),
+      aRoad('d-b', [d, b]),
+    ];
+    const pattern = aPattern('branch', ways, ['a-b', 'b-c']);
+    const system = aSystem({
+      ways,
+      services: [aService('service', [pattern])],
+      nodes: [
+        {
+          id: 'b',
+          coord: b,
+          refs: [
+            { wayId: 'a-b', pointIndex: 1 },
+            { wayId: 'b-c', pointIndex: 0 },
+            { wayId: 'd-b', pointIndex: 1 },
+          ],
+        },
+        {
+          id: 'c',
+          coord: c,
+          refs: [
+            { wayId: 'b-c', pointIndex: 1 },
+            { wayId: 'c-d', pointIndex: 0 },
+          ],
+        },
+        {
+          id: 'd',
+          coord: d,
+          refs: [
+            { wayId: 'c-d', pointIndex: 1 },
+            { wayId: 'd-b', pointIndex: 0 },
+          ],
+        },
+      ],
+    });
+    const store = createEditorStore();
+    store.getState().setSystem(system);
+    store.getState().select({ kind: 'service', id: 'service' });
+    const map = createMap(terminusFeature('branch', 'end', c));
+    const shown: Array<PointerIntent | null> = [];
+    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+
+    map.fire('mousedown', mouseEvent(map, map.project(c)));
+    map.setFeatures(serviceOccurrenceFeature('service', 'branch', 'a-b', 0, [a, b]));
+    map.fire('mousemove', mouseEvent(map, map.project(b)));
+    scheduler.pump();
+
+    expect(shown.at(-1)).toMatchObject({
+      primaryOperation: 'close-directional-loop',
+      badge: 'loop',
+      anchor: 'target',
+    });
+    map.fire('mouseup', mouseEvent(map, map.project(b)));
+    expect(store.getState().system.services[0].patterns[0].sections).toMatchObject([
+      { kind: 'shared' },
+      { kind: 'split' },
+    ]);
+    detach();
+  });
+
+  it('cancels an armed return gesture with Escape without changing the system', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.ways = [erasableWay()];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Service',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] }],
+      },
+    ];
+    store.getState().setSystem(system);
+    store.getState().armTerminus({
+      serviceId: 'service',
+      patternId: 'branch',
+      side: 'end',
+      position: {
+        patternId: 'branch',
+        run: 'outbound',
+        legIndex: 0,
+        wayId: 'erasable',
+        t: 1,
+        distanceMeters: 1,
+      },
+    });
+    const map = createMap(terminusFeature('branch', 'end', [-115.2, 36.1]));
+    const detach = attach(map, store);
+
+    map.fire('mousedown', mouseEvent(map, map.project([-115.2, 36.1])));
+    scheduler.fireKey('keydown', { key: 'Escape' });
+
+    expect(store.getState().system).toBe(system);
+    expect(store.getState().armedTerminus).toBeNull();
+    expect(store.getState().canUndo).toBe(false);
+    detach();
+  });
+
+  it('clears an idle armed return with Escape before a drag starts', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.ways = [erasableWay()];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Service',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] }],
+      },
+    ];
+    store.getState().setSystem(system);
+    store.getState().armTerminus({
+      serviceId: 'service',
+      patternId: 'branch',
+      side: 'end',
+      position: {
+        patternId: 'branch',
+        run: 'outbound',
+        legIndex: 0,
+        wayId: 'erasable',
+        t: 1,
+        distanceMeters: 1,
+      },
+    });
+    const detach = attach(createMap(), store);
+
+    scheduler.fireKey('keydown', { key: 'Escape' });
+
+    expect(store.getState().armedTerminus).toBeNull();
+    expect(store.getState().system).toBe(system);
+    expect(store.getState().canUndo).toBe(false);
+    detach();
+  });
+
+  it('opens an inert terminus chooser and commits Connect paths as one undo step', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const first = erasableWay();
+    first.id = 'first';
+    first.points = [
+      [-115.25, 36.1],
+      [-115.23, 36.1],
+    ];
+    const second = erasableWay();
+    second.id = 'second';
+    second.points = [
+      [-115.23, 36.1],
+      [-115.2, 36.1],
+    ];
+    const system = createEmptySystem();
+    system.ways = [first, second];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Dragged',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('first')] }] }],
+      },
+      {
+        id: 'target',
+        name: 'Target',
+        modeId: 'bus',
+        color: '#167d9a',
+        patterns: [
+          { id: 'target-branch', sections: [{ kind: 'shared', legs: [wholeLeg('second')] }] },
+        ],
+      },
+    ];
+    store.getState().setSystem(system);
+    store.getState().select({ kind: 'service', id: 'service' });
+    const sourceTerminus = terminusFeature('branch', 'end', [-115.23, 36.1]);
+    const targetTerminus = terminusFeature('target-branch', 'start', [-115.23, 36.1]);
+    targetTerminus.properties = {
+      ...targetTerminus.properties,
+      serviceId: 'target',
+      modeId: 'bus',
+    };
+    const map = createMap(sourceTerminus);
+    let chooser:
+      | Parameters<NonNullable<AttachInteractionsOptions['openTerminusConnectionChoice']>>[0]
+      | undefined;
+    const detach = attach(
+      map,
+      store,
+      undefined,
+      undefined,
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      (next) => {
+        chooser = next;
+      },
+    );
+
+    map.fire('mousedown', mouseEvent(map, map.project([-115.23, 36.1])));
+    map.setFeatures(targetTerminus);
+    map.fire('mousemove', mouseEvent(map, map.project([-115.23, 36.1])));
+    scheduler.pump();
+    map.fire('mouseup', mouseEvent(map, map.project([-115.23, 36.1])));
+
+    expect(chooser).toBeDefined();
+    expect(store.getState().system).toBe(system);
+    expect(store.getState().canUndo).toBe(false);
+
+    chooser!.connectPaths();
+    expect(store.getState().system.services).toHaveLength(2);
+    expect(store.getState().system.nodes).toHaveLength(1);
+    store.getState().undo();
+    expect(store.getState().system).toBe(system);
+    detach();
+  });
+
+  it('presents and commits no mutation for a different-mode terminus drop', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const road = erasableWay();
+    road.id = 'road';
+    road.points = [
+      [-115.25, 36.1],
+      [-115.23, 36.1],
+    ];
+    const rail = erasableWay();
+    rail.id = 'rail';
+    rail.typeId = 'heavyRail';
+    rail.profile = defaultProfileFor('heavyRail');
+    rail.points = [
+      [-115.23, 36.1],
+      [-115.2, 36.1],
+    ];
+    const system = createEmptySystem();
+    system.ways = [road, rail];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Bus',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('road')] }] }],
+      },
+      {
+        id: 'rail-service',
+        name: 'Rail',
+        modeId: 'subway',
+        color: '#167d9a',
+        patterns: [{ id: 'rail-branch', sections: [{ kind: 'shared', legs: [wholeLeg('rail')] }] }],
+      },
+    ];
+    store.getState().setSystem(system);
+    store.getState().select({ kind: 'service', id: 'service' });
+    const sourceTerminus = terminusFeature('branch', 'end', [-115.23, 36.1]);
+    const targetTerminus = terminusFeature('rail-branch', 'start', [-115.23, 36.1]);
+    targetTerminus.properties = {
+      ...targetTerminus.properties,
+      serviceId: 'rail-service',
+      modeId: 'subway',
+    };
+    const map = createMap(sourceTerminus);
+    const shown: Array<PointerIntent | null> = [];
+    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+
+    map.fire('mousedown', mouseEvent(map, map.project([-115.23, 36.1])));
+    map.setFeatures(targetTerminus);
+    map.fire('mousemove', mouseEvent(map, map.project([-115.23, 36.1])));
+    scheduler.pump();
+    expect(shown.at(-1)).toMatchObject({
+      primaryOperation: 'refuse',
+      cursor: 'not-allowed',
+      allowed: false,
+    });
+
+    map.fire('mouseup', mouseEvent(map, map.project([-115.23, 36.1])));
+    expect(store.getState().system).toBe(system);
+    expect(store.getState().canUndo).toBe(false);
+    detach();
+  });
+
   it('splits an interior control point through the resolved Ctrl intent', () => {
     installBrowserGlobals();
     const store = createEditorStore();

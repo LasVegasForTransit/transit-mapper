@@ -12,7 +12,7 @@ import { useSim, useSimClock } from '../ui/SimProvider';
 import { useContextMenu, useUi } from '../ui/UiProvider';
 import { useView } from '../ui/ViewProvider';
 import { BASEMAP_STYLE } from './basemap';
-import { attachInteractions } from './interactions';
+import { attachInteractions, type TerminusConnectionChoice } from './interactions';
 import { PointerBadge } from './PointerBadge';
 import type { PointerIntent } from '../editor/pointerIntent';
 import { computeDiagramSystem } from '@transitmapper/core/model/diagramLayout';
@@ -100,6 +100,7 @@ import { markFirstSystemMapPaint, systemPaintReady } from '../perf/mapPaintMark'
 import { servicesByWay } from '@transitmapper/core/render/featureMemo';
 import { attachSimDevHandle } from '../sim/devHandle';
 import { attachVehicleAnimation } from '../sim/vehicles';
+import { clearArmedTerminusForViewChange } from './viewEditorState';
 const OWN_LAYER_IDS = new Set(LAYER_SPECS.map((l) => l.id));
 const PERF_HARNESS_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
 
@@ -143,24 +144,54 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     y: number;
   }>({ intent: null, x: 0, y: 0 });
   const refreshPointerIntentRef = useRef<(() => void) | null>(null);
+  const [terminusConnectionChoice, setTerminusConnectionChoice] =
+    useState<TerminusConnectionChoice | null>(null);
   const store = useEditorStore();
   const { openShortcuts, toggleUi } = useUi();
   const { contextMenuAt, openContextMenu, closeContextMenu } = useContextMenu();
   const contextMenuOpenRef = useRef(false);
-  contextMenuOpenRef.current = contextMenuAt !== null;
+  contextMenuOpenRef.current = contextMenuAt !== null || terminusConnectionChoice !== null;
   useEffect(() => {
-    if (contextMenuAt !== null) return;
+    if (contextMenuAt !== null || terminusConnectionChoice !== null) return;
     const source = getMap()?.getSource(SRC_ACTION_ANCHOR) as GeoJSONSource | undefined;
     source?.setData({ type: 'FeatureCollection', features: [] });
     // The controller holds the last real map pointer. Re-evaluate it now that
     // the menu no longer owns focus instead of consuming the next mouse move.
     refreshPointerIntentRef.current?.();
-  }, [contextMenuAt]);
+  }, [contextMenuAt, terminusConnectionChoice]);
   const { viewMode, setViewMode, visibleModes, visibleWayTypes, showLandmarks } = useView();
   useEffect(() => {
     const source = getMap()?.getSource(SRC_ACTION_ANCHOR) as GeoJSONSource | undefined;
     source?.setData({ type: 'FeatureCollection', features: [] });
-  }, [viewMode]);
+    clearArmedTerminusForViewChange(store);
+    setTerminusConnectionChoice((choice) => {
+      choice?.dismiss();
+      return null;
+    });
+  }, [viewMode, store]);
+  useEffect(() => {
+    if (!terminusConnectionChoice) return;
+    const dismiss = () => {
+      terminusConnectionChoice.dismiss();
+      setTerminusConnectionChoice(null);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') dismiss();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [terminusConnectionChoice]);
+  useEffect(
+    () =>
+      store.subscribe((state, previous) => {
+        if (state.tool === previous.tool) return;
+        setTerminusConnectionChoice((choice) => {
+          choice?.dismiss();
+          return null;
+        });
+      }),
+    [store],
+  );
   // Created once by SimProvider and injected into the animation loop below,
   // the same way the editor store is — the loop is imperative and lives
   // outside React, so it is handed what it needs rather than reaching for an
@@ -649,8 +680,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         sourceIds = ALL_SYSTEM_FEATURE_SOURCES;
       }
       if (sourceIds.length === 0) return;
-      const { system, selection } = store.getState();
-      const { activePatternId } = store.getState();
+      const { system, selection, activePatternId, armedTerminus } = store.getState();
       const laneDetail = laneDetailNow();
       const b = map.getBounds();
       // Expand the lane-detail cull bounds by half a viewport on each side, so a
@@ -678,6 +708,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         physicalHandleStationId: physicalHandleStationId(),
         physicalHandleGroupId: physicalHandleGroupId(),
         activePatternId,
+        armedTerminus,
         counts: sourceProjectionCounts,
       });
       const sourceData: Record<SystemFeatureSourceId, GeoJSON.FeatureCollection> = {
@@ -974,6 +1005,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
             if (refreshPointerIntentRef.current === refresh) refreshPointerIntentRef.current = null;
           };
         },
+        openTerminusConnectionChoice: setTerminusConnectionChoice,
         // Footprints only render in the Infrastructure view — switch there
         // and zoom in, or a newly-drawn complex would be invisible right
         // where the user just drew it (the original bug report this fixes).
@@ -1064,7 +1096,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       } else if (
         (s.selection !== prev.selection ||
           s.activeWayId !== prev.activeWayId ||
-          s.activePatternId !== prev.activePatternId) &&
+          s.activePatternId !== prev.activePatternId ||
+          s.armedTerminus !== prev.armedTerminus) &&
         map.getSource(SRC_SERVICES)
       ) {
         if (gestureActive) {
@@ -1199,6 +1232,68 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     <>
       <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
       <PointerBadge intent={pointerBadge.intent} x={pointerBadge.x} y={pointerBadge.y} />
+      {terminusConnectionChoice ? (
+        <>
+          <button
+            type="button"
+            aria-label="Dismiss connection choices"
+            style={{ position: 'fixed', inset: 0, zIndex: 49, cursor: 'default', opacity: 0 }}
+            onClick={() => {
+              terminusConnectionChoice.dismiss();
+              setTerminusConnectionChoice(null);
+            }}
+          />
+          <div
+            role="menu"
+            aria-label="Choose how to connect these paths"
+            style={{
+              position: 'fixed',
+              left: terminusConnectionChoice.x,
+              top: terminusConnectionChoice.y,
+              zIndex: 50,
+              display: 'grid',
+              minWidth: 240,
+              padding: 6,
+              gap: 2,
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              background: 'var(--bg)',
+              boxShadow: 'var(--shadow)',
+            }}
+            onContextMenu={(event) => event.preventDefault()}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                terminusConnectionChoice.connectPaths();
+                setTerminusConnectionChoice(null);
+              }}
+            >
+              Connect paths
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                terminusConnectionChoice.joinThroughService();
+                setTerminusConnectionChoice(null);
+              }}
+            >
+              Join into a through-service
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                terminusConnectionChoice.dismiss();
+                setTerminusConnectionChoice(null);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : null}
     </>
   );
 }

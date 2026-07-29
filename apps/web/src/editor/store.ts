@@ -73,15 +73,24 @@ import {
   normalizeSections,
 } from '@transitmapper/core/model/patternEdits';
 import {
+  closePatternTerminus,
   dividePatternAtPosition,
   endPatternAtPosition,
   extendPatternTerminus as extendPatternTerminusInCore,
   trimPatternAtPosition,
   type PatternPosition,
 } from '@transitmapper/core/model/serviceEdits';
+import type {
+  TerminusGesturePlan,
+  TerminusGestureSource,
+  TerminusGestureTarget,
+} from '@transitmapper/core/model/serviceGestures';
 import { materializeRouteSpans } from '@transitmapper/core/model/routeLegs';
 import type { SelectionRef } from '@transitmapper/core/model/selectionActions';
-import { throughRouteServices } from '@transitmapper/core/model/throughRoute';
+import {
+  throughRouteServices,
+  throughRouteServicesAt,
+} from '@transitmapper/core/model/throughRoute';
 import { shortId } from '@transitmapper/core/model/ids';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import {
@@ -565,6 +574,16 @@ export interface EditorState {
     patternId: string,
     side: 'start' | 'end',
     spans: RouteSpan[],
+  ) => boolean;
+  /** Apply the stateless plan shown by a Network terminus drag. The complete
+   * service/topology result lands in one store write, so one undo restores the
+   * exact pre-gesture snapshot. A chooser plan remains inert until `choice`
+   * names the operation. */
+  commitTerminusGesture: (
+    source: TerminusGestureSource,
+    target: TerminusGestureTarget,
+    plan: TerminusGesturePlan,
+    choice?: 'connect' | 'through',
   ) => boolean;
   /** End one pattern at an exact displayed occurrence, keeping the longer
    * operating half. Returns false when that hit cannot make two valid halves. */
@@ -1269,13 +1288,15 @@ function mergeWays(system: TransitSystem, keepId: string, otherId: string): Tran
 }
 
 /**
- * The SimCity moment: wherever `wayId` crosses another way of the SAME grade
+ * The SimCity moment: wherever `wayId` crosses another corridor of the SAME
+ * type and grade
  * mid-segment, form a real 4-arm junction — a shared vertex spliced into
  * both ways, linked as one Node, then both ways split there so every arm is
  * its own way (which is what per-arm lane connectors and per-arm profile
- * edits need). Different grades never join: an elevated freeway over a
- * surface street is an overpass, not an intersection. Newly created arms are
- * re-scanned, so a way crossing three streets forms all three junctions.
+ * edits need). Different types remain visually coincident until an explicit
+ * compatible service connection joins them; different grades are overpasses.
+ * Newly created arms are re-scanned, so a way crossing three streets forms
+ * all three junctions.
  */
 function formCrossingJunctions(
   system: TransitSystem,
@@ -1305,7 +1326,8 @@ function formCrossingJunctions(
     const nearby = candidateWayIdsAlong(resolveWayPath(a), next.ways);
     let formed = false;
     for (const b of next.ways) {
-      if (b.id === aId || b.grade !== a.grade || b.points.length < 2) continue;
+      if (b.id === aId || b.typeId !== a.typeId || b.grade !== a.grade || b.points.length < 2)
+        continue;
       if (onlyWithWayId && b.id !== onlyWithWayId) continue;
       if (!nearby.has(b.id)) continue;
       const crossings = wayCrossings(a, b);
@@ -2116,9 +2138,10 @@ export function createEditorStore() {
         // action applies to — a marquee only ever ADDS, so those ways would
         // sit there until cleared by hand. Switching tools is the moment to
         // drop them.
-        if (tool !== 'lines' || s.tool === 'lines') return { tool };
+        if (tool !== 'lines' || s.tool === 'lines') return { tool, armedTerminus: null };
         return {
           tool,
+          armedTerminus: null,
           multiSelection: s.multiSelection.filter((i) => i.kind === 'service'),
           selection: s.selection?.kind === 'service' ? s.selection : null,
         };
@@ -3353,6 +3376,77 @@ export function createEditorStore() {
           ),
         }),
       }));
+      return true;
+    },
+
+    commitTerminusGesture: (source, target, plan, choice) => {
+      const current = get();
+      const refuse = () => {
+        if (current.armedTerminus) set({ armedTerminus: null });
+        return false;
+      };
+      if (current.system !== plan.baseSystem) return refuse();
+      if (plan.kind === 'refuse') return refuse();
+      if (plan.kind === 'connection-choice' && !choice) return false;
+      const service = plan.system.services.find((candidate) => candidate.id === source.serviceId);
+      const pattern = service?.patterns.find((candidate) => candidate.id === source.patternId);
+      if (!service || !pattern) return refuse();
+
+      if (plan.kind === 'connection-choice' && choice === 'through') {
+        const targetServiceId =
+          plan.targetServiceId ??
+          (target.kind === 'service-position' ? target.serviceId : undefined);
+        const joined =
+          targetServiceId &&
+          target.kind === 'service-position' &&
+          target.terminus &&
+          throughRouteServicesAt(plan.system, source.serviceId, targetServiceId, {
+            aPatternId: source.patternId,
+            aEnd: source.side,
+            bPatternId: target.terminus.patternId,
+            bEnd: target.terminus.side,
+            distanceM: 0,
+          });
+        if (!joined) return refuse();
+        set({
+          system: touch(joined),
+          selection: { kind: 'service', id: source.serviceId },
+          activePatternId: source.patternId,
+          armedTerminus: null,
+        });
+        return true;
+      }
+
+      const legs = materializeRouteSpans(plan.system, plan.spans) ?? [];
+      const targetPosition = target.kind === 'service-position' ? target.position : undefined;
+      const nextPattern =
+        plan.kind === 'loop' || plan.kind === 'return'
+          ? targetPosition
+            ? closePatternTerminus(plan.system.ways, pattern, source.side, targetPosition, legs)
+            : null
+          : legs.length > 0
+            ? extendPatternTerminusInCore(pattern, source.side, legs)
+            : pattern;
+      if (!nextPattern) return refuse();
+      const nextSystem: TransitSystem = {
+        ...plan.system,
+        services: plan.system.services.map((candidate) =>
+          candidate.id !== source.serviceId
+            ? candidate
+            : {
+                ...candidate,
+                patterns: candidate.patterns.map((currentPattern) =>
+                  currentPattern.id === source.patternId ? nextPattern : currentPattern,
+                ),
+              },
+        ),
+      };
+      set({
+        system: touch(nextSystem),
+        selection: { kind: 'service', id: source.serviceId },
+        activePatternId: source.patternId,
+        armedTerminus: null,
+      });
       return true;
     },
 

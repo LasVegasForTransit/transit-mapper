@@ -43,6 +43,11 @@ export interface BuildFeaturesForSourcesOptions {
   physicalHandleStationId?: string | null;
   physicalHandleGroupId?: string | null;
   activePatternId?: string | null;
+  armedTerminus?: {
+    serviceId: string;
+    patternId: string;
+    side: 'start' | 'end';
+  } | null;
   counts?: SourceFeatureProjectionCounts;
 }
 
@@ -86,6 +91,7 @@ export function buildFeaturesForSources({
   physicalHandleStationId = null,
   physicalHandleGroupId = null,
   activePatternId = null,
+  armedTerminus = null,
   counts,
 }: BuildFeaturesForSourcesOptions): SystemFeatures {
   const needsDiagramLayout =
@@ -104,6 +110,7 @@ export function buildFeaturesForSources({
       requestedFeatures: sourceIds.map((sourceId) => FEATURE_NAME_BY_SOURCE[sourceId]),
       counts,
       activePatternId,
+      armedTerminus,
     },
   );
 }
