@@ -53,7 +53,7 @@ docs/            This documentation.
 serialization, return-path validation) and `share/claim.ts` +
 `share/ownership.ts` are the first slice of the accounts feature on the
 [roadmap](../../../ROADMAP.md). They are complete, pure, and covered by
-`apps/web/tests/verify.ts` — and **nothing imports them but that test
+`apps/web/tests/verify.test.ts` — and **nothing imports them but that test
 file.** There are no auth routes in the Worker, no users or sessions table,
 and no owner column on `systems`.
 
@@ -142,7 +142,7 @@ requestAnimationFrame and MapLibre host that drives it is
 
 ## packages/core/tests/support/ — fixtures for the test suites
 
-- `fixtures.ts` — typed builders (`aRoad`, `aPattern`, `aStation`) so a test
+- `fixtures.test.ts` — typed builders (`aRoad`, `aPattern`, `aStation`) so a test
   never reaches for `as unknown as Way`. A double cast disables the compiler
   exactly where a test asserts behaviour: a cast fixture keeps compiling after
   a record gains a required field, describing something that cannot exist.
@@ -329,7 +329,7 @@ Brotli delivery size remain the absolute bundle gates. See
 
 ## apps/web/src/import/ — bounded browser imports
 
-Large GTFS archives are downloaded once and transferred to `gtfs.worker.ts`,
+Large GTFS archives are downloaded once and transferred to `gtfsWorker.ts`,
 which parses them and emits bounded batches so store commits can yield between
 them. Reconciliation runs in a second Worker because corridor matching is also
 CPU-heavy. The protocol files contain the typed message boundaries; the
@@ -482,7 +482,10 @@ logic.
 Each module keeps its test material under `tests/`, mirroring the `src/` area
 it covers. Isolated Vitest cases live in those trees; shared test helpers live
 under `tests/support/`; source-relative imports cross explicitly into `src/`.
-`apps/web/tests/verify.ts` and `apps/worker/tests/verify.ts` remain the
+Every test-tree filename has exactly the form `<name>.test.ts` or
+`<name>.test.tsx`, including verifiers and support. End-to-end files under
+`tests/e2e/` instead use exactly `<name>.spec.ts` or `<name>.spec.tsx`.
+`apps/web/tests/verify.test.ts` and `apps/worker/tests/verify.test.ts` remain the
 stateful sequential suites, so their sections are extended in place rather
 than split piecemeal.
 

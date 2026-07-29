@@ -27,7 +27,7 @@ export interface StreamRtcGtfsOptions {
 }
 
 function defaultWorkerFactory(): GtfsWorker {
-  return new Worker(new URL('./gtfs.worker.ts', import.meta.url), {
+  return new Worker(new URL('./gtfsWorker.ts', import.meta.url), {
     type: 'module',
     name: 'transitmapper-gtfs-import',
   });

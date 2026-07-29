@@ -6,5 +6,12 @@
     // workerd tests import.
     "types": ["@cloudflare/workers-types", "@cloudflare/vitest-pool-workers/types"]
   },
-  "include": ["src", "tests/**/*.test.ts", "vitest.config.ts", "worker-configuration.d.ts"]
+  "include": [
+    "src",
+    "tests/**/*.test.ts",
+    "tests/**/*.test.tsx",
+    "vitest.config.ts",
+    "worker-configuration.d.ts"
+  ],
+  "exclude": ["tests/verify.test.ts"]
 }

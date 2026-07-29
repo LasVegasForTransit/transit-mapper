@@ -15,7 +15,7 @@
 //      rather than a statement of intent, so this module is careful about
 //      which trips it measures and says so below.
 //
-// Pure and CSV-agnostic: apps/web/tests/verify.ts drives it directly with
+// Pure and CSV-agnostic: apps/web/tests/verify.test.ts drives it directly with
 // already-parsed fixture rows.
 
 import type { SchedulePeriod } from './system/service';

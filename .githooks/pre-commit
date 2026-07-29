@@ -21,6 +21,14 @@ if ! pnpm --silent exec lint-staged; then
   exit 1
 fi
 
+# Filename checks read Git's index, so unstaged work cannot hide a bad name and
+# unrelated working-tree files cannot block the commit.
+if ! pnpm --silent check:filenames --staged; then
+  printf '\n  Commit blocked: a source or test filename is out of contract.\n'
+  printf '    fix:  pnpm check:filenames\n\n' >&2
+  exit 1
+fi
+
 # Secret scanning, net 1 of 3. Nets 2 and 3 are CI and GitHub push
 # protection, because this one is bypassable by design.
 if command -v gitleaks >/dev/null 2>&1; then

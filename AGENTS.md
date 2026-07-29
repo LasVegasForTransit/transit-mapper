@@ -39,6 +39,8 @@ says **nothing**, the rule holds only because you follow it.
 | Every package declares `lint`, `typecheck`, `verify`                          | a package missing one is skipped by Turborepo without an error, and CI stays green while it goes unchecked               | `check:contract`                |
 | Every dependency version comes from the catalog                               | two packages on different versions of one library is invisible until it breaks                                           | `check:contract`                |
 | Recognizable test material lives under the owning module's root `tests/` tree | Production trees stay navigable, and runner globs cannot silently omit a colocated test                                  | `check:contract`                |
+| Files under a module's `src/` tree have exactly two filename parts            | One source stem and one extension keep runtime roles in names instead of punctuation conventions                         | `check:filenames`, pre-commit   |
+| Files under `tests/` are `.test.ts(x)`; end-to-end files are `.spec.ts(x)`    | Every test-tree file is recognizable, and extra dots cannot create private naming dialects                               | `check:filenames`, pre-commit   |
 | Test-only support lives under the owning module's root `tests/support/` tree  | A generic `support/` directory has no test-specific signal, so this semantic boundary depends on contributors            | **nothing**                     |
 | Relative links in `docs/` resolve                                             | three had been broken since the monorepo split, and nothing noticed                                                      | `check:docs`                    |
 | `worker-configuration.d.ts` matches `wrangler.toml`                           | it is generated and committed, so it can describe a deployment that no longer exists                                     | `check:types`                   |
@@ -83,7 +85,7 @@ Then, in the same change:
 Tests run on Vitest and on a `check()`-based suite that predates it.
 `pnpm verify` runs both.
 
-- `apps/web/tests/verify.ts` and `apps/worker/tests/verify.ts` are
+- `apps/web/tests/verify.test.ts` and `apps/worker/tests/verify.test.ts` are
   sequential scripts: one store is built at module scope and mutated in
   order, so each section depends on what the sections above it left behind.
   Add to them in that style, beside related cases. Do not split them up
@@ -91,6 +93,9 @@ Tests run on Vitest and on a `check()`-based suite that predates it.
 - New isolated Vitest files go under `<module>/tests/`, mirroring the area in
   `src/` they cover. `apps/worker/tests/shares.test.ts` runs in real workerd
   against a real D1 with the production migrations applied.
+- Every file under `tests/` uses `.test.ts` or `.test.tsx`, including
+  sequential verifiers and support modules. End-to-end files under
+  `<module>/tests/e2e/` use `.spec.ts` or `.spec.tsx`.
 
 Name a case as a sentence stating the rule it enforces — "deleting a way
 removes its service" — because that name is what a failure reports.

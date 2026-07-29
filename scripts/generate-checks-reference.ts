@@ -43,6 +43,11 @@ const CHECKS: Check[] = [
     fix: 'fix the type error; do not add `any`',
   },
   {
+    command: 'check:filenames',
+    fails: 'a file under a module src/ or tests/ tree does not follow its filename contract',
+    fix: 'rename the file and update its imports',
+  },
+  {
     command: 'check:contract',
     fails:
       'a package is missing a required task, pins a version outside the catalog, or keeps test material outside its tests/ directory',
