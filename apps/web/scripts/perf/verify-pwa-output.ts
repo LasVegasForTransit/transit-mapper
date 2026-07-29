@@ -5,8 +5,10 @@ import { dirname, resolve } from 'node:path';
 import {
   editorPrecacheFiles,
   embedOnlyFiles,
+  manifestInstallIconFiles,
   verifyPrecacheOutput,
   type BuildManifest,
+  type WebAppManifest,
 } from '../../src/perf/pwaPrecache';
 
 interface PwaOutputReport {
@@ -22,6 +24,7 @@ interface PwaOutputReport {
 const APP_ROOT = resolve(import.meta.dirname, '../..');
 const DIST_DIRECTORY = resolve(APP_ROOT, 'dist');
 const MANIFEST_PATH = resolve(DIST_DIRECTORY, '.vite/manifest.json');
+const WEB_APP_MANIFEST_PATH = resolve(DIST_DIRECTORY, 'manifest.json');
 const SERVICE_WORKER_PATH = resolve(DIST_DIRECTORY, 'sw.js');
 const REPORT_PATH = resolve(DIST_DIRECTORY, 'performance/pwa-report.json');
 const NAVIGATION_FALLBACK_DENYLIST = ['/api/', '/s/', '/e/'] as const;
@@ -59,11 +62,18 @@ async function referencedBuildAssets(initialFiles: string[]): Promise<string[]> 
 
 async function main(): Promise<void> {
   const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8')) as BuildManifest;
+  const webAppManifest = JSON.parse(
+    await readFile(WEB_APP_MANIFEST_PATH, 'utf8'),
+  ) as WebAppManifest;
+  const installIcons = manifestInstallIconFiles(webAppManifest);
   const serviceWorker = await readFile(SERVICE_WORKER_PATH, 'utf8');
-  const expectedEditorAssets = await referencedBuildAssets(editorPrecacheFiles(manifest));
+  const expectedEditorAssets = await referencedBuildAssets(
+    editorPrecacheFiles(manifest, installIcons),
+  );
   const precachedAssets = precacheUrls(serviceWorker);
   const failures = verifyPrecacheOutput({
     manifest,
+    installIcons,
     precached: precachedAssets,
   });
 
@@ -85,7 +95,7 @@ async function main(): Promise<void> {
     generatedAt: new Date().toISOString(),
     expectedEditorAssets,
     precachedAssets,
-    excludedEmbedAssets: embedOnlyFiles(manifest),
+    excludedEmbedAssets: embedOnlyFiles(manifest, installIcons),
     navigationFallbackDenylist: [...NAVIGATION_FALLBACK_DENYLIST],
     failures,
   };

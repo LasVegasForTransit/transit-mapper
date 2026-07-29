@@ -9,23 +9,38 @@
   "background_color": "#F7F4EC",
   "theme_color": "#E5471A",
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     {
-      "src": "/icon-maskable.svg",
+      "src": "/icons/app-icon-9593f8fe446b.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/app-icon-9593f8fe446b-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/app-icon-9593f8fe446b-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/app-icon-maskable-9593f8fe446b.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "maskable"
     },
     {
-      "src": "/icon-maskable-192.png",
+      "src": "/icons/app-icon-maskable-9593f8fe446b-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icon-maskable-512.png",
+      "src": "/icons/app-icon-maskable-9593f8fe446b-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
