@@ -202,9 +202,23 @@ the initial and final snapshots and fails if JS heap, DOM nodes, listeners,
 dedicated workers, or WebGL contexts grow by more than 10%. WebGL is counted as
 contexts created minus observed `webglcontextlost` events; the report names
 that source because the browser does not expose a general live-context census.
-Its evidence is `soak-report.json`. A shorter
-`--soak-duration <milliseconds>` is available only to smoke-test the
-mechanism; a manually dispatched CI audit uses the ten-minute default.
+Its evidence is `soak-report.json`. When the listener count grows, the report
+also groups the retained initial and final listeners by queried root, actual
+backend node when Chrome supplies it, event type, capture/passive/once flags,
+and handler-code location, then lists signed count deltas. Script URLs are
+preferred over per-session script IDs. The location identifies the handler
+code, not necessarily the `addEventListener` call. This diagnostic inspects
+`window`, `document`, and the main map canvas at CDP depth 1; it is not an
+all-page listener census. The unchanged scalar count remains the hard gate.
+
+A shorter `--soak-duration <milliseconds>` is available only to smoke-test or
+diagnose the mechanism. The manual Performance workflow can run only that
+remote soak and accept the same duration override, which keeps headed Chrome
+inside Xvfb instead of taking over a local desktop. A shorter diagnostic result
+cannot satisfy the leak gate; omit the override for ten-minute acceptance
+evidence. The baseline warms both PNG and SVG export paths before its first
+forced-GC snapshot so one-time initialization is not mistaken for retained
+growth.
 
 ## What “offline” means
 

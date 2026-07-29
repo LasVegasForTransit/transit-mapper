@@ -2,6 +2,15 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Browser, CDPSession, Page } from 'playwright-core';
 import { generatePerfFixture } from '../../src/perf/fixtures';
+import {
+  createPerfListenerIdentity,
+  groupListenerInventory,
+  listenerDeltas,
+  type PerfListenerDescription,
+  type PerfListenerDiagnostics,
+  type PerfListenerIdentity,
+  type PerfListenerTarget,
+} from '../../src/perf/listenerInventory';
 import { PERF_SCENARIOS } from '../../src/perf/scenarios';
 import { soakViolations, type SoakSnapshot } from '../../src/perf/soakPolicy';
 import type { PerfProtocol } from '../../src/perf/types';
@@ -16,7 +25,7 @@ import type { PerfPageWindow } from './browserContract';
 import { waitForScenarioReady } from './journeys';
 
 interface ListenerResult {
-  listeners: unknown[];
+  listeners: PerfListenerDescription[];
 }
 
 interface RuntimeObjectResult {
@@ -25,8 +34,13 @@ interface RuntimeObjectResult {
   };
 }
 
+interface ScriptParsedEvent {
+  scriptId: string;
+  url: string;
+}
+
 export interface SoakReport {
-  schemaVersion: 2;
+  schemaVersion: 3;
   generatedAt: string;
   durationMs: number;
   scenarioId: 'rtc';
@@ -40,42 +54,74 @@ export interface SoakReport {
   pngDownloadCount: number;
   svgDownloadCount: number;
   webGlContextCountSource: 'created-minus-context-lost-events';
+  listenerDiagnostics: PerfListenerDiagnostics;
 }
 
-async function listenerCount(session: CDPSession): Promise<number> {
-  let total = 0;
-  for (const expression of ['window', 'document', 'document.querySelector(".maplibregl-canvas")']) {
+const LISTENER_TARGETS: Array<{ target: PerfListenerTarget; expression: string }> = [
+  { target: 'window', expression: 'window' },
+  { target: 'document', expression: 'document' },
+  { target: 'map-canvas', expression: 'document.querySelector(".maplibregl-canvas")' },
+];
+
+async function listenerInventory(
+  session: CDPSession,
+  scriptUrls: Map<string, string>,
+): Promise<PerfListenerIdentity[]> {
+  const inventory: PerfListenerIdentity[] = [];
+  for (const { target, expression } of LISTENER_TARGETS) {
     const evaluated = (await session.send('Runtime.evaluate', {
       expression,
       returnByValue: false,
     })) as RuntimeObjectResult;
     const objectId = evaluated.result.objectId;
     if (!objectId) continue;
-    const result = (await session.send('DOMDebugger.getEventListeners', {
-      objectId,
-    })) as ListenerResult;
-    total += result.listeners.length;
-    await session.send('Runtime.releaseObject', { objectId });
+    try {
+      const result = (await session.send('DOMDebugger.getEventListeners', {
+        objectId,
+        depth: 1,
+      })) as ListenerResult;
+      inventory.push(
+        ...result.listeners.map((listener) =>
+          createPerfListenerIdentity(
+            target,
+            listener,
+            listener.scriptId ? scriptUrls.get(listener.scriptId) : undefined,
+          ),
+        ),
+      );
+    } finally {
+      await session.send('Runtime.releaseObject', { objectId });
+    }
   }
-  return total;
+  return inventory;
+}
+
+interface CapturedSoakSnapshot {
+  snapshot: SoakSnapshot;
+  listeners: PerfListenerIdentity[];
 }
 
 async function captureSoakSnapshot(
   page: Page,
   session: CDPSession,
+  scriptUrls: Map<string, string>,
   startedAt: number,
-): Promise<SoakSnapshot> {
+): Promise<CapturedSoakSnapshot> {
   await session.send('HeapProfiler.collectGarbage');
   const { memory, domNodeCount } = await collectMemory(session);
+  const listeners = await listenerInventory(session, scriptUrls);
   return {
-    elapsedMs: Date.now() - startedAt,
-    jsHeapUsedBytes: memory.jsHeapUsedBytes,
-    domNodeCount,
-    listenerCount: await listenerCount(session),
-    workerCount: page.workers().length,
-    webGlContextCount: await page.evaluate(
-      () => (window as PerfPageWindow).__perfWebGlContextCount ?? 0,
-    ),
+    snapshot: {
+      elapsedMs: Date.now() - startedAt,
+      jsHeapUsedBytes: memory.jsHeapUsedBytes,
+      domNodeCount,
+      listenerCount: listeners.length,
+      workerCount: page.workers().length,
+      webGlContextCount: await page.evaluate(
+        () => (window as PerfPageWindow).__perfWebGlContextCount ?? 0,
+      ),
+    },
+    listeners,
   };
 }
 
@@ -202,8 +248,13 @@ export async function runSoak(
   });
   const page = await context.newPage();
   const session = await context.newCDPSession(page);
+  const scriptUrls = new Map<string, string>();
+  session.on('Debugger.scriptParsed', ({ scriptId, url }: ScriptParsedEvent) => {
+    if (url) scriptUrls.set(scriptId, url);
+  });
   const fixture = generatePerfFixture('rtc');
   try {
+    await session.send('Debugger.enable');
     await configureProtocol(session, protocol);
     await session.send('HeapProfiler.enable');
     await installWebGlContextCounter(page);
@@ -225,10 +276,12 @@ export async function runSoak(
     // Warm all one-time paths before the forced-GC baseline.
     await runEditCycle(page, station.id, station.name ?? '');
     await runExportCycle(page, 'PNG');
+    await runExportCycle(page, 'SVG');
     await page.waitForTimeout(1_000);
 
     const startedAt = Date.now();
-    const initial = await captureSoakSnapshot(page, session, startedAt);
+    const initialCapture = await captureSoakSnapshot(page, session, scriptUrls, startedAt);
+    const initial = initialCapture.snapshot;
     let iterations = 0;
     let editCycles = 0;
     let exportDialogCycles = 0;
@@ -253,15 +306,18 @@ export async function runSoak(
       await page.waitForTimeout(100);
     }
     await page.waitForTimeout(1_000);
-    const final = await captureSoakSnapshot(page, session, startedAt);
+    const finalCapture = await captureSoakSnapshot(page, session, scriptUrls, startedAt);
+    const final = finalCapture.snapshot;
     const violations = soakViolations(initial, final, {
       editCycles,
       exportDialogCycles,
       pngDownloadCount,
       svgDownloadCount,
     });
+    const initialListeners = groupListenerInventory(initialCapture.listeners);
+    const finalListeners = groupListenerInventory(finalCapture.listeners);
     const report: SoakReport = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       generatedAt: new Date().toISOString(),
       durationMs,
       scenarioId: 'rtc',
@@ -275,6 +331,11 @@ export async function runSoak(
       pngDownloadCount,
       svgDownloadCount,
       webGlContextCountSource: 'created-minus-context-lost-events',
+      listenerDiagnostics: {
+        initial: initialListeners,
+        final: finalListeners,
+        deltas: listenerDeltas(initialListeners, finalListeners),
+      },
     };
     const path = resolve(outputDirectory, 'soak-report.json');
     await writeFile(path, `${JSON.stringify(report, null, 2)}\n`, 'utf8');

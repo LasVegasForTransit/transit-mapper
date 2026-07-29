@@ -11,6 +11,18 @@ on:
       - 'pnpm-workspace.yaml'
       - '.github/workflows/performance.yml'
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Run the complete matrix or only the leak soak
+        type: choice
+        options:
+          - full
+          - soak
+        default: full
+      soak_duration_ms:
+        description: Diagnostic soak length; acceptance remains 600000 ms
+        type: string
+        default: '600000'
 
 permissions:
   contents: read
@@ -22,6 +34,7 @@ concurrency:
 jobs:
   browser:
     name: Chrome responsiveness (${{ matrix.profile }})
+    if: github.event_name != 'workflow_dispatch' || inputs.scope == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 45 }}
     strategy:
@@ -82,12 +95,13 @@ jobs:
           retention-days: 14
 
   soak:
-    name: Ten-minute RTC leak gate
+    name: RTC leak soak
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
       XVFB_ARGS: -screen 0 1440x900x24 -nolisten tcp -dpi 96
+      SOAK_DURATION_MS: ${{ inputs.soak_duration_ms || '600000' }}
     steps:
       # Keep soak artifacts in the runner-owned temporary directory too.
       - name: Configure artifact path
@@ -109,10 +123,12 @@ jobs:
           google-chrome --version
           command -v xvfb-run
 
-      - name: Exercise RTC scale for ten minutes
+      - name: Exercise RTC-scale soak
         run: >-
           xvfb-run -a --server-args="$XVFB_ARGS"
-          pnpm perf:soak -- --output "$SOAK_ARTIFACT"
+          pnpm perf:soak --
+          --output "$SOAK_ARTIFACT"
+          --soak-duration "$SOAK_DURATION_MS"
 
       - name: Upload leak report
         if: always()
