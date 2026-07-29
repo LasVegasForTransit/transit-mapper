@@ -35,6 +35,7 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "playwright-core": "catalog:",
+    "terser": "catalog:",
     "tsx": "catalog:",
     "vite": "catalog:",
     "vite-plugin-pwa": "catalog:",
