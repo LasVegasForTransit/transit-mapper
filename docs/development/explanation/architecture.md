@@ -323,8 +323,13 @@ intersecting Route segments from becoming separate glass surfaces. Icon
 Composer applies a solid Ember background and Combined Liquid Glass mode, and
 its committed 1024px flattened export is then resized to the 180px web asset.
 Safari web apps cannot consume the layered Icon Composer format directly, so
-changing this icon requires re-exporting `apple-touch-icon-source.png` in Icon
-Composer before running the generator.
+changing this icon requires running the generator once to update the native
+document's Route layer, re-exporting `apple-touch-icon-source.png` in Icon
+Composer, then rerunning the generator with `--record-apple-export`. The
+committed provenance record fingerprints the Icon Composer document, generated
+layer, and flattened export. This lets the cross-platform repository check
+reject a stale manual export without trying to reproduce Apple's proprietary
+Liquid Glass renderer.
 
 `pnpm --filter @transitmapper/web generate:icons` regenerates the favicon,
 install assets, and generic social-card mark. The root repository check runs
