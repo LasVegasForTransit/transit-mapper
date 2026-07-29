@@ -105,7 +105,8 @@ It includes:
   deviation, coefficient of variation, cache hits/misses, source uploads, and
   full/gesture projection phase counters;
 - `bundle-report.json`, covering each entry's complete static and dynamic
-  import graph in raw, gzip, and Brotli bytes;
+  import graph in raw, gzip, and Brotli bytes plus every emitted JavaScript
+  chunk's raw size and budget;
 - `pwa-report.json`, the deterministic build-graph/precache comparison; and
 - `pwa-runtime-report.json`, proof that an installed editor reopened offline
   after Chrome's HTTP cache was cleared, populated a system overlay on its
@@ -148,6 +149,14 @@ normalizes a regression. Gzip and Brotli delivery bytes get the same 10%
 regression check during a full audit. Raw graph size remains in the report for
 diagnosis, but it is not an absolute or regression gate; browser measurements
 own parse and responsiveness costs.
+
+The production build keeps MapLibre and React in stable cache chunks so an
+editor release does not make a returning browser download those runtimes
+again. MapLibre 4 is itself one prebundled module, so an output named
+`map-engine` whose source map contains only MapLibre modules has a narrow
+810 kB raw limit. Every other JavaScript output, including service-worker and
+nested outputs, is limited to 500 kB. These are enforced in
+`bundle-report.json`; Vite's generic warning threshold is not the only guard.
 
 Missing Chrome produces an `unavailable` report and a non-zero exit. The
 harness never writes placeholder timings.

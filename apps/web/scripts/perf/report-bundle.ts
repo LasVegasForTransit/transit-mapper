@@ -1,14 +1,21 @@
 #!/usr/bin/env tsx
 
 import { brotliCompressSync, gzipSync } from 'node:zlib';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, dirname, resolve } from 'node:path';
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { basename, dirname, relative, resolve } from 'node:path';
 import { BUNDLE_BUDGETS } from '../../perf.config';
 import {
   evaluateBundleBudgets,
   type BundleBudgetViolation,
   type BundleEntrySize,
 } from '../../src/perf/bundleBudget';
+import {
+  evaluateChunkSizes,
+  isMapEngineChunkName,
+  performanceChunkKind,
+  type PerformanceChunkSize,
+  type PerformanceChunkViolation,
+} from '../../src/perf/chunkPolicy';
 
 interface ViteManifestEntry {
   file: string;
@@ -28,10 +35,16 @@ interface BundleEntryReport extends BundleEntrySize {
 }
 
 interface BundleReport {
-  schemaVersion: 1;
+  schemaVersion: 2;
   generatedAt: string;
   entries: BundleEntryReport[];
+  chunks: PerformanceChunkSize[];
   violations: BundleBudgetViolation[];
+  chunkViolations: PerformanceChunkViolation[];
+}
+
+interface SourceMap {
+  sources?: unknown;
 }
 
 const APP_ROOT = resolve(import.meta.dirname, '../..');
@@ -97,6 +110,42 @@ async function reportEntry(
   };
 }
 
+async function reportChunks(): Promise<PerformanceChunkSize[]> {
+  const directoryEntries = await readdir(DIST_DIRECTORY, {
+    recursive: true,
+    withFileTypes: true,
+  });
+  const files = directoryEntries
+    .filter((entry) => entry.isFile() && /\.(?:m?js)$/.test(entry.name))
+    .map((entry) =>
+      relative(DIST_DIRECTORY, resolve(entry.parentPath, entry.name)).replaceAll('\\', '/'),
+    )
+    .sort();
+
+  return Promise.all(
+    files.map(async (file) => {
+      let moduleIds: string[] = [];
+      if (isMapEngineChunkName(file)) {
+        try {
+          const sourceMap = JSON.parse(
+            await readFile(resolve(DIST_DIRECTORY, `${file}.map`), 'utf8'),
+          ) as SourceMap;
+          moduleIds = Array.isArray(sourceMap.sources)
+            ? sourceMap.sources.filter((source): source is string => typeof source === 'string')
+            : [];
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        }
+      }
+      return {
+        file,
+        rawBytes: (await stat(resolve(DIST_DIRECTORY, file))).size,
+        kind: performanceChunkKind(file, moduleIds),
+      };
+    }),
+  );
+}
+
 function formatKiB(bytes: number): string {
   return `${(bytes / 1_024).toFixed(1)} KiB`;
 }
@@ -108,12 +157,16 @@ async function main(): Promise<void> {
       .filter(([, entry]) => entry.isEntry)
       .map(([key, entry]) => reportEntry(key, entry, manifest)),
   );
+  const chunks = await reportChunks();
   const violations = evaluateBundleBudgets(entries, BUNDLE_BUDGETS);
+  const chunkViolations = evaluateChunkSizes(chunks);
   const report: BundleReport = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: new Date().toISOString(),
     entries,
+    chunks,
     violations,
+    chunkViolations,
   };
 
   await mkdir(dirname(REPORT_PATH), { recursive: true });
@@ -125,12 +178,17 @@ async function main(): Promise<void> {
         `gzip ${formatKiB(entry.gzipBytes)}, brotli ${formatKiB(entry.brotliBytes)}`,
     );
   }
+  const largestChunk = [...chunks].sort((left, right) => right.rawBytes - left.rawBytes)[0];
+  if (largestChunk) {
+    console.log(
+      `largest JavaScript chunk: ${largestChunk.file} (${formatKiB(largestChunk.rawBytes)})`,
+    );
+  }
   console.log(`bundle report: ${REPORT_PATH}`);
 
-  if (violations.length > 0) {
-    for (const violation of violations) console.error(`bundle budget: ${violation.message}`);
-    process.exitCode = 1;
-  }
+  for (const violation of violations) console.error(`bundle budget: ${violation.message}`);
+  for (const violation of chunkViolations) console.error(`chunk budget: ${violation.message}`);
+  if (violations.length > 0 || chunkViolations.length > 0) process.exitCode = 1;
 }
 
 main().catch((error: unknown) => {
