@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Feature, Point } from 'geojson';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
-import type { GestureProjection } from './gestureProjection';
+import type { GestureProjection } from '../../src/map/gestureProjection';
 import {
   combineGestureSettlementPreview,
   createStationGesturePreviewController,
   createStationSettlementPreviewFeatures,
-} from './stationGesturePreview';
+} from '../../src/map/stationGesturePreview';
 
 function stationFeature(id: string, coordinates: [number, number]): Feature<Point> {
   return {

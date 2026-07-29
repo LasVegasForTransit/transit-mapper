@@ -8,7 +8,7 @@ import {
   performanceChunkFileName,
   performanceChunkKind,
   performanceChunkName,
-} from './chunkPolicy';
+} from '../../src/perf/chunkPolicy';
 
 describe('performance chunk policy', () => {
   it('gives stable cache boundaries to the map engine and React runtime', () => {

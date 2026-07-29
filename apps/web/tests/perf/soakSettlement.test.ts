@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { settleKeyboardPointerSentinels, type SoakPointerPage } from './soakSettlement';
+import {
+  settleKeyboardPointerSentinels,
+  type SoakPointerPage,
+} from '../../src/perf/soakSettlement';
 
 describe('performance soak settlement', () => {
   it('consumes keyboard pointer sentinels without activating a primary map action', async () => {

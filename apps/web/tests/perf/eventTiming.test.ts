@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { eventTimingInteractionDurations } from './eventTiming';
+import { eventTimingInteractionDurations } from '../../src/perf/eventTiming';
 
 describe('Event Timing interaction aggregation', () => {
   it('ignores entries without a browser-assigned interaction ID', () => {

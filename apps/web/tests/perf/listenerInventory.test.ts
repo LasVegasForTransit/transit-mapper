@@ -4,7 +4,7 @@ import {
   groupListenerInventory,
   listenerDeltas,
   type PerfListenerIdentity,
-} from './listenerInventory';
+} from '../../src/perf/listenerInventory';
 
 const clickListener: PerfListenerIdentity = {
   target: 'window',
