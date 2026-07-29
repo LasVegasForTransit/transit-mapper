@@ -263,11 +263,33 @@ preview be drawn where there is no MapLibre and no DOM.
 | Share   | Export formats, preview rendering, and the publishing client              |
 | Storage | The local document library                                                |
 | Sim     | Vehicle animation along service patterns                                  |
+| PWA     | Editor-only installation and offline-runtime integration                  |
 
 Map and Sim sit outside React on purpose. Both update every frame, and
 reconciling a React tree that often is the difference between a map that
 pans smoothly and one that stutters. They read the store and write to
 MapLibre sources directly.
+
+### Desktop installation
+
+The editor's PWA install controller lives in `apps/web/src/pwa/`, outside
+`packages/core` and outside the embedded share entry. It retains Chromium's
+`beforeinstallprompt` event but calls `prompt()` only after a person presses
+Install. Safari and Firefox receive browser-specific instructions instead of
+a non-working button.
+
+The contextual invitation appears only in an editable desktop session after
+90 seconds and the first undoable edit. Its first dismissal is local to that
+browser profile for seven days; later dismissals last fourteen. An installed
+or standalone launch suppresses the invitation permanently. `Workbench`
+owns the invitation's slot directly below top chrome, so responsive toolbar
+height pushes the card down rather than letting it overlap editor controls.
+
+The manifest carries stable identity, scope, and 192/512px normal and
+maskable icons. The production PWA verifier includes every install asset in
+the editor's precache proof. Settings also offers an explicit request for
+persistent browser storage; that is a best-effort eviction-resistance request,
+not a claim that storage can never be cleared.
 
 ## 6. Runtime View
 

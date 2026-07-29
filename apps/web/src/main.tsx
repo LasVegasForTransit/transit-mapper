@@ -7,6 +7,7 @@ import { SaveStatusProvider } from './ui/SaveStatusProvider';
 import { SimProvider } from './ui/SimProvider';
 import { UiProvider } from './ui/UiProvider';
 import { ViewProvider } from './ui/ViewProvider';
+import { InstallProvider } from './pwa/InstallProvider';
 
 // Outermost boundary: the last thing between a render error anywhere in the
 // editor and a white page. It cannot save the unsaved work — by the time it
@@ -18,15 +19,17 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary label="editor">
       <EditorProvider>
-        <UiProvider>
-          <SaveStatusProvider>
-            <ViewProvider>
-              <SimProvider>
-                <App />
-              </SimProvider>
-            </ViewProvider>
-          </SaveStatusProvider>
-        </UiProvider>
+        <InstallProvider enabled={!window.location.pathname.startsWith('/s/')}>
+          <UiProvider>
+            <SaveStatusProvider>
+              <ViewProvider>
+                <SimProvider>
+                  <App />
+                </SimProvider>
+              </ViewProvider>
+            </SaveStatusProvider>
+          </UiProvider>
+        </InstallProvider>
       </EditorProvider>
     </ErrorBoundary>
   </StrictMode>,

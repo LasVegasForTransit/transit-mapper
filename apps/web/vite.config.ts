@@ -32,6 +32,7 @@ export default defineConfig({
           'manifest.json',
           'favicon.svg',
           'favicon-*.png',
+          'icon-*.png',
           'apple-touch-icon.png',
           'assets/**/*.{js,css,png,svg,webp,woff,woff2}',
         ],

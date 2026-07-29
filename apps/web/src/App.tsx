@@ -35,6 +35,8 @@ import { useSaveStatus } from './ui/SaveStatusProvider';
 import { useUi } from './ui/UiProvider';
 import { useView } from './ui/ViewProvider';
 import { Workbench } from './ui/Workbench';
+import { InstallBanner } from './ui/InstallBanner';
+import { useInstall } from './pwa/InstallProvider';
 import { useAppUpdate } from '@transitmapper/pwa-updater/useAppUpdate';
 import './ui/app.css';
 
@@ -149,6 +151,7 @@ export function App() {
   // rather than here because writes happen in dialogs too, and a failure
   // there is exactly as silent and exactly as costly.
   const { outcome: saveState, report } = useSaveStatus();
+  const { installState, recordUndoableEdit, setEditable } = useInstall();
 
   // Bootstrap: shared link → read-only load; otherwise local autosave or fresh.
   useEffect(() => {
@@ -268,7 +271,16 @@ export function App() {
   const multiSelection = useEditor((s) => s.multiSelection);
   const tool = useEditor((s) => s.tool);
   const readOnly = useEditor((s) => s.readOnly);
+  const canUndo = useEditor((s) => s.canUndo);
   const { viewMode } = useView();
+
+  useEffect(() => {
+    setEditable(!readOnly);
+  }, [readOnly, setEditable]);
+
+  useEffect(() => {
+    if (canUndo) recordUndoableEdit();
+  }, [canUndo, recordUndoableEdit]);
   // The right sidebar is the one dynamic surface for "what's relevant right
   // now" — a selected object's details, OR (when a drawing tool is armed)
   // that tool's own draft options, never a second bottom-bar popup for the
@@ -422,6 +434,9 @@ export function App() {
         simControlsCompact={<SimControlsCompact />}
         modeToolbar={<Toolbar />}
         importStatus={<ImportProgressPill />}
+        installBanner={
+          installState.eligible && !uiHidden && !readOnly ? <InstallBanner /> : undefined
+        }
       />
       {shortcutsOpen && (
         <LazyDialog
