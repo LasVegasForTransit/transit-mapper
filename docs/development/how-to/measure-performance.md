@@ -217,7 +217,10 @@ remote soak and accept the same duration override, which keeps headed Chrome
 inside Xvfb instead of taking over a local desktop. A shorter diagnostic result
 cannot satisfy the leak gate; omit the override for ten-minute acceptance
 evidence. The baseline warms both PNG and SVG export paths before its first
-forced-GC snapshot so one-time initialization is not mistaken for retained
+for retained growth. Before the final snapshot, a non-primary map click
+consumes Radix Menu's one-shot pointer-modality listeners. Keyboard actions
+legitimately arm one pair per mounted menu until the next pointer input; taking
+the snapshot before that input would count a transient state as retained
 growth.
 
 ## What “offline” means
