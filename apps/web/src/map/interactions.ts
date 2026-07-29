@@ -321,19 +321,26 @@ export function attachInteractions(
     return features;
   };
 
-  const featureAt = (e: MapMouseEvent, layers: string[]): MapGeoJSONFeature | undefined => {
-    const existing = layers.filter((l) => map.getLayer(l));
-    const candidates = existing.length
-      ? hitStack(e).filter((feature) => existing.includes(feature.layer.id))
-      : [];
-    const squaredDistance = (feature: MapGeoJSONFeature): number => {
-      if (feature.geometry.type === 'Point') {
-        const p = map.project(feature.geometry.coordinates as [number, number]);
-        return (p.x - e.point.x) ** 2 + (p.y - e.point.y) ** 2;
-      }
-      if (feature.geometry.type !== 'LineString') return Infinity;
+  // Pointer intent and dispatch classify the same rendered feature more than
+  // once, but neither its geometry nor the event's screen point can change
+  // during that callback. Retain the exact projected distance for that event
+  // so repeated classifiers do not reproject every point and line segment.
+  const squaredDistanceByEvent = new WeakMap<MapMouseEvent, WeakMap<MapGeoJSONFeature, number>>();
+  const squaredDistance = (e: MapMouseEvent, feature: MapGeoJSONFeature): number => {
+    let distances = squaredDistanceByEvent.get(e);
+    if (!distances) {
+      distances = new WeakMap();
+      squaredDistanceByEvent.set(e, distances);
+    }
+    const cached = distances.get(feature);
+    if (cached !== undefined) return cached;
+
+    let distance = Infinity;
+    if (feature.geometry.type === 'Point') {
+      const p = map.project(feature.geometry.coordinates as [number, number]);
+      distance = (p.x - e.point.x) ** 2 + (p.y - e.point.y) ** 2;
+    } else if (feature.geometry.type === 'LineString') {
       const coords = feature.geometry.coordinates as [number, number][];
-      let best = Infinity;
       for (let i = 1; i < coords.length; i++) {
         const a = map.project(coords[i - 1]);
         const z = map.project(coords[i]);
@@ -344,14 +351,50 @@ export function attachInteractions(
           den === 0
             ? 0
             : Math.max(0, Math.min(1, ((e.point.x - a.x) * dx + (e.point.y - a.y) * dy) / den));
-        best = Math.min(best, (a.x + t * dx - e.point.x) ** 2 + (a.y + t * dy - e.point.y) ** 2);
+        distance = Math.min(
+          distance,
+          (a.x + t * dx - e.point.x) ** 2 + (a.y + t * dy - e.point.y) ** 2,
+        );
       }
-      return best;
-    };
-    return candidates.sort((a, b) => {
-      const layerOrder = existing.indexOf(a.layer.id) - existing.indexOf(b.layer.id);
-      return layerOrder || squaredDistance(a) - squaredDistance(b);
-    })[0];
+    }
+    distances.set(feature, distance);
+    return distance;
+  };
+
+  const featureAt = (e: MapMouseEvent, layers: string[]): MapGeoJSONFeature | undefined => {
+    const existing = layers.filter((l) => map.getLayer(l));
+    if (!existing.length) return undefined;
+
+    const layerOrder = new Map<string, number>();
+    for (const layer of existing) {
+      if (!layerOrder.has(layer)) layerOrder.set(layer, layerOrder.size);
+    }
+    const hits = hitStack(e);
+    let selectedLayer = Infinity;
+    for (const feature of hits) {
+      const order = layerOrder.get(feature.layer.id);
+      if (order !== undefined) selectedLayer = Math.min(selectedLayer, order);
+    }
+    if (selectedLayer === Infinity) return undefined;
+
+    let selected: MapGeoJSONFeature | undefined;
+    let selectedDistance: number | undefined;
+    for (const feature of hits) {
+      if (layerOrder.get(feature.layer.id) !== selectedLayer) continue;
+      if (!selected) {
+        selected = feature;
+        continue;
+      }
+      if (selectedDistance === undefined) selectedDistance = squaredDistance(e, selected);
+      const candidateDistance = squaredDistance(e, feature);
+      // Strictly nearer wins. Equal distances retain MapLibre's first result,
+      // matching stable Array.sort without allocating and sorting candidates.
+      if (candidateDistance < selectedDistance) {
+        selected = feature;
+        selectedDistance = candidateDistance;
+      }
+    }
+    return selected;
   };
 
   const modifierState = (event: {
