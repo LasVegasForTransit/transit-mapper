@@ -62,6 +62,9 @@ import {
   LYR_WAYS_DASHED,
   LYR_WAYS_SOLID,
   LYR_WAY_ENDPOINTS,
+  LYR_SERVICE_TERMINI,
+  LYR_SERVICE_TERMINI_HIT,
+  LYR_ACTION_ANCHOR,
   LYR_WAY_LABELS,
   LYR_WAY_SELECTED,
   SRC_CONNECTORS,
@@ -70,6 +73,8 @@ import {
   SRC_FOOTPRINTS,
   SRC_GESTURE,
   SRC_HANDLES,
+  SRC_SERVICE_TERMINI,
+  SRC_ACTION_ANCHOR,
   SRC_JUNCTIONS,
   SRC_LANDMARKS,
   SRC_LANES,
@@ -406,6 +411,37 @@ export const LAYER_SPECS: LayerSpecification[] = [
       // The hit surface must sit on the same fanned/lane path as the line it
       // names; otherwise a bundled repeated line catches clicks at its center.
       'line-offset': ['get', 'offset'],
+    },
+  },
+  {
+    // Route ends sit above the occurrence hit surface so a coincident branch
+    // resolves to the branch the inspector or map most recently focused.
+    id: LYR_SERVICE_TERMINI,
+    type: 'circle',
+    source: SRC_SERVICE_TERMINI,
+    paint: {
+      'circle-radius': 8,
+      'circle-color': '#ffffff',
+      'circle-stroke-width': 3,
+      'circle-stroke-color': '#191a17',
+    },
+  },
+  {
+    id: LYR_SERVICE_TERMINI_HIT,
+    type: 'circle',
+    source: SRC_SERVICE_TERMINI,
+    filter: ['get', 'interactive'],
+    paint: { 'circle-radius': 14, 'circle-color': '#000000', 'circle-opacity': 0 },
+  },
+  {
+    id: LYR_ACTION_ANCHOR,
+    type: 'circle',
+    source: SRC_ACTION_ANCHOR,
+    paint: {
+      'circle-radius': 7,
+      'circle-color': '#ffffff',
+      'circle-stroke-width': 2.5,
+      'circle-stroke-color': '#191a17',
     },
   },
   {

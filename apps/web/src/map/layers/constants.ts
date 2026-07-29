@@ -8,6 +8,8 @@ export const SRC_WAYS = 'tm-ways';
 export const SRC_SERVICES = 'tm-services';
 export const SRC_STATIONS = 'tm-stations';
 export const SRC_HANDLES = 'tm-handles';
+export const SRC_SERVICE_TERMINI = 'tm-service-termini';
+export const SRC_ACTION_ANCHOR = 'tm-action-anchor';
 export const SRC_PREVIEW = 'tm-preview';
 /** Small, gesture-only geometry. Direct manipulation writes only this source
  *  until release instead of rebuilding and uploading every derived source. */
@@ -55,6 +57,9 @@ export const LYR_STATION_LABELS_MAJOR = 'tm-station-labels-major'; // interchang
 export const LYR_FACILITY_LABELS = 'tm-facility-labels';
 export const LYR_HANDLES = 'tm-handles';
 export const LYR_WAY_ENDPOINTS = 'tm-way-endpoints';
+export const LYR_SERVICE_TERMINI = 'tm-service-termini';
+export const LYR_SERVICE_TERMINI_HIT = 'tm-service-termini-hit';
+export const LYR_ACTION_ANCHOR = 'tm-action-anchor';
 export const LYR_PREVIEW = 'tm-preview';
 export const LYR_GESTURE_FILL = 'tm-gesture-fill';
 export const LYR_GESTURE_STROKE = 'tm-gesture-stroke';

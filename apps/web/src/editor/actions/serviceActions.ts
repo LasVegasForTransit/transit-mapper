@@ -16,7 +16,7 @@ import { servicesShareOrCross, terminiMeet } from '@transitmapper/core/model/sel
 import type { EditorStore } from '../store';
 
 export function serviceActionProvider(store: EditorStore): SelectionActionProvider {
-  return ({ system, refs }) => {
+  return ({ system, refs, serviceHit }) => {
     const serviceIds = refIds(refs, 'service');
 
     // One line selected: the couplet gestures. Offered here rather than only
@@ -24,6 +24,31 @@ export function serviceActionProvider(store: EditorStore): SelectionActionProvid
     // looking at where it runs, which is the map.
     if (serviceIds.length === 1 && refs.length === 1) {
       const service = system.services.find((s) => s.id === serviceIds[0]);
+      if (
+        service &&
+        serviceHit?.terminusSide &&
+        serviceHit.position &&
+        serviceHit.serviceId === service.id
+      ) {
+        return [
+          {
+            id: 'service.convertTerminus',
+            label: 'Convert end to two one-way paths',
+            hint: 'Arms this end for the return-path gesture',
+            group: 'direction',
+            // Task 4 owns the side-aware drag. Keep its exact starting end in
+            // ephemeral editor state; this action must not start a draft or
+            // alter the service before that gesture happens.
+            run: () =>
+              store.getState().armTerminus({
+                serviceId: serviceHit.serviceId,
+                patternId: serviceHit.patternId,
+                side: serviceHit.terminusSide!,
+                position: serviceHit.position!,
+              }),
+          },
+        ];
+      }
       // A branching line has no single path to split — which of its branches
       // gets the return trip is a question the menu cannot ask.
       if (!service || service.patterns.length !== 1) return [];

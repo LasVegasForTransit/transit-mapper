@@ -190,6 +190,16 @@ export interface EditorState {
   system: TransitSystem;
   tool: Tool;
   selection: Selection;
+  /** Transient branch focus for service-owned map affordances. */
+  activePatternId: string | null;
+  /** A service terminus chosen for a follow-up gesture. This is deliberately
+   * ephemeral: Task 4 consumes or clears it before any route changes. */
+  armedTerminus: {
+    serviceId: string;
+    patternId: string;
+    side: 'start' | 'end';
+    position: PatternPosition;
+  } | null;
   /** Bumped by selectAndFocus (never by plain select) — MapCanvas watches
    *  this, not `selection` itself, to know when to pan/fit the camera onto
    *  the newly selected thing. A direct map click already shows the user
@@ -287,6 +297,9 @@ export interface EditorState {
   // tools & selection
   setTool: (tool: Tool) => void;
   select: (selection: Selection) => void;
+  setActivePattern: (patternId: string | null) => void;
+  armTerminus: (terminus: NonNullable<EditorState['armedTerminus']>) => void;
+  clearArmedTerminus: () => void;
   /** Same as select(), but also bumps cameraFocusToken so MapCanvas pans/
    *  fits the camera onto it — see cameraFocusToken's own doc comment for
    *  when to reach for this instead of plain select(). */
@@ -1952,6 +1965,8 @@ export function createEditorStore() {
     system: createEmptySystem(),
     tool: 'select',
     selection: null,
+    activePatternId: null,
+    armedTerminus: null,
     cameraFocusToken: 0,
     focusNameToken: 0,
     focusNameStationId: null,
@@ -1983,6 +1998,8 @@ export function createEditorStore() {
         system,
         readOnly: opts?.readOnly === true,
         selection: null,
+        activePatternId: null,
+        armedTerminus: null,
         multiSelection: [],
         activeWayId: null,
         tool: 'select',
@@ -2000,6 +2017,7 @@ export function createEditorStore() {
       set({
         system: prev,
         selection: null,
+        armedTerminus: null,
         multiSelection: [],
         activeWayId: null,
         canUndo: past.length > 0,
@@ -2016,6 +2034,7 @@ export function createEditorStore() {
       set({
         system: next,
         selection: null,
+        armedTerminus: null,
         multiSelection: [],
         activeWayId: null,
         canUndo: true,
@@ -2056,7 +2075,7 @@ export function createEditorStore() {
       // them; this is O(1), produces no phantom undo step, and preserves every
       // field (including updatedAt) exactly as it was before the gesture.
       skipHistory = true;
-      set({ system: before });
+      set({ system: before, armedTerminus: null });
       skipHistory = false;
     },
 
@@ -2068,6 +2087,7 @@ export function createEditorStore() {
         selection: null,
         multiSelection: [],
         activeWayId: null,
+        armedTerminus: null,
         tool: 'way',
       });
       skipHistory = false;
@@ -2105,10 +2125,33 @@ export function createEditorStore() {
       });
     },
 
-    select: (selection) => set({ selection, multiSelection: [] }),
+    select: (selection) =>
+      set((s) => ({
+        selection,
+        multiSelection: [],
+        activePatternId:
+          selection?.kind === 'service'
+            ? (s.system.services.find((service) => service.id === selection.id)?.patterns[0]?.id ??
+              null)
+            : null,
+      })),
+
+    setActivePattern: (activePatternId) => set({ activePatternId }),
+    armTerminus: (armedTerminus) =>
+      set({ activePatternId: armedTerminus.patternId, armedTerminus }),
+    clearArmedTerminus: () => set({ armedTerminus: null }),
 
     selectAndFocus: (selection) =>
-      set((s) => ({ selection, multiSelection: [], cameraFocusToken: s.cameraFocusToken + 1 })),
+      set((s) => ({
+        selection,
+        multiSelection: [],
+        activePatternId:
+          selection?.kind === 'service'
+            ? (s.system.services.find((service) => service.id === selection.id)?.patterns[0]?.id ??
+              null)
+            : null,
+        cameraFocusToken: s.cameraFocusToken + 1,
+      })),
 
     toggleMultiSelect: (item) =>
       set((s) => {
@@ -3259,6 +3302,9 @@ export function createEditorStore() {
       set((s) => ({
         system: touch({ ...s.system, services: s.system.services.filter((sv) => sv.id !== id) }),
         selection: s.selection?.kind === 'service' && s.selection.id === id ? null : s.selection,
+        activePatternId:
+          s.selection?.kind === 'service' && s.selection.id === id ? null : s.activePatternId,
+        armedTerminus: s.armedTerminus?.serviceId === id ? null : s.armedTerminus,
       })),
 
     startAddingPattern: (serviceId) => set({ addingPatternForServiceId: serviceId, tool: 'way' }),
@@ -3273,6 +3319,16 @@ export function createEditorStore() {
               : sv,
           ),
         }),
+        activePatternId:
+          s.activePatternId === patternId
+            ? (s.system.services
+                .find((service) => service.id === serviceId)
+                ?.patterns.find((pattern) => pattern.id !== patternId)?.id ?? null)
+            : s.activePatternId,
+        armedTerminus:
+          s.armedTerminus?.serviceId === serviceId && s.armedTerminus.patternId === patternId
+            ? null
+            : s.armedTerminus,
       })),
 
     extendPatternTerminus: (serviceId, patternId, side, spans) => {
@@ -3356,6 +3412,7 @@ export function createEditorStore() {
           ],
         }),
         selection: { kind: 'service', id: newId },
+        activePatternId: spawned.patterns[0].id,
       }));
       return newId;
     },

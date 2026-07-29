@@ -3,6 +3,7 @@ import type {
   SelectionAction,
   SelectionRef,
   ServiceActionHit,
+  CorridorActionHit,
 } from '@transitmapper/core/model/selectionActions';
 import type { LngLat } from '@transitmapper/core/model/system';
 import { blockedMergeNote } from './actions';
@@ -39,6 +40,7 @@ function refsOfSelection(selection: Selection): SelectionRef[] {
 export function useSelectionActions(
   at?: LngLat,
   serviceHit?: ServiceActionHit,
+  corridorHit?: CorridorActionHit,
 ): SelectionActionsView {
   const registry = useSelectionActionRegistry();
   const system = useEditor((s) => s.system);
@@ -51,8 +53,8 @@ export function useSelectionActions(
     if (refs.length === 0) return { refs, actions: [], note: null };
     return {
       refs,
-      actions: registry.actionsFor({ system, refs, at, serviceHit }),
+      actions: registry.actionsFor({ system, refs, at, serviceHit, corridorHit }),
       note: readOnly ? null : blockedMergeNote(system, refs),
     };
-  }, [registry, system, multiSelection, selection, readOnly, at, serviceHit]);
+  }, [registry, system, multiSelection, selection, readOnly, at, serviceHit, corridorHit]);
 }

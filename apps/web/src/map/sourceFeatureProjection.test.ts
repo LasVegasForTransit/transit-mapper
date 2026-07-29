@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
+import { wholeLeg } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import {
   createFeatureBuildOperationCounts,
@@ -10,6 +11,7 @@ import {
   SRC_FOOTPRINTS,
   SRC_PHYSICAL_HANDLES,
   SRC_PLATFORMS,
+  SRC_SERVICE_TERMINI,
   SRC_STATIONS,
 } from './layers';
 import { buildFeaturesForSources } from './sourceFeatureProjection';
@@ -88,6 +90,37 @@ describe('MapLibre source feature projection', () => {
     });
   });
 
+  it('does not project editable service termini into Diagram', () => {
+    const counts = operationCounts();
+    const system = fixture();
+    system.services = [
+      {
+        id: 'line',
+        name: 'Line',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [
+          {
+            id: 'pattern',
+            sections: [{ kind: 'shared', legs: [wholeLeg('way')] }],
+          },
+        ],
+      },
+    ];
+
+    const features = buildFeaturesForSources({
+      system,
+      selection: { kind: 'service', id: 'line' },
+      handleWayIds: [],
+      view: diagramView,
+      sourceIds: [SRC_SERVICE_TERMINI],
+      counts,
+    });
+
+    expect(features.serviceTermini.features).toEqual([]);
+    expect(counts.diagramTopologyBuildCount).toBe(0);
+  });
+
   it('reuses Diagram topology while remapping a changed station collection', () => {
     const system = fixture();
     const warmCounts = operationCounts();
@@ -138,7 +171,7 @@ describe('MapLibre source feature projection', () => {
       counts,
     });
 
-    expect(counts.featureCollectionBuildCount).toBe(15);
+    expect(counts.featureCollectionBuildCount).toBe(16);
     expect(counts.featureTopologyPassCount).toBe(1);
     expect(counts.featureStationPassCount).toBe(1);
     expect(counts.featureHandlePassCount).toBe(1);

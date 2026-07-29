@@ -14,6 +14,7 @@
  */
 
 import type { LngLat, RunDirection, TransitSystem } from './system';
+import type { PatternPosition } from './serviceEdits';
 
 /** One selected object. The store's MultiSelectItem is this type — it lives
  *  here because the registry takes a selection as input and core cannot
@@ -29,8 +30,18 @@ export interface SelectionRef {
 export interface ServiceActionHit {
   serviceId: string;
   patternId: string;
-  run: RunDirection;
-  legIndex: number;
+  run?: RunDirection;
+  legIndex?: number;
+  /** Present only for a service-owned end handle. */
+  terminusSide?: 'start' | 'end';
+  /** Resolved once from the rendered occurrence; action providers must reuse it. */
+  position?: PatternPosition;
+}
+
+/** A corridor point resolved by the map before any action provider runs. */
+export interface CorridorActionHit {
+  wayId: string;
+  t: number;
 }
 
 export interface ActionContext {
@@ -48,6 +59,7 @@ export interface ActionContext {
   at?: LngLat;
   /** Exact occurrence encoded by the service feature under a map gesture. */
   serviceHit?: ServiceActionHit;
+  corridorHit?: CorridorActionHit;
 }
 
 export interface SelectionAction {

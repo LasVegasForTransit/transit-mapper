@@ -6,19 +6,17 @@
 // nothing ever passed one — so removing a stretch of a line that had no
 // station at each end could not be asked for at all.
 //
-// A right-click knows where it landed, so these providers turn that position
-// into the `t` those actions were already written to accept.
+// The interaction layer resolves the hit once, while it still has the exact
+// rendered occurrence. These providers deliberately consume that result
+// instead of projecting a geographic click back onto a possibly different
+// pass through the same corridor.
 
-import { nearestOnPath, resolveWayPath } from '@transitmapper/core/model/geo';
-import { patternRunLegs } from '@transitmapper/core/model/geo';
-import { patternPositionAt, type PatternPosition } from '@transitmapper/core/model/serviceEdits';
 import {
   refIds,
   type ActionContext,
   type SelectionAction,
   type SelectionActionProvider,
 } from '@transitmapper/core/model/selectionActions';
-import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
 import type { EditorStore } from '../store';
 
 // There is deliberately no distance check here.
@@ -33,67 +31,6 @@ import type { EditorStore } from '../store';
 // What remains worth checking is where along the object the point falls: a cut
 // at either extreme removes nothing and splits nothing.
 
-/** A position this close to an end is the end, and cutting there is a no-op. */
-const END_T = 0.001;
-
-interface PointOnWay {
-  wayId: string;
-  t: number;
-}
-
-/** Where a click lands along one specific way, or null if it missed. */
-function pointOnWay(system: TransitSystem, wayId: string, at: LngLat): PointOnWay | null {
-  const way = system.ways.find((w) => w.id === wayId);
-  if (!way) return null;
-  const near = nearestOnPath(resolveWayPath(way), at);
-  if (!near) return null;
-  if (near.t <= END_T || near.t >= 1 - END_T) return null;
-  return { wayId, t: near.t };
-}
-
-/** Which of a line's own ways the click landed on, and where along it. A line
- *  runs over many ways; only the one under the cursor can be cut. */
-function pointOnService(
-  system: TransitSystem,
-  serviceId: string,
-  at: LngLat,
-  renderedHit: ActionContext['serviceHit'],
-): { position: PatternPosition } | null {
-  const service = system.services.find((s) => s.id === serviceId);
-  if (!service) return null;
-  if (renderedHit?.serviceId === serviceId) {
-    const pattern = service.patterns.find((candidate) => candidate.id === renderedHit.patternId);
-    if (!pattern) return null;
-    const leg = patternRunLegs(pattern, renderedHit.run)[renderedHit.legIndex];
-    const way = leg && system.ways.find((candidate) => candidate.id === leg.leg.wayId);
-    const near = way && nearestOnPath(resolveWayPath(way), at);
-    if (!near || near.t <= END_T || near.t >= 1 - END_T) return null;
-    const position = patternPositionAt(
-      system.ways,
-      pattern,
-      renderedHit.run,
-      renderedHit.legIndex,
-      near.t,
-    );
-    return position ? { position } : null;
-  }
-  let best: { position: PatternPosition; distMeters: number } | null = null;
-  for (const pattern of service.patterns) {
-    for (const run of ['outbound', 'inbound'] as const) {
-      for (const [legIndex, { leg }] of patternRunLegs(pattern, run).entries()) {
-        const way = system.ways.find((candidate) => candidate.id === leg.wayId);
-        if (!way) continue;
-        const near = nearestOnPath(resolveWayPath(way), at);
-        if (!near || near.t <= END_T || near.t >= 1 - END_T) continue;
-        const position = patternPositionAt(system.ways, pattern, run, legIndex, near.t);
-        if (!position || (best && best.distMeters <= near.distMeters)) continue;
-        best = { position, distMeters: near.distMeters };
-      }
-    }
-  }
-  return best ? { position: best.position } : null;
-}
-
 /**
  * Cutting a LINE at the clicked point.
  *
@@ -102,12 +39,13 @@ function pointOnService(
  * stretch in the middle comes out: cut at both ends, delete the middle.
  */
 export function servicePointActionProvider(store: EditorStore): SelectionActionProvider {
-  return ({ system, refs, at, serviceHit }: ActionContext) => {
-    if (!at) return [];
+  return ({ refs, serviceHit }: ActionContext) => {
     const [serviceId] = refIds(refs, 'service');
     if (!serviceId || refs.length !== 1) return [];
-    const hit = pointOnService(system, serviceId, at, serviceHit);
-    if (!hit) return [];
+    // A terminus has its own constrained menu. Offering line cuts beside the
+    // conversion action would turn one exact handle into competing commands.
+    if (serviceHit?.terminusSide) return [];
+    if (serviceHit?.serviceId !== serviceId || !serviceHit.position) return [];
 
     const actions: SelectionAction[] = [
       {
@@ -115,21 +53,14 @@ export function servicePointActionProvider(store: EditorStore): SelectionActionP
         label: 'Divide line here',
         hint: 'Two lines over the same track; delete either half',
         group: 'cut',
-        run: () => store.getState().divideServiceAt(serviceId, hit.position),
-      },
-      {
-        id: 'service.startHere',
-        label: 'Start the line here',
-        hint: 'Drops everything before this point',
-        group: 'cut',
-        run: () => store.getState().trimPatternAt(serviceId, hit.position, 'start'),
+        run: () => store.getState().divideServiceAt(serviceId, serviceHit.position!),
       },
       {
         id: 'service.endHere',
         label: 'End line here',
         hint: 'Drops everything after this point',
         group: 'cut',
-        run: () => store.getState().endPatternAt(serviceId, hit.position),
+        run: () => store.getState().endPatternAt(serviceId, serviceHit.position!),
       },
     ];
     return actions;
@@ -145,19 +76,17 @@ export function servicePointActionProvider(store: EditorStore): SelectionActionP
  * in; this exposes the same thing to a click.
  */
 export function wayPointActionProvider(store: EditorStore): SelectionActionProvider {
-  return ({ system, refs, at }: ActionContext) => {
-    if (!at) return [];
+  return ({ refs, corridorHit }: ActionContext) => {
     const [wayId] = refIds(refs, 'way');
     if (!wayId || refs.length !== 1) return [];
-    const hit = pointOnWay(system, wayId, at);
-    if (!hit) return [];
+    if (!corridorHit || corridorHit.wayId !== wayId) return [];
     return [
       {
         id: 'way.splitHere',
-        label: 'Divide here',
+        label: 'Split corridor here',
         hint: 'Two streets, each editable on its own',
         group: 'cut',
-        run: () => store.getState().splitWayAtT(wayId, hit.t),
+        run: () => store.getState().splitWayAtT(wayId, corridorHit.t),
       },
     ];
   };

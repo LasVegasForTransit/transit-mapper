@@ -20,6 +20,7 @@ import {
   serviceLaneOnWay,
   serviceRangesOnWay,
   slicePathByT,
+  pointAtT,
   wayById,
   patternRunSegments,
 } from '../model/geo';
@@ -156,12 +157,10 @@ interface ServiceWayOccurrence {
 
 function serviceWayOccurrences(service: Service, wayId: string): ServiceWayOccurrence[] {
   const occurrences: ServiceWayOccurrence[] = [];
-  const seenLegs = new Set<PatternLeg>();
   for (const pattern of service.patterns) {
     for (const run of PATTERN_RUNS) {
       patternRunLegs(pattern, run).forEach(({ leg }, legIndex) => {
-        if (leg.wayId !== wayId || seenLegs.has(leg)) return;
-        seenLegs.add(leg);
+        if (leg.wayId !== wayId) return;
         occurrences.push({ patternId: pattern.id, run, legIndex, range: legRange(leg), leg });
       });
     }
@@ -268,6 +267,8 @@ export interface SystemFeatures {
   services: FeatureCollection<LineString>;
   stations: FeatureCollection<Point>;
   handles: FeatureCollection<Point>;
+  /** Route-owned ends, intentionally distinct from physical corridor controls. */
+  serviceTermini: FeatureCollection<Point>;
   footprints: FeatureCollection<Polygon>;
   platforms: FeatureCollection<Polygon>;
   facilities: FeatureCollection<Point>;
@@ -427,6 +428,8 @@ export interface BuildFeaturesOptions {
    * so unrelated RTC-scale phases are never traversed just to discard them. */
   requestedFeatures?: readonly SystemFeatureName[];
   counts?: FeatureBuildOperationCounts;
+  /** The branch that alone receives interaction at coincident termini. */
+  activePatternId?: string | null;
 }
 
 export function createFeatureBuildOperationCounts(): FeatureBuildOperationCounts {
@@ -456,6 +459,7 @@ const SYSTEM_FEATURE_NAMES: readonly SystemFeatureName[] = [
   'services',
   'stations',
   'handles',
+  'serviceTermini',
   'footprints',
   'platforms',
   'facilities',
@@ -507,6 +511,7 @@ interface FeatureProjectionPlan {
   junctions: JunctionProjection;
   stations: boolean;
   selectionHandles: boolean;
+  serviceTermini: boolean;
   physical: PhysicalProjection;
   facilities: boolean;
   wayLabels: boolean;
@@ -561,6 +566,7 @@ function createFeatureProjectionPlan(
   };
   const stations = includes('stations');
   const selectionHandles = includes('handles');
+  const serviceTermini = includes('serviceTermini');
   const facilities = includes('facilities');
   const wayLabels = includes('wayLabels');
   const topologyPassEnabled =
@@ -572,11 +578,12 @@ function createFeatureProjectionPlan(
     junctions,
     stations,
     selectionHandles,
+    serviceTermini,
     physical,
     facilities,
     wayLabels,
     dependencies: {
-      wayIndex: topologyPassEnabled || stations || selectionHandles || wayLabels,
+      wayIndex: topologyPassEnabled || stations || selectionHandles || serviceTermini || wayLabels,
       serviceIndex: topology.enabled || stations,
     },
     topologyPassEnabled,
@@ -680,6 +687,64 @@ function projectSelectionHandles(
     counts.featureHandleWayVisitCount += handleWayIds.length;
   }
   return buildHandles(indexes.waysById, handleWayIds);
+}
+
+function projectServiceTermini(
+  system: TransitSystem,
+  selection: Highlight,
+  indexes: SharedProjectionIndexes,
+  activePatternId: string | null | undefined,
+): Feature<Point>[] {
+  if (selection?.kind !== 'service') return [];
+  const service = system.services.find((candidate) => candidate.id === selection.id);
+  if (!service) return [];
+  const interactivePatternId = service.patterns.some((pattern) => pattern.id === activePatternId)
+    ? activePatternId
+    : service.patterns[0]?.id;
+  const pending: Array<Feature<Point> & { properties: Record<string, unknown> }> = [];
+  for (const pattern of service.patterns) {
+    const outbound = patternRunLegs(pattern, 'outbound');
+    const ends: Array<{ side: 'start' | 'end'; entry: (typeof outbound)[number] | undefined }> = [
+      { side: 'start', entry: outbound[0] },
+      { side: 'end', entry: outbound[outbound.length - 1] },
+    ];
+    for (const { side, entry } of ends) {
+      if (!entry) continue;
+      const way = indexes.waysById.get(entry.leg.wayId);
+      if (!way) continue;
+      const [lo, hi] = legRange(entry.leg);
+      const isStart = side === 'start';
+      const t = isStart === entry.forward ? lo : hi;
+      pending.push({
+        type: 'Feature',
+        properties: {
+          serviceId: service.id,
+          patternId: pattern.id,
+          side,
+          modeId: service.modeId,
+          interactive: false,
+        },
+        geometry: { type: 'Point', coordinates: pointAtT(resolveWayPath(way), t) },
+      });
+    }
+  }
+  const coincident = new Map<string, number>();
+  for (const feature of pending) {
+    const [lng, lat] = feature.geometry.coordinates;
+    const key = `${lng},${lat}`;
+    coincident.set(key, (coincident.get(key) ?? 0) + 1);
+  }
+  return pending.map((feature) => {
+    const [lng, lat] = feature.geometry.coordinates;
+    const multiple = (coincident.get(`${lng},${lat}`) ?? 0) > 1;
+    return {
+      ...feature,
+      properties: {
+        ...feature.properties,
+        interactive: !multiple || feature.properties.patternId === interactivePatternId,
+      },
+    };
+  });
 }
 
 interface PhysicalProjectionResult {
@@ -1162,7 +1227,7 @@ function projectTopologyFeatures({
         tOnPath: (t: number) => number = (t) => t,
       ) => {
         const occurrences = serviceWayOccurrences(svc, way.id);
-        if (occurrences.length < 2) return;
+        if (occurrences.length === 0) return;
         for (const occurrence of occurrences) {
           const piece = slicePathByT(
             on,
@@ -1342,9 +1407,14 @@ export function buildFeatures(
       })
     : emptyTopologyProjection();
   const stations = projection.stations ? projectStations(system, view, indexes, counts) : [];
-  const handles = projection.selectionHandles
-    ? projectSelectionHandles(indexes, handleWayIds, counts)
-    : [];
+  const handles =
+    projection.selectionHandles && !(network && selection?.kind === 'service')
+      ? projectSelectionHandles(indexes, handleWayIds, counts)
+      : [];
+  const serviceTermini =
+    projection.serviceTermini && view.viewMode !== 'diagram'
+      ? projectServiceTermini(system, selection, indexes, options.activePatternId)
+      : [];
   const physical = projection.physical.enabled
     ? projectPhysicalFeatures({
         system,
@@ -1369,6 +1439,7 @@ export function buildFeatures(
     facilities: { type: 'FeatureCollection', features: facilities },
     physicalHandles: { type: 'FeatureCollection', features: physical.handles },
     handles: { type: 'FeatureCollection', features: handles },
+    serviceTermini: { type: 'FeatureCollection', features: serviceTermini },
     lanes: { type: 'FeatureCollection', features: topology.lanes },
     laneMarkings: { type: 'FeatureCollection', features: topology.laneMarkings },
     laneArrows: { type: 'FeatureCollection', features: topology.laneArrows },

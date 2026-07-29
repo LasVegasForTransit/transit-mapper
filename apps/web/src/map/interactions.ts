@@ -15,6 +15,7 @@ import {
   detectShapeRuns,
   metersFromOrigin,
   nearestOpenEndpoint,
+  nearestOnPath,
   offsetMeters,
   patternPath,
   resolveWayPath,
@@ -22,16 +23,24 @@ import {
   squareFootprint,
   type ShapeRun,
   patternLegs,
+  patternRunLegs,
+  legRange,
+  pointAtT,
   primaryAnchor,
 } from '@transitmapper/core/model/geo';
 import { facilityType, mode } from '@transitmapper/core/model/catalog';
 import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
+import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
 import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
-import type { ServiceActionHit } from '@transitmapper/core/model/selectionActions';
+import type {
+  CorridorActionHit,
+  ServiceActionHit,
+} from '@transitmapper/core/model/selectionActions';
 import type { EditGestureTargets } from './gestureProjection';
 import {
   LYR_FACILITIES,
   LYR_HANDLES,
+  LYR_SERVICE_TERMINI_HIT,
   LYR_JUNCTIONS,
   LYR_LANE_SURFACES,
   LYR_PHYSICAL_HANDLES,
@@ -149,7 +158,17 @@ export interface AttachInteractionsOptions {
   /** Open the map's action menu at these viewport pixels. Called for a right
    *  CLICK that placed no node and finished no draw — a right DRAG still
    *  pans, so this never fires mid-gesture. */
-  openContextMenu: (x: number, y: number, at: LngLat, serviceHit?: ServiceActionHit) => void;
+  openContextMenu: (
+    x: number,
+    y: number,
+    at: LngLat,
+    serviceHit?: ServiceActionHit,
+    corridorHit?: CorridorActionHit,
+  ) => void;
+  /** Dismisses the React menu as well as its imperative map anchor. */
+  closeContextMenu?: () => void;
+  /** The action menu keeps an exact geographic marker while it owns focus. */
+  setActionAnchor?: (at: LngLat | null) => void;
   /** MapCanvas uses these exact pointer-gesture boundaries to switch from the
    *  full derived map to its one-source manipulation projection, then rebuild
    *  the settled map once on commit/cancel. Optional for non-rendering callers
@@ -208,7 +227,6 @@ export function attachInteractions(
   let spaceHeld = false;
   let lastPointer: MapMouseEvent | null = null;
   let lockedPrimaryOperation: PointerOperation | undefined;
-  let pointerIntentSuppressedByMenu = false;
   /**
    * Set by a gesture that already handled the current press itself, so onClick
    * doesn't act on that same press a second time.
@@ -261,7 +279,33 @@ export function attachInteractions(
       [e.point.x + HIT_PX, e.point.y + HIT_PX],
     ];
     const existing = layers.filter((l) => map.getLayer(l));
-    return existing.length ? map.queryRenderedFeatures(b, { layers: existing })[0] : undefined;
+    const candidates = existing.length ? map.queryRenderedFeatures(b, { layers: existing }) : [];
+    const squaredDistance = (feature: MapGeoJSONFeature): number => {
+      if (feature.geometry.type === 'Point') {
+        const p = map.project(feature.geometry.coordinates as [number, number]);
+        return (p.x - e.point.x) ** 2 + (p.y - e.point.y) ** 2;
+      }
+      if (feature.geometry.type !== 'LineString') return Infinity;
+      const coords = feature.geometry.coordinates as [number, number][];
+      let best = Infinity;
+      for (let i = 1; i < coords.length; i++) {
+        const a = map.project(coords[i - 1]);
+        const z = map.project(coords[i]);
+        const dx = z.x - a.x;
+        const dy = z.y - a.y;
+        const den = dx * dx + dy * dy;
+        const t =
+          den === 0
+            ? 0
+            : Math.max(0, Math.min(1, ((e.point.x - a.x) * dx + (e.point.y - a.y) * dy) / den));
+        best = Math.min(best, (a.x + t * dx - e.point.x) ** 2 + (a.y + t * dy - e.point.y) ** 2);
+      }
+      return best;
+    };
+    return candidates.sort((a, b) => {
+      const layerOrder = existing.indexOf(a.layer.id) - existing.indexOf(b.layer.id);
+      return layerOrder || squaredDistance(a) - squaredDistance(b);
+    })[0];
   };
 
   const modifierState = (event: {
@@ -306,6 +350,7 @@ export function attachInteractions(
     if (opts.isNetworkMode() && state.tool === 'way' && state.activeWayId) return 'empty';
     if (opts.isNetworkMode() && state.tool === 'way' && networkOpenEndpointAt(e))
       return state.routeDraft ? 'compatible-corridor' : 'endpoint';
+    if (featureAt(e, [LYR_SERVICE_TERMINI_HIT])) return 'service-terminus';
     const endpoint = featureAt(e, [LYR_WAY_ENDPOINTS]);
     if (endpoint) return 'endpoint';
     const handle = featureAt(e, [LYR_HANDLES]);
@@ -377,12 +422,6 @@ export function attachInteractions(
     lastPointer = e;
     const pointerIntent = intentAt(e, modifierOverride, gestureActive);
     if (opts.isContextMenuOpen?.()) {
-      pointerIntentSuppressedByMenu = true;
-      clearPointerIntent();
-      return pointerIntent;
-    }
-    if (pointerIntentSuppressedByMenu) {
-      pointerIntentSuppressedByMenu = false;
       clearPointerIntent();
       return pointerIntent;
     }
@@ -1954,6 +1993,7 @@ export function attachInteractions(
         // Stations/handles/lines outrank the junction footprint under them.
         const hit =
           featureAt(e, [
+            LYR_SERVICE_TERMINI_HIT,
             LYR_STATIONS,
             LYR_FACILITIES,
             LYR_HANDLES,
@@ -1964,6 +2004,9 @@ export function attachInteractions(
           st.select(null);
         } else if (hit.layer.id === LYR_JUNCTIONS) {
           st.select({ kind: 'node', id: hit.properties.nodeId as string });
+        } else if (hit.layer.id === LYR_SERVICE_TERMINI_HIT) {
+          st.select({ kind: 'service', id: hit.properties.serviceId as string });
+          st.setActivePattern(hit.properties.patternId as string);
         } else if (hit.layer.id === LYR_STATIONS) {
           st.select({ kind: 'station', id: hit.properties.id as string });
         } else if (hit.layer.id === LYR_FACILITIES) {
@@ -1977,12 +2020,18 @@ export function attachInteractions(
           // control point to the way it runs on.
           const serviceId = hit.properties.serviceId as string;
           const wayId = hit.properties.wayId as string;
-          if (st.selection?.kind === 'service' && st.selection.id === serviceId) {
+          if (
+            !opts.isNetworkMode() &&
+            st.selection?.kind === 'service' &&
+            st.selection.id === serviceId
+          ) {
             const way = st.system.ways.find((w) => w.id === wayId);
             if (way) st.insertWayPoint(wayId, insertIndexOnPolygon(way.points, e.point), coord);
           } else {
             st.select({ kind: 'service', id: serviceId });
           }
+          const patternId = hit.properties.patternId;
+          if (typeof patternId === 'string') st.setActivePattern(patternId);
         }
         break;
       }
@@ -2013,33 +2062,93 @@ export function attachInteractions(
    *  clicking a line would offer actions for the street under it. */
   const rightClickTarget = (
     e: MapMouseEvent,
-  ): { target: MultiSelectItem; serviceHit?: ServiceActionHit } | null => {
+  ): {
+    target: MultiSelectItem;
+    serviceHit?: ServiceActionHit;
+    corridorHit?: CorridorActionHit;
+    anchor: LngLat;
+  } | null => {
+    const st = store.getState();
     const hit = featureAt(e, [
       LYR_STATIONS,
       LYR_FACILITIES,
+      LYR_SERVICE_TERMINI_HIT,
       LYR_HANDLES,
       ...SERVICE_LAYERS,
       ...WAY_LAYERS,
     ]);
     if (!hit) return null;
     if (hit.layer.id === LYR_STATIONS)
-      return { target: { kind: 'station', id: hit.properties.id as string } };
+      return { target: { kind: 'station', id: hit.properties.id as string }, anchor: lngLatOf(e) };
     if (hit.layer.id === LYR_FACILITIES)
-      return { target: { kind: 'facility', id: hit.properties.id as string } };
+      return { target: { kind: 'facility', id: hit.properties.id as string }, anchor: lngLatOf(e) };
+    if (hit.layer.id === LYR_SERVICE_TERMINI_HIT) {
+      const { serviceId, patternId, side } = hit.properties;
+      const anchor =
+        hit.geometry.type === 'Point' ? (hit.geometry.coordinates as LngLat) : lngLatOf(e);
+      const service = st.system.services.find((candidate) => candidate.id === serviceId);
+      const pattern = service?.patterns.find((candidate) => candidate.id === patternId);
+      const run = 'outbound' as const;
+      const runLegs = pattern ? patternRunLegs(pattern, run) : [];
+      const legIndex = side === 'start' ? 0 : runLegs.length - 1;
+      const entry = runLegs[legIndex];
+      const [lo, hi] = entry ? legRange(entry.leg) : [0, 1];
+      const t = entry && (side === 'start') === entry.forward ? lo : hi;
+      const position =
+        pattern && entry && (side === 'start' || side === 'end')
+          ? patternPositionAt(st.system.ways, pattern, run, legIndex, t)
+          : null;
+      return {
+        target: { kind: 'service', id: serviceId as string },
+        anchor,
+        ...(typeof serviceId === 'string' &&
+        typeof patternId === 'string' &&
+        (side === 'start' || side === 'end') &&
+        position
+          ? { serviceHit: { serviceId, patternId, run, legIndex, terminusSide: side, position } }
+          : {}),
+      };
+    }
     if (hit.layer.id === LYR_HANDLES)
-      return { target: { kind: 'way', id: hit.properties.wayId as string } };
-    if (WAY_LAYERS.includes(hit.layer.id))
-      return { target: { kind: 'way', id: hit.properties.id as string } };
+      return { target: { kind: 'way', id: hit.properties.wayId as string }, anchor: lngLatOf(e) };
+    if (WAY_LAYERS.includes(hit.layer.id)) {
+      const wayId = hit.properties.id as string;
+      const way = st.system.ways.find((candidate) => candidate.id === wayId);
+      const near = way && nearestOnPath(resolveWayPath(way), lngLatOf(e));
+      const anchor = near && way ? pointAtT(resolveWayPath(way), near.t) : lngLatOf(e);
+      return {
+        target: { kind: 'way', id: wayId },
+        anchor,
+        ...(near ? { corridorHit: { wayId, t: near.t } } : {}),
+      };
+    }
     const { serviceId, patternId, run, legIndex } = hit.properties;
+    const service = st.system.services.find((candidate) => candidate.id === serviceId);
+    const pattern = service?.patterns.find((candidate) => candidate.id === patternId);
+    const leg =
+      pattern && (run === 'outbound' || run === 'inbound') && typeof legIndex === 'number'
+        ? patternRunLegs(pattern, run)[legIndex]
+        : undefined;
+    const way = leg && st.system.ways.find((candidate) => candidate.id === leg.leg.wayId);
+    const near = way && nearestOnPath(resolveWayPath(way), lngLatOf(e));
+    const position =
+      pattern &&
+      leg &&
+      near &&
+      (run === 'outbound' || run === 'inbound') &&
+      typeof legIndex === 'number'
+        ? patternPositionAt(st.system.ways, pattern, run, legIndex, near.t)
+        : null;
     const serviceHit =
       typeof serviceId === 'string' &&
       typeof patternId === 'string' &&
       (run === 'outbound' || run === 'inbound') &&
       typeof legIndex === 'number'
-        ? { serviceId, patternId, run, legIndex }
+        ? { serviceId, patternId, run, legIndex, ...(position ? { position } : {}) }
         : undefined;
     return {
       target: { kind: 'service', id: serviceId as string },
+      anchor: position && way ? pointAtT(resolveWayPath(way), position.t) : lngLatOf(e),
       ...(serviceHit ? { serviceHit } : {}),
     };
   };
@@ -2056,6 +2165,7 @@ export function attachInteractions(
    */
   const openMenuAt = (e: MapMouseEvent) => {
     clearPointerIntent();
+    opts.setActionAnchor?.(null);
     const st = store.getState();
     const hit = rightClickTarget(e);
     if (!hit) {
@@ -2063,13 +2173,32 @@ export function attachInteractions(
       st.clearMultiSelection();
       return;
     }
-    const { target, serviceHit } = hit;
+    const { target, serviceHit, corridorHit, anchor } = hit;
+    const terminus = featureAt(e, [LYR_SERVICE_TERMINI_HIT]);
+    // A terminus owns its menu: its side-aware conversion cannot safely share
+    // a two-service merge group. Service-body right-clicks retain the ordinary
+    // multi-select behavior below.
+    if (terminus) {
+      st.clearMultiSelection();
+      st.select(target);
+    }
     const inGroup = st.multiSelection.some((i) => i.kind === target.kind && i.id === target.id);
     const isSelected = st.selection?.kind === target.kind && st.selection.id === target.id;
     if (!inGroup && !isSelected) st.select(target);
+    if (hit.target.kind === 'service') {
+      const patternId = terminus?.properties.patternId;
+      if (typeof patternId === 'string') st.setActivePattern(patternId);
+    }
     // The map coordinate travels with the screen one: an action that cuts a
     // line where you clicked needs the place, not the pixel.
-    opts.openContextMenu(e.originalEvent.clientX, e.originalEvent.clientY, lngLatOf(e), serviceHit);
+    opts.setActionAnchor?.(anchor);
+    opts.openContextMenu(
+      e.originalEvent.clientX,
+      e.originalEvent.clientY,
+      anchor,
+      serviceHit,
+      corridorHit,
+    );
   };
 
   const onContextMenu = (ev: Event) => ev.preventDefault();
@@ -2081,6 +2210,8 @@ export function attachInteractions(
   // consumes the keypress instead of also "backing out" a level.
   const onEscapeCapture = (e: KeyboardEvent) => {
     if (e.key !== 'Escape') return;
+    opts.setActionAnchor?.(null);
+    opts.closeContextMenu?.();
     if (cancelActiveGesture) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -2229,6 +2360,7 @@ export function attachInteractions(
       lastTool = s.tool;
       canvas.style.cursor = cursorFor();
       clearPointerIntent();
+      opts.setActionAnchor?.(null);
       if (s.tool !== 'way') {
         clearPreviews();
         setEndpointHint(null);

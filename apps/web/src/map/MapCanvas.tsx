@@ -44,6 +44,8 @@ import {
   SRC_FOOTPRINTS,
   SRC_GESTURE,
   SRC_HANDLES,
+  SRC_SERVICE_TERMINI,
+  SRC_ACTION_ANCHOR,
   SRC_CONNECTORS,
   SRC_JUNCTIONS,
   SRC_LANDMARKS,
@@ -143,10 +145,22 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   const refreshPointerIntentRef = useRef<(() => void) | null>(null);
   const store = useEditorStore();
   const { openShortcuts, toggleUi } = useUi();
-  const { contextMenuAt, openContextMenu } = useContextMenu();
+  const { contextMenuAt, openContextMenu, closeContextMenu } = useContextMenu();
   const contextMenuOpenRef = useRef(false);
   contextMenuOpenRef.current = contextMenuAt !== null;
+  useEffect(() => {
+    if (contextMenuAt !== null) return;
+    const source = getMap()?.getSource(SRC_ACTION_ANCHOR) as GeoJSONSource | undefined;
+    source?.setData({ type: 'FeatureCollection', features: [] });
+    // The controller holds the last real map pointer. Re-evaluate it now that
+    // the menu no longer owns focus instead of consuming the next mouse move.
+    refreshPointerIntentRef.current?.();
+  }, [contextMenuAt]);
   const { viewMode, setViewMode, visibleModes, visibleWayTypes, showLandmarks } = useView();
+  useEffect(() => {
+    const source = getMap()?.getSource(SRC_ACTION_ANCHOR) as GeoJSONSource | undefined;
+    source?.setData({ type: 'FeatureCollection', features: [] });
+  }, [viewMode]);
   // Created once by SimProvider and injected into the animation loop below,
   // the same way the editor store is — the loop is imperative and lives
   // outside React, so it is handed what it needs rather than reaching for an
@@ -355,6 +369,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       SRC_SERVICES,
       SRC_STATIONS,
       SRC_HANDLES,
+      SRC_SERVICE_TERMINI,
+      SRC_ACTION_ANCHOR,
       SRC_PREVIEW,
       SRC_GESTURE,
       SRC_SHARING,
@@ -634,6 +650,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       }
       if (sourceIds.length === 0) return;
       const { system, selection } = store.getState();
+      const { activePatternId } = store.getState();
       const laneDetail = laneDetailNow();
       const b = map.getBounds();
       // Expand the lane-detail cull bounds by half a viewport on each side, so a
@@ -660,6 +677,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         sourceIds,
         physicalHandleStationId: physicalHandleStationId(),
         physicalHandleGroupId: physicalHandleGroupId(),
+        activePatternId,
         counts: sourceProjectionCounts,
       });
       const sourceData: Record<SystemFeatureSourceId, GeoJSON.FeatureCollection> = {
@@ -667,6 +685,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         [SRC_SERVICES]: fc.services,
         [SRC_STATIONS]: fc.stations,
         [SRC_HANDLES]: fc.handles,
+        [SRC_SERVICE_TERMINI]: fc.serviceTermini,
         [SRC_FOOTPRINTS]: fc.footprints,
         [SRC_PLATFORMS]: fc.platforms,
         [SRC_FACILITIES]: fc.facilities,
@@ -925,6 +944,24 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         isDiagramMode: () => viewRef.current.viewMode === 'diagram',
         isNetworkMode: () => viewRef.current.viewMode === 'network',
         openContextMenu,
+        closeContextMenu,
+        setActionAnchor: (at) => {
+          const source = map.getSource(SRC_ACTION_ANCHOR) as GeoJSONSource | undefined;
+          source?.setData(
+            at
+              ? {
+                  type: 'FeatureCollection',
+                  features: [
+                    {
+                      type: 'Feature',
+                      properties: {},
+                      geometry: { type: 'Point', coordinates: at },
+                    },
+                  ],
+                }
+              : emptyFC,
+          );
+        },
         onDirectManipulationStart: beginDirectManipulation,
         onDirectManipulationEnd: endDirectManipulation,
         onEditGestureStart: beginGestureProjection,
@@ -1025,7 +1062,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           schedulePushData(changedSources);
         }
       } else if (
-        (s.selection !== prev.selection || s.activeWayId !== prev.activeWayId) &&
+        (s.selection !== prev.selection ||
+          s.activeWayId !== prev.activeWayId ||
+          s.activePatternId !== prev.activePatternId) &&
         map.getSource(SRC_SERVICES)
       ) {
         if (gestureActive) {
@@ -1037,7 +1076,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           // else takes the feature-state fast path.
           const involvesNode = s.selection?.kind === 'node' || prev.selection?.kind === 'node';
           if (involvesNode) schedulePushData('all');
-          else scheduleSelectionUpdate();
+          else {
+            scheduleSelectionUpdate();
+            schedulePushData([SRC_SERVICE_TERMINI]);
+          }
         }
       }
       // Route drafting (Network view snap-to-streets drawing): show the
@@ -1142,7 +1184,16 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // session, and simCommands is a ref-held façade whose identity never
     // changes (it reads the live handlers through simCommandsRef). All are
     // listed because the effect genuinely closes over them.
-  }, [store, openShortcuts, toggleUi, openContextMenu, setViewMode, simClock, simCommands]);
+  }, [
+    store,
+    openShortcuts,
+    toggleUi,
+    openContextMenu,
+    closeContextMenu,
+    setViewMode,
+    simClock,
+    simCommands,
+  ]);
 
   return (
     <>
