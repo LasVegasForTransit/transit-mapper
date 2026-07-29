@@ -6,6 +6,7 @@ import type {
   PerfScenarioId,
   PerfViewport,
 } from './types';
+import { PERF_FIXTURES } from './fixtureDefinitions';
 
 const PROFILE_VIEWPORTS: Record<PerfProfileId, PerfViewport> = {
   desktop: {
@@ -59,12 +60,7 @@ export const PERF_SCENARIOS: Record<PerfScenarioId, PerfScenario> = {
     description: 'A small advocacy sketch that catches fixed startup costs.',
     path: '/',
     readySelector: '.maplibregl-canvas',
-    fixture: {
-      ways: 24,
-      points: 240,
-      stations: 30,
-      patterns: 6,
-    },
+    fixture: { ...PERF_FIXTURES.small.counts },
     absoluteBudgets: {
       loadMs: 3_500,
       firstContentfulPaintMs: 2_000,
@@ -91,12 +87,7 @@ export const PERF_SCENARIOS: Record<PerfScenarioId, PerfScenario> = {
     description: 'A dense urban network between a sketch and a full agency import.',
     path: '/',
     readySelector: '.maplibregl-canvas',
-    fixture: {
-      ways: 600,
-      points: 18_000,
-      stations: 800,
-      patterns: 60,
-    },
+    fixture: { ...PERF_FIXTURES.dense.counts },
     absoluteBudgets: {
       loadMs: 5_000,
       firstContentfulPaintMs: 2_500,
@@ -123,12 +114,7 @@ export const PERF_SCENARIOS: Record<PerfScenarioId, PerfScenario> = {
     description: 'The scale of the RTC Southern Nevada fixture: thousands of ways and stops.',
     path: '/',
     readySelector: '.maplibregl-canvas',
-    fixture: {
-      ways: 3_800,
-      points: 121_000,
-      stations: 3_800,
-      patterns: 285,
-    },
+    fixture: { ...PERF_FIXTURES.rtc.counts },
     absoluteBudgets: {
       loadMs: 8_000,
       firstContentfulPaintMs: 3_500,
@@ -150,17 +136,12 @@ export const PERF_SCENARIOS: Record<PerfScenarioId, PerfScenario> = {
   share: {
     id: 'share',
     surface: 'share',
-    fixtureId: 'rtc',
-    label: 'RTC-shaped share page',
-    description: 'The read-only public share surface with an agency-scale snapshot.',
+    fixtureId: 'published',
+    label: 'Large published share page',
+    description: 'The read-only public surface with a large snapshot that users can publish.',
     path: '/s/perfshare',
     readySelector: '.ro-name',
-    fixture: {
-      ways: 3_800,
-      points: 121_000,
-      stations: 3_800,
-      patterns: 285,
-    },
+    fixture: { ...PERF_FIXTURES.published.counts },
     absoluteBudgets: {
       loadMs: 8_000,
       firstContentfulPaintMs: 3_500,
@@ -168,7 +149,7 @@ export const PERF_SCENARIOS: Record<PerfScenarioId, PerfScenario> = {
       firstMapCanvasMs: 7_500,
       cumulativeLayoutShift: 0.1,
       longTaskTotalMs: 3_500,
-      transferBytes: 6_000_000,
+      transferBytes: 2_500_000,
       inputToNextPaintP95Ms: 50,
       paintedFrameP95Ms: 16.7,
       paintedFramesOver33Ratio: 0.01,
@@ -182,17 +163,12 @@ export const PERF_SCENARIOS: Record<PerfScenarioId, PerfScenario> = {
   embed: {
     id: 'embed',
     surface: 'embed',
-    fixtureId: 'rtc',
-    label: 'RTC-shaped embed',
-    description: 'The small read-only embed entry with an agency-scale snapshot.',
+    fixtureId: 'published',
+    label: 'Large published embed',
+    description: 'The read-only embed entry with a large snapshot that users can publish.',
     path: '/e/perfembed',
     readySelector: '.maplibregl-canvas',
-    fixture: {
-      ways: 3_800,
-      points: 121_000,
-      stations: 3_800,
-      patterns: 285,
-    },
+    fixture: { ...PERF_FIXTURES.published.counts },
     absoluteBudgets: {
       loadMs: 7_000,
       firstContentfulPaintMs: 3_000,
@@ -200,7 +176,7 @@ export const PERF_SCENARIOS: Record<PerfScenarioId, PerfScenario> = {
       firstMapCanvasMs: 6_500,
       cumulativeLayoutShift: 0.1,
       longTaskTotalMs: 3_000,
-      transferBytes: 4_000_000,
+      transferBytes: 2_500_000,
       inputToNextPaintP95Ms: 50,
       warmLoadMs: 7_000,
       warmLargestContentfulPaintMs: 2_500,

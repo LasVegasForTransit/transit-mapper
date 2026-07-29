@@ -1,7 +1,7 @@
 import type { TransitSystem } from '@transitmapper/core/model/system';
 
-export type PerfFixtureId = 'small' | 'dense' | 'rtc';
-export type PerfScenarioId = PerfFixtureId | 'share' | 'embed';
+export type PerfFixtureId = 'small' | 'dense' | 'published' | 'rtc';
+export type PerfScenarioId = 'small' | 'dense' | 'rtc' | 'share' | 'embed';
 export type PerfSurface = 'editor' | 'share' | 'embed';
 export type PerfProfileId = 'desktop' | 'mobile';
 export type PerfRunMode = 'audit' | 'smoke';

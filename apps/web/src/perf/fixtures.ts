@@ -8,7 +8,7 @@ import type {
   TransitSystem,
   Way,
 } from '@transitmapper/core/model/system';
-import { PERF_SCENARIOS } from './scenarios';
+import { PERF_FIXTURES } from './fixtureDefinitions';
 import type { PerfFixtureCounts, PerfFixtureId } from './types';
 
 const FIXTURE_COLORS = ['#e4572e', '#17bebb', '#ffc914', '#2e282a', '#76b041', '#5c4d7d'] as const;
@@ -58,7 +58,7 @@ function wayPoints(wayIndex: number, pointCount: number, wayCount: number): LngL
 }
 
 function makeWays(scenarioId: PerfFixtureId): Way[] {
-  const counts = PERF_SCENARIOS[scenarioId].fixture;
+  const counts = PERF_FIXTURES[scenarioId].counts;
 
   return Array.from({ length: counts.ways }, (_, wayIndex) => ({
     id: `${scenarioId}-way-${wayIndex.toString().padStart(4, '0')}`,
@@ -72,7 +72,7 @@ function makeWays(scenarioId: PerfFixtureId): Way[] {
 }
 
 function makeStations(scenarioId: PerfFixtureId, ways: Way[]): Station[] {
-  const stationCount = PERF_SCENARIOS[scenarioId].fixture.stations;
+  const stationCount = PERF_FIXTURES[scenarioId].counts.stations;
 
   return Array.from({ length: stationCount }, (_, stationIndex) => {
     const way = ways[stationIndex % ways.length];
@@ -112,7 +112,7 @@ function makePattern(scenarioId: PerfFixtureId, patternIndex: number, way: Way):
 }
 
 function makeServices(scenarioId: PerfFixtureId, ways: Way[]): Service[] {
-  const patternCount = PERF_SCENARIOS[scenarioId].fixture.patterns;
+  const patternCount = PERF_FIXTURES[scenarioId].counts.patterns;
 
   return Array.from({ length: patternCount }, (_, patternIndex) => {
     const wayIndex = Math.floor((patternIndex * ways.length) / patternCount);
@@ -137,11 +137,12 @@ function makeServices(scenarioId: PerfFixtureId, ways: Way[]): Service[] {
 export function generatePerfFixture(scenarioId: PerfFixtureId): TransitSystem {
   const ways = makeWays(scenarioId);
   const base = createEmptySystem(0);
+  const definition = PERF_FIXTURES[scenarioId];
 
   return {
     ...base,
     id: `perf-${scenarioId}`,
-    name: `Performance fixture: ${PERF_SCENARIOS[scenarioId].label}`,
+    name: `Performance fixture: ${definition.label}`,
     viewport: {
       center: fixtureCenter(ways.length),
       zoom: scenarioId === 'small' ? 12 : 10,
