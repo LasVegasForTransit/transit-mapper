@@ -245,8 +245,9 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 ## apps/web/src/pwa/ — installation and offline protection
 
 `install.ts` owns the capability-aware desktop installation controller:
-deferred native prompting for Chromium, guidance for Safari/Firefox, local
-snoozes, and standalone/install suppression. `InstallProvider.tsx` mounts
+deferred native prompting for Chromium, Add to Dock guidance for Safari, an
+accurate unavailable state for Firefox, local snoozes, and standalone/install
+suppression. `InstallProvider.tsx` mounts
 only in `main.tsx`, never the embed entry. `persistence.ts` wraps the
 user-initiated `navigator.storage.persist()` request used by Settings. The
 controller is browser code by design and must not move into `packages/core`.

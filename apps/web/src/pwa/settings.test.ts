@@ -39,5 +39,18 @@ describe('install settings presentation', () => {
         }),
       ),
     ).toEqual({ kind: 'guidance', message: 'In Safari, choose File or Share, then Add to Dock.' });
+    expect(
+      installSettingsPresentation(
+        installState({
+          browser: 'firefox',
+          instructions:
+            'Firefox does not support installing TransitMapper as a desktop app. Use Chrome, Edge, or Safari instead.',
+        }),
+      ),
+    ).toEqual({
+      kind: 'guidance',
+      message:
+        'Firefox does not support installing TransitMapper as a desktop app. Use Chrome, Edge, or Safari instead.',
+    });
   });
 });

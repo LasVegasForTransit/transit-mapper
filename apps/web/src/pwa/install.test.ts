@@ -58,12 +58,16 @@ describe('install controller', () => {
       createEnvironment({ now: () => now, browser: () => 'safari' }),
     );
 
-    expect(controller.state().eligible).toBe(false);
+    const initialState = controller.state();
+    expect(controller.state()).toBe(initialState);
+    expect(initialState.eligible).toBe(false);
 
     controller.recordUndoableEdit();
+    expect(controller.state()).not.toBe(initialState);
     expect(controller.state().eligible).toBe(false);
 
     now = 90_000;
+    controller.refresh();
     expect(controller.state().eligible).toBe(true);
   });
 
@@ -77,13 +81,16 @@ describe('install controller', () => {
     expect(controller.state().eligible).toBe(false);
 
     now += 7 * 24 * 60 * 60 * 1000;
+    controller.refresh();
     expect(controller.state().eligible).toBe(true);
 
     controller.dismiss();
     now += 13 * 24 * 60 * 60 * 1000;
+    controller.refresh();
     expect(controller.state().eligible).toBe(false);
 
     now += 24 * 60 * 60 * 1000;
+    controller.refresh();
     expect(controller.state().eligible).toBe(true);
   });
 
@@ -96,6 +103,14 @@ describe('install controller', () => {
 
     expect(controller.state()).toMatchObject({ eligible: false, permanentlySuppressed: true });
     expect(controller.state().instructions).toContain('Add to Dock');
+  });
+
+  it('does not offer a nonexistent Firefox desktop installation flow', () => {
+    const controller = createInstallController(createEnvironment({ browser: () => 'firefox' }));
+
+    expect(controller.state().instructions).toBe(
+      'Firefox does not support installing TransitMapper as a desktop app. Use Chrome, Edge, or Safari instead.',
+    );
   });
 
   it('keeps the Chromium prompt until an explicit install click and clears it after installation', async () => {
