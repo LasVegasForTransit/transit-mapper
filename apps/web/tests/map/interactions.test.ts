@@ -199,6 +199,7 @@ function createMap(initialFeatures: MapGeoJSONFeature | MapGeoJSONFeature[] | nu
   const handlers = new Map<string, Set<(event: unknown) => void>>();
   const sourceData = new Map<string, unknown>();
   const panCalls: unknown[][] = [];
+  let renderedFeatureQueries = 0;
   const canvas = {
     style: { cursor: '' },
     addEventListener() {},
@@ -230,8 +231,10 @@ function createMap(initialFeatures: MapGeoJSONFeature | MapGeoJSONFeature[] | nu
       _box: [[number, number], [number, number]],
       options: { layers: string[] },
     ) {
+      renderedFeatureQueries++;
       return features.filter((feature) => options.layers.includes(feature.layer.id));
     },
+    renderedFeatureQueryCount: () => renderedFeatureQueries,
     project: (coord: [number, number]): Point => ({
       x: (coord[0] + 115.3) * 10_000,
       y: (36.2 - coord[1]) * 10_000,
@@ -382,6 +385,19 @@ afterEach(() => {
 });
 
 describe('pointer work coalescing', () => {
+  it('queries the rendered hit stack once for one pointer event', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setTool('select');
+    const map = createMap(stationFeature('station'));
+    const detach = attach(map, store);
+
+    map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
+
+    expect(map.renderedFeatureQueryCount()).toBe(1);
+    detach();
+  });
+
   it('dispatches a selected service terminus drag through the resolved extension intent', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
