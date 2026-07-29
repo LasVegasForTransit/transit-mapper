@@ -54,40 +54,64 @@ declare global {
   }
 }
 
-interface SourceUploadMeter {
+export interface SourceUploadMeter {
   count: () => number;
   detach: () => void;
 }
 
-interface WrappedGeoJsonSource {
+interface WrappedSetDataSource {
   source: GeoJSONSource;
   original: GeoJSONSource['setData'];
   wrapped: GeoJSONSource['setData'];
 }
 
-function attachSourceUploadMeter(map: MLMap): SourceUploadMeter {
+interface WrappedUpdateDataSource {
+  source: GeoJSONSource;
+  original: GeoJSONSource['updateData'];
+  wrapped: GeoJSONSource['updateData'];
+}
+
+export function attachSourceUploadMeter(map: MLMap): SourceUploadMeter {
   let uploads = 0;
-  const wrappedSources: WrappedGeoJsonSource[] = [];
+  const wrappedSetDataSources: WrappedSetDataSource[] = [];
+  const wrappedUpdateDataSources: WrappedUpdateDataSource[] = [];
   for (const sourceId of Object.keys(map.getStyle().sources)) {
     const source = map.getSource(sourceId);
-    if (!source || typeof (source as Partial<GeoJSONSource>).setData !== 'function') continue;
+    if (!source) continue;
     const geoJsonSource = source as GeoJSONSource;
-    const original = geoJsonSource.setData;
-    const wrapped: GeoJSONSource['setData'] = function setData(
-      this: GeoJSONSource,
-      data: Parameters<GeoJSONSource['setData']>[0],
-    ) {
-      uploads += 1;
-      return original.call(this, data);
-    };
-    geoJsonSource.setData = wrapped;
-    wrappedSources.push({ source: geoJsonSource, original, wrapped });
+    if (typeof (source as Partial<GeoJSONSource>).setData === 'function') {
+      const original = geoJsonSource.setData;
+      const wrapped: GeoJSONSource['setData'] = function setData(
+        this: GeoJSONSource,
+        data: Parameters<GeoJSONSource['setData']>[0],
+      ) {
+        uploads += 1;
+        return original.call(this, data);
+      };
+      geoJsonSource.setData = wrapped;
+      wrappedSetDataSources.push({ source: geoJsonSource, original, wrapped });
+    }
+    if (typeof (source as Partial<GeoJSONSource>).updateData === 'function') {
+      const original = geoJsonSource.updateData;
+      const wrapped: GeoJSONSource['updateData'] = function updateData(
+        this: GeoJSONSource,
+        diff: Parameters<GeoJSONSource['updateData']>[0],
+      ) {
+        uploads += 1;
+        return original.call(this, diff);
+      };
+      geoJsonSource.updateData = wrapped;
+      wrappedUpdateDataSources.push({ source: geoJsonSource, original, wrapped });
+    }
   }
   return {
     count: () => uploads,
     detach: () => {
-      for (const entry of wrappedSources) {
+      for (const entry of wrappedSetDataSources) {
         if (entry.source.setData === entry.wrapped) entry.source.setData = entry.original;
+      }
+      for (const entry of wrappedUpdateDataSources) {
+        if (entry.source.updateData === entry.wrapped) entry.source.updateData = entry.original;
       }
     },
   };
