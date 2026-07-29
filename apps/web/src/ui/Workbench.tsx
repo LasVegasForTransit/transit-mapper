@@ -52,7 +52,7 @@ export interface WorkbenchProps {
    *  which through the media query matching Tailwind's md breakpoint, not
    *  the caller. */
   brand: ReactNode;
-  /** The Objects list — desktop wraps it in a collapsible card with `brand`
+  /** The active view's workspace — desktop wraps it in a collapsible card with `brand`
    *  above it; mobile wraps it in the bottom sheet instead. */
   menuPanel: ReactNode;
   /** The one dynamic, contextual surface: a selected object's details, OR
@@ -192,7 +192,7 @@ export function Workbench({
           </div>
         )}
 
-        {/* ---- desktop-only docked cards. The Objects panel and the
+        {/* ---- desktop-only docked cards. The workspace panel and the
             supplemental panel are the two that genuinely want a grid cell:
             both are full-height columns pinned to an edge. Everything that
             needs to sit CENTERED on the map is laid out as a flex row
@@ -234,7 +234,7 @@ export function Workbench({
             Both side children are `flex-1` from a zero basis, so they take
             equal space and the middle sits on the MAP's center — the thing
             the old absolute positioning was for, kept. The left one carries a
-            min-width mirroring the Objects panel beneath it, and the right
+            min-width mirroring the workspace panel beneath it, and the right
             one can't shrink below the actions card's own content width, so
             when the three together want more than the row has, the middle
             wraps instead of anything sliding under anything else. No
@@ -327,7 +327,7 @@ export function Workbench({
           <SheetHandle
             expanded={sheetExpanded}
             setExpanded={setSheetExpanded}
-            title={showingSupplemental ? 'Details' : 'Objects'}
+            title={showingSupplemental ? 'Details' : 'Workspace'}
           />
           {showingSupplemental && (
             // Whichever put supplementalPanel here — a selection, an armed
@@ -342,7 +342,7 @@ export function Workbench({
                 backToSelectTool('select');
               }}
             >
-              <Icon name="chevronDown" size={15} style={{ transform: 'rotate(90deg)' }} /> Objects
+              <Icon name="chevronDown" size={15} style={{ transform: 'rotate(90deg)' }} /> Workspace
             </button>
           )}
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -359,8 +359,8 @@ interface MenuCardProps {
   children: ReactNode;
 }
 
-/** Desktop's menu card: brand header + collapsible Objects body — sized to
- *  its content (not stretched full-height) so collapsing Objects actually
+/** Desktop's menu card: brand header + collapsible workspace body — sized to
+ *  its content (not stretched full-height) so collapsing the workspace actually
  *  shrinks the card instead of leaving a tall empty rectangle below it. */
 function MenuCard({ brand, children }: MenuCardProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -437,7 +437,7 @@ function MenuCard({ brand, children }: MenuCardProps) {
   }, [uiHidden]);
 
   return (
-    <Panel ref={cardRef} slot="left" className="menu-card" aria-label="System objects">
+    <Panel ref={cardRef} slot="left" className="menu-card" aria-label="System workspace">
       <div className="panel-brand">
         <div className="panel-brand-row">{brand}</div>
       </div>
@@ -449,7 +449,7 @@ function MenuCard({ brand, children }: MenuCardProps) {
           label={collapsed ? 'Expand' : 'Collapse'}
           onClick={() => setCollapsed((c) => !c)}
         />
-        <span className="panel-head-title">Objects</span>
+        <span className="panel-head-title">Workspace</span>
       </div>
       <div className={`collapsible ${collapsed ? 'collapsed' : ''}`}>
         <div className="collapsible-inner">{children}</div>

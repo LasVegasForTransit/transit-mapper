@@ -9,7 +9,7 @@ interface ListboxKeyboardNav<T extends HTMLElement> {
 
 /**
  * Roving-tabindex keyboard navigation for a flat, DOM-ordered list of real
- * `<button role="option">` rows inside a `role="listbox"` container — the
+ * selectable button rows inside one keyboard-navigation container — the
  * behavior every modern list (Gmail, Figma's layers panel, Linear) shares:
  * Arrow Up/Down move to and activate the adjacent row, Home/End jump to the
  * first/last, and typing a letter jumps to the next row whose text starts
@@ -19,16 +19,18 @@ interface ListboxKeyboardNav<T extends HTMLElement> {
  * than tracking an index in React state: the options can come from several
  * independent arrays rendered as separate sections (see LinesPanel) with
  * non-interactive headers between them, and this only cares about the
- * resulting `[role="option"]` elements in visual/DOM order — no caller-side
+ * resulting matching elements in visual/DOM order — no caller-side
  * bookkeeping of "which array, which index" needed. Rows stay real
  * `<button>` elements so Enter/Space activation keeps working for free via
  * native button behavior; this hook only owns movement between them.
- * Callers still own each row's roving `tabIndex` (0 for the one row Tab
+ * The default selector targets enabled listbox options; callers with native
+ * buttons and surrounding controls can provide a narrower data-attribute
+ * selector. Callers still own each row's roving `tabIndex` (0 for the one row Tab
  * should land on — normally whichever is selected, else the first row).
  */
-export function useListboxKeyboardNav<
-  T extends HTMLElement = HTMLDivElement,
->(): ListboxKeyboardNav<T> {
+export function useListboxKeyboardNav<T extends HTMLElement = HTMLDivElement>(
+  optionSelector = '[role="option"]:not(:disabled)',
+): ListboxKeyboardNav<T> {
   const containerRef = useRef<T | null>(null);
   const typeAheadBuffer = useRef('');
   const typeAheadTimer = useRef<number | undefined>(undefined);
@@ -40,9 +42,7 @@ export function useListboxKeyboardNav<
   // recomputes the same currentIndex forever.
   const options = (): HTMLElement[] =>
     containerRef.current
-      ? Array.from(
-          containerRef.current.querySelectorAll<HTMLElement>('[role="option"]:not(:disabled)'),
-        )
+      ? Array.from(containerRef.current.querySelectorAll<HTMLElement>(optionSelector))
       : [];
 
   // .focus() alone would only move keyboard focus, leaving the app's actual
@@ -56,6 +56,9 @@ export function useListboxKeyboardNav<
   };
 
   const onKeyDown = (e: KeyboardEvent<T>) => {
+    const eventTarget = e.target as HTMLElement;
+    if (!eventTarget.matches(optionSelector)) return;
+
     const opts = options();
     if (opts.length === 0) return;
     const current = document.activeElement as HTMLElement | null;

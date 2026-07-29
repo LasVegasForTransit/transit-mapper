@@ -616,7 +616,7 @@ input {
 }
 
 /* ---- tool dock — independent of the side panels, never stacked under one
-   so it doesn't read as part of the objects list. Workbench.tsx positions
+   so it doesn't read as part of the workspace list. Workbench.tsx positions
    this wrapper (desktop: a real grid cell; mobile: absolute + fades out
    while the sheet is expanded) — this rule is just its own contents. */
 .toolbar-dock {
@@ -835,7 +835,7 @@ input {
      than the screen. This used to be opt-in per variant (.panel-right had
      its own overflow-y:auto, .panel-left relied on max-height:100% against
      its grid area, which didn't reliably resolve there — confirmed live: a
-     long Objects list just grew past the viewport with nothing to scroll).
+     long workspace list just grew past the viewport with nothing to scroll).
      One rule on the shared base means no panel can ship without it. */
   max-height: calc(100vh - 2 * var(--overlay-gap));
   overflow-y: auto;
@@ -850,7 +850,7 @@ input {
      (popovers/menus) where a shared-element read actually exists. */
   animation: fade-in 160ms ease;
 }
-/* Left is the unified brand/name + Objects card — stretched to the bottom
+/* Left is the unified brand/name + view-specific workspace card — stretched to the bottom
    of the overlay grid so it runs the full left edge of the viewport (its
    grid wrapper spans all three rows). Shares the "left" slot with
    .topbar-left/.ui-restore — mutually exclusive (mobile vs. desktop, chrome
@@ -994,7 +994,7 @@ input {
   transition: width 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 /* The card is normally stretched full-height by design (see the comment on
-   .panel-left above) — deliberate when it's actually the Objects list, but
+   .panel-left above) — deliberate when it's actually the workspace list, but
    wrong for the collapsed pill: a tall, mostly-empty card would read as a
    layout bug, not a restore button. Both the card's own stretch (a flex
    default from its wrapper) and the wrapper's own grid-level stretch (see
@@ -1023,7 +1023,7 @@ input {
     padding 200ms ease;
   transition-delay: 0ms, 140ms, 0ms;
 }
-/* The Objects toggle itself is meaningless once zen mode has force-
+/* The workspace toggle itself is meaningless once zen mode has force-
    collapsed the list below it — it fades along with the list rather than
    staying as a dead control. max-width, not just max-height: the card's
    own width is "auto" (shrink-to-fit) in zen mode, and a shrink-to-fit
@@ -1043,13 +1043,13 @@ input {
   font-size: var(--fs-title-sm);
   font-weight: 600;
 }
-/* Animates the Objects section open/closed via max-height instead of an
+/* Animates the workspace section open/closed via max-height instead of an
    instant show/hide. flex:1 lets it fill whatever space remains in the
    (possibly viewport-clamped) card when expanded; max-height:0 when
    collapsed overrides that, which is what actually animates. The expanded
    ceiling was a flat 640px until it was confirmed live to bind on any panel
    taller than ~740px — not rare at all on a normal laptop screen — leaving
-   the Objects list scroll-capped inside 640px of its own box, with the
+   the workspace list scroll-capped inside 640px of its own box, with the
    rest of the (correctly full-height) card sitting empty below it. 100%
    resolves against .panel's own height, which is definite here (stretched
    by the grid), so the transition still animates a concrete value — it
@@ -1059,7 +1059,7 @@ input {
      actually shrink to fit whatever height this ends up with, instead of
      just sizing to its own content and getting silently clipped (not
      scrolled) by the overflow:hidden below — confirmed live: with a long
-     enough Objects list, everything past this box's edge was simply gone,
+     enough workspace list, everything past this box's edge was simply gone,
      no scrollbar, nothing to click to reach it. */
   display: flex;
   flex-direction: column;
@@ -1072,7 +1072,7 @@ input {
 .collapsible.collapsed {
   max-height: 0;
 }
-/* Same shrink-to-fit leak as .panel-head above: the Objects list's own
+/* Same shrink-to-fit leak as .panel-head above: the workspace list's own
    long hint text has to lose its natural width too, not just its height,
    or the "auto"-width card stays exactly as wide as it was before. */
 [data-zen] .collapsible {
@@ -1189,6 +1189,141 @@ input {
 .dot.sm {
   width: 8px;
   height: 8px;
+}
+
+/* ---- view-specific left workspace ---- */
+.sidebar-workspace {
+  padding-inline: 8px;
+}
+.sidebar-workspace-title {
+  padding: 2px 8px 10px;
+  font-size: var(--fs-title-md);
+  font-weight: 600;
+}
+.sidebar-grouping {
+  padding: 0 8px 12px;
+  color: var(--text-muted);
+  font-size: var(--fs-label-md);
+}
+.sidebar-segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin-top: 6px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.sidebar-segmented button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.sidebar-segmented button[aria-pressed='true'] {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+}
+.sidebar-section {
+  border-top: 1px solid var(--border);
+}
+.sidebar-section:last-child {
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-section-head {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 4px;
+  align-items: center;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sidebar-section-head:hover,
+.sidebar-disclosure:hover {
+  background: var(--surface);
+}
+.sidebar-section-meta {
+  color: var(--text-faint);
+  font-size: var(--fs-label-sm);
+  font-weight: 400;
+}
+.sidebar-section-body {
+  padding: 2px 0 8px;
+}
+.sidebar-tree-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+}
+.sidebar-disclosure {
+  display: grid;
+  width: 28px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sidebar-main-row {
+  min-width: 0;
+}
+.sidebar-tree-children {
+  margin: 0 0 6px 14px;
+  padding-left: 13px;
+  border-left: 1px solid var(--border);
+}
+.sidebar-nested-label {
+  padding: 7px 8px 3px;
+  color: var(--text-faint);
+  font-size: var(--fs-label-sm);
+}
+.sidebar-stop-row {
+  display: grid;
+  grid-template-columns: 18px 12px minmax(0, 1fr);
+}
+.sidebar-stop-index {
+  color: var(--text-faint);
+  font-size: var(--fs-label-sm);
+  text-align: right;
+}
+.sidebar-nested-row {
+  padding-left: 8px;
+}
+.sidebar-show-more {
+  margin: 4px 8px;
+}
+.sidebar-section-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 8px 4px;
+}
+.sidebar-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: var(--fs-body-md);
+}
+.sidebar-check-row:hover {
+  background: var(--surface);
 }
 
 /* ---- inspector ---- */
@@ -2787,7 +2922,7 @@ button.chip-removable-label:hover {
   }
 }
 
-/* ---- mobile bottom sheet: Workbench swaps the floating Objects/Inspector
+/* ---- mobile bottom sheet: Workbench swaps the floating workspace/Inspector
    panels for this below its mobile breakpoint, so an idle panel isn't a
    whole side of the map left empty. LinesPanel/Inspector render unchanged
    inside .sheet-shell — these rules just neutralize their own floating
