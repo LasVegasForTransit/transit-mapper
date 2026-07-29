@@ -67,12 +67,15 @@ export function servicesByWay(
 }
 
 const nearWaysCache = new WeakMap<Station[], WeakMap<Way[], string[][]>>();
+const nearWaysByStationCache = new WeakMap<Way[], WeakMap<Station, string[]>>();
 
 /** For each station (aligned to `stations` order), the ids of visible ways whose
  *  path passes within INTERCHANGE_METERS — the interchange-detection scan. This
- *  is the single most expensive part of buildFeatures at RTC scale; caching it on
- *  (stations, visibleWays) means it runs once per genuine station/ways/filter
- *  change, not on every selection or viewport rebuild. */
+ *  is the single most expensive part of buildFeatures at RTC scale. The exact
+ *  array pair remains the fast path for selection-only rebuilds; when an
+ *  immutable edit replaces `stations`, unchanged station objects retain their
+ *  individual results. A new `visibleWays` array gets a separate per-station
+ *  cache, so any ways or visibility change safely recomputes every result. */
 export function nearWaysForStations(stations: Station[], visibleWays: Way[]): string[][] {
   let byWays = nearWaysCache.get(stations);
   if (!byWays) {
@@ -81,7 +84,19 @@ export function nearWaysForStations(stations: Station[], visibleWays: Way[]): st
   }
   let result = byWays.get(visibleWays);
   if (!result) {
-    result = stations.map((s) => servedWayIds(s.coord, visibleWays, INTERCHANGE_METERS));
+    let byStation = nearWaysByStationCache.get(visibleWays);
+    if (!byStation) {
+      byStation = new WeakMap();
+      nearWaysByStationCache.set(visibleWays, byStation);
+    }
+    result = stations.map((station) => {
+      let nearWays = byStation.get(station);
+      if (!nearWays) {
+        nearWays = servedWayIds(station.coord, visibleWays, INTERCHANGE_METERS);
+        byStation.set(station, nearWays);
+      }
+      return nearWays;
+    });
     byWays.set(visibleWays, result);
   }
   return result;
