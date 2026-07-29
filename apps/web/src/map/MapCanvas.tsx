@@ -105,6 +105,7 @@ import { attachVehicleAnimation } from '../sim/vehicles';
 import { clearArmedTerminusForViewChange } from './viewEditorState';
 import { basemapStyleForScheme, layerSpecsForScheme } from './mapTheme';
 import { createStyleSwitchController, type StyleSwitchController } from './styleSwitchController';
+import { recoverMapStyleState } from './styleRecovery';
 const OWN_LAYER_IDS = new Set(LAYER_SPECS.map((l) => l.id));
 const PERF_HARNESS_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
 
@@ -962,28 +963,34 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     };
 
     let initialMapLoaded = false;
-    const recoverMapStyle = () => {
-      registerMapIcons(map, activeMapScheme);
-      if (!ensureOverlay()) return;
-      pushData(ALL_SYSTEM_FEATURE_SOURCES);
-      // A full style rebuild creates fresh feature-state tables. pushData
-      // reapplies selection after setData; restore the stationary hover too so
-      // the pointer does not lose its affordance until it moves again.
-      if (hovered && map.getSource(hovered.source)) {
-        map.setFeatureState(hovered, { hover: true });
-      }
-      updateHaloVisibility();
-      setRouteFocus(routeFocusActive, true);
-      const landmarkVisibility =
-        viewRef.current.viewMode !== 'diagram' && showLandmarksRef.current ? 'visible' : 'none';
-      if (map.getLayer(LYR_LANDMARKS))
-        map.setLayoutProperty(LYR_LANDMARKS, 'visibility', landmarkVisibility);
-      if (map.getLayer(LYR_LANDMARK_LABELS))
-        map.setLayoutProperty(LYR_LANDMARK_LABELS, 'visibility', landmarkVisibility);
-      setBasemapVisible(map, viewRef.current.viewMode !== 'diagram');
-      notifyVehicleGate();
-      map.triggerRepaint();
-    };
+    const recoverMapStyle = () =>
+      recoverMapStyleState({
+        registerIcons: () => registerMapIcons(map, activeMapScheme),
+        ensureOverlay,
+        restoreFeatureData: () => pushData(ALL_SYSTEM_FEATURE_SOURCES),
+        // A full style rebuild creates fresh feature-state tables. pushData
+        // reapplies selection after setData; restore the stationary hover too
+        // so the pointer does not lose its affordance until it moves again.
+        restoreHover: () => {
+          if (hovered && map.getSource(hovered.source)) {
+            map.setFeatureState(hovered, { hover: true });
+          }
+        },
+        restoreHaloVisibility: updateHaloVisibility,
+        restoreRouteFocus: () => setRouteFocus(routeFocusActive, true),
+        restoreLandmarkVisibility: () => {
+          const visibility =
+            viewRef.current.viewMode !== 'diagram' && showLandmarksRef.current ? 'visible' : 'none';
+          if (map.getLayer(LYR_LANDMARKS))
+            map.setLayoutProperty(LYR_LANDMARKS, 'visibility', visibility);
+          if (map.getLayer(LYR_LANDMARK_LABELS))
+            map.setLayoutProperty(LYR_LANDMARK_LABELS, 'visibility', visibility);
+        },
+        restoreDiagramVisibility: () =>
+          setBasemapVisible(map, viewRef.current.viewMode !== 'diagram'),
+        restoreSimulation: notifyVehicleGate,
+        repaint: () => map.triggerRepaint(),
+      });
     const onStyleLoad = () => {
       if (initialMapLoaded) recoverMapStyle();
     };

@@ -70,14 +70,27 @@ export function createStyleSwitchController(
   let appliedScheme = options.initialScheme;
   const fetchStyle = options.fetchStyle ?? fetchStyleDocument;
 
+  const cancelActiveRequest = () => {
+    if (!activeRequest) return;
+    // Invalidate the generation even if a custom fetch implementation ignores
+    // AbortSignal. Its eventual response must not replace a newer request.
+    generation += 1;
+    activeRequest.abort();
+    activeRequest = undefined;
+  };
+
   const apply = async (scheme: ColorScheme): Promise<void> => {
     if (disposed) return;
-    if (scheme === appliedScheme && activeRequest === undefined) {
-      pendingScheme = undefined;
+    if (options.isInteractionActive()) {
+      cancelActiveRequest();
+      // Reversing to the style that is still on screen cancels the queued
+      // switch altogether. Any other latest request waits for release.
+      pendingScheme = scheme === appliedScheme ? undefined : scheme;
       return;
     }
-    if (options.isInteractionActive()) {
-      pendingScheme = scheme;
+    if (scheme === appliedScheme) {
+      cancelActiveRequest();
+      pendingScheme = undefined;
       return;
     }
 

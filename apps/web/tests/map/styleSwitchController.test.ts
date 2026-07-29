@@ -73,6 +73,33 @@ describe('style switch controller', () => {
     expect(map.setStyle).not.toHaveBeenCalled();
   });
 
+  it('keeps a gesture-time reversal newer than an in-flight style response', async () => {
+    const map = createMap();
+    const darkStyle = deferred<StyleSpecification>();
+    let active = false;
+    const fetchStyle = vi
+      .fn()
+      .mockImplementationOnce(() => darkStyle.promise)
+      .mockResolvedValue(style('dark'));
+    const controller = createStyleSwitchController({
+      map,
+      initialScheme: 'light',
+      fetchStyle,
+      isInteractionActive: () => active,
+    });
+
+    const stale = controller.request('dark');
+    active = true;
+    await controller.request('light');
+    darkStyle.resolve(style('dark'));
+    await stale;
+    active = false;
+    await controller.flush();
+
+    expect(fetchStyle).toHaveBeenCalledOnce();
+    expect(map.setStyle).not.toHaveBeenCalled();
+  });
+
   it('aborts and ignores stale style responses', async () => {
     const map = createMap();
     const first = deferred<StyleSpecification>();
