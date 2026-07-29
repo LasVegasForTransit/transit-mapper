@@ -29,8 +29,14 @@ import {
   primaryAnchor,
 } from '@transitmapper/core/model/geo';
 import { facilityType, mode } from '@transitmapper/core/model/catalog';
-import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
+import { anchorOnWay, routePath } from '@transitmapper/core/model/routeGraph';
 import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
+import {
+  planTerminusGesture,
+  type TerminusGesturePlan,
+  type TerminusGestureSource,
+  type TerminusGestureTarget,
+} from '@transitmapper/core/model/serviceGestures';
 import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
 import type {
   CorridorActionHit,
@@ -134,6 +140,14 @@ export interface MarqueeProbe {
 
 export type MarqueeCollector = (probe: MarqueeProbe, system: TransitSystem) => MultiSelectItem[];
 
+export interface TerminusConnectionChoice {
+  x: number;
+  y: number;
+  connectPaths: () => void;
+  joinThroughService: () => void;
+  dismiss: () => void;
+}
+
 export interface AttachInteractionsOptions {
   openShortcuts: () => void;
   toggleUi: () => void;
@@ -191,6 +205,9 @@ export interface AttachInteractionsOptions {
   /** Lets view state invalidate a stationary hover without recreating the map
    * controller. The registration is optional for browser-free tests. */
   registerPointerIntentRefresh?: (refresh: () => void) => () => void;
+  /** A drop on another line's terminus is deliberately inert until this
+   * anchored chooser invokes one of the two callbacks. */
+  openTerminusConnectionChoice?: (choice: TerminusConnectionChoice) => void;
 }
 
 /**
@@ -227,6 +244,7 @@ export function attachInteractions(
   let spaceHeld = false;
   let lastPointer: MapMouseEvent | null = null;
   let lockedPrimaryOperation: PointerOperation | undefined;
+  let activeTerminusSource: TerminusGestureSource | null = null;
   /**
    * Set by a gesture that already handled the current press itself, so onClick
    * doesn't act on that same press a second time.
@@ -350,7 +368,30 @@ export function attachInteractions(
     if (opts.isNetworkMode() && state.tool === 'way' && state.activeWayId) return 'empty';
     if (opts.isNetworkMode() && state.tool === 'way' && networkOpenEndpointAt(e))
       return state.routeDraft ? 'compatible-corridor' : 'endpoint';
-    if (featureAt(e, [LYR_SERVICE_TERMINI_HIT])) return 'service-terminus';
+    const serviceTerminus = featureAt(e, [LYR_SERVICE_TERMINI_HIT]);
+    if (serviceTerminus) {
+      const armed = state.armedTerminus;
+      if (
+        armed &&
+        armed.serviceId === serviceTerminus.properties.serviceId &&
+        armed.patternId === serviceTerminus.properties.patternId &&
+        armed.side === serviceTerminus.properties.side
+      )
+        return 'return-terminus';
+      if (activeTerminusSource) {
+        const targetService = state.system.services.find(
+          (service) => service.id === serviceTerminus.properties.serviceId,
+        );
+        const sourceService = state.system.services.find(
+          (service) => service.id === activeTerminusSource?.serviceId,
+        );
+        if (targetService && sourceService)
+          return targetService.modeId === sourceService.modeId
+            ? 'same-mode-line'
+            : 'different-mode-line';
+      }
+      return 'service-terminus';
+    }
     const endpoint = featureAt(e, [LYR_WAY_ENDPOINTS]);
     if (endpoint) return 'endpoint';
     const handle = featureAt(e, [LYR_HANDLES]);
@@ -376,7 +417,25 @@ export function attachInteractions(
         return 'compatible-corridor';
       return 'empty';
     }
-    if (opts.isNetworkMode() && state.tool === 'select') return 'line-body';
+    if (opts.isNetworkMode() && state.tool === 'select') {
+      if (activeTerminusSource && serviceLine) {
+        const serviceId = serviceLine.properties.serviceId as string;
+        const patternId = serviceLine.properties.patternId as string;
+        if (
+          serviceId === activeTerminusSource.serviceId &&
+          patternId === activeTerminusSource.patternId
+        )
+          return 'same-branch-interior';
+        const sourceMode = state.system.services.find(
+          (service) => service.id === activeTerminusSource?.serviceId,
+        )?.modeId;
+        const targetMode = state.system.services.find(
+          (service) => service.id === serviceId,
+        )?.modeId;
+        return sourceMode === targetMode ? 'same-mode-line' : 'different-mode-line';
+      }
+      return 'line-body';
+    }
     if (opts.isNetworkMode() && state.tool === 'way') {
       // Service paint sits above its carrier. Its feature retains `wayId`, so
       // use that exact carrier rather than treating a colored overlay as an
@@ -404,10 +463,13 @@ export function attachInteractions(
       target: pointerTargetAt(e),
       modifiers: modifierOverride ?? modifierState(e.originalEvent),
       readOnly: state.readOnly,
-      // Network terminus/connection handles are added in later tasks. Until a
-      // real hit can identify one, active drafts keep their existing drawing
-      // behavior instead of advertising a future loop/connect gesture.
-      armed: 'none',
+      armed: activeTerminusSource
+        ? activeTerminusSource.purpose === 'return'
+          ? 'network-return'
+          : 'network-extending'
+        : state.armedTerminus
+          ? 'network-return'
+          : 'none',
       gestureActive,
       lockedPrimaryOperation,
       routeDraftActive: Boolean(state.routeDraft),
@@ -1038,14 +1100,18 @@ export function attachInteractions(
     setSharingPreview([], '#000000');
   };
 
-  const setPreview = (coords: LngLat[] | null) => {
+  interface PreviewProperties {
+    oneWayReturn?: boolean;
+  }
+
+  const setPreview = (coords: LngLat[] | null, properties: PreviewProperties = {}) => {
     (map.getSource(SRC_PREVIEW) as GeoJSONSource | undefined)?.setData({
       type: 'FeatureCollection',
       features: coords
         ? [
             {
               type: 'Feature',
-              properties: {},
+              properties,
               geometry: { type: 'LineString', coordinates: coords },
             },
           ]
@@ -1654,6 +1720,136 @@ export function attachInteractions(
     clearPointerIntent();
   }
 
+  const terminusTargetAt = (
+    e: MapMouseEvent,
+    source: TerminusGestureSource,
+  ): TerminusGestureTarget | null => {
+    const serviceTarget = rightClickTarget(e);
+    if (serviceTarget?.serviceHit && serviceTarget.target.kind === 'service') {
+      const { serviceHit } = serviceTarget;
+      const position = serviceHit.position;
+      if (!position) return null;
+      return {
+        kind: 'service-position',
+        serviceId: serviceHit.serviceId,
+        position,
+        ...(serviceHit.terminusSide
+          ? {
+              terminus: {
+                patternId: serviceHit.patternId,
+                side: serviceHit.terminusSide,
+              },
+            }
+          : {}),
+      };
+    }
+    const state = store.getState();
+    const sourceMode = state.system.services.find(
+      (service) => service.id === source.serviceId,
+    )?.modeId;
+    if (!sourceMode) return null;
+    const allowed = new Set(mode(sourceMode).wayTypeIds);
+    const candidates = state.system.ways.filter((way) => allowed.has(way.typeId));
+    const hit = snap(candidates, lngLatOf(e), snapMeters(SNAP_PX));
+    return hit ? { kind: 'corridor', wayId: hit.wayId, coord: hit.coord } : null;
+  };
+
+  const finishTerminusGestureWithoutCommit = () => {
+    activeTerminusSource = null;
+    cancelActiveGesture = null;
+    store.getState().cancelHistoryCheckpoint();
+    opts.onEditGestureEnd?.();
+    opts.onDirectManipulationEnd?.();
+    clearPreviews();
+    clearPointerIntent();
+  };
+
+  const startTerminusDrag = (feature: MapGeoJSONFeature) => {
+    const state = store.getState();
+    const serviceId = feature.properties.serviceId as string;
+    const patternId = feature.properties.patternId as string;
+    const side = feature.properties.side as 'start' | 'end';
+    if ((side !== 'start' && side !== 'end') || !serviceId || !patternId) return;
+    const armed = state.armedTerminus;
+    const source: TerminusGestureSource = {
+      serviceId,
+      patternId,
+      side,
+      purpose:
+        armed &&
+        armed.serviceId === serviceId &&
+        armed.patternId === patternId &&
+        armed.side === side
+          ? 'return'
+          : 'extend',
+    };
+    activeTerminusSource = source;
+    suppressClick = true;
+    let latest: { target: TerminusGestureTarget; plan: TerminusGesturePlan } | null = null;
+    const preview = (ev: MapMouseEvent) => {
+      const target = terminusTargetAt(ev, source);
+      latest = target
+        ? { target, plan: planTerminusGesture(store.getState().system, source, target) }
+        : null;
+      const coords =
+        latest && latest.plan.kind !== 'refuse'
+          ? routePath(latest.plan.system, latest.plan.spans)
+          : [];
+      setPreview(
+        coords.length >= 2 ? coords : null,
+        source.purpose === 'return' ? { oneWayReturn: true } : {},
+      );
+      setSharingPreview(coords.length >= 2 ? [coords] : [], '#000000');
+      setEndpointHint(coords.at(-1) ?? null);
+      publishPointerIntent(ev, undefined, true);
+    };
+    const throttled = rafThrottle(preview);
+    const onMove = (ev: MapMouseEvent) => throttled.call(ev);
+    const onUp = (ev: MapMouseEvent) => {
+      throttled.cancel();
+      preview(ev);
+      map.off('mousemove', onMove);
+      map.off('mouseup', onUp);
+      clearPreviews();
+      setEndpointHint(null);
+      const resolved = latest;
+      if (resolved?.plan.kind === 'connection-choice') {
+        opts.setActionAnchor?.(rightClickTarget(ev)?.anchor ?? lngLatOf(ev));
+        finishTerminusGestureWithoutCommit();
+        const choose = (choice: 'connect' | 'through') => {
+          opts.setActionAnchor?.(null);
+          store.getState().commitTerminusGesture(source, resolved.target, resolved.plan, choice);
+        };
+        opts.openTerminusConnectionChoice?.({
+          x: ev.originalEvent.clientX,
+          y: ev.originalEvent.clientY,
+          connectPaths: () => choose('connect'),
+          joinThroughService: () => choose('through'),
+          dismiss: () => {
+            opts.setActionAnchor?.(null);
+            store.getState().clearArmedTerminus();
+          },
+        });
+        return;
+      }
+      if (resolved) store.getState().commitTerminusGesture(source, resolved.target, resolved.plan);
+      else store.getState().clearArmedTerminus();
+      activeTerminusSource = null;
+      endGesture();
+    };
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
+    beginGesture(() => {
+      throttled.cancel();
+      map.off('mousemove', onMove);
+      map.off('mouseup', onUp);
+      activeTerminusSource = null;
+      store.getState().clearArmedTerminus();
+      clearPreviews();
+      setEndpointHint(null);
+    }, {});
+  };
+
   // ---- mousedown: dispatch by button, modifier, tool, target --------------
   const onMouseDown = (e: MapMouseEvent) => {
     const st = store.getState();
@@ -1674,6 +1870,7 @@ export function attachInteractions(
     const endpoint = featureAt(e, [LYR_WAY_ENDPOINTS]);
     const handle = endpoint ?? featureAt(e, [LYR_HANDLES]);
     const physicalHandle = featureAt(e, [LYR_PHYSICAL_HANDLES]);
+    const serviceTerminus = featureAt(e, [LYR_SERVICE_TERMINI_HIT]);
     const station = featureAt(e, [LYR_STATIONS]);
     const facility = featureAt(e, [LYR_FACILITIES]);
 
@@ -1710,6 +1907,16 @@ export function attachInteractions(
       !isDoubleClickFinish(oe.detail)
     ) {
       startDraw(e, pointerIntent.primaryOperation);
+      return;
+    }
+
+    if (
+      opts.isNetworkMode() &&
+      serviceTerminus &&
+      (pointerIntent.primaryOperation === 'extend-branch' ||
+        pointerIntent.primaryOperation === 'draw-inbound-side')
+    ) {
+      startTerminusDrag(serviceTerminus);
       return;
     }
 

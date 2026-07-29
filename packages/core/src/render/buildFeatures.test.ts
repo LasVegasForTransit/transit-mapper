@@ -206,6 +206,38 @@ describe('service editing affordances', () => {
     ]);
   });
 
+  it('marks only the exact armed terminus as the one-way return origin', () => {
+    const features = buildFeatures(
+      system,
+      { kind: 'service', id: service.id },
+      [],
+      NETWORK_VIEW,
+      null,
+      null,
+      {
+        activePatternId: 'south-pattern',
+        armedTerminus: {
+          serviceId: 'line',
+          patternId: 'south-pattern',
+          side: 'end',
+        },
+      },
+    );
+
+    expect(
+      features.serviceTermini.features
+        .filter((feature) => feature.properties?.armedReturn)
+        .map((feature) => feature.properties),
+    ).toMatchObject([
+      {
+        serviceId: 'line',
+        patternId: 'south-pattern',
+        side: 'end',
+        armedReturn: true,
+      },
+    ]);
+  });
+
   it('does not project service termini into Diagram', () => {
     const features = buildFeatures(system, { kind: 'service', id: service.id }, [], {
       ...NETWORK_VIEW,

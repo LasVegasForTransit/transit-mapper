@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { patternPath, patternLegs } from './geo';
-import { throughRouteServices } from './throughRoute';
+import { throughRouteServices, throughRouteServicesAt } from './throughRoute';
 import { validateSystemQuick } from './validate';
 import { aPattern, aRoad, aService, aSystem } from '../testing/fixtures';
 
@@ -90,6 +90,74 @@ describe('joining two lines into a through-route', () => {
     const [joined] = next!.services;
     expect(joined.patterns).toHaveLength(2);
     expect(joined.patterns[1].name).toBe('Green');
+  });
+
+  it('joins the exact requested branches even when another pair of termini is nearer', () => {
+    const desiredKeep = aRoad('desired-keep', [
+      [-115.21, 36.15],
+      [-115.2, 36.15],
+    ]);
+    const connector = aRoad('connector', [
+      [-115.2, 36.15],
+      [-115.1995, 36.15],
+    ]);
+    const desiredOther = aRoad('desired-other', [
+      [-115.1995, 36.15],
+      [-115.19, 36.15],
+    ]);
+    const alternateKeep = aRoad('alternate-keep', [
+      [-115.31, 36.2],
+      [-115.3, 36.2],
+    ]);
+    const alternateOther = aRoad('alternate-other', [
+      [-115.3, 36.2],
+      [-115.29, 36.2],
+    ]);
+    const system = aSystem({
+      ways: [desiredKeep, connector, desiredOther, alternateKeep, alternateOther],
+      services: [
+        aService('a', [
+          aPattern('alternate-a', [alternateKeep], ['alternate-keep']),
+          aPattern('desired-a', [desiredKeep], ['desired-keep']),
+        ]),
+        aService('b', [
+          aPattern('alternate-b', [alternateOther], ['alternate-other']),
+          aPattern('desired-b', [desiredOther], ['desired-other']),
+        ]),
+      ],
+      nodes: [
+        {
+          id: 'desired-west',
+          coord: [-115.2, 36.15],
+          refs: [
+            { wayId: 'desired-keep', pointIndex: 1 },
+            { wayId: 'connector', pointIndex: 0 },
+          ],
+        },
+        {
+          id: 'desired-east',
+          coord: [-115.1995, 36.15],
+          refs: [
+            { wayId: 'connector', pointIndex: 1 },
+            { wayId: 'desired-other', pointIndex: 0 },
+          ],
+        },
+      ],
+    });
+
+    const next = throughRouteServicesAt(system, 'a', 'b', {
+      aPatternId: 'desired-a',
+      aEnd: 'end',
+      bPatternId: 'desired-b',
+      bEnd: 'start',
+      distanceM: 45,
+    });
+
+    expect(
+      patternLegs(next!.services[0].patterns.find((pattern) => pattern.id === 'desired-a')!).map(
+        (leg) => leg.wayId,
+      ),
+    ).toEqual(['desired-keep', 'connector', 'desired-other']);
   });
 
   it('refuses two lines of different modes', () => {

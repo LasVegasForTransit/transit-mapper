@@ -130,9 +130,22 @@ export function resolvePointerIntent(input: PointerIntentInput): PointerIntent {
     return intent('refuse-edit', 'not-allowed', null, false);
   }
 
-  // A lock preserves the operation chosen at pointer-down, but it cannot
-  // override a later transition to a non-editable projection or snapshot.
-  if (input.gestureActive && input.lockedPrimaryOperation) {
+  // A terminus drag keeps "edit this branch" locked while its live target
+  // refines the visible/committed result into extend, loop, or connect below.
+  // Other gestures retain their exact pointer-down verb.
+  if (
+    input.gestureActive &&
+    input.lockedPrimaryOperation &&
+    !(
+      input.view === 'network' &&
+      ((input.armed === 'network-return' && input.lockedPrimaryOperation === 'draw-inbound-side') ||
+        (input.armed === 'network-extending' &&
+          input.lockedPrimaryOperation === 'extend-branch' &&
+          (target === 'same-branch-interior' ||
+            target === 'same-mode-line' ||
+            target === 'different-mode-line')))
+    )
+  ) {
     return intent(input.lockedPrimaryOperation, 'grabbing', null, true, 'preview', constraint);
   }
 
@@ -147,6 +160,13 @@ export function resolvePointerIntent(input: PointerIntentInput): PointerIntent {
   if (modifiers.space) return intent('pan', 'grab', null, true);
 
   if (input.view === 'network') {
+    if (input.armed === 'network-return') {
+      if (target === 'different-mode-line') return intent('refuse', 'not-allowed', null, false);
+      if (input.gestureActive)
+        return intent('draw-inbound-side', 'crosshair', 'one-way-return', true, 'preview');
+      if (target === 'return-terminus')
+        return intent('draw-inbound-side', 'crosshair', 'one-way-return', true, 'target');
+    }
     if (input.armed === 'network-extending') {
       if (target === 'same-branch-interior')
         return intent('close-directional-loop', 'grabbing', 'loop', true, 'target');
@@ -155,8 +175,6 @@ export function resolvePointerIntent(input: PointerIntentInput): PointerIntent {
       if (target === 'different-mode-line') return intent('refuse', 'not-allowed', null, false);
     }
     if (input.tool === 'way') {
-      if (input.armed === 'network-return' && target === 'return-terminus')
-        return intent('draw-inbound-side', 'crosshair', 'one-way-return', true, 'target');
       // A live route draft is already committed to sharing compatible
       // infrastructure. Alt only opts an idle Way tool into separate drawing;
       // it cannot start a physical way beside an unfinished route draft.

@@ -73,6 +73,10 @@ and `apps/worker` depend on it as a workspace package.
   stretches of a path run along infrastructure that already exists.
 - `routeGraph.ts` — the routing graph over ways and junctions;
   `routeBetween` finds paths for service drawing and adoption.
+- `serviceEdits.ts` and `serviceGestures.ts` — exact-occurrence service-path
+  edits and the stateless route/topology plan for a terminus drag. The map
+  previews that pure plan; the web store commits its service and optional
+  explicit-junction result in one undoable write.
 - `patternEdits.ts` — how a line's legs change, both when the infrastructure
   under them moves (a way split or merged) and when the line itself is edited
   (trimmed, cut in two, or a stretch of road taken out from under it). Pure:

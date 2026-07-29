@@ -82,7 +82,9 @@ const zoom = (c: KeyContext, d: number) => c.map.zoomTo(c.map.getZoom() + d, { d
 // without also losing the current tool or selection.
 function backOut(c: KeyContext): void {
   const s = c.editor.getState();
-  if (s.routeDraft) {
+  if (s.armedTerminus) {
+    s.clearArmedTerminus();
+  } else if (s.routeDraft) {
     s.cancelRouteDraft();
   } else if (s.placingFacilityForGroupId) {
     s.cancelPlacingFacility();

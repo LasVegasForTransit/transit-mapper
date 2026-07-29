@@ -61,6 +61,7 @@ export const LYR_SERVICE_TERMINI = 'tm-service-termini';
 export const LYR_SERVICE_TERMINI_HIT = 'tm-service-termini-hit';
 export const LYR_ACTION_ANCHOR = 'tm-action-anchor';
 export const LYR_PREVIEW = 'tm-preview';
+export const LYR_PREVIEW_ARROWS = 'tm-preview-arrows';
 export const LYR_GESTURE_FILL = 'tm-gesture-fill';
 export const LYR_GESTURE_STROKE = 'tm-gesture-stroke';
 export const LYR_GESTURE_LINE = 'tm-gesture-line';

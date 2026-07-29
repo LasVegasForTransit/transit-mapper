@@ -107,14 +107,14 @@ export function closePatternTerminus(
   target: PatternPosition,
   closingLegs: PatternLeg[],
 ): Pattern | null {
-  if (side !== 'end' || target.patternId !== pattern.id || target.run !== 'outbound') return null;
+  if (target.patternId !== pattern.id || target.run !== 'outbound') return null;
   if (closingLegs.length === 0 || pattern.sections.some((section) => section.kind !== 'shared'))
     return null;
   const exact = patternPositionAt(ways, pattern, target.run, target.legIndex, target.t);
   if (!exact || exact.wayId !== target.wayId) return null;
 
   const outbound = patternRunLegs(pattern, 'outbound');
-  const terminus = outbound[outbound.length - 1];
+  const terminus = side === 'start' ? outbound[0] : outbound[outbound.length - 1];
   const firstClosing = closingLegs[0];
   const lastClosing = closingLegs[closingLegs.length - 1];
   const targetWay = ways.find((way) => way.id === target.wayId);
@@ -122,7 +122,7 @@ export function closePatternTerminus(
   const targetAt = targetPath.length >= 2 ? pointAtT(targetPath, target.t) : null;
   if (
     !terminus ||
-    !samePlace(legEndpoint(ways, terminus.leg, 'end'), legEndpoint(ways, firstClosing, 'start')) ||
+    !samePlace(legEndpoint(ways, terminus.leg, side), legEndpoint(ways, firstClosing, 'start')) ||
     !samePlace(targetAt, legEndpoint(ways, lastClosing, 'end'))
   )
     return null;
@@ -141,6 +141,20 @@ export function closePatternTerminus(
   );
   const [prefix, tail] = splitLegsAt(sharedLegs, target.legIndex, target.t);
   if (prefix.length === 0 || tail.length === 0) return null;
+  if (side === 'start') {
+    const inbound = [...prefix].reverse().map((leg) => ({
+      ...leg,
+      direction:
+        leg.direction === 'withPoints' ? ('againstPoints' as const) : ('withPoints' as const),
+    }));
+    return {
+      ...pattern,
+      sections: [
+        { kind: 'split', outbound: closingLegs, inbound },
+        { kind: 'shared', legs: tail },
+      ],
+    };
+  }
   return {
     ...pattern,
     sections: [

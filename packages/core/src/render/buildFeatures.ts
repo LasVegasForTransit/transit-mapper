@@ -430,6 +430,14 @@ export interface BuildFeaturesOptions {
   counts?: FeatureBuildOperationCounts;
   /** The branch that alone receives interaction at coincident termini. */
   activePatternId?: string | null;
+  /** Exact endpoint armed for a one-way return gesture. Rendering reads this
+   * ephemeral editor value only to distinguish that handle; it is never
+   * written into the TransitSystem. */
+  armedTerminus?: {
+    serviceId: string;
+    patternId: string;
+    side: 'start' | 'end';
+  } | null;
 }
 
 export function createFeatureBuildOperationCounts(): FeatureBuildOperationCounts {
@@ -694,6 +702,7 @@ function projectServiceTermini(
   selection: Highlight,
   indexes: SharedProjectionIndexes,
   activePatternId: string | null | undefined,
+  armedTerminus: BuildFeaturesOptions['armedTerminus'],
 ): Feature<Point>[] {
   if (selection?.kind !== 'service') return [];
   const service = system.services.find((candidate) => candidate.id === selection.id);
@@ -723,6 +732,11 @@ function projectServiceTermini(
           side,
           modeId: service.modeId,
           interactive: false,
+          ...(armedTerminus?.serviceId === service.id &&
+          armedTerminus.patternId === pattern.id &&
+          armedTerminus.side === side
+            ? { armedReturn: true }
+            : {}),
         },
         geometry: { type: 'Point', coordinates: pointAtT(resolveWayPath(way), t) },
       });
@@ -1413,7 +1427,13 @@ export function buildFeatures(
       : [];
   const serviceTermini =
     projection.serviceTermini && view.viewMode !== 'diagram'
-      ? projectServiceTermini(system, selection, indexes, options.activePatternId)
+      ? projectServiceTermini(
+          system,
+          selection,
+          indexes,
+          options.activePatternId,
+          options.armedTerminus,
+        )
       : [];
   const physical = projection.physical.enabled
     ? projectPhysicalFeatures({

@@ -113,12 +113,25 @@ export function throughRouteServices(
   keepId: string,
   otherId: string,
 ): TransitSystem | null {
+  const meeting: TerminusMeeting | null = terminiMeet(system, keepId, otherId);
+  return meeting ? throughRouteServicesAt(system, keepId, otherId, meeting) : null;
+}
+
+/**
+ * Exact counterpart for a terminus gesture. Unlike throughRouteServices,
+ * this never substitutes a closer branch for the branch and ends the person
+ * actually connected in the anchored preview.
+ */
+export function throughRouteServicesAt(
+  system: TransitSystem,
+  keepId: string,
+  otherId: string,
+  meeting: TerminusMeeting,
+): TransitSystem | null {
   const keep = system.services.find((s) => s.id === keepId);
   const other = system.services.find((s) => s.id === otherId);
   if (!keep || !other || keep.id === other.id || keep.modeId !== other.modeId) return null;
 
-  const meeting: TerminusMeeting | null = terminiMeet(system, keepId, otherId);
-  if (!meeting) return null;
   const keepPattern = keep.patterns.find((p) => p.id === meeting.aPatternId);
   const otherPattern = other.patterns.find((p) => p.id === meeting.bPatternId);
   if (!keepPattern || !otherPattern) return null;
