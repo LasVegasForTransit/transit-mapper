@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createInstallController,
+  shouldShowInstallBanner,
   shouldRegisterInstallController,
   type InstallEnvironment,
 } from './install';
@@ -27,6 +28,18 @@ function createEnvironment(overrides: Partial<InstallEnvironment> = {}): Install
 }
 
 describe('install controller', () => {
+  it('keeps the contextual banner out of Zen mode and read-only sessions', () => {
+    expect(shouldShowInstallBanner({ eligible: true, uiHidden: true, readOnly: false })).toBe(
+      false,
+    );
+    expect(shouldShowInstallBanner({ eligible: true, uiHidden: false, readOnly: true })).toBe(
+      false,
+    );
+    expect(shouldShowInstallBanner({ eligible: true, uiHidden: false, readOnly: false })).toBe(
+      true,
+    );
+  });
+
   it('does not register browser install events for read-only or standalone entries', () => {
     expect(shouldRegisterInstallController({ enabled: false, permanentlySuppressed: false })).toBe(
       false,

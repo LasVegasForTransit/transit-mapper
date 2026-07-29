@@ -50,6 +50,16 @@ export function shouldRegisterInstallController(registration: InstallRegistratio
   return registration.enabled && !registration.permanentlySuppressed;
 }
 
+export interface InstallBannerVisibility {
+  eligible: boolean;
+  uiHidden: boolean;
+  readOnly: boolean;
+}
+
+export function shouldShowInstallBanner(visibility: InstallBannerVisibility): boolean {
+  return visibility.eligible && !visibility.uiHidden && !visibility.readOnly;
+}
+
 interface InstallPreferences {
   dismissals: number;
   snoozedUntil: number;

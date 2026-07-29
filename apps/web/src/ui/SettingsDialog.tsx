@@ -3,6 +3,7 @@ import { useUnitPreference, setUnitPreference } from '../services/userPreference
 import { messages } from '../i18n/messages';
 import { useInstall } from '../pwa/InstallProvider';
 import { protectOfflineData, type OfflineDataProtection } from '../pwa/persistence';
+import { installSettingsPresentation } from '../pwa/settings';
 import { Modal } from './Modal';
 
 export interface SettingsDialogProps {
@@ -13,6 +14,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
   const currentUnitSystem = useUnitPreference();
   const { installState, requestInstall } = useInstall();
   const [protection, setProtection] = useState<OfflineDataProtection | null>(null);
+  const installPresentation = installSettingsPresentation(installState);
 
   return (
     <Modal
@@ -39,21 +41,15 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
       </div>
       <div className="settings-section">
         <label className="field-label">Install TransitMapper</label>
-        {installState.permanentlySuppressed ? (
-          <p className="settings-copy">TransitMapper is installed on this browser profile.</p>
-        ) : !installState.isDesktop ? (
-          <p className="settings-copy">
-            Installation guidance is available from a desktop browser.
-          </p>
-        ) : installState.canPrompt ? (
+        {installPresentation.kind === 'native' ? (
           <>
-            <p className="settings-copy">Keep your editor one click away and work offline.</p>
+            <p className="settings-copy">{installPresentation.message}</p>
             <button type="button" className="btn btn-primary" onClick={() => void requestInstall()}>
               Install
             </button>
           </>
         ) : (
-          <p className="settings-copy">{installState.instructions}</p>
+          <p className="settings-copy">{installPresentation.message}</p>
         )}
       </div>
       <div className="settings-section">
