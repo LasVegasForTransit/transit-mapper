@@ -77,7 +77,7 @@ export function attachVehicleAnimation(
   gate: VehicleGate,
 ): () => void {
   let frame: number | null = null;
-  let idleWakeTimer: number | null = null;
+  let idleWakeTimer: ReturnType<typeof setTimeout> | null = null;
   let detached = false;
   let paintPausedFrame = false;
   let advancingClock = false;

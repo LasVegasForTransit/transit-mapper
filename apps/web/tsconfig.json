@@ -7,8 +7,7 @@
     "jsx": "react-jsx",
     "types": ["vite/client"]
   },
-  // Browser sources only. The test suite in `scripts/` is a Node program and
-  // is typechecked by tsconfig.scripts.json instead — see that file for why
-  // the two can't share one config, and why it isn't simply left out.
+  // Browser sources only. Node tooling and tests are typechecked separately by
+  // tsconfig.scripts.json so Node globals do not enter the production config.
   "include": ["src"]
 }

@@ -64,8 +64,8 @@ export async function* streamRtcGtfsBatches(
   const events: GtfsWorkerEvent[] = [];
   let wake: (() => void) | null = null;
   let failure: Error | null = null;
-  let idleTimer: number | null = null;
-  let hardTimer: number | null = null;
+  let idleTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+  let hardTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
   const notify = () => {
     const resolve = wake;
     wake = null;
