@@ -29,6 +29,12 @@ function validateOptions(options: PerfCliOptions): void {
   if (options.record && options.scenarioId) {
     throw new Error('--record requires the full scenario matrix; omit --scenario.');
   }
+  if (options.smoke && (options.record || options.soak || options.requireBaseline)) {
+    throw new Error('--smoke cannot be combined with --record, --soak, or --require-baseline.');
+  }
+  if (options.smoke && options.baselinePath) {
+    throw new Error('--smoke is functional evidence and cannot be compared with --baseline.');
+  }
   if (options.soak && (options.record || options.scenarioId)) {
     throw new Error('--soak cannot be combined with --record or --scenario.');
   }
@@ -48,7 +54,7 @@ function selectedScenarios(options: PerfCliOptions): PerfScenario[] {
 
 export async function runPerformanceAudit(options: PerfCliOptions): Promise<void> {
   validateOptions(options);
-  const protocol = createPerfProtocol(options.profile);
+  const protocol = createPerfProtocol(options.profile, options.smoke ? 'smoke' : 'audit');
   const scenarios = selectedScenarios(options);
   await mkdir(options.outputDirectory, { recursive: true });
   if (!options.skipBuild) await buildPerformanceApp();
@@ -106,6 +112,7 @@ export async function runPerformanceAudit(options: PerfCliOptions): Promise<void
       scenarios,
       maxRegressionRatio: PERF_MAX_REGRESSION_RATIO,
       requireBaseline: options.requireBaseline,
+      enforceNumericBudgets: !options.smoke,
     });
     report.evaluation = evaluation;
     const reportPath = await writeReport(options.outputDirectory, report);

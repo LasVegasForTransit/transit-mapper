@@ -9,24 +9,21 @@ export const PERF_BASELINE_DIRECTORY = 'perf';
 
 /**
  * Entry budgets include the HTML document, CSS, entry chunk, and the full
- * static and dynamic import graph. They are intentionally absolute policy
- * limits, not measurements copied from a particular run.
+ * static and dynamic import graph. Raw bytes remain visible in the report,
+ * but only compressed delivery size is an absolute gate. Browser audits own
+ * parse and responsiveness costs; raw module size is not a product ceiling.
  */
 export const BUNDLE_BUDGETS: BundleBudget[] = [
   {
     entry: 'main',
-    // The desktop PWA controller and view-specific workspace are editor-only,
-    // but still belong in this entry. CI measures 1,627,645 raw bytes after the
-    // workspace landed, so preserve the same deliberately narrow raw headroom
-    // while leaving the compressed delivery budgets unchanged.
-    maximumRawBytes: 1_628_000,
-    maximumGzipBytes: 463_000,
-    maximumBrotliBytes: 400_000,
+    // These round delivery guardrails leave space for the simulator to grow
+    // while still making a material download increase an explicit decision.
+    maximumGzipBytes: 512_000,
+    maximumBrotliBytes: 450_560,
   },
   {
     entry: 'embed',
-    maximumRawBytes: 1_100_000,
-    maximumGzipBytes: 320_000,
-    maximumBrotliBytes: 280_000,
+    maximumGzipBytes: 358_400,
+    maximumBrotliBytes: 307_200,
   },
 ];

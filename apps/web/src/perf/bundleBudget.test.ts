@@ -5,23 +5,21 @@ import type { BundleBudget, BundleEntrySize } from './bundleBudget';
 const budgets: BundleBudget[] = [
   {
     entry: 'main',
-    maximumRawBytes: 1_000,
     maximumGzipBytes: 500,
     maximumBrotliBytes: 400,
   },
   {
     entry: 'embed',
-    maximumRawBytes: 800,
     maximumGzipBytes: 400,
     maximumBrotliBytes: 300,
   },
 ];
 
 describe('bundle budgets', () => {
-  it('passes when every entry stays within every absolute limit', () => {
+  it('gates delivered bytes without treating raw module size as a product ceiling', () => {
     const sizes: BundleEntrySize[] = [
-      { entry: 'main', rawBytes: 999, gzipBytes: 499, brotliBytes: 399 },
-      { entry: 'embed', rawBytes: 799, gzipBytes: 399, brotliBytes: 299 },
+      { entry: 'main', rawBytes: 99_999, gzipBytes: 499, brotliBytes: 399 },
+      { entry: 'embed', rawBytes: 99_999, gzipBytes: 399, brotliBytes: 299 },
     ];
 
     expect(evaluateBundleBudgets(sizes, budgets)).toEqual([]);

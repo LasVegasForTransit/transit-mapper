@@ -4,6 +4,7 @@ export type PerfFixtureId = 'small' | 'dense' | 'rtc';
 export type PerfScenarioId = PerfFixtureId | 'share' | 'embed';
 export type PerfSurface = 'editor' | 'share' | 'embed';
 export type PerfProfileId = 'desktop' | 'mobile';
+export type PerfRunMode = 'audit' | 'smoke';
 
 export type PerfMetricName =
   | 'loadMs'
@@ -82,8 +83,8 @@ export interface PerfProtocol {
   cache: 'cleared-before-cold-load-then-enabled';
   viewport: PerfViewport;
   network: PerfNetworkProfile;
-  warmupRuns: 1;
-  measuredRuns: 5;
+  warmupRuns: number;
+  measuredRuns: number;
   warmReloadsPerMeasuredRun: 1;
 }
 
@@ -322,4 +323,7 @@ export interface EvaluatePerfBudgetsOptions {
   scenarios: PerfScenario[];
   maxRegressionRatio: number;
   requireBaseline?: boolean;
+  /** A smoke proves that the production build and browser journey complete.
+   * One sample is deliberately not treated as statistical timing evidence. */
+  enforceNumericBudgets?: boolean;
 }

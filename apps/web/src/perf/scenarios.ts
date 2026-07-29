@@ -1,6 +1,7 @@
 import type {
   PerfProfileId,
   PerfProtocol,
+  PerfRunMode,
   PerfScenario,
   PerfScenarioId,
   PerfViewport,
@@ -19,7 +20,10 @@ const PROFILE_VIEWPORTS: Record<PerfProfileId, PerfViewport> = {
   },
 };
 
-export function createPerfProtocol(profile: PerfProfileId): PerfProtocol {
+export function createPerfProtocol(
+  profile: PerfProfileId,
+  runMode: PerfRunMode = 'audit',
+): PerfProtocol {
   return {
     profile,
     browser: 'Google Chrome',
@@ -34,8 +38,12 @@ export function createPerfProtocol(profile: PerfProfileId): PerfProtocol {
       uploadThroughputBytesPerSecond: (3 * 1_024 * 1_024) / 8,
       latencyMs: 20,
     },
-    warmupRuns: 1,
-    measuredRuns: 5,
+    // Pull-request smoke runs prove the complete cold/warm RTC journey once.
+    // Repetition belongs to a deliberate audit, where it can support a
+    // statistical timing decision instead of spending Actions minutes on
+    // every branch update.
+    warmupRuns: runMode === 'smoke' ? 0 : 1,
+    measuredRuns: runMode === 'smoke' ? 1 : 5,
     warmReloadsPerMeasuredRun: 1,
   };
 }
