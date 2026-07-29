@@ -66,6 +66,10 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    // Terser costs a little more build time than Vite's default esbuild
+    // minifier, but keeps the complete editor graph within its transfer
+    // budget without hiding lazy features from the entrypoint report.
+    minify: 'terser',
     // The post-build performance reporter walks each entry's full import
     // closure from this manifest. Console chunk warnings cannot tell whether
     // a byte is paid by the editor, the embed, or both.
