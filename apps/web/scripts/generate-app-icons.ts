@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
-import { readFile, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import sharp from 'sharp';
 import { LVBT } from '@transitmapper/core/style/lvbtBrand';
@@ -19,8 +19,11 @@ import {
   type AppIconKind,
   type AppIconTheme,
 } from './app-icon';
+import { generateInstallIconAssets, type ManifestIcon } from './app-icon-assets';
 
 const PUBLIC_DIRECTORY = resolve(import.meta.dirname, '../public');
+const MANIFEST_PATH = resolve(PUBLIC_DIRECTORY, 'manifest.json');
+const INSTALL_ICON_DIRECTORY = resolve(PUBLIC_DIRECTORY, 'icons');
 const OPEN_GRAPH_PATH = resolve(PUBLIC_DIRECTORY, 'og-image.png');
 const ICON_COMPOSER_LAYER_PATH = resolve(
   import.meta.dirname,
@@ -34,6 +37,15 @@ const ICON_COMPOSER_PROVENANCE_PATH = resolve(
 );
 const CHECK_ONLY = process.argv.includes('--check');
 const RECORD_APPLE_EXPORT = process.argv.includes('--record-apple-export');
+const LEGACY_INSTALL_ASSETS = [
+  'icon.svg',
+  'icon-192.png',
+  'icon-512.png',
+  'icon-maskable.svg',
+  'icon-maskable-192.png',
+  'icon-maskable-512.png',
+] as const;
+const MANAGED_INSTALL_ASSET = /^app-icon(?:-maskable)?-[^.]+\.(?:png|svg)$/;
 
 interface RasterAsset {
   name: string;
@@ -47,10 +59,6 @@ const RASTER_ASSETS: RasterAsset[] = [
   { name: 'favicon-32x32.png', size: 32, kind: 'regular', theme: 'light' },
   { name: 'favicon-dark-16x16.png', size: 16, kind: 'regular', theme: 'dark' },
   { name: 'favicon-dark-32x32.png', size: 32, kind: 'regular', theme: 'dark' },
-  { name: 'icon-192.png', size: 192, kind: 'regular', theme: 'light' },
-  { name: 'icon-512.png', size: 512, kind: 'regular', theme: 'light' },
-  { name: 'icon-maskable-192.png', size: 192, kind: 'maskable', theme: 'light' },
-  { name: 'icon-maskable-512.png', size: 512, kind: 'maskable', theme: 'light' },
 ];
 
 interface GeneratedAsset {
@@ -63,14 +71,6 @@ async function generatedAssets(appleSource: Buffer): Promise<GeneratedAsset[]> {
     {
       name: 'favicon.svg',
       contents: Buffer.from(appIconSvg({ kind: 'regular', theme: 'adaptive' })),
-    },
-    {
-      name: 'icon.svg',
-      contents: Buffer.from(appIconSvg({ kind: 'regular', theme: 'adaptive' })),
-    },
-    {
-      name: 'icon-maskable.svg',
-      contents: Buffer.from(appIconSvg({ kind: 'maskable', theme: 'adaptive' })),
     },
   ];
 
@@ -122,12 +122,49 @@ async function generatedOpenGraphImage(): Promise<Buffer> {
 
 async function verifyOrWrite(path: string, expected: Buffer): Promise<boolean> {
   if (!CHECK_ONLY) {
+    await mkdir(dirname(path), { recursive: true });
     await writeFile(path, expected);
     return true;
   }
 
   const actual = await readFile(path).catch(() => null);
   return actual?.equals(expected) === true;
+}
+
+interface WebAppManifest extends Record<string, unknown> {
+  icons?: ManifestIcon[];
+}
+
+async function generatedManifest(icons: ManifestIcon[]): Promise<Buffer> {
+  const current = JSON.parse(await readFile(MANIFEST_PATH, 'utf8')) as WebAppManifest;
+  return Buffer.from(`${JSON.stringify({ ...current, icons }, null, 2)}\n`);
+}
+
+async function obsoleteInstallAssets(expectedNames: ReadonlySet<string>): Promise<string[]> {
+  const entries = await readdir(INSTALL_ICON_DIRECTORY).catch(() => []);
+  return entries
+    .filter((name) => MANAGED_INSTALL_ASSET.test(name) && !expectedNames.has(name))
+    .sort();
+}
+
+async function removeOrReportObsolete(
+  expectedNames: ReadonlySet<string>,
+  stale: string[],
+): Promise<void> {
+  const obsolete = await obsoleteInstallAssets(expectedNames);
+  for (const name of obsolete) {
+    const relativePath = `icons/${name}`;
+    if (CHECK_ONLY) stale.push(relativePath);
+    else await rm(resolve(INSTALL_ICON_DIRECTORY, name), { force: true });
+  }
+
+  for (const name of LEGACY_INSTALL_ASSETS) {
+    const path = resolve(PUBLIC_DIRECTORY, name);
+    const exists = (await readFile(path).catch(() => null)) !== null;
+    if (!exists) continue;
+    if (CHECK_ONLY) stale.push(name);
+    else await rm(path, { force: true });
+  }
 }
 
 async function main(): Promise<void> {
@@ -179,6 +216,23 @@ async function main(): Promise<void> {
     if (!(await verifyOrWrite(path, asset.contents))) stale.push(asset.name);
   }
 
+  const installIcons = await generateInstallIconAssets();
+  const installNames = new Set(installIcons.assets.map((asset) => asset.name));
+  for (const asset of installIcons.assets) {
+    const relativePath = `icons/${asset.name}`;
+    const path = resolve(PUBLIC_DIRECTORY, relativePath);
+    if (!(await verifyOrWrite(path, asset.contents))) stale.push(relativePath);
+  }
+  if (
+    !(await verifyOrWrite(
+      MANIFEST_PATH,
+      await generatedManifest(installIcons.assets.map((asset) => asset.manifest)),
+    ))
+  ) {
+    stale.push('manifest.json');
+  }
+  await removeOrReportObsolete(installNames, stale);
+
   const openGraph = await generatedOpenGraphImage();
   if (!(await verifyOrWrite(OPEN_GRAPH_PATH, openGraph))) stale.push('og-image.png');
 
@@ -192,8 +246,8 @@ async function main(): Promise<void> {
     RECORD_APPLE_EXPORT
       ? 'Recorded the current Apple Icon Composer export and generated app icon assets.'
       : CHECK_ONLY
-        ? 'Generated app icon assets are current.'
-        : 'Generated theme-aware app icon assets.',
+        ? `Generated app icon assets are current at revision ${installIcons.revision}.`
+        : `Generated theme-aware app icon assets at revision ${installIcons.revision}.`,
   );
 }
 

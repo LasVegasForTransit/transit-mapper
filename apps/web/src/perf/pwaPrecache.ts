@@ -11,8 +11,20 @@ export interface BuildManifestEntry {
 
 export type BuildManifest = Record<string, BuildManifestEntry>;
 
+export interface WebAppManifestIcon {
+  src: string;
+  sizes?: string;
+  type?: string;
+  purpose?: string;
+}
+
+export interface WebAppManifest {
+  icons?: WebAppManifestIcon[];
+}
+
 export interface VerifyPrecacheOutputOptions {
   manifest: BuildManifest;
+  installIcons: readonly string[];
   precached: string[];
 }
 
@@ -23,12 +35,6 @@ const EDITOR_PUBLIC_ASSETS = [
   'favicon-dark-16x16.png',
   'favicon-dark-32x32.png',
   'favicon.svg',
-  'icon-192.png',
-  'icon-512.png',
-  'icon-maskable.svg',
-  'icon-maskable-192.png',
-  'icon-maskable-512.png',
-  'icon.svg',
   'manifest.json',
 ] as const;
 
@@ -67,23 +73,32 @@ function entryGraph(manifest: BuildManifest, name: 'main' | 'embed'): Set<string
   return files;
 }
 
-export function editorPrecacheFiles(manifest: BuildManifest): string[] {
-  return [...entryGraph(manifest, 'main'), ...EDITOR_PUBLIC_ASSETS].sort();
+export function manifestInstallIconFiles(manifest: WebAppManifest): string[] {
+  return [
+    ...new Set((manifest.icons ?? []).map((icon) => icon.src.replace(/^\/+/, '')).filter(Boolean)),
+  ].sort();
 }
 
-export function embedOnlyFiles(manifest: BuildManifest): string[] {
-  const editorFiles = new Set(editorPrecacheFiles(manifest));
+export function editorPrecacheFiles(
+  manifest: BuildManifest,
+  installIcons: readonly string[],
+): string[] {
+  return [...entryGraph(manifest, 'main'), ...EDITOR_PUBLIC_ASSETS, ...installIcons].sort();
+}
+
+export function embedOnlyFiles(manifest: BuildManifest, installIcons: readonly string[]): string[] {
+  const editorFiles = new Set(editorPrecacheFiles(manifest, installIcons));
   return [...entryGraph(manifest, 'embed')].filter((file) => !editorFiles.has(file)).sort();
 }
 
 export function verifyPrecacheOutput(options: VerifyPrecacheOutputOptions): string[] {
   const precached = new Set(options.precached);
-  const failures = editorPrecacheFiles(options.manifest)
+  const failures = editorPrecacheFiles(options.manifest, options.installIcons)
     .filter((file) => !precached.has(file))
     .map((file) => `editor asset is not precached: ${file}`);
 
   failures.push(
-    ...embedOnlyFiles(options.manifest)
+    ...embedOnlyFiles(options.manifest, options.installIcons)
       .filter((file) => precached.has(file))
       .map((file) => `embed-only asset is precached: ${file}`),
   );

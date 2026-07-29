@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   editorPrecacheFiles,
   embedOnlyFiles,
+  manifestInstallIconFiles,
   verifyPrecacheOutput,
   type BuildManifest,
+  type WebAppManifest,
 } from '../../src/perf/pwaPrecache';
 
 const manifest: BuildManifest = {
@@ -31,9 +33,42 @@ const manifest: BuildManifest = {
   },
 };
 
+const webAppManifest: WebAppManifest = {
+  icons: [
+    {
+      src: '/icons/app-icon-a1b2c3d4e5f6.svg',
+      sizes: 'any',
+      type: 'image/svg+xml',
+      purpose: 'any',
+    },
+    {
+      src: '/icons/app-icon-a1b2c3d4e5f6-192.png',
+      sizes: '192x192',
+      type: 'image/png',
+      purpose: 'any',
+    },
+    {
+      src: '/icons/app-icon-maskable-a1b2c3d4e5f6-512.png',
+      sizes: '512x512',
+      type: 'image/png',
+      purpose: 'maskable',
+    },
+  ],
+};
+
+const installIcons = manifestInstallIconFiles(webAppManifest);
+
 describe('PWA precache output', () => {
+  it('derives fingerprinted install assets from the web app manifest', () => {
+    expect(installIcons).toEqual([
+      'icons/app-icon-a1b2c3d4e5f6-192.png',
+      'icons/app-icon-a1b2c3d4e5f6.svg',
+      'icons/app-icon-maskable-a1b2c3d4e5f6-512.png',
+    ]);
+  });
+
   it('walks static and lazy editor imports into the offline graph', () => {
-    expect(editorPrecacheFiles(manifest)).toEqual([
+    expect(editorPrecacheFiles(manifest, installIcons)).toEqual([
       'apple-touch-icon.png',
       'assets/dialog-icon.svg',
       'assets/dialog.js',
@@ -46,29 +81,26 @@ describe('PWA precache output', () => {
       'favicon-dark-16x16.png',
       'favicon-dark-32x32.png',
       'favicon.svg',
-      'icon-192.png',
-      'icon-512.png',
-      'icon-maskable-192.png',
-      'icon-maskable-512.png',
-      'icon-maskable.svg',
-      'icon.svg',
+      'icons/app-icon-a1b2c3d4e5f6-192.png',
+      'icons/app-icon-a1b2c3d4e5f6.svg',
+      'icons/app-icon-maskable-a1b2c3d4e5f6-512.png',
       'index.html',
       'manifest.json',
     ]);
   });
 
   it('excludes only assets unique to the embed graph', () => {
-    expect(embedOnlyFiles(manifest)).toEqual(['assets/embed.js', 'embed.html']);
+    expect(embedOnlyFiles(manifest, installIcons)).toEqual(['assets/embed.js', 'embed.html']);
   });
 
-  it('reports missing editor assets and accidentally cached embed assets', () => {
-    const expected = editorPrecacheFiles(manifest);
+  it('reports missing manifest icons and accidentally cached embed assets', () => {
+    const expected = editorPrecacheFiles(manifest, installIcons);
     const precached = expected
-      .filter((file) => file !== 'assets/dialog.js')
+      .filter((file) => file !== 'icons/app-icon-a1b2c3d4e5f6.svg')
       .concat('assets/embed.js');
 
-    expect(verifyPrecacheOutput({ manifest, precached })).toEqual([
-      'editor asset is not precached: assets/dialog.js',
+    expect(verifyPrecacheOutput({ manifest, installIcons, precached })).toEqual([
+      'editor asset is not precached: icons/app-icon-a1b2c3d4e5f6.svg',
       'embed-only asset is precached: assets/embed.js',
     ]);
   });
