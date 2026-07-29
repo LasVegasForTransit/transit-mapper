@@ -148,7 +148,9 @@ is auditable. Display cadence is diagnostic only and never changes a budget or
 normalizes a regression. Gzip and Brotli delivery bytes get the same 10%
 regression check during a full audit. Raw graph size remains in the report for
 diagnosis, but it is not an absolute or regression gate; browser measurements
-own parse and responsiveness costs.
+own parse and responsiveness costs. The compressed absolute limits are round
+delivery guardrails, not snapshots of the current build plus a few kilobytes,
+so ordinary feature work does not require ritual budget churn.
 
 The production build keeps MapLibre and React in stable cache chunks so an
 editor release does not make a returning browser download those runtimes
@@ -202,6 +204,10 @@ the initial and final snapshots and fails if JS heap, DOM nodes, listeners,
 dedicated workers, or WebGL contexts grow by more than 10%. WebGL is counted as
 contexts created minus observed `webglcontextlost` events; the report names
 that source because the browser does not expose a general live-context census.
+Both snapshots come from the same build after the tested edit and export paths
+have been warmed. A feature that has a higher but stable resource baseline
+therefore passes; the gate targets retained growth across repeated lifecycles,
+not a fixed historical count.
 Its evidence is `soak-report.json`. When the listener count grows, the report
 also groups the retained initial and final listeners by queried root, actual
 backend node when Chrome supplies it, event type, capture/passive/once flags,
@@ -217,7 +223,8 @@ remote soak and accept the same duration override, which keeps headed Chrome
 inside Xvfb instead of taking over a local desktop. A shorter diagnostic result
 cannot satisfy the leak gate; omit the override for ten-minute acceptance
 evidence. The baseline warms both PNG and SVG export paths before its first
-for retained growth. Before the final snapshot, a non-primary map click
+forced-GC snapshot so one-time initialization is not mistaken for retained
+growth. Before the final snapshot, a non-primary map click
 consumes Radix Menu's one-shot pointer-modality listeners. Keyboard actions
 legitimately arm one pair per mounted menu until the next pointer input; taking
 the snapshot before that input would count a transient state as retained
