@@ -1,8 +1,7 @@
 import { useEffect, useRef } from 'react';
-import maplibregl, { type GeoJSONSource, type StyleSpecification } from 'maplibre-gl';
+import maplibregl, { type GeoJSONSource } from 'maplibre-gl';
 import {
   buildFeatures,
-  LAYER_SPECS,
   registerMapIcons,
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
@@ -22,6 +21,8 @@ import {
   ONBOARDING_SERVICE_COLOR,
   ONBOARDING_VEHICLE_PROFILE,
 } from './fixtureSystem';
+import { useSystemColorScheme } from '../../theme/systemColorScheme';
+import { layerSpecsForScheme, localBlankStyleForScheme } from '../../map/mapTheme';
 
 /**
  * A third, independent MapLibre instance — alongside the app's main map
@@ -53,8 +54,6 @@ interface OnboardingPreviewMapProps {
   animateVehicle?: boolean;
 }
 
-const BLANK_STYLE: StyleSpecification = { version: 8, sources: {}, layers: [] };
-const PREVIEW_LAYER_SPECS = LAYER_SPECS.filter((spec) => spec.type !== 'symbol');
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
 export function OnboardingPreviewMap({
@@ -63,13 +62,17 @@ export function OnboardingPreviewMap({
   className = '',
   animateVehicle = false,
 }: OnboardingPreviewMapProps) {
+  const colorScheme = useSystemColorScheme();
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const previewLayerSpecs = layerSpecsForScheme(colorScheme).filter(
+      (spec) => spec.type !== 'symbol',
+    );
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: BLANK_STYLE,
+      style: localBlankStyleForScheme(colorScheme),
       center: system.viewport.center,
       zoom: system.viewport.zoom,
       interactive: false,
@@ -81,17 +84,17 @@ export function OnboardingPreviewMap({
 
     map.on('load', () => {
       try {
-        registerMapIcons(map);
+        registerMapIcons(map, colorScheme);
 
         const sources = new Set(
-          PREVIEW_LAYER_SPECS.map((spec) =>
-            'source' in spec ? (spec.source as string) : '',
-          ).filter(Boolean),
+          previewLayerSpecs
+            .map((spec) => ('source' in spec ? (spec.source as string) : ''))
+            .filter(Boolean),
         );
         for (const src of sources) {
           if (!map.getSource(src)) map.addSource(src, { type: 'geojson', data: EMPTY_FC });
         }
-        for (const spec of PREVIEW_LAYER_SPECS) {
+        for (const spec of previewLayerSpecs) {
           if (!map.getLayer(spec.id)) map.addLayer(spec);
         }
 
@@ -154,11 +157,11 @@ export function OnboardingPreviewMap({
       if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
       map.remove();
     };
-    // Mounts once per slide (OnboardingDialog only renders the active
-    // slide's preview) — system/view are fixed for this component's whole
-    // lifetime, unlike ExportPreviewMap's, which tracks a live-editable one.
+    // System/view are fixed for this component's whole lifetime. A scheme
+    // change intentionally rebuilds this tiny non-interactive map so its
+    // substrate changes in the same frame as the dialog chrome.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [colorScheme]);
 
   return <div ref={containerRef} className={`onboarding-preview-map ${className}`.trim()} />;
 }

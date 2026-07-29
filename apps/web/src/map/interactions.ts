@@ -1097,7 +1097,7 @@ export function attachInteractions(
    *  something alongside the rubber band that produced it. */
   const clearPreviews = () => {
     setPreview(null);
-    setSharingPreview([], '#000000');
+    setSharingPreview([], store.getState().draftColor);
   };
 
   interface PreviewProperties {
@@ -1799,7 +1799,13 @@ export function attachInteractions(
         coords.length >= 2 ? coords : null,
         source.purpose === 'return' ? { oneWayReturn: true } : {},
       );
-      setSharingPreview(coords.length >= 2 ? [coords] : [], '#000000');
+      const sourceService = store
+        .getState()
+        .system.services.find((service) => service.id === source.serviceId);
+      setSharingPreview(
+        coords.length >= 2 ? [coords] : [],
+        sourceService?.color ?? store.getState().draftColor,
+      );
       setEndpointHint(coords.at(-1) ?? null);
       publishPointerIntent(ev, undefined, true);
     };

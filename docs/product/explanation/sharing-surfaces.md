@@ -31,6 +31,23 @@ could only ever serve one static image for every system.
 The web app's export modules are now thin adapters that supply what only a
 live map knows — viewport size, projection, bearing, ground resolution.
 
+## Theme boundary
+
+The editor, read-only share page, onboarding maps, and live embed follow the
+viewer's operating-system color scheme. Their neutral chrome, basemap, label
+halos, handles, and other editing or reading affordances can change.
+
+The colors a person assigned to lines and other system objects cannot. Those
+colors are domain data used by every renderer, not theme accents. Live maps
+put a scheme-appropriate neutral casing beneath user-colored routes so
+near-black, near-white, and saturated colors keep enough local contrast
+without changing the stored value.
+
+Portable artifacts are deliberately different. PNG and SVG exports, uploaded
+share cards, and Worker-served/generated preview surfaces always use the light
+palette. The same snapshot therefore produces the same artifact regardless
+of the operating-system theme of the browser that requested it.
+
 ## Detail follows display size
 
 An exported image is looked at close to full size. A link unfurl is composed

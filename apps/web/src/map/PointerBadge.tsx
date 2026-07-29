@@ -26,7 +26,7 @@ export function PointerBadge({ intent, x, y }: PointerBadgeProps) {
   const { badge } = intent;
   return (
     <span
-      className="pointer-events-none fixed z-50 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--bg)] text-[var(--ink)] shadow-[var(--shadow)]"
+      className="pointer-events-none fixed z-50 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-primary)] shadow-[var(--md-sys-elevation-level2)]"
       style={{ left: x + 14, top: y + 14 }}
       data-pointer-anchor={intent.anchor}
       aria-hidden="true"

@@ -112,7 +112,7 @@ export function ColorSpectrum({ value, onChange }: ColorSpectrumProps) {
         className="cs-sv"
         ref={svRef}
         style={{
-          background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(${hue} 100% 50%))`,
+          background: `linear-gradient(to top, var(--tm-fixed-black), transparent), linear-gradient(to right, var(--tm-fixed-white), hsl(${hue} 100% 50%))`,
         }}
         onPointerDown={trackDrag(dragSV)}
       >

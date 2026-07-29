@@ -1,4 +1,6 @@
-import type { Map as MLMap, StyleSpecification } from 'maplibre-gl';
+import type { Map as MLMap } from 'maplibre-gl';
+import type { ColorScheme } from '../theme/systemColorScheme';
+import { localBlankStyleForScheme } from './mapTheme';
 
 /**
  * The editor owns every interactive layer, so a slow street style must never
@@ -7,19 +9,8 @@ import type { Map as MLMap, StyleSpecification } from 'maplibre-gl';
  */
 export const INITIAL_STYLE_FALLBACK_TIMEOUT_MS = 1_500;
 
-export const LOCAL_BLANK_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {},
-  layers: [
-    {
-      id: 'transitmapper-local-background',
-      type: 'background',
-      paint: { 'background-color': '#f7f4ec' },
-    },
-  ],
-};
-
 export interface InitialStyleFallbackOptions {
+  scheme: ColorScheme;
   timeoutMs: number;
   onFallback: () => void;
 }
@@ -42,7 +33,7 @@ export function attachInitialStyleFallback(
     if (settled || fallbackRequested) return;
     fallbackRequested = true;
     options.onFallback();
-    map.setStyle(LOCAL_BLANK_STYLE, { diff: false });
+    map.setStyle(localBlankStyleForScheme(options.scheme), { diff: false });
   };
   const onStyleLoad = () => {
     settled = true;

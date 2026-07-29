@@ -58,7 +58,10 @@ a live preview where you can choose what's included. `C` captures a quick
 PNG of the whole system from the keyboard.
 
 Exports are rendered from the system data itself, not screenshotted from the
-map, so they come out clean at any size and include a legend.
+map, so they come out clean at any size and include a legend. PNG and SVG
+exports always use the light basemap and light paper palette, even when the
+editor is following a dark operating-system theme. That makes a downloaded
+artifact deterministic and portable into documents and presentations.
 
 ## Save data
 

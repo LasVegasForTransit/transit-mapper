@@ -2,7 +2,7 @@ import type { GeoJSONSource, Map as MLMap } from 'maplibre-gl';
 import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
 import { landmarksFeatureCollection } from '../landmarks';
 import {
-  LAYER_SPECS,
+  LIGHT_LAYER_SPECS,
   SRC_CONNECTORS,
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
@@ -30,13 +30,13 @@ const EMPTY_FEATURE_COLLECTION: GeoJSON.FeatureCollection = {
  * Install the complete export overlay in dependency order: every GeoJSON
  * source referenced by the shared layer catalog first, then every layer.
  *
- * Deriving this list from LAYER_SPECS is deliberate. Export maps are
+ * Deriving this list from LIGHT_LAYER_SPECS is deliberate. Export maps are
  * short-lived and do not need the editor's hand-maintained source inventory;
  * deriving it here means a new layer/source pair cannot silently break one
  * export surface while working in another.
  */
 export function addExportSourcesAndLayers(map: MLMap): void {
-  for (const spec of LAYER_SPECS) {
+  for (const spec of LIGHT_LAYER_SPECS) {
     const sourceId = 'source' in spec ? spec.source : undefined;
     if (typeof sourceId !== 'string' || map.getSource(sourceId)) continue;
     map.addSource(sourceId, {
@@ -45,7 +45,7 @@ export function addExportSourcesAndLayers(map: MLMap): void {
     });
   }
 
-  for (const spec of LAYER_SPECS) map.addLayer(spec);
+  for (const spec of LIGHT_LAYER_SPECS) map.addLayer(spec);
 }
 
 /** Populate every source derived by buildFeatures. Sources used only for live

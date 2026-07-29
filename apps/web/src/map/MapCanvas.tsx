@@ -11,7 +11,7 @@ import type { SimCommands } from '../editor/keymap';
 import { useSim, useSimClock } from '../ui/SimProvider';
 import { useContextMenu, useUi } from '../ui/UiProvider';
 import { useView } from '../ui/ViewProvider';
-import { BASEMAP_STYLE } from './basemap';
+import { useSystemColorScheme } from '../theme/systemColorScheme';
 import { attachInteractions, type TerminusConnectionChoice } from './interactions';
 import { PointerBadge } from './PointerBadge';
 import type { PointerIntent } from '../editor/pointerIntent';
@@ -34,8 +34,10 @@ import {
   LYR_WAYS_SOLID,
   LYR_WAYS_DASHED,
   LYR_SERVICES_SOLID,
+  LYR_SERVICES_SOLID_CASING,
   LYR_SERVICES_ELEVATED,
   LYR_SERVICES_UNDERGROUND,
+  LYR_SERVICES_UNDERGROUND_CASING,
   LYR_STATIONS,
   LYR_FACILITIES,
   registerMapIcons,
@@ -101,16 +103,19 @@ import { servicesByWay } from '@transitmapper/core/render/featureMemo';
 import { attachSimDevHandle } from '../sim/devHandle';
 import { attachVehicleAnimation } from '../sim/vehicles';
 import { clearArmedTerminusForViewChange } from './viewEditorState';
+import { basemapStyleForScheme, layerSpecsForScheme } from './mapTheme';
+import { createStyleSwitchController, type StyleSwitchController } from './styleSwitchController';
 const OWN_LAYER_IDS = new Set(LAYER_SPECS.map((l) => l.id));
 const PERF_HARNESS_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
 
 /** A local blank style has no glyph endpoint. Keep all geometry and icon-only
  * interaction layers, and omit only symbol layers whose text would otherwise
  * make an impossible network request before later layers are installed. */
-const LOCAL_BLANK_LAYER_SPECS = LAYER_SPECS.filter(
-  (layer: LayerSpecification) =>
-    layer.type !== 'symbol' || layer.layout?.['text-field'] === undefined,
-);
+function localBlankLayerSpecs(scheme: 'light' | 'dark'): LayerSpecification[] {
+  return layerSpecsForScheme(scheme).filter(
+    (layer) => layer.type !== 'symbol' || layer.layout?.['text-field'] === undefined,
+  );
+}
 
 /** Diagram mode is a schematic with no real geography, so the street basemap
  *  underneath would be actively misleading — hide every style layer that
@@ -137,6 +142,9 @@ interface MapErrorLike {
 }
 
 export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
+  const colorScheme = useSystemColorScheme();
+  const initialColorSchemeRef = useRef(colorScheme);
+  const styleSwitchControllerRef = useRef<StyleSwitchController | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [pointerBadge, setPointerBadge] = useState<{
     intent: PointerIntent | null;
@@ -232,6 +240,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   }, [pinnedPeriod]);
 
   const viewRef = useRef<ViewOptions>({ viewMode, visibleModes, visibleWayTypes });
+  const showLandmarksRef = useRef(showLandmarks);
+  showLandmarksRef.current = showLandmarks;
   const schedulePushDataRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -300,6 +310,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const initialColorScheme = initialColorSchemeRef.current;
     const initial = store.getState().system;
     // Seed the live camera holder from the loaded system's saved viewport
     // (camera/liveCamera.ts owns the LIVE camera from here on, not `system`).
@@ -307,7 +318,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: BASEMAP_STYLE,
+      style: basemapStyleForScheme(initialColorScheme),
       center: initial.viewport.center,
       zoom: initial.viewport.zoom,
       // No preserveDrawingBuffer: PNG export renders on a dedicated offscreen
@@ -333,17 +344,19 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // overlay's self-healing in ensureOverlay() will keep re-adding layers
     // over a style that never loaded, hiding a persistent failure forever.
     //
-    // BASEMAP_STYLE is a third-party host (openfreemap.org) with no SLA, so
+    // OpenFreeMap is a third-party host with no SLA, so
     // "the basemap is down" is a real operating condition, not a hypothetical.
     // Only a failure *before the style loads* is worth telling the user about:
     // once it's up, later errors are individual tiles timing out, which
     // MapLibre retries and which nobody needs a message about.
     let usingLocalBlankStyle = false;
+    let activeMapScheme = initialColorScheme;
     const onMapError = (event: MapErrorLike) => {
       console.error('[transitmapper]', event.error ?? event);
     };
     map.on('error', onMapError);
     const detachInitialStyleFallback = attachInitialStyleFallback(map, {
+      scheme: initialColorScheme,
       timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
       onFallback: () => {
         usingLocalBlankStyle = true;
@@ -432,7 +445,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // the paint order instead of landing on top.
     const ensureOverlay = (): boolean => {
       if (!map.getStyle()) return false;
-      const layerSpecs = usingLocalBlankStyle ? LOCAL_BLANK_LAYER_SPECS : LAYER_SPECS;
+      const layerSpecs = usingLocalBlankStyle
+        ? localBlankLayerSpecs(activeMapScheme)
+        : layerSpecsForScheme(activeMapScheme);
       for (const src of ALL_SOURCES) {
         if (map.getSource(src)) continue;
         // The two heavy static line sources (imported GTFS geometry — ~121k
@@ -508,14 +523,20 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // you can trace one line across a dense network. Restored when unfocused.
     const FOCUS_DIM = 0.12;
     let routeFocusActive = false;
-    const setRouteFocus = (active: boolean) => {
-      if (active === routeFocusActive) return;
+    const setRouteFocus = (active: boolean, force = false) => {
+      if (active === routeFocusActive && !force) return;
       routeFocusActive = active;
-      const opacity = active
-        ? ['case', ['boolean', ['feature-state', 'selected'], false], 1, FOCUS_DIM]
-        : 1;
-      for (const layer of [LYR_SERVICES_SOLID, LYR_SERVICES_UNDERGROUND]) {
-        if (map.getLayer(layer)) map.setPaintProperty(layer, 'line-opacity', opacity as never);
+      for (const [layer, baseOpacity] of [
+        [LYR_SERVICES_SOLID, 1],
+        [LYR_SERVICES_UNDERGROUND, 1],
+        [LYR_SERVICES_SOLID_CASING, 0.72],
+        [LYR_SERVICES_UNDERGROUND_CASING, 0.72],
+      ] as const) {
+        if (!map.getLayer(layer)) continue;
+        const layerOpacity = active
+          ? ['case', ['boolean', ['feature-state', 'selected'], false], baseOpacity, FOCUS_DIM]
+          : baseOpacity;
+        map.setPaintProperty(layer, 'line-opacity', layerOpacity as never);
       }
     };
 
@@ -650,6 +671,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       if (!directManipulationActive) return;
       directManipulationActive = false;
       notifyVehicleGate();
+      void styleSwitchControllerRef.current?.flush();
     };
 
     if (PERF_HARNESS_BUILD) {
@@ -669,9 +691,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       // swallow this update (every setData below is optional-chained).
       const overlayNeedsHealing =
         ALL_SOURCES.some((sourceId) => !map.getSource(sourceId)) ||
-        (usingLocalBlankStyle ? LOCAL_BLANK_LAYER_SPECS : LAYER_SPECS).some(
-          (layer) => !map.getLayer(layer.id),
-        );
+        (usingLocalBlankStyle
+          ? localBlankLayerSpecs(activeMapScheme)
+          : layerSpecsForScheme(activeMapScheme)
+        ).some((layer) => !map.getLayer(layer.id));
       let sourceIds = requestedSources;
       if (overlayNeedsHealing) {
         if (!ensureOverlay()) return;
@@ -873,6 +896,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         // expose a classifiable system change.
         schedulePushData(sourceUploadQueue.hasPending() ? [] : 'all');
       }
+      void styleSwitchControllerRef.current?.flush();
     };
 
     // Selection-only fast path (system unchanged): update halos via feature-state
@@ -937,6 +961,53 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       }, LANE_REFRESH_DEBOUNCE_MS);
     };
 
+    let initialMapLoaded = false;
+    const recoverMapStyle = () => {
+      registerMapIcons(map, activeMapScheme);
+      if (!ensureOverlay()) return;
+      pushData(ALL_SYSTEM_FEATURE_SOURCES);
+      // A full style rebuild creates fresh feature-state tables. pushData
+      // reapplies selection after setData; restore the stationary hover too so
+      // the pointer does not lose its affordance until it moves again.
+      if (hovered && map.getSource(hovered.source)) {
+        map.setFeatureState(hovered, { hover: true });
+      }
+      updateHaloVisibility();
+      setRouteFocus(routeFocusActive, true);
+      const landmarkVisibility =
+        viewRef.current.viewMode !== 'diagram' && showLandmarksRef.current ? 'visible' : 'none';
+      if (map.getLayer(LYR_LANDMARKS))
+        map.setLayoutProperty(LYR_LANDMARKS, 'visibility', landmarkVisibility);
+      if (map.getLayer(LYR_LANDMARK_LABELS))
+        map.setLayoutProperty(LYR_LANDMARK_LABELS, 'visibility', landmarkVisibility);
+      setBasemapVisible(map, viewRef.current.viewMode !== 'diagram');
+      notifyVehicleGate();
+      map.triggerRepaint();
+    };
+    const onStyleLoad = () => {
+      if (initialMapLoaded) recoverMapStyle();
+    };
+    map.on('style.load', onStyleLoad);
+    styleSwitchControllerRef.current = createStyleSwitchController({
+      map,
+      initialScheme: initialColorScheme,
+      isInteractionActive: () => {
+        const state = store.getState();
+        return (
+          gestureActive ||
+          directManipulationActive ||
+          state.activeWayId !== null ||
+          state.routeDraft !== null
+        );
+      },
+      recover: (scheme, fullRebuild) => {
+        activeMapScheme = scheme;
+        usingLocalBlankStyle = false;
+        if (!fullRebuild) recoverMapStyle();
+      },
+      onUnavailable: () => basemapFailureRef.current?.(),
+    });
+
     map.on('load', () => {
       // MapLibre's compact attribution starts expanded once (its own default
       // "first impression" behavior, applied asynchronously as style/source
@@ -947,7 +1018,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         .getContainer()
         .querySelector('.maplibregl-ctrl-attrib')
         ?.classList.remove('maplibregl-compact-show');
-      registerMapIcons(map);
+      registerMapIcons(map, activeMapScheme);
       ensureOverlay();
       if (PERF_HARNESS_BUILD) {
         initialPaintListener = () => {
@@ -967,6 +1038,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         map.on('render', initialPaintListener);
       }
       pushData(ALL_SYSTEM_FEATURE_SOURCES);
+      initialMapLoaded = true;
       map.triggerRepaint();
       detachInteractions = attachInteractions(map, store, {
         openShortcuts,
@@ -1071,6 +1143,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     ro.observe(containerRef.current);
 
     const unsub = store.subscribe((s, prev) => {
+      const wasDrawing = prev.activeWayId !== null || prev.routeDraft !== null;
+      const drawing = s.activeWayId !== null || s.routeDraft !== null;
+      if (wasDrawing && !drawing) void styleSwitchControllerRef.current?.flush();
+
       // Plan from the exact TransitSystem fields whose references changed.
       // Renaming the system, moving the camera, or picking a palette color
       // produces an empty plan; topology edits conservatively include every
@@ -1200,6 +1276,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       detachPerf?.();
       detachSimDev?.();
       detachInitialStyleFallback();
+      styleSwitchControllerRef.current?.dispose();
+      styleSwitchControllerRef.current = null;
+      map.off('style.load', onStyleLoad);
       map.off('error', onMapError);
       clearGesturePreview();
       restoreGestureMask();
@@ -1228,9 +1307,20 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     simCommands,
   ]);
 
+  useEffect(() => {
+    void styleSwitchControllerRef.current?.request(colorScheme);
+  }, [colorScheme]);
+
   return (
     <>
-      <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
+      <div
+        ref={containerRef}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'var(--tm-map-background)',
+        }}
+      />
       <PointerBadge intent={pointerBadge.intent} x={pointerBadge.x} y={pointerBadge.y} />
       {terminusConnectionChoice ? (
         <>
@@ -1255,10 +1345,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
               minWidth: 240,
               padding: 6,
               gap: 2,
-              border: '1px solid var(--border)',
+              border: '1px solid var(--md-sys-color-outline-variant)',
               borderRadius: 8,
-              background: 'var(--bg)',
-              boxShadow: 'var(--shadow)',
+              background: 'var(--md-sys-color-surface-container)',
+              boxShadow: 'var(--md-sys-elevation-level2)',
             }}
             onContextMenu={(event) => event.preventDefault()}
           >

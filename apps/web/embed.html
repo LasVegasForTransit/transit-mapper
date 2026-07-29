@@ -8,26 +8,39 @@
          itself be indexed or unfurled as a destination. The share page at
          /s/:id is the canonical, linkable version. -->
     <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#f7f4ec" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111310" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <style>
       /* Self-contained: no Tailwind, no app stylesheet. An embed's whole
          point is to be small, and it has exactly three elements.
-         Colours and type are the org's brand tokens, not the editor's own
-         palette — an embed lives in someone else's article under the org's
-         name. See packages/core/src/style/lvbtBrand.ts. */
+         The compact surface uses the same MD3 role vocabulary as the app,
+         while preserving the light LVBT paper appearance an embed already
+         had in someone else's article. */
       :root {
-        --lvbt-surface: #f7f4ec;
-        --lvbt-on-surface: #0f1115;
-        --lvbt-on-surface-variant: #4a4e57;
-        --lvbt-outline: #0f1115;
+        color-scheme: light dark;
+        --md-sys-color-surface: #f7f4ec;
+        --md-sys-color-surface-container: #f7f4ec;
+        --md-sys-color-on-surface: #0f1115;
+        --md-sys-color-on-surface-variant: #4a4e57;
+        --md-sys-color-outline: #0f1115;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --md-sys-color-surface: #111310;
+          --md-sys-color-surface-container: #1e201e;
+          --md-sys-color-on-surface: #e6e6df;
+          --md-sys-color-on-surface-variant: #c6c7c0;
+          --md-sys-color-outline: #92938c;
+        }
       }
       html,
       body {
         margin: 0;
         height: 100%;
-        background: var(--lvbt-surface);
+        background: var(--md-sys-color-surface);
         font-family: 'Public Sans', system-ui, sans-serif;
-        color: var(--lvbt-on-surface);
+        color: var(--md-sys-color-on-surface);
       }
       #map {
         position: absolute;
@@ -40,11 +53,11 @@
         z-index: 1;
         padding: 4px 8px;
         border-radius: 4px;
-        background: rgba(247, 244, 236, 0.92);
-        border: 1px solid var(--lvbt-outline);
+        background: color-mix(in srgb, var(--md-sys-color-surface-container) 92%, transparent);
+        border: 1px solid var(--md-sys-color-outline);
         font-size: 12px;
         font-weight: 600;
-        color: var(--lvbt-on-surface);
+        color: var(--md-sys-color-on-surface);
         text-decoration: none;
       }
       #embed-credit:hover {
@@ -56,7 +69,7 @@
         display: grid;
         place-items: center;
         font-size: 14px;
-        color: var(--lvbt-on-surface-variant);
+        color: var(--md-sys-color-on-surface-variant);
       }
       /* An id rule beats the user agent's `[hidden] { display: none }`, so
          setting the attribute alone would leave "Loading map…" on screen

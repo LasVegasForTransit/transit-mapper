@@ -77,7 +77,10 @@ export function StationInspector({ id }: StationInspectorProps) {
   return (
     <Panel slot="right" aria-label="Selection details">
       <div className="insp-head">
-        <span className="dot" style={{ background: served[0]?.color ?? '#4b5563' }} />
+        <span
+          className="dot"
+          style={{ background: served[0]?.color ?? 'var(--md-sys-color-outline)' }}
+        />
         <input
           ref={nameInputRef}
           className="insp-name"

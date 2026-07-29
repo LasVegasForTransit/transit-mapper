@@ -1,5 +1,4 @@
 import {
-  LAYER_SPECS,
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
   SRC_PLATFORMS,
@@ -7,6 +6,8 @@ import {
   SRC_STATIONS,
   SRC_WAYS,
 } from '../map/layers';
+import type { ColorScheme } from '../theme/systemColorScheme';
+import { layerSpecsForScheme } from '../map/mapTheme';
 
 /** The read-only schematic never writes editor previews, handles, lanes,
  * simulation vehicles, or marquee data. Omitting both their sources and
@@ -20,7 +21,12 @@ export const EMBED_SOURCE_IDS: ReadonlySet<string> = new Set([
   SRC_FACILITIES,
 ]);
 
-export const EMBED_LAYER_SPECS = LAYER_SPECS.filter(
-  (spec) =>
-    'source' in spec && typeof spec.source === 'string' && EMBED_SOURCE_IDS.has(spec.source),
-);
+export function embedLayerSpecsForScheme(scheme: ColorScheme) {
+  return layerSpecsForScheme(scheme).filter(
+    (spec) =>
+      'source' in spec && typeof spec.source === 'string' && EMBED_SOURCE_IDS.has(spec.source),
+  );
+}
+
+/** Scheme-invariant compatibility surface for source/order contract tests. */
+export const EMBED_LAYER_SPECS = embedLayerSpecsForScheme('light');

@@ -1,7 +1,7 @@
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import { BASEMAP_STYLE } from '../basemap';
+import { basemapStyleForScheme } from '../mapTheme';
 import { armVisibilityAwareTimeout } from './visibilityAwareTimeout';
 import { buildFeatures, LYR_STATIONS, registerMapIcons, type ViewOptions } from '../layers';
 import { addExportSourcesAndLayers, setExportFeatureData } from './exportLayerSetup';
@@ -55,7 +55,7 @@ export function renderSystemForExport(
 
     const map = new maplibregl.Map({
       container,
-      style: BASEMAP_STYLE,
+      style: basemapStyleForScheme('light'),
       preserveDrawingBuffer: true, // this offscreen instance is the ONE place that reads pixels back
       attributionControl: false,
       fadeDuration: 0,
@@ -95,7 +95,7 @@ export function renderSystemForExport(
     map.on('error', (e) => fail(e.error ?? new Error('Export map error.')));
     map.on('load', () => {
       try {
-        registerMapIcons(map);
+        registerMapIcons(map, 'light');
         addExportSourcesAndLayers(map);
 
         // Export-only: a full-system export frames thousands of stops at once, so

@@ -3,8 +3,8 @@ import type { Map as MLMap, StyleSpecification } from 'maplibre-gl';
 import {
   attachInitialStyleFallback,
   INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
-  LOCAL_BLANK_STYLE,
 } from '../../src/map/initialStyleFallback';
+import { localBlankStyleForScheme } from '../../src/map/mapTheme';
 
 type StyleEvent = 'error' | 'style.load';
 
@@ -42,6 +42,7 @@ describe('initial map style fallback', () => {
     const map = new FakeStyleMap();
     const onFallback = vi.fn();
     const detach = attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'dark',
       timeoutMs: 1_000,
       onFallback,
     });
@@ -51,7 +52,7 @@ describe('initial map style fallback', () => {
 
     expect(onFallback).toHaveBeenCalledTimes(1);
     expect(map.setStyle).toHaveBeenCalledTimes(1);
-    expect(map.setStyle).toHaveBeenCalledWith(LOCAL_BLANK_STYLE, { diff: false });
+    expect(map.setStyle).toHaveBeenCalledWith(localBlankStyleForScheme('dark'), { diff: false });
 
     detach();
   });
@@ -61,6 +62,7 @@ describe('initial map style fallback', () => {
     const timedOut = new FakeStyleMap();
     const fallback = vi.fn();
     attachInitialStyleFallback(timedOut as unknown as MLMap, {
+      scheme: 'light',
       timeoutMs: 250,
       onFallback: fallback,
     });
@@ -71,6 +73,7 @@ describe('initial map style fallback', () => {
     const loaded = new FakeStyleMap();
     const shouldNotFallback = vi.fn();
     attachInitialStyleFallback(loaded as unknown as MLMap, {
+      scheme: 'light',
       timeoutMs: 250,
       onFallback: shouldNotFallback,
     });
