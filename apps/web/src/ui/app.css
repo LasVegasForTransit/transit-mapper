@@ -21,6 +21,9 @@
      that room without the panel reading as oversized against the map. */
   --panel-w: 280px;
   --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Menlo', monospace;
+  /* App chrome uses one curve in either direction so hiding a surface feels
+     like the exact reverse of showing it. */
+  --motion-chrome-curve: cubic-bezier(0.2, 0.7, 0.3, 1);
   /* The shared margin every floating overlay card keeps from the viewport
      edge AND from its neighbors — the one number .app-chrome's grid (below)
      derives every gap from, instead of each panel hand-computing its own
@@ -185,8 +188,8 @@ input[type='range'] {
   max-width: 220px;
   opacity: 1;
   transition:
-    max-width 200ms cubic-bezier(0.2, 0.7, 0.3, 1),
-    opacity 120ms ease;
+    max-width 200ms var(--motion-chrome-curve),
+    opacity 120ms var(--motion-chrome-curve);
   transition-delay: 0ms, 140ms;
 }
 [data-zen] .zen-label,
@@ -205,8 +208,8 @@ input[type='range'] {
   max-height: 16px;
   opacity: 1;
   transition:
-    max-height 200ms cubic-bezier(0.2, 0.7, 0.3, 1),
-    opacity 120ms ease;
+    max-height 200ms var(--motion-chrome-curve),
+    opacity 120ms var(--motion-chrome-curve);
   transition-delay: 0ms, 140ms;
 }
 [data-zen] .zen-label-block,
@@ -216,8 +219,8 @@ input[type='range'] {
 }
 .zen-cluster {
   transition:
-    opacity 160ms ease,
-    transform 160ms ease;
+    opacity 160ms var(--motion-chrome-curve),
+    transform 160ms var(--motion-chrome-curve);
 }
 [data-zen] .zen-cluster {
   opacity: 0;
@@ -234,8 +237,8 @@ input[type='range'] {
   max-width: 400px;
   opacity: 1;
   transition:
-    max-width 220ms cubic-bezier(0.2, 0.7, 0.3, 1),
-    opacity 140ms ease;
+    max-width 220ms var(--motion-chrome-curve),
+    opacity 140ms var(--motion-chrome-curve);
   transition-delay: 0ms, 160ms;
 }
 [data-zen] .zen-collapse-cluster {
@@ -266,7 +269,7 @@ input[type='range'] {
   background: transparent;
   min-width: 128px;
   max-width: 320px;
-  transition: max-width 200ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  transition: max-width 200ms var(--motion-chrome-curve);
 }
 .system-name:hover {
   border-color: var(--md-sys-color-surface-container-highest);
@@ -283,7 +286,7 @@ input[type='range'] {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 320px;
-  transition: max-width 200ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  transition: max-width 200ms var(--motion-chrome-curve);
 }
 /* Unlike every other label above, the system name does NOT collapse to
    nothing in zen mode — hiding the UI shouldn't also hide which system
@@ -823,7 +826,7 @@ input[type='range'] {
   /* Chrome surfaces appear with a plain FADE — no slide, no scale-up
      reveal. Motion beyond opacity is reserved for anchored transients
      (popovers/menus) where a shared-element read actually exists. */
-  animation: fade-in 160ms ease;
+  animation: fade-in 160ms var(--motion-chrome-curve);
 }
 /* Left is the unified brand/name + view-specific workspace card — stretched to the bottom
    of the overlay grid so it runs the full left edge of the viewport (its
@@ -853,10 +856,10 @@ input[type='range'] {
    stays mounted through the exit transition (see useDelayedUnmount) instead
    of vanishing the instant selection clears. */
 [data-inspector-state='open'] .panel-right {
-  animation: fade-in 160ms ease;
+  animation: fade-in 160ms var(--motion-chrome-curve);
 }
 [data-inspector-state='closed'] .panel-right {
-  animation: fade-out 160ms ease-in forwards;
+  animation: fade-out 160ms var(--motion-chrome-curve) forwards;
 }
 /* A row is a set of explicit slots (start/end), not children left to imply
    their own position via DOM order + ad hoc margins — .panel-brand-start
@@ -966,7 +969,7 @@ input[type='range'] {
    re-measuring on any resize of the content so a rename while collapsed
    still tracks correctly. */
 .menu-card {
-  transition: width 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  transition: width 220ms var(--motion-chrome-curve);
 }
 /* The card is normally stretched full-height by design (see the comment on
    .panel-left above) — deliberate when it's actually the workspace list, but
@@ -993,9 +996,9 @@ input[type='range'] {
   max-height: 60px;
   overflow: hidden;
   transition:
-    max-height 200ms cubic-bezier(0.2, 0.7, 0.3, 1),
-    opacity 120ms ease,
-    padding 200ms ease;
+    max-height 200ms var(--motion-chrome-curve),
+    opacity 120ms var(--motion-chrome-curve),
+    padding 200ms var(--motion-chrome-curve);
   transition-delay: 0ms, 140ms, 0ms;
 }
 /* The workspace toggle itself is meaningless once zen mode has force-
@@ -1042,7 +1045,7 @@ input[type='range'] {
   min-height: 0;
   max-height: 100%;
   overflow: hidden;
-  transition: max-height 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  transition: max-height 220ms var(--motion-chrome-curve);
 }
 .collapsible.collapsed {
   max-height: 0;
@@ -2932,7 +2935,7 @@ button.chip-removable-label:hover {
   display: flex;
   flex-direction: column;
   max-height: 62vh;
-  transition: max-height 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  transition: max-height 220ms var(--motion-chrome-curve);
 }
 .sheet.peek {
   max-height: 56px;
@@ -3005,8 +3008,8 @@ button.chip-removable-label:hover {
 }
 .toolbar-fade {
   transition:
-    opacity 180ms ease,
-    transform 180ms ease;
+    opacity 180ms var(--motion-chrome-curve),
+    transform 180ms var(--motion-chrome-curve);
 }
 .toolbar-fade-hidden {
   opacity: 0;
