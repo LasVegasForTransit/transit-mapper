@@ -367,6 +367,7 @@ function MenuCard({ brand, children }: MenuCardProps) {
   const { uiHidden } = useUi();
   const cardRef = useRef<HTMLElement | null>(null);
   const openWidthRef = useRef(0);
+  const collapsedWidthRef = useRef(0);
 
   // Mirrors the open width on every render where the card IS open, so
   // it's available the instant zen mode engages without racing React's
@@ -376,40 +377,21 @@ function MenuCard({ brand, children }: MenuCardProps) {
   // would already read the collapsed value. Reading it one render ago,
   // here, sidesteps that entirely.
   useLayoutEffect(() => {
-    if (!uiHidden && cardRef.current) {
+    if (!uiHidden && cardRef.current?.style.width === '') {
       openWidthRef.current = cardRef.current.getBoundingClientRect().width;
     }
   });
 
-  // A plain `width: auto` transition can't interpolate — there's no
-  // numeric endpoint for the browser to animate toward, so it snaps
-  // instead of morphing (confirmed live: zero transitionrun events, and
-  // separately, getComputedStyle(html).interpolateSize reports
-  // "numeric-only" — the CSS Values L4 feature that would let `auto`
-  // itself interpolate isn't opted into anywhere in this app). Measuring
-  // the real collapsed width and animating to that fixed number instead
-  // is what actually produces the "boundary moving" motion this card
-  // exists for.
-  //
-  // JS stays the source of truth for the collapsed width for as long as
-  // zen mode is engaged, rather than handing off to app.css's `[data-zen]
-  // .menu-card { width: auto }` once the transition settles — confirmed
-  // live, that CSS-only auto resolved to a real, reproducible ~90px
-  // wider than the SAME measurement taken by briefly forcing an inline
-  // `width: auto` and reading `getBoundingClientRect()` (both ought to
-  // compute the same used value; they didn't). Rather than depend on
-  // that discrepancy resolving itself, every resize of the actual content
-  // (a rename, most plausibly) re-runs the identical measurement this
-  // effect already trusts.
+  // Width cannot transition to or from `auto`. Keep the two measured numeric
+  // endpoints and give the browser one painted frame at the starting width
+  // before assigning the destination. Without that frame, closing commits its
+  // final width before paint and appears to snap even though CSS has a
+  // transition.
   useLayoutEffect(() => {
     const el = cardRef.current;
     if (!el) return;
-    if (!uiHidden) {
-      el.style.width = '';
-      return;
-    }
 
-    const measureCollapsedWidth = () => {
+    const measureNaturalWidth = () => {
       const prev = el.style.width;
       el.style.width = 'auto';
       const w = el.getBoundingClientRect().width;
@@ -417,22 +399,45 @@ function MenuCard({ brand, children }: MenuCardProps) {
       return w;
     };
 
-    el.style.width = `${openWidthRef.current}px`;
-    const raf = requestAnimationFrame(() => {
-      el.style.width = `${measureCollapsedWidth()}px`;
-    });
+    let targetWidth: number;
+    if (uiHidden) {
+      collapsedWidthRef.current = measureNaturalWidth();
+      el.style.width = `${openWidthRef.current}px`;
+      targetWidth = collapsedWidthRef.current;
+    } else if (collapsedWidthRef.current > 0) {
+      el.style.width = `${collapsedWidthRef.current}px`;
+      targetWidth = openWidthRef.current;
+    } else {
+      el.style.width = '';
+      return;
+    }
 
     const brandEl = el.querySelector('.panel-brand');
-    const ro = brandEl
-      ? new ResizeObserver(() => {
-          el.style.width = `${measureCollapsedWidth()}px`;
-        })
-      : null;
-    if (brandEl) ro?.observe(brandEl);
+    let ro: ResizeObserver | null = null;
+    let targetFrame = 0;
+    const startFrame = requestAnimationFrame(() => {
+      targetFrame = requestAnimationFrame(() => {
+        el.style.width = `${targetWidth}px`;
+        if (uiHidden && brandEl) {
+          ro = new ResizeObserver(() => {
+            collapsedWidthRef.current = measureNaturalWidth();
+            el.style.width = `${collapsedWidthRef.current}px`;
+          });
+          ro.observe(brandEl);
+        }
+      });
+    });
+
+    const releaseOpenWidth = (event: TransitionEvent) => {
+      if (!uiHidden && event.propertyName === 'width') el.style.width = '';
+    };
+    el.addEventListener('transitionend', releaseOpenWidth);
 
     return () => {
-      cancelAnimationFrame(raf);
+      cancelAnimationFrame(startFrame);
+      cancelAnimationFrame(targetFrame);
       ro?.disconnect();
+      el.removeEventListener('transitionend', releaseOpenWidth);
     };
   }, [uiHidden]);
 
