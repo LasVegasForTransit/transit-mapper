@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { gtfsArchiveToBatches } from './gtfsImport';
+import { gtfsArchiveToBatches } from '../../src/model/gtfsImport';
 
 function rtcLikeArchive(): Uint8Array {
   return zipSync({

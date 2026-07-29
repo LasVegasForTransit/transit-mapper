@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptySystem } from '../model/serialize';
-import { MAX_SHARE_BODY_BYTES, serializeShareRequest, shareRequestFits } from './contract';
+import { createEmptySystem } from '../../src/model/serialize';
+import {
+  MAX_SHARE_BODY_BYTES,
+  serializeShareRequest,
+  shareRequestFits,
+} from '../../src/share/contract';
 
 describe('share request serialization', () => {
   it('serializes the system once into both the comparison data and request body', () => {

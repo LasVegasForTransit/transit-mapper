@@ -8,15 +8,15 @@
 // flawed line than a swallowed click can ask for one.
 
 import { describe, expect, it } from 'vitest';
-import { makeOneWay } from './profile';
-import { anchorOnWay, createRouteOperationCounts, routeBetween } from './routeGraph';
-import { createEmptySystem } from './serialize';
-import { preferredLaneKinds, serviceLaneOnWay } from './geo/serviceLane';
-import { oneSection, wholeLeg, wayById } from './geo';
-import { defaultLaneFor } from './profile';
-import type { Pattern } from './system';
-import { aRoad } from '../testing/fixtures';
-import type { LngLat, Node, TransitSystem, Way } from './system';
+import { makeOneWay } from '../../src/model/profile';
+import { anchorOnWay, createRouteOperationCounts, routeBetween } from '../../src/model/routeGraph';
+import { createEmptySystem } from '../../src/model/serialize';
+import { preferredLaneKinds, serviceLaneOnWay } from '../../src/model/geo/serviceLane';
+import { oneSection, wholeLeg, wayById } from '../../src/model/geo';
+import { defaultLaneFor } from '../../src/model/profile';
+import type { Pattern } from '../../src/model/system';
+import { aRoad } from '../support/fixtures';
+import type { LngLat, Node, TransitSystem, Way } from '../../src/model/system';
 
 const ROADS = { allowedTypeIds: new Set(['road']) };
 

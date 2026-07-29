@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { importOsmWays } from './import';
+import { importOsmWays } from '../../src/model/import';
 
 const BBOX = { west: -115.2, south: 36.1, east: -115.19, north: 36.11 };
 

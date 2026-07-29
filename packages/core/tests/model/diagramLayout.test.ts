@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptySystem } from './serialize';
-import type { TransitSystem } from './system';
-import { computeDiagramSystem } from './diagramLayout';
+import { createEmptySystem } from '../../src/model/serialize';
+import type { TransitSystem } from '../../src/model/system';
+import { computeDiagramSystem } from '../../src/model/diagramLayout';
 
 function fixture(): TransitSystem {
   return {

@@ -4,12 +4,12 @@
 // boundary).
 
 import { describe, expect, it } from 'vitest';
-import { MODE_ORDER, WAY_TYPE_ORDER } from '../model/catalog';
-import { wholeLeg, wholeLegs, oneSection } from '../model/geo';
-import { wayById } from '../model/geo/wayPath';
-import { aRoad, aService, aSystem } from '../testing/fixtures';
-import type { Pattern, Service } from '../model/system';
-import { buildFeatures, type ViewOptions } from './buildFeatures';
+import { MODE_ORDER, WAY_TYPE_ORDER } from '../../src/model/catalog';
+import { wholeLeg, wholeLegs, oneSection } from '../../src/model/geo';
+import { wayById } from '../../src/model/geo/wayPath';
+import { aRoad, aService, aSystem } from '../support/fixtures';
+import type { Pattern, Service } from '../../src/model/system';
+import { buildFeatures, type ViewOptions } from '../../src/render/buildFeatures';
 
 const NETWORK_VIEW: ViewOptions = {
   viewMode: 'network',

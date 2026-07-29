@@ -3,7 +3,7 @@
 
 import type { Feature, LineString } from 'geojson';
 import { describe, expect, it } from 'vitest';
-import { mergeAdjacentServiceLines } from './mergeServiceLines';
+import { mergeAdjacentServiceLines } from '../../src/render/mergeServiceLines';
 
 function line(props: Record<string, unknown>, coords: [number, number][]): Feature<LineString> {
   return {

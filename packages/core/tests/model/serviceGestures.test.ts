@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { MODE_ORDER, mode } from './catalog';
-import { defaultProfileFor } from './profile';
-import { patternPositionAt } from './serviceEdits';
-import { planTerminusGesture } from './serviceGestures';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../testing/fixtures';
-import type { Way } from './system';
+import { MODE_ORDER, mode } from '../../src/model/catalog';
+import { defaultProfileFor } from '../../src/model/profile';
+import { patternPositionAt } from '../../src/model/serviceEdits';
+import { planTerminusGesture } from '../../src/model/serviceGestures';
+import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures';
+import type { Way } from '../../src/model/system';
 
 const A: [number, number] = [-115.2, 36.1];
 const B: [number, number] = [-115.19, 36.1];

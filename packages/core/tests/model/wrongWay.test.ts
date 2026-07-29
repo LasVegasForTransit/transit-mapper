@@ -5,12 +5,12 @@
 // only way to get one, and the reason a stored flag would be useless.
 
 import { describe, expect, it } from 'vitest';
-import { wrongWayLegs } from './geo';
-import { makeOneWay, makeTwoWay } from './profile';
-import { validateSystemQuick } from './validate';
-import { aPattern, aRoad, aService, aSystem } from '../testing/fixtures';
-import { wayById } from './geo';
-import type { LngLat, TransitSystem, Way } from './system';
+import { wrongWayLegs } from '../../src/model/geo';
+import { makeOneWay, makeTwoWay } from '../../src/model/profile';
+import { validateSystemQuick } from '../../src/model/validate';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
+import { wayById } from '../../src/model/geo';
+import type { LngLat, TransitSystem, Way } from '../../src/model/system';
 
 const S: LngLat = [-115.2, 36.1];
 const N: LngLat = [-115.2, 36.14];

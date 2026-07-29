@@ -15,10 +15,11 @@ packages/
       model/     Pure domain: types, catalogs, geometry math, routing.
       geometry/  Pure derived geometry: lane offsets, junction footprints.
       sim/       Pure vehicle-motion kernel. No DOM; the host lives in web.
-      testing/   Typed fixture builders for the test suites.
       share/     contract.ts — the wire shapes both the app and worker use.
                  claim.ts/ownership.ts are accounts groundwork (see below).
       auth/      Accounts groundwork: NOT WIRED UP (see below).
+    tests/       Module-root test trees mirror their production areas.
+      support/   Typed fixture builders, exported separately from production.
   pwa-updater/   The React hook behind the "new version available" prompt.
   tsconfig/      Shared compiler options. JSON only, no source.
   eslint-plugin/ Lint rules for invariants the compiler cannot express.
@@ -134,12 +135,17 @@ WebAssembly later without dragging a browser dependency along; the
 requestAnimationFrame and MapLibre host that drives it is
 `apps/web/src/sim/vehicles.ts`.
 
-## packages/core/src/testing/ — fixtures for the test suites
+## packages/core/tests/support/ — fixtures for the test suites
 
 - `fixtures.ts` — typed builders (`aRoad`, `aPattern`, `aStation`) so a test
   never reaches for `as unknown as Way`. A double cast disables the compiler
   exactly where a test asserts behaviour: a cast fixture keeps compiling after
   a record gains a required field, describing something that cannot exist.
+
+The module-root test trees mirror the production areas they cover. The
+`@transitmapper/core/testing/fixtures` export is explicit and precedes the
+production wildcard, so test support remains available without treating it as
+production source.
 
 ## packages/core/src/render/ — drawing a system without a map
 

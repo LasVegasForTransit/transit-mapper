@@ -7,16 +7,30 @@
     },
     "typecheck": {
       "dependsOn": ["^typecheck"],
-      "inputs": ["src/**", "scripts/**", "tsconfig*.json"],
+      "inputs": ["src/**", "scripts/**", "tests/**", "tsconfig*.json"],
       "outputs": ["*.tsbuildinfo"]
     },
     "lint": {
-      "inputs": ["src/**", "scripts/**", "$TURBO_ROOT$/eslint.config.js"],
+      "inputs": [
+        "src/**",
+        "scripts/**",
+        "tests/**",
+        "vitest.config.ts",
+        "$TURBO_ROOT$/eslint.config.js"
+      ],
       "outputs": []
     },
     "verify": {
       "dependsOn": ["^typecheck"],
-      "inputs": ["src/**", "scripts/**"],
+      "inputs": [
+        "src/**",
+        "scripts/**",
+        "tests/**",
+        "public/**",
+        "vitest.config.ts",
+        "tsconfig*.json",
+        "wrangler.toml"
+      ],
       "outputs": []
     },
     "check:types": {

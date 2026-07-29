@@ -7,10 +7,16 @@
 // street with a single bidirectional lane must not read as one-way.
 
 import { describe, expect, it } from 'vitest';
-import { defaultProfileFor } from './profile';
-import { isOneWay, makeOneWay, makeTwoWay, profileTraversal, wayTraversal } from './profile';
-import { aRoad } from '../testing/fixtures';
-import type { CrossSection } from './system';
+import { defaultProfileFor } from '../../src/model/profile';
+import {
+  isOneWay,
+  makeOneWay,
+  makeTwoWay,
+  profileTraversal,
+  wayTraversal,
+} from '../../src/model/profile';
+import { aRoad } from '../support/fixtures';
+import type { CrossSection } from '../../src/model/system';
 
 const road = defaultProfileFor('road');
 
