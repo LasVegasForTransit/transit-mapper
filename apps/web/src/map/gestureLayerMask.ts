@@ -97,13 +97,14 @@ export function buildGestureLayerMaskPlan(affected: GestureAffectedEntities): Ge
  * Masks settled features beneath the live gesture preview without asking
  * MapLibre to recalculate the same style filters on every pointer frame.
  * Gesture projections return fresh arrays, so the key compares their values
- * rather than their references. A target set can grow during a gesture; that
- * produces a new key and refreshes the mask before the next preview paints.
+ * rather than their references. A target set can grow or shrink as gestures
+ * overlap settlement; each changed plan retains only the masks it owns.
  */
 export function createGestureLayerMaskController(
   map: GestureLayerMaskMap,
 ): GestureLayerMaskController {
   const filterRestores = new Map<string, FilterSpecification | undefined>();
+  const appliedFilterKeys = new Map<string, string>();
   const visibilityRestores = new Map<string, unknown>();
   let appliedKey: string | null = null;
 
@@ -119,19 +120,38 @@ export function createGestureLayerMaskController(
       if (key === appliedKey) return;
 
       const plan = buildGestureLayerMaskPlan(affected);
+      const nextFilteredLayers = new Set(plan.filterRules.map((rule) => rule.layerId));
+      for (const [layerId, filter] of filterRestores) {
+        const layerExists = Boolean(map.getLayer(layerId));
+        if (layerExists && nextFilteredLayers.has(layerId)) continue;
+        if (layerExists) map.setFilter(layerId, filter ?? null);
+        filterRestores.delete(layerId);
+        appliedFilterKeys.delete(layerId);
+      }
+      const nextHiddenLayers = new Set(plan.hiddenLayerIds);
+      for (const [layerId, visibility] of visibilityRestores) {
+        const layerExists = Boolean(map.getLayer(layerId));
+        if (layerExists && nextHiddenLayers.has(layerId)) continue;
+        if (layerExists) map.setLayoutProperty(layerId, 'visibility', visibility ?? 'visible');
+        visibilityRestores.delete(layerId);
+      }
+
       for (const rule of plan.filterRules) {
         if (!map.getLayer(rule.layerId)) continue;
         if (!filterRestores.has(rule.layerId))
           filterRestores.set(rule.layerId, map.getFilter(rule.layerId) || undefined);
+        const filterKey = JSON.stringify(rule.exclusions);
+        if (appliedFilterKeys.get(rule.layerId) === filterKey) continue;
         map.setFilter(
           rule.layerId,
           maskedGestureFilter(filterRestores.get(rule.layerId), rule.exclusions),
         );
+        appliedFilterKeys.set(rule.layerId, filterKey);
       }
       for (const layerId of plan.hiddenLayerIds) {
         if (!map.getLayer(layerId)) continue;
-        if (!visibilityRestores.has(layerId))
-          visibilityRestores.set(layerId, map.getLayoutProperty(layerId, 'visibility'));
+        if (visibilityRestores.has(layerId)) continue;
+        visibilityRestores.set(layerId, map.getLayoutProperty(layerId, 'visibility'));
         map.setLayoutProperty(layerId, 'visibility', 'none');
       }
       appliedKey = key;
@@ -142,6 +162,7 @@ export function createGestureLayerMaskController(
         if (map.getLayer(layerId)) map.setFilter(layerId, filter ?? null);
       }
       filterRestores.clear();
+      appliedFilterKeys.clear();
       for (const [layerId, visibility] of visibilityRestores) {
         if (map.getLayer(layerId))
           map.setLayoutProperty(layerId, 'visibility', visibility ?? 'visible');

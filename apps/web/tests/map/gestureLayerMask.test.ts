@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FilterSpecification } from 'maplibre-gl';
 import {
+  LYR_STATIONS,
   LYR_SERVICES_SOLID,
   LYR_WAY_LABELS,
   LYR_WAYS_SOLID,
@@ -11,7 +12,54 @@ import {
   buildGestureLayerMaskPlan,
   createGestureLayerMaskController,
   maskedGestureFilter,
+  type GestureLayerMaskMap,
 } from '../../src/map/gestureLayerMask';
+
+interface StatefulMaskMapFixture {
+  map: GestureLayerMaskMap;
+  originalWayFilter: FilterSpecification;
+  originalStationFilter: FilterSpecification;
+  filters: Map<string, FilterSpecification>;
+  visibility: Map<string, unknown>;
+  filterCalls: Array<{ layerId: string; filter: FilterSpecification | null }>;
+  visibilityCalls: Array<{ layerId: string; value: unknown }>;
+}
+
+function createStatefulMaskMap(): StatefulMaskMapFixture {
+  const visibleLayers = new Set([LYR_WAYS_SOLID, LYR_WAY_LABELS, LYR_STATIONS]);
+  const originalWayFilter = ['get', 'way-visible'] as FilterSpecification;
+  const originalStationFilter = ['get', 'station-visible'] as FilterSpecification;
+  const filters = new Map<string, FilterSpecification>([
+    [LYR_WAYS_SOLID, originalWayFilter],
+    [LYR_STATIONS, originalStationFilter],
+  ]);
+  const visibility = new Map<string, unknown>([[LYR_WAY_LABELS, 'visible']]);
+  const filterCalls: Array<{ layerId: string; filter: FilterSpecification | null }> = [];
+  const visibilityCalls: Array<{ layerId: string; value: unknown }> = [];
+  const map: GestureLayerMaskMap = {
+    getLayer: (layerId) => (visibleLayers.has(layerId) ? {} : undefined),
+    getFilter: (layerId) => filters.get(layerId),
+    setFilter: (layerId, filter) => {
+      filterCalls.push({ layerId, filter });
+      if (filter) filters.set(layerId, filter);
+      else filters.delete(layerId);
+    },
+    getLayoutProperty: (layerId) => visibility.get(layerId),
+    setLayoutProperty: (layerId, _property, value) => {
+      visibilityCalls.push({ layerId, value });
+      visibility.set(layerId, value);
+    },
+  };
+  return {
+    map,
+    originalWayFilter,
+    originalStationFilter,
+    filters,
+    visibility,
+    filterCalls,
+    visibilityCalls,
+  };
+}
 
 describe('gesture settled-layer mask', () => {
   it('excludes the moved way and its old service geometry while hiding unaddressable labels', () => {
@@ -91,5 +139,75 @@ describe('gesture settled-layer mask', () => {
       layerId: LYR_WAY_LABELS,
       visibility: 'visible',
     });
+  });
+
+  it('retains only the station mask after an overlapping way gesture ends', () => {
+    const fixture = createStatefulMaskMap();
+    const {
+      map,
+      originalWayFilter,
+      originalStationFilter,
+      filters,
+      visibility,
+      filterCalls,
+      visibilityCalls,
+    } = fixture;
+    const controller = createGestureLayerMaskController(map);
+
+    controller.apply({
+      wayIds: ['way-a'],
+      stationIds: ['station-a'],
+      facilityIds: [],
+      groupIds: [],
+      nodeIds: [],
+    });
+    controller.apply({
+      wayIds: [],
+      stationIds: ['station-a'],
+      facilityIds: [],
+      groupIds: [],
+      nodeIds: [],
+    });
+
+    expect(filters.get(LYR_WAYS_SOLID)).toBe(originalWayFilter);
+    expect(visibility.get(LYR_WAY_LABELS)).toBe('visible');
+    expect(filters.get(LYR_STATIONS)).toEqual([
+      'all',
+      originalStationFilter,
+      ['!', ['in', ['get', 'id'], ['literal', ['station-a']]]],
+    ]);
+
+    filterCalls.length = 0;
+    visibilityCalls.length = 0;
+    controller.restore();
+
+    expect(filterCalls).toEqual([{ layerId: LYR_STATIONS, filter: originalStationFilter }]);
+    expect(visibilityCalls).toEqual([]);
+  });
+
+  it('leaves an active way mask untouched when station settlement ends', () => {
+    const { map, originalWayFilter, originalStationFilter, filterCalls, visibilityCalls } =
+      createStatefulMaskMap();
+    const controller = createGestureLayerMaskController(map);
+    const wayAndStation = {
+      wayIds: ['way-a'],
+      stationIds: ['station-a'],
+      facilityIds: [],
+      groupIds: [],
+      nodeIds: [],
+    };
+
+    controller.apply(wayAndStation);
+    filterCalls.length = 0;
+    visibilityCalls.length = 0;
+    controller.apply({ ...wayAndStation, stationIds: [] });
+
+    expect(filterCalls).toEqual([{ layerId: LYR_STATIONS, filter: originalStationFilter }]);
+    expect(visibilityCalls).toEqual([]);
+
+    filterCalls.length = 0;
+    controller.restore();
+    expect(filterCalls).toEqual([{ layerId: LYR_WAYS_SOLID, filter: originalWayFilter }]);
+    expect(visibilityCalls).toEqual([{ layerId: LYR_WAY_LABELS, value: 'visible' }]);
   });
 });
