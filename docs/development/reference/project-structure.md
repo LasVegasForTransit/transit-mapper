@@ -264,12 +264,15 @@ only in `main.tsx`, never the embed entry. `persistence.ts` wraps the
 user-initiated `navigator.storage.persist()` request used by Settings. The
 controller is browser code by design and must not move into `packages/core`.
 
-## apps/web/scripts/app-icon.ts and generate-app-icons.ts — application identity
+## apps/web/scripts/app-icon.ts, apple-icon-provenance.ts, and generate-app-icons.ts — application identity
 
 `app-icon.ts` turns the toolbar's Lucide Route nodes and the shared LVBT brand
 tokens into the rotated, shadowed TransitMapper mark. `generate-app-icons.ts`
 writes the adaptive SVG, light and dark browser fallbacks, normal and maskable
 install rasters, and the mark on the generic Open Graph card.
+`apple-icon-provenance.ts` fingerprints the native Icon Composer document, its
+generated Route layer, and the flattened export so repository verification
+cannot accept an export made from older inputs.
 
 The Apple touch icon follows Apple's native authoring workflow. The generator
 rasterizes the exact geometry into a flat, effect-free alpha layer inside
@@ -278,9 +281,12 @@ one glass surface. The document applies a solid Ember background and Combined
 Liquid Glass material in Icon Composer, and `apple-touch-icon-source.png` is
 the committed 1024px flattened export. The generator resizes that export for
 Safari, which cannot consume the layered format directly. After changing the
-glyph or palette, regenerate the layer, export the Icon Composer document, then
-run `pnpm --filter @transitmapper/web generate:icons`; verification rejects
-stale generated assets.
+glyph, palette, or Icon Composer settings, run the generator once to update the
+layer, export the Icon Composer document, then run
+`pnpm --filter @transitmapper/web generate:icons -- --record-apple-export`.
+That explicit recording step updates `apple-touch-icon-provenance.json` and
+the public assets. Ordinary generation and repository verification reject a
+stale or unrecorded export.
 
 ## apps/web/src/i18n/ — user-facing messages
 

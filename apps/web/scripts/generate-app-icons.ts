@@ -6,6 +6,13 @@ import { pathToFileURL } from 'node:url';
 import sharp from 'sharp';
 import { LVBT } from '@transitmapper/core/style/lvbtBrand';
 import {
+  appleIconProvenanceMatches,
+  createAppleIconProvenance,
+  parseAppleIconProvenance,
+  serializeAppleIconProvenance,
+  type AppleIconProvenanceInputs,
+} from './apple-icon-provenance';
+import {
   appIconPng,
   appIconSvg,
   appleTouchIconLayerPng,
@@ -19,8 +26,14 @@ const ICON_COMPOSER_LAYER_PATH = resolve(
   import.meta.dirname,
   'transit-mapper.icon/Assets/apple-touch-icon-layer.png',
 );
+const ICON_COMPOSER_DOCUMENT_PATH = resolve(import.meta.dirname, 'transit-mapper.icon/icon.json');
 const ICON_COMPOSER_EXPORT_PATH = resolve(import.meta.dirname, 'apple-touch-icon-source.png');
+const ICON_COMPOSER_PROVENANCE_PATH = resolve(
+  import.meta.dirname,
+  'apple-touch-icon-provenance.json',
+);
 const CHECK_ONLY = process.argv.includes('--check');
+const RECORD_APPLE_EXPORT = process.argv.includes('--record-apple-export');
 
 interface RasterAsset {
   name: string;
@@ -45,7 +58,7 @@ interface GeneratedAsset {
   contents: Buffer;
 }
 
-async function generatedAssets(): Promise<GeneratedAsset[]> {
+async function generatedAssets(appleSource: Buffer): Promise<GeneratedAsset[]> {
   const assets: GeneratedAsset[] = [
     {
       name: 'favicon.svg',
@@ -68,12 +81,6 @@ async function generatedAssets(): Promise<GeneratedAsset[]> {
     });
   }
 
-  const appleSource = await readFile(ICON_COMPOSER_EXPORT_PATH).catch(() => null);
-  if (!appleSource) {
-    throw new Error(
-      `Missing Icon Composer export: ${ICON_COMPOSER_EXPORT_PATH}. Export a flattened 1024px PNG from transit-mapper.icon.`,
-    );
-  }
   assets.push({
     name: 'apple-touch-icon.png',
     contents: await sharp(appleSource).resize(180, 180).png({ compressionLevel: 9 }).toBuffer(),
@@ -124,11 +131,50 @@ async function verifyOrWrite(path: string, expected: Buffer): Promise<boolean> {
 }
 
 async function main(): Promise<void> {
+  if (CHECK_ONLY && RECORD_APPLE_EXPORT) {
+    throw new Error('--check and --record-apple-export cannot be used together.');
+  }
+
   const stale: string[] = [];
-  if (!(await verifyOrWrite(ICON_COMPOSER_LAYER_PATH, await appleTouchIconLayerPng()))) {
+  const appleLayer = await appleTouchIconLayerPng();
+  if (!(await verifyOrWrite(ICON_COMPOSER_LAYER_PATH, appleLayer))) {
     stale.push('scripts/transit-mapper.icon/Assets/apple-touch-icon-layer.png');
   }
-  for (const asset of await generatedAssets()) {
+
+  const [iconDocument, appleSource] = await Promise.all([
+    readFile(ICON_COMPOSER_DOCUMENT_PATH),
+    readFile(ICON_COMPOSER_EXPORT_PATH).catch(() => null),
+  ]);
+  if (!appleSource) {
+    throw new Error(
+      `Missing Icon Composer export: ${ICON_COMPOSER_EXPORT_PATH}. Export a flattened 1024px PNG from transit-mapper.icon.`,
+    );
+  }
+
+  const provenanceInputs: AppleIconProvenanceInputs = {
+    iconDocument,
+    layer: appleLayer,
+    exportImage: appleSource,
+  };
+  if (RECORD_APPLE_EXPORT) {
+    await writeFile(
+      ICON_COMPOSER_PROVENANCE_PATH,
+      serializeAppleIconProvenance(createAppleIconProvenance(provenanceInputs)),
+    );
+  } else {
+    const recorded = parseAppleIconProvenance(
+      (await readFile(ICON_COMPOSER_PROVENANCE_PATH).catch(() => null))?.toString() ?? '',
+    );
+    if (!recorded || !appleIconProvenanceMatches(recorded, provenanceInputs)) {
+      throw new Error(
+        CHECK_ONLY
+          ? 'The Apple Icon Composer export is stale. Run generate:icons to update its layer, export apple-touch-icon-source.png from transit-mapper.icon, then rerun with --record-apple-export.'
+          : 'The Apple Icon Composer inputs changed. Export apple-touch-icon-source.png from transit-mapper.icon, then rerun generate:icons with --record-apple-export.',
+      );
+    }
+  }
+
+  for (const asset of await generatedAssets(appleSource)) {
     const path = resolve(PUBLIC_DIRECTORY, asset.name);
     if (!(await verifyOrWrite(path, asset.contents))) stale.push(asset.name);
   }
@@ -143,9 +189,11 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    CHECK_ONLY
-      ? 'Generated app icon assets are current.'
-      : 'Generated theme-aware app icon assets.',
+    RECORD_APPLE_EXPORT
+      ? 'Recorded the current Apple Icon Composer export and generated app icon assets.'
+      : CHECK_ONLY
+        ? 'Generated app icon assets are current.'
+        : 'Generated theme-aware app icon assets.',
   );
 }
 
