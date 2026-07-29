@@ -53,6 +53,15 @@ function packageRelativePath(packagePath: string, parentPath: string, name: stri
   return relative(resolve(ROOT, packagePath), resolve(parentPath, name)).replaceAll('\\', '/');
 }
 
+function canonicalPackagePath(packagePath: string, entry: string): string {
+  const packageRoot = resolve(ROOT, packagePath);
+  return relative(packageRoot, resolve(packageRoot, entry)).replaceAll('\\', '/');
+}
+
+function workspacePath(packagePath: string, entry: string): string {
+  return relative(ROOT, resolve(ROOT, packagePath, entry)).replaceAll('\\', '/');
+}
+
 async function misplacedTestMaterial(packagePath: string): Promise<string[]> {
   const entries = await readdir(resolve(ROOT, packagePath), {
     recursive: true,
@@ -73,10 +82,124 @@ async function misplacedTestMaterial(packagePath: string): Promise<string[]> {
     .sort();
 }
 
-function directVerifyEntries(command: string): string[] {
-  return [...command.matchAll(/\btsx\s+([^\s;&|]+)/g)]
-    .map((match) => match[1].replace(/^['"]|['"]$/g, ''))
-    .filter((path) => /\.[cm]?[jt]sx?$/.test(path));
+const SHELL_OPERATORS = new Set([';', '&', '&&', '|', '||']);
+
+function shellTokens(command: string): string[] | undefined {
+  const tokens: string[] = [];
+  let token = '';
+  let quote: "'" | '"' | undefined;
+  let escaped = false;
+
+  const pushToken = (): void => {
+    if (token.length === 0) return;
+    tokens.push(token);
+    token = '';
+  };
+
+  for (let index = 0; index < command.length; index += 1) {
+    const character = command[index];
+    if (escaped) {
+      token += character;
+      escaped = false;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) {
+        quote = undefined;
+      } else if (character === '\\' && quote === '"') {
+        escaped = true;
+      } else {
+        token += character;
+      }
+      continue;
+    }
+    if (character === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (character === "'" || character === '"') {
+      quote = character;
+      continue;
+    }
+    if (/\s/.test(character)) {
+      pushToken();
+      continue;
+    }
+    if (character === ';' || character === '&' || character === '|') {
+      pushToken();
+      const next = command[index + 1];
+      if ((character === '&' || character === '|') && next === character) {
+        tokens.push(`${character}${next}`);
+        index += 1;
+      } else {
+        tokens.push(character);
+      }
+      continue;
+    }
+    token += character;
+  }
+
+  if (quote || escaped) return undefined;
+  pushToken();
+  return tokens;
+}
+
+interface DirectVerifyDiscovery {
+  entries: string[];
+  unverifiable: string[];
+}
+
+function directVerifyEntries(command: string): DirectVerifyDiscovery {
+  const tokens = shellTokens(command);
+  if (!tokens) {
+    return {
+      entries: [],
+      unverifiable: command.includes('tsx') ? [command] : [],
+    };
+  }
+
+  const entries: string[] = [];
+  const unverifiable: string[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index] !== 'tsx') continue;
+
+    const end = tokens.findIndex(
+      (token, tokenIndex) => tokenIndex > index && SHELL_OPERATORS.has(token),
+    );
+    const commandEnd = end === -1 ? tokens.length : end;
+    const args = tokens.slice(index + 1, commandEnd);
+    const rendered = ['tsx', ...args].join(' ');
+    let argument = 0;
+
+    while (argument < args.length && args[argument].startsWith('-')) {
+      const option = args[argument];
+      if (option === '--') {
+        argument += 1;
+        break;
+      }
+      if (option === '--tsconfig') {
+        argument += 2;
+        continue;
+      }
+      if (option.startsWith('--tsconfig=') && option.length > '--tsconfig='.length) {
+        argument += 1;
+        continue;
+      }
+      unverifiable.push(rendered);
+      argument = args.length;
+      break;
+    }
+
+    const entry = args[argument];
+    if (entry && /\.[cm]?[jt]sx?$/.test(entry)) {
+      entries.push(entry);
+    } else if (!unverifiable.includes(rendered)) {
+      unverifiable.push(rendered);
+    }
+    index = commandEnd - 1;
+  }
+
+  return { entries, unverifiable };
 }
 
 /**
@@ -153,29 +276,39 @@ async function main(): Promise<void> {
   }
 
   for (const { name, path, manifest } of manifests) {
-    if (path !== '.' && (await shipsCode(path))) {
+    if (path !== '.') {
       const scripts = manifest.scripts ?? {};
-      for (const task of REQUIRED_TASKS) {
-        if (!scripts[task]) {
-          failures.push({
-            kind: 'task',
-            message: `${name} (${path}/package.json) has no "${task}" script`,
-          });
+      if (await shipsCode(path)) {
+        for (const task of REQUIRED_TASKS) {
+          if (!scripts[task]) {
+            failures.push({
+              kind: 'task',
+              message: `${name} (${path}/package.json) has no "${task}" script`,
+            });
+          }
         }
       }
 
       const misplacedTests = new Set(await misplacedTestMaterial(path));
+      const directVerifiers = directVerifyEntries(scripts.verify ?? '');
 
-      for (const entry of directVerifyEntries(scripts.verify ?? '')) {
-        const normalized = entry.replace(/^\.\//, '');
-        if (normalized === 'tests' || normalized.startsWith('tests/')) continue;
-        misplacedTests.add(normalized);
+      for (const entry of directVerifiers.entries) {
+        const canonical = canonicalPackagePath(path, entry);
+        if (canonical === 'tests' || canonical.startsWith('tests/')) continue;
+        misplacedTests.add(canonical);
       }
 
       for (const misplaced of [...misplacedTests].sort()) {
         failures.push({
           kind: 'test-layout',
-          message: `${name} keeps test material outside ${path}/tests/: ${path}/${misplaced}`,
+          message: `${name} keeps test material outside ${path}/tests/: ${workspacePath(path, misplaced)}`,
+        });
+      }
+
+      for (const command of [...new Set(directVerifiers.unverifiable)].sort()) {
+        failures.push({
+          kind: 'test-layout',
+          message: `${name} has an unverifiable direct tsx command in ${path}/package.json verify: ${command}`,
         });
       }
     }
