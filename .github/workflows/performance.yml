@@ -80,7 +80,13 @@ jobs:
       - name: Install base revision
         if: steps.baseline.outputs.available == 'true'
         working-directory: .performance-baseline
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile
+          # The base revision is measured for comparison, not accepted as a
+          # release candidate. Use the candidate's current bundle policy so a
+          # historical, overly-tight budget cannot prevent it from emitting
+          # the report that the candidate's required baseline gate consumes.
+          cp ../apps/web/perf.config.ts apps/web/perf.config.ts
 
       - name: Measure base RTC journey
         if: steps.baseline.outputs.available == 'true'
