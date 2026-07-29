@@ -35,6 +35,19 @@ export interface GestureLayerMaskPlan {
   hiddenLayerIds: string[];
 }
 
+export interface GestureLayerMaskMap {
+  getLayer: (layerId: string) => unknown;
+  getFilter: (layerId: string) => FilterSpecification | undefined | void;
+  setFilter: (layerId: string, filter: FilterSpecification | null) => void;
+  getLayoutProperty: (layerId: string, property: string) => unknown;
+  setLayoutProperty: (layerId: string, property: string, value: unknown) => void;
+}
+
+export interface GestureLayerMaskController {
+  apply: (affected: GestureAffectedEntities) => void;
+  restore: () => void;
+}
+
 export function buildGestureLayerMaskPlan(affected: GestureAffectedEntities): GestureLayerMaskPlan {
   const exclusionsBySource = new Map<string, GestureFilterExclusion[]>();
   const add = (sourceId: string, property: string, ids: string[]) => {
@@ -78,6 +91,65 @@ export function buildGestureLayerMaskPlan(affected: GestureAffectedEntities): Ge
     if (exclusions) filterRules.push({ layerId: layer.id, sourceId: layer.source, exclusions });
   }
   return { filterRules, hiddenLayerIds };
+}
+
+/**
+ * Masks settled features beneath the live gesture preview without asking
+ * MapLibre to recalculate the same style filters on every pointer frame.
+ * Gesture projections return fresh arrays, so the key compares their values
+ * rather than their references. A target set can grow during a gesture; that
+ * produces a new key and refreshes the mask before the next preview paints.
+ */
+export function createGestureLayerMaskController(
+  map: GestureLayerMaskMap,
+): GestureLayerMaskController {
+  const filterRestores = new Map<string, FilterSpecification | undefined>();
+  const visibilityRestores = new Map<string, unknown>();
+  let appliedKey: string | null = null;
+
+  return {
+    apply(affected) {
+      const key = JSON.stringify([
+        affected.wayIds,
+        affected.stationIds,
+        affected.facilityIds,
+        affected.groupIds,
+        affected.nodeIds,
+      ]);
+      if (key === appliedKey) return;
+
+      const plan = buildGestureLayerMaskPlan(affected);
+      for (const rule of plan.filterRules) {
+        if (!map.getLayer(rule.layerId)) continue;
+        if (!filterRestores.has(rule.layerId))
+          filterRestores.set(rule.layerId, map.getFilter(rule.layerId) || undefined);
+        map.setFilter(
+          rule.layerId,
+          maskedGestureFilter(filterRestores.get(rule.layerId), rule.exclusions),
+        );
+      }
+      for (const layerId of plan.hiddenLayerIds) {
+        if (!map.getLayer(layerId)) continue;
+        if (!visibilityRestores.has(layerId))
+          visibilityRestores.set(layerId, map.getLayoutProperty(layerId, 'visibility'));
+        map.setLayoutProperty(layerId, 'visibility', 'none');
+      }
+      appliedKey = key;
+    },
+
+    restore() {
+      for (const [layerId, filter] of filterRestores) {
+        if (map.getLayer(layerId)) map.setFilter(layerId, filter ?? null);
+      }
+      filterRestores.clear();
+      for (const [layerId, visibility] of visibilityRestores) {
+        if (map.getLayer(layerId))
+          map.setLayoutProperty(layerId, 'visibility', visibility ?? 'visible');
+      }
+      visibilityRestores.clear();
+      appliedKey = null;
+    },
+  };
 }
 
 export function maskedGestureFilter(

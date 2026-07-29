@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl, {
-  type FilterSpecification,
   type GeoJSONSource,
   type LayerSpecification,
   type Map as MLMap,
@@ -74,11 +73,10 @@ import {
   recordFullProjection,
   recordSourceUpload,
   type EditGestureTargets,
-  type GestureAffectedEntities,
   type GestureProjectionController,
   type GestureProjectionResult,
 } from './gestureProjection';
-import { buildGestureLayerMaskPlan, maskedGestureFilter } from './gestureLayerMask';
+import { createGestureLayerMaskController } from './gestureLayerMask';
 import {
   ALL_SYSTEM_FEATURE_SOURCES,
   createSourceUploadQueue,
@@ -790,42 +788,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // content changes below pass a dependency-filtered source list.
     schedulePushDataRef.current = () => schedulePushData('all');
 
-    const gestureFilterRestores = new Map<string, FilterSpecification | undefined>();
-    const gestureVisibilityRestores = new Map<string, unknown>();
-
-    const applyGestureMask = (affected: GestureAffectedEntities) => {
-      const plan = buildGestureLayerMaskPlan(affected);
-      for (const rule of plan.filterRules) {
-        if (!map.getLayer(rule.layerId)) continue;
-        if (!gestureFilterRestores.has(rule.layerId))
-          gestureFilterRestores.set(
-            rule.layerId,
-            map.getFilter(rule.layerId) as FilterSpecification | undefined,
-          );
-        map.setFilter(
-          rule.layerId,
-          maskedGestureFilter(gestureFilterRestores.get(rule.layerId), rule.exclusions),
-        );
-      }
-      for (const layerId of plan.hiddenLayerIds) {
-        if (!map.getLayer(layerId)) continue;
-        if (!gestureVisibilityRestores.has(layerId))
-          gestureVisibilityRestores.set(layerId, map.getLayoutProperty(layerId, 'visibility'));
-        map.setLayoutProperty(layerId, 'visibility', 'none');
-      }
-    };
-
-    const restoreGestureMask = () => {
-      for (const [layerId, filter] of gestureFilterRestores) {
-        if (map.getLayer(layerId)) map.setFilter(layerId, filter ?? null);
-      }
-      gestureFilterRestores.clear();
-      for (const [layerId, visibility] of gestureVisibilityRestores) {
-        if (map.getLayer(layerId))
-          map.setLayoutProperty(layerId, 'visibility', visibility ?? 'visible');
-      }
-      gestureVisibilityRestores.clear();
-    };
+    const gestureMask = createGestureLayerMaskController(map);
 
     const clearGesturePreview = () => {
       if (!gesturePreviewVisible) return;
@@ -841,7 +804,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       gestureProjectionAborted = true;
       fullAfterGesture = true;
       clearGesturePreview();
-      restoreGestureMask();
+      gestureMask.restore();
     };
 
     const applyGestureProjectionResult = (result: GestureProjectionResult) => {
@@ -858,7 +821,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       source.setData(result.projection.data);
       recordSourceUpload(projectionCounts);
       gesturePreviewVisible = true;
-      applyGestureMask(result.projection.affected);
+      gestureMask.apply(result.projection.affected);
     };
 
     const beginGestureProjection = (targets: EditGestureTargets) => {
@@ -886,7 +849,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       if (!gestureActive) return;
       const finish = gestureProjection?.finish() ?? { rebuild: false, hadPreview: false };
       clearGesturePreview();
-      restoreGestureMask();
+      gestureMask.restore();
       gestureActive = false;
       gestureProjection = null;
       const needsFullProjection = finish.rebuild || fullAfterGesture;
@@ -1288,7 +1251,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       map.off('style.load', onStyleLoad);
       map.off('error', onMapError);
       clearGesturePreview();
-      restoreGestureMask();
+      gestureMask.restore();
       if (PERF_HARNESS_BUILD) delete window.__mapProjectionCounts;
       schedulePushDataRef.current = null;
       setMap(null);
