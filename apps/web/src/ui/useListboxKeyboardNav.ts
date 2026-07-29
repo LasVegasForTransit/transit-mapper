@@ -1,7 +1,7 @@
 import { useRef, type KeyboardEvent, type MutableRefObject } from 'react';
 
 interface ListboxKeyboardNav<T extends HTMLElement> {
-  /** Attach to the role="listbox" container. */
+  /** Attach to the container that owns the selectable rows. */
   containerRef: MutableRefObject<T | null>;
   /** Attach to the same container's onKeyDown. */
   onKeyDown: (e: KeyboardEvent<T>) => void;
@@ -70,7 +70,7 @@ export function useListboxKeyboardNav<T extends HTMLElement = HTMLDivElement>(
     // pan, and more, so an unstopped event here would fire BOTH this list's
     // own navigation AND whatever global binding happens to share the same
     // key (confirmed live: typing "l" to search this list also switched the
-    // active tool to Way). Once focus is inside a listbox, its own keyboard
+    // active tool to Way). Once focus is inside the row collection, its own keyboard
     // model owns the keystroke — the same rule Finder/Explorer type-ahead
     // and Gmail's list navigation follow.
     if (e.key === 'ArrowDown') {

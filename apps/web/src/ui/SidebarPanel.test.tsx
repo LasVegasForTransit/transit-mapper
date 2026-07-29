@@ -48,10 +48,10 @@ describe('SidebarPanel', () => {
     expect(markup).not.toContain('Group by');
   });
 
-  it('uses native controls in a navigation landmark rather than nesting controls in a listbox', () => {
+  it('uses native controls in a labelled region rather than nesting controls in a listbox', () => {
     const markup = renderSidebar();
 
-    expect(markup).toContain('role="navigation"');
+    expect(markup).toContain('role="region"');
     expect(markup).not.toContain('role="listbox"');
     expect(markup).not.toContain('role="option"');
   });

@@ -58,7 +58,7 @@ and catalog/view-state APIs.
 - [ ] Run the focused component test and confirm it fails because the component
       does not exist.
 - [ ] Implement the three view workspaces, independent section controls,
-      keyboard listbox behavior, selection/focus, multi-select behavior for
+      keyboard row-navigation behavior, selection/focus, multi-select behavior for
       services, and the existing 150-row cap.
 - [ ] Replace `LinesPanel` with `SidebarPanel` in `App.tsx`.
 - [ ] Run both focused test files and confirm they pass.
