@@ -1,5 +1,6 @@
 import type { LngLat } from '@transitmapper/core/model/system';
 import type { Page } from 'playwright-core';
+import { eventTimingInteractionDurations } from '../../src/perf/eventTiming';
 import { summarizeGesture } from '../../src/perf/gestureStats';
 import { directGestureGateMeasurements } from '../../src/perf/gestureGate';
 import {
@@ -18,7 +19,6 @@ import type {
 import {
   type BrowserMetricState,
   type DirectJourneyMeasurements,
-  type EventTimingMeasurement,
   type GestureCaptureState,
   type PerfPageWindow,
   PERF_STORAGE_CONTRACT,
@@ -146,26 +146,15 @@ async function finishGestureCapture(
   // Give PerformanceObserver one task turn to deliver entries queued after
   // the presentation that ended the interaction.
   await page.waitForTimeout(250);
-  return page.evaluate(() => {
+  const measurements = await page.evaluate(() => {
     const state = (window as PerfPageWindow).__genericPerfGesture;
     if (!state) throw new Error('The direct-manipulation measurement did not start.');
     state.active = false;
     delete (window as PerfPageWindow).__genericPerfFrame;
 
-    const deduplicated = new Map<string, EventTimingMeasurement>();
-    for (const entry of state.eventTimings) {
-      const key = `${entry.name}:${entry.interactionId}:${entry.startTime}:${entry.duration}`;
-      deduplicated.set(key, entry);
-    }
-    const interactions = new Map<number | string, number>();
-    for (const entry of deduplicated.values()) {
-      const key =
-        entry.interactionId > 0 ? entry.interactionId : `${entry.name}:${entry.startTime}`;
-      interactions.set(key, Math.max(interactions.get(key) ?? 0, entry.duration));
-    }
     const sourceUploadsAfter = (window as PerfPageWindow).__perfSourceUploadCount?.() ?? null;
     return {
-      inputToNextPaintMs: [...interactions.values()],
+      eventTimings: state.eventTimings,
       animationFrameMs: state.animationFrameMs.slice(2),
       longTaskMs: state.longTaskMs,
       sourceUploadCount:
@@ -174,6 +163,12 @@ async function finishGestureCapture(
           : sourceUploadsAfter - state.sourceUploadsBefore,
     };
   });
+  return {
+    inputToNextPaintMs: eventTimingInteractionDurations(measurements.eventTimings),
+    animationFrameMs: measurements.animationFrameMs,
+    longTaskMs: measurements.longTaskMs,
+    sourceUploadCount: measurements.sourceUploadCount,
+  };
 }
 
 async function canvasGeometry(page: Page): Promise<CanvasGeometry> {

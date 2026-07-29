@@ -1,4 +1,5 @@
 import type { LngLat } from '@transitmapper/core/model/system';
+import type { EventTimingSample } from '../../src/perf/eventTiming';
 import {
   INDEXED_DB_DOCUMENT_STORE,
   INDEXED_DB_INDEX_STORE,
@@ -41,15 +42,8 @@ export interface BrowserProductionPersistenceState {
   cycles: BrowserProductionPersistenceCycle[];
 }
 
-export interface EventTimingMeasurement {
-  name: string;
-  interactionId: number;
-  duration: number;
-  startTime: number;
-}
-
 export interface GestureCaptureState {
-  eventTimings: EventTimingMeasurement[];
+  eventTimings: EventTimingSample[];
   animationFrameMs: number[];
   longTaskMs: number[];
   active: boolean;
