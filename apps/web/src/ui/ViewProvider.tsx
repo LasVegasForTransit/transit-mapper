@@ -35,10 +35,11 @@ function toggleInSet(set: Set<string>, id: string): Set<string> {
 
 interface ViewProviderProps {
   children: ReactNode;
+  initialViewMode?: ViewMode;
 }
 
-export function ViewProvider({ children }: ViewProviderProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('network');
+export function ViewProvider({ children, initialViewMode = 'network' }: ViewProviderProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [visibleModes, setVisibleModes] = useState<Set<string>>(() => new Set(MODE_ORDER));
   const [visibleWayTypes, setVisibleWayTypes] = useState<Set<string>>(
     () => new Set(WAY_TYPE_ORDER),

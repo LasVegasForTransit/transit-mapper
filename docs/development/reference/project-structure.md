@@ -436,8 +436,12 @@ rather than by making the camera reactive again.
 contextual install-banner row below top chrome; `Toolbar.tsx` is the
 bottom dock; `Inspector.tsx` (with `NodeInspector.tsx`,
 `CrossSectionEditor.tsx`, `InspectorTabs.tsx`) is the right-hand panel;
-plus dialogs (export, import, share, schedule, systems) and primitives
-(popover, modal, dropdown). Components hold no domain logic.
+`SidebarPanel.tsx` is the view-specific left workspace. Its
+`sidebarOutline.ts` helper projects the existing system into ordered line
+stops and service-bearing corridors without creating another stored domain
+model. The folder also holds dialogs (export, import, share, schedule,
+systems) and primitives (popover, modal, dropdown). Components hold no domain
+logic.
 
 ## Testing
 

@@ -27,7 +27,7 @@ import { Icon } from './ui/Icon';
 import { ImportProgressPill } from './ui/ImportProgressPill';
 import { MapContextMenu } from './ui/MapContextMenu';
 import { Inspector } from './ui/Inspector';
-import { LinesPanel } from './ui/LinesPanel';
+import { SidebarPanel } from './ui/SidebarPanel';
 import { SimControls, SimControlsCompact } from './ui/SimControls';
 import { Toolbar } from './ui/Toolbar';
 import { TopBarActions, TopBarBrand, ViewSwitch } from './ui/TopBar';
@@ -426,7 +426,7 @@ export function App() {
       )}
       <Workbench
         brand={<TopBarBrand />}
-        menuPanel={<LinesPanel />}
+        menuPanel={<SidebarPanel />}
         supplementalPanel={<Inspector />}
         hasSupplementalContent={hasSupplementalContent}
         primaryToolbar={<TopBarActions />}
