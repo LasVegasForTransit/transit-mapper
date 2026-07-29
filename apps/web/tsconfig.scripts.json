@@ -1,29 +1,12 @@
-// Typechecks the test suite in `scripts/` — which nothing did until now.
-//
-// `tsconfig.json` includes only `src`, so `pnpm typecheck` never looked at
-// verify.ts: the single file that asserts how the whole model behaves was the
-// single file the compiler ignored. It had already drifted into duplicate
-// imports and a dead comparison, neither of which failed anything, because
-// tsx runs what tsc would have rejected.
-//
-// A separate config rather than adding "scripts" to the main include: the
-// suite is a Node program and the app is browser code, and `tsconfig.json`
-// must keep describing the browser accurately — it is what stops a `src` file
-// compiling against a global the browser doesn't have.
-//
-// `vite/client` is listed alongside `node` because `types` REPLACES the base
-// config's array rather than extending it. The suite imports application code
-// directly (`../src/editor/store` and friends), and `src` uses
-// `import.meta.env`, which only `vite/client` types — so dropping it means the
-// first check that happens to reach `App.tsx` or `EditorProvider.tsx` fails
-// with an error pointing at perfectly good application code, from a config
-// nobody touched. It passes today only because the import graph doesn't reach
-// them yet, which is not a property worth relying on.
+// Typechecks Node-run tooling, the sequential suite, the asset verifier, and
+// Vitest files without admitting Node globals into the production browser
+// config. `vite/client` stays alongside `node` because the tests and tools
+// import browser sources that use `import.meta.env`.
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "types": ["node", "vite/client"],
     "noEmit": true
   },
-  "include": ["scripts"]
+  "include": ["scripts", "tests"]
 }

@@ -11,7 +11,7 @@
     "perf:record": "tsx scripts/perf/run.ts --record",
     "perf:soak": "tsx scripts/perf/run.ts --soak",
     "typecheck": "tsc -b --noEmit && tsc -p tsconfig.scripts.json",
-    "verify": "tsx scripts/verify.ts && tsx scripts/verify-maskable-icon.ts && vitest run",
+    "verify": "tsx tests/verify.ts && tsx tests/verify-maskable-icon.ts && vitest run",
     "lint": "eslint ."
   },
   "dependencies": {
