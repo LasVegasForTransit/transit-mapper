@@ -94,6 +94,9 @@ describe('service point actions', () => {
         )!,
       },
     });
+    expect(actions.find((action) => action.id === 'service.endHere')?.hint).toBe(
+      'Keeps the longer side and ends it at this point',
+    );
     actions.find((action) => action.id === 'service.endHere')!.run();
 
     expect(

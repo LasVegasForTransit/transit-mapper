@@ -15,6 +15,8 @@ import { patternHasCouplet } from '@transitmapper/core/model/geo';
 import { servicesShareOrCross, terminiMeet } from '@transitmapper/core/model/selectionRelations';
 import type { EditorStore } from '../store';
 
+export const JOIN_THROUGH_SERVICE_LABEL = 'Join into a through-service';
+
 export function serviceActionProvider(store: EditorStore): SelectionActionProvider {
   return ({ system, refs, serviceHit }) => {
     const serviceIds = refIds(refs, 'service');
@@ -63,15 +65,7 @@ export function serviceActionProvider(store: EditorStore): SelectionActionProvid
               run: () => store.getState().makePatternTwoWay(service.id, pattern.id),
             },
           ]
-        : [
-            {
-              id: 'service.drawReturnPath',
-              label: 'Draw a separate return path',
-              hint: 'Trace the streets the return trip runs — a one-way couplet',
-              group: 'direction',
-              run: () => store.getState().startReturnPathDraft(service.id, pattern.id),
-            },
-          ];
+        : [];
     }
 
     if (serviceIds.length !== 2 || refs.length !== 2) return [];
@@ -88,7 +82,7 @@ export function serviceActionProvider(store: EditorStore): SelectionActionProvid
     if (terminiMeet(system, a, b)) {
       actions.push({
         id: 'service.throughRoute',
-        label: 'Join into a through-route',
+        label: JOIN_THROUGH_SERVICE_LABEL,
         hint: `One continuous line, keeping the name “${first.name}”`,
         group: 'merge',
         run: () => store.getState().throughRouteInto(a, b),

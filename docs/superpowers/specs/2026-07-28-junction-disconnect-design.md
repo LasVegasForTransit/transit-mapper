@@ -1,20 +1,26 @@
 # Disconnecting a junction, and refusing to form bad ones
 
+> **Vocabulary.** The user-facing object is a **junction**. It is represented
+> by `Node` in the current model; code identifiers such as `NodeInspector` and
+> `sel.kind === 'node'` retain that representation name. See
+> [Editor interactions](../../product/reference/editor-interactions.md).
+
 ## Context
 
-A `Node` joins two or more ways at a coincident control point. Nothing today
-lets a person undo that join. `useSelectionActions.ts` deliberately excludes
-node selections from the whole selection-action system, `NodeInspector.tsx`
-offers only turn-lane and control-type tabs, and `deleteSelection` in
-`keymap.ts` has no branch for `sel.kind === 'node'` — pressing Delete on a
-selected junction is a silent no-op.
+A junction joins two or more corridors at coincident control points and is
+represented by a `Node`. Nothing today lets a person undo that join.
+`useSelectionActions.ts` deliberately excludes junction selections from the
+whole selection-action system, `NodeInspector.tsx` offers only turn-lane and
+control-type tabs, and `deleteSelection` in `keymap.ts` has no branch for
+`sel.kind === 'node'` — pressing Delete on a selected junction is a silent
+no-op.
 
 That gap is now a live bug. `formCrossingJunctions`
 (`apps/web/src/editor/store.ts:1253`) auto-joins any two ways of the same
 `grade` the moment a draw commits, and checks `grade` only — never `typeId`.
 Draw a bus road across an existing rail line and the app wires them into one
 lane-connected junction with no confirmation, producing exactly the case in
-the report: a road and a rail service sharing a node that isn't a station,
+the report: a road and a rail service sharing a junction that isn't a station,
 with `Mode.wayTypeIds` (`catalog.ts:620-694`) making clear the two could never
 carry the same vehicle. `crossingBetween`
 (`packages/core/src/model/selectionRelations.ts:70-79`), which backs the
@@ -25,8 +31,8 @@ got the same rule.
 
 The reader of this document is whoever implements it. When you finish, you
 should know why the disconnect primitive follows `joinWayPointToWay`'s shape
-rather than moving into `packages/core`, and why a 2-arm node and a 6-arm
-node go through the same code path.
+rather than moving into `packages/core`, and why a 2-arm junction and a 6-arm
+junction go through the same code path.
 
 ## Decisions
 
@@ -46,7 +52,7 @@ Every item here was confirmed in brainstorming.
   the same mechanism `findCrossingsWithoutJoining` already uses, rather than
   left for someone to find by clicking around the map.
 - The trigger is a **per-arm list in `NodeInspector`**, not a keyboard
-  shortcut. A 2-arm node's list has two rows; disconnecting either one
+  shortcut. A 2-arm junction's list has two rows; disconnecting either one
   produces the same end state.
 
 ## `disconnectWayFromNode`
@@ -86,9 +92,9 @@ splice logic into `packages/core`, which isn't otherwise part of this change.
    point is left exactly where it was — only the disconnected side moves.
 
 This covers both shapes of the ask. The screenshot's 2-arm case: disconnecting
-either arm drops the node to 0 or 1 refs, so it's deleted and the two ways end
-up fully separated. A real 3+ arm intersection: disconnecting one arm shrinks
-`refs` and `connectors` but leaves the node standing for the rest.
+either arm drops the junction's `Node` to 0 or 1 refs, so it is deleted and the
+two corridors end up fully separated. A real 3+ arm junction keeps its stored
+representation for the remaining arms.
 
 ## Bug fix: exact type match on crossing-formed junctions
 
@@ -129,7 +135,7 @@ only the `Issue` union does.
 
 The new check merges into the same `IssuesPopover.tsx` list that
 `validateSystemQuick` and `crossingsWithoutJoiningChunked` already feed.
-Clicking the issue selects the node and pans to it, same as any other issue,
+Clicking the issue selects the junction and pans to it, same as any other issue,
 landing on `NodeInspector` where the new Connections tab (below) is right
 there.
 
@@ -149,7 +155,7 @@ Control tab, and the new Connections tab's Disconnect buttons call
 `SelectionActionProvider`/`wayActions.ts`'s registry — that system is for the
 context-menu and multi-selection surfaces, and `useSelectionActions.ts`
 deliberately excludes node selections from it; `NodeInspector` has always
-talked to the store directly for single-node actions. If the node is deleted
+talked to the store directly for single-junction actions. If the `Node` is deleted
 as a side effect (refs drop below 2), `selection` clears; otherwise the
 inspector re-renders with one fewer row.
 

@@ -58,7 +58,7 @@ export function servicePointActionProvider(store: EditorStore): SelectionActionP
       {
         id: 'service.endHere',
         label: 'End line here',
-        hint: 'Drops everything after this point',
+        hint: 'Keeps the longer side and ends it at this point',
         group: 'cut',
         run: () => store.getState().endPatternAt(serviceId, serviceHit.position!),
       },

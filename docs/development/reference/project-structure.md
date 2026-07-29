@@ -83,6 +83,14 @@ and `apps/worker` depend on it as a workspace package.
   the store supplies the one measurement each edit needs and this decides what
   the legs become, so the arithmetic is testable without a system to test it
   against.
+- `serviceEdits.ts` — exact positions within a branch occurrence and the pure
+  service-path operations for extending, looping, ending, and dividing it.
+  Repeated use of one corridor remains distinguishable because a position
+  carries its run and leg index as well as its way-relative distance.
+- `serviceGestures.ts` — plans one transactional terminus drag without browser
+  state: legal route, directional loop, one-way return, same-mode connection,
+  connection choice, or refusal. Its plan keeps the immutable base-system
+  identity so a chooser cannot commit over an intervening edit.
 - `validate.ts` — system-level checks (crossings, dangling refs, a route with
   a gap in it) surfaced in the Issues popover.
 - `serialize.ts` — versioned save/load with migrations (v3 → current).
@@ -352,7 +360,9 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 
 - `store.ts` — the single zustand store. Every change to the system goes
   through an action here; undo checkpoints, junction bookkeeping, station
-  re-anchoring, and NamedWay upkeep all live in the actions.
+  re-anchoring, and NamedWay upkeep all live in the actions. A branch-terminus
+  drag previews without mutating; `commitTerminusGesture` applies its complete
+  plan as one checkpoint or refuses it unchanged.
 - `keymap.ts` — the declarative keyboard table
   ([Keyboard shortcuts](../../product/reference/keyboard-shortcuts.md)).
 - `pointerIntent.ts` — the browser-free pointer grammar. It translates a
@@ -370,8 +380,11 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
   termini are their own source because a branch end is an operational line
   affordance, not a control point on the corridor it follows.
 - `interactions.ts` — the pointer state machine: drawing, dragging,
-  snapping, route drafting, station-land drawing; adapts MapLibre feature
-  hits into the editor pointer-intent grammar and owns the pointer-down lock.
+  snapping, route drafting, branch-terminus gestures, connection choices, and
+  station-land drawing. It adapts MapLibre feature hits into the editor
+  pointer-intent grammar, owns the pointer-down lock, and carries the one
+  resolved service-path position through right-click dispatch without
+  re-projecting it.
 - `MapCanvas.tsx` — the map component; keeps sources in sync with the store
   and heals overlay layers if the style reloads; renders the pointer-intent
   badge beside the native cursor. It also owns the transient action-anchor
@@ -382,6 +395,11 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 - `initialStyleFallback.ts` — bounds initial third-party style loading and
   switches failures to a local blank style so system geometry and pointer
   interactions still initialize offline.
+
+The terms these layers expose to users, and the cursor/badge/preview contract
+they implement, are normative in
+[Editor interactions](../../product/reference/editor-interactions.md).
+
 - `layers/` — the layer specifications and icons `layers.ts` assembles.
 - `export/` — rendering the map to an image off-screen.
 - `basemap.ts`, `icons.ts`, `landmarks.ts`, `mapRef.ts`,

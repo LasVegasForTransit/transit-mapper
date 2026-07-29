@@ -3,9 +3,13 @@ import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { oneSection, wholeLeg } from '@transitmapper/core/model/geo';
 import { createEditorStore } from '../store';
 import { createSelectionActions } from '.';
-import { serviceActionProvider } from './serviceActions';
+import { JOIN_THROUGH_SERVICE_LABEL, serviceActionProvider } from './serviceActions';
 
 describe('terminus service actions', () => {
+  it('uses the standard through-service connection label', () => {
+    expect(JOIN_THROUGH_SERVICE_LABEL).toBe('Join into a through-service');
+  });
+
   it('clears an armed terminus when its model reference can no longer exist', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
@@ -92,6 +96,27 @@ describe('terminus service actions', () => {
         })
         .map((action) => action.id),
     ).toEqual(['service.convertTerminus']);
+  });
+
+  it('offers conversion only from an exact terminus, not a whole-line selection', () => {
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.services = [
+      {
+        id: 'line',
+        name: 'Line',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [{ id: 'branch', sections: oneSection([wholeLeg('way')]) }],
+      },
+    ];
+
+    const actions = serviceActionProvider(store)({
+      system,
+      refs: [{ kind: 'service', id: 'line' }],
+    });
+
+    expect(actions).toEqual([]);
   });
 
   it.each(['start', 'end'] as const)('arms the %s end without mutating the system', (side) => {

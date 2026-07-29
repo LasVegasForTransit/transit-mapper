@@ -78,6 +78,31 @@ const DAY_SCOPE_LABEL: Record<ScheduleDayScope, string> = {
   weekend: 'Weekends',
 };
 
+/** User-facing route vocabulary is normative in
+ * docs/product/reference/editor-interactions.md. Keep these strings together
+ * so a copy regression cannot quietly turn model names into interface terms. */
+export const ROUTE_INSPECTOR_COPY = {
+  branchesLabel: 'Branches',
+  branchExplanation:
+    'Each branch is one service path this line runs — add a branch to model a line that splits.',
+  deleteBranch: 'Delete this branch',
+  corridorShape: 'Corridor shape',
+  mergeBranches:
+    "Combines this line's branches into another line of the same mode, then removes this line.",
+  adoptTitle:
+    'Re-route this line onto already-built corridors near its sketch and remove the redundant sketch geometry',
+  adoptRefusal:
+    "No adoptable infrastructure found near this line's endpoints — build or import the corridors it should ride first.",
+  adoptHelp:
+    'Re-binds each branch onto nearby built corridors, following the sketched service path; stations move with it.',
+  corridorHelp:
+    'Drag a control point or corridor endpoint to reshape · click the corridor to add a control point · Ctrl/⌘-drag an endpoint to extend it · Alt/Option-drag to erase a section · Ctrl/⌘-click a control point to split the corridor there',
+} as const;
+
+export function corridorCountLabel(count: number): string {
+  return `${count} corridor${count === 1 ? '' : 's'}`;
+}
+
 function formatSpan(start: string, end: string): string {
   return `${start}–${end}`;
 }
@@ -136,7 +161,6 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   const deletePattern = useEditor((s) => s.deletePattern);
   const mergeServiceInto = useEditor((s) => s.mergeServiceInto);
   const adoptExistingInfrastructure = useEditor((s) => s.adoptExistingInfrastructure);
-  const startReturnPathDraft = useEditor((s) => s.startReturnPathDraft);
   const setStopSkipped = useEditor((s) => s.setStopSkipped);
   const makePatternTwoWay = useEditor((s) => s.makePatternTwoWay);
   const trimPatternTo = useEditor((s) => s.trimPatternTo);
@@ -516,34 +540,24 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
               type="button"
               className="ghost-btn"
               style={{ width: '100%', justifyContent: 'center', marginBottom: 4 }}
-              title="Re-route this line onto already-built ways near its sketch (streets, track) and remove the redundant sketch geometry"
+              title={ROUTE_INSPECTOR_COPY.adoptTitle}
               onClick={() => {
                 const n = adoptExistingInfrastructure(id);
-                if (n === 0)
-                  window.alert(
-                    "No adoptable infrastructure found near this line's endpoints — build or import the ways it should ride first.",
-                  );
+                if (n === 0) window.alert(ROUTE_INSPECTOR_COPY.adoptRefusal);
               }}
             >
               Adopt existing infrastructure
             </button>
             <p className="insp-sub" style={{ marginBottom: 12 }}>
-              Re-binds each pattern onto nearby built ways, following the sketched corridor;
-              stations move with it.
+              {ROUTE_INSPECTOR_COPY.adoptHelp}
             </p>
           </>
         )}
         {singleWay && (
           <>
-            <label className="field-label">Way shape</label>
-            {!readOnly && (
-              <p className="insp-sub">
-                Drag a handle (or an end) to reshape · click the line to add a point · Ctrl-drag an
-                end to extend it · Alt-drag to erase a section · Ctrl-click a point to split the way
-                there
-              </p>
-            )}
-            <div className="chip-row" role="group" aria-label="Way shape">
+            <label className="field-label">{ROUTE_INSPECTOR_COPY.corridorShape}</label>
+            {!readOnly && <p className="insp-sub">{ROUTE_INSPECTOR_COPY.corridorHelp}</p>}
+            <div className="chip-row" role="group" aria-label={ROUTE_INSPECTOR_COPY.corridorShape}>
               {GEOMETRY_OPTIONS.map(([g, label]) => (
                 <button
                   key={g}
@@ -564,12 +578,8 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
           </>
         )}
 
-        <label className="field-label">Patterns</label>
-        {!readOnly && (
-          <p className="insp-sub">
-            Each pattern is one path this service runs — add a branch to model a line that splits.
-          </p>
-        )}
+        <label className="field-label">{ROUTE_INSPECTOR_COPY.branchesLabel}</label>
+        {!readOnly && <p className="insp-sub">{ROUTE_INSPECTOR_COPY.branchExplanation}</p>}
         <ul className="pattern-list">
           {service.patterns.map((p, i) => {
             const pWay = ways.find((w) => w.id === patternLegs(p)[0]?.wayId);
@@ -587,15 +597,14 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                   </span>
                   <span className="pattern-meta">
                     {formatDistance(pathLengthMeters(patternPath(ways, p)), unitSystem)} ·{' '}
-                    {patternLegs(p).length} way
-                    {patternLegs(p).length === 1 ? '' : 's'}
+                    {corridorCountLabel(patternLegs(p).length)}
                   </span>
                 </button>
                 {!readOnly && service.patterns.length > 1 && (
                   <IconButton
                     icon="trash"
                     size={15}
-                    label="Delete this pattern"
+                    label={ROUTE_INSPECTOR_COPY.deleteBranch}
                     onClick={() => deletePattern(id, p.id)}
                   />
                 )}
@@ -645,31 +654,13 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                     Make it run both ways on one street
                   </button>
                 </>
-              ) : (
-                <>
-                  <p className="insp-sub">
-                    Splitting the line lets its return trip run a different street — a one-way
-                    couplet. Draw the return path from the far end back toward the start.
-                  </p>
-                  <button
-                    type="button"
-                    className="ghost-btn"
-                    style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}
-                    onClick={() => startReturnPathDraft(id, singlePattern.id)}
-                  >
-                    <Icon name="plus" size={17} /> Draw a separate return path
-                  </button>
-                </>
-              ))}
+              ) : null)}
             {mergeTargets.length > 0 && (
               <>
                 <label className="field-label" htmlFor="merge-into-select">
                   Merge into another line
                 </label>
-                <p className="insp-sub">
-                  Combines this line's patterns into another line of the same mode as its own
-                  branch(es), then removes this line.
-                </p>
+                <p className="insp-sub">{ROUTE_INSPECTOR_COPY.mergeBranches}</p>
                 <select
                   id="merge-into-select"
                   className="opt-select"
