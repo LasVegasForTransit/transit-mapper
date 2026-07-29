@@ -35,7 +35,8 @@ export function attachFrameMeter(map: MLMap): FrameMeter {
   const overlay = document.createElement('div');
   overlay.style.cssText =
     'position:fixed;left:8px;bottom:8px;z-index:99999;font:11px ui-monospace,SFMono-Regular,monospace;' +
-    'background:rgba(25,26,23,0.82);color:#fff;padding:4px 8px;border-radius:6px;' +
+    'background:var(--md-sys-color-inverse-surface);color:var(--md-sys-color-inverse-on-surface);' +
+    'padding:4px 8px;border-radius:6px;' +
     'pointer-events:none;white-space:nowrap;letter-spacing:0.02em';
   document.body.appendChild(overlay);
 
