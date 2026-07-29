@@ -151,6 +151,32 @@ function assertDirectVerifierLayoutGuard(): void {
 
     setGeneratedVerify(manifest, 'tsx --watch src/index.ts');
     assertContractRejects('unverifiable direct tsx command');
+
+    const bypasses = [
+      {
+        description: 'a grouped direct verifier',
+        command: '(tsx scripts/verify.ts)',
+        expected: 'packages/gencheck/scripts/verify.ts',
+      },
+      {
+        description: 'a direct verifier after a newline',
+        command: 'tsx tests/verify.ts\ntsx scripts/second-verifier.ts',
+        expected: 'packages/gencheck/scripts/second-verifier.ts',
+      },
+      {
+        description: 'an expansion-bearing direct verifier',
+        command: 'tsx tests/$ENTRY.ts',
+        expected: 'unverifiable direct tsx command',
+      },
+    ];
+    const missed = bypasses.flatMap(({ description, command, expected }) => {
+      setGeneratedVerify(manifest, command);
+      const result = checkContract();
+      return result.status !== 0 && result.output.includes(expected) ? [] : [description];
+    });
+    if (missed.length > 0) {
+      throw new Error(`check:contract did not reject ${missed.join(', ')}`);
+    }
   } finally {
     writeFileSync(manifest, original, 'utf8');
   }
