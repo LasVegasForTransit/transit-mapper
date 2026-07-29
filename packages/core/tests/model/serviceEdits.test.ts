@@ -5,10 +5,10 @@ import {
   endPatternAtPosition,
   extendPatternTerminus,
   patternPositionAt,
-} from './serviceEdits';
-import { oneSection, stretchLeg, wholeLeg } from './geo/servicePaths';
-import { aRoad } from '../testing/fixtures';
-import type { LngLat, Pattern, Way } from './system';
+} from '../../src/model/serviceEdits';
+import { oneSection, stretchLeg, wholeLeg } from '../../src/model/geo/servicePaths';
+import { aRoad } from '../support/fixtures';
+import type { LngLat, Pattern, Way } from '../../src/model/system';
 
 describe('pattern positions', () => {
   it('keeps repeated visits to one way as distinct positions', () => {

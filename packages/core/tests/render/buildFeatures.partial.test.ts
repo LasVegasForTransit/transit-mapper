@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptySystem } from '../model/serialize';
-import type { TransitSystem } from '../model/system';
-import { buildFeatures, type SystemFeatures } from './buildFeatures';
+import { createEmptySystem } from '../../src/model/serialize';
+import type { TransitSystem } from '../../src/model/system';
+import { buildFeatures, type SystemFeatures } from '../../src/render/buildFeatures';
 
 const view = {
   viewMode: 'infrastructure' as const,

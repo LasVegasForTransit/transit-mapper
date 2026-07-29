@@ -11,7 +11,7 @@
 // types says it must.
 
 import { describe, expect, it } from 'vitest';
-import { haversineMeters, wayById } from './geo';
+import { haversineMeters, wayById } from '../../src/model/geo';
 import {
   oneSection,
   patternHasSplit,
@@ -19,9 +19,9 @@ import {
   patternRunLegs,
   patternRunPath,
   wholeLeg,
-} from './geo/servicePaths';
-import { aRoad } from '../testing/fixtures';
-import type { LngLat, Pattern, Way } from './system';
+} from '../../src/model/geo/servicePaths';
+import { aRoad } from '../support/fixtures';
+import type { LngLat, Pattern, Way } from '../../src/model/system';
 
 // A north-south trunk in two halves, with a one-block couplet between them:
 // `up` carries the outward trip, `down` the return, a block to the east.

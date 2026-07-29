@@ -6,8 +6,8 @@
 // branches whose fleet is counted twice.
 
 import { describe, expect, it } from 'vitest';
-import { pairRouteShapes } from './gtfsImport';
-import type { LngLat } from './system';
+import { pairRouteShapes } from '../../src/model/gtfsImport';
+import type { LngLat } from '../../src/model/system';
 
 /** A north-south line and its mirror image, plus the pieces that must NOT be
  *  mistaken for one. Coordinates are Vegas-ish so the metre thresholds mean

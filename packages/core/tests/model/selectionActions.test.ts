@@ -2,9 +2,9 @@
 // cases are about that contract rather than about any particular action.
 
 import { describe, expect, it, vi } from 'vitest';
-import { createSelectionActionRegistry, isExactly, refIds } from './selectionActions';
-import type { ActionContext, SelectionAction } from './selectionActions';
-import { aSystem } from '../testing/fixtures';
+import { createSelectionActionRegistry, isExactly, refIds } from '../../src/model/selectionActions';
+import type { ActionContext, SelectionAction } from '../../src/model/selectionActions';
+import { aSystem } from '../support/fixtures';
 
 const ctx: ActionContext = {
   system: aSystem(),

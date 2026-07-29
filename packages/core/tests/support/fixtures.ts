@@ -7,10 +7,10 @@
 // change breaks the build here — once — instead of quietly weakening every
 // test that builds one.
 
-import { wayById, wholeLegs, oneSection } from '../model/geo';
-import { defaultProfileFor } from '../model/profile';
-import { createEmptySystem } from '../model/serialize';
-import type { LngLat, Pattern, Service, Station, TransitSystem, Way } from '../model/system';
+import { wayById, wholeLegs, oneSection } from '../../src/model/geo';
+import { defaultProfileFor } from '../../src/model/profile';
+import { createEmptySystem } from '../../src/model/serialize';
+import type { LngLat, Pattern, Service, Station, TransitSystem, Way } from '../../src/model/system';
 
 /** A road with the way type's default cross-section. */
 export function aRoad(id: string, points: LngLat[], overrides: Partial<Way> = {}): Way {

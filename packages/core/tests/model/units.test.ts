@@ -5,7 +5,7 @@ import {
   lengthToMeters,
   speedFromKmh,
   speedToKmh,
-} from './units';
+} from '../../src/model/units';
 
 describe('editable unit conversions', () => {
   it('round-trips an imperial vehicle dimension without rounding it', () => {

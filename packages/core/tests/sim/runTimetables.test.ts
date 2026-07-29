@@ -9,13 +9,13 @@
 // which is the part that must not regress.
 
 import { describe, expect, it } from 'vitest';
-import { planService, runStateAt } from './fleet';
+import { planService, runStateAt } from '../../src/sim/fleet';
 import {
   buildTimetable,
   metersAtElapsed,
   roundTripMs,
   type VehicleMotionProfile,
-} from './timetable';
+} from '../../src/sim/timetable';
 
 const SPEED: VehicleMotionProfile = { speedMps: 10, accelMps2: 2, decelMps2: 2 }; // m/s, so 1 km takes just over 100 s
 

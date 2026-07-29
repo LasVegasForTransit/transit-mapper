@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { aRoad, aSystem } from '../testing/fixtures';
+import { aRoad, aSystem } from '../support/fixtures';
 import {
   createCrossingOperationCounts,
   crossingsWithoutJoiningChunked,
   findCrossingsWithoutJoining,
   type Issue,
-} from './validate';
+} from '../../src/model/validate';
 
 async function collectCrossingIssues(generator: AsyncGenerator<Issue[]>): Promise<Issue[]> {
   const issues: Issue[] = [];

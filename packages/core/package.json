@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./testing/fixtures": "./tests/support/fixtures.ts",
     "./*": "./src/*.ts"
   },
   "scripts": {

@@ -11,11 +11,11 @@ import {
   oneSection,
   patternLegs,
   wholeLeg,
-} from '../model/geo';
-import { aPattern, aRoad, aStation } from '../testing/fixtures';
-import { dwellStopsForPattern, patternStats, patternStops } from './serviceStats';
-import type { VehicleMotionProfile } from './timetable';
-import type { Pattern } from '../model/system';
+} from '../../src/model/geo';
+import { aPattern, aRoad, aStation } from '../support/fixtures';
+import { dwellStopsForPattern, patternStats, patternStops } from '../../src/sim/serviceStats';
+import type { VehicleMotionProfile } from '../../src/sim/timetable';
+import type { Pattern } from '../../src/model/system';
 
 const profile: VehicleMotionProfile = { speedMps: 15, accelMps2: 2, decelMps2: 2 };
 

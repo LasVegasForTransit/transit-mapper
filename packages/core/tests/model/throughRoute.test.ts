@@ -4,10 +4,10 @@
 // not part of the join.
 
 import { describe, expect, it } from 'vitest';
-import { patternPath, patternLegs } from './geo';
-import { throughRouteServices, throughRouteServicesAt } from './throughRoute';
-import { validateSystemQuick } from './validate';
-import { aPattern, aRoad, aService, aSystem } from '../testing/fixtures';
+import { patternPath, patternLegs } from '../../src/model/geo';
+import { throughRouteServices, throughRouteServicesAt } from '../../src/model/throughRoute';
+import { validateSystemQuick } from '../../src/model/validate';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures';
 
 const west = aRoad('west', [
   [-115.21, 36.15],

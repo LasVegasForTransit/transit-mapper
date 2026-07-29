@@ -16,13 +16,13 @@ import {
   wayById,
   oneSection,
   patternLegs,
-} from '../model/geo';
-import { serviceLaneOnWay } from '../model/geo/serviceLane';
-import { planService, runStateAt } from '../sim/fleet';
-import { buildTimetable, roundTripMs, type VehicleMotionProfile } from '../sim/timetable';
-import { aPattern, aRoad } from '../testing/fixtures';
-import { wayLaneGeometry } from './streets';
-import { patternLanePath } from './vehicleLane';
+} from '../../src/model/geo';
+import { serviceLaneOnWay } from '../../src/model/geo/serviceLane';
+import { planService, runStateAt } from '../../src/sim/fleet';
+import { buildTimetable, roundTripMs, type VehicleMotionProfile } from '../../src/sim/timetable';
+import { aPattern, aRoad } from '../support/fixtures';
+import { wayLaneGeometry } from '../../src/geometry/streets';
+import { patternLanePath } from '../../src/geometry/vehicleLane';
 
 /** A north-south arterial with the default four drive lanes, two each way. */
 const arterial = (id: string, fromLat: number, toLat: number) =>
