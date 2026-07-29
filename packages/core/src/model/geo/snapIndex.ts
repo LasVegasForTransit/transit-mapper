@@ -336,8 +336,20 @@ export function candidateWayIdsAlong(path: LngLat[], ways: Way[]): Set<string> {
   return ids;
 }
 
-/** IDs of every way whose path passes within maxMeters of a coordinate. */
-export function servedWayIds(coord: LngLat, ways: Way[], maxMeters: number): string[] {
+export interface ServedWayDistance {
+  wayId: string;
+  distMeters: number;
+}
+
+/** Every way whose path passes within maxMeters of a coordinate, ranked by
+ *  exact nearest distance and then id. Returning the distance with the id lets
+ *  an incremental caller merge a small changed-way query into a prior result
+ *  without walking every retained way again. */
+export function servedWaysByDistance(
+  coord: LngLat,
+  ways: Way[],
+  maxMeters: number,
+): ServedWayDistance[] {
   const grid = gridFor(ways);
   const cellRadiusLat = Math.ceil(maxMeters / 111_320 / CELL_DEG) + 1; // +1 cell of margin for anything straddling a boundary
   const cellRadiusLng = lngCellRadius(maxMeters, coord[1]);
@@ -371,10 +383,19 @@ export function servedWayIds(coord: LngLat, ways: Way[], maxMeters: number): str
   // so the ordering has to be pinned to something intrinsic first.
   // "The nearest way's service colors the station" is also simply the more
   // defensible rule than "whichever the scan reached first".
-  const ranked: { wayId: string; d: number }[] = [];
-  for (const [wayId, d] of bestByWay) if (d <= maxMeters) ranked.push({ wayId, d });
-  ranked.sort((x, y) => x.d - y.d || (x.wayId < y.wayId ? -1 : x.wayId > y.wayId ? 1 : 0));
-  return ranked.map((r) => r.wayId);
+  const ranked: ServedWayDistance[] = [];
+  for (const [wayId, distMeters] of bestByWay) {
+    if (distMeters <= maxMeters) ranked.push({ wayId, distMeters });
+  }
+  ranked.sort(
+    (x, y) => x.distMeters - y.distMeters || (x.wayId < y.wayId ? -1 : x.wayId > y.wayId ? 1 : 0),
+  );
+  return ranked;
+}
+
+/** IDs of every way whose path passes within maxMeters of a coordinate. */
+export function servedWayIds(coord: LngLat, ways: Way[], maxMeters: number): string[] {
+  return servedWaysByDistance(coord, ways, maxMeters).map(({ wayId }) => wayId);
 }
 
 // A station within this distance of a way's path counts as served by it, so a
