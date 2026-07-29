@@ -338,8 +338,10 @@ and cold/warm repetitions; `offline.ts` and `soak.ts` own their specialized
 proofs; and `artifacts.ts` writes reports and checked baselines. The diagnostic
 storage probe keeps compatibility parse, stringify, and `localStorage` write
 costs separate; editor journeys seed and read back real IndexedDB records.
-`report-bundle.ts` and `verify-pwa-output.ts` inspect production output after
-Vite builds it.
+`chunkPolicy.ts` assigns stable MapLibre and React cache boundaries and defines
+per-chunk raw-byte limits. `report-bundle.ts` enforces those limits alongside
+the complete editor/embed graph budgets; `verify-pwa-output.ts` checks the
+offline asset graph after Vite builds it.
 
 The checked reports in `apps/web/perf/` are reviewable comparison evidence.
 Generated traces and current reports live under

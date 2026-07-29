@@ -2,6 +2,11 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import {
+  MAP_ENGINE_MAXIMUM_RAW_BYTES,
+  performanceChunkFileName,
+  performanceChunkName,
+} from './src/perf/chunkPolicy';
 
 export default defineConfig({
   plugins: [
@@ -71,10 +76,17 @@ export default defineConfig({
     // minifier, but keeps the complete editor graph within its transfer
     // budget without hiding lazy features from the entrypoint report.
     minify: 'terser',
+    // Additional compression passes recover size exposed by the stable vendor
+    // boundaries below. It is deterministic and avoids unsafe transforms.
+    terserOptions: { compress: { passes: 4 } },
     // The post-build performance reporter walks each entry's full import
     // closure from this manifest. Console chunk warnings cannot tell whether
     // a byte is paid by the editor, the embed, or both.
     manifest: true,
+    // MapLibre 4 is one prebundled module and cannot be divided by Rollup.
+    // report-bundle.ts gives it a narrow 810 kB exception while failing every
+    // other emitted JavaScript chunk above 500 kB.
+    chunkSizeWarningLimit: MAP_ENGINE_MAXIMUM_RAW_BYTES / 1_000,
     rollupOptions: {
       // Two entries, not one. embed.html is the read-only map that gets
       // iframed into other people's pages (/e/:id) — it deliberately shares
@@ -83,6 +95,12 @@ export default defineConfig({
       input: {
         main: 'index.html',
         embed: 'embed.html',
+      },
+      output: {
+        // Keep slow-changing runtimes cacheable across frequent editor
+        // releases. Vite module-preloads these static imports in parallel.
+        manualChunks: performanceChunkName,
+        chunkFileNames: (chunk) => performanceChunkFileName(chunk.moduleIds),
       },
     },
   },
