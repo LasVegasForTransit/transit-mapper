@@ -4,14 +4,14 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aPattern, aRoad, aService, aStation, aSystem } from '@transitmapper/core/testing/fixtures';
-import type { EditorState } from '../editor/store';
-import { createEditorStore } from '../editor/store';
-import { SidebarPanel } from './SidebarPanel';
-import { ViewProvider } from './ViewProvider';
+import type { EditorState } from '../../src/editor/store';
+import { createEditorStore } from '../../src/editor/store';
+import { SidebarPanel } from '../../src/ui/SidebarPanel';
+import { ViewProvider } from '../../src/ui/ViewProvider';
 
 const editorState = vi.hoisted(() => ({ current: null as EditorState | null }));
 
-vi.mock('../editor/EditorProvider', () => ({
+vi.mock('../../src/editor/EditorProvider', () => ({
   useEditor: <T,>(selector: (state: EditorState) => T): T => {
     if (!editorState.current) throw new Error('Editor state was not initialized');
     return selector(editorState.current);

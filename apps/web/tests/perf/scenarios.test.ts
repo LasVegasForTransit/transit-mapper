@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createPerfProtocol } from './scenarios';
+import { createPerfProtocol } from '../../src/perf/scenarios';
 
 describe('performance protocols', () => {
   it('keeps statistical repetition in a full audit', () => {
