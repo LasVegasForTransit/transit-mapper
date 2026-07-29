@@ -100,7 +100,7 @@ jobs:
           ctype() { curl -sS -o /dev/null -w '%{content_type}' --max-time 20 "$1" | cut -d';' -f1; }
           # Presence, not an exact count — a header duplicated by some future
           # proxy rule shouldn't read as "the header is missing".
-          header() { [ "$(curl -sSI --max-time 20 "$1" | tr 'A-Z' 'a-z' | grep -c "^$2:" || true)" -ge 1 ] && echo 1 || echo 0; }
+          header() { [ "$(curl -sSI --max-time 20 "$1" | tr '[:upper:]' '[:lower:]' | grep -c "^$2:" || true)" -ge 1 ] && echo 1 || echo 0; }
 
           # What identifies THIS build: vite fingerprints the entry chunk, so
           # the filename changes whenever the app does. Asserting the live
@@ -128,14 +128,18 @@ jobs:
             # A genuinely stale/broken deploy won't self-correct no matter how
             # long this waits, so widening the window costs nothing but time on
             # the rare slow-propagation case, and saves a false alarm.
+            deployed=0
             for _ in $(seq 1 24); do
-              curl -sS --max-time 20 "$SITE/" | grep -qF "$entry" && break
+              # Keep the successful observation. A second request can reach a
+              # different edge that is still propagating and falsely turn a
+              # confirmed deployment back into a failure.
+              if curl -sS --max-time 20 "$SITE/" | grep -qF "$entry"; then
+                deployed=1
+                break
+              fi
               sleep 5
             done
-            # >= 1, matching header(): a modulepreload for the same chunk would
-            # make this 2, which is not a bad deploy.
-            hits=$(curl -sS --max-time 20 "$SITE/" | grep -cF "$entry" || true)
-            expect "the live site serves the build we just made" "$SITE/" "1" "$([ "$hits" -ge 1 ] && echo 1 || echo 0)"
+            expect "the live site serves the build we just made" "$SITE/" "1" "$deployed"
           else
             # Deliberately a warning, not a failure. The deploy has already
             # happened by the time this step runs, so failing the job because
@@ -172,7 +176,7 @@ jobs:
           # origin any site may frame), while the asset fallback carries
           # `frame-ancestors 'none'` from _headers. Getting 'none' here means
           # the embed prefix never reached Worker code.
-          expect "the embed route reaches the Worker" "$SITE/e/$missing" "1" "$(curl -sSI --max-time 20 "$SITE/e/$missing" | tr 'A-Z' 'a-z' | grep -c 'frame-ancestors \*' || true)"
+          expect "the embed route reaches the Worker" "$SITE/e/$missing" "1" "$(curl -sSI --max-time 20 "$SITE/e/$missing" | tr '[:upper:]' '[:lower:]' | grep -c 'frame-ancestors \*' || true)"
 
           # _headers applied. Without it the editor has no CSP and no HSTS.
           expect "assets carry a Content-Security-Policy" "$SITE/" "1" "$(header "$SITE/" "content-security-policy")"
