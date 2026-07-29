@@ -82,18 +82,29 @@ async function misplacedTestMaterial(packagePath: string): Promise<string[]> {
     .sort();
 }
 
-const SHELL_OPERATORS = new Set([';', '&', '&&', '|', '||']);
+const SHELL_OPERATORS = new Set([';', '&', '&&', '|', '||', '\n', '(', ')']);
 
-function shellTokens(command: string): string[] | undefined {
-  const tokens: string[] = [];
+interface ShellToken {
+  value: string;
+  isStatic: boolean;
+}
+
+function shellTokens(command: string): ShellToken[] | undefined {
+  const tokens: ShellToken[] = [];
   let token = '';
+  let tokenIsStatic = true;
   let quote: "'" | '"' | undefined;
   let escaped = false;
 
   const pushToken = (): void => {
     if (token.length === 0) return;
-    tokens.push(token);
+    tokens.push({ value: token, isStatic: tokenIsStatic });
     token = '';
+    tokenIsStatic = true;
+  };
+
+  const pushOperator = (value: string): void => {
+    tokens.push({ value, isStatic: true });
   };
 
   for (let index = 0; index < command.length; index += 1) {
@@ -109,6 +120,9 @@ function shellTokens(command: string): string[] | undefined {
       } else if (character === '\\' && quote === '"') {
         escaped = true;
       } else {
+        if (quote === '"' && (character === '$' || character === '`')) {
+          tokenIsStatic = false;
+        }
         token += character;
       }
       continue;
@@ -121,20 +135,42 @@ function shellTokens(command: string): string[] | undefined {
       quote = character;
       continue;
     }
+    if (character === '\n') {
+      pushToken();
+      pushOperator(character);
+      continue;
+    }
     if (/\s/.test(character)) {
       pushToken();
       continue;
     }
-    if (character === ';' || character === '&' || character === '|') {
+    if (
+      character === ';' ||
+      character === '&' ||
+      character === '|' ||
+      character === '(' ||
+      character === ')'
+    ) {
       pushToken();
       const next = command[index + 1];
       if ((character === '&' || character === '|') && next === character) {
-        tokens.push(`${character}${next}`);
+        pushOperator(`${character}${next}`);
         index += 1;
       } else {
-        tokens.push(character);
+        pushOperator(character);
       }
       continue;
+    }
+    if (
+      character === '$' ||
+      character === '`' ||
+      character === '*' ||
+      character === '?' ||
+      character === '[' ||
+      character === '{' ||
+      (character === '~' && token.length === 0)
+    ) {
+      tokenIsStatic = false;
     }
     token += character;
   }
@@ -161,18 +197,18 @@ function directVerifyEntries(command: string): DirectVerifyDiscovery {
   const entries: string[] = [];
   const unverifiable: string[] = [];
   for (let index = 0; index < tokens.length; index += 1) {
-    if (tokens[index] !== 'tsx') continue;
+    if (tokens[index].value !== 'tsx') continue;
 
     const end = tokens.findIndex(
-      (token, tokenIndex) => tokenIndex > index && SHELL_OPERATORS.has(token),
+      (token, tokenIndex) => tokenIndex > index && SHELL_OPERATORS.has(token.value),
     );
     const commandEnd = end === -1 ? tokens.length : end;
     const args = tokens.slice(index + 1, commandEnd);
-    const rendered = ['tsx', ...args].join(' ');
+    const rendered = ['tsx', ...args.map((argument) => argument.value)].join(' ');
     let argument = 0;
 
-    while (argument < args.length && args[argument].startsWith('-')) {
-      const option = args[argument];
+    while (argument < args.length && args[argument].value.startsWith('-')) {
+      const option = args[argument].value;
       if (option === '--') {
         argument += 1;
         break;
@@ -191,8 +227,8 @@ function directVerifyEntries(command: string): DirectVerifyDiscovery {
     }
 
     const entry = args[argument];
-    if (entry && /\.[cm]?[jt]sx?$/.test(entry)) {
-      entries.push(entry);
+    if (entry?.isStatic && /\.[cm]?[jt]sx?$/.test(entry.value)) {
+      entries.push(entry.value);
     } else if (!unverifiable.includes(rendered)) {
       unverifiable.push(rendered);
     }

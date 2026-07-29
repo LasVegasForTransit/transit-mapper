@@ -7,7 +7,14 @@
     },
     "typecheck": {
       "dependsOn": ["^typecheck"],
-      "inputs": ["src/**", "scripts/**", "tests/**", "tsconfig*.json"],
+      "inputs": [
+        "src/**",
+        "scripts/**",
+        "tests/**",
+        "vitest.config.ts",
+        "*.d.ts",
+        "tsconfig*.json"
+      ],
       "outputs": ["*.tsbuildinfo"]
     },
     "lint": {
