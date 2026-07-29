@@ -264,6 +264,17 @@ only in `main.tsx`, never the embed entry. `persistence.ts` wraps the
 user-initiated `navigator.storage.persist()` request used by Settings. The
 controller is browser code by design and must not move into `packages/core`.
 
+## apps/web/scripts/app-icon.ts and generate-app-icons.ts — application identity
+
+`app-icon.ts` turns the toolbar's Lucide Route nodes and the shared LVBT brand
+tokens into the rotated, shadowed TransitMapper mark. `generate-app-icons.ts`
+writes the adaptive SVG, light and dark browser fallbacks, normal and maskable
+install rasters, and the mark on the generic Open Graph card. It also renders
+the Apple touch icon as a flattened glass-glyph treatment over the same solid
+Ember field; Safari web apps cannot consume the layered native Icon Composer
+format. Run `pnpm --filter @transitmapper/web generate:icons` after changing
+the glyph or palette; verification rejects stale generated assets.
+
 ## apps/web/src/i18n/ — user-facing messages
 
 - `messages.ts` — strings shared by the settings and vehicle-kind surfaces,
