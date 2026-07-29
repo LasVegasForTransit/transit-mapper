@@ -15,11 +15,12 @@ export const PERF_BASELINE_DIRECTORY = 'perf';
 export const BUNDLE_BUDGETS: BundleBudget[] = [
   {
     entry: 'main',
-    // The desktop PWA controller is editor-only, but still belongs in this
-    // entry so it can retain Chromium's deferred install event. The production
-    // build is 1,614,603 raw / 462,696 gzip bytes; leave only 397 raw and 304
-    // gzip bytes of headroom, rather than masking future main-bundle growth.
-    maximumRawBytes: 1_615_000,
+    // The desktop PWA controller and view-specific workspace both belong in
+    // this entry: the controller retains Chromium's deferred install event,
+    // while the workspace is present at first paint. The production graph is
+    // 1,627,645 raw bytes; leave only 355 bytes of raw headroom rather than
+    // masking future growth with a broad allowance.
+    maximumRawBytes: 1_628_000,
     maximumGzipBytes: 463_000,
     maximumBrotliBytes: 400_000,
   },
