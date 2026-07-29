@@ -45,6 +45,7 @@ import type {
 import type { EditGestureTargets } from './gestureProjection';
 import {
   LYR_FACILITIES,
+  LYR_GESTURE_POINT,
   LYR_HANDLES,
   LYR_SERVICE_TERMINI_HIT,
   LYR_JUNCTIONS,
@@ -88,6 +89,7 @@ const HIT_TEST_LAYERS = [
   LYR_WAY_ENDPOINTS,
   LYR_HANDLES,
   LYR_PHYSICAL_HANDLES,
+  LYR_GESTURE_POINT,
   LYR_STATIONS,
   LYR_FACILITIES,
   LYR_JUNCTIONS,
@@ -397,6 +399,16 @@ export function attachInteractions(
     return selected;
   };
 
+  const stationFeatureAt = (e: MapMouseEvent): MapGeoJSONFeature | undefined => {
+    // A committed station remains masked for the few frames in which its
+    // one-feature source diff settles. Its visible gesture point must retain
+    // the same hit behavior, or an immediate second drag would pan the map
+    // despite showing a draggable station under the pointer.
+    const settling = featureAt(e, [LYR_GESTURE_POINT]);
+    if (settling?.properties.kind === 'station') return settling;
+    return featureAt(e, [LYR_STATIONS]);
+  };
+
   const modifierState = (event: {
     altKey?: boolean;
     ctrlKey?: boolean;
@@ -476,7 +488,7 @@ export function attachInteractions(
         : 'interior-point';
     }
     if (featureAt(e, [LYR_PHYSICAL_HANDLES])) return 'control-point';
-    if (featureAt(e, [LYR_STATIONS])) return 'station';
+    if (stationFeatureAt(e)) return 'station';
     if (featureAt(e, [LYR_FACILITIES])) return 'facility';
     const serviceLine = featureAt(e, SERVICE_LAYERS);
     const wayLine = featureAt(e, WAY_LAYERS);
@@ -1948,7 +1960,7 @@ export function attachInteractions(
     const handle = endpoint ?? featureAt(e, [LYR_HANDLES]);
     const physicalHandle = featureAt(e, [LYR_PHYSICAL_HANDLES]);
     const serviceTerminus = featureAt(e, [LYR_SERVICE_TERMINI_HIT]);
-    const station = featureAt(e, [LYR_STATIONS]);
+    const station = stationFeatureAt(e);
     const facility = featureAt(e, [LYR_FACILITIES]);
 
     if (
@@ -2233,7 +2245,7 @@ export function attachInteractions(
     // clicking empty space does nothing (only Escape/the Inspector cancels),
     // so a mis-click can't silently drop the user out of the flow.
     if (st.pickingMemberForGroupId) {
-      const hit = featureAt(e, [LYR_STATIONS, LYR_FACILITIES]);
+      const hit = stationFeatureAt(e) ?? featureAt(e, [LYR_FACILITIES]);
       if (hit) {
         const memberId = hit.properties.id as string;
         st.addGroupMember(st.pickingMemberForGroupId, memberId);
@@ -2276,14 +2288,10 @@ export function attachInteractions(
       case 'select': {
         // Stations/handles/lines outrank the junction footprint under them.
         const hit =
-          featureAt(e, [
-            LYR_SERVICE_TERMINI_HIT,
-            LYR_STATIONS,
-            LYR_FACILITIES,
-            LYR_HANDLES,
-            ...SERVICE_LAYERS,
-            ...WAY_LAYERS,
-          ]) ?? featureAt(e, [LYR_JUNCTIONS]);
+          featureAt(e, [LYR_SERVICE_TERMINI_HIT]) ??
+          stationFeatureAt(e) ??
+          featureAt(e, [LYR_FACILITIES, LYR_HANDLES, ...SERVICE_LAYERS, ...WAY_LAYERS]) ??
+          featureAt(e, [LYR_JUNCTIONS]);
         if (!hit) {
           st.select(null);
         } else if (hit.layer.id === LYR_JUNCTIONS) {
@@ -2291,7 +2299,10 @@ export function attachInteractions(
         } else if (hit.layer.id === LYR_SERVICE_TERMINI_HIT) {
           st.select({ kind: 'service', id: hit.properties.serviceId as string });
           st.setActivePattern(hit.properties.patternId as string);
-        } else if (hit.layer.id === LYR_STATIONS) {
+        } else if (
+          hit.layer.id === LYR_STATIONS ||
+          (hit.layer.id === LYR_GESTURE_POINT && hit.properties.kind === 'station')
+        ) {
           st.select({ kind: 'station', id: hit.properties.id as string });
         } else if (hit.layer.id === LYR_FACILITIES) {
           st.select({ kind: 'facility', id: hit.properties.id as string });
@@ -2353,16 +2364,20 @@ export function attachInteractions(
     anchor: LngLat;
   } | null => {
     const st = store.getState();
-    const hit = featureAt(e, [
-      LYR_STATIONS,
-      LYR_FACILITIES,
-      LYR_SERVICE_TERMINI_HIT,
-      LYR_HANDLES,
-      ...SERVICE_LAYERS,
-      ...WAY_LAYERS,
-    ]);
+    const hit =
+      stationFeatureAt(e) ??
+      featureAt(e, [
+        LYR_FACILITIES,
+        LYR_SERVICE_TERMINI_HIT,
+        LYR_HANDLES,
+        ...SERVICE_LAYERS,
+        ...WAY_LAYERS,
+      ]);
     if (!hit) return null;
-    if (hit.layer.id === LYR_STATIONS)
+    if (
+      hit.layer.id === LYR_STATIONS ||
+      (hit.layer.id === LYR_GESTURE_POINT && hit.properties.kind === 'station')
+    )
       return { target: { kind: 'station', id: hit.properties.id as string }, anchor: lngLatOf(e) };
     if (hit.layer.id === LYR_FACILITIES)
       return { target: { kind: 'facility', id: hit.properties.id as string }, anchor: lngLatOf(e) };
