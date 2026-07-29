@@ -12,7 +12,7 @@
     "perf:record": "tsx scripts/perf/run.ts --record",
     "perf:soak": "tsx scripts/perf/run.ts --soak",
     "typecheck": "tsc -b --noEmit && tsc -p tsconfig.scripts.json",
-    "verify": "tsx tests/verify.test.ts && tsx scripts/generate-app-icons.ts --check && vitest run",
+    "verify": "tsx tests/verify.test.ts && vitest run",
     "lint": "eslint ."
   },
   "dependencies": {

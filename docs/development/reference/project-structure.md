@@ -269,11 +269,18 @@ controller is browser code by design and must not move into `packages/core`.
 `app-icon.ts` turns the toolbar's Lucide Route nodes and the shared LVBT brand
 tokens into the rotated, shadowed TransitMapper mark. `generate-app-icons.ts`
 writes the adaptive SVG, light and dark browser fallbacks, normal and maskable
-install rasters, and the mark on the generic Open Graph card. It also renders
-the Apple touch icon as a flattened glass-glyph treatment over the same solid
-Ember field; Safari web apps cannot consume the layered native Icon Composer
-format. Run `pnpm --filter @transitmapper/web generate:icons` after changing
-the glyph or palette; verification rejects stale generated assets.
+install rasters, and the mark on the generic Open Graph card.
+
+The Apple touch icon follows Apple's native authoring workflow. The generator
+rasterizes the exact geometry into a flat, effect-free alpha layer inside
+`transit-mapper.icon`; flattening first unions the intersecting strokes into
+one glass surface. The document applies a solid Ember background and Combined
+Liquid Glass material in Icon Composer, and `apple-touch-icon-source.png` is
+the committed 1024px flattened export. The generator resizes that export for
+Safari, which cannot consume the layered format directly. After changing the
+glyph or palette, regenerate the layer, export the Icon Composer document, then
+run `pnpm --filter @transitmapper/web generate:icons`; verification rejects
+stale generated assets.
 
 ## apps/web/src/i18n/ — user-facing messages
 

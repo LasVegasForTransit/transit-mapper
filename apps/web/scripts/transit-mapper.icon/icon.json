@@ -1,0 +1,28 @@
+{
+  "fill": {
+    "solid": "extended-srgb:0.89804,0.27843,0.10196,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "apple-touch-icon-layer.png",
+          "name": "apple-touch-icon-layer"
+        }
+      ],
+      "lighting": "combined",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": ["watchOS"],
+    "squares": "shared"
+  }
+}

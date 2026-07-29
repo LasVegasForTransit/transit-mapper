@@ -316,17 +316,23 @@ browser theme metadata select the LVBT light or dark palette from the device's
 preferred color scheme; a platform may capture that SVG state at installation
 instead of updating an already-installed icon when the preference later
 changes. Static raster fallbacks therefore use the light brand pair. The
-Apple touch icon is the one deliberate platform-specific raster: it keeps the
-solid Ember field and renders the same Route geometry as a flattened,
-top-lit glass glyph because Safari web apps cannot consume Apple's layered
-Icon Composer format.
+Apple touch icon is the one deliberate platform-specific raster. The generator
+rasterizes the same Route geometry into one flat, effect-free alpha silhouette
+inside the committed `transit-mapper.icon` source. That unioned layer prevents
+intersecting Route segments from becoming separate glass surfaces. Icon
+Composer applies a solid Ember background and Combined Liquid Glass mode, and
+its committed 1024px flattened export is then resized to the 180px web asset.
+Safari web apps cannot consume the layered Icon Composer format directly, so
+changing this icon requires re-exporting `apple-touch-icon-source.png` in Icon
+Composer before running the generator.
 
 `pnpm --filter @transitmapper/web generate:icons` regenerates the favicon,
-install assets, and generic social-card mark. Its `--check` form runs in the
-web verifier, while the production PWA verifier includes every install asset
-in the editor's precache proof. Settings also offers an explicit request for
-persistent browser storage; that is a best-effort eviction-resistance request,
-not a claim that storage can never be cleared.
+install assets, and generic social-card mark. The root repository check runs
+its `--check` form as a generated-asset invariant rather than treating the
+generator as test code. The production PWA verifier includes every install
+asset in the editor's precache proof. Settings also offers an explicit request
+for persistent browser storage; that is a best-effort eviction-resistance
+request, not a claim that storage can never be cleared.
 
 ## 6. Runtime View
 
