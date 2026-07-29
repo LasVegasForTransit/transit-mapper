@@ -87,6 +87,10 @@ does not satisfy the startup gate.
 
 Each editor sample resolves a known fixture station from both its GeoJSON
 source and painted hit-test layer, then drags it with trusted pointer input.
+An isolated Network-view station release replaces only the changed promoted-ID
+feature. The exact gesture preview remains visible and hit-testable until the
+station source reports loaded and a later map render occurs, so the reduced
+settlement work cannot introduce a snap-back or a temporarily dead station.
 It performs a deterministic right-button camera drag and a separate line draw,
 then allows validation, simulation, and the shared autosave debounce to run.
 The driver requires the station coordinate and document revision to change,
@@ -134,6 +138,12 @@ pnpm perf:record -- --profile mobile
 
 Review baseline diffs as measurement evidence. Do not update one simply to
 make a regression disappear.
+
+`sourceUploadCount` means application-issued GeoJSON source mutations during
+the measured action. Both complete `setData` replacements and differential
+`updateData` calls count once. It is an operation counter, not a byte estimate;
+deterministic projection tests separately prove how many features a targeted
+mutation derives.
 
 Absolute startup gates use the five-run p95. Direct-manipulation gates combine
 the raw samples across all five runs, so one bad run cannot hide behind a
