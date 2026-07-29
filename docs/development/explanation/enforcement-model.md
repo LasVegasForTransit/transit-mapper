@@ -82,6 +82,20 @@ agent configuration at all.
 
 ## Rules
 
+### test-layout
+
+Vitest globs alone cannot enforce the test boundary: a test placed elsewhere
+is silently skipped. `check:contract` already knows each workspace package
+and its `verify` script, so it also checks the paths those scripts and test
+runners use.
+
+It rejects test and spec filenames, test directories, test-support
+directories, and direct `tsx` verifier entries outside the owning package's
+`tests/` tree.
+
+**If it fires:** move the path under `<package>/tests/`, mirroring the source
+area it covers, and update imports to cross explicitly into `src/`.
+
 ### core-runtime-purity
 
 `packages/core` runs in two runtimes: the browser and workerd. A

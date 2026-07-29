@@ -54,6 +54,6 @@ pnpm --filter @transitmapper/worker exec wrangler d1 migrations apply transitmap
 In production the deploy pipeline applies migrations before the Worker
 deploys. See [operations](../../operations/how-to/operations.md).
 
-Tests apply them too: `apps/worker/src/shares.test.ts` runs against a real
+Tests apply them too: `apps/worker/tests/shares.test.ts` runs against a real
 D1 built from these exact files, so a migration that does not apply cleanly
 fails the suite.

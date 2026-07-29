@@ -13,7 +13,7 @@
 // request overwrites. "Edit, c, edit, c" therefore exports the SECOND edit,
 // which is the only answer that is both responsive and correct.
 //
-// Deliberately pure and DOM-free so apps/web/scripts/verify.ts can drive it.
+// Deliberately pure and DOM-free so apps/web/tests/verify.ts can drive it.
 
 export interface SingleFlight<A extends unknown[]> {
   /** Start `run` if idle, otherwise replace the queued request. */

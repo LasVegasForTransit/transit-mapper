@@ -4,8 +4,8 @@
 pnpm gen lint-rule
 ```
 
-Emits the rule, its test file, and a `meta.docs.url` pointing at the section
-you are about to write.
+Emits the rule, its test file under `packages/eslint-plugin/tests/`, and a
+`meta.docs.url` pointing at the section you are about to write.
 
 Then three things, in this order:
 

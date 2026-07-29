@@ -21,8 +21,10 @@ packages/
     tests/       Module-root test trees mirror their production areas.
       support/   Typed fixture builders, exported separately from production.
   pwa-updater/   The React hook behind the "new version available" prompt.
+    tests/       Module-root tests for the package.
   tsconfig/      Shared compiler options. JSON only, no source.
   eslint-plugin/ Lint rules for invariants the compiler cannot express.
+    tests/       Module-root tests for the rules.
 apps/
   web/           The Vite React SPA.
     src/
@@ -35,10 +37,12 @@ apps/
       storage/   Local persistence.
       pwa/       Editor-only install prompting and offline-data protection.
       perf/      Frame instrumentation plus pure fixtures/report/budget policy.
+    tests/       Module-root tests mirroring `src/`, plus sequential verifiers.
     perf/        Checked desktop and mobile browser-performance baselines.
-    scripts/     verify.ts plus the production Chrome/output performance tools.
+    scripts/     Production Chrome, performance, and build-output tooling.
   worker/        Cloudflare Worker + D1 migrations for shared snapshots.
-    scripts/     verify.ts — the Worker's own suite (URL scoping, uploads).
+    tests/       Module-root tests, including the sequential Worker verifier.
+    scripts/     Generated Worker-types tooling.
 docs/            This documentation.
 ```
 
@@ -48,7 +52,7 @@ docs/            This documentation.
 serialization, return-path validation) and `share/claim.ts` +
 `share/ownership.ts` are the first slice of the accounts feature on the
 [roadmap](../../../ROADMAP.md). They are complete, pure, and covered by
-`apps/web/scripts/verify.ts` — and **nothing imports them but that test
+`apps/web/tests/verify.ts` — and **nothing imports them but that test
 file.** There are no auth routes in the Worker, no users or sessions table,
 and no owner column on `systems`.
 
@@ -142,10 +146,11 @@ requestAnimationFrame and MapLibre host that drives it is
   exactly where a test asserts behaviour: a cast fixture keeps compiling after
   a record gains a required field, describing something that cannot exist.
 
-The module-root test trees mirror the production areas they cover. The
+The module-root test tree mirrors the production areas it covers. The
 `@transitmapper/core/testing/fixtures` export is explicit and precedes the
 production wildcard, so test support remains available without treating it as
-production source.
+production source. Other modules keep their test-only helpers in their own
+`tests/support/` directories; production code never imports them.
 
 ## packages/core/src/render/ — drawing a system without a map
 
@@ -455,8 +460,15 @@ logic.
 
 ## Testing
 
-`pnpm verify` runs `apps/web/scripts/verify.ts`: hundreds of deterministic
-checks over the model, profile operations, migrations, junction geometry,
-routing, store actions, and layer emission. No browser required.
+Each module keeps its test material under `tests/`, mirroring the `src/` area
+it covers. Isolated Vitest cases live in those trees; shared test helpers live
+under `tests/support/`; source-relative imports cross explicitly into `src/`.
+`apps/web/tests/verify.ts` and `apps/worker/tests/verify.ts` remain the
+stateful sequential suites, so their sections are extended in place rather
+than split piecemeal.
+
+`pnpm verify` runs those suites and the module-root Vitest trees: hundreds of
+deterministic checks over the model, profile operations, migrations, junction
+geometry, routing, store actions, and layer emission. No browser required.
 `pnpm typecheck` covers `packages/core`, `apps/web`, and `apps/worker`. Both
 must pass before a PR. Each command fans out per-package via Turborepo.

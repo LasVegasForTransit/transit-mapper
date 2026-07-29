@@ -103,6 +103,6 @@ to shape), that decides how the Facility tool works for it:
 
 Add the entry to the relevant record and order array in
 `src/model/catalog.ts`, add its rendering to `src/style/catalogStyle.ts`,
-and add a check to `scripts/verify.ts`. Nothing else should need to change.
+and add a check to `apps/web/tests/verify.ts`. Nothing else should need to change.
 If adding an entry forces edits elsewhere, that's a bug in the code that
 forced it.

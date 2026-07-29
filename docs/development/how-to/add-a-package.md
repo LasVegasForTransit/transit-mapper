@@ -9,7 +9,8 @@ pnpm check
 The generator asks for a name and a one-line purpose, and emits a package
 that already passes every check: the three required scripts, a Vitest
 project, a tsconfig leaf, and a placeholder test so `verify` has something
-to run.
+to run. The generated test lives under `tests/`, beside the production
+`src/` tree rather than inside it.
 
 ## What the generator is saving you from
 

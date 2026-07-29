@@ -16,7 +16,7 @@ import type {
 // A tiny, hand-built system for the onboarding dialog's live previews — never
 // saved, never shown to buildFeatures' callers as anything but a picture.
 // Built from plain object literals plus real model helpers (defaultProfileFor,
-// oneSection/wholeLeg), not packages/core's testing/fixtures.ts builders:
+// oneSection/wholeLeg), not @transitmapper/core/testing/fixtures builders:
 // those exist for tests, and importing a testing module into a shipped
 // feature would be a layering violation the rest of the codebase doesn't have.
 

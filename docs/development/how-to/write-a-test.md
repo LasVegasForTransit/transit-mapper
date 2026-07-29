@@ -5,7 +5,7 @@ interchangeable.
 
 ## Adding to an existing suite
 
-`apps/web/scripts/verify.ts` and `apps/worker/scripts/verify.ts` are
+`apps/web/tests/verify.ts` and `apps/worker/tests/verify.ts` are
 sequential scripts. One store is built at module scope and mutated in order,
 so each section depends on the state the sections above it left behind.
 
@@ -24,7 +24,23 @@ them is a rewrite, not a refactor.
 
 ## Adding a new test file
 
-Anything new goes in a `*.test.ts` file as ordinary isolated Vitest cases:
+Put each new isolated Vitest case in the owning module's `tests/` tree,
+mirroring the production area it covers:
+
+```text
+<module>/
+  src/
+    map/interactions.ts
+  tests/
+    map/interactions.test.ts
+```
+
+Test support belongs in `tests/support/`. Test imports cross explicitly into
+`src/`; do not make production code reach into test support. For example, a
+test in `tests/share/claim.test.ts` imports its subject from
+`../../src/share/claim`.
+
+Write the case as ordinary isolated Vitest:
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -36,11 +52,13 @@ describe('claimOutcome', () => {
 });
 ```
 
-Vitest picks up `src/**/*.test.ts` in every package.
+Web discovers `tests/**/*.test.{ts,tsx}`. TypeScript-only modules discover
+`tests/**/*.test.ts`. Keeping all test material under this one boundary makes
+the runner configuration and the repository check agree about what must run.
 
 ## Testing the Worker
 
-`apps/worker/src/shares.test.ts` runs in **real workerd against a real D1**,
+`apps/worker/tests/shares.test.ts` runs in **real workerd against a real D1**,
 with the production migrations applied — not a mock. That means a test can
 exercise actual SQL, actual bindings, and actual request handling:
 
