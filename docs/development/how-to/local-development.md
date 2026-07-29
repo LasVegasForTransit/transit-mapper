@@ -54,8 +54,8 @@ pnpm typecheck
 pnpm verify
 ```
 
-Both need to pass. `verify` runs `apps/web/scripts/verify.ts`, the
-project's deterministic test suite, with no browser needed.
+Both need to pass. `verify` runs the package test suites, including the
+deterministic `apps/web/tests/verify.ts` suite, with no browser needed.
 
 `typecheck`, `build`, and `verify` all run through
 [Turborepo](https://turborepo.com) for caching, so a repeat run with

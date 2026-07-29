@@ -32,20 +32,21 @@ Most of these are enforced. Where the right-hand column says a command, you
 do not need to carry the rule — break it and the command tells you. Where it
 says **nothing**, the rule holds only because you follow it.
 
-| Invariant                                                                  | Why it exists                                                                                                            | Enforced by                     |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
-| `packages/core` uses no browser-only globals                               | core is typechecked against the browser _and_ workerd; a browser global compiles and then throws in production           | `lint`                          |
-| A migration that exists is never edited, renamed, or deleted               | Wrangler records applied migrations by name and never re-runs one it has seen, so an edit silently diverges environments | `check:migrations`              |
-| Every package declares `lint`, `typecheck`, `verify`                       | a package missing one is skipped by Turborepo without an error, and CI stays green while it goes unchecked               | `check:contract`                |
-| Every dependency version comes from the catalog                            | two packages on different versions of one library is invisible until it breaks                                           | `check:contract`                |
-| Relative links in `docs/` resolve                                          | three had been broken since the monorepo split, and nothing noticed                                                      | `check:docs`                    |
-| `worker-configuration.d.ts` matches `wrangler.toml`                        | it is generated and committed, so it can describe a deployment that no longer exists                                     | `check:types`                   |
-| Commit subjects are conventional, ≤72 chars                                | see [commit messages](docs/development/reference/commit-messages.md)                                                     | `commit-msg` hook               |
-| No secret reaches a commit                                                 | see [secrets](docs/security/reference/secrets.md)                                                                        | pre-commit, CI, push protection |
-| Stored values are injected with `HTMLRewriter`, never string concatenation | `system.name` is unauthenticated text with no sanitization at write time                                                 | **nothing** — see below         |
-| `/api` paths name a resource; the verb is the HTTP method                  | `DELETE /api/session`, not `POST /api/auth/signout`                                                                      | **nothing**                     |
-| Parameter and prop types are named interfaces, even single-use ones        | `interface ShareDialogProps { onClose: () => void }`, not an inline object type                                          | **nothing**                     |
-| Selection-dependent controls go in the right-hand inspector                | one dynamic surface, not several                                                                                         | **nothing**                     |
+| Invariant                                                                     | Why it exists                                                                                                            | Enforced by                     |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| `packages/core` uses no browser-only globals                                  | core is typechecked against the browser _and_ workerd; a browser global compiles and then throws in production           | `lint`                          |
+| A migration that exists is never edited, renamed, or deleted                  | Wrangler records applied migrations by name and never re-runs one it has seen, so an edit silently diverges environments | `check:migrations`              |
+| Every package declares `lint`, `typecheck`, `verify`                          | a package missing one is skipped by Turborepo without an error, and CI stays green while it goes unchecked               | `check:contract`                |
+| Every dependency version comes from the catalog                               | two packages on different versions of one library is invisible until it breaks                                           | `check:contract`                |
+| Tests and test-only support live under the owning module's root `tests/` tree | Production trees stay navigable, and runner globs cannot silently omit a colocated test                                  | `check:contract`                |
+| Relative links in `docs/` resolve                                             | three had been broken since the monorepo split, and nothing noticed                                                      | `check:docs`                    |
+| `worker-configuration.d.ts` matches `wrangler.toml`                           | it is generated and committed, so it can describe a deployment that no longer exists                                     | `check:types`                   |
+| Commit subjects are conventional, ≤72 chars                                   | see [commit messages](docs/development/reference/commit-messages.md)                                                     | `commit-msg` hook               |
+| No secret reaches a commit                                                    | see [secrets](docs/security/reference/secrets.md)                                                                        | pre-commit, CI, push protection |
+| Stored values are injected with `HTMLRewriter`, never string concatenation    | `system.name` is unauthenticated text with no sanitization at write time                                                 | **nothing** — see below         |
+| `/api` paths name a resource; the verb is the HTTP method                     | `DELETE /api/session`, not `POST /api/auth/signout`                                                                      | **nothing**                     |
+| Parameter and prop types are named interfaces, even single-use ones           | `interface ShareDialogProps { onClose: () => void }`, not an inline object type                                          | **nothing**                     |
+| Selection-dependent controls go in the right-hand inspector                   | one dynamic surface, not several                                                                                         | **nothing**                     |
 
 The `HTMLRewriter` row is unenforced by choice. The two places the Worker builds markup by interpolation are both
 correct, and telling a safe interpolation from an unsafe one needs value
@@ -81,14 +82,14 @@ Then, in the same change:
 Tests run on Vitest and on a `check()`-based suite that predates it.
 `pnpm verify` runs both.
 
-- `apps/web/scripts/verify.ts` and `apps/worker/scripts/verify.ts` are
+- `apps/web/tests/verify.ts` and `apps/worker/tests/verify.ts` are
   sequential scripts: one store is built at module scope and mutated in
   order, so each section depends on what the sections above it left behind.
   Add to them in that style, beside related cases. Do not split them up
   piecemeal.
-- Anything new goes in a `*.test.ts` file as ordinary isolated Vitest cases.
-  `apps/worker/src/shares.test.ts` runs in real workerd against a real D1
-  with the production migrations applied.
+- New isolated Vitest files go under `<module>/tests/`, mirroring the area in
+  `src/` they cover. `apps/worker/tests/shares.test.ts` runs in real workerd
+  against a real D1 with the production migrations applied.
 
 Name a case as a sentence stating the rule it enforces — "deleting a way
 removes its service" — because that name is what a failure reports.

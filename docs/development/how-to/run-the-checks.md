@@ -16,17 +16,17 @@ repairs everything a machine can, then re-runs the rest.
 
 ## What each part is for
 
-| Command             | Fails when                                                                  |
-| ------------------- | --------------------------------------------------------------------------- |
-| `format:check`      | a file is not Prettier-formatted                                            |
-| `lint`              | a lint rule is violated, including the repository's own                     |
-| `typecheck:scripts` | a script under `scripts/` does not compile                                  |
-| `check:contract`    | a package is missing a required task, or pins a version outside the catalog |
-| `check:docs`        | a relative link in `docs/` does not resolve                                 |
-| `check:migrations`  | a migration that already exists was edited, renamed or deleted              |
-| `check:structure`   | a source directory is undescribed, or a described one is gone               |
-| `check:types`       | `worker-configuration.d.ts` no longer matches `wrangler.toml`               |
-| `verify`            | a test fails                                                                |
+| Command             | Fails when                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `format:check`      | a file is not Prettier-formatted                                                                                   |
+| `lint`              | a lint rule is violated, including the repository's own                                                            |
+| `typecheck:scripts` | a script under `scripts/` does not compile                                                                         |
+| `check:contract`    | a package is missing a required task, pins a version outside the catalog, or keeps tests outside its `tests/` tree |
+| `check:docs`        | a relative link in `docs/` does not resolve                                                                        |
+| `check:migrations`  | a migration that already exists was edited, renamed or deleted                                                     |
+| `check:structure`   | a source directory is undescribed, or a described one is gone                                                      |
+| `check:types`       | `worker-configuration.d.ts` no longer matches `wrangler.toml`                                                      |
+| `verify`            | a test fails                                                                                                       |
 
 Every failure names the command that fixes it. If one does not, that is a
 bug in the check worth reporting.

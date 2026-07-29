@@ -17,7 +17,7 @@ import type { TransitSystem } from '../model/system';
 //   1. The Record<keyof TransitSystem, …> below is EXHAUSTIVE by type. Adding a
 //      field to TransitSystem is a compile error until it is classified here.
 //      A new renderable field cannot be forgotten into staleness.
-//   2. apps/web/scripts/verify.ts asserts the classification by experiment:
+//   2. apps/web/tests/verify.ts asserts the classification by experiment:
 //      for every "meta" field it mutates the field and checks that all 14
 //      collections come out byte-identical. That catches the residual hole —
 //      a field classified correctly today whose USE changes tomorrow.

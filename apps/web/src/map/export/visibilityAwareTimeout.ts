@@ -1,5 +1,5 @@
 // Deliberately pure and DOM-free (takes its visibility source as an argument
-// rather than reading `document` directly) so apps/web/scripts/verify.ts can
+// rather than reading `document` directly) so apps/web/tests/verify.ts can
 // drive it — see share/singleFlight.ts for the same pattern.
 
 export interface VisibilitySource {
