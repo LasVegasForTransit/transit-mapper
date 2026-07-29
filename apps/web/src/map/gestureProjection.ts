@@ -429,7 +429,10 @@ function projectStation(station: Station): Array<Feature<Point | Polygon>> {
   const features: Array<Feature<Point | Polygon>> = [
     {
       type: 'Feature',
-      properties: properties('station', station.id),
+      // The settled preview stays interactive until MapLibre paints the
+      // committed station diff, so expose the same stable id its normal source
+      // uses in addition to the generic gesture owner id.
+      properties: { ...properties('station', station.id), id: station.id },
       geometry: { type: 'Point', coordinates: station.coord },
     },
   ];

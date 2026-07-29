@@ -13,6 +13,7 @@ import { createEditorStore } from '../../src/editor/store';
 import { createSelectionActions } from '../../src/editor/actions';
 import {
   LYR_FACILITIES,
+  LYR_GESTURE_POINT,
   LYR_HANDLES,
   LYR_SERVICE_TERMINI_HIT,
   LYR_SERVICES_HIT,
@@ -177,6 +178,18 @@ function stationFeature(
     sourceLayer: '',
     layer: { id: LYR_STATIONS, type: 'circle', source: 'tm-stations' },
     state: {},
+  } as unknown as MapGeoJSONFeature;
+}
+
+function settlingStationFeature(
+  id: string,
+  coordinates: [number, number] = [-115.2, 36.1],
+): MapGeoJSONFeature {
+  return {
+    ...stationFeature(id, coordinates),
+    properties: { kind: 'station', ownerId: id, id },
+    source: 'tm-gesture',
+    layer: { id: LYR_GESTURE_POINT, type: 'circle', source: 'tm-gesture' },
   } as unknown as MapGeoJSONFeature;
 }
 
@@ -1098,6 +1111,31 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const stationId = store.getState().addStation([-115.2, 36.1]);
     const map = createMap(stationFeature(stationId));
+    const lifecycle: string[] = [];
+    const detach = attach(
+      map,
+      store,
+      {
+        onStart: (targets) => lifecycle.push(`edit:${targets.stationIds?.[0]}`),
+        onEnd() {},
+      },
+      { onStart: () => lifecycle.push('direct'), onEnd() {} },
+    );
+
+    map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
+    map.fire('mousemove', mouseEvent(map, { x: 140, y: 100 }));
+    scheduler.pump();
+
+    expect(lifecycle).toEqual(['direct', `edit:${stationId}`]);
+    expect(map.panCalls).toEqual([]);
+    detach();
+  });
+
+  it('lets a settling station preview start the next drag immediately', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const stationId = store.getState().addStation([-115.2, 36.1]);
+    const map = createMap(settlingStationFeature(stationId));
     const lifecycle: string[] = [];
     const detach = attach(
       map,
