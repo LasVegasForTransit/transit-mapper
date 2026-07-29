@@ -53,8 +53,10 @@ landmarks. No new document fields or visibility model are introduced.
 
 Expansion and grouping are local presentation state and reset on reload. Every
 section is independent; opening one never closes another. Large leaf lists keep
-the existing 150-row cap and explicit “show more” affordance. Rows continue to
-use one keyboard-navigable listbox and select-and-focus behavior.
+the existing 150-row cap and explicit “show more” affordance. Selectable rows
+remain native buttons inside one labelled keyboard-navigation region. This
+preserves select-and-focus and roving arrow-key behavior without putting
+disclosure buttons, section controls, and “show more” actions inside a listbox.
 
 ## Testing
 

@@ -76,6 +76,17 @@ function rowKey(kind: NonNullable<Selection>['kind'], id: string): string {
   return `${kind}:${id}`;
 }
 
+function sidebarTabIndexFor(tabStopKey: string | null) {
+  let assigned = false;
+  return (kind: NonNullable<Selection>['kind'], id: string): 0 | -1 => {
+    if (assigned || rowKey(kind, id) !== tabStopKey) return -1;
+    // A line or station can be projected beneath more than one expanded
+    // corridor. Only its first visible occurrence may be the roving tab stop.
+    assigned = true;
+    return 0;
+  };
+}
+
 export function SidebarPanel() {
   const system = useEditor((state) => state.system);
   const selection = useEditor((state) => state.selection);
@@ -103,7 +114,7 @@ export function SidebarPanel() {
     <div
       className="panel-body sidebar-workspace"
       ref={containerRef}
-      role="navigation"
+      role="region"
       aria-label={`${viewMode === 'network' ? 'Network' : 'Infrastructure'} workspace`}
       onKeyDown={onKeyDown}
     >
@@ -206,8 +217,7 @@ function NetworkWorkspace({
           );
         }));
   const tabStopKey = sidebarTabStopKey(firstKey, selectedKey, selectedIsVisible);
-  const tabIndexFor = (kind: NonNullable<Selection>['kind'], id: string) =>
-    rowKey(kind, id) === tabStopKey ? 0 : -1;
+  const tabIndexFor = sidebarTabIndexFor(tabStopKey);
   const toggleRow = (key: string) =>
     setExpandedRows((current) => {
       const next = new Set(current);
@@ -510,8 +520,7 @@ function InfrastructureWorkspace({ system, selection, selectAndFocus }: SharedWo
             (place) => place.kind === selection.kind && place.value.id === selection.id,
           ));
   const tabStopKey = sidebarTabStopKey(firstKey, selectedKey, selectedIsVisible);
-  const tabIndexFor = (kind: NonNullable<Selection>['kind'], id: string) =>
-    rowKey(kind, id) === tabStopKey ? 0 : -1;
+  const tabIndexFor = sidebarTabIndexFor(tabStopKey);
   const expand = (key: string) => setExpandedLists((current) => new Set(current).add(key));
 
   return (
