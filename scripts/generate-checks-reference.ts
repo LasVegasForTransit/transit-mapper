@@ -45,8 +45,8 @@ const CHECKS: Check[] = [
   {
     command: 'check:contract',
     fails:
-      'a package is missing lint, typecheck or verify, or pins a literal version instead of catalog:',
-    fix: 'add the script, or move the version into the catalog in pnpm-workspace.yaml',
+      'a package is missing a required task, pins a version outside the catalog, or keeps test material outside its tests/ directory',
+    fix: 'add the script, use the catalog, or move the test under the owning package tests/ tree',
   },
   {
     command: 'check:docs',

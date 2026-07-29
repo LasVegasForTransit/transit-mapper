@@ -48,7 +48,7 @@ function documentPackage(answers: unknown, _config: unknown, plop: PlopTypes.Nod
   // directory anyone would look for a package under.
   source = source.replace(
     /^## Testing$/m,
-    `## ${path}/ — ${purpose}\n\n- \`src/index.ts\` — replace this line with what the package holds.\n\n## Testing`,
+    `## ${path}/ — ${purpose}\n\n- \`src/index.ts\` — replace this line with what the package holds.\n- \`tests/index.test.ts\` — the package's initial contract test.\n\n## Testing`,
   );
 
   writeFileSync(doc, source, 'utf8');
@@ -105,7 +105,7 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
       },
       {
         type: 'add',
-        path: 'packages/{{name}}/src/index.test.ts',
+        path: 'packages/{{name}}/tests/index.test.ts',
         templateFile: 'templates/package/index.test.ts.hbs',
       },
       documentPackage,
@@ -160,7 +160,7 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
       },
       {
         type: 'add',
-        path: 'packages/eslint-plugin/src/{{name}}.test.ts',
+        path: 'packages/eslint-plugin/tests/{{name}}.test.ts',
         templateFile: 'templates/lint-rule/rule.test.ts.hbs',
       },
       () =>
