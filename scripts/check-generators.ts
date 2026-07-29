@@ -12,7 +12,15 @@
  * uncommitted work. CI runs it, where the tree is disposable.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { rmSync, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import {
+  rmSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -60,24 +68,91 @@ function cleanUp(paths: string[], originals: Map<string, string>): void {
   for (const [p, contents] of originals) writeFileSync(resolve(ROOT, p), contents, 'utf8');
 }
 
+interface ContractResult {
+  status: number | null;
+  output: string;
+}
+
+function checkContract(): ContractResult {
+  const result = spawnSync('pnpm', ['check:contract'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  });
+  if (result.error) throw result.error;
+  return { status: result.status, output: `${result.stdout}${result.stderr}` };
+}
+
+function assertContractRejects(expected: string): string {
+  const result = checkContract();
+  if (result.status === 0 || !result.output.includes(expected)) {
+    throw new Error(`check:contract did not reject ${expected}`);
+  }
+  return result.output;
+}
+
+function assertContractAccepts(description: string): void {
+  const result = checkContract();
+  if (result.status !== 0) {
+    throw new Error(`check:contract rejected ${description}\n${result.output}`);
+  }
+}
+
 function assertTestLayoutGuard(): void {
   const allowed = resolve(ROOT, 'packages/gencheck/tests/index.test.ts');
   const misplaced = resolve(ROOT, 'packages/gencheck/src/index.test.ts');
 
   renameSync(allowed, misplaced);
   try {
-    const result = spawnSync('pnpm', ['check:contract'], {
-      cwd: ROOT,
-      encoding: 'utf8',
-    });
-    if (result.error) throw result.error;
-
-    const output = `${result.stdout}${result.stderr}`;
-    if (result.status === 0 || !output.includes('packages/gencheck/src/index.test.ts')) {
-      throw new Error('check:contract did not reject packages/gencheck/src/index.test.ts');
-    }
+    assertContractRejects('packages/gencheck/src/index.test.ts');
   } finally {
     renameSync(misplaced, allowed);
+  }
+}
+
+function assertNonCodePackageLayoutGuard(): void {
+  const directory = resolve(ROOT, 'packages/tsconfig/testing');
+  const fixture = resolve(directory, 'gencheck-fixture.json');
+  const directoryExisted = existsSync(directory);
+
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(fixture, '{}\n', 'utf8');
+  try {
+    assertContractRejects('packages/tsconfig/testing/gencheck-fixture.json');
+  } finally {
+    rmSync(fixture, { force: true });
+    if (!directoryExisted) rmdirSync(directory);
+  }
+}
+
+function setGeneratedVerify(manifest: string, command: string): void {
+  const parsed = JSON.parse(readFileSync(manifest, 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+  parsed.scripts.verify = command;
+  writeFileSync(manifest, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+}
+
+function assertDirectVerifierLayoutGuard(): void {
+  const manifest = resolve(ROOT, 'packages/gencheck/package.json');
+  const original = readFileSync(manifest, 'utf8');
+
+  try {
+    setGeneratedVerify(manifest, 'tsx src/index.ts && tsx tests/../src/index.ts');
+    const duplicateOutput = assertContractRejects('packages/gencheck/src/index.ts');
+    if (duplicateOutput.split('packages/gencheck/src/index.ts').length - 1 !== 1) {
+      throw new Error('check:contract did not de-duplicate canonical direct verifier paths');
+    }
+
+    setGeneratedVerify(manifest, 'tsx ././tests/index.test.ts');
+    assertContractAccepts('the canonical tests/ verifier path');
+
+    setGeneratedVerify(manifest, 'tsx --tsconfig "tsconfig.json" "src/index.ts"');
+    assertContractRejects('packages/gencheck/src/index.ts');
+
+    setGeneratedVerify(manifest, 'tsx --watch src/index.ts');
+    assertContractRejects('unverifiable direct tsx command');
+  } finally {
+    writeFileSync(manifest, original, 'utf8');
   }
 }
 
@@ -104,6 +179,8 @@ function main(): void {
     run('pnpm', ['install', '--no-frozen-lockfile']);
     run('pnpm', ['check']);
     assertTestLayoutGuard();
+    assertNonCodePackageLayoutGuard();
+    assertDirectVerifierLayoutGuard();
 
     console.log(`generators: ${SCENARIOS.length} scenarios, output passes pnpm check unmodified.`);
   } catch (err) {
