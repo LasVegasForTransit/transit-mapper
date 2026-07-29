@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
-import { BASEMAP_STYLE } from '../map/basemap';
 import { buildFeatures, registerMapIcons, SRC_STATIONS, type ViewOptions } from '../map/layers';
 import { addExportSourcesAndLayers, setExportFeatureData } from '../map/export/exportLayerSetup';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
+import { basemapStyleForScheme } from '../map/mapTheme';
 
 /**
  * A second, read-only MapLibre instance for the export dialog — deliberately
@@ -29,7 +29,7 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
     if (!containerRef.current) return;
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: BASEMAP_STYLE,
+      style: basemapStyleForScheme('light'),
       center: system.viewport.center,
       zoom: system.viewport.zoom,
       preserveDrawingBuffer: true, // needed to read the canvas back out for PNG export
@@ -43,7 +43,7 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
     mapRef.current = map;
 
     map.on('load', () => {
-      registerMapIcons(map);
+      registerMapIcons(map, 'light');
       addExportSourcesAndLayers(map);
 
       // Resize BEFORE fitting bounds — the dialog's layout (and this map's

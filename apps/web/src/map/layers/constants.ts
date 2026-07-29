@@ -40,11 +40,15 @@ export const SRC_LANDMARKS = 'tm-landmarks';
 
 export const LYR_WAYS_SOLID = 'tm-ways-solid';
 export const LYR_WAYS_DASHED = 'tm-ways-dashed';
+export const LYR_WAYS_SOLID_CASING = 'tm-ways-solid-casing';
+export const LYR_WAYS_DASHED_CASING = 'tm-ways-dashed-casing';
 export const LYR_WAY_SELECTED = 'tm-way-selected';
 export const LYR_SERVICES_ELEVATED = 'tm-services-elevated';
 export const LYR_SERVICE_SELECTED = 'tm-service-selected';
 export const LYR_SERVICES_SOLID = 'tm-services-solid';
 export const LYR_SERVICES_UNDERGROUND = 'tm-services-underground';
+export const LYR_SERVICES_SOLID_CASING = 'tm-services-solid-casing';
+export const LYR_SERVICES_UNDERGROUND_CASING = 'tm-services-underground-casing';
 /** Invisible per-occurrence geometry used only for exact service actions. */
 export const LYR_SERVICES_HIT = 'tm-services-hit';
 export const LYR_STATIONS = 'tm-stations';
@@ -125,5 +129,6 @@ const serviceWidthExpr = (margin: number) => {
   return ['interpolate', ['linear'], ['zoom'], 15, stop(2.5), 18, stop(7), 21, stop(15)];
 };
 export const SERVICE_WIDTH_EXPR = serviceWidthExpr(0);
+export const SERVICE_CASING_WIDTH_EXPR = serviceWidthExpr(2.5);
 export const SELECT_HALO_WIDTH_EXPR = serviceWidthExpr(7);
 export const SERVICE_ELEVATED_WIDTH_EXPR = serviceWidthExpr(3.5);

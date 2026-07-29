@@ -270,6 +270,29 @@ reconciling a React tree that often is the difference between a map that
 pans smoothly and one that stutters. They read the store and write to
 MapLibre sources directly.
 
+### Appearance and map styles
+
+The operating system is the only appearance authority. `apps/web/src/theme/`
+exposes `prefers-color-scheme` as a small external store for code that cannot
+be driven by CSS, and `tokens.css` defines the MD3 color, type, shape, and
+elevation roles used by application chrome. There is no theme setting,
+browser-storage key, or serialized appearance field. Browsers without the
+media-query API receive light mode.
+
+The map has a parallel cartographic token layer. Positron is the light
+OpenFreeMap style and Dark is the dark style; TransitMapper's sources and
+layers are carried across a style diff. A full-rebuild fallback enters the
+same idempotent recovery path, which restores sources, data, icons, selection,
+focus, view visibility, landmarks, and simulation without moving the camera.
+Style requests are deferred during drawing and direct manipulation, and a
+failed runtime request leaves the working style in place.
+
+Colors stored on services, ways, facilities, lanes, and vehicles are domain
+data. A theme may add a neutral contrast casing around them, but it must never
+transform those colors. Downloaded PNG/SVG output and generated share
+previews are a separate portability boundary and always render with the light
+palette.
+
 ### Desktop installation
 
 The editor's PWA install controller lives in `apps/web/src/pwa/`, outside

@@ -1,0 +1,175 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { StyleSpecification } from 'maplibre-gl';
+import { MAP_THEMES } from '../../src/map/mapTheme';
+import {
+  carryTransitMapperStyle,
+  createStyleSwitchController,
+  type StyleSwitchMap,
+} from '../../src/map/styleSwitchController';
+
+const style = (id: string): StyleSpecification => ({
+  version: 8,
+  sources: {},
+  layers: [{ id, type: 'background', paint: { 'background-color': '#fff' } }],
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function createMap(): StyleSwitchMap & { setStyle: ReturnType<typeof vi.fn> } {
+  const setStyle = vi.fn((..._args: Parameters<StyleSwitchMap['setStyle']>) => undefined);
+  return {
+    getStyle: () => style('current'),
+    setStyle,
+  } as StyleSwitchMap & { setStyle: typeof setStyle };
+}
+
+describe('style switch controller', () => {
+  it('defers a scheme change until drawing or dragging finishes', async () => {
+    const map = createMap();
+    let active = true;
+    const fetchStyle = vi.fn(async () => style('dark'));
+    const controller = createStyleSwitchController({
+      map,
+      fetchStyle,
+      isInteractionActive: () => active,
+    });
+
+    await controller.request('dark');
+    expect(fetchStyle).not.toHaveBeenCalled();
+    expect(map.setStyle).not.toHaveBeenCalled();
+
+    active = false;
+    await controller.flush();
+    expect(fetchStyle).toHaveBeenCalledWith(MAP_THEMES.dark.basemapStyle, expect.any(AbortSignal));
+    expect(map.setStyle).toHaveBeenCalledOnce();
+  });
+
+  it('drops a deferred change that reverses to the already-applied scheme', async () => {
+    const map = createMap();
+    let active = true;
+    const fetchStyle = vi.fn(async () => style('dark'));
+    const controller = createStyleSwitchController({
+      map,
+      initialScheme: 'light',
+      fetchStyle,
+      isInteractionActive: () => active,
+    });
+
+    await controller.request('dark');
+    await controller.request('light');
+    active = false;
+    await controller.flush();
+    await controller.flush();
+
+    expect(fetchStyle).not.toHaveBeenCalled();
+    expect(map.setStyle).not.toHaveBeenCalled();
+  });
+
+  it('aborts and ignores stale style responses', async () => {
+    const map = createMap();
+    const first = deferred<StyleSpecification>();
+    const second = deferred<StyleSpecification>();
+    const fetchStyle = vi
+      .fn()
+      .mockImplementationOnce((_url: string, signal: AbortSignal) => {
+        signal.addEventListener('abort', () =>
+          first.reject(new DOMException('aborted', 'AbortError')),
+        );
+        return first.promise;
+      })
+      .mockImplementationOnce(() => second.promise);
+    const controller = createStyleSwitchController({
+      map,
+      fetchStyle,
+      isInteractionActive: () => false,
+    });
+
+    const stale = controller.request('dark');
+    const current = controller.request('light');
+    second.resolve(style('light'));
+    await Promise.all([stale, current]);
+
+    expect(map.setStyle).toHaveBeenCalledOnce();
+    expect(map.setStyle.mock.calls[0]?.[0]).toEqual(style('light'));
+  });
+
+  it('keeps the working style and reports a runtime fetch failure', async () => {
+    const map = createMap();
+    const onUnavailable = vi.fn();
+    const controller = createStyleSwitchController({
+      map,
+      fetchStyle: async () => {
+        throw new Error('offline');
+      },
+      isInteractionActive: () => false,
+      onUnavailable,
+    });
+
+    await controller.request('dark');
+
+    expect(map.setStyle).not.toHaveBeenCalled();
+    expect(onUnavailable).toHaveBeenCalledWith('dark', expect.any(Error));
+  });
+
+  it('uses a full rebuild and the shared recovery path if diffing throws', async () => {
+    const map = createMap();
+    map.setStyle.mockImplementationOnce(() => {
+      throw new Error('diff failed');
+    });
+    const recover = vi.fn();
+    const controller = createStyleSwitchController({
+      map,
+      fetchStyle: async () => style('dark'),
+      isInteractionActive: () => false,
+      recover,
+    });
+
+    await controller.request('dark');
+
+    expect(map.setStyle).toHaveBeenNthCalledWith(
+      1,
+      style('dark'),
+      expect.objectContaining({ diff: true, transformStyle: expect.any(Function) }),
+    );
+    expect(map.setStyle).toHaveBeenNthCalledWith(2, style('dark'), { diff: false });
+    expect(recover).toHaveBeenCalledWith('dark', true);
+  });
+});
+
+describe('TransitMapper style preservation', () => {
+  it('carries live sources forward and replaces app layers with themed specs', () => {
+    const previous: StyleSpecification = {
+      version: 8,
+      sources: {
+        streets: { type: 'vector', url: 'map://streets' },
+        'tm-routes': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+      },
+      layers: [
+        { id: 'street', type: 'line', source: 'streets' },
+        { id: 'tm-old', type: 'line', source: 'tm-routes' },
+      ],
+    };
+    const next = style('new-basemap');
+    const themed = [
+      {
+        id: 'tm-new',
+        type: 'line' as const,
+        source: 'tm-routes',
+        paint: { 'line-color': MAP_THEMES.dark.ink },
+      },
+    ];
+
+    const carried = carryTransitMapperStyle(previous, next, themed);
+
+    expect(carried.sources['tm-routes']).toEqual(previous.sources['tm-routes']);
+    expect(carried.layers.map((layer) => layer.id)).toEqual(['new-basemap', 'tm-new']);
+  });
+});

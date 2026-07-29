@@ -6,7 +6,6 @@ import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
 import { buildFeatures, type ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { GetShareResponse } from '@transitmapper/core/share/contract';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import { BASEMAP_STYLE } from '../map/basemap';
 import {
   registerMapIcons,
   SRC_FACILITIES,
@@ -17,8 +16,15 @@ import {
   SRC_WAYS,
 } from '../map/layers';
 import { fetchWithTimeout } from '../network/fetchWithTimeout';
-import { EMBED_LAYER_SPECS, EMBED_SOURCE_IDS } from './config';
+import { EMBED_SOURCE_IDS, embedLayerSpecsForScheme } from './config';
 import { markFirstSystemMapPaint } from '../perf/mapPaintMark';
+import {
+  getSystemColorScheme,
+  subscribeSystemColorScheme,
+  type ColorScheme,
+} from '../theme/systemColorScheme';
+import { basemapStyleForScheme } from '../map/mapTheme';
+import { createStyleSwitchController } from '../map/styleSwitchController';
 
 const PERF_HARNESS_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
 
@@ -61,10 +67,10 @@ async function loadSystem(id: string, signal: AbortSignal): Promise<TransitSyste
   return parseSystem(data.system);
 }
 
-function createMap(container: HTMLElement): MLMap {
+function createMap(container: HTMLElement, scheme: ColorScheme): MLMap {
   const map = new maplibregl.Map({
     container,
-    style: BASEMAP_STYLE,
+    style: basemapStyleForScheme(scheme),
     // The real camera is fitted once the snapshot arrives. Starting the style
     // now lets its network/worker setup overlap the independent API request.
     center: [0, 0],
@@ -162,8 +168,25 @@ async function drawSystem(
   map: MLMap,
   system: TransitSystem,
   features: ReturnType<typeof buildFeatures>,
+  scheme: ColorScheme,
 ): Promise<void> {
-  registerMapIcons(map);
+  restoreEmbedOverlay(map, features, scheme);
+
+  // Resize before framing, never after: fitBounds solves for the viewport
+  // it's told about, so fitting against a stale size frames the wrong extent.
+  map.resize();
+  const bounds = systemBounds(system);
+  if (bounds) map.fitBounds(bounds, { padding: 40, animate: false });
+  await waitForSystemPaint(map);
+  markFirstSystemMapPaint();
+}
+
+function restoreEmbedOverlay(
+  map: MLMap,
+  features: ReturnType<typeof buildFeatures>,
+  scheme: ColorScheme,
+): void {
+  registerMapIcons(map, scheme);
   const dataBySource: Record<string, GeoJSON.FeatureCollection> = {
     [SRC_WAYS]: features.ways,
     [SRC_SERVICES]: features.services,
@@ -173,6 +196,7 @@ async function drawSystem(
     [SRC_FACILITIES]: features.facilities,
   };
   for (const sourceId of EMBED_SOURCE_IDS) {
+    if (map.getSource(sourceId)) continue;
     const heavy = sourceId === SRC_WAYS || sourceId === SRC_SERVICES;
     map.addSource(sourceId, {
       type: 'geojson',
@@ -180,15 +204,9 @@ async function drawSystem(
       ...(heavy ? { tolerance: 1 } : {}),
     });
   }
-  for (const spec of EMBED_LAYER_SPECS) map.addLayer(spec);
-
-  // Resize before framing, never after: fitBounds solves for the viewport
-  // it's told about, so fitting against a stale size frames the wrong extent.
-  map.resize();
-  const bounds = systemBounds(system);
-  if (bounds) map.fitBounds(bounds, { padding: 40, animate: false });
-  await waitForSystemPaint(map);
-  markFirstSystemMapPaint();
+  for (const spec of embedLayerSpecsForScheme(scheme)) {
+    if (!map.getLayer(spec.id)) map.addLayer(spec);
+  }
 }
 
 async function start(): Promise<void> {
@@ -206,7 +224,9 @@ async function start(): Promise<void> {
   const controller = new AbortController();
   const cancel = () => controller.abort(new DOMException('Embed closed.', 'AbortError'));
   window.addEventListener('pagehide', cancel, { once: true });
-  const map = createMap(container);
+  const initialScheme = getSystemColorScheme();
+  const map = createMap(container, initialScheme);
+  let detachScheme = () => {};
 
   try {
     const systemAndFeatures = loadSystem(id, controller.signal).then((system) => ({
@@ -224,7 +244,29 @@ async function start(): Promise<void> {
       credit.textContent = system.name ? `${system.name} · TransitMapper` : 'Open in TransitMapper';
     }
 
-    await drawSystem(map, system, features);
+    await drawSystem(map, system, features, initialScheme);
+    let activeScheme = initialScheme;
+    const styleSwitcher = createStyleSwitchController({
+      map,
+      initialScheme,
+      isInteractionActive: () => false,
+      layerSpecs: embedLayerSpecsForScheme,
+      recover: (scheme, fullRebuild) => {
+        activeScheme = scheme;
+        if (!fullRebuild) restoreEmbedOverlay(map, features, scheme);
+      },
+      onUnavailable: (_scheme, error) => console.error('[transitmapper embed]', error),
+    });
+    const onStyleLoad = () => restoreEmbedOverlay(map, features, activeScheme);
+    map.on('style.load', onStyleLoad);
+    detachScheme = subscribeSystemColorScheme(
+      () => void styleSwitcher.request(getSystemColorScheme()),
+    );
+    map.on('remove', () => {
+      detachScheme();
+      styleSwitcher.dispose();
+      map.off('style.load', onStyleLoad);
+    });
     const status = document.getElementById('embed-status');
     if (status) status.hidden = true;
   } catch (e) {

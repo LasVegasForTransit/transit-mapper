@@ -175,7 +175,7 @@ export function Workbench({
         {mobile && (
           <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center gap-2">
             <div className="flex w-full items-start justify-between gap-2">
-              <div className="pointer-events-auto min-w-0 flex-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 shadow-[var(--shadow)]">
+              <div className="pointer-events-auto min-w-0 flex-1 overflow-hidden rounded-xl border border-[var(--md-sys-color-surface-container-highest)] bg-[var(--md-sys-color-surface)] px-2 py-1.5 shadow-[var(--md-sys-elevation-level2)]">
                 <div className="mobile-topleft">
                   <div className="mobile-topleft-row">{brand}</div>
                   {viewSwitcher}
@@ -184,7 +184,7 @@ export function Workbench({
               </div>
               <div
                 ref={actionsCollapsedRef}
-                className="actions-collapsed zen-cluster pointer-events-auto flex shrink-0 flex-col items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-1 shadow-[var(--shadow)]"
+                className="actions-collapsed zen-cluster pointer-events-auto flex shrink-0 flex-col items-center gap-1 rounded-xl border border-[var(--md-sys-color-surface-container-highest)] bg-[var(--md-sys-color-surface)] p-1 shadow-[var(--md-sys-elevation-level2)]"
               >
                 {primaryToolbar}
               </div>
@@ -258,14 +258,14 @@ export function Workbench({
             style={{ gridColumn: '1 / -1', gridRow: '1' }}
           >
             <div className="flex-1" style={{ minWidth: 'var(--panel-w)' }} aria-hidden="true" />
-            <div className="pointer-events-auto flex min-w-0 flex-wrap items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 shadow-[var(--shadow)]">
+            <div className="pointer-events-auto flex min-w-0 flex-wrap items-center justify-center gap-2 rounded-xl border border-[var(--md-sys-color-surface-container-highest)] bg-[var(--md-sys-color-surface)] px-2 py-1.5 shadow-[var(--md-sys-elevation-level2)]">
               {viewSwitcher}
               {simControls}
             </div>
             <div className="flex flex-1 justify-end">
               <div
                 ref={actionsFullRef}
-                className="actions-full zen-cluster pointer-events-auto flex max-w-[900px] flex-wrap items-center justify-end gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 shadow-[var(--shadow)]"
+                className="actions-full zen-cluster pointer-events-auto flex max-w-[900px] flex-wrap items-center justify-end gap-2 rounded-xl border border-[var(--md-sys-color-surface-container-highest)] bg-[var(--md-sys-color-surface)] px-2 py-1.5 shadow-[var(--md-sys-elevation-level2)]"
               >
                 {primaryToolbar}
               </div>
@@ -316,7 +316,7 @@ export function Workbench({
       {mobile && (
         <div
           ref={sheetRef}
-          className={`absolute inset-x-0 bottom-0 z-[5] flex flex-col rounded-t-2xl border-t border-[var(--border)] bg-[var(--bg)] shadow-[0_-6px_20px_rgba(25,26,23,0.12)] transition-[max-height,opacity] duration-200 ease-[cubic-bezier(0.2,0.7,0.3,1)] ${
+          className={`absolute inset-x-0 bottom-0 z-[5] flex flex-col rounded-t-2xl border-t border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-level3)] transition-[max-height,opacity] duration-200 ease-[cubic-bezier(0.2,0.7,0.3,1)] ${
             uiHidden
               ? 'pointer-events-none max-h-0 overflow-hidden opacity-0'
               : sheetExpanded

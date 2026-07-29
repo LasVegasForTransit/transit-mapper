@@ -14,6 +14,7 @@ const ICON_PX = 48; // registered image resolution; icon-size scales it down/up
 // lucide-react/dist/esm/defaultAttributes.mjs) — the same coordinate space
 // the old hand-drawn PATHS used, so this scale factor still holds.
 const VIEWBOX = 24;
+const registeredDisplayColors = new WeakMap<MLMap, Map<string, string>>();
 
 /** Draws one [tag, attrs] shape onto `ctx` in its own local space (the 0-24
  *  Lucide viewBox) — Lucide icons are built from exactly these 7 tag types
@@ -87,6 +88,9 @@ function rasterize(name: IconName, color: string, fill: boolean): Uint8ClampedAr
 export { iconName };
 
 export interface EnsureIconOptions {
+  /** Raster ink can change with the map theme without changing the canonical
+   * image ID stamped into GeoJSON features. */
+  displayColor?: string;
   fill?: boolean;
 }
 
@@ -104,14 +108,19 @@ export function ensureIcon(
   opts?: EnsureIconOptions,
 ): string {
   const name = iconName(pathKey, color);
+  const displayColor = opts?.displayColor ?? color;
+  const mapColors = registeredDisplayColors.get(map) ?? new Map<string, string>();
+  registeredDisplayColors.set(map, mapColors);
+  if (map.hasImage(name) && mapColors.get(name) !== displayColor) map.removeImage(name);
   if (!map.hasImage(name)) {
     const node = (ICON_NODES as Record<string, IconNode | undefined>)[pathKey];
     if (node) {
       map.addImage(name, {
         width: ICON_PX,
         height: ICON_PX,
-        data: rasterize(pathKey as IconName, color, opts?.fill ?? false),
+        data: rasterize(pathKey as IconName, displayColor, opts?.fill ?? false),
       });
+      mapColors.set(name, displayColor);
     }
   }
   return name;

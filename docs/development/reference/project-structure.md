@@ -30,6 +30,7 @@ apps/
     src/
       editor/    The zustand store (all mutation) and the keyboard system.
       map/       MapLibre integration: layers, pointer interactions, canvas.
+      theme/     System color-scheme service and MD3 application tokens.
       camera/    Live map camera, held outside the domain system object.
       ui/        React components. Thin: read the store, call actions.
       style/     How catalog kinds LOOK (colors, widths, dashes, icons).
@@ -421,6 +422,12 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 - `initialStyleFallback.ts` — bounds initial third-party style loading and
   switches failures to a local blank style so system geometry and pointer
   interactions still initialize offline.
+- `mapTheme.ts` and `mapThemePalette.ts` — the paired OpenFreeMap styles and
+  neutral cartographic roles. User-authored feature colors are inputs to
+  layers, never theme tokens.
+- `styleSwitchController.ts` — prefetches a target style while the working map
+  stays interactive, defers application during gestures, carries app sources
+  through MapLibre's style diff, and falls back to the shared recovery path.
 
 The terms these layers expose to users, and the cursor/badge/preview contract
 they implement, are normative in
@@ -428,8 +435,20 @@ they implement, are normative in
 
 - `layers/` — the layer specifications and icons `layers.ts` assembles.
 - `export/` — rendering the map to an image off-screen.
-- `basemap.ts`, `icons.ts`, `landmarks.ts`, `mapRef.ts`,
-  `selectionFocus.ts` — supporting pieces.
+- `icons.ts`, `landmarks.ts`, `mapRef.ts`, `selectionFocus.ts` — supporting
+  pieces.
+
+## apps/web/src/theme/ — system appearance
+
+- `systemColorScheme.ts` — resolves and subscribes to
+  `prefers-color-scheme`. It deliberately has no persistence or manual
+  override.
+- `tokens.css` — MD3 application color, typography, shape, and elevation
+  roles, plus explicitly fixed color-spectrum and light-export roles.
+
+CSS follows an operating-system change immediately. Imperative MapLibre
+surfaces consume the same scheme through the TypeScript service and may lag
+only until an active drawing or drag gesture ends.
 
 ## apps/web/src/camera/ — where the map is looking
 
