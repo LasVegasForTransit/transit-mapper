@@ -3,6 +3,7 @@ import maplibregl, {
   type GeoJSONSource,
   type LayerSpecification,
   type Map as MLMap,
+  type MapSourceDataEvent,
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEditorStore } from '../editor/EditorProvider';
@@ -77,6 +78,10 @@ import {
   type GestureProjectionResult,
 } from './gestureProjection';
 import { createGestureLayerMaskController } from './gestureLayerMask';
+import type { SourceMutationSettlementHost } from './sourceMutationSettlement';
+import { planStationGestureSettlement } from './stationGesturePlan';
+import { createStationGesturePreviewController } from './stationGesturePreview';
+import { createStationGestureSettlementController } from './stationGestureSettlement';
 import {
   ALL_SYSTEM_FEATURE_SOURCES,
   createSourceUploadQueue,
@@ -680,6 +685,13 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       });
     }
 
+    const overlayNeedsHealing = () =>
+      ALL_SOURCES.some((sourceId) => !map.getSource(sourceId)) ||
+      (usingLocalBlankStyle
+        ? localBlankLayerSpecs(activeMapScheme)
+        : layerSpecsForScheme(activeMapScheme)
+      ).some((layer) => !map.getLayer(layer.id));
+
     const pushData = (requestedSources: readonly SystemFeatureSourceId[]) => {
       if (gestureActive) {
         sourceUploadQueue.add(requestedSources);
@@ -688,14 +700,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       }
       // Self-heal before pushing — a missing source would otherwise silently
       // swallow this update (every setData below is optional-chained).
-      const overlayNeedsHealing =
-        ALL_SOURCES.some((sourceId) => !map.getSource(sourceId)) ||
-        (usingLocalBlankStyle
-          ? localBlankLayerSpecs(activeMapScheme)
-          : layerSpecsForScheme(activeMapScheme)
-        ).some((layer) => !map.getLayer(layer.id));
       let sourceIds = requestedSources;
-      if (overlayNeedsHealing) {
+      if (overlayNeedsHealing()) {
         if (!ensureOverlay()) return;
         // A repaired style has fresh, empty sources. Repopulate every derived
         // collection even if the store change that exposed it was narrow.
@@ -784,10 +790,6 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         pushData(sourceUploadQueue.take());
       });
     };
-    // React view changes invalidate all derived collections, while store
-    // content changes below pass a dependency-filtered source list.
-    schedulePushDataRef.current = () => schedulePushData('all');
-
     const gestureMask = createGestureLayerMaskController(map);
 
     const clearGesturePreview = () => {
@@ -800,11 +802,82 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       gesturePreviewVisible = false;
     };
 
+    const gesturePreview = createStationGesturePreviewController({
+      render(projection) {
+        if (!projection) {
+          clearGesturePreview();
+          gestureMask.restore();
+          return true;
+        }
+        const source = map.getSource(SRC_GESTURE) as GeoJSONSource | undefined;
+        if (!source) return false;
+        if (projection.data.features.length > 0) {
+          source.setData(projection.data);
+          recordSourceUpload(projectionCounts);
+          gesturePreviewVisible = true;
+        } else {
+          clearGesturePreview();
+        }
+        gestureMask.apply(projection.affected);
+        return true;
+      },
+    });
+
+    const finishStationSettlementVisuals = () => {
+      // updateData normally preserves feature-state, but reapplying here also
+      // covers the full-setData fallback without exposing an unselected frame.
+      applySelectionState();
+      gesturePreview.releaseStations();
+    };
+
+    const stationSettlementHost: SourceMutationSettlementHost = {
+      onSourceLoading(listener) {
+        const onSourceLoading = (event: MapSourceDataEvent) => {
+          // GeoJSON tile requests also emit sourcedataloading. Only the
+          // source-level event proves that setData/updateData has begun.
+          if (!event.tile) listener(event.sourceId);
+        };
+        map.on('sourcedataloading', onSourceLoading);
+        return () => map.off('sourcedataloading', onSourceLoading);
+      },
+      onSourceData(listener) {
+        const onSourceData = (event: MapSourceDataEvent) =>
+          listener({
+            sourceId: event.sourceId,
+            sourceDataType: event.sourceDataType,
+            isSourceLoaded: event.isSourceLoaded,
+          });
+        map.on('sourcedata', onSourceData);
+        return () => map.off('sourcedata', onSourceData);
+      },
+      onRender(listener) {
+        map.on('render', listener);
+        return () => map.off('render', listener);
+      },
+      triggerRepaint: () => map.triggerRepaint(),
+    };
+
+    const stationSettlement = createStationGestureSettlementController({
+      host: stationSettlementHost,
+      sourceId: SRC_STATIONS,
+      isGestureActive: () => gestureActive,
+      onRelease: finishStationSettlementVisuals,
+    });
+
+    // React view changes invalidate every derived collection and the visual
+    // meaning of a pending Network-only diff. Store changes below still pass a
+    // dependency-filtered source list.
+    schedulePushDataRef.current = () => {
+      stationSettlement.invalidate();
+      gesturePreview.clear();
+      schedulePushData('all');
+    };
+
     const abortGestureProjection = () => {
       gestureProjectionAborted = true;
       fullAfterGesture = true;
-      clearGesturePreview();
-      gestureMask.restore();
+      stationSettlement.invalidate();
+      gesturePreview.clear();
     };
 
     const applyGestureProjectionResult = (result: GestureProjectionResult) => {
@@ -812,16 +885,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         abortGestureProjection();
         return;
       }
-      if (result.kind !== 'preview') return;
-      const source = map.getSource(SRC_GESTURE) as GeoJSONSource | undefined;
-      if (!source) {
+      if (!gesturePreview.showActive(result.kind === 'preview' ? result.projection : null)) {
         abortGestureProjection();
-        return;
       }
-      source.setData(result.projection.data);
-      recordSourceUpload(projectionCounts);
-      gesturePreviewVisible = true;
-      gestureMask.apply(result.projection.affected);
     };
 
     const beginGestureProjection = (targets: EditGestureTargets) => {
@@ -847,18 +913,95 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
 
     const endGestureProjection = () => {
       if (!gestureActive) return;
+      const affected = gestureProjection?.affected() ?? {
+        wayIds: [],
+        stationIds: [],
+        facilityIds: [],
+        groupIds: [],
+        nodeIds: [],
+      };
       const finish = gestureProjection?.finish() ?? { rebuild: false, hadPreview: false };
-      clearGesturePreview();
-      gestureMask.restore();
       gestureActive = false;
       gestureProjection = null;
       const needsFullProjection = finish.rebuild || fullAfterGesture;
       fullAfterGesture = false;
       if (needsFullProjection) {
+        const pendingSources = sourceUploadQueue.take();
+        const stationPlan = planStationGestureSettlement({
+          viewMode: viewRef.current.viewMode,
+          affected,
+          pendingSources,
+          stationSourceReady: map.isSourceLoaded(SRC_STATIONS) || stationSettlement.ownsPreview(),
+          overlayHealthy: !overlayNeedsHealing(),
+          projectionAborted: gestureProjectionAborted,
+        });
+        if (stationPlan.kind === 'diff') {
+          const { system, selection, activePatternId, armedTerminus } = store.getState();
+          const projected = buildFeaturesForSources({
+            system,
+            selection,
+            handleWayIds: handleWayIds(),
+            view: viewRef.current,
+            sourceIds: [SRC_STATIONS],
+            stationIds: stationPlan.stationIds,
+            physicalHandleStationId: physicalHandleStationId(),
+            physicalHandleGroupId: physicalHandleGroupId(),
+            activePatternId,
+            armedTerminus,
+            counts: sourceProjectionCounts,
+          });
+          const expectedIds = new Set(stationPlan.stationIds);
+          const features = projected.stations.features;
+          const complete =
+            features.length === expectedIds.size &&
+            features.every(
+              (feature) =>
+                typeof feature.properties?.id === 'string' &&
+                expectedIds.has(feature.properties.id),
+            );
+          const source = map.getSource(SRC_STATIONS) as GeoJSONSource | undefined;
+          if (source && complete) {
+            gesturePreview.retainCommitted(stationPlan.stationIds, features);
+            stationSettlement.beginDiff({
+              mutate: () => {
+                source.updateData({ add: features });
+                recordSourceUpload(projectionCounts);
+              },
+              fallback: () => schedulePushData(pendingSources),
+            });
+            return;
+          }
+        }
+
         // Gesture store commits already contributed their exact dependency
         // union. Fall back to all only for a canceled/aborted path that did not
         // expose a classifiable system change.
-        schedulePushData(sourceUploadQueue.hasPending() ? [] : 'all');
+        const refreshRequest = pendingSources.length > 0 ? pendingSources : 'all';
+        const refreshesStations =
+          pendingSources.length === 0 || pendingSources.includes(SRC_STATIONS);
+        const preserveStationPreview =
+          stationPlan.kind === 'diff' || stationPlan.preserveStationPreview;
+        if (preserveStationPreview) gesturePreview.retainActiveStations(affected.stationIds);
+        else gesturePreview.clearActive();
+
+        if (refreshesStations && (preserveStationPreview || stationSettlement.ownsPreview())) {
+          stationSettlement.beginFull({ mutate: () => schedulePushData(refreshRequest) });
+          return;
+        }
+        if (!stationSettlement.ownsPreview()) {
+          stationSettlement.invalidate();
+          gesturePreview.releaseStations();
+        }
+        schedulePushData(refreshRequest);
+      } else if (stationSettlement.ownsPreview()) {
+        // A click against a settling preview may have taken ownership while
+        // its source completed. Release now if ready; otherwise its existing
+        // paint barrier will release after this gesture.
+        gesturePreview.clearActive();
+        stationSettlement.releaseIfReady();
+        return;
+      } else {
+        gesturePreview.clearActive();
       }
       void styleSwitchControllerRef.current?.flush();
     };
@@ -921,7 +1064,12 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     const scheduleLaneRefresh = () => {
       window.clearTimeout(laneRefreshTimer);
       laneRefreshTimer = window.setTimeout(() => {
-        if (map.getSource(SRC_LANES)) schedulePushData('all');
+        if (!map.getSource(SRC_LANES)) return;
+        if (stationSettlement.ownsPreview()) {
+          stationSettlement.beginFull({ mutate: () => schedulePushData('all') });
+        } else {
+          schedulePushData('all');
+        }
       }, LANE_REFRESH_DEBOUNCE_MS);
     };
 
@@ -1122,6 +1270,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       // produces an empty plan; topology edits conservatively include every
       // derived collection they can influence.
       const documentChanged = prev.system.id !== s.system.id;
+      if (documentChanged && !gestureActive) {
+        stationSettlement.invalidate();
+        gesturePreview.clear();
+      }
       const changedSources = sourceUploadsForSystemChange(prev.system, s.system, {
         forceAll: documentChanged,
       });
@@ -1137,7 +1289,16 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           // Build and upload only dependencies whose GeoJSON may differ.
           // Unrequested feature phases never traverse or allocate their
           // RTC-scale collections.
-          schedulePushData(changedSources);
+          if (changedSources.includes(SRC_STATIONS) && stationSettlement.ownsPreview()) {
+            // Undo, delete, and Inspector edits can supersede an in-flight
+            // station diff. Keep the newest geometry truthful in the scratch
+            // source and replace the old paint barrier before scheduling the
+            // complete station collection.
+            gesturePreview.syncStations(s.system);
+            stationSettlement.beginFull({ mutate: () => schedulePushData(changedSources) });
+          } else {
+            schedulePushData(changedSources);
+          }
         }
       } else if (
         (s.selection !== prev.selection ||
@@ -1154,8 +1315,11 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           // junctions `selected` filter, so it still needs a rebuild; everything
           // else takes the feature-state fast path.
           const involvesNode = s.selection?.kind === 'node' || prev.selection?.kind === 'node';
-          if (involvesNode) schedulePushData('all');
-          else {
+          if (involvesNode && stationSettlement.ownsPreview()) {
+            stationSettlement.beginFull({ mutate: () => schedulePushData('all') });
+          } else if (involvesNode) {
+            schedulePushData('all');
+          } else {
             scheduleSelectionUpdate();
             schedulePushData([SRC_SERVICE_TERMINI]);
           }
@@ -1229,6 +1393,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     map.on('moveend', onMoveEnd);
 
     return () => {
+      stationSettlement.dispose();
       ro.disconnect();
       unsub();
       pendingHover = null;
