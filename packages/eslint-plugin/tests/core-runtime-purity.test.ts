@@ -1,7 +1,7 @@
 import { RuleTester } from 'eslint';
 import tsParser from '@typescript-eslint/parser';
 import { describe, it } from 'vitest';
-import { coreRuntimePurity } from './core-runtime-purity';
+import { coreRuntimePurity } from '../src/core-runtime-purity';
 
 // RuleTester drives its own describe/it. Handing it Vitest's means failures
 // report as ordinary test failures rather than as thrown assertions.
