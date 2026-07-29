@@ -12,6 +12,7 @@ import {
   type PerfListenerTarget,
 } from '../../src/perf/listenerInventory';
 import { PERF_SCENARIOS } from '../../src/perf/scenarios';
+import { settleKeyboardPointerSentinels } from '../../src/perf/soakSettlement';
 import { soakViolations, type SoakSnapshot } from '../../src/perf/soakPolicy';
 import type { PerfProtocol } from '../../src/perf/types';
 import {
@@ -305,6 +306,7 @@ export async function runSoak(
       }
       await page.waitForTimeout(100);
     }
+    await settleKeyboardPointerSentinels(page);
     await page.waitForTimeout(1_000);
     const finalCapture = await captureSoakSnapshot(page, session, scriptUrls, startedAt);
     const final = finalCapture.snapshot;
