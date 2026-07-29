@@ -1,6 +1,11 @@
 @import 'tailwindcss';
 @import '../theme/tokens.css';
 
+/* Tailwind's scanner sees these words in prose and API identifiers, but none
+   is a utility class in the editor. Excluding the false positives removes
+   2.4 kB of CSS. Remove a name here before adopting that utility in markup. */
+@source not inline('collapse invisible visible isolate container contents table transform zoom-0 resize text-justify lowercase outline filter select-all');
+
 /* md: below matches useIsMobileLayout's own 760px query exactly (Tailwind's
    own default is 768px) — one breakpoint, not two independently-tuned
    ones that could drift apart. New layout work (Workbench.tsx) should
