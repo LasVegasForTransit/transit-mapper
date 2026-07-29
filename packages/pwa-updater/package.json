@@ -9,7 +9,7 @@
   "scripts": {
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
-    "verify": "vitest run --passWithNoTests"
+    "verify": "vitest run"
   },
   "peerDependencies": {
     "react": "^18.3.1"

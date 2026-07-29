@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { reloadAfterFlush } from './reloadAfterFlush';
+import { reloadAfterFlush } from '../src/reloadAfterFlush';
 
 describe('PWA update reload', () => {
   it('waits for async document durability before activating the update', async () => {
