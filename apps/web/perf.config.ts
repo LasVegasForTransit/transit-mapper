@@ -15,8 +15,12 @@ export const PERF_BASELINE_DIRECTORY = 'perf';
 export const BUNDLE_BUDGETS: BundleBudget[] = [
   {
     entry: 'main',
+    // The desktop PWA controller is editor-only, but still belongs in this
+    // entry so it can retain Chromium's deferred install event. Keep the
+    // limit close to its measured compressed cost rather than masking future
+    // main-bundle growth with a broad allowance.
     maximumRawBytes: 1_610_000,
-    maximumGzipBytes: 460_000,
+    maximumGzipBytes: 461_000,
     maximumBrotliBytes: 400_000,
   },
   {

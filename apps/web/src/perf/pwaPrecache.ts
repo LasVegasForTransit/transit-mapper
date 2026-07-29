@@ -21,6 +21,10 @@ const EDITOR_PUBLIC_ASSETS = [
   'favicon-16x16.png',
   'favicon-32x32.png',
   'favicon.svg',
+  'icon-192.png',
+  'icon-512.png',
+  'icon-maskable-192.png',
+  'icon-maskable-512.png',
   'manifest.json',
 ] as const;
 

@@ -32,6 +32,7 @@ apps/
       style/     How catalog kinds LOOK (colors, widths, dashes, icons).
       share/     Export (PNG/SVG/JSON), the share card, the share-API client.
       storage/   Local persistence.
+      pwa/       Editor-only install prompting and offline-data protection.
       perf/      Frame instrumentation plus pure fixtures/report/budget policy.
     perf/        Checked desktop and mobile browser-performance baselines.
     scripts/     verify.ts plus the production Chrome/output performance tools.
@@ -241,6 +242,15 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
   system. A cached external-store snapshot lets React consumers update
   together without moving preferences into the domain model.
 
+## apps/web/src/pwa/ — installation and offline protection
+
+`install.ts` owns the capability-aware desktop installation controller:
+deferred native prompting for Chromium, guidance for Safari/Firefox, local
+snoozes, and standalone/install suppression. `InstallProvider.tsx` mounts
+only in `main.tsx`, never the embed entry. `persistence.ts` wraps the
+user-initiated `navigator.storage.persist()` request used by Settings. The
+controller is browser code by design and must not move into `packages/core`.
+
 ## apps/web/src/i18n/ — user-facing messages
 
 - `messages.ts` — strings shared by the settings and vehicle-kind surfaces,
@@ -421,7 +431,8 @@ rather than by making the camera reactive again.
 
 ## apps/web/src/ui/ — components
 
-`Workbench.tsx` is the shell that arranges everything; `Toolbar.tsx` is the
+`Workbench.tsx` is the shell that arranges everything, including the
+contextual install-banner row below top chrome; `Toolbar.tsx` is the
 bottom dock; `Inspector.tsx` (with `NodeInspector.tsx`,
 `CrossSectionEditor.tsx`, `InspectorTabs.tsx`) is the right-hand panel;
 plus dialogs (export, import, share, schedule, systems) and primitives

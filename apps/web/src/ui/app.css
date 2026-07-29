@@ -572,6 +572,44 @@ input {
   gap: 8px;
 }
 
+.settings-copy {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: var(--fs-body-md);
+  line-height: 1.45;
+}
+
+/* Workbench places this as a real grid row below desktop top chrome, or as a
+   flex sibling below mobile chrome. It therefore has no viewport offset of
+   its own and cannot cover a toolbar that grows or wraps. */
+.install-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--accent-soft);
+  color: var(--text);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  font-size: var(--fs-body-md);
+}
+.install-banner strong {
+  color: var(--accent);
+}
+.install-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.install-banner-guidance {
+  max-width: 265px;
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+}
+
 /* ---- tool dock — independent of the side panels, never stacked under one
    so it doesn't read as part of the objects list. Workbench.tsx positions
    this wrapper (desktop: a real grid cell; mobile: absolute + fades out

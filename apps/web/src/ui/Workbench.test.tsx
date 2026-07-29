@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+
+vi.mock('react', async () => {
+  const actual = await vi.importActual<typeof import('react')>('react');
+  return { ...actual, useLayoutEffect: actual.useEffect };
+});
+
 import { EditorProvider } from '../editor/EditorProvider';
 import { UiProvider } from './UiProvider';
 import { Workbench } from './Workbench';
@@ -33,6 +39,7 @@ function renderWorkbench(mobile: boolean): string {
           simControls={slot('desktop-sim')}
           simControlsCompact={slot('mobile-sim')}
           modeToolbar={slot('mode')}
+          installBanner={slot('install')}
         />
       </UiProvider>
     </EditorProvider>,
@@ -57,6 +64,10 @@ describe('Workbench responsive mounting', () => {
     expect(occurrences(markup, 'data-slot="view"')).toBe(1);
     expect(occurrences(markup, 'data-slot="desktop-sim"')).toBe(1);
     expect(occurrences(markup, 'data-slot="mobile-sim"')).toBe(0);
+    expect(occurrences(markup, 'data-slot="install"')).toBe(1);
+    expect(markup.indexOf('data-slot="install"')).toBeGreaterThan(
+      markup.indexOf('data-slot="desktop-sim"'),
+    );
     expect(markup).not.toContain('aria-label="Expand panel"');
   });
 
@@ -69,6 +80,10 @@ describe('Workbench responsive mounting', () => {
     expect(occurrences(markup, 'data-slot="view"')).toBe(1);
     expect(occurrences(markup, 'data-slot="desktop-sim"')).toBe(0);
     expect(occurrences(markup, 'data-slot="mobile-sim"')).toBe(1);
+    expect(occurrences(markup, 'data-slot="install"')).toBe(1);
+    expect(markup.indexOf('data-slot="install"')).toBeGreaterThan(
+      markup.indexOf('data-slot="mobile-sim"'),
+    );
     expect(occurrences(markup, 'aria-label="Expand panel"')).toBe(1);
     expect(markup).toContain('aria-expanded="false"');
   });

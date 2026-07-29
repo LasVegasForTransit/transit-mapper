@@ -88,6 +88,9 @@ export interface WorkbenchProps {
    *  the sheet-expanded fade) rather than guessing its own fixed offset.
    *  Null/undefined when nothing's importing. */
   importStatus?: ReactNode;
+  /** Contextual desktop installation invite. It occupies the Workbench's
+   *  top-chrome flow, so changing toolbar height can only push it down. */
+  installBanner?: ReactNode;
 }
 
 /**
@@ -121,6 +124,7 @@ export function Workbench({
   simControlsCompact,
   modeToolbar,
   importStatus,
+  installBanner,
 }: WorkbenchProps) {
   const mobile = useMobileLayout();
   const [sheetExpanded, setSheetExpanded] = useState(false);
@@ -151,7 +155,7 @@ export function Workbench({
         className={`pointer-events-none absolute inset-2 ${mobile ? '' : 'grid gap-2'}`}
         style={{
           gridTemplateColumns: 'auto 1fr auto',
-          gridTemplateRows: `auto 1fr var(--controls-clearance)`,
+          gridTemplateRows: `auto auto 1fr var(--controls-clearance)`,
         }}
       >
         {/* ---- mobile-only top bar (desktop folds brand into the menu
@@ -169,20 +173,25 @@ export function Workbench({
             the primary actions and reveals the ⋯ overflow that carries the
             rest (see TopBarActions). */}
         {mobile && (
-          <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2">
-            <div className="pointer-events-auto min-w-0 flex-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 shadow-[var(--shadow)]">
-              <div className="mobile-topleft">
-                <div className="mobile-topleft-row">{brand}</div>
-                {viewSwitcher}
-                {simControlsCompact}
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center gap-2">
+            <div className="flex w-full items-start justify-between gap-2">
+              <div className="pointer-events-auto min-w-0 flex-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 shadow-[var(--shadow)]">
+                <div className="mobile-topleft">
+                  <div className="mobile-topleft-row">{brand}</div>
+                  {viewSwitcher}
+                  {simControlsCompact}
+                </div>
+              </div>
+              <div
+                ref={actionsCollapsedRef}
+                className="actions-collapsed zen-cluster pointer-events-auto flex shrink-0 flex-col items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-1 shadow-[var(--shadow)]"
+              >
+                {primaryToolbar}
               </div>
             </div>
-            <div
-              ref={actionsCollapsedRef}
-              className="actions-collapsed zen-cluster pointer-events-auto flex shrink-0 flex-col items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-1 shadow-[var(--shadow)]"
-            >
-              {primaryToolbar}
-            </div>
+            {installBanner && (
+              <div className="pointer-events-auto max-w-[560px]">{installBanner}</div>
+            )}
           </div>
         )}
 
@@ -198,7 +207,7 @@ export function Workbench({
           <>
             <div
               className="menu-card-slot pointer-events-auto flex self-stretch justify-self-start"
-              style={{ gridArea: '1 / 1 / 4 / 2' }}
+              style={{ gridArea: '1 / 1 / 5 / 2' }}
             >
               <MenuCard brand={brand}>{menuPanel}</MenuCard>
             </div>
@@ -206,7 +215,7 @@ export function Workbench({
               <div
                 ref={supplementalRef}
                 className="zen-cluster pointer-events-auto flex self-stretch justify-self-end"
-                style={{ gridArea: '2 / 3 / 3 / 4' }}
+                style={{ gridArea: '3 / 3 / 4 / 4' }}
               >
                 {supplementalPanel}
               </div>
@@ -264,6 +273,15 @@ export function Workbench({
                 {primaryToolbar}
               </div>
             </div>
+          </div>
+        )}
+
+        {!mobile && installBanner && (
+          <div
+            className="pointer-events-auto z-[1] max-w-[560px] justify-self-center"
+            style={{ gridColumn: '1 / -1', gridRow: '2' }}
+          >
+            {installBanner}
           </div>
         )}
 
