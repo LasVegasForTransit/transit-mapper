@@ -4,11 +4,6 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.{ts,tsx}'],
-    exclude: [
-      ...configDefaults.exclude,
-      'tests/verify.test.ts',
-      'tests/verify-maskable-icon.test.ts',
-      'tests/support/**',
-    ],
+    exclude: [...configDefaults.exclude, 'tests/verify.test.ts', 'tests/support/**'],
   },
 });
