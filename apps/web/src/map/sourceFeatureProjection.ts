@@ -16,6 +16,7 @@ import {
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
   SRC_HANDLES,
+  SRC_SERVICE_TERMINI,
   SRC_JUNCTIONS,
   SRC_LANE_ARROWS,
   SRC_LANE_MARKINGS,
@@ -41,6 +42,7 @@ export interface BuildFeaturesForSourcesOptions {
   sourceIds: readonly SystemFeatureSourceId[];
   physicalHandleStationId?: string | null;
   physicalHandleGroupId?: string | null;
+  activePatternId?: string | null;
   counts?: SourceFeatureProjectionCounts;
 }
 
@@ -49,6 +51,7 @@ const FEATURE_NAME_BY_SOURCE: Record<SystemFeatureSourceId, SystemFeatureName> =
   [SRC_SERVICES]: 'services',
   [SRC_STATIONS]: 'stations',
   [SRC_HANDLES]: 'handles',
+  [SRC_SERVICE_TERMINI]: 'serviceTermini',
   [SRC_FOOTPRINTS]: 'footprints',
   [SRC_PLATFORMS]: 'platforms',
   [SRC_FACILITIES]: 'facilities',
@@ -82,6 +85,7 @@ export function buildFeaturesForSources({
   sourceIds,
   physicalHandleStationId = null,
   physicalHandleGroupId = null,
+  activePatternId = null,
   counts,
 }: BuildFeaturesForSourcesOptions): SystemFeatures {
   const needsDiagramLayout =
@@ -99,6 +103,7 @@ export function buildFeaturesForSources({
     {
       requestedFeatures: sourceIds.map((sourceId) => FEATURE_NAME_BY_SOURCE[sourceId]),
       counts,
+      activePatternId,
     },
   );
 }

@@ -9,7 +9,10 @@ import {
   type SetStateAction,
 } from 'react';
 import type { LngLat } from '@transitmapper/core/model/system';
-import type { ServiceActionHit } from '@transitmapper/core/model/selectionActions';
+import type {
+  CorridorActionHit,
+  ServiceActionHit,
+} from '@transitmapper/core/model/selectionActions';
 
 export type DialogName =
   'import' | 'gtfs' | 'export' | 'share' | 'systems' | 'settings' | 'onboarding';
@@ -72,8 +75,20 @@ const ImportProgressContext = createContext<ImportProgressState | null>(null);
 interface ContextMenuState {
   /** Screen position for the menu, plus the map coordinate the right-click
    *  landed on — actions that cut a line where you clicked need the latter. */
-  contextMenuAt: { x: number; y: number; at: LngLat; serviceHit?: ServiceActionHit } | null;
-  openContextMenu: (x: number, y: number, at: LngLat, serviceHit?: ServiceActionHit) => void;
+  contextMenuAt: {
+    x: number;
+    y: number;
+    at: LngLat;
+    serviceHit?: ServiceActionHit;
+    corridorHit?: CorridorActionHit;
+  } | null;
+  openContextMenu: (
+    x: number,
+    y: number,
+    at: LngLat,
+    serviceHit?: ServiceActionHit,
+    corridorHit?: CorridorActionHit,
+  ) => void;
   closeContextMenu: () => void;
 }
 
@@ -93,10 +108,23 @@ export function UiProvider({ children }: UiProviderProps) {
     y: number;
     at: LngLat;
     serviceHit?: ServiceActionHit;
+    corridorHit?: CorridorActionHit;
   } | null>(null);
   const openContextMenu = useCallback(
-    (x: number, y: number, at: LngLat, serviceHit?: ServiceActionHit) =>
-      setContextMenuAt({ x, y, at, ...(serviceHit ? { serviceHit } : {}) }),
+    (
+      x: number,
+      y: number,
+      at: LngLat,
+      serviceHit?: ServiceActionHit,
+      corridorHit?: CorridorActionHit,
+    ) =>
+      setContextMenuAt({
+        x,
+        y,
+        at,
+        ...(serviceHit ? { serviceHit } : {}),
+        ...(corridorHit ? { corridorHit } : {}),
+      }),
     [],
   );
   const closeContextMenu = useCallback(() => setContextMenuAt(null), []);

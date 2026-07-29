@@ -361,12 +361,18 @@ See [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 
 - `layers.ts` — turns the system into GeoJSON sources and layers per view;
   owns paint order (street surfaces below footprints, labels on top).
+- `sourceFeatureProjection.ts` and `sourceUploadPlan.ts` — map the pure
+  renderer's named collections onto independently uploaded sources. Service
+  termini are their own source because a branch end is an operational line
+  affordance, not a control point on the corridor it follows.
 - `interactions.ts` — the pointer state machine: drawing, dragging,
   snapping, route drafting, station-land drawing; adapts MapLibre feature
   hits into the editor pointer-intent grammar and owns the pointer-down lock.
 - `MapCanvas.tsx` — the map component; keeps sources in sync with the store
   and heals overlay layers if the style reloads; renders the pointer-intent
-  badge beside the native cursor.
+  badge beside the native cursor. It also owns the transient action-anchor
+  source: interaction resolution supplies its exact projected map position,
+  and menu dismissal, action completion, tool/view changes, or Escape clear it.
 - `PointerBadge.tsx` — the pointer-transparent icon badge, using the shared
   UI icon vocabulary rather than a second map-specific icon set.
 - `initialStyleFallback.ts` — bounds initial third-party style loading and

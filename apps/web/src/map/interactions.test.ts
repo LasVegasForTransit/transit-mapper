@@ -1,12 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Map as MLMap, MapGeoJSONFeature } from 'maplibre-gl';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
+import { wholeLeg } from '@transitmapper/core/model/geo';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import type { Way } from '@transitmapper/core/model/system';
+import type {
+  CorridorActionHit,
+  ServiceActionHit,
+} from '@transitmapper/core/model/selectionActions';
 import { createEditorStore } from '../editor/store';
+import { createSelectionActions } from '../editor/actions';
 import {
   LYR_FACILITIES,
   LYR_HANDLES,
+  LYR_SERVICE_TERMINI_HIT,
   LYR_SERVICES_HIT,
   LYR_STATIONS,
   LYR_WAYS_SOLID,
@@ -57,7 +64,12 @@ function installBrowserGlobals(): FrameScheduler {
       for (const callback of due.values()) callback(0);
     },
     fireKey(type, event) {
-      for (const listener of listeners.get(type) ?? []) listener(event as KeyboardEvent);
+      const keyboardEvent = {
+        preventDefault() {},
+        stopImmediatePropagation() {},
+        ...event,
+      } as KeyboardEvent;
+      for (const listener of listeners.get(type) ?? []) listener(keyboardEvent);
     },
   };
 }
@@ -92,11 +104,42 @@ function serviceFeature(wayId: string): MapGeoJSONFeature {
   return {
     type: 'Feature',
     id: `service-${wayId}`,
-    properties: { serviceId: 'service', wayId },
-    geometry: { type: 'LineString', coordinates: [] },
+    properties: { serviceId: 'service', wayId, patternId: 'branch', run: 'outbound', legIndex: 0 },
+    geometry: {
+      type: 'LineString',
+      coordinates: [
+        [-115.25, 36.1],
+        [-115.2, 36.1],
+      ],
+    },
     source: 'tm-services',
     sourceLayer: '',
     layer: { id: LYR_SERVICES_HIT, type: 'line', source: 'tm-services' },
+    state: {},
+  } as unknown as MapGeoJSONFeature;
+}
+
+function serviceFeatureFor(patternId: string, coordinates: [number, number][]): MapGeoJSONFeature {
+  const feature = serviceFeature('erasable');
+  feature.id = `service-${patternId}`;
+  feature.properties = { ...feature.properties, patternId };
+  feature.geometry = { type: 'LineString', coordinates };
+  return feature;
+}
+
+function terminusFeature(
+  patternId: string,
+  side: 'start' | 'end',
+  at: [number, number],
+): MapGeoJSONFeature {
+  return {
+    type: 'Feature',
+    id: `terminus-${patternId}-${side}`,
+    properties: { serviceId: 'service', patternId, side },
+    geometry: { type: 'Point', coordinates: at },
+    source: 'tm-service-termini',
+    sourceLayer: '',
+    layer: { id: LYR_SERVICE_TERMINI_HIT, type: 'circle', source: 'tm-service-termini' },
     state: {},
   } as unknown as MapGeoJSONFeature;
 }
@@ -241,6 +284,18 @@ interface DirectManipulationLifecycleProbe {
   onEnd: () => void;
 }
 
+interface ContextMenuProbe {
+  open: (
+    x: number,
+    y: number,
+    at: [number, number],
+    serviceHit?: ServiceActionHit,
+    corridorHit?: CorridorActionHit,
+  ) => void;
+  setAnchor: (at: [number, number] | null) => void;
+  close?: () => void;
+}
+
 function attach(
   map: ReturnType<typeof createMap>,
   store: ReturnType<typeof createEditorStore>,
@@ -249,6 +304,8 @@ function attach(
   onPointerIntent?: (intent: PointerIntent | null) => void,
   networkMode = true,
   isContextMenuOpen?: () => boolean,
+  contextMenu?: ContextMenuProbe,
+  onPointerRefresh?: (refresh: () => void) => void,
 ) {
   return attachInteractions(map as unknown as MLMap, store, {
     openShortcuts() {},
@@ -257,13 +314,21 @@ function attach(
     isDiagramMode: () => false,
     isNetworkMode: () => networkMode,
     focusFootprint() {},
-    openContextMenu() {},
+    openContextMenu: contextMenu?.open ?? (() => {}),
+    closeContextMenu: contextMenu?.close,
+    setActionAnchor: contextMenu?.setAnchor,
     onEditGestureStart: gesture?.onStart,
     onEditGestureEnd: gesture?.onEnd,
     onDirectManipulationStart: directManipulation?.onStart,
     onDirectManipulationEnd: directManipulation?.onEnd,
     onPointerIntent: onPointerIntent ? (intent) => onPointerIntent(intent) : undefined,
     isContextMenuOpen,
+    registerPointerIntentRefresh: onPointerRefresh
+      ? (refresh) => {
+          onPointerRefresh(refresh);
+          return () => {};
+        }
+      : undefined,
   });
 }
 
@@ -705,6 +770,328 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
+  it('focuses the clicked Network service occurrence without inserting a corridor point', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.ways = [erasableWay()];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Service',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [
+          {
+            id: 'branch',
+            sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }],
+          },
+        ],
+      },
+    ];
+    store.getState().setSystem(system);
+    store.getState().select({ kind: 'service', id: 'service' });
+    const before = store.getState().system;
+    const map = createMap(serviceFeature('erasable'));
+    const detach = attach(map, store);
+
+    map.fire('click', mouseEvent(map, map.project([-115.23, 36.1])));
+
+    expect(store.getState().system).toEqual(before);
+    expect(store.getState().selection).toEqual({ kind: 'service', id: 'service' });
+    expect(store.getState().activePatternId).toBe('branch');
+    detach();
+  });
+
+  it('focuses the nearest rendered branch among same-layer service hits', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.ways = [erasableWay()];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Service',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [
+          { id: 'near', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
+          { id: 'far', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
+        ],
+      },
+    ];
+    store.getState().setSystem(system);
+    const map = createMap([
+      serviceFeatureFor('far', [
+        [-115.25, 36.11],
+        [-115.2, 36.11],
+      ]),
+      serviceFeatureFor('near', [
+        [-115.25, 36.1],
+        [-115.2, 36.1],
+      ]),
+    ]);
+    const detach = attach(map, store);
+
+    map.fire('click', mouseEvent(map, map.project([-115.23, 36.1002])));
+
+    expect(store.getState().activePatternId).toBe('near');
+    detach();
+  });
+
+  it('gives a service terminus priority over overlapping service and corridor hits', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.ways = [erasableWay()];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Service',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] }],
+      },
+    ];
+    store.getState().setSystem(system);
+    const at: [number, number] = [-115.23, 36.1];
+    const map = createMap([
+      terminusFeature('branch', 'end', at),
+      serviceFeature('erasable'),
+      wayFeature('erasable'),
+    ]);
+    const opened: unknown[] = [];
+    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
+      open: (_x, _y, anchor, serviceHit) => opened.push({ anchor, serviceHit }),
+      setAnchor() {},
+    });
+    const right = mouseEvent(map, map.project(at));
+    right.originalEvent.button = 2;
+    map.fire('mousedown', right);
+    map.fire('mouseup', right);
+
+    expect(opened).toMatchObject([
+      { anchor: at, serviceHit: { terminusSide: 'end', patternId: 'branch', position: { t: 1 } } },
+    ]);
+    scheduler.fireKey('keydown', { key: 'Escape' });
+    detach();
+  });
+
+  it('collapses a service multi-selection to a terminus before building its real action registry', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.ways = [erasableWay()];
+    system.services = ['service', 'other'].map((id) => ({
+      id,
+      name: id,
+      modeId: 'bus',
+      color: '#e4572e',
+      patterns: [
+        { id: `${id}-branch`, sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
+      ],
+    }));
+    store.getState().setSystem(system);
+    store.getState().addMultiSelection([
+      { kind: 'service', id: 'service' },
+      { kind: 'service', id: 'other' },
+    ]);
+    const at: [number, number] = [-115.23, 36.1];
+    const map = createMap([
+      terminusFeature('service-branch', 'end', at),
+      serviceFeature('erasable'),
+    ]);
+    const opened: Array<{ serviceHit?: ServiceActionHit }> = [];
+    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
+      open: (_x, _y, _anchor, serviceHit) => opened.push({ serviceHit }),
+      setAnchor() {},
+    });
+    const right = mouseEvent(map, map.project(at));
+    right.originalEvent.button = 2;
+    map.fire('mousedown', right);
+    map.fire('mouseup', right);
+
+    expect(store.getState().multiSelection).toEqual([]);
+    expect(store.getState().selection).toEqual({ kind: 'service', id: 'service' });
+    expect(
+      createSelectionActions(store)
+        .actionsFor({
+          system: store.getState().system,
+          refs: [{ kind: 'service', id: 'service' }],
+          serviceHit: opened[0].serviceHit,
+        })
+        .map((action) => action.id),
+    ).toEqual(['service.convertTerminus']);
+    scheduler.fireKey('keydown', { key: 'Escape' });
+    detach();
+  });
+
+  it('re-publishes a stationary pointer immediately after the menu releases focus', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.ways = [erasableWay()];
+    store.getState().setSystem(system);
+    const map = createMap(wayFeature('erasable'));
+    const shown: Array<PointerIntent | null> = [];
+    let menuOpen = false;
+    let refresh: (() => void) | undefined;
+    const detach = attach(
+      map,
+      store,
+      undefined,
+      undefined,
+      (intent) => shown.push(intent),
+      true,
+      () => menuOpen,
+      undefined,
+      (registered) => {
+        refresh = registered;
+      },
+    );
+    map.fire('mousemove', mouseEvent(map, map.project([-115.23, 36.1])));
+    scheduler.pump();
+    expect(shown.at(-1)).toMatchObject({ primaryOperation: 'select-line-and-branch' });
+
+    menuOpen = true;
+    refresh!();
+    expect(shown.at(-1)).toBeNull();
+    menuOpen = false;
+    refresh!();
+    expect(shown.at(-1)).toMatchObject({ primaryOperation: 'select-line-and-branch' });
+    detach();
+  });
+
+  it('uses the one projected off-center service hit for both menu anchor and line edit', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.ways = [erasableWay()];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Service',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] }],
+      },
+    ];
+    store.getState().setSystem(system);
+    const map = createMap(serviceFeature('erasable'));
+    const opened: Array<{ anchor: [number, number]; serviceHit?: ServiceActionHit }> = [];
+    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
+      open: (_x, _y, anchor, serviceHit) => opened.push({ anchor, serviceHit }),
+      setAnchor() {},
+    });
+    const offCenter = map.project([-115.24, 36.1008]);
+    const right = mouseEvent(map, offCenter);
+    right.originalEvent.button = 2;
+    map.fire('mousedown', right);
+    map.fire('mouseup', right);
+
+    expect(opened[0].anchor).toEqual([-115.24, 36.1]);
+    const action = createSelectionActions(store)
+      .actionsFor({
+        system: store.getState().system,
+        refs: [{ kind: 'service', id: 'service' }],
+        at: opened[0].anchor,
+        serviceHit: opened[0].serviceHit,
+      })
+      .find((candidate) => candidate.id === 'service.endHere')!;
+    action.run();
+    const leg = store.getState().system.services[0].patterns[0].sections[0];
+    expect(leg.kind === 'shared' && leg.legs[0].extent).toMatchObject({
+      kind: 'stretch',
+      toT: 1,
+    });
+    if (leg.kind === 'shared' && leg.legs[0].extent.kind === 'stretch')
+      expect(leg.legs[0].extent.fromT).toBeCloseTo(0.2, 9);
+    detach();
+  });
+
+  it('uses the one projected off-center corridor hit for both menu anchor and split', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.ways = [erasableWay()];
+    store.getState().setSystem(system);
+    const map = createMap(wayFeature('erasable'));
+    const opened: Array<{ anchor: [number, number]; corridorHit?: { wayId: string; t: number } }> =
+      [];
+    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
+      open: (_x, _y, anchor, _serviceHit, corridorHit) => {
+        opened.push({ anchor, corridorHit });
+      },
+      setAnchor() {},
+    });
+    const right = mouseEvent(map, map.project([-115.24, 36.1008]));
+    right.originalEvent.button = 2;
+    map.fire('mousedown', right);
+    map.fire('mouseup', right);
+
+    expect(opened[0].anchor).toEqual([-115.24, 36.1]);
+    const action = createSelectionActions(store)
+      .actionsFor({
+        system: store.getState().system,
+        refs: [{ kind: 'way', id: 'erasable' }],
+        at: opened[0].anchor,
+        corridorHit: opened[0].corridorHit,
+      })
+      .find((candidate) => candidate.id === 'way.splitHere')!;
+    action.run();
+    expect(store.getState().system.ways).toHaveLength(2);
+    expect(store.getState().system.ways[0].points).toContainEqual([-115.24, 36.1]);
+    detach();
+  });
+
+  it('anchors a service menu to its resolved occurrence and clears it on Escape', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.ways = [erasableWay()];
+    system.services = [
+      {
+        id: 'service',
+        name: 'Service',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [
+          {
+            id: 'branch',
+            sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }],
+          },
+        ],
+      },
+    ];
+    store.getState().setSystem(system);
+    const map = createMap(serviceFeature('erasable'));
+    const anchors: Array<[number, number] | null> = [];
+    const opened: unknown[] = [];
+    const closed: string[] = [];
+    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
+      open: (_x, _y, at, serviceHit) => opened.push({ at, serviceHit }),
+      setAnchor: (at) => anchors.push(at),
+      close: () => closed.push('close'),
+    });
+    const point = map.project([-115.23, 36.1]);
+    const right = mouseEvent(map, point);
+    right.originalEvent.button = 2;
+    map.fire('mousedown', right);
+    map.fire('mouseup', right);
+
+    expect(opened).toMatchObject([
+      {
+        at: [-115.23, 36.1],
+        serviceHit: { serviceId: 'service', patternId: 'branch', run: 'outbound', legIndex: 0 },
+      },
+    ]);
+    expect(anchors.at(-1)).toEqual([-115.23, 36.1]);
+    scheduler.fireKey('keydown', { key: 'Escape' });
+    expect(anchors.at(-1)).toBeNull();
+    expect(closed).toEqual(['close']);
+    detach();
+  });
+
   it('updates a stationary cursor on keydown and keyup without a mouse move', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
@@ -811,7 +1198,7 @@ describe('pointer work coalescing', () => {
 
     menuOpen = false;
     scheduler.fireKey('keyup', { key: 'Shift', shiftKey: false });
-    expect(shown.at(-1)).toBeNull();
+    expect(shown.at(-1)).toMatchObject({ primaryOperation: 'move-point' });
     detach();
   });
 

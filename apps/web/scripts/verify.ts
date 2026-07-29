@@ -560,8 +560,12 @@ check(
     visibleWayTypes: new Set(['lightRail', 'road']),
   };
   const net = buildFeatures(store.getState().system, null, [], { viewMode: 'network', ...filters });
-  const aFeats = net.services.features.filter((f) => f.properties?.serviceId === aId);
-  const bFeats = net.services.features.filter((f) => f.properties?.serviceId === bId);
+  const aFeats = net.services.features.filter(
+    (f) => f.properties?.serviceId === aId && !f.properties?.hitTarget,
+  );
+  const bFeats = net.services.features.filter(
+    (f) => f.properties?.serviceId === bId && !f.properties?.hitTarget,
+  );
   const aOffsets = new Set(aFeats.map((f) => f.properties?.offset));
   check('the through-line is drawn as one unbroken run over the whole way', aFeats.length === 1);
   check(
@@ -918,7 +922,9 @@ check(
     laneDetail: true,
     ...filters,
   });
-  const infraFeats = infra.services.features.filter((f) => f.properties?.serviceId === svcId);
+  const infraFeats = infra.services.features.filter(
+    (f) => f.properties?.serviceId === svcId && !f.properties?.hitTarget,
+  );
   check('lane detail: the bus service renders', infraFeats.length >= 1);
   check(
     'lane detail: the service carries no paint offset (geometry IS the lane)',
@@ -930,7 +936,9 @@ check(
   );
 
   const net = buildFeatures(sys, null, [], { viewMode: 'network', ...filters });
-  const netFeats = net.services.features.filter((f) => f.properties?.serviceId === svcId);
+  const netFeats = net.services.features.filter(
+    (f) => f.properties?.serviceId === svcId && !f.properties?.hitTarget,
+  );
   check(
     'network view: the service stays on the way centerline (schematic)',
     netFeats.length === 1 && onCenterline(netFeats[0].geometry.coordinates as LngLat[]),
@@ -2231,18 +2239,34 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       .every((a) => !a.id.startsWith('service.cutHere')),
   );
 
-  const at = (coord: LngLat) =>
-    registry.actionsFor({ system: store.getState().system, refs, at: coord });
+  const actionHit = (t: number) => {
+    const current = store.getState().system;
+    const pattern = current.services.find((service) => service.id === line)!.patterns[0];
+    return {
+      serviceId: line,
+      patternId: pattern.id,
+      run: 'outbound' as const,
+      legIndex: 0,
+      position: patternPositionAt(current.ways, pattern, 'outbound', 0, t)!,
+    };
+  };
+  const at = (coord: LngLat, t?: number) =>
+    registry.actionsFor({
+      system: store.getState().system,
+      refs,
+      at: coord,
+      serviceHit: t === undefined ? undefined : actionHit(t),
+    });
   check(
     'clicking along the line offers to cut it there',
-    at(midway).some((a) => a.id === 'service.cutHere'),
+    at(midway, 0.5).some((a) => a.id === 'service.cutHere'),
   );
   check(
     'clicking at the very end of a line offers no cut, since there is nothing to cut off',
     at([-115.2, 36.1]).every((a) => a.group !== 'cut'),
   );
 
-  at(midway)
+  at(midway, 0.5)
     .find((a) => a.id === 'service.endHere')!
     .run();
   const trimmed = store.getState().system.services[0].patterns[0];
@@ -2264,8 +2288,21 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   store.getState().finishWay();
   const line2 = store.getState().system.services[0].id;
   const refs2: MultiSelectItem[] = [{ kind: 'service', id: line2 }];
+  const pattern2 = store.getState().system.services.find((service) => service.id === line2)!
+    .patterns[0];
   registry
-    .actionsFor({ system: store.getState().system, refs: refs2, at: [-115.15, 36.1] })
+    .actionsFor({
+      system: store.getState().system,
+      refs: refs2,
+      at: [-115.15, 36.1],
+      serviceHit: {
+        serviceId: line2,
+        patternId: pattern2.id,
+        run: 'outbound',
+        legIndex: 0,
+        position: patternPositionAt(store.getState().system.ways, pattern2, 'outbound', 0, 0.5)!,
+      },
+    })
     .find((a) => a.id === 'service.cutHere')!
     .run();
   check(
@@ -2282,7 +2319,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   store.getState().finishWay();
   const refs3: MultiSelectItem[] = [{ kind: 'way', id: way3 }];
   const divide = registry
-    .actionsFor({ system: store.getState().system, refs: refs3, at: [-115.15, 36.1] })
+    .actionsFor({
+      system: store.getState().system,
+      refs: refs3,
+      at: [-115.15, 36.1],
+      corridorHit: { wayId: way3, t: 0.5 },
+    })
     .find((a) => a.id === 'way.splitHere');
   check('a way offers to divide where you clicked', !!divide);
   divide!.run();
@@ -2650,14 +2692,18 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   };
   const fc = buildFeatures(store.getState().system, null, [], view);
   const trunkFeatures = fc.services.features.filter(
-    (f) => (f.properties as { wayId: string }).wayId === trunk,
+    (f) =>
+      (f.properties as { wayId: string; hitTarget?: boolean }).wayId === trunk &&
+      !f.properties?.hitTarget,
   );
   check(
     'the shared trunk renders as exactly one service line, not doubled by the branch',
     trunkFeatures.length === 1,
   );
   const branchFeatures = fc.services.features.filter(
-    (f) => (f.properties as { wayId: string }).wayId === branchWay,
+    (f) =>
+      (f.properties as { wayId: string; hitTarget?: boolean }).wayId === branchWay &&
+      !f.properties?.hitTarget,
   );
   check('the branch-only way renders its own service line too', branchFeatures.length === 1);
 
@@ -11953,7 +11999,7 @@ function buildGrid() {
       viewMode: 'network',
       visibleModes: new Set(Object.keys(MODES)),
       visibleWayTypes: new Set(['road']),
-    }).services.features.length === 2,
+    }).services.features.filter((feature) => !feature.properties?.hitTarget).length === 2,
   );
 }
 

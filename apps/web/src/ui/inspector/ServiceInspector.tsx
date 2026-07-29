@@ -129,6 +129,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   const deleteService = useEditor((s) => s.deleteService);
   const addPaletteColor = useEditor((s) => s.addPaletteColor);
   const selectAndFocus = useEditor((s) => s.selectAndFocus);
+  const setActivePattern = useEditor((s) => s.setActivePattern);
   const addingPatternForServiceId = useEditor((s) => s.addingPatternForServiceId);
   const startAddingPattern = useEditor((s) => s.startAddingPattern);
   const cancelAddingPattern = useEditor((s) => s.cancelAddingPattern);
@@ -578,7 +579,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                   type="button"
                   className="pattern-open"
                   disabled={!pWay}
-                  onClick={() => pWay && selectAndFocus({ kind: 'way', id: pWay.id })}
+                  onClick={() => setActivePattern(p.id)}
                 >
                   <span className="dot ring" />
                   <span className="pattern-name">

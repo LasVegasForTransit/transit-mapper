@@ -4,8 +4,31 @@ import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { oneSection, patternRunLegs, wholeLeg } from '@transitmapper/core/model/geo';
 import { servicePointActionProvider } from './pointActions';
 import { createEditorStore } from '../store';
+import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
 
 describe('service point actions', () => {
+  it('requires the interaction-resolved occurrence position', () => {
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.services = [
+      {
+        id: 'line',
+        name: 'Line',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [],
+      },
+    ];
+
+    expect(
+      servicePointActionProvider(store)({
+        system,
+        refs: [{ kind: 'service', id: 'line' }],
+        at: [-115.2, 36.1],
+        serviceHit: { serviceId: 'line', patternId: 'missing' },
+      }),
+    ).toEqual([]);
+  });
   it('ends a repeated corridor at the exact displayed occurrence and keeps the longer half', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
@@ -57,7 +80,19 @@ describe('service point actions', () => {
       system,
       refs: [{ kind: 'service', id: 'line' }],
       at: [-115.1875, 36.1],
-      serviceHit: { serviceId: 'line', patternId: 'loop', run: 'outbound', legIndex: 1 },
+      serviceHit: {
+        serviceId: 'line',
+        patternId: 'loop',
+        run: 'outbound',
+        legIndex: 1,
+        position: patternPositionAt(
+          system.ways,
+          system.services[0].patterns[0],
+          'outbound',
+          1,
+          0.25,
+        )!,
+      },
     });
     actions.find((action) => action.id === 'service.endHere')!.run();
 
@@ -104,7 +139,19 @@ describe('service point actions', () => {
       system,
       refs: [{ kind: 'service', id: 'line' }],
       at: [-115.195, 36.1],
-      serviceHit: { serviceId: 'line', patternId: 'loop', run: 'outbound', legIndex: 1 },
+      serviceHit: {
+        serviceId: 'line',
+        patternId: 'loop',
+        run: 'outbound',
+        legIndex: 1,
+        position: patternPositionAt(
+          system.ways,
+          system.services[0].patterns[0],
+          'outbound',
+          1,
+          0.5,
+        )!,
+      },
     });
     actions.find((action) => action.id === 'service.endHere')!.run();
 
@@ -157,7 +204,19 @@ describe('service point actions', () => {
       system,
       refs: [{ kind: 'service', id: 'line' }],
       at: [-115.182, 36.1],
-      serviceHit: { serviceId: 'line', patternId: 'couplet', run: 'outbound', legIndex: 1 },
+      serviceHit: {
+        serviceId: 'line',
+        patternId: 'couplet',
+        run: 'outbound',
+        legIndex: 1,
+        position: patternPositionAt(
+          system.ways,
+          system.services[0].patterns[0],
+          'outbound',
+          1,
+          0.8,
+        )!,
+      },
     });
     actions.find((action) => action.id === 'service.endHere')!.run();
 

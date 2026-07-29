@@ -234,7 +234,7 @@ describe('partial system feature projection', () => {
     buildFeatures(fixture(), null, ['road'], view, 'station', 'group', { counts });
 
     expect(counts).toMatchObject({
-      featureCollectionBuildCount: 15,
+      featureCollectionBuildCount: 16,
       featureTopologyPassCount: 1,
       featureTopologyWayVisitCount: 1,
       featureStationPassCount: 1,

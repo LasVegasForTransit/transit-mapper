@@ -35,7 +35,8 @@ describe('map source upload planning', () => {
     expect(sourceUploadsForSystemChange(system, nextDocument, { forceAll: true })).toEqual(
       ALL_SYSTEM_FEATURE_SOURCES,
     );
-    expect(ALL_SYSTEM_FEATURE_SOURCES).toHaveLength(15);
+    expect(ALL_SYSTEM_FEATURE_SOURCES).toContain('tm-service-termini');
+    expect(ALL_SYSTEM_FEATURE_SOURCES).toHaveLength(16);
   });
 
   it('uploads only the four station-derived sources for a station-only change', () => {
@@ -59,6 +60,7 @@ describe('map source upload planning', () => {
       SRC_SERVICES,
       SRC_STATIONS,
       SRC_HANDLES,
+      'tm-service-termini',
       SRC_LANE_ARROWS,
       SRC_SERVICE_ARROWS,
     ]);
@@ -120,6 +122,7 @@ describe('map source upload planning', () => {
       SRC_SERVICES,
       SRC_STATIONS,
       SRC_HANDLES,
+      'tm-service-termini',
       SRC_LANES,
       SRC_LANE_MARKINGS,
       SRC_LANE_ARROWS,
@@ -135,6 +138,7 @@ describe('map source upload planning', () => {
       SRC_SERVICES,
       SRC_STATIONS,
       SRC_HANDLES,
+      'tm-service-termini',
       SRC_LANE_ARROWS,
       SRC_SERVICE_ARROWS,
     ]);
@@ -143,6 +147,7 @@ describe('map source upload planning', () => {
       SRC_SERVICES,
       SRC_STATIONS,
       SRC_HANDLES,
+      'tm-service-termini',
       SRC_LANES,
       SRC_LANE_MARKINGS,
       SRC_LANE_ARROWS,

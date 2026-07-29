@@ -1,6 +1,10 @@
 import * as RdxMenu from '@radix-ui/react-dropdown-menu';
+import { useEffect, useRef } from 'react';
 import { useSelectionActions } from '../editor/useSelectionActions';
+import { useEditor } from '../editor/EditorProvider';
 import { useContextMenu } from './UiProvider';
+import { useView } from './ViewProvider';
+import { shouldCloseMapContextMenu } from './mapContextMenuLifecycle';
 
 /**
  * The map's right-click menu: the actions available for what is selected,
@@ -21,7 +25,52 @@ import { useContextMenu } from './UiProvider';
  */
 export function MapContextMenu() {
   const { contextMenuAt, closeContextMenu } = useContextMenu();
-  const { actions } = useSelectionActions(contextMenuAt?.at, contextMenuAt?.serviceHit);
+  const tool = useEditor((state) => state.tool);
+  const { viewMode } = useView();
+  const { actions } = useSelectionActions(
+    contextMenuAt?.at,
+    contextMenuAt?.serviceHit,
+    contextMenuAt?.corridorHit,
+  );
+
+  // A menu belongs to the tool and projection that opened it. Record those
+  // values after opening, then close in effects when the surrounding editor
+  // state makes its actions meaningless. Effects avoid setting provider state
+  // during render, which React correctly rejects.
+  const openedFor = useRef<{
+    menu: NonNullable<typeof contextMenuAt>;
+    tool: typeof tool;
+    viewMode: typeof viewMode;
+  } | null>(null);
+  const currentToolRef = useRef(tool);
+  const currentViewModeRef = useRef(viewMode);
+  currentToolRef.current = tool;
+  currentViewModeRef.current = viewMode;
+  useEffect(() => {
+    if (!contextMenuAt) {
+      openedFor.current = null;
+      return;
+    }
+    openedFor.current = {
+      menu: contextMenuAt,
+      tool: currentToolRef.current,
+      viewMode: currentViewModeRef.current,
+    };
+  }, [contextMenuAt]);
+  useEffect(() => {
+    const opened = openedFor.current;
+    if (!contextMenuAt || !opened || opened.menu !== contextMenuAt) return;
+    if (
+      shouldCloseMapContextMenu({
+        actionCount: actions.length,
+        openedTool: opened.tool,
+        currentTool: tool,
+        openedViewMode: opened.viewMode,
+        currentViewMode: viewMode,
+      })
+    )
+      closeContextMenu();
+  }, [actions.length, closeContextMenu, contextMenuAt, tool, viewMode]);
 
   if (!contextMenuAt || actions.length === 0) return null;
 
