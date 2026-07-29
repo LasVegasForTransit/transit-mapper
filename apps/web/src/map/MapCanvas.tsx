@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import maplibregl, {
   type FilterSpecification,
   type GeoJSONSource,
@@ -13,6 +13,8 @@ import { useContextMenu, useUi } from '../ui/UiProvider';
 import { useView } from '../ui/ViewProvider';
 import { BASEMAP_STYLE } from './basemap';
 import { attachInteractions } from './interactions';
+import { PointerBadge } from './PointerBadge';
+import type { PointerIntent } from '../editor/pointerIntent';
 import { computeDiagramSystem } from '@transitmapper/core/model/diagramLayout';
 import { serviceWayIds, systemBounds, wayById } from '@transitmapper/core/model/geo';
 import { routePath } from '@transitmapper/core/model/routeGraph';
@@ -133,9 +135,17 @@ interface MapErrorLike {
 
 export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [pointerBadge, setPointerBadge] = useState<{
+    intent: PointerIntent | null;
+    x: number;
+    y: number;
+  }>({ intent: null, x: 0, y: 0 });
+  const refreshPointerIntentRef = useRef<(() => void) | null>(null);
   const store = useEditorStore();
   const { openShortcuts, toggleUi } = useUi();
-  const { openContextMenu } = useContextMenu();
+  const { contextMenuAt, openContextMenu } = useContextMenu();
+  const contextMenuOpenRef = useRef(false);
+  contextMenuOpenRef.current = contextMenuAt !== null;
   const { viewMode, setViewMode, visibleModes, visibleWayTypes, showLandmarks } = useView();
   // Created once by SimProvider and injected into the animation loop below,
   // the same way the editor store is — the loop is imperative and lives
@@ -183,6 +193,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     const prevMode = viewRef.current.viewMode;
     const prevVisibleModes = viewRef.current.visibleModes;
     viewRef.current = { viewMode, visibleModes, visibleWayTypes };
+    // A view swap changes whether the same stationary hover is editable.
+    // Ask the interaction controller to resolve it again rather than waiting
+    // for incidental pointer movement to remove a stale badge.
+    refreshPointerIntentRef.current?.();
     if (prevMode !== viewMode || prevVisibleModes !== visibleModes) {
       // View mode and mode visibility determine whether the vehicle host has
       // any work. An explicit invalidation lets Diagram/fully-filtered states
@@ -915,6 +929,14 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         onDirectManipulationEnd: endDirectManipulation,
         onEditGestureStart: beginGestureProjection,
         onEditGestureEnd: endGestureProjection,
+        onPointerIntent: (intent, x, y) => setPointerBadge({ intent, x, y }),
+        isContextMenuOpen: () => contextMenuOpenRef.current,
+        registerPointerIntentRefresh: (refresh) => {
+          refreshPointerIntentRef.current = refresh;
+          return () => {
+            if (refreshPointerIntentRef.current === refresh) refreshPointerIntentRef.current = null;
+          };
+        },
         // Footprints only render in the Infrastructure view — switch there
         // and zoom in, or a newly-drawn complex would be invisible right
         // where the user just drew it (the original bug report this fixes).
@@ -1122,5 +1144,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // listed because the effect genuinely closes over them.
   }, [store, openShortcuts, toggleUi, openContextMenu, setViewMode, simClock, simCommands]);
 
-  return <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />;
+  return (
+    <>
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
+      <PointerBadge intent={pointerBadge.intent} x={pointerBadge.x} y={pointerBadge.y} />
+    </>
+  );
 }
