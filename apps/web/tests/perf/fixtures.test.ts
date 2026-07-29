@@ -1,5 +1,7 @@
+import { MAX_SHARE_BODY_BYTES, serializeShareRequest } from '@transitmapper/core/share/contract';
 import { describe, expect, it } from 'vitest';
 import { countPerfFixture, generatePerfFixture } from '../../src/perf/fixtures';
+import { PERF_SCENARIOS } from '../../src/perf/scenarios';
 
 describe('performance fixtures', () => {
   it('generates the RTC-shaped fixture at the declared scale', () => {
@@ -14,7 +16,7 @@ describe('performance fixtures', () => {
   });
 
   it('generates every fixture deterministically', () => {
-    for (const scenarioId of ['small', 'dense', 'rtc'] as const) {
+    for (const scenarioId of ['small', 'dense', 'published', 'rtc'] as const) {
       const first = generatePerfFixture(scenarioId);
       const second = generatePerfFixture(scenarioId);
 
@@ -39,5 +41,13 @@ describe('performance fixtures', () => {
     expect(dense.ways).toBeLessThan(rtc.ways);
     expect(small.points).toBeLessThan(dense.points);
     expect(dense.points).toBeLessThan(rtc.points);
+  });
+
+  it('keeps public-surface fixtures within the production publishing contract', () => {
+    for (const scenario of [PERF_SCENARIOS.share, PERF_SCENARIOS.embed]) {
+      const request = serializeShareRequest(generatePerfFixture(scenario.fixtureId));
+
+      expect(request.byteLength).toBeLessThanOrEqual(MAX_SHARE_BODY_BYTES);
+    }
   });
 });

@@ -55,8 +55,9 @@ The protocol is fixed in `apps/web/src/perf/scenarios.ts`:
 - 1440 × 900 at device-pixel ratio 1 for desktop;
 - a cache-cleared cold navigation followed by an HTTP-cache warm reload;
 - one discarded warm-up and five measured runs; and
-- deterministic small, dense, and RTC-shaped systems. The RTC fixture has
-  about 3,800 ways, 121,000 points, 3,800 stations, and 285 patterns.
+- deterministic small, dense, large-published, and RTC-shaped systems. The
+  RTC fixture has about 3,800 ways, 121,000 points, 3,800 stations, and 285
+  patterns.
 
 The automated fixture set does not yet include the acceptance matrix's empty
 editor startup. Adding that gate requires an `empty` fixture/scenario ID, a
@@ -64,9 +65,13 @@ zero-entity generator branch, and a startup-only journey that does not require
 a station target. Until those pieces land, record empty startup separately and
 do not describe `pnpm perf` as covering it.
 
-The share page and the dedicated embed entry both use the RTC-shaped fixture.
-The manually dispatched workflow also runs the 390 × 844,
-device-pixel-ratio 3 mobile profile:
+RTC scale belongs to the editor: the production share API refuses request
+bodies above 1 MB. The share page and dedicated embed instead use a roughly
+715 kB request fixture, large enough to exercise their real work while leaving
+ordinary model-growth headroom beneath the publishing contract.
+
+The manually dispatched workflow also runs the 390 × 844, device-pixel-ratio 3
+mobile profile:
 
 ```bash
 pnpm perf -- --profile mobile
