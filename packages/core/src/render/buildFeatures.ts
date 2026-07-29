@@ -427,6 +427,10 @@ export interface BuildFeaturesOptions {
    * editor passes the exact collections whose MapLibre sources will upload,
    * so unrelated RTC-scale phases are never traversed just to discard them. */
   requestedFeatures?: readonly SystemFeatureName[];
+  /** Restrict station feature derivation to these stable ids. Live gesture
+   * settlement uses this to avoid allocating and resolving service context
+   * for every unchanged station. */
+  stationIds?: readonly string[];
   counts?: FeatureBuildOperationCounts;
   /** The branch that alone receives interaction at coincident termini. */
   activePatternId?: string | null;
@@ -625,6 +629,7 @@ function buildSharedProjectionIndexes(
 
 function projectStations(
   system: TransitSystem,
+  stations: TransitSystem['stations'],
   view: ViewOptions,
   indexes: SharedProjectionIndexes,
   counts: FeatureBuildOperationCounts | undefined,
@@ -634,7 +639,7 @@ function projectStations(
   // The interchange scan (servedWayIds per station) is the single most expensive
   // part of this function at RTC scale — memoized on (stations, visibleWays) so a
   // selection/viewport rebuild reuses it instead of re-scanning ~3787 stations.
-  const nearWaysByStation = nearWaysForStations(system.stations, visibleWays);
+  const nearWaysByStation = nearWaysForStations(stations, visibleWays);
   // `servicesByWay` reports every service that touches a way, which over-reports
   // once a service can cover only part of one. Only trimmed services need the
   // more expensive position check.
@@ -649,7 +654,7 @@ function projectStations(
     return near ? serviceCoversWayAt(service, wayId, near.t) : true;
   };
 
-  return system.stations.map((station, stationIndex) => {
+  return stations.map((station, stationIndex) => {
     if (counts) counts.featureStationVisitCount++;
     const servingServiceSet = new Set<Service>();
     for (const wayId of nearWaysByStation[stationIndex]) {
@@ -1423,7 +1428,13 @@ export function buildFeatures(
         counts,
       })
     : emptyTopologyProjection();
-  const stations = projection.stations ? projectStations(system, view, indexes, counts) : [];
+  const requestedStationIds = options.stationIds ? new Set(options.stationIds) : null;
+  const stationsToProject = requestedStationIds
+    ? system.stations.filter((station) => requestedStationIds.has(station.id))
+    : system.stations;
+  const stations = projection.stations
+    ? projectStations(system, stationsToProject, view, indexes, counts)
+    : [];
   const handles =
     projection.selectionHandles && !(network && selection?.kind === 'service')
       ? projectSelectionHandles(indexes, handleWayIds, counts)

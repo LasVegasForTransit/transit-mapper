@@ -40,6 +40,7 @@ export interface BuildFeaturesForSourcesOptions {
   handleWayIds: string[];
   view: ViewOptions;
   sourceIds: readonly SystemFeatureSourceId[];
+  stationIds?: readonly string[];
   physicalHandleStationId?: string | null;
   physicalHandleGroupId?: string | null;
   activePatternId?: string | null;
@@ -88,6 +89,7 @@ export function buildFeaturesForSources({
   handleWayIds,
   view,
   sourceIds,
+  stationIds,
   physicalHandleStationId = null,
   physicalHandleGroupId = null,
   activePatternId = null,
@@ -108,6 +110,7 @@ export function buildFeaturesForSources({
     physicalHandleGroupId,
     {
       requestedFeatures: sourceIds.map((sourceId) => FEATURE_NAME_BY_SOURCE[sourceId]),
+      stationIds,
       counts,
       activePatternId,
       armedTerminus,
