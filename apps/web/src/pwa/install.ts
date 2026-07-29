@@ -95,7 +95,7 @@ function readPreferences(storage: InstallStorage): InstallPreferences {
 function installInstructions(browser: InstallBrowser): string {
   if (browser === 'safari') return 'In Safari, choose File or Share, then Add to Dock.';
   if (browser === 'firefox')
-    return 'Use Firefox’s Install option from the address bar or browser menu.';
+    return 'Firefox does not support installing TransitMapper as a desktop app. Use Chrome, Edge, or Safari instead.';
   if (browser === 'chromium')
     return 'Use your browser’s Install option from the address bar or menu.';
   return 'Use your browser’s install or add-to-desktop option to keep TransitMapper close at hand.';
@@ -139,7 +139,6 @@ export function createInstallController(environment: InstallEnvironment): Instal
   let promptEvent: InstallPromptEvent | null = null;
   const listeners = new Set<() => void>();
 
-  const notify = () => listeners.forEach((listener) => listener());
   const writePreferences = () => {
     try {
       environment.storage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
@@ -150,7 +149,7 @@ export function createInstallController(environment: InstallEnvironment): Instal
   };
   const permanentlySuppressed = () => preferences.installed || environment.isStandalone();
 
-  const state = (): InstallState => {
+  const buildState = (): InstallState => {
     const browser = environment.browser();
     const isDesktop = environment.isDesktop();
     const eligible =
@@ -168,6 +167,14 @@ export function createInstallController(environment: InstallEnvironment): Instal
       permanentlySuppressed: permanentlySuppressed(),
       instructions: installInstructions(browser),
     };
+  };
+  // useSyncExternalStore compares snapshots by reference. Keep one immutable
+  // object between notifications instead of allocating during every read.
+  let snapshot = buildState();
+  const state = (): InstallState => snapshot;
+  const notify = () => {
+    snapshot = buildState();
+    listeners.forEach((listener) => listener());
   };
 
   const onBeforeInstallPrompt: EventListener = (event) => {

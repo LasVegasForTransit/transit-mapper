@@ -275,8 +275,8 @@ MapLibre sources directly.
 The editor's PWA install controller lives in `apps/web/src/pwa/`, outside
 `packages/core` and outside the embedded share entry. It retains Chromium's
 `beforeinstallprompt` event but calls `prompt()` only after a person presses
-Install. Safari and Firefox receive browser-specific instructions instead of
-a non-working button.
+Install. Safari receives Add to Dock instructions; Firefox is told plainly
+that desktop installation is unavailable and directed to a supported browser.
 
 The contextual invitation appears only in an editable desktop session after
 90 seconds and the first undoable edit. Its first dismissal is local to that
