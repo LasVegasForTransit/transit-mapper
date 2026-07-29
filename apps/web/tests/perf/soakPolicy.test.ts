@@ -37,4 +37,24 @@ describe('performance soak policy', () => {
       }),
     ).toEqual([]);
   });
+
+  it('uses the warmed run as the baseline for stable feature resources', () => {
+    const featureSnapshot: SoakSnapshot = {
+      ...stableSnapshot,
+      jsHeapUsedBytes: 50_000_000,
+      domNodeCount: 2_500,
+      listenerCount: 75,
+      workerCount: 3,
+      webGlContextCount: 2,
+    };
+
+    expect(
+      soakViolations(featureSnapshot, featureSnapshot, {
+        editCycles: 1,
+        exportDialogCycles: 2,
+        pngDownloadCount: 1,
+        svgDownloadCount: 1,
+      }),
+    ).toEqual([]);
+  });
 });
