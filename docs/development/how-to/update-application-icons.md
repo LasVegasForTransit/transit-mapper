@@ -33,8 +33,13 @@ that document in Icon Composer, export a flattened 1024px PNG to
 export:
 
 ```bash
+pnpm exec prettier --write apps/web/scripts/transit-mapper.icon/icon.json
 pnpm --filter @transitmapper/web generate:icons -- --record-apple-export
 ```
+
+Quit Icon Composer before running those commands. The native editor may persist
+default layer properties after export; formatting the closed document first
+keeps the recorded hash stable through the commit hook.
 
 The unioned silhouette must remain one layer. Separate overlapping strokes
 become separate glass surfaces and produce visible seams. The recorded
