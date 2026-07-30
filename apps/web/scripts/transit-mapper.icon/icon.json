@@ -6,6 +6,8 @@
     {
       "layers": [
         {
+          "glass": true,
+          "hidden": false,
           "image-name": "apple-touch-icon-layer.png",
           "name": "apple-touch-icon-layer"
         }
