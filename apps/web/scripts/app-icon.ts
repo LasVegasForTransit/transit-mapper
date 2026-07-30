@@ -21,6 +21,7 @@ const GLYPH_SCALE: Record<AppIconKind, number> = {
   regular: 0.88,
   maskable: 0.62,
 };
+const APPLE_GLYPH_SCALE = 1;
 
 interface ThemeColors {
   background: string;
@@ -132,7 +133,7 @@ export async function appIconPng(options: AppIconPngOptions): Promise<Buffer> {
  * Composer sees them.
  */
 function appleTouchIconLayerSvg(): string {
-  const transform = `translate(${GLYPH_OFFSET} ${GLYPH_OFFSET}) translate(12 12) scale(${GLYPH_SCALE.regular}) translate(-12 -12) rotate(45 12 12)`;
+  const transform = `translate(${GLYPH_OFFSET} ${GLYPH_OFFSET}) translate(12 12) scale(${APPLE_GLYPH_SCALE}) translate(-12 -12) rotate(45 12 12)`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 ${ICON_SIZE} ${ICON_SIZE}">
   <g
