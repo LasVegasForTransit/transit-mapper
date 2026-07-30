@@ -1,61 +1,110 @@
-import { useState } from 'react';
+import { useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Modal } from '../Modal';
-import { Icon } from '../Icon';
 import { OnboardingPreviewMap } from './OnboardingPreviewMap';
 import { ONBOARDING_FIXTURE_SYSTEM, onboardingViewOptions } from './fixtureSystem';
 import { ONBOARDING_SLIDES, type OnboardingSlideVisual } from './slides';
 
 interface OnboardingDialogProps {
   onClose: () => void;
+  onComplete: () => void;
 }
 
-/** The first-run introduction — freely skippable from any slide (Skip, close,
- *  or jump straight to a dot), never a gate the app makes you clear. */
-export function OnboardingDialog({ onClose }: OnboardingDialogProps) {
+/** The first-run introduction. Closing is always allowed, but only the final
+ *  action counts as completion so an accidental dismissal does not suppress
+ *  the welcome on the next visit. */
+export function OnboardingDialog({ onClose, onComplete }: OnboardingDialogProps) {
   const [index, setIndex] = useState(0);
+  const dotRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const slide = ONBOARDING_SLIDES[index];
   const isLast = index === ONBOARDING_SLIDES.length - 1;
+
+  const selectFromKeyboard = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    currentIndex: number,
+  ) => {
+    let nextIndex: number | undefined;
+    if (event.key === 'ArrowRight') {
+      nextIndex = (currentIndex + 1) % ONBOARDING_SLIDES.length;
+    } else if (event.key === 'ArrowLeft') {
+      nextIndex = (currentIndex - 1 + ONBOARDING_SLIDES.length) % ONBOARDING_SLIDES.length;
+    } else if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = ONBOARDING_SLIDES.length - 1;
+    }
+    if (nextIndex === undefined) return;
+
+    event.preventDefault();
+    setIndex(nextIndex);
+    dotRefs.current[nextIndex]?.focus();
+  };
 
   return (
     <Modal
       title={slide.title}
-      description="A short introduction to TransitMapper's core ideas."
+      description="Learn how to sketch and develop a transit system."
       onClose={onClose}
       className="onboarding-modal"
       footer={
         <div className="onboarding-foot">
-          <button type="button" className="ghost-btn" onClick={onClose}>
-            Skip
-          </button>
-          <div className="onboarding-dots" role="tablist" aria-label="Slides">
+          <div className="onboarding-back-slot">
+            {index > 0 && (
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => setIndex((current) => current - 1)}
+              >
+                Back
+              </button>
+            )}
+          </div>
+          <div className="onboarding-dots" role="tablist" aria-label="Onboarding steps">
             {ONBOARDING_SLIDES.map((s, i) => (
               <button
                 key={s.title}
+                ref={(element) => {
+                  dotRefs.current[i] = element;
+                }}
                 type="button"
                 role="tab"
                 aria-selected={i === index}
                 aria-label={`Go to slide ${i + 1}: ${s.title}`}
+                tabIndex={i === index ? 0 : -1}
                 className={`onboarding-dot ${i === index ? 'active' : ''}`}
                 onClick={() => setIndex(i)}
+                onKeyDown={(event) => selectFromKeyboard(event, i)}
               />
             ))}
           </div>
           <button
             type="button"
-            className="primary-btn"
-            onClick={() => (isLast ? onClose() : setIndex(index + 1))}
+            className="primary-btn onboarding-next"
+            onClick={() => (isLast ? onComplete() : setIndex((current) => current + 1))}
           >
-            {isLast ? 'Get started' : 'Next'}
+            {isLast ? 'Start drawing' : 'Next'}
           </button>
         </div>
       }
     >
       <div className="onboarding-body">
-        <OnboardingSlideVisualView visual={slide.visual} />
         <p className="onboarding-copy">{slide.body}</p>
-        {slide.note ? <p className="onboarding-note">{slide.note}</p> : null}
+        {slide.note ? <OnboardingNote text={slide.note} /> : null}
+        <OnboardingSlideVisualView visual={slide.visual} />
       </div>
     </Modal>
+  );
+}
+
+function OnboardingNote({ text }: { text: string }) {
+  const label = 'Open beta';
+  const body = text.startsWith(`${label}: `) ? text.slice(label.length + 2) : text;
+
+  return (
+    <p className="onboarding-note">
+      <span className="onboarding-note-label">{label}</span>
+      <span className="sr-only">: </span>
+      <span>{body}</span>
+    </p>
   );
 }
 
@@ -65,34 +114,49 @@ interface OnboardingSlideVisualViewProps {
 
 function OnboardingSlideVisualView({ visual }: OnboardingSlideVisualViewProps) {
   if (visual.kind === 'triPreview') {
+    const previews = [
+      { viewMode: 'infrastructure', label: 'Infrastructure' },
+      { viewMode: 'network', label: 'Network' },
+      { viewMode: 'diagram', label: 'Diagram' },
+    ] as const;
     return (
       <div className="onboarding-tri-preview">
-        {(['infrastructure', 'network', 'diagram'] as const).map((viewMode) => (
-          <OnboardingPreviewMap
-            key={viewMode}
-            system={ONBOARDING_FIXTURE_SYSTEM}
-            view={onboardingViewOptions(viewMode)}
-            className="onboarding-tri-preview-item"
-          />
+        {previews.map(({ viewMode, label }) => (
+          <figure className="onboarding-tri-preview-item" key={viewMode}>
+            <figcaption className="onboarding-preview-label">{label}</figcaption>
+            <OnboardingPreviewMap
+              system={ONBOARDING_FIXTURE_SYSTEM}
+              view={onboardingViewOptions(viewMode)}
+              className="onboarding-tri-preview-map"
+            />
+          </figure>
         ))}
       </div>
     );
   }
-  if (visual.kind === 'singlePreview') {
-    return (
+  return (
+    <div className="onboarding-single-preview">
+      {visual.key === 'service' && (
+        <div className="onboarding-preview-key" aria-label="Example service">
+          <span>
+            <i className="onboarding-service-swatch" />
+            Crosstown
+          </span>
+          <span className="onboarding-preview-frequency">Every 10 minutes</span>
+        </div>
+      )}
+      {visual.key === 'infrastructure' && (
+        <div className="onboarding-preview-key" aria-label="Example infrastructure">
+          <span>Streets</span>
+          <span>Light rail tracks</span>
+        </div>
+      )}
       <OnboardingPreviewMap
         system={ONBOARDING_FIXTURE_SYSTEM}
         view={onboardingViewOptions(visual.viewMode)}
         animateVehicle={visual.animateVehicle}
-        className="onboarding-single-preview"
+        className="onboarding-single-preview-map"
       />
-    );
-  }
-  return (
-    <div className="onboarding-icons">
-      {visual.icons.map((icon) => (
-        <Icon key={icon} name={icon} size={40} />
-      ))}
     </div>
   );
 }
