@@ -29,7 +29,7 @@ The Apple touch icon uses Apple's Liquid Glass renderer, which the
 cross-platform generator cannot reproduce. The generator updates the unioned
 Route silhouette inside the committed `transit-mapper.icon` document. Open
 that document in Icon Composer, export a flattened 1024px PNG to
-`apps/web/public/apple-touch-icon-source.png`, then record and resize the
+`apps/web/scripts/apple-touch-icon-source.png`, then record and resize the
 export:
 
 ```bash
@@ -40,6 +40,10 @@ The unioned silhouette must remain one layer. Separate overlapping strokes
 become separate glass surfaces and produce visible seams. The recorded
 provenance lets normal check mode detect a stale native export without trying
 to emulate Apple's proprietary renderer.
+
+The Apple-only Route layer uses a 16dp left and right inset in the 180px touch
+icon. Browser and manifest icons keep their independent regular and maskable
+scales; changing the Apple inset must not resize those assets.
 
 ## Installed application updates
 
