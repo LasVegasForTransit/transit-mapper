@@ -492,14 +492,10 @@ export function App() {
         </LazyDialog>
       )}
       {activeDialog === 'onboarding' && (
-        <LazyDialog
-          onFailure={() => {
-            markOnboardingSeen();
-            dialogFailed();
-          }}
-        >
+        <LazyDialog onFailure={dialogFailed}>
           <OnboardingDialog
-            onClose={() => {
+            onClose={closeDialog}
+            onComplete={() => {
               markOnboardingSeen();
               closeDialog();
             }}

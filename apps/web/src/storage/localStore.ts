@@ -357,10 +357,9 @@ export function setIndexedDbLibraryHistory(hasDocuments: boolean): void {
   }
 }
 
-/** Whether this browser has dismissed the onboarding dialog before — the
- *  only sensible meaning of "seen" with no account system: per browser, not
- *  per person. A storage failure reads as "not seen" so onboarding shows
- *  again rather than silently never showing at all. */
+/** Whether this browser has completed onboarding before. Closing the dialog
+ *  does not set this flag: only its final action does. A storage failure reads
+ *  as incomplete so onboarding shows again rather than silently disappearing. */
 export function hasSeenOnboarding(): boolean {
   try {
     return localStorage.getItem(ONBOARDING_SEEN_KEY) === '1';

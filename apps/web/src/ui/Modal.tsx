@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Icon } from './Icon';
+import { IconButton } from './IconButton';
 
 /**
  * The one modal-dialog shell every dialog in this app renders through —
@@ -78,9 +78,7 @@ export function Modal({
               <h2>{title}</h2>
             </Dialog.Title>
             <Dialog.Close asChild>
-              <button className="icon-btn" aria-label="Close">
-                <Icon name="x" size={20} />
-              </button>
+              <IconButton icon="x" size={20} label="Close" />
             </Dialog.Close>
           </div>
           <Dialog.Description className="sr-only">{description}</Dialog.Description>
