@@ -243,6 +243,10 @@ Package, migration, and lint-rule scaffolding lives under `turbo/`. Generators
 must leave their output compliant with the same package, filename,
 documentation, and structure contracts enforced in CI.
 
+Bootstrap holds the desired GitHub governance state as data and keeps API
+reads and confirmed mutations in its repository-governance phase. Doctor mode
+uses the same comparisons without taking a mutation path.
+
 ### Performance tooling
 
 The web application's browser scenarios, committed baselines, and production
