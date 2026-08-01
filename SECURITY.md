@@ -10,7 +10,14 @@ volunteer team, so a fix may take longer than that — we would rather tell
 you honestly where it stands than go quiet.
 
 If you would prefer to report through GitHub, use
-[private vulnerability reporting](https://github.com/WillieCubed/transit-mapper/security/advisories/new).
+[private vulnerability reporting](https://github.com/LasVegasForTransit/transit-mapper/security/advisories/new).
+
+## Supported versions
+
+TransitMapper is in open beta. Security fixes are applied to the version
+running at [map.lasvegasfortransit.org](https://map.lasvegasfortransit.org)
+and the current `main` branch. Older commits, forks, and exported system data
+do not receive security updates.
 
 ## What is in scope
 
