@@ -33,6 +33,14 @@ The command is one Turborepo graph. Package checks and repository-root checks
 run at the scheduler's native concurrency; dependencies in `turbo.json`, not a
 serial shell chain, determine ordering.
 
+Package checks and root checks that discover files use Turborepo's default
+input set so every tracked module input is covered while ignored dependencies,
+build output, and cache files do not invalidate them. Cross-package executable
+inputs are explicit: TypeScript and test tasks hash the shared TypeScript
+configuration, and lint tasks hash both the root config and the repository's
+local ESLint plugin. The migration check is deliberately uncached because its
+result also depends on the current Git merge base, not only on file contents.
+
 ## Layers
 
 | Layer          | What runs                                          | Blocks on                   |
