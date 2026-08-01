@@ -86,6 +86,11 @@ const CHECKS: Check[] = [
     fix: 'pnpm --filter @transitmapper/worker types',
   },
   {
+    command: 'check:icons',
+    fails: 'generated app icons no longer match their source and provenance',
+    fix: 'pnpm --filter @transitmapper/web generate:icons',
+  },
+  {
     command: 'typecheck',
     fails: 'TypeScript rejects the code in any package',
     fix: 'fix the type error',

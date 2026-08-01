@@ -23,6 +23,7 @@ pnpm check --fix  # everything a machine can repair
 | `check:documents`   | a required document is missing, lacks a required section, has them out of order, or uses a stock phrase                       | `add the section or cut the phrase — see docs/development/reference/document-standards.md` |
 | `check:reference`   | this page no longer matches the registry it is generated from                                                                 | `pnpm gen:checks`                                                                          |
 | `check:types`       | worker-configuration.d.ts no longer matches wrangler.toml                                                                     | `pnpm --filter @transitmapper/worker types`                                                |
+| `check:icons`       | generated app icons no longer match their source and provenance                                                               | `pnpm --filter @transitmapper/web generate:icons`                                          |
 | `typecheck`         | TypeScript rejects the code in any package                                                                                    | `fix the type error`                                                                       |
 | `verify`            | a test fails                                                                                                                  | `fix the code, or the test if the test was wrong`                                          |
 

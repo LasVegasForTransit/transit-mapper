@@ -44,8 +44,116 @@
       "inputs": ["wrangler.toml", "worker-configuration.d.ts"],
       "outputs": []
     },
-    "check": {
-      "dependsOn": ["lint", "typecheck", "verify", "check:types"],
+    "check:icons": {
+      "inputs": [
+        "scripts/generate-app-icons.ts",
+        "scripts/app-icon.ts",
+        "src/assets/**",
+        "public/**"
+      ],
+      "outputs": []
+    },
+    "lint:workspace": {
+      "dependsOn": ["lint", "//#lint:root"],
+      "outputs": []
+    },
+    "validate": {
+      "dependsOn": [
+        "lint",
+        "typecheck",
+        "verify",
+        "check:types",
+        "check:icons",
+        "//#format:check",
+        "//#lint:root",
+        "//#typecheck:scripts",
+        "//#check:filenames",
+        "//#check:contract",
+        "//#check:docs",
+        "//#check:migrations",
+        "//#check:structure",
+        "//#check:documents",
+        "//#check:reference"
+      ],
+      "outputs": []
+    },
+    "//#format:check": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/**",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/docs/**",
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/turbo/**",
+        "$TURBO_ROOT$/.claude/**",
+        "$TURBO_ROOT$/.github/**",
+        "$TURBO_ROOT$/.githooks/**"
+      ],
+      "outputs": []
+    },
+    "//#lint:root": {
+      "inputs": [
+        "$TURBO_ROOT$/eslint.config.js",
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/turbo/**"
+      ],
+      "outputs": []
+    },
+    "//#typecheck:scripts": {
+      "inputs": ["$TURBO_ROOT$/scripts/**", "$TURBO_ROOT$/package.json"],
+      "outputs": []
+    },
+    "//#check:filenames": {
+      "inputs": [
+        "$TURBO_ROOT$/apps/**",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/scripts/check-file-names.ts"
+      ],
+      "outputs": []
+    },
+    "//#check:contract": {
+      "inputs": [
+        "$TURBO_ROOT$/apps/**",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/pnpm-workspace.yaml",
+        "$TURBO_ROOT$/scripts/check-workspace-contract.ts"
+      ],
+      "outputs": []
+    },
+    "//#check:docs": {
+      "inputs": ["$TURBO_ROOT$/docs/**", "$TURBO_ROOT$/scripts/check-docs-links.ts"],
+      "outputs": []
+    },
+    "//#check:migrations": {
+      "inputs": [
+        "$TURBO_ROOT$/apps/worker/src/migrations/**",
+        "$TURBO_ROOT$/scripts/check-migrations-append-only.ts"
+      ],
+      "outputs": []
+    },
+    "//#check:structure": {
+      "inputs": [
+        "$TURBO_ROOT$/apps/**",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/docs/development/reference/project-structure.md",
+        "$TURBO_ROOT$/scripts/check-project-structure.ts"
+      ],
+      "outputs": []
+    },
+    "//#check:documents": {
+      "inputs": [
+        "$TURBO_ROOT$/*.md",
+        "$TURBO_ROOT$/docs/**",
+        "$TURBO_ROOT$/scripts/check-document-standards.ts"
+      ],
+      "outputs": []
+    },
+    "//#check:reference": {
+      "inputs": [
+        "$TURBO_ROOT$/docs/development/reference/checks.md",
+        "$TURBO_ROOT$/scripts/generate-checks-reference.ts"
+      ],
       "outputs": []
     }
   }
