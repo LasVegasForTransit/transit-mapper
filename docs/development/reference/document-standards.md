@@ -165,10 +165,12 @@ Generated from a registry. Not hand-written.
 
 ### Root files
 
-| File              | Contents                                |
-| ----------------- | --------------------------------------- |
-| `README.md`       | What the project is, quick start, links |
-| `AGENTS.md`       | Invariants table; what is unenforced    |
-| `CONTRIBUTING.md` | How to contribute, and where to start   |
-| `SECURITY.md`     | Reporting a vulnerability; scope        |
-| `LICENSE`         | The license                             |
+| File                 | Contents                                          |
+| -------------------- | ------------------------------------------------- |
+| `README.md`          | What the project is, quick start, links           |
+| `AGENTS.md`          | Invariants table; what is unenforced              |
+| `CONTRIBUTING.md`    | How to contribute, and where to start             |
+| `SECURITY.md`        | Reporting a vulnerability; scope and support      |
+| `SUPPORT.md`         | Product, organization, security, and media routes |
+| `CODE_OF_CONDUCT.md` | Community standards and private enforcement path  |
+| `LICENSE`            | The software license                              |
