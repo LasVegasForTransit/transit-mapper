@@ -2,7 +2,7 @@
   "name": "TransitMapper",
   "short_name": "TransitMapper",
   "id": "/",
-  "description": "Design regional transit systems on a real map.",
+  "description": "An open beta editor for designing regional transit systems on a real map.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

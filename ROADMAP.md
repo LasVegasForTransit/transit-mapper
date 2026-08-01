@@ -1,5 +1,8 @@
 # Roadmap
 
+TransitMapper is in open beta. Features, workflows, and data formats can
+change before a stable release as the project moves through this roadmap.
+
 TransitMapper lets anyone design a regional transit system on a real map. Sketch lines the way you'd
 sketch them on a napkin, then build out the physical network underneath. It started as a tool for
 [Las Vegans for Better Transit](https://lasvegasfortransit.org), but nothing in it is specific to one city.

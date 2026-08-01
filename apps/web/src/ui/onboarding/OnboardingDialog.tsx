@@ -53,6 +53,7 @@ export function OnboardingDialog({ onClose }: OnboardingDialogProps) {
       <div className="onboarding-body">
         <OnboardingSlideVisualView visual={slide.visual} />
         <p className="onboarding-copy">{slide.body}</p>
+        {slide.note ? <p className="onboarding-note">{slide.note}</p> : null}
       </div>
     </Modal>
   );
