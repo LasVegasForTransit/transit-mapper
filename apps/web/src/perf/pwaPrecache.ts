@@ -28,6 +28,18 @@ export interface VerifyPrecacheOutputOptions {
   precached: string[];
 }
 
+/**
+ * Fingerprinted assets referenced from emitted JavaScript or CSS.
+ *
+ * `woff2?` is deliberate: putting `woff` before `woff2` in an alternation
+ * accepts the shorter prefix and silently turns a `.woff2` URL into `.woff`.
+ */
+export function referencedBuildAssetFiles(source: string): string[] {
+  return [
+    ...source.matchAll(/(?:^|["'(])\/?(assets\/[A-Za-z0-9_.@-]+\.(?:js|css|png|svg|webp|woff2?))/g),
+  ].map((match) => match[1]);
+}
+
 const EDITOR_PUBLIC_ASSETS = [
   'apple-touch-icon.png',
   'favicon-16x16.png',

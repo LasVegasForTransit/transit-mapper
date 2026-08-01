@@ -84,6 +84,12 @@ Contributions are welcome, and not just code. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for how to report a bug, suggest a
 feature, or submit a change.
 
+## Acknowledgements
+
+TransitMapper self-hosts the Public Sans variable Latin font from
+`@fontsource-variable/public-sans@5.2.7`. The font is licensed under the
+[SIL Open Font License 1.1](apps/web/src/assets/public-sans-ofl.txt).
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
