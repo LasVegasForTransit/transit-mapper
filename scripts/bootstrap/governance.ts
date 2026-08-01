@@ -17,7 +17,7 @@ interface EndpointResult {
 
 export type BooleanEndpointState = 'enabled' | 'disabled' | 'unreadable';
 
-/** Boolean GitHub settings use success for on and 404 for off. */
+/** GitHub's vulnerability-alerts endpoint uses success for on and 404 for off. */
 export function booleanEndpointState(result: EndpointResult): BooleanEndpointState {
   if (result.ok) return 'enabled';
   return /\bHTTP 404\b/.test(result.error) ? 'disabled' : 'unreadable';

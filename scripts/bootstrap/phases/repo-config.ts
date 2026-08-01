@@ -88,45 +88,53 @@ function securityState(): Drift | ToolRow {
       };
 }
 
-interface BooleanEndpointOptions {
-  key: 'vulnerability-alerts' | 'dependabot-security-updates';
-  label: string;
-  endpoint: string;
-}
-
-function booleanSettingState(options: BooleanEndpointOptions): Drift | ToolRow {
-  const result = ghApi(options.endpoint);
+function vulnerabilityAlertsState(): Drift | ToolRow {
+  const result = ghApi('repos/:owner/:repo/vulnerability-alerts');
   const state = booleanEndpointState(result);
   if (state === 'enabled') {
-    return { label: options.label, status: 'ready', detail: 'enabled' };
+    return { label: 'Vulnerability alerts', status: 'ready', detail: 'enabled' };
   }
   if (state === 'disabled') {
     return {
-      key: options.key,
-      row: { label: options.label, status: 'failed', detail: 'disabled' },
+      key: 'vulnerability-alerts',
+      row: { label: 'Vulnerability alerts', status: 'failed', detail: 'disabled' },
     };
   }
   return {
-    label: options.label,
+    label: 'Vulnerability alerts',
     status: 'failed',
     detail: `could not read current setting — ${result.error.slice(0, 120)}`,
   };
 }
 
-function vulnerabilityAlertsState(): Drift | ToolRow {
-  return booleanSettingState({
-    key: 'vulnerability-alerts',
-    label: 'Vulnerability alerts',
-    endpoint: 'repos/:owner/:repo/vulnerability-alerts',
-  });
-}
-
 function dependabotSecurityUpdatesState(): Drift | ToolRow {
-  return booleanSettingState({
-    key: 'dependabot-security-updates',
+  // Unlike vulnerability alerts, this endpoint returns 200 for both states;
+  // the response body's `enabled` field is the setting's source of truth.
+  const result = ghApi('repos/:owner/:repo/automated-security-fixes');
+  if (!result.ok || typeof result.data !== 'object' || result.data === null) {
+    return {
+      label: 'Dependabot updates',
+      status: 'failed',
+      detail: `could not read current setting — ${result.error.slice(0, 120)}`,
+    };
+  }
+
+  const enabled = (result.data as { enabled?: unknown }).enabled;
+  if (enabled === true) {
+    return { label: 'Dependabot updates', status: 'ready', detail: 'enabled' };
+  }
+  if (enabled === false) {
+    return {
+      key: 'dependabot-security-updates',
+      row: { label: 'Dependabot updates', status: 'failed', detail: 'disabled' },
+    };
+  }
+
+  return {
     label: 'Dependabot updates',
-    endpoint: 'repos/:owner/:repo/automated-security-fixes',
-  });
+    status: 'failed',
+    detail: 'could not read current setting — response omitted enabled',
+  };
 }
 
 function actionsPolicyState(): Drift | ToolRow {
