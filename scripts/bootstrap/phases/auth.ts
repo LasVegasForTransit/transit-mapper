@@ -1,5 +1,5 @@
 import { log } from '@clack/prompts';
-import { runCommand, runInteractiveCommand } from '../lib/shell.js';
+import { runCommand, runInteractiveCommand, type CommandResult } from '../lib/shell.js';
 import { printToolTable, promptConfirm, type ToolRow } from '../lib/ui.js';
 
 export interface PhaseResult {
@@ -25,18 +25,37 @@ const AUTH_TOOLS: AuthTool[] = [
   },
 ];
 
+interface AuthDependencies {
+  runCommand: (command: string) => CommandResult;
+  runInteractiveCommand: (command: string) => boolean;
+  promptConfirm: (message: string, initialValue: boolean) => Promise<boolean>;
+}
+
 /** Confirms `gh` and `wrangler` are both authenticated, offering to log in
  *  interactively when either isn't. Neither tool's absence is fatal here —
  *  a missing binary just gets reported as failed with the login command to
  *  run once it's installed. */
-export async function runAuthPhase(): Promise<PhaseResult> {
+export async function runAuthPhase(
+  options: { doctor: boolean } = { doctor: false },
+  dependencies: AuthDependencies = { runCommand, runInteractiveCommand, promptConfirm },
+): Promise<PhaseResult> {
   const rows: ToolRow[] = [];
   let allReady = true;
 
   for (const tool of AUTH_TOOLS) {
-    const check = runCommand(tool.checkCommand);
+    const check = dependencies.runCommand(tool.checkCommand);
     if (check.ok) {
       rows.push({ label: tool.label, status: 'ready', detail: 'authenticated' });
+      continue;
+    }
+
+    if (options.doctor) {
+      rows.push({
+        label: tool.label,
+        status: 'failed',
+        detail: `not authenticated — run \`${tool.loginCommand}\``,
+      });
+      allReady = false;
       continue;
     }
 
@@ -45,7 +64,10 @@ export async function runAuthPhase(): Promise<PhaseResult> {
       rows.length = 0;
     }
 
-    const shouldAuth = await promptConfirm(`${tool.label} is not authenticated. Log in now?`, true);
+    const shouldAuth = await dependencies.promptConfirm(
+      `${tool.label} is not authenticated. Log in now?`,
+      true,
+    );
     if (!shouldAuth) {
       rows.push({
         label: tool.label,
@@ -56,8 +78,10 @@ export async function runAuthPhase(): Promise<PhaseResult> {
       continue;
     }
 
-    const loginOk = runInteractiveCommand(tool.loginCommand);
-    const recheck = loginOk ? runCommand(tool.checkCommand) : { ok: false, stdout: '', stderr: '' };
+    const loginOk = dependencies.runInteractiveCommand(tool.loginCommand);
+    const recheck = loginOk
+      ? dependencies.runCommand(tool.checkCommand)
+      : { ok: false, stdout: '', stderr: '' };
     if (recheck.ok) {
       rows.push({ label: tool.label, status: 'ready', detail: 'authenticated' });
     } else {

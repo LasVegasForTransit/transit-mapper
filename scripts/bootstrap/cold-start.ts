@@ -50,7 +50,7 @@ interface Phase {
 
 const PHASES: readonly Phase[] = [
   { id: 'workspace', title: 'Workspace', run: runWorkspacePhase },
-  { id: 'auth', title: 'CLI authentication', run: () => runAuthPhase() },
+  { id: 'auth', title: 'CLI authentication', run: runAuthPhase },
   { id: 'provision', title: 'Cloudflare resources', run: runProvisionPhase },
   {
     id: 'cloudflare-verify',
