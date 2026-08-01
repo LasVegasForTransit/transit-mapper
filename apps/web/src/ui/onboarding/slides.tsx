@@ -13,6 +13,8 @@ export type OnboardingSlideVisual =
 export interface OnboardingSlideData {
   title: string;
   body: string;
+  /** Quiet release-stability context shown only where the slide needs it. */
+  note?: string;
   visual: OnboardingSlideVisual;
 }
 
@@ -20,6 +22,7 @@ export const ONBOARDING_SLIDES: OnboardingSlideData[] = [
   {
     title: 'One system, three views',
     body: 'Every system you build is one model that appears three ways. Infrastructure shows the real streets and rail. Network shows the colored lines and stops riders see. Diagram straightens it into a clean, read-only summary.',
+    note: 'Open beta: features and workflows may change frequently before a stable release.',
     visual: { kind: 'triPreview' },
   },
   {

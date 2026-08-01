@@ -1,15 +1,20 @@
 # TransitMapper
 
-[![Deploy production](https://github.com/WillieCubed/transit-mapper/actions/workflows/deploy-production.yml/badge.svg)](https://github.com/WillieCubed/transit-mapper/actions/workflows/deploy-production.yml)
+[![Deploy production](https://github.com/LasVegasForTransit/transit-mapper/actions/workflows/deploy-production.yml/badge.svg)](https://github.com/LasVegasForTransit/transit-mapper/actions/workflows/deploy-production.yml)
+
+> TransitMapper is in open beta. It changes frequently as we learn what works,
+> and features, workflows, and data formats may change before a stable release.
+> Export important systems you want to keep long term.
 
 Design regional transit systems on a real map. Sketch lines the way you'd
 sketch them on a napkin, then build out the physical network underneath:
 streets with lanes and turn pockets, rail with real track counts,
 intersections that form themselves, stations with land and structures.
 
-TransitMapper started as a tool for [Las Vegans for Better Transit](https://lasvegasfortransit.org)
-to model a better transit future for the Las Vegas Valley, but nothing in it
-is specific to one city or one transit agency.
+TransitMapper is an open-source project of
+[Las Vegans for Better Transit](https://lasvegasfortransit.org). It models a
+better transit future for the Las Vegas Valley, but nothing in it is specific
+to one city or one transit agency.
 
 ## Features
 
