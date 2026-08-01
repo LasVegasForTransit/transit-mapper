@@ -8,6 +8,7 @@ import { SimProvider } from './ui/SimProvider';
 import { UiProvider } from './ui/UiProvider';
 import { ViewProvider } from './ui/ViewProvider';
 import { InstallProvider } from './pwa/InstallProvider';
+import './theme/font.css';
 
 // Outermost boundary: the last thing between a render error anywhere in the
 // editor and a white page. It cannot save the unsaved work — by the time it

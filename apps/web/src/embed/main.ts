@@ -1,5 +1,6 @@
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import '../theme/font.css';
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';

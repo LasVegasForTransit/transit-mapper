@@ -8,10 +8,9 @@
 // be replaced with a hand-picked near-white or near-black — that is exactly
 // the mistake this module exists to prevent.
 //
-// Note this is NOT the same palette as TransitMapper's own editor chrome
-// (apps/web/src/ui/app.css), which is a cooler ink-on-white system with its
-// own typeface. Reconciling the two is tracked separately; what's settled is
-// that anything leaving the app and carrying the org's name uses these.
+// The editor shares the Public Sans family while keeping its own semantic
+// application roles. Public output uses these fixed brand colors so generated
+// assets remain deterministic and recognizably tied to the organization.
 
 /** Brand colors, light and dark. Token names match the brand page exactly. */
 export const LVBT = {

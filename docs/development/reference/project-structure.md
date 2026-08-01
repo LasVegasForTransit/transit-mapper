@@ -155,7 +155,9 @@ store and core projectors.
 `apps/web/src/ui` owns React presentation, workbench layout, inspector
 controls, dialogs, onboarding, and accessibility semantics.
 `apps/web/src/theme` maps the operating system color preference to application
-tokens, while `apps/web/src/i18n` owns user-visible message selection.
+tokens. `apps/web/src/assets` holds source-distributed browser binaries beside
+their required licenses, while `apps/web/src/i18n` owns user-visible message
+selection.
 `apps/web/src/services` exposes browser-local preferences to UI consumers.
 These modules may read the editor store and invoke actions but do not duplicate
 domain rules.

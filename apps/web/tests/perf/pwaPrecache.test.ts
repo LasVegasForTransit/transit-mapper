@@ -3,6 +3,7 @@ import {
   editorPrecacheFiles,
   embedOnlyFiles,
   manifestInstallIconFiles,
+  referencedBuildAssetFiles,
   verifyPrecacheOutput,
   type BuildManifest,
   type WebAppManifest,
@@ -59,6 +60,14 @@ const webAppManifest: WebAppManifest = {
 const installIcons = manifestInstallIconFiles(webAppManifest);
 
 describe('PWA precache output', () => {
+  it('keeps the complete extension for referenced WOFF2 assets', () => {
+    expect(
+      referencedBuildAssetFiles(
+        "src:url('/assets/public-sans-latin-a1b2c3.woff2') format('woff2-variations')",
+      ),
+    ).toEqual(['assets/public-sans-latin-a1b2c3.woff2']);
+  });
+
   it('derives fingerprinted install assets from the web app manifest', () => {
     expect(installIcons).toEqual([
       'icons/app-icon-a1b2c3d4e5f6-192.png',

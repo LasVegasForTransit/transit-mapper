@@ -45,13 +45,7 @@
      the bottom of this file) shares one source instead of three
      independently-guessed pixel values. */
   --controls-clearance: 120px;
-  font-family:
-    'Outfit',
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
+  font-family: 'Public Sans', system-ui, sans-serif;
   letter-spacing: -0.006em;
 }
 
