@@ -3,53 +3,38 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["VITE_PERF_BUILD"],
       "outputs": ["dist/**", "*.tsbuildinfo"]
     },
     "typecheck": {
       "dependsOn": ["^typecheck"],
-      "inputs": [
-        "src/**",
-        "scripts/**",
-        "tests/**",
-        "vitest.config.ts",
-        "*.d.ts",
-        "tsconfig*.json"
-      ],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/tsconfig/*.json"],
       "outputs": ["*.tsbuildinfo"]
     },
     "lint": {
       "inputs": [
-        "src/**",
-        "scripts/**",
-        "tests/**",
-        "vitest.config.ts",
-        "$TURBO_ROOT$/eslint.config.js"
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/eslint.config.js",
+        "$TURBO_ROOT$/packages/eslint-plugin/src/**"
       ],
       "outputs": []
     },
     "verify": {
       "dependsOn": ["^typecheck"],
-      "inputs": [
-        "src/**",
-        "scripts/**",
-        "tests/**",
-        "public/**",
-        "vitest.config.ts",
-        "tsconfig*.json",
-        "wrangler.toml"
-      ],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/tsconfig/*.json"],
       "outputs": []
     },
     "check:types": {
-      "inputs": ["wrangler.toml", "worker-configuration.d.ts"],
+      "inputs": ["scripts/check-generated-types.ts", "wrangler.toml", "worker-configuration.d.ts"],
       "outputs": []
     },
     "check:icons": {
       "inputs": [
-        "scripts/generate-app-icons.ts",
-        "scripts/app-icon.ts",
+        "scripts/**",
         "src/assets/**",
-        "public/**"
+        "src/map/lucideIconNodes.ts",
+        "public/**",
+        "$TURBO_ROOT$/packages/core/src/style/lvbtBrand.ts"
       ],
       "outputs": []
     },
@@ -78,22 +63,13 @@
       "outputs": []
     },
     "//#format:check": {
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/apps/**",
-        "$TURBO_ROOT$/packages/**",
-        "$TURBO_ROOT$/docs/**",
-        "$TURBO_ROOT$/scripts/**",
-        "$TURBO_ROOT$/turbo/**",
-        "$TURBO_ROOT$/.claude/**",
-        "$TURBO_ROOT$/.github/**",
-        "$TURBO_ROOT$/.githooks/**"
-      ],
+      "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     },
     "//#lint:root": {
       "inputs": [
         "$TURBO_ROOT$/eslint.config.js",
+        "$TURBO_ROOT$/packages/eslint-plugin/src/**",
         "$TURBO_ROOT$/scripts/**",
         "$TURBO_ROOT$/turbo/**"
       ],
@@ -104,28 +80,19 @@
       "outputs": []
     },
     "//#check:filenames": {
-      "inputs": [
-        "$TURBO_ROOT$/apps/**",
-        "$TURBO_ROOT$/packages/**",
-        "$TURBO_ROOT$/scripts/check-file-names.ts"
-      ],
+      "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     },
     "//#check:contract": {
-      "inputs": [
-        "$TURBO_ROOT$/apps/**",
-        "$TURBO_ROOT$/packages/**",
-        "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/pnpm-workspace.yaml",
-        "$TURBO_ROOT$/scripts/check-workspace-contract.ts"
-      ],
+      "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     },
     "//#check:docs": {
-      "inputs": ["$TURBO_ROOT$/docs/**", "$TURBO_ROOT$/scripts/check-docs-links.ts"],
+      "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     },
     "//#check:migrations": {
+      "cache": false,
       "inputs": [
         "$TURBO_ROOT$/apps/worker/src/migrations/**",
         "$TURBO_ROOT$/scripts/check-migrations-append-only.ts"
@@ -133,17 +100,13 @@
       "outputs": []
     },
     "//#check:structure": {
-      "inputs": [
-        "$TURBO_ROOT$/apps/**",
-        "$TURBO_ROOT$/packages/**",
-        "$TURBO_ROOT$/docs/development/reference/project-structure.md",
-        "$TURBO_ROOT$/scripts/check-project-structure.ts"
-      ],
+      "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     },
     "//#check:documents": {
       "inputs": [
         "$TURBO_ROOT$/*.md",
+        "$TURBO_ROOT$/LICENSE",
         "$TURBO_ROOT$/docs/**",
         "$TURBO_ROOT$/scripts/check-document-standards.ts"
       ],
@@ -151,6 +114,7 @@
     },
     "//#check:reference": {
       "inputs": [
+        "$TURBO_ROOT$/.prettierrc.json",
         "$TURBO_ROOT$/docs/development/reference/checks.md",
         "$TURBO_ROOT$/scripts/generate-checks-reference.ts"
       ],
