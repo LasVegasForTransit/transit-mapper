@@ -29,6 +29,10 @@ repairs everything a machine can.
 One command means a red CI run maps to one local command. The output names
 the tool that failed and the command that resolves it.
 
+The command is one Turborepo graph. Package checks and repository-root checks
+run at the scheduler's native concurrency; dependencies in `turbo.json`, not a
+serial shell chain, determine ordering.
+
 ## Layers
 
 | Layer          | What runs                                          | Blocks on                   |
