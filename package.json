@@ -2,6 +2,15 @@
   "name": "transitmapper",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
+  "homepage": "https://map.lasvegasfortransit.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LasVegasForTransit/transit-mapper.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LasVegasForTransit/transit-mapper/issues"
+  },
   "type": "module",
   "packageManager": "pnpm@11.15.1",
   "engines": {
