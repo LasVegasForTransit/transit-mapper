@@ -17,6 +17,8 @@ export function OnboardingDialog({ onClose, onComplete }: OnboardingDialogProps)
   const dotRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const slide = ONBOARDING_SLIDES[index];
   const isLast = index === ONBOARDING_SLIDES.length - 1;
+  const activeTabId = `onboarding-step-${index}`;
+  const panelId = 'onboarding-panel';
 
   const selectFromKeyboard = (
     event: ReactKeyboardEvent<HTMLButtonElement>,
@@ -67,6 +69,8 @@ export function OnboardingDialog({ onClose, onComplete }: OnboardingDialogProps)
                 }}
                 type="button"
                 role="tab"
+                id={`onboarding-step-${i}`}
+                aria-controls={panelId}
                 aria-selected={i === index}
                 aria-label={`Go to slide ${i + 1}: ${s.title}`}
                 tabIndex={i === index ? 0 : -1}
@@ -86,7 +90,13 @@ export function OnboardingDialog({ onClose, onComplete }: OnboardingDialogProps)
         </div>
       }
     >
-      <div className="onboarding-body">
+      <div
+        className="onboarding-body"
+        id={panelId}
+        role="tabpanel"
+        aria-labelledby={activeTabId}
+        aria-live="polite"
+      >
         <p className="onboarding-copy">{slide.body}</p>
         {slide.note ? <OnboardingNote text={slide.note} /> : null}
         <OnboardingSlideVisualView visual={slide.visual} />

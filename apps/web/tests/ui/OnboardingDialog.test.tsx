@@ -109,6 +109,16 @@ describe('OnboardingDialog', () => {
     act(() => root.render(<OnboardingDialog onClose={vi.fn()} onComplete={vi.fn()} />));
 
     const first = stepButton(1);
+    const panel = container.querySelector<HTMLElement>('[role="tabpanel"]');
+    expect(first.id).not.toBe('');
+    expect(first.getAttribute('aria-controls')).toBe(panel?.id);
+    expect(
+      [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].every(
+        (tab) => tab.getAttribute('aria-controls') === panel?.id,
+      ),
+    ).toBe(true);
+    expect(panel?.getAttribute('aria-labelledby')).toBe(first.id);
+
     first.focus();
     act(() => {
       first.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
