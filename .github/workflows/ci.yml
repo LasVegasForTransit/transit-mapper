@@ -9,6 +9,11 @@ on:
   # instead of restating them. There is one definition of "validated", and
   # both entry points use it.
   workflow_call:
+  # A pull request created by GITHUB_TOKEN does not emit another workflow
+  # event. The release workflow dispatches CI explicitly against Release
+  # Please's branch so the generated version and changelog receive the same
+  # required check as every other pull request.
+  workflow_dispatch:
 
 # Least-privilege defaults.
 permissions:

@@ -198,6 +198,22 @@ and Apple surfaces, and content-versioned manifest assets. The generation and
 platform export procedure is documented in
 [Update application icons](../how-to/update-application-icons.md).
 
+#### Build identity
+
+The About dialog reads one immutable build-information object injected by
+Vite. Its version and repository come from the root manifest, its copyright
+comes from the license, and its revision comes from the release environment or
+Git. Contributor roles and platform credits remain in one curated web module
+because neither the manifest nor Git history can express them reliably.
+
+The root build launcher resolves the revision and dirty-tree state before
+Turborepo starts, then includes those values in the web build's cache key. Vite
+records the time only when it creates an artifact: a cache hit reuses that
+artifact and its original timestamp rather than relabelling old output as a
+new build. Release builds also validate that the release tag agrees with the
+manifest version. A source archive without Git remains buildable, but the
+dialog reports that its revision is unavailable instead of inventing one.
+
 #### Performance
 
 `apps/web/src/perf` owns measurable performance policy, fixtures, reports, and
@@ -246,6 +262,28 @@ documentation, and structure contracts enforced in CI.
 Bootstrap holds the desired GitHub governance state as data and keeps API
 reads and confirmed mutations in its repository-governance phase. Doctor mode
 uses the same comparisons without taking a mutation path.
+
+### Releases and deployment provenance
+
+Release Please derives the next root version and changelog from conventional
+commits and maintains a release pull request. Merging that generated pull
+request creates the matching tag and GitHub release; no version, changelog, or
+release input is copied into workflow settings by hand.
+
+GitHub suppresses ordinary workflow events caused by its own workflow token,
+so the release job explicitly dispatches the shared CI workflow against the
+generated branch. That check attaches to the release commit and satisfies the
+same default-branch rule as a contributor-authored pull request without a
+personal token or manually maintained secret.
+
+The production workflow bundles the static application, Worker module,
+deployment configuration, and migrations once. It archives and attests that
+payload with GitHub's workload identity, attaches both the archive and
+attestation bundle to the release, then extracts the same archive for the D1
+migration and Cloudflare deployment steps. The Worker deploy disables
+rebundling so the deployed module cannot diverge from the attested subject.
+The production environment and smoke test record which workflow deployed the
+release and confirm that the public site serves its fingerprinted entry chunk.
 
 ### Performance tooling
 

@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const WEB_ROOT = resolve(import.meta.dirname, '../..');
+const REPOSITORY_ROOT = resolve(WEB_ROOT, '../..');
 
 function source(path: string): string {
   return readFileSync(resolve(WEB_ROOT, path), 'utf8');
@@ -27,5 +28,13 @@ describe('public product metadata', () => {
       short_name: 'TransitMapper',
     });
     expect(manifest.description).toMatch(/open beta/i);
+  });
+
+  it('attributes the transferred copyright only to LVBT', () => {
+    const license = readFileSync(resolve(REPOSITORY_ROOT, 'LICENSE'), 'utf8');
+
+    expect(license.match(/^Copyright \(c\) .+$/gm)).toEqual([
+      'Copyright (c) 2026 Las Vegans for Better Transit',
+    ]);
   });
 });

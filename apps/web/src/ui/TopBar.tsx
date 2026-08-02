@@ -67,14 +67,14 @@ export function TopBarBrand() {
   return (
     <>
       {/* One row, always, in every state: FileMenu icon at the left (a
-          read-only view has no file actions to offer, so nothing renders
-          there), the system name filling the middle, the toggle fixed at
+          read-only view keeps only the app's About action), the system name
+          filling the middle, the toggle fixed at
           the right — never three lines, never a wrap. FileMenu's own
           "TransitMapper" wordmark doesn't render here at all (see
           FileMenu.tsx) — the middle of this row is the system name's
           permanently, not the app's own name conditionally collapsing
           into it. */}
-      {!readOnly && <FileMenu />}
+      <FileMenu />
       {readOnly ? (
         <span className="ro-name">{name}</span>
       ) : (
