@@ -2620,8 +2620,8 @@ kbd {
   flex: 0 0 auto;
   padding: 2px 7px;
   border-radius: 999px;
-  background: var(--md-sys-color-tertiary-container);
-  color: var(--md-sys-color-on-tertiary-container);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
   font-size: var(--md-sys-typescale-label-small-size);
   font-weight: var(--md-sys-typescale-label-small-weight);
   letter-spacing: var(--md-sys-typescale-label-small-tracking);
@@ -2716,21 +2716,32 @@ kbd {
 }
 .onboarding-dots {
   display: flex;
-  gap: 8px;
+  gap: 0;
   justify-self: center;
 }
 .onboarding-next {
   justify-self: end;
 }
 .onboarding-dot {
-  width: 8px;
-  height: 8px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: none;
   border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.onboarding-dot::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
   background: var(--md-sys-color-outline-variant);
 }
-.onboarding-dot.active {
+.onboarding-dot:hover::before {
+  background: var(--md-sys-color-outline);
+}
+.onboarding-dot.active::before {
   background: var(--md-sys-color-on-surface);
 }
 @media (max-width: 620px) {

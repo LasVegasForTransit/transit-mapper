@@ -62,6 +62,7 @@ const junctionNode: Node = {
   refs: [
     { wayId: roadA.id, pointIndex: 1 },
     { wayId: roadB.id, pointIndex: 1 },
+    { wayId: railSpine.id, pointIndex: 1 },
   ],
 };
 
