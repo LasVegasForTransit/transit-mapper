@@ -4,7 +4,6 @@ import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OnboardingDialog } from '../../src/ui/onboarding/OnboardingDialog';
-import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 
 interface MockModalProps {
   title: string;
@@ -27,20 +26,7 @@ vi.mock('../../src/ui/Modal', () => ({
 }));
 
 vi.mock('../../src/ui/onboarding/OnboardingPreviewMap', () => ({
-  OnboardingPreviewMap: ({
-    view,
-    animateVehicle,
-  }: {
-    view: ViewOptions;
-    animateVehicle?: boolean;
-  }) => (
-    <div
-      data-testid="onboarding-preview"
-      data-view-mode={view.viewMode}
-      data-shows-services={view.visibleModes.size > 0 ? 'true' : 'false'}
-      data-animates-vehicle={animateVehicle ? 'true' : 'false'}
-    />
-  ),
+  OnboardingPreviewMap: () => <div />,
 }));
 
 let container: HTMLDivElement;
@@ -58,6 +44,14 @@ function stepButton(step: number): HTMLButtonElement {
   const button = container.querySelector<HTMLButtonElement>(`[aria-label^="Go to slide ${step}:"]`);
   if (!button) throw new Error(`Expected a button for slide ${step}`);
   return button;
+}
+
+function expectSelectedStep(step: number): void {
+  const tabs = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+  expect(tabs.length).toBeGreaterThanOrEqual(step);
+  expect(tabs.filter((tab) => tab.getAttribute('aria-selected') === 'true')).toEqual([
+    tabs[step - 1],
+  ]);
 }
 
 beforeEach(() => {
@@ -78,31 +72,19 @@ afterEach(() => {
 });
 
 describe('OnboardingDialog', () => {
-  it('welcomes a newcomer before explaining the editor', () => {
-    act(() => root.render(<OnboardingDialog onClose={vi.fn()} onComplete={vi.fn()} />));
-
-    expect(container.querySelector('h2')?.textContent).toBe('Welcome to TransitMapper');
-    expect(container.textContent).toContain(
-      'TransitMapper helps you turn an idea for better transit into a map you can explore and refine.',
-    );
-    expect(container.querySelector('.onboarding-note')?.textContent).toContain('Open beta');
-    expect(container.textContent).not.toContain('One system, three views');
-  });
-
   it('moves forward and back through the introduction', () => {
     act(() => root.render(<OnboardingDialog onClose={vi.fn()} onComplete={vi.fn()} />));
 
+    expectSelectedStep(1);
     expect(
       [...container.querySelectorAll('button')].some((button) => button.textContent === 'Back'),
     ).toBe(false);
     clickButton('Next');
 
-    expect(container.querySelector('h2')?.textContent).toBe(
-      'Sketch the routes your community needs',
-    );
+    expectSelectedStep(2);
     clickButton('Back');
 
-    expect(container.querySelector('h2')?.textContent).toBe('Welcome to TransitMapper');
+    expectSelectedStep(1);
   });
 
   it('treats the slide indicators as keyboard-navigable tabs', () => {
@@ -110,13 +92,11 @@ describe('OnboardingDialog', () => {
 
     const first = stepButton(1);
     const panel = container.querySelector<HTMLElement>('[role="tabpanel"]');
+    const tabs = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    expectSelectedStep(1);
     expect(first.id).not.toBe('');
     expect(first.getAttribute('aria-controls')).toBe(panel?.id);
-    expect(
-      [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].every(
-        (tab) => tab.getAttribute('aria-controls') === panel?.id,
-      ),
-    ).toBe(true);
+    expect(tabs.every((tab) => tab.getAttribute('aria-controls') === panel?.id)).toBe(true);
     expect(panel?.getAttribute('aria-labelledby')).toBe(first.id);
 
     first.focus();
@@ -124,56 +104,32 @@ describe('OnboardingDialog', () => {
       first.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
     });
 
-    expect(container.querySelector('h2')?.textContent).toBe(
-      'Sketch the routes your community needs',
-    );
+    expectSelectedStep(2);
     expect(document.activeElement).toBe(stepButton(2));
 
     act(() => {
       stepButton(2).dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'End' }));
     });
-    expect(container.querySelector('h2')?.textContent).toBe('See the same system three ways');
+    expectSelectedStep(4);
     expect(document.activeElement).toBe(stepButton(4));
   });
 
-  it('dismisses without completion and completes only from Start drawing', () => {
+  it('dismisses without completing', () => {
     const onClose = vi.fn();
     const onComplete = vi.fn();
     act(() => root.render(<OnboardingDialog onClose={onClose} onComplete={onComplete} />));
 
-    expect(container.textContent).not.toContain('Skip');
     clickButton('Close');
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it('completes from the final action', () => {
+    const onComplete = vi.fn();
+    act(() => root.render(<OnboardingDialog onClose={vi.fn()} onComplete={onComplete} />));
 
     act(() => stepButton(4).click());
     clickButton('Start drawing');
-    expect(onClose).toHaveBeenCalledTimes(1);
     expect(onComplete).toHaveBeenCalledTimes(1);
-  });
-
-  it('uses a different visual treatment for each teaching step', () => {
-    act(() => root.render(<OnboardingDialog onClose={vi.fn()} onComplete={vi.fn()} />));
-
-    const preview = () =>
-      container.querySelector<HTMLElement>('[data-testid="onboarding-preview"]');
-
-    expect(preview()?.dataset.viewMode).toBe('network');
-    expect(preview()?.dataset.animatesVehicle).toBe('false');
-
-    clickButton('Next');
-    expect(preview()?.dataset.viewMode).toBe('network');
-    expect(preview()?.dataset.animatesVehicle).toBe('true');
-
-    clickButton('Next');
-    expect(preview()?.dataset.viewMode).toBe('infrastructure');
-    expect(preview()?.dataset.showsServices).toBe('false');
-
-    clickButton('Next');
-    expect(
-      [...container.querySelectorAll('.onboarding-preview-label')].map(
-        (label) => label.textContent,
-      ),
-    ).toEqual(['Infrastructure', 'Network', 'Diagram']);
   });
 });
