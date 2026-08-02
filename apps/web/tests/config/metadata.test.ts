@@ -37,4 +37,15 @@ describe('public product metadata', () => {
       'Copyright (c) 2026 Las Vegans for Better Transit',
     ]);
   });
+
+  it('dispatches release pull request validation without a checkout', () => {
+    const workflow = readFileSync(
+      resolve(REPOSITORY_ROOT, '.github/workflows/deploy-production.yml'),
+      'utf8',
+    );
+
+    expect(workflow).toContain(
+      'gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$release_branch"',
+    );
+  });
 });
