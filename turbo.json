@@ -3,7 +3,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "env": ["VITE_PERF_BUILD"],
+      "env": [
+        "GITHUB_SHA",
+        "TRANSITMAPPER_BUILD_COMMIT",
+        "TRANSITMAPPER_BUILD_DIRTY",
+        "TRANSITMAPPER_RELEASE_TAG",
+        "VITE_PERF_BUILD"
+      ],
       "outputs": ["dist/**", "*.tsbuildinfo"]
     },
     "typecheck": {

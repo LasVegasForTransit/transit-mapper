@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "node",
+  "include-component-in-tag": false,
+  "bootstrap-sha": "b8e0fc8db814df0ea35e244b080f213763d90017",
+  "packages": {
+    ".": {
+      "package-name": "TransitMapper",
+      "changelog-path": "CHANGELOG.md"
+    }
+  }
+}

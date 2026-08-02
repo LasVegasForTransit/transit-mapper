@@ -73,6 +73,9 @@ const SettingsDialog = lazy(() =>
 const OnboardingDialog = lazy(() =>
   import('./ui/onboarding/OnboardingDialog').then((m) => ({ default: m.OnboardingDialog })),
 );
+const AboutDialog = lazy(() =>
+  import('./ui/about-dialog').then((m) => ({ default: m.AboutDialog })),
+);
 
 const SHARE_PREFIX = '/s/';
 
@@ -500,6 +503,11 @@ export function App() {
               closeDialog();
             }}
           />
+        </LazyDialog>
+      )}
+      {activeDialog === 'about' && (
+        <LazyDialog onFailure={dialogFailed}>
+          <AboutDialog onClose={closeDialog} />
         </LazyDialog>
       )}
     </div>

@@ -317,10 +317,28 @@ export async function runRepoConfigPhase(options: { doctor: boolean }): Promise<
       '--method PUT repos/:owner/:repo/actions/permissions/workflow',
       ACTIONS_SETTINGS,
     );
+    if (!result.ok) {
+      applied.push({
+        label: 'Actions token',
+        status: 'failed',
+        detail: result.error.slice(0, 160),
+      });
+      continue;
+    }
+
+    // An organization policy can accept this repository-level PUT with 204
+    // while leaving the effective value unchanged. Re-read it so bootstrap
+    // never claims Release Please is ready when GitHub will still refuse its
+    // pull request.
+    const verified = actionsWorkflowState();
     applied.push(
-      result.ok
-        ? { label: 'Actions token', status: 'ready', detail: 'restricted to the standard' }
-        : { label: 'Actions token', status: 'failed', detail: result.error.slice(0, 160) },
+      isDrift(verified)
+        ? {
+            label: 'Actions token',
+            status: 'failed',
+            detail: 'organization policy still blocks workflow-created pull requests',
+          }
+        : verified,
     );
   }
 

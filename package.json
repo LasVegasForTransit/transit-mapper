@@ -23,7 +23,7 @@
     "perf:record": "pnpm --filter @transitmapper/web perf:record",
     "perf:soak": "pnpm --filter @transitmapper/web perf:soak",
     "worker:dev": "pnpm --filter @transitmapper/worker dev",
-    "build": "turbo run build",
+    "build": "tsx apps/web/scripts/run-build.ts",
     "typecheck": "turbo run typecheck",
     "verify": "turbo run verify",
     "deploy": "pnpm run build && pnpm --filter @transitmapper/worker run deploy",

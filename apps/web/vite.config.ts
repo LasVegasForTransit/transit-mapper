@@ -2,13 +2,21 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { resolve } from 'node:path';
+import { loadBuildInfo } from './scripts/build-metadata';
 import {
   MAP_ENGINE_MAXIMUM_RAW_BYTES,
   performanceChunkFileName,
   performanceChunkName,
 } from './src/perf/chunkPolicy';
 
+const repositoryRoot = resolve(import.meta.dirname, '../..');
+const buildInfo = loadBuildInfo({ repositoryRoot });
+
 export default defineConfig({
+  define: {
+    __TRANSITMAPPER_BUILD_INFO__: JSON.stringify(buildInfo),
+  },
   plugins: [
     react(),
     tailwindcss(),

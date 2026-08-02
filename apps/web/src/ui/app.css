@@ -1515,6 +1515,10 @@ input[type='range'] {
 .dropdown-menu-item[data-highlighted] {
   background: var(--md-sys-color-surface-container);
 }
+.dropdown-menu-icon-spacer {
+  width: 17px;
+  flex: none;
+}
 
 /* ---- catalog select (swatch + label trigger over a DropdownMenu — see
    CatalogSelect.tsx) — the "Line type" / "Way type" / "Service" pickers,
@@ -2500,6 +2504,78 @@ input[type='range'] {
 .error-text {
   color: var(--md-sys-color-error);
   font-size: var(--md-sys-typescale-body-medium-size);
+}
+
+/* ---- About dialog: identity is primary; machine and platform provenance
+   stays compact and quiet enough to inspect without reading like legal UI. */
+.about-modal {
+  width: 480px;
+}
+.about-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.about-section h3 {
+  margin: 0 0 6px;
+  color: var(--md-sys-color-outline);
+  font-size: var(--md-sys-typescale-label-small-size);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.about-section a,
+.about-foot a {
+  color: var(--md-sys-color-primary);
+  text-decoration: none;
+}
+.about-section a:hover,
+.about-foot a:hover {
+  text-decoration: underline;
+}
+.about-contributor {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.about-contributor span,
+.about-build-note,
+.about-release-links,
+.about-foot {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: var(--md-sys-typescale-body-small-size);
+}
+.about-build {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 5px 16px;
+  margin: 0;
+  font-size: var(--md-sys-typescale-body-medium-size);
+}
+.about-build dt {
+  color: var(--md-sys-color-on-surface-variant);
+}
+.about-build dd {
+  margin: 0;
+  min-width: 0;
+}
+.about-build dd:nth-of-type(2) {
+  font-family: var(--mono);
+}
+.about-build-note,
+.about-release-links {
+  margin: 8px 0 0;
+}
+.about-foot {
+  border-top: 1px solid var(--md-sys-color-surface-container-highest);
+  line-height: 1.55;
+  padding-top: 14px;
+}
+.about-foot p {
+  margin: 0;
+}
+.about-foot p + p {
+  margin-top: 6px;
 }
 
 /* ---- shortcuts dialog ---- */

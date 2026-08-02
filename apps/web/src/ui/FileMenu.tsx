@@ -1,10 +1,11 @@
 import { useEditor, useEditorStore } from '../editor/EditorProvider';
 import { exportSystemJson } from '../share/jsonExport';
-import { DropdownMenu, DropdownMenuItem } from './DropdownMenu';
+import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from './DropdownMenu';
 import { Icon } from './Icon';
 import { useUi } from './UiProvider';
 
-/** Figma-style file menu: New/Import/Export, tucked behind one trigger in
+/** Figma-style application menu: whole-document actions plus project identity,
+ *  tucked behind one trigger in
  *  the left panel instead of sitting loose among the top bar's action
  *  buttons — these are whole-document actions, not in-place edits.
  *  Icon-only trigger, no "TransitMapper" wordmark: the brand row's middle
@@ -22,8 +23,6 @@ export function FileMenu() {
   const newSystem = useEditor((s) => s.newSystem);
   const { openDialog } = useUi();
 
-  if (readOnly) return null;
-
   return (
     <DropdownMenu
       align="start"
@@ -31,31 +30,39 @@ export function FileMenu() {
         <button
           type="button"
           className="btn btn-plain icon-only"
-          title="File menu"
-          aria-label="File menu"
+          title="TransitMapper menu"
+          aria-label="TransitMapper menu"
         >
           <Icon name="file" size={17} />
         </button>
       }
     >
-      <DropdownMenuItem onSelect={newSystem}>
-        <Icon name="file" size={17} /> New system
-      </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => openDialog('systems')}>
-        <Icon name="layers" size={17} /> My systems…
-      </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => openDialog('import')}>
-        <Icon name="road" size={17} /> Import streets…
-      </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => openDialog('gtfs')}>
-        <Icon name="bus" size={17} /> Import RTC's real system…
-      </DropdownMenuItem>
-      {/* The portable escape hatch out of browser localStorage (the only
-          other place a system lives) — back it up, put it in git, move it
-          to another browser/computer. Not the same as Share, which creates
-          a hosted read-only snapshot rather than a file you keep. */}
-      <DropdownMenuItem onSelect={() => exportSystemJson(store.getState().system)}>
-        <Icon name="download" size={17} /> Export system data (.json)
+      {!readOnly && (
+        <>
+          <DropdownMenuItem onSelect={newSystem}>
+            <Icon name="file" size={17} /> New system
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => openDialog('systems')}>
+            <Icon name="layers" size={17} /> My systems…
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => openDialog('import')}>
+            <Icon name="road" size={17} /> Import streets…
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => openDialog('gtfs')}>
+            <Icon name="bus" size={17} /> Import RTC's real system…
+          </DropdownMenuItem>
+          {/* The portable escape hatch out of browser localStorage (the only
+              other place a system lives) — back it up, put it in git, move it
+              to another browser/computer. Not the same as Share, which creates
+              a hosted read-only snapshot rather than a file you keep. */}
+          <DropdownMenuItem onSelect={() => exportSystemJson(store.getState().system)}>
+            <Icon name="download" size={17} /> Export system data (.json)
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+        </>
+      )}
+      <DropdownMenuItem onSelect={() => openDialog('about')}>
+        <span className="dropdown-menu-icon-spacer" aria-hidden="true" /> About TransitMapper…
       </DropdownMenuItem>
     </DropdownMenu>
   );

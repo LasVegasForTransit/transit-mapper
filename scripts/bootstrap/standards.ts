@@ -71,12 +71,14 @@ export const ACTIONS_POLICY_SETTINGS = {
  *
  * A workflow token defaults to write access across the repository unless
  * told otherwise, which means any compromised action in any workflow can
- * push commits. Read is sufficient here: the deploy authenticates to
- * Cloudflare with its own credential rather than with the workflow token.
+ * push commits. Keep that default read-only and grant writes to the release
+ * job explicitly. GitHub combines permission to create pull requests with
+ * permission to approve them in one repository setting; Release Please needs
+ * that setting enabled to maintain its generated release pull request.
  */
 export const ACTIONS_SETTINGS = {
   default_workflow_permissions: 'read',
-  can_approve_pull_request_reviews: false,
+  can_approve_pull_request_reviews: true,
 } as const;
 
 /**
