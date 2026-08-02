@@ -48,4 +48,10 @@ describe('public product metadata', () => {
       'gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$release_branch"',
     );
   });
+
+  it("does not reformat Release Please's canonical changelog", () => {
+    const prettierIgnore = readFileSync(resolve(REPOSITORY_ROOT, '.prettierignore'), 'utf8');
+
+    expect(prettierIgnore.split('\n')).toContain('CHANGELOG.md');
+  });
 });
