@@ -6,13 +6,21 @@
    2.4 kB of CSS. Remove a name here before adopting that utility in markup. */
 @source not inline('collapse invisible visible isolate container contents table transform zoom-0 resize text-justify lowercase outline filter select-all');
 
-/* md: below matches useIsMobileLayout's own 760px query exactly (Tailwind's
-   own default is 768px) — one breakpoint, not two independently-tuned
-   ones that could drift apart. New layout work (Workbench.tsx) should
-   reach for Tailwind's responsive utilities directly instead of adding
-   more one-off classes/media queries to this file. */
+/* THE layout breakpoint, and the only one that decides which component tree
+   mounts. It matches useCompactLayout()'s own (max-width: 767px) query in
+   ui/device-capabilities.ts exactly — the two are a matched pair, and moving
+   one alone puts the CSS and the component tree on different sides of the
+   same screen width. Tailwind's own default is 768px, so `md:` utilities
+   agree with both for free; this declaration exists to say so, not to shift
+   it. (It previously read 760px against a 767px JS query, and the comment
+   here claimed they matched.)
+
+   New layout work (Workbench.tsx) should reach for Tailwind's responsive
+   utilities directly instead of adding more one-off media queries to this
+   file. The three that remain below are content-fit thresholds, not layout
+   boundaries — see each one's own comment. */
 @theme {
-  --breakpoint-md: 760px;
+  --breakpoint-md: 768px;
 }
 
 :root {
@@ -833,27 +841,28 @@ input[type='range'] {
      (popovers/menus) where a shared-element read actually exists. */
   animation: fade-in 160ms var(--motion-chrome-curve);
 }
-/* Left is the unified brand/name + view-specific workspace card — stretched to the bottom
-   of the overlay grid so it runs the full left edge of the viewport (its
-   grid wrapper spans all three rows). Shares the "left" slot with
-   .topbar-left/.ui-restore — mutually exclusive (mobile vs. desktop, chrome
-   hidden vs. shown), never actually competing for it. */
+/* Left is the unified brand/name + view-specific workspace card, stretched to
+   run the full left edge of the viewport.
+
+   Both this rule and .panel-right below used to carry `grid-area` and
+   `justify-self` naming areas on an `.app-chrome` grid. That container is
+   gone: Workbench.tsx now places each card by numeric `gridArea` on a
+   wrapper, and these panels are flex children of those wrappers, where a
+   grid-area name resolves to nothing and justify-self is ignored outright.
+   Both declarations were removed. `align-self` is NOT inert — it is what
+   makes the card full-height as a flex item, and [data-zen] .menu-card
+   overrides it to flex-start to collapse the card in place. */
 .panel-left {
-  grid-area: left;
-  justify-self: start;
   align-self: stretch;
 }
-/* Row-span "right" (see .app-chrome's grid-template-areas) is only the
-   middle row — the bottom row is --controls-clearance, deliberately left
-   empty under it, so this card's own bottom edge already stops short of
-   MapLibre's bottom-right zoom control without a hand-picked bottom value
-   to keep in sync with that control's real height. align-self:stretch fills
-   whatever height the middle row actually has, whatever the viewport
-   (always well inside the shared max-height above, so that's a no-op cap
-   here — the real bound for this one is the grid row itself). */
+/* The wrapper's grid row stops short of the bottom row (--controls-clearance,
+   deliberately left empty), so this card's own bottom edge already clears
+   MapLibre's bottom-right zoom control without a hand-picked bottom value to
+   keep in sync with that control's real height. align-self:stretch fills
+   whatever height that row actually has, whatever the viewport (always well
+   inside the shared max-height above, so that cap is a no-op here — the real
+   bound for this one is the grid row itself). */
 .panel-right {
-  grid-area: right;
-  justify-self: end;
   align-self: stretch;
   padding: 12px 16px;
 }
@@ -2910,42 +2919,17 @@ button.chip-removable-label:hover {
     filter: invert(1);
   }
 }
-/* The bottom-right zoom control (stacked with the compact attribution "i",
-   ~112px tall together) must never sit under floating UI. Desktop:
-   panel-right already stops short of this corner (see its bottom: 128px
-   above). Mobile: the bottom sheet's peek header is always present at this
-   breakpoint (see Workbench's own MOBILE_QUERY), so the control needs to
-   sit above it unconditionally rather than reacting to sheet state. */
-@media (max-width: 760px) {
-  .maplibregl-ctrl-bottom-right {
-    bottom: 68px;
-  }
-}
 
 /* ---- mobile bottom sheet: Workbench swaps the floating workspace/Inspector
-   panels for this below its mobile breakpoint, so an idle panel isn't a
-   whole side of the map left empty. LinesPanel/Inspector render unchanged
-   inside .sheet-shell — these rules just neutralize their own floating
-   .panel positioning so they fill the sheet body instead. ---- */
-.sheet {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 5;
-  background: var(--md-sys-color-surface);
-  border-top: 1px solid var(--md-sys-color-surface-container-highest);
-  border-radius: 16px 16px 0 0;
-  box-shadow: 0 -6px 20px color-mix(in srgb, var(--md-sys-color-shadow) 28%, transparent);
-  display: flex;
-  flex-direction: column;
-  max-height: 62vh;
-  transition: max-height 220ms var(--motion-chrome-curve);
-}
-.sheet.peek {
-  max-height: 56px;
-  overflow: hidden;
-}
+   panels for this below --breakpoint-md, so an idle panel isn't a whole side
+   of the map left empty.
+
+   The sheet's own box — position, elevation, max-height, and the expand/peek
+   transition — is built from Tailwind utilities in Workbench.tsx, not from
+   here. An earlier `.sheet`/`.sheet.peek`/`.sheet-shell` implementation and
+   its `.toolbar-fade` pair used to live at this spot; the live sheet stopped
+   carrying those class names and they were deleted. What remains below is
+   only what the live markup still uses: the drag handle and its parts. ---- */
 .sheet-handle {
   display: flex;
   align-items: center;
@@ -2990,42 +2974,22 @@ button.chip-removable-label:hover {
   background: var(--md-sys-color-surface-container);
   color: var(--md-sys-color-on-surface);
 }
-.sheet-shell {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-.sheet-shell .panel {
-  position: static;
-  width: 100%;
-  height: 100%;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  animation: none;
-}
 
-/* The tool dock would otherwise sit under the sheet's peek header; faded
-   out (not unmounted) while the sheet is expanded, so hiding it is an
-   animation rather than an instant snap. */
-.sheet ~ .toolbar-fade .toolbar-dock {
-  bottom: 72px;
-}
-.toolbar-fade {
-  transition:
-    opacity 180ms var(--motion-chrome-curve),
-    transform 180ms var(--motion-chrome-curve);
-}
-.toolbar-fade-hidden {
-  opacity: 0;
-  transform: translateY(6px);
-  pointer-events: none;
-}
+/* ---- content-fit thresholds, NOT layout boundaries ----
+   The three media queries below (860px, 620px, 339px) are each the width at
+   which one specific piece of content stops fitting. They are deliberately
+   not --breakpoint-md and must not be collapsed into it: the layout fork is
+   a single decision about which tree mounts, while these are three unrelated
+   observations about when text and controls run out of room. Each says which
+   content it is about, so the next person changing one knows what to
+   re-measure.
 
-/* ---- responsive: below its own breakpoint, Workbench swaps floating panels
-   for the bottom sheet (which has no width to squeeze), so panels here keep
-   a constant, readable --panel-w — only the tool dock and top bar chrome
-   need to keep adapting down through mobile widths. ---- */
+   Below --breakpoint-md, Workbench swaps floating panels for the bottom
+   sheet (which has no width to squeeze), so panels keep a constant, readable
+   --panel-w — only the tool dock and top bar chrome adapt further down. */
+
+/* 860px: the tool dock's widest state stops clearing the full-height right
+   panel's column. */
 @media (max-width: 860px) {
   /* Only panel-right still stretches full-height in its own row (panel-left
      is auto-height, see its rule above) — the bottom-center tool dock
@@ -3040,9 +3004,12 @@ button.chip-removable-label:hover {
   }
 }
 
+/* 620px: the top bar's button labels and the system-name input stop fitting
+   beside each other. */
 @media (max-width: 620px) {
-  /* Icons + tooltips carry the meaning once text can't fit; every button
-     already has a title attribute for that. */
+  /* Icons carry the meaning once text can't fit; every button also has an
+     aria-label, so the meaning survives for assistive technology and for
+     touch, where a title tooltip is unreachable. */
   .btn-label {
     display: none;
   }
@@ -3232,7 +3199,12 @@ button.chip-removable-label:hover {
     justify-content: center;
     gap: 6px;
   }
-  /* Keep MapLibre's zoom/attribution clear of the bottom sheet. */
+  /* Keep MapLibre's zoom/attribution clear of the bottom sheet. The sheet's
+     peek header is always present below this width (Workbench mounts the
+     sheet layout here, see useCompactLayout), so this is unconditional
+     rather than reacting to sheet state. A second copy of this rule at
+     760px/68px used to sit further up the file; it never applied, because
+     this block wins on source order at every width it covered. */
   .maplibregl-ctrl-bottom-right {
     bottom: 60px;
   }
@@ -3267,7 +3239,8 @@ button.chip-removable-label:hover {
   text-align: center;
   padding: 4px 6px;
 }
-/* Only truly tiny screens stack the view navigation vertically. */
+/* 339px: Network/Infrastructure/Diagram stop fitting on one row, so the view
+   navigation stacks. Only truly tiny screens reach this. */
 @media (max-width: 339px) {
   .mobile-topleft .segmented {
     flex-direction: column;

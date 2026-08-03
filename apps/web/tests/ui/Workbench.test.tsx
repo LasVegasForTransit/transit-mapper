@@ -10,9 +10,10 @@ import { EditorProvider } from '../../src/editor/EditorProvider';
 import { UiProvider } from '../../src/ui/UiProvider';
 import { Workbench } from '../../src/ui/Workbench';
 
-function matchMedia(matches: boolean): typeof window.matchMedia {
+/** Answers each query independently, so width and pointer can disagree. */
+function matchMedia(matches: (query: string) => boolean): typeof window.matchMedia {
   return (query: string) => ({
-    matches,
+    matches: matches(query),
     media: query,
     onchange: null,
     addListener() {},
@@ -23,8 +24,22 @@ function matchMedia(matches: boolean): typeof window.matchMedia {
   });
 }
 
-function renderWorkbench(mobile: boolean): string {
-  vi.stubGlobal('window', { matchMedia: matchMedia(mobile) });
+interface MediaEnvironment {
+  narrow: boolean;
+  coarse: boolean;
+}
+
+function renderWorkbench(environment: boolean | MediaEnvironment): string {
+  const { narrow, coarse } =
+    typeof environment === 'boolean' ? { narrow: environment, coarse: environment } : environment;
+  vi.stubGlobal('window', {
+    matchMedia: matchMedia((query) => {
+      if (query.includes('max-width')) return narrow;
+      if (query.includes('pointer: coarse')) return coarse;
+      if (query.includes('hover: none')) return coarse;
+      return false;
+    }),
+  });
   const slot = (name: string) => <span data-slot={name}>{name}</span>;
   return renderToStaticMarkup(
     <EditorProvider>
@@ -84,5 +99,25 @@ describe('Workbench responsive mounting', () => {
     expect(occurrences(markup, 'data-slot="install"')).toBe(0);
     expect(occurrences(markup, 'aria-label="Expand panel"')).toBe(1);
     expect(markup).toContain('aria-expanded="false"');
+  });
+
+  it('a wide coarse-pointer device keeps the docked layout', () => {
+    // A touchscreen laptop or a tablet in landscape. Layout follows width
+    // alone; the coarse pointer changes hit tolerance on the map (see
+    // editor/input-tuning.ts) and nothing about which tree mounts.
+    const markup = renderWorkbench({ narrow: false, coarse: true });
+
+    expect(occurrences(markup, 'data-slot="desktop-sim"')).toBe(1);
+    expect(occurrences(markup, 'data-slot="mobile-sim"')).toBe(0);
+    expect(markup).not.toContain('aria-label="Expand panel"');
+  });
+
+  it('a narrow fine-pointer window takes the sheet layout', () => {
+    // A small desktop window with a mouse: the mirror of the case above.
+    const markup = renderWorkbench({ narrow: true, coarse: false });
+
+    expect(occurrences(markup, 'data-slot="mobile-sim"')).toBe(1);
+    expect(occurrences(markup, 'data-slot="desktop-sim"')).toBe(0);
+    expect(occurrences(markup, 'aria-label="Expand panel"')).toBe(1);
   });
 });

@@ -154,6 +154,10 @@ store and core projectors.
 
 `apps/web/src/ui` owns React presentation, workbench layout, inspector
 controls, dialogs, onboarding, and accessibility semantics.
+`apps/web/src/ui/device-capabilities.ts` resolves viewport width and pointer
+capability as separate answers, so layout and input tolerance adapt on their
+own evidence; it serves both React consumers and imperative callers in the map
+and installation modules.
 `apps/web/src/theme` maps the operating system color preference to application
 tokens, while `apps/web/src/i18n` owns user-visible message selection.
 `apps/web/src/services` exposes browser-local preferences to UI consumers.

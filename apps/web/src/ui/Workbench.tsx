@@ -3,54 +3,24 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  useSyncExternalStore,
   type PointerEvent,
   type ReactNode,
 } from 'react';
 import { useEditor } from '../editor/EditorProvider';
+import { useCompactLayout } from './device-capabilities';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Panel } from './Panel';
 import { useInertRef } from './useInertRef';
 import { useUi } from './UiProvider';
 
-// Tailwind's `md` breakpoint is min-width: 768px. The component tree must use
-// the same boundary as the CSS: mounting both trees and hiding one with
-// display utilities leaves every hidden panel subscribed to the editor store.
-const MOBILE_QUERY = '(max-width: 767px)';
-
-function mobileSnapshot(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia?.(MOBILE_QUERY).matches === true;
-}
-
-function subscribeMobile(listener: () => void): () => void {
-  if (typeof window === 'undefined' || !window.matchMedia) return () => {};
-  const query = window.matchMedia(MOBILE_QUERY);
-  const onChange = () => listener();
-  if (query.addEventListener) {
-    query.addEventListener('change', onChange);
-    return () => query.removeEventListener('change', onChange);
-  }
-  // Safari < 14. The app does not target it deliberately, but this fallback
-  // costs nothing and makes the subscription safe in older embedded browsers.
-  query.addListener(onChange);
-  return () => query.removeListener(onChange);
-}
-
-function useMobileLayout(): boolean {
-  // This app is client-rendered rather than hydrated. Reusing the guarded live
-  // snapshot for the server argument also makes static render tests represent
-  // the media environment they install without introducing a second default.
-  return useSyncExternalStore(subscribeMobile, mobileSnapshot, mobileSnapshot);
-}
-
 export interface WorkbenchProps {
   /** File menu / system name / Hide-UI toggle. Docks into the menu panel's
    *  own header on desktop; mobile has nowhere else for it to live, since
    *  the menu panel itself becomes a bottom sheet there, so it renders in
    *  the top bar instead. One prop, two positions — Workbench decides
-   *  which through the media query matching Tailwind's md breakpoint, not
-   *  the caller. */
+   *  which through useCompactLayout(), which shares its boundary with
+   *  Tailwind's md breakpoint, not the caller. */
   brand: ReactNode;
   /** The active view's workspace — desktop wraps it in a collapsible card with `brand`
    *  above it; mobile wraps it in the bottom sheet instead. */
@@ -126,7 +96,10 @@ export function Workbench({
   importStatus,
   installBanner,
 }: WorkbenchProps) {
-  const mobile = useMobileLayout();
+  // Width only. Pointer type is a separate question with its own answer (see
+  // ui/device-capabilities.ts) — a touchscreen laptop keeps these docked cards
+  // and still gets finger-sized hit tolerances on the map.
+  const mobile = useCompactLayout();
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const clearSelection = useEditor((s) => s.select);
   const backToSelectTool = useEditor((s) => s.setTool);
