@@ -108,11 +108,13 @@ is still outstanding, roughly in order of how badly it misleads people.
 - **Hardcoded id switches.** `geo/serviceLane.ts` switches on mode ids to pick lane kinds, and
   `model/import.ts` hardcodes `IMPORT_CATEGORY_ORDER` and its road/rail/bike category mapping. Both
   should be declared on the catalog entries they describe.
-- **Input tuning should be declared, then adjustable.** `HIT_PX`, `SNAP_PX`, `DRAG_PX`,
-  `STRAIGHT_SNAP_PX`, and `FREEHAND_SAMPLE_PX` are scattered literals in `map/interactions.ts`.
-  Collect them into one declared input-tuning config, then let people change them: pointer precision
-  varies enormously between a trackpad, a mouse, and a hand that shakes, and a fixed 4-pixel drag
-  threshold is an accessibility decision made on someone else's behalf.
+- **Input tuning should be adjustable.** The five scattered literals in `map/interactions.ts` are
+  now one declared table in `editor/input-tuning.ts`, with a coarse-pointer profile selected from
+  the device's own pointer capability, so a finger no longer gets tolerances sized for a mouse.
+  What remains is letting people change them: pointer precision varies enormously between a
+  trackpad, a mouse, and a hand that shakes, and even a well-chosen default is a decision made on
+  someone else's behalf. The table is injected through `attachInteractions`, so a settings override
+  has somewhere to write.
 - **Presentation sizes come from whoever asked for the picture.** `exportRenderer.ts` falls back to
   1600×1000 and `DEFAULT_VIEWPORT` decides where a document opens. Both should come from the export
   dialog and the document respectively.

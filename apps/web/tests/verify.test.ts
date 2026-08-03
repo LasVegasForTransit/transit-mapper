@@ -1,6 +1,11 @@
 // Deterministic verification of the editor/model logic without a browser.
 // Run with: pnpm --filter @transitmapper/web verify
 import { createEditorStore, type MultiSelectItem } from '../src/editor/store';
+import {
+  COARSE_POINTER_TUNING,
+  FINE_POINTER_TUNING,
+  inputTuningFor,
+} from '../src/editor/input-tuning';
 import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
 import { createSelectionActions } from '../src/editor/actions';
 import { validateSystemQuick } from '@transitmapper/core/model/validate';
@@ -12156,6 +12161,48 @@ function buildGrid() {
   check(
     'merging needs at least two ways',
     store.getState().mergeWaysIntoCorridor([apart[0]]) === 0,
+  );
+}
+
+// --- input tuning: coarse pointers get proportional tolerances ---
+// A fingertip contact patch is 9-11mm, ~24 CSS px on a phone. Every tolerance
+// the map hit-tests with has to grow with it, or a finger is asked to land
+// inside a radius narrower than the finger.
+{
+  check('a coarse pointer hit-tests at least a fingertip wide', COARSE_POINTER_TUNING.hitPx >= 24);
+  check(
+    'snapping still reaches further than plain hit-testing',
+    FINE_POINTER_TUNING.snapPx > FINE_POINTER_TUNING.hitPx &&
+      COARSE_POINTER_TUNING.snapPx > COARSE_POINTER_TUNING.hitPx,
+  );
+  check(
+    'every precision tolerance grows for a coarse pointer',
+    COARSE_POINTER_TUNING.hitPx > FINE_POINTER_TUNING.hitPx &&
+      COARSE_POINTER_TUNING.snapPx > FINE_POINTER_TUNING.snapPx &&
+      COARSE_POINTER_TUNING.dragPx > FINE_POINTER_TUNING.dragPx &&
+      COARSE_POINTER_TUNING.straightSnapPx > FINE_POINTER_TUNING.straightSnapPx,
+  );
+  // Sample spacing decides how faithfully a drawn curve follows the gesture.
+  // That is a question about the geometry someone wants, not about how
+  // precisely they can point, so it is the one value that must NOT scale.
+  check(
+    'freehand sample spacing is not a precision tolerance and does not scale',
+    COARSE_POINTER_TUNING.freehandSamplePx === FINE_POINTER_TUNING.freehandSamplePx,
+  );
+  check(
+    'the fine profile is what the editor shipped with',
+    FINE_POINTER_TUNING.hitPx === 9 &&
+      FINE_POINTER_TUNING.snapPx === 18 &&
+      FINE_POINTER_TUNING.dragPx === 4 &&
+      FINE_POINTER_TUNING.straightSnapPx === 10,
+  );
+  check(
+    'inputTuningFor(false) selects the fine profile',
+    inputTuningFor(false) === FINE_POINTER_TUNING,
+  );
+  check(
+    'inputTuningFor(true) selects the coarse profile',
+    inputTuningFor(true) === COARSE_POINTER_TUNING,
   );
 }
 

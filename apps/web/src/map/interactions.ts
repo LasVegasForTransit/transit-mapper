@@ -1,6 +1,8 @@
 import type { Map as MLMap, MapMouseEvent, MapGeoJSONFeature, GeoJSONSource } from 'maplibre-gl';
 import type { EditorState, EditorStore, MultiSelectItem } from '../editor/store';
 import { attachKeyboard, type SimCommands } from '../editor/keymap';
+import { inputTuningFor, type InputTuning } from '../editor/input-tuning';
+import { deviceCapabilitiesSnapshot } from '../ui/device-capabilities';
 import {
   resolvePointerIntent,
   type ModifierState,
@@ -69,16 +71,6 @@ interface ScreenPoint {
   x: number;
   y: number;
 }
-
-const HIT_PX = 9; // pixel tolerance for hit-testing features under the cursor
-const SNAP_PX = 18; // stations/way endpoints within this screen distance snap
-const DRAG_PX = 4; // movement beyond this counts as a drag, not a click
-const FREEHAND_SAMPLE_PX = 16; // spacing between points sampled while freehand-drawing
-// How far off the way's existing heading the cursor may sit and still be
-// snapped into continuing straight. A SCREEN distance, not an angle, so the
-// snap's strength is what it looks like — see continueStraight for why an
-// angle was the wrong unit for this.
-const STRAIGHT_SNAP_PX = 10;
 
 const SERVICE_LAYERS = [LYR_SERVICES_HIT, LYR_SERVICES_SOLID, LYR_SERVICES_UNDERGROUND];
 // Lane surfaces stand in for the fan at lane-detail zooms — they carry the
@@ -221,6 +213,11 @@ export interface AttachInteractionsOptions {
   /** A drop on another line's terminus is deliberately inert until this
    * anchored chooser invokes one of the two callbacks. */
   openTerminusConnectionChoice?: (choice: TerminusConnectionChoice) => void;
+  /** Hit, snap, and drag tolerances for this attachment (see
+   * editor/input-tuning.ts). Defaults to the profile matching the device's
+   * primary pointer. Passed explicitly by tests, which then need no media
+   * queries to exercise either profile. */
+  tuning?: InputTuning;
 }
 
 /**
@@ -254,6 +251,12 @@ export function attachInteractions(
   opts: AttachInteractionsOptions,
 ): () => void {
   const canvas = map.getCanvas();
+  // Resolved once per attachment, not read per event: swapping tolerances
+  // underneath a drag already in progress would change what the gesture means
+  // halfway through it. A device that gains or loses a pointer type between
+  // attachments is rare enough to be worth that trade.
+  const { hitPx, snapPx, dragPx, freehandSamplePx, straightSnapPx } =
+    opts.tuning ?? inputTuningFor(deviceCapabilitiesSnapshot().coarsePointer);
   let spaceHeld = false;
   let lastPointer: MapMouseEvent | null = null;
   let lockedPrimaryOperation: PointerOperation | undefined;
@@ -315,8 +318,8 @@ export function attachInteractions(
     if (cached) return cached;
     const layers = HIT_TEST_LAYERS.filter((layer) => map.getLayer(layer));
     const box: [[number, number], [number, number]] = [
-      [e.point.x - HIT_PX, e.point.y - HIT_PX],
-      [e.point.x + HIT_PX, e.point.y + HIT_PX],
+      [e.point.x - hitPx, e.point.y - hitPx],
+      [e.point.x + hitPx, e.point.y + hitPx],
     ];
     const features = layers.length ? map.queryRenderedFeatures(box, { layers }) : [];
     hitStackByEvent.set(e, features);
@@ -605,12 +608,12 @@ export function attachInteractions(
   const snapMeters = (px: number) => Math.min(px * metersPerPixel(), MAX_SNAP_M);
 
   const networkRouteAnchorAt = (e: MapMouseEvent): LngLat | null => {
-    const hit = snap(networkCandidates(store.getState()), lngLatOf(e), snapMeters(SNAP_PX));
+    const hit = snap(networkCandidates(store.getState()), lngLatOf(e), snapMeters(snapPx));
     return hit?.coord ?? null;
   };
 
   const networkOpenEndpointAt = (e: MapMouseEvent) =>
-    nearestOpenEndpoint(networkCandidates(store.getState()), lngLatOf(e), snapMeters(SNAP_PX));
+    nearestOpenEndpoint(networkCandidates(store.getState()), lngLatOf(e), snapMeters(snapPx));
 
   // ---- pan (right-drag or space+left-drag) --------------------------------
   // Not part of the cancel system: it never mutates the system, so there's
@@ -661,7 +664,7 @@ export function attachInteractions(
           !st.activeWayId &&
           !st.routeDraft
         ) {
-          const hit = nearestOpenEndpoint(st.system.ways, lngLatOf(ev), snapMeters(SNAP_PX));
+          const hit = nearestOpenEndpoint(st.system.ways, lngLatOf(ev), snapMeters(snapPx));
           if (hit) {
             st.beginOneWayBranch(hit.wayId, hit.end);
             return;
@@ -881,7 +884,7 @@ export function attachInteractions(
       setPreview(closedForPreview(rectCorners(startCoord, c))),
     );
     const onMove = (ev: MapMouseEvent) => {
-      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
+      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= dragPx) dragged = true;
       if (dragged) previewThrottle.call(lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
@@ -938,7 +941,7 @@ export function attachInteractions(
       setPreview(closedForPreview(rectCorners(startCoord, c))),
     );
     const onMove = (ev: MapMouseEvent) => {
-      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
+      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= dragPx) dragged = true;
       if (dragged) previewThrottle.call(lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
@@ -975,7 +978,7 @@ export function attachInteractions(
       setPreview(closedForPreview(rectCorners(startCoord, c))),
     );
     const onMove = (ev: MapMouseEvent) => {
-      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
+      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= dragPx) dragged = true;
       if (dragged) previewThrottle.call(lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
@@ -1364,7 +1367,7 @@ export function attachInteractions(
     let lastPt = startPt;
     const moveThrottle = rafThrottle((ev: MapMouseEvent) => {
       if (!started) {
-        if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) < DRAG_PX) return;
+        if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) < dragPx) return;
         started = true;
         suppressClick = true;
         const st = store.getState();
@@ -1372,7 +1375,7 @@ export function attachInteractions(
         st.addWayPoint(wayId, startCoord);
         lastPt = startPt;
       }
-      if (Math.hypot(ev.point.x - lastPt.x, ev.point.y - lastPt.y) < FREEHAND_SAMPLE_PX) return;
+      if (Math.hypot(ev.point.x - lastPt.x, ev.point.y - lastPt.y) < freehandSamplePx) return;
       lastPt = ev.point;
       store.getState().addWayPoint(wayId, lngLatOf(ev));
     });
@@ -1438,7 +1441,7 @@ export function attachInteractions(
     if (st.routeDraft) {
       if (!routeExisting || !candidates) return;
       suppressClick = true;
-      const hit = snap(candidates, lngLatOf(e), snapMeters(SNAP_PX));
+      const hit = snap(candidates, lngLatOf(e), snapMeters(snapPx));
       if (hit) {
         const way = candidates.find((w) => w.id === hit.wayId);
         const anchor = way ? anchorOnWay(way, hit.coord) : null;
@@ -1472,9 +1475,9 @@ export function attachInteractions(
       // first and swallow the press before the extend-drag handlers (added
       // further down) ever get registered.
       const onOwnEndpoint =
-        nearestOpenEndpoint(candidates, lngLatOf(e), snapMeters(SNAP_PX)) !== null;
+        nearestOpenEndpoint(candidates, lngLatOf(e), snapMeters(snapPx)) !== null;
       if (routeExisting && !onOwnEndpoint) {
-        const hit = snap(candidates, lngLatOf(e), snapMeters(SNAP_PX));
+        const hit = snap(candidates, lngLatOf(e), snapMeters(snapPx));
         if (hit) {
           const way = candidates.find((w) => w.id === hit.wayId);
           const anchor = way ? anchorOnWay(way, hit.coord) : null;
@@ -1507,8 +1510,8 @@ export function attachInteractions(
       const resume = forceSeparate
         ? null
         : candidates && resumeExisting
-          ? nearestOpenEndpoint(candidates, startCoord, snapMeters(SNAP_PX))
-          : nearestOpenEndpoint(st.system.ways, startCoord, snapMeters(SNAP_PX), st.draftWayTypeId);
+          ? nearestOpenEndpoint(candidates, startCoord, snapMeters(snapPx))
+          : nearestOpenEndpoint(st.system.ways, startCoord, snapMeters(snapPx), st.draftWayTypeId);
       if (resume) {
         wayId = resume.wayId;
         extendAtStart = resume.end === 'start';
@@ -1525,7 +1528,7 @@ export function attachInteractions(
         const seed = snap(
           st.system.ways,
           startCoord,
-          snapMeters(SNAP_PX),
+          snapMeters(snapPx),
           new Set([wayId]),
           st.draftWayTypeId,
         );
@@ -1543,7 +1546,7 @@ export function attachInteractions(
       previewEnd(committedWayId, extendAtStart, raw, shiftKey);
     });
     const onMove = (ev: MapMouseEvent) => {
-      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
+      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= dragPx) dragged = true;
       previewThrottle.call(lngLatOf(ev), ev.originalEvent.shiftKey);
     };
     const onUp = (ev: MapMouseEvent) => {
@@ -1602,14 +1605,14 @@ export function attachInteractions(
     const otherWay = snap(
       store.getState().system.ways,
       raw,
-      snapMeters(SNAP_PX),
+      snapMeters(snapPx),
       new Set([wayId]),
       store.getState().draftWayTypeId,
     );
     if (otherWay) return { coord: otherWay.coord, snapWayId: otherWay.wayId };
     const heading = wayHeadingAnchor(wayId, atStart);
     if (endpoint && heading) {
-      const straight = continueStraight(endpoint, heading, raw, snapMeters(STRAIGHT_SNAP_PX));
+      const straight = continueStraight(endpoint, heading, raw, snapMeters(straightSnapPx));
       if (straight) return { coord: straight };
     }
     return { coord: raw };
@@ -1729,7 +1732,7 @@ export function attachInteractions(
 
   const placeOrSnapStation = (id: string, coord: LngLat) => {
     const ways = store.getState().system.ways;
-    const s = snap(ways, coord, snapMeters(SNAP_PX));
+    const s = snap(ways, coord, snapMeters(snapPx));
     if (s) store.getState().moveStation(id, s.coord, { wayId: s.wayId, t: s.t });
     else store.getState().moveStation(id, coord, undefined);
   };
@@ -1833,7 +1836,7 @@ export function attachInteractions(
     if (!sourceMode) return null;
     const allowed = new Set(mode(sourceMode).wayTypeIds);
     const candidates = state.system.ways.filter((way) => allowed.has(way.typeId));
-    const hit = snap(candidates, lngLatOf(e), snapMeters(SNAP_PX));
+    const hit = snap(candidates, lngLatOf(e), snapMeters(snapPx));
     return hit ? { kind: 'corridor', wayId: hit.wayId, coord: hit.coord } : null;
   };
 
@@ -2260,7 +2263,7 @@ export function attachInteractions(
         // Infrastructure view everything is 2D — the mousedown gesture owns
         // station creation there (land only), so a bare click does nothing.
         if (!opts.isNetworkMode()) break;
-        const s = snap(st.system.ways, coord, snapMeters(SNAP_PX));
+        const s = snap(st.system.ways, coord, snapMeters(snapPx));
         if (s) st.addStation(s.coord, { wayId: s.wayId, t: s.t });
         else st.addStation(coord);
         break;

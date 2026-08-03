@@ -22,6 +22,11 @@ import {
   SRC_ENDPOINT_HINT,
 } from '../../src/map/layers';
 import { attachInteractions, type AttachInteractionsOptions } from '../../src/map/interactions';
+import {
+  COARSE_POINTER_TUNING,
+  FINE_POINTER_TUNING,
+  type InputTuning,
+} from '../../src/editor/input-tuning';
 import type { PointerIntent } from '../../src/editor/pointerIntent';
 import type { EditGestureTargets } from '../../src/map/gestureProjection';
 
@@ -359,6 +364,9 @@ function attach(
   openTerminusConnectionChoice?: NonNullable<
     AttachInteractionsOptions['openTerminusConnectionChoice']
   >,
+  /** Omitted means the fine profile: the fake window carries no matchMedia,
+   *  so the capability snapshot reports a precise pointer. */
+  tuning?: InputTuning,
 ) {
   return attachInteractions(map as unknown as MLMap, store, {
     openShortcuts() {},
@@ -383,6 +391,7 @@ function attach(
         }
       : undefined,
     openTerminusConnectionChoice,
+    tuning,
   });
 }
 
@@ -1941,6 +1950,48 @@ describe('pointer work coalescing', () => {
     expect(points.at(-1)).toEqual([-115.277, 36.190000000000005]);
 
     detach();
+  });
+
+  it('starts a freehand draw at the fine threshold but not the coarse one', () => {
+    // 6px: past the fine profile's 4px drag threshold, short of the coarse
+    // profile's 10px. A fingertip wobbles about this much just resting on the
+    // glass, so at the fine threshold a phone starts drawing a way whenever
+    // someone means to tap. Same events, same map, only the tolerance differs.
+    const move = 6;
+    expect(FINE_POINTER_TUNING.dragPx).toBeLessThan(move);
+    expect(COARSE_POINTER_TUNING.dragPx).toBeGreaterThan(move);
+
+    const waysAfterNudge = (tuning: InputTuning): number => {
+      const scheduler = installBrowserGlobals();
+      const store = createEditorStore();
+      store.getState().setSystem(createEmptySystem());
+      store.getState().setTool('way');
+      store.getState().setDraftGeometry('freeform');
+      const map = createMap();
+      const detach = attach(
+        map,
+        store,
+        undefined,
+        undefined,
+        undefined,
+        true,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        tuning,
+      );
+
+      map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
+      map.fire('mousemove', mouseEvent(map, { x: 100 + move, y: 100 }));
+      scheduler.pump();
+      const count = store.getState().system.ways.length;
+      detach();
+      return count;
+    };
+
+    expect(waysAfterNudge(FINE_POINTER_TUNING)).toBe(1);
+    expect(waysAfterNudge(COARSE_POINTER_TUNING)).toBe(0);
   });
 
   it('erase hit-testing runs once per frame and includes the release position', () => {
