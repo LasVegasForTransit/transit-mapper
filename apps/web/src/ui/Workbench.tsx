@@ -35,6 +35,13 @@ export interface WorkbenchProps {
   /** Whether supplementalPanel actually has something to show right now —
    *  drives the mobile sheet's List⇄Details toggle. */
   hasSupplementalContent: boolean;
+  /** Whether that content is something the person just caused — a selection,
+   *  or a drawing tool they picked up — as opposed to a tool's standing
+   *  defaults. Only the former opens the mobile sheet on its own. The Select
+   *  tool's modifier channels are always available on a touch device, and
+   *  auto-expanding for them would park the sheet over 62% of the map from
+   *  the moment the app loads. */
+  supplementalIsFresh: boolean;
   /** Undo/redo/export/share/issues/layers/keyboard — the transient-action
    *  cluster, distinct from viewSwitcher (persistent canvas state). */
   primaryToolbar: ReactNode;
@@ -89,6 +96,7 @@ export function Workbench({
   menuPanel,
   supplementalPanel,
   hasSupplementalContent,
+  supplementalIsFresh,
   primaryToolbar,
   viewSwitcher,
   simControls,
@@ -118,8 +126,8 @@ export function Workbench({
   const sheetRef = useInertRef<HTMLDivElement>(uiHidden);
 
   useEffect(() => {
-    if (hasSupplementalContent) setSheetExpanded(true);
-  }, [hasSupplementalContent]);
+    if (supplementalIsFresh) setSheetExpanded(true);
+  }, [supplementalIsFresh]);
 
   const showingSupplemental = hasSupplementalContent;
 

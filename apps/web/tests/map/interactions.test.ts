@@ -334,7 +334,7 @@ function mouseEvent(
  * active touches and `points` is every one of them, which is how the adapter
  * tells a one-finger gesture from a pinch.
  */
-function touchEvent(map: ReturnType<typeof createMap>, points: Point[]) {
+function touchEvent(map: ReturnType<typeof createMap>, points: Point[], timeStamp?: number) {
   const centroid =
     points.length > 0
       ? {
@@ -347,9 +347,26 @@ function touchEvent(map: ReturnType<typeof createMap>, points: Point[]) {
     points,
     lngLat: map.unproject(centroid),
     lngLats: points.map((p) => map.unproject(p)),
-    originalEvent: { preventDefault() {} },
+    // The adapter reads timeStamp, not the clock: dispatching a tap blocks the
+    // main thread long enough to swallow the double-tap window otherwise.
+    originalEvent: { preventDefault() {}, timeStamp },
     preventDefault() {},
   };
+}
+
+/**
+ * A tap, as a browser actually delivers one: the touch pair, then the
+ * compatibility mouse events every browser emits afterwards for a motionless
+ * touch. The adapter deliberately does NOT synthesize these — doing so made
+ * every tap land twice — so a test that fires only touchstart/touchend is
+ * modelling a browser that does not exist.
+ */
+function tap(map: ReturnType<typeof createMap>, point: Point, at?: number) {
+  map.fire('touchstart', touchEvent(map, [point], at));
+  map.fire('touchend', touchEvent(map, [], at));
+  map.fire('mousedown', mouseEvent(map, point));
+  map.fire('mouseup', mouseEvent(map, point));
+  map.fire('click', mouseEvent(map, point));
 }
 
 interface GestureLifecycleProbe {
@@ -1274,8 +1291,7 @@ describe('pointer work coalescing', () => {
     const map = createMap(stationFeature(stationId));
     const detach = attach(map, store);
 
-    map.fire('touchstart', touchEvent(map, [{ x: 100, y: 100 }]));
-    map.fire('touchend', touchEvent(map, []));
+    tap(map, { x: 100, y: 100 });
 
     expect(store.getState().system.stations).toHaveLength(0);
     detach();
@@ -2172,6 +2188,106 @@ describe('touch gestures', () => {
     detach();
   });
 
+  it('reads the double-tap gap from the event, not the clock', () => {
+    // Committing a tap runs a store mutation and a MapLibre repaint, and that
+    // work blocks the main thread. Measured against Date.now(), two taps 80ms
+    // apart came out 549ms apart and no double tap ever registered — lines
+    // could not be finished by finger at all. The browser stamps each touch
+    // with when it actually happened, which is the only interval a person
+    // controls. These taps carry timestamps 90ms apart while the clock, under
+    // fake timers, does not advance between them at all.
+    vi.useFakeTimers();
+    installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    tap(map, { x: 100, y: 100 }, 1000);
+    tap(map, { x: 200, y: 140 }, 2000);
+    expect(store.getState().activeWayId).not.toBeNull();
+
+    tap(map, { x: 260, y: 180 }, 3000);
+    tap(map, { x: 260, y: 180 }, 3090);
+
+    expect(store.getState().activeWayId).toBeNull();
+    expect(store.getState().system.ways[0].points).toHaveLength(3);
+    detach();
+    vi.useRealTimers();
+  });
+
+  it('keeps two deliberate taps apart even when they are quick', () => {
+    // The distance check, not the interval, is what prevents a fast pair of
+    // real points from being read as a finish.
+    vi.useFakeTimers();
+    installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    tap(map, { x: 100, y: 100 }, 1000);
+    tap(map, { x: 200, y: 140 }, 1050);
+    tap(map, { x: 300, y: 190 }, 1100);
+
+    expect(store.getState().activeWayId).not.toBeNull();
+    expect(store.getState().system.ways[0].points).toHaveLength(3);
+    detach();
+    vi.useRealTimers();
+  });
+
+  it('places one point per tap, not two', () => {
+    // The regression this exists for. A browser already emits compatibility
+    // mousedown/mouseup/click after a motionless touch, so an adapter that
+    // synthesizes them too runs every tap twice. Confirmed live on a phone
+    // profile before this was fixed: three taps produced four control points
+    // and a double tap produced eight and never finished the line.
+    vi.useFakeTimers();
+    installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    tap(map, { x: 100, y: 100 });
+    tap(map, { x: 200, y: 140 });
+    tap(map, { x: 260, y: 180 });
+
+    expect(store.getState().system.ways).toHaveLength(1);
+    expect(store.getState().system.ways[0].points).toHaveLength(3);
+    detach();
+    vi.useRealTimers();
+  });
+
+  it('ignores the compatibility tap that follows a long press', () => {
+    // A motionless touch still produces compatibility mouse events after the
+    // adapter has already driven the press. Without the guard, a long press
+    // opens the action menu and then starts a draw underneath it.
+    vi.useFakeTimers();
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    map.fire('touchstart', touchEvent(map, [{ x: 120, y: 140 }]));
+    vi.advanceTimersByTime(600);
+    scheduler.pump();
+    map.fire('touchend', touchEvent(map, []));
+    // The browser's compatibility tail, arriving after the gesture is over.
+    map.fire('mousedown', mouseEvent(map, { x: 120, y: 140 }));
+    map.fire('mouseup', mouseEvent(map, { x: 120, y: 140 }));
+    map.fire('click', mouseEvent(map, { x: 120, y: 140 }));
+
+    expect(store.getState().system.ways).toHaveLength(0);
+    detach();
+    vi.useRealTimers();
+  });
+
   it('publishes the intent at touchstart, before the press commits', () => {
     // A mouse answers "what will this press do" from an idle hover. A finger
     // has no idle state, so the answer has to arrive inside the gesture,
@@ -2293,10 +2409,8 @@ describe('touch gestures', () => {
     const map = createMap();
     const detach = attach(map, store);
 
-    map.fire('touchstart', touchEvent(map, [{ x: 100, y: 100 }]));
-    map.fire('touchend', touchEvent(map, []));
-    map.fire('touchstart', touchEvent(map, [{ x: 200, y: 140 }]));
-    map.fire('touchend', touchEvent(map, []));
+    tap(map, { x: 100, y: 100 });
+    tap(map, { x: 200, y: 140 });
     expect(store.getState().activeWayId).not.toBeNull();
 
     map.fire('touchstart', touchEvent(map, [{ x: 260, y: 180 }]));
@@ -2319,21 +2433,13 @@ describe('touch gestures', () => {
     const map = createMap();
     const detach = attach(map, store);
 
-    const tapAt = (x: number, y: number) => {
-      map.fire('touchstart', touchEvent(map, [{ x, y }]));
-      map.fire('touchend', touchEvent(map, []));
-    };
-
-    tapAt(100, 100);
-    vi.advanceTimersByTime(400); // beyond DOUBLE_TAP_MS, so these stay separate
-    tapAt(200, 140);
+    tap(map, { x: 100, y: 100 });
+    tap(map, { x: 200, y: 140 });
     expect(store.getState().activeWayId).not.toBeNull();
 
     // Two taps in the same spot inside the double-tap window.
-    vi.advanceTimersByTime(400);
-    tapAt(260, 180);
-    vi.advanceTimersByTime(50);
-    tapAt(260, 180);
+    tap(map, { x: 260, y: 180 });
+    tap(map, { x: 260, y: 180 });
 
     expect(store.getState().activeWayId).toBeNull();
     expect(store.getState().system.ways).toHaveLength(1);

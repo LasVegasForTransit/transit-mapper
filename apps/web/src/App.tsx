@@ -270,6 +270,7 @@ export function App() {
   const selection = useEditor((s) => s.selection);
   const multiSelection = useEditor((s) => s.multiSelection);
   const readOnly = useEditor((s) => s.readOnly);
+  const tool = useEditor((s) => s.tool);
   const canUndo = useEditor((s) => s.canUndo);
 
   useEffect(() => {
@@ -288,6 +289,11 @@ export function App() {
   const showingToolDraft = useShowingToolDraft();
   const hasSupplementalContent =
     selection !== null || multiSelection.length > 0 || showingToolDraft;
+  // A selection or a picked-up drawing tool is something the person just did,
+  // so the mobile sheet opens for it. The Select tool's standing modifier
+  // channels are not, and must not park the sheet over the map on load.
+  const supplementalIsFresh =
+    selection !== null || multiSelection.length > 0 || (showingToolDraft && tool !== 'select');
 
   const dialogFailed = () => {
     closeDialog();
@@ -425,6 +431,7 @@ export function App() {
         menuPanel={<SidebarPanel />}
         supplementalPanel={<Inspector />}
         hasSupplementalContent={hasSupplementalContent}
+        supplementalIsFresh={supplementalIsFresh}
         primaryToolbar={<TopBarActions />}
         viewSwitcher={<ViewSwitch />}
         simControls={<SimControls />}

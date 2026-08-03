@@ -2,10 +2,68 @@
 
 ## Status
 
-Proposed 2026-08-01. Not implemented. This document settles four decisions
-before any code is written: the device-support position, the touch gesture
-table, the rename of `ModifierState`, and which of two two-finger pan
-implementations to build.
+Implemented 2026-08-01, as designed. All four decisions below were settled
+first and none changed during implementation: the device-support position, the
+touch gesture table, the rename of `ModifierState`, and app-owned two-finger
+pan.
+
+Three things surfaced only while building it, all fixed before landing.
+
+**The synthesized mouse event needed client coordinates.** `openMenuAt` and the
+pointer badge both position against `originalEvent.clientX`/`clientY`, which a
+canvas-relative `point` is not whenever the canvas is inset. The adapter reads
+them from the real `TouchEvent` and falls back to the point.
+
+**Five dispatch branches read key state directly.** `onMouseDown` tested
+`oe.altKey`, `oe.shiftKey`, and `oe.ctrlKey` in its own branches rather than
+going through the resolver, and six mid-drag reads tested `shiftKey` for the
+geometry constraint. A latched channel would have changed the badge and the
+cursor while those branches did something else — the badge promising erase
+while the press moved the station. All eleven read the resolved channels now.
+
+**`hoverCapable` had to be asked as `(hover: none)` and negated.** Under
+`(hover: hover)` a browser too old for `matchMedia` matches nothing, which
+reads as "cannot hover" and hands a desktop the touch affordances. Asking the
+negative makes every capability default to its desktop answer.
+
+One design point moved. `touch-action: none` was specified on `.app`; it
+belongs on the map container alone, because the bottom sheet and the panels
+inside it scroll and a blanket rule at that level freezes them.
+
+Four more surfaced only under a real browser on a phone profile, none of
+which a unit test could have reached. They are recorded here because each is
+a fact about how touch actually behaves, not about this codebase.
+
+**A tap arrives twice, or not at all, depending on the engine.** Browsers
+emit compatibility `mousedown`/`mouseup`/`click` after a motionless touch,
+so an adapter that synthesizes them too runs every tap twice: three taps
+produced four control points. Leaning on the browser's instead is equally
+wrong, because whether they arrive depends on `touch-action`, on whether
+anything called `preventDefault`, and on the engine — three taps then
+produced two points. The adapter drives every gesture itself and discards
+the browser's tail through a 700ms window.
+
+**That window swallowed the adapter's own dispatch.** The second tap of a
+double tap falls inside the first tap's suppression window. Timing cannot
+separate the two, so the dispatch says which it is through a
+`dispatchingSynthetic` flag.
+
+**The double-tap gap must come from the event, not the clock.** Committing a
+tap runs a store mutation and a MapLibre repaint, and that work blocks the
+main thread. Measured with `Date.now()`, two taps 80ms apart came out 549ms
+apart, so no double tap ever registered and a line could not be finished by
+finger. `TouchEvent.timeStamp` records when the touch happened. The window
+is also 500ms rather than 300ms, since dispatch latency still lands inside
+the measured gap on a slow device; the distance check is what actually
+prevents a false positive.
+
+**Select's modifier panel must not open the mobile sheet.** Stage 4 made the
+channels available whenever Select is armed on a touch device, which fed
+`hasSupplementalContent` and parked the sheet over 62% of the map from the
+moment the app loaded — found because taps in the browser were landing on
+the inspector instead of the canvas. `supplementalIsFresh` separates content
+a person just caused from a tool's standing defaults; only the former
+expands the sheet.
 
 ## Context
 
