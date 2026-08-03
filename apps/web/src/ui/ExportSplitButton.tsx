@@ -32,12 +32,17 @@ export function ExportSplitButton() {
 
   return (
     <div className="split-btn-root">
+      {/* aria-label on the main button, not just a title: .btn-label is
+          hidden below 620px, which leaves it icon-only with no accessible
+          name at exactly the widths most likely to be a touchscreen, where
+          a title tooltip is unreachable anyway. */}
       <div className="split-btn">
         <button
           type="button"
           className="split-btn-main"
           onClick={() => openDialog('export')}
           title="Export…"
+          aria-label="Export"
         >
           <Icon name="download" size={18} /> <span className="btn-label">Export</span>
         </button>

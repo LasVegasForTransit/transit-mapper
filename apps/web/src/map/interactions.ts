@@ -2758,6 +2758,12 @@ export function attachInteractions(
     touchGesture = 'pending';
     touchStartPoint = e.point;
     touchStartEvent = e;
+    // The badge, published before anything is dispatched. A mouse answers
+    // "what will this press do" from an idle hover; a finger has no idle
+    // state, so the answer moves inside the gesture — shown while the press is
+    // still undecided and there is time to lift and cancel. Same guarantee
+    // hover gives, just later.
+    publishPointerIntent(asMouseEvent(e, e.point, 0), undefined, false);
     // Nothing is dispatched yet. Until this press either moves or times out,
     // its meaning is undecided, and committing to a verb here would make every
     // long press start by dragging whatever it landed on.

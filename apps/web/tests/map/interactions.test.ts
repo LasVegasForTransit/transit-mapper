@@ -2172,6 +2172,27 @@ describe('touch gestures', () => {
     detach();
   });
 
+  it('publishes the intent at touchstart, before the press commits', () => {
+    // A mouse answers "what will this press do" from an idle hover. A finger
+    // has no idle state, so the answer has to arrive inside the gesture,
+    // while the press is still undecided and can be lifted.
+    vi.useFakeTimers();
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const stationId = store.getState().addStation([-115.2, 36.1]);
+    store.getState().setLatchedModifier('alternate', true);
+    const map = createMap(stationFeature(stationId));
+    const shown: Array<PointerIntent | null> = [];
+    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+
+    map.fire('touchstart', touchEvent(map, [{ x: 100, y: 100 }]));
+    scheduler.pump();
+
+    expect(shown.at(-1)).toMatchObject({ primaryOperation: 'delete-station', badge: 'erase' });
+    detach();
+    vi.useRealTimers();
+  });
+
   it('pans with two fingers and draws nothing', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
