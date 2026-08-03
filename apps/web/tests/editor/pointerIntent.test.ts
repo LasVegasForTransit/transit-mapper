@@ -25,7 +25,7 @@ describe('resolvePointerIntent', () => {
   const cases: IntentCase[] = [
     {
       name: 'Any editable view / Space',
-      input: { modifiers: { space: true } },
+      input: { modifiers: { pan: true } },
       cursor: 'grab',
       badge: null,
       primaryOperation: 'pan',
@@ -75,7 +75,7 @@ describe('resolvePointerIntent', () => {
     },
     {
       name: 'Network Select / Station Alt',
-      input: { target: 'station', modifiers: { alt: true } },
+      input: { target: 'station', modifiers: { alternate: true } },
       cursor: 'grab',
       badge: 'erase',
       primaryOperation: 'delete-station',
@@ -85,7 +85,7 @@ describe('resolvePointerIntent', () => {
     },
     {
       name: 'Network Select / Facility Alt',
-      input: { target: 'facility', modifiers: { alt: true } },
+      input: { target: 'facility', modifiers: { alternate: true } },
       cursor: 'grab',
       badge: 'erase',
       primaryOperation: 'delete-facility',
@@ -165,7 +165,7 @@ describe('resolvePointerIntent', () => {
     },
     {
       name: 'Network Line / Alt Option',
-      input: { tool: 'way', modifiers: { alt: true } },
+      input: { tool: 'way', modifiers: { alternate: true } },
       cursor: 'crosshair',
       badge: 'separate',
       primaryOperation: 'draw-separate-corridor',
@@ -199,7 +199,7 @@ describe('resolvePointerIntent', () => {
         tool: 'way',
         target: 'compatible-corridor',
         routeDraftActive: true,
-        modifiers: { alt: true },
+        modifiers: { alternate: true },
       },
       cursor: 'crosshair',
       badge: 'connect',
@@ -220,7 +220,7 @@ describe('resolvePointerIntent', () => {
     },
     {
       name: 'Network / Right-click line',
-      input: { target: 'line', modifiers: { rightButton: true } },
+      input: { target: 'line', modifiers: { actions: true } },
       cursor: 'default',
       badge: null,
       primaryOperation: 'open-line-actions',
@@ -230,7 +230,7 @@ describe('resolvePointerIntent', () => {
     },
     {
       name: 'Network / Right-click terminus',
-      input: { target: 'terminus', modifiers: { rightButton: true } },
+      input: { target: 'terminus', modifiers: { actions: true } },
       cursor: 'default',
       badge: null,
       primaryOperation: 'open-terminus-actions',
@@ -250,7 +250,7 @@ describe('resolvePointerIntent', () => {
     },
     {
       name: 'Infrastructure Select / Control point Shift',
-      input: { view: 'infrastructure', target: 'control-point', modifiers: { shift: true } },
+      input: { view: 'infrastructure', target: 'control-point', modifiers: { constrain: true } },
       cursor: 'grab',
       badge: 'constrain',
       primaryOperation: 'constrained-move',
@@ -260,7 +260,7 @@ describe('resolvePointerIntent', () => {
     },
     {
       name: 'Infrastructure Select / Control point Alt Option',
-      input: { view: 'infrastructure', target: 'control-point', modifiers: { alt: true } },
+      input: { view: 'infrastructure', target: 'control-point', modifiers: { alternate: true } },
       cursor: 'grab',
       badge: 'erase',
       primaryOperation: 'erase-points',
@@ -270,7 +270,7 @@ describe('resolvePointerIntent', () => {
     },
     {
       name: 'Infrastructure Select / Interior point Ctrl Cmd',
-      input: { view: 'infrastructure', target: 'interior-point', modifiers: { ctrlOrMeta: true } },
+      input: { view: 'infrastructure', target: 'interior-point', modifiers: { secondary: true } },
       cursor: 'default',
       badge: 'split',
       primaryOperation: 'split-corridor',
@@ -280,7 +280,7 @@ describe('resolvePointerIntent', () => {
     },
     {
       name: 'Infrastructure Select / Endpoint Ctrl Cmd',
-      input: { view: 'infrastructure', target: 'endpoint', modifiers: { ctrlOrMeta: true } },
+      input: { view: 'infrastructure', target: 'endpoint', modifiers: { secondary: true } },
       cursor: 'grab',
       badge: 'extend',
       primaryOperation: 'extend-corridor',
@@ -290,7 +290,7 @@ describe('resolvePointerIntent', () => {
     },
     {
       name: 'Infrastructure / Right-click corridor',
-      input: { view: 'infrastructure', target: 'corridor', modifiers: { rightButton: true } },
+      input: { view: 'infrastructure', target: 'corridor', modifiers: { actions: true } },
       cursor: 'default',
       badge: null,
       primaryOperation: 'open-corridor-actions',
@@ -338,11 +338,11 @@ describe('resolvePointerIntent', () => {
       badge: 'move',
       primaryOperation: 'move-point',
     });
-    expect(resolvePointerIntent({ ...base, modifiers: { shift: true } })).toMatchObject({
+    expect(resolvePointerIntent({ ...base, modifiers: { constrain: true } })).toMatchObject({
       badge: 'constrain',
       primaryOperation: 'constrained-move',
     });
-    expect(resolvePointerIntent({ ...base, modifiers: { alt: true } })).toMatchObject({
+    expect(resolvePointerIntent({ ...base, modifiers: { alternate: true } })).toMatchObject({
       badge: 'erase',
       primaryOperation: 'erase-points',
     });
@@ -360,7 +360,7 @@ describe('resolvePointerIntent', () => {
       target: 'control-point',
       gestureActive: true,
       lockedPrimaryOperation: down.primaryOperation,
-      modifiers: { shift: true, alt: true, ctrlOrMeta: true },
+      modifiers: { constrain: true, alternate: true, secondary: true },
     });
     expect(dragged.primaryOperation).toBe('move-point');
     expect(dragged.constraint).toBe('constrain');

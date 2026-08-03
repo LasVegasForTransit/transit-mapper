@@ -2,6 +2,7 @@ import { useRef, type ReactNode } from 'react';
 import { useEditor } from '../editor/EditorProvider';
 import { useSelectionActions } from '../editor/useSelectionActions';
 import type { MultiSelectItem, Selection } from '../editor/store';
+import { useHoverCapable } from './device-capabilities';
 import { Icon } from './Icon';
 import { NodeInspector } from './NodeInspector';
 import { Panel } from './Panel';
@@ -42,13 +43,37 @@ function renderInspectorContent(
 // otherwise. Slides back out the same way once BOTH clear: stays mounted
 // (showing the last real content) for the CSS exit transition's duration
 // instead of vanishing the instant either one clears — see useDelayedUnmount.
+/**
+ * Whether an armed tool has draft options to show. Exported because App.tsx
+ * decides the same thing for `hasSupplementalContent`, and two copies of this
+ * predicate would drift into a sheet that opens over an empty panel.
+ *
+ * The Select tool is included only without a hover-capable pointer. Its
+ * options are the latched modifier channels (see inspector/modifiers.tsx),
+ * which are the only way to reach Alt/Shift/Ctrl operations by finger. Where
+ * those keys can actually be held, Select keeps its empty inspector, and the
+ * channels stay discoverable through the other three tools' panels — an
+ * inspector that never closes would be chrome with nothing to say.
+ */
+export function useShowingToolDraft(): boolean {
+  const tool = useEditor((s) => s.tool);
+  const readOnly = useEditor((s) => s.readOnly);
+  const selection = useEditor((s) => s.selection);
+  const multiSelection = useEditor((s) => s.multiSelection);
+  const hoverCapable = useHoverCapable();
+  const { viewMode } = useView();
+  if (readOnly || viewMode === 'diagram') return false;
+  if (tool !== 'select') return true;
+  // Unlike a drawing tool, Select's options yield to a selection: what you
+  // just picked is more specific than how the next press will be qualified.
+  return !hoverCapable && selection === null && multiSelection.length === 0;
+}
+
 export function Inspector() {
   const selection = useEditor((s) => s.selection);
   const multiSelection = useEditor((s) => s.multiSelection);
   const tool = useEditor((s) => s.tool);
-  const readOnly = useEditor((s) => s.readOnly);
-  const { viewMode } = useView();
-  const showingToolDraft = tool !== 'select' && !readOnly && viewMode !== 'diagram';
+  const showingToolDraft = useShowingToolDraft();
   const isOpen = showingToolDraft || multiSelection.length > 0 || selection !== null;
   const { mounted, closing } = useDelayedUnmount(isOpen, 160);
 

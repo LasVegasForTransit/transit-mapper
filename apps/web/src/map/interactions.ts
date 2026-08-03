@@ -418,19 +418,38 @@ export function attachInteractions(
     return featureAt(e, [LYR_STATIONS]);
   };
 
+  /**
+   * A held key OR a latched channel produces the same state, which is the one
+   * place the two input paths meet. Everything downstream — the resolver, the
+   * badge, the dispatch — sees a channel and cannot tell which set it, so
+   * touch reaches Alt/Shift/Ctrl operations without a second code path.
+   */
   const modifierState = (event: {
     altKey?: boolean;
     ctrlKey?: boolean;
     metaKey?: boolean;
     shiftKey?: boolean;
     button?: number;
-  }): ModifierState => ({
-    space: spaceHeld,
-    shift: event.shiftKey,
-    alt: event.altKey,
-    ctrlOrMeta: event.ctrlKey || event.metaKey,
-    rightButton: event.button === 2,
-  });
+  }): ModifierState => {
+    const latched = store.getState().latchedModifiers;
+    return {
+      pan: spaceHeld,
+      constrain: event.shiftKey === true || latched.constrain,
+      alternate: event.altKey === true || latched.alternate,
+      secondary: event.ctrlKey === true || event.metaKey === true || latched.secondary,
+      actions: event.button === 2,
+    };
+  };
+
+  /**
+   * The `constrain` channel during a live drag. Shift is the sole modifier
+   * allowed to alter a gesture mid-flight (it changes only geometry, never the
+   * verb), so every drag loop that offers angle-snapping asks through this
+   * rather than reading shiftKey — otherwise a latched constraint would show
+   * in the badge and do nothing to the geometry.
+   */
+  const constrainActive = (ev: { originalEvent?: { shiftKey?: boolean } }): boolean =>
+    ev.originalEvent?.shiftKey === true || store.getState().latchedModifiers.constrain;
 
   /** The one definition of a corridor a Network line may route over. Both
    * rendered-hit classification and startDraw use it, so an icon never says
@@ -704,7 +723,7 @@ export function attachInteractions(
       // the sole modifier permitted to alter it mid-drag, and only changes the
       // geometric constraint — Alt/Ctrl/Cmd cannot turn the drag into erase/
       // split/extend after its start.
-      if (ev.originalEvent.shiftKey) c = constrainToNeighbor(wayId, index, c);
+      if (constrainActive(ev)) c = constrainToNeighbor(wayId, index, c);
       throttled.call(c);
     };
     const onUp = () => {
@@ -745,7 +764,7 @@ export function attachInteractions(
     });
     const onMove = (ev: MapMouseEvent) => {
       dragged = true;
-      previewThrottle.call(lngLatOf(ev), ev.originalEvent.shiftKey);
+      previewThrottle.call(lngLatOf(ev), constrainActive(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
       previewThrottle.cancel();
@@ -753,11 +772,7 @@ export function attachInteractions(
       map.off('mousemove', onMove);
       clearPreviews();
       if (dragged) {
-        placeEnd(
-          wayId,
-          atStart,
-          resolveEnd(wayId, atStart, lngLatOf(ev), ev.originalEvent.shiftKey),
-        );
+        placeEnd(wayId, atStart, resolveEnd(wayId, atStart, lngLatOf(ev), constrainActive(ev)));
         // Pulling an end across another same-grade way forms a real junction
         // there, same as finishing a draw does.
         store.getState().formCrossingJunctions(wayId);
@@ -1553,7 +1568,7 @@ export function attachInteractions(
     });
     const onMove = (ev: MapMouseEvent) => {
       if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= dragPx) dragged = true;
-      previewThrottle.call(lngLatOf(ev), ev.originalEvent.shiftKey);
+      previewThrottle.call(lngLatOf(ev), constrainActive(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
       previewThrottle.cancel();
@@ -1562,12 +1577,7 @@ export function attachInteractions(
       // Seed-only click just grabbed the start (fresh or resumed); every
       // other release adds a node.
       if (dragged || !seededStart) {
-        const end = resolveEnd(
-          committedWayId,
-          extendAtStart,
-          lngLatOf(ev),
-          ev.originalEvent.shiftKey,
-        );
+        const end = resolveEnd(committedWayId, extendAtStart, lngLatOf(ev), constrainActive(ev));
         placeEnd(committedWayId, extendAtStart, end);
       }
       suppressClick = true; // node placement is handled here, not in onClick
@@ -1691,7 +1701,7 @@ export function attachInteractions(
       // established rubber band remains unconditional; Network drafts are
       // gated by the resolved presentation contract.
       if (!opts.isNetworkMode() || pointerIntent.anchor === 'preview')
-        previewEnd(st.activeWayId, activeExtendAtStart, lngLatOf(ev), ev.originalEvent.shiftKey);
+        previewEnd(st.activeWayId, activeExtendAtStart, lngLatOf(ev), constrainActive(ev));
       else clearPreviews();
       setEndpointHint(null);
       return;
@@ -1948,10 +1958,15 @@ export function attachInteractions(
     }, {});
   };
 
-  // ---- mousedown: dispatch by button, modifier, tool, target --------------
+  // ---- mousedown: dispatch by button, channel, tool, target ----------------
   const onMouseDown = (e: MapMouseEvent) => {
     const st = store.getState();
     const oe = e.originalEvent;
+    // Resolved channels, not raw key state: the branches below must agree with
+    // the intent the badge and cursor already published, and a latched channel
+    // has to reach them exactly as a held key does. Read once so the whole
+    // dispatch sees one consistent answer.
+    const channels = modifierState(oe);
     // A new press owns the flag outright: whatever the previous one armed is
     // spent by now, whether or not a click ever arrived to consume it.
     suppressClick = false;
@@ -2035,7 +2050,7 @@ export function attachInteractions(
       if (
         pointerIntent.primaryOperation === 'move-station' &&
         station &&
-        !oe.shiftKey &&
+        !channels.constrain &&
         !isGroupMember('station', station.properties.id as string)
       ) {
         startStationDrag(station.properties.id as string);
@@ -2044,7 +2059,7 @@ export function attachInteractions(
       if (
         pointerIntent.primaryOperation === 'move-facility' &&
         facility &&
-        !oe.shiftKey &&
+        !channels.constrain &&
         !isGroupMember('facility', facility.properties.id as string)
       ) {
         startFacilityDrag(facility.properties.id as string);
@@ -2086,7 +2101,7 @@ export function attachInteractions(
       return;
     }
 
-    if (oe.altKey) {
+    if (channels.alternate) {
       if (physicalHandle) {
         const kind = physicalHandle.properties.kind as 'footprint' | 'platform' | 'groupFootprint';
         if (kind === 'groupFootprint') {
@@ -2129,7 +2144,7 @@ export function attachInteractions(
     // keeps the original's type/grade/class/capacity and can then be edited
     // independently (see store.ts's splitWayAt doc comment). A no-op on an
     // endpoint (nothing to split off) or any other target.
-    if (oe.ctrlKey || oe.metaKey) return;
+    if (channels.secondary) return;
 
     switch (st.tool) {
       case 'select':
@@ -2137,7 +2152,7 @@ export function attachInteractions(
         // drag — a discrete add/remove, resolved entirely here since every
         // draggable target below sets suppressClick and would otherwise
         // swallow the click before onClick ever saw it.
-        if (oe.shiftKey) {
+        if (channels.constrain) {
           if (handle) st.extendSelection({ kind: 'way', id: handle.properties.wayId as string });
           else if (facility)
             st.extendSelection({ kind: 'facility', id: facility.properties.id as string });
@@ -2559,7 +2574,7 @@ export function attachInteractions(
       if (lastPointer)
         publishPointerIntent(
           lastPointer,
-          { ...modifierState(lastPointer.originalEvent), space: held },
+          { ...modifierState(lastPointer.originalEvent), pan: held },
           false,
         );
       else canvas.style.cursor = held ? 'grab' : cursorFor();

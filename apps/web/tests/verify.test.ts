@@ -6,6 +6,7 @@ import {
   FINE_POINTER_TUNING,
   inputTuningFor,
 } from '../src/editor/input-tuning';
+import { resolvePointerIntent } from '../src/editor/pointerIntent';
 import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
 import { createSelectionActions } from '../src/editor/actions';
 import { validateSystemQuick } from '@transitmapper/core/model/validate';
@@ -12204,6 +12205,62 @@ function buildGrid() {
     'inputTuningFor(true) selects the coarse profile',
     inputTuningFor(true) === COARSE_POINTER_TUNING,
   );
+}
+
+// --- modifier channels resolve the operations their keys used to ---
+// These are named for the channel rather than the key (alternate, not alt)
+// because a touchscreen latches them from the inspector instead of holding
+// them. The resolver must therefore have no notion of which set it — see
+// interactions.test.ts for the test that a latched channel and a held key
+// reach the same dispatch.
+{
+  const base = {
+    view: 'infrastructure' as const,
+    tool: 'select' as const,
+    readOnly: false,
+    armed: 'none' as const,
+    gestureActive: false,
+  };
+  check(
+    'the alternate channel erases a control point',
+    resolvePointerIntent({ ...base, target: 'control-point', modifiers: { alternate: true } })
+      .primaryOperation === 'erase-points',
+  );
+  check(
+    'without a channel the same target just moves',
+    resolvePointerIntent({ ...base, target: 'control-point', modifiers: {} }).primaryOperation ===
+      'move-point',
+  );
+  check(
+    'the secondary channel splits an interior point',
+    resolvePointerIntent({ ...base, target: 'interior-point', modifiers: { secondary: true } })
+      .primaryOperation === 'split-corridor',
+  );
+  check(
+    'the constrain channel qualifies a move without changing the verb',
+    resolvePointerIntent({ ...base, target: 'control-point', modifiers: { constrain: true } })
+      .primaryOperation === 'constrained-move',
+  );
+  check(
+    'the actions channel opens the corridor menu',
+    resolvePointerIntent({ ...base, target: 'corridor', modifiers: { actions: true } })
+      .primaryOperation === 'open-corridor-actions',
+  );
+}
+
+// --- latched modifiers are editor state, not history ---
+{
+  fresh();
+  const before = store.getState().canUndo;
+  store.getState().setLatchedModifier('alternate', true);
+  check('latching a channel turns it on', store.getState().latchedModifiers.alternate);
+  check(
+    'latching one channel leaves the others alone',
+    !store.getState().latchedModifiers.constrain,
+  );
+  check('latching a channel creates no undo step', store.getState().canUndo === before);
+  store.getState().setLatchedModifier('alternate', false);
+  check('a latched channel switches back off', !store.getState().latchedModifiers.alternate);
 }
 
 // --- an identity with no name contributes no name ---

@@ -195,9 +195,42 @@ export interface ApplyGtfsImportBatch {
   pieces: GtfsImportPieces;
 }
 
+/**
+ * Modifier channels a pointer can hold open without a keyboard.
+ *
+ * `Alt`, `Shift`, and `Ctrl` qualify real operations — erase, angle-snap,
+ * split. A touchscreen has no way to hold one, and a chorded finger gesture
+ * per modifier is not something anyone could learn, so the same channels can
+ * be latched instead and stay on until switched off.
+ *
+ * Only the three qualifying channels latch. `pan` and `actions` do not appear
+ * here: both already have their own touch gestures (two fingers and a long
+ * press), and a latched "everything is now the action menu" mode would be a
+ * trap rather than a convenience.
+ *
+ * Held keys are ORed with these, so a keyboard is unaffected. See
+ * pointerIntent.ts's ModifierState for what each one means.
+ */
+export interface LatchedModifiers {
+  constrain: boolean;
+  alternate: boolean;
+  secondary: boolean;
+}
+
+export type LatchedModifierChannel = keyof LatchedModifiers;
+
+export const NO_LATCHED_MODIFIERS: LatchedModifiers = {
+  constrain: false,
+  alternate: false,
+  secondary: false,
+};
+
 export interface EditorState {
   system: TransitSystem;
   tool: Tool;
+  /** See LatchedModifiers. Not undoable: it qualifies the next gesture rather
+   *  than describing the system. */
+  latchedModifiers: LatchedModifiers;
   selection: Selection;
   /** Transient branch focus for service-owned map affordances. */
   activePatternId: string | null;
@@ -305,6 +338,8 @@ export interface EditorState {
 
   // tools & selection
   setTool: (tool: Tool) => void;
+  /** Turns one latched channel on or off. A held key is unaffected either way. */
+  setLatchedModifier: (channel: LatchedModifierChannel, latched: boolean) => void;
   select: (selection: Selection) => void;
   setActivePattern: (patternId: string | null) => void;
   armTerminus: (terminus: NonNullable<EditorState['armedTerminus']>) => void;
@@ -1986,6 +2021,7 @@ export function createEditorStore() {
   const editor = createStore<EditorState>()((set, get) => ({
     system: createEmptySystem(),
     tool: 'select',
+    latchedModifiers: NO_LATCHED_MODIFIERS,
     selection: null,
     activePatternId: null,
     armedTerminus: null,
@@ -2147,6 +2183,12 @@ export function createEditorStore() {
         };
       });
     },
+
+    // Not routed through history: a latched channel qualifies the NEXT
+    // gesture, so undoing back through it would restore a mode rather than a
+    // change to the system, and the gesture it qualified would be a step away.
+    setLatchedModifier: (channel, latched) =>
+      set((s) => ({ latchedModifiers: { ...s.latchedModifiers, [channel]: latched } })),
 
     select: (selection) =>
       set((s) => ({

@@ -22,12 +22,31 @@ export type PointerTarget =
   | 'facility'
   | 'corridor';
 
+/**
+ * The modal channels a press can be qualified by, named for what they are
+ * rather than for how they are set.
+ *
+ * A keyboard sets these by being held; a touch device has no modifier keys, so
+ * the same channels are latched from the inspector instead (see
+ * ui/inspector/modifiers.tsx). Both produce this identical shape, which is why
+ * resolvePointerIntent below needs no notion of what kind of pointer it is
+ * serving — that is the whole reason these are not called `alt` and `shift`.
+ *
+ * They are channels rather than verbs on purpose. `alternate` means erase
+ * under Select and separate-corridor under the Way tool, so any verb name
+ * would be accurate in one tool and a lie in the other.
+ */
 export interface ModifierState {
-  space?: boolean;
-  shift?: boolean;
-  alt?: boolean;
-  ctrlOrMeta?: boolean;
-  rightButton?: boolean;
+  /** `Space`. Offers camera pan over any target. */
+  pan?: boolean;
+  /** `Shift`. Adds a geometric constraint; the only channel legal mid-gesture. */
+  constrain?: boolean;
+  /** `Alt`/`Option`. Erase, or draw deliberately separate infrastructure. */
+  alternate?: boolean;
+  /** `Ctrl`/`⌘`. Split at an interior point, extend at an endpoint. */
+  secondary?: boolean;
+  /** The right button, or a long press. Opens the action anchor and its menu. */
+  actions?: boolean;
 }
 
 /** A drawing state that gives the next pointer press a more specific verb. */
@@ -120,13 +139,13 @@ function intent(
 export function resolvePointerIntent(input: PointerIntentInput): PointerIntent {
   const target = input.target ?? 'empty';
   const { modifiers } = input;
-  const constraint = input.gestureActive && modifiers.shift ? 'constrain' : 'none';
+  const constraint = input.gestureActive && modifiers.constrain ? 'constrain' : 'none';
 
   // Diagram coordinates are a projection and shared snapshots are immutable;
   // neither may feed an edit back into the store. Space still offers camera
   // pan, but an editable target must state its refusal explicitly.
   if (input.readOnly || input.view === 'diagram') {
-    if (modifiers.space || target === 'empty') return intent('pan', 'grab', null, true);
+    if (modifiers.pan || target === 'empty') return intent('pan', 'grab', null, true);
     return intent('refuse-edit', 'not-allowed', null, false);
   }
 
@@ -149,7 +168,7 @@ export function resolvePointerIntent(input: PointerIntentInput): PointerIntent {
     return intent(input.lockedPrimaryOperation, 'grabbing', null, true, 'preview', constraint);
   }
 
-  if (modifiers.rightButton) {
+  if (modifiers.actions) {
     if (target === 'terminus')
       return intent('open-terminus-actions', 'default', null, true, 'target');
     if (input.view === 'infrastructure' && target === 'corridor')
@@ -157,7 +176,7 @@ export function resolvePointerIntent(input: PointerIntentInput): PointerIntent {
     return intent('open-line-actions', 'default', null, true, 'target');
   }
 
-  if (modifiers.space) return intent('pan', 'grab', null, true);
+  if (modifiers.pan) return intent('pan', 'grab', null, true);
 
   if (input.view === 'network') {
     if (input.armed === 'network-return') {
@@ -182,7 +201,7 @@ export function resolvePointerIntent(input: PointerIntentInput): PointerIntent {
         return target === 'compatible-corridor'
           ? intent('route-service', 'crosshair', 'connect', true, 'target')
           : intent('default', 'crosshair', null, true);
-      if (modifiers.alt)
+      if (modifiers.alternate)
         return intent('draw-separate-corridor', 'crosshair', 'separate', true, 'preview');
       if (target === 'compatible-corridor')
         return intent('route-service', 'crosshair', 'connect', true, 'target');
@@ -190,9 +209,9 @@ export function resolvePointerIntent(input: PointerIntentInput): PointerIntent {
         return intent('resume-service-and-corridor', 'crosshair', 'extend', true, 'target');
       return intent('draw-service-and-corridor', 'crosshair', 'new', true, 'preview');
     }
-    if (input.tool === 'select' && modifiers.alt && target === 'station')
+    if (input.tool === 'select' && modifiers.alternate && target === 'station')
       return intent('delete-station', 'grab', 'erase', true, 'target');
-    if (input.tool === 'select' && modifiers.alt && target === 'facility')
+    if (input.tool === 'select' && modifiers.alternate && target === 'facility')
       return intent('delete-facility', 'grab', 'erase', true, 'target');
     if (input.tool === 'select' && target === 'station')
       return intent('move-station', 'grab', 'move', true, 'target');
@@ -212,14 +231,14 @@ export function resolvePointerIntent(input: PointerIntentInput): PointerIntent {
 
   if (input.view === 'infrastructure' && input.tool === 'select') {
     const editablePoint = target === 'control-point' || target === 'interior-point';
-    if (modifiers.alt && editablePoint)
+    if (modifiers.alternate && editablePoint)
       return intent('erase-points', 'grab', 'erase', true, 'target');
-    if (modifiers.ctrlOrMeta && target === 'interior-point')
+    if (modifiers.secondary && target === 'interior-point')
       return intent('split-corridor', 'default', 'split', true, 'target');
-    if (modifiers.ctrlOrMeta && target === 'endpoint')
+    if (modifiers.secondary && target === 'endpoint')
       return intent('extend-corridor', 'grab', 'extend', true, 'target');
     if (editablePoint || target === 'endpoint')
-      return modifiers.shift
+      return modifiers.constrain
         ? intent('constrained-move', 'grab', 'constrain', true, 'target')
         : intent('move-point', 'grab', 'move', true, 'target');
   }

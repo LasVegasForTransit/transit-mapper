@@ -1380,6 +1380,15 @@ input[type='range'] {
 .chip.static {
   cursor: default;
 }
+/* The key a modifier chip mirrors (see inspector/modifiers.tsx). Quieter than
+   the label: the chip is the control, and the key is a note about another way
+   to reach it. Rendered only where a keyboard is likely, so it never claims a
+   phone has an Alt key. */
+.chip-key {
+  font-family: var(--mono);
+  font-size: var(--md-sys-typescale-label-small-size);
+  opacity: 0.6;
+}
 .chip:disabled {
   cursor: not-allowed;
 }

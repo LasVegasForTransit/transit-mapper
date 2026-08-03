@@ -91,6 +91,25 @@ Pointer tolerances scale with the pointer. A coarse pointer hit-tests within
 and cannot be placed inside a 9-pixel radius. The full table is in
 `apps/web/src/editor/input-tuning.ts`.
 
-Modifier keys have no touch equivalent, and no chorded finger gesture stands in
-for one. `Shift`, `Alt`/`Option`, and `Ctrl`/`⌘` are instead available as
-latched channels in the inspector, which a pointer of any kind can set.
+## Modifier channels
+
+A press can be qualified by four modal channels. They are named for what they
+qualify rather than for the key that sets them, because a keyboard is only one
+of two ways to set them: each can also be latched from the inspector, which is
+how a touchscreen reaches operations that would otherwise need a key held.
+
+| Channel     | Key            | Latchable | Qualifies                                                       |
+| ----------- | -------------- | --------- | --------------------------------------------------------------- |
+| `constrain` | `Shift`        | Yes       | Angle-snapping and constrained moves                            |
+| `alternate` | `Alt`/`Option` | Yes       | Erase; separate-corridor drawing in the Line tool               |
+| `secondary` | `Ctrl`/`⌘`     | Yes       | Split at an interior point, extend at an endpoint               |
+| `pan`       | `Space`        | No        | Camera pan. Touch uses two fingers instead                      |
+| `actions`   | Right button   | No        | The action anchor and its menu. Touch uses a long press instead |
+
+A held key and a latched channel produce the same input, so the resolved
+operation, badge, and cursor are identical either way. `pan` and `actions` do
+not latch: both already have a touch gesture, and a latched action-menu mode
+would be a trap rather than a convenience.
+
+`constrain` is the only channel that may change during a gesture, and it alters
+only geometry, never the operation.

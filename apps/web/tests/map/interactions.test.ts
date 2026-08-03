@@ -1236,6 +1236,52 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
+  it('reaches the same erase through a latched channel with no key held', () => {
+    // The equivalence the whole channel rename exists for. A touchscreen
+    // cannot hold Alt, so the inspector latches `alternate` instead; the
+    // published intent and the dispatch must both be identical to the
+    // Alt-click above, which fires the same events WITHOUT altKey.
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const stationId = store.getState().addStation([-115.2, 36.1]);
+    store.getState().setLatchedModifier('alternate', true);
+    const map = createMap(stationFeature(stationId));
+    const shown: Array<PointerIntent | null> = [];
+    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+
+    map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
+    scheduler.pump();
+    expect(shown.at(-1)).toMatchObject({
+      primaryOperation: 'delete-station',
+      cursor: 'grab',
+      badge: 'erase',
+      anchor: 'target',
+    });
+
+    map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
+    expect(store.getState().system.stations).toHaveLength(0);
+    expect(map.panCalls).toEqual([]);
+    detach();
+  });
+
+  it('erases by finger when the alternate channel is latched', () => {
+    // End to end: no keyboard, no mouse, and the tap still deletes.
+    vi.useFakeTimers();
+    installBrowserGlobals();
+    const store = createEditorStore();
+    const stationId = store.getState().addStation([-115.2, 36.1]);
+    store.getState().setLatchedModifier('alternate', true);
+    const map = createMap(stationFeature(stationId));
+    const detach = attach(map, store);
+
+    map.fire('touchstart', touchEvent(map, [{ x: 100, y: 100 }]));
+    map.fire('touchend', touchEvent(map, []));
+
+    expect(store.getState().system.stations).toHaveLength(0);
+    detach();
+    vi.useRealTimers();
+  });
+
   it('publishes erase and deletes an Alt-clicked Network facility', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
