@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { useEditor } from '../editor/EditorProvider';
 import { useCompactLayout } from './device-capabilities';
+import { useKeyboardInset } from './useKeyboardInset';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Panel } from './Panel';
@@ -108,6 +109,9 @@ export function Workbench({
   // `inert` isn't expressible in CSS, so it's the one thing that still
   // needs uiHidden read directly here rather than falling out of a class.
   const { uiHidden } = useUi();
+  // Only the sheet reacts to the keyboard; the docked desktop cards are not
+  // bottom-anchored and no desktop keyboard covers the viewport.
+  const keyboardInset = useKeyboardInset();
   const actionsCollapsedRef = useInertRef<HTMLDivElement>(uiHidden);
   const supplementalRef = useInertRef<HTMLDivElement>(uiHidden);
   const actionsFullRef = useInertRef<HTMLDivElement>(uiHidden);
@@ -146,7 +150,13 @@ export function Workbench({
             the primary actions and reveals the ⋯ overflow that carries the
             rest (see TopBarActions). */}
         {mobile && (
-          <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center gap-2">
+          <div
+            // viewport-fit=cover extends the viewport under the notch and the
+            // status bar, so the top cluster needs that inset back or its own
+            // first row sits beneath them. Zero on every device without one.
+            style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+            className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center gap-2"
+          >
             <div className="flex w-full items-start justify-between gap-2">
               <div className="pointer-events-auto min-w-0 flex-1 overflow-hidden rounded-xl border border-[var(--md-sys-color-surface-container-highest)] bg-[var(--md-sys-color-surface)] px-2 py-1.5 shadow-[var(--md-sys-elevation-level2)]">
                 <div className="mobile-topleft">
@@ -289,11 +299,24 @@ export function Workbench({
       {mobile && (
         <div
           ref={sheetRef}
+          // 62dvh, not 62vh: a mobile browser's vh is fixed to the viewport
+          // with the URL bar retracted, so a vh-sized sheet is taller than the
+          // space it has for as long as that bar is showing.
+          //
+          // bottom is the keyboard's height when one is open, so the sheet
+          // rides above it instead of being typed into from behind; it is the
+          // home-indicator inset otherwise, since viewport-fit=cover put the
+          // viewport's bottom edge underneath the indicator. Padding rather
+          // than a margin, so the sheet's surface still reaches the edge.
+          style={{
+            bottom: keyboardInset > 0 ? keyboardInset : undefined,
+            paddingBottom: keyboardInset > 0 ? undefined : 'env(safe-area-inset-bottom, 0px)',
+          }}
           className={`absolute inset-x-0 bottom-0 z-[5] flex flex-col rounded-t-2xl border-t border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-level3)] transition-[max-height,opacity] duration-200 ease-[cubic-bezier(0.2,0.7,0.3,1)] ${
             uiHidden
               ? 'pointer-events-none max-h-0 overflow-hidden opacity-0'
               : sheetExpanded
-                ? 'max-h-[62vh]'
+                ? 'max-h-[62dvh]'
                 : 'max-h-14 overflow-hidden'
           }`}
         >

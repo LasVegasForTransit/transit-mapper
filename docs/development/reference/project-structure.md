@@ -139,8 +139,13 @@ updater for activation state.
 #### Editing
 
 `apps/web/src/editor` owns the Zustand store, undo history, editing actions,
-selection, keyboard routing, and gesture transactions. `apps/web/src/camera`
-holds the live map camera outside the saved system. Domain mutations pass
+selection, keyboard routing, and gesture transactions.
+`apps/web/src/editor/pointerIntent.ts` resolves a press into an operation from
+its target and modifier channels alone, without browser or map state, so
+presentation and dispatch reach the same decision.
+`apps/web/src/editor/input-tuning.ts` declares the hit, snap, and drag
+tolerances for each pointer precision. `apps/web/src/camera` holds the live map
+camera outside the saved system. Domain mutations pass
 through editor actions; map and UI modules do not modify records directly.
 
 #### Map rendering
@@ -157,7 +162,9 @@ controls, dialogs, onboarding, and accessibility semantics.
 `apps/web/src/ui/device-capabilities.ts` resolves viewport width and pointer
 capability as separate answers, so layout and input tolerance adapt on their
 own evidence; it serves both React consumers and imperative callers in the map
-and installation modules.
+and installation modules. `apps/web/src/ui/useKeyboardInset.ts` reports how much
+of the viewport an on-screen keyboard covers, which no layout-viewport
+measurement exposes.
 `apps/web/src/theme` maps the operating system color preference to application
 tokens, while `apps/web/src/i18n` owns user-visible message selection.
 `apps/web/src/services` exposes browser-local preferences to UI consumers.

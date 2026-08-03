@@ -1483,6 +1483,13 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           position: 'absolute',
           inset: 0,
           background: 'var(--tm-map-background)',
+          // The map owns every gesture inside its own box, so the browser gets
+          // none of them. Without this a downward swipe on the canvas is
+          // pull-to-refresh and a horizontal one is back-navigation on some
+          // Android browsers: a gesture meant to draw a line reloads the page
+          // or leaves it. Scoped to the canvas, never the whole app — the
+          // bottom sheet and its panels still need to scroll.
+          touchAction: 'none',
         }}
       />
       <PointerBadge intent={pointerBadge.intent} x={pointerBadge.x} y={pointerBadge.y} />
