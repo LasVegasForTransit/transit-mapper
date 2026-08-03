@@ -65,3 +65,32 @@ Dropping an extension on an invalid target, dismissing the connection chooser,
 or pressing `Escape` changes no saved network data. A successful gesture is
 one undo checkpoint. Service-path edits do not move or split corridors,
 junctions, or stations unless the user explicitly chooses a corridor operation.
+
+## Touch equivalents
+
+Touch reaches the operations above through a different grammar, not a reduced
+one. Each row of this table names the mouse gesture it stands in for; the
+resolved operation, badge, and undo behaviour are identical, because both
+grammars dispatch through the same intent resolution.
+
+| Touch gesture     | Stands in for              | Result                                                                  |
+| ----------------- | -------------------------- | ----------------------------------------------------------------------- |
+| One-finger drag   | Left-drag                  | The active tool's operation: draw, move, extend, or marquee             |
+| Two-finger drag   | Right-drag or `Space`-drag | Pan                                                                     |
+| Pinch             | Scroll                     | Zoom. Rotation and pitch stay disabled                                  |
+| Long press, 500ms | Right-click                | Open the action anchor and its menu, finish a draw, or branch a one-way |
+| Double tap        | Double-click               | Finish the current line                                                 |
+| Tap               | Click                      | Select, deselect, or place the next point                               |
+
+A press that has not yet moved past the drag threshold has committed to
+nothing. Lifting it is a tap, moving it starts the tool's gesture, and holding
+it opens the actions menu.
+
+Pointer tolerances scale with the pointer. A coarse pointer hit-tests within
+24 CSS pixels rather than 9, because a fingertip contact patch measures 9-11mm
+and cannot be placed inside a 9-pixel radius. The full table is in
+`apps/web/src/editor/input-tuning.ts`.
+
+Modifier keys have no touch equivalent, and no chorded finger gesture stands in
+for one. `Shift`, `Alt`/`Option`, and `Ctrl`/`⌘` are instead available as
+latched channels in the inspector, which a pointer of any kind can set.

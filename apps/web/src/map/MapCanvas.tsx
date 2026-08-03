@@ -330,13 +330,25 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       // always-on per-frame drawing-buffer copy that reading its canvas required.
       fadeDuration: 0, // no trailing label/icon fade animation after a pan/zoom — snappier, one fewer post-move repaint pass
       refreshExpiredTiles: false, // the basemap is static within a session; don't re-fetch/re-tessellate expired tiles
-      dragPan: false, // SimCity-style: the map pans on right-drag / space-drag only
+      // SimCity-style: the primary press belongs to the active tool, never to
+      // the camera. On a mouse that means pan is right-drag or space-drag; by
+      // finger it means two fingers (see interactions.ts's touch adapter, which
+      // owns that gesture). Leaving dragPan off is what reserves the one-finger
+      // drag for the tool — MapLibre's own DragPanHandler would otherwise claim
+      // it, and there is no supported way to enable its touch half alone.
+      dragPan: false,
       dragRotate: false, // right-drag pans, never rotates
-      doubleClickZoom: false, // double-click finishes a line instead
+      doubleClickZoom: false, // double-click (and double-tap) finishes a line instead
       keyboard: false, // we own the keymap (see keymap.ts)
       boxZoom: false, // Shift+drag is our marquee-select gesture, not MapLibre's native box-zoom
+      // Pinch-to-zoom is MapLibre's, and the only camera gesture it still owns.
+      touchZoomRotate: true,
+      touchPitch: false, // a two-finger drag pans; it must never tilt the map instead
       attributionControl: false, // replaced below with a compact (collapsed-to-an-"i") one
     });
+    // Rotation would leave a reader unable to get back to north, and every
+    // projection in this app assumes an unrotated camera (see render/project).
+    map.touchZoomRotate.disableRotation();
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
     setMap(map);

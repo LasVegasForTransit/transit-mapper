@@ -329,6 +329,29 @@ function mouseEvent(
   };
 }
 
+/**
+ * A MapTouchEvent as MapLibre delivers one: `point` is the centroid of the
+ * active touches and `points` is every one of them, which is how the adapter
+ * tells a one-finger gesture from a pinch.
+ */
+function touchEvent(map: ReturnType<typeof createMap>, points: Point[]) {
+  const centroid =
+    points.length > 0
+      ? {
+          x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+          y: points.reduce((sum, p) => sum + p.y, 0) / points.length,
+        }
+      : { x: 0, y: 0 };
+  return {
+    point: centroid,
+    points,
+    lngLat: map.unproject(centroid),
+    lngLats: points.map((p) => map.unproject(p)),
+    originalEvent: { preventDefault() {} },
+    preventDefault() {},
+  };
+}
+
 interface GestureLifecycleProbe {
   onStart: (targets: EditGestureTargets) => void;
   onEnd: () => void;
@@ -2080,5 +2103,199 @@ describe('pointer work coalescing', () => {
 
     expect(lifecycle).toEqual(['start', 'end']);
     detach();
+  });
+});
+
+describe('touch gestures', () => {
+  it('draws with one finger, using the tool rather than the camera', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    store.getState().setDraftGeometry('freeform');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    map.fire('touchstart', touchEvent(map, [{ x: 100, y: 100 }]));
+    map.fire('touchmove', touchEvent(map, [{ x: 160, y: 100 }]));
+    scheduler.pump();
+    map.fire('touchend', touchEvent(map, []));
+
+    expect(store.getState().system.ways).toHaveLength(1);
+    expect(map.panCalls).toEqual([]);
+    detach();
+  });
+
+  it('pans with two fingers and draws nothing', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    store.getState().setDraftGeometry('freeform');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    map.fire(
+      'touchstart',
+      touchEvent(map, [
+        { x: 100, y: 100 },
+        { x: 200, y: 100 },
+      ]),
+    );
+    map.fire(
+      'touchmove',
+      touchEvent(map, [
+        { x: 140, y: 130 },
+        { x: 240, y: 130 },
+      ]),
+    );
+    scheduler.pump();
+    map.fire('touchend', touchEvent(map, []));
+
+    expect(map.panCalls.length).toBeGreaterThan(0);
+    expect(store.getState().system.ways).toHaveLength(0);
+    detach();
+  });
+
+  it('keeps a pinch a camera gesture when one finger lifts early', () => {
+    // The regression this guards: latching at touchstart. If the gesture were
+    // re-derived per event, lifting one finger mid-pinch would leave a single
+    // touch dragging across the map and start drawing on it.
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    store.getState().setDraftGeometry('freeform');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    map.fire(
+      'touchstart',
+      touchEvent(map, [
+        { x: 100, y: 100 },
+        { x: 200, y: 100 },
+      ]),
+    );
+    map.fire('touchmove', touchEvent(map, [{ x: 180, y: 160 }]));
+    scheduler.pump();
+    map.fire('touchend', touchEvent(map, []));
+
+    expect(store.getState().system.ways).toHaveLength(0);
+    detach();
+  });
+
+  it('holds a still finger below the drag threshold as a tap, not a draw', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    store.getState().setDraftGeometry('freeform');
+    const map = createMap();
+    const detach = attach(
+      map,
+      store,
+      undefined,
+      undefined,
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      COARSE_POINTER_TUNING,
+    );
+
+    map.fire('touchstart', touchEvent(map, [{ x: 100, y: 100 }]));
+    // 6px of finger tremor, inside the coarse profile's 10px threshold.
+    map.fire('touchmove', touchEvent(map, [{ x: 106, y: 100 }]));
+    scheduler.pump();
+
+    expect(map.panCalls).toEqual([]);
+    detach();
+  });
+
+  it('finishes a live draw on a long press, as right-click does', () => {
+    // Long press is the whole right-button family in one gesture, so it
+    // inherits startPan's release path: finish the draw, branch a one-way, or
+    // open the action menu, whichever the state calls for.
+    vi.useFakeTimers();
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    map.fire('touchstart', touchEvent(map, [{ x: 100, y: 100 }]));
+    map.fire('touchend', touchEvent(map, []));
+    map.fire('touchstart', touchEvent(map, [{ x: 200, y: 140 }]));
+    map.fire('touchend', touchEvent(map, []));
+    expect(store.getState().activeWayId).not.toBeNull();
+
+    map.fire('touchstart', touchEvent(map, [{ x: 260, y: 180 }]));
+    vi.advanceTimersByTime(600);
+    scheduler.pump();
+    map.fire('touchend', touchEvent(map, []));
+
+    expect(store.getState().activeWayId).toBeNull();
+    expect(store.getState().system.ways).toHaveLength(1);
+    detach();
+    vi.useRealTimers();
+  });
+
+  it('finishes a line on a double tap', () => {
+    vi.useFakeTimers();
+    installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    const tapAt = (x: number, y: number) => {
+      map.fire('touchstart', touchEvent(map, [{ x, y }]));
+      map.fire('touchend', touchEvent(map, []));
+    };
+
+    tapAt(100, 100);
+    vi.advanceTimersByTime(400); // beyond DOUBLE_TAP_MS, so these stay separate
+    tapAt(200, 140);
+    expect(store.getState().activeWayId).not.toBeNull();
+
+    // Two taps in the same spot inside the double-tap window.
+    vi.advanceTimersByTime(400);
+    tapAt(260, 180);
+    vi.advanceTimersByTime(50);
+    tapAt(260, 180);
+
+    expect(store.getState().activeWayId).toBeNull();
+    expect(store.getState().system.ways).toHaveLength(1);
+    detach();
+    vi.useRealTimers();
+  });
+
+  it('cancels a long press once the finger moves past the drag threshold', () => {
+    vi.useFakeTimers();
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('select');
+    const map = createMap();
+    const opened: number[] = [];
+    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
+      open: (x) => opened.push(x),
+      setAnchor() {},
+      close() {},
+    });
+
+    map.fire('touchstart', touchEvent(map, [{ x: 120, y: 140 }]));
+    map.fire('touchmove', touchEvent(map, [{ x: 200, y: 140 }]));
+    vi.advanceTimersByTime(600);
+    scheduler.pump();
+    map.fire('touchend', touchEvent(map, []));
+
+    expect(opened).toEqual([]);
+    detach();
+    vi.useRealTimers();
   });
 });
