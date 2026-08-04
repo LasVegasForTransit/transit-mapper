@@ -5,6 +5,7 @@ import {
   crossingsWithoutJoiningChunked,
   findCrossingsWithoutJoining,
   findMismatchedTypeJunctions,
+  planIssues,
   validateSystemQuick,
   type Issue,
 } from '../../src/model/validate';
@@ -168,10 +169,10 @@ describe('junctions joining different way types', () => {
     expect(findMismatchedTypeJunctions(junctionOf('road'))).toEqual([]);
   });
 
-  it('reach the reactive tier, since the fix is one click away in the inspector', () => {
-    expect(validateSystemQuick(junctionOf('heavyRail')).map((i) => i.id)).toContain(
-      'mixed-junction-n',
-    );
+  it('are never shown to anyone, being a document fault rather than a plan one', () => {
+    const issues = validateSystemQuick(junctionOf('heavyRail'));
+    expect(issues.map((i) => i.id)).toContain('mixed-junction-n');
+    expect(planIssues(issues)).toEqual([]);
   });
 
   it('are gone once the mismatched arm stops referencing the junction', () => {

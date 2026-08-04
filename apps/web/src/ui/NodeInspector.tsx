@@ -19,6 +19,7 @@ import { useState } from 'react';
 import { WAY_FAMILIES, laneKind, wayType } from '@transitmapper/core/model/catalog';
 import { armRefKey, getComponent, laneRefKey } from '@transitmapper/core/model/components';
 import { metersFromOrigin } from '@transitmapper/core/model/geo';
+import { junctionGroupOf } from '@transitmapper/core/model/junctions';
 import type {
   LaneConnector,
   LaneSpec,
@@ -152,7 +153,9 @@ export function NodeInspector({ id }: NodeInspectorProps) {
   const connectedWays = [...new Set(node.refs.map((r) => r.wayId))]
     .map((wayId) => waysById.get(wayId))
     .filter((way): way is Way => way !== undefined);
-  const mixedTypes = new Set(connectedWays.map((w) => w.typeId)).size > 1;
+  // Grouped the way model/junctions.ts groups them: a bike path meeting a
+  // road is an ordinary junction, a road meeting a rail line is not.
+  const mixedTypes = new Set(connectedWays.map((w) => junctionGroupOf(w.typeId))).size > 1;
 
   const isActive = (lane: LaneSpec, fromWayId: string, targetWayIds: Set<string>): boolean =>
     connectors.some(
