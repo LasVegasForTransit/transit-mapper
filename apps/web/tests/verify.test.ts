@@ -2096,6 +2096,91 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 }
 
+// --- Disconnecting a junction: disconnectNodeWay takes one way out and
+// leaves nothing sharing the coordinate ---
+{
+  // A 2-arm junction: the crossing corridor's end joined onto a through way.
+  fresh();
+  const through = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(through, [-115.2, 36.1]);
+  store.getState().addWayPoint(through, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const spur = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(spur, [-115.15, 36.2]);
+  store.getState().addWayPoint(spur, [-115.15, 36.1]);
+  store.getState().finishWay();
+  store.getState().joinWayPointToWay(spur, 1, through, [-115.15, 36.1]);
+
+  const junctionId = store.getState().system.nodes[0].id;
+  const stayingPoint = store
+    .getState()
+    .system.ways.find((w) => w.id === through)!
+    .points[1].slice() as [number, number];
+  store.getState().select({ kind: 'node', id: junctionId });
+  store.getState().disconnectNodeWay(junctionId, spur);
+
+  let s = store.getState().system;
+  check('disconnecting one of two arms deletes the junction outright', s.nodes.length === 0);
+  const movedEnd = s.ways.find((w) => w.id === spur)!.points[1];
+  check(
+    'the disconnected way stops sharing the coordinate',
+    haversineMeters(movedEnd, stayingPoint) > 10,
+  );
+  check(
+    "the arm that stayed didn't move",
+    s.ways.find((w) => w.id === through)!.points[1][0] === stayingPoint[0] &&
+      s.ways.find((w) => w.id === through)!.points[1][1] === stayingPoint[1],
+  );
+  check(
+    'the selection clears with the junction it pointed at',
+    store.getState().selection === null,
+  );
+
+  // A 3-arm junction sheds one arm and keeps standing, taking that arm's
+  // lane connectors with it — a connector naming a way that no longer meets
+  // here would break junctionGeometry.
+  fresh();
+  const main = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(main, [-115.2, 36.1]);
+  store.getState().addWayPoint(main, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const north = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(north, [-115.15, 36.2]);
+  store.getState().addWayPoint(north, [-115.15, 36.1]);
+  store.getState().finishWay();
+  const south = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(south, [-115.15, 36.0]);
+  store.getState().addWayPoint(south, [-115.15, 36.1]);
+  store.getState().finishWay();
+  store.getState().joinWayPointToWay(north, 1, main, [-115.15, 36.1]);
+  store.getState().joinWayPointToWay(south, 1, main, [-115.15, 36.1]);
+
+  s = store.getState().system;
+  const threeArm = s.nodes[0];
+  check('setup: all three ways meet at one junction', threeArm.refs.length === 3);
+  const laneOf = (wayId: string) => s.ways.find((w) => w.id === wayId)!.profile.lanes[0].id;
+  store.getState().setNodeConnectors(threeArm.id, [
+    { from: { wayId: south, laneId: laneOf(south) }, to: { wayId: north, laneId: laneOf(north) } },
+    { from: { wayId: north, laneId: laneOf(north) }, to: { wayId: main, laneId: laneOf(main) } },
+  ]);
+  store.getState().disconnectNodeWay(threeArm.id, south);
+
+  s = store.getState().system;
+  check('a 3-arm junction survives shedding one arm', s.nodes.length === 1);
+  check(
+    'the remaining arms keep their refs',
+    s.nodes[0].refs.length === 2 && !s.nodes[0].refs.some((r) => r.wayId === south),
+  );
+  check(
+    'connectors naming the disconnected way are pruned',
+    (s.nodes[0].connectors ?? []).length === 1 && s.nodes[0].connectors![0].from.wayId === north,
+  );
+  check(
+    'the shed arm is nudged clear of the junction that stayed',
+    haversineMeters(s.ways.find((w) => w.id === south)!.points[1], s.nodes[0].coord) > 10,
+  );
+}
+
 // --- multi-select: toggle, bulk move (nudge), bulk delete ---
 {
   fresh();
