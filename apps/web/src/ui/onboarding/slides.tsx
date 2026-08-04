@@ -1,40 +1,49 @@
 import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
-import type { IconName } from '../Icon';
 
-/** How a slide illustrates itself. `triPreview` and `singlePreview` both
- *  render a live `OnboardingPreviewMap` against the shared fixture system —
- *  `icons` is the one deliberate exception (slide 4: there's no natural
- *  live-preview moment for "import data" or "share a link"). */
+/** Every slide renders a live `OnboardingPreviewMap` against the same fixture
+ *  system, either as one generous view or as the final three-view comparison. */
 export type OnboardingSlideVisual =
   | { kind: 'triPreview' }
-  | { kind: 'singlePreview'; viewMode: ViewOptions['viewMode']; animateVehicle?: boolean }
-  | { kind: 'icons'; icons: [IconName, IconName] };
+  | {
+      kind: 'singlePreview';
+      viewMode: ViewOptions['viewMode'];
+      animateVehicle?: boolean;
+      key?: 'service' | 'infrastructure';
+    };
 
 export interface OnboardingSlideData {
   title: string;
   body: string;
+  /** Quiet release-stability context shown only where the slide needs it. */
+  note?: string;
   visual: OnboardingSlideVisual;
 }
 
 export const ONBOARDING_SLIDES: OnboardingSlideData[] = [
   {
-    title: 'One system, three views',
-    body: 'Every system you build is one model that appears three ways. Infrastructure shows the real streets and rail. Network shows the colored lines and stops riders see. Diagram straightens it into a clean, read-only summary.',
+    title: 'Welcome to TransitMapper',
+    body: 'TransitMapper helps you turn an idea for better transit into a map you can explore and refine. Sketch the routes your community needs, then add streets, tracks, stops, and stations as the plan takes shape.',
+    note: 'Open beta: features and workflows may change frequently before a stable release.',
+    visual: { kind: 'singlePreview', viewMode: 'network' },
+  },
+  {
+    title: 'Sketch the routes your community needs',
+    body: 'Start in Network to draw the lines people would ride. Name each route, choose its color, add stops and a schedule, then press play to see service move. Keep the first pass rough. You can work out the physical details later.',
+    visual: {
+      kind: 'singlePreview',
+      viewMode: 'network',
+      animateVehicle: true,
+      key: 'service',
+    },
+  },
+  {
+    title: 'Add the streets and rail underneath',
+    body: 'Switch to Infrastructure to place routes on real roads and tracks. Draw the physical network yourself, or import real streets instead of starting from scratch. Crossings become junctions as you build.',
+    visual: { kind: 'singlePreview', viewMode: 'infrastructure', key: 'infrastructure' },
+  },
+  {
+    title: 'See the same system three ways',
+    body: 'Use Network for routes and stops, Infrastructure for streets, tracks, and stations, and Diagram for a clean overview. Everything stays connected. Share a link or export an image when you are ready to bring other people into the conversation.',
     visual: { kind: 'triPreview' },
-  },
-  {
-    title: 'Draw your streets and rail',
-    body: 'Pick Road, Track, or Path and draw over your streets. Cross one way with another and a junction forms on its own. You never split anything by hand.',
-    visual: { kind: 'singlePreview', viewMode: 'infrastructure' },
-  },
-  {
-    title: 'Draw a line, watch it run',
-    body: 'Draw a service line on top of what you built. Give it a name and a color. Then press play to see it move on a schedule.',
-    visual: { kind: 'singlePreview', viewMode: 'network', animateVehicle: true },
-  },
-  {
-    title: 'Bring in real data, or share what you made',
-    body: "Import a slice of OpenStreetMap or a GTFS feed to jump-start a system. When you're ready, share a link or export an image.",
-    visual: { kind: 'icons', icons: ['download', 'share'] },
   },
 ];

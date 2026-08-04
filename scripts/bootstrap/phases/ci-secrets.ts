@@ -65,6 +65,65 @@ function parseAccountIds(stdout: string): string[] {
   return ids;
 }
 
+interface CiVariable {
+  name: string;
+  value: string;
+}
+
+export interface CiEnvironmentState {
+  tokenReady: boolean;
+  accountIdReady: boolean;
+}
+
+export function ciEnvironmentState(
+  secretNames: readonly string[],
+  variables: readonly CiVariable[],
+  accountId: string,
+): CiEnvironmentState {
+  return {
+    tokenReady: secretNames.includes('CLOUDFLARE_API_TOKEN'),
+    accountIdReady: variables.some(
+      (variable) => variable.name === 'CLOUDFLARE_ACCOUNT_ID' && variable.value === accountId,
+    ),
+  };
+}
+
+function readCiEnvironment(accountId: string): CiEnvironmentState | null {
+  const secrets = runCommand(`gh secret list --env ${GITHUB_ENVIRONMENT} --json name`);
+  const variables = runCommand(`gh variable list --env ${GITHUB_ENVIRONMENT} --json name,value`);
+  if (!secrets.ok || !variables.ok) return null;
+  try {
+    const secretRows = JSON.parse(secrets.stdout) as { name: string }[];
+    const variableRows = JSON.parse(variables.stdout) as CiVariable[];
+    return ciEnvironmentState(
+      secretRows.map((row) => row.name),
+      variableRows,
+      accountId,
+    );
+  } catch {
+    return null;
+  }
+}
+
+function ciEnvironmentRows(state: CiEnvironmentState): Parameters<typeof printToolTable>[1] {
+  return [
+    state.tokenReady
+      ? { label: 'CLOUDFLARE_API_TOKEN', status: 'ready', detail: GITHUB_ENVIRONMENT }
+      : {
+          label: 'CLOUDFLARE_API_TOKEN',
+          status: 'failed',
+          detail: `not set on the "${GITHUB_ENVIRONMENT}" environment`,
+        },
+    state.accountIdReady
+      ? { label: 'CLOUDFLARE_ACCOUNT_ID', status: 'ready', detail: GITHUB_ENVIRONMENT }
+      : {
+          label: 'CLOUDFLARE_ACCOUNT_ID',
+          status: 'failed',
+          detail: `missing or does not match the active Cloudflare account`,
+        },
+  ];
+}
+
 /**
  * Prompts for a Cloudflare API token, derives the account id from
  * `wrangler whoami` (no need to ask the user to hunt it down and paste it),
@@ -90,57 +149,60 @@ export async function runCiSecretsPhase(
   const accountId = accountIds[0]!;
   log.info(`Using Cloudflare account id ${accountId} (from \`wrangler whoami\`).`);
 
+  const existing = readCiEnvironment(accountId);
+  if (!existing) {
+    log.error(`Could not read the "${GITHUB_ENVIRONMENT}" GitHub Environment credentials.`);
+    return { success: false };
+  }
+
+  if (existing.tokenReady && existing.accountIdReady) {
+    printToolTable('CI secrets', ciEnvironmentRows(existing));
+    return { success: true };
+  }
+
   // Doctor mode reports and returns. Prompting would make `pnpm preflight`
   // interactive, which defeats running it in a script or a fresh shell to
   // find out what is wrong.
   if (options.doctor) {
-    const existing = runCommand(
-      `gh secret list --env ${GITHUB_ENVIRONMENT} --json name --jq '.[].name'`,
-    );
-    const names = existing.ok ? existing.stdout : '';
-    const missing = ['CLOUDFLARE_API_TOKEN'].filter((n) => !names.includes(n));
-    printToolTable('CI secrets', [
-      missing.length === 0
-        ? { label: 'CLOUDFLARE_API_TOKEN', status: 'ready', detail: GITHUB_ENVIRONMENT }
-        : {
-            label: 'CLOUDFLARE_API_TOKEN',
-            status: 'failed',
-            detail: `not set on the "${GITHUB_ENVIRONMENT}" environment — run \`pnpm bootstrap\``,
-          },
-    ]);
-    return { success: missing.length === 0 };
+    printToolTable('CI secrets', ciEnvironmentRows(existing));
+    return { success: false };
   }
 
   const proceed = await promptConfirm(
-    `Set CI secrets on the "${GITHUB_ENVIRONMENT}" GitHub Environment now?`,
+    `Set missing CI credentials on the "${GITHUB_ENVIRONMENT}" GitHub Environment now?`,
     true,
   );
   if (!proceed) {
     return { success: false };
   }
 
-  note(tokenPromptBody(accountId), 'Cloudflare API token');
-  tryOpenInBrowser(tokenDashboardUrl(accountId));
+  if (!existing.tokenReady) {
+    note(tokenPromptBody(accountId), 'Cloudflare API token');
+    tryOpenInBrowser(tokenDashboardUrl(accountId));
 
-  const token = await promptSecret('Paste the Cloudflare API token:');
-
-  const setToken = runCommand(
-    `gh secret set CLOUDFLARE_API_TOKEN --env ${GITHUB_ENVIRONMENT} --body ${shellEscape(token)}`,
-  );
-  if (!setToken.ok) {
-    log.error(`Failed to set CLOUDFLARE_API_TOKEN: ${setToken.stderr || setToken.stdout}`);
-    log.info(
-      `If the "${GITHUB_ENVIRONMENT}" environment doesn't exist yet, create it first: repo Settings → Environments → New environment.`,
+    const token = await promptSecret('Paste the Cloudflare API token:');
+    const setToken = runCommand(
+      `gh secret set CLOUDFLARE_API_TOKEN --env ${GITHUB_ENVIRONMENT} --body ${shellEscape(token)}`,
     );
-    return { success: false };
+    if (!setToken.ok) {
+      log.error(`Failed to set CLOUDFLARE_API_TOKEN: ${setToken.stderr || setToken.stdout}`);
+      log.info(
+        `If the "${GITHUB_ENVIRONMENT}" environment doesn't exist yet, create it first: repo Settings → Environments → New environment.`,
+      );
+      return { success: false };
+    }
   }
 
-  const setAccountId = runCommand(
-    `gh variable set CLOUDFLARE_ACCOUNT_ID --env ${GITHUB_ENVIRONMENT} --body ${shellEscape(accountId)}`,
-  );
-  if (!setAccountId.ok) {
-    log.error(`Failed to set CLOUDFLARE_ACCOUNT_ID: ${setAccountId.stderr || setAccountId.stdout}`);
-    return { success: false };
+  if (!existing.accountIdReady) {
+    const setAccountId = runCommand(
+      `gh variable set CLOUDFLARE_ACCOUNT_ID --env ${GITHUB_ENVIRONMENT} --body ${shellEscape(accountId)}`,
+    );
+    if (!setAccountId.ok) {
+      log.error(
+        `Failed to set CLOUDFLARE_ACCOUNT_ID: ${setAccountId.stderr || setAccountId.stdout}`,
+      );
+      return { success: false };
+    }
   }
 
   log.success(

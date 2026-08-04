@@ -15,7 +15,7 @@ import type {
 } from '@transitmapper/core/model/selectionActions';
 
 export type DialogName =
-  'import' | 'gtfs' | 'export' | 'share' | 'systems' | 'settings' | 'onboarding';
+  'import' | 'gtfs' | 'export' | 'share' | 'systems' | 'settings' | 'onboarding' | 'about';
 
 /** A background import's live status — surfaced as a small non-blocking
  *  indicator (see ImportProgressPill) rather than a modal, so a long import

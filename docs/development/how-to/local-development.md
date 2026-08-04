@@ -5,7 +5,7 @@ Requirements: Node 24+ and [pnpm](https://pnpm.io). (`package.json` sets
 don't obviously point at the version.)
 
 ```sh
-git clone git@github.com:WillieCubed/transit-mapper.git
+git clone git@github.com:LasVegasForTransit/transit-mapper.git
 cd transit-mapper
 pnpm install
 pnpm dev

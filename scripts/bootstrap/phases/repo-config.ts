@@ -9,9 +9,12 @@ import { printToolTable, promptConfirm, type ToolRow } from '../lib/ui.js';
 import {
   BRANCH_RULESET,
   SECURITY_SETTINGS,
+  ACTIONS_POLICY_SETTINGS,
   ACTIONS_SETTINGS,
+  GOVERNANCE_APPLY_ORDER,
   REQUIRES_ORGANIZATION,
 } from '../standards.js';
+import { actionsPolicyBody, booleanEndpointState, settingDrift } from '../governance.js';
 import type { PhaseResult } from './auth.js';
 
 /**
@@ -28,7 +31,7 @@ import type { PhaseResult } from './auth.js';
  */
 
 interface Drift {
-  key: 'ruleset' | 'security' | 'actions';
+  key: (typeof GOVERNANCE_APPLY_ORDER)[number];
   row: ToolRow;
 }
 
@@ -75,9 +78,7 @@ function securityState(): Drift | ToolRow {
     };
   }
   const current = repo.data as SecurityState;
-  const off = Object.entries(SECURITY_SETTINGS)
-    .filter(([key, want]) => current[key]?.status !== want)
-    .map(([key]) => key);
+  const off = settingDrift(current, SECURITY_SETTINGS, (value) => value?.status);
 
   return off.length === 0
     ? { label: 'Secret scanning', status: 'ready', detail: 'scanning and push protection on' }
@@ -87,7 +88,79 @@ function securityState(): Drift | ToolRow {
       };
 }
 
-function actionsState(): Drift | ToolRow {
+function vulnerabilityAlertsState(): Drift | ToolRow {
+  const result = ghApi('repos/:owner/:repo/vulnerability-alerts');
+  const state = booleanEndpointState(result);
+  if (state === 'enabled') {
+    return { label: 'Vulnerability alerts', status: 'ready', detail: 'enabled' };
+  }
+  if (state === 'disabled') {
+    return {
+      key: 'vulnerability-alerts',
+      row: { label: 'Vulnerability alerts', status: 'failed', detail: 'disabled' },
+    };
+  }
+  return {
+    label: 'Vulnerability alerts',
+    status: 'failed',
+    detail: `could not read current setting — ${result.error.slice(0, 120)}`,
+  };
+}
+
+function dependabotSecurityUpdatesState(): Drift | ToolRow {
+  // Unlike vulnerability alerts, this endpoint returns 200 for both states;
+  // the response body's `enabled` field is the setting's source of truth.
+  const result = ghApi('repos/:owner/:repo/automated-security-fixes');
+  if (!result.ok || typeof result.data !== 'object' || result.data === null) {
+    return {
+      label: 'Dependabot updates',
+      status: 'failed',
+      detail: `could not read current setting — ${result.error.slice(0, 120)}`,
+    };
+  }
+
+  const enabled = (result.data as { enabled?: unknown }).enabled;
+  if (enabled === true) {
+    return { label: 'Dependabot updates', status: 'ready', detail: 'enabled' };
+  }
+  if (enabled === false) {
+    return {
+      key: 'dependabot-security-updates',
+      row: { label: 'Dependabot updates', status: 'failed', detail: 'disabled' },
+    };
+  }
+
+  return {
+    label: 'Dependabot updates',
+    status: 'failed',
+    detail: 'could not read current setting — response omitted enabled',
+  };
+}
+
+function actionsPolicyState(): Drift | ToolRow {
+  const current = ghApi('repos/:owner/:repo/actions/permissions');
+  if (!current.ok || typeof current.data !== 'object' || current.data === null) {
+    return { label: 'Actions policy', status: 'failed', detail: 'could not read current settings' };
+  }
+  const wrong = settingDrift(current.data as Record<string, unknown>, ACTIONS_POLICY_SETTINGS);
+
+  return wrong.length === 0
+    ? {
+        label: 'Actions policy',
+        status: 'ready',
+        detail: 'enabled; full commit-SHA pinning required',
+      }
+    : {
+        key: 'actions-policy',
+        row: {
+          label: 'Actions policy',
+          status: 'failed',
+          detail: `${wrong.join(', ')} not at the standard`,
+        },
+      };
+}
+
+function actionsWorkflowState(): Drift | ToolRow {
   const current = ghApi('repos/:owner/:repo/actions/permissions/workflow');
   if (!current.ok || typeof current.data !== 'object' || current.data === null) {
     return { label: 'Actions token', status: 'failed', detail: 'could not read current settings' };
@@ -102,7 +175,7 @@ function actionsState(): Drift | ToolRow {
         detail: `${String(ACTIONS_SETTINGS.default_workflow_permissions)}-only by default`,
       }
     : {
-        key: 'actions',
+        key: 'actions-workflow',
         row: {
           label: 'Actions token',
           status: 'failed',
@@ -130,7 +203,14 @@ export async function runRepoConfigPhase(options: { doctor: boolean }): Promise<
     return { success: false };
   }
 
-  const states = [rulesetState(), securityState(), actionsState()];
+  const states = [
+    rulesetState(),
+    securityState(),
+    vulnerabilityAlertsState(),
+    dependabotSecurityUpdatesState(),
+    actionsPolicyState(),
+    actionsWorkflowState(),
+  ];
   const rows = states.map((s) => (isDrift(s) ? s.row : s));
   const pending = states.filter(isDrift).map((s) => s.key);
 
@@ -146,7 +226,9 @@ export async function runRepoConfigPhase(options: { doctor: boolean }): Promise<
 
   printToolTable('Repository governance', rows);
 
-  if (pending.length === 0) return { success: true };
+  if (pending.length === 0) {
+    return { success: rows.every((row) => row.status !== 'failed') };
+  }
   if (options.doctor) return { success: false };
 
   const confirmed = await promptConfirm(
@@ -157,50 +239,106 @@ export async function runRepoConfigPhase(options: { doctor: boolean }): Promise<
 
   const applied: ToolRow[] = [];
 
-  if (pending.includes('ruleset')) {
-    // The full body every time. A PUT is a partial update at the top level,
-    // so omitting a key preserves whatever is there — which for `rules`
-    // means stale rules survive an update that looks like it replaced them.
-    const existing = findRuleset(BRANCH_RULESET.name);
-    const result = existing
-      ? ghApi(`--method PUT repos/:owner/:repo/rulesets/${existing.id}`, BRANCH_RULESET)
-      : ghApi('--method POST repos/:owner/:repo/rulesets', BRANCH_RULESET);
-    applied.push(
-      result.ok
-        ? {
-            label: 'Branch ruleset',
-            status: 'ready',
-            detail: existing ? 'updated to the standard' : 'created',
-          }
-        : { label: 'Branch ruleset', status: 'failed', detail: result.error.slice(0, 160) },
-    );
-  }
+  for (const key of GOVERNANCE_APPLY_ORDER) {
+    if (!pending.includes(key)) continue;
 
-  if (pending.includes('security')) {
-    // Both keys in one request. Sent separately, there is a window where
-    // push protection is requested against a repository whose scanning is
-    // still off, which GitHub rejects.
-    const result = ghApi('--method PATCH repos/:owner/:repo', {
-      security_and_analysis: Object.fromEntries(
-        Object.entries(SECURITY_SETTINGS).map(([key, status]) => [key, { status }]),
-      ),
-    });
-    applied.push(
-      result.ok
-        ? { label: 'Secret scanning', status: 'ready', detail: 'enabled' }
-        : { label: 'Secret scanning', status: 'failed', detail: result.error.slice(0, 160) },
-    );
-  }
+    if (key === 'ruleset') {
+      // The full body every time. A PUT is a partial update at the top level,
+      // so omitting a key preserves whatever is there — which for `rules`
+      // means stale rules survive an update that looks like it replaced them.
+      const existing = findRuleset(BRANCH_RULESET.name);
+      const result = existing
+        ? ghApi(`--method PUT repos/:owner/:repo/rulesets/${existing.id}`, BRANCH_RULESET)
+        : ghApi('--method POST repos/:owner/:repo/rulesets', BRANCH_RULESET);
+      applied.push(
+        result.ok
+          ? {
+              label: 'Branch ruleset',
+              status: 'ready',
+              detail: existing ? 'updated to the standard' : 'created',
+            }
+          : { label: 'Branch ruleset', status: 'failed', detail: result.error.slice(0, 160) },
+      );
+      continue;
+    }
 
-  if (pending.includes('actions')) {
+    if (key === 'security') {
+      // Both keys in one request. Sent separately, there is a window where
+      // push protection is requested against a repository whose scanning is
+      // still off, which GitHub rejects.
+      const result = ghApi('--method PATCH repos/:owner/:repo', {
+        security_and_analysis: Object.fromEntries(
+          Object.entries(SECURITY_SETTINGS).map(([setting, status]) => [setting, { status }]),
+        ),
+      });
+      applied.push(
+        result.ok
+          ? { label: 'Secret scanning', status: 'ready', detail: 'enabled' }
+          : { label: 'Secret scanning', status: 'failed', detail: result.error.slice(0, 160) },
+      );
+      continue;
+    }
+
+    if (key === 'vulnerability-alerts' || key === 'dependabot-security-updates') {
+      const vulnerabilityAlerts = key === 'vulnerability-alerts';
+      const label = vulnerabilityAlerts ? 'Vulnerability alerts' : 'Dependabot updates';
+      const endpoint = vulnerabilityAlerts ? 'vulnerability-alerts' : 'automated-security-fixes';
+      const result = ghApi(`--method PUT repos/:owner/:repo/${endpoint}`);
+      applied.push(
+        result.ok
+          ? { label, status: 'ready', detail: 'enabled' }
+          : { label, status: 'failed', detail: result.error.slice(0, 160) },
+      );
+      continue;
+    }
+
+    if (key === 'actions-policy') {
+      const current = ghApi('repos/:owner/:repo/actions/permissions');
+      const result =
+        current.ok && typeof current.data === 'object' && current.data !== null
+          ? ghApi(
+              '--method PUT repos/:owner/:repo/actions/permissions',
+              actionsPolicyBody(current.data as Record<string, unknown>),
+            )
+          : current;
+      applied.push(
+        result.ok
+          ? {
+              label: 'Actions policy',
+              status: 'ready',
+              detail: 'full commit-SHA pinning required',
+            }
+          : { label: 'Actions policy', status: 'failed', detail: result.error.slice(0, 160) },
+      );
+      continue;
+    }
+
     const result = ghApi(
       '--method PUT repos/:owner/:repo/actions/permissions/workflow',
       ACTIONS_SETTINGS,
     );
+    if (!result.ok) {
+      applied.push({
+        label: 'Actions token',
+        status: 'failed',
+        detail: result.error.slice(0, 160),
+      });
+      continue;
+    }
+
+    // An organization policy can accept this repository-level PUT with 204
+    // while leaving the effective value unchanged. Re-read it so bootstrap
+    // never claims Release Please is ready when GitHub will still refuse its
+    // pull request.
+    const verified = actionsWorkflowState();
     applied.push(
-      result.ok
-        ? { label: 'Actions token', status: 'ready', detail: 'restricted to the standard' }
-        : { label: 'Actions token', status: 'failed', detail: result.error.slice(0, 160) },
+      isDrift(verified)
+        ? {
+            label: 'Actions token',
+            status: 'failed',
+            detail: 'organization policy still blocks workflow-created pull requests',
+          }
+        : verified,
     );
   }
 

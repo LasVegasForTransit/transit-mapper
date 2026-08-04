@@ -9,6 +9,11 @@ on:
   # instead of restating them. There is one definition of "validated", and
   # both entry points use it.
   workflow_call:
+  # A pull request created by GITHUB_TOKEN does not emit another workflow
+  # event. The release workflow dispatches CI explicitly against Release
+  # Please's branch so the generated version and changelog receive the same
+  # required check as every other pull request.
+  workflow_dispatch:
 
 # Least-privilege defaults.
 permissions:
@@ -29,19 +34,15 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+          # Gitleaks scans history rather than only the proposed tree. A
+          # shallow checkout would turn that promise into a one-commit scan.
+          fetch-depth: 0
 
       - name: Setup Node + pnpm
         uses: ./.github/actions/setup-node-pnpm
 
-      - name: Typecheck
-        run: pnpm typecheck
-
-      # AGENTS.md makes `pnpm typecheck && pnpm verify` the bar for a pull
-      # request, but only the first half was enforced here — the suite could
-      # go red and still merge. It needs no browser or network, so there's no
-      # reason for CI not to run it.
-      - name: Verify
-        run: pnpm verify
+      - name: Check
+        run: pnpm check
 
       # A generator exists so scaffolding is right by construction. This runs
       # them and checks the output still passes, so one cannot rot into
@@ -52,4 +53,16 @@ jobs:
         run: pnpm check:generators
 
       - name: Dependency audit
-        run: pnpm audit --prod --audit-level=high
+        # Build and test tooling executes in CI, so a production-only audit
+        # would miss vulnerabilities in code this job actually runs.
+        run: pnpm audit --audit-level=high
+
+      - name: Secret scan
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --is-shallow-repository)" = false
+          docker run --rm \
+            -v "$PWD:/repo" \
+            -w /repo \
+            ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git --redact --no-banner --config /repo/.gitleaks.toml

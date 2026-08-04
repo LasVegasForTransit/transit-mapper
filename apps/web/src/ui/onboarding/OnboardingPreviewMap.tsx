@@ -13,6 +13,7 @@ import {
   type ViewOptions,
 } from '../../map/layers';
 import { pointAtDistance, systemBounds } from '@transitmapper/core/model/geo';
+import { computeDiagramSystem } from '@transitmapper/core/model/diagramLayout';
 import { runStateAt } from '@transitmapper/core/sim/fleet';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import {
@@ -48,9 +49,9 @@ interface OnboardingPreviewMapProps {
   system: TransitSystem;
   view: ViewOptions;
   className?: string;
-  /** Slide 3 only: animate a vehicle along the fixture's one service, reusing
-   *  the real sim kernel (packages/core/src/sim) instead of a hand-animated
-   *  CSS trick. */
+  /** The route-sketching slide animates a vehicle along the fixture's
+   *  Crosstown service, reusing the real sim kernel (packages/core/src/sim)
+   *  instead of a hand-animated CSS trick. */
   animateVehicle?: boolean;
 }
 
@@ -67,6 +68,7 @@ export function OnboardingPreviewMap({
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const renderedSystem = view.viewMode === 'diagram' ? computeDiagramSystem(system) : system;
     const previewLayerSpecs = layerSpecsForScheme(colorScheme).filter(
       (spec) => spec.type !== 'symbol',
     );
@@ -98,7 +100,7 @@ export function OnboardingPreviewMap({
           if (!map.getLayer(spec.id)) map.addLayer(spec);
         }
 
-        const fc = buildFeatures(system, null, [], view);
+        const fc = buildFeatures(renderedSystem, null, [], view);
         const setData = (id: string, data: GeoJSON.FeatureCollection) => {
           (map.getSource(id) as GeoJSONSource | undefined)?.setData(data);
         };
@@ -114,7 +116,7 @@ export function OnboardingPreviewMap({
         // layout may not have settled yet at "load" time) frames the wrong
         // extent — the same ordering ExportPreviewMap/embed/main.ts use.
         map.resize();
-        const bounds = systemBounds(system);
+        const bounds = systemBounds(renderedSystem);
         if (bounds) map.fitBounds(bounds, { padding: 24, animate: false });
 
         if (animateVehicle) {
@@ -157,11 +159,11 @@ export function OnboardingPreviewMap({
       if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
       map.remove();
     };
-    // System/view are fixed for this component's whole lifetime. A scheme
-    // change intentionally rebuilds this tiny non-interactive map so its
-    // substrate changes in the same frame as the dialog chrome.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [colorScheme]);
+    // Each slide can reuse this React component position with a different
+    // view or animation treatment. Rebuild the tiny non-interactive map when
+    // that presentation changes so Infrastructure never keeps Network's
+    // already-mounted layers after the user advances.
+  }, [animateVehicle, colorScheme, system, view]);
 
   return <div ref={containerRef} className={`onboarding-preview-map ${className}`.trim()} />;
 }

@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  deployments: write
 
 # Never cancel a prod deploy in flight — let it finish, then queue the next.
 concurrency:
@@ -24,9 +23,46 @@ jobs:
     name: Validate
     uses: ./.github/workflows/ci.yml
 
-  deploy:
-    name: Build and deploy to Cloudflare Workers
+  # Conventional commits are the only release input. Release Please maintains
+  # the release PR, root version, changelog, tag, and GitHub release together.
+  release:
+    name: Prepare or publish release
     needs: validate
+    permissions:
+      actions: write
+      contents: write
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - name: Run Release Please
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Validate generated release pull request
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PR: ${{ steps.release.outputs.pr }}
+        run: |
+          release_branch=$(jq -er '.headBranchName' <<< "$RELEASE_PR")
+          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$release_branch"
+
+  deploy:
+    name: Attest and deploy release to Cloudflare Workers
+    needs: [validate, release]
+    if: needs.release.outputs.release_created == 'true'
+    permissions:
+      attestations: write
+      contents: write
+      deployments: write
+      id-token: write
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Scopes secrets to the production environment + surfaces a deployment
@@ -34,6 +70,7 @@ jobs:
     # you want a manual approval gate later.
     environment:
       name: production
+      url: https://map.lasvegasfortransit.org
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
@@ -51,8 +88,65 @@ jobs:
       # the schema — and running it after the migration would leave production
       # with a migrated database and the old code for a reason unrelated to
       # either. Everything that can fail without consequence happens first.
-      - name: Build
+      - name: Build release
+        env:
+          TRANSITMAPPER_RELEASE_TAG: ${{ needs.release.outputs.tag_name }}
         run: pnpm run build
+
+      # Wrangler's dry run creates the exact Worker module that will be
+      # archived, attested, and deployed below. Deployment uses --no-bundle so
+      # it cannot silently replace the attested bytes with a second build.
+      - name: Bundle Worker
+        run: |
+          set -euo pipefail
+          worker_bundle="$RUNNER_TEMP/transitmapper-worker"
+          rm -rf "$worker_bundle"
+          pnpm --filter @transitmapper/worker exec wrangler deploy --dry-run --outdir "$worker_bundle"
+
+      - name: Package deployment artifact
+        id: package
+        env:
+          RELEASE_TAG: ${{ needs.release.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          payload="$RUNNER_TEMP/transitmapper-release"
+          archive="$RUNNER_TEMP/transitmapper-${RELEASE_TAG}-deployment.tar.gz"
+          rm -rf "$payload"
+          mkdir -p "$payload/apps/web/dist" "$payload/apps/worker/dist" "$payload/apps/worker/src/migrations"
+          cp -R apps/web/dist/. "$payload/apps/web/dist/"
+          cp "$RUNNER_TEMP/transitmapper-worker/index.js" "$payload/apps/worker/dist/index.js"
+          cp apps/worker/wrangler.toml "$payload/apps/worker/wrangler.toml"
+          cp -R apps/worker/src/migrations/. "$payload/apps/worker/src/migrations/"
+          tar -C "$payload" -czf "$archive" .
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+      - name: Attest deployment artifact
+        id: attest
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.0.0
+        with:
+          subject-path: ${{ steps.package.outputs.archive }}
+
+      - name: Attach artifact and attestation to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag_name }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            "${{ steps.package.outputs.archive }}" \
+            "${{ steps.attest.outputs.bundle-path }}" \
+            --clobber
+
+      # Extracting the signed archive before deployment makes the release
+      # asset, the attestation subject, and the production inputs identical.
+      - name: Extract attested deployment artifact
+        id: extract
+        run: |
+          set -euo pipefail
+          deploy_root="$RUNNER_TEMP/transitmapper-deploy"
+          rm -rf "$deploy_root"
+          mkdir -p "$deploy_root"
+          tar -xzf "${{ steps.package.outputs.archive }}" -C "$deploy_root"
+          echo "root=$deploy_root" >> "$GITHUB_OUTPUT"
 
       # Schema next. `wrangler deploy` does not apply migrations, so until now
       # the two travelled on separate tracks with nothing ordering them: a
@@ -64,10 +158,22 @@ jobs:
       # not safe in either order and needs to be split across two releases —
       # see docs/how-to/operations.md.
       - name: Apply D1 migrations
-        run: pnpm --filter @transitmapper/worker exec wrangler d1 migrations apply transitmapper --remote
+        env:
+          DEPLOY_ROOT: ${{ steps.extract.outputs.root }}
+        run: |
+          pnpm --filter @transitmapper/worker exec wrangler d1 migrations apply transitmapper \
+            --remote \
+            --config "$DEPLOY_ROOT/apps/worker/wrangler.toml"
 
       - name: Deploy
-        run: pnpm --filter @transitmapper/worker run deploy
+        env:
+          DEPLOY_ROOT: ${{ steps.extract.outputs.root }}
+        run: |
+          pnpm --filter @transitmapper/worker exec wrangler deploy \
+            "$DEPLOY_ROOT/apps/worker/dist/index.js" \
+            --config "$DEPLOY_ROOT/apps/worker/wrangler.toml" \
+            --no-bundle \
+            --assets "$DEPLOY_ROOT/apps/web/dist"
 
       # A green deploy only proves the upload succeeded. It says nothing about
       # whether the Worker is actually serving the routes it was built for —
@@ -78,6 +184,7 @@ jobs:
       # Each check below is one of those symptoms, turned into an assertion.
       - name: Smoke test production
         env:
+          DEPLOY_ROOT: ${{ steps.extract.outputs.root }}
           SITE: https://map.lasvegasfortransit.org
         run: |
           set -euo pipefail
@@ -109,8 +216,8 @@ jobs:
           # stale deployment that prompted all of this had perfectly plausible
           # route shapes, it was simply a different build.
           entry=""
-          if [ -f apps/web/dist/index.html ]; then
-            entry=$(grep -oE '/assets/[A-Za-z0-9._-]+\.js' apps/web/dist/index.html | head -1 || true)
+          if [ -f "$DEPLOY_ROOT/apps/web/dist/index.html" ]; then
+            entry=$(grep -oE '/assets/[A-Za-z0-9._-]+\.js' "$DEPLOY_ROOT/apps/web/dist/index.html" | head -1 || true)
           fi
 
           if [ -n "$entry" ]; then

@@ -1,6 +1,6 @@
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
-import { cumulativeLengths, oneSection, wholeLeg } from '@transitmapper/core/model/geo';
+import { cumulativeLengths, oneSection, pointAtT, wholeLeg } from '@transitmapper/core/model/geo';
 import { LINE_COLORS } from '@transitmapper/core/model/catalog';
 import { effectiveVehicleKind, serviceStats } from '@transitmapper/core/sim/serviceStats';
 import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
@@ -29,7 +29,7 @@ const CROSSING: [number, number] = [-115.176, 36.13];
 const roadA: Way = {
   id: 'onboarding-road-a',
   typeId: 'road',
-  points: [[-115.1815, 36.13], CROSSING, [-115.1705, 36.13]],
+  points: [[-115.1815, 36.1287], CROSSING, [-115.1705, 36.1318]],
   geometry: 'straight',
   grade: 'atGrade',
   profile: defaultProfileFor('road'),
@@ -38,10 +38,22 @@ const roadA: Way = {
 const roadB: Way = {
   id: 'onboarding-road-b',
   typeId: 'road',
-  points: [[-115.176, 36.1255], CROSSING, [-115.176, 36.1345]],
+  points: [[-115.1776, 36.1255], CROSSING, [-115.1744, 36.1345]],
   geometry: 'straight',
   grade: 'atGrade',
   profile: defaultProfileFor('road'),
+};
+
+// A light-rail spine crosses the bus route at Central. Its geographic bends
+// are deliberate: Network follows the actual corridor while Diagram snaps it
+// into a schematic, so the final comparison teaches a visible difference.
+const railSpine: Way = {
+  id: 'onboarding-rail-spine',
+  typeId: 'lightRail',
+  points: [[-115.1752, 36.1245], CROSSING, [-115.1718, 36.1355]],
+  geometry: 'straight',
+  grade: 'atGrade',
+  profile: defaultProfileFor('lightRail'),
 };
 
 const junctionNode: Node = {
@@ -50,30 +62,69 @@ const junctionNode: Node = {
   refs: [
     { wayId: roadA.id, pointIndex: 1 },
     { wayId: roadB.id, pointIndex: 1 },
+    { wayId: railSpine.id, pointIndex: 1 },
   ],
 };
 
-// Unsnapped (empty `anchors`) is simplest and valid here — it only needs to
-// sit near the junction for the preview, not ride a specific way.
-const station: Station = {
-  id: 'onboarding-station',
-  name: 'Crossing',
-  coord: [-115.1785, 36.13],
-  anchors: [],
-};
+function crossingT(way: Way): number {
+  const lengths = cumulativeLengths(way.points);
+  return lengths[1] / lengths[lengths.length - 1];
+}
 
-const pattern: Pattern = {
-  id: 'onboarding-pattern',
+function stationOnWay(id: string, name: string, way: Way, t: number): Station {
+  return {
+    id,
+    name,
+    coord: pointAtT(way.points, t),
+    anchors: [{ wayId: way.id, t }],
+  };
+}
+
+// Every stop is anchored to its corridor so Diagram carries it onto the
+// schematic geometry instead of leaving geographic stop dots floating beside
+// the straightened lines.
+const stations: Station[] = [
+  stationOnWay('onboarding-station-west', 'Westside', roadA, 0.18),
+  {
+    id: 'onboarding-station-transfer',
+    name: 'Central',
+    coord: CROSSING,
+    anchors: [
+      { wayId: roadA.id, t: crossingT(roadA) },
+      { wayId: railSpine.id, t: crossingT(railSpine) },
+    ],
+  },
+  stationOnWay('onboarding-station-east', 'Eastside', roadA, 0.82),
+  stationOnWay('onboarding-station-north', 'North', railSpine, 0.82),
+  stationOnWay('onboarding-station-south', 'South', railSpine, 0.18),
+];
+
+const busPattern: Pattern = {
+  id: 'onboarding-bus-pattern',
   sections: oneSection([wholeLeg(roadA.id)]),
 };
 
-const service: Service = {
-  id: 'onboarding-service',
-  name: 'Sample line',
+const busService: Service = {
+  id: 'onboarding-bus-service',
+  name: 'Crosstown',
   modeId: 'bus',
   color: LINE_COLORS[0],
-  patterns: [pattern],
+  patterns: [busPattern],
   frequencyMinutes: 10,
+};
+
+const railPattern: Pattern = {
+  id: 'onboarding-rail-pattern',
+  sections: oneSection([wholeLeg(railSpine.id)]),
+};
+
+const railService: Service = {
+  id: 'onboarding-rail-service',
+  name: 'Valley Line',
+  modeId: 'lightRail',
+  color: LINE_COLORS[1],
+  patterns: [railPattern],
+  frequencyMinutes: 12,
 };
 
 /** The one fixture system every onboarding slide's preview map renders —
@@ -81,19 +132,25 @@ const service: Service = {
 export const ONBOARDING_FIXTURE_SYSTEM: TransitSystem = {
   ...createEmptySystem(0),
   id: 'onboarding-fixture',
-  name: 'Sample system',
-  ways: [roadA, roadB],
-  stations: [station],
-  services: [service],
+  name: 'Community network',
+  ways: [roadA, roadB, railSpine],
+  stations,
+  services: [busService, railService],
   nodes: [junctionNode],
 };
 
-// Measured once, at module load, since the fixture never changes — the same
-// serviceStats() the real Inspector and vehicle animation call, so slide 3's
-// preview moves on exactly the numbers a real drawn line would.
-const stats = serviceStats([roadA, roadB], [station], [], service, service.frequencyMinutes);
-const onlyPattern = stats?.patterns[0];
-if (!onlyPattern || !onlyPattern.plan) {
+// The Crosstown bus is the one animated service. Select it explicitly instead
+// of relying on array position: this fixture deliberately contains multiple
+// services, and adding another should never silently change which one moves.
+const stats = serviceStats(
+  [roadA, roadB, railSpine],
+  stations,
+  [],
+  busService,
+  busService.frequencyMinutes,
+);
+const animatedPattern = stats?.patterns[0];
+if (!animatedPattern || !animatedPattern.plan) {
   throw new Error('Onboarding fixture pattern failed to measure — check fixtureSystem.ts');
 }
 
@@ -104,17 +161,18 @@ if (!onlyPattern || !onlyPattern.plan) {
  *  couplet's two directions ride different streets), so the caller needs
  *  both paths' arc lengths, not just the outbound one `PatternStats` already
  *  carries. */
-export const ONBOARDING_PATTERN_STATS = onlyPattern;
-export const ONBOARDING_INBOUND_CUM_LENGTHS = cumulativeLengths(onlyPattern.inboundPath);
-export const ONBOARDING_VEHICLE_PROFILE = effectiveVehicleKind([], service).profile;
-export const ONBOARDING_SERVICE_COLOR = service.color;
+export const ONBOARDING_PATTERN_STATS = animatedPattern;
+export const ONBOARDING_INBOUND_CUM_LENGTHS = cumulativeLengths(animatedPattern.inboundPath);
+export const ONBOARDING_VEHICLE_PROFILE = effectiveVehicleKind([], busService).profile;
+export const ONBOARDING_SERVICE_COLOR = busService.color;
 
-/** The fixture only ever has one mode (bus) on one way type (road) — every
- *  slide's preview just switches `viewMode`. */
+/** The preview keeps one system connected across the sequence. Infrastructure
+ *  hides its service overlay so the roads, tracks, and junction are legible
+ *  rather than looking like a recolored copy of Network. */
 export function onboardingViewOptions(viewMode: ViewOptions['viewMode']): ViewOptions {
   return {
     viewMode,
-    visibleModes: new Set(['bus']),
-    visibleWayTypes: new Set(['road']),
+    visibleModes: new Set(viewMode === 'infrastructure' ? [] : ['bus', 'lightRail']),
+    visibleWayTypes: new Set(['road', 'lightRail']),
   };
 }

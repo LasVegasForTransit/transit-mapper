@@ -11,10 +11,33 @@ handling `/api/*`, `/s/*` and `/e/*` itself, with one D1 database (also
 
 ## Deploy
 
-Deploys are automatic: pushing to `main` runs
-[`deploy-production.yml`](../../../.github/workflows/deploy-production.yml),
-which runs the full CI checks, builds, applies any pending D1 migrations,
-deploys the Worker, and then smoke-tests the live site.
+Releases and deploys are automatic. Conventional commits merged to `main`
+cause Release Please to create or update one release pull request. That pull
+request contains the calculated version and changelog. Merging it creates the
+matching tag and GitHub release; the same workflow then runs the full CI
+checks, builds and attests a deployment archive, applies pending D1 migrations
+from it, deploys its exact Worker and web files, and smoke-tests the live site.
+
+Ordinary feature merges therefore do not deploy immediately. They accumulate
+in the generated release pull request until that pull request is merged. Do
+not edit the version, changelog, release tag, or build revision by hand; the
+root manifest, conventional commits, and GitHub event are their canonical
+sources.
+
+[`deploy-production.yml`](../../../.github/workflows/deploy-production.yml)
+attaches the deployment archive and its Sigstore bundle to every GitHub
+release. To verify a downloaded archive was built by this repository's GitHub
+Actions workflow:
+
+```bash
+gh attestation verify transitmapper-v<VERSION>-deployment.tar.gz \
+  --repo LasVegasForTransit/transit-mapper
+```
+
+The About dialog links the running build to its release, source revision, and
+repository attestations. The attestation proves the release archive's GitHub
+Actions origin; the workflow's production deployment record and entry-chunk
+smoke test establish that the same extracted archive was sent to Cloudflare.
 
 Because nothing applied migrations automatically before this workflow existed,
 the first automated deploy after it lands applies whatever backlog production
@@ -41,10 +64,21 @@ public site, with no checks — there is no staging environment. Run
 
 ### When a deploy fails
 
-Check which step failed before anything else — the three fail for unrelated
-reasons.
+Check which step failed before anything else; they fail for unrelated reasons.
 
 - **Validate** — a real test or type failure. Fix it on a branch.
+- **Prepare or publish release** — Release Please could not update its release
+  pull request or create the tag and GitHub release. Check the job's repository
+  permissions and default-branch rules. Repository Actions settings must allow
+  workflows to create pull requests; `pnpm bootstrap` keeps this setting in
+  sync while leaving the default workflow token read-only. If the organization
+  locks that setting off, an organization owner must enable workflow-created
+  pull requests once under the organization's Actions settings before a
+  repository workflow can change it.
+- **Build release**, **Bundle Worker**, **Package deployment artifact**, or
+  **Attest deployment artifact** — nothing has reached Cloudflare. Fix the
+  reproducible build or the workflow's `id-token` and `attestations`
+  permissions, then rerun the failed job.
 - **Apply D1 migrations** or **Deploy** with
   `Authentication error [code: 10000]` — the `CLOUDFLARE_API_TOKEN` secret in
   the repository's `production` environment lacks a permission. It needs
@@ -80,7 +114,7 @@ fix-forward deploy instead.
 
 ## Migrations
 
-The deploy workflow applies migrations before deploying code, so an ordinary
+The release workflow applies migrations before deploying code, so an ordinary
 release needs nothing from you. To check what production is running:
 
 ```bash

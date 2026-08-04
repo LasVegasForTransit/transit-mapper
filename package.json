@@ -1,7 +1,16 @@
 {
   "name": "transitmapper",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "license": "MIT",
+  "homepage": "https://map.lasvegasfortransit.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LasVegasForTransit/transit-mapper.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LasVegasForTransit/transit-mapper/issues"
+  },
   "type": "module",
   "packageManager": "pnpm@11.15.1",
   "engines": {
@@ -14,7 +23,7 @@
     "perf:record": "pnpm --filter @transitmapper/web perf:record",
     "perf:soak": "pnpm --filter @transitmapper/web perf:soak",
     "worker:dev": "pnpm --filter @transitmapper/worker dev",
-    "build": "turbo run build",
+    "build": "tsx apps/web/scripts/run-build.ts",
     "typecheck": "turbo run typecheck",
     "verify": "turbo run verify",
     "deploy": "pnpm run build && pnpm --filter @transitmapper/worker run deploy",
@@ -22,15 +31,16 @@
     "preflight": "tsx scripts/bootstrap/cold-start.ts --doctor",
     "postinstall": "tsx scripts/record-install.ts",
     "prepare": "git config --local core.hooksPath .githooks 2>/dev/null || true",
-    "lint": "eslint .",
+    "lint": "turbo run lint:workspace",
+    "lint:root": "eslint eslint.config.js scripts ./turbo",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck:scripts": "tsc -p scripts/tsconfig.json --noEmit",
     "check:contract": "tsx scripts/check-workspace-contract.ts",
     "check:filenames": "tsx scripts/check-file-names.ts",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck:scripts && pnpm check:filenames && pnpm check:contract && pnpm check:docs && pnpm check:migrations && pnpm check:structure && pnpm check:breakpoint && pnpm check:documents && pnpm check:reference && pnpm --filter @transitmapper/web generate:icons -- --check && turbo run lint typecheck check:types && turbo run verify --concurrency=1",
-    "check:fix": "pnpm format && pnpm lint:fix && pnpm run check",
+    "check": "tsx scripts/run-checks.ts",
+    "check:fix": "pnpm check --fix",
     "check:docs": "tsx scripts/check-docs-links.ts",
     "check:migrations": "tsx scripts/check-migrations-append-only.ts",
     "check:structure": "tsx scripts/check-project-structure.ts",

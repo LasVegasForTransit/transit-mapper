@@ -1,7 +1,8 @@
 # TransitMapper documentation
 
-> TransitMapper is a work in progress. These docs track the editor as it
-> exists today; where a feature is planned but not built, the docs say so.
+> TransitMapper is in open beta and changes frequently. These docs track the
+> editor as it exists today; where a feature is planned but not built, the
+> docs say so.
 
 The documentation follows the [Diátaxis](https://diataxis.fr/) framework:
 tutorials teach, how-to guides solve, reference informs, explanation

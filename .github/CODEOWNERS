@@ -1,8 +1,9 @@
-# Review routing. Every pull request needs one approval, so this decides who
-# is asked rather than whether anyone is — see the workflow section of the
-# harness spec.
+# Review routing is separate from project ownership and copyright. Willie is
+# currently the only repository administrator, so routes stay individual
+# until an organization maintainer team can receive them.
 #
-# Update the default once a maintainers team exists: `* @lvbt-team`.
+# After `@LasVegasForTransit/maintainers` exists and has repository access,
+# replace every `@williecubed` entry below with that team.
 * @williecubed
 
 # Paths where a mistake is expensive or irreversible. These are called out

@@ -429,9 +429,12 @@ flowchart TD
   cron --> w
 ```
 
-There is one environment. A merge to the default branch runs the checks,
-applies pending database migrations, deploys the Worker, and smoke-tests the
-result.
+There is one environment. Conventional commits on the default branch update a
+generated release pull request. Merging that pull request runs the checks,
+creates and attests one deployment archive, applies pending database
+migrations from it, deploys its exact Worker and static assets, and smoke-tests
+the result. GitHub records the release and production deployment; the About
+dialog exposes their version, revision, and provenance links to the viewer.
 
 | Element           | Detail                                                                                |
 | ----------------- | ------------------------------------------------------------------------------------- |
@@ -601,19 +604,17 @@ fail without turning a build red.
 
 | Item                                                  | Effect                                                                                                                                | Status                                                               |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Wall-clock performance assertion                      | A spatial-grid bound is asserted in elapsed milliseconds, measured between 178ms and 3,229ms for identical code                       | Mitigated by running tests serially; needs a deterministic proxy     |
 | Single maintainer                                     | Review, deployment, and credentials rest with one person                                                                              | Open                                                                 |
 | Unwired account code                                  | Identity, sessions, and ownership are implemented and imported by nothing; it reads as dead code and is not                           | Documented in section 12 and the code map                            |
 | TypeScript pinned to 6                                | The toolchain cannot move to 7 until `typescript-eslint` supports it                                                                  | Blocked upstream                                                     |
-| Merge queue unavailable                               | A personal account owns the repository, so concurrent merges are never tested against the merged result                               | Unblocked by transferring to the organization                        |
+| Merge queue not configured                            | Concurrent pull requests are not retested against the merged result                                                                   | Configure the organization repository's merge queue when needed      |
 | Browser storage as the only home for unpublished work | Clearing site data loses documents, with no recovery path                                                                             | Accepted; publishing is the backup                                   |
 | Hard termination during an agency-scale save          | Browsers cannot guarantee an async IndexedDB commit after process termination; a synchronous fallback may exceed `localStorage` quota | Mitigated by flushing on visibility change and documenting the limit |
 | Two test suites                                       | A sequential `check()` script and Vitest coexist; the former resists being split                                                      | Accepted; new tests go to Vitest                                     |
 | Usability unverified                                  | The first quality goal has no automated check and no usability testing behind it                                                      | Open                                                                 |
 
-Watch the first and last entries. A flaky assertion teaches people to re-run
-a build instead of reading it, and an unverified top-priority goal is a
-claim, not a property.
+Watch the usability entry. An unverified top-priority goal is a claim, not a
+property.
 
 ## 12. Glossary
 

@@ -26,6 +26,7 @@ repairs everything a machine can, then re-runs the rest.
 | `check:migrations`  | a migration that already exists was edited, renamed or deleted                                                     |
 | `check:structure`   | a source directory is undescribed, or a described one is gone                                                      |
 | `check:types`       | `worker-configuration.d.ts` no longer matches `wrangler.toml`                                                      |
+| `check:icons`       | generated app icons no longer match their source and provenance                                                    |
 | `verify`            | a test fails                                                                                                       |
 
 Every failure names the command that fixes it. If one does not, that is a

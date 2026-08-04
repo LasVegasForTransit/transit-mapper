@@ -10168,8 +10168,18 @@ function buildGrid() {
     validateSystem(ONBOARDING_FIXTURE_SYSTEM).length === 0,
   );
   check(
-    "the fixture's one pattern actually measures to a real run",
+    "the fixture's animated pattern actually measures to a real run",
     ONBOARDING_PATTERN_STATS.plan !== null && ONBOARDING_PATTERN_STATS.meters > 0,
+  );
+  check(
+    'the onboarding fixture presents a small network rather than a single line',
+    ONBOARDING_FIXTURE_SYSTEM.services.length >= 2 &&
+      ONBOARDING_FIXTURE_SYSTEM.stations.length >= 4,
+  );
+  check(
+    'the onboarding fixture includes both streets and rail',
+    ONBOARDING_FIXTURE_SYSTEM.ways.some((way) => way.typeId === 'road') &&
+      ONBOARDING_FIXTURE_SYSTEM.ways.some((way) => way.typeId === 'lightRail'),
   );
 }
 

@@ -6,6 +6,7 @@ import {
   editorPrecacheFiles,
   embedOnlyFiles,
   manifestInstallIconFiles,
+  referencedBuildAssetFiles,
   verifyPrecacheOutput,
   type BuildManifest,
   type WebAppManifest,
@@ -45,10 +46,7 @@ async function referencedBuildAssets(initialFiles: string[]): Promise<string[]> 
     const file = pending.pop();
     if (!file) continue;
     const source = await readFile(resolve(DIST_DIRECTORY, file), 'utf8');
-    for (const match of source.matchAll(
-      /(?:^|["'(])\/?(assets\/[A-Za-z0-9_.@-]+\.(?:js|css|png|svg|webp|woff|woff2))/g,
-    )) {
-      const referenced = match[1];
+    for (const referenced of referencedBuildAssetFiles(source)) {
       if (discovered.has(referenced)) continue;
       discovered.add(referenced);
       if (referenced.endsWith('.js') || referenced.endsWith('.css')) {
