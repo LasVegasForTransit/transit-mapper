@@ -1,13 +1,8 @@
-import type {
-  Map as MLMap,
-  MapMouseEvent,
-  MapTouchEvent,
-  MapGeoJSONFeature,
-  GeoJSONSource,
-} from 'maplibre-gl';
+import type { Map as MLMap, MapMouseEvent, MapGeoJSONFeature, GeoJSONSource } from 'maplibre-gl';
 import type { EditorState, EditorStore, MultiSelectItem } from '../editor/store';
 import { attachKeyboard, type SimCommands } from '../editor/keymap';
 import type { InputTuning } from '../editor/input-tuning';
+import { attachTouchGestures } from './touch-gestures';
 import {
   resolvePointerIntent,
   type ModifierState,
@@ -1961,10 +1956,8 @@ export function attachInteractions(
     // The touch adapter below already drove that press; replaying it here
     // would run the whole gesture a second time — a long press would open the
     // action menu and then immediately start a draw underneath it.
-    if (!dispatchingSynthetic && ignoreCompatMouseUntil > 0) {
-      if (Date.now() < ignoreCompatMouseUntil) return;
-      ignoreCompatMouseUntil = 0;
-    }
+    if (ignoringCompatMouse()) return;
+    ignoreCompatMouseUntil = 0;
     const st = store.getState();
     const oe = e.originalEvent;
     // Resolved channels, not raw key state: the branches below must agree with
@@ -2266,8 +2259,7 @@ export function attachInteractions(
     // The tail of a compatibility tap whose press the touch adapter already
     // handled (see onMouseDown's own guard, which never ran for this one and
     // so never cleared the window).
-    if (!dispatchingSynthetic && ignoreCompatMouseUntil > 0 && Date.now() < ignoreCompatMouseUntil)
-      return;
+    if (ignoringCompatMouse()) return;
     // Not reset here — onMouseDown owns clearing it, so a press whose click
     // MapLibre never fires can't leave this armed for the next one.
     if (suppressClick) return;
@@ -2541,21 +2533,31 @@ export function attachInteractions(
   // gesture that started it can. Capture phase guarantees this fires before
   // the keymap's own (bubble-phase) Escape handler, so a canceled gesture
   // consumes the keypress instead of also "backing out" a level.
+  /**
+   * Cancel whatever pointer gesture is in flight, and report whether there was
+   * one. Escape and an interrupted touch both need exactly this, and kept
+   * their own copies of it until they didn't.
+   */
+  const abortActiveGesture = (): boolean => {
+    if (!cancelActiveGesture) return false;
+    const cancel = cancelActiveGesture;
+    cancelActiveGesture = null;
+    cancel(); // cleans up live handlers/previews and any gesture-local state
+    store.getState().cancelHistoryCheckpoint(); // restores the exact pre-gesture system
+    opts.onEditGestureEnd?.();
+    opts.onDirectManipulationEnd?.();
+    lockedPrimaryOperation = undefined;
+    clearPointerIntent();
+    return true;
+  };
+
   const onEscapeCapture = (e: KeyboardEvent) => {
     if (e.key !== 'Escape') return;
     opts.setActionAnchor?.(null);
     opts.closeContextMenu?.();
-    if (cancelActiveGesture) {
+    if (abortActiveGesture()) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      const cancel = cancelActiveGesture;
-      cancelActiveGesture = null;
-      cancel(); // cleans up live handlers/previews and any gesture-local state
-      store.getState().cancelHistoryCheckpoint(); // restores the exact pre-gesture system
-      opts.onEditGestureEnd?.();
-      opts.onDirectManipulationEnd?.();
-      lockedPrimaryOperation = undefined;
-      clearPointerIntent();
       return;
     }
     if (facilityBoundaryDraft) {
@@ -2667,299 +2669,50 @@ export function attachInteractions(
     clearPointerIntent();
   };
 
-  // ---- touch: an ADAPTER onto the mouse vocabulary, not a second dispatcher --
-  //
-  // Every gesture above runs the same shape: a press classifies its target and
-  // starts a loop bound to `map.on('mousemove')` / `map.once('mouseup')`.
-  // Rather than teach four hundred lines of dispatch a second event
-  // vocabulary, this supplies the events it already speaks. Everything below
-  // reaches the SAME onMouseDown and resolves through the same pointerIntent
-  // verbs; nothing here decides what a press means.
-  //
-  // The grammar it supplies:
-  //   one-finger drag   the active tool's verb (desktop's left-drag)
-  //   two-finger drag   pan (desktop's right-drag / space-drag)
-  //   long press        the right-button family: menu, finish, one-way branch
-  //   tap / double tap  place-or-select, and finish a line
-  // Pinch-zoom is MapLibre's own TwoFingersTouchZoomRotate and is untouched.
-  //
-  // It drives EVERY one of those itself and then discards the compatibility
-  // mouse events the browser may emit afterwards (see armCompatSuppression).
-  // Leaning on those instead was tried and abandoned: whether they arrive
-  // depends on touch-action, on whether anything called preventDefault, and
-  // on the engine, so a tap landed twice in one browser and went missing in
-  // another. Confirmed live on a phone profile both ways — three taps
-  // producing four control points, then three taps producing two.
-  const LONG_PRESS_MS = 500;
   /**
-   * The gap between one finger LIFTING and the next landing.
+   * The compatibility mouse events a browser emits after a motionless touch.
    *
-   * Read from the browser's own event timestamps rather than the clock: on
-   * real hardware those record when the finger actually moved, so a person
-   * tapping at a normal cadence still registers while the main thread is busy
-   * committing the first tap.
+   * This is the one place the mouse path cannot be entirely innocent of touch,
+   * so it is named rather than hidden. The touch adapter drives each gesture
+   * itself and then arms this; without it a long press would open the action
+   * menu and immediately start a draw underneath it.
    *
-   * 500ms, matching the platform default for a double click, rather than the
-   * 300ms a double tap nominally is. Dispatching a tap runs a store mutation
-   * and a MapLibre repaint; that work lands inside the measured gap whenever
-   * the browser stamps an event late, and at 300ms a double tap on a slow
-   * device silently became two points and no finish. Widening it is safe
-   * because the distance check below is what actually prevents a false
-   * positive: two deliberate points placed within a fingertip's width of each
-   * other are already degenerate.
-   */
-  const DOUBLE_TAP_MS = 500;
-
-  /** Which vocabulary the live touch gesture was committed to at touchstart. */
-  type TouchGesture = 'pending' | 'tool' | 'camera' | 'actions';
-
-  let touchGesture: TouchGesture | null = null;
-  let touchStartPoint: ScreenPoint | null = null;
-  let touchStartEvent: MapTouchEvent | null = null;
-  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
-  /**
-   * Set once this adapter has driven a press itself, so the compatibility
-   * mouse events the browser emits afterwards are ignored rather than
-   * replaying the gesture a second time.
-   *
-   * Only a motionless touch produces those events, so in practice this covers
-   * the long press; a real drag suppresses them at the browser level. Cleared
-   * by the next touchstart and by any mouse event that arrives outside the
-   * window, so a hybrid device's actual mouse is never held off.
-   */
-  let ignoreCompatMouseUntil = 0;
-  /** When the previous tap's finger left the glass. */
-  let lastTapEndedAt = 0;
-  let lastTapPoint: ScreenPoint | null = null;
-  /** When the live gesture's finger landed. */
-  let touchStartedAt = 0;
-
-  /**
-   * When a touch happened, as the browser recorded it. Both timestamps share
-   * the document's time origin, so they are comparable to each other; falling
-   * back to the clock only matters for a synthetic event with no timeStamp.
-   */
-  const touchTime = (e: MapTouchEvent): number =>
-    typeof e.originalEvent?.timeStamp === 'number' ? e.originalEvent.timeStamp : Date.now();
-
-  /**
-   * Arm the window in which compatibility mouse events are ignored.
-   *
-   * Whether a browser emits them at all depends on the touch-action in force,
-   * on whether anything called preventDefault, and on the browser: relying on
-   * that variation either way produces a press that lands twice on one engine
-   * and not at all on another. This adapter therefore drives every gesture
-   * itself and discards whatever the browser adds afterwards.
-   *
-   * 700ms covers the compatibility tail (~300ms in practice) without being
-   * long enough to hold off a real mouse on a hybrid device, which would need
+   * 700ms covers the compatibility tail (~300ms in practice) without being long
+   * enough to hold off a real mouse on a hybrid device, which would need
    * someone to touch the screen and grab the mouse inside the same gesture.
    */
-  const armCompatSuppression = () => {
-    ignoreCompatMouseUntil = Date.now() + 700;
-  };
-
+  let ignoreCompatMouseUntil = 0;
   /**
-   * True while this adapter is re-firing an event on the map itself.
+   * True while the touch adapter is re-firing an event on the map itself.
    *
-   * The suppression window cannot tell the adapter's own dispatch from the
-   * browser's tail by timing alone — they overlap by design — so the dispatch
-   * says so explicitly. Without this the window swallowed the very events it
-   * exists to protect: the second tap of a double tap arrives inside the first
-   * tap's window, so the line never finished and a stray point was left
-   * behind instead.
+   * The window above cannot tell the adapter's own dispatch from the browser's
+   * tail by timing alone — they overlap by design — so the dispatch says so
+   * explicitly. Without this the window swallowed the very events it exists to
+   * protect: the second tap of a double tap arrives inside the first tap's
+   * window, so a line could never be finished by finger.
    */
   let dispatchingSynthetic = false;
 
-  const dispatch = (
-    type: 'mousedown' | 'mousemove' | 'mouseup' | 'click' | 'dblclick',
-    event: MapMouseEvent,
-  ) => {
-    dispatchingSynthetic = true;
-    try {
-      map.fire(type, event);
-    } finally {
-      dispatchingSynthetic = false;
-    }
-  };
+  const ignoringCompatMouse = () =>
+    !dispatchingSynthetic && ignoreCompatMouseUntil > 0 && Date.now() < ignoreCompatMouseUntil;
 
-  const cancelLongPress = () => {
-    if (longPressTimer === null) return;
-    clearTimeout(longPressTimer);
-    longPressTimer = null;
-  };
-
-  /**
-   * A MapMouseEvent good enough for every consumer in this file: the dispatch
-   * reads `point` for hit-testing, `lngLat` for geometry, and `originalEvent`
-   * for the button and modifier keys.
-   */
-  const asMouseEvent = (
-    source: MapTouchEvent,
-    point: ScreenPoint,
-    button: number,
-    detail = 1,
-  ): MapMouseEvent => {
-    // Viewport coordinates, which the action menu and the hover badge position
-    // against — `point` is canvas-relative and would place both wrong whenever
-    // the canvas is inset. Read from the real TouchEvent where there is one,
-    // falling back to the canvas point for the offsetless common case.
-    const touch = source.originalEvent?.changedTouches?.[0] ?? source.originalEvent?.touches?.[0];
-    return {
-      point,
-      lngLat: source.lngLat,
-      target: map,
-      originalEvent: {
-        button,
-        detail,
-        clientX: touch?.clientX ?? point.x,
-        clientY: touch?.clientY ?? point.y,
-        // Touch supplies no modifier keys. Their equivalents are latched
-        // channels in the inspector, not chorded finger gestures.
-        shiftKey: false,
-        altKey: false,
-        ctrlKey: false,
-        metaKey: false,
-        preventDefault() {},
-        stopPropagation() {},
-      },
-      preventDefault() {},
-    } as unknown as MapMouseEvent;
-  };
-
-  const movedPastThreshold = (point: ScreenPoint): boolean =>
-    touchStartPoint !== null &&
-    Math.hypot(point.x - touchStartPoint.x, point.y - touchStartPoint.y) >= dragPx;
-
-  const onTouchStart = (e: MapTouchEvent) => {
-    cancelLongPress();
-    ignoreCompatMouseUntil = 0;
-    // Latched at touchstart and never revisited: a finger lifting out of a
-    // pinch must not silently convert a camera gesture into a draw across the
-    // map someone was only trying to look at.
-    if (e.points.length >= 2) {
-      if (touchGesture === 'tool' || touchGesture === 'actions') {
-        dispatch('mouseup', asMouseEvent(e, e.point, 0));
+  const detachTouch = attachTouchGestures(map, {
+    dispatch(type, event) {
+      dispatchingSynthetic = true;
+      try {
+        map.fire(type, event);
+      } finally {
+        dispatchingSynthetic = false;
       }
-      touchGesture = 'camera';
-      touchStartPoint = e.point;
-      touchStartEvent = e;
-      // Called directly rather than through a synthetic right-button mousedown,
-      // because startPan's rightButton path also owns finish-the-draw and
-      // open-the-menu on release. Two fingers mean the camera and nothing else.
-      startPan(asMouseEvent(e, e.point, 0), false);
-      return;
-    }
-    touchGesture = 'pending';
-    touchStartPoint = e.point;
-    touchStartEvent = e;
-    touchStartedAt = touchTime(e);
-    // The badge, published before anything is dispatched. A mouse answers
-    // "what will this press do" from an idle hover; a finger has no idle
-    // state, so the answer moves inside the gesture — shown while the press is
-    // still undecided and there is time to lift and cancel.
-    publishPointerIntent(asMouseEvent(e, e.point, 0), undefined, false);
-    longPressTimer = setTimeout(() => {
-      longPressTimer = null;
-      if (touchGesture !== 'pending' || !touchStartEvent || !touchStartPoint) return;
-      touchGesture = 'actions';
-      // Button 2 is the whole substitution: onMouseDown routes it to
-      // startPan(rightButton), whose release path already owns the one-way
-      // branch, the finish-the-draw, and the action menu.
-      dispatch('mousedown', asMouseEvent(touchStartEvent, touchStartPoint, 2));
-      // Confirms a press that produced no visible motion. Absent on iOS, where
-      // the menu appearing is the only feedback available.
-      navigator.vibrate?.(10);
-    }, LONG_PRESS_MS);
-  };
-
-  const onTouchMove = (e: MapTouchEvent) => {
-    if (touchGesture === null) return;
-    if (touchGesture === 'pending') {
-      if (!movedPastThreshold(e.point)) return;
-      cancelLongPress();
-      touchGesture = 'tool';
-      // The press is replayed at the point the finger STARTED from, then moved
-      // to where it is now. Dispatching it here instead would silently shift
-      // every gesture's origin by the drag threshold.
-      if (touchStartEvent && touchStartPoint) {
-        dispatch('mousedown', asMouseEvent(touchStartEvent, touchStartPoint, 0));
-      }
-    }
-    dispatch('mousemove', asMouseEvent(e, e.point, 0));
-  };
-
-  const onTouchEnd = (e: MapTouchEvent) => {
-    cancelLongPress();
-    const endedAt = touchTime(e);
-    const gesture = touchGesture;
-    const startPoint = touchStartPoint;
-    const startEvent = touchStartEvent;
-    // A pinch releasing one finger at a time ends the camera gesture on the
-    // first release; the remaining finger must not become a new draw.
-    touchGesture = null;
-    touchStartPoint = null;
-    touchStartEvent = null;
-    if (gesture === null) return;
-
-    if (gesture === 'pending' && startEvent && startPoint) {
-      // A tap: press and release in place, then the click the dispatch's
-      // select/deselect handling waits for.
-      const doubleTap =
-        lastTapPoint !== null &&
-        touchStartedAt - lastTapEndedAt < DOUBLE_TAP_MS &&
-        Math.hypot(startPoint.x - lastTapPoint.x, startPoint.y - lastTapPoint.y) < dragPx;
-      // detail 2 marks the second press of a double tap, which is what
-      // isDoubleClickFinish reads to keep the Way tool from placing one more
-      // point before the dblclick finishes the line.
-      dispatch('mousedown', asMouseEvent(startEvent, startPoint, 0, doubleTap ? 2 : 1));
-      dispatch('mouseup', asMouseEvent(startEvent, startPoint, 0));
-      dispatch('click', asMouseEvent(startEvent, startPoint, 0, doubleTap ? 2 : 1));
-      if (doubleTap) {
-        dispatch('dblclick', asMouseEvent(startEvent, startPoint, 0, 2));
-        // A third tap must not pair with the second: a double tap is two taps,
-        // not the start of a run.
-        lastTapEndedAt = 0;
-        lastTapPoint = null;
-      } else {
-        lastTapEndedAt = endedAt;
-        lastTapPoint = startPoint;
-      }
-      armCompatSuppression();
-      return;
-    }
-
-    // `touchend` carries only the touches that REMAIN, so the released
-    // position comes from the last known one rather than from e.point.
-    const point = e.points.length > 0 ? e.point : (startPoint ?? e.point);
-    dispatch('mouseup', asMouseEvent(e, point, gesture === 'actions' ? 2 : 0));
-    armCompatSuppression();
-  };
-
-  // The system interrupted the gesture (an incoming call, a system edge swipe).
-  // Treated as Escape rather than as a release: a drag the person never
-  // finished must not commit wherever their finger happened to be.
-  const onTouchCancel = () => {
-    cancelLongPress();
-    if (cancelActiveGesture) {
-      const cancel = cancelActiveGesture;
-      cancelActiveGesture = null;
-      cancel();
-      store.getState().cancelHistoryCheckpoint();
-      opts.onEditGestureEnd?.();
-      opts.onDirectManipulationEnd?.();
-      lockedPrimaryOperation = undefined;
-      clearPointerIntent();
-    }
-    touchGesture = null;
-    touchStartPoint = null;
-    touchStartEvent = null;
-  };
-
-  map.on('touchstart', onTouchStart);
-  map.on('touchmove', onTouchMove);
-  map.on('touchend', onTouchEnd);
-  map.on('touchcancel', onTouchCancel);
+    },
+    startPan: (at) => startPan(at, false),
+    abortGesture: () => void abortActiveGesture(),
+    publishIntent: (at) => publishPointerIntent(at, undefined, false),
+    dragPx,
+    armCompatSuppression() {
+      ignoreCompatMouseUntil = Date.now() + 700;
+    },
+  });
 
   map.on('mousedown', onMouseDown);
   map.on('mouseup', onPointerUp);
@@ -3014,11 +2767,7 @@ export function attachInteractions(
 
   return () => {
     hoverThrottle.cancel();
-    cancelLongPress();
-    map.off('touchstart', onTouchStart);
-    map.off('touchmove', onTouchMove);
-    map.off('touchend', onTouchEnd);
-    map.off('touchcancel', onTouchCancel);
+    detachTouch();
     map.off('mousedown', onMouseDown);
     map.off('mouseup', onPointerUp);
     map.off('mousemove', onHoverMove);
