@@ -1,13 +1,12 @@
 import { useRef, type ReactNode } from 'react';
 import { useEditor } from '../editor/EditorProvider';
 import { useSelectionActions } from '../editor/useSelectionActions';
-import type { MultiSelectItem, Selection } from '../editor/store';
-import { useHoverCapable } from './device-capabilities';
+import type { MultiSelectItem, Selection, Tool } from '../editor/store';
 import { Icon } from './Icon';
 import { NodeInspector } from './NodeInspector';
 import { Panel } from './Panel';
 import { useDelayedUnmount } from './useDelayedUnmount';
-import { useView } from './ViewProvider';
+import { useView, type ViewMode } from './ViewProvider';
 import { ToolDraftInspector } from './inspector/drafts';
 import { ServiceInspector } from './inspector/ServiceInspector';
 import { WayInspector } from './inspector/WayInspector';
@@ -44,44 +43,95 @@ function renderInspectorContent(
 // (showing the last real content) for the CSS exit transition's duration
 // instead of vanishing the instant either one clears — see useDelayedUnmount.
 /**
- * Whether an armed tool has draft options to show. Exported because App.tsx
- * decides the same thing for `hasSupplementalContent`, and two copies of this
- * predicate would drift into a sheet that opens over an empty panel.
+ * What the one dynamic surface should be showing.
  *
- * The Select tool is included only without a hover-capable pointer. Its
- * options are the latched modifier channels (see inspector/modifiers.tsx),
- * which are the only way to reach Alt/Shift/Ctrl operations by finger. Where
- * those keys can actually be held, Select keeps its empty inspector, and the
- * channels stay discoverable through the other three tools' panels — an
- * inspector that never closes would be chrome with nothing to say.
+ * This is the single answer to a question three call sites used to compute
+ * separately — Inspector's own open state, App's `hasSupplementalContent`, and
+ * App's sheet auto-expand — from the same four store fields. Three formulas
+ * over the same inputs is how the mobile sheet ended up opening over an empty
+ * panel; there is one now.
  */
-export function useShowingToolDraft(): boolean {
+export type SupplementalContent =
+  | { kind: 'none' }
+  | { kind: 'selection' }
+  /** A tool's own options. `standing` marks the ones that are simply always
+   *  there, as opposed to options a person just summoned by picking up a
+   *  tool — see supplementalOpensSheet. */
+  | { kind: 'tool-draft'; tool: Tool; standing: boolean };
+
+export interface SupplementalInput {
+  tool: Tool;
+  readOnly: boolean;
+  viewMode: ViewMode;
+  hasSelection: boolean;
+}
+
+/**
+ * The decision itself, as a plain function of four facts.
+ *
+ * Pure so the rules below can be verified without a renderer, the same shape
+ * editor/pointerIntent.ts uses for the pointer vocabulary.
+ */
+export function supplementalContentFor({
+  tool,
+  readOnly,
+  viewMode,
+  hasSelection,
+}: SupplementalInput): SupplementalContent {
+  // Diagram and read-only both disable the drawing tools outright (see
+  // Toolbar's `locked`), so an armed tool from before switching there must not
+  // still claim this slot. A selection can still be inspected.
+  if (readOnly || viewMode === 'diagram') {
+    return hasSelection ? { kind: 'selection' } : { kind: 'none' };
+  }
+  // An armed drawing tool is what you are doing right now, and outranks
+  // whatever was selected before you picked it up.
+  if (tool !== 'select') return { kind: 'tool-draft', tool, standing: false };
+  // Select's own options are its modifier channels, and unlike a drawing
+  // tool's they yield to a selection: what you just picked is more specific
+  // than how the next press will be qualified.
+  if (hasSelection) return { kind: 'selection' };
+  return { kind: 'tool-draft', tool, standing: true };
+}
+
+export function useSupplementalContent(): SupplementalContent {
   const tool = useEditor((s) => s.tool);
   const readOnly = useEditor((s) => s.readOnly);
   const selection = useEditor((s) => s.selection);
   const multiSelection = useEditor((s) => s.multiSelection);
-  const hoverCapable = useHoverCapable();
   const { viewMode } = useView();
-  if (readOnly || viewMode === 'diagram') return false;
-  if (tool !== 'select') return true;
-  // Unlike a drawing tool, Select's options yield to a selection: what you
-  // just picked is more specific than how the next press will be qualified.
-  return !hoverCapable && selection === null && multiSelection.length === 0;
+  return supplementalContentFor({
+    tool,
+    readOnly,
+    viewMode,
+    hasSelection: selection !== null || multiSelection.length > 0,
+  });
+}
+
+/**
+ * Whether this content should take over the mobile sheet on its own.
+ *
+ * Standing options are excluded. The Select tool's modifier channels are
+ * present from the moment the app loads, and auto-expanding for them parked
+ * the sheet over 62% of the map before anyone had touched anything.
+ */
+export function supplementalOpensSheet(content: SupplementalContent): boolean {
+  if (content.kind === 'none') return false;
+  return !(content.kind === 'tool-draft' && content.standing);
 }
 
 export function Inspector() {
   const selection = useEditor((s) => s.selection);
   const multiSelection = useEditor((s) => s.multiSelection);
-  const tool = useEditor((s) => s.tool);
-  const showingToolDraft = useShowingToolDraft();
-  const isOpen = showingToolDraft || multiSelection.length > 0 || selection !== null;
-  const { mounted, closing } = useDelayedUnmount(isOpen, 160);
+  const content = useSupplementalContent();
+  const { mounted, closing } = useDelayedUnmount(content.kind !== 'none', 160);
 
-  const current = showingToolDraft ? (
-    <ToolDraftInspector tool={tool} />
-  ) : (
-    renderInspectorContent(selection, multiSelection)
-  );
+  const current =
+    content.kind === 'tool-draft' ? (
+      <ToolDraftInspector tool={content.tool} />
+    ) : (
+      renderInspectorContent(selection, multiSelection)
+    );
   const lastContent = useRef<ReactNode>(current);
   if (current !== null) lastContent.current = current;
 

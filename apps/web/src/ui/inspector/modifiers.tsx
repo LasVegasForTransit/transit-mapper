@@ -1,6 +1,5 @@
 import { useEditor } from '../../editor/EditorProvider';
 import type { LatchedModifierChannel } from '../../editor/store';
-import { useHoverCapable } from '../device-capabilities';
 
 /**
  * The modifier channels, as controls rather than as held keys.
@@ -54,7 +53,6 @@ const CHANNELS: ChannelDescriptor[] = [
 export function ModifierChannels() {
   const latched = useEditor((s) => s.latchedModifiers);
   const setLatchedModifier = useEditor((s) => s.setLatchedModifier);
-  const hoverCapable = useHoverCapable();
 
   return (
     <div className="insp-section">
@@ -71,21 +69,25 @@ export function ModifierChannels() {
               // aria-pressed, not aria-checked: these are independent toggles,
               // not a single choice among alternatives.
               aria-pressed={active}
-              aria-label={`${label}${hoverCapable ? ` (${key})` : ''}. ${hint}`}
+              // The key is always named. Hover is not a proxy for having a
+              // keyboard — an iPad with a Magic Keyboard and a Windows
+              // touchscreen laptop both report `hover: none` and both have
+              // keys — so gating this on it hid the shortcut from a screen
+              // reader on exactly the devices that could use it. Whether the
+              // key is drawn is a separate, CSS-only question below.
+              aria-label={`${label} (${key}). ${hint}`}
               className={`chip ${active ? 'active' : ''}`}
               onClick={() => setLatchedModifier(channel, !active)}
             >
               {label}
-              {hoverCapable && <span className="chip-key">{key}</span>}
+              <span className="chip-key">{key}</span>
             </button>
           );
         })}
       </div>
-      <p className="panel-hint">
-        {hoverCapable
-          ? 'Hold the key, or switch one on to keep it on.'
-          : 'Stays on until you switch it off.'}
-      </p>
+      {/* One sentence rather than one per pointer type: on a touchscreen
+          laptop both were true at once and the component had to pick. */}
+      <p className="panel-hint">Switch one on to keep it on. Holding its key works too.</p>
     </div>
   );
 }

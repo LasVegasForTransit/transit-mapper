@@ -1394,12 +1394,75 @@ input[type='range'] {
 }
 /* The key a modifier chip mirrors (see inspector/modifiers.tsx). Quieter than
    the label: the chip is the control, and the key is a note about another way
-   to reach it. Rendered only where a keyboard is likely, so it never claims a
-   phone has an Alt key. */
+   to reach it. Always in the accessible name — a tablet with a keyboard case
+   reports no hover and still has an Alt key — but only drawn where a pointer
+   can hover, which is the closest signal a stylesheet has for "a keyboard is
+   probably attached". */
 .chip-key {
   font-family: var(--mono);
   font-size: var(--md-sys-typescale-label-small-size);
   opacity: 0.6;
+}
+@media (hover: none) {
+  .chip-key {
+    display: none;
+  }
+}
+
+/* ---- the pointer badge: what the next press will do ----
+   Positioned by map/PointerBadge.tsx, which supplies only the pointer's x/y.
+   Everything about how it LOOKS is here, including its two pointer-dependent
+   answers — the component deliberately does not ask what kind of pointer it
+   has, so these rules cannot drift from a second copy in a .tsx file. */
+.pointer-badge {
+  --badge-dx: 14px;
+  --badge-dy: 14px;
+  --badge-size: 20px;
+  --badge-icon: 14px;
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--badge-size);
+  height: var(--badge-size);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 999px;
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-primary);
+  box-shadow: var(--md-sys-elevation-level2);
+  pointer-events: none;
+  /* Offset from the pointer, applied here so the two constants below live
+     beside every other number describing this element. */
+  translate: var(--badge-dx) var(--badge-dy);
+}
+.pointer-badge > svg {
+  width: var(--badge-icon);
+  height: var(--badge-icon);
+}
+.pointer-badge[data-pointer-refused] {
+  border-color: var(--md-sys-color-error);
+  color: var(--md-sys-color-error);
+}
+/* A cursor is drawn below-right of its hotspot, so the badge sits below-right
+   of it and covers nothing. A fingertip covers what it touches and roughly
+   24px around it, so the badge goes ABOVE the contact point instead — and
+   larger, since 20px is sized to sit beside a one-pixel cursor. */
+@media (hover: none) {
+  .pointer-badge {
+    --badge-dx: -12px;
+    --badge-dy: -44px;
+    --badge-size: 32px;
+    --badge-icon: 18px;
+  }
+}
+/* A refusal with no badge icon of its own needs drawing only where no cursor
+   can say it. With a mouse the `not-allowed` cursor already has (see
+   cursorFor in map/interactions.ts), and a second marker is noise. */
+@media (hover: hover) {
+  .pointer-badge[data-pointer-refused]:not([data-badge]) {
+    display: none;
+  }
 }
 .chip:disabled {
   cursor: not-allowed;

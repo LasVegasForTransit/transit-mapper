@@ -26,7 +26,7 @@ import { resolveLibraryBootstrap } from './storage/bootstrapLibrary';
 import { Icon } from './ui/Icon';
 import { ImportProgressPill } from './ui/ImportProgressPill';
 import { MapContextMenu } from './ui/MapContextMenu';
-import { Inspector, useShowingToolDraft } from './ui/Inspector';
+import { Inspector, supplementalOpensSheet, useSupplementalContent } from './ui/Inspector';
 import { SidebarPanel } from './ui/SidebarPanel';
 import { SimControls, SimControlsCompact } from './ui/SimControls';
 import { Toolbar } from './ui/Toolbar';
@@ -267,10 +267,7 @@ export function App() {
     }
   }, []);
 
-  const selection = useEditor((s) => s.selection);
-  const multiSelection = useEditor((s) => s.multiSelection);
   const readOnly = useEditor((s) => s.readOnly);
-  const tool = useEditor((s) => s.tool);
   const canUndo = useEditor((s) => s.canUndo);
 
   useEffect(() => {
@@ -281,19 +278,9 @@ export function App() {
     if (canUndo) recordUndoableEdit();
   }, [canUndo, recordUndoableEdit]);
   // The right sidebar is the one dynamic surface for "what's relevant right
-  // now" — a selected object's details, OR (when a drawing tool is armed)
-  // that tool's own draft options, never a second bottom-bar popup for the
-  // latter. Diagram/read-only both disable drawing tools outright (see
-  // Toolbar's own `locked`), so an armed tool from before switching there
-  // shouldn't still claim this slot.
-  const showingToolDraft = useShowingToolDraft();
-  const hasSupplementalContent =
-    selection !== null || multiSelection.length > 0 || showingToolDraft;
-  // A selection or a picked-up drawing tool is something the person just did,
-  // so the mobile sheet opens for it. The Select tool's standing modifier
-  // channels are not, and must not park the sheet over the map on load.
-  const supplementalIsFresh =
-    selection !== null || multiSelection.length > 0 || (showingToolDraft && tool !== 'select');
+  // now". What belongs there, and whether it should take over the mobile
+  // sheet, are both decided by useSupplementalContent — not restated here.
+  const supplemental = useSupplementalContent();
 
   const dialogFailed = () => {
     closeDialog();
@@ -430,8 +417,8 @@ export function App() {
         brand={<TopBarBrand />}
         menuPanel={<SidebarPanel />}
         supplementalPanel={<Inspector />}
-        hasSupplementalContent={hasSupplementalContent}
-        supplementalIsFresh={supplementalIsFresh}
+        hasSupplementalContent={supplemental.kind !== 'none'}
+        supplementalIsFresh={supplementalOpensSheet(supplemental)}
         primaryToolbar={<TopBarActions />}
         viewSwitcher={<ViewSwitch />}
         simControls={<SimControls />}
