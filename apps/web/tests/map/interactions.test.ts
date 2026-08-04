@@ -391,23 +391,42 @@ interface ContextMenuProbe {
   close?: () => void;
 }
 
+interface AttachOptions {
+  gesture?: GestureLifecycleProbe;
+  directManipulation?: DirectManipulationLifecycleProbe;
+  onPointerIntent?: (intent: PointerIntent | null) => void;
+  /** Defaults to the Network view, which most cases exercise. */
+  networkMode?: boolean;
+  isContextMenuOpen?: () => boolean;
+  contextMenu?: ContextMenuProbe;
+  onPointerRefresh?: (refresh: () => void) => void;
+  openTerminusConnectionChoice?: NonNullable<
+    AttachInteractionsOptions['openTerminusConnectionChoice']
+  >;
+  /** Defaults to the fine profile, matching a mouse. */
+  tuning?: InputTuning;
+}
+
+/**
+ * Named rather than positional. This took eleven positional parameters once,
+ * and its call sites were long runs of `undefined` counted by hand.
+ */
 function attach(
   map: ReturnType<typeof createMap>,
   store: ReturnType<typeof createEditorStore>,
-  gesture?: GestureLifecycleProbe,
-  directManipulation?: DirectManipulationLifecycleProbe,
-  onPointerIntent?: (intent: PointerIntent | null) => void,
-  networkMode = true,
-  isContextMenuOpen?: () => boolean,
-  contextMenu?: ContextMenuProbe,
-  onPointerRefresh?: (refresh: () => void) => void,
-  openTerminusConnectionChoice?: NonNullable<
-    AttachInteractionsOptions['openTerminusConnectionChoice']
-  >,
-  /** Omitted means the fine profile: the fake window carries no matchMedia,
-   *  so the capability snapshot reports a precise pointer. */
-  tuning?: InputTuning,
+  options: AttachOptions = {},
 ) {
+  const {
+    gesture,
+    directManipulation,
+    onPointerIntent,
+    networkMode = true,
+    isContextMenuOpen,
+    contextMenu,
+    onPointerRefresh,
+    openTerminusConnectionChoice,
+    tuning = FINE_POINTER_TUNING,
+  } = options;
   return attachInteractions(map as unknown as MLMap, store, {
     openShortcuts() {},
     toggleUi() {},
@@ -499,7 +518,9 @@ describe('pointer work coalescing', () => {
         [-115.2, 36.1],
       ]),
     ]);
-    const detach = attach(map, store, undefined, undefined, undefined, false);
+    const detach = attach(map, store, {
+      networkMode: false,
+    });
     const event = mouseEvent(map, { x: 700, y: 1000 }, { shiftKey: true });
     map.resetProjectedCoordinateCount();
 
@@ -551,7 +572,9 @@ describe('pointer work coalescing', () => {
     store.getState().setActivePattern('branch');
     const map = createMap(terminusFeature('branch', 'end', [-115.23, 36.1]));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousedown', mouseEvent(map, map.project([-115.23, 36.1])));
     map.setFeatures(wayFeature('extension'));
@@ -662,7 +685,9 @@ describe('pointer work coalescing', () => {
     });
     const map = createMap(terminusFeature('branch', 'end', [-115.21, 36.1]));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, map.project([-115.21, 36.1])));
     scheduler.pump();
@@ -748,7 +773,9 @@ describe('pointer work coalescing', () => {
     store.getState().select({ kind: 'service', id: 'service' });
     const map = createMap(terminusFeature('branch', 'end', c));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousedown', mouseEvent(map, map.project(c)));
     map.setFeatures(serviceOccurrenceFeature('service', 'branch', 'a-b', 0, [a, b]));
@@ -894,20 +921,11 @@ describe('pointer work coalescing', () => {
     let chooser:
       | Parameters<NonNullable<AttachInteractionsOptions['openTerminusConnectionChoice']>>[0]
       | undefined;
-    const detach = attach(
-      map,
-      store,
-      undefined,
-      undefined,
-      undefined,
-      true,
-      undefined,
-      undefined,
-      undefined,
-      (next) => {
+    const detach = attach(map, store, {
+      openTerminusConnectionChoice: (next) => {
         chooser = next;
       },
-    );
+    });
 
     map.fire('mousedown', mouseEvent(map, map.project([-115.23, 36.1])));
     map.setFeatures(targetTerminus);
@@ -973,7 +991,9 @@ describe('pointer work coalescing', () => {
     };
     const map = createMap(sourceTerminus);
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousedown', mouseEvent(map, map.project([-115.23, 36.1])));
     map.setFeatures(targetTerminus);
@@ -998,7 +1018,9 @@ describe('pointer work coalescing', () => {
     system.ways = [erasableWay()];
     store.getState().setSystem(system);
     const map = createMap(handleFeature(2));
-    const detach = attach(map, store, undefined, undefined, undefined, false);
+    const detach = attach(map, store, {
+      networkMode: false,
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }, { ctrlKey: true }));
 
@@ -1013,7 +1035,9 @@ describe('pointer work coalescing', () => {
     system.ways = [erasableWay()];
     store.getState().setSystem(system);
     const map = createMap(handleFeature(1));
-    const detach = attach(map, store, undefined, undefined, undefined, false);
+    const detach = attach(map, store, {
+      networkMode: false,
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }, { shiftKey: true }));
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 120 }, { shiftKey: true }));
@@ -1033,7 +1057,10 @@ describe('pointer work coalescing', () => {
     store.getState().setSystem(system);
     const map = createMap(handleFeature(1));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent), false);
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+      networkMode: false,
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.fireKey('keydown', { key: 'Shift', shiftKey: true });
@@ -1059,7 +1086,9 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('way');
     const map = createMap([serviceFeature('erasable'), wayFeature('erasable')]);
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 700, y: 1000 }));
     scheduler.pump();
@@ -1082,7 +1111,9 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('way');
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
     const endpoint = map.project([-115.2, 36.1]);
 
     map.fire('mousemove', mouseEvent(map, endpoint));
@@ -1108,7 +1139,9 @@ describe('pointer work coalescing', () => {
     store.getState().startRouteDraft({ wayId: 'erasable', insertIndex: 1, coord: [-115.24, 36.1] });
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
     const endpoint = map.project([-115.2, 36.1]);
 
     map.fire('mousemove', mouseEvent(map, endpoint));
@@ -1134,7 +1167,9 @@ describe('pointer work coalescing', () => {
     store.getState().startRouteDraft({ wayId: 'erasable', insertIndex: 1, coord: [-115.24, 36.1] });
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
     const endpoint = map.project([-115.2, 36.1]);
 
     map.fire('mousemove', mouseEvent(map, endpoint, { altKey: true }));
@@ -1161,15 +1196,13 @@ describe('pointer work coalescing', () => {
     const stationId = store.getState().addStation([-115.2, 36.1]);
     const map = createMap(stationFeature(stationId));
     const lifecycle: string[] = [];
-    const detach = attach(
-      map,
-      store,
-      {
+    const detach = attach(map, store, {
+      gesture: {
         onStart: (targets) => lifecycle.push(`edit:${targets.stationIds?.[0]}`),
         onEnd() {},
       },
-      { onStart: () => lifecycle.push('direct'), onEnd() {} },
-    );
+      directManipulation: { onStart: () => lifecycle.push('direct'), onEnd() {} },
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 100 }));
@@ -1186,15 +1219,13 @@ describe('pointer work coalescing', () => {
     const stationId = store.getState().addStation([-115.2, 36.1]);
     const map = createMap(settlingStationFeature(stationId));
     const lifecycle: string[] = [];
-    const detach = attach(
-      map,
-      store,
-      {
+    const detach = attach(map, store, {
+      gesture: {
         onStart: (targets) => lifecycle.push(`edit:${targets.stationIds?.[0]}`),
         onEnd() {},
       },
-      { onStart: () => lifecycle.push('direct'), onEnd() {} },
-    );
+      directManipulation: { onStart: () => lifecycle.push('direct'), onEnd() {} },
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 100 }));
@@ -1211,15 +1242,13 @@ describe('pointer work coalescing', () => {
     const facilityId = store.getState().addFacility('entrance', [-115.2, 36.1]);
     const map = createMap(facilityFeature(facilityId));
     const lifecycle: string[] = [];
-    const detach = attach(
-      map,
-      store,
-      {
+    const detach = attach(map, store, {
+      gesture: {
         onStart: (targets) => lifecycle.push(`edit:${targets.facilityIds?.[0]}`),
         onEnd() {},
       },
-      { onStart: () => lifecycle.push('direct'), onEnd() {} },
-    );
+      directManipulation: { onStart: () => lifecycle.push('direct'), onEnd() {} },
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 100 }));
@@ -1236,7 +1265,9 @@ describe('pointer work coalescing', () => {
     const stationId = store.getState().addStation([-115.2, 36.1]);
     const map = createMap(stationFeature(stationId));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }, { altKey: true }));
     scheduler.pump();
@@ -1264,7 +1295,9 @@ describe('pointer work coalescing', () => {
     store.getState().setLatchedModifier('alternate', true);
     const map = createMap(stationFeature(stationId));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
@@ -1304,7 +1337,9 @@ describe('pointer work coalescing', () => {
     const facilityId = store.getState().addFacility('entrance', [-115.2, 36.1]);
     const map = createMap(facilityFeature(facilityId));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }, { altKey: true }));
     scheduler.pump();
@@ -1396,7 +1431,9 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('way');
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 700, y: 1000 }));
     scheduler.pump();
@@ -1417,7 +1454,9 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('way');
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 700, y: 1000 }, { altKey: true }));
     scheduler.pump();
@@ -1464,9 +1503,11 @@ describe('pointer work coalescing', () => {
     store.getState().setSystem(system);
     const map = createMap(wayFeature('erasable'));
     const lifecycle: string[] = [];
-    const detach = attach(map, store, undefined, {
-      onStart: () => lifecycle.push('start'),
-      onEnd: () => lifecycle.push('end'),
+    const detach = attach(map, store, {
+      directManipulation: {
+        onStart: () => lifecycle.push('start'),
+        onEnd: () => lifecycle.push('end'),
+      },
     });
 
     map.fire('mousedown', mouseEvent(map, { x: 700, y: 1000 }));
@@ -1629,9 +1670,11 @@ describe('pointer work coalescing', () => {
       wayFeature('erasable'),
     ]);
     const opened: unknown[] = [];
-    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
-      open: (_x, _y, anchor, serviceHit) => opened.push({ anchor, serviceHit }),
-      setAnchor() {},
+    const detach = attach(map, store, {
+      contextMenu: {
+        open: (_x, _y, anchor, serviceHit) => opened.push({ anchor, serviceHit }),
+        setAnchor() {},
+      },
     });
     const right = mouseEvent(map, map.project(at));
     right.originalEvent.button = 2;
@@ -1670,9 +1713,11 @@ describe('pointer work coalescing', () => {
       serviceFeature('erasable'),
     ]);
     const opened: Array<{ serviceHit?: ServiceActionHit }> = [];
-    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
-      open: (_x, _y, _anchor, serviceHit) => opened.push({ serviceHit }),
-      setAnchor() {},
+    const detach = attach(map, store, {
+      contextMenu: {
+        open: (_x, _y, _anchor, serviceHit) => opened.push({ serviceHit }),
+        setAnchor() {},
+      },
     });
     const right = mouseEvent(map, map.project(at));
     right.originalEvent.button = 2;
@@ -1704,19 +1749,13 @@ describe('pointer work coalescing', () => {
     const shown: Array<PointerIntent | null> = [];
     let menuOpen = false;
     let refresh: (() => void) | undefined;
-    const detach = attach(
-      map,
-      store,
-      undefined,
-      undefined,
-      (intent) => shown.push(intent),
-      true,
-      () => menuOpen,
-      undefined,
-      (registered) => {
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+      isContextMenuOpen: () => menuOpen,
+      onPointerRefresh: (registered) => {
         refresh = registered;
       },
-    );
+    });
     map.fire('mousemove', mouseEvent(map, map.project([-115.23, 36.1])));
     scheduler.pump();
     expect(shown.at(-1)).toMatchObject({ primaryOperation: 'select-line-and-branch' });
@@ -1747,9 +1786,11 @@ describe('pointer work coalescing', () => {
     store.getState().setSystem(system);
     const map = createMap(serviceFeature('erasable'));
     const opened: Array<{ anchor: [number, number]; serviceHit?: ServiceActionHit }> = [];
-    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
-      open: (_x, _y, anchor, serviceHit) => opened.push({ anchor, serviceHit }),
-      setAnchor() {},
+    const detach = attach(map, store, {
+      contextMenu: {
+        open: (_x, _y, anchor, serviceHit) => opened.push({ anchor, serviceHit }),
+        setAnchor() {},
+      },
     });
     const offCenter = map.project([-115.24, 36.1008]);
     const right = mouseEvent(map, offCenter);
@@ -1786,11 +1827,13 @@ describe('pointer work coalescing', () => {
     const map = createMap(wayFeature('erasable'));
     const opened: Array<{ anchor: [number, number]; corridorHit?: { wayId: string; t: number } }> =
       [];
-    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
-      open: (_x, _y, anchor, _serviceHit, corridorHit) => {
-        opened.push({ anchor, corridorHit });
+    const detach = attach(map, store, {
+      contextMenu: {
+        open: (_x, _y, anchor, _serviceHit, corridorHit) => {
+          opened.push({ anchor, corridorHit });
+        },
+        setAnchor() {},
       },
-      setAnchor() {},
     });
     const right = mouseEvent(map, map.project([-115.24, 36.1008]));
     right.originalEvent.button = 2;
@@ -1836,10 +1879,12 @@ describe('pointer work coalescing', () => {
     const anchors: Array<[number, number] | null> = [];
     const opened: unknown[] = [];
     const closed: string[] = [];
-    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
-      open: (_x, _y, at, serviceHit) => opened.push({ at, serviceHit }),
-      setAnchor: (at) => anchors.push(at),
-      close: () => closed.push('close'),
+    const detach = attach(map, store, {
+      contextMenu: {
+        open: (_x, _y, at, serviceHit) => opened.push({ at, serviceHit }),
+        setAnchor: (at) => anchors.push(at),
+        close: () => closed.push('close'),
+      },
     });
     const point = map.project([-115.23, 36.1]);
     const right = mouseEvent(map, point);
@@ -1868,7 +1913,10 @@ describe('pointer work coalescing', () => {
     store.getState().setSystem(system);
     const map = createMap(handleFeature(1));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent), false);
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+      networkMode: false,
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
@@ -1890,7 +1938,9 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('way');
     const map = createMap();
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
@@ -1910,7 +1960,9 @@ describe('pointer work coalescing', () => {
     system.ways = [erasableWay()];
     store.getState().setSystem(system);
     const map = createMap(handleFeature(1));
-    const detach = attach(map, store, undefined, undefined, undefined, false);
+    const detach = attach(map, store, {
+      networkMode: false,
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 100 }, { altKey: true, ctrlKey: true }));
@@ -1929,7 +1981,9 @@ describe('pointer work coalescing', () => {
     system.ways = [erasableWay()];
     store.getState().setSystem(system);
     const map = createMap(handleFeature(1));
-    const detach = attach(map, store, undefined, undefined, undefined, false);
+    const detach = attach(map, store, {
+      networkMode: false,
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
@@ -1948,15 +2002,11 @@ describe('pointer work coalescing', () => {
     const map = createMap(handleFeature(1));
     const shown: Array<PointerIntent | null> = [];
     let menuOpen = false;
-    const detach = attach(
-      map,
-      store,
-      undefined,
-      undefined,
-      (intent) => shown.push(intent),
-      false,
-      () => menuOpen,
-    );
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+      networkMode: false,
+      isContextMenuOpen: () => menuOpen,
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
@@ -1978,7 +2028,10 @@ describe('pointer work coalescing', () => {
     store.getState().setSystem(system);
     const map = createMap(handleFeature(1));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent), false);
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+      networkMode: false,
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
@@ -2053,19 +2106,9 @@ describe('pointer work coalescing', () => {
       store.getState().setTool('way');
       store.getState().setDraftGeometry('freeform');
       const map = createMap();
-      const detach = attach(
-        map,
-        store,
-        undefined,
-        undefined,
-        undefined,
-        true,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
+      const detach = attach(map, store, {
         tuning,
-      );
+      });
 
       map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
       map.fire('mousemove', mouseEvent(map, { x: 100 + move, y: 100 }));
@@ -2115,21 +2158,19 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('select');
     const map = createMap(handleFeature(1));
     const lifecycle: string[] = [];
-    const detach = attach(
-      map,
-      store,
-      {
+    const detach = attach(map, store, {
+      gesture: {
         onStart: (targets) =>
           lifecycle.push(
             `edit-start:${targets.wayPoints?.[0]?.wayId}:${targets.wayPoints?.[0]?.pointIndex}`,
           ),
         onEnd: () => lifecycle.push('edit-end'),
       },
-      {
+      directManipulation: {
         onStart: () => lifecycle.push('direct-start'),
         onEnd: () => lifecycle.push('direct-end'),
       },
-    );
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 110 }));
@@ -2150,9 +2191,11 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('select');
     const map = createMap();
     const lifecycle: string[] = [];
-    const detach = attach(map, store, undefined, {
-      onStart: () => lifecycle.push('start'),
-      onEnd: () => lifecycle.push('end'),
+    const detach = attach(map, store, {
+      directManipulation: {
+        onStart: () => lifecycle.push('start'),
+        onEnd: () => lifecycle.push('end'),
+      },
     });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
@@ -2299,7 +2342,9 @@ describe('touch gestures', () => {
     store.getState().setLatchedModifier('alternate', true);
     const map = createMap(stationFeature(stationId));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('touchstart', touchEvent(map, [{ x: 100, y: 100 }]));
     scheduler.pump();
@@ -2374,19 +2419,9 @@ describe('touch gestures', () => {
     store.getState().setTool('way');
     store.getState().setDraftGeometry('freeform');
     const map = createMap();
-    const detach = attach(
-      map,
-      store,
-      undefined,
-      undefined,
-      undefined,
-      true,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      COARSE_POINTER_TUNING,
-    );
+    const detach = attach(map, store, {
+      tuning: COARSE_POINTER_TUNING,
+    });
 
     map.fire('touchstart', touchEvent(map, [{ x: 100, y: 100 }]));
     // 6px of finger tremor, inside the coarse profile's 10px threshold.
@@ -2455,10 +2490,12 @@ describe('touch gestures', () => {
     store.getState().setTool('select');
     const map = createMap();
     const opened: number[] = [];
-    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
-      open: (x) => opened.push(x),
-      setAnchor() {},
-      close() {},
+    const detach = attach(map, store, {
+      contextMenu: {
+        open: (x) => opened.push(x),
+        setAnchor() {},
+        close() {},
+      },
     });
 
     map.fire('touchstart', touchEvent(map, [{ x: 120, y: 140 }]));

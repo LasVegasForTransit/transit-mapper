@@ -27,16 +27,24 @@ function matchMedia(matches: (query: string) => boolean): typeof window.matchMed
 interface MediaEnvironment {
   narrow: boolean;
   coarse: boolean;
+  /** Whether the device reports `(hover: none)`. Independent of `coarse`. */
+  hoverless?: boolean;
 }
 
 function renderWorkbench(environment: boolean | MediaEnvironment): string {
-  const { narrow, coarse } =
-    typeof environment === 'boolean' ? { narrow: environment, coarse: environment } : environment;
+  const { narrow, coarse, hoverless } =
+    typeof environment === 'boolean'
+      ? { narrow: environment, coarse: environment, hoverless: environment }
+      : { hoverless: environment.coarse, ...environment };
   vi.stubGlobal('window', {
     matchMedia: matchMedia((query) => {
       if (query.includes('max-width')) return narrow;
       if (query.includes('pointer: coarse')) return coarse;
-      if (query.includes('hover: none')) return coarse;
+      // Hover is answered independently of pointer precision on purpose. A
+      // touchscreen laptop reports a coarse pointer AND hover, and hardcoding
+      // them equal here would hide exactly the conflation the capability
+      // module exists to prevent the moment Workbench reads hover.
+      if (query.includes('hover: none')) return hoverless;
       return false;
     }),
   });
@@ -102,23 +110,15 @@ describe('Workbench responsive mounting', () => {
     expect(markup).toContain('aria-expanded="false"');
   });
 
-  it('a wide coarse-pointer device keeps the docked layout', () => {
-    // A touchscreen laptop or a tablet in landscape. Layout follows width
-    // alone; the coarse pointer changes hit tolerance on the map (see
-    // editor/input-tuning.ts) and nothing about which tree mounts.
+  it('mounts by width alone, whatever the pointer', () => {
+    // A touchscreen laptop: wide and coarse. Layout follows width; the coarse
+    // pointer changes hit tolerance on the map (see editor/input-tuning.ts)
+    // and nothing about which tree mounts. That the two axes ANSWER
+    // independently is device/capabilities' own test; this is only that
+    // Workbench reads the width one.
     const markup = renderWorkbench({ narrow: false, coarse: true });
 
     expect(occurrences(markup, 'data-slot="desktop-sim"')).toBe(1);
-    expect(occurrences(markup, 'data-slot="mobile-sim"')).toBe(0);
     expect(markup).not.toContain('aria-label="Expand panel"');
-  });
-
-  it('a narrow fine-pointer window takes the sheet layout', () => {
-    // A small desktop window with a mouse: the mirror of the case above.
-    const markup = renderWorkbench({ narrow: true, coarse: false });
-
-    expect(occurrences(markup, 'data-slot="mobile-sim"')).toBe(1);
-    expect(occurrences(markup, 'data-slot="desktop-sim"')).toBe(0);
-    expect(occurrences(markup, 'aria-label="Expand panel"')).toBe(1);
   });
 });

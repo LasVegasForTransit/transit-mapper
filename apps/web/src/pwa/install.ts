@@ -1,4 +1,4 @@
-import { deviceCapabilitiesSnapshot } from '../ui/device-capabilities';
+import { compactLayoutSnapshot, hoverCapableSnapshot } from '../device/capabilities';
 
 export type InstallBrowser = 'chromium' | 'safari' | 'firefox' | 'other';
 
@@ -118,10 +118,7 @@ export function createBrowserInstallEnvironment(): InstallEnvironment {
     // hover. Asked as two media queries rather than a user-agent test — the
     // regex this replaced (`/android|iphone|ipad|ipod|mobile/`) called an iPad
     // a phone and a Mac an iPad, because iPadOS reports itself as a Mac.
-    isDesktop: () => {
-      const { compactLayout, hoverCapable } = deviceCapabilitiesSnapshot();
-      return !compactLayout && hoverCapable;
-    },
+    isDesktop: () => !compactLayoutSnapshot() && hoverCapableSnapshot(),
     isStandalone: () =>
       window.matchMedia?.('(display-mode: standalone)').matches === true ||
       (navigator as Navigator & { standalone?: boolean }).standalone === true,

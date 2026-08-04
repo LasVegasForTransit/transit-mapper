@@ -70,6 +70,11 @@ const CHECKS: Check[] = [
     fix: 'describe the module beneath its package or application, or remove the stale locator',
   },
   {
+    command: 'check:breakpoint',
+    fails: 'the layout breakpoint in the stylesheet and the capability module disagree',
+    fix: "set --breakpoint-md to one more than COMPACT_LAYOUT_QUERY's max-width",
+  },
+  {
     command: 'check:documents',
     fails:
       'a required document is missing, lacks a required section, has them out of order, or uses a stock phrase',

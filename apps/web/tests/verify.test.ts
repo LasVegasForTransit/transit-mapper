@@ -5035,6 +5035,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     map: { panBy() {}, zoomTo() {}, getZoom: () => 10 },
     editor: store,
     setPanKeyHeld() {},
+    tuning: FINE_POINTER_TUNING,
     openShortcuts() {},
     toggleUi() {},
   } as unknown as KeyContext;
@@ -5206,6 +5207,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     map: { panBy() {}, zoomTo() {}, getZoom: () => 10 },
     editor: store,
     setPanKeyHeld() {},
+    tuning: FINE_POINTER_TUNING,
     openShortcuts() {},
     toggleUi() {},
   } as unknown as KeyContext;
@@ -5854,6 +5856,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       s.getState().setTool('station');
       const map = createFakeMap();
       const detach = attachInteractions(map as never, s, {
+        tuning: FINE_POINTER_TUNING,
         openShortcuts() {},
         toggleUi() {},
         sim: { togglePaused() {}, stepSpeed() {} },
@@ -5937,6 +5940,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       s.getState().setTool('way');
 
       const detach = attachInteractions(map as never, s, {
+        tuning: FINE_POINTER_TUNING,
         openShortcuts() {},
         toggleUi() {},
         sim: { togglePaused() {}, stepSpeed() {} },
@@ -5977,6 +5981,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       s.getState().setTool('way');
       const map = createFakeMap();
       const detach = attachInteractions(map as never, s, {
+        tuning: FINE_POINTER_TUNING,
         openShortcuts() {},
         toggleUi() {},
         sim: { togglePaused() {}, stepSpeed() {} },
@@ -6038,6 +6043,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       s.getState().setTool('way');
       const map = createFakeMap();
       const detach = attachInteractions(map as never, s, {
+        tuning: FINE_POINTER_TUNING,
         openShortcuts() {},
         toggleUi() {},
         sim: { togglePaused() {}, stepSpeed() {} },

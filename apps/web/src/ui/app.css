@@ -8,7 +8,7 @@
 
 /* THE layout breakpoint, and the only one that decides which component tree
    mounts. It matches useCompactLayout()'s own (max-width: 767px) query in
-   ui/device-capabilities.ts exactly — the two are a matched pair, and moving
+   device/capabilities.ts exactly — the two are a matched pair, and moving
    one alone puts the CSS and the component tree on different sides of the
    same screen width. Tailwind's own default is 768px, so `md:` utilities
    agree with both for free; this declaration exists to say so, not to shift

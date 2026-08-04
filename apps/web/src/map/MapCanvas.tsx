@@ -14,6 +14,8 @@ import { useView } from '../ui/ViewProvider';
 import { useSystemColorScheme } from '../theme/systemColorScheme';
 import { attachInteractions, type TerminusConnectionChoice } from './interactions';
 import { PointerBadge } from './PointerBadge';
+import { useCoarsePointer } from '../device/capabilities';
+import { inputTuningFor } from '../editor/input-tuning';
 import type { PointerIntent } from '../editor/pointerIntent';
 import { computeDiagramSystem } from '@transitmapper/core/model/diagramLayout';
 import { serviceWayIds, systemBounds, wayById } from '@transitmapper/core/model/geo';
@@ -243,9 +245,16 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     for (const listener of vehicleGateListenersRef.current) listener();
   }, [pinnedPeriod]);
 
+  const coarsePointer = useCoarsePointer();
   const viewRef = useRef<ViewOptions>({ viewMode, visibleModes, visibleWayTypes });
   const showLandmarksRef = useRef(showLandmarks);
   showLandmarksRef.current = showLandmarks;
+  // The map layer takes tolerances, not a device: which profile applies is
+  // resolved here, where a hook can see it, and interactions.ts asks nothing
+  // about the pointer. Through a ref because a pointer type appearing
+  // mid-session must not tear down and rebuild the map.
+  const tuningRef = useRef(inputTuningFor(coarsePointer));
+  tuningRef.current = inputTuningFor(coarsePointer);
   const schedulePushDataRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -1188,6 +1197,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       initialMapLoaded = true;
       map.triggerRepaint();
       detachInteractions = attachInteractions(map, store, {
+        tuning: tuningRef.current,
         openShortcuts,
         toggleUi,
         sim: simCommands,

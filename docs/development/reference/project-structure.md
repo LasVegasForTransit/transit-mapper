@@ -159,17 +159,23 @@ store and core projectors.
 
 `apps/web/src/ui` owns React presentation, workbench layout, inspector
 controls, dialogs, onboarding, and accessibility semantics.
-`apps/web/src/ui/device-capabilities.ts` resolves viewport width and pointer
-capability as separate answers, so layout and input tolerance adapt on their
-own evidence; it serves both React consumers and imperative callers in the map
-and installation modules. `apps/web/src/ui/useKeyboardInset.ts` reports how much
-of the viewport an on-screen keyboard covers, which no layout-viewport
-measurement exposes.
+`apps/web/src/ui/useKeyboardInset.ts` reports how much of the viewport an
+on-screen keyboard covers, which no layout-viewport measurement exposes.
 `apps/web/src/theme` maps the operating system color preference to application
 tokens, while `apps/web/src/i18n` owns user-visible message selection.
 `apps/web/src/services` exposes browser-local preferences to UI consumers.
 These modules may read the editor store and invoke actions but do not duplicate
 domain rules.
+
+#### Device
+
+`apps/web/src/device` reads what the browser reports about the machine it is
+running on. `media-query.ts` is the single `matchMedia` primitive; `capabilities.ts`
+exposes viewport width, pointer precision, and hover as independent answers, so
+layout and input tolerance each adapt on their own evidence. It depends on
+nothing else in the application, and the user interface, map, theme, and
+installation modules all read it. A difference that is only visual belongs in a
+CSS media query instead, beside the rules it coordinates with.
 
 #### Storage
 

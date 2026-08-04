@@ -7,8 +7,7 @@ import type {
 } from 'maplibre-gl';
 import type { EditorState, EditorStore, MultiSelectItem } from '../editor/store';
 import { attachKeyboard, type SimCommands } from '../editor/keymap';
-import { inputTuningFor, type InputTuning } from '../editor/input-tuning';
-import { deviceCapabilitiesSnapshot } from '../ui/device-capabilities';
+import type { InputTuning } from '../editor/input-tuning';
 import {
   resolvePointerIntent,
   type ModifierState,
@@ -220,10 +219,10 @@ export interface AttachInteractionsOptions {
    * anchored chooser invokes one of the two callbacks. */
   openTerminusConnectionChoice?: (choice: TerminusConnectionChoice) => void;
   /** Hit, snap, and drag tolerances for this attachment (see
-   * editor/input-tuning.ts). Defaults to the profile matching the device's
-   * primary pointer. Passed explicitly by tests, which then need no media
-   * queries to exercise either profile. */
-  tuning?: InputTuning;
+   * editor/input-tuning.ts). Required, and resolved by the caller: this module
+   * takes numbers and asks nothing about the device, which is also why its
+   * tests never need a media query to exercise either profile. */
+  tuning: InputTuning;
 }
 
 /**
@@ -257,12 +256,10 @@ export function attachInteractions(
   opts: AttachInteractionsOptions,
 ): () => void {
   const canvas = map.getCanvas();
-  // Resolved once per attachment, not read per event: swapping tolerances
+  // Destructured once per attachment, not read per event: swapping tolerances
   // underneath a drag already in progress would change what the gesture means
-  // halfway through it. A device that gains or loses a pointer type between
-  // attachments is rare enough to be worth that trade.
-  const { hitPx, snapPx, dragPx, freehandSamplePx, straightSnapPx } =
-    opts.tuning ?? inputTuningFor(deviceCapabilitiesSnapshot().coarsePointer);
+  // halfway through it.
+  const { hitPx, snapPx, dragPx, freehandSamplePx, straightSnapPx } = opts.tuning;
   let spaceHeld = false;
   let lastPointer: MapMouseEvent | null = null;
   let lockedPrimaryOperation: PointerOperation | undefined;

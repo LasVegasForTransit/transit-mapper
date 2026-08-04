@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useEditor } from '../editor/EditorProvider';
-import { useCompactLayout } from './device-capabilities';
+import { useCompactLayout } from '../device/capabilities';
 import { useKeyboardInset } from './useKeyboardInset';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
@@ -106,7 +106,7 @@ export function Workbench({
   installBanner,
 }: WorkbenchProps) {
   // Width only. Pointer type is a separate question with its own answer (see
-  // ui/device-capabilities.ts) — a touchscreen laptop keeps these docked cards
+  // device/capabilities.ts) — a touchscreen laptop keeps these docked cards
   // and still gets finger-sized hit tolerances on the map.
   const mobile = useCompactLayout();
   const [sheetExpanded, setSheetExpanded] = useState(false);
