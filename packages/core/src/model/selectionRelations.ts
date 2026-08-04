@@ -20,6 +20,7 @@ import {
   patternWayIds,
   resolveWayPath,
 } from './geo';
+import { junctionGroupOf } from './junctions';
 import type { LngLat, Node, Pattern, Service, TransitSystem, Way } from './system';
 import { polylineCrossings, type WayCrossing } from './validate';
 
@@ -67,12 +68,19 @@ export function sharedEndpointNode(system: TransitSystem, aId: string, bId: stri
  * different grades that overlap on the map are an overpass, and
  * formCrossingJunctions declines them for the same reason.
  *
- * Type is part of it for the same reason, mirroring sharedEndpointNode above
- * and formCrossingJunctions' own guard: a junction is a lane graph, and a
+ * Type is part of it for the same reason: a junction is a lane graph, and a
  * road meeting a rail line has no lanes to connect. Offering the join built
  * one anyway — a road and a rail service sharing a junction that is not a
  * station — so the predicate refuses the pair outright rather than leaving
  * the operation to catch it.
+ *
+ * By junction GROUP, not by exact typeId. This backs a menu entry somebody
+ * has to pick deliberately, so it is held to the same bar as keeping a
+ * junction that already exists (junctionGroupOf) rather than the stricter one
+ * formCrossingJunctions applies when it forms junctions unasked: a bike path
+ * may be connected to the street it crosses, a railway may not.
+ * sharedEndpointNode above stays on exact typeId because it gates a MERGE —
+ * two ways becoming one, with one cross-section between them.
  */
 export function crossingBetween(
   system: TransitSystem,
@@ -81,7 +89,8 @@ export function crossingBetween(
 ): WayCrossing | null {
   const a = wayOf(system, aId);
   const b = wayOf(system, bId);
-  if (!a || !b || a.id === b.id || a.grade !== b.grade || a.typeId !== b.typeId) return null;
+  if (!a || !b || a.id === b.id || a.grade !== b.grade) return null;
+  if (junctionGroupOf(a.typeId) !== junctionGroupOf(b.typeId)) return null;
   return polylineCrossings(a.points, b.points)[0] ?? null;
 }
 

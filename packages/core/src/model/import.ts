@@ -7,6 +7,7 @@
 //  - importOsmWays, the one function that actually calls the network.
 import { wayType, type Grade, type ProfileTemplateLane } from './catalog';
 import { haversineMeters, nearestOnPath } from './geo';
+import { junctionGroupOf, wayTypeIndex, withSingleTypeArms } from './junctions';
 import { shortId } from './ids';
 import {
   defaultProfileFor,
@@ -941,7 +942,11 @@ export function osmElementsToNetwork(
   const named = namedWaysFor(ways, nameByWayId);
   return {
     ways,
-    nodes,
+    // OSM shares node ids between a street-running tram and the road it runs
+    // down, and between a bike path and the street it crosses. Those are one
+    // OSM node but not one junction — a junction is a lane graph, and these
+    // ways have no lanes in common. See model/junctions.ts.
+    nodes: withSingleTypeArms(nodes, wayTypeIndex(ways)),
     namedWays: named.namedWays,
     medians: named.medians,
     turnRestrictions: turnRestrictionsFrom(elements, wayByOsmId, armsByOsmNode, osmNodeOfWayPoint),
@@ -1131,6 +1136,14 @@ export function withoutAlreadyImported(
   const resolve = (wayId: string): string | undefined =>
     keptWayIds.has(wayId) ? wayId : rePointTo.get(wayId);
 
+  const typeOfWay = new Map<string, string>();
+  for (const w of existingWays) typeOfWay.set(w.id, w.typeId);
+  for (const w of keptWays) typeOfWay.set(w.id, w.typeId);
+  const groupOfWay = (wayId: string | undefined): string | undefined => {
+    const typeId = wayId === undefined ? undefined : typeOfWay.get(wayId);
+    return typeId === undefined ? undefined : junctionGroupOf(typeId);
+  };
+
   // Which existing junction, if any, an incoming one already is — matched by
   // a shared (way, point) arm, which is exact and needs no coordinates.
   const existingNodeByArm = new Map<string, Node>();
@@ -1157,7 +1170,16 @@ export function withoutAlreadyImported(
       .find((n) => n !== undefined);
     if (existing) {
       const known = new Set(existing.refs.map((r) => `${r.wayId}:${r.pointIndex}`));
-      const additions = refs.filter((r) => !known.has(`${r.wayId}:${r.pointIndex}`));
+      // An arm may only join a junction whose other arms are of a compatible
+      // kind of way — the same rule withSingleTypeArms enforces on whole
+      // junctions, applied one arm at a time, so that importing a tram line
+      // down an existing street cannot wire its track into that street's lane
+      // graph by increments. A cycleway meeting the same street still joins:
+      // both are in the street junction group.
+      const existingGroup = groupOfWay(existing.refs[0]?.wayId);
+      const additions = refs.filter(
+        (r) => !known.has(`${r.wayId}:${r.pointIndex}`) && groupOfWay(r.wayId) === existingGroup,
+      );
       if (additions.length > 0) junctionAdditions.push({ id: existing.id, refs: additions });
       continue;
     }
@@ -1173,9 +1195,6 @@ export function withoutAlreadyImported(
   // and puts the shared boundary way in both — the way is then renamed by one
   // identity and not the other, and the member count that gates the
   // carriageway tools counts it twice.
-  const typeOfWay = new Map<string, string>();
-  for (const w of existingWays) typeOfWay.set(w.id, w.typeId);
-  for (const w of keptWays) typeOfWay.set(w.id, w.typeId);
   const identityKey = (name: string, wayIds: string[]): string =>
     `${typeOfWay.get(wayIds[0]) ?? ''}\u0000${name}`;
   const existingByKey = new Map<string, NamedWay>();
@@ -1205,7 +1224,10 @@ export function withoutAlreadyImported(
   return {
     network: {
       ways: keptWays,
-      nodes,
+      // Every import lands here, not only OSM's — a hand-built network, or a
+      // document imported into another, gets the junction rule applied at the
+      // same choke point rather than trusting whoever built the input.
+      nodes: withSingleTypeArms(nodes, typeOfWay),
       namedWays,
       medians: network.medians.filter((m) => keptIds.has(m.id)),
       // A restriction on a way this import didn't keep is already recorded

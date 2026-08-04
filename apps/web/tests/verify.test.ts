@@ -2195,41 +2195,41 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     store.getState().system.nodes.length === 0,
   );
 
-  // A document written before that rule still has the bad junction in it.
-  // It is reported rather than repaired, and disconnecting is the repair.
+  // An import that claims a junction between a road and a rail line does not
+  // get one: nothing repairs it later, because it never lands. What survives
+  // is the pair of same-kind arms, if there are two of them.
   fresh();
+  const wayOf = (id: string, typeId: string, points: [number, number][]) => ({
+    id,
+    typeId,
+    points,
+    geometry: 'straight' as const,
+    grade: 'atGrade' as const,
+    profile: defaultProfileFor(typeId),
+  });
   store.getState().importWays({
     ways: [
-      {
-        id: 'mixed-rail',
-        typeId: 'lightRail',
-        points: [
-          [-115.2, 36.1],
-          [-115.15, 36.1],
-        ],
-        geometry: 'straight',
-        grade: 'atGrade',
-        profile: defaultProfileFor('lightRail'),
-      },
-      {
-        id: 'mixed-road',
-        typeId: 'road',
-        points: [
-          [-115.15, 36.2],
-          [-115.15, 36.1],
-        ],
-        geometry: 'straight',
-        grade: 'atGrade',
-        profile: defaultProfileFor('road'),
-      },
+      wayOf('mixed-road-west', 'road', [
+        [-115.2, 36.1],
+        [-115.15, 36.1],
+      ]),
+      wayOf('mixed-road-east', 'road', [
+        [-115.15, 36.1],
+        [-115.1, 36.1],
+      ]),
+      wayOf('mixed-rail', 'lightRail', [
+        [-115.15, 36.05],
+        [-115.15, 36.1],
+      ]),
     ],
     nodes: [
       {
         id: 'mixed-junction',
         coord: [-115.15, 36.1],
         refs: [
+          { wayId: 'mixed-road-west', pointIndex: 1 },
+          { wayId: 'mixed-road-east', pointIndex: 0 },
           { wayId: 'mixed-rail', pointIndex: 1 },
-          { wayId: 'mixed-road', pointIndex: 1 },
         ],
       },
     ],
@@ -2238,15 +2238,50 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     turnRestrictions: [],
   });
   check(
-    'a junction joining a road to a rail line is reported',
-    findMismatchedTypeJunctions(store.getState().system).some(
-      (i) => i.target?.kind === 'node' && i.target.id === 'mixed-junction',
-    ),
-  );
-  store.getState().disconnectNodeWay('mixed-junction', 'mixed-road');
-  check(
-    'disconnecting the mismatched arm clears the issue',
+    'importing a road-and-rail junction leaves no mismatched junction behind',
     findMismatchedTypeJunctions(store.getState().system).length === 0,
+  );
+  check(
+    'the two road arms keep their junction',
+    store.getState().system.nodes.length === 1 &&
+      store.getState().system.nodes[0].refs.every((r) => r.wayId.startsWith('mixed-road')),
+  );
+  check(
+    'and the rail line is left where it was, crossing without joining',
+    store.getState().system.ways.find((w) => w.id === 'mixed-rail')!.points[1][1] === 36.1,
+  );
+
+  // The same rule keeps a bike path joined to the street it meets: both are
+  // in the street junction group, and a cyclist really does turn there.
+  fresh();
+  store.getState().importWays({
+    ways: [
+      wayOf('bike-street-west', 'road', [
+        [-115.2, 36.1],
+        [-115.15, 36.1],
+      ]),
+      wayOf('bike-path', 'bike', [
+        [-115.15, 36.05],
+        [-115.15, 36.1],
+      ]),
+    ],
+    nodes: [
+      {
+        id: 'bike-junction',
+        coord: [-115.15, 36.1],
+        refs: [
+          { wayId: 'bike-street-west', pointIndex: 1 },
+          { wayId: 'bike-path', pointIndex: 1 },
+        ],
+      },
+    ],
+    namedWays: [],
+    medians: [],
+    turnRestrictions: [],
+  });
+  check(
+    'a bike path keeps the junction where it meets a street',
+    store.getState().system.nodes.length === 1,
   );
 }
 
@@ -6624,13 +6659,17 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     JSON.stringify(round.ways[0].profile) === JSON.stringify(v5ish.ways[0].profile),
   );
 
-  // Node control/connectors round-trip, with bad connectors dropped.
+  // Node control/connectors round-trip, with bad connectors dropped. Both ways
+  // are roads here: a junction between a road and a rail line is one the
+  // loader repairs away (see model/junctions.ts), so it could not carry a
+  // control setting to assert about.
   const laneA = v5ish.ways[0].profile.lanes[1].id;
   const laneB = v5ish.ways[1].profile.lanes[0].id;
   const withNode = {
     ...JSON.parse(JSON.stringify(v5ish)),
     ways: JSON.parse(JSON.stringify(v5ish.ways)).map((w: Way) => ({
       ...w,
+      typeId: 'road',
       points: [
         [-115.2, 36.1],
         [-115.1, 36.1],
@@ -9980,8 +10019,11 @@ function buildGrid() {
     );
   }
   // Latitude has no wrap-around meaning, so past a pole really is nonsense.
+  // The way is left with one point, which draws nothing, so the loader's own
+  // repair pass then drops the way as well (see model/junctions.ts's
+  // neighbours in serialize.ts).
   check(
-    'a latitude past the pole is dropped',
+    'a latitude past the pole is dropped, and takes the undrawable way with it',
     parseSystem(
       wayWith({
         points: [
@@ -9989,7 +10031,7 @@ function buildGrid() {
           [-115.1, 36.1],
         ],
       }),
-    ).ways[0].points.length === 1,
+    ).ways.length === 0,
   );
   check(
     'an ordinary coordinate is untouched',
