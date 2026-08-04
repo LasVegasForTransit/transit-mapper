@@ -23,22 +23,23 @@ function useDebouncedSystem(system: TransitSystem, delayMs: number): TransitSyst
 
 /**
  * A pure sanity check surfaced as UI: ghost ways/services, orphaned stations,
- * and ways that cross without joining (see model/validate.ts). Hidden
+ * junctions joining ways of different types, and ways that cross without
+ * joining (see model/validate.ts). Hidden
  * entirely when the system is clean — this is a warning light, not a panel
  * that's always present and usually empty.
  */
 export function IssuesPopover() {
   const store = useEditorStore();
-  // Quick validation reads ways/services/stations; crossing detection reads
-  // only ways/nodes. System name, viewport, palette, facilities, and other
-  // unrelated changes retain those references and restart neither pass.
+  // Quick validation reads ways/services/stations/nodes; crossing detection
+  // reads only ways/nodes. System name, viewport, palette, facilities, and
+  // other unrelated changes retain those references and restart neither pass.
   const ways = useEditor((s) => s.system.ways);
   const services = useEditor((s) => s.system.services);
   const stations = useEditor((s) => s.system.stations);
   const nodes = useEditor((s) => s.system.nodes);
   const quickSource = useMemo<TransitSystem>(
-    () => ({ ...store.getState().system, ways, services, stations }),
-    [store, ways, services, stations],
+    () => ({ ...store.getState().system, ways, services, stations, nodes }),
+    [store, ways, services, stations, nodes],
   );
   const crossingSource = useMemo<TransitSystem>(
     () => ({ ...store.getState().system, ways, nodes }),

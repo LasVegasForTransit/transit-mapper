@@ -4,8 +4,11 @@ import {
   createCrossingOperationCounts,
   crossingsWithoutJoiningChunked,
   findCrossingsWithoutJoining,
+  findMismatchedTypeJunctions,
+  validateSystemQuick,
   type Issue,
 } from '../../src/model/validate';
+import type { TransitSystem } from '../../src/model/system';
 
 async function collectCrossingIssues(generator: AsyncGenerator<Issue[]>): Promise<Issue[]> {
   const issues: Issue[] = [];
@@ -116,5 +119,70 @@ describe('chunked crossing validation', () => {
     expect(first.map(({ id, target }) => ({ id, target }))).toEqual(expectedTargets);
     expect(second).toEqual(first);
     expect(secondOperations).toEqual(firstOperations);
+  });
+});
+
+// A junction is a lane graph, so its arms have to be the same kind of way.
+// Nothing forms a mixed one any more; these are documents that already have
+// one, from the crossing bug or from a pre-v4 load deriving nodes by bare
+// coordinate coincidence.
+describe('junctions joining different way types', () => {
+  const road = aRoad('russell', [
+    [-115.2, 36.1],
+    [-115.18, 36.1],
+  ]);
+  const rail = aRoad('charleston', [
+    [-115.19, 36.09],
+    [-115.19, 36.11],
+  ]);
+
+  function junctionOf(typeId: string): TransitSystem {
+    return aSystem({
+      ways: [road, { ...rail, typeId }],
+      nodes: [
+        {
+          id: 'n',
+          coord: [-115.19, 36.1],
+          refs: [
+            { wayId: 'russell', pointIndex: 1 },
+            { wayId: 'charleston', pointIndex: 0 },
+          ],
+        },
+      ],
+    });
+  }
+
+  it('are reported, pointing at the junction so clicking one selects it', () => {
+    const issues = findMismatchedTypeJunctions(junctionOf('heavyRail'));
+    expect(issues.map(({ id, target }) => ({ id, target }))).toEqual([
+      { id: 'mixed-junction-n', target: { kind: 'node', id: 'n' } },
+    ]);
+    // Catalog labels, never the catalog's ids: nobody drawing a network
+    // should be shown the string "heavyRail".
+    expect(issues[0].message).toContain('Road');
+    expect(issues[0].message).toContain('Heavy rail');
+    expect(issues[0].message).not.toContain('heavyRail');
+  });
+
+  it('are not reported when every arm is the same type', () => {
+    expect(findMismatchedTypeJunctions(junctionOf('road'))).toEqual([]);
+  });
+
+  it('reach the reactive tier, since the fix is one click away in the inspector', () => {
+    expect(validateSystemQuick(junctionOf('heavyRail')).map((i) => i.id)).toContain(
+      'mixed-junction-n',
+    );
+  });
+
+  it('are gone once the mismatched arm stops referencing the junction', () => {
+    const system = junctionOf('heavyRail');
+    const disconnected = {
+      ...system,
+      nodes: system.nodes.map((n) => ({
+        ...n,
+        refs: n.refs.filter((r) => r.wayId !== 'charleston'),
+      })),
+    };
+    expect(findMismatchedTypeJunctions(disconnected)).toEqual([]);
   });
 });

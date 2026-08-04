@@ -120,7 +120,7 @@ import {
   MAX_PREVIEW_BYTES,
   pngDimensions,
 } from '@transitmapper/core/render/pngBytes';
-import { validateSystem } from '@transitmapper/core/model/validate';
+import { findMismatchedTypeJunctions, validateSystem } from '@transitmapper/core/model/validate';
 import { estimateWayCapitalCost, formatUsdCompact } from '@transitmapper/core/model/cost';
 import {
   LANE_KINDS,
@@ -2178,6 +2178,75 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check(
     'the shed arm is nudged clear of the junction that stayed',
     haversineMeters(s.ways.find((w) => w.id === south)!.points[1], s.nodes[0].coord) > 10,
+  );
+  // The bug this primitive exists for: drawing a road across a rail line no
+  // longer wires them into one junction on commit.
+  fresh();
+  const rail = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(rail, [-115.2, 36.1]);
+  store.getState().addWayPoint(rail, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const road = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(road, [-115.15, 36.05]);
+  store.getState().addWayPoint(road, [-115.15, 36.15]);
+  store.getState().finishWay();
+  check(
+    'a road drawn across a rail line forms no junction',
+    store.getState().system.nodes.length === 0,
+  );
+
+  // A document written before that rule still has the bad junction in it.
+  // It is reported rather than repaired, and disconnecting is the repair.
+  fresh();
+  store.getState().importWays({
+    ways: [
+      {
+        id: 'mixed-rail',
+        typeId: 'lightRail',
+        points: [
+          [-115.2, 36.1],
+          [-115.15, 36.1],
+        ],
+        geometry: 'straight',
+        grade: 'atGrade',
+        profile: defaultProfileFor('lightRail'),
+      },
+      {
+        id: 'mixed-road',
+        typeId: 'road',
+        points: [
+          [-115.15, 36.2],
+          [-115.15, 36.1],
+        ],
+        geometry: 'straight',
+        grade: 'atGrade',
+        profile: defaultProfileFor('road'),
+      },
+    ],
+    nodes: [
+      {
+        id: 'mixed-junction',
+        coord: [-115.15, 36.1],
+        refs: [
+          { wayId: 'mixed-rail', pointIndex: 1 },
+          { wayId: 'mixed-road', pointIndex: 1 },
+        ],
+      },
+    ],
+    namedWays: [],
+    medians: [],
+    turnRestrictions: [],
+  });
+  check(
+    'a junction joining a road to a rail line is reported',
+    findMismatchedTypeJunctions(store.getState().system).some(
+      (i) => i.target?.kind === 'node' && i.target.id === 'mixed-junction',
+    ),
+  );
+  store.getState().disconnectNodeWay('mixed-junction', 'mixed-road');
+  check(
+    'disconnecting the mismatched arm clears the issue',
+    findMismatchedTypeJunctions(store.getState().system).length === 0,
   );
 }
 
