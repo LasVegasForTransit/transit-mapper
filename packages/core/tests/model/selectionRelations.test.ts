@@ -106,6 +106,13 @@ describe('two ways crossing mid-span', () => {
     expect(crossingBetween(system, 'ns', 'ew')).toBeNull();
   });
 
+  it('still report one where a bike path crosses a street, which cyclists turn at', () => {
+    const system = aSystem({
+      ways: [northSouth, { ...eastWest, typeId: 'bike' }],
+    });
+    expect(crossingBetween(system, 'ns', 'ew')).not.toBeNull();
+  });
+
   it('report no crossing when the ways only touch at an endpoint', () => {
     const { system } = splitPair();
     expect(crossingBetween(system, 'west', 'east')).toBeNull();

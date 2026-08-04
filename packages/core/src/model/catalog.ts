@@ -236,7 +236,27 @@ export interface WayType {
    * own defaultProfile stands.
    */
   importedCapacity?: number;
+  /**
+   * Which way types this one may share a JUNCTION with, named as a group.
+   * Defaults to the type's own id — most types may only meet their own kind,
+   * because a junction is a lane graph and, say, heavy rail and light rail
+   * have neither a gauge nor a signalling system in common.
+   *
+   * Streets are the exception worth naming: a bike path meeting a road is a
+   * real turn a real cyclist makes, and an OSM import records that junction
+   * because someone surveyed it. Grouping them here is what keeps
+   * model/junctions.ts from deleting it as impossible.
+   *
+   * This governs what may be KEPT, not what is formed. Drawing a way across
+   * another still forms a junction only on an exact typeId match — see
+   * formCrossingJunctions, which would rather form nothing than guess.
+   */
+  junctionGroupId?: string;
 }
+
+/** Roads, bike paths and footways all carry traffic that can turn from one
+ *  into another at a junction, so they share a junction group. */
+const STREET_JUNCTIONS = 'street';
 
 export const WAY_TYPES: Record<string, WayType> = {
   // Heavy rail and light rail are physically incompatible track standards —
@@ -285,6 +305,7 @@ export const WAY_TYPES: Record<string, WayType> = {
     id: 'road',
     label: 'Road',
     family: 'roadway',
+    junctionGroupId: STREET_JUNCTIONS,
     capacityLabel: 'lanes',
     defaultCapacity: 4,
     // A street we only know because a bus route traces it: assume the modest
@@ -322,6 +343,7 @@ export const WAY_TYPES: Record<string, WayType> = {
     id: 'bike',
     label: 'Bike',
     family: 'path',
+    junctionGroupId: STREET_JUNCTIONS,
     capacityLabel: 'width',
     defaultCapacity: 1,
     defaultClassId: 'protected',
@@ -340,6 +362,7 @@ export const WAY_TYPES: Record<string, WayType> = {
     id: 'pedestrian',
     label: 'Pedestrian',
     family: 'path',
+    junctionGroupId: STREET_JUNCTIONS,
     capacityLabel: 'width',
     defaultCapacity: 1,
     defaultClassId: 'promenade',

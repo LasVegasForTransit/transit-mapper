@@ -16,7 +16,9 @@ Junctions form and maintain themselves; your job is deciding what they mean.
   one arm's lanes feed which of another's, and a road and a rail line have no
   lanes in common. Draw a road across a light-rail line and you get two
   independent ways that cross — which is what a level crossing is, even
-  though nothing draws one as such yet.
+  though nothing draws one as such yet. Drawing never joins two different
+  types at all, not even a bike path to a road: it would rather form nothing
+  than guess, and you can join them yourself with "Connect at crossing".
 
 At close zoom in the Infrastructure view, a junction renders as a real
 footprint: each arm's lanes trim back and the shared asphalt fills the
@@ -55,10 +57,10 @@ A junction needs at least two arms. Disconnect one arm of a two-arm junction
 and the junction itself is gone; a six-arm intersection sheds one arm and
 carries on with five.
 
-Junctions that already join ways of different types — from an older document,
-or from an OSM import — are reported in the issues list in the top bar.
-Clicking the issue selects the junction, and the Connections tab is where you
-fix it.
+A junction between two ways that could never exchange traffic — a road and a
+railway — is not something you have to find and fix. Opening a document, or
+importing one, drops those arms as it loads. A bike path meeting a street is
+not one of those: cyclists turn there, so that junction stays.
 
 ## Grade separation
 
