@@ -101,11 +101,24 @@ export function TopBarBrand() {
 /**
  * The transient-action button cluster — one markup for every viewport.
  * Which subset shows is a LAYOUT decision made by the container: a
- * `.actions-full` container (desktop card) shows everything and hides the
- * overflow menu; a `.actions-collapsed` container (mobile's vertical
- * column) shows only the primary few (`.act-secondary` hides) plus the ⋯
- * overflow carrying the rest. Same component, same handlers, no per-device
- * behavior forks.
+ * `.actions-full` container (desktop card) shows as much as it has room for
+ * on one line, stepping down through `[data-fit]` — everything, then the
+ * same buttons without their labels, then the primary few plus the ⋯
+ * overflow (Workbench's useToolbarFit measures which); a
+ * `.actions-collapsed` container (mobile's vertical column) shows only the
+ * primary few plus ⋯ unconditionally. Same component, same handlers, no
+ * per-device behavior forks.
+ *
+ * Two classes mark what a container may take away, and everything either one
+ * marks also appears in the ⋯ menu at the bottom — that menu is where those
+ * actions live once the container runs out of room. `.act-tertiary` is help,
+ * reached far more often from the keyboard or from a menu than from here;
+ * `.act-secondary` is everything else that can go.
+ *
+ * Three buttons carry neither class and are always present: the issues badge,
+ * a warning light that only renders when something is actually wrong; layers;
+ * and undo. Driving side is unmarked too — it is a document setting, and a
+ * menu of verbs has no shape for it.
  */
 export function TopBarActions() {
   const store = useEditorStore();
@@ -126,21 +139,13 @@ export function TopBarActions() {
 
   return (
     <>
-      {!readOnly && (
-        <span className="act-secondary">
-          <IssuesPopover />
-        </span>
-      )}
+      {!readOnly && <IssuesPopover />}
       <LayersPopover />
-      {!readOnly && (
-        <span className="act-secondary">
-          <DrivingSidePopover />
-        </span>
-      )}
-      <span className="act-secondary">
+      {!readOnly && <DrivingSidePopover />}
+      <span className="act-tertiary act-secondary">
         <IconButton icon="keyboard" onClick={openShortcuts} label="Keyboard shortcuts (?)" />
       </span>
-      <span className="act-secondary">
+      <span className="act-tertiary act-secondary">
         <IconButton icon="play" onClick={() => openDialog('onboarding')} label="Replay intro" />
       </span>
       {readOnly ? (
@@ -191,6 +196,10 @@ export function TopBarActions() {
           {!readOnly && (
             <DropdownMenuItem onSelect={() => openDialog('share')}>Share…</DropdownMenuItem>
           )}
+          <DropdownMenuItem onSelect={openShortcuts}>Keyboard shortcuts</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => openDialog('onboarding')}>
+            Replay intro
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => openDialog('settings')}>Settings…</DropdownMenuItem>
           <DropdownMenuItem onSelect={toggleUi}>Hide UI</DropdownMenuItem>
         </DropdownMenu>
