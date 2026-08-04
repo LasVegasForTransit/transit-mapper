@@ -66,6 +66,13 @@ export function sharedEndpointNode(system: TransitSystem, aId: string, bId: stri
  * part of the question rather than a caveat on the answer: two ways at
  * different grades that overlap on the map are an overpass, and
  * formCrossingJunctions declines them for the same reason.
+ *
+ * Type is part of it for the same reason, mirroring sharedEndpointNode above
+ * and formCrossingJunctions' own guard: a junction is a lane graph, and a
+ * road meeting a rail line has no lanes to connect. Offering the join built
+ * one anyway — a road and a rail service sharing a junction that is not a
+ * station — so the predicate refuses the pair outright rather than leaving
+ * the operation to catch it.
  */
 export function crossingBetween(
   system: TransitSystem,
@@ -74,7 +81,7 @@ export function crossingBetween(
 ): WayCrossing | null {
   const a = wayOf(system, aId);
   const b = wayOf(system, bId);
-  if (!a || !b || a.id === b.id || a.grade !== b.grade) return null;
+  if (!a || !b || a.id === b.id || a.grade !== b.grade || a.typeId !== b.typeId) return null;
   return polylineCrossings(a.points, b.points)[0] ?? null;
 }
 

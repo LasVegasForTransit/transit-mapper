@@ -99,6 +99,13 @@ describe('two ways crossing mid-span', () => {
     expect(crossesAtDifferentGrades(system, 'ns', 'ew')).toBe(true);
   });
 
+  it('report no crossing across different way types, which can share no lanes', () => {
+    const system = aSystem({
+      ways: [northSouth, { ...eastWest, typeId: 'heavyRail' }],
+    });
+    expect(crossingBetween(system, 'ns', 'ew')).toBeNull();
+  });
+
   it('report no crossing when the ways only touch at an endpoint', () => {
     const { system } = splitPair();
     expect(crossingBetween(system, 'west', 'east')).toBeNull();

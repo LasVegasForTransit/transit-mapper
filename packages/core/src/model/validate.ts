@@ -1,4 +1,4 @@
-import type { Grade } from './catalog';
+import { wayType, type Grade } from './catalog';
 import {
   haversineMeters,
   patternHasSplit,
@@ -22,12 +22,20 @@ const RUN_NOUN: Record<RunDirection, string> = {
  *  without accepting a gap anyone would notice. */
 export const LEG_JOIN_TOLERANCE_M = 1;
 
+/** What clicking an issue selects. A subset of the app's own Selection union
+ *  — core cannot import the store's type, and the two are kept assignable on
+ *  purpose so IssuesPopover can hand a target straight to selectAndFocus. */
+export type IssueTarget =
+  | { kind: 'way'; id: string }
+  | { kind: 'station'; id: string }
+  | { kind: 'service'; id: string }
+  | { kind: 'node'; id: string };
+
 export interface Issue {
   id: string;
   message: string;
   /** What clicking this issue should select, if anything. */
-  target?:
-    { kind: 'way'; id: string } | { kind: 'station'; id: string } | { kind: 'service'; id: string };
+  target?: IssueTarget;
 }
 
 /** Deterministic work performed by one chunked crossing scan. */
@@ -157,11 +165,12 @@ function sectionRunPath(
 }
 
 /**
- * The cheap half of validateSystem: ghost/orphan record checks, all a single
- * O(n) pass (the orphan-station check used to be O(stations × ways) via
- * `.some()` per station — fixed to a Set lookup). Safe to run reactively on
- * every store change, unlike crossing detection below — see validateSystem's
- * own note on why that one is NOT in this cheap tier.
+ * The cheap half of validateSystem: ghost/orphan record checks and
+ * mismatched-type junctions, all a single O(n) pass (the orphan-station check
+ * used to be O(stations × ways) via `.some()` per station — fixed to a Set
+ * lookup). Safe to run reactively on every store change, unlike crossing
+ * detection below — see validateSystem's own note on why that one is NOT in
+ * this cheap tier.
  */
 export function validateSystemQuick(system: TransitSystem): Issue[] {
   const issues: Issue[] = [];
@@ -170,7 +179,7 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
     if (way.points.length < 2) {
       issues.push({
         id: `ghost-way-${way.id}`,
-        message: `A ${way.typeId} way has fewer than 2 points and won't render.`,
+        message: `A ${wayType(way.typeId).label} corridor has fewer than 2 points and won't draw.`,
         target: { kind: 'way', id: way.id },
       });
     }
@@ -247,7 +256,54 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
     }
   }
 
+  issues.push(...findMismatchedTypeJunctions(system));
+
   return issues;
+}
+
+/**
+ * Junctions whose arms are not all the same way type.
+ *
+ * A junction is a lane graph: it exists to say which arm's lanes feed which
+ * other arm's. Ways of different types share no lanes, so a node spanning two
+ * of them describes a connection no vehicle can make — a road and a rail line
+ * meeting at something that is not a station. Nothing forms these any more
+ * (formCrossingJunctions and selectionRelations' crossingBetween both require
+ * an exact typeId match), but two sources of them are already out there:
+ * documents edited before that rule, and pre-v4 documents whose nodes
+ * serialize.ts derived from bare coordinate coincidence.
+ *
+ * Reported rather than repaired, because which arm should leave is the
+ * person's call — NodeInspector's Connections tab is where they make it.
+ * Cheap enough for the reactive tier: one pass over refs, no geometry.
+ */
+export function findMismatchedTypeJunctions(system: TransitSystem): Issue[] {
+  const waysById = wayById(system.ways);
+  const issues: Issue[] = [];
+  for (const node of system.nodes) {
+    const typeIds = [
+      ...new Set(
+        node.refs
+          .map((ref) => waysById.get(ref.wayId)?.typeId)
+          .filter((typeId): typeId is string => typeId !== undefined),
+      ),
+    ];
+    if (typeIds.length < 2) continue;
+    issues.push({
+      id: `mixed-junction-${node.id}`,
+      message: `A junction joins ${listOfTypes(typeIds)} corridors, which have no lanes in common — nothing can turn between them. Disconnect one in the junction's Connections tab.`,
+      target: { kind: 'node', id: node.id },
+    });
+  }
+  return issues;
+}
+
+/** Way types as a person reads them, never the catalog's own ids: this text
+ *  goes straight into the issues list, and "heavyRail" is a code identifier
+ *  nobody drawing a network should ever be shown. */
+function listOfTypes(typeIds: string[]): string {
+  const labels = typeIds.map((typeId) => wayType(typeId).label);
+  return new Intl.ListFormat(undefined, { style: 'long', type: 'conjunction' }).format(labels);
 }
 
 /**
@@ -517,7 +573,15 @@ function considerCrossSegment(context: CrossConsideration, other: CrossSegment):
   flagged.add(key);
   issues.push({
     id: `crossing-${key}`,
-    message: `A ${way.typeId} way crosses a ${other.typeId} way without joining — check whether they should share a junction.`,
+    // Two ways of different types can never share a junction — nothing in the
+    // app will form one, and findMismatchedTypeJunctions reports the ones that
+    // already exist. Saying "should they share a junction?" there sent people
+    // to build exactly the junction the app refuses; what that crossing needs
+    // is a level crossing, which the model has no primitive for yet.
+    message:
+      way.typeId === other.typeId
+        ? `Two ${wayType(way.typeId).label} corridors cross without joining — check whether they should share a junction.`
+        : `A ${wayType(way.typeId).label} corridor crosses a ${wayType(other.typeId).label} corridor at the same grade. They can't share a junction, so what this needs is a level crossing.`,
     target: { kind: 'way', id: way.id },
   });
 }

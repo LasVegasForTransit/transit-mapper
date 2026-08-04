@@ -101,6 +101,15 @@ Two ways at different `grade`s never need a junction between them, and the
 crossing check in `packages/core/src/model/validate.ts` skips such pairs — an elevated way
 over a surface street is a bridge, not a missing junction.
 
+Two ways of different `typeId`s never get one either, at any grade. A node
+carries a lane graph, and lanes of a road do not continue into the lanes of a
+rail line, so `findMismatchedTypeJunctions` reports any node whose arms are
+not all one type — documents that predate the rule, and pre-node documents
+whose junctions were derived from coordinate coincidence. Nothing repairs
+them on load: the junction inspector's **Connections** tab is where an arm is
+taken back out, which moves that arm's control point clear so the coordinate
+stops being shared at all.
+
 ## NamedWay — shared identity
 
 ```ts
