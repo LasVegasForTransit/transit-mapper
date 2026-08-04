@@ -1,5 +1,13 @@
 # Disconnecting a junction, and refusing to form bad ones
 
+> **Status.** Implemented. Two departures from what is written below, both
+> forced by the code having moved on: `formCrossingJunctions` had already
+> gained its `typeId` guard, so only `crossingBetween` needed the rule; and
+> the web verifier now lives at `apps/web/tests/verify.test.ts`, not
+> `apps/web/scripts/verify.ts`. The Connections list also carries each arm's
+> compass bearing, because four arms of two unnamed streets otherwise read as
+> four identical rows.
+
 > **Vocabulary.** The user-facing object is a **junction**. It is represented
 > by `Node` in the current model; code identifiers such as `NodeInspector` and
 > `sel.kind === 'node'` retain that representation name. See
