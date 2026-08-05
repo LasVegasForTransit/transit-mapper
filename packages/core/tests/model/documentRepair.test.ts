@@ -9,6 +9,7 @@ import { withSingleTypeArms, wayTypeIndex } from '../../src/model/junctions';
 import { parseSystem } from '../../src/model/serialize';
 import { findMismatchedTypeJunctions, validateSystem } from '../../src/model/validate';
 import type { Node } from '../../src/model/system';
+import { patternLegs } from '../../src/model/geo';
 import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
 
 /** A road running east-west and a rail line running north-south, both with a
@@ -131,6 +132,34 @@ describe('a document referring to a way that cannot be drawn', () => {
   it('leaves the loaded system with nothing to report', () => {
     const loaded = parseSystem(JSON.parse(JSON.stringify(savedWithGhost())));
     expect(validateSystem(loaded)).toEqual([]);
+  });
+});
+
+describe('a line riding a way that cannot be drawn', () => {
+  function savedWithLine() {
+    const ways = [...crossingPair(), aRoad('ghost', [[-115.2, 36.1]])];
+    return aSystem({
+      ways,
+      services: [aService('line', [aPattern('p', ways, ['road-west', 'ghost'])])],
+    });
+  }
+
+  it('keeps the line, and only drops the leg that named the way', () => {
+    const loaded = parseSystem(JSON.parse(JSON.stringify(savedWithLine())));
+    expect(loaded.services.map((sv) => sv.id)).toEqual(['line']);
+    expect(patternLegs(loaded.services[0].patterns[0]).map((l) => l.wayId)).toEqual(['road-west']);
+  });
+
+  it('leaves a line that ends up riding nothing for the person to deal with', () => {
+    const ways = [aRoad('ghost', [[-115.2, 36.1]])];
+    const saved = aSystem({
+      ways,
+      services: [aService('line', [aPattern('p', ways, ['ghost'])])],
+    });
+    const loaded = parseSystem(JSON.parse(JSON.stringify(saved)));
+    expect(loaded.services.map((sv) => sv.id)).toEqual(['line']);
+    // Reported, not repaired: deleting somebody's line is their call.
+    expect(validateSystem(loaded).map((i) => i.id)).toEqual(['ghost-service-line']);
   });
 });
 

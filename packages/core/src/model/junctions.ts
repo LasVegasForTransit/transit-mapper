@@ -65,6 +65,13 @@ export function junctionTypeIds(node: Node, waysById: Map<string, Way>): string[
  * to the group whose first arm appears first, which makes the repair
  * deterministic rather than dependent on Map iteration order.
  *
+ * The tempting alternative — keep every group, as one Node each — is the one
+ * to avoid. Two Nodes at one coordinate is not cosmetic: cascadeMove finds
+ * only the first, so dragging the junction moves one Node's arms and strands
+ * the other's, and setNodeControl reaches only one of them. Losing the
+ * minority group's junction is the lesser fault, and it is a fault nobody can
+ * see, since those ways still meet at the same point.
+ *
  * Nothing MOVES. The interactive disconnect nudges the departing way 12 m
  * clear so the person can see what they just did; this runs on load and on
  * import, where silently shifting geometry someone drew would be a worse

@@ -1,6 +1,6 @@
 import { shortId } from './ids';
 import { LINE_COLORS, laneKind } from './catalog';
-import { deriveLegDirections, oneSection, patternLegs, wayById } from './geo';
+import { deriveLegDirections, oneSection, wayById } from './geo';
 import { wayTypeIndex, withSingleTypeArms } from './junctions';
 import { mapSectionLegs, pruneSections } from './patternEdits';
 import { defaultProfileFor } from './profile';
@@ -971,15 +971,19 @@ function finish(o: Record<string, unknown>, parts: FinishParts): TransitSystem {
     createdAt: typeof o.createdAt === 'number' ? o.createdAt : now,
     updatedAt: typeof o.updatedAt === 'number' ? o.updatedAt : now,
     ...repaired,
-    services: repaired.services
-      .map((sv) => ({
-        ...sv,
-        patterns: resolveLegDirections(sv.patterns, repaired.ways)
-          .map((pt) => prunedSkippedStops(pt, liveStationIds))
-          .map((pt) => ({ ...pt, sections: prunedToLiveWays(pt.sections, repaired.ways) }))
-          .filter((pt) => patternLegs(pt).length > 0),
-      }))
-      .filter((sv) => sv.patterns.length > 0),
+    // Legs onto a way that is not here are dropped, but the pattern and the
+    // service that held them are NOT. A line is something a person made and
+    // named; losing one on load, silently, because a way it rode had gone
+    // missing would be the loader deciding something that is not its to
+    // decide. A line left riding nothing is what validateSystemQuick's
+    // "doesn't run over any way" has always been for — it says so, in the
+    // list, and the person deletes it or re-routes it.
+    services: repaired.services.map((sv) => ({
+      ...sv,
+      patterns: resolveLegDirections(sv.patterns, repaired.ways)
+        .map((pt) => prunedSkippedStops(pt, liveStationIds))
+        .map((pt) => ({ ...pt, sections: prunedToLiveWays(pt.sections, repaired.ways) })),
+    })),
     vehicleKinds: parseVehicleKinds(o.vehicleKinds),
     palette,
     drivingSide: drivingSideOf(o.drivingSide),
