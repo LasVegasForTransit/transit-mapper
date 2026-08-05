@@ -301,33 +301,38 @@ export function Workbench({
           </>
         )}
 
-        {/* ---- the top row: spacer | canvas state | actions.
-            ONE flex row whose three children are siblings, so the browser
-            sizes them against each other and no two can ever overlap. That is
-            the whole reason this is a row rather than three independently
-            positioned things: the centered group used to be absolutely
-            positioned across the full width, which made it free to grow
-            straight over the actions card — and "how wide is the actions
-            card" is not something CSS elsewhere can know, so guarding it with
-            a max-width constant was guessing (it guessed 280px; the card is
-            446px, and it covered three buttons).
+        {/* ---- the top row: spacer | view | simulation | actions.
+            ONE flex row whose children are siblings, so the browser sizes
+            them against each other and no two can ever overlap. That is the
+            whole reason this is a row rather than independently positioned
+            things: the centered group used to be absolutely positioned across
+            the full width, which made it free to grow straight over the
+            actions card — and "how wide is the actions card" is not something
+            CSS elsewhere can know, so guarding it with a max-width constant
+            was guessing (it guessed 280px; the card is 446px, and it covered
+            three buttons).
 
             Both side children are `flex-1` from a zero basis, so they take
-            equal space and the middle sits on the MAP's center — the thing
-            the old absolute positioning was for, kept. The left one carries a
-            min-width mirroring the workspace panel beneath it, and the right
-            one can't shrink below the actions card's own content width, so
-            when the three together want more than the row has, a bar gives up
-            content rather than anything sliding under anything else.
+            equal space and the middle pair sits on the MAP's center — the
+            thing the old absolute positioning was for, kept. The left one
+            carries a min-width mirroring the workspace panel beneath it, and
+            the right one can't shrink below the actions bar's own content
+            width, so when they together want more than the row has, a bar
+            gives up content rather than anything sliding under anything else.
 
-            Both cards are `.top-app-bar`, so the row has one height at every
-            width and resizing it moves nothing below it.
+            Which view you are looking at and what the simulation is doing are
+            two different questions, so they are two bars rather than one with
+            a divider in it. One card holding both read as a single control
+            whose left half changed the right half.
+
+            Every card here is a `.top-app-bar`, so the row has one height at
+            every width and resizing it moves nothing below it.
 
             A real grid item in row 1, not `absolute inset-x-0 top-0` — an
             absolutely positioned grid item opts out of the grid's own track
             sizing, so row 1's `auto` height ignored this row's actual
-            rendered height entirely, and row 2 (the Inspector panel, the
-            install banner) started underneath it and got covered. ---- */}
+            rendered height entirely, and row 2 (the install banner) started
+            underneath it and got covered. ---- */}
         {!mobile && (
           <div
             className="pointer-events-none flex items-start gap-2"
@@ -336,6 +341,8 @@ export function Workbench({
             <div className="flex-1" style={{ minWidth: 'var(--panel-w)' }} aria-hidden="true" />
             <div className="top-app-bar top-app-bar-center top-chrome-card pointer-events-auto min-w-0">
               {viewSwitcher}
+            </div>
+            <div className="top-app-bar top-app-bar-center top-chrome-card pointer-events-auto min-w-0">
               {simControls}
             </div>
             <div ref={actionsSlotRef} className="flex min-w-0 flex-1 justify-end">

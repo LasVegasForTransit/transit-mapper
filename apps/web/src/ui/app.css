@@ -3572,6 +3572,22 @@ button.chip-removable-label:hover {
 .top-app-bar-end {
   justify-content: safe flex-end;
 }
+/* A bar whose only control collapses itself in zen mode has to collapse with
+   it. .zen-collapse-cluster shrinks the control's own max-width and padding
+   (see its comment), which used to be enough when it shared a card with the
+   sim controls; on its own card it would leave an empty 48px pill standing
+   where the view switch was. Keyed off `:has` rather than a second class on
+   the card, so the card follows whatever the control does. */
+.top-app-bar:has(> .zen-collapse-cluster) {
+  max-width: 400px;
+  transition: max-width 220ms var(--motion-chrome-curve);
+}
+[data-zen] .top-app-bar:has(> .zen-collapse-cluster) {
+  max-width: 0;
+  padding: 0;
+  border-width: 0;
+  overflow: hidden;
+}
 
 /* ---- which actions a bar shows is its CONTAINER's decision ----
    One TopBarActions markup everywhere. `.actions-collapsed` (mobile's
