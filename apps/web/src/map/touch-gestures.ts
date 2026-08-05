@@ -135,8 +135,9 @@ function asMouseEvent(
       detail,
       clientX: touch?.clientX ?? point.x,
       clientY: touch?.clientY ?? point.y,
-      // Touch supplies no modifier keys. Their equivalents are latched
-      // channels in the inspector, not chorded finger gestures.
+      // Touch supplies no modifier keys. Erase and split are reached as
+      // variants on the Select tool's dock button instead, never as chorded
+      // finger gestures.
       shiftKey: false,
       altKey: false,
       ctrlKey: false,
