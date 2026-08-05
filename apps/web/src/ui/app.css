@@ -559,37 +559,51 @@ input[type='range'] {
 /* Workbench places this as a real grid row below desktop top chrome, or as a
    flex sibling below mobile chrome. It therefore has no viewport offset of
    its own and cannot cover a toolbar that grows or wraps. */
+/* Material 3 has no banner component — M2's was dropped and nothing replaced
+   it, so the nearest sanctioned pattern for persistent inline messaging is a
+   card, and this is styled as one: the same surface, border and elevation as
+   every other card floating over the map, so it reads as a peer of the
+   toolbars rather than a coloured alert.
+   It deliberately does NOT use primary-container. tokens.css keeps the whole
+   palette neutral on purpose (line colours are meant to be the only accent in
+   the app), which makes primary-container #ecebe6 — a warm grey that sits a
+   couple of percent off both the map behind it and the surface-container-
+   highest border around it, so the banner read as a smudge rather than as a
+   card. Emphasis comes from the leading icon and the filled Install button
+   instead, which is what M3 Expressive asks for anyway: shape, containment
+   and a clear action, not a saturated fill. */
 .install-banner {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  background: var(--md-sys-color-primary-container);
+  background: var(--md-sys-color-surface);
   color: var(--md-sys-color-on-surface);
   padding: 10px 12px;
-  border: 1px solid var(--md-sys-color-surface-container-highest);
-  border-radius: 10px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
   box-shadow: var(--md-sys-elevation-level2);
   font-size: var(--md-sys-typescale-body-medium-size);
 }
-.install-banner strong {
-  color: var(--md-sys-color-primary);
-}
-.install-banner-actions {
+/* No wrapping. The banner is one row: icon, message, action, dismiss. It used
+   to be `flex-wrap`, which let the action cluster drop onto a second line and
+   sit ragged under the message with the whole right half of the banner empty
+   — the "gap". The message itself is the only elastic part, so give it the
+   slack and let its own text wrap inside it. */
+.install-banner-icon {
   display: flex;
-  align-items: center;
-  gap: 8px;
   flex: none;
+  color: var(--md-sys-color-on-surface-variant);
 }
-.install-banner > div:first-child {
+.install-banner-message {
+  flex: 1 1 auto;
   min-width: 0;
+  margin: 0;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.install-banner-guidance {
-  max-width: 265px;
-  color: var(--md-sys-color-on-surface-variant);
-  font-size: var(--md-sys-typescale-body-small-size);
+.install-banner .btn-primary,
+.install-banner .app-banner-dismiss {
+  flex: none;
 }
 
 /* ---- tool dock — independent of the side panels, never stacked under one
