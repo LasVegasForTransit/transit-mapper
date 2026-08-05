@@ -6,6 +6,7 @@ import {
   useSyncExternalStore,
   type PointerEvent,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { useEditor } from '../editor/EditorProvider';
 import { Icon } from './Icon';
@@ -42,6 +43,114 @@ function useMobileLayout(): boolean {
   // snapshot for the server argument also makes static render tests represent
   // the media environment they install without introducing a second default.
   return useSyncExternalStore(subscribeMobile, mobileSnapshot, mobileSnapshot);
+}
+
+/** How much of the action bar's content fits. Each step is narrower than the
+ *  one before it, so the first that fits is the most complete that fits.
+ *  app.css owns what each one drops, keyed off `[data-fit]`. */
+type ToolbarFit = 'full' | 'labels' | 'tertiary' | 'overflow';
+
+/** Widest first. `full` gives up nothing, so it is the only one app.css has no
+ *  rule for; tests/ui/toolbar-fit-steps.test.ts holds the two sides together. */
+export const TOOLBAR_FITS: ToolbarFit[] = ['full', 'labels', 'tertiary', 'overflow'];
+
+/** Measures a `.top-app-bar`'s natural width. A bar never compresses its
+ *  contents and scrolls when it is short, so neither its rendered width nor
+ *  its scrollWidth says what it actually wants. */
+function naturalWidth(bar: HTMLElement): number {
+  const width = bar.style.width;
+  const flex = bar.style.flex;
+  bar.style.flex = 'none';
+  bar.style.width = 'max-content';
+  const measured = bar.getBoundingClientRect().width;
+  bar.style.flex = flex;
+  bar.style.width = width;
+  return measured;
+}
+
+/**
+ * Picks the widest action bar that fits the width its container was given.
+ *
+ * The input is the container, not the viewport: Workbench's top row divides
+ * itself between a reserved left edge, the canvas-state bar and this one, so
+ * the same viewport hands this bar different widths as its neighbours change.
+ * Each step is priced by writing `data-fit` onto the live element and reading
+ * its width back, then restoring what React rendered — a width table in JS
+ * would be a copy of app.css that goes stale silently. It all happens in a
+ * layout effect, so nothing intermediate is painted.
+ *
+ * The bar cannot wrap whatever this returns: `.top-app-bar` is `nowrap`, and
+ * the last step scrolls. This only decides how much of the content is worth
+ * showing before the ⋯ menu takes the rest.
+ */
+function useToolbarFit(
+  container: RefObject<HTMLDivElement | null>,
+  bar: RefObject<HTMLDivElement | null>,
+  mobile: boolean,
+): ToolbarFit {
+  const [fit, setFit] = useState<ToolbarFit>('full');
+
+  useLayoutEffect(() => {
+    const box = container.current;
+    const el = bar.current;
+    if (mobile || !box || !el) return;
+
+    // Pricing a step means writing it, forcing layout, and reading the width
+    // back, so this runs on every resize frame of a window drag. Price the
+    // narrowest step (the floor below), then walk from the widest and stop at
+    // the first that fits: two measurements in the steady state, where the bar
+    // has room and nothing changes, rather than one per step every frame.
+    const measure = () => {
+      const rendered = el.dataset.fit;
+      const priceOf = (candidate: ToolbarFit) => {
+        el.dataset.fit = candidate;
+        return naturalWidth(el);
+      };
+      const narrowest = TOOLBAR_FITS[TOOLBAR_FITS.length - 1];
+
+      // The narrowest step is the floor the row must respect. Without it the
+      // container keeps taking its share of a shrinking row and the bar ends
+      // up scrolling its own ⋯ button out of reach; with it, the
+      // canvas-state bar beside it gives way instead.
+      const floor = `${Math.ceil(priceOf(narrowest))}px`;
+      if (box.style.minWidth !== floor) box.style.minWidth = floor;
+
+      // Read after the floor lands: applying it is what widens the container
+      // in the case the floor exists for.
+      const available = box.clientWidth;
+      let chosen = narrowest;
+      for (const candidate of TOOLBAR_FITS) {
+        if (priceOf(candidate) <= available) {
+          chosen = candidate;
+          break;
+        }
+      }
+
+      if (rendered === undefined) delete el.dataset.fit;
+      else el.dataset.fit = rendered;
+      setFit(chosen);
+    };
+
+    measure();
+    // Writing the floor from inside the callback can resize the very element
+    // being observed, which is the shape that produces "ResizeObserver loop
+    // completed with undelivered notifications". It settles in one extra
+    // notification and cannot run away: the floor only widens the container
+    // when the container was narrower than it, and the pass that follows finds
+    // the same floor, writes nothing, and picks the same step.
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    // The bar too, not just its container. What the bar wants changes without
+    // the row moving at all: the issues badge mounts when validation starts
+    // failing, and forking a read-only system swaps two buttons for six.
+    // Neither resizes the container — it is `flex-1` from a zero basis — so
+    // watching only the container leaves the step stale, and the bar quietly
+    // scrolls its own content out of view instead of stepping down.
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [container, bar, mobile]);
+
+  return fit;
 }
 
 export interface WorkbenchProps {
@@ -139,6 +248,8 @@ export function Workbench({
   const supplementalRef = useInertRef<HTMLDivElement>(uiHidden);
   const actionsFullRef = useInertRef<HTMLDivElement>(uiHidden);
   const sheetRef = useInertRef<HTMLDivElement>(uiHidden);
+  const actionsSlotRef = useRef<HTMLDivElement | null>(null);
+  const toolbarFit = useToolbarFit(actionsSlotRef, actionsFullRef, mobile);
 
   useEffect(() => {
     if (hasSupplementalContent) setSheetExpanded(true);
@@ -175,7 +286,7 @@ export function Workbench({
         {mobile && (
           <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center gap-2">
             <div className="flex w-full items-start justify-between gap-2">
-              <div className="pointer-events-auto min-w-0 flex-1 overflow-hidden rounded-xl border border-[var(--md-sys-color-surface-container-highest)] bg-[var(--md-sys-color-surface)] px-2 py-1.5 shadow-[var(--md-sys-elevation-level2)]">
+              <div className="top-chrome-card pointer-events-auto min-w-0 flex-1 overflow-hidden px-2 py-1.5">
                 <div className="mobile-topleft">
                   <div className="mobile-topleft-row">{brand}</div>
                   {viewSwitcher}
@@ -184,7 +295,7 @@ export function Workbench({
               </div>
               <div
                 ref={actionsCollapsedRef}
-                className="actions-collapsed zen-cluster pointer-events-auto flex shrink-0 flex-col items-center gap-1 rounded-xl border border-[var(--md-sys-color-surface-container-highest)] bg-[var(--md-sys-color-surface)] p-1 shadow-[var(--md-sys-elevation-level2)]"
+                className="actions-collapsed top-chrome-card zen-cluster pointer-events-auto flex shrink-0 flex-col items-center gap-1 p-1"
               >
                 {primaryToolbar}
               </div>
@@ -220,52 +331,55 @@ export function Workbench({
           </>
         )}
 
-        {/* ---- the top row: spacer | canvas state | actions.
-            ONE flex row whose three children are siblings, so the browser
-            sizes them against each other and no two can ever overlap. That is
-            the whole reason this is a row rather than three independently
-            positioned things: the centered group used to be absolutely
-            positioned across the full width, which made it free to grow
-            straight over the actions card — and "how wide is the actions
-            card" is not something CSS elsewhere can know, so guarding it with
-            a max-width constant was guessing (it guessed 280px; the card is
-            446px, and it covered three buttons).
+        {/* ---- the top row: spacer | view | simulation | actions.
+            ONE flex row whose children are siblings, so the browser sizes
+            them against each other and no two can ever overlap. That is the
+            whole reason this is a row rather than independently positioned
+            things: the centered group used to be absolutely positioned across
+            the full width, which made it free to grow straight over the
+            actions card — and "how wide is the actions card" is not something
+            CSS elsewhere can know, so guarding it with a max-width constant
+            was guessing (it guessed 280px; the card is 446px, and it covered
+            three buttons).
 
             Both side children are `flex-1` from a zero basis, so they take
-            equal space and the middle sits on the MAP's center — the thing
-            the old absolute positioning was for, kept. The left one carries a
-            min-width mirroring the workspace panel beneath it, and the right
-            one can't shrink below the actions card's own content width, so
-            when the three together want more than the row has, the middle
-            wraps instead of anything sliding under anything else. No
-            measured constants, no breakpoint, nothing for a caller to
-            know.
+            equal space and the middle pair sits on the MAP's center — the
+            thing the old absolute positioning was for, kept. The left one
+            carries a min-width mirroring the workspace panel beneath it, and
+            the right one can't shrink below the actions bar's own content
+            width, so when they together want more than the row has, a bar
+            gives up content rather than anything sliding under anything else.
+
+            Which view you are looking at and what the simulation is doing are
+            two different questions, so they are two bars rather than one with
+            a divider in it. One card holding both read as a single control
+            whose left half changed the right half.
+
+            Every card here is a `.top-app-bar`, so the row has one height at
+            every width and resizing it moves nothing below it.
 
             A real grid item in row 1, not `absolute inset-x-0 top-0` — an
             absolutely positioned grid item opts out of the grid's own track
             sizing, so row 1's `auto` height ignored this row's actual
-            rendered height entirely. That was invisible right up until the
-            actions card ran out of width and its own `flex-wrap` grew it
-            tall instead of wide, at which point row 1 was still sized as if
-            it were empty and row 2 (the Inspector panel) started underneath
-            it and got covered — confirmed live at 768px, where the actions
-            card wraps to ~220px tall. Placing this row in the grid for real
-            makes row 1 size to whatever it actually renders at, so row 2
-            gets pushed down instead of covered, at every width. ---- */}
+            rendered height entirely, and row 2 (the install banner) started
+            underneath it and got covered. ---- */}
         {!mobile && (
           <div
             className="pointer-events-none flex items-start gap-2"
             style={{ gridColumn: '1 / -1', gridRow: '1' }}
           >
             <div className="flex-1" style={{ minWidth: 'var(--panel-w)' }} aria-hidden="true" />
-            <div className="pointer-events-auto flex min-w-0 flex-wrap items-center justify-center gap-2 rounded-xl border border-[var(--md-sys-color-surface-container-highest)] bg-[var(--md-sys-color-surface)] px-2 py-1.5 shadow-[var(--md-sys-elevation-level2)]">
+            <div className="top-app-bar top-app-bar-center top-chrome-card zen-collapse-bar pointer-events-auto min-w-0">
               {viewSwitcher}
+            </div>
+            <div className="top-app-bar top-app-bar-center top-chrome-card pointer-events-auto min-w-0">
               {simControls}
             </div>
-            <div className="flex flex-1 justify-end">
+            <div ref={actionsSlotRef} className="flex min-w-0 flex-1 justify-end">
               <div
                 ref={actionsFullRef}
-                className="actions-full zen-cluster pointer-events-auto flex max-w-[900px] flex-wrap items-center justify-end gap-2 rounded-xl border border-[var(--md-sys-color-surface-container-highest)] bg-[var(--md-sys-color-surface)] px-2 py-1.5 shadow-[var(--md-sys-elevation-level2)]"
+                data-fit={toolbarFit}
+                className="actions-full top-app-bar top-app-bar-end top-chrome-card zen-cluster pointer-events-auto min-w-0"
               >
                 {primaryToolbar}
               </div>
@@ -273,10 +387,17 @@ export function Workbench({
           </div>
         )}
 
+        {/* The install invitation is app-level chrome, not something about
+            the map underneath it, so it hangs off the right edge below the
+            action bar rather than floating in the middle of the canvas. That
+            edge and `--panel-w` are the Inspector's too, so when both are up
+            they read as one column instead of two unrelated cards. It keeps
+            its own grid row: whatever height it takes pushes the Inspector
+            down rather than covering it. ---- */}
         {!mobile && installBanner && (
           <div
-            className="pointer-events-auto z-[1] w-full min-w-0 max-w-[560px] justify-self-center"
-            style={{ gridColumn: '2 / 3', gridRow: '2' }}
+            className="pointer-events-auto z-[1] justify-self-end"
+            style={{ gridColumn: '1 / -1', gridRow: '2', width: 'var(--panel-w)' }}
           >
             {installBanner}
           </div>

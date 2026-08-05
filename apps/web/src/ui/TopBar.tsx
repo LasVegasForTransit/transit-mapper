@@ -27,13 +27,16 @@ const MOD_LABEL = IS_MAC ? '⌘' : 'Ctrl';
  *  viewSwitcher prop. Mobile: folded into TopBarActions instead (see that
  *  component) — no room for a third floating group at that width.
  *
- *  Unlike sim controls (its constant companion in the same top-center
- *  card), this DOES collapse in zen mode — self-managed here via
+ *  Unlike sim controls (its neighbour in the top-center of the desktop
+ *  row), this DOES collapse in zen mode — self-managed here via
  *  `.zen-collapse-cluster` + `inert` rather than threaded through
  *  Workbench, since it owns its own root element. That class shrinks its
- *  own max-width to 0 (not just a fade/lift like `.zen-cluster`) so sim
- *  controls slides into the freed width through ordinary flex reflow —
- *  no repositioning code needed for that motion. */
+ *  own max-width to 0 rather than fading and lifting like `.zen-cluster`,
+ *  so the simulation bar slides into the freed width through ordinary flex
+ *  reflow with no repositioning code. On desktop the card around this one
+ *  has to collapse too, which is `.zen-collapse-bar`, applied by Workbench
+ *  — there is no such card on mobile, which is why this class stays here
+ *  on the control rather than moving up to the card. */
 export function ViewSwitch() {
   const { viewMode, setViewMode } = useView();
   const { uiHidden } = useUi();
@@ -101,11 +104,26 @@ export function TopBarBrand() {
 /**
  * The transient-action button cluster — one markup for every viewport.
  * Which subset shows is a LAYOUT decision made by the container: a
- * `.actions-full` container (desktop card) shows everything and hides the
- * overflow menu; a `.actions-collapsed` container (mobile's vertical
- * column) shows only the primary few (`.act-secondary` hides) plus the ⋯
- * overflow carrying the rest. Same component, same handlers, no per-device
- * behavior forks.
+ * `.actions-full` container (desktop card) shows as much as it has room for
+ * on one line, stepping down through `[data-fit]` — everything, then the
+ * same buttons without their labels, then the primary few plus the ⋯
+ * overflow (Workbench's useToolbarFit measures which); a
+ * `.actions-collapsed` container (mobile's vertical column) shows only the
+ * primary few plus ⋯ unconditionally. Same component, same handlers, no
+ * per-device behavior forks.
+ *
+ * Two classes mark what a container may take away, and everything either one
+ * marks also appears in the ⋯ menu at the bottom — that menu is where those
+ * actions live once the container runs out of room. `.act-tertiary` is help,
+ * reached far more often from the keyboard or from a menu than from here;
+ * `.act-secondary` is everything else that can go. The help buttons carry
+ * BOTH, and need to: `.act-tertiary` is what the desktop bar drops one step
+ * early, and `.act-secondary` is the only one mobile's single rule reads.
+ *
+ * Three buttons carry neither class and are always present: the issues badge,
+ * a warning light that only renders when something is actually wrong; layers;
+ * and undo. Driving side is unmarked too — it is a document setting, and a
+ * menu of verbs has no shape for it.
  */
 export function TopBarActions() {
   const store = useEditorStore();
@@ -126,21 +144,13 @@ export function TopBarActions() {
 
   return (
     <>
-      {!readOnly && (
-        <span className="act-secondary">
-          <IssuesPopover />
-        </span>
-      )}
+      {!readOnly && <IssuesPopover />}
       <LayersPopover />
-      {!readOnly && (
-        <span className="act-secondary">
-          <DrivingSidePopover />
-        </span>
-      )}
-      <span className="act-secondary">
+      {!readOnly && <DrivingSidePopover />}
+      <span className="act-tertiary act-secondary">
         <IconButton icon="keyboard" onClick={openShortcuts} label="Keyboard shortcuts (?)" />
       </span>
-      <span className="act-secondary">
+      <span className="act-tertiary act-secondary">
         <IconButton icon="play" onClick={() => openDialog('onboarding')} label="Replay intro" />
       </span>
       {readOnly ? (
@@ -191,6 +201,10 @@ export function TopBarActions() {
           {!readOnly && (
             <DropdownMenuItem onSelect={() => openDialog('share')}>Share…</DropdownMenuItem>
           )}
+          <DropdownMenuItem onSelect={openShortcuts}>Keyboard shortcuts</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => openDialog('onboarding')}>
+            Replay intro
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => openDialog('settings')}>Settings…</DropdownMenuItem>
           <DropdownMenuItem onSelect={toggleUi}>Hide UI</DropdownMenuItem>
         </DropdownMenu>
