@@ -1386,23 +1386,6 @@ input[type='range'] {
 .chip.static {
   cursor: default;
 }
-/* The key a modifier chip mirrors (see inspector/modifiers.tsx). Quieter than
-   the label: the chip is the control, and the key is a note about another way
-   to reach it. Always in the accessible name — a tablet with a keyboard case
-   reports no hover and still has an Alt key — but only drawn where a pointer
-   can hover, which is the closest signal a stylesheet has for "a keyboard is
-   probably attached". */
-.chip-key {
-  font-family: var(--mono);
-  font-size: var(--md-sys-typescale-label-small-size);
-  opacity: 0.6;
-}
-@media (hover: none) {
-  .chip-key {
-    display: none;
-  }
-}
-
 /* ---- the pointer badge: what the next press will do ----
    Positioned by map/PointerBadge.tsx, which supplies only the pointer's x/y.
    Everything about how it LOOKS is here, including its two pointer-dependent

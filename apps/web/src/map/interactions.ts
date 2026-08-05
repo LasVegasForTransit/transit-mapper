@@ -411,10 +411,11 @@ export function attachInteractions(
   };
 
   /**
-   * A held key OR a latched channel produces the same state, which is the one
-   * place the two input paths meet. Everything downstream — the resolver, the
-   * badge, the dispatch — sees a channel and cannot tell which set it, so
-   * touch reaches Alt/Shift/Ctrl operations without a second code path.
+   * A held key OR the Select tool's variant produces the same state, which is
+   * the one place the two input paths meet. Everything downstream — the
+   * resolver, the badge, the dispatch — sees a channel and cannot tell which
+   * set it, so a finger reaches the Alt and Ctrl operations through the dock
+   * without a second code path.
    */
   const modifierState = (event: {
     altKey?: boolean;
@@ -423,25 +424,26 @@ export function attachInteractions(
     shiftKey?: boolean;
     button?: number;
   }): ModifierState => {
-    const latched = store.getState().latchedModifiers;
+    const { tool, selectVariant } = store.getState();
+    // A variant only speaks for the tool it belongs to.
+    const variant = tool === 'select' ? selectVariant : 'select';
     return {
       pan: spaceHeld,
-      constrain: event.shiftKey === true || latched.constrain,
-      alternate: event.altKey === true || latched.alternate,
-      secondary: event.ctrlKey === true || event.metaKey === true || latched.secondary,
+      constrain: event.shiftKey === true,
+      alternate: event.altKey === true || variant === 'erase',
+      secondary: event.ctrlKey === true || event.metaKey === true || variant === 'split',
       actions: event.button === 2,
     };
   };
 
   /**
-   * The `constrain` channel during a live drag. Shift is the sole modifier
-   * allowed to alter a gesture mid-flight (it changes only geometry, never the
-   * verb), so every drag loop that offers angle-snapping asks through this
-   * rather than reading shiftKey — otherwise a latched constraint would show
-   * in the badge and do nothing to the geometry.
+   * Shift during a live drag: the sole modifier allowed to alter a gesture
+   * mid-flight, and it changes only geometry, never the verb. Read through one
+   * helper so every drag loop that offers angle-snapping asks the same
+   * question.
    */
   const constrainActive = (ev: { originalEvent?: { shiftKey?: boolean } }): boolean =>
-    ev.originalEvent?.shiftKey === true || store.getState().latchedModifiers.constrain;
+    ev.originalEvent?.shiftKey === true;
 
   /** The one definition of a corridor a Network line may route over. Both
    * rendered-hit classification and startDraw use it, so an icon never says

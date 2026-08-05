@@ -26,7 +26,7 @@ import { resolveLibraryBootstrap } from './storage/bootstrapLibrary';
 import { Icon } from './ui/Icon';
 import { ImportProgressPill } from './ui/ImportProgressPill';
 import { MapContextMenu } from './ui/MapContextMenu';
-import { Inspector, supplementalOpensSheet, useSupplementalContent } from './ui/Inspector';
+import { Inspector, useSupplementalContent } from './ui/Inspector';
 import { SidebarPanel } from './ui/SidebarPanel';
 import { SimControls, SimControlsCompact } from './ui/SimControls';
 import { Toolbar } from './ui/Toolbar';
@@ -421,7 +421,6 @@ export function App() {
         menuPanel={<SidebarPanel />}
         supplementalPanel={<Inspector />}
         hasSupplementalContent={supplemental.kind !== 'none'}
-        supplementalIsFresh={supplementalOpensSheet(supplemental)}
         primaryToolbar={<TopBarActions />}
         viewSwitcher={<ViewSwitch />}
         simControls={<SimControls />}

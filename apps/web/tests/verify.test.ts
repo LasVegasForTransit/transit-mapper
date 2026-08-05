@@ -12264,19 +12264,15 @@ function buildGrid() {
   );
 }
 
-// --- latched modifiers are editor state, not history ---
+// --- the Select variant is editor state, not history ---
 {
   fresh();
   const before = store.getState().canUndo;
-  store.getState().setLatchedModifier('alternate', true);
-  check('latching a channel turns it on', store.getState().latchedModifiers.alternate);
-  check(
-    'latching one channel leaves the others alone',
-    !store.getState().latchedModifiers.constrain,
-  );
-  check('latching a channel creates no undo step', store.getState().canUndo === before);
-  store.getState().setLatchedModifier('alternate', false);
-  check('a latched channel switches back off', !store.getState().latchedModifiers.alternate);
+  store.getState().setSelectVariant('erase');
+  check('picking a variant arms it', store.getState().selectVariant === 'erase');
+  check('picking a variant creates no undo step', store.getState().canUndo === before);
+  store.getState().setSelectVariant('select');
+  check('a variant switches back off', store.getState().selectVariant === 'select');
 }
 
 // --- an identity with no name contributes no name ---

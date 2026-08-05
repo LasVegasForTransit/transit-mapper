@@ -37,7 +37,6 @@ function renderWorkbench(): void {
               menuPanel={slot('menu')}
               supplementalPanel={null}
               hasSupplementalContent={false}
-              supplementalIsFresh={false}
               primaryToolbar={slot('primary')}
               viewSwitcher={slot('view')}
               simControls={slot('desktop-sim')}

@@ -12,7 +12,6 @@ import type { Tool } from '../../editor/store';
 import { ColorField } from '../ColorField';
 import { Panel } from '../Panel';
 import { useView } from '../ViewProvider';
-import { ModifierChannels } from './modifiers';
 import { GEOMETRY_OPTIONS, GradeChips } from './shared';
 
 /**
@@ -35,28 +34,10 @@ export function ToolDraftInspector({ tool }: ToolDraftInspectorProps) {
   if (tool === 'way') return <WayDraftInspector />;
   if (tool === 'station') return <StationDraftInspector />;
   if (tool === 'facility') return <FacilityDraftInspector />;
-  if (tool === 'select') return <SelectDraftInspector />;
+  // Select has no draft options: erasing and splitting are variants of it,
+  // shown on the dock button and picked from its chevron (see Toolbar), which
+  // is where every other tool's variants live.
   return null;
-}
-
-/**
- * The Select tool's own options, which until now was an empty set.
- *
- * Select is where the modifier channels matter most — erase, split, and
- * constrain all qualify a Select press — so leaving this null meant the one
- * tool that needs them had nowhere to show them. A tool's configuration
- * belongs where a selection's details would; for Select, its configuration is
- * which channel is armed.
- */
-function SelectDraftInspector() {
-  return (
-    <Panel slot="right" aria-label="Select options">
-      <div className="panel-head">
-        <span className="panel-head-title">Select</span>
-      </div>
-      <ModifierChannels />
-    </Panel>
-  );
 }
 
 /**

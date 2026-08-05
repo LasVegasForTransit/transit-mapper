@@ -95,21 +95,37 @@ and cannot be placed inside a 9-pixel radius. The full table is in
 
 A press can be qualified by four modal channels. They are named for what they
 qualify rather than for the key that sets them, because a keyboard is only one
-of two ways to set them: each can also be latched from the inspector, which is
-how a touchscreen reaches operations that would otherwise need a key held.
+of two ways to set them.
 
-| Channel     | Key            | Latchable | Qualifies                                                       |
-| ----------- | -------------- | --------- | --------------------------------------------------------------- |
-| `constrain` | `Shift`        | Yes       | Angle-snapping and constrained moves                            |
-| `alternate` | `Alt`/`Option` | Yes       | Erase; separate-corridor drawing in the Line tool               |
-| `secondary` | `Ctrl`/`⌘`     | Yes       | Split at an interior point, extend at an endpoint               |
-| `pan`       | `Space`        | No        | Camera pan. Touch uses two fingers instead                      |
-| `actions`   | Right button   | No        | The action anchor and its menu. Touch uses a long press instead |
+| Channel     | Key            | Qualifies                                                       |
+| ----------- | -------------- | --------------------------------------------------------------- |
+| `constrain` | `Shift`        | Angle-snapping and constrained moves                            |
+| `alternate` | `Alt`/`Option` | Erase; separate-corridor drawing in the Line tool               |
+| `secondary` | `Ctrl`/`⌘`     | Split at an interior point, extend at an endpoint               |
+| `pan`       | `Space`        | Camera pan. Touch uses two fingers instead                      |
+| `actions`   | Right button   | The action anchor and its menu. Touch uses a long press instead |
 
-A held key and a latched channel produce the same input, so the resolved
-operation, badge, and cursor are identical either way. `pan` and `actions` do
-not latch: both already have a touch gesture, and a latched action-menu mode
-would be a trap rather than a convenience.
+A held key and a Select variant (below) produce the same input, so the resolved
+operation, badge, and cursor are identical either way.
 
 `constrain` is the only channel that may change during a gesture, and it alters
 only geometry, never the operation.
+
+## Select variants
+
+Erasing and splitting are things the Select tool does, so they are variants of
+it: chosen from its chevron in the dock, shown on its button, and exclusive of
+each other. This is how both operations are reached without a keyboard, since
+`Alt` and `Ctrl` cannot be held on a touchscreen.
+
+| Variant  | Sets        | A press then                                              |
+| -------- | ----------- | --------------------------------------------------------- |
+| `select` | nothing     | Selects, moves, or extends, per the table above           |
+| `erase`  | `alternate` | Removes the point, station, or facility pressed           |
+| `split`  | `secondary` | Splits a corridor at an interior point, extends at an end |
+
+A held `Alt` or `Ctrl` reaches the same operation without changing the variant,
+so a mouse is unaffected.
+
+`Shift` has no variant. It constrains a drag already under way rather than
+deciding what a press does, and a finger can draw the angle directly.

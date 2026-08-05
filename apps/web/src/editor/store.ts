@@ -196,41 +196,30 @@ export interface ApplyGtfsImportBatch {
 }
 
 /**
- * Modifier channels a pointer can hold open without a keyboard.
+ * What a Select press does.
  *
- * `Alt`, `Shift`, and `Ctrl` qualify real operations — erase, angle-snap,
- * split. A touchscreen has no way to hold one, and a chorded finger gesture
- * per modifier is not something anyone could learn, so the same channels can
- * be latched instead and stay on until switched off.
+ * Erasing and splitting are things the Select tool DOES, not settings it
+ * carries, so they are variants of it the way a road's cross-section is a
+ * variant of the Road tool — one choice, shown on the dock button, picked from
+ * its chevron. A press cannot both erase and split, and three independent
+ * toggles said otherwise.
  *
- * Only the three qualifying channels latch. `pan` and `actions` do not appear
- * here: both already have their own touch gestures (two fingers and a long
- * press), and a latched "everything is now the action menu" mode would be a
- * trap rather than a convenience.
+ * This is also how the two operations are reachable without a keyboard. Alt
+ * and Ctrl still work and are ORed with the variant, so nothing changes for a
+ * mouse; a finger picks the same thing from the dock.
  *
- * Held keys are ORed with these, so a keyboard is unaffected. See
- * pointerIntent.ts's ModifierState for what each one means.
+ * Shift is deliberately absent. It constrains a drag already under way rather
+ * than deciding what a press does, so it is not a variant of anything — and by
+ * finger you can simply draw the angle you meant.
  */
-export interface LatchedModifiers {
-  constrain: boolean;
-  alternate: boolean;
-  secondary: boolean;
-}
-
-export type LatchedModifierChannel = keyof LatchedModifiers;
-
-export const NO_LATCHED_MODIFIERS: LatchedModifiers = {
-  constrain: false,
-  alternate: false,
-  secondary: false,
-};
+export type SelectVariant = 'select' | 'erase' | 'split';
 
 export interface EditorState {
   system: TransitSystem;
   tool: Tool;
-  /** See LatchedModifiers. Not undoable: it qualifies the next gesture rather
-   *  than describing the system. */
-  latchedModifiers: LatchedModifiers;
+  /** See SelectVariant. Not undoable: it decides what the next press does
+   *  rather than describing the system. */
+  selectVariant: SelectVariant;
   selection: Selection;
   /** Transient branch focus for service-owned map affordances. */
   activePatternId: string | null;
@@ -338,8 +327,8 @@ export interface EditorState {
 
   // tools & selection
   setTool: (tool: Tool) => void;
-  /** Turns one latched channel on or off. A held key is unaffected either way. */
-  setLatchedModifier: (channel: LatchedModifierChannel, latched: boolean) => void;
+  /** Picks what a Select press does. A held Alt or Ctrl is unaffected. */
+  setSelectVariant: (variant: SelectVariant) => void;
   select: (selection: Selection) => void;
   setActivePattern: (patternId: string | null) => void;
   armTerminus: (terminus: NonNullable<EditorState['armedTerminus']>) => void;
@@ -2021,7 +2010,7 @@ export function createEditorStore() {
   const editor = createStore<EditorState>()((set, get) => ({
     system: createEmptySystem(),
     tool: 'select',
-    latchedModifiers: NO_LATCHED_MODIFIERS,
+    selectVariant: 'select',
     selection: null,
     activePatternId: null,
     armedTerminus: null,
@@ -2184,11 +2173,10 @@ export function createEditorStore() {
       });
     },
 
-    // Not routed through history: a latched channel qualifies the NEXT
-    // gesture, so undoing back through it would restore a mode rather than a
-    // change to the system, and the gesture it qualified would be a step away.
-    setLatchedModifier: (channel, latched) =>
-      set((s) => ({ latchedModifiers: { ...s.latchedModifiers, [channel]: latched } })),
+    // Not routed through history: a variant decides what the NEXT press does,
+    // so undoing back through it would restore a mode rather than a change to
+    // the system, and the edit it qualified would be a step further away.
+    setSelectVariant: (variant) => set({ selectVariant: variant }),
 
     select: (selection) =>
       set((s) => ({

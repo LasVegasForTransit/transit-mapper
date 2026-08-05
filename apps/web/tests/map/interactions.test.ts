@@ -1284,15 +1284,15 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
-  it('reaches the same erase through a latched channel with no key held', () => {
-    // The equivalence the whole channel rename exists for. A touchscreen
-    // cannot hold Alt, so the inspector latches `alternate` instead; the
-    // published intent and the dispatch must both be identical to the
+  it('reaches the same erase through the Select variant with no key held', () => {
+    // The equivalence the channel rename exists for. A touchscreen cannot
+    // hold Alt, so the Select tool's Erase variant supplies the same channel;
+    // the published intent and the dispatch must both be identical to the
     // Alt-click above, which fires the same events WITHOUT altKey.
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
     const stationId = store.getState().addStation([-115.2, 36.1]);
-    store.getState().setLatchedModifier('alternate', true);
+    store.getState().setSelectVariant('erase');
     const map = createMap(stationFeature(stationId));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -1314,13 +1314,13 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
-  it('erases by finger when the alternate channel is latched', () => {
+  it('erases by finger with the Erase variant picked', () => {
     // End to end: no keyboard, no mouse, and the tap still deletes.
     vi.useFakeTimers();
     installBrowserGlobals();
     const store = createEditorStore();
     const stationId = store.getState().addStation([-115.2, 36.1]);
-    store.getState().setLatchedModifier('alternate', true);
+    store.getState().setSelectVariant('erase');
     const map = createMap(stationFeature(stationId));
     const detach = attach(map, store);
 
@@ -2339,7 +2339,7 @@ describe('touch gestures', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
     const stationId = store.getState().addStation([-115.2, 36.1]);
-    store.getState().setLatchedModifier('alternate', true);
+    store.getState().setSelectVariant('erase');
     const map = createMap(stationFeature(stationId));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {

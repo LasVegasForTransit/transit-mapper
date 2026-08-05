@@ -57,7 +57,6 @@ function renderWorkbench(environment: boolean | MediaEnvironment): string {
           menuPanel={slot('menu')}
           supplementalPanel={slot('supplemental')}
           hasSupplementalContent={false}
-          supplementalIsFresh={false}
           primaryToolbar={slot('primary')}
           viewSwitcher={slot('view')}
           simControls={slot('desktop-sim')}

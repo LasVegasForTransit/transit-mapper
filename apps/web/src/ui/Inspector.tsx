@@ -52,12 +52,7 @@ function renderInspectorContent(
  * panel; there is one now.
  */
 export type SupplementalContent =
-  | { kind: 'none' }
-  | { kind: 'selection' }
-  /** A tool's own options. `standing` marks the ones that are simply always
-   *  there, as opposed to options a person just summoned by picking up a
-   *  tool — see supplementalOpensSheet. */
-  | { kind: 'tool-draft'; tool: Tool; standing: boolean };
+  { kind: 'none' } | { kind: 'selection' } | { kind: 'tool-draft'; tool: Tool };
 
 export interface SupplementalInput {
   tool: Tool;
@@ -85,13 +80,11 @@ export function supplementalContentFor({
     return hasSelection ? { kind: 'selection' } : { kind: 'none' };
   }
   // An armed drawing tool is what you are doing right now, and outranks
-  // whatever was selected before you picked it up.
-  if (tool !== 'select') return { kind: 'tool-draft', tool, standing: false };
-  // Select's own options are its modifier channels, and unlike a drawing
-  // tool's they yield to a selection: what you just picked is more specific
-  // than how the next press will be qualified.
-  if (hasSelection) return { kind: 'selection' };
-  return { kind: 'tool-draft', tool, standing: true };
+  // whatever was selected before you picked it up. Select has no options of
+  // its own — erasing and splitting are variants on its dock button — so it
+  // shows a selection or nothing.
+  if (tool !== 'select') return { kind: 'tool-draft', tool };
+  return hasSelection ? { kind: 'selection' } : { kind: 'none' };
 }
 
 export function useSupplementalContent(): SupplementalContent {
@@ -106,18 +99,6 @@ export function useSupplementalContent(): SupplementalContent {
     viewMode,
     hasSelection: selection !== null || multiSelection.length > 0,
   });
-}
-
-/**
- * Whether this content should take over the mobile sheet on its own.
- *
- * Standing options are excluded. The Select tool's modifier channels are
- * present from the moment the app loads, and auto-expanding for them parked
- * the sheet over 62% of the map before anyone had touched anything.
- */
-export function supplementalOpensSheet(content: SupplementalContent): boolean {
-  if (content.kind === 'none') return false;
-  return !(content.kind === 'tool-draft' && content.standing);
 }
 
 export function Inspector() {
