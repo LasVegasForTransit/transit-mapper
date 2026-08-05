@@ -573,40 +573,62 @@ input[type='range'] {
   line-height: 1.45;
 }
 
-/* Workbench places this as a real grid row below desktop top chrome, or as a
-   flex sibling below mobile chrome. It therefore has no viewport offset of
-   its own and cannot cover a toolbar that grows or wraps. */
+/* Desktop only — install.ts gates eligibility on a desktop browser, and
+   Workbench renders this in no other layout. It sits in a real grid row of
+   its own below the top chrome, with no viewport offset it could use to
+   cover the bar above it or the Inspector below it.
+   Material 3 has no banner component — M2's was dropped and nothing replaced
+   it, so the nearest sanctioned pattern for persistent inline messaging is a
+   card, and this is styled as one: the same surface, border and elevation as
+   every other card floating over the map, so it reads as a peer of the
+   toolbars rather than a coloured alert.
+   It deliberately does NOT use primary-container. tokens.css keeps the whole
+   palette neutral on purpose (line colours are meant to be the only accent in
+   the app), which makes primary-container #ecebe6 — a warm grey that sits a
+   couple of percent off both the map behind it and the surface-container-
+   highest border around it, so the banner read as a smudge rather than as a
+   card. Emphasis comes from the leading icon and the filled Install button
+   instead, which is what M3 Expressive asks for anyway: shape, containment
+   and a clear action, not a saturated fill. */
 .install-banner {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: var(--md-sys-color-primary-container);
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--md-sys-color-surface);
   color: var(--md-sys-color-on-surface);
-  padding: 10px 12px;
-  border: 1px solid var(--md-sys-color-surface-container-highest);
-  border-radius: 10px;
+  padding: 12px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
   box-shadow: var(--md-sys-elevation-level2);
   font-size: var(--md-sys-typescale-body-medium-size);
 }
-.install-banner strong {
-  color: var(--md-sys-color-primary);
-}
-.install-banner-actions {
+/* Three columns, and only the middle one is elastic: the icon marks what this
+   is, the message and its button stack under each other, and dismiss stays in
+   the top-right corner where it is in every other card. The banner used to be
+   `flex-wrap` with everything on one level, which let the button and the ✕
+   drop onto a second line and sit ragged under the message with the whole
+   right half of the card empty — the "gap". */
+.install-banner-icon {
   display: flex;
-  align-items: center;
-  gap: 8px;
   flex: none;
+  margin-top: 1px;
+  color: var(--md-sys-color-on-surface-variant);
 }
-.install-banner > div:first-child {
+.install-banner-body {
+  display: flex;
+  flex: 1 1 auto;
   min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.install-banner-message {
+  margin: 0;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.install-banner-guidance {
-  max-width: 265px;
-  color: var(--md-sys-color-on-surface-variant);
-  font-size: var(--md-sys-typescale-body-small-size);
+.install-banner .app-banner-dismiss {
+  flex: none;
 }
 
 /* ---- tool dock — independent of the side panels, never stacked under one
@@ -3552,33 +3574,97 @@ button.chip-removable-label:hover {
   color: var(--md-sys-color-on-surface);
 }
 
-/* ---- action-cluster visibility is the CONTAINER's layout decision ----
-   One TopBarActions markup everywhere: the desktop card (.actions-full)
-   shows everything and hides the ⋯ overflow; mobile's vertical column
-   (.actions-collapsed) keeps only the primary actions + ⋯. The mobile
-   top-left card hides the brand's non-title pieces the same way. */
-/* pointer-events opts in per BUTTON, not for the card's own box — .actions-
-   full wraps onto multiple rows once it runs out of width (see Workbench's
-   top row), and a flex-wrap row's own padding/gaps don't line up with any
-   button once that happens, so a blanket pointer-events:auto on the card
-   turned that dead space into a silent click/drag trap over the map
-   underneath — confirmed live at 768px, where the card is a tall narrow
-   column with real gaps between its rows. The card itself now falls through
-   like the rest of the empty overlay; only its actual children opt back in. */
-.actions-full {
-  pointer-events: none;
+/* ---- every card in the top chrome ----
+   One surface treatment, defined once. Workbench floats several cards over
+   the map — the workspace card, the canvas-state card, the action cluster,
+   and mobile's two — and they are the same object at different widths, so
+   they get their border, radius, fill and elevation from here rather than
+   from a Tailwind chain repeated at each call site. */
+.top-chrome-card {
+  border: 1px solid var(--md-sys-color-surface-container-highest);
+  border-radius: 12px;
+  background: var(--md-sys-color-surface);
+  box-shadow: var(--md-sys-elevation-level2);
 }
-.actions-full > * {
-  pointer-events: auto;
+
+/* A top app bar is a row of controls at a fixed height. The bar sets the
+   height and the controls fit it; the controls never resize the bar. So:
+   no wrapping, no shrinking, and anything that will not fit scrolls out of
+   the bar sideways instead of onto a second line. Every top app bar behaves
+   this way — the ones that need to drop content first say so themselves
+   (see `[data-fit]` below). */
+.top-app-bar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.top-app-bar::-webkit-scrollbar {
+  display: none;
+}
+.top-app-bar > * {
+  flex: none;
+}
+/* `safe` matters only in the overflow case, and it is the whole point of
+   these two rules: plain `center`/`flex-end` push a bar's content past BOTH
+   edges of the scroll box, so the first control lands out of view behind the
+   left edge with no way to reach it. `safe` drops back to start alignment the
+   moment the content overflows, which puts the scroll at the first control. */
+.top-app-bar-center {
+  justify-content: safe center;
+}
+.top-app-bar-end {
+  justify-content: safe flex-end;
+}
+/* A bar whose only control collapses itself in zen mode has to collapse with
+   it: .zen-collapse-cluster shrinks the control (see its comment), which was
+   enough when the view switch shared a card with the sim controls, but on its
+   own card it leaves an empty 48px pill standing where the switch was. The
+   card carries this class in addition to the control carrying its own —
+   .zen-collapse-cluster still has to be on the control itself for the mobile
+   layout, where there is no card around it. */
+.zen-collapse-bar {
+  max-width: 400px;
+  transition: max-width 220ms var(--motion-chrome-curve);
+}
+[data-zen] .zen-collapse-bar {
+  max-width: 0;
+  padding: 0;
+  border-width: 0;
+  overflow: hidden;
+}
+
+/* ---- which actions a bar shows is its CONTAINER's decision ----
+   One TopBarActions markup everywhere. `.actions-collapsed` (mobile's
+   vertical column) always keeps only the primary actions plus ⋯.
+   `.actions-full` (the desktop bar) keeps as much as its container's width
+   allows: Workbench measures every `[data-fit]` step below and renders the
+   widest one that fits (see useToolbarFit). The steps give up labels first,
+   then the help actions, then everything marked secondary. */
 .actions-full .act-overflow {
   display: none;
 }
-.actions-collapsed .act-secondary {
+.actions-collapsed .primary-btn .btn-label,
+.actions-full[data-fit='labels'] .btn-label,
+.actions-full[data-fit='tertiary'] .btn-label,
+.actions-full[data-fit='overflow'] .btn-label {
   display: none;
 }
-.actions-collapsed .primary-btn .btn-label {
+.actions-full[data-fit='tertiary'] .act-tertiary,
+.actions-full[data-fit='overflow'] .act-tertiary {
   display: none;
+}
+.actions-collapsed .act-secondary,
+.actions-full[data-fit='overflow'] .act-secondary {
+  display: none;
+}
+.actions-collapsed .act-overflow,
+.actions-full[data-fit='overflow'] .act-overflow {
+  display: inline-flex;
 }
 /* FileMenu is icon-only in every state now (see FileMenu.tsx) — nothing
    left here to hide on a narrow screen. The Hide-UI toggle itself was

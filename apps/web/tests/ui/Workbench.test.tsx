@@ -88,7 +88,10 @@ describe('Workbench responsive mounting', () => {
     expect(occurrences(markup, 'data-slot="desktop-sim"')).toBe(1);
     expect(occurrences(markup, 'data-slot="mobile-sim"')).toBe(0);
     expect(occurrences(markup, 'data-slot="install"')).toBe(1);
-    expect(markup).toContain('grid-column:2 / 3;grid-row:2');
+    // Its own grid row below the top chrome, aligned to the same right edge
+    // and width as the Inspector rather than floating over the canvas.
+    expect(markup).toContain('grid-column:1 / -1;grid-row:2;width:var(--panel-w)');
+    expect(markup).toContain('justify-self-end');
     expect(markup.indexOf('data-slot="install"')).toBeGreaterThan(
       markup.indexOf('data-slot="desktop-sim"'),
     );
