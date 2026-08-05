@@ -9,7 +9,7 @@ import { withSingleTypeArms, wayTypeIndex } from '../../src/model/junctions';
 import { parseSystem } from '../../src/model/serialize';
 import { findMismatchedTypeJunctions, validateSystem } from '../../src/model/validate';
 import type { Node } from '../../src/model/system';
-import { aRoad, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
 
 /** A road running east-west and a rail line running north-south, both with a
  *  control point at the same coordinate. */
@@ -143,5 +143,29 @@ describe('a stop anchored to a way that is not in the document', () => {
     const loaded = parseSystem(JSON.parse(JSON.stringify(saved)));
     expect(loaded.stations[0].anchors).toEqual([]);
     expect(validateSystem(loaded)).toEqual([]);
+  });
+});
+
+// The repair runs on every load, so the case that matters most is the one
+// where there is nothing to repair.
+describe('a document that says nothing the model disallows', () => {
+  it('comes back from a load unchanged', () => {
+    const ways = crossingPair();
+    const saved = aSystem({
+      ways,
+      nodes: [{ ...mixedJunction, refs: mixedJunction.refs.slice(0, 2) }],
+      stations: [aStation('st', [-115.18, 36.1], { wayId: 'road-west', t: 0.5 })],
+      services: [aService('line', [aPattern('p', ways, ['road-west', 'road-east'])])],
+      namedWays: [{ id: 'name', name: 'Russell Road', wayIds: ['road-west', 'road-east'] }],
+    });
+    const loaded = parseSystem(JSON.parse(JSON.stringify(saved)));
+    // Record for record, not field for field: parse normalizes coordinates
+    // and fills optional keys, which is its own business and predates this.
+    // What the repair must never do is DROP any of it.
+    expect(loaded.ways.map((w) => w.id)).toEqual(saved.ways.map((w) => w.id));
+    expect(loaded.nodes.map((n) => n.refs)).toEqual(saved.nodes.map((n) => n.refs));
+    expect(loaded.stations.map((st) => st.anchors)).toEqual(saved.stations.map((st) => st.anchors));
+    expect(loaded.services[0].patterns[0].sections).toEqual(saved.services[0].patterns[0].sections);
+    expect(loaded.namedWays).toEqual(saved.namedWays);
   });
 });
