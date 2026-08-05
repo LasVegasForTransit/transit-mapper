@@ -113,7 +113,9 @@ export function TopBarBrand() {
  * marks also appears in the ⋯ menu at the bottom — that menu is where those
  * actions live once the container runs out of room. `.act-tertiary` is help,
  * reached far more often from the keyboard or from a menu than from here;
- * `.act-secondary` is everything else that can go.
+ * `.act-secondary` is everything else that can go. The help buttons carry
+ * BOTH, and need to: `.act-tertiary` is what the desktop bar drops one step
+ * early, and `.act-secondary` is the only one mobile's single rule reads.
  *
  * Three buttons carry neither class and are always present: the issues badge,
  * a warning light that only renders when something is actually wrong; layers;

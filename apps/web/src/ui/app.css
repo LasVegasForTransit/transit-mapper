@@ -556,10 +556,11 @@ input[type='range'] {
   line-height: 1.45;
 }
 
-/* Workbench places this as a real grid row below desktop top chrome, or as a
-   flex sibling below mobile chrome. It therefore has no viewport offset of
-   its own and cannot cover a toolbar that grows or wraps. */
-/* Material 3 has no banner component — M2's was dropped and nothing replaced
+/* Desktop only — install.ts gates eligibility on a desktop browser, and
+   Workbench renders this in no other layout. It sits in a real grid row of
+   its own below the top chrome, with no viewport offset it could use to
+   cover the bar above it or the Inspector below it.
+   Material 3 has no banner component — M2's was dropped and nothing replaced
    it, so the nearest sanctioned pattern for persistent inline messaging is a
    card, and this is styled as one: the same surface, border and elevation as
    every other card floating over the map, so it reads as a peer of the

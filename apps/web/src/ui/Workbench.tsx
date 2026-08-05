@@ -117,6 +117,13 @@ function useToolbarFit(
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(box);
+    // The bar too, not just its container. What the bar wants changes without
+    // the row moving at all: the issues badge mounts when validation starts
+    // failing, and forking a read-only system swaps two buttons for six.
+    // Neither resizes the container — it is `flex-1` from a zero basis — so
+    // watching only the container leaves the step stale, and the bar quietly
+    // scrolls its own content out of view instead of stepping down.
+    observer.observe(el);
     return () => observer.disconnect();
   }, [container, bar, mobile]);
 

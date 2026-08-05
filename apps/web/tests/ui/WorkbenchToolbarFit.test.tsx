@@ -20,6 +20,16 @@ const STEP_WIDTH: Record<string, number> = {
 let container: HTMLDivElement;
 let root: Root | undefined;
 let slotWidth: number;
+/** Stands in for the bar's content changing under a container that has not
+ *  moved — a mounting issues badge, or forking a read-only system. */
+let extraBarWidth: number;
+let observed: { target: Element; notify: () => void }[];
+
+/** Fires only the observers actually watching `target`, the way a real
+ *  ResizeObserver would when just that element changes size. */
+function reportResize(target: Element): void {
+  act(() => observed.filter((entry) => entry.target === target).forEach((entry) => entry.notify()));
+}
 
 function renderWorkbench(): void {
   const slot = (name: string) => <span>{name}</span>;
@@ -63,10 +73,18 @@ beforeEach(() => {
     globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
 
+  observed = [];
+  extraBarWidth = 0;
+  // Records what was observed, not just that something was. A real
+  // ResizeObserver only fires for the elements handed to observe(), and the
+  // point of one of the cases below is which element that is.
   vi.stubGlobal(
     'ResizeObserver',
     class {
-      observe(): void {}
+      constructor(private readonly callback: () => void) {}
+      observe(target: Element): void {
+        observed.push({ target, notify: this.callback });
+      }
       disconnect(): void {}
     },
   );
@@ -95,7 +113,7 @@ beforeEach(() => {
     this: HTMLElement,
   ) {
     if (!this.classList.contains('actions-full')) return DOMRect.fromRect();
-    return DOMRect.fromRect({ width: STEP_WIDTH[this.dataset.fit ?? 'full'] });
+    return DOMRect.fromRect({ width: STEP_WIDTH[this.dataset.fit ?? 'full'] + extraBarWidth });
   });
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
     configurable: true,
@@ -142,5 +160,18 @@ describe('the desktop action bar sizes itself to its container', () => {
   it('reserves the smallest step on its container so the row cannot squeeze it away', () => {
     const slot = renderAt(40).parentElement;
     expect(slot?.style.minWidth).toBe(`${STEP_WIDTH.overflow}px`);
+  });
+
+  it('steps down when its own content grows and the container has not moved', () => {
+    const bar = renderAt(520);
+    expect(bar.dataset.fit).toBe('full');
+
+    // A mounting issues badge widens every step. The container is `flex-1`
+    // from a zero basis, so its width does not change and nothing reports a
+    // resize on it — only the bar itself changed size.
+    extraBarWidth = 60;
+    reportResize(bar);
+
+    expect(bar.dataset.fit).toBe('labels');
   });
 });
