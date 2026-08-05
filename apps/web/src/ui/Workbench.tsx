@@ -50,7 +50,9 @@ function useMobileLayout(): boolean {
  *  app.css owns what each one drops, keyed off `[data-fit]`. */
 type ToolbarFit = 'full' | 'labels' | 'tertiary' | 'overflow';
 
-const TOOLBAR_FITS: ToolbarFit[] = ['full', 'labels', 'tertiary', 'overflow'];
+/** Widest first. `full` gives up nothing, so it is the only one app.css has no
+ *  rule for; tests/ui/toolbar-fit-steps.test.ts holds the two sides together. */
+export const TOOLBAR_FITS: ToolbarFit[] = ['full', 'labels', 'tertiary', 'overflow'];
 
 /** Measures a `.top-app-bar`'s natural width. A bar never compresses its
  *  contents and scrolls when it is short, so neither its rendered width nor
@@ -93,28 +95,49 @@ function useToolbarFit(
     const el = bar.current;
     if (mobile || !box || !el) return;
 
+    // Pricing a step means writing it, forcing layout, and reading the width
+    // back, so this runs on every resize frame of a window drag. Price the
+    // narrowest step (the floor below), then walk from the widest and stop at
+    // the first that fits: two measurements in the steady state, where the bar
+    // has room and nothing changes, rather than one per step every frame.
     const measure = () => {
       const rendered = el.dataset.fit;
-      const widths = TOOLBAR_FITS.map((candidate) => {
+      const priceOf = (candidate: ToolbarFit) => {
         el.dataset.fit = candidate;
         return naturalWidth(el);
-      });
-      if (rendered === undefined) delete el.dataset.fit;
-      else el.dataset.fit = rendered;
+      };
+      const narrowest = TOOLBAR_FITS[TOOLBAR_FITS.length - 1];
 
-      // The smallest step is the floor the row must respect. Without it the
+      // The narrowest step is the floor the row must respect. Without it the
       // container keeps taking its share of a shrinking row and the bar ends
       // up scrolling its own ⋯ button out of reach; with it, the
       // canvas-state bar beside it gives way instead.
-      const floor = `${Math.ceil(widths[widths.length - 1])}px`;
+      const floor = `${Math.ceil(priceOf(narrowest))}px`;
       if (box.style.minWidth !== floor) box.style.minWidth = floor;
 
+      // Read after the floor lands: applying it is what widens the container
+      // in the case the floor exists for.
       const available = box.clientWidth;
-      const index = widths.findIndex((width) => width <= available);
-      setFit(TOOLBAR_FITS[index === -1 ? TOOLBAR_FITS.length - 1 : index]);
+      let chosen = narrowest;
+      for (const candidate of TOOLBAR_FITS) {
+        if (priceOf(candidate) <= available) {
+          chosen = candidate;
+          break;
+        }
+      }
+
+      if (rendered === undefined) delete el.dataset.fit;
+      else el.dataset.fit = rendered;
+      setFit(chosen);
     };
 
     measure();
+    // Writing the floor from inside the callback can resize the very element
+    // being observed, which is the shape that produces "ResizeObserver loop
+    // completed with undelivered notifications". It settles in one extra
+    // notification and cannot run away: the floor only widens the container
+    // when the container was narrower than it, and the pass that follows finds
+    // the same floor, writes nothing, and picks the same step.
     const observer = new ResizeObserver(measure);
     observer.observe(box);
     // The bar too, not just its container. What the bar wants changes without
@@ -346,7 +369,7 @@ export function Workbench({
             style={{ gridColumn: '1 / -1', gridRow: '1' }}
           >
             <div className="flex-1" style={{ minWidth: 'var(--panel-w)' }} aria-hidden="true" />
-            <div className="top-app-bar top-app-bar-center top-chrome-card pointer-events-auto min-w-0">
+            <div className="top-app-bar top-app-bar-center top-chrome-card zen-collapse-bar pointer-events-auto min-w-0">
               {viewSwitcher}
             </div>
             <div className="top-app-bar top-app-bar-center top-chrome-card pointer-events-auto min-w-0">

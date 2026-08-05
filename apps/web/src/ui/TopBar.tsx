@@ -27,13 +27,16 @@ const MOD_LABEL = IS_MAC ? '⌘' : 'Ctrl';
  *  viewSwitcher prop. Mobile: folded into TopBarActions instead (see that
  *  component) — no room for a third floating group at that width.
  *
- *  Unlike sim controls (its constant companion in the same top-center
- *  card), this DOES collapse in zen mode — self-managed here via
+ *  Unlike sim controls (its neighbour in the top-center of the desktop
+ *  row), this DOES collapse in zen mode — self-managed here via
  *  `.zen-collapse-cluster` + `inert` rather than threaded through
  *  Workbench, since it owns its own root element. That class shrinks its
- *  own max-width to 0 (not just a fade/lift like `.zen-cluster`) so sim
- *  controls slides into the freed width through ordinary flex reflow —
- *  no repositioning code needed for that motion. */
+ *  own max-width to 0 rather than fading and lifting like `.zen-cluster`,
+ *  so the simulation bar slides into the freed width through ordinary flex
+ *  reflow with no repositioning code. On desktop the card around this one
+ *  has to collapse too, which is `.zen-collapse-bar`, applied by Workbench
+ *  — there is no such card on mobile, which is why this class stays here
+ *  on the control rather than moving up to the card. */
 export function ViewSwitch() {
   const { viewMode, setViewMode } = useView();
   const { uiHidden } = useUi();

@@ -3581,16 +3581,17 @@ button.chip-removable-label:hover {
   justify-content: safe flex-end;
 }
 /* A bar whose only control collapses itself in zen mode has to collapse with
-   it. .zen-collapse-cluster shrinks the control's own max-width and padding
-   (see its comment), which used to be enough when it shared a card with the
-   sim controls; on its own card it would leave an empty 48px pill standing
-   where the view switch was. Keyed off `:has` rather than a second class on
-   the card, so the card follows whatever the control does. */
-.top-app-bar:has(> .zen-collapse-cluster) {
+   it: .zen-collapse-cluster shrinks the control (see its comment), which was
+   enough when the view switch shared a card with the sim controls, but on its
+   own card it leaves an empty 48px pill standing where the switch was. The
+   card carries this class in addition to the control carrying its own —
+   .zen-collapse-cluster still has to be on the control itself for the mobile
+   layout, where there is no card around it. */
+.zen-collapse-bar {
   max-width: 400px;
   transition: max-width 220ms var(--motion-chrome-curve);
 }
-[data-zen] .top-app-bar:has(> .zen-collapse-cluster) {
+[data-zen] .zen-collapse-bar {
   max-width: 0;
   padding: 0;
   border-width: 0;
