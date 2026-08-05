@@ -1,4 +1,5 @@
 import { useEditor } from '../editor/EditorProvider';
+import type { SelectVariant } from '../editor/store';
 import {
   FACILITY_TYPE_ORDER,
   FACILITY_TYPES,
@@ -49,6 +50,8 @@ const lastTypeByFamily: Partial<Record<WayFamily, string>> = {};
 export function Toolbar() {
   const tool = useEditor((s) => s.tool);
   const setTool = useEditor((s) => s.setTool);
+  const selectVariant = useEditor((s) => s.selectVariant);
+  const setSelectVariant = useEditor((s) => s.setSelectVariant);
   const readOnly = useEditor((s) => s.readOnly);
   const draftWayTypeId = useEditor((s) => s.draftWayTypeId);
   const setDraftWayType = useEditor((s) => s.setDraftWayType);
@@ -84,13 +87,30 @@ export function Toolbar() {
       <div className="tool-row">
         {/* Cluster 1: selection — neither a path nor a place. */}
         <div className="tool-cluster" role="toolbar" aria-label="Select">
+          {/* The dock button wears the variant, so it promises what the next
+              press does: "Erase" erases, the way "Road" draws a road. Alt and
+              Ctrl still reach the same two operations for a mouse; this is how
+              a finger reaches them, since neither key can be held. */}
           <ToolButton
-            icon="cursor"
-            label="Select"
+            icon={SELECT_VARIANTS[selectVariant].icon}
+            label={SELECT_VARIANTS[selectVariant].label}
             hotkey="V"
             active={tool === 'select'}
             disabled={false}
             onClick={() => setTool('select')}
+            menu={[
+              {
+                entries: SELECT_VARIANT_ORDER.map((id) => ({
+                  id,
+                  label: SELECT_VARIANTS[id].label,
+                  checked: selectVariant === id,
+                  onSelect: () => {
+                    setSelectVariant(id);
+                    setTool('select');
+                  },
+                })),
+              },
+            ]}
           />
           {/* Network view only: a marquee here catches LINES, where the Select
               tool's catches the streets under them. Both gestures are useful
@@ -290,6 +310,23 @@ export function Toolbar() {
     </div>
   );
 }
+
+/**
+ * What each Select variant is called and what it looks like on the dock.
+ *
+ * Labels are what the next press DOES, not what the control is: the button
+ * reads "Erase" while erasing, the same way the paths cluster reads "Road"
+ * while drawing one. An earlier version of this shipped as three checkboxes
+ * under a heading reading MODIFIERS, which named the mechanism rather than
+ * the operation and implied a press could erase and split at once.
+ */
+const SELECT_VARIANTS: Record<SelectVariant, { label: string; icon: IconName }> = {
+  select: { label: 'Select', icon: 'cursor' },
+  erase: { label: 'Erase', icon: 'trash' },
+  split: { label: 'Split', icon: 'line' },
+};
+
+const SELECT_VARIANT_ORDER: SelectVariant[] = ['select', 'erase', 'split'];
 
 interface ToolMenuEntry {
   id: string;

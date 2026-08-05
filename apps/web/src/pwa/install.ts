@@ -1,3 +1,5 @@
+import { compactLayoutSnapshot, hoverCapableSnapshot } from '../device/capabilities';
+
 export type InstallBrowser = 'chromium' | 'safari' | 'firefox' | 'other';
 
 export interface InstallPromptEvent {
@@ -111,11 +113,12 @@ function browserFromUserAgent(userAgent: string): InstallBrowser {
 export function createBrowserInstallEnvironment(): InstallEnvironment {
   return {
     now: () => Date.now(),
-    isDesktop: () => {
-      const narrow = window.matchMedia?.('(max-width: 767px)').matches === true;
-      const mobileAgent = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
-      return !narrow && !mobileAgent;
-    },
+    // "Desktop" here means a device where installing to a desktop is a
+    // meaningful offer: room for the docked layout, and a pointer that can
+    // hover. Asked as two media queries rather than a user-agent test — the
+    // regex this replaced (`/android|iphone|ipad|ipod|mobile/`) called an iPad
+    // a phone and a Mac an iPad, because iPadOS reports itself as a Mac.
+    isDesktop: () => !compactLayoutSnapshot() && hoverCapableSnapshot(),
     isStandalone: () =>
       window.matchMedia?.('(display-mode: standalone)').matches === true ||
       (navigator as Navigator & { standalone?: boolean }).standalone === true,

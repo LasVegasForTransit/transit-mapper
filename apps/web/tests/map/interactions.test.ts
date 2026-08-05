@@ -22,6 +22,11 @@ import {
   SRC_ENDPOINT_HINT,
 } from '../../src/map/layers';
 import { attachInteractions, type AttachInteractionsOptions } from '../../src/map/interactions';
+import {
+  COARSE_POINTER_TUNING,
+  FINE_POINTER_TUNING,
+  type InputTuning,
+} from '../../src/editor/input-tuning';
 import type { PointerIntent } from '../../src/editor/pointerIntent';
 import type { EditGestureTargets } from '../../src/map/gestureProjection';
 
@@ -324,6 +329,46 @@ function mouseEvent(
   };
 }
 
+/**
+ * A MapTouchEvent as MapLibre delivers one: `point` is the centroid of the
+ * active touches and `points` is every one of them, which is how the adapter
+ * tells a one-finger gesture from a pinch.
+ */
+function touchEvent(map: ReturnType<typeof createMap>, points: Point[], timeStamp?: number) {
+  const centroid =
+    points.length > 0
+      ? {
+          x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+          y: points.reduce((sum, p) => sum + p.y, 0) / points.length,
+        }
+      : { x: 0, y: 0 };
+  return {
+    point: centroid,
+    points,
+    lngLat: map.unproject(centroid),
+    lngLats: points.map((p) => map.unproject(p)),
+    // The adapter reads timeStamp, not the clock: dispatching a tap blocks the
+    // main thread long enough to swallow the double-tap window otherwise.
+    originalEvent: { preventDefault() {}, timeStamp },
+    preventDefault() {},
+  };
+}
+
+/**
+ * A tap, as a browser actually delivers one: the touch pair, then the
+ * compatibility mouse events every browser emits afterwards for a motionless
+ * touch. The adapter deliberately does NOT synthesize these — doing so made
+ * every tap land twice — so a test that fires only touchstart/touchend is
+ * modelling a browser that does not exist.
+ */
+function tap(map: ReturnType<typeof createMap>, point: Point, at?: number) {
+  map.fire('touchstart', touchEvent(map, [point], at));
+  map.fire('touchend', touchEvent(map, [], at));
+  map.fire('mousedown', mouseEvent(map, point));
+  map.fire('mouseup', mouseEvent(map, point));
+  map.fire('click', mouseEvent(map, point));
+}
+
 interface GestureLifecycleProbe {
   onStart: (targets: EditGestureTargets) => void;
   onEnd: () => void;
@@ -346,20 +391,42 @@ interface ContextMenuProbe {
   close?: () => void;
 }
 
+interface AttachOptions {
+  gesture?: GestureLifecycleProbe;
+  directManipulation?: DirectManipulationLifecycleProbe;
+  onPointerIntent?: (intent: PointerIntent | null) => void;
+  /** Defaults to the Network view, which most cases exercise. */
+  networkMode?: boolean;
+  isContextMenuOpen?: () => boolean;
+  contextMenu?: ContextMenuProbe;
+  onPointerRefresh?: (refresh: () => void) => void;
+  openTerminusConnectionChoice?: NonNullable<
+    AttachInteractionsOptions['openTerminusConnectionChoice']
+  >;
+  /** Defaults to the fine profile, matching a mouse. */
+  tuning?: InputTuning;
+}
+
+/**
+ * Named rather than positional. This took eleven positional parameters once,
+ * and its call sites were long runs of `undefined` counted by hand.
+ */
 function attach(
   map: ReturnType<typeof createMap>,
   store: ReturnType<typeof createEditorStore>,
-  gesture?: GestureLifecycleProbe,
-  directManipulation?: DirectManipulationLifecycleProbe,
-  onPointerIntent?: (intent: PointerIntent | null) => void,
-  networkMode = true,
-  isContextMenuOpen?: () => boolean,
-  contextMenu?: ContextMenuProbe,
-  onPointerRefresh?: (refresh: () => void) => void,
-  openTerminusConnectionChoice?: NonNullable<
-    AttachInteractionsOptions['openTerminusConnectionChoice']
-  >,
+  options: AttachOptions = {},
 ) {
+  const {
+    gesture,
+    directManipulation,
+    onPointerIntent,
+    networkMode = true,
+    isContextMenuOpen,
+    contextMenu,
+    onPointerRefresh,
+    openTerminusConnectionChoice,
+    tuning = FINE_POINTER_TUNING,
+  } = options;
   return attachInteractions(map as unknown as MLMap, store, {
     openShortcuts() {},
     toggleUi() {},
@@ -383,6 +450,7 @@ function attach(
         }
       : undefined,
     openTerminusConnectionChoice,
+    tuning,
   });
 }
 
@@ -450,7 +518,9 @@ describe('pointer work coalescing', () => {
         [-115.2, 36.1],
       ]),
     ]);
-    const detach = attach(map, store, undefined, undefined, undefined, false);
+    const detach = attach(map, store, {
+      networkMode: false,
+    });
     const event = mouseEvent(map, { x: 700, y: 1000 }, { shiftKey: true });
     map.resetProjectedCoordinateCount();
 
@@ -502,7 +572,9 @@ describe('pointer work coalescing', () => {
     store.getState().setActivePattern('branch');
     const map = createMap(terminusFeature('branch', 'end', [-115.23, 36.1]));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousedown', mouseEvent(map, map.project([-115.23, 36.1])));
     map.setFeatures(wayFeature('extension'));
@@ -613,7 +685,9 @@ describe('pointer work coalescing', () => {
     });
     const map = createMap(terminusFeature('branch', 'end', [-115.21, 36.1]));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, map.project([-115.21, 36.1])));
     scheduler.pump();
@@ -699,7 +773,9 @@ describe('pointer work coalescing', () => {
     store.getState().select({ kind: 'service', id: 'service' });
     const map = createMap(terminusFeature('branch', 'end', c));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousedown', mouseEvent(map, map.project(c)));
     map.setFeatures(serviceOccurrenceFeature('service', 'branch', 'a-b', 0, [a, b]));
@@ -845,20 +921,11 @@ describe('pointer work coalescing', () => {
     let chooser:
       | Parameters<NonNullable<AttachInteractionsOptions['openTerminusConnectionChoice']>>[0]
       | undefined;
-    const detach = attach(
-      map,
-      store,
-      undefined,
-      undefined,
-      undefined,
-      true,
-      undefined,
-      undefined,
-      undefined,
-      (next) => {
+    const detach = attach(map, store, {
+      openTerminusConnectionChoice: (next) => {
         chooser = next;
       },
-    );
+    });
 
     map.fire('mousedown', mouseEvent(map, map.project([-115.23, 36.1])));
     map.setFeatures(targetTerminus);
@@ -924,7 +991,9 @@ describe('pointer work coalescing', () => {
     };
     const map = createMap(sourceTerminus);
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousedown', mouseEvent(map, map.project([-115.23, 36.1])));
     map.setFeatures(targetTerminus);
@@ -949,7 +1018,9 @@ describe('pointer work coalescing', () => {
     system.ways = [erasableWay()];
     store.getState().setSystem(system);
     const map = createMap(handleFeature(2));
-    const detach = attach(map, store, undefined, undefined, undefined, false);
+    const detach = attach(map, store, {
+      networkMode: false,
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }, { ctrlKey: true }));
 
@@ -964,7 +1035,9 @@ describe('pointer work coalescing', () => {
     system.ways = [erasableWay()];
     store.getState().setSystem(system);
     const map = createMap(handleFeature(1));
-    const detach = attach(map, store, undefined, undefined, undefined, false);
+    const detach = attach(map, store, {
+      networkMode: false,
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }, { shiftKey: true }));
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 120 }, { shiftKey: true }));
@@ -984,7 +1057,10 @@ describe('pointer work coalescing', () => {
     store.getState().setSystem(system);
     const map = createMap(handleFeature(1));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent), false);
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+      networkMode: false,
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.fireKey('keydown', { key: 'Shift', shiftKey: true });
@@ -1010,7 +1086,9 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('way');
     const map = createMap([serviceFeature('erasable'), wayFeature('erasable')]);
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 700, y: 1000 }));
     scheduler.pump();
@@ -1033,7 +1111,9 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('way');
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
     const endpoint = map.project([-115.2, 36.1]);
 
     map.fire('mousemove', mouseEvent(map, endpoint));
@@ -1059,7 +1139,9 @@ describe('pointer work coalescing', () => {
     store.getState().startRouteDraft({ wayId: 'erasable', insertIndex: 1, coord: [-115.24, 36.1] });
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
     const endpoint = map.project([-115.2, 36.1]);
 
     map.fire('mousemove', mouseEvent(map, endpoint));
@@ -1085,7 +1167,9 @@ describe('pointer work coalescing', () => {
     store.getState().startRouteDraft({ wayId: 'erasable', insertIndex: 1, coord: [-115.24, 36.1] });
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
     const endpoint = map.project([-115.2, 36.1]);
 
     map.fire('mousemove', mouseEvent(map, endpoint, { altKey: true }));
@@ -1112,15 +1196,13 @@ describe('pointer work coalescing', () => {
     const stationId = store.getState().addStation([-115.2, 36.1]);
     const map = createMap(stationFeature(stationId));
     const lifecycle: string[] = [];
-    const detach = attach(
-      map,
-      store,
-      {
+    const detach = attach(map, store, {
+      gesture: {
         onStart: (targets) => lifecycle.push(`edit:${targets.stationIds?.[0]}`),
         onEnd() {},
       },
-      { onStart: () => lifecycle.push('direct'), onEnd() {} },
-    );
+      directManipulation: { onStart: () => lifecycle.push('direct'), onEnd() {} },
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 100 }));
@@ -1137,15 +1219,13 @@ describe('pointer work coalescing', () => {
     const stationId = store.getState().addStation([-115.2, 36.1]);
     const map = createMap(settlingStationFeature(stationId));
     const lifecycle: string[] = [];
-    const detach = attach(
-      map,
-      store,
-      {
+    const detach = attach(map, store, {
+      gesture: {
         onStart: (targets) => lifecycle.push(`edit:${targets.stationIds?.[0]}`),
         onEnd() {},
       },
-      { onStart: () => lifecycle.push('direct'), onEnd() {} },
-    );
+      directManipulation: { onStart: () => lifecycle.push('direct'), onEnd() {} },
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 100 }));
@@ -1162,15 +1242,13 @@ describe('pointer work coalescing', () => {
     const facilityId = store.getState().addFacility('entrance', [-115.2, 36.1]);
     const map = createMap(facilityFeature(facilityId));
     const lifecycle: string[] = [];
-    const detach = attach(
-      map,
-      store,
-      {
+    const detach = attach(map, store, {
+      gesture: {
         onStart: (targets) => lifecycle.push(`edit:${targets.facilityIds?.[0]}`),
         onEnd() {},
       },
-      { onStart: () => lifecycle.push('direct'), onEnd() {} },
-    );
+      directManipulation: { onStart: () => lifecycle.push('direct'), onEnd() {} },
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 100 }));
@@ -1187,7 +1265,9 @@ describe('pointer work coalescing', () => {
     const stationId = store.getState().addStation([-115.2, 36.1]);
     const map = createMap(stationFeature(stationId));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }, { altKey: true }));
     scheduler.pump();
@@ -1204,13 +1284,62 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
+  it('reaches the same erase through the Select variant with no key held', () => {
+    // The equivalence the channel rename exists for. A touchscreen cannot
+    // hold Alt, so the Select tool's Erase variant supplies the same channel;
+    // the published intent and the dispatch must both be identical to the
+    // Alt-click above, which fires the same events WITHOUT altKey.
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const stationId = store.getState().addStation([-115.2, 36.1]);
+    store.getState().setSelectVariant('erase');
+    const map = createMap(stationFeature(stationId));
+    const shown: Array<PointerIntent | null> = [];
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
+
+    map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
+    scheduler.pump();
+    expect(shown.at(-1)).toMatchObject({
+      primaryOperation: 'delete-station',
+      cursor: 'grab',
+      badge: 'erase',
+      anchor: 'target',
+    });
+
+    map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
+    expect(store.getState().system.stations).toHaveLength(0);
+    expect(map.panCalls).toEqual([]);
+    detach();
+  });
+
+  it('erases by finger with the Erase variant picked', () => {
+    // End to end: no keyboard, no mouse, and the tap still deletes.
+    vi.useFakeTimers();
+    installBrowserGlobals();
+    const store = createEditorStore();
+    const stationId = store.getState().addStation([-115.2, 36.1]);
+    store.getState().setSelectVariant('erase');
+    const map = createMap(stationFeature(stationId));
+    const detach = attach(map, store);
+
+    tap(map, { x: 100, y: 100 });
+
+    expect(store.getState().system.stations).toHaveLength(0);
+    detach();
+    vi.useRealTimers();
+  });
+
   it('publishes erase and deletes an Alt-clicked Network facility', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
     const facilityId = store.getState().addFacility('entrance', [-115.2, 36.1]);
     const map = createMap(facilityFeature(facilityId));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }, { altKey: true }));
     scheduler.pump();
@@ -1302,7 +1431,9 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('way');
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 700, y: 1000 }));
     scheduler.pump();
@@ -1323,7 +1454,9 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('way');
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 700, y: 1000 }, { altKey: true }));
     scheduler.pump();
@@ -1370,9 +1503,11 @@ describe('pointer work coalescing', () => {
     store.getState().setSystem(system);
     const map = createMap(wayFeature('erasable'));
     const lifecycle: string[] = [];
-    const detach = attach(map, store, undefined, {
-      onStart: () => lifecycle.push('start'),
-      onEnd: () => lifecycle.push('end'),
+    const detach = attach(map, store, {
+      directManipulation: {
+        onStart: () => lifecycle.push('start'),
+        onEnd: () => lifecycle.push('end'),
+      },
     });
 
     map.fire('mousedown', mouseEvent(map, { x: 700, y: 1000 }));
@@ -1535,9 +1670,11 @@ describe('pointer work coalescing', () => {
       wayFeature('erasable'),
     ]);
     const opened: unknown[] = [];
-    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
-      open: (_x, _y, anchor, serviceHit) => opened.push({ anchor, serviceHit }),
-      setAnchor() {},
+    const detach = attach(map, store, {
+      contextMenu: {
+        open: (_x, _y, anchor, serviceHit) => opened.push({ anchor, serviceHit }),
+        setAnchor() {},
+      },
     });
     const right = mouseEvent(map, map.project(at));
     right.originalEvent.button = 2;
@@ -1576,9 +1713,11 @@ describe('pointer work coalescing', () => {
       serviceFeature('erasable'),
     ]);
     const opened: Array<{ serviceHit?: ServiceActionHit }> = [];
-    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
-      open: (_x, _y, _anchor, serviceHit) => opened.push({ serviceHit }),
-      setAnchor() {},
+    const detach = attach(map, store, {
+      contextMenu: {
+        open: (_x, _y, _anchor, serviceHit) => opened.push({ serviceHit }),
+        setAnchor() {},
+      },
     });
     const right = mouseEvent(map, map.project(at));
     right.originalEvent.button = 2;
@@ -1610,19 +1749,13 @@ describe('pointer work coalescing', () => {
     const shown: Array<PointerIntent | null> = [];
     let menuOpen = false;
     let refresh: (() => void) | undefined;
-    const detach = attach(
-      map,
-      store,
-      undefined,
-      undefined,
-      (intent) => shown.push(intent),
-      true,
-      () => menuOpen,
-      undefined,
-      (registered) => {
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+      isContextMenuOpen: () => menuOpen,
+      onPointerRefresh: (registered) => {
         refresh = registered;
       },
-    );
+    });
     map.fire('mousemove', mouseEvent(map, map.project([-115.23, 36.1])));
     scheduler.pump();
     expect(shown.at(-1)).toMatchObject({ primaryOperation: 'select-line-and-branch' });
@@ -1653,9 +1786,11 @@ describe('pointer work coalescing', () => {
     store.getState().setSystem(system);
     const map = createMap(serviceFeature('erasable'));
     const opened: Array<{ anchor: [number, number]; serviceHit?: ServiceActionHit }> = [];
-    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
-      open: (_x, _y, anchor, serviceHit) => opened.push({ anchor, serviceHit }),
-      setAnchor() {},
+    const detach = attach(map, store, {
+      contextMenu: {
+        open: (_x, _y, anchor, serviceHit) => opened.push({ anchor, serviceHit }),
+        setAnchor() {},
+      },
     });
     const offCenter = map.project([-115.24, 36.1008]);
     const right = mouseEvent(map, offCenter);
@@ -1692,11 +1827,13 @@ describe('pointer work coalescing', () => {
     const map = createMap(wayFeature('erasable'));
     const opened: Array<{ anchor: [number, number]; corridorHit?: { wayId: string; t: number } }> =
       [];
-    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
-      open: (_x, _y, anchor, _serviceHit, corridorHit) => {
-        opened.push({ anchor, corridorHit });
+    const detach = attach(map, store, {
+      contextMenu: {
+        open: (_x, _y, anchor, _serviceHit, corridorHit) => {
+          opened.push({ anchor, corridorHit });
+        },
+        setAnchor() {},
       },
-      setAnchor() {},
     });
     const right = mouseEvent(map, map.project([-115.24, 36.1008]));
     right.originalEvent.button = 2;
@@ -1742,10 +1879,12 @@ describe('pointer work coalescing', () => {
     const anchors: Array<[number, number] | null> = [];
     const opened: unknown[] = [];
     const closed: string[] = [];
-    const detach = attach(map, store, undefined, undefined, undefined, true, undefined, {
-      open: (_x, _y, at, serviceHit) => opened.push({ at, serviceHit }),
-      setAnchor: (at) => anchors.push(at),
-      close: () => closed.push('close'),
+    const detach = attach(map, store, {
+      contextMenu: {
+        open: (_x, _y, at, serviceHit) => opened.push({ at, serviceHit }),
+        setAnchor: (at) => anchors.push(at),
+        close: () => closed.push('close'),
+      },
     });
     const point = map.project([-115.23, 36.1]);
     const right = mouseEvent(map, point);
@@ -1774,7 +1913,10 @@ describe('pointer work coalescing', () => {
     store.getState().setSystem(system);
     const map = createMap(handleFeature(1));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent), false);
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+      networkMode: false,
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
@@ -1796,7 +1938,9 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('way');
     const map = createMap();
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent));
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
@@ -1816,7 +1960,9 @@ describe('pointer work coalescing', () => {
     system.ways = [erasableWay()];
     store.getState().setSystem(system);
     const map = createMap(handleFeature(1));
-    const detach = attach(map, store, undefined, undefined, undefined, false);
+    const detach = attach(map, store, {
+      networkMode: false,
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 100 }, { altKey: true, ctrlKey: true }));
@@ -1835,7 +1981,9 @@ describe('pointer work coalescing', () => {
     system.ways = [erasableWay()];
     store.getState().setSystem(system);
     const map = createMap(handleFeature(1));
-    const detach = attach(map, store, undefined, undefined, undefined, false);
+    const detach = attach(map, store, {
+      networkMode: false,
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
@@ -1854,15 +2002,11 @@ describe('pointer work coalescing', () => {
     const map = createMap(handleFeature(1));
     const shown: Array<PointerIntent | null> = [];
     let menuOpen = false;
-    const detach = attach(
-      map,
-      store,
-      undefined,
-      undefined,
-      (intent) => shown.push(intent),
-      false,
-      () => menuOpen,
-    );
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+      networkMode: false,
+      isContextMenuOpen: () => menuOpen,
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
@@ -1884,7 +2028,10 @@ describe('pointer work coalescing', () => {
     store.getState().setSystem(system);
     const map = createMap(handleFeature(1));
     const shown: Array<PointerIntent | null> = [];
-    const detach = attach(map, store, undefined, undefined, (intent) => shown.push(intent), false);
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+      networkMode: false,
+    });
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
@@ -1943,6 +2090,38 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
+  it('starts a freehand draw at the fine threshold but not the coarse one', () => {
+    // 6px: past the fine profile's 4px drag threshold, short of the coarse
+    // profile's 10px. A fingertip wobbles about this much just resting on the
+    // glass, so at the fine threshold a phone starts drawing a way whenever
+    // someone means to tap. Same events, same map, only the tolerance differs.
+    const move = 6;
+    expect(FINE_POINTER_TUNING.dragPx).toBeLessThan(move);
+    expect(COARSE_POINTER_TUNING.dragPx).toBeGreaterThan(move);
+
+    const waysAfterNudge = (tuning: InputTuning): number => {
+      const scheduler = installBrowserGlobals();
+      const store = createEditorStore();
+      store.getState().setSystem(createEmptySystem());
+      store.getState().setTool('way');
+      store.getState().setDraftGeometry('freeform');
+      const map = createMap();
+      const detach = attach(map, store, {
+        tuning,
+      });
+
+      map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
+      map.fire('mousemove', mouseEvent(map, { x: 100 + move, y: 100 }));
+      scheduler.pump();
+      const count = store.getState().system.ways.length;
+      detach();
+      return count;
+    };
+
+    expect(waysAfterNudge(FINE_POINTER_TUNING)).toBe(1);
+    expect(waysAfterNudge(COARSE_POINTER_TUNING)).toBe(0);
+  });
+
   it('erase hit-testing runs once per frame and includes the release position', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
@@ -1979,21 +2158,19 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('select');
     const map = createMap(handleFeature(1));
     const lifecycle: string[] = [];
-    const detach = attach(
-      map,
-      store,
-      {
+    const detach = attach(map, store, {
+      gesture: {
         onStart: (targets) =>
           lifecycle.push(
             `edit-start:${targets.wayPoints?.[0]?.wayId}:${targets.wayPoints?.[0]?.pointIndex}`,
           ),
         onEnd: () => lifecycle.push('edit-end'),
       },
-      {
+      directManipulation: {
         onStart: () => lifecycle.push('direct-start'),
         onEnd: () => lifecycle.push('direct-end'),
       },
-    );
+    });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 110 }));
@@ -2014,9 +2191,11 @@ describe('pointer work coalescing', () => {
     store.getState().setTool('select');
     const map = createMap();
     const lifecycle: string[] = [];
-    const detach = attach(map, store, undefined, {
-      onStart: () => lifecycle.push('start'),
-      onEnd: () => lifecycle.push('end'),
+    const detach = attach(map, store, {
+      directManipulation: {
+        onStart: () => lifecycle.push('start'),
+        onEnd: () => lifecycle.push('end'),
+      },
     });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
@@ -2029,5 +2208,304 @@ describe('pointer work coalescing', () => {
 
     expect(lifecycle).toEqual(['start', 'end']);
     detach();
+  });
+});
+
+describe('touch gestures', () => {
+  it('draws with one finger, using the tool rather than the camera', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    store.getState().setDraftGeometry('freeform');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    map.fire('touchstart', touchEvent(map, [{ x: 100, y: 100 }]));
+    map.fire('touchmove', touchEvent(map, [{ x: 160, y: 100 }]));
+    scheduler.pump();
+    map.fire('touchend', touchEvent(map, []));
+
+    expect(store.getState().system.ways).toHaveLength(1);
+    expect(map.panCalls).toEqual([]);
+    detach();
+  });
+
+  it('reads the double-tap gap from the event, not the clock', () => {
+    // Committing a tap runs a store mutation and a MapLibre repaint, and that
+    // work blocks the main thread. Measured against Date.now(), two taps 80ms
+    // apart came out 549ms apart and no double tap ever registered — lines
+    // could not be finished by finger at all. The browser stamps each touch
+    // with when it actually happened, which is the only interval a person
+    // controls. These taps carry timestamps 90ms apart while the clock, under
+    // fake timers, does not advance between them at all.
+    vi.useFakeTimers();
+    installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    tap(map, { x: 100, y: 100 }, 1000);
+    tap(map, { x: 200, y: 140 }, 2000);
+    expect(store.getState().activeWayId).not.toBeNull();
+
+    tap(map, { x: 260, y: 180 }, 3000);
+    tap(map, { x: 260, y: 180 }, 3090);
+
+    expect(store.getState().activeWayId).toBeNull();
+    expect(store.getState().system.ways[0].points).toHaveLength(3);
+    detach();
+    vi.useRealTimers();
+  });
+
+  it('keeps two deliberate taps apart even when they are quick', () => {
+    // The distance check, not the interval, is what prevents a fast pair of
+    // real points from being read as a finish.
+    vi.useFakeTimers();
+    installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    tap(map, { x: 100, y: 100 }, 1000);
+    tap(map, { x: 200, y: 140 }, 1050);
+    tap(map, { x: 300, y: 190 }, 1100);
+
+    expect(store.getState().activeWayId).not.toBeNull();
+    expect(store.getState().system.ways[0].points).toHaveLength(3);
+    detach();
+    vi.useRealTimers();
+  });
+
+  it('places one point per tap, not two', () => {
+    // The regression this exists for. A browser already emits compatibility
+    // mousedown/mouseup/click after a motionless touch, so an adapter that
+    // synthesizes them too runs every tap twice. Confirmed live on a phone
+    // profile before this was fixed: three taps produced four control points
+    // and a double tap produced eight and never finished the line.
+    vi.useFakeTimers();
+    installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    tap(map, { x: 100, y: 100 });
+    tap(map, { x: 200, y: 140 });
+    tap(map, { x: 260, y: 180 });
+
+    expect(store.getState().system.ways).toHaveLength(1);
+    expect(store.getState().system.ways[0].points).toHaveLength(3);
+    detach();
+    vi.useRealTimers();
+  });
+
+  it('ignores the compatibility tap that follows a long press', () => {
+    // A motionless touch still produces compatibility mouse events after the
+    // adapter has already driven the press. Without the guard, a long press
+    // opens the action menu and then starts a draw underneath it.
+    vi.useFakeTimers();
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    map.fire('touchstart', touchEvent(map, [{ x: 120, y: 140 }]));
+    vi.advanceTimersByTime(600);
+    scheduler.pump();
+    map.fire('touchend', touchEvent(map, []));
+    // The browser's compatibility tail, arriving after the gesture is over.
+    map.fire('mousedown', mouseEvent(map, { x: 120, y: 140 }));
+    map.fire('mouseup', mouseEvent(map, { x: 120, y: 140 }));
+    map.fire('click', mouseEvent(map, { x: 120, y: 140 }));
+
+    expect(store.getState().system.ways).toHaveLength(0);
+    detach();
+    vi.useRealTimers();
+  });
+
+  it('publishes the intent at touchstart, before the press commits', () => {
+    // A mouse answers "what will this press do" from an idle hover. A finger
+    // has no idle state, so the answer has to arrive inside the gesture,
+    // while the press is still undecided and can be lifted.
+    vi.useFakeTimers();
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    const stationId = store.getState().addStation([-115.2, 36.1]);
+    store.getState().setSelectVariant('erase');
+    const map = createMap(stationFeature(stationId));
+    const shown: Array<PointerIntent | null> = [];
+    const detach = attach(map, store, {
+      onPointerIntent: (intent) => shown.push(intent),
+    });
+
+    map.fire('touchstart', touchEvent(map, [{ x: 100, y: 100 }]));
+    scheduler.pump();
+
+    expect(shown.at(-1)).toMatchObject({ primaryOperation: 'delete-station', badge: 'erase' });
+    detach();
+    vi.useRealTimers();
+  });
+
+  it('pans with two fingers and draws nothing', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    store.getState().setDraftGeometry('freeform');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    map.fire(
+      'touchstart',
+      touchEvent(map, [
+        { x: 100, y: 100 },
+        { x: 200, y: 100 },
+      ]),
+    );
+    map.fire(
+      'touchmove',
+      touchEvent(map, [
+        { x: 140, y: 130 },
+        { x: 240, y: 130 },
+      ]),
+    );
+    scheduler.pump();
+    map.fire('touchend', touchEvent(map, []));
+
+    expect(map.panCalls.length).toBeGreaterThan(0);
+    expect(store.getState().system.ways).toHaveLength(0);
+    detach();
+  });
+
+  it('keeps a pinch a camera gesture when one finger lifts early', () => {
+    // The regression this guards: latching at touchstart. If the gesture were
+    // re-derived per event, lifting one finger mid-pinch would leave a single
+    // touch dragging across the map and start drawing on it.
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    store.getState().setDraftGeometry('freeform');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    map.fire(
+      'touchstart',
+      touchEvent(map, [
+        { x: 100, y: 100 },
+        { x: 200, y: 100 },
+      ]),
+    );
+    map.fire('touchmove', touchEvent(map, [{ x: 180, y: 160 }]));
+    scheduler.pump();
+    map.fire('touchend', touchEvent(map, []));
+
+    expect(store.getState().system.ways).toHaveLength(0);
+    detach();
+  });
+
+  it('holds a still finger below the drag threshold as a tap, not a draw', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    store.getState().setDraftGeometry('freeform');
+    const map = createMap();
+    const detach = attach(map, store, {
+      tuning: COARSE_POINTER_TUNING,
+    });
+
+    map.fire('touchstart', touchEvent(map, [{ x: 100, y: 100 }]));
+    // 6px of finger tremor, inside the coarse profile's 10px threshold.
+    map.fire('touchmove', touchEvent(map, [{ x: 106, y: 100 }]));
+    scheduler.pump();
+
+    expect(map.panCalls).toEqual([]);
+    detach();
+  });
+
+  it('finishes a live draw on a long press, as right-click does', () => {
+    // Long press is the whole right-button family in one gesture, so it
+    // inherits startPan's release path: finish the draw, branch a one-way, or
+    // open the action menu, whichever the state calls for.
+    vi.useFakeTimers();
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    tap(map, { x: 100, y: 100 });
+    tap(map, { x: 200, y: 140 });
+    expect(store.getState().activeWayId).not.toBeNull();
+
+    map.fire('touchstart', touchEvent(map, [{ x: 260, y: 180 }]));
+    vi.advanceTimersByTime(600);
+    scheduler.pump();
+    map.fire('touchend', touchEvent(map, []));
+
+    expect(store.getState().activeWayId).toBeNull();
+    expect(store.getState().system.ways).toHaveLength(1);
+    detach();
+    vi.useRealTimers();
+  });
+
+  it('finishes a line on a double tap', () => {
+    vi.useFakeTimers();
+    installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    tap(map, { x: 100, y: 100 });
+    tap(map, { x: 200, y: 140 });
+    expect(store.getState().activeWayId).not.toBeNull();
+
+    // Two taps in the same spot inside the double-tap window.
+    tap(map, { x: 260, y: 180 });
+    tap(map, { x: 260, y: 180 });
+
+    expect(store.getState().activeWayId).toBeNull();
+    expect(store.getState().system.ways).toHaveLength(1);
+    detach();
+    vi.useRealTimers();
+  });
+
+  it('cancels a long press once the finger moves past the drag threshold', () => {
+    vi.useFakeTimers();
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('select');
+    const map = createMap();
+    const opened: number[] = [];
+    const detach = attach(map, store, {
+      contextMenu: {
+        open: (x) => opened.push(x),
+        setAnchor() {},
+        close() {},
+      },
+    });
+
+    map.fire('touchstart', touchEvent(map, [{ x: 120, y: 140 }]));
+    map.fire('touchmove', touchEvent(map, [{ x: 200, y: 140 }]));
+    vi.advanceTimersByTime(600);
+    scheduler.pump();
+    map.fire('touchend', touchEvent(map, []));
+
+    expect(opened).toEqual([]);
+    detach();
+    vi.useRealTimers();
   });
 });

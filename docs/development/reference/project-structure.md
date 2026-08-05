@@ -139,8 +139,13 @@ updater for activation state.
 #### Editing
 
 `apps/web/src/editor` owns the Zustand store, undo history, editing actions,
-selection, keyboard routing, and gesture transactions. `apps/web/src/camera`
-holds the live map camera outside the saved system. Domain mutations pass
+selection, keyboard routing, and gesture transactions.
+`apps/web/src/editor/pointerIntent.ts` resolves a press into an operation from
+its target and modifier channels alone, without browser or map state, so
+presentation and dispatch reach the same decision.
+`apps/web/src/editor/input-tuning.ts` declares the hit, snap, and drag
+tolerances for each pointer precision. `apps/web/src/camera` holds the live map
+camera outside the saved system. Domain mutations pass
 through editor actions; map and UI modules do not modify records directly.
 
 #### Map rendering
@@ -154,6 +159,8 @@ store and core projectors.
 
 `apps/web/src/ui` owns React presentation, workbench layout, inspector
 controls, dialogs, onboarding, and accessibility semantics.
+`apps/web/src/ui/useKeyboardInset.ts` reports how much of the viewport an
+on-screen keyboard covers, which no layout-viewport measurement exposes.
 `apps/web/src/theme` maps the operating system color preference to application
 tokens. `apps/web/src/assets` holds source-distributed browser binaries beside
 their required licenses, while `apps/web/src/i18n` owns user-visible message
@@ -161,6 +168,16 @@ selection.
 `apps/web/src/services` exposes browser-local preferences to UI consumers.
 These modules may read the editor store and invoke actions but do not duplicate
 domain rules.
+
+#### Device
+
+`apps/web/src/device` reads what the browser reports about the machine it is
+running on. `media-query.ts` is the single `matchMedia` primitive; `capabilities.ts`
+exposes viewport width, pointer precision, and hover as independent answers, so
+layout and input tolerance each adapt on their own evidence. It depends on
+nothing else in the application, and the user interface, map, theme, and
+installation modules all read it. A difference that is only visual belongs in a
+CSS media query instead, beside the rules it coordinates with.
 
 #### Storage
 

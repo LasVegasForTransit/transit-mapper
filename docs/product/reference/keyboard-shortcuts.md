@@ -1,8 +1,10 @@
 # Keyboard shortcuts
 
 Press `?` in the editor for this list in a dialog. Everything the keyboard
-does is also reachable by mouse. Shortcuts don't fire while you're typing
-in a text field.
+does is also reachable by pointer, whether that pointer is a mouse or a
+finger; the touch equivalents are in
+[Editor interactions](editor-interactions.md#touch-equivalents). Shortcuts
+don't fire while you're typing in a text field.
 
 The single source of truth is `KEY_BINDINGS` in
 [`src/editor/keymap.ts`](../../../apps/web/src/editor/keymap.ts); this page mirrors it.

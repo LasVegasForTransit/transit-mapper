@@ -1,12 +1,12 @@
 import { useRef, type ReactNode } from 'react';
 import { useEditor } from '../editor/EditorProvider';
 import { useSelectionActions } from '../editor/useSelectionActions';
-import type { MultiSelectItem, Selection } from '../editor/store';
+import type { MultiSelectItem, Selection, Tool } from '../editor/store';
 import { Icon } from './Icon';
 import { NodeInspector } from './NodeInspector';
 import { Panel } from './Panel';
 import { useDelayedUnmount } from './useDelayedUnmount';
-import { useView } from './ViewProvider';
+import { useView, type ViewMode } from './ViewProvider';
 import { ToolDraftInspector } from './inspector/drafts';
 import { ServiceInspector } from './inspector/ServiceInspector';
 import { WayInspector } from './inspector/WayInspector';
@@ -42,21 +42,77 @@ function renderInspectorContent(
 // otherwise. Slides back out the same way once BOTH clear: stays mounted
 // (showing the last real content) for the CSS exit transition's duration
 // instead of vanishing the instant either one clears — see useDelayedUnmount.
+/**
+ * What the one dynamic surface should be showing.
+ *
+ * This is the single answer to a question three call sites used to compute
+ * separately — Inspector's own open state, App's `hasSupplementalContent`, and
+ * App's sheet auto-expand — from the same four store fields. Three formulas
+ * over the same inputs is how the mobile sheet ended up opening over an empty
+ * panel; there is one now.
+ */
+export type SupplementalContent =
+  { kind: 'none' } | { kind: 'selection' } | { kind: 'tool-draft'; tool: Tool };
+
+export interface SupplementalInput {
+  tool: Tool;
+  readOnly: boolean;
+  viewMode: ViewMode;
+  hasSelection: boolean;
+}
+
+/**
+ * The decision itself, as a plain function of four facts.
+ *
+ * Pure so the rules below can be verified without a renderer, the same shape
+ * editor/pointerIntent.ts uses for the pointer vocabulary.
+ */
+export function supplementalContentFor({
+  tool,
+  readOnly,
+  viewMode,
+  hasSelection,
+}: SupplementalInput): SupplementalContent {
+  // Diagram and read-only both disable the drawing tools outright (see
+  // Toolbar's `locked`), so an armed tool from before switching there must not
+  // still claim this slot. A selection can still be inspected.
+  if (readOnly || viewMode === 'diagram') {
+    return hasSelection ? { kind: 'selection' } : { kind: 'none' };
+  }
+  // An armed drawing tool is what you are doing right now, and outranks
+  // whatever was selected before you picked it up. Select has no options of
+  // its own — erasing and splitting are variants on its dock button — so it
+  // shows a selection or nothing.
+  if (tool !== 'select') return { kind: 'tool-draft', tool };
+  return hasSelection ? { kind: 'selection' } : { kind: 'none' };
+}
+
+export function useSupplementalContent(): SupplementalContent {
+  const tool = useEditor((s) => s.tool);
+  const readOnly = useEditor((s) => s.readOnly);
+  const selection = useEditor((s) => s.selection);
+  const multiSelection = useEditor((s) => s.multiSelection);
+  const { viewMode } = useView();
+  return supplementalContentFor({
+    tool,
+    readOnly,
+    viewMode,
+    hasSelection: selection !== null || multiSelection.length > 0,
+  });
+}
+
 export function Inspector() {
   const selection = useEditor((s) => s.selection);
   const multiSelection = useEditor((s) => s.multiSelection);
-  const tool = useEditor((s) => s.tool);
-  const readOnly = useEditor((s) => s.readOnly);
-  const { viewMode } = useView();
-  const showingToolDraft = tool !== 'select' && !readOnly && viewMode !== 'diagram';
-  const isOpen = showingToolDraft || multiSelection.length > 0 || selection !== null;
-  const { mounted, closing } = useDelayedUnmount(isOpen, 160);
+  const content = useSupplementalContent();
+  const { mounted, closing } = useDelayedUnmount(content.kind !== 'none', 160);
 
-  const current = showingToolDraft ? (
-    <ToolDraftInspector tool={tool} />
-  ) : (
-    renderInspectorContent(selection, multiSelection)
-  );
+  const current =
+    content.kind === 'tool-draft' ? (
+      <ToolDraftInspector tool={content.tool} />
+    ) : (
+      renderInspectorContent(selection, multiSelection)
+    );
   const lastContent = useRef<ReactNode>(current);
   if (current !== null) lastContent.current = current;
 

@@ -26,14 +26,13 @@ import { resolveLibraryBootstrap } from './storage/bootstrapLibrary';
 import { Icon } from './ui/Icon';
 import { ImportProgressPill } from './ui/ImportProgressPill';
 import { MapContextMenu } from './ui/MapContextMenu';
-import { Inspector } from './ui/Inspector';
+import { Inspector, useSupplementalContent } from './ui/Inspector';
 import { SidebarPanel } from './ui/SidebarPanel';
 import { SimControls, SimControlsCompact } from './ui/SimControls';
 import { Toolbar } from './ui/Toolbar';
 import { TopBarActions, TopBarBrand, ViewSwitch } from './ui/TopBar';
 import { useSaveStatus } from './ui/SaveStatusProvider';
 import { useUi } from './ui/UiProvider';
-import { useView } from './ui/ViewProvider';
 import { Workbench } from './ui/Workbench';
 import { InstallBanner } from './ui/InstallBanner';
 import { useInstall } from './pwa/InstallProvider';
@@ -271,12 +270,8 @@ export function App() {
     }
   }, []);
 
-  const selection = useEditor((s) => s.selection);
-  const multiSelection = useEditor((s) => s.multiSelection);
-  const tool = useEditor((s) => s.tool);
   const readOnly = useEditor((s) => s.readOnly);
   const canUndo = useEditor((s) => s.canUndo);
-  const { viewMode } = useView();
 
   useEffect(() => {
     setEditable(!readOnly);
@@ -286,15 +281,9 @@ export function App() {
     if (canUndo) recordUndoableEdit();
   }, [canUndo, recordUndoableEdit]);
   // The right sidebar is the one dynamic surface for "what's relevant right
-  // now" — a selected object's details, OR (when a drawing tool is armed)
-  // that tool's own draft options, never a second bottom-bar popup for the
-  // latter. Diagram/read-only both disable drawing tools outright (see
-  // Toolbar's own `locked`), so an armed tool from before switching there
-  // shouldn't still claim this slot.
-  const hasSupplementalContent =
-    selection !== null ||
-    multiSelection.length > 0 ||
-    (tool !== 'select' && !readOnly && viewMode !== 'diagram');
+  // now". What belongs there, and whether it should take over the mobile
+  // sheet, are both decided by useSupplementalContent — not restated here.
+  const supplemental = useSupplementalContent();
 
   const dialogFailed = () => {
     closeDialog();
@@ -431,7 +420,7 @@ export function App() {
         brand={<TopBarBrand />}
         menuPanel={<SidebarPanel />}
         supplementalPanel={<Inspector />}
-        hasSupplementalContent={hasSupplementalContent}
+        hasSupplementalContent={supplemental.kind !== 'none'}
         primaryToolbar={<TopBarActions />}
         viewSwitcher={<ViewSwitch />}
         simControls={<SimControls />}

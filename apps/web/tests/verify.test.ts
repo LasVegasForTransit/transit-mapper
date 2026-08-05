@@ -1,6 +1,12 @@
 // Deterministic verification of the editor/model logic without a browser.
 // Run with: pnpm --filter @transitmapper/web verify
 import { createEditorStore, type MultiSelectItem } from '../src/editor/store';
+import {
+  COARSE_POINTER_TUNING,
+  FINE_POINTER_TUNING,
+  inputTuningFor,
+} from '../src/editor/input-tuning';
+import { resolvePointerIntent } from '../src/editor/pointerIntent';
 import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
 import { createSelectionActions } from '../src/editor/actions';
 import { validateSystemQuick } from '@transitmapper/core/model/validate';
@@ -5218,6 +5224,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     map: { panBy() {}, zoomTo() {}, getZoom: () => 10 },
     editor: store,
     setPanKeyHeld() {},
+    tuning: FINE_POINTER_TUNING,
     openShortcuts() {},
     toggleUi() {},
   } as unknown as KeyContext;
@@ -5389,6 +5396,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     map: { panBy() {}, zoomTo() {}, getZoom: () => 10 },
     editor: store,
     setPanKeyHeld() {},
+    tuning: FINE_POINTER_TUNING,
     openShortcuts() {},
     toggleUi() {},
   } as unknown as KeyContext;
@@ -6037,6 +6045,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       s.getState().setTool('station');
       const map = createFakeMap();
       const detach = attachInteractions(map as never, s, {
+        tuning: FINE_POINTER_TUNING,
         openShortcuts() {},
         toggleUi() {},
         sim: { togglePaused() {}, stepSpeed() {} },
@@ -6120,6 +6129,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       s.getState().setTool('way');
 
       const detach = attachInteractions(map as never, s, {
+        tuning: FINE_POINTER_TUNING,
         openShortcuts() {},
         toggleUi() {},
         sim: { togglePaused() {}, stepSpeed() {} },
@@ -6160,6 +6170,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       s.getState().setTool('way');
       const map = createFakeMap();
       const detach = attachInteractions(map as never, s, {
+        tuning: FINE_POINTER_TUNING,
         openShortcuts() {},
         toggleUi() {},
         sim: { togglePaused() {}, stepSpeed() {} },
@@ -6221,6 +6232,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       s.getState().setTool('way');
       const map = createFakeMap();
       const detach = attachInteractions(map as never, s, {
+        tuning: FINE_POINTER_TUNING,
         openShortcuts() {},
         toggleUi() {},
         sim: { togglePaused() {}, stepSpeed() {} },
@@ -12363,6 +12375,100 @@ function buildGrid() {
     'merging needs at least two ways',
     store.getState().mergeWaysIntoCorridor([apart[0]]) === 0,
   );
+}
+
+// --- input tuning: coarse pointers get proportional tolerances ---
+// A fingertip contact patch is 9-11mm, ~24 CSS px on a phone. Every tolerance
+// the map hit-tests with has to grow with it, or a finger is asked to land
+// inside a radius narrower than the finger.
+{
+  check('a coarse pointer hit-tests at least a fingertip wide', COARSE_POINTER_TUNING.hitPx >= 24);
+  check(
+    'snapping still reaches further than plain hit-testing',
+    FINE_POINTER_TUNING.snapPx > FINE_POINTER_TUNING.hitPx &&
+      COARSE_POINTER_TUNING.snapPx > COARSE_POINTER_TUNING.hitPx,
+  );
+  check(
+    'every precision tolerance grows for a coarse pointer',
+    COARSE_POINTER_TUNING.hitPx > FINE_POINTER_TUNING.hitPx &&
+      COARSE_POINTER_TUNING.snapPx > FINE_POINTER_TUNING.snapPx &&
+      COARSE_POINTER_TUNING.dragPx > FINE_POINTER_TUNING.dragPx &&
+      COARSE_POINTER_TUNING.straightSnapPx > FINE_POINTER_TUNING.straightSnapPx,
+  );
+  // Sample spacing decides how faithfully a drawn curve follows the gesture.
+  // That is a question about the geometry someone wants, not about how
+  // precisely they can point, so it is the one value that must NOT scale.
+  check(
+    'freehand sample spacing is not a precision tolerance and does not scale',
+    COARSE_POINTER_TUNING.freehandSamplePx === FINE_POINTER_TUNING.freehandSamplePx,
+  );
+  check(
+    'the fine profile is what the editor shipped with',
+    FINE_POINTER_TUNING.hitPx === 9 &&
+      FINE_POINTER_TUNING.snapPx === 18 &&
+      FINE_POINTER_TUNING.dragPx === 4 &&
+      FINE_POINTER_TUNING.straightSnapPx === 10,
+  );
+  check(
+    'inputTuningFor(false) selects the fine profile',
+    inputTuningFor(false) === FINE_POINTER_TUNING,
+  );
+  check(
+    'inputTuningFor(true) selects the coarse profile',
+    inputTuningFor(true) === COARSE_POINTER_TUNING,
+  );
+}
+
+// --- modifier channels resolve the operations their keys used to ---
+// These are named for the channel rather than the key (alternate, not alt)
+// because a touchscreen latches them from the inspector instead of holding
+// them. The resolver must therefore have no notion of which set it — see
+// interactions.test.ts for the test that a latched channel and a held key
+// reach the same dispatch.
+{
+  const base = {
+    view: 'infrastructure' as const,
+    tool: 'select' as const,
+    readOnly: false,
+    armed: 'none' as const,
+    gestureActive: false,
+  };
+  check(
+    'the alternate channel erases a control point',
+    resolvePointerIntent({ ...base, target: 'control-point', modifiers: { alternate: true } })
+      .primaryOperation === 'erase-points',
+  );
+  check(
+    'without a channel the same target just moves',
+    resolvePointerIntent({ ...base, target: 'control-point', modifiers: {} }).primaryOperation ===
+      'move-point',
+  );
+  check(
+    'the secondary channel splits an interior point',
+    resolvePointerIntent({ ...base, target: 'interior-point', modifiers: { secondary: true } })
+      .primaryOperation === 'split-corridor',
+  );
+  check(
+    'the constrain channel qualifies a move without changing the verb',
+    resolvePointerIntent({ ...base, target: 'control-point', modifiers: { constrain: true } })
+      .primaryOperation === 'constrained-move',
+  );
+  check(
+    'the actions channel opens the corridor menu',
+    resolvePointerIntent({ ...base, target: 'corridor', modifiers: { actions: true } })
+      .primaryOperation === 'open-corridor-actions',
+  );
+}
+
+// --- the Select variant is editor state, not history ---
+{
+  fresh();
+  const before = store.getState().canUndo;
+  store.getState().setSelectVariant('erase');
+  check('picking a variant arms it', store.getState().selectVariant === 'erase');
+  check('picking a variant creates no undo step', store.getState().canUndo === before);
+  store.getState().setSelectVariant('select');
+  check('a variant switches back off', store.getState().selectVariant === 'select');
 }
 
 // --- an identity with no name contributes no name ---

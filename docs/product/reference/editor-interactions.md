@@ -65,3 +65,67 @@ Dropping an extension on an invalid target, dismissing the connection chooser,
 or pressing `Escape` changes no saved network data. A successful gesture is
 one undo checkpoint. Service-path edits do not move or split corridors,
 junctions, or stations unless the user explicitly chooses a corridor operation.
+
+## Touch equivalents
+
+Touch reaches the operations above through a different grammar, not a reduced
+one. Each row of this table names the mouse gesture it stands in for; the
+resolved operation, badge, and undo behaviour are identical, because both
+grammars dispatch through the same intent resolution.
+
+| Touch gesture     | Stands in for              | Result                                                                  |
+| ----------------- | -------------------------- | ----------------------------------------------------------------------- |
+| One-finger drag   | Left-drag                  | The active tool's operation: draw, move, extend, or marquee             |
+| Two-finger drag   | Right-drag or `Space`-drag | Pan                                                                     |
+| Pinch             | Scroll                     | Zoom. Rotation and pitch stay disabled                                  |
+| Long press, 500ms | Right-click                | Open the action anchor and its menu, finish a draw, or branch a one-way |
+| Double tap        | Double-click               | Finish the current line                                                 |
+| Tap               | Click                      | Select, deselect, or place the next point                               |
+
+A press that has not yet moved past the drag threshold has committed to
+nothing. Lifting it is a tap, moving it starts the tool's gesture, and holding
+it opens the actions menu.
+
+Pointer tolerances scale with the pointer. A coarse pointer hit-tests within
+24 CSS pixels rather than 9, because a fingertip contact patch measures 9-11mm
+and cannot be placed inside a 9-pixel radius. The full table is in
+`apps/web/src/editor/input-tuning.ts`.
+
+## Modifier channels
+
+A press can be qualified by four modal channels. They are named for what they
+qualify rather than for the key that sets them, because a keyboard is only one
+of two ways to set them.
+
+| Channel     | Key            | Qualifies                                                       |
+| ----------- | -------------- | --------------------------------------------------------------- |
+| `constrain` | `Shift`        | Angle-snapping and constrained moves                            |
+| `alternate` | `Alt`/`Option` | Erase; separate-corridor drawing in the Line tool               |
+| `secondary` | `Ctrl`/`⌘`     | Split at an interior point, extend at an endpoint               |
+| `pan`       | `Space`        | Camera pan. Touch uses two fingers instead                      |
+| `actions`   | Right button   | The action anchor and its menu. Touch uses a long press instead |
+
+A held key and a Select variant (below) produce the same input, so the resolved
+operation, badge, and cursor are identical either way.
+
+`constrain` is the only channel that may change during a gesture, and it alters
+only geometry, never the operation.
+
+## Select variants
+
+Erasing and splitting are things the Select tool does, so they are variants of
+it: chosen from its chevron in the dock, shown on its button, and exclusive of
+each other. This is how both operations are reached without a keyboard, since
+`Alt` and `Ctrl` cannot be held on a touchscreen.
+
+| Variant  | Sets        | A press then                                              |
+| -------- | ----------- | --------------------------------------------------------- |
+| `select` | nothing     | Selects, moves, or extends, per the table above           |
+| `erase`  | `alternate` | Removes the point, station, or facility pressed           |
+| `split`  | `secondary` | Splits a corridor at an interior point, extends at an end |
+
+A held `Alt` or `Ctrl` reaches the same operation without changing the variant,
+so a mouse is unaffected.
+
+`Shift` has no variant. It constrains a drag already under way rather than
+deciding what a press does, and a finger can draw the angle directly.

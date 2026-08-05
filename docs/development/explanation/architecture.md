@@ -94,6 +94,14 @@ linting off.
 There are no accounts. Every published link is public, and nothing in the
 system can depend on knowing who is asking.
 
+Desktop is the primary authoring surface, and it sets the editing vocabulary.
+Touch reaches every operation that vocabulary contains, through a grammar
+suited to fingers rather than a reduced set of features. Two device properties
+decide this and they are read separately: viewport width selects the layout,
+and pointer capability selects the input grammar and the hit tolerances. A
+device can be wide and coarse, so deciding either from the other is wrong on
+real hardware.
+
 Working documents live in browser-owned IndexedDB, with localStorage retained
 only for migration and close-time recovery. Browser quotas are finite, and the
 user can clear either store at any moment.

@@ -34,6 +34,9 @@ export function ToolDraftInspector({ tool }: ToolDraftInspectorProps) {
   if (tool === 'way') return <WayDraftInspector />;
   if (tool === 'station') return <StationDraftInspector />;
   if (tool === 'facility') return <FacilityDraftInspector />;
+  // Select has no draft options: erasing and splitting are variants of it,
+  // shown on the dock button and picked from its chevron (see Toolbar), which
+  // is where every other tool's variants live.
   return null;
 }
 

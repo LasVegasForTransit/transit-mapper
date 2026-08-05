@@ -44,6 +44,7 @@
     "check:docs": "tsx scripts/check-docs-links.ts",
     "check:migrations": "tsx scripts/check-migrations-append-only.ts",
     "check:structure": "tsx scripts/check-project-structure.ts",
+    "check:breakpoint": "tsx scripts/check-breakpoint.ts",
     "gen": "turbo gen",
     "check:generators": "tsx scripts/check-generators.ts",
     "check:env": "tsx scripts/doctor.ts",

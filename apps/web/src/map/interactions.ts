@@ -1,6 +1,8 @@
 import type { Map as MLMap, MapMouseEvent, MapGeoJSONFeature, GeoJSONSource } from 'maplibre-gl';
 import type { EditorState, EditorStore, MultiSelectItem } from '../editor/store';
 import { attachKeyboard, type SimCommands } from '../editor/keymap';
+import type { InputTuning } from '../editor/input-tuning';
+import { attachTouchGestures } from './touch-gestures';
 import {
   resolvePointerIntent,
   type ModifierState,
@@ -69,16 +71,6 @@ interface ScreenPoint {
   x: number;
   y: number;
 }
-
-const HIT_PX = 9; // pixel tolerance for hit-testing features under the cursor
-const SNAP_PX = 18; // stations/way endpoints within this screen distance snap
-const DRAG_PX = 4; // movement beyond this counts as a drag, not a click
-const FREEHAND_SAMPLE_PX = 16; // spacing between points sampled while freehand-drawing
-// How far off the way's existing heading the cursor may sit and still be
-// snapped into continuing straight. A SCREEN distance, not an angle, so the
-// snap's strength is what it looks like — see continueStraight for why an
-// angle was the wrong unit for this.
-const STRAIGHT_SNAP_PX = 10;
 
 const SERVICE_LAYERS = [LYR_SERVICES_HIT, LYR_SERVICES_SOLID, LYR_SERVICES_UNDERGROUND];
 // Lane surfaces stand in for the fan at lane-detail zooms — they carry the
@@ -221,6 +213,11 @@ export interface AttachInteractionsOptions {
   /** A drop on another line's terminus is deliberately inert until this
    * anchored chooser invokes one of the two callbacks. */
   openTerminusConnectionChoice?: (choice: TerminusConnectionChoice) => void;
+  /** Hit, snap, and drag tolerances for this attachment (see
+   * editor/input-tuning.ts). Required, and resolved by the caller: this module
+   * takes numbers and asks nothing about the device, which is also why its
+   * tests never need a media query to exercise either profile. */
+  tuning: InputTuning;
 }
 
 /**
@@ -254,6 +251,10 @@ export function attachInteractions(
   opts: AttachInteractionsOptions,
 ): () => void {
   const canvas = map.getCanvas();
+  // Destructured once per attachment, not read per event: swapping tolerances
+  // underneath a drag already in progress would change what the gesture means
+  // halfway through it.
+  const { hitPx, snapPx, dragPx, freehandSamplePx, straightSnapPx } = opts.tuning;
   let spaceHeld = false;
   let lastPointer: MapMouseEvent | null = null;
   let lockedPrimaryOperation: PointerOperation | undefined;
@@ -315,8 +316,8 @@ export function attachInteractions(
     if (cached) return cached;
     const layers = HIT_TEST_LAYERS.filter((layer) => map.getLayer(layer));
     const box: [[number, number], [number, number]] = [
-      [e.point.x - HIT_PX, e.point.y - HIT_PX],
-      [e.point.x + HIT_PX, e.point.y + HIT_PX],
+      [e.point.x - hitPx, e.point.y - hitPx],
+      [e.point.x + hitPx, e.point.y + hitPx],
     ];
     const features = layers.length ? map.queryRenderedFeatures(box, { layers }) : [];
     hitStackByEvent.set(e, features);
@@ -409,19 +410,40 @@ export function attachInteractions(
     return featureAt(e, [LYR_STATIONS]);
   };
 
+  /**
+   * A held key OR the Select tool's variant produces the same state, which is
+   * the one place the two input paths meet. Everything downstream — the
+   * resolver, the badge, the dispatch — sees a channel and cannot tell which
+   * set it, so a finger reaches the Alt and Ctrl operations through the dock
+   * without a second code path.
+   */
   const modifierState = (event: {
     altKey?: boolean;
     ctrlKey?: boolean;
     metaKey?: boolean;
     shiftKey?: boolean;
     button?: number;
-  }): ModifierState => ({
-    space: spaceHeld,
-    shift: event.shiftKey,
-    alt: event.altKey,
-    ctrlOrMeta: event.ctrlKey || event.metaKey,
-    rightButton: event.button === 2,
-  });
+  }): ModifierState => {
+    const { tool, selectVariant } = store.getState();
+    // A variant only speaks for the tool it belongs to.
+    const variant = tool === 'select' ? selectVariant : 'select';
+    return {
+      pan: spaceHeld,
+      constrain: event.shiftKey === true,
+      alternate: event.altKey === true || variant === 'erase',
+      secondary: event.ctrlKey === true || event.metaKey === true || variant === 'split',
+      actions: event.button === 2,
+    };
+  };
+
+  /**
+   * Shift during a live drag: the sole modifier allowed to alter a gesture
+   * mid-flight, and it changes only geometry, never the verb. Read through one
+   * helper so every drag loop that offers angle-snapping asks the same
+   * question.
+   */
+  const constrainActive = (ev: { originalEvent?: { shiftKey?: boolean } }): boolean =>
+    ev.originalEvent?.shiftKey === true;
 
   /** The one definition of a corridor a Network line may route over. Both
    * rendered-hit classification and startDraw use it, so an icon never says
@@ -605,12 +627,12 @@ export function attachInteractions(
   const snapMeters = (px: number) => Math.min(px * metersPerPixel(), MAX_SNAP_M);
 
   const networkRouteAnchorAt = (e: MapMouseEvent): LngLat | null => {
-    const hit = snap(networkCandidates(store.getState()), lngLatOf(e), snapMeters(SNAP_PX));
+    const hit = snap(networkCandidates(store.getState()), lngLatOf(e), snapMeters(snapPx));
     return hit?.coord ?? null;
   };
 
   const networkOpenEndpointAt = (e: MapMouseEvent) =>
-    nearestOpenEndpoint(networkCandidates(store.getState()), lngLatOf(e), snapMeters(SNAP_PX));
+    nearestOpenEndpoint(networkCandidates(store.getState()), lngLatOf(e), snapMeters(snapPx));
 
   // ---- pan (right-drag or space+left-drag) --------------------------------
   // Not part of the cancel system: it never mutates the system, so there's
@@ -661,7 +683,7 @@ export function attachInteractions(
           !st.activeWayId &&
           !st.routeDraft
         ) {
-          const hit = nearestOpenEndpoint(st.system.ways, lngLatOf(ev), snapMeters(SNAP_PX));
+          const hit = nearestOpenEndpoint(st.system.ways, lngLatOf(ev), snapMeters(snapPx));
           if (hit) {
             st.beginOneWayBranch(hit.wayId, hit.end);
             return;
@@ -695,7 +717,7 @@ export function attachInteractions(
       // the sole modifier permitted to alter it mid-drag, and only changes the
       // geometric constraint — Alt/Ctrl/Cmd cannot turn the drag into erase/
       // split/extend after its start.
-      if (ev.originalEvent.shiftKey) c = constrainToNeighbor(wayId, index, c);
+      if (constrainActive(ev)) c = constrainToNeighbor(wayId, index, c);
       throttled.call(c);
     };
     const onUp = () => {
@@ -736,7 +758,7 @@ export function attachInteractions(
     });
     const onMove = (ev: MapMouseEvent) => {
       dragged = true;
-      previewThrottle.call(lngLatOf(ev), ev.originalEvent.shiftKey);
+      previewThrottle.call(lngLatOf(ev), constrainActive(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
       previewThrottle.cancel();
@@ -744,11 +766,7 @@ export function attachInteractions(
       map.off('mousemove', onMove);
       clearPreviews();
       if (dragged) {
-        placeEnd(
-          wayId,
-          atStart,
-          resolveEnd(wayId, atStart, lngLatOf(ev), ev.originalEvent.shiftKey),
-        );
+        placeEnd(wayId, atStart, resolveEnd(wayId, atStart, lngLatOf(ev), constrainActive(ev)));
         // Pulling an end across another same-grade way forms a real junction
         // there, same as finishing a draw does.
         store.getState().formCrossingJunctions(wayId);
@@ -881,7 +899,7 @@ export function attachInteractions(
       setPreview(closedForPreview(rectCorners(startCoord, c))),
     );
     const onMove = (ev: MapMouseEvent) => {
-      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
+      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= dragPx) dragged = true;
       if (dragged) previewThrottle.call(lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
@@ -938,7 +956,7 @@ export function attachInteractions(
       setPreview(closedForPreview(rectCorners(startCoord, c))),
     );
     const onMove = (ev: MapMouseEvent) => {
-      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
+      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= dragPx) dragged = true;
       if (dragged) previewThrottle.call(lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
@@ -975,7 +993,7 @@ export function attachInteractions(
       setPreview(closedForPreview(rectCorners(startCoord, c))),
     );
     const onMove = (ev: MapMouseEvent) => {
-      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
+      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= dragPx) dragged = true;
       if (dragged) previewThrottle.call(lngLatOf(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
@@ -1364,7 +1382,7 @@ export function attachInteractions(
     let lastPt = startPt;
     const moveThrottle = rafThrottle((ev: MapMouseEvent) => {
       if (!started) {
-        if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) < DRAG_PX) return;
+        if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) < dragPx) return;
         started = true;
         suppressClick = true;
         const st = store.getState();
@@ -1372,7 +1390,7 @@ export function attachInteractions(
         st.addWayPoint(wayId, startCoord);
         lastPt = startPt;
       }
-      if (Math.hypot(ev.point.x - lastPt.x, ev.point.y - lastPt.y) < FREEHAND_SAMPLE_PX) return;
+      if (Math.hypot(ev.point.x - lastPt.x, ev.point.y - lastPt.y) < freehandSamplePx) return;
       lastPt = ev.point;
       store.getState().addWayPoint(wayId, lngLatOf(ev));
     });
@@ -1438,7 +1456,7 @@ export function attachInteractions(
     if (st.routeDraft) {
       if (!routeExisting || !candidates) return;
       suppressClick = true;
-      const hit = snap(candidates, lngLatOf(e), snapMeters(SNAP_PX));
+      const hit = snap(candidates, lngLatOf(e), snapMeters(snapPx));
       if (hit) {
         const way = candidates.find((w) => w.id === hit.wayId);
         const anchor = way ? anchorOnWay(way, hit.coord) : null;
@@ -1472,9 +1490,9 @@ export function attachInteractions(
       // first and swallow the press before the extend-drag handlers (added
       // further down) ever get registered.
       const onOwnEndpoint =
-        nearestOpenEndpoint(candidates, lngLatOf(e), snapMeters(SNAP_PX)) !== null;
+        nearestOpenEndpoint(candidates, lngLatOf(e), snapMeters(snapPx)) !== null;
       if (routeExisting && !onOwnEndpoint) {
-        const hit = snap(candidates, lngLatOf(e), snapMeters(SNAP_PX));
+        const hit = snap(candidates, lngLatOf(e), snapMeters(snapPx));
         if (hit) {
           const way = candidates.find((w) => w.id === hit.wayId);
           const anchor = way ? anchorOnWay(way, hit.coord) : null;
@@ -1507,8 +1525,8 @@ export function attachInteractions(
       const resume = forceSeparate
         ? null
         : candidates && resumeExisting
-          ? nearestOpenEndpoint(candidates, startCoord, snapMeters(SNAP_PX))
-          : nearestOpenEndpoint(st.system.ways, startCoord, snapMeters(SNAP_PX), st.draftWayTypeId);
+          ? nearestOpenEndpoint(candidates, startCoord, snapMeters(snapPx))
+          : nearestOpenEndpoint(st.system.ways, startCoord, snapMeters(snapPx), st.draftWayTypeId);
       if (resume) {
         wayId = resume.wayId;
         extendAtStart = resume.end === 'start';
@@ -1525,7 +1543,7 @@ export function attachInteractions(
         const seed = snap(
           st.system.ways,
           startCoord,
-          snapMeters(SNAP_PX),
+          snapMeters(snapPx),
           new Set([wayId]),
           st.draftWayTypeId,
         );
@@ -1543,8 +1561,8 @@ export function attachInteractions(
       previewEnd(committedWayId, extendAtStart, raw, shiftKey);
     });
     const onMove = (ev: MapMouseEvent) => {
-      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= DRAG_PX) dragged = true;
-      previewThrottle.call(lngLatOf(ev), ev.originalEvent.shiftKey);
+      if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) >= dragPx) dragged = true;
+      previewThrottle.call(lngLatOf(ev), constrainActive(ev));
     };
     const onUp = (ev: MapMouseEvent) => {
       previewThrottle.cancel();
@@ -1553,12 +1571,7 @@ export function attachInteractions(
       // Seed-only click just grabbed the start (fresh or resumed); every
       // other release adds a node.
       if (dragged || !seededStart) {
-        const end = resolveEnd(
-          committedWayId,
-          extendAtStart,
-          lngLatOf(ev),
-          ev.originalEvent.shiftKey,
-        );
+        const end = resolveEnd(committedWayId, extendAtStart, lngLatOf(ev), constrainActive(ev));
         placeEnd(committedWayId, extendAtStart, end);
       }
       suppressClick = true; // node placement is handled here, not in onClick
@@ -1602,14 +1615,14 @@ export function attachInteractions(
     const otherWay = snap(
       store.getState().system.ways,
       raw,
-      snapMeters(SNAP_PX),
+      snapMeters(snapPx),
       new Set([wayId]),
       store.getState().draftWayTypeId,
     );
     if (otherWay) return { coord: otherWay.coord, snapWayId: otherWay.wayId };
     const heading = wayHeadingAnchor(wayId, atStart);
     if (endpoint && heading) {
-      const straight = continueStraight(endpoint, heading, raw, snapMeters(STRAIGHT_SNAP_PX));
+      const straight = continueStraight(endpoint, heading, raw, snapMeters(straightSnapPx));
       if (straight) return { coord: straight };
     }
     return { coord: raw };
@@ -1682,7 +1695,7 @@ export function attachInteractions(
       // established rubber band remains unconditional; Network drafts are
       // gated by the resolved presentation contract.
       if (!opts.isNetworkMode() || pointerIntent.anchor === 'preview')
-        previewEnd(st.activeWayId, activeExtendAtStart, lngLatOf(ev), ev.originalEvent.shiftKey);
+        previewEnd(st.activeWayId, activeExtendAtStart, lngLatOf(ev), constrainActive(ev));
       else clearPreviews();
       setEndpointHint(null);
       return;
@@ -1729,7 +1742,7 @@ export function attachInteractions(
 
   const placeOrSnapStation = (id: string, coord: LngLat) => {
     const ways = store.getState().system.ways;
-    const s = snap(ways, coord, snapMeters(SNAP_PX));
+    const s = snap(ways, coord, snapMeters(snapPx));
     if (s) store.getState().moveStation(id, s.coord, { wayId: s.wayId, t: s.t });
     else store.getState().moveStation(id, coord, undefined);
   };
@@ -1833,7 +1846,7 @@ export function attachInteractions(
     if (!sourceMode) return null;
     const allowed = new Set(mode(sourceMode).wayTypeIds);
     const candidates = state.system.ways.filter((way) => allowed.has(way.typeId));
-    const hit = snap(candidates, lngLatOf(e), snapMeters(SNAP_PX));
+    const hit = snap(candidates, lngLatOf(e), snapMeters(snapPx));
     return hit ? { kind: 'corridor', wayId: hit.wayId, coord: hit.coord } : null;
   };
 
@@ -1939,10 +1952,21 @@ export function attachInteractions(
     }, {});
   };
 
-  // ---- mousedown: dispatch by button, modifier, tool, target --------------
+  // ---- mousedown: dispatch by button, channel, tool, target ----------------
   const onMouseDown = (e: MapMouseEvent) => {
+    // The compatibility mouse events a browser emits after a motionless touch.
+    // The touch adapter below already drove that press; replaying it here
+    // would run the whole gesture a second time — a long press would open the
+    // action menu and then immediately start a draw underneath it.
+    if (ignoringCompatMouse()) return;
+    ignoreCompatMouseUntil = 0;
     const st = store.getState();
     const oe = e.originalEvent;
+    // Resolved channels, not raw key state: the branches below must agree with
+    // the intent the badge and cursor already published, and a latched channel
+    // has to reach them exactly as a held key does. Read once so the whole
+    // dispatch sees one consistent answer.
+    const channels = modifierState(oe);
     // A new press owns the flag outright: whatever the previous one armed is
     // spent by now, whether or not a click ever arrived to consume it.
     suppressClick = false;
@@ -2026,7 +2050,7 @@ export function attachInteractions(
       if (
         pointerIntent.primaryOperation === 'move-station' &&
         station &&
-        !oe.shiftKey &&
+        !channels.constrain &&
         !isGroupMember('station', station.properties.id as string)
       ) {
         startStationDrag(station.properties.id as string);
@@ -2035,7 +2059,7 @@ export function attachInteractions(
       if (
         pointerIntent.primaryOperation === 'move-facility' &&
         facility &&
-        !oe.shiftKey &&
+        !channels.constrain &&
         !isGroupMember('facility', facility.properties.id as string)
       ) {
         startFacilityDrag(facility.properties.id as string);
@@ -2077,7 +2101,7 @@ export function attachInteractions(
       return;
     }
 
-    if (oe.altKey) {
+    if (channels.alternate) {
       if (physicalHandle) {
         const kind = physicalHandle.properties.kind as 'footprint' | 'platform' | 'groupFootprint';
         if (kind === 'groupFootprint') {
@@ -2120,7 +2144,7 @@ export function attachInteractions(
     // keeps the original's type/grade/class/capacity and can then be edited
     // independently (see store.ts's splitWayAt doc comment). A no-op on an
     // endpoint (nothing to split off) or any other target.
-    if (oe.ctrlKey || oe.metaKey) return;
+    if (channels.secondary) return;
 
     switch (st.tool) {
       case 'select':
@@ -2128,7 +2152,7 @@ export function attachInteractions(
         // drag — a discrete add/remove, resolved entirely here since every
         // draggable target below sets suppressClick and would otherwise
         // swallow the click before onClick ever saw it.
-        if (oe.shiftKey) {
+        if (channels.constrain) {
           if (handle) st.extendSelection({ kind: 'way', id: handle.properties.wayId as string });
           else if (facility)
             st.extendSelection({ kind: 'facility', id: facility.properties.id as string });
@@ -2234,6 +2258,10 @@ export function attachInteractions(
 
   // ---- click: discrete add / select (fires only when not dragged) ---------
   const onClick = (e: MapMouseEvent) => {
+    // The tail of a compatibility tap whose press the touch adapter already
+    // handled (see onMouseDown's own guard, which never ran for this one and
+    // so never cleared the window).
+    if (ignoringCompatMouse()) return;
     // Not reset here — onMouseDown owns clearing it, so a press whose click
     // MapLibre never fires can't leave this armed for the next one.
     if (suppressClick) return;
@@ -2260,7 +2288,7 @@ export function attachInteractions(
         // Infrastructure view everything is 2D — the mousedown gesture owns
         // station creation there (land only), so a bare click does nothing.
         if (!opts.isNetworkMode()) break;
-        const s = snap(st.system.ways, coord, snapMeters(SNAP_PX));
+        const s = snap(st.system.ways, coord, snapMeters(snapPx));
         if (s) st.addStation(s.coord, { wayId: s.wayId, t: s.t });
         else st.addStation(coord);
         break;
@@ -2507,21 +2535,31 @@ export function attachInteractions(
   // gesture that started it can. Capture phase guarantees this fires before
   // the keymap's own (bubble-phase) Escape handler, so a canceled gesture
   // consumes the keypress instead of also "backing out" a level.
+  /**
+   * Cancel whatever pointer gesture is in flight, and report whether there was
+   * one. Escape and an interrupted touch both need exactly this, and kept
+   * their own copies of it until they didn't.
+   */
+  const abortActiveGesture = (): boolean => {
+    if (!cancelActiveGesture) return false;
+    const cancel = cancelActiveGesture;
+    cancelActiveGesture = null;
+    cancel(); // cleans up live handlers/previews and any gesture-local state
+    store.getState().cancelHistoryCheckpoint(); // restores the exact pre-gesture system
+    opts.onEditGestureEnd?.();
+    opts.onDirectManipulationEnd?.();
+    lockedPrimaryOperation = undefined;
+    clearPointerIntent();
+    return true;
+  };
+
   const onEscapeCapture = (e: KeyboardEvent) => {
     if (e.key !== 'Escape') return;
     opts.setActionAnchor?.(null);
     opts.closeContextMenu?.();
-    if (cancelActiveGesture) {
+    if (abortActiveGesture()) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      const cancel = cancelActiveGesture;
-      cancelActiveGesture = null;
-      cancel(); // cleans up live handlers/previews and any gesture-local state
-      store.getState().cancelHistoryCheckpoint(); // restores the exact pre-gesture system
-      opts.onEditGestureEnd?.();
-      opts.onDirectManipulationEnd?.();
-      lockedPrimaryOperation = undefined;
-      clearPointerIntent();
       return;
     }
     if (facilityBoundaryDraft) {
@@ -2550,7 +2588,7 @@ export function attachInteractions(
       if (lastPointer)
         publishPointerIntent(
           lastPointer,
-          { ...modifierState(lastPointer.originalEvent), space: held },
+          { ...modifierState(lastPointer.originalEvent), pan: held },
           false,
         );
       else canvas.style.cursor = held ? 'grab' : cursorFor();
@@ -2633,6 +2671,51 @@ export function attachInteractions(
     clearPointerIntent();
   };
 
+  /**
+   * The compatibility mouse events a browser emits after a motionless touch.
+   *
+   * This is the one place the mouse path cannot be entirely innocent of touch,
+   * so it is named rather than hidden. The touch adapter drives each gesture
+   * itself and then arms this; without it a long press would open the action
+   * menu and immediately start a draw underneath it.
+   *
+   * 700ms covers the compatibility tail (~300ms in practice) without being long
+   * enough to hold off a real mouse on a hybrid device, which would need
+   * someone to touch the screen and grab the mouse inside the same gesture.
+   */
+  let ignoreCompatMouseUntil = 0;
+  /**
+   * True while the touch adapter is re-firing an event on the map itself.
+   *
+   * The window above cannot tell the adapter's own dispatch from the browser's
+   * tail by timing alone — they overlap by design — so the dispatch says so
+   * explicitly. Without this the window swallowed the very events it exists to
+   * protect: the second tap of a double tap arrives inside the first tap's
+   * window, so a line could never be finished by finger.
+   */
+  let dispatchingSynthetic = false;
+
+  const ignoringCompatMouse = () =>
+    !dispatchingSynthetic && ignoreCompatMouseUntil > 0 && Date.now() < ignoreCompatMouseUntil;
+
+  const detachTouch = attachTouchGestures(map, {
+    dispatch(type, event) {
+      dispatchingSynthetic = true;
+      try {
+        map.fire(type, event);
+      } finally {
+        dispatchingSynthetic = false;
+      }
+    },
+    startPan: (at) => startPan(at, false),
+    abortGesture: () => void abortActiveGesture(),
+    publishIntent: (at) => publishPointerIntent(at, undefined, false),
+    dragPx,
+    armCompatSuppression() {
+      ignoreCompatMouseUntil = Date.now() + 700;
+    },
+  });
+
   map.on('mousedown', onMouseDown);
   map.on('mouseup', onPointerUp);
   map.on('mousemove', onHoverMove);
@@ -2686,6 +2769,7 @@ export function attachInteractions(
 
   return () => {
     hoverThrottle.cancel();
+    detachTouch();
     map.off('mousedown', onMouseDown);
     map.off('mouseup', onPointerUp);
     map.off('mousemove', onHoverMove);

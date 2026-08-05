@@ -12,10 +12,17 @@ tied to Las Vegas.
 ## 1. Learn the camera
 
 The map never pans on a plain left-drag; the left button always belongs to
-the active tool, like a map editor rather than a map viewer.
+the active tool, like a map editor rather than a map viewer. Moving the
+camera takes a deliberate second input.
 
 - Pan: right-drag, or hold space and drag.
 - Zoom: scroll, or `Z`/`X`.
+
+By touch the same rule holds, with the second input being a second finger:
+
+- Pan: drag with two fingers. One finger belongs to the active tool.
+- Zoom: pinch.
+- Long-press where you would right-click.
 
 ## 2. Build two streets
 

@@ -198,9 +198,31 @@ export interface ApplyGtfsImportBatch {
   pieces: GtfsImportPieces;
 }
 
+/**
+ * What a Select press does.
+ *
+ * Erasing and splitting are things the Select tool DOES, not settings it
+ * carries, so they are variants of it the way a road's cross-section is a
+ * variant of the Road tool — one choice, shown on the dock button, picked from
+ * its chevron. A press cannot both erase and split, and three independent
+ * toggles said otherwise.
+ *
+ * This is also how the two operations are reachable without a keyboard. Alt
+ * and Ctrl still work and are ORed with the variant, so nothing changes for a
+ * mouse; a finger picks the same thing from the dock.
+ *
+ * Shift is deliberately absent. It constrains a drag already under way rather
+ * than deciding what a press does, so it is not a variant of anything — and by
+ * finger you can simply draw the angle you meant.
+ */
+export type SelectVariant = 'select' | 'erase' | 'split';
+
 export interface EditorState {
   system: TransitSystem;
   tool: Tool;
+  /** See SelectVariant. Not undoable: it decides what the next press does
+   *  rather than describing the system. */
+  selectVariant: SelectVariant;
   selection: Selection;
   /** Transient branch focus for service-owned map affordances. */
   activePatternId: string | null;
@@ -308,6 +330,8 @@ export interface EditorState {
 
   // tools & selection
   setTool: (tool: Tool) => void;
+  /** Picks what a Select press does. A held Alt or Ctrl is unaffected. */
+  setSelectVariant: (variant: SelectVariant) => void;
   select: (selection: Selection) => void;
   setActivePattern: (patternId: string | null) => void;
   armTerminus: (terminus: NonNullable<EditorState['armedTerminus']>) => void;
@@ -2121,6 +2145,7 @@ export function createEditorStore() {
   const editor = createStore<EditorState>()((set, get) => ({
     system: createEmptySystem(),
     tool: 'select',
+    selectVariant: 'select',
     selection: null,
     activePatternId: null,
     armedTerminus: null,
@@ -2282,6 +2307,11 @@ export function createEditorStore() {
         };
       });
     },
+
+    // Not routed through history: a variant decides what the NEXT press does,
+    // so undoing back through it would restore a mode rather than a change to
+    // the system, and the edit it qualified would be a step further away.
+    setSelectVariant: (variant) => set({ selectVariant: variant }),
 
     select: (selection) =>
       set((s) => ({

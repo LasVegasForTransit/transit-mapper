@@ -186,6 +186,7 @@ export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps)
             <button
               className="chip"
               title="Narrower (1 ft)"
+              aria-label="Narrower (1 ft)"
               onClick={() =>
                 updateLane(selected.id, { widthM: Math.max(FT, selected.widthM - FT) })
               }
@@ -195,6 +196,7 @@ export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps)
             <button
               className="chip"
               title="Wider (1 ft)"
+              aria-label="Wider (1 ft)"
               onClick={() => updateLane(selected.id, { widthM: selected.widthM + FT })}
             >
               +
@@ -212,6 +214,7 @@ export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps)
               disabled={selectedIndex <= 0}
               onClick={() => moveLane(-1)}
               title="Move left"
+              aria-label="Move lane left"
             >
               ⟵
             </button>
@@ -220,6 +223,7 @@ export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps)
               disabled={selectedIndex >= profile.lanes.length - 1}
               onClick={() => moveLane(1)}
               title="Move right"
+              aria-label="Move lane right"
             >
               ⟶
             </button>
@@ -228,6 +232,7 @@ export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps)
               disabled={profile.lanes.length <= 1}
               onClick={removeLane}
               title="Delete lane"
+              aria-label="Delete lane"
             >
               <Icon name="plus" size={13} style={{ transform: 'rotate(45deg)' }} />
             </button>

@@ -63,6 +63,7 @@
         "//#check:docs",
         "//#check:migrations",
         "//#check:structure",
+        "//#check:breakpoint",
         "//#check:documents",
         "//#check:reference"
       ],
@@ -107,6 +108,14 @@
     },
     "//#check:structure": {
       "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": []
+    },
+    "//#check:breakpoint": {
+      "inputs": [
+        "scripts/check-breakpoint.ts",
+        "apps/web/src/device/capabilities.ts",
+        "apps/web/src/ui/app.css"
+      ],
       "outputs": []
     },
     "//#check:documents": {

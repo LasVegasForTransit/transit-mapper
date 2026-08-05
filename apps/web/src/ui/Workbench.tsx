@@ -3,47 +3,18 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  useSyncExternalStore,
   type PointerEvent,
   type ReactNode,
   type RefObject,
 } from 'react';
 import { useEditor } from '../editor/EditorProvider';
+import { useCompactLayout } from '../device/capabilities';
+import { useKeyboardInset } from './useKeyboardInset';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Panel } from './Panel';
 import { useInertRef } from './useInertRef';
 import { useUi } from './UiProvider';
-
-// Tailwind's `md` breakpoint is min-width: 768px. The component tree must use
-// the same boundary as the CSS: mounting both trees and hiding one with
-// display utilities leaves every hidden panel subscribed to the editor store.
-const MOBILE_QUERY = '(max-width: 767px)';
-
-function mobileSnapshot(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia?.(MOBILE_QUERY).matches === true;
-}
-
-function subscribeMobile(listener: () => void): () => void {
-  if (typeof window === 'undefined' || !window.matchMedia) return () => {};
-  const query = window.matchMedia(MOBILE_QUERY);
-  const onChange = () => listener();
-  if (query.addEventListener) {
-    query.addEventListener('change', onChange);
-    return () => query.removeEventListener('change', onChange);
-  }
-  // Safari < 14. The app does not target it deliberately, but this fallback
-  // costs nothing and makes the subscription safe in older embedded browsers.
-  query.addListener(onChange);
-  return () => query.removeListener(onChange);
-}
-
-function useMobileLayout(): boolean {
-  // This app is client-rendered rather than hydrated. Reusing the guarded live
-  // snapshot for the server argument also makes static render tests represent
-  // the media environment they install without introducing a second default.
-  return useSyncExternalStore(subscribeMobile, mobileSnapshot, mobileSnapshot);
-}
 
 /** How much of the action bar's content fits. Each step is narrower than the
  *  one before it, so the first that fits is the most complete that fits.
@@ -158,8 +129,8 @@ export interface WorkbenchProps {
    *  own header on desktop; mobile has nowhere else for it to live, since
    *  the menu panel itself becomes a bottom sheet there, so it renders in
    *  the top bar instead. One prop, two positions — Workbench decides
-   *  which through the media query matching Tailwind's md breakpoint, not
-   *  the caller. */
+   *  which through useCompactLayout(), which shares its boundary with
+   *  Tailwind's md breakpoint, not the caller. */
   brand: ReactNode;
   /** The active view's workspace — desktop wraps it in a collapsible card with `brand`
    *  above it; mobile wraps it in the bottom sheet instead. */
@@ -235,7 +206,10 @@ export function Workbench({
   importStatus,
   installBanner,
 }: WorkbenchProps) {
-  const mobile = useMobileLayout();
+  // Width only. Pointer type is a separate question with its own answer (see
+  // device/capabilities.ts) — a touchscreen laptop keeps these docked cards
+  // and still gets finger-sized hit tolerances on the map.
+  const mobile = useCompactLayout();
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const clearSelection = useEditor((s) => s.select);
   const backToSelectTool = useEditor((s) => s.setTool);
@@ -244,6 +218,9 @@ export function Workbench({
   // `inert` isn't expressible in CSS, so it's the one thing that still
   // needs uiHidden read directly here rather than falling out of a class.
   const { uiHidden } = useUi();
+  // Only the sheet reacts to the keyboard; the docked desktop cards are not
+  // bottom-anchored and no desktop keyboard covers the viewport.
+  const keyboardInset = useKeyboardInset();
   const actionsCollapsedRef = useInertRef<HTMLDivElement>(uiHidden);
   const supplementalRef = useInertRef<HTMLDivElement>(uiHidden);
   const actionsFullRef = useInertRef<HTMLDivElement>(uiHidden);
@@ -284,7 +261,13 @@ export function Workbench({
             the primary actions and reveals the ⋯ overflow that carries the
             rest (see TopBarActions). */}
         {mobile && (
-          <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center gap-2">
+          <div
+            // viewport-fit=cover extends the viewport under the notch and the
+            // status bar, so the top cluster needs that inset back or its own
+            // first row sits beneath them. Zero on every device without one.
+            style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+            className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center gap-2"
+          >
             <div className="flex w-full items-start justify-between gap-2">
               <div className="top-chrome-card pointer-events-auto min-w-0 flex-1 overflow-hidden px-2 py-1.5">
                 <div className="mobile-topleft">
@@ -437,11 +420,24 @@ export function Workbench({
       {mobile && (
         <div
           ref={sheetRef}
+          // 62dvh, not 62vh: a mobile browser's vh is fixed to the viewport
+          // with the URL bar retracted, so a vh-sized sheet is taller than the
+          // space it has for as long as that bar is showing.
+          //
+          // bottom is the keyboard's height when one is open, so the sheet
+          // rides above it instead of being typed into from behind; it is the
+          // home-indicator inset otherwise, since viewport-fit=cover put the
+          // viewport's bottom edge underneath the indicator. Padding rather
+          // than a margin, so the sheet's surface still reaches the edge.
+          style={{
+            bottom: keyboardInset > 0 ? keyboardInset : undefined,
+            paddingBottom: keyboardInset > 0 ? undefined : 'env(safe-area-inset-bottom, 0px)',
+          }}
           className={`absolute inset-x-0 bottom-0 z-[5] flex flex-col rounded-t-2xl border-t border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-level3)] transition-[max-height,opacity] duration-200 ease-[cubic-bezier(0.2,0.7,0.3,1)] ${
             uiHidden
               ? 'pointer-events-none max-h-0 overflow-hidden opacity-0'
               : sheetExpanded
-                ? 'max-h-[62vh]'
+                ? 'max-h-[62dvh]'
                 : 'max-h-14 overflow-hidden'
           }`}
         >

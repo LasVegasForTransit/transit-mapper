@@ -20,18 +20,35 @@ const ICON_FOR_BADGE: Record<PointerBadgeKind, IconName> = {
   split: 'line',
 };
 
-/** A visual qualifier beside the native cursor; it never catches the pointer. */
+/**
+ * A visual qualifier beside the pointer; it never catches the pointer.
+ *
+ * With a mouse this answers "what will this press do" BEFORE the press, from
+ * the idle hover. Touch has no idle state, so the same answer moves inside the
+ * gesture: interactions.ts publishes an intent on touchstart, and this renders
+ * it while there is still time to lift and cancel.
+ *
+ * This component does not ask what kind of pointer it has. Where the badge
+ * sits, how big it is, and whether a bare refusal is worth drawing at all are
+ * decisions `.pointer-badge` makes in app.css, next to the cursor rules they
+ * coordinate with — see its `@media (hover: …)` blocks. Only `x`/`y` are
+ * genuinely per-event and stay here.
+ */
 export function PointerBadge({ intent, x, y }: PointerBadgeProps) {
-  if (!intent?.badge) return null;
-  const { badge } = intent;
+  if (!intent) return null;
+  const refused = !intent.allowed;
+  if (!intent.badge && !refused) return null;
+
   return (
     <span
-      className="pointer-events-none fixed z-50 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-primary)] shadow-[var(--md-sys-elevation-level2)]"
-      style={{ left: x + 14, top: y + 14 }}
+      className="pointer-badge"
+      style={{ left: x, top: y }}
       data-pointer-anchor={intent.anchor}
+      data-badge={intent.badge ?? undefined}
+      data-pointer-refused={refused || undefined}
       aria-hidden="true"
     >
-      <Icon name={ICON_FOR_BADGE[badge]} size={14} />
+      <Icon name={intent.badge ? ICON_FOR_BADGE[intent.badge] : 'x'} size={14} />
     </span>
   );
 }
