@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEditor, useEditorStore } from '../editor/EditorProvider';
 import {
   crossingsWithoutJoiningChunked,
+  planIssues,
   validateSystemQuick,
   type Issue,
 } from '@transitmapper/core/model/validate';
@@ -22,23 +23,24 @@ function useDebouncedSystem(system: TransitSystem, delayMs: number): TransitSyst
 }
 
 /**
- * A pure sanity check surfaced as UI: ghost ways/services, orphaned stations,
- * and ways that cross without joining (see model/validate.ts). Hidden
+ * A pure sanity check surfaced as UI: lines that don't run anywhere, routes
+ * with a hole in them, lines running the wrong way up a street, and ways that
+ * cross without joining (see model/validate.ts). Hidden
  * entirely when the system is clean — this is a warning light, not a panel
  * that's always present and usually empty.
  */
 export function IssuesPopover() {
   const store = useEditorStore();
-  // Quick validation reads ways/services/stations; crossing detection reads
-  // only ways/nodes. System name, viewport, palette, facilities, and other
-  // unrelated changes retain those references and restart neither pass.
+  // Quick validation reads ways/services/stations/nodes; crossing detection
+  // reads only ways/nodes. System name, viewport, palette, facilities, and
+  // other unrelated changes retain those references and restart neither pass.
   const ways = useEditor((s) => s.system.ways);
   const services = useEditor((s) => s.system.services);
   const stations = useEditor((s) => s.system.stations);
   const nodes = useEditor((s) => s.system.nodes);
   const quickSource = useMemo<TransitSystem>(
-    () => ({ ...store.getState().system, ways, services, stations }),
-    [store, ways, services, stations],
+    () => ({ ...store.getState().system, ways, services, stations, nodes }),
+    [store, ways, services, stations, nodes],
   );
   const crossingSource = useMemo<TransitSystem>(
     () => ({ ...store.getState().system, ways, nodes }),
@@ -79,7 +81,14 @@ export function IssuesPopover() {
     };
   }, [debouncedCrossings]);
 
-  const issues = useMemo(() => [...quickIssues, ...crossingIssues], [quickIssues, crossingIssues]);
+  // Only what someone can act on. A document that contradicts the model —
+  // a way with one point, a stop riding a way that is gone — is repaired as
+  // it loads (serialize.ts), and a warning about it would be a warning nobody
+  // could do anything with. See IssueAudience in model/validate.ts.
+  const issues = useMemo(
+    () => planIssues([...quickIssues, ...crossingIssues]),
+    [quickIssues, crossingIssues],
+  );
   const { containerRef, onKeyDown } = useListboxKeyboardNav<HTMLDivElement>();
 
   if (issues.length === 0) return null;

@@ -18,7 +18,15 @@ import {
 import { useState } from 'react';
 import { WAY_FAMILIES, laneKind, wayType } from '@transitmapper/core/model/catalog';
 import { armRefKey, getComponent, laneRefKey } from '@transitmapper/core/model/components';
-import type { LaneConnector, LaneSpec, NodeControl, Way } from '@transitmapper/core/model/system';
+import { metersFromOrigin } from '@transitmapper/core/model/geo';
+import { junctionGroupOf } from '@transitmapper/core/model/junctions';
+import type {
+  LaneConnector,
+  LaneSpec,
+  Node,
+  NodeControl,
+  Way,
+} from '@transitmapper/core/model/system';
 import { Icon } from './Icon';
 import { InspectorTabs, type InspectorTab } from './InspectorTabs';
 
@@ -38,6 +46,40 @@ const TURN_ORDER: Exclude<TurnClass, 'uturn'>[] = ['left', 'straight', 'right'];
 
 interface NodeInspectorProps {
   id: string;
+}
+
+const COMPASS = [
+  'north',
+  'northeast',
+  'east',
+  'southeast',
+  'south',
+  'southwest',
+  'west',
+  'northwest',
+];
+
+/**
+ * Which way a corridor leaves the junction, as a compass direction.
+ *
+ * Two unnamed streets crossing give a junction four arms all called "Street ·
+ * Road", and a list of four identical rows tells nobody which one they are
+ * about to disconnect. The bearing is the one thing that always differs.
+ * A corridor that runs THROUGH the junction leaves on both sides and reads
+ * as "east–west".
+ */
+function approachOf(node: Node, way: Way): string | undefined {
+  const bearings: string[] = [];
+  for (const ref of node.refs.filter((r) => r.wayId === way.id)) {
+    for (const neighbor of [way.points[ref.pointIndex - 1], way.points[ref.pointIndex + 1]]) {
+      if (!neighbor) continue;
+      const [dx, dy] = metersFromOrigin(node.coord, neighbor);
+      if (Math.hypot(dx, dy) < 0.01) continue;
+      const clockwiseFromNorth = (90 - (Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
+      bearings.push(COMPASS[Math.round(clockwiseFromNorth / 45) % COMPASS.length]);
+    }
+  }
+  return bearings.length > 0 ? [...new Set(bearings)].join('–') : undefined;
 }
 
 /** Signed turn angle from an incoming arm's heading to an outgoing arm. */
@@ -72,6 +114,7 @@ export function NodeInspector({ id }: NodeInspectorProps) {
   const readOnly = useEditor((s) => s.readOnly);
   const setNodeControl = useEditor((s) => s.setNodeControl);
   const setNodeConnectors = useEditor((s) => s.setNodeConnectors);
+  const disconnectNodeWay = useEditor((s) => s.disconnectNodeWay);
   const turnRestrictions = useEditor((s) => s.system.turnRestrictions);
   const setTurnRestriction = useEditor((s) => s.setTurnRestriction);
   const approachControls = useEditor((s) => s.system.approachControls);
@@ -84,12 +127,35 @@ export function NodeInspector({ id }: NodeInspectorProps) {
   const connectors = effectiveConnectors(node, waysById, turnRestrictions);
   const control = node.control ?? 'uncontrolled';
 
-  const wayLabel = (way: Way): string => {
+  const nameOf = (way: Way): string | undefined => {
     const named = namedWays.find((n) => n.wayIds.includes(way.id));
-    if (named?.name) return named.name;
-    const type = wayType(way.typeId);
-    return `${WAY_FAMILIES[type.family].identityNoun} · ${type.label}`;
+    return named && named.name.trim() !== '' ? named.name : undefined;
   };
+
+  /** What this way is called: its shared name, or the noun its family uses
+   *  for an unnamed one ("Street", "Line"). */
+  const wayIdentity = (way: Way): string =>
+    nameOf(way) ?? WAY_FAMILIES[wayType(way.typeId).family].identityNoun;
+
+  /** A heading for one arm. A named way needs no type appended — "East
+   *  Russell Road" already says what it is — while "Street" on its own does
+   *  not distinguish two arms of different types. */
+  const wayLabel = (way: Way): string => {
+    const named = nameOf(way);
+    const type = wayType(way.typeId);
+    return named ?? `${WAY_FAMILIES[type.family].identityNoun} · ${type.label}`;
+  };
+
+  // Every way meeting here, including one running STRAIGHT THROUGH the
+  // junction — junctionGeometry's arms are way ENDS only, and a corridor
+  // crossing the node mid-span is just as much a connection to sever. Keyed
+  // by way, so a loop touching the junction twice lists once and leaves once.
+  const connectedWays = [...new Set(node.refs.map((r) => r.wayId))]
+    .map((wayId) => waysById.get(wayId))
+    .filter((way): way is Way => way !== undefined);
+  // Grouped the way model/junctions.ts groups them: a bike path meeting a
+  // road is an ordinary junction, a road meeting a rail line is not.
+  const mixedTypes = new Set(connectedWays.map((w) => junctionGroupOf(w.typeId))).size > 1;
 
   const isActive = (lane: LaneSpec, fromWayId: string, targetWayIds: Set<string>): boolean =>
     connectors.some(
@@ -164,6 +230,7 @@ export function NodeInspector({ id }: NodeInspectorProps) {
   const tabs: InspectorTab[] = [
     { id: 'turns', label: 'Turn lanes' },
     { id: 'control', label: 'Control' },
+    { id: 'connections', label: 'Connections' },
   ];
 
   return (
@@ -337,6 +404,45 @@ export function NodeInspector({ id }: NodeInspectorProps) {
               })}
             </>
           )}
+        </div>
+      )}
+      {tab === 'connections' && (
+        <div className="insp-section" role="tabpanel">
+          {mixedTypes && (
+            <p className="insp-sub">
+              These ways aren't the same type, so no vehicle can actually turn between them.
+              Disconnecting one is how you undo that.
+            </p>
+          )}
+          {!readOnly && !mixedTypes && (
+            <p className="insp-sub">
+              Disconnecting a way pulls its end clear of the others — the rest of the junction stays
+              as it is.
+            </p>
+          )}
+          <div className="svc-list">
+            {connectedWays.map((way) => (
+              <div key={way.id} className="svc-chip chip-removable">
+                <span className="chip-removable-label">
+                  {wayIdentity(way)} · {wayType(way.typeId).label}
+                </span>
+                <span className="node-lane-label">{approachOf(node, way)}</span>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    className="chip-remove-btn"
+                    aria-label={`Disconnect the ${approachOf(node, way) ?? ''} ${wayIdentity(
+                      way,
+                    )} arm from this junction`}
+                    title="Disconnect from this junction"
+                    onClick={() => disconnectNodeWay(node.id, way.id)}
+                  >
+                    <Icon name="x" size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </aside>

@@ -1,6 +1,8 @@
 import { shortId } from './ids';
 import { LINE_COLORS, laneKind } from './catalog';
 import { deriveLegDirections, oneSection, wayById } from './geo';
+import { wayTypeIndex, withSingleTypeArms } from './junctions';
+import { mapSectionLegs, pruneSections } from './patternEdits';
 import { defaultProfileFor } from './profile';
 import type { ComponentMap } from './components';
 import {
@@ -10,6 +12,8 @@ import {
   type DrivingSide,
   type LaneConnector,
   type LaneSpec,
+  type Facility,
+  type Group,
   type LngLat,
   type Median,
   type NamedWay,
@@ -924,16 +928,21 @@ function prunedSkippedStops(pattern: Pattern, liveStationIds: Set<string>): Patt
   return Object.keys(kept).length > 0 ? { ...rest, skippedStops: kept } : rest;
 }
 
-function finish(
-  o: Record<string, unknown>,
-  parts: Omit<
-    Pick<
-      TransitSystem,
-      'ways' | 'services' | 'stations' | 'facilities' | 'groups' | 'nodes' | 'namedWays'
-    >,
-    'services'
-  > & { services: DraftService[] },
-): TransitSystem {
+/** What a parse path recovered from a document, before defaults, repair, and
+ *  the component maps finish() derives. Services are still drafts here: their
+ *  legs have no direction until finish() resolves them against the ways. */
+interface FinishParts {
+  ways: Way[];
+  services: DraftService[];
+  stations: Station[];
+  facilities: Facility[];
+  groups: Group[];
+  nodes: Node[];
+  namedWays: NamedWay[];
+}
+
+function finish(o: Record<string, unknown>, parts: FinishParts): TransitSystem {
+  const repaired = repairedParts(parts);
   const vp = o.viewport as Record<string, unknown> | undefined;
   // Normalized, not merely validated. A predicate that answers "is this a
   // coordinate?" while handing back the caller's original value is a guard
@@ -950,7 +959,7 @@ function finish(
   // A skip names a station, and a station can be deleted after the skip was
   // set — the one way this record goes stale. Rebuilt against the stations
   // that actually parsed, which is cheap and has no false positives.
-  const liveStationIds = new Set(parts.stations.map((st) => st.id));
+  const liveStationIds = new Set(repaired.stations.map((st) => st.id));
 
   const now = Date.now();
   return {
@@ -961,20 +970,81 @@ function finish(
     viewport,
     createdAt: typeof o.createdAt === 'number' ? o.createdAt : now,
     updatedAt: typeof o.updatedAt === 'number' ? o.updatedAt : now,
-    ...parts,
-    services: parts.services.map((sv) => ({
+    ...repaired,
+    // Legs onto a way that is not here are dropped, but the pattern and the
+    // service that held them are NOT. A line is something a person made and
+    // named; losing one on load, silently, because a way it rode had gone
+    // missing would be the loader deciding something that is not its to
+    // decide. A line left riding nothing is what validateSystemQuick's
+    // "doesn't run over any way" has always been for — it says so, in the
+    // list, and the person deletes it or re-routes it.
+    services: repaired.services.map((sv) => ({
       ...sv,
-      patterns: resolveLegDirections(sv.patterns, parts.ways).map((pt) =>
-        prunedSkippedStops(pt, liveStationIds),
-      ),
+      patterns: resolveLegDirections(sv.patterns, repaired.ways)
+        .map((pt) => prunedSkippedStops(pt, liveStationIds))
+        .map((pt) => ({ ...pt, sections: prunedToLiveWays(pt.sections, repaired.ways) })),
     })),
     vehicleKinds: parseVehicleKinds(o.vehicleKinds),
     palette,
     drivingSide: drivingSideOf(o.drivingSide),
-    turnRestrictions: parseTurnRestrictions(o.turnRestrictions, parts.ways),
-    medians: parseMedians(o.medians, parts.namedWays),
-    approachControls: parseApproachControls(o.approachControls, parts.ways),
+    turnRestrictions: parseTurnRestrictions(o.turnRestrictions, repaired.ways),
+    medians: parseMedians(o.medians, repaired.namedWays),
+    approachControls: parseApproachControls(o.approachControls, repaired.ways),
   };
+}
+
+/**
+ * A document brought back to what the model allows, before anything reads it.
+ *
+ * These are contradictions rather than choices: a way with one point cannot be
+ * drawn, a station cannot ride a way that is not there, a junction cannot join
+ * two different kinds of way (see junctions.ts). They arrive from documents
+ * saved before a rule existed, from a hand-edited file, or from a migration
+ * that had to guess — never from anything a person did in the editor.
+ *
+ * Repaired here rather than reported, because the person reading a warning
+ * about them could do nothing except accept it. What IS worth reporting —
+ * a line with a gap in its route, a crossing that should probably be a
+ * junction — is left to validate.ts, so the issues list stays a list of
+ * things about the network someone is designing.
+ */
+function repairedParts(parts: FinishParts): FinishParts {
+  const ways = parts.ways.filter((w) => w.points.length >= 2);
+  const liveWayIds = new Set(ways.map((w) => w.id));
+  return {
+    ...parts,
+    ways,
+    stations: prunedAnchors(parts.stations, ways),
+    nodes: withSingleTypeArms(
+      parts.nodes.map((n) => ({ ...n, refs: n.refs.filter((r) => liveWayIds.has(r.wayId)) })),
+      wayTypeIndex(ways),
+    ),
+    namedWays: parts.namedWays
+      .map((n) => ({ ...n, wayIds: n.wayIds.filter((id) => liveWayIds.has(id)) }))
+      .filter((n) => n.wayIds.length > 0),
+  };
+}
+
+/** Stations keep every anchor onto a way that exists, and lose the rest. A
+ *  station with no anchors left still stands: it is a stop someone placed,
+ *  and where it sits is not in question — only what it rides. */
+function prunedAnchors(stations: Station[], ways: Way[]): Station[] {
+  const liveWayIds = new Set(ways.map((w) => w.id));
+  return stations.map((st) =>
+    st.anchors.every((a) => liveWayIds.has(a.wayId))
+      ? st
+      : { ...st, anchors: st.anchors.filter((a) => liveWayIds.has(a.wayId)) },
+  );
+}
+
+/** A pattern's sections with every leg onto a missing way dropped. The route
+ *  is left with a hole where one was, which validate.ts then reports — that
+ *  IS a planning problem, unlike the dangling reference itself. */
+function prunedToLiveWays(sections: PatternSection[], ways: Way[]): PatternSection[] {
+  const liveWayIds = new Set(ways.map((w) => w.id));
+  return pruneSections(
+    mapSectionLegs(sections, (legs) => legs.filter((l) => liveWayIds.has(l.wayId))),
+  );
 }
 
 /** Deep clone a system under a fresh id — used by "Fork". */

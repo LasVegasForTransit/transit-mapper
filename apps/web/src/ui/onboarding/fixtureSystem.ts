@@ -56,13 +56,18 @@ const railSpine: Way = {
   profile: defaultProfileFor('lightRail'),
 };
 
+// Only the two ROADS share the junction. The rail spine runs through the same
+// coordinate without joining it: a junction is a lane graph, and a road and a
+// light-rail line have no lanes that feed each other, so the app refuses to
+// form one (see validate.ts's findMismatchedTypeJunctions). What the two of
+// them meeting really needs is a level crossing, which the model has no
+// primitive for yet.
 const junctionNode: Node = {
   id: 'onboarding-junction',
   coord: CROSSING,
   refs: [
     { wayId: roadA.id, pointIndex: 1 },
     { wayId: roadB.id, pointIndex: 1 },
-    { wayId: railSpine.id, pointIndex: 1 },
   ],
 };
 
@@ -85,14 +90,17 @@ function stationOnWay(id: string, name: string, way: Way, t: number): Station {
 // the straightened lines.
 const stations: Station[] = [
   stationOnWay('onboarding-station-west', 'Westside', roadA, 0.18),
+  // Central sits where the train crosses the bus route, but it rides the BUS
+  // corridor only. Diagram keeps a stop on each corridor it is anchored to by
+  // straightening that corridor around it, and it can only hold two corridors
+  // together where they share a junction vertex — which a road and a rail
+  // line never do. Anchoring Central to both would leave the schematic
+  // drawing the train some 200 m away from its own stop.
   {
     id: 'onboarding-station-transfer',
     name: 'Central',
     coord: CROSSING,
-    anchors: [
-      { wayId: roadA.id, t: crossingT(roadA) },
-      { wayId: railSpine.id, t: crossingT(railSpine) },
-    ],
+    anchors: [{ wayId: roadA.id, t: crossingT(roadA) }],
   },
   stationOnWay('onboarding-station-east', 'Eastside', roadA, 0.82),
   stationOnWay('onboarding-station-north', 'North', railSpine, 0.82),

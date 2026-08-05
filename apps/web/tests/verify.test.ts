@@ -126,7 +126,7 @@ import {
   MAX_PREVIEW_BYTES,
   pngDimensions,
 } from '@transitmapper/core/render/pngBytes';
-import { validateSystem } from '@transitmapper/core/model/validate';
+import { findMismatchedTypeJunctions, validateSystem } from '@transitmapper/core/model/validate';
 import { estimateWayCapitalCost, formatUsdCompact } from '@transitmapper/core/model/cost';
 import {
   LANE_KINDS,
@@ -2099,6 +2099,195 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check(
     'v4 round-trip preserves the explicit node',
     v4Round.nodes.length === 1 && v4Round.nodes[0].refs.length === 2,
+  );
+}
+
+// --- Disconnecting a junction: disconnectNodeWay takes one way out and
+// leaves nothing sharing the coordinate ---
+{
+  // A 2-arm junction: the crossing corridor's end joined onto a through way.
+  fresh();
+  const through = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(through, [-115.2, 36.1]);
+  store.getState().addWayPoint(through, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const spur = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(spur, [-115.15, 36.2]);
+  store.getState().addWayPoint(spur, [-115.15, 36.1]);
+  store.getState().finishWay();
+  store.getState().joinWayPointToWay(spur, 1, through, [-115.15, 36.1]);
+
+  const junctionId = store.getState().system.nodes[0].id;
+  const stayingPoint = store
+    .getState()
+    .system.ways.find((w) => w.id === through)!
+    .points[1].slice() as [number, number];
+  store.getState().select({ kind: 'node', id: junctionId });
+  store.getState().disconnectNodeWay(junctionId, spur);
+
+  let s = store.getState().system;
+  check('disconnecting one of two arms deletes the junction outright', s.nodes.length === 0);
+  const movedEnd = s.ways.find((w) => w.id === spur)!.points[1];
+  check(
+    'the disconnected way stops sharing the coordinate',
+    haversineMeters(movedEnd, stayingPoint) > 10,
+  );
+  check(
+    "the arm that stayed didn't move",
+    s.ways.find((w) => w.id === through)!.points[1][0] === stayingPoint[0] &&
+      s.ways.find((w) => w.id === through)!.points[1][1] === stayingPoint[1],
+  );
+  check(
+    'the selection clears with the junction it pointed at',
+    store.getState().selection === null,
+  );
+
+  // A 3-arm junction sheds one arm and keeps standing, taking that arm's
+  // lane connectors with it — a connector naming a way that no longer meets
+  // here would break junctionGeometry.
+  fresh();
+  const main = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(main, [-115.2, 36.1]);
+  store.getState().addWayPoint(main, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const north = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(north, [-115.15, 36.2]);
+  store.getState().addWayPoint(north, [-115.15, 36.1]);
+  store.getState().finishWay();
+  const south = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(south, [-115.15, 36.0]);
+  store.getState().addWayPoint(south, [-115.15, 36.1]);
+  store.getState().finishWay();
+  store.getState().joinWayPointToWay(north, 1, main, [-115.15, 36.1]);
+  store.getState().joinWayPointToWay(south, 1, main, [-115.15, 36.1]);
+
+  s = store.getState().system;
+  const threeArm = s.nodes[0];
+  check('setup: all three ways meet at one junction', threeArm.refs.length === 3);
+  const laneOf = (wayId: string) => s.ways.find((w) => w.id === wayId)!.profile.lanes[0].id;
+  store.getState().setNodeConnectors(threeArm.id, [
+    { from: { wayId: south, laneId: laneOf(south) }, to: { wayId: north, laneId: laneOf(north) } },
+    { from: { wayId: north, laneId: laneOf(north) }, to: { wayId: main, laneId: laneOf(main) } },
+  ]);
+  store.getState().disconnectNodeWay(threeArm.id, south);
+
+  s = store.getState().system;
+  check('a 3-arm junction survives shedding one arm', s.nodes.length === 1);
+  check(
+    'the remaining arms keep their refs',
+    s.nodes[0].refs.length === 2 && !s.nodes[0].refs.some((r) => r.wayId === south),
+  );
+  check(
+    'connectors naming the disconnected way are pruned',
+    (s.nodes[0].connectors ?? []).length === 1 && s.nodes[0].connectors![0].from.wayId === north,
+  );
+  check(
+    'the shed arm is nudged clear of the junction that stayed',
+    haversineMeters(s.ways.find((w) => w.id === south)!.points[1], s.nodes[0].coord) > 10,
+  );
+  // The bug this primitive exists for: drawing a road across a rail line no
+  // longer wires them into one junction on commit.
+  fresh();
+  const rail = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(rail, [-115.2, 36.1]);
+  store.getState().addWayPoint(rail, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const road = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(road, [-115.15, 36.05]);
+  store.getState().addWayPoint(road, [-115.15, 36.15]);
+  store.getState().finishWay();
+  check(
+    'a road drawn across a rail line forms no junction',
+    store.getState().system.nodes.length === 0,
+  );
+
+  // An import that claims a junction between a road and a rail line does not
+  // get one: nothing repairs it later, because it never lands. What survives
+  // is the pair of same-kind arms, if there are two of them.
+  fresh();
+  const wayOf = (id: string, typeId: string, points: [number, number][]) => ({
+    id,
+    typeId,
+    points,
+    geometry: 'straight' as const,
+    grade: 'atGrade' as const,
+    profile: defaultProfileFor(typeId),
+  });
+  store.getState().importWays({
+    ways: [
+      wayOf('mixed-road-west', 'road', [
+        [-115.2, 36.1],
+        [-115.15, 36.1],
+      ]),
+      wayOf('mixed-road-east', 'road', [
+        [-115.15, 36.1],
+        [-115.1, 36.1],
+      ]),
+      wayOf('mixed-rail', 'lightRail', [
+        [-115.15, 36.05],
+        [-115.15, 36.1],
+      ]),
+    ],
+    nodes: [
+      {
+        id: 'mixed-junction',
+        coord: [-115.15, 36.1],
+        refs: [
+          { wayId: 'mixed-road-west', pointIndex: 1 },
+          { wayId: 'mixed-road-east', pointIndex: 0 },
+          { wayId: 'mixed-rail', pointIndex: 1 },
+        ],
+      },
+    ],
+    namedWays: [],
+    medians: [],
+    turnRestrictions: [],
+  });
+  check(
+    'importing a road-and-rail junction leaves no mismatched junction behind',
+    findMismatchedTypeJunctions(store.getState().system).length === 0,
+  );
+  check(
+    'the two road arms keep their junction',
+    store.getState().system.nodes.length === 1 &&
+      store.getState().system.nodes[0].refs.every((r) => r.wayId.startsWith('mixed-road')),
+  );
+  check(
+    'and the rail line is left where it was, crossing without joining',
+    store.getState().system.ways.find((w) => w.id === 'mixed-rail')!.points[1][1] === 36.1,
+  );
+
+  // The same rule keeps a bike path joined to the street it meets: both are
+  // in the street junction group, and a cyclist really does turn there.
+  fresh();
+  store.getState().importWays({
+    ways: [
+      wayOf('bike-street-west', 'road', [
+        [-115.2, 36.1],
+        [-115.15, 36.1],
+      ]),
+      wayOf('bike-path', 'bike', [
+        [-115.15, 36.05],
+        [-115.15, 36.1],
+      ]),
+    ],
+    nodes: [
+      {
+        id: 'bike-junction',
+        coord: [-115.15, 36.1],
+        refs: [
+          { wayId: 'bike-street-west', pointIndex: 1 },
+          { wayId: 'bike-path', pointIndex: 1 },
+        ],
+      },
+    ],
+    namedWays: [],
+    medians: [],
+    turnRestrictions: [],
+  });
+  check(
+    'a bike path keeps the junction where it meets a street',
+    store.getState().system.nodes.length === 1,
   );
 }
 
@@ -6482,13 +6671,17 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     JSON.stringify(round.ways[0].profile) === JSON.stringify(v5ish.ways[0].profile),
   );
 
-  // Node control/connectors round-trip, with bad connectors dropped.
+  // Node control/connectors round-trip, with bad connectors dropped. Both ways
+  // are roads here: a junction between a road and a rail line is one the
+  // loader repairs away (see model/junctions.ts), so it could not carry a
+  // control setting to assert about.
   const laneA = v5ish.ways[0].profile.lanes[1].id;
   const laneB = v5ish.ways[1].profile.lanes[0].id;
   const withNode = {
     ...JSON.parse(JSON.stringify(v5ish)),
     ways: JSON.parse(JSON.stringify(v5ish.ways)).map((w: Way) => ({
       ...w,
+      typeId: 'road',
       points: [
         [-115.2, 36.1],
         [-115.1, 36.1],
@@ -9838,8 +10031,11 @@ function buildGrid() {
     );
   }
   // Latitude has no wrap-around meaning, so past a pole really is nonsense.
+  // The way is left with one point, which draws nothing, so the loader's own
+  // repair pass then drops the way as well (see model/junctions.ts's
+  // neighbours in serialize.ts).
   check(
-    'a latitude past the pole is dropped',
+    'a latitude past the pole is dropped, and takes the undrawable way with it',
     parseSystem(
       wayWith({
         points: [
@@ -9847,7 +10043,7 @@ function buildGrid() {
           [-115.1, 36.1],
         ],
       }),
-    ).ways[0].points.length === 1,
+    ).ways.length === 0,
   );
   check(
     'an ordinary coordinate is untouched',

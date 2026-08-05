@@ -31,6 +31,14 @@ Heavy rail, light rail, and monorail are separate types (not classes of one
 classes (transitway / arterial / collector / local); bike ways carry
 protection classes; pedestrian ways carry promenade / pathway / stairs.
 
+A type may also name a `junctionGroupId`: which other types it may share a
+junction with. Road, bike, and pedestrian share the `street` group, because a
+cyclist really does turn from a path onto the street it meets. Every other
+type omits it and so may only meet its own kind — a road and a heavy-rail
+line crossing is a level crossing, not a junction. This governs which
+junctions are KEPT (on load, and on import); forming one by drawing across
+another way still needs an exact type match.
+
 ### Way families (`WAY_FAMILIES`)
 
 Families group types for the UI: each family is one drawing tool in the dock

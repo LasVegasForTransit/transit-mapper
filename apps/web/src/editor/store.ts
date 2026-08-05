@@ -30,8 +30,10 @@ import {
   detectShapeRuns,
   dropCollinearPoints,
   haversineMeters,
+  metersFromOrigin,
   nearestInsertionPoint,
   nearestOnPath,
+  offsetMeters,
   offsetPolyline,
   pathLengthMeters,
   patternPath,
@@ -130,6 +132,7 @@ import type {
   VehicleKind,
   Viewport,
   Way,
+  WayPointRef,
 } from '@transitmapper/core/model/system';
 
 /** `lines` selects SERVICES and only services — a drag-select for routes,
@@ -458,6 +461,10 @@ export interface EditorState {
   /** Store an explicit lane-connectivity graph for a junction; undefined
    *  reverts it to heuristic-derived connectors. */
   setNodeConnectors: (nodeId: string, connectors: LaneConnector[] | undefined) => void;
+  /** Take one way out of a junction. Its control point moves clear of the
+   *  others, so nothing is left sharing the coordinate; a junction down to a
+   *  single arm stops existing, and the selection clears with it. */
+  disconnectNodeWay: (nodeId: string, wayId: string) => void;
   /** Traffic control for one specific approach, overriding the node's
    *  whole-node control for that arm only; undefined clears the override. */
   setApproachControl: (
@@ -1060,6 +1067,134 @@ function joinWayPointToWay(
   next = { ...next, stations: reanchorStations(next, targetWayId) };
   next = { ...next, stations: reanchorStations(next, wayId) };
   return { ...next, updatedAt: Date.now() };
+}
+
+/**
+ * How far a way's control point moves when it leaves a junction.
+ *
+ * Removing the shared ref alone would leave the two points still sitting on
+ * the same coordinate: the map still draws one meeting of two corridors, and
+ * a reload re-derives the junction outright, because serialize.ts buckets
+ * coordinates to NODE_COORD_PRECISION (~0.11 m) to decide what is coincident.
+ * 12 m clears that bucket by two orders of magnitude and reads as a real gap
+ * at street-level zoom, while being short enough not to visibly bend the way
+ * it moves. It is deliberately unrelated to MAX_SNAP_M (50 m): disconnecting
+ * is not a drag gesture, so nothing re-snaps the point afterwards.
+ */
+const DISCONNECT_NUDGE_M = 12;
+
+/** Unit vectors pointing away from `origin` along each side of one arm — two
+ *  for a way passing through the junction, one for a way ending at it. */
+function armTangentsAt(
+  system: TransitSystem,
+  origin: LngLat,
+  ref: WayPointRef,
+): [number, number][] {
+  const way = system.ways.find((w) => w.id === ref.wayId);
+  if (!way) return [];
+  const tangents: [number, number][] = [];
+  for (const neighbor of [way.points[ref.pointIndex - 1], way.points[ref.pointIndex + 1]]) {
+    if (!neighbor) continue;
+    const [dx, dy] = metersFromOrigin(origin, neighbor);
+    const length = Math.hypot(dx, dy);
+    if (length < 0.01) continue;
+    tangents.push([dx / length, dy / length]);
+  }
+  return tangents;
+}
+
+/**
+ * Which way a leaving arm's point moves: opposite the sum of every remaining
+ * arm's tangents, so the point retreats from wherever the junction's other
+ * corridors continue. At a 4-arm cross that is straight back down the arm
+ * being removed; at an end-to-end joint it is back along the way that stays.
+ *
+ * A way running STRAIGHT THROUGH the junction contributes two opposed
+ * tangents that cancel, which is honest — the junction offers no side to
+ * retreat towards — so the arm falls back to backing off along its own
+ * alignment, which separates the two points without bending either way.
+ */
+function disconnectDirection(
+  system: TransitSystem,
+  origin: LngLat,
+  staying: WayPointRef[],
+  leaving: WayPointRef[],
+): [number, number] {
+  let sx = 0;
+  let sy = 0;
+  for (const ref of staying) {
+    for (const [dx, dy] of armTangentsAt(system, origin, ref)) {
+      sx += dx;
+      sy += dy;
+    }
+  }
+  const length = Math.hypot(sx, sy);
+  if (length > 1e-6) return [-sx / length, -sy / length];
+  const own = leaving.flatMap((ref) => armTangentsAt(system, origin, ref))[0];
+  // Both sides degenerate only for a way with no usable neighbouring point at
+  // all, which cannot render anyway; any direction separates the points.
+  return own ?? [1, 0];
+}
+
+/** `node` with `wayId` gone from both its arms and its lane graph. A
+ *  connector naming a way that no longer meets here would break
+ *  junctionGeometry, which resolves every connector endpoint against a live
+ *  arm. */
+function nodeWithoutWay(node: Node, wayId: string, refs: WayPointRef[]): Node {
+  const connectors = node.connectors?.filter((c) => c.from.wayId !== wayId && c.to.wayId !== wayId);
+  return { ...node, refs, connectors: connectors?.length ? connectors : undefined };
+}
+
+/**
+ * Take one way out of a junction: the inverse of joinWayPointToWay, and
+ * written the same way — a private pure transform over a TransitSystem, with
+ * a same-named store action wrapping it.
+ *
+ * The leaving way's control point is NUDGED, not merely unlinked. Leaving it
+ * coincident would keep drawing a junction that no longer exists in the
+ * model, and serialize.ts would re-derive one on the next load. The arms that
+ * stay never move.
+ *
+ * One path covers every junction, not just the 2-arm case the bug report
+ * showed: a 6-arm intersection sheds one arm and keeps standing, a 2-arm one
+ * drops to a single ref and stops being a junction at all — a way passing
+ * through a point on its own is not one.
+ */
+function disconnectWayFromNode(
+  system: TransitSystem,
+  nodeId: string,
+  wayId: string,
+): TransitSystem {
+  const node = system.nodes.find((n) => n.id === nodeId);
+  if (!node) return system;
+  // A way that touches the same junction twice (a loop closing on itself)
+  // leaves by both refs at once — one of them staying behind would leave the
+  // junction half-disconnected, which no UI can then describe.
+  const leaving = node.refs.filter((r) => r.wayId === wayId);
+  const staying = node.refs.filter((r) => r.wayId !== wayId);
+  if (leaving.length === 0) return system;
+
+  const [dx, dy] = disconnectDirection(system, node.coord, staying, leaving);
+  const moved = new Set(leaving.map((r) => r.pointIndex));
+  const ways = system.ways.map((w) =>
+    w.id === wayId
+      ? {
+          ...w,
+          points: w.points.map((p, i) =>
+            moved.has(i) ? offsetMeters(p, dx * DISCONNECT_NUDGE_M, dy * DISCONNECT_NUDGE_M) : p,
+          ),
+        }
+      : w,
+  );
+  const nodes =
+    staying.length < 2
+      ? system.nodes.filter((n) => n.id !== nodeId)
+      : system.nodes.map((n) => (n.id === nodeId ? nodeWithoutWay(n, wayId, staying) : n));
+
+  const next: TransitSystem = { ...system, ways, nodes };
+  // The moved point reshapes the way, so anything riding it by fraction-along
+  // has to be re-measured — the same reason cascadeMove does this.
+  return { ...next, stations: reanchorStations(next, wayId), updatedAt: Date.now() };
 }
 
 /**
@@ -2778,6 +2913,19 @@ export function createEditorStore() {
           nodes: s.system.nodes.map((n) => (n.id === nodeId ? { ...n, connectors } : n)),
         }),
       })),
+
+    disconnectNodeWay: (nodeId, wayId) =>
+      set((s) => {
+        const system = disconnectWayFromNode(s.system, nodeId, wayId);
+        const nodeSurvives = system.nodes.some((n) => n.id === nodeId);
+        return {
+          system,
+          selection:
+            !nodeSurvives && s.selection?.kind === 'node' && s.selection.id === nodeId
+              ? null
+              : s.selection,
+        };
+      }),
 
     setApproachControl: (wayId, end, control) =>
       set((s) => {
