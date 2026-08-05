@@ -357,10 +357,17 @@ export function Workbench({
           </div>
         )}
 
+        {/* The install invitation is app-level chrome, not something about
+            the map underneath it, so it hangs off the right edge below the
+            action bar rather than floating in the middle of the canvas. That
+            edge and `--panel-w` are the Inspector's too, so when both are up
+            they read as one column instead of two unrelated cards. It keeps
+            its own grid row: whatever height it takes pushes the Inspector
+            down rather than covering it. ---- */}
         {!mobile && installBanner && (
           <div
-            className="pointer-events-auto z-[1] w-full min-w-0 max-w-[560px] justify-self-center"
-            style={{ gridColumn: '2 / 3', gridRow: '2' }}
+            className="pointer-events-auto z-[1] justify-self-end"
+            style={{ gridColumn: '1 / -1', gridRow: '2', width: 'var(--panel-w)' }}
           >
             {installBanner}
           </div>
