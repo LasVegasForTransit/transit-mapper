@@ -17,6 +17,7 @@ import {
   type SelectionAction,
   type SelectionActionProvider,
 } from '@transitmapper/core/model/selectionActions';
+import { isOneWay } from '@transitmapper/core/model/profile';
 import type { EditorStore } from '../store';
 
 // There is deliberately no distance check here.
@@ -76,11 +77,12 @@ export function servicePointActionProvider(store: EditorStore): SelectionActionP
  * in; this exposes the same thing to a click.
  */
 export function wayPointActionProvider(store: EditorStore): SelectionActionProvider {
-  return ({ refs, corridorHit }: ActionContext) => {
+  return ({ refs, corridorHit, system }: ActionContext) => {
     const [wayId] = refIds(refs, 'way');
     if (!wayId || refs.length !== 1) return [];
     if (!corridorHit || corridorHit.wayId !== wayId) return [];
-    return [
+    const way = system.ways.find((w) => w.id === wayId);
+    const actions: SelectionAction[] = [
       {
         id: 'way.splitHere',
         label: 'Split corridor here',
@@ -89,5 +91,20 @@ export function wayPointActionProvider(store: EditorStore): SelectionActionProvi
         run: () => store.getState().splitWayAtT(wayId, corridorHit.t),
       },
     ];
+    // Also offered from the Way Inspector's Lanes tab — surfaced here too so
+    // it's reachable from the same right-click a person already tried it
+    // from, rather than only from a panel they have to know to open. Hidden
+    // once a way is already one-way rather than left to separateCarriageways'
+    // own silent no-op, which is the more honest affordance.
+    if (way && !isOneWay(way.profile)) {
+      actions.push({
+        id: 'way.separateCarriageways',
+        label: 'Separate carriageways',
+        hint: 'Two one-way streets around a median, each draggable from its own end',
+        group: 'cut',
+        run: () => store.getState().separateCarriageways(wayId),
+      });
+    }
+    return actions;
   };
 }
