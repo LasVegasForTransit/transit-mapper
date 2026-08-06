@@ -12477,6 +12477,42 @@ function buildGrid() {
   );
 }
 
+// --- cross-street auto-naming: pre-filled on placement, never touched again ---
+{
+  fresh();
+  const ew = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ew, [-115.2, 36.1]);
+  store.getState().addWayPoint(ew, [-115.1, 36.1]);
+  store.getState().finishWay();
+  store.getState().nameWay(ew, 'Home St');
+  const ns = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ns, [-115.15, 36.05]);
+  store.getState().addWayPoint(ns, [-115.15, 36.15]);
+  store.getState().finishWay();
+  store.getState().nameWay(ns, 'Cross Ave');
+  store.getState().formCrossingJunctions(ns);
+
+  const ewAfterSplit = store
+    .getState()
+    .system.ways.find((w) => w.points.some((p) => p[0] === -115.15 && p[1] === 36.1))!;
+  // No service rides either road yet, so the unserved/road-anchored default
+  // applies — 'alongStreet' style ('@'), not the rail-style '&'; see the
+  // dedicated crossStreetNaming.test.ts suite for that rule on its own.
+  const stId = store.getState().addStation([-115.15, 36.1], { wayId: ewAfterSplit.id, t: 1 });
+  const placed = store.getState().system.stations.find((s) => s.id === stId)!;
+  check(
+    'placing a station on a named way pre-fills its name from the nearest cross street',
+    placed.name === 'Home St @ Cross Ave',
+  );
+
+  store.getState().moveStation(stId, [-115.12, 36.1]);
+  const moved = store.getState().system.stations.find((s) => s.id === stId)!;
+  check(
+    "moving a station leaves its auto-filled name untouched, even though it's no longer accurate",
+    moved.name === 'Home St @ Cross Ave',
+  );
+}
+
 // --- the crossing scan only looks at ways that could actually cross ---
 // wayCrossings compares every segment of one way against every segment of
 // another, with no bbox reject, and formCrossingJunctions runs it on every

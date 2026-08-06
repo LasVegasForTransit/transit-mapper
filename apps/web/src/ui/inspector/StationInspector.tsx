@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { useEditor } from '../../editor/EditorProvider';
+import { useEditor, useEditorStore } from '../../editor/EditorProvider';
+import { suggestStopName } from '@transitmapper/core/model/geo/crossStreetNaming';
 import type { Service } from '@transitmapper/core/model/system';
 import {
   activeSchedule,
@@ -16,6 +17,7 @@ import { InspectorTabs, type InspectorTab } from '../InspectorTabs';
 import { Panel } from '../Panel';
 import { blurOnEnter } from '../formUtils';
 import { Icon } from '../Icon';
+import { IconButton } from '../IconButton';
 import { useSim } from '../SimProvider';
 import { useSimTime } from '../useSimTime';
 import { useView } from '../ViewProvider';
@@ -29,6 +31,7 @@ export interface StationInspectorProps {
 // Physical (footprint/platforms — Infrastructure-view detail), Complex
 // (transfer grouping). One concern at a time.
 export function StationInspector({ id }: StationInspectorProps) {
+  const store = useEditorStore();
   const station = useEditor((s) => s.system.stations.find((st) => st.id === id));
   // Narrow selectors, not the whole `system` — see ServiceInspector's note.
   const ways = useEditor((s) => s.system.ways);
@@ -91,6 +94,24 @@ export function StationInspector({ id }: StationInspectorProps) {
           onChange={(e) => setStationName(id, e.target.value)}
           onKeyDown={blurOnEnter}
         />
+        {!readOnly && !station.name && (
+          <IconButton
+            icon="redo"
+            size={15}
+            label="Suggest a name from nearby cross streets"
+            onClick={() => {
+              const state = store.getState();
+              const st = state.system.stations.find((s) => s.id === id);
+              if (!st) return;
+              const suggested = suggestStopName({
+                system: state.system,
+                coord: st.coord,
+                anchors: st.anchors,
+              });
+              if (suggested.name) setStationName(id, suggested.name);
+            }}
+          />
+        )}
       </div>
       <div className="insp-kind">
         {served.length > 1

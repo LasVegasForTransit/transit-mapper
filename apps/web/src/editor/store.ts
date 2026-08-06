@@ -109,6 +109,7 @@ import {
   createGroup as createGroupEntity,
   createStation,
 } from '@transitmapper/core/model/system';
+import { suggestStopName } from '@transitmapper/core/model/geo/crossStreetNaming';
 import { withoutAlreadyImported, type ImportedNetwork } from '@transitmapper/core/model/import';
 import type {
   RunDirection,
@@ -4505,7 +4506,17 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         }),
 
       addStation: (coord, anchor) => {
-        const station = createStation(coord, anchor);
+        let station = createStation(coord, anchor);
+        // Computed once, here, never again automatically — moving or
+        // re-anchoring a station must never silently overwrite a name the
+        // user (or this suggestion) already gave it. The Inspector's own
+        // "Suggest name" button is the only other place this runs.
+        const suggested = suggestStopName({
+          system: get().system,
+          coord,
+          anchors: station.anchors,
+        });
+        if (suggested.name) station = { ...station, name: suggested.name };
         set((s) => ({
           system: touch({ ...s.system, stations: [...s.system.stations, station] }),
           selection: { kind: 'station', id: station.id },
@@ -4525,11 +4536,14 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         let coord: LngLat = [cx, cy];
         const hit = snap(get().system.ways, coord, STATION_DRAW_ANCHOR_M);
         if (hit) coord = hit.coord;
+        const anchors = hit ? [{ wayId: hit.wayId, t: hit.t }] : [];
+        const suggested = suggestStopName({ system: get().system, coord, anchors });
         const station: Station = {
           id,
           coord,
-          anchors: hit ? [{ wayId: hit.wayId, t: hit.t }] : [],
+          anchors,
           footprint,
+          ...(suggested.name ? { name: suggested.name } : {}),
         };
         set((s) => ({
           system: touch({ ...s.system, stations: [...s.system.stations, station] }),
