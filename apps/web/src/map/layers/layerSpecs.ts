@@ -770,7 +770,9 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       // bigger and softer than the plain endpoint dot (LYR_WAY_ENDPOINTS)
       // itself, which only ever renders for the active/selected way anyway and
       // wasn't visible at all for the arbitrary other way you're about to snap
-      // onto.
+      // onto. Also fires WHILE drawing, over the active way's own loop-close
+      // vertex (see onHoverMoveImpl's ownLoopCloseTarget branch) — the one
+      // case a mid-draw hover still needs an affordance for.
       id: LYR_ENDPOINT_HINT,
       type: 'circle',
       source: SRC_ENDPOINT_HINT,

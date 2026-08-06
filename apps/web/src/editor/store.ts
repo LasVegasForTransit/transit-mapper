@@ -399,6 +399,10 @@ export interface EditorState {
    *  and `targetWayId`: splices a genuine control point into the target way
    *  (or reuses one already there) and links both as one Node. */
   joinWayPointToWay: (wayId: string, index: number, targetWayId: string, coord: LngLat) => void;
+  /** Closes a way back onto its own start with a real shared Node, once the
+   *  caller has already made points[0] and the way's new last point
+   *  coincide by coordinate (see resolveEnd's loop-close branch). */
+  closeWayLoop: (wayId: string) => void;
   /** Drops every intermediate control point that isn't a junction, leaving a
    *  straight line between the way's endpoints (junction points are kept in
    *  place so connected ways don't desync). Cleanup for a wobbly freehand or
@@ -1067,6 +1071,49 @@ function joinWayPointToWay(
   next = { ...next, stations: reanchorStations(next, targetWayId) };
   next = { ...next, stations: reanchorStations(next, wayId) };
   return { ...next, updatedAt: Date.now() };
+}
+
+// Same-way counterpart to joinWayPointToWay: closing a way back onto its own
+// start needs a real shared Node linking index 0 to the new last index, or
+// the ring is just two coincident points — visually closed but disconnected
+// for routing/lane-graph purposes. joinWayPointToWay can't be reused directly
+// since it guards wayId === targetWayId (built for merging distinct ways).
+// Assumes the caller already appended/prepended the closing point so
+// points[0] and points[last] are coincident by coordinate.
+function closeWayLoop(system: TransitSystem, wayId: string): TransitSystem {
+  const way = system.ways.find((w) => w.id === wayId);
+  if (!way || way.points.length < 2) return system;
+  const lastIndex = way.points.length - 1;
+  const coord = way.points[0];
+  const existingNode = system.nodes.find((n) =>
+    n.refs.some((r) => r.wayId === wayId && r.pointIndex === 0),
+  );
+  let nodes = system.nodes;
+  if (existingNode) {
+    const alreadyLinked = existingNode.refs.some(
+      (r) => r.wayId === wayId && r.pointIndex === lastIndex,
+    );
+    nodes = alreadyLinked
+      ? nodes
+      : nodes.map((n) =>
+          n.id === existingNode.id
+            ? { ...n, refs: [...n.refs, { wayId, pointIndex: lastIndex }] }
+            : n,
+        );
+  } else {
+    nodes = [
+      ...nodes,
+      {
+        id: shortId(),
+        coord,
+        refs: [
+          { wayId, pointIndex: 0 },
+          { wayId, pointIndex: lastIndex },
+        ],
+      },
+    ];
+  }
+  return { ...system, nodes, updatedAt: Date.now() };
 }
 
 /**
@@ -2630,6 +2677,8 @@ export function createEditorStore() {
 
     joinWayPointToWay: (wayId, index, targetWayId, coord) =>
       set((s) => ({ system: joinWayPointToWay(s.system, wayId, index, targetWayId, coord) })),
+
+    closeWayLoop: (wayId) => set((s) => ({ system: closeWayLoop(s.system, wayId) })),
 
     straightenWay: (wayId) => set((s) => ({ system: straightenWay(s.system, wayId) })),
 

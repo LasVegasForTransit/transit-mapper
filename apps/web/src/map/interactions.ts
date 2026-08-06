@@ -15,6 +15,7 @@ import {
   CONFLATION_TOLERANCE_M,
   densifyForMatching,
   detectShapeRuns,
+  haversineMeters,
   metersFromOrigin,
   nearestOpenEndpoint,
   nearestOnPath,
@@ -1378,6 +1379,20 @@ export function attachInteractions(
     return atStart ? w.points[1] : w.points[w.points.length - 2];
   };
 
+  // The vertex closing this way's own loop: the endpoint OPPOSITE the one
+  // currently being extended (if extending from the start, that's the way's
+  // end, and vice versa). Only offered once there are enough committed
+  // points that closing back onto it forms a real loop instead of doubling
+  // back between two adjacent clicks — 3 raw control points means the ring
+  // closed by a 4th coincident point has 3 distinct vertices, the smallest
+  // shape that means anything.
+  const OWN_LOOP_MIN_POINTS = 3;
+  const ownLoopCloseTarget = (wayId: string, atStart: boolean): LngLat | null => {
+    const w = store.getState().system.ways.find((x) => x.id === wayId);
+    if (!w || w.points.length < OWN_LOOP_MIN_POINTS) return null;
+    return atStart ? w.points[w.points.length - 1] : w.points[0];
+  };
+
   // Freehand: sample the drag path into a way (freeform geometry only).
   // Coarse sampling keeps it smooth without dumping hundreds of points.
   const startFreehand = (e: MapMouseEvent) => {
@@ -1603,13 +1618,17 @@ export function attachInteractions(
      *  junction (a shared control point, not just a coincidental-looking
      *  curve) once the point is placed. */
     snapWayId?: string;
+    /** Set when `coord` landed on this same way's own start/end vertex —
+     *  placeEnd closes a real loop junction once the point is placed. */
+    closesLoop?: boolean;
   }
 
-  // Where a new node lands: another way's path wins first (forms a
-  // junction); failing that, the way's own current heading if the drag is
-  // roughly aligned with it (so extending continues straight instead of
-  // introducing an accidental kink); a Shift-held drag instead constrains to
-  // 45° from the endpoint; otherwise the raw cursor position.
+  // Where a new node lands: another way's path or this way's own loop-close
+  // vertex win first (whichever is nearer forms a junction); failing that,
+  // the way's own current heading if the drag is roughly aligned with it (so
+  // extending continues straight instead of introducing an accidental kink);
+  // a Shift-held drag instead constrains to 45° from the endpoint; otherwise
+  // the raw cursor position.
   const resolveEnd = (
     wayId: string,
     atStart: boolean,
@@ -1625,6 +1644,18 @@ export function attachInteractions(
       new Set([wayId]),
       store.getState().draftWayTypeId,
     );
+    // The way's own start/end vertex is a snap candidate exactly like any
+    // other way's endpoint. Nearest wins — the same tie-break `snap()` itself
+    // uses across different ways — so a genuinely closer junction with
+    // someone else's line still forms that junction instead of force-closing
+    // a loop the cursor only brushed past.
+    const loopTarget = ownLoopCloseTarget(wayId, atStart);
+    if (loopTarget) {
+      const loopDist = haversineMeters(raw, loopTarget);
+      if (loopDist <= snapMeters(snapPx) && (!otherWay || loopDist <= otherWay.distMeters)) {
+        return { coord: loopTarget, closesLoop: true };
+      }
+    }
     if (otherWay) return { coord: otherWay.coord, snapWayId: otherWay.wayId };
     const heading = wayHeadingAnchor(wayId, atStart);
     if (endpoint && heading) {
@@ -1636,13 +1667,17 @@ export function attachInteractions(
 
   // A new node appends at the way's end normally, or prepends at its start
   // when extending a resumed way backwards. When the resolved coordinate
-  // snapped onto another way, also forms a real junction between them.
+  // snapped onto another way, also forms a real junction between them; when
+  // it closed this way's own loop, forms the same kind of junction with
+  // itself instead.
   const placeEnd = (wayId: string, atStart: boolean, end: ResolvedEnd): void => {
     const way = store.getState().system.ways.find((w) => w.id === wayId);
     const index = atStart ? 0 : (way?.points.length ?? 0);
     if (atStart) store.getState().insertWayPoint(wayId, 0, end.coord);
     else store.getState().addWayPoint(wayId, end.coord);
-    if (end.snapWayId) store.getState().joinWayPointToWay(wayId, index, end.snapWayId, end.coord);
+    if (end.closesLoop) store.getState().closeWayLoop(wayId);
+    else if (end.snapWayId)
+      store.getState().joinWayPointToWay(wayId, index, end.snapWayId, end.coord);
   };
 
   /**
@@ -1703,7 +1738,15 @@ export function attachInteractions(
       if (!opts.isNetworkMode() || pointerIntent.anchor === 'preview')
         previewEnd(st.activeWayId, activeExtendAtStart, lngLatOf(ev), constrainActive(ev));
       else clearPreviews();
-      setEndpointHint(null);
+      // While drawing, the one endpoint hint that still applies is the way's
+      // own loop-close vertex (see resolveEnd/ownLoopCloseTarget) — hints for
+      // OTHER ways' open endpoints stay suppressed here, unchanged.
+      const loopTarget = ownLoopCloseTarget(st.activeWayId, activeExtendAtStart);
+      setEndpointHint(
+        loopTarget && haversineMeters(lngLatOf(ev), loopTarget) <= snapMeters(snapPx)
+          ? loopTarget
+          : null,
+      );
       return;
     }
     if (facilityBoundaryDraft) {
