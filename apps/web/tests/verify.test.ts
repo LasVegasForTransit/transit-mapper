@@ -7227,6 +7227,39 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 }
 
+// --- separating carriageways must not sever the network: the new offset
+// backward carriageway starts with zero junction refs, so it has to be
+// re-run through the same crossing-junction pass a finished draw gets ---
+{
+  fresh();
+  const trunk = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(trunk, [-115.2, 36.1]);
+  store.getState().addWayPoint(trunk, [-115.1, 36.1]);
+  store.getState().finishWay();
+  store.getState().applyProfilePreset(trunk, 'roadArterial4');
+  const cross = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(cross, [-115.15, 36.15]);
+  store.getState().addWayPoint(cross, [-115.15, 36.05]);
+  store.getState().finishWay();
+  check(
+    'the trunk and cross street share a junction before separating',
+    store.getState().system.nodes.some((n) => {
+      const wayIds = new Set(n.refs.map((r) => r.wayId));
+      return wayIds.has(trunk) && wayIds.has(cross);
+    }),
+  );
+
+  const backId = store.getState().separateCarriageways(trunk)!;
+  const sys = store.getState().system;
+  check(
+    'separating carriageways preserves junctions with crossing streets',
+    sys.nodes.some((n) => {
+      const wayIds = new Set(n.refs.map((r) => r.wayId));
+      return wayIds.has(backId) && [...wayIds].some((id) => id !== trunk && id !== backId);
+    }),
+  );
+}
+
 // --- combining carriageways carries the discarded half's anchors across ---
 {
   // The realistic shape: a divided street imported from OSM as two one-way
