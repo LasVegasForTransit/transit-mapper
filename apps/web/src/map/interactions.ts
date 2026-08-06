@@ -20,6 +20,8 @@ import {
   nearestOpenEndpoint,
   nearestOnPath,
   offsetMeters,
+  offsetPolyline,
+  pathLengthMeters,
   patternPath,
   resolveWayPath,
   snap,
@@ -33,6 +35,7 @@ import {
   slicePathByT,
 } from '@transitmapper/core/model/geo';
 import { facilityType, mode } from '@transitmapper/core/model/catalog';
+import { profileWidthM } from '@transitmapper/core/model/profile';
 import { anchorOnWay, routePath } from '@transitmapper/core/model/routeGraph';
 import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
 import {
@@ -1643,12 +1646,102 @@ export function attachInteractions(
     closesLoop?: boolean;
   }
 
+  // How much more permissive corridor-following is than an exact-type snap —
+  // "run alongside this" is a looser judgment than "is this the same track,"
+  // so it gets a wider radius than snapMeters' own tight tolerance.
+  const CORRIDOR_FOLLOW_TOLERANCE_SCALE = 1.75;
+  // Within this many degrees of dead-parallel counts as "following" rather
+  // than "crossing" — a drag steeper than this is passing over the candidate
+  // way, not running alongside it, and bending toward it would read as the
+  // line snapping sideways instead of continuing where it was aimed.
+  const CORRIDOR_FOLLOW_MAX_ANGLE_DEG = 35;
+  const CORRIDOR_FOLLOW_MIN_COS = Math.cos((CORRIDOR_FOLLOW_MAX_ANGLE_DEG * Math.PI) / 180);
+  // Clearance beyond both ways' own half-widths, and beyond the mode's own
+  // corridorToleranceM — so the offset line never nearly touches the
+  // corridor it's deliberately kept separate from, and finishWay's own
+  // conflatePatternOntoExisting can't quietly re-absorb it on commit.
+  const CORRIDOR_FOLLOW_CLEARANCE_M = 3;
+
+  /**
+   * When freehand-dragging near an existing way of a type the draft can't
+   * merge with (so the exact-type snap above found nothing) and the drag is
+   * running roughly PARALLEL to it rather than crossing it, bend the drawn
+   * point onto an offset copy of that way's path — "run alongside this
+   * corridor" without landing on it or forming any junction. A passive
+   * assist: it only nudges a point that's already close and roughly
+   * aligned — move the cursor away and it stops applying, the same as any
+   * other snap here.
+   */
+  const followCorridor = (
+    wayId: string,
+    endpoint: LngLat,
+    behind: LngLat,
+    raw: LngLat,
+  ): LngLat | null => {
+    const state = store.getState();
+    const drawing = state.system.ways.find((w) => w.id === wayId);
+    if (!drawing) return null;
+    const modeSpec = mode(state.draftModeId);
+    const baseToleranceM = modeSpec.corridorToleranceM ?? CONFLATION_TOLERANCE_M;
+    const candidate = snap(
+      state.system.ways,
+      raw,
+      baseToleranceM * CORRIDOR_FOLLOW_TOLERANCE_SCALE,
+      new Set([wayId]),
+    );
+    if (!candidate) return null;
+    const way = state.system.ways.find((w) => w.id === candidate.wayId);
+    if (!way) return null;
+    const path = resolveWayPath(way);
+    if (path.length < 2) return null;
+    const totalM = pathLengthMeters(path);
+    if (totalM < 1e-6) return null;
+
+    const [bx, by] = metersFromOrigin(endpoint, behind);
+    const dragLen = Math.hypot(bx, by);
+    if (dragLen < 1e-6) return null;
+    const dragX = -bx / dragLen;
+    const dragY = -by / dragLen;
+
+    const near = nearestOnPath(path, candidate.coord);
+    if (!near) return null;
+    // A local tangent sampled a couple of meters either side of the nearest
+    // point — short enough to stay local on a long way, wide enough not to
+    // be numerical noise on a short one.
+    const tEps = Math.min(0.05, Math.max(0.002, 2 / totalM));
+    const [tx, ty] = metersFromOrigin(
+      pointAtT(path, Math.max(0, near.t - tEps)),
+      pointAtT(path, Math.min(1, near.t + tEps)),
+    );
+    const tanLen = Math.hypot(tx, ty);
+    if (tanLen < 1e-6) return null;
+    const cosAngle = Math.abs((dragX * tx + dragY * ty) / tanLen);
+    if (cosAngle < CORRIDOR_FOLLOW_MIN_COS) return null;
+
+    const halfSpanM =
+      Math.max(
+        profileWidthM(way.profile) / 2 + profileWidthM(drawing.profile) / 2,
+        baseToleranceM,
+      ) + CORRIDOR_FOLLOW_CLEARANCE_M;
+    const plus = offsetPolyline(path, halfSpanM);
+    const minus = offsetPolyline(path, -halfSpanM);
+    const nearPlus = nearestOnPath(plus, raw);
+    const nearMinus = nearestOnPath(minus, raw);
+    const chosen =
+      nearPlus && (!nearMinus || nearPlus.distMeters <= nearMinus.distMeters)
+        ? nearPlus
+        : nearMinus;
+    return chosen?.coord ?? null;
+  };
+
   // Where a new node lands: another way's path or this way's own loop-close
-  // vertex win first (whichever is nearer forms a junction); failing that,
-  // the way's own current heading if the drag is roughly aligned with it (so
-  // extending continues straight instead of introducing an accidental kink);
-  // a Shift-held drag instead constrains to 45° from the endpoint; otherwise
-  // the raw cursor position.
+  // vertex win first (whichever is nearer forms a junction); failing that, an
+  // incompatible-type corridor to run alongside if the drag is roughly
+  // parallel to one (see followCorridor); failing that, the way's own current
+  // heading if the drag is roughly aligned with it (so extending continues
+  // straight instead of introducing an accidental kink); a Shift-held drag
+  // instead constrains to 45° from the endpoint; otherwise the raw cursor
+  // position.
   const resolveEnd = (
     wayId: string,
     atStart: boolean,
@@ -1679,6 +1772,8 @@ export function attachInteractions(
     if (otherWay) return { coord: otherWay.coord, snapWayId: otherWay.wayId };
     const heading = wayHeadingAnchor(wayId, atStart);
     if (endpoint && heading) {
+      const followed = followCorridor(wayId, endpoint, heading, raw);
+      if (followed) return { coord: followed };
       const straight = continueStraight(endpoint, heading, raw, snapMeters(straightSnapPx));
       if (straight) return { coord: straight };
     }
