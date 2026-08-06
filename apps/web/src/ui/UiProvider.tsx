@@ -15,7 +15,15 @@ import type {
 } from '@transitmapper/core/model/selectionActions';
 
 export type DialogName =
-  'import' | 'gtfs' | 'export' | 'share' | 'systems' | 'settings' | 'onboarding' | 'about';
+  | 'import'
+  | 'gtfs'
+  | 'export'
+  | 'share'
+  | 'systems'
+  | 'settings'
+  | 'onboarding'
+  | 'about'
+  | 'newSystemLocation';
 
 /** A background import's live status — surfaced as a small non-blocking
  *  indicator (see ImportProgressPill) rather than a modal, so a long import
@@ -49,6 +57,12 @@ interface UiState {
   activeDialog: DialogName | null;
   openDialog: (name: DialogName) => void;
   closeDialog: () => void;
+  /** Which of the two behaviors NewSystemLocationDialog should run as — see
+   *  its own props doc. Set alongside activeDialog by openNewSystemLocation
+   *  rather than a second openDialog signature, since only this one dialog
+   *  needs a mode. */
+  newSystemLocationMode: 'create' | 'importIntoActive';
+  openNewSystemLocation: (mode: 'create' | 'importIntoActive') => void;
 }
 
 const UiContext = createContext<UiState | null>(null);
@@ -102,6 +116,9 @@ export function UiProvider({ children }: UiProviderProps) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [uiHidden, setUiHidden] = useState(false);
   const [activeDialog, setActiveDialog] = useState<DialogName | null>(null);
+  const [newSystemLocationMode, setNewSystemLocationMode] = useState<'create' | 'importIntoActive'>(
+    'create',
+  );
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
   const [contextMenuAt, setContextMenuAt] = useState<{
     x: number;
@@ -133,6 +150,10 @@ export function UiProvider({ children }: UiProviderProps) {
   const toggleUi = useCallback(() => setUiHidden((h) => !h), []);
   const openDialog = useCallback((name: DialogName) => setActiveDialog(name), []);
   const closeDialog = useCallback(() => setActiveDialog(null), []);
+  const openNewSystemLocation = useCallback((mode: 'create' | 'importIntoActive') => {
+    setNewSystemLocationMode(mode);
+    setActiveDialog('newSystemLocation');
+  }, []);
   const value = useMemo<UiState>(
     () => ({
       shortcutsOpen,
@@ -143,6 +164,8 @@ export function UiProvider({ children }: UiProviderProps) {
       activeDialog,
       openDialog,
       closeDialog,
+      newSystemLocationMode,
+      openNewSystemLocation,
     }),
     [
       shortcutsOpen,
@@ -153,6 +176,8 @@ export function UiProvider({ children }: UiProviderProps) {
       activeDialog,
       openDialog,
       closeDialog,
+      newSystemLocationMode,
+      openNewSystemLocation,
     ],
   );
   const importProgressValue = useMemo<ImportProgressState>(

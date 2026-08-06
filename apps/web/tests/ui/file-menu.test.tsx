@@ -12,7 +12,6 @@ vi.mock('../../src/editor/EditorProvider', () => ({
   useEditor: <T,>(selector: (editor: Record<string, unknown>) => T): T =>
     selector({
       readOnly: state.readOnly,
-      newSystem: () => undefined,
       system: { name: 'Test system' },
       setName: () => undefined,
     }),
@@ -20,7 +19,12 @@ vi.mock('../../src/editor/EditorProvider', () => ({
 }));
 
 vi.mock('../../src/ui/UiProvider', () => ({
-  useUi: () => ({ openDialog: () => undefined, uiHidden: false, toggleUi: () => undefined }),
+  useUi: () => ({
+    openDialog: () => undefined,
+    openNewSystemLocation: () => undefined,
+    uiHidden: false,
+    toggleUi: () => undefined,
+  }),
 }));
 
 let container: HTMLDivElement;

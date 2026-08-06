@@ -1725,6 +1725,78 @@ input[type='range'] {
   width: 560px;
   max-width: 92vw;
 }
+/* ---- new-system location picker: search + a real interactive basemap the
+   user clicks to drop a pin, wide enough for both to breathe. */
+.modal.new-system-modal {
+  width: 640px;
+  max-width: 94vw;
+}
+.new-system-search {
+  position: relative;
+  margin-top: 12px;
+}
+.new-system-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: var(--md-sys-typescale-body-medium-size);
+  color: var(--md-sys-color-on-surface);
+  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.new-system-search-input:focus {
+  outline: none;
+  border-color: var(--md-sys-color-primary);
+}
+.new-system-results {
+  position: absolute;
+  z-index: 3;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+.new-system-results button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: var(--md-sys-typescale-body-medium-size);
+  color: var(--md-sys-color-on-surface);
+}
+.new-system-results button:hover {
+  background: var(--md-sys-color-surface-container-highest);
+}
+.new-system-map-wrap {
+  position: relative;
+  height: 280px;
+  margin-top: 12px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+}
+.location-picker-map {
+  position: absolute;
+  inset: 0;
+}
+.new-system-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
 .export-body {
   display: grid;
   grid-template-columns: 240px 1fr;

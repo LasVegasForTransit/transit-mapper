@@ -79,6 +79,11 @@ const SettingsDialog = lazy(() =>
 const OnboardingDialog = lazy(() =>
   import('./ui/onboarding/OnboardingDialog').then((m) => ({ default: m.OnboardingDialog })),
 );
+const NewSystemLocationDialog = lazy(() =>
+  import('./ui/newSystem/NewSystemLocationDialog').then((m) => ({
+    default: m.NewSystemLocationDialog,
+  })),
+);
 const AboutDialog = lazy(() =>
   import('./ui/about-dialog').then((m) => ({ default: m.AboutDialog })),
 );
@@ -135,8 +140,16 @@ function LazyDialog({ children, onFailure }: LazyDialogProps) {
 
 export function App() {
   const store = useEditorStore();
-  const { shortcutsOpen, closeShortcuts, uiHidden, activeDialog, openDialog, closeDialog } =
-    useUi();
+  const {
+    shortcutsOpen,
+    closeShortcuts,
+    uiHidden,
+    activeDialog,
+    openDialog,
+    closeDialog,
+    newSystemLocationMode,
+    openNewSystemLocation,
+  } = useUi();
   // Whether the document on screen is the one the app went looking for. Owned
   // by the store, because that is where it decides which changes to accept —
   // mirroring it into local state here would let the two disagree.
@@ -231,15 +244,21 @@ export function App() {
       setActiveId(system.id);
       store.getState().setSystem(system, { readOnly: false });
       if (isBrandNew) store.getState().setTool('way');
-      // Independent of isBrandNew: that flag means "no saved system found,"
-      // which a returning user hits too (they deleted their only system) —
-      // conflating the two would re-show onboarding to someone who's seen it.
-      if (!hasSeenOnboarding()) openDialog('onboarding');
+      // isBrandNew means "no saved system found" — true for a genuine first
+      // run AND for a returning user who deleted their only system, and
+      // either way the blank system this bootstrap just created is the best
+      // moment to offer real streets instead of an empty canvas. The dialog
+      // chains onboarding itself once it closes (see its onClose below),
+      // rather than opening both here — only one modal slot exists, and this
+      // is also how a returning user who's already seen onboarding avoids
+      // seeing it again (the chain checks hasSeenOnboarding, not isBrandNew).
+      if (isBrandNew) openNewSystemLocation('importIntoActive');
+      else if (!hasSeenOnboarding()) openDialog('onboarding');
     })();
     return () => {
       disposed = true;
     };
-  }, [store, report, openDialog, bootstrapAttempt]);
+  }, [store, report, openDialog, openNewSystemLocation, bootstrapAttempt]);
 
   // A wait nobody noticed does not need announcing, and a message that flashes
   // for 40ms on every single load is worse than silence. Only a wait somebody
@@ -492,6 +511,22 @@ export function App() {
               markOnboardingSeen();
               closeDialog();
             }}
+          />
+        </LazyDialog>
+      )}
+      {activeDialog === 'newSystemLocation' && (
+        <LazyDialog onFailure={dialogFailed}>
+          <NewSystemLocationDialog
+            onClose={() => {
+              closeDialog();
+              // Only the bootstrap trigger (mode: 'importIntoActive') should
+              // chain into onboarding — the explicit File-menu/Systems-dialog
+              // "New system" action (mode: 'create') closes plain.
+              if (newSystemLocationMode === 'importIntoActive' && !hasSeenOnboarding()) {
+                openDialog('onboarding');
+              }
+            }}
+            mode={newSystemLocationMode}
           />
         </LazyDialog>
       )}
