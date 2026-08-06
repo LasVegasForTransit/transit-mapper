@@ -126,7 +126,11 @@ import {
   MAX_PREVIEW_BYTES,
   pngDimensions,
 } from '@transitmapper/core/render/pngBytes';
-import { findMismatchedTypeJunctions, validateSystem } from '@transitmapper/core/model/validate';
+import {
+  findMismatchedTypeJunctions,
+  planIssues,
+  validateSystem,
+} from '@transitmapper/core/model/validate';
 import { estimateWayCapitalCost, formatUsdCompact } from '@transitmapper/core/model/cost';
 import {
   LANE_KINDS,
@@ -2019,12 +2023,39 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // Deleting the junction's OWN point on one way should drop that way's ref
   // and, since only one ref remains, the node stops being a junction at all.
+  // Way B needs a third point first: it's sitting at exactly 2 right now, and
+  // deleting its junction end would ghost it — deleteWayPoint refuses that
+  // (see store.ts), which is exactly what the next check below proves.
+  store.getState().insertWayPoint(wB, 0, [-115.15, 36.25]);
+  s = store.getState().system;
   const wBRefIndex = s.nodes[0].refs.find((r) => r.wayId === wB)!.pointIndex;
   store.getState().deleteWayPoint(wB, wBRefIndex);
   s = store.getState().system;
   check(
     'deleting the shared point on one way drops the node (no longer a real junction)',
     s.nodes.length === 0,
+  );
+
+  // The same guard also protects a junction arm still at exactly 2 points:
+  // deleting its only remaining non-junction point would ghost the way AND,
+  // as a side effect, desync the junction — refused outright instead.
+  fresh();
+  const armA = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(armA, [-115.2, 36.1]);
+  store.getState().addWayPoint(armA, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const armB = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(armB, [-115.15, 36.2]);
+  store.getState().addWayPoint(armB, [-115.15, 36.1]);
+  store.getState().finishWay();
+  store.getState().joinWayPointToWay(armB, 1, armA, [-115.15, 36.1]);
+  s = store.getState().system;
+  check('setup: a fresh junction with a 2-point arm exists', s.nodes.length === 1);
+  store.getState().deleteWayPoint(armB, 1);
+  s = store.getState().system;
+  check(
+    "deleting a junction arm's own point is refused when the arm has only 2",
+    s.nodes.length === 1 && s.ways.find((w) => w.id === armB)!.points.length === 2,
   );
 
   // deleteWay must strip any surviving refs to the removed way.
@@ -2981,16 +3012,29 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   fresh();
   check('a clean fresh system has no issues', validateSystem(store.getState().system).length === 0);
 
-  // A way with fewer than 2 points is a ghost: accepted, invisible. finishWay
-  // already discards a way that's still sub-2-point at draw time (see
-  // store.ts), so the only way one exists is a finished way later shrunk by
-  // deleteWayPoint (e.g. Alt-click erasing down to one point).
+  // A way with fewer than 2 points is a ghost: accepted, invisible.
+  // deleteWayPoint now refuses to drop a way below 2 points (see store.ts),
+  // same floor straightenWay already enforced, so the only way one exists is
+  // a document that arrives already broken — built via importWays, which
+  // trusts an incoming way's points as given.
   fresh();
-  const ghostWay = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(ghostWay, [-115.2, 36.1]);
-  store.getState().addWayPoint(ghostWay, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().deleteWayPoint(ghostWay, 0);
+  const ghostWay = 'ghost';
+  store.getState().importWays({
+    ways: [
+      {
+        id: ghostWay,
+        typeId: 'lightRail',
+        points: [[-115.2, 36.1]],
+        geometry: 'straight',
+        grade: 'atGrade',
+        profile: defaultProfileFor('lightRail'),
+      },
+    ],
+    nodes: [],
+    namedWays: [],
+    medians: [],
+    turnRestrictions: [],
+  });
   let issues = validateSystem(store.getState().system);
   check(
     'flags a sub-2-point way',
@@ -3006,10 +3050,9 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     issues.some((i) => i.id === `orphan-station-${stId}`),
   );
 
-  // Two ways that genuinely cross without joining should be flagged; the
-  // same two, once joined via a Node, should not be. Built via importWays —
-  // drawing them would auto-form the junction at finishWay now, leaving no
-  // unjoined crossing to flag.
+  // Two ways of the SAME type crossing arrive already joined: importWays now
+  // runs the same crossing pass finishWay does (see store.ts), so there's no
+  // unjoined same-type crossing left for the detector to find.
   fresh();
   const wX = 'vx';
   const wY = 'vy';
@@ -3045,15 +3088,58 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   });
   issues = validateSystem(store.getState().system);
   check(
-    'flags two ways that cross without joining',
-    issues.some((i) => i.id.startsWith('crossing-')),
+    'importing two same-type crossing ways joins them instead of flagging a crossing',
+    !issues.some((i) => i.id.startsWith('crossing-')),
+  );
+  check(
+    'importing crossing ways forms a real junction node',
+    store.getState().system.nodes.length === 1,
   );
 
-  store.getState().joinWayPointToWay(wY, 1, wX, [-115.15, 36.1]);
+  // Two ways of DIFFERENT types crossing at the same grade can never be
+  // auto-joined — the model has no level-crossing primitive yet — so this
+  // stays flagged, but as a document-audience issue: real, but nothing the
+  // user can do about it from here, so it never reaches the issues popover.
+  fresh();
+  const wRoad = 'vroad';
+  const wRail = 'vrail';
+  store.getState().importWays({
+    ways: [
+      {
+        id: wRoad,
+        typeId: 'road',
+        points: [
+          [-115.2, 36.1],
+          [-115.1, 36.1],
+        ],
+        geometry: 'straight',
+        grade: 'atGrade',
+        profile: defaultProfileFor('road'),
+      },
+      {
+        id: wRail,
+        typeId: 'lightRail',
+        points: [
+          [-115.15, 36.05],
+          [-115.15, 36.15],
+        ],
+        geometry: 'straight',
+        grade: 'atGrade',
+        profile: defaultProfileFor('lightRail'),
+      },
+    ],
+    nodes: [],
+    namedWays: [],
+    medians: [],
+    turnRestrictions: [],
+  });
   issues = validateSystem(store.getState().system);
+  const typeCrossing = issues.find((i) => i.id.startsWith('crossing-'));
+  check('flags a different-type crossing at the same grade', typeCrossing !== undefined);
   check(
-    'does not flag a crossing once the two ways share a real junction',
-    !issues.some((i) => i.id.startsWith('crossing-')),
+    'a different-type crossing is document-audience, so it never reaches the issues list',
+    typeCrossing?.audience === 'document' &&
+      planIssues(issues).every((i) => !i.id.startsWith('crossing-')),
   );
 
   // Parallel ways that never cross at all: no false positive.
@@ -5046,8 +5132,9 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     turnRestrictions: [],
   });
   check(
-    'the same two ways at one grade are still flagged',
-    validateSystem(store.getState().system).some((i) => i.id.startsWith('crossing-')),
+    'the same two ways at one grade are joined into a real junction instead of flagged',
+    !validateSystem(store.getState().system).some((i) => i.id.startsWith('crossing-')) &&
+      store.getState().system.nodes.length === 1,
   );
 }
 
