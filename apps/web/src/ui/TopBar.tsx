@@ -6,7 +6,6 @@ import { DrivingSidePopover } from './DrivingSidePopover';
 import { ExportSplitButton } from './ExportSplitButton';
 import { FileMenu } from './FileMenu';
 import { IconButton } from './IconButton';
-import { IssuesPopover } from './IssuesPopover';
 import { LayersPopover } from './LayersPopover';
 import { useInertRef } from './useInertRef';
 import { useUi } from './UiProvider';
@@ -144,7 +143,6 @@ export function TopBarActions() {
 
   return (
     <>
-      {!readOnly && <IssuesPopover />}
       <LayersPopover />
       {!readOnly && <DrivingSidePopover />}
       <span className="act-tertiary act-secondary">
