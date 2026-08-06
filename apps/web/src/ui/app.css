@@ -1901,55 +1901,6 @@ input[type='range'] {
   accent-color: var(--md-sys-color-primary);
 }
 
-/* ---- issues popover — the one deliberate departure from "active states are
-   monochrome": a validation issue is asking
-   for attention the same way an error is, so it borrows that same hue. ---- */
-.issues-trigger.active {
-  background: var(--md-sys-color-error-container);
-  border-color: var(--md-sys-color-error);
-  color: var(--md-sys-color-error);
-}
-.issues-popover {
-  z-index: 30;
-  width: 300px;
-  max-width: calc(100vw - 28px);
-  background: var(--md-sys-color-surface);
-  border: 1px solid var(--md-sys-color-surface-container-highest);
-  border-radius: 12px;
-  box-shadow: var(--md-sys-elevation-level2);
-  padding: 12px;
-}
-.issues-popover[data-state='open'] {
-  animation: pop-in 130ms cubic-bezier(0.2, 0.7, 0.3, 1);
-}
-.issues-popover[data-state='closed'] {
-  animation: pop-out 110ms ease-in;
-}
-.issues-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 4px 0 0;
-  padding: 0;
-}
-.issues-item {
-  width: 100%;
-  text-align: left;
-  font-size: var(--md-sys-typescale-label-large-size);
-  line-height: 1.4;
-  color: var(--md-sys-color-on-surface);
-  padding: 6px 8px;
-  border-radius: 8px;
-}
-.issues-item:hover:not(:disabled) {
-  background: var(--md-sys-color-surface-container);
-}
-.issues-item:disabled {
-  color: var(--md-sys-color-on-surface-variant);
-  cursor: default;
-}
-
 /* ---- color spectrum ---- */
 .cs-sv {
   position: relative;
