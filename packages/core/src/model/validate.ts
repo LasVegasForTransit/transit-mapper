@@ -597,17 +597,20 @@ function considerCrossSegment(context: CrossConsideration, other: CrossSegment):
   if (other.grade !== way.grade) return;
   if (!segmentsCross(a1, a2, other.a, other.b)) return;
   flagged.add(key);
+  const sameType = way.typeId === other.typeId;
   issues.push({
     id: `crossing-${key}`,
     // Two ways of different types can never share a junction — nothing in the
     // app will form one, and findMismatchedTypeJunctions reports the ones that
     // already exist. Saying "should they share a junction?" there sent people
     // to build exactly the junction the app refuses; what that crossing needs
-    // is a level crossing, which the model has no primitive for yet.
-    message:
-      way.typeId === other.typeId
-        ? `Two ${wayType(way.typeId).label} corridors cross without joining — check whether they should share a junction.`
-        : `A ${wayType(way.typeId).label} corridor crosses a ${wayType(other.typeId).label} corridor at the same grade. They can't share a junction, so what this needs is a level crossing.`,
+    // is a level crossing, which the model has no primitive for yet. Nothing
+    // in-app can act on that, so — like findMismatchedTypeJunctions — it's
+    // document-audience: kept so the detector stays provable, not shown.
+    message: sameType
+      ? `Two ${wayType(way.typeId).label} corridors cross without joining — check whether they should share a junction.`
+      : `A ${wayType(way.typeId).label} corridor crosses a ${wayType(other.typeId).label} corridor at the same grade. They can't share a junction, so what this needs is a level crossing.`,
+    audience: sameType ? undefined : 'document',
     target: { kind: 'way', id: way.id },
   });
 }
