@@ -2509,3 +2509,92 @@ describe('touch gestures', () => {
     vi.useRealTimers();
   });
 });
+
+describe('closing a way back onto its own start', () => {
+  it("shows the endpoint-hint ring over a way's own start vertex once it has 3 points", () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    tap(map, { x: 100, y: 100 });
+    tap(map, { x: 300, y: 100 });
+    tap(map, { x: 300, y: 300 });
+    expect(store.getState().system.ways[0].points).toHaveLength(3);
+
+    map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
+    scheduler.pump();
+
+    expect(map.sourceData.get(SRC_ENDPOINT_HINT)).toEqual({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Point',
+            coordinates: (() => {
+              const { lng, lat } = map.unproject({ x: 100, y: 100 });
+              return [lng, lat];
+            })(),
+          },
+        },
+      ],
+    });
+    detach();
+  });
+
+  it('does not offer to close a loop with only 2 committed points', () => {
+    const scheduler = installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    tap(map, { x: 100, y: 100 });
+    tap(map, { x: 300, y: 100 });
+    expect(store.getState().system.ways[0].points).toHaveLength(2);
+
+    map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
+    scheduler.pump();
+
+    expect(map.sourceData.get(SRC_ENDPOINT_HINT)).toEqual({
+      type: 'FeatureCollection',
+      features: [],
+    });
+    detach();
+  });
+
+  it("closes a ring by clicking back on a way's own start vertex, forming a real junction", () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(createEmptySystem());
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store);
+
+    tap(map, { x: 100, y: 100 });
+    tap(map, { x: 300, y: 100 });
+    tap(map, { x: 300, y: 300 });
+    tap(map, { x: 100, y: 100 }); // back onto the way's own start
+
+    const wayId = store.getState().activeWayId!;
+    const way = store.getState().system.ways.find((w) => w.id === wayId)!;
+    expect(way.points).toHaveLength(4);
+    expect(way.points[3]).toEqual(way.points[0]);
+    expect(
+      store.getState().activeWayId,
+      'drawing continues after closing the loop, same as any other placed point',
+    ).toBe(wayId);
+    expect(
+      store.getState().system.nodes.some((n) => {
+        const refs = n.refs.filter((r) => r.wayId === wayId);
+        return refs.some((r) => r.pointIndex === 0) && refs.some((r) => r.pointIndex === 3);
+      }),
+    ).toBe(true);
+    detach();
+  });
+});
