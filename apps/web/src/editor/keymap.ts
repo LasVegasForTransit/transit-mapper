@@ -204,6 +204,13 @@ export const KEY_BINDINGS: KeyBinding[] = [
     when: editable,
     run: (c) => c.editor.getState().setTool('facility'),
   },
+  {
+    group: 'Tools',
+    keys: ['b'],
+    description: 'Demolish streets',
+    when: editable,
+    run: (c) => c.editor.getState().setTool('demolish'),
+  },
 
   {
     group: 'Camera',

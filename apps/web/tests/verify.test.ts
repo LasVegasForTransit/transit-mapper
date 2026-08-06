@@ -12299,6 +12299,45 @@ function buildGrid() {
   );
 }
 
+{
+  // The Demolish tool's whole-way click path relies on this: a stretch
+  // spanning end-to-end degrades to a full-way removal, same as deleteWay,
+  // rather than leaving a zero-length stub behind.
+  fresh();
+  const road = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(road, [-115.3, 36.1]);
+  store.getState().addWayPoint(road, [-115.1, 36.1]);
+  store.getState().finishWay();
+  store.getState().deleteWayStretch(road, 0, 1);
+  check(
+    'a stretch spanning the whole way removes it entirely',
+    !store.getState().system.ways.some((w) => w.id === road),
+  );
+}
+
+{
+  // A demolished OSM-imported way's surviving stubs must keep their
+  // provenance — deleteWayStretch cuts via splitWay, whose spread already
+  // preserves `source`, so the "Imported from OpenStreetMap" badge and the
+  // Demolish tool's no-confirm-dialog decision both stay correct after a cut.
+  fresh();
+  const road = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(road, [-115.3, 36.1]);
+  store.getState().addWayPoint(road, [-115.1, 36.1]);
+  store.getState().finishWay();
+  store.getState().setSystem({
+    ...store.getState().system,
+    ways: store.getState().system.ways.map((w) => (w.id === road ? { ...w, source: 'osm:1' } : w)),
+  });
+  store.getState().deleteWayStretch(road, 0.4, 0.6);
+  const survivors = store.getState().system.ways;
+  check('demolishing a stretch leaves two surviving pieces', survivors.length === 2);
+  check(
+    'both surviving pieces of a demolished OSM way keep their source',
+    survivors.every((w) => w.source === 'osm:1'),
+  );
+}
+
 // --- the crossing scan only looks at ways that could actually cross ---
 // wayCrossings compares every segment of one way against every segment of
 // another, with no bbox reject, and formCrossingJunctions runs it on every

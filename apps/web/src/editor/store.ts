@@ -137,8 +137,11 @@ import type {
 
 /** `lines` selects SERVICES and only services — a drag-select for routes,
  *  offered in the Network view where lines are what you are working on. The
- *  Select tool stays the one that picks up and moves infrastructure. */
-export type Tool = 'select' | 'way' | 'station' | 'facility' | 'lines';
+ *  Select tool stays the one that picks up and moves infrastructure.
+ *  `demolish` is a persistent Infrastructure-view tool mode (not a
+ *  selection-dependent Inspector control) since it isn't conditioned on any
+ *  current selection — a deliberate exception to that convention. */
+export type Tool = 'select' | 'way' | 'station' | 'facility' | 'lines' | 'demolish';
 
 // A freshly-drawn line should already be a "working" one — an ambient
 // vehicle animating along it — without a trip to the Inspector first (both

@@ -30,6 +30,7 @@ import {
   legRange,
   pointAtT,
   primaryAnchor,
+  slicePathByT,
 } from '@transitmapper/core/model/geo';
 import { facilityType, mode } from '@transitmapper/core/model/catalog';
 import { anchorOnWay, routePath } from '@transitmapper/core/model/routeGraph';
@@ -558,6 +559,21 @@ export function attachInteractions(
     gestureActive = lockedPrimaryOperation !== undefined,
   ): PointerIntent => {
     const state = store.getState();
+    // Demolish has one verb and isn't part of resolvePointerIntent's
+    // Select/Way/Station/Facility vocabulary (route-service, corridor-
+    // splitting, station/facility drag…) — short-circuit before that
+    // function ever sees the tool, rather than widening its closed union
+    // for a single unrelated case.
+    if (state.tool === 'demolish') {
+      return {
+        primaryOperation: 'default',
+        cursor: 'crosshair',
+        badge: null,
+        allowed: !state.readOnly && !opts.isNetworkMode(),
+        anchor: 'none',
+        constraint: 'none',
+      };
+    }
     const view: PointerIntentInput['view'] = opts.isDiagramMode()
       ? 'diagram'
       : opts.isNetworkMode()
@@ -1210,6 +1226,10 @@ export function attachInteractions(
 
   interface PreviewProperties {
     oneWayReturn?: boolean;
+    /** Styles this preview stretch in the same warning colour as a
+     *  wrong-way service span — what the Demolish tool's drag is currently
+     *  about to remove. */
+    demolish?: boolean;
   }
 
   const setPreview = (coords: LngLat[] | null, properties: PreviewProperties = {}) => {
@@ -1865,6 +1885,80 @@ export function attachInteractions(
     clearPointerIntent();
   }
 
+  // Bulldozer-style: a click with no movement removes the whole street
+  // (deleteWayStretch's own [lo,hi]≈[0,1] degrades to a full-way removal, so
+  // that path is reused rather than calling deleteWay separately — see its
+  // MIN_STRETCH_T guard); a drag removes only the stretch swept, one
+  // deleteWayStretch call per way touched. Whatever the drag crosses is one
+  // undo step, same as startErase's own sweep.
+  const startDemolishDrag = (e: MapMouseEvent) => {
+    suppressClick = true;
+    const first = snap(store.getState().system.ways, lngLatOf(e), snapMeters(snapPx));
+    if (!first) return; // pressed on empty ground
+    const hitRanges = new Map<string, { lo: number; hi: number }>();
+    const record = (wayId: string, t: number) => {
+      const r = hitRanges.get(wayId);
+      if (!r) hitRanges.set(wayId, { lo: t, hi: t });
+      else {
+        r.lo = Math.min(r.lo, t);
+        r.hi = Math.max(r.hi, t);
+      }
+    };
+    record(first.wayId, first.t);
+    let moved = false;
+
+    const updatePreview = () => {
+      const sys = store.getState().system;
+      const coords: LngLat[] = [];
+      for (const [wayId, { lo, hi }] of hitRanges) {
+        const way = sys.ways.find((w) => w.id === wayId);
+        if (!way) continue;
+        coords.push(...slicePathByT(resolveWayPath(way), lo, hi));
+      }
+      setPreview(coords, { demolish: true });
+    };
+
+    const throttle = rafThrottle((coord: LngLat) => {
+      const hit = snap(store.getState().system.ways, coord, snapMeters(snapPx));
+      if (hit) record(hit.wayId, hit.t);
+      updatePreview();
+    });
+    const onMove = (ev: MapMouseEvent) => {
+      moved = true;
+      throttle.call(lngLatOf(ev));
+    };
+    const onUp = () => {
+      // Applies the release position's own sample before reading hitRanges —
+      // cancel() would silently drop it if no animation frame happened to
+      // land between the last mousemove and this mouseup (same reasoning as
+      // startErase's own onUp).
+      if (moved) throttle.flush();
+      else throttle.cancel();
+      map.off('mousemove', onMove);
+      clearPreviews();
+      // The deletions run BEFORE endGesture — commitHistoryCheckpoint diffs
+      // against the system as it stands when called, so ending the gesture
+      // first would commit a no-op checkpoint and let each deletion below
+      // fall through to the store's per-set auto-history instead, splitting
+      // one sweep into several undo steps.
+      if (!moved) {
+        store.getState().deleteWay(first.wayId);
+      } else {
+        for (const [wayId, { lo, hi }] of hitRanges)
+          store.getState().deleteWayStretch(wayId, lo, hi);
+      }
+      endGesture();
+    };
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
+    beginGesture(() => {
+      throttle.cancel();
+      map.off('mousemove', onMove);
+      clearPreviews();
+    });
+    updatePreview();
+  };
+
   const terminusTargetAt = (
     e: MapMouseEvent,
     source: TerminusGestureSource,
@@ -2302,6 +2396,12 @@ export function attachInteractions(
             startStructureDraw(e);
         }
         break;
+      case 'demolish':
+        // Infrastructure view only — Network foregrounds lines over the
+        // ways beneath them, and demolishing real streets is deliberately
+        // kept a distinct, physical-view action.
+        if (!opts.isNetworkMode()) startDemolishDrag(e);
+        break;
     }
   };
 
@@ -2669,7 +2769,13 @@ export function attachInteractions(
     // a draw that won't happen.
     if (opts.isDiagramMode()) return 'grab';
     const tool = store.getState().tool;
-    if (tool === 'way' || tool === 'station' || tool === 'facility' || tool === 'lines')
+    if (
+      tool === 'way' ||
+      tool === 'station' ||
+      tool === 'facility' ||
+      tool === 'lines' ||
+      tool === 'demolish'
+    )
       return 'crosshair';
     // Select tool, empty space: left-drag pans here too (see onMouseDown), so
     // the grab cursor MapLibre already shows by default is actually honest —
