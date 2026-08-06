@@ -2195,13 +2195,18 @@ export function createEditorStore() {
       if (past.length === 0) return;
       const prev = past.pop()!;
       future.push(get().system);
+      // Undoing one node of an in-progress way should keep drawing that same
+      // way, not exit draw mode — only clear activeWayId once the reverted
+      // system no longer contains the way at all (undone past its creation).
+      const { activeWayId } = get();
+      const wayStillExists = activeWayId !== null && prev.ways.some((w) => w.id === activeWayId);
       skipHistory = true;
       set({
         system: prev,
         selection: null,
         armedTerminus: null,
         multiSelection: [],
-        activeWayId: null,
+        activeWayId: wayStillExists ? activeWayId : null,
         canUndo: past.length > 0,
         canRedo: true,
       });
@@ -2212,13 +2217,15 @@ export function createEditorStore() {
       if (future.length === 0) return;
       const next = future.pop()!;
       past.push(get().system);
+      const { activeWayId } = get();
+      const wayStillExists = activeWayId !== null && next.ways.some((w) => w.id === activeWayId);
       skipHistory = true;
       set({
         system: next,
         selection: null,
         armedTerminus: null,
         multiSelection: [],
-        activeWayId: null,
+        activeWayId: wayStillExists ? activeWayId : null,
         canUndo: true,
         canRedo: future.length > 0,
       });
