@@ -749,16 +749,30 @@ function touch(system: TransitSystem): TransitSystem {
   return { ...system, turnRestrictions, updatedAt: Date.now() };
 }
 
-// Recompute the coords of every station riding `wayId`, so they follow the
-// way when its control points move.
+// Recompute the coords of every station riding `wayId` by reprojecting each
+// one's own last-known coordinate onto the way's new path — the same
+// technique splitWay/mergeWays already use — rather than replaying its
+// stored `t` against the new total length. `t` is a fraction of TOTAL
+// length, which isn't invariant when the total changes without the
+// station's own stretch changing: extending the far endpoint grows the
+// denominator, so replaying the same t silently drags the station along
+// with it even though the geometry under it never moved.
 function reanchorStations(system: TransitSystem, wayId: string): Station[] {
   const way = system.ways.find((w) => w.id === wayId);
   if (!way) return system.stations;
   const path = resolveWayPath(way);
   if (path.length < 2) return system.stations;
-  return system.stations.map((s) =>
-    anchorOnWayId(s, wayId) ? { ...s, coord: pointAtT(path, anchorOnWayId(s, wayId)!.t) } : s,
-  );
+  return system.stations.map((s) => {
+    const anchor = anchorOnWayId(s, wayId);
+    if (!anchor) return s;
+    const on = nearestOnPath(path, s.coord);
+    if (!on) return s;
+    return {
+      ...s,
+      coord: on.coord,
+      anchors: s.anchors.map((a) => (a === anchor ? { ...a, t: on.t } : a)),
+    };
+  });
 }
 
 function updateWayPoints(
@@ -794,6 +808,17 @@ function updateWayPointsBatch(
   // Only allocate a new `stations` array when something actually reanchors.
   // Map projection and simulation caches use these immutable collection
   // identities to skip unrelated work after a group drag.
+  // Unlike reanchorStations, this stays on the plain t-against-new-path
+  // replay: nudgeSelection (this function's only caller) is a RIGID
+  // TRANSLATION, which doesn't touch arc length, so a station's fraction is
+  // already exactly invariant here — and it must stay exact, since the
+  // station here was deliberately left untranslated (see nudgeSelection's
+  // own skip for a co-selected anchor way) in favor of following the way's
+  // reanchor. Reprojecting its stale pre-nudge coordinate with nearestOnPath
+  // would find the nearest point on the ALREADY-MOVED path instead of the
+  // translated one, which is wrong for a rigid move even though it's the
+  // right fix for reanchorStations' actual bug (a length-changing edit, not
+  // a translation).
   let stationsChanged = false;
   const stations = system.stations.map((s) => {
     const anchor = primaryAnchor(s);
