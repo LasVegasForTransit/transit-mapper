@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { oneSection, patternRunLegs, wholeLeg } from '@transitmapper/core/model/geo';
-import { servicePointActionProvider } from '../../../src/editor/actions/pointActions';
+import {
+  servicePointActionProvider,
+  wayPointActionProvider,
+} from '../../../src/editor/actions/pointActions';
 import { createEditorStore } from '../../../src/editor/store';
 import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
 
@@ -226,5 +229,57 @@ describe('service point actions', () => {
     const sections = store.getState().system.services[0].patterns[0].sections;
     expect(sections).toHaveLength(2);
     expect(sections[1].kind).toBe('split');
+  });
+});
+
+describe('way point actions', () => {
+  it('offers Separate carriageways on a two-way street clicked along its body', () => {
+    const store = createEditorStore();
+    const wayId = store.getState().beginWay('road', 'straight');
+    store.getState().addWayPoint(wayId, [-115.2, 36.1]);
+    store.getState().addWayPoint(wayId, [-115.1, 36.1]);
+    store.getState().finishWay();
+
+    const actions = wayPointActionProvider(store)({
+      system: store.getState().system,
+      refs: [{ kind: 'way', id: wayId }],
+      corridorHit: { wayId, t: 0.5 },
+    });
+
+    expect(actions.map((a) => a.id)).toContain('way.separateCarriageways');
+  });
+
+  it('does not offer Separate carriageways once a street is already one-way', () => {
+    const store = createEditorStore();
+    const wayId = store.getState().beginWay('road', 'straight');
+    store.getState().addWayPoint(wayId, [-115.2, 36.1]);
+    store.getState().addWayPoint(wayId, [-115.1, 36.1]);
+    store.getState().finishWay();
+    store.getState().separateCarriageways(wayId);
+
+    const actions = wayPointActionProvider(store)({
+      system: store.getState().system,
+      refs: [{ kind: 'way', id: wayId }],
+      corridorHit: { wayId, t: 0.5 },
+    });
+
+    expect(actions.map((a) => a.id)).not.toContain('way.separateCarriageways');
+  });
+
+  it('running Separate carriageways from the point action produces two independent ways', () => {
+    const store = createEditorStore();
+    const wayId = store.getState().beginWay('road', 'straight');
+    store.getState().addWayPoint(wayId, [-115.2, 36.1]);
+    store.getState().addWayPoint(wayId, [-115.1, 36.1]);
+    store.getState().finishWay();
+
+    const actions = wayPointActionProvider(store)({
+      system: store.getState().system,
+      refs: [{ kind: 'way', id: wayId }],
+      corridorHit: { wayId, t: 0.5 },
+    });
+    actions.find((a) => a.id === 'way.separateCarriageways')!.run();
+
+    expect(store.getState().system.ways).toHaveLength(2);
   });
 });
