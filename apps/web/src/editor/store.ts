@@ -2171,6 +2171,13 @@ const ADOPT_SNAP_M = 500;
 const ADOPT_BIAS_WEIGHT = 2;
 const ADOPT_STATION_REANCHOR_M = 300;
 
+// How far a separated carriageway's endpoint may sit from the rest of the
+// network and still be treated as the same intersection it was cut loose
+// from — matches the map editor's own drawing-snap radius (interactions.ts'
+// MAX_SNAP_M), since this is the same "close enough to mean the same
+// junction" judgment call, just made from the store instead of a live cursor.
+const CARRIAGEWAY_RECONNECT_M = 50;
+
 const HISTORY_LIMIT = 100;
 
 export function createEditorStore() {
@@ -3108,7 +3115,48 @@ export function createEditorStore() {
           widthM: gap,
           kindId: medianLane?.kindId ?? 'median',
         });
-        return { system: touch({ ...s.system, ways, namedWays, medians }) };
+        let withNewWay = touch({ ...s.system, ways, namedWays, medians });
+        // The offset backward carriageway starts with zero junction
+        // connectivity — separating never touches system.nodes, and its
+        // endpoints no longer sit ON the original alignment (they're offset
+        // sideways by half the combined width), so formCrossingJunctions
+        // can't find them: it looks for one path crossing THROUGH another,
+        // not an endpoint landing near one. Snap each end the same way a
+        // fresh draw's seed point binds onto existing infrastructure,
+        // excluding the forward carriageway (so the two halves of one
+        // street never join to each other) AND the new way itself — its own
+        // endpoint sits exactly on its own path at distance 0, which ties
+        // with a genuinely nearby crossing street and lets snap()'s id-based
+        // tie-break pick either one at random depending on shortId() output.
+        const exclude = new Set([wayId, newId]);
+        const lastIndex = newWay.points.length - 1;
+        const startSnap = snap(
+          withNewWay.ways,
+          newWay.points[0],
+          CARRIAGEWAY_RECONNECT_M,
+          exclude,
+          newWay.typeId,
+        );
+        if (startSnap) {
+          withNewWay = joinWayPointToWay(withNewWay, newId, 0, startSnap.wayId, startSnap.coord);
+        }
+        const endSnap = snap(
+          withNewWay.ways,
+          newWay.points[lastIndex],
+          CARRIAGEWAY_RECONNECT_M,
+          exclude,
+          newWay.typeId,
+        );
+        if (endSnap) {
+          withNewWay = joinWayPointToWay(
+            withNewWay,
+            newId,
+            lastIndex,
+            endSnap.wayId,
+            endSnap.coord,
+          );
+        }
+        return { system: withNewWay };
       });
       return newId;
     },
