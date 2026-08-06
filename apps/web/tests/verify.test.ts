@@ -5404,6 +5404,45 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 }
 
+// --- undo/redo must not exit draw mode: activeWayId only clears once the
+// way it points at is genuinely gone, not on every undo/redo ---
+{
+  fresh();
+  const w = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(w, [-115.2, 36.1]);
+  store.getState().addWayPoint(w, [-115.15, 36.1]);
+  check('drawing sets activeWayId to the way being drawn', store.getState().activeWayId === w);
+
+  store.getState().undo();
+  check(
+    'undoing one point of an in-progress way keeps activeWayId set',
+    store.getState().activeWayId === w,
+  );
+  check(
+    'undo removed only the last point',
+    store.getState().system.ways.find((x) => x.id === w)!.points.length === 1,
+  );
+
+  store.getState().redo();
+  check(
+    'redo mirrors undo: activeWayId survives while the way still exists',
+    store.getState().activeWayId === w &&
+      store.getState().system.ways.find((x) => x.id === w)!.points.length === 2,
+  );
+
+  store.getState().undo(); // back to 1 point
+  store.getState().undo(); // back to the way existing with 0 points (still "exists")
+  check(
+    'a way undone back to zero points still counts as existing',
+    store.getState().activeWayId === w,
+  );
+  store.getState().undo(); // back to before beginWay: the way is gone entirely
+  check(
+    "undoing past a way's own creation clears activeWayId",
+    store.getState().activeWayId === null,
+  );
+}
+
 // --- undo/redo: gesture checkpoints coalesce into one step, discard no-ops ---
 {
   fresh();
