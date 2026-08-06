@@ -724,7 +724,13 @@ export function attachInteractions(
       throttled.flush();
       endGesture();
       map.off('mousemove', onMove);
-      if (!moved) store.getState().select({ kind: 'way', id: wayId });
+      if (moved) {
+        // Dragging a point across another same-type, same-grade way forms a
+        // real junction there, same as finishing a draw does.
+        store.getState().formCrossingJunctions(wayId);
+      } else {
+        store.getState().select({ kind: 'way', id: wayId });
+      }
     };
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
@@ -2349,7 +2355,10 @@ export function attachInteractions(
             st.selection.id === serviceId
           ) {
             const way = st.system.ways.find((w) => w.id === wayId);
-            if (way) st.insertWayPoint(wayId, insertIndexOnPolygon(way.points, e.point), coord);
+            if (way) {
+              st.insertWayPoint(wayId, insertIndexOnPolygon(way.points, e.point), coord);
+              st.formCrossingJunctions(wayId);
+            }
           } else {
             st.select({ kind: 'service', id: serviceId });
           }

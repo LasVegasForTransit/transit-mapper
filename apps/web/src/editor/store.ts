@@ -2606,12 +2606,20 @@ export function createEditorStore() {
       set((s) => ({ system: cascadeMove(s.system, wayId, index, coord) })),
 
     deleteWayPoint: (wayId, index) =>
-      set((s) => ({
-        system: {
-          ...updateWayPoints(s.system, wayId, (pts) => pts.filter((_, i) => i !== index)),
-          nodes: shiftNodeRefsForDelete(s.system.nodes, wayId, index),
-        },
-      })),
+      set((s) => {
+        // A way below 2 points can't render — same floor straightenWay
+        // enforces. Without this, alt-drag erasing over every handle leaves a
+        // ghost way sitting invisibly in the document until it round-trips
+        // through save/load.
+        const way = s.system.ways.find((w) => w.id === wayId);
+        if (!way || way.points.length <= 2) return s;
+        return {
+          system: {
+            ...updateWayPoints(s.system, wayId, (pts) => pts.filter((_, i) => i !== index)),
+            nodes: shiftNodeRefsForDelete(s.system.nodes, wayId, index),
+          },
+        };
+      }),
 
     joinWayPointToWay: (wayId, index, targetWayId, coord) =>
       set((s) => ({ system: joinWayPointToWay(s.system, wayId, index, targetWayId, coord) })),
@@ -2794,10 +2802,14 @@ export function createEditorStore() {
           ),
         }),
       }));
+      // Imported ways arrive with no crossing pass at all — a hand-drawn way
+      // gets this at finishWay, so an import should form the same junctions
+      // it would have if someone had drawn it.
+      for (const way of ways) get().formCrossingJunctions(way.id);
       return { added: ways.length, skipped: duplicateWays };
     },
 
-    importGtfs: (pieces) =>
+    importGtfs: (pieces) => {
       set((s) => ({
         system: touch({
           ...s.system,
@@ -2805,7 +2817,12 @@ export function createEditorStore() {
           services: [...s.system.services, ...pieces.services],
           stations: [...s.system.stations, ...pieces.stations],
         }),
-      })),
+      }));
+      // Same crossing pass importWays gets — a GTFS feed's shapes cross real
+      // streets constantly, and none of that geometry has been through
+      // finishWay's own junction-forming.
+      for (const way of pieces.ways) get().formCrossingJunctions(way.id);
+    },
 
     applyGtfsImportBatch: ({ targetSystemId, pieces }) => {
       let applied = false;
@@ -2821,6 +2838,7 @@ export function createEditorStore() {
           }),
         };
       });
+      if (applied) for (const way of pieces.ways) get().formCrossingJunctions(way.id);
       return applied;
     },
 
