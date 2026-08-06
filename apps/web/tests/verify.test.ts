@@ -349,9 +349,12 @@ check(
   'drawing a road with service enabled creates a default service (bus/BRT)',
   servicesOnWay(road).length === 1,
 );
+// Not 'arterial' (major): a fresh sketch road shouldn't force a viaduct the
+// moment a rail line crosses it — see autoElevateAcrossMajorRoad's own
+// caller in formCrossingJunctions and catalog.ts's road.defaultClassId.
 check(
-  'road defaults to the arterial class',
-  store.getState().system.ways[0].classId === 'arterial',
+  'road defaults to the collector class, not a major one',
+  store.getState().system.ways[0].classId === 'collector',
 );
 
 // --- heavy rail and light rail are physically incompatible track standards ---
@@ -7503,6 +7506,124 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check(
     'different grades never auto-join (overpass, not intersection)',
     store.getState().system.nodes.length === 0 && store.getState().system.ways.length === 2,
+  );
+}
+
+// --- store: auto-elevate a guideway crossing a major road ---
+{
+  fresh();
+  const road = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(road, [-115.15, 36.05]);
+  store.getState().addWayPoint(road, [-115.15, 36.15]);
+  store.getState().finishWay();
+  store.getState().setWayClassId(road, 'arterial'); // major
+  const rail = store.getState().beginWay('heavyRail', 'straight');
+  store.getState().addWayPoint(rail, [-115.2, 36.1]);
+  store.getState().addWayPoint(rail, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const after = store.getState().system;
+  const railPieces = after.ways.filter((w) => w.typeId === 'heavyRail');
+  check('the rail line is auto-split into three pieces', railPieces.length === 3);
+  check(
+    'exactly one piece is elevated over the road',
+    railPieces.filter((w) => w.grade === 'elevated').length === 1,
+  );
+  check(
+    'the flanking pieces stay at grade',
+    railPieces.filter((w) => w.grade === 'atGrade').length === 2,
+  );
+  const crossedRoad = after.ways.find((w) => w.id === road)!;
+  check(
+    'the crossed road is completely untouched',
+    crossedRoad.points.length === 2 && crossedRoad.grade === 'atGrade',
+  );
+  // The three pieces stay one continuous physical alignment — splitWay's own
+  // seam-node behavior connects each cut, same as splitting a way for any
+  // other reason (a profile change, say) already does. What must NOT happen
+  // is either seam reaching the road: that's the actual "stays an overpass"
+  // guarantee, not an absence of nodes altogether.
+  check('splitting into three pieces leaves two internal seam nodes', after.nodes.length === 2);
+  check(
+    'neither seam node touches the crossed road',
+    after.nodes.every((n) => !n.refs.some((r) => r.wayId === road)),
+  );
+}
+
+// --- store: a guideway crossing a NON-major road does not auto-elevate ---
+{
+  fresh();
+  const road = store.getState().beginWay('road', 'straight'); // defaults to collector, not major
+  store.getState().addWayPoint(road, [-115.15, 36.05]);
+  store.getState().addWayPoint(road, [-115.15, 36.15]);
+  store.getState().finishWay();
+  const rail = store.getState().beginWay('heavyRail', 'straight');
+  store.getState().addWayPoint(rail, [-115.2, 36.1]);
+  store.getState().addWayPoint(rail, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const after = store.getState().system;
+  check(
+    'the rail line is left whole — no auto-elevate over a minor road',
+    after.ways.filter((w) => w.typeId === 'heavyRail').length === 1,
+  );
+  check(
+    'nothing is elevated',
+    after.ways.every((w) => w.grade === 'atGrade'),
+  );
+}
+
+// --- store: road crossing a major road still forms an ordinary junction ---
+// Auto-elevate only ever applies to a DIFFERENT-type crossing (guideway vs.
+// road) — same-type crossings always take the existing junction-forming
+// branch regardless of either way's class.
+{
+  fresh();
+  const ew = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ew, [-115.2, 36.1]);
+  store.getState().addWayPoint(ew, [-115.1, 36.1]);
+  store.getState().finishWay();
+  store.getState().setWayClassId(ew, 'arterial');
+  const ns = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ns, [-115.15, 36.05]);
+  store.getState().addWayPoint(ns, [-115.15, 36.15]);
+  store.getState().finishWay();
+  store.getState().setWayClassId(ns, 'arterial');
+  store.getState().formCrossingJunctions(ns);
+  const after = store.getState().system;
+  check(
+    'two major roads crossing still form an ordinary junction, not a viaduct',
+    after.nodes.length === 1 &&
+      after.ways.length === 4 &&
+      after.ways.every((w) => w.grade === 'atGrade'),
+  );
+}
+
+// --- store: a guideway crossing two major roads elevates over both ---
+{
+  fresh();
+  const roadA = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(roadA, [-115.18, 36.05]);
+  store.getState().addWayPoint(roadA, [-115.18, 36.15]);
+  store.getState().finishWay();
+  store.getState().setWayClassId(roadA, 'arterial');
+  const roadB = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(roadB, [-115.12, 36.05]);
+  store.getState().addWayPoint(roadB, [-115.12, 36.15]);
+  store.getState().finishWay();
+  store.getState().setWayClassId(roadB, 'arterial');
+  const rail = store.getState().beginWay('heavyRail', 'straight');
+  store.getState().addWayPoint(rail, [-115.2, 36.1]);
+  store.getState().addWayPoint(rail, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const after = store.getState().system;
+  const railPieces = after.ways.filter((w) => w.typeId === 'heavyRail');
+  check('crossing two major roads produces five rail pieces', railPieces.length === 5);
+  check(
+    'exactly two pieces are elevated, one per road',
+    railPieces.filter((w) => w.grade === 'elevated').length === 2,
+  );
+  check(
+    'both crossed roads are still untouched',
+    after.ways.filter((w) => w.typeId === 'road').length === 2,
   );
 }
 

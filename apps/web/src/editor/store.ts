@@ -3,6 +3,7 @@ import {
   INITIAL_DRAFT,
   LANE_KINDS,
   PROFILE_PRESETS,
+  isMajorRoad,
   laneKind,
   mode,
   modesForWayType,
@@ -1540,16 +1541,94 @@ function mergeWays(system: TransitSystem, keepId: string, otherId: string): Tran
   return { ...system, ways, nodes, services, stations, namedWays, updatedAt: Date.now() };
 }
 
+// How far past a major road's own edge the elevated segment extends, in
+// meters — enough that the viaduct visibly clears the shoulder rather than
+// ending exactly at the road edge.
+const VIADUCT_CLEARANCE_M = 5;
+// Floor on the elevated segment's half-span, for a crossed road with no
+// meaningful recorded width (an empty profile).
+const MIN_VIADUCT_HALF_SPAN_M = 8;
+
 /**
- * The SimCity moment: wherever `wayId` crosses another corridor of the SAME
- * type and grade
- * mid-segment, form a real 4-arm junction — a shared vertex spliced into
- * both ways, linked as one Node, then both ways split there so every arm is
- * its own way (which is what per-arm lane connectors and per-arm profile
- * edits need). Different types remain visually coincident until an explicit
- * compatible service connection joins them; different grades are overpasses.
- * Newly created arms are re-scanned, so a way crossing three streets forms
- * all three junctions.
+ * Splits `aId` into three pieces at `crossingCoord` — before / over / after —
+ * and elevates the middle piece to a viaduct. `bWidthM` (the crossed road's
+ * own width) sets how far the elevated segment extends past the crossing on
+ * each side. The crossed road itself is never touched: no point inserted, no
+ * grade change, no junction — this is what keeps it a real overpass rather
+ * than a shared intersection, matching formCrossingJunctions' existing
+ * different-grade rule.
+ *
+ * Returns every piece that still exists after the cut (a short way entirely
+ * inside the buffer has no "before" or "after" side), so the caller can
+ * re-queue them — a guideway can cross several major roads along its length.
+ * Returns null when the way is too short to carry a distinct elevated
+ * segment at all.
+ */
+function autoElevateAcrossMajorRoad(
+  system: TransitSystem,
+  aId: string,
+  crossingCoord: LngLat,
+  bWidthM: number,
+): { system: TransitSystem; pieceIds: string[] } | null {
+  const a = system.ways.find((w) => w.id === aId);
+  if (!a) return null;
+  const path = resolveWayPath(a);
+  if (path.length < 2) return null;
+  const total = pathLengthMeters(path);
+  if (total <= 0) return null;
+  const near = nearestOnPath(path, crossingCoord);
+  if (!near) return null;
+
+  const halfSpanM = Math.max(bWidthM / 2 + VIADUCT_CLEARANCE_M, MIN_VIADUCT_HALF_SPAN_M);
+  const halfSpanT = halfSpanM / total;
+  const loT = Math.max(0, near.t - halfSpanT);
+  const hiT = Math.min(1, near.t + halfSpanT);
+  if (hiT - loT < MIN_STRETCH_T) return null;
+
+  // High before low — same reasoning as deleteWayStretch: splitting high
+  // first keeps the low end's position stable on the piece that keeps aId.
+  let sys = system;
+  const atHi = insertIndexAtT(sys, aId, hiT);
+  const afterId = shortId();
+  if (atHi) sys = splitWay(atHi.system, aId, atHi.index, afterId);
+  const atLo = insertIndexAtT(sys, aId, loT);
+  const middleId = shortId();
+  if (atLo) sys = splitWay(atLo.system, aId, atLo.index, middleId);
+  // No cut at the low end means the buffer reaches the way's own start, so
+  // aId itself is already the elevated (middle) piece — same degenerate case
+  // deleteWayStretch handles for its own "remove" side.
+  const elevatedId = atLo ? middleId : aId;
+  sys = {
+    ...sys,
+    ways: sys.ways.map((w) => (w.id === elevatedId ? { ...w, grade: 'elevated' as const } : w)),
+  };
+
+  const pieceIds = [atLo ? aId : null, elevatedId, atHi ? afterId : null].filter(
+    (id): id is string => id !== null,
+  );
+  return { system: sys, pieceIds };
+}
+
+/**
+ * The SimCity moment: wherever `wayId` crosses another corridor mid-segment,
+ * resolve it into something real instead of leaving two lines silently
+ * coincident. Three cases:
+ *
+ * - Same type, same grade: a real 4-arm junction — a shared vertex spliced
+ *   into both ways, linked as one Node, then both ways split there so every
+ *   arm is its own way (which is what per-arm lane connectors and per-arm
+ *   profile edits need).
+ * - A guideway crossing a MAJOR road at the same grade: the guideway
+ *   auto-splits and elevates over it — see autoElevateAcrossMajorRoad. The
+ *   crossed road is never touched.
+ * - Different grades: already an overpass, nothing to do.
+ *
+ * Different types at the same grade, neither of the above (a guideway
+ * crossing an ordinary road, say), remain visually coincident — see
+ * validate.ts's considerCrossSegment for what that state looks like today.
+ *
+ * Newly created arms/pieces are re-scanned, so a way crossing three streets
+ * resolves all three crossings.
  */
 function formCrossingJunctions(
   system: TransitSystem,
@@ -1579,36 +1658,58 @@ function formCrossingJunctions(
     const nearby = candidateWayIdsAlong(resolveWayPath(a), next.ways);
     let formed = false;
     for (const b of next.ways) {
-      if (b.id === aId || b.typeId !== a.typeId || b.grade !== a.grade || b.points.length < 2)
-        continue;
+      if (b.id === aId || b.grade !== a.grade || b.points.length < 2) continue;
       if (onlyWithWayId && b.id !== onlyWithWayId) continue;
       if (!nearby.has(b.id)) continue;
-      const crossings = wayCrossings(a, b);
-      if (crossings.length === 0) continue;
-      const { coord, aIndex } = crossings[0];
 
-      // A real shared vertex on both ways, linked as one Node…
-      const inserted = updateWayPoints(next, aId, (pts) => [
-        ...pts.slice(0, aIndex),
-        coord,
-        ...pts.slice(aIndex),
-      ]);
-      next = { ...inserted, nodes: shiftNodeRefsForInsert(inserted.nodes, aId, aIndex) };
-      next = joinWayPointToWay(next, aId, aIndex, b.id, coord);
+      if (b.typeId === a.typeId) {
+        const crossings = wayCrossings(a, b);
+        if (crossings.length === 0) continue;
+        const { coord, aIndex } = crossings[0];
 
-      // …then split both ways there so each junction arm is its own way.
-      const exact = next.ways.find((w) => w.id === aId)!.points[aIndex];
-      const bWay = next.ways.find((w) => w.id === b.id)!;
-      const bIndex = bWay.points.findIndex(
-        (p) => haversineMeters(p, exact) <= JOIN_REUSE_TOLERANCE_M,
-      );
-      const aNewId = shortId();
-      next = splitWay(next, aId, aIndex, aNewId);
-      if (bIndex > 0 && bIndex < bWay.points.length - 1) next = splitWay(next, b.id, bIndex);
+        // A real shared vertex on both ways, linked as one Node…
+        const inserted = updateWayPoints(next, aId, (pts) => [
+          ...pts.slice(0, aIndex),
+          coord,
+          ...pts.slice(aIndex),
+        ]);
+        next = { ...inserted, nodes: shiftNodeRefsForInsert(inserted.nodes, aId, aIndex) };
+        next = joinWayPointToWay(next, aId, aIndex, b.id, coord);
 
-      queue.push(aId, aNewId);
-      formed = true;
-      break;
+        // …then split both ways there so each junction arm is its own way.
+        const exact = next.ways.find((w) => w.id === aId)!.points[aIndex];
+        const bWay = next.ways.find((w) => w.id === b.id)!;
+        const bIndex = bWay.points.findIndex(
+          (p) => haversineMeters(p, exact) <= JOIN_REUSE_TOLERANCE_M,
+        );
+        const aNewId = shortId();
+        next = splitWay(next, aId, aIndex, aNewId);
+        if (bIndex > 0 && bIndex < bWay.points.length - 1) next = splitWay(next, b.id, bIndex);
+
+        queue.push(aId, aNewId);
+        formed = true;
+        break;
+      }
+
+      // Auto-elevate: only a guideway crossing a MAJOR road triggers this —
+      // road-vs-road never does (per the user's own framing, "a train line
+      // across a highway"), and bike/pedestrian-vs-road is left for a person
+      // to resolve rather than silently automated.
+      if (wayType(a.typeId).family === 'guideway' && b.typeId === 'road' && isMajorRoad(b)) {
+        const crossings = wayCrossings(a, b);
+        if (crossings.length === 0) continue;
+        const result = autoElevateAcrossMajorRoad(
+          next,
+          aId,
+          crossings[0].coord,
+          profileWidthM(b.profile),
+        );
+        if (!result) continue;
+        next = result.system;
+        queue.push(...result.pieceIds);
+        formed = true;
+        break;
+      }
     }
     if (!formed) continue;
   }
