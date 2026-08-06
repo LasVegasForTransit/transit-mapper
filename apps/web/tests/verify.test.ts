@@ -2445,6 +2445,38 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 }
 
+// --- extending a way's endpoint must not move stations anchored earlier on
+// it: t is a fraction of TOTAL length, so a naive replay against the new
+// (longer) total silently drags every station toward the new far end ---
+{
+  fresh();
+  const w = store.getState().beginWay('lightRail', 'straight');
+  store.getState().addWayPoint(w, [-115.2, 36.1]);
+  store.getState().addWayPoint(w, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const midStation = store.getState().addStation([-115.15, 36.1], { wayId: w, t: 0.5 });
+  const before = store.getState().system.stations.find((s) => s.id === midStation)!.coord;
+
+  store.getState().addWayPoint(w, [-115.0, 36.1]); // extend the far endpoint
+  const afterFirst = store.getState().system.stations.find((s) => s.id === midStation)!;
+  check(
+    "extending a way's endpoint does not move a station anchored earlier on the way",
+    Math.abs(afterFirst.coord[0] - before[0]) < 1e-9 &&
+      Math.abs(afterFirst.coord[1] - before[1]) < 1e-9,
+  );
+  check(
+    "extending a way's endpoint updates the station's stored t, not just its coord",
+    afterFirst.anchors.find((a) => a.wayId === w)!.t < 0.5,
+  );
+
+  store.getState().addWayPoint(w, [-114.9, 36.1]); // extend again
+  const afterSecond = store.getState().system.stations.find((s) => s.id === midStation)!.coord;
+  check(
+    "a second endpoint extension still preserves the station's absolute position",
+    Math.abs(afterSecond[0] - before[0]) < 1e-9 && Math.abs(afterSecond[1] - before[1]) < 1e-9,
+  );
+}
+
 // --- cutting where you CLICKED: the point-anchored actions that make a
 // stretch of a line removable without a station at each end ---
 {
