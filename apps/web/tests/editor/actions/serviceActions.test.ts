@@ -154,7 +154,7 @@ describe('terminus service actions', () => {
       },
     })[0];
 
-    expect(action.label).toBe('Convert end to two one-way paths');
+    expect(action.label).toBe('Add a return trip from here');
     action.run();
     expect(store.getState().system).toBe(before);
     expect(store.getState().armedTerminus).toMatchObject({

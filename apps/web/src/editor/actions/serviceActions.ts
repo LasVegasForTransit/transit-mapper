@@ -35,8 +35,8 @@ export function serviceActionProvider(store: EditorStore): SelectionActionProvid
         return [
           {
             id: 'service.convertTerminus',
-            label: 'Convert end to two one-way paths',
-            hint: 'Arms this end for the return-path gesture',
+            label: 'Add a return trip from here',
+            hint: 'Drag to where this line should turn back',
             group: 'direction',
             // Task 4 owns the side-aware drag. Keep its exact starting end in
             // ephemeral editor state; this action must not start a draft or
