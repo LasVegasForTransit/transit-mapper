@@ -173,8 +173,17 @@ export function NodeInspector({ id }: NodeInspectorProps) {
     turn: Exclude<TurnClass, 'uturn'>,
   ): JunctionArm[] => {
     if (!g) return [];
+    const inGroup = junctionGroupOf(waysById.get(inArm.wayId)?.typeId ?? '');
     const byAngle = g.arms.filter(
-      (a) => a !== inArm && classifyTurn(turnBetween(inArm, a)) === turn,
+      (a) =>
+        a !== inArm &&
+        classifyTurn(turnBetween(inArm, a)) === turn &&
+        // A mismatched junction (findMismatchedTypeJunctions' document-audience
+        // case) or a level crossing can put arms of two junction groups on one
+        // Node — a rail lane offering a "turn" onto a street lane draws a
+        // connector nothing can actually drive, since defaultConnectors
+        // already refuses to derive one for exactly this reason.
+        junctionGroupOf(waysById.get(a.wayId)?.typeId ?? '') === inGroup,
     );
     const restriction = getComponent(turnRestrictions, laneRefKey(inArm.wayId, lane.id));
     return restriction
@@ -408,11 +417,18 @@ export function NodeInspector({ id }: NodeInspectorProps) {
       )}
       {tab === 'connections' && (
         <div className="insp-section" role="tabpanel">
-          {mixedTypes && (
+          {control === 'levelCrossing' ? (
             <p className="insp-sub">
-              These ways aren't the same type, so no vehicle can actually turn between them.
-              Disconnecting one is how you undo that.
+              A guideway crossing a street at grade — real, not a fault to undo. No vehicle turns
+              between the two, same as any other level crossing.
             </p>
+          ) : (
+            mixedTypes && (
+              <p className="insp-sub">
+                These ways aren't the same type, so no vehicle can actually turn between them.
+                Disconnecting one is how you undo that.
+              </p>
+            )
           )}
           {!readOnly && !mixedTypes && (
             <p className="insp-sub">

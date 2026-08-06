@@ -126,11 +126,7 @@ import {
   MAX_PREVIEW_BYTES,
   pngDimensions,
 } from '@transitmapper/core/render/pngBytes';
-import {
-  findMismatchedTypeJunctions,
-  planIssues,
-  validateSystem,
-} from '@transitmapper/core/model/validate';
+import { findMismatchedTypeJunctions, validateSystem } from '@transitmapper/core/model/validate';
 import { estimateWayCapitalCost, formatUsdCompact } from '@transitmapper/core/model/cost';
 import {
   LANE_KINDS,
@@ -3131,10 +3127,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     store.getState().system.nodes.length === 1,
   );
 
-  // Two ways of DIFFERENT types crossing at the same grade can never be
-  // auto-joined — the model has no level-crossing primitive yet — so this
-  // stays flagged, but as a document-audience issue: real, but nothing the
-  // user can do about it from here, so it never reaches the issues popover.
+  // A guideway crossing a (non-major) road at the same grade now forms a
+  // real level crossing — see formCrossingJunctions' guideway/road branch —
+  // so importing one joins it the same way a same-type crossing does,
+  // instead of leaving it flagged with nothing anyone can act on.
   fresh();
   const wRoad = 'vroad';
   const wRail = 'vrail';
@@ -3169,12 +3165,14 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     turnRestrictions: [],
   });
   issues = validateSystem(store.getState().system);
-  const typeCrossing = issues.find((i) => i.id.startsWith('crossing-'));
-  check('flags a different-type crossing at the same grade', typeCrossing !== undefined);
   check(
-    'a different-type crossing is document-audience, so it never reaches the issues list',
-    typeCrossing?.audience === 'document' &&
-      planIssues(issues).every((i) => !i.id.startsWith('crossing-')),
+    'importing a guideway crossing a non-major road joins it instead of flagging a crossing',
+    !issues.some((i) => i.id.startsWith('crossing-')),
+  );
+  check(
+    'importing a guideway-over-road crossing forms a real level-crossing node',
+    store.getState().system.nodes.length === 1 &&
+      store.getState().system.nodes[0].control === 'levelCrossing',
   );
 
   // Parallel ways that never cross at all: no false positive.
@@ -7549,7 +7547,8 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 }
 
-// --- store: a guideway crossing a NON-major road does not auto-elevate ---
+// --- store: a guideway crossing a NON-major road forms a level crossing,
+// not an auto-elevate ---
 {
   fresh();
   const road = store.getState().beginWay('road', 'straight'); // defaults to collector, not major
@@ -7562,12 +7561,31 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   store.getState().finishWay();
   const after = store.getState().system;
   check(
-    'the rail line is left whole — no auto-elevate over a minor road',
-    after.ways.filter((w) => w.typeId === 'heavyRail').length === 1,
+    'nothing is elevated over a minor road',
+    after.ways.every((w) => w.grade === 'atGrade'),
   );
   check(
-    'nothing is elevated',
-    after.ways.every((w) => w.grade === 'atGrade'),
+    'a real level-crossing node forms instead',
+    after.nodes.length === 1 && after.nodes[0].control === 'levelCrossing',
+  );
+  check(
+    'the level crossing splits both ways into two arms each',
+    after.ways.filter((w) => w.typeId === 'heavyRail').length === 2 &&
+      after.ways.filter((w) => w.typeId === 'road').length === 2,
+  );
+  check(
+    "a level crossing's connectors are empty — nothing turns from a track onto a street lane",
+    effectiveConnectors(after.nodes[0], new Map(after.ways.map((w) => [w.id, w]))).length === 0,
+  );
+
+  // The two invariants a level crossing depends on that are easy to break
+  // separately: withSingleTypeArms must not prune it back to single-type on
+  // load, and the NODE_CONTROLS whitelist must not silently drop the value.
+  const reloaded = parseSystem(JSON.parse(JSON.stringify(after)));
+  check('a level crossing survives a save and a reload', reloaded.nodes.length === 1);
+  check(
+    'the reloaded node keeps all four arms and its control',
+    reloaded.nodes[0]?.control === 'levelCrossing' && reloaded.nodes[0]?.refs.length === 4,
   );
 }
 

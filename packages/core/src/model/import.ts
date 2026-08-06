@@ -690,6 +690,12 @@ function controlFromOsmNodeTags(tags: Record<string, string> | undefined): NodeC
  *  signalized roundabout is a signal, and a junction with any signalized
  *  approach is signalized regardless of what the other arms say. */
 const CONTROL_RANK: Record<NodeControl, number> = {
+  // controlFromOsmNodeTags never returns 'levelCrossing' — OSM import builds
+  // no guideway/road junctions at all, so this value is unreachable through
+  // this path today. Ranked above every real vote so a future import that
+  // does derive one (e.g. from railway=level_crossing) isn't silently
+  // outranked by a signal tag on the same node.
+  levelCrossing: 4,
   signal: 3,
   stop: 2,
   roundabout: 1,

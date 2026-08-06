@@ -1610,22 +1610,69 @@ function autoElevateAcrossMajorRoad(
 }
 
 /**
+ * Splices a real junction arm between `aId` (at `aIndex`, already holding the
+ * crossing coordinate) and `b`: a shared Node, then both ways split so every
+ * arm is its own way — the mechanics an ordinary same-type intersection and a
+ * level crossing both need identically. `control`, when given, marks the
+ * resulting Node (a level crossing gets `'levelCrossing'`; an ordinary
+ * intersection leaves it unset, the heuristic default).
+ */
+function spliceJunctionArm(
+  system: TransitSystem,
+  aId: string,
+  aIndex: number,
+  coord: LngLat,
+  b: Way,
+  control?: NodeControl,
+): { system: TransitSystem; aNewId: string } {
+  // A real shared vertex on both ways, linked as one Node…
+  const inserted = updateWayPoints(system, aId, (pts) => [
+    ...pts.slice(0, aIndex),
+    coord,
+    ...pts.slice(aIndex),
+  ]);
+  let next: TransitSystem = {
+    ...inserted,
+    nodes: shiftNodeRefsForInsert(inserted.nodes, aId, aIndex),
+  };
+  next = joinWayPointToWay(next, aId, aIndex, b.id, coord);
+
+  if (control) {
+    next = {
+      ...next,
+      nodes: next.nodes.map((n) =>
+        n.refs.some((r) => r.wayId === aId && r.pointIndex === aIndex) ? { ...n, control } : n,
+      ),
+    };
+  }
+
+  // …then split both ways there so each junction arm is its own way.
+  const exact = next.ways.find((w) => w.id === aId)!.points[aIndex];
+  const bWay = next.ways.find((w) => w.id === b.id)!;
+  const bIndex = bWay.points.findIndex((p) => haversineMeters(p, exact) <= JOIN_REUSE_TOLERANCE_M);
+  const aNewId = shortId();
+  next = splitWay(next, aId, aIndex, aNewId);
+  if (bIndex > 0 && bIndex < bWay.points.length - 1) next = splitWay(next, b.id, bIndex);
+
+  return { system: next, aNewId };
+}
+
+/**
  * The SimCity moment: wherever `wayId` crosses another corridor mid-segment,
  * resolve it into something real instead of leaving two lines silently
- * coincident. Three cases:
+ * coincident. Four cases:
  *
- * - Same type, same grade: a real 4-arm junction — a shared vertex spliced
- *   into both ways, linked as one Node, then both ways split there so every
- *   arm is its own way (which is what per-arm lane connectors and per-arm
- *   profile edits need).
+ * - Same type, same grade: a real 4-arm junction (spliceJunctionArm, no
+ *   control override) — every arm its own way, which is what per-arm lane
+ *   connectors and per-arm profile edits need.
  * - A guideway crossing a MAJOR road at the same grade: the guideway
  *   auto-splits and elevates over it — see autoElevateAcrossMajorRoad. The
  *   crossed road is never touched.
+ * - A guideway crossing a NON-major road at the same grade: a real at-grade
+ *   junction forms (spliceJunctionArm again, `control: 'levelCrossing'`) —
+ *   both ways split, same as the same-type case, but marked as a level
+ *   crossing rather than an ordinary intersection.
  * - Different grades: already an overpass, nothing to do.
- *
- * Different types at the same grade, neither of the above (a guideway
- * crossing an ordinary road, say), remain visually coincident — see
- * validate.ts's considerCrossSegment for what that state looks like today.
  *
  * Newly created arms/pieces are re-scanned, so a way crossing three streets
  * resolves all three crossings.
@@ -1666,49 +1713,46 @@ function formCrossingJunctions(
         const crossings = wayCrossings(a, b);
         if (crossings.length === 0) continue;
         const { coord, aIndex } = crossings[0];
-
-        // A real shared vertex on both ways, linked as one Node…
-        const inserted = updateWayPoints(next, aId, (pts) => [
-          ...pts.slice(0, aIndex),
-          coord,
-          ...pts.slice(aIndex),
-        ]);
-        next = { ...inserted, nodes: shiftNodeRefsForInsert(inserted.nodes, aId, aIndex) };
-        next = joinWayPointToWay(next, aId, aIndex, b.id, coord);
-
-        // …then split both ways there so each junction arm is its own way.
-        const exact = next.ways.find((w) => w.id === aId)!.points[aIndex];
-        const bWay = next.ways.find((w) => w.id === b.id)!;
-        const bIndex = bWay.points.findIndex(
-          (p) => haversineMeters(p, exact) <= JOIN_REUSE_TOLERANCE_M,
-        );
-        const aNewId = shortId();
-        next = splitWay(next, aId, aIndex, aNewId);
-        if (bIndex > 0 && bIndex < bWay.points.length - 1) next = splitWay(next, b.id, bIndex);
-
-        queue.push(aId, aNewId);
+        const result = spliceJunctionArm(next, aId, aIndex, coord, b);
+        next = result.system;
+        queue.push(aId, result.aNewId);
         formed = true;
         break;
       }
 
-      // Auto-elevate: only a guideway crossing a MAJOR road triggers this —
-      // road-vs-road never does (per the user's own framing, "a train line
-      // across a highway"), and bike/pedestrian-vs-road is left for a person
-      // to resolve rather than silently automated.
-      if (wayType(a.typeId).family === 'guideway' && b.typeId === 'road' && isMajorRoad(b)) {
+      // Different types, same grade: only a guideway crossing a road
+      // triggers anything — bike/pedestrian-vs-road is left for a person to
+      // resolve rather than silently automated, and guideway-vs-guideway
+      // needs a different primitive entirely (a track diamond, not a road
+      // crossing).
+      if (wayType(a.typeId).family === 'guideway' && b.typeId === 'road') {
         const crossings = wayCrossings(a, b);
         if (crossings.length === 0) continue;
-        const result = autoElevateAcrossMajorRoad(
-          next,
-          aId,
-          crossings[0].coord,
-          profileWidthM(b.profile),
-        );
-        if (!result) continue;
-        next = result.system;
-        queue.push(...result.pieceIds);
-        formed = true;
-        break;
+
+        if (isMajorRoad(b)) {
+          // A major road: auto-elevate — road-vs-road never does this (per
+          // the user's own framing, "a train line across a highway").
+          const result = autoElevateAcrossMajorRoad(
+            next,
+            aId,
+            crossings[0].coord,
+            profileWidthM(b.profile),
+          );
+          if (!result) continue;
+          next = result.system;
+          queue.push(...result.pieceIds);
+          formed = true;
+          break;
+        } else {
+          // An ordinary road: a genuine at-grade level crossing — the same
+          // splice as an ordinary intersection, just marked as one.
+          const { coord, aIndex } = crossings[0];
+          const result = spliceJunctionArm(next, aId, aIndex, coord, b, 'levelCrossing');
+          next = result.system;
+          queue.push(aId, result.aNewId);
+          formed = true;
+          break;
+        }
       }
     }
     if (!formed) continue;

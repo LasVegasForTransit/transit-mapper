@@ -27,8 +27,13 @@ export type DrivingSide = 'left' | 'right';
 export type LaneDirection = 'forward' | 'backward' | 'both' | 'none';
 
 /** How traffic through a junction is controlled — rendering + (later)
- *  simulation semantics, not topology. */
-export type NodeControl = 'uncontrolled' | 'signal' | 'stop' | 'roundabout';
+ *  simulation semantics, not topology. `levelCrossing` is distinct from the
+ *  rest: it's not a traffic-control choice someone picks, but the marker a
+ *  guideway-crosses-a-non-major-road junction always carries (see
+ *  formCrossingJunctions in apps/web/src/editor/store.ts) — a real at-grade
+ *  crossing between two physically incompatible way types, gates and all,
+ *  as opposed to an ordinary same-type intersection. */
+export type NodeControl = 'uncontrolled' | 'signal' | 'stop' | 'roundabout' | 'levelCrossing';
 
 /** Which days a SchedulePeriod runs. Deliberately coarse (not a specific
  *  weekday set or calendar) — this is a fantasy-system planning tool, not a
