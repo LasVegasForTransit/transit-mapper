@@ -73,3 +73,37 @@ that mental picture, not force people to think in terms of the pieces.
 In practice: a shared name (like "Decatur Avenue") is its own record, a
 `NamedWay`, that a street's segments all point back to, rather than being
 a property duplicated on each segment.
+
+## An invalid state is either impossible or fixed automatically, never reported
+
+The tool is meant to be forgiving to use and precise underneath — someone
+should be able to draw and drag without thinking about the model's rules,
+while the model stays exactly right. A warning that tells a person "you did
+something wrong, go fix it" fails both halves at once: it makes the tool
+less forgiving (now they owe it a fix) without making the model any more
+correct (the invalid state still happened). If the code can already tell a
+state is wrong, the fix belongs in the code that produced the state, not in
+a message asking a person to notice and correct it.
+
+This isn't the same as a design decision, which only a person can make — a
+line running against traffic on a one-way street might be a mistake, or it
+might be a documented contraflow bus lane, and the model has no way to know
+which. Those stay a person's call. What doesn't stay a person's call is a
+line with one point, or two street segments visibly crossing with no
+junction between them — both are bugs in whatever produced them, not
+questions about the network being designed.
+
+In practice: every mutation that can shrink a way's point list refuses to
+take it below 2 (`deleteWayPoint`, `splitWay`, `straightenWay` in
+`apps/web/src/editor/store.ts`), and every path that can introduce a new
+same-type, same-grade crossing — drawing, dragging a point, inserting one,
+importing a batch of ways — runs the same junction-forming pass a hand-drawn
+crossing already gets (`formCrossingJunctions`, same file). A state neither
+guard can reach in practice (a hand-edited document with the same corridor
+type crossing itself twice) is still checked and repaired on load
+(`packages/core/src/model/serialize.ts`'s `repairedParts`), never surfaced
+as something to click through. `packages/core/src/model/validate.ts`'s
+`IssueAudience` split (`plan` vs `document`) is the seam: `document` issues
+are checked and tested so the repair stays provable, but never shown to
+anyone — there used to be a top-bar panel that showed them, and it was
+deleted once the states it reported became impossible to reach.
