@@ -43,7 +43,7 @@ function renderWorkbench(): void {
             brand={slot('brand')}
             menuPanel={slot('menu')}
             supplementalPanel={null}
-            hasSupplementalContent={false}
+            supplemental="none"
             primaryToolbar={slot('primary')}
             viewSwitcher={slot('view')}
             viewSwitcherCompact={<span data-slot="view-compact" />}

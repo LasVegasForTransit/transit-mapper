@@ -3809,8 +3809,11 @@ button.chip-removable-label:hover {
    dvh, not vh: a mobile browser's vh is measured against the viewport with
    the URL bar retracted and never changes, so a vh-sized surface is taller
    than the space it has for as long as that bar is showing. */
-.compact-workbench.is-open {
-  max-height: min(62dvh, calc(100dvh - 96px));
+.compact-workbench.is-half {
+  max-height: min(46dvh, calc(100dvh - 96px));
+}
+.compact-workbench.is-full {
+  max-height: calc(100dvh - 96px);
 }
 .compact-workbench.is-hidden {
   max-height: 0;

@@ -442,7 +442,7 @@ export function App() {
         brand={<TopBarBrand />}
         menuPanel={<SidebarPanel />}
         supplementalPanel={<Inspector />}
-        hasSupplementalContent={supplemental.kind !== 'none'}
+        supplemental={supplemental.kind}
         primaryToolbar={<TopBarActions />}
         viewSwitcher={<ViewSwitch />}
         viewSwitcherCompact={<ViewSwitchCompact />}
