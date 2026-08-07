@@ -133,7 +133,11 @@ export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps)
               style={{ flexGrow: l.widthM, background: laneRender(l.kindId).color }}
               role="option"
               aria-selected={selected?.id === l.id}
+              // Still here for a mouse resting on a lane too narrow to print
+              // its own name, but no longer the only place the name exists —
+              // see .xs-lane-kind below.
               title={`${kind.label} · ${ftLabel(l.widthM)}${restricted ? ' · turn-restricted (edit at the junction)' : ''}`}
+              aria-label={`${kind.label}, ${ftLabel(l.widthM)}${restricted ? ', turn-restricted' : ''}`}
               disabled={readOnly}
               onClick={() => setSelectedLaneId(selected?.id === l.id ? null : l.id)}
             >
@@ -148,6 +152,16 @@ export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps)
           );
         })}
       </div>
+      {/* What the selected lane actually IS. The strip paints lanes by colour
+          and prints a width, and until now the only place a lane's KIND was
+          written was its `title` — so on a phone there was no way to tell a
+          bus lane from parking except by learning the palette. */}
+      {selected && (
+        <div className="xs-selected">
+          <span className="xs-selected-kind">{laneKind(selected.kindId).label}</span>
+          <span className="xs-selected-width">{ftLabel(selected.widthM)}</span>
+        </div>
+      )}
       <div className="xs-total">
         {profile.lanes.length} lanes · {ftLabel(profileWidthM(profile))} (
         {profileWidthM(profile).toFixed(1)} m) total

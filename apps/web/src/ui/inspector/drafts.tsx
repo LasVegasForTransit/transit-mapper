@@ -180,12 +180,7 @@ function WayDraftInspector() {
             <label className="field-label" id="draft-direction-label">
               Direction
             </label>
-            <div
-              className="chip-row"
-              role="group"
-              aria-labelledby="draft-direction-label"
-              title="One-way runs the direction you draw (O toggles; D flips after). Tip: right-click an existing endpoint to branch a one-way segment off it."
-            >
+            <div className="chip-row" role="group" aria-labelledby="draft-direction-label">
               <button
                 className={`chip ${!draftOneWay ? 'active' : ''}`}
                 aria-pressed={!draftOneWay}
@@ -201,6 +196,17 @@ function WayDraftInspector() {
                 One-way
               </button>
             </div>
+            {/* This was a `title` on the (non-focusable) chip row above, which
+                made it unreachable by finger AND by keyboard — a tooltip on a
+                div is readable only by a mouse that happens to rest there. It
+                is the only place either behaviour is written down, so it says
+                so on screen. Both gestures are named, since neither the key
+                nor the long press is guessable. */}
+            <p className="panel-hint">
+              A one-way runs the direction you draw it. Press O to switch before you draw, or D to
+              flip it after. Long-press an endpoint — right-click with a mouse — to branch a one-way
+              segment off it.
+            </p>
           </>
         )}
 

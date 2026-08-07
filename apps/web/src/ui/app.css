@@ -2350,6 +2350,25 @@ input[type='range'] {
   line-height: 1;
   opacity: 0.85;
 }
+/* Names the selected lane, because the strip cannot: a 14px-wide lane has no
+   room for a word, and its `title` is a mouse-only affordance. */
+.xs-selected {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+.xs-selected-kind {
+  font-size: var(--md-sys-typescale-label-large-size);
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface);
+}
+.xs-selected-width {
+  font-family: var(--mono);
+  font-size: var(--md-sys-typescale-label-medium-size);
+  color: var(--md-sys-color-on-surface-variant);
+}
 .xs-total {
   font-size: var(--md-sys-typescale-label-small-size);
   color: var(--md-sys-color-outline);
@@ -3494,28 +3513,30 @@ button.chip-removable-label:hover {
    beside each other. */
 @media (max-width: 620px) {
   /* Icons carry the meaning once text can't fit; every button also has an
-     aria-label, so the meaning survives for assistive technology and for
-     touch, where a title tooltip is unreachable. */
+     aria-label, so the meaning survives for assistive technology.
+
+     NOT for `.primary-btn` though. This used to take every label, which meant
+     Share and Export lost theirs at exactly the widths most likely to be
+     touched — and a `title` tooltip, which is the only other place their
+     names appear, cannot be reached by a finger at all. An icon is a
+     reminder of a name you already know; it is not the name. The two primary
+     verbs keep theirs. */
   .btn-label {
     display: none;
   }
+  .primary-btn .btn-label {
+    display: inline;
+  }
   /* An explicit width (not just min-width) actually shrinks the input —
      otherwise it keeps its ~170px browser-default intrinsic size and the
-     topbar-right reservation below can't stay accurate. */
-  .system-name {
+     topbar-right reservation below can't stay accurate.
+
+     Scoped away from the compact top bar, which gives the name the whole row
+     to itself and lets it ellipsise: 60px there truncated "Untitled system"
+     to "Untitle…" on a bar with room to spare. */
+  .system-name:not(.compact-top-bar *) {
     width: 60px;
     min-width: 0;
-  }
-  .topbar-left {
-    max-width: 160px;
-  }
-  .topbar-right {
-    max-width: calc(100vw - 196px);
-  }
-  .topbar-left,
-  .topbar-right {
-    padding: 4px 8px;
-    gap: 4px;
   }
   .ghost-btn,
   .primary-btn {
