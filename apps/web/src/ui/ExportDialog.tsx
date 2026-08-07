@@ -269,7 +269,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
             </button>
           </div>
           <p className="panel-hint">
-            Drag to pan, scroll to zoom — this frames exactly what gets exported.
+            Drag to move the map, pinch or scroll to zoom — this frames exactly what gets exported.
           </p>
         </div>
       </div>
