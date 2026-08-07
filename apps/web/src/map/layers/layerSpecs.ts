@@ -732,13 +732,20 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       source: SRC_PREVIEW,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        // A stretch the route had to run against traffic is drawn in the warning
-        // colour, heavier and at full opacity — the rest of the draft is a faint
-        // dashed hint, and something wrong with it has to out-read that.
-        'line-color': ['case', ['get', 'wrongWay'], theme.danger, theme.gesturePreview],
-        'line-width': ['case', ['get', 'wrongWay'], 3.5, 2],
+        // A stretch the route had to run against traffic (wrongWay) or that
+        // the Demolish tool is about to remove (demolish) is drawn in the
+        // warning colour, heavier and at full opacity — the rest of the
+        // draft is a faint dashed hint, and something destructive about it
+        // has to out-read that.
+        'line-color': [
+          'case',
+          ['any', ['get', 'wrongWay'], ['get', 'demolish']],
+          theme.danger,
+          theme.gesturePreview,
+        ],
+        'line-width': ['case', ['any', ['get', 'wrongWay'], ['get', 'demolish']], 3.5, 2],
         'line-dasharray': [1.5, 1.5],
-        'line-opacity': ['case', ['get', 'wrongWay'], 1, 0.5],
+        'line-opacity': ['case', ['any', ['get', 'wrongWay'], ['get', 'demolish']], 1, 0.5],
       },
     },
     {

@@ -3,6 +3,7 @@ import {
   INITIAL_DRAFT,
   LANE_KINDS,
   PROFILE_PRESETS,
+  isMajorRoad,
   laneKind,
   mode,
   modesForWayType,
@@ -108,6 +109,11 @@ import {
   createGroup as createGroupEntity,
   createStation,
 } from '@transitmapper/core/model/system';
+import {
+  resyncAutoNamedStations,
+  suggestStopName,
+  type SuggestedStopName,
+} from '@transitmapper/core/model/geo/crossStreetNaming';
 import { withoutAlreadyImported, type ImportedNetwork } from '@transitmapper/core/model/import';
 import type {
   RunDirection,
@@ -137,8 +143,11 @@ import type {
 
 /** `lines` selects SERVICES and only services — a drag-select for routes,
  *  offered in the Network view where lines are what you are working on. The
- *  Select tool stays the one that picks up and moves infrastructure. */
-export type Tool = 'select' | 'way' | 'station' | 'facility' | 'lines';
+ *  Select tool stays the one that picks up and moves infrastructure.
+ *  `demolish` is a persistent Infrastructure-view tool mode (not a
+ *  selection-dependent Inspector control) since it isn't conditioned on any
+ *  current selection — a deliberate exception to that convention. */
+export type Tool = 'select' | 'way' | 'station' | 'facility' | 'lines' | 'demolish';
 
 // A freshly-drawn line should already be a "working" one — an ambient
 // vehicle animating along it — without a trip to the Inspector first (both
@@ -178,6 +187,15 @@ const GROUP_FOOTPRINT_HALF_SIZE_M = 20; // a ~40m default facility-complex site
 
 export interface SetSystemOptions {
   readOnly?: boolean;
+}
+
+export interface SetStationNameOptions {
+  /** True when this call is itself an auto-suggestion (the Inspector's
+   *  "Suggest name" button) rather than the user typing their own text —
+   *  keeps the station's autoNamed flag set, so resyncAutoNamedStations may
+   *  still correct it later. Omitted (or false) clears autoNamed for good:
+   *  once someone types their own text, nothing overwrites it again. */
+  auto?: boolean;
 }
 
 export interface ApplyImportedReconciliation {
@@ -697,7 +715,12 @@ export interface EditorState {
    *  never for this id), so it's safe to call unconditionally on mount. */
   consumeFocusName: (id: string) => void;
   moveStation: (id: string, coord: LngLat, anchor?: StationAnchor) => void;
-  setStationName: (id: string, name: string) => void;
+  setStationName: (id: string, name: string, options?: SetStationNameOptions) => void;
+  /** Recomputes a station's name from its current position and applies it,
+   *  the same suggestion addStation/addDrawnStation compute at placement —
+   *  the Inspector's "Suggest name" button, for after a move makes the
+   *  original guess stale. A no-op if nothing can be suggested. */
+  suggestStationName: (id: string) => void;
   /** How long a vehicle dwells here before departing, in seconds — undefined
    *  reverts to the animation's own default (see sim/vehicles.ts). */
   setStationDwellSeconds: (id: string, seconds: number | undefined) => void;
@@ -754,6 +777,18 @@ function centroidOf(ring: LngLat[]): LngLat {
   const cx = ring.reduce((sum, p) => sum + p[0], 0) / ring.length;
   const cy = ring.reduce((sum, p) => sum + p[1], 0) / ring.length;
   return [cx, cy];
+}
+
+/** Applies a computed name suggestion onto a station-shaped object, marking
+ *  it `autoNamed` — shared by addStation/addDrawnStation, the only two
+ *  places a station gets its initial name. A null suggestion leaves `base`
+ *  untouched (same reference), matching "leave the name unset" everywhere
+ *  else a suggestion comes up empty. */
+function withSuggestedName<T extends { name?: string; autoNamed?: boolean }>(
+  base: T,
+  suggested: SuggestedStopName,
+): T {
+  return suggested.name ? { ...base, name: suggested.name, autoNamed: true } : base;
 }
 
 function touch(system: TransitSystem): TransitSystem {
@@ -1537,16 +1572,141 @@ function mergeWays(system: TransitSystem, keepId: string, otherId: string): Tran
   return { ...system, ways, nodes, services, stations, namedWays, updatedAt: Date.now() };
 }
 
+// How far past a major road's own edge the elevated segment extends, in
+// meters — enough that the viaduct visibly clears the shoulder rather than
+// ending exactly at the road edge.
+const VIADUCT_CLEARANCE_M = 5;
+// Floor on the elevated segment's half-span, for a crossed road with no
+// meaningful recorded width (an empty profile).
+const MIN_VIADUCT_HALF_SPAN_M = 8;
+
 /**
- * The SimCity moment: wherever `wayId` crosses another corridor of the SAME
- * type and grade
- * mid-segment, form a real 4-arm junction — a shared vertex spliced into
- * both ways, linked as one Node, then both ways split there so every arm is
- * its own way (which is what per-arm lane connectors and per-arm profile
- * edits need). Different types remain visually coincident until an explicit
- * compatible service connection joins them; different grades are overpasses.
- * Newly created arms are re-scanned, so a way crossing three streets forms
- * all three junctions.
+ * Splits `aId` into three pieces at `crossingCoord` — before / over / after —
+ * and elevates the middle piece to a viaduct. `bWidthM` (the crossed road's
+ * own width) sets how far the elevated segment extends past the crossing on
+ * each side. The crossed road itself is never touched: no point inserted, no
+ * grade change, no junction — this is what keeps it a real overpass rather
+ * than a shared intersection, matching formCrossingJunctions' existing
+ * different-grade rule.
+ *
+ * Returns every piece that still exists after the cut (a short way entirely
+ * inside the buffer has no "before" or "after" side), so the caller can
+ * re-queue them — a guideway can cross several major roads along its length.
+ * Returns null when the way is too short to carry a distinct elevated
+ * segment at all.
+ */
+function autoElevateAcrossMajorRoad(
+  system: TransitSystem,
+  aId: string,
+  crossingCoord: LngLat,
+  bWidthM: number,
+): { system: TransitSystem; pieceIds: string[] } | null {
+  const a = system.ways.find((w) => w.id === aId);
+  if (!a) return null;
+  const path = resolveWayPath(a);
+  if (path.length < 2) return null;
+  const total = pathLengthMeters(path);
+  if (total <= 0) return null;
+  const near = nearestOnPath(path, crossingCoord);
+  if (!near) return null;
+
+  const halfSpanM = Math.max(bWidthM / 2 + VIADUCT_CLEARANCE_M, MIN_VIADUCT_HALF_SPAN_M);
+  const halfSpanT = halfSpanM / total;
+  const loT = Math.max(0, near.t - halfSpanT);
+  const hiT = Math.min(1, near.t + halfSpanT);
+  if (hiT - loT < MIN_STRETCH_T) return null;
+
+  // High before low — same reasoning as deleteWayStretch: splitting high
+  // first keeps the low end's position stable on the piece that keeps aId.
+  let sys = system;
+  const atHi = insertIndexAtT(sys, aId, hiT);
+  const afterId = shortId();
+  if (atHi) sys = splitWay(atHi.system, aId, atHi.index, afterId);
+  const atLo = insertIndexAtT(sys, aId, loT);
+  const middleId = shortId();
+  if (atLo) sys = splitWay(atLo.system, aId, atLo.index, middleId);
+  // No cut at the low end means the buffer reaches the way's own start, so
+  // aId itself is already the elevated (middle) piece — same degenerate case
+  // deleteWayStretch handles for its own "remove" side.
+  const elevatedId = atLo ? middleId : aId;
+  sys = {
+    ...sys,
+    ways: sys.ways.map((w) => (w.id === elevatedId ? { ...w, grade: 'elevated' as const } : w)),
+  };
+
+  const pieceIds = [atLo ? aId : null, elevatedId, atHi ? afterId : null].filter(
+    (id): id is string => id !== null,
+  );
+  return { system: sys, pieceIds };
+}
+
+/**
+ * Splices a real junction arm between `aId` (at `aIndex`, already holding the
+ * crossing coordinate) and `b`: a shared Node, then both ways split so every
+ * arm is its own way — the mechanics an ordinary same-type intersection and a
+ * level crossing both need identically. `control`, when given, marks the
+ * resulting Node (a level crossing gets `'levelCrossing'`; an ordinary
+ * intersection leaves it unset, the heuristic default).
+ */
+function spliceJunctionArm(
+  system: TransitSystem,
+  aId: string,
+  aIndex: number,
+  coord: LngLat,
+  b: Way,
+  control?: NodeControl,
+): { system: TransitSystem; aNewId: string } {
+  // A real shared vertex on both ways, linked as one Node…
+  const inserted = updateWayPoints(system, aId, (pts) => [
+    ...pts.slice(0, aIndex),
+    coord,
+    ...pts.slice(aIndex),
+  ]);
+  let next: TransitSystem = {
+    ...inserted,
+    nodes: shiftNodeRefsForInsert(inserted.nodes, aId, aIndex),
+  };
+  next = joinWayPointToWay(next, aId, aIndex, b.id, coord);
+
+  if (control) {
+    next = {
+      ...next,
+      nodes: next.nodes.map((n) =>
+        n.refs.some((r) => r.wayId === aId && r.pointIndex === aIndex) ? { ...n, control } : n,
+      ),
+    };
+  }
+
+  // …then split both ways there so each junction arm is its own way.
+  const exact = next.ways.find((w) => w.id === aId)!.points[aIndex];
+  const bWay = next.ways.find((w) => w.id === b.id)!;
+  const bIndex = bWay.points.findIndex((p) => haversineMeters(p, exact) <= JOIN_REUSE_TOLERANCE_M);
+  const aNewId = shortId();
+  next = splitWay(next, aId, aIndex, aNewId);
+  if (bIndex > 0 && bIndex < bWay.points.length - 1) next = splitWay(next, b.id, bIndex);
+
+  return { system: next, aNewId };
+}
+
+/**
+ * The SimCity moment: wherever `wayId` crosses another corridor mid-segment,
+ * resolve it into something real instead of leaving two lines silently
+ * coincident. Four cases:
+ *
+ * - Same type, same grade: a real 4-arm junction (spliceJunctionArm, no
+ *   control override) — every arm its own way, which is what per-arm lane
+ *   connectors and per-arm profile edits need.
+ * - A guideway crossing a MAJOR road at the same grade: the guideway
+ *   auto-splits and elevates over it — see autoElevateAcrossMajorRoad. The
+ *   crossed road is never touched.
+ * - A guideway crossing a NON-major road at the same grade: a real at-grade
+ *   junction forms (spliceJunctionArm again, `control: 'levelCrossing'`) —
+ *   both ways split, same as the same-type case, but marked as a level
+ *   crossing rather than an ordinary intersection.
+ * - Different grades: already an overpass, nothing to do.
+ *
+ * Newly created arms/pieces are re-scanned, so a way crossing three streets
+ * resolves all three crossings.
  */
 function formCrossingJunctions(
   system: TransitSystem,
@@ -1576,36 +1736,55 @@ function formCrossingJunctions(
     const nearby = candidateWayIdsAlong(resolveWayPath(a), next.ways);
     let formed = false;
     for (const b of next.ways) {
-      if (b.id === aId || b.typeId !== a.typeId || b.grade !== a.grade || b.points.length < 2)
-        continue;
+      if (b.id === aId || b.grade !== a.grade || b.points.length < 2) continue;
       if (onlyWithWayId && b.id !== onlyWithWayId) continue;
       if (!nearby.has(b.id)) continue;
-      const crossings = wayCrossings(a, b);
-      if (crossings.length === 0) continue;
-      const { coord, aIndex } = crossings[0];
 
-      // A real shared vertex on both ways, linked as one Node…
-      const inserted = updateWayPoints(next, aId, (pts) => [
-        ...pts.slice(0, aIndex),
-        coord,
-        ...pts.slice(aIndex),
-      ]);
-      next = { ...inserted, nodes: shiftNodeRefsForInsert(inserted.nodes, aId, aIndex) };
-      next = joinWayPointToWay(next, aId, aIndex, b.id, coord);
+      if (b.typeId === a.typeId) {
+        const crossings = wayCrossings(a, b);
+        if (crossings.length === 0) continue;
+        const { coord, aIndex } = crossings[0];
+        const result = spliceJunctionArm(next, aId, aIndex, coord, b);
+        next = result.system;
+        queue.push(aId, result.aNewId);
+        formed = true;
+        break;
+      }
 
-      // …then split both ways there so each junction arm is its own way.
-      const exact = next.ways.find((w) => w.id === aId)!.points[aIndex];
-      const bWay = next.ways.find((w) => w.id === b.id)!;
-      const bIndex = bWay.points.findIndex(
-        (p) => haversineMeters(p, exact) <= JOIN_REUSE_TOLERANCE_M,
-      );
-      const aNewId = shortId();
-      next = splitWay(next, aId, aIndex, aNewId);
-      if (bIndex > 0 && bIndex < bWay.points.length - 1) next = splitWay(next, b.id, bIndex);
+      // Different types, same grade: only a guideway crossing a road
+      // triggers anything — bike/pedestrian-vs-road is left for a person to
+      // resolve rather than silently automated, and guideway-vs-guideway
+      // needs a different primitive entirely (a track diamond, not a road
+      // crossing).
+      if (wayType(a.typeId).family === 'guideway' && b.typeId === 'road') {
+        const crossings = wayCrossings(a, b);
+        if (crossings.length === 0) continue;
 
-      queue.push(aId, aNewId);
-      formed = true;
-      break;
+        if (isMajorRoad(b)) {
+          // A major road: auto-elevate — road-vs-road never does this (per
+          // the user's own framing, "a train line across a highway").
+          const result = autoElevateAcrossMajorRoad(
+            next,
+            aId,
+            crossings[0].coord,
+            profileWidthM(b.profile),
+          );
+          if (!result) continue;
+          next = result.system;
+          queue.push(...result.pieceIds);
+          formed = true;
+          break;
+        } else {
+          // An ordinary road: a genuine at-grade level crossing — the same
+          // splice as an ordinary intersection, just marked as one.
+          const { coord, aIndex } = crossings[0];
+          const result = spliceJunctionArm(next, aId, aIndex, coord, b, 'levelCrossing');
+          next = result.system;
+          queue.push(aId, result.aNewId);
+          formed = true;
+          break;
+        }
+      }
     }
     if (!formed) continue;
   }
@@ -3522,10 +3701,18 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         };
         // Routing over what's already there adds no infrastructure at all now —
         // only a service that names the stretches it uses.
-        set((s) => ({
-          system: touch({ ...s.system, services: [...s.system.services, service] }),
-          selection: { kind: 'service', id },
-        }));
+        const riddenWayIds = new Set(legs.map((l) => l.wayId));
+        set((s) => {
+          const withService = { ...s.system, services: [...s.system.services, service] };
+          // A station riding one of these ways could have been unserved when
+          // its name was auto-suggested — resolveNamingStyle's fallback has to
+          // guess a style before any service exists, and this line might prove
+          // that guess wrong (see resyncAutoNamedStations).
+          return {
+            system: touch(resyncAutoNamedStations(withService, riddenWayIds)),
+            selection: { kind: 'service', id },
+          };
+        });
         return id;
       },
 
@@ -4151,8 +4338,8 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
                 { kind: 'split' as const, outbound: diverged, inbound: returnLegs },
               ],
         );
-        set((s) => ({
-          system: touch({
+        set((s) => {
+          const withReturnPath = {
             ...s.system,
             services: s.system.services.map((sv) =>
               sv.id !== serviceId
@@ -4162,9 +4349,18 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
                     patterns: sv.patterns.map((p) => (p.id === patternId ? { ...p, sections } : p)),
                   },
             ),
-          }),
-          routeDraft: null,
-        }));
+          };
+          // The return trip can newly cover a station the outbound leg never
+          // reached — same staleness case createRoutedService resyncs for.
+          // Only the return legs themselves are new coverage; the shared/
+          // outbound legs already existed before this call.
+          return {
+            system: touch(
+              resyncAutoNamedStations(withReturnPath, new Set(returnLegs.map((l) => l.wayId))),
+            ),
+            routeDraft: null,
+          };
+        });
         return true;
       },
 
@@ -4357,7 +4553,19 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         }),
 
       addStation: (coord, anchor) => {
-        const station = createStation(coord, anchor);
+        const bare = createStation(coord, anchor);
+        // Computed once, here, never again automatically — moving or
+        // re-anchoring a station must never silently overwrite a name the
+        // user (or this suggestion) already gave it. autoNamed marks it as
+        // still eligible for resyncAutoNamedStations to correct later, if a
+        // service drawn afterward reveals the initial guess was wrong; the
+        // Inspector's "Suggest name" button is the only other place this runs.
+        const suggested = suggestStopName({
+          system: get().system,
+          coord,
+          anchors: bare.anchors,
+        });
+        const station = withSuggestedName(bare, suggested);
         set((s) => ({
           system: touch({ ...s.system, stations: [...s.system.stations, station] }),
           selection: { kind: 'station', id: station.id },
@@ -4377,12 +4585,9 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         let coord: LngLat = [cx, cy];
         const hit = snap(get().system.ways, coord, STATION_DRAW_ANCHOR_M);
         if (hit) coord = hit.coord;
-        const station: Station = {
-          id,
-          coord,
-          anchors: hit ? [{ wayId: hit.wayId, t: hit.t }] : [],
-          footprint,
-        };
+        const anchors = hit ? [{ wayId: hit.wayId, t: hit.t }] : [];
+        const suggested = suggestStopName({ system: get().system, coord, anchors });
+        const station = withSuggestedName<Station>({ id, coord, anchors, footprint }, suggested);
         set((s) => ({
           system: touch({ ...s.system, stations: [...s.system.stations, station] }),
           selection: { kind: 'station', id },
@@ -4400,13 +4605,26 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           }),
         })),
 
-      setStationName: (id, name) =>
+      setStationName: (id, name, options) =>
         set((s) => ({
           system: touch({
             ...s.system,
-            stations: s.system.stations.map((st) => (st.id === id ? { ...st, name } : st)),
+            stations: s.system.stations.map((st) =>
+              st.id === id ? { ...st, name, autoNamed: options?.auto ?? false } : st,
+            ),
           }),
         })),
+
+      suggestStationName: (id) => {
+        const st = get().system.stations.find((s) => s.id === id);
+        if (!st) return;
+        const suggested = suggestStopName({
+          system: get().system,
+          coord: st.coord,
+          anchors: st.anchors,
+        });
+        if (suggested.name) get().setStationName(id, suggested.name, { auto: true });
+      },
 
       setStationDwellSeconds: (id, seconds) =>
         set((s) => ({

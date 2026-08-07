@@ -20,6 +20,8 @@ import {
   nearestOpenEndpoint,
   nearestOnPath,
   offsetMeters,
+  offsetPolyline,
+  pathLengthMeters,
   patternPath,
   resolveWayPath,
   snap,
@@ -30,8 +32,11 @@ import {
   legRange,
   pointAtT,
   primaryAnchor,
+  slicePathByT,
+  wayById,
 } from '@transitmapper/core/model/geo';
 import { facilityType, mode } from '@transitmapper/core/model/catalog';
+import { profileWidthM } from '@transitmapper/core/model/profile';
 import { anchorOnWay, routePath } from '@transitmapper/core/model/routeGraph';
 import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
 import {
@@ -558,6 +563,21 @@ export function attachInteractions(
     gestureActive = lockedPrimaryOperation !== undefined,
   ): PointerIntent => {
     const state = store.getState();
+    // Demolish has one verb and isn't part of resolvePointerIntent's
+    // Select/Way/Station/Facility vocabulary (route-service, corridor-
+    // splitting, station/facility drag…) — short-circuit before that
+    // function ever sees the tool, rather than widening its closed union
+    // for a single unrelated case.
+    if (state.tool === 'demolish') {
+      return {
+        primaryOperation: 'default',
+        cursor: 'crosshair',
+        badge: null,
+        allowed: !state.readOnly && !opts.isNetworkMode(),
+        anchor: 'none',
+        constraint: 'none',
+      };
+    }
     const view: PointerIntentInput['view'] = opts.isDiagramMode()
       ? 'diagram'
       : opts.isNetworkMode()
@@ -1210,6 +1230,10 @@ export function attachInteractions(
 
   interface PreviewProperties {
     oneWayReturn?: boolean;
+    /** Styles this preview stretch in the same warning colour as a
+     *  wrong-way service span — what the Demolish tool's drag is currently
+     *  about to remove. */
+    demolish?: boolean;
   }
 
   const setPreview = (coords: LngLat[] | null, properties: PreviewProperties = {}) => {
@@ -1623,12 +1647,117 @@ export function attachInteractions(
     closesLoop?: boolean;
   }
 
+  // How much more permissive corridor-following is than an exact-type snap —
+  // "run alongside this" is a looser judgment than "is this the same track,"
+  // so it gets a wider radius than snapMeters' own tight tolerance.
+  const CORRIDOR_FOLLOW_TOLERANCE_SCALE = 1.75;
+  // Within this many degrees of dead-parallel counts as "following" rather
+  // than "crossing" — a drag steeper than this is passing over the candidate
+  // way, not running alongside it, and bending toward it would read as the
+  // line snapping sideways instead of continuing where it was aimed.
+  const CORRIDOR_FOLLOW_MAX_ANGLE_DEG = 35;
+  const CORRIDOR_FOLLOW_MIN_COS = Math.cos((CORRIDOR_FOLLOW_MAX_ANGLE_DEG * Math.PI) / 180);
+  // Clearance beyond both ways' own half-widths, and beyond the mode's own
+  // corridorToleranceM — so the offset line never nearly touches the
+  // corridor it's deliberately kept separate from, and finishWay's own
+  // conflatePatternOntoExisting can't quietly re-absorb it on commit.
+  const CORRIDOR_FOLLOW_CLEARANCE_M = 3;
+
+  /**
+   * When freehand-dragging near an existing way of a type the draft can't
+   * merge with (so the exact-type snap above found nothing) and the CURRENT
+   * drag direction is running roughly PARALLEL to it rather than crossing
+   * it, bend the drawn point onto an offset copy of that way's path — "run
+   * alongside this corridor" without landing on it or forming any junction.
+   * A passive assist: it only nudges a point that's already close and
+   * roughly aligned — move the cursor away and it stops applying, the same
+   * as any other snap here.
+   */
+  const followCorridor = (wayId: string, endpoint: LngLat, raw: LngLat): LngLat | null => {
+    const state = store.getState();
+    const waysById = wayById(state.system.ways);
+    const drawing = waysById.get(wayId);
+    if (!drawing) return null;
+    const modeSpec = mode(state.draftModeId);
+    const baseToleranceM = modeSpec.corridorToleranceM ?? CONFLATION_TOLERANCE_M;
+    const candidate = snap(
+      state.system.ways,
+      raw,
+      baseToleranceM * CORRIDOR_FOLLOW_TOLERANCE_SCALE,
+      new Set([wayId]),
+    );
+    if (!candidate) return null;
+    const way = waysById.get(candidate.wayId);
+    if (!way) return null;
+    // A way of the SAME type as the draft belongs to the exact-type snap
+    // above (which already ran and found nothing at the tighter radius) —
+    // corridor-following only ever bends toward a genuinely incompatible
+    // type, per its own doc comment. Without this, a same-type way just
+    // outside the tight snap radius but inside this wider one gets treated
+    // as "incompatible" and offset alongside instead of left alone,
+    // planting an unwanted parallel duplicate.
+    if (way.typeId === drawing.typeId) return null;
+    const path = resolveWayPath(way);
+    if (path.length < 2) return null;
+    const totalM = pathLengthMeters(path);
+    if (totalM < 1e-6) return null;
+
+    // The CURRENT drag direction (endpoint → raw), not the way's already-
+    // committed heading (endpoint → behind, fixed before this call) — the
+    // gate below exists to tell "dragging alongside this corridor" apart
+    // from "crossing it," and only the live cursor direction can answer
+    // that. Using the fixed prior heading here would keep passing even
+    // after a sharp turn mid-drag, bending a deliberate crossing sideways.
+    const drag = unitVectorMeters(endpoint, raw);
+    if (!drag) return null;
+    const [dragX, dragY] = drag;
+
+    const near = nearestOnPath(path, candidate.coord);
+    if (!near) return null;
+    // A local tangent sampled a couple of meters either side of the nearest
+    // point — short enough to stay local on a long way, wide enough not to
+    // be numerical noise on a short one.
+    const tEps = Math.min(0.05, Math.max(0.002, 2 / totalM));
+    const tangent = unitVectorMeters(
+      pointAtT(path, Math.max(0, near.t - tEps)),
+      pointAtT(path, Math.min(1, near.t + tEps)),
+    );
+    if (!tangent) return null;
+    const [tx, ty] = tangent;
+    const cosAngle = Math.abs(dragX * tx + dragY * ty);
+    if (cosAngle < CORRIDOR_FOLLOW_MIN_COS) return null;
+
+    const halfSpanM =
+      Math.max(
+        profileWidthM(way.profile) / 2 + profileWidthM(drawing.profile) / 2,
+        baseToleranceM,
+      ) + CORRIDOR_FOLLOW_CLEARANCE_M;
+    // Only the neighborhood around the drag actually gets consulted below
+    // (via nearestOnPath), so offset just that window instead of the whole
+    // way — offsetPolyline's per-point cost otherwise scales with a long
+    // imported way's full point count, on every drag frame.
+    const windowMarginM = halfSpanM + baseToleranceM * CORRIDOR_FOLLOW_TOLERANCE_SCALE + 20;
+    const window = windowAroundArcLength(path, near.t * totalM, windowMarginM);
+    if (window.length < 2) return null;
+    const plus = offsetPolyline(window, halfSpanM);
+    const minus = offsetPolyline(window, -halfSpanM);
+    const nearPlus = nearestOnPath(plus, raw);
+    const nearMinus = nearestOnPath(minus, raw);
+    const chosen =
+      nearPlus && (!nearMinus || nearPlus.distMeters <= nearMinus.distMeters)
+        ? nearPlus
+        : nearMinus;
+    return chosen?.coord ?? null;
+  };
+
   // Where a new node lands: another way's path or this way's own loop-close
-  // vertex win first (whichever is nearer forms a junction); failing that,
-  // the way's own current heading if the drag is roughly aligned with it (so
-  // extending continues straight instead of introducing an accidental kink);
-  // a Shift-held drag instead constrains to 45° from the endpoint; otherwise
-  // the raw cursor position.
+  // vertex win first (whichever is nearer forms a junction); failing that, an
+  // incompatible-type corridor to run alongside if the drag is roughly
+  // parallel to one (see followCorridor); failing that, the way's own current
+  // heading if the drag is roughly aligned with it (so extending continues
+  // straight instead of introducing an accidental kink); a Shift-held drag
+  // instead constrains to 45° from the endpoint; otherwise the raw cursor
+  // position.
   const resolveEnd = (
     wayId: string,
     atStart: boolean,
@@ -1659,6 +1788,8 @@ export function attachInteractions(
     if (otherWay) return { coord: otherWay.coord, snapWayId: otherWay.wayId };
     const heading = wayHeadingAnchor(wayId, atStart);
     if (endpoint && heading) {
+      const followed = followCorridor(wayId, endpoint, raw);
+      if (followed) return { coord: followed };
       const straight = continueStraight(endpoint, heading, raw, snapMeters(straightSnapPx));
       if (straight) return { coord: straight };
     }
@@ -1864,6 +1995,80 @@ export function attachInteractions(
     opts.onDirectManipulationEnd?.();
     clearPointerIntent();
   }
+
+  // Bulldozer-style: a click with no movement removes the whole street
+  // (deleteWayStretch's own [lo,hi]≈[0,1] degrades to a full-way removal, so
+  // that path is reused rather than calling deleteWay separately — see its
+  // MIN_STRETCH_T guard); a drag removes only the stretch swept, one
+  // deleteWayStretch call per way touched. Whatever the drag crosses is one
+  // undo step, same as startErase's own sweep.
+  const startDemolishDrag = (e: MapMouseEvent) => {
+    suppressClick = true;
+    const first = snap(store.getState().system.ways, lngLatOf(e), snapMeters(snapPx));
+    if (!first) return; // pressed on empty ground
+    const hitRanges = new Map<string, { lo: number; hi: number }>();
+    const record = (wayId: string, t: number) => {
+      const r = hitRanges.get(wayId);
+      if (!r) hitRanges.set(wayId, { lo: t, hi: t });
+      else {
+        r.lo = Math.min(r.lo, t);
+        r.hi = Math.max(r.hi, t);
+      }
+    };
+    record(first.wayId, first.t);
+    let moved = false;
+
+    const updatePreview = () => {
+      const sys = store.getState().system;
+      const coords: LngLat[] = [];
+      for (const [wayId, { lo, hi }] of hitRanges) {
+        const way = sys.ways.find((w) => w.id === wayId);
+        if (!way) continue;
+        coords.push(...slicePathByT(resolveWayPath(way), lo, hi));
+      }
+      setPreview(coords, { demolish: true });
+    };
+
+    const throttle = rafThrottle((coord: LngLat) => {
+      const hit = snap(store.getState().system.ways, coord, snapMeters(snapPx));
+      if (hit) record(hit.wayId, hit.t);
+      updatePreview();
+    });
+    const onMove = (ev: MapMouseEvent) => {
+      moved = true;
+      throttle.call(lngLatOf(ev));
+    };
+    const onUp = () => {
+      // Applies the release position's own sample before reading hitRanges —
+      // cancel() would silently drop it if no animation frame happened to
+      // land between the last mousemove and this mouseup (same reasoning as
+      // startErase's own onUp).
+      if (moved) throttle.flush();
+      else throttle.cancel();
+      map.off('mousemove', onMove);
+      clearPreviews();
+      // The deletions run BEFORE endGesture — commitHistoryCheckpoint diffs
+      // against the system as it stands when called, so ending the gesture
+      // first would commit a no-op checkpoint and let each deletion below
+      // fall through to the store's per-set auto-history instead, splitting
+      // one sweep into several undo steps.
+      if (!moved) {
+        store.getState().deleteWay(first.wayId);
+      } else {
+        for (const [wayId, { lo, hi }] of hitRanges)
+          store.getState().deleteWayStretch(wayId, lo, hi);
+      }
+      endGesture();
+    };
+    map.on('mousemove', onMove);
+    map.once('mouseup', onUp);
+    beginGesture(() => {
+      throttle.cancel();
+      map.off('mousemove', onMove);
+      clearPreviews();
+    });
+    updatePreview();
+  };
 
   const terminusTargetAt = (
     e: MapMouseEvent,
@@ -2302,6 +2507,12 @@ export function attachInteractions(
             startStructureDraw(e);
         }
         break;
+      case 'demolish':
+        // Infrastructure view only — Network foregrounds lines over the
+        // ways beneath them, and demolishing real streets is deliberately
+        // kept a distinct, physical-view action.
+        if (!opts.isNetworkMode()) startDemolishDrag(e);
+        break;
     }
   };
 
@@ -2669,7 +2880,13 @@ export function attachInteractions(
     // a draw that won't happen.
     if (opts.isDiagramMode()) return 'grab';
     const tool = store.getState().tool;
-    if (tool === 'way' || tool === 'station' || tool === 'facility' || tool === 'lines')
+    if (
+      tool === 'way' ||
+      tool === 'station' ||
+      tool === 'facility' ||
+      tool === 'lines' ||
+      tool === 'demolish'
+    )
       return 'crosshair';
     // Select tool, empty space: left-drag pans here too (see onMouseDown), so
     // the grab cursor MapLibre already shows by default is actually honest —
@@ -2930,6 +3147,45 @@ function distToSegment(p: ScreenPoint, a: ScreenPoint, b: ScreenPoint): number {
 }
 
 /**
+ * The unit direction vector from `a` to `b`, in local meters — null when the
+ * two points are coincident, since a zero-length vector has no direction.
+ * Shared by every heading/tangent gate in this file (continueStraight,
+ * followCorridor) that needs "which way does this line point," so the
+ * meters-space normalization lives in exactly one place.
+ */
+function unitVectorMeters(a: LngLat, b: LngLat): [number, number] | null {
+  const [dx, dy] = metersFromOrigin(a, b);
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return null;
+  return [dx / len, dy / len];
+}
+
+/**
+ * A slice of `path`'s own points spanning at least `marginM` on either side
+ * of arc-length position `nearM`, clamped to the path's bounds — enough
+ * neighborhood for offsetPolyline's normal computation to stay accurate
+ * without processing the whole path. followCorridor only ever consults the
+ * offset near the drag point, but a long imported way can run thousands of
+ * points, and this runs on every drag frame.
+ */
+function windowAroundArcLength(path: LngLat[], nearM: number, marginM: number): LngLat[] {
+  const loBound = nearM - marginM;
+  const hiBound = nearM + marginM;
+  let acc = 0;
+  let loIdx = -1;
+  let hiIdx = path.length - 1;
+  for (let i = 1; i < path.length; i++) {
+    if (loIdx === -1 && acc >= loBound) loIdx = i - 1;
+    acc += haversineMeters(path[i - 1], path[i]);
+    if (acc >= hiBound) {
+      hiIdx = i;
+      break;
+    }
+  }
+  return path.slice(loIdx === -1 ? 0 : loIdx, hiIdx + 1);
+}
+
+/**
  * Snap the vector from→to to the nearest 45° increment, as seen on screen.
  *
  * Measured in local meters rather than in raw degrees. A degree of longitude
@@ -2976,11 +3232,10 @@ export function continueStraight(
   maxDeviationMeters: number,
 ): LngLat | null {
   // Vector endpoint→behind, so the way's direction of travel is its negation.
-  const [bx, by] = metersFromOrigin(endpoint, behind);
-  const dirLen = Math.hypot(bx, by);
-  if (dirLen < 1e-6) return null;
-  const nx = -bx / dirLen;
-  const ny = -by / dirLen;
+  const behindUnit = unitVectorMeters(endpoint, behind);
+  if (!behindUnit) return null;
+  const nx = -behindUnit[0];
+  const ny = -behindUnit[1];
   const [rx, ry] = metersFromOrigin(endpoint, raw);
   const along = rx * nx + ry * ny;
   if (along <= 0) return null; // only continue forward, never fold back over itself

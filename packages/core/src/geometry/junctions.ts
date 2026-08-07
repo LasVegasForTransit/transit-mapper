@@ -264,6 +264,12 @@ export function defaultConnectors(
   waysById: Map<string, Way>,
   turnRestrictions?: ComponentMap<TurnRestriction>,
 ): LaneConnector[] {
+  // A level crossing's arms are two different junction groups by design (see
+  // formCrossingJunctions) — this function has no group guard of its own, so
+  // without this it would pair a rail lane against a road lane by position
+  // and produce a turn curve nothing can actually drive. There's also
+  // genuinely nothing to connect: a train doesn't turn onto a street lane.
+  if (node.control === 'levelCrossing') return [];
   const g = junctionGeometry(node, waysById);
   if (!g) return [];
   const out: LaneConnector[] = [];

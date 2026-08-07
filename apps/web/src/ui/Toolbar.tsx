@@ -306,6 +306,22 @@ export function Toolbar() {
             />
           )}
         </div>
+        {/* Cluster 4: Demolish — Infrastructure view only. Its target is
+            physical way geometry, the same reason Road/Track/Path are
+            infra-only; ways stay clickable by other tools in Network view,
+            this just doesn't put a dedicated bulldozer button there. */}
+        {!network && (
+          <div className="tool-cluster" role="toolbar" aria-label="Demolish">
+            <ToolButton
+              icon="demolish"
+              label="Demolish"
+              hotkey="B"
+              active={tool === 'demolish'}
+              disabled={locked}
+              onClick={() => setTool('demolish')}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

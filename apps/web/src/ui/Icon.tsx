@@ -10,6 +10,7 @@ import {
   Download,
   DoorOpen,
   File,
+  Hammer,
   Hand,
   Keyboard,
   LandPlot,
@@ -82,6 +83,7 @@ export const ICONS = {
   lock: Lock,
   play: Play,
   pause: Pause,
+  demolish: Hammer,
 } satisfies Record<string, ComponentType<LucideProps>>;
 
 export type IconName = keyof typeof ICONS;

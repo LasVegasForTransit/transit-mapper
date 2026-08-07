@@ -16,6 +16,7 @@ import { InspectorTabs, type InspectorTab } from '../InspectorTabs';
 import { Panel } from '../Panel';
 import { blurOnEnter } from '../formUtils';
 import { Icon } from '../Icon';
+import { IconButton } from '../IconButton';
 import { useSim } from '../SimProvider';
 import { useSimTime } from '../useSimTime';
 import { useView } from '../ViewProvider';
@@ -35,6 +36,7 @@ export function StationInspector({ id }: StationInspectorProps) {
   const services = useEditor((s) => s.system.services);
   const readOnly = useEditor((s) => s.readOnly);
   const setStationName = useEditor((s) => s.setStationName);
+  const suggestStationName = useEditor((s) => s.suggestStationName);
   const setStationDwellSeconds = useEditor((s) => s.setStationDwellSeconds);
   const setStationMajorStop = useEditor((s) => s.setStationMajorStop);
   const deleteStation = useEditor((s) => s.deleteStation);
@@ -91,6 +93,14 @@ export function StationInspector({ id }: StationInspectorProps) {
           onChange={(e) => setStationName(id, e.target.value)}
           onKeyDown={blurOnEnter}
         />
+        {!readOnly && !station.name && (
+          <IconButton
+            icon="redo"
+            size={15}
+            label="Suggest a name from nearby cross streets"
+            onClick={() => suggestStationName(id)}
+          />
+        )}
       </div>
       <div className="insp-kind">
         {served.length > 1

@@ -17,6 +17,7 @@ import { blurOnEnter } from './formUtils';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Modal } from './Modal';
+import { useUi } from './UiProvider';
 
 function relativeTime(ts: number): string {
   const minutes = Math.round((Date.now() - ts) / 60_000);
@@ -54,6 +55,7 @@ export function SystemsDialog({
   const currentName = useEditor((s) => s.system.name);
   const setName = useEditor((s) => s.setName);
   const setSystem = useEditor((s) => s.setSystem);
+  const { openNewSystemLocation } = useUi();
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [libraryUnavailable, setLibraryUnavailable] = useState(false);
@@ -145,14 +147,10 @@ export function SystemsDialog({
     await refresh();
   };
 
-  const startNew = () => {
-    const system = createEmptySystem();
-    setActiveId(system.id);
-    // The store transition enters the shared persistence coordinator, which
-    // saves this immutable snapshot and reports its outcome once.
-    setSystem(system, { readOnly: false });
-    onClose();
-  };
+  // Opens the location-picker dialog in place of this one — one modal slot,
+  // so choosing "New system" here hands off to it rather than creating a
+  // blank system directly the way this used to.
+  const startNew = () => openNewSystemLocation('create');
 
   const revokeShare = async (id: string) => {
     try {

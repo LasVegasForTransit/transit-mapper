@@ -15,6 +15,12 @@
 export interface FacilityClass {
   id: string;
   label: string;
+  /** Whether crossing a way of this class is treated as needing grade
+   *  separation by default when a physically-incompatible way (a guideway)
+   *  is drawn across it — see formCrossingJunctions' auto-elevate branch in
+   *  apps/web/src/editor/store.ts. Only meaningful for the road WayType's
+   *  classes; unset elsewhere. */
+  major?: boolean;
 }
 
 // ---- Lane kinds ------------------------------------------------------------
@@ -311,10 +317,15 @@ export const WAY_TYPES: Record<string, WayType> = {
     // A street we only know because a bus route traces it: assume the modest
     // two-lane case rather than the four a deliberately-drawn road starts with.
     importedCapacity: 2,
-    defaultClassId: 'arterial',
+    // Not 'arterial': combined with the auto-elevate branch in
+    // formCrossingJunctions, defaulting a fresh sketch road to major would
+    // force a viaduct the moment a rail line crossed it, before anyone had
+    // told the tool anything about the road's real character. A road only
+    // counts as major once someone (or a real OSM import) says so.
+    defaultClassId: 'collector',
     classes: [
-      { id: 'transitway', label: 'Transitway' },
-      { id: 'arterial', label: 'Arterial' },
+      { id: 'transitway', label: 'Transitway', major: true },
+      { id: 'arterial', label: 'Arterial', major: true },
       { id: 'collector', label: 'Collector' },
       { id: 'local', label: 'Local' },
     ],
@@ -852,6 +863,13 @@ export function facilityClass(
   return Object.hasOwn(WAY_TYPES, typeId)
     ? WAY_TYPES[typeId].classes.find((c) => c.id === classId)
     : undefined;
+}
+
+/** Whether a way's class is marked major — the trigger for auto-elevating a
+ *  guideway that crosses it (see formCrossingJunctions). Derived entirely
+ *  from `classId`, never a separate stored field. */
+export function isMajorRoad(way: { typeId: string; classId?: string }): boolean {
+  return facilityClass(way.typeId, way.classId)?.major === true;
 }
 
 // Default colors offered when seeding a new system's line palette. Lives here

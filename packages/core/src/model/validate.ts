@@ -309,6 +309,10 @@ export function findMismatchedTypeJunctions(system: TransitSystem): Issue[] {
   const waysById = wayById(system.ways);
   const issues: Issue[] = [];
   for (const node of system.nodes) {
+    // A level crossing is DELIBERATELY two junction groups sharing one Node
+    // (see formCrossingJunctions) — not a document fault to catch, the thing
+    // this check exists to catch.
+    if (node.control === 'levelCrossing') continue;
     const typeIds = junctionTypeIds(node, waysById);
     // By junction GROUP, not by type: a bike path meeting a road is a turn a
     // cyclist makes, and reporting it would be reporting a fault that is not

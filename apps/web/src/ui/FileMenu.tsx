@@ -20,8 +20,7 @@ export function FileMenu() {
   // value anyway). Read it imperatively instead.
   const store = useEditorStore();
   const readOnly = useEditor((s) => s.readOnly);
-  const newSystem = useEditor((s) => s.newSystem);
-  const { openDialog } = useUi();
+  const { openDialog, openNewSystemLocation } = useUi();
 
   return (
     <DropdownMenu
@@ -39,7 +38,7 @@ export function FileMenu() {
     >
       {!readOnly && (
         <>
-          <DropdownMenuItem onSelect={newSystem}>
+          <DropdownMenuItem onSelect={() => openNewSystemLocation('create')}>
             <Icon name="file" size={17} /> New system
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => openDialog('systems')}>

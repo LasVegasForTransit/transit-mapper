@@ -126,11 +126,7 @@ import {
   MAX_PREVIEW_BYTES,
   pngDimensions,
 } from '@transitmapper/core/render/pngBytes';
-import {
-  findMismatchedTypeJunctions,
-  planIssues,
-  validateSystem,
-} from '@transitmapper/core/model/validate';
+import { findMismatchedTypeJunctions, validateSystem } from '@transitmapper/core/model/validate';
 import { estimateWayCapitalCost, formatUsdCompact } from '@transitmapper/core/model/cost';
 import {
   LANE_KINDS,
@@ -349,9 +345,12 @@ check(
   'drawing a road with service enabled creates a default service (bus/BRT)',
   servicesOnWay(road).length === 1,
 );
+// Not 'arterial' (major): a fresh sketch road shouldn't force a viaduct the
+// moment a rail line crosses it — see autoElevateAcrossMajorRoad's own
+// caller in formCrossingJunctions and catalog.ts's road.defaultClassId.
 check(
-  'road defaults to the arterial class',
-  store.getState().system.ways[0].classId === 'arterial',
+  'road defaults to the collector class, not a major one',
+  store.getState().system.ways[0].classId === 'collector',
 );
 
 // --- heavy rail and light rail are physically incompatible track standards ---
@@ -3128,10 +3127,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     store.getState().system.nodes.length === 1,
   );
 
-  // Two ways of DIFFERENT types crossing at the same grade can never be
-  // auto-joined — the model has no level-crossing primitive yet — so this
-  // stays flagged, but as a document-audience issue: real, but nothing the
-  // user can do about it from here, so it never reaches the issues popover.
+  // A guideway crossing a (non-major) road at the same grade now forms a
+  // real level crossing — see formCrossingJunctions' guideway/road branch —
+  // so importing one joins it the same way a same-type crossing does,
+  // instead of leaving it flagged with nothing anyone can act on.
   fresh();
   const wRoad = 'vroad';
   const wRail = 'vrail';
@@ -3166,12 +3165,14 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     turnRestrictions: [],
   });
   issues = validateSystem(store.getState().system);
-  const typeCrossing = issues.find((i) => i.id.startsWith('crossing-'));
-  check('flags a different-type crossing at the same grade', typeCrossing !== undefined);
   check(
-    'a different-type crossing is document-audience, so it never reaches the issues list',
-    typeCrossing?.audience === 'document' &&
-      planIssues(issues).every((i) => !i.id.startsWith('crossing-')),
+    'importing a guideway crossing a non-major road joins it instead of flagging a crossing',
+    !issues.some((i) => i.id.startsWith('crossing-')),
+  );
+  check(
+    'importing a guideway-over-road crossing forms a real level-crossing node',
+    store.getState().system.nodes.length === 1 &&
+      store.getState().system.nodes[0].control === 'levelCrossing',
   );
 
   // Parallel ways that never cross at all: no false positive.
@@ -7503,6 +7504,144 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check(
     'different grades never auto-join (overpass, not intersection)',
     store.getState().system.nodes.length === 0 && store.getState().system.ways.length === 2,
+  );
+}
+
+// --- store: auto-elevate a guideway crossing a major road ---
+{
+  fresh();
+  const road = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(road, [-115.15, 36.05]);
+  store.getState().addWayPoint(road, [-115.15, 36.15]);
+  store.getState().finishWay();
+  store.getState().setWayClassId(road, 'arterial'); // major
+  const rail = store.getState().beginWay('heavyRail', 'straight');
+  store.getState().addWayPoint(rail, [-115.2, 36.1]);
+  store.getState().addWayPoint(rail, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const after = store.getState().system;
+  const railPieces = after.ways.filter((w) => w.typeId === 'heavyRail');
+  check('the rail line is auto-split into three pieces', railPieces.length === 3);
+  check(
+    'exactly one piece is elevated over the road',
+    railPieces.filter((w) => w.grade === 'elevated').length === 1,
+  );
+  check(
+    'the flanking pieces stay at grade',
+    railPieces.filter((w) => w.grade === 'atGrade').length === 2,
+  );
+  const crossedRoad = after.ways.find((w) => w.id === road)!;
+  check(
+    'the crossed road is completely untouched',
+    crossedRoad.points.length === 2 && crossedRoad.grade === 'atGrade',
+  );
+  // The three pieces stay one continuous physical alignment — splitWay's own
+  // seam-node behavior connects each cut, same as splitting a way for any
+  // other reason (a profile change, say) already does. What must NOT happen
+  // is either seam reaching the road: that's the actual "stays an overpass"
+  // guarantee, not an absence of nodes altogether.
+  check('splitting into three pieces leaves two internal seam nodes', after.nodes.length === 2);
+  check(
+    'neither seam node touches the crossed road',
+    after.nodes.every((n) => !n.refs.some((r) => r.wayId === road)),
+  );
+}
+
+// --- store: a guideway crossing a NON-major road forms a level crossing,
+// not an auto-elevate ---
+{
+  fresh();
+  const road = store.getState().beginWay('road', 'straight'); // defaults to collector, not major
+  store.getState().addWayPoint(road, [-115.15, 36.05]);
+  store.getState().addWayPoint(road, [-115.15, 36.15]);
+  store.getState().finishWay();
+  const rail = store.getState().beginWay('heavyRail', 'straight');
+  store.getState().addWayPoint(rail, [-115.2, 36.1]);
+  store.getState().addWayPoint(rail, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const after = store.getState().system;
+  check(
+    'nothing is elevated over a minor road',
+    after.ways.every((w) => w.grade === 'atGrade'),
+  );
+  check(
+    'a real level-crossing node forms instead',
+    after.nodes.length === 1 && after.nodes[0].control === 'levelCrossing',
+  );
+  check(
+    'the level crossing splits both ways into two arms each',
+    after.ways.filter((w) => w.typeId === 'heavyRail').length === 2 &&
+      after.ways.filter((w) => w.typeId === 'road').length === 2,
+  );
+  check(
+    "a level crossing's connectors are empty — nothing turns from a track onto a street lane",
+    effectiveConnectors(after.nodes[0], new Map(after.ways.map((w) => [w.id, w]))).length === 0,
+  );
+
+  // The two invariants a level crossing depends on that are easy to break
+  // separately: withSingleTypeArms must not prune it back to single-type on
+  // load, and the NODE_CONTROLS whitelist must not silently drop the value.
+  const reloaded = parseSystem(JSON.parse(JSON.stringify(after)));
+  check('a level crossing survives a save and a reload', reloaded.nodes.length === 1);
+  check(
+    'the reloaded node keeps all four arms and its control',
+    reloaded.nodes[0]?.control === 'levelCrossing' && reloaded.nodes[0]?.refs.length === 4,
+  );
+}
+
+// --- store: road crossing a major road still forms an ordinary junction ---
+// Auto-elevate only ever applies to a DIFFERENT-type crossing (guideway vs.
+// road) — same-type crossings always take the existing junction-forming
+// branch regardless of either way's class.
+{
+  fresh();
+  const ew = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ew, [-115.2, 36.1]);
+  store.getState().addWayPoint(ew, [-115.1, 36.1]);
+  store.getState().finishWay();
+  store.getState().setWayClassId(ew, 'arterial');
+  const ns = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ns, [-115.15, 36.05]);
+  store.getState().addWayPoint(ns, [-115.15, 36.15]);
+  store.getState().finishWay();
+  store.getState().setWayClassId(ns, 'arterial');
+  store.getState().formCrossingJunctions(ns);
+  const after = store.getState().system;
+  check(
+    'two major roads crossing still form an ordinary junction, not a viaduct',
+    after.nodes.length === 1 &&
+      after.ways.length === 4 &&
+      after.ways.every((w) => w.grade === 'atGrade'),
+  );
+}
+
+// --- store: a guideway crossing two major roads elevates over both ---
+{
+  fresh();
+  const roadA = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(roadA, [-115.18, 36.05]);
+  store.getState().addWayPoint(roadA, [-115.18, 36.15]);
+  store.getState().finishWay();
+  store.getState().setWayClassId(roadA, 'arterial');
+  const roadB = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(roadB, [-115.12, 36.05]);
+  store.getState().addWayPoint(roadB, [-115.12, 36.15]);
+  store.getState().finishWay();
+  store.getState().setWayClassId(roadB, 'arterial');
+  const rail = store.getState().beginWay('heavyRail', 'straight');
+  store.getState().addWayPoint(rail, [-115.2, 36.1]);
+  store.getState().addWayPoint(rail, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const after = store.getState().system;
+  const railPieces = after.ways.filter((w) => w.typeId === 'heavyRail');
+  check('crossing two major roads produces five rail pieces', railPieces.length === 5);
+  check(
+    'exactly two pieces are elevated, one per road',
+    railPieces.filter((w) => w.grade === 'elevated').length === 2,
+  );
+  check(
+    'both crossed roads are still untouched',
+    after.ways.filter((w) => w.typeId === 'road').length === 2,
   );
 }
 
@@ -12296,6 +12435,122 @@ function buildGrid() {
   check(
     'the surviving system has no route with a gap in it',
     validateSystem(after).every((i) => !i.id.startsWith('broken-pattern')),
+  );
+}
+
+{
+  // The Demolish tool's whole-way click path relies on this: a stretch
+  // spanning end-to-end degrades to a full-way removal, same as deleteWay,
+  // rather than leaving a zero-length stub behind.
+  fresh();
+  const road = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(road, [-115.3, 36.1]);
+  store.getState().addWayPoint(road, [-115.1, 36.1]);
+  store.getState().finishWay();
+  store.getState().deleteWayStretch(road, 0, 1);
+  check(
+    'a stretch spanning the whole way removes it entirely',
+    !store.getState().system.ways.some((w) => w.id === road),
+  );
+}
+
+{
+  // A demolished OSM-imported way's surviving stubs must keep their
+  // provenance — deleteWayStretch cuts via splitWay, whose spread already
+  // preserves `source`, so the "Imported from OpenStreetMap" badge and the
+  // Demolish tool's no-confirm-dialog decision both stay correct after a cut.
+  fresh();
+  const road = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(road, [-115.3, 36.1]);
+  store.getState().addWayPoint(road, [-115.1, 36.1]);
+  store.getState().finishWay();
+  store.getState().setSystem({
+    ...store.getState().system,
+    ways: store.getState().system.ways.map((w) => (w.id === road ? { ...w, source: 'osm:1' } : w)),
+  });
+  store.getState().deleteWayStretch(road, 0.4, 0.6);
+  const survivors = store.getState().system.ways;
+  check('demolishing a stretch leaves two surviving pieces', survivors.length === 2);
+  check(
+    'both surviving pieces of a demolished OSM way keep their source',
+    survivors.every((w) => w.source === 'osm:1'),
+  );
+}
+
+// --- cross-street auto-naming: pre-filled on placement, never touched again ---
+{
+  fresh();
+  const ew = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ew, [-115.2, 36.1]);
+  store.getState().addWayPoint(ew, [-115.1, 36.1]);
+  store.getState().finishWay();
+  store.getState().nameWay(ew, 'Home St');
+  const ns = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ns, [-115.15, 36.05]);
+  store.getState().addWayPoint(ns, [-115.15, 36.15]);
+  store.getState().finishWay();
+  store.getState().nameWay(ns, 'Cross Ave');
+  store.getState().formCrossingJunctions(ns);
+
+  const ewAfterSplit = store
+    .getState()
+    .system.ways.find((w) => w.points.some((p) => p[0] === -115.15 && p[1] === 36.1))!;
+  // No service rides either road yet, so the unserved/road-anchored default
+  // applies — 'alongStreet' style ('@'), not the rail-style '&'; see the
+  // dedicated crossStreetNaming.test.ts suite for that rule on its own.
+  const stId = store.getState().addStation([-115.15, 36.1], { wayId: ewAfterSplit.id, t: 1 });
+  const placed = store.getState().system.stations.find((s) => s.id === stId)!;
+  check(
+    'placing a station on a named way pre-fills its name from the nearest cross street',
+    placed.name === 'Home St @ Cross Ave',
+  );
+
+  store.getState().moveStation(stId, [-115.12, 36.1]);
+  const moved = store.getState().system.stations.find((s) => s.id === stId)!;
+  check(
+    "moving a station leaves its auto-filled name untouched, even though it's no longer accurate",
+    moved.name === 'Home St @ Cross Ave',
+  );
+}
+
+// --- cross-street auto-naming: resyncs once a later service proves the unserved guess wrong ---
+{
+  fresh();
+  const ew = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ew, [-115.2, 36.1]);
+  store.getState().addWayPoint(ew, [-115.1, 36.1]);
+  store.getState().finishWay();
+  store.getState().nameWay(ew, 'Home St');
+  const ns = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ns, [-115.15, 36.05]);
+  store.getState().addWayPoint(ns, [-115.15, 36.15]);
+  store.getState().finishWay();
+  store.getState().nameWay(ns, 'Cross Ave');
+  // finishWay already forms the crossing junction, splitting 'ew' at it.
+
+  const ewAfterSplit = store
+    .getState()
+    .system.ways.find((w) => w.points.some((p) => p[0] === -115.15 && p[1] === 36.1))!;
+  const stId = store.getState().addStation([-115.15, 36.1], { wayId: ewAfterSplit.id, t: 1 });
+  const placed = store.getState().system.stations.find((s) => s.id === stId)!;
+  check(
+    'an unserved road-anchored station is auto-named along-street and marked autoNamed',
+    placed.name === 'Home St @ Cross Ave' && placed.autoNamed === true,
+  );
+
+  // Draw a tram line over the whole of the station's own way — tram is
+  // street-running, so a 'road'-typed way is a legal alignment for it.
+  const sys = store.getState().system;
+  const homeWay = sys.ways.find((w) => w.id === ewAfterSplit.id)!;
+  const from = anchorOnWay(homeWay, homeWay.points[0])!;
+  const to = anchorOnWay(homeWay, homeWay.points[homeWay.points.length - 1])!;
+  const routed = routeBetween(sys, from, to, { allowedTypeIds: new Set(['road']) })!;
+  store.getState().createRoutedService(routed.spans, 'tram');
+
+  const resynced = store.getState().system.stations.find((s) => s.id === stId)!;
+  check(
+    'the tram line resyncs the still-autoNamed station to intersection style',
+    resynced.name === 'Home St & Cross Ave' && resynced.autoNamed === true,
   );
 }
 

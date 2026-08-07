@@ -81,6 +81,13 @@ export function junctionTypeIds(node: Node, waysById: Map<string, Way>): string[
 export function withSingleTypeArms(nodes: Node[], typeByWayId: WayTypeIndex): Node[] {
   const repaired: Node[] = [];
   for (const node of nodes) {
+    // A level crossing is deliberately two different junction groups sharing
+    // one Node — see formCrossingJunctions' guideway/non-major-road branch —
+    // so it's exempt from the single-group repair every other Node gets.
+    if (node.control === 'levelCrossing') {
+      repaired.push(node);
+      continue;
+    }
     const kept = largestCompatibleGroup(node.refs, typeByWayId);
     if (kept.length < 2) continue;
     if (kept.length === node.refs.length) {

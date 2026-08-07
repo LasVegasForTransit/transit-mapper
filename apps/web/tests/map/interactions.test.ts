@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Map as MLMap, MapGeoJSONFeature } from 'maplibre-gl';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
-import { wholeLeg } from '@transitmapper/core/model/geo';
+import { haversineMeters, patternLegs, wholeLeg } from '@transitmapper/core/model/geo';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import type { Way } from '@transitmapper/core/model/system';
 import { aPattern, aRoad, aService, aSystem } from '@transitmapper/core/testing/fixtures';
@@ -2595,6 +2595,190 @@ describe('closing a way back onto its own start', () => {
         return refs.some((r) => r.pointIndex === 0) && refs.some((r) => r.pointIndex === 3);
       }),
     ).toBe(true);
+    detach();
+  });
+});
+
+describe('corridor-following an incompatible-type way', () => {
+  it('bends a rail line dragged close to and parallel with an existing road, offset from it', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(
+      aSystem({
+        ways: [
+          aRoad('road1', [
+            [-115.3, 36.1],
+            [-115.0, 36.1],
+          ]),
+        ],
+      }),
+    );
+    // heavyRail can't merge with a road (disjoint wayTypeIds) — the exact-
+    // type snap in resolveEnd can never match this candidate, so any bend
+    // toward it has to be followCorridor's doing.
+    store.getState().setDraftWayType('heavyRail');
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store, { networkMode: false });
+
+    // Three points a few meters south of, and running parallel to, road1 —
+    // close enough and aligned enough for the third placement to trigger
+    // corridor-following.
+    tap(map, { x: 800, y: 1000.4 }); // seed
+    tap(map, { x: 1000, y: 1000.4 });
+    tap(map, { x: 1200, y: 1000.4 }); // corridor-follow should apply here
+
+    const wayId = store.getState().activeWayId!;
+    const way = store.getState().system.ways.find((w) => w.id === wayId)!;
+    expect(way.points.length).toBeGreaterThanOrEqual(3);
+    const placed = way.points[2];
+
+    // road1 is a straight east-west line at lat 36.1 spanning this point's
+    // longitude, so the nearest point on it is directly north — this is an
+    // exact perpendicular-distance measure, not an approximation.
+    const distToRoadM = haversineMeters([placed[0], 36.1], placed);
+    expect(placed[1], 'stays on the same (south) side raw was dragged on').toBeLessThan(36.1);
+    expect(
+      distToRoadM,
+      'offset well clear of the road, not landed on its centerline',
+    ).toBeGreaterThan(7);
+    expect(distToRoadM, 'not implausibly far from where the drag actually was').toBeLessThan(30);
+    expect(placed[0], 'stays near where the drag actually was, longitude-wise').toBeCloseTo(
+      -115.18,
+      2,
+    );
+
+    store.getState().finishWay();
+    const after = store.getState().system;
+    expect(
+      after.ways.some((w) => w.id === wayId),
+      'the rail line stays its own way',
+    ).toBe(true);
+    expect(
+      after.services
+        .flatMap((sv) => sv.patterns)
+        .flatMap((p) => patternLegs(p))
+        .some((l) => l.wayId === 'road1'),
+      'finishWay does not reabsorb it onto the road it was kept offset from',
+    ).toBe(false);
+    detach();
+  });
+
+  it('does not bend a line dragged nowhere near an existing way', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(
+      aSystem({
+        ways: [
+          aRoad('road1', [
+            [-115.3, 36.1],
+            [-115.0, 36.1],
+          ]),
+        ],
+      }),
+    );
+    store.getState().setDraftWayType('heavyRail');
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store, { networkMode: false });
+
+    // Same shape as above, but ~110m south — well outside the follow radius.
+    tap(map, { x: 800, y: 1100 });
+    tap(map, { x: 1000, y: 1100 });
+    tap(map, { x: 1200, y: 1100 });
+
+    const wayId = store.getState().activeWayId!;
+    const way = store.getState().system.ways.find((w) => w.id === wayId)!;
+    const placed = way.points[2];
+    const { lat } = map.unproject({ x: 1200, y: 1100 });
+    expect(placed[1]).toBeCloseTo(lat, 6);
+    detach();
+  });
+
+  it('does not bend a way toward another way of the SAME type', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(
+      aSystem({
+        ways: [
+          aRoad('road1', [
+            [-115.3, 36.1],
+            [-115.0, 36.1],
+          ]),
+        ],
+      }),
+    );
+    store.getState().setDraftWayType('road');
+    store.getState().setDraftMode('bus'); // corridorToleranceM unset -> 20m base
+    store.getState().setTool('way');
+    const map = createMap();
+    // A tighter zoom than the mock's default z14, matching real street-
+    // editing zoom, where the exact-type snap's pixel-derived radius shrinks
+    // below followCorridor's fixed-meters radius — the gap the bug lived in.
+    map.getZoom = () => 18;
+    const detach = attach(map, store, { networkMode: false });
+
+    // ~15m south of, and parallel to, road1: past the exact-type snap's
+    // tight radius (~8.7m at this zoom) but comfortably inside
+    // followCorridor's wider one (base 20m * 1.75 = 35m) — road1 is the
+    // SAME type as the draft, so followCorridor must leave this alone
+    // rather than treat it as an incompatible corridor to hug. The mock
+    // map's own project/unproject is a fixed 1px = 1/10000° scale
+    // (independent of zoom), so this y is computed from that scale
+    // directly, not from the zoom-dependent metersPerPixel() the app uses
+    // for its own tolerance thresholds.
+    tap(map, { x: 800, y: 1001.3475 });
+    tap(map, { x: 1000, y: 1001.3475 });
+    tap(map, { x: 1200, y: 1001.3475 });
+
+    const wayId = store.getState().activeWayId!;
+    const way = store.getState().system.ways.find((w) => w.id === wayId)!;
+    const placed = way.points[2];
+    const distToRoadM = haversineMeters([placed[0], 36.1], placed);
+    expect(
+      distToRoadM,
+      "stays near the raw ~15m drag, not pulled out to followCorridor's ~23m offset",
+    ).toBeLessThan(18);
+    detach();
+  });
+
+  it('does not bend toward a corridor when the drag turns sharply away from the established heading', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    store.getState().setSystem(
+      aSystem({
+        ways: [
+          aRoad('road1', [
+            [-115.3, 36.1],
+            [-115.0, 36.1],
+          ]),
+        ],
+      }),
+    );
+    store.getState().setDraftWayType('heavyRail');
+    store.getState().setTool('way');
+    const map = createMap();
+    const detach = attach(map, store, { networkMode: false });
+
+    // First two points establish an EAST heading, far south of road1 (well
+    // outside any follow radius, so nothing bends yet). The third point then
+    // turns sharply NORTH, landing a few meters south of road1 — close
+    // enough to trigger corridor-following IF it (wrongly) judged the angle
+    // against the way's already-committed EAST heading, which happens to be
+    // parallel to road1. It must instead judge the angle against the LIVE
+    // drag direction (north, perpendicular to road1) and reject.
+    tap(map, { x: 1000, y: 1500 }); // seed
+    tap(map, { x: 1500, y: 1500 }); // heading due east
+    tap(map, { x: 1500, y: 1000.449 }); // sharp turn north, ~5m south of road1
+
+    const wayId = store.getState().activeWayId!;
+    const way = store.getState().system.ways.find((w) => w.id === wayId)!;
+    const placed = way.points[2];
+    const raw = map.unproject({ x: 1500, y: 1000.449 });
+    expect(placed, 'lands at the raw cursor position, not bent sideways toward road1').toEqual([
+      raw.lng,
+      raw.lat,
+    ]);
     detach();
   });
 });

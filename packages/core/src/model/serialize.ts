@@ -164,7 +164,7 @@ export function parseSystem(input: unknown): TransitSystem {
 }
 
 const LANE_DIRECTIONS = new Set(['forward', 'backward', 'both', 'none']);
-const NODE_CONTROLS = new Set(['uncontrolled', 'signal', 'stop', 'roundabout']);
+const NODE_CONTROLS = new Set(['uncontrolled', 'signal', 'stop', 'roundabout', 'levelCrossing']);
 
 /** Parse a stored cross-section (v6+); null when absent/invalid so the
  *  caller can fall back to a capacity-derived default profile. Unknown lane
