@@ -69,7 +69,8 @@ export function Toolbar() {
   // on it can be dragged or clicked back into a real edit (see
   // map/interactions.ts's isDiagramMode gating), so drawing/editing tools are
   // disabled here too, same treatment as a read-only shared view.
-  const locked = readOnly || viewMode === 'diagram';
+  const diagram = viewMode === 'diagram';
+  const locked = readOnly || diagram;
   const network = viewMode === 'network';
   const activeFamily = tool === 'way' ? wayType(draftWayTypeId).family : null;
 
@@ -129,93 +130,98 @@ export function Toolbar() {
           )}
         </div>
 
-        {/* Cluster 2: PATHS — linear infrastructure (or lines in Network). */}
-        <div className="tool-cluster" role="toolbar" aria-label="Draw paths">
-          {network ? (
-            // Network view: you draw LINES (services). One tool; its variants
-            // are the modes.
-            <ToolButton
-              icon="line"
-              label={MODES[draftModeId]?.label ?? 'Line'}
-              hotkey="L"
-              active={tool === 'way'}
-              disabled={locked}
-              onClick={() => setTool('way')}
-              menu={[
-                {
-                  entries: MODE_ORDER.map((id) => ({
-                    id,
-                    label: MODES[id].label,
-                    checked: draftModeId === id,
-                    onSelect: () => {
-                      setDraftMode(id);
-                      setTool('way');
-                    },
-                  })),
-                },
-              ]}
-            />
-          ) : (
-            // Infrastructure view: one drawing tool per way family — click
-            // Road and you're drawing a road. The chevron menu picks the
-            // variant (track standard, path kind, or a road cross-section).
-            wayTypesByFamily().map(({ family, typeIds }) => {
-              const info = WAY_FAMILIES[family];
-              const isActive = tool === 'way' && activeFamily === family;
-              const presets = family === 'roadway' ? profilePresetsForWayType(typeIds[0]) : [];
-              const menu =
-                typeIds.length > 1
-                  ? [
-                      {
-                        entries: typeIds.map((id) => ({
-                          id,
-                          label: wayType(id).label,
-                          checked: draftWayTypeId === id,
-                          onSelect: () => activateFamily(family, id),
-                        })),
+        {/* Cluster 2: PATHS — linear infrastructure (or lines in Network).
+            Absent in Diagram view rather than present and disabled: a
+            schematic projection has nothing to draw on (see `diagram`), and
+            eleven dead buttons taught nobody that. */}
+        {!diagram && (
+          <div className="tool-cluster" role="toolbar" aria-label="Draw paths">
+            {network ? (
+              // Network view: you draw LINES (services). One tool; its variants
+              // are the modes.
+              <ToolButton
+                icon="line"
+                label={MODES[draftModeId]?.label ?? 'Line'}
+                hotkey="L"
+                active={tool === 'way'}
+                disabled={locked}
+                onClick={() => setTool('way')}
+                menu={[
+                  {
+                    entries: MODE_ORDER.map((id) => ({
+                      id,
+                      label: MODES[id].label,
+                      checked: draftModeId === id,
+                      onSelect: () => {
+                        setDraftMode(id);
+                        setTool('way');
                       },
-                    ]
-                  : presets.length > 0
+                    })),
+                  },
+                ]}
+              />
+            ) : (
+              // Infrastructure view: one drawing tool per way family — click
+              // Road and you're drawing a road. The chevron menu picks the
+              // variant (track standard, path kind, or a road cross-section).
+              wayTypesByFamily().map(({ family, typeIds }) => {
+                const info = WAY_FAMILIES[family];
+                const isActive = tool === 'way' && activeFamily === family;
+                const presets = family === 'roadway' ? profilePresetsForWayType(typeIds[0]) : [];
+                const menu =
+                  typeIds.length > 1
                     ? [
                         {
-                          label: 'Cross-section',
-                          entries: [
-                            {
-                              id: '',
-                              label: 'Default',
-                              checked: false,
-                              onSelect: () => {
-                                activateFamily(family, typeIds[0]);
-                                setDraftPreset(null);
-                              },
-                            },
-                            ...presets.map((p) => ({
-                              id: p.id,
-                              label: p.label,
-                              checked: false,
-                              onSelect: () => {
-                                activateFamily(family, typeIds[0]);
-                                setDraftPreset(p.id);
-                              },
-                            })),
-                          ],
+                          entries: typeIds.map((id) => ({
+                            id,
+                            label: wayType(id).label,
+                            checked: draftWayTypeId === id,
+                            onSelect: () => activateFamily(family, id),
+                          })),
                         },
                       ]
-                    : undefined;
-              return (
-                <ToolButton
-                  key={family}
-                  icon={FAMILY_TOOL_ICON[family] ?? 'line'}
-                  label={info.toolLabel}
-                  active={isActive}
-                  disabled={locked}
-                  onClick={() => activateFamily(family)}
-                  menu={menu}
-                />
-              );
-            })
-          )}
-        </div>
+                    : presets.length > 0
+                      ? [
+                          {
+                            label: 'Cross-section',
+                            entries: [
+                              {
+                                id: '',
+                                label: 'Default',
+                                checked: false,
+                                onSelect: () => {
+                                  activateFamily(family, typeIds[0]);
+                                  setDraftPreset(null);
+                                },
+                              },
+                              ...presets.map((p) => ({
+                                id: p.id,
+                                label: p.label,
+                                checked: false,
+                                onSelect: () => {
+                                  activateFamily(family, typeIds[0]);
+                                  setDraftPreset(p.id);
+                                },
+                              })),
+                            ],
+                          },
+                        ]
+                      : undefined;
+                return (
+                  <ToolButton
+                    key={family}
+                    icon={FAMILY_TOOL_ICON[family] ?? 'line'}
+                    label={info.toolLabel}
+                    active={isActive}
+                    disabled={locked}
+                    onClick={() => activateFamily(family)}
+                    menu={menu}
+                  />
+                );
+              })
+            )}
+          </div>
+        )}
 
         {/* Cluster 3: PLACES — region/building-like things with real
             footprints (stations, facilities), a different mental verb from
@@ -228,89 +234,98 @@ export function Toolbar() {
             quick click-to-place stop. The invisible spacer balances the
             cluster's card when Facility's menu caret is present (Infra view
             only) — same width as .tool-btn-caret's own footprint — so the
-            pair reads as centered rather than lopsided toward the caret. */}
-        <div className="tool-cluster" role="toolbar" aria-label="Places">
-          {!network && <span className="tool-caret-spacer" aria-hidden="true" />}
-          <ToolButton
-            icon={network ? 'station' : 'boundary'}
-            label="Station"
-            hotkey="S"
-            active={tool === 'station'}
-            disabled={locked}
-            onClick={() => setTool('station')}
-          />
-          {!network && (
-            // The Facility tool wears its current variant and places it on
-            // click; "Complex" (draw a site boundary to build inside) is one
-            // more variant, never a hidden default.
+            pair reads as centered rather than lopsided toward the caret.
+            Absent in Diagram view for the same reason as the paths cluster
+            above. */}
+        {!diagram && (
+          <div className="tool-cluster" role="toolbar" aria-label="Places">
+            {!network && <span className="tool-caret-spacer" aria-hidden="true" />}
             <ToolButton
-              icon={
-                draftFacilityComplexMode
-                  ? 'boundary'
-                  : // facilityRender lives in packages/core, which can't know
-                    // about this app's icon vocabulary — its `icon` field is a
-                    // plain string by necessity. The cast is the one place that
-                    // boundary is crossed; every value it can actually return
-                    // (see catalogStyle.ts's facilityRender) is a real IconName.
-                    ((facilityRender(draftFacilityTypeId).icon as IconName) ?? 'plus')
-              }
-              label="Facility"
-              hotkey="F"
-              active={tool === 'facility'}
+              icon={network ? 'station' : 'boundary'}
+              label="Station"
+              hotkey="S"
+              active={tool === 'station'}
               disabled={locked}
-              onClick={() => setTool('facility')}
-              menu={[
-                {
-                  label: 'Access points (placed)',
-                  entries: FACILITY_TYPE_ORDER.filter(
-                    (id) => FACILITY_TYPES[id].geometryKind === 'point',
-                  ).map((id) => ({
-                    id,
-                    label: FACILITY_TYPES[id].label,
-                    checked: !draftFacilityComplexMode && draftFacilityTypeId === id,
-                    onSelect: () => {
-                      setDraftFacilityType(id);
-                      setTool('facility');
-                    },
-                  })),
-                },
-                {
-                  label: 'Structures (drawn to shape)',
-                  entries: FACILITY_TYPE_ORDER.filter(
-                    (id) => FACILITY_TYPES[id].geometryKind === 'area',
-                  ).map((id) => ({
-                    id,
-                    label: FACILITY_TYPES[id].label,
-                    checked: !draftFacilityComplexMode && draftFacilityTypeId === id,
-                    onSelect: () => {
-                      setDraftFacilityType(id);
-                      setTool('facility');
-                    },
-                  })),
-                },
-                {
-                  label: 'Land',
-                  entries: [
-                    {
-                      id: 'complex',
-                      label: 'Site boundary (a complex\u2019s land)',
-                      checked: draftFacilityComplexMode,
+              onClick={() => setTool('station')}
+            />
+            {!network && (
+              // The Facility tool wears its current variant and places it on
+              // click; "Complex" (draw a site boundary to build inside) is one
+              // more variant, never a hidden default.
+              <ToolButton
+                icon={
+                  draftFacilityComplexMode
+                    ? 'boundary'
+                    : // facilityRender lives in packages/core, which can't know
+                      // about this app's icon vocabulary — its `icon` field is a
+                      // plain string by necessity. The cast is the one place that
+                      // boundary is crossed; every value it can actually return
+                      // (see catalogStyle.ts's facilityRender) is a real IconName.
+                      ((facilityRender(draftFacilityTypeId).icon as IconName) ?? 'plus')
+                }
+                label="Facility"
+                hotkey="F"
+                active={tool === 'facility'}
+                disabled={locked}
+                onClick={() => setTool('facility')}
+                menu={[
+                  {
+                    label: 'Access points (placed)',
+                    entries: FACILITY_TYPE_ORDER.filter(
+                      (id) => FACILITY_TYPES[id].geometryKind === 'point',
+                    ).map((id) => ({
+                      id,
+                      label: FACILITY_TYPES[id].label,
+                      checked: !draftFacilityComplexMode && draftFacilityTypeId === id,
                       onSelect: () => {
-                        setDraftFacilityComplexMode(true);
+                        setDraftFacilityType(id);
                         setTool('facility');
                       },
-                    },
-                  ],
-                },
-              ]}
-            />
-          )}
-        </div>
+                    })),
+                  },
+                  {
+                    label: 'Structures (drawn to shape)',
+                    entries: FACILITY_TYPE_ORDER.filter(
+                      (id) => FACILITY_TYPES[id].geometryKind === 'area',
+                    ).map((id) => ({
+                      id,
+                      label: FACILITY_TYPES[id].label,
+                      checked: !draftFacilityComplexMode && draftFacilityTypeId === id,
+                      onSelect: () => {
+                        setDraftFacilityType(id);
+                        setTool('facility');
+                      },
+                    })),
+                  },
+                  {
+                    label: 'Land',
+                    entries: [
+                      {
+                        id: 'complex',
+                        label: 'Site boundary (a complex\u2019s land)',
+                        checked: draftFacilityComplexMode,
+                        onSelect: () => {
+                          setDraftFacilityComplexMode(true);
+                          setTool('facility');
+                        },
+                      },
+                    ],
+                  },
+                ]}
+              />
+            )}
+          </div>
+        )}
+
         {/* Cluster 4: Demolish — Infrastructure view only. Its target is
             physical way geometry, the same reason Road/Track/Path are
             infra-only; ways stay clickable by other tools in Network view,
-            this just doesn't put a dedicated bulldozer button there. */}
-        {!network && (
+            this just doesn't put a dedicated bulldozer button there.
+
+            Absent in Diagram view for the same reason as the two clusters
+            above: a schematic projection has no physical geometry to
+            demolish, so the button would only ever be disabled. */}
+        {!network && !diagram && (
           <div className="tool-cluster" role="toolbar" aria-label="Demolish">
             <ToolButton
               icon="demolish"

@@ -756,8 +756,19 @@ input[type='range'] {
   opacity: 0.35;
   cursor: not-allowed;
 }
+/* The button is a fixed square so a mode change cannot shove its neighbours
+   around (see .tool-btn's comment), but the LABEL does not have to be
+   trapped inside that square. It was, and the two longest labels in the dock
+   never fit: "Select lines" needs 62px against the button's 44px of usable
+   width and rendered "Select…", "Light rail" needs 47 and rendered
+   "Light r…" — inside a window with 990px of free space beside the dock.
+
+   Letting it overflow the square symmetrically keeps the button's geometry,
+   keeps the row's alignment, and lets a two-word label read. The cap is what
+   still stops a long mode name from widening the cluster; it is now generous
+   enough that nothing in the catalog reaches it. */
 .tool-btn-label {
-  max-width: 100%;
+  max-width: 76px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3668,15 +3679,36 @@ button.chip-removable-label:hover {
   .tool-btn-label {
     display: none;
   }
-  .tool-btn {
-    width: auto;
-    height: auto;
-    padding: 8px;
-  }
+  /* ONE row that scrolls, never two that wrap.
+     Wrapping put the Infrastructure dock's 13 buttons on two rows that were
+     each centred on themselves, so they did not line up with each other, and
+     the taller stack ran the dock's right edge into MapLibre's zoom column —
+     measured at 390x844 they met at exactly x=346 with no gap at all. A row
+     that scrolls keeps one line, one alignment, and a predictable edge.
+
+     Snapping to each cluster rather than each button: a cluster is the unit
+     that means something (select / draw / place), and stopping mid-cluster
+     reads as a broken scroll. */
   .tool-row {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    padding: 2px 8px;
+    max-width: 100vw;
+  }
+  .tool-row::-webkit-scrollbar {
+    display: none;
+  }
+  .tool-cluster {
+    scroll-snap-align: center;
+    flex: none;
+  }
+  .toolbar-dock {
+    width: 100%;
+    max-width: none;
   }
   /* Keep MapLibre's zoom and attribution clear of the workbench. Its height
      changes with its own contents and with which detent it is at, so this
@@ -3690,6 +3722,146 @@ button.chip-removable-label:hover {
      the attribution completely. */
   .maplibregl-ctrl-bottom-right {
     bottom: calc(var(--workbench-h) + 8px);
+  }
+}
+
+/* ---- touch sizing ----
+
+   Keyed to the POINTER, not the width. A finger is about 24 CSS px across
+   (see editor/input-tuning.ts, which already widens the map's hit tolerance
+   on the same signal), and that is true of a touchscreen laptop at 1440px
+   just as much as a phone at 390px. Width would answer the wrong question in
+   both directions.
+
+   What this fixes, measured before it existed: every tool button was 36x36
+   and every variant caret 16x36 — SMALLER on the only devices that are
+   exclusively finger-driven than the same buttons' 56x56 on a desktop with a
+   mouse. The action-bar icons were 34x34, menu rows 37px tall, and the
+   colour picker's swatches 27x27 on a 31px pitch.
+
+   44px is the floor, applied by growing the hit box rather than the glyph:
+   the icons stay the size they were, so nothing about the look changes on a
+   device that did not need this. */
+@media (pointer: coarse) {
+  .tool-btn {
+    min-width: 48px;
+    min-height: 48px;
+  }
+  .tool-btn-caret {
+    min-width: 44px;
+    min-height: 48px;
+  }
+  .tool-caret-spacer {
+    width: 44px;
+  }
+  .btn,
+  .ghost-btn,
+  .primary-btn,
+  .danger-btn,
+  .icon-btn,
+  .mobile-more-btn,
+  .sidebar-disclosure,
+  .split-btn-caret,
+  .cf-trigger,
+  .cs-trigger,
+  .view-switch-btn,
+  .sim-speed-trigger {
+    min-height: 44px;
+  }
+  .btn.icon-only,
+  .mobile-more-btn {
+    min-width: 44px;
+  }
+  .dropdown-menu-item,
+  .lp-row,
+  .list-row,
+  .svc-chip,
+  .stop-item,
+  .pattern-open,
+  .sidebar-check-row,
+  .sidebar-stop-row,
+  .insp-tab,
+  .seg {
+    min-height: 44px;
+  }
+  /* Rows are laid out with flex/grid, so a min-height alone leaves their text
+     pinned to the top of a taller box. */
+  .dropdown-menu-item,
+  .lp-row,
+  .list-row,
+  .svc-chip,
+  .stop-item,
+  .pattern-open,
+  .insp-tab,
+  .seg {
+    align-items: center;
+  }
+  /* Chips wrap, so they get a taller pill rather than a min-height that
+     would fight `.chip-row`'s own line spacing. */
+  .chip {
+    padding: 10px 14px;
+  }
+  /* 16x16 was the smallest control in the product. The glyph stays 16; the
+     box around it grows. */
+  .chip-remove-btn {
+    width: 44px;
+    height: 44px;
+    margin-right: -8px;
+  }
+  .cf-swatch {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .cf-swatches {
+    gap: 8px;
+  }
+  /* A raw checkbox is 13x13 in every browser, and there are 18 of them in
+     the layers panel alone. */
+  input[type='checkbox'] {
+    width: 22px;
+    height: 22px;
+  }
+  .onboarding-dot {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* ---- what hover was hiding ----
+
+   Asked as `(hover: none)`, the device question — not width, and not pointer
+   precision. A touchscreen laptop reports a coarse pointer AND hover, so
+   keying this to `coarse` would take these actions away from a mouse that
+   can perfectly well reveal them.
+
+   `.stop-actions` is the reason this block exists: it was `opacity: 0` with
+   a `:hover`/`:focus-within` reveal, which meant Skip returning, Start here,
+   End here and Split did not exist at all on a phone. */
+@media (hover: none) {
+  .stop-actions {
+    opacity: 1;
+  }
+  /* A row of four buttons cannot sit beside a stop's name in 358px, and it
+     no longer has to: nothing is being revealed, so they can have their own
+     line. */
+  .stop-row {
+    flex-wrap: wrap;
+  }
+  .stop-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  /* Without a resting fill these read as floating glyphs with nothing to
+     press. On a mouse the hover fill answers that; on a finger nothing did. */
+  .btn-plain {
+    background: var(--md-sys-color-surface-container);
+  }
+  /* The only thing separating a clickable member row from a static one was a
+     hover underline, so on touch they looked identical. */
+  button.chip-removable-label {
+    text-decoration: underline;
+    text-decoration-color: var(--md-sys-color-outline-variant);
+    text-underline-offset: 3px;
   }
 }
 
