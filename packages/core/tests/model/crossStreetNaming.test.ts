@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { suggestStopName } from '../../src/model/geo/crossStreetNaming';
 import { defaultProfileFor } from '../../src/model/profile';
 import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
-import type { NamedWay, Node, TransitSystem, Way } from '../../src/model/system';
+import type { NamedWay, Node, TransitSystem, Way, WayPointRef } from '../../src/model/system';
 
 // Real-meter-scale coordinate helpers — CROSS_STREET_AT_JUNCTION_M (20),
 // CROSS_STREET_SEARCH_RADIUS_M (90), and CROSS_STREET_WALK_MAX_M (400) are
@@ -28,11 +28,7 @@ function namedWay(id: string, name: string, wayIds: string[]): NamedWay {
   return { id, name, wayIds };
 }
 
-function node(
-  id: string,
-  coord: [number, number],
-  refs: { wayId: string; pointIndex: number }[],
-): Node {
+function node(id: string, coord: [number, number], refs: WayPointRef[]): Node {
   return { id, coord, refs };
 }
 
@@ -340,7 +336,7 @@ describe('suggestStopName', () => {
     expect(result.name).toBeNull();
   });
 
-  it('names a free-floating station near two streets from whichever are nearest', () => {
+  it('names a free-floating station at a real intersection of the two nearest streets', () => {
     const center: [number, number] = [-115.15, LAT0];
     const a = railWay('a', [
       [east(center[0], -20), center[1]],
@@ -353,9 +349,35 @@ describe('suggestStopName', () => {
     const system: TransitSystem = aSystem({
       ways: [a, b],
       namedWays: [namedWay('nw-a', 'A St', ['a']), namedWay('nw-b', 'B Ave', ['b'])],
+      nodes: [
+        node('n1', center, [
+          { wayId: 'a', pointIndex: 1 },
+          { wayId: 'b', pointIndex: 1 },
+        ]),
+      ],
     });
     const result = suggestStopName({ system, coord: center, anchors: [] });
     expect(result.name).toBe('A St & B Ave');
+  });
+
+  it('does not claim an intersection for a free-floating station between two streets that never cross', () => {
+    // Two parallel streets a block apart — both are "nearest," but neither
+    // meets the other anywhere, so this must not read as an intersection.
+    const center: [number, number] = [-115.15, LAT0];
+    const a = railWay('a', [
+      [east(center[0], -20), north(center[1], -30)],
+      [east(center[0], 20), north(center[1], -30)],
+    ]);
+    const b = railWay('b', [
+      [east(center[0], -20), north(center[1], 30)],
+      [east(center[0], 20), north(center[1], 30)],
+    ]);
+    const system: TransitSystem = aSystem({
+      ways: [a, b],
+      namedWays: [namedWay('nw-a', 'A St', ['a']), namedWay('nw-b', 'B Ave', ['b'])],
+    });
+    const result = suggestStopName({ system, coord: center, anchors: [] });
+    expect(result.name).toBe('A St');
   });
 
   it('prefers intersection-style naming when both a rail and a bus service call at the same station', () => {

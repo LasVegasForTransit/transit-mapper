@@ -613,12 +613,6 @@ export interface VehicleFootprint {
   lengthM: number;
 }
 
-/** Which cross-street naming convention a stop reads as — see
- *  model/geo/crossStreetNaming.ts for the algorithm that picks one. Declared
- *  here, not there, so Mode can reference it with no import cycle (the
- *  naming module already depends on the catalog, not the other way round). */
-export type StopNamingStyle = 'intersection' | 'alongStreet';
-
 export interface Mode {
   id: string;
   label: string;
@@ -650,13 +644,6 @@ export interface Mode {
    * road-width figure already tuned against real GTFS data.
    */
   corridorToleranceM?: number;
-  /** Which cross-street naming convention a stop on this mode gets by
-   *  default — see model/geo/crossStreetNaming.ts. 'intersection'
-   *  ("14th St & Broadway") reads as a fixed-platform rail stop; 'alongStreet'
-   *  ("Main St @ 5th Ave" / "Main St before 5th Ave") reads as a curb stop
-   *  positioned along one street. Unset means 'intersection', the safer
-   *  default for a mode that's always at a fixed platform. */
-  stopNamingStyleId?: StopNamingStyle;
 }
 
 /** A track is a precise line: two rail alignments a few metres apart are two
@@ -716,7 +703,6 @@ export const MODES: Record<string, Mode> = {
     wayTypeIds: ['road'],
     preferredLaneKindIds: ['bus', 'drive'],
     defaultFootprintM: { widthM: 2.6, lengthM: 12 },
-    stopNamingStyleId: 'alongStreet',
   },
   bus: {
     id: 'bus',
@@ -724,7 +710,6 @@ export const MODES: Record<string, Mode> = {
     wayTypeIds: ['road'],
     preferredLaneKindIds: ['bus', 'drive'],
     defaultFootprintM: { widthM: 2.6, lengthM: 12 },
-    stopNamingStyleId: 'alongStreet',
   },
   gondola: {
     id: 'gondola',

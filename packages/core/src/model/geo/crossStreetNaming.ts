@@ -3,15 +3,34 @@
 // "Main St @ 5th Ave" / "Main St before 5th Ave" for a bus-style stop along
 // a block. Computed entirely from existing street geometry (NamedWay +
 // Node), never from landmark/POI data — none exists in this model yet.
-import { mode, type StopNamingStyle } from '../catalog';
+import { modesForWayType } from '../catalog';
 import { laneCapacity } from '../profile';
 import { servicesAtStation } from '../../sim/frequency';
-import type { LngLat, NamedWay, StationAnchor, TransitSystem, Way } from '../system';
+import type { LngLat, NamedWay, Node, StationAnchor, TransitSystem, Way } from '../system';
+import { haversineMeters } from './spherical';
 import { pathLengthMeters } from './measurement';
-import { resolveWayPath } from './wayPath';
+import { resolveWayPath, wayById } from './wayPath';
 import { servedWaysByDistance } from './snapIndex';
 
-export type { StopNamingStyle };
+/** Which cross-street naming convention a stop reads as. 'intersection'
+ *  ("14th St & Broadway") reads as a fixed-platform rail stop; 'alongStreet'
+ *  ("Main St @ 5th Ave" / "Main St before 5th Ave") reads as a curb stop
+ *  positioned along one street. Kept local to this feature rather than on
+ *  the shared Mode catalog type — nothing outside this file needs to know a
+ *  mode's naming convention, the same reasoning that keeps MODE_RENDER
+ *  (style/catalogStyle.ts) off Mode too. */
+export type StopNamingStyle = 'intersection' | 'alongStreet';
+
+/** Naming convention by mode id. Unset means 'intersection', the safer
+ *  default for a mode that's always at a fixed platform. */
+const STOP_NAMING_STYLE: Partial<Record<string, StopNamingStyle>> = {
+  bus: 'alongStreet',
+  brt: 'alongStreet',
+};
+
+function stopNamingStyle(modeId: string): StopNamingStyle {
+  return STOP_NAMING_STYLE[modeId] ?? 'intersection';
+}
 
 /** How close a stop's coordinate must be to a Node to read as "at" that
  *  junction rather than mid-block. */
@@ -43,6 +62,27 @@ function namedWayByWayId(namedWays: NamedWay[]): Map<string, NamedWay> {
   return index;
 }
 
+// Cached by the nodes array's own reference, same convention as wayById
+// (wayPath.ts) — crossStreetsAtNode and walkOneDirection each otherwise
+// scan every Node in the system per lookup, which adds up on a real
+// imported system with thousands of nodes.
+const nodesByWayIdCache = new WeakMap<Node[], Map<string, Node[]>>();
+
+function nodesByWayId(nodes: Node[]): Map<string, Node[]> {
+  let index = nodesByWayIdCache.get(nodes);
+  if (index) return index;
+  index = new Map();
+  for (const node of nodes) {
+    for (const ref of node.refs) {
+      const list = index.get(ref.wayId);
+      if (list) list.push(node);
+      else index.set(ref.wayId, [node]);
+    }
+  }
+  nodesByWayIdCache.set(nodes, index);
+  return index;
+}
+
 /** Which naming convention this stop should read as. Prefers what's already
  *  serving it (an interchange keeps its rail-derived "&" name even once a
  *  bus also calls there); falls back to the anchored way's own type when no
@@ -59,20 +99,29 @@ function resolveNamingStyle(
     anchors,
   });
   if (services.length > 0) {
-    const styles = new Set(
-      services.map((sv) => mode(sv.modeId).stopNamingStyleId ?? 'intersection'),
-    );
+    const styles = new Set(services.map((sv) => stopNamingStyle(sv.modeId)));
     return styles.has('intersection') ? 'intersection' : 'alongStreet';
   }
-  if (anchors.length === 0) return 'intersection';
-  const waysById = new Map(system.ways.map((w) => [w.id, w]));
+  const waysById = wayById(system.ways);
   const anchoredWays = anchors
     .map((a) => waysById.get(a.wayId))
     .filter((w): w is Way => w !== undefined);
-  if (anchoredWays.length > 0 && anchoredWays.every((w) => w.typeId === 'road')) {
-    return 'alongStreet';
-  }
-  return 'intersection';
+  // No service rides this stop yet, so guess from which mode(s) treat the
+  // anchored way's type as their OWN primary type (wayTypeIds[0]) rather
+  // than a secondary one — e.g. tram lists ['lightRail', 'road'] because it
+  // can street-run, but 'lightRail' is what it actually is; a plain
+  // road-typed way should read as a bus stop by default, not a tram one.
+  // This is still a best-effort guess, not a guarantee: the catalog
+  // deliberately allows a tram to run on a 'road'-typed way, so a station
+  // placed there can still go stale in naming convention if a tram service
+  // is drawn through it later. The Inspector's "Suggest name" button is the
+  // recourse.
+  const nativeModes = anchoredWays.flatMap((w) =>
+    modesForWayType(w.typeId).filter((m) => m.wayTypeIds[0] === w.typeId),
+  );
+  if (nativeModes.length === 0) return 'intersection';
+  const styles = new Set(nativeModes.map((m) => stopNamingStyle(m.id)));
+  return styles.has('intersection') ? 'intersection' : 'alongStreet';
 }
 
 /** Distinct NamedWay names carried by the stop's own anchored way(s). */
@@ -112,12 +161,14 @@ function crossStreetsAtNode(
   namedWayIndex: Map<string, NamedWay>,
   waysById: Map<string, Way>,
 ): JunctionCrossStreets | null {
-  let best: { node: (typeof system.nodes)[number]; distM: number } | null = null;
-  for (const node of system.nodes) {
-    if (!node.refs.some((r) => homeWayIds.has(r.wayId))) continue;
-    const distM = haversineApproxM(node.coord, coord);
-    if (distM > CROSS_STREET_AT_JUNCTION_M) continue;
-    if (!best || distM < best.distM) best = { node, distM };
+  const index = nodesByWayId(system.nodes);
+  let best: { node: Node; distM: number } | null = null;
+  for (const homeWayId of homeWayIds) {
+    for (const node of index.get(homeWayId) ?? []) {
+      const distM = haversineMeters(node.coord, coord);
+      if (distM > CROSS_STREET_AT_JUNCTION_M) continue;
+      if (!best || distM < best.distM) best = { node, distM };
+    }
   }
   if (!best) return null;
   const candidates = new Map<string, NamedWay>(); // name -> representative NamedWay
@@ -135,14 +186,16 @@ function crossStreetsAtNode(
   return { crossNames: ranked.map((nw) => nw.name) };
 }
 
-// A plain equirectangular approximation is plenty accurate at the block
-// scale this function operates at, and avoids pulling in the full
-// great-circle helper for a threshold comparison.
-function haversineApproxM(a: LngLat, b: LngLat): number {
-  const latRad = ((a[1] + b[1]) / 2) * (Math.PI / 180);
-  const dLng = (b[0] - a[0]) * Math.cos(latRad) * 111_320;
-  const dLat = (b[1] - a[1]) * 111_320;
-  return Math.hypot(dLng, dLat);
+/** Whether any Node within the at-junction tolerance of `coord` links `a` and
+ *  `b` directly — i.e. the two ways actually cross near here, not merely
+ *  both happen to pass nearby. */
+function waysCrossNear(system: TransitSystem, coord: LngLat, a: string, b: string): boolean {
+  const index = nodesByWayId(system.nodes);
+  for (const node of index.get(a) ?? []) {
+    if (haversineMeters(node.coord, coord) > CROSS_STREET_AT_JUNCTION_M) continue;
+    if (node.refs.some((r) => r.wayId === b)) return true;
+  }
+  return false;
 }
 
 interface CorridorHit {
@@ -154,6 +207,20 @@ interface CorridorHit {
    *  order, not a compass direction or a service's travel direction (which
    *  usually doesn't exist yet at naming time — see resolveNamingStyle). */
   direction: 'ahead' | 'behind';
+}
+
+/** Resolves a way ref's NamedWay, skipping unnamed and home-named arms.
+ *  Shared by crossStreetsAtNode's junction scan and walkOneDirection's
+ *  pass-through check — both need exactly this filter before deciding what
+ *  to do with a genuinely different name. */
+function nonHomeName(
+  wayId: string,
+  namedWayIndex: Map<string, NamedWay>,
+  homeNames: Set<string>,
+): string | null {
+  const nw = namedWayIndex.get(wayId);
+  if (!nw || nw.name.trim() === '' || homeNames.has(nw.name)) return null;
+  return nw.name;
 }
 
 /** Walks the stop's own corridor in one direction from its projection point,
@@ -171,7 +238,11 @@ function walkOneDirection(
   let wayId = startWayId;
   let t = startT;
   let distM = 0;
+  // Same-named arms already left behind, so a loop back to one of them
+  // (e.g. two same-named ways meeting again at a later node) can't be
+  // re-picked as the "unexplored" continuation and ping-pong forever.
   const visited = new Set<string>();
+  const nodeIndex = nodesByWayId(system.nodes);
   for (let hop = 0; hop < MAX_WALK_HOPS; hop++) {
     const way = waysById.get(wayId);
     if (!way) return null;
@@ -182,22 +253,21 @@ function walkOneDirection(
     if (distM + remainingM > CROSS_STREET_WALK_MAX_M) return null;
     distM += remainingM;
     const endCoord = direction === 'ahead' ? path[path.length - 1] : path[0];
-    const endNode = system.nodes.find((n) =>
+    const endNode = (nodeIndex.get(wayId) ?? []).find((n) =>
       n.refs.some(
-        (r) => r.wayId === wayId && haversineApproxM(way.points[r.pointIndex], endCoord) < 1,
+        (r) => r.wayId === wayId && haversineMeters(way.points[r.pointIndex], endCoord) < 1,
       ),
     );
     if (!endNode) return null; // open endpoint — the street just ends here
     const others = endNode.refs.filter((r) => r.wayId !== wayId);
     let sameNameContinuation: string | null = null;
     for (const ref of others) {
+      const name = nonHomeName(ref.wayId, namedWayIndex, homeNames);
+      if (name) return { name, distM, direction };
       const nw = namedWayIndex.get(ref.wayId);
-      if (!nw || nw.name.trim() === '') continue;
-      if (homeNames.has(nw.name)) {
-        if (!visited.has(ref.wayId)) sameNameContinuation = ref.wayId;
-        continue;
+      if (nw && nw.name.trim() !== '' && !visited.has(ref.wayId)) {
+        sameNameContinuation = ref.wayId;
       }
-      return { name: nw.name, distM, direction };
     }
     if (!sameNameContinuation) return null;
     visited.add(wayId);
@@ -205,7 +275,7 @@ function walkOneDirection(
     const nextWay = waysById.get(wayId);
     if (!nextWay) return null;
     // Resume from whichever end of the next way sits at endNode.
-    const atStart = haversineApproxM(nextWay.points[0], endCoord) < 1;
+    const atStart = haversineMeters(nextWay.points[0], endCoord) < 1;
     t = atStart ? 0 : 1;
     direction = atStart ? 'ahead' : 'behind';
   }
@@ -233,23 +303,30 @@ export function suggestStopName(query: CrossStreetQuery): SuggestedStopName {
   const { system, coord, anchors } = query;
   const style = resolveNamingStyle(system, coord, anchors);
   const namedWayIndex = namedWayByWayId(system.namedWays);
-  const waysById = new Map(system.ways.map((w) => [w.id, w]));
+  const waysById = wayById(system.ways);
   const homeNames = new Set(homeStreetNames(anchors, namedWayIndex));
 
   if (anchors.length === 0) {
     const nearby = servedWaysByDistance(coord, system.ways, CROSS_STREET_SEARCH_RADIUS_M);
-    const names: string[] = [];
+    const named: { wayId: string; name: string }[] = [];
     const seen = new Set<string>();
     for (const { wayId } of nearby) {
       const nw = namedWayIndex.get(wayId);
       if (!nw || nw.name.trim() === '' || seen.has(nw.name)) continue;
       seen.add(nw.name);
-      names.push(nw.name);
-      if (names.length === 2) break;
+      named.push({ wayId, name: nw.name });
     }
-    if (names.length === 0) return { style, name: null };
-    if (names.length === 1) return { style, name: names[0] };
-    return { style, name: formatName(style, names[0], names[1], true, null) };
+    if (named.length === 0) return { style, name: null };
+    const [first, ...rest] = named;
+    // Only the nearest named way is guaranteed nearby — a second name only
+    // becomes a cross street if it actually meets the first one near here,
+    // not merely because it's also nearby (two parallel streets a block
+    // apart are not an intersection).
+    const cross = rest.find((candidate) =>
+      waysCrossNear(system, coord, first.wayId, candidate.wayId),
+    );
+    if (!cross) return { style, name: first.name };
+    return { style, name: formatName(style, first.name, cross.name, true, null) };
   }
 
   if (homeNames.size === 0) return { style, name: null };
