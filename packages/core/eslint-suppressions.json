@@ -2,6 +2,28 @@
   "src/geometry/junctions.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
+    },
+    "complexity": {
+      "count": 2
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 3
+    }
+  },
+  "src/geometry/streets.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 2
+    }
+  },
+  "src/model/catalog.ts": {
+    "max-lines": {
+      "count": 1
     }
   },
   "src/model/components.ts": {
@@ -12,6 +34,12 @@
   "src/model/diagramLayout.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
+    },
+    "complexity": {
+      "count": 1
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 1
     }
   },
   "src/model/geo/corridorConflation.ts": {
@@ -20,16 +48,47 @@
     },
     "@typescript-eslint/prefer-optional-chain": {
       "count": 1
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 1
     }
   },
   "src/model/geo/serviceLane.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "max-params": {
       "count": 1
     }
   },
   "src/model/geo/servicePaths.ts": {
     "@typescript-eslint/prefer-optional-chain": {
       "count": 2
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 1
+    }
+  },
+  "src/model/geo/snapIndex.ts": {
+    "max-depth": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 2
+    }
+  },
+  "src/model/geo/wayPath.ts": {
+    "max-params": {
+      "count": 1
     }
   },
   "src/model/gtfsImport.ts": {
@@ -41,6 +100,18 @@
     },
     "@typescript-eslint/no-unnecessary-type-conversion": {
       "count": 1
+    },
+    "complexity": {
+      "count": 3
+    },
+    "max-depth": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 4
     }
   },
   "src/model/gtfsSchedule.ts": {
@@ -51,6 +122,12 @@
       "count": 3
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "complexity": {
+      "count": 1
+    },
+    "sonarjs/cognitive-complexity": {
       "count": 1
     }
   },
@@ -66,6 +143,18 @@
     },
     "@typescript-eslint/prefer-optional-chain": {
       "count": 2
+    },
+    "complexity": {
+      "count": 4
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 6
     }
   },
   "src/model/patternEdits.ts": {
@@ -82,6 +171,12 @@
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 2
+    },
+    "max-params": {
+      "count": 1
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 1
     }
   },
   "src/model/routeGraph.ts": {
@@ -93,11 +188,40 @@
     },
     "@typescript-eslint/prefer-optional-chain": {
       "count": 1
+    },
+    "complexity": {
+      "count": 2
+    },
+    "max-depth": {
+      "count": 1
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 3
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 3
     }
   },
   "src/model/routeLegs.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 2
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 1
+    }
+  },
+  "src/model/selectionRelations.ts": {
+    "max-depth": {
+      "count": 2
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 1
     }
   },
   "src/model/serialize.ts": {
@@ -109,6 +233,18 @@
     },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 1
+    },
+    "complexity": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 2
     }
   },
   "src/model/serviceEdits.ts": {
@@ -116,6 +252,12 @@
       "count": 3
     },
     "@typescript-eslint/prefer-optional-chain": {
+      "count": 2
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-params": {
       "count": 2
     }
   },
@@ -125,6 +267,15 @@
     },
     "@typescript-eslint/prefer-optional-chain": {
       "count": 2
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 1
     }
   },
   "src/model/throughRoute.ts": {
@@ -135,6 +286,21 @@
   "src/model/validate.ts": {
     "@typescript-eslint/prefer-nullish-coalescing": {
       "count": 1
+    },
+    "complexity": {
+      "count": 3
+    },
+    "max-depth": {
+      "count": 5
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 2
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 6
     }
   },
   "src/render/buildFeatures.ts": {
@@ -149,6 +315,29 @@
     },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 1
+    },
+    "complexity": {
+      "count": 6
+    },
+    "max-depth": {
+      "count": 8
+    },
+    "max-lines": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    },
+    "max-params": {
+      "count": 7
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 5
+    }
+  },
+  "src/render/featureMemo.ts": {
+    "sonarjs/cognitive-complexity": {
+      "count": 1
     }
   },
   "src/render/mergeServiceLines.ts": {
@@ -157,10 +346,43 @@
     },
     "@typescript-eslint/prefer-for-of": {
       "count": 2
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 1
     }
   },
   "src/render/svg.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 2
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 1
+    }
+  },
+  "src/sim/clock.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 1
+    }
+  },
+  "src/sim/fleet.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "src/sim/serviceStats.ts": {
+    "max-params": {
       "count": 4
     }
   },

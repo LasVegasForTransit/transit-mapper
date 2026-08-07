@@ -33,6 +33,7 @@ catalog:
   eslint: '^10.8.0'
   eslint-config-prettier: '^10.1.8'
   eslint-plugin-react-hooks: '^7.1.1'
+  eslint-plugin-sonarjs: '^4.2.0'
   fflate: '^0.8.2'
   hono: '^4.6.14'
   # ESLint loads eslint.config.ts through jiti. Without it the flat config

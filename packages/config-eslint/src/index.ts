@@ -26,6 +26,7 @@ import prettier from 'eslint-config-prettier';
 // deprecated in favour of this one; aliased because this module exports a
 // `defineConfig` of its own.
 import { defineConfig as compose } from 'eslint/config';
+import sonarjs from 'eslint-plugin-sonarjs';
 import tseslint from 'typescript-eslint';
 
 /** What the composer accepts, and what callers may pass as overrides. */
@@ -139,6 +140,75 @@ const TYPE_AWARE_ADJUSTMENTS: ConfigInput = {
   },
 };
 
+/**
+ * Caps on the shape of code: how long a file runs, how much a function does,
+ * how deeply it nests.
+ *
+ * These are the weakest rules in this module and worth being honest about. A
+ * length cap is satisfied by splitting one tangled file into several tangled
+ * files, so it does not produce good structure on its own; what it produces is
+ * a moment where somebody has to decide where the seam goes. The rules that
+ * catch bad code are elsewhere. These catch code nobody stopped to shape.
+ *
+ * Blank lines and comments are excluded from both length counts. This
+ * repository requires comments explaining why code is the way it is, and a cap
+ * that charges for them would set one rule against another.
+ */
+const SHAPE: ConfigInput = {
+  rules: {
+    'max-lines': ['error', { max: 400, skipBlankLines: true, skipComments: true }],
+    'max-lines-per-function': ['error', { max: 80, skipBlankLines: true, skipComments: true }],
+    'max-depth': ['error', 4],
+    // Four rather than three, because a named options interface is this
+    // repository's answer to a long parameter list and the fourth position is
+    // where that conversion usually becomes worth it.
+    'max-params': ['error', 4],
+    'max-nested-callbacks': ['error', 3],
+    complexity: ['error', 15],
+  },
+};
+
+/**
+ * A small, hand-picked set from eslint-plugin-sonarjs.
+ *
+ * `sonarjs.configs.recommended` enables 222 rules and is not usable: it carries
+ * `todo-tag` and `fixme-tag`, which fail a build on a TODO comment, and
+ * `no-commented-code`, which runs language heuristics over every comment in the
+ * repository. Naming four is duller and survives contact with people.
+ */
+const SONAR: ConfigInput = {
+  plugins: { sonarjs },
+  rules: {
+    // Cyclomatic complexity counts independent paths, which is the right
+    // measure for how many tests something needs and the wrong one for whether
+    // a person can read it. Cognitive complexity charges `nesting + 1` per
+    // branch, so a triple-nested `if` costs 6 where cyclomatic charges 3, and
+    // an early return costs nothing at all — it rewards exactly the refactor
+    // cyclomatic complexity punishes.
+    'sonarjs/cognitive-complexity': ['error', 15],
+    // Cross-function within one file. Duplication across files needs a tool
+    // that sees more than one file at a time.
+    'sonarjs/no-identical-functions': 'error',
+    'sonarjs/no-duplicated-branches': 'error',
+    'sonarjs/no-collapsible-if': 'error',
+  },
+};
+
+/**
+ * A Vitest file is one `describe` callback containing the whole suite, so a
+ * per-function length cap measures the file and a nesting cap measures how many
+ * `describe` levels the author used to organise it. Neither says anything about
+ * quality there. The per-file cap still applies: a test file that has outgrown
+ * 400 lines is covering more than one thing.
+ */
+const TEST_SHAPE: ConfigInput = {
+  files: ['**/tests/**', '**/*.{test,spec}.{ts,tsx}'],
+  rules: {
+    'max-lines-per-function': 'off',
+    'max-nested-callbacks': 'off',
+  },
+};
+
 function assemble(typeAware: ConfigInput[], extra: ConfigInput[]): ConfigArray {
   return compose(
     IGNORES,
@@ -146,6 +216,9 @@ function assemble(typeAware: ConfigInput[], extra: ConfigInput[]): ConfigArray {
     ...typeAware,
     SUPPRESSION_HYGIENE,
     TYPESCRIPT_ADJUSTMENTS,
+    SHAPE,
+    SONAR,
+    TEST_SHAPE,
     ...extra,
     // Last, so it switches off every stylistic rule that would fight Prettier.
     prettier,
