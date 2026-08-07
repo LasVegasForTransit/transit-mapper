@@ -37,7 +37,7 @@ import { Inspector, useSupplementalContent } from './ui/Inspector';
 import { SidebarPanel } from './ui/SidebarPanel';
 import { SimControls, SimControlsCompact } from './ui/SimControls';
 import { Toolbar } from './ui/Toolbar';
-import { TopBarActions, TopBarBrand, ViewSwitch } from './ui/TopBar';
+import { TopBarActions, TopBarBrand, ViewSwitch, ViewSwitchCompact } from './ui/TopBar';
 import { useSaveStatus } from './ui/SaveStatusProvider';
 import { useUi } from './ui/UiProvider';
 import { Workbench } from './ui/Workbench';
@@ -443,6 +443,7 @@ export function App() {
         hasSupplementalContent={supplemental.kind !== 'none'}
         primaryToolbar={<TopBarActions />}
         viewSwitcher={<ViewSwitch />}
+        viewSwitcherCompact={<ViewSwitchCompact />}
         simControls={<SimControls />}
         simControlsCompact={<SimControlsCompact />}
         modeToolbar={<Toolbar />}

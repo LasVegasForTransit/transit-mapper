@@ -39,6 +39,7 @@ function renderWorkbench(): void {
               hasSupplementalContent={false}
               primaryToolbar={slot('primary')}
               viewSwitcher={slot('view')}
+              viewSwitcherCompact={<span data-slot="view-compact" />}
               simControls={slot('desktop-sim')}
               simControlsCompact={slot('mobile-sim')}
               modeToolbar={slot('mode')}

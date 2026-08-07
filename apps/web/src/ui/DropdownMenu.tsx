@@ -1,5 +1,6 @@
 import * as RdxMenu from '@radix-ui/react-dropdown-menu';
 import type { ReactNode } from 'react';
+import { Icon } from './Icon';
 
 /**
  * The one trigger-driven action menu used everywhere (File menu, the Export
@@ -38,6 +39,32 @@ export function DropdownMenuItem({ onSelect, children }: DropdownMenuItemProps) 
     <RdxMenu.Item className="dropdown-menu-item" onSelect={onSelect}>
       {children}
     </RdxMenu.Item>
+  );
+}
+
+interface DropdownMenuChoiceProps {
+  checked: boolean;
+  onSelect: () => void;
+  children: ReactNode;
+}
+
+/**
+ * A menu row that is one of a set, showing which one is current.
+ *
+ * The unchecked rows keep the tick's width so the labels form a column
+ * instead of shifting by 14px as the choice moves. Written once here because
+ * three menus need it — the tool dock's variants, its cross-section presets,
+ * and the compact view switch — and they were drifting apart as inline
+ * styles at each call site.
+ */
+export function DropdownMenuChoice({ checked, onSelect, children }: DropdownMenuChoiceProps) {
+  return (
+    <DropdownMenuItem onSelect={onSelect}>
+      <span className="dropdown-menu-choice">
+        {checked ? <Icon name="check" size={14} /> : <span className="dropdown-menu-tick" />}
+        {children}
+      </span>
+    </DropdownMenuItem>
   );
 }
 

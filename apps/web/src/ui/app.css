@@ -797,6 +797,36 @@ input[type='range'] {
   box-shadow: var(--md-sys-elevation-level1);
 }
 
+/* The same control where three labels side by side do not fit — see
+   ViewSwitchCompact. Sized like `.seg.active` rather than like a button, so
+   swapping densities does not change the height of the bar it sits in. */
+.view-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 8px;
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  font-size: var(--md-sys-typescale-label-medium-size);
+  font-weight: 500;
+  cursor: pointer;
+}
+.view-switch-btn:hover {
+  background: var(--md-sys-color-surface-container);
+}
+/* The label is the whole point of this density — it is what tells you which
+   view you are in without three of them side by side. It still has to give
+   way before the button starts pushing its neighbours around. */
+.view-switch-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
 /* ---- simulation transport controls (SimControls) ---- */
 .sim-controls {
   display: inline-flex;
@@ -814,6 +844,32 @@ input[type='range'] {
   min-width: 8ch;
   text-align: center;
   white-space: nowrap;
+  /* When the bar is squeezed anyway, lose the last characters visibly rather
+     than invisibly. Without this the readout is cut mid-glyph by an ancestor's
+     `overflow: hidden` — measured at 320px, "Mon 09:06 AM" needed 100px, got
+     93, and rendered a half-drawn M with nothing to say it was truncated. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The narrow rendering's speed control: a text trigger wearing the current
+   speed. Sized like `.seg` so swapping densities does not change the bar's
+   height. */
+.sim-speed-trigger {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 8px;
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  font-size: var(--md-sys-typescale-label-medium-size);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sim-speed-trigger:hover {
+  background: var(--md-sys-color-surface-container);
 }
 /* A pinned scenario overrides the clock for scheduling purposes; the time is
    still true and still moving, it just isn't what's deciding service levels. */
@@ -1646,6 +1702,18 @@ input[type='range'] {
 .dropdown-menu-item:hover,
 .dropdown-menu-item[data-highlighted] {
   background: var(--md-sys-color-surface-container);
+}
+/* One row of a set-of-choices menu (DropdownMenuChoice). The tick and its
+   placeholder are the same width, so the labels hold a column instead of
+   shifting sideways as the current choice moves. */
+.dropdown-menu-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.dropdown-menu-tick {
+  width: 14px;
+  flex: none;
 }
 .dropdown-menu-icon-spacer {
   width: 17px;

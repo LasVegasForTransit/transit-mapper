@@ -27,18 +27,32 @@ function matchMedia(matches: (query: string) => boolean): typeof window.matchMed
 interface MediaEnvironment {
   narrow: boolean;
   coarse: boolean;
+  /**
+   * Whether the top row is wide enough for the segmented view switch and the
+   * full simulation ladder (ROOMY_TOP_ROW_QUERY). A separate axis from
+   * `narrow`: a 900px window is not narrow and is not roomy either. Defaults
+   * to the opposite of `narrow`, which is what a plain wide/narrow case
+   * means.
+   */
+  roomy?: boolean;
   /** Whether the device reports `(hover: none)`. Independent of `coarse`. */
   hoverless?: boolean;
 }
 
 function renderWorkbench(environment: boolean | MediaEnvironment): string {
-  const { narrow, coarse, hoverless } =
+  const { narrow, coarse, roomy, hoverless } =
     typeof environment === 'boolean'
-      ? { narrow: environment, coarse: environment, hoverless: environment }
-      : { hoverless: environment.coarse, ...environment };
+      ? {
+          narrow: environment,
+          coarse: environment,
+          roomy: !environment,
+          hoverless: environment,
+        }
+      : { roomy: !environment.narrow, hoverless: environment.coarse, ...environment };
   vi.stubGlobal('window', {
     matchMedia: matchMedia((query) => {
       if (query.includes('max-width')) return narrow;
+      if (query.includes('min-width')) return roomy;
       if (query.includes('pointer: coarse')) return coarse;
       // Hover is answered independently of pointer precision on purpose. A
       // touchscreen laptop reports a coarse pointer AND hover, and hardcoding
@@ -59,6 +73,7 @@ function renderWorkbench(environment: boolean | MediaEnvironment): string {
           hasSupplementalContent={false}
           primaryToolbar={slot('primary')}
           viewSwitcher={slot('view')}
+          viewSwitcherCompact={slot('view-compact')}
           simControls={slot('desktop-sim')}
           simControlsCompact={slot('mobile-sim')}
           modeToolbar={slot('mode')}
@@ -85,6 +100,7 @@ describe('Workbench responsive mounting', () => {
     expect(occurrences(markup, 'data-slot="menu"')).toBe(1);
     expect(occurrences(markup, 'data-slot="primary"')).toBe(1);
     expect(occurrences(markup, 'data-slot="view"')).toBe(1);
+    expect(occurrences(markup, 'data-slot="view-compact"')).toBe(0);
     expect(occurrences(markup, 'data-slot="desktop-sim"')).toBe(1);
     expect(occurrences(markup, 'data-slot="mobile-sim"')).toBe(0);
     expect(occurrences(markup, 'data-slot="install"')).toBe(1);
@@ -104,12 +120,29 @@ describe('Workbench responsive mounting', () => {
     expect(occurrences(markup, 'data-slot="brand"')).toBe(1);
     expect(occurrences(markup, 'data-slot="menu"')).toBe(1);
     expect(occurrences(markup, 'data-slot="primary"')).toBe(1);
-    expect(occurrences(markup, 'data-slot="view"')).toBe(1);
+    expect(occurrences(markup, 'data-slot="view"')).toBe(0);
+    expect(occurrences(markup, 'data-slot="view-compact"')).toBe(1);
     expect(occurrences(markup, 'data-slot="desktop-sim"')).toBe(0);
     expect(occurrences(markup, 'data-slot="mobile-sim"')).toBe(1);
     expect(occurrences(markup, 'data-slot="install"')).toBe(0);
     expect(occurrences(markup, 'aria-label="Expand panel"')).toBe(1);
     expect(markup).toContain('aria-expanded="false"');
+  });
+
+  it('keeps the docked layout but narrows the top row between the two widths', () => {
+    // 768-1088: too wide for the sheet, too narrow for three view labels
+    // beside a full simulation ladder. This is the band where the segmented
+    // switch used to overflow its bar in silence — "Diagram" rendered 0 of
+    // its 63px and the clock 0 of its 100px, with no scrollbar to say so.
+    const markup = renderWorkbench({ narrow: false, roomy: false, coarse: false });
+
+    // Still the docked tree: no sheet.
+    expect(markup).not.toContain('aria-label="Expand panel"');
+    // But the narrow rendering of both bars.
+    expect(occurrences(markup, 'data-slot="view"')).toBe(0);
+    expect(occurrences(markup, 'data-slot="view-compact"')).toBe(1);
+    expect(occurrences(markup, 'data-slot="desktop-sim"')).toBe(0);
+    expect(occurrences(markup, 'data-slot="mobile-sim"')).toBe(1);
   });
 
   it('mounts by width alone, whatever the pointer', () => {

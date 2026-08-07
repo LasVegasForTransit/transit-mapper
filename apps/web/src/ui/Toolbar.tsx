@@ -14,7 +14,7 @@ import {
 import { facilityRender } from '@transitmapper/core/style/catalogStyle';
 import {
   DropdownMenu,
-  DropdownMenuItem,
+  DropdownMenuChoice,
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from './DropdownMenu';
@@ -407,16 +407,13 @@ function ToolButton({ icon, label, hotkey, active, disabled, onClick, menu }: To
               {si > 0 && <DropdownMenuSeparator />}
               {section.label && <DropdownMenuLabel>{section.label}</DropdownMenuLabel>}
               {section.entries.map((entry) => (
-                <DropdownMenuItem key={entry.id || 'default'} onSelect={entry.onSelect}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                    {entry.checked ? (
-                      <Icon name="check" size={14} />
-                    ) : (
-                      <span style={{ width: 14 }} />
-                    )}
-                    {entry.label}
-                  </span>
-                </DropdownMenuItem>
+                <DropdownMenuChoice
+                  key={entry.id || 'default'}
+                  checked={entry.checked}
+                  onSelect={entry.onSelect}
+                >
+                  {entry.label}
+                </DropdownMenuChoice>
               ))}
             </div>
           ))}

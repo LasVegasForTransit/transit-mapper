@@ -45,31 +45,76 @@ export function SimControls() {
 }
 
 /**
- * The narrow rendering, for a phone's top-left card. Same state, same
- * handlers — four speed buttons and a clock won't fit beside a view switch at
- * that width, so the ladder collapses into a select. A layout difference, not
- * a behavior one.
+ * The narrow rendering. Same state, same handlers: what changes is that the
+ * four-button speed ladder folds into a popover, leaving the two things worth
+ * a permanent place — whether it is running, and what time it is.
+ *
+ * Not a phone special case. Workbench picks this whenever the top row cannot
+ * afford the wide one, which starts at about 1090px: below that the wide bar
+ * wanted 337px, got 153, and scrolled the difference away behind
+ * `scrollbar-width: none`, so the clock rendered 0 of its 100px with nothing
+ * on screen to say it existed.
+ *
+ * This used to collapse the ladder into a native `<select>`. That was 95px
+ * against this popover's 34, and it was the only browser-styled form control
+ * anywhere in the chrome — sitting next to a custom segmented control doing
+ * the same kind of job.
  */
 export function SimControlsCompact() {
-  const { speedId, setSpeedId, paused, togglePaused } = useSim();
+  const { paused, togglePaused } = useSim();
   return (
     <div className="sim-controls" role="group" aria-label="Simulation">
       <SimPlayPause paused={paused} onToggle={togglePaused} />
-      <select
-        className="opt-select"
-        aria-label="Simulation speed"
-        value={speedId}
-        onChange={(e) => setSpeedId(e.target.value)}
-      >
-        {SIM_SPEEDS.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.label}
-          </option>
-        ))}
-      </select>
       <SimClockReadout />
+      <SimSpeedPopover />
       <ScenarioPicker />
     </div>
+  );
+}
+
+/**
+ * The speed ladder, kept whole, behind a trigger that costs a third of its
+ * width. The same buttons as the wide bar's, so nothing is reachable in one
+ * rendering and missing from the other.
+ *
+ * The trigger wears the current speed rather than an icon. That keeps the one
+ * thing the wide ladder gave you for free — reading the speed without acting
+ * — and no glyph says "4× faster than real time" anyway.
+ */
+function SimSpeedPopover() {
+  const { speedId, setSpeedId } = useSim();
+  const current = SIM_SPEEDS.find((s) => s.id === speedId);
+  return (
+    <Popover
+      className="sim-scenario-popover"
+      trigger={
+        <button
+          type="button"
+          className="sim-speed-trigger"
+          aria-label={`Simulation speed: ${current?.label ?? speedId}`}
+        >
+          {current?.label ?? speedId}
+        </button>
+      }
+    >
+      <>
+        <span className="panel-section-label">Simulation speed</span>
+        <p className="panel-hint">How fast the simulated clock runs against real time.</p>
+        <div className="segmented" role="group" aria-label="Simulation speed">
+          {SIM_SPEEDS.map((s) => (
+            <button
+              key={s.id}
+              className={`seg ${speedId === s.id ? 'active' : ''}`}
+              aria-pressed={speedId === s.id}
+              aria-label={`${s.label} — ${s.dayLabel}`}
+              onClick={() => setSpeedId(s.id)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </>
+    </Popover>
   );
 }
 

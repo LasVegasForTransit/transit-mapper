@@ -9,12 +9,36 @@ import {
 } from 'react';
 import { useEditor } from '../editor/EditorProvider';
 import { useCompactLayout } from '../device/capabilities';
+import { useMediaQuery } from '../device/media-query';
 import { useKeyboardInset } from './useKeyboardInset';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Panel } from './Panel';
 import { useInertRef } from './useInertRef';
 import { useUi } from './UiProvider';
+
+/**
+ * Whether the top row can afford the wide rendering of the view switch and
+ * the simulation transport.
+ *
+ * A content-fit threshold, not a layout boundary — the same species as the
+ * 860/620/339 ones in app.css, and deliberately not --breakpoint-md. It is
+ * arithmetic over things that do not change: the workspace panel's reserved
+ * 280px, the segmented view switch's 254px, the simulation bar's 337px, the
+ * action bar's own narrowest step at 178px, three 8px gaps and the overlay's
+ * 16px inset come to 1089.
+ *
+ * Below it the two bars used to overflow and, because `.top-app-bar` scrolls
+ * with `scrollbar-width: none`, they did it silently. Measured at 768px:
+ * "Diagram" rendered 0 of its 63px and the clock 0 of its 100px, with no
+ * scrollbar, fade or arrow to say so. That band covered iPad in both
+ * orientations and every phone held sideways.
+ *
+ * Re-measure this if a control is added to either bar. `.top-app-bar` keeps
+ * its `overflow-x: auto` as a backstop so a miss here degrades to a scroll
+ * rather than to something unreachable.
+ */
+const ROOMY_TOP_ROW_QUERY = '(min-width: 1089px)';
 
 /** How much of the action bar's content fits. Each step is narrower than the
  *  one before it, so the first that fits is the most complete that fits.
@@ -151,6 +175,11 @@ export interface WorkbenchProps {
    *  transient action, so it's its own slot rather than folded into
    *  primaryToolbar (desktop only has room to show this distinction). */
   viewSwitcher: ReactNode;
+  /** The same switch as one labelled button, for rows too narrow for three
+   *  labels side by side. Which of the two shows is this component's
+   *  decision, exactly as it is for the two simulation renderings below —
+   *  the caller hands over both and never learns which was used. */
+  viewSwitcherCompact: ReactNode;
   /** Play/pause, simulation speed, and the simulated clock. Persistent state
    *  of the canvas like `viewSwitcher`, so it shares that card. */
   simControls: ReactNode;
@@ -200,6 +229,7 @@ export function Workbench({
   hasSupplementalContent,
   primaryToolbar,
   viewSwitcher,
+  viewSwitcherCompact,
   simControls,
   simControlsCompact,
   modeToolbar,
@@ -210,6 +240,17 @@ export function Workbench({
   // device/capabilities.ts) — a touchscreen laptop keeps these docked cards
   // and still gets finger-sized hit tolerances on the map.
   const mobile = useCompactLayout();
+  // A second, narrower question than `mobile`, and not the same one: this is
+  // about whether the top row's contents fit, not about which tree mounts.
+  // See ROOMY_TOP_ROW_QUERY.
+  //
+  // Read into a variable first. Folding it into the `||` below reads better
+  // and is a conditional hook call: `mobile` short-circuits it away, so
+  // crossing the layout breakpoint changed the hook order and React threw
+  // mid-resize. Confirmed live.
+  const roomyTopRow = useMediaQuery(ROOMY_TOP_ROW_QUERY);
+  const compactTopRow = mobile || !roomyTopRow;
+  const viewSwitch = compactTopRow ? viewSwitcherCompact : viewSwitcher;
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const clearSelection = useEditor((s) => s.select);
   const backToSelectTool = useEditor((s) => s.setTool);
@@ -272,7 +313,7 @@ export function Workbench({
               <div className="top-chrome-card pointer-events-auto min-w-0 flex-1 overflow-hidden px-2 py-1.5">
                 <div className="mobile-topleft">
                   <div className="mobile-topleft-row">{brand}</div>
-                  {viewSwitcher}
+                  {viewSwitch}
                   {simControlsCompact}
                 </div>
               </div>
@@ -353,10 +394,10 @@ export function Workbench({
           >
             <div className="flex-1" style={{ minWidth: 'var(--panel-w)' }} aria-hidden="true" />
             <div className="top-app-bar top-app-bar-center top-chrome-card zen-collapse-bar pointer-events-auto min-w-0">
-              {viewSwitcher}
+              {viewSwitch}
             </div>
             <div className="top-app-bar top-app-bar-center top-chrome-card pointer-events-auto min-w-0">
-              {simControls}
+              {compactTopRow ? simControlsCompact : simControls}
             </div>
             <div ref={actionsSlotRef} className="flex min-w-0 flex-1 justify-end">
               <div
