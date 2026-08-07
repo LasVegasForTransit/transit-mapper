@@ -3685,7 +3685,17 @@ button.chip-removable-label:hover {
 .actions-full[data-fit='overflow'] .act-secondary {
   display: none;
 }
+/* The ⋯ menu appears at the FIRST step that takes something away, not at the
+   last one. `tertiary` hides Keyboard shortcuts and Replay intro, and this
+   menu is the only other place either one lives — so a bar sitting at that
+   step without the menu has no path to them at all. Measured live at
+   1280x800, where the bar settles on `tertiary`: both help buttons computed
+   `display:none` and so did `.act-overflow`, which left `openDialog('settings')`
+   (one call site, inside this menu) unreachable on a perfectly ordinary
+   desktop. `labels` is deliberately not in this list: it only drops label
+   TEXT, and every button it affects is still on the bar. */
 .actions-collapsed .act-overflow,
+.actions-full[data-fit='tertiary'] .act-overflow,
 .actions-full[data-fit='overflow'] .act-overflow {
   display: inline-flex;
 }
