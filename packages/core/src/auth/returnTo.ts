@@ -7,11 +7,10 @@
 
 // Written with escapes so the character class survives copy-paste.
 //
-// no-control-regex is disabled deliberately, and only here. The rule exists
-// to catch control characters written into a pattern by accident; matching
-// them is the entire purpose of this one, because a redirect target that
-// contains them is exactly what must be rejected.
-// eslint-disable-next-line no-control-regex
+// no-control-regex exists to catch control characters written into a pattern
+// by accident. Here they are the point: a redirect target containing one must
+// be rejected, so the pattern has to match them.
+// eslint-disable-next-line no-control-regex -- matching control characters is the point here
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
 
 export function safeReturnTo(value: string | null | undefined): string {

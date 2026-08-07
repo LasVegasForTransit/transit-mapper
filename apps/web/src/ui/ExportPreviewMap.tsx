@@ -70,7 +70,7 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
     // Mounts once; the preview map's own life (bounds fit, sources) starts
     // from whatever `system`/`view` are at mount time — see the separate
     // effect below for keeping its data in sync as those props change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mounts once; another effect syncs data
   }, []);
 
   const pushData = () => {

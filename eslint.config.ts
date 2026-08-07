@@ -8,6 +8,7 @@
 // `website` has no ESLint at all, which makes this the org's first
 // configuration and therefore the shared one.
 import eslint from '@eslint/js';
+import comments from '@eslint-community/eslint-plugin-eslint-comments';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import transitmapper from '@transitmapper/eslint-plugin';
@@ -45,6 +46,35 @@ export default tseslint.config(
     rules: {
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'error',
+    },
+  },
+  // Rules about the escape hatch itself. Every rule below this file adds can
+  // be switched off one line at a time, so the suppressions have to be as
+  // accountable as the code — otherwise the first inconvenient rule gets
+  // silenced and nothing announces it.
+  //
+  // The plugin's `recommended` preset is deliberately not spread. It carries
+  // `no-unused-disable`, which reports the same defect as ESLint's own
+  // `reportUnusedDisableDirectives` below, and two tools reporting one defect
+  // teaches people to ignore both.
+  {
+    linterOptions: {
+      // A disable that no longer suppresses anything outlived the code it was
+      // written for. Left at the default `warn` it accumulates silently, which
+      // is how a suppression list stops describing the codebase.
+      reportUnusedDisableDirectives: 'error',
+    },
+    plugins: { '@eslint-community/eslint-comments': comments },
+    rules: {
+      // A bare `/* eslint-disable */` switches off every rule for the rest of
+      // the file, including ones written years after the comment.
+      '@eslint-community/eslint-comments/no-unlimited-disable': 'error',
+      '@eslint-community/eslint-comments/no-duplicate-disable': 'error',
+      // Not in the plugin's `recommended`, and the reason to have the plugin
+      // at all: a disable must say why in a `-- reason` suffix. "Which rule"
+      // is already in the comment; "why" is the part that goes stale, and the
+      // part a reviewer needs to judge whether it still holds.
+      '@eslint-community/eslint-comments/require-description': 'error',
     },
   },
   {

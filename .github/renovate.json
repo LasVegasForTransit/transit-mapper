@@ -27,6 +27,7 @@
       "matchPackageNames": [
         "eslint",
         "@eslint/**",
+        "@eslint-community/**",
         "typescript-eslint",
         "@typescript-eslint/**",
         "eslint-config-prettier",
