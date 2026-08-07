@@ -23,7 +23,13 @@ import {
   type PersistenceCoordinator,
 } from './storage/persistenceCoordinator';
 import { resolveLibraryBootstrap } from './storage/bootstrapLibrary';
-import { Icon } from './ui/Icon';
+import { AppBanner } from './ui/AppBanner';
+import {
+  resolveAppBanner,
+  type AppBannerActionKind,
+  type BootstrapOutcome,
+  type NoticeCause,
+} from './ui/app-banner';
 import { ImportProgressPill } from './ui/ImportProgressPill';
 import { MapContextMenu } from './ui/MapContextMenu';
 import { Inspector, useSupplementalContent } from './ui/Inspector';
@@ -78,26 +84,8 @@ const AboutDialog = lazy(() =>
 
 const SHARE_PREFIX = '/s/';
 
-// The common case by far is a chunk whose filename changed under a tab that
-// was left open, so "reload" is the actual fix rather than a shrug.
-const dialogFailureNotice =
-  'That dialog couldn’t be loaded. Your system is safe — reload the page and try again.';
-
-// Says what still works, because most of it does: the basemap is a backdrop
-// from a third-party host, and everything the user has drawn is ours.
-const basemapNotice =
-  'The background map couldn’t be loaded, so the map behind your system is blank. Your system is unaffected and still saved.';
-
-// Deliberately says the damaged copy still exists. "Your work is gone" and
-// "your work is here but unreadable" call for very different reactions, and
-// only one of them is true.
-const corruptSystemNotice =
-  'The system you had open couldn’t be read, so this is a new one. The damaged copy is still saved and hasn’t been deleted.';
-
-// Same condition reached deliberately rather than at startup — the user
-// clicked a row and deserves to know why nothing happened.
-const corruptOpenNotice =
-  'That system couldn’t be read, so it can’t be opened. Its data is still saved and hasn’t been deleted.';
+// Every message this app can show, and the order it shows them in, lives in
+// ui/appBanner.ts. What reaches state here is the *cause* — see NoticeCause.
 
 interface LazyDialogProps {
   children: ReactNode;
@@ -144,12 +132,15 @@ export function App() {
   const { shortcutsOpen, closeShortcuts, uiHidden, activeDialog, openDialog, closeDialog } =
     useUi();
   const [ready, setReady] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [storageRecovery, setStorageRecovery] = useState(false);
+  // Why bootstrap produced no document, and nothing else. What it produced is
+  // the store's business; keeping the two apart means neither can contradict
+  // the other, which is what the pair of booleans this replaced could do.
+  const [bootstrap, setBootstrap] = useState<BootstrapOutcome>({ kind: 'ok' });
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
-  // Anything worth telling the user that isn't the share-load error: a stored
-  // system that wouldn't parse, a dialog that failed to load.
-  const [notice, setNotice] = useState<string | null>(null);
+  // Something that already happened and is worth reading once: a stored system
+  // that wouldn't parse, a dialog that failed to load. Held as a cause rather
+  // than as the sentence for it, so the wording stays a render-time decision.
+  const [notice, setNotice] = useState<NoticeCause | null>(null);
   // Whether the working copy is actually reaching disk. Held in a provider
   // rather than here because writes happen in dialogs too, and a failure
   // there is exactly as silent and exactly as costly.
@@ -165,7 +156,7 @@ export function App() {
       fetchShare(id, { signal: controller.signal })
         .then((system) => store.getState().setSystem(system, { readOnly: true }))
         .catch((e: Error) => {
-          if (e.name !== 'AbortError') setLoadError(e.message);
+          if (e.name !== 'AbortError') setBootstrap({ kind: 'share-failed', reason: e.message });
         })
         .finally(() => {
           if (!controller.signal.aborted) setReady(true);
@@ -200,19 +191,19 @@ export function App() {
         // Do not create a blank replacement or change activeId. IndexedDB may
         // contain the only copy of an agency-scale document and recover on
         // the next attempt.
-        setStorageRecovery(true);
+        setBootstrap({ kind: 'storage-unavailable' });
         setReady(false);
         return;
       }
       const { system, isBrandNew } = result;
-      if (result.encounteredCorruption) setNotice(corruptSystemNotice);
+      if (result.encounteredCorruption) setNotice('corrupt-system');
       // A loaded system is already durable, and legacy reads migrate as part
       // of loading. Only a genuinely new document needs a bootstrap write;
       // rewriting an RTC-sized system here would delay first paint for no
       // additional safety.
       if (isBrandNew) report(await saveToLibrary(system));
       if (disposed) return;
-      setStorageRecovery(false);
+      setBootstrap({ kind: 'ok' });
       setActiveId(system.id);
       store.getState().setSystem(system, { readOnly: false });
       if (isBrandNew) store.getState().setTool('way');
@@ -287,85 +278,37 @@ export function App() {
 
   const dialogFailed = () => {
     closeDialog();
-    setNotice(dialogFailureNotice);
+    setNotice('dialog-failed');
   };
 
-  // Everything app-level and urgent goes through the one banner below.
-  // A failing autosave outranks the others: the other two describe something
-  // that already happened, this one is still happening and gets worse the
-  // longer it goes unread.
-  const saveMessage =
-    saveState === 'full'
-      ? 'Your browser’s storage is full, so your work is no longer being saved. Export this system, or delete one you don’t need, to make room.'
-      : saveState === 'unavailable'
-        ? 'This browser isn’t saving your work — storage is unavailable here, which private browsing windows often do. Export before closing the tab.'
-        : null;
-  const banner = saveMessage ? (
-    <div className="app-banner" role="alert">
-      {saveMessage}
-    </div>
-  ) : storageRecovery ? (
-    <div className="app-banner app-banner-action" role="alert">
-      <span>
-        Your saved systems are temporarily unavailable. Nothing was replaced; retry when browser
-        storage is available again.
-      </span>
-      <button
-        type="button"
-        className="ghost-btn"
-        onClick={() => setBootstrapAttempt((attempt) => attempt + 1)}
-      >
-        Try again
-      </button>
-    </div>
-  ) : loadError ? (
-    <div className="app-banner" role="alert">
-      Couldn’t open shared system: {loadError}
-    </div>
-  ) : needRefresh ? (
-    // Not dismissible — reloading is the only way to clear it, and it isn't
-    // an error, so it deliberately doesn't borrow app-banner's danger tone.
-    <div className="app-banner app-banner-update app-banner-action" role="status">
-      <span>A new version of TransitMapper is available.</span>
-      <button type="button" className="ghost-btn" onClick={reload}>
-        Reload
-      </button>
-    </div>
-  ) : offlineReady ? (
-    // Good news, not a problem — same neutral tone as the update banner
-    // above, not app-banner-dismissible's danger one. Centered (app-banner-
-    // action), not flex-start: that alignment exists for the longer, wrapped
-    // messages notice below carries, and looks visibly off on this one-liner.
-    <div className="app-banner app-banner-update app-banner-action" role="status">
-      <span>TransitMapper is now available offline.</span>
-      <button
-        type="button"
-        className="app-banner-dismiss"
-        onClick={dismissOfflineReady}
-        aria-label="Dismiss"
-      >
-        <Icon name="x" size={14} />
-      </button>
-    </div>
-  ) : notice ? (
-    // Dismissible, unlike the two above. Those describe a condition that is
-    // still true — a share that won't load, a save that isn't happening — and
-    // clearing them would be a lie. A notice describes something that already
-    // happened and has been read, and it sits over a canvas whose entire
-    // interaction model is clicking on it, so it must be possible to get rid
-    // of it.
-    <div className="app-banner app-banner-dismissible" role="status">
-      <span>{notice}</span>
-      <button
-        type="button"
-        className="app-banner-dismiss"
-        onClick={() => setNotice(null)}
-        aria-label="Dismiss"
-      >
-        <Icon name="x" size={14} />
-      </button>
-    </div>
-  ) : null;
+  // Everything app-level and urgent goes through one banner. Which message
+  // wins, and what each one says, is decided by resolveAppBanner — a pure
+  // function over the state below, so the priority order is covered by tests
+  // rather than by whoever last read this file.
+  const descriptor = resolveAppBanner({
+    save: saveState,
+    bootstrap,
+    updateWaiting: needRefresh,
+    offlineReady,
+    notice,
+  });
+  const runBannerAction = (kind: AppBannerActionKind) => {
+    switch (kind) {
+      case 'retry-bootstrap':
+        setBootstrapAttempt((attempt) => attempt + 1);
+        return;
+      case 'reload':
+        reload();
+        return;
+      case 'dismiss-offline-ready':
+        dismissOfflineReady();
+        return;
+      case 'dismiss-notice':
+        setNotice(null);
+        return;
+    }
+  };
+  const banner = descriptor ? <AppBanner banner={descriptor} onAction={runBannerAction} /> : null;
 
   if (!ready) {
     return (
@@ -391,7 +334,7 @@ export function App() {
     // sit under this same root but carry none of those classes, so they're
     // untouched by it.
     <div className="app" data-zen={uiHidden || undefined}>
-      {ready && <MapCanvas onBasemapUnavailable={() => setNotice(basemapNotice)} />}
+      {ready && <MapCanvas onBasemapUnavailable={() => setNotice('basemap-unavailable')} />}
       {/* Outside the chrome, like the banner above: right-clicking still has
           to offer its actions when the UI is hidden, since hiding the panels
           is exactly when the menu is the only way to reach them. */}
@@ -441,7 +384,7 @@ export function App() {
         <LazyDialog
           onFailure={() => {
             closeShortcuts();
-            setNotice(dialogFailureNotice);
+            setNotice('dialog-failed');
           }}
         >
           <ShortcutsDialog onClose={closeShortcuts} />
@@ -471,7 +414,7 @@ export function App() {
         <LazyDialog onFailure={dialogFailed}>
           <SystemsDialog
             onClose={closeDialog}
-            onCorrupt={() => setNotice(corruptOpenNotice)}
+            onCorrupt={() => setNotice('corrupt-open')}
             flushPendingSave={flushPendingSave}
             recordSaveOutcome={recordSaveOutcome}
             discardPendingSave={discardPendingSave}
