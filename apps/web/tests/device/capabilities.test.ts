@@ -3,21 +3,33 @@ import { compactLayoutSnapshot, hoverCapableSnapshot } from '../../src/device/ca
 
 interface MediaEnvironment {
   narrow?: boolean;
+  /** Whether the viewport is short — a phone in landscape is wide AND short. */
+  short?: boolean;
   coarse?: boolean;
   /** Whether the device reports `(hover: none)`. */
   noHover?: boolean;
 }
 
+/**
+ * Evaluates one clause. Deliberately not a substring test over the whole
+ * query: the layout query is a comma list carrying both `max-width` and
+ * `max-height`, and a helper that stops at the first `includes('max-width')`
+ * would answer for the width clause and never see the height one — which
+ * would make the landscape-phone case below silently untestable.
+ */
+function clauseMatches(clause: string, environment: MediaEnvironment): boolean {
+  if (clause.includes('max-width')) return environment.narrow === true;
+  if (clause.includes('max-height')) return environment.short === true;
+  if (clause.includes('pointer: coarse')) return environment.coarse === true;
+  if (clause.includes('hover: none')) return environment.noHover === true;
+  return false;
+}
+
 function installMedia(environment: MediaEnvironment) {
   vi.stubGlobal('window', {
     matchMedia(query: string) {
-      const matches = query.includes('max-width')
-        ? environment.narrow === true
-        : query.includes('pointer: coarse')
-          ? environment.coarse === true
-          : query.includes('hover: none')
-            ? environment.noHover === true
-            : false;
+      // A comma list is OR, the way a real browser reads it.
+      const matches = query.split(',').some((clause) => clauseMatches(clause, environment));
       return { matches, media: query, addEventListener() {}, removeEventListener() {} };
     },
   });
@@ -38,10 +50,25 @@ describe('device capabilities', () => {
   });
 
   it('answers a narrow window with a mouse the other way round', () => {
-    installMedia({ narrow: true, coarse: false, noHover: false });
+    installMedia({ narrow: true, short: false, coarse: false, noHover: false });
 
     expect(compactLayoutSnapshot()).toBe(true);
     expect(hoverCapableSnapshot()).toBe(true);
+  });
+
+  it('calls a phone in landscape compact, though it is not narrow', () => {
+    // 844x390. Width alone said "desktop" and handed it a 280px workspace
+    // card taking a third of the width and 96% of the height, with the tool
+    // dock painted over it. Height is the half that catches this.
+    installMedia({ narrow: false, short: true, coarse: true, noHover: true });
+
+    expect(compactLayoutSnapshot()).toBe(true);
+  });
+
+  it('leaves a wide, tall window on the docked layout', () => {
+    installMedia({ narrow: false, short: false, coarse: false, noHover: false });
+
+    expect(compactLayoutSnapshot()).toBe(false);
   });
 
   it('treats a browser without matchMedia as wide and hover-capable', () => {

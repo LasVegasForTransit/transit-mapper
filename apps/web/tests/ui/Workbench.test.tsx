@@ -26,6 +26,8 @@ function matchMedia(matches: (query: string) => boolean): typeof window.matchMed
 
 interface MediaEnvironment {
   narrow: boolean;
+  /** Whether the viewport is short. A phone in landscape is wide AND short. */
+  short?: boolean;
   coarse: boolean;
   /**
    * Whether the top row is wide enough for the segmented view switch and the
@@ -40,27 +42,39 @@ interface MediaEnvironment {
 }
 
 function renderWorkbench(environment: boolean | MediaEnvironment): string {
-  const { narrow, coarse, roomy, hoverless } =
+  const { narrow, short, coarse, roomy, hoverless } =
     typeof environment === 'boolean'
       ? {
           narrow: environment,
+          short: environment,
           coarse: environment,
           roomy: !environment,
           hoverless: environment,
         }
-      : { roomy: !environment.narrow, hoverless: environment.coarse, ...environment };
+      : {
+          short: environment.narrow,
+          roomy: !environment.narrow,
+          hoverless: environment.coarse,
+          ...environment,
+        };
   vi.stubGlobal('window', {
-    matchMedia: matchMedia((query) => {
-      if (query.includes('max-width')) return narrow;
-      if (query.includes('min-width')) return roomy;
-      if (query.includes('pointer: coarse')) return coarse;
-      // Hover is answered independently of pointer precision on purpose. A
-      // touchscreen laptop reports a coarse pointer AND hover, and hardcoding
-      // them equal here would hide exactly the conflation the capability
-      // module exists to prevent the moment Workbench reads hover.
-      if (query.includes('hover: none')) return hoverless;
-      return false;
-    }),
+    matchMedia: matchMedia((query) =>
+      // Split first: the layout query is a comma list carrying `max-width` AND
+      // `max-height`, and a chain that tests the whole string would answer for
+      // whichever clause it named first and never reach the other one.
+      query.split(',').some((clause) => {
+        if (clause.includes('max-width')) return narrow;
+        if (clause.includes('max-height')) return short;
+        if (clause.includes('min-width')) return roomy;
+        if (clause.includes('pointer: coarse')) return coarse;
+        // Hover is answered independently of pointer precision on purpose. A
+        // touchscreen laptop reports a coarse pointer AND hover, and hardcoding
+        // them equal here would hide exactly the conflation the capability
+        // module exists to prevent the moment Workbench reads hover.
+        if (clause.includes('hover: none')) return hoverless;
+        return false;
+      }),
+    ),
   });
   const slot = (name: string) => <span data-slot={name}>{name}</span>;
   return renderToStaticMarkup(
@@ -164,15 +178,25 @@ describe('Workbench responsive mounting', () => {
     expect(occurrences(markup, 'data-slot="mobile-sim"')).toBe(1);
   });
 
-  it('mounts by width alone, whatever the pointer', () => {
-    // A touchscreen laptop: wide and coarse. Layout follows width; the coarse
-    // pointer changes hit tolerance on the map (see editor/input-tuning.ts)
-    // and nothing about which tree mounts. That the two axes ANSWER
-    // independently is device/capabilities' own test; this is only that
-    // Workbench reads the width one.
-    const markup = renderWorkbench({ narrow: false, coarse: true });
+  it('mounts by viewport size alone, whatever the pointer', () => {
+    // A touchscreen laptop: wide, tall and coarse. Layout follows the
+    // viewport; the coarse pointer changes hit tolerance on the map (see
+    // editor/input-tuning.ts) and nothing about which tree mounts. That the
+    // two axes ANSWER independently is device/capabilities' own test; this is
+    // only that Workbench reads the size one.
+    const markup = renderWorkbench({ narrow: false, short: false, coarse: true });
 
     expect(occurrences(markup, 'data-slot="desktop-sim"')).toBe(1);
     expect(markup).not.toContain('aria-label="Expand panel"');
+  });
+
+  it('gives a phone in landscape the sheet, though it is not narrow', () => {
+    // 844x390. On width alone this took the desktop branch and got a 280px
+    // workspace card holding a third of the width and 96% of the height.
+    const markup = renderWorkbench({ narrow: false, short: true, coarse: true });
+
+    expect(occurrences(markup, 'data-slot="mobile-sim"')).toBe(1);
+    expect(occurrences(markup, 'data-slot="desktop-sim"')).toBe(0);
+    expect(occurrences(markup, 'aria-label="Expand panel"')).toBe(1);
   });
 });

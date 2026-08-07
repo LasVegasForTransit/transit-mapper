@@ -6,19 +6,29 @@
    2.4 kB of CSS. Remove a name here before adopting that utility in markup. */
 @source not inline('collapse invisible visible isolate container contents table transform zoom-0 resize text-justify lowercase outline filter select-all');
 
-/* THE layout breakpoint, and the only one that decides which component tree
-   mounts. It matches useCompactLayout()'s own (max-width: 767px) query in
-   device/capabilities.ts exactly — the two are a matched pair, and moving
-   one alone puts the CSS and the component tree on different sides of the
-   same screen width. Tailwind's own default is 768px, so `md:` utilities
-   agree with both for free; this declaration exists to say so, not to shift
-   it. (It previously read 760px against a 767px JS query, and the comment
-   here claimed they matched.)
+/* THE layout condition, and the only one that decides which component tree
+   mounts. Written out in full wherever it is used:
 
-   New layout work (Workbench.tsx) should reach for Tailwind's responsive
-   utilities directly instead of adding more one-off media queries to this
-   file. The three that remain below are content-fit thresholds, not layout
-   boundaries — see each one's own comment. */
+       @media (max-width: 767px), (max-height: 500px)
+
+   It matches useCompactLayout()'s COMPACT_LAYOUT_QUERY in
+   device/capabilities.ts character for character — the two are a matched
+   pair, and moving one alone puts the CSS and the component tree on
+   different sides of the same screen. That comment carries the reasoning for
+   both halves; this one only says where the copies live. Grep this file for
+   `max-height: 500px` to find them all.
+
+   Tailwind's `md:` cannot express the height half, so `md:` utilities are NOT
+   equivalent and must not be used to fork layout — a phone in landscape is
+   844px wide and would take the desktop branch. Use the media query above.
+   --breakpoint-md is still declared, and still 768px, because `md:` remains
+   correct for anything that genuinely only cares about width.
+   (It previously read 760px against a 767px JS query, and the comment here
+   claimed they matched.)
+
+   The three thresholds further down (860px, 620px, 339px) are content-fit
+   observations, not layout boundaries, and stay width-only — see each one's
+   own comment. */
 @theme {
   --breakpoint-md: 768px;
 }
@@ -527,6 +537,25 @@ input[type='range'] {
    of it in DOM order — a load error can only ever happen right after a
    shared link fails to fetch, so there's nothing it needs to share a slot
    with; it just sits above the view switch in that one card. */
+/* Where that banner hangs. It sits outside the chrome (see App.tsx) so a
+   failing autosave survives zen mode, which means it has to clear whichever
+   top chrome is mounted by its own offset rather than by being laid out
+   beside it. Two offsets, on THE layout condition, because the compact top
+   chrome is taller than the desktop bar. */
+.app-banner-slot {
+  top: 68px;
+}
+@media (max-width: 767px), (max-height: 500px) {
+  .app-banner-slot {
+    top: 136px;
+  }
+}
+/* Outranks both by specificity, not by source order: with the chrome hidden
+   there is nothing left to clear, so the banner moves up to the top edge. */
+[data-zen] .app-banner-slot {
+  top: 12px;
+}
+
 /* App-level banner: a share that wouldn't open, a save that isn't happening.
    Named for the slot rather than the message now that more than one thing
    uses it (Workbench's `banner` prop). */
@@ -988,7 +1017,8 @@ input[type='range'] {
    scroller means the inner one steals the drag. It also forced overflow-x to
    compute as auto, so anything wider than the content box grew a horizontal
    scrollbar INSIDE the panel. */
-@media (max-width: 767px) {
+/* THE layout condition — see the note at the top of this file. */
+@media (max-width: 767px), (max-height: 500px) {
   .panel {
     width: 100%;
     max-height: none;
@@ -3627,7 +3657,11 @@ button.chip-removable-label:hover {
   display: none;
 }
 
-@media (max-width: 767px) {
+/* THE layout condition — see the note at the top of this file. This block has
+   to move with the component tree, not merely with width: the sheet these
+   rules dodge is mounted by useCompactLayout(), which now also answers yes to
+   a short viewport. */
+@media (max-width: 767px), (max-height: 500px) {
   /* Icon-only tools — Figma-style compact dock on phones. The standard
      width above is for the label-bearing desktop button; icon-only mobile
      buttons go back to sizing themselves to their (identical) icon. */
@@ -3824,6 +3858,18 @@ button.chip-removable-label:hover {
    nothing until a service has a schedule. */
 .workbench-rail-sim:empty {
   display: none;
+}
+/* On a short screen the rail's two rows cost more than they are worth: at
+   844x390 they made the workbench 143px of a 390px screen. Side by side they
+   fit in one row and hand about 35px back to the map. Width is not the
+   question here — a 390px-wide phone held upright has all the height it
+   needs for two rows. */
+@media (max-height: 500px) {
+  .workbench-rail {
+    flex-direction: row;
+    justify-content: center;
+    gap: 12px;
+  }
 }
 
 /* ---- mobile top chrome: title + navigation left, vertical actions right ---- */

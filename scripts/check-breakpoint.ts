@@ -1,19 +1,31 @@
 #!/usr/bin/env tsx
 /**
- * The layout breakpoint is declared twice, and both copies are load-bearing.
+ * The layout condition is declared in three places, and all three are
+ * load-bearing.
  *
- * `device/capabilities.ts` decides which component tree mounts; `ui/app.css`
- * declares the same boundary to Tailwind so `md:` utilities agree with it.
- * Mounting a tree on one side of a screen width while styling it for the other
- * produces a layout nobody wrote and no test renders.
+ * `device/capabilities.ts` decides which component tree mounts. `ui/app.css`
+ * repeats the same condition in every media query that has to move with that
+ * tree, and separately declares `--breakpoint-md` so Tailwind's `md:`
+ * utilities agree about the width half. Mounting a tree on one side of a
+ * boundary while styling it for the other produces a layout nobody wrote and
+ * no test renders.
  *
  * They already diverged once — 760px in the stylesheet against 767px in the
  * hook — for long enough that a comment claiming the two matched was written
  * underneath the mismatch. A comment is the thing that failed here, so this is
  * a check instead.
  *
- * The two numbers are deliberately off by one: the CSS token is a `min-width`
- * boundary and the media query is its `max-width` complement.
+ * The condition is a comma list, and both halves matter:
+ *
+ *   (max-width: 767px), (max-height: 500px)
+ *
+ * The height clause is why `md:` is NOT equivalent and must not be used to
+ * fork layout — a phone in landscape is 844px wide and would take the desktop
+ * branch. Tailwind cannot express it, so this check makes sure the CSS spells
+ * the whole condition out wherever it mirrors the fork.
+ *
+ * The two width numbers are deliberately off by one: the CSS token is a
+ * `min-width` boundary and the query is its `max-width` complement.
  *
  * Usage: `pnpm check:breakpoint` — exit 0 = they agree, exit 1 = they do not.
  */
@@ -32,27 +44,75 @@ function fail(message: string): never {
   process.exit(1);
 }
 
-const compactQuery = /COMPACT_LAYOUT_QUERY\s*=\s*'\(max-width:\s*(\d+)px\)'/.exec(
-  read(CAPABILITIES),
-);
-if (!compactQuery) {
+const capabilities = read(CAPABILITIES);
+const stylesheet = read(STYLESHEET);
+
+const declaration = /COMPACT_LAYOUT_QUERY\s*=\s*'([^']+)'/.exec(capabilities);
+if (!declaration) {
   fail(`could not find COMPACT_LAYOUT_QUERY in ${CAPABILITIES}. Update this check with it.`);
 }
+const condition = declaration[1];
 
-const themeToken = /--breakpoint-md:\s*(\d+)px/.exec(read(STYLESHEET));
+const compactWidth = /\(max-width:\s*(\d+)px\)/.exec(condition);
+if (!compactWidth) {
+  fail(
+    `COMPACT_LAYOUT_QUERY has no (max-width: …) clause: "${condition}".\n` +
+      `  Something has to pair with --breakpoint-md, or Tailwind's md: utilities\n` +
+      `  no longer agree with the tree that mounts.`,
+  );
+}
+
+const themeToken = /--breakpoint-md:\s*(\d+)px/.exec(stylesheet);
 if (!themeToken) {
   fail(`could not find --breakpoint-md in ${STYLESHEET}. Update this check with it.`);
 }
 
-const compactMax = Number(compactQuery[1]);
+const compactMax = Number(compactWidth[1]);
 const themeMin = Number(themeToken[1]);
 
 if (themeMin !== compactMax + 1) {
   fail(
     `${STYLESHEET} styles for a boundary at ${themeMin}px while ${CAPABILITIES} mounts for one at ${compactMax + 1}px.\n` +
       `  --breakpoint-md must be exactly one more than COMPACT_LAYOUT_QUERY's max-width.\n` +
-      `  Fix: set --breakpoint-md to ${compactMax + 1}px, or the query to (max-width: ${themeMin - 1}px).`,
+      `  Fix: set --breakpoint-md to ${compactMax + 1}px, or the clause to (max-width: ${themeMin - 1}px).`,
   );
 }
 
-console.log(`breakpoint: the layout boundary is ${themeMin}px in both places.`);
+/**
+ * Every media query in the stylesheet that mentions the width boundary must
+ * spell out the WHOLE condition, not just the width half.
+ *
+ * This is the check that would have caught the landscape-phone gap: a rule
+ * written as `@media (max-width: 767px)` alone stops applying at 844x390,
+ * where the compact tree is mounted and needs it — the tool dock's icon-only
+ * sizing and MapLibre's clearance both live in such a block.
+ *
+ * Content-fit thresholds (860px, 620px, 339px) are deliberately width-only
+ * and are not this boundary, so they are not matched here.
+ */
+const normalise = (value: string) => value.replace(/\s+/g, ' ').trim();
+const wanted = normalise(condition);
+// Comments quote the condition — that is the point of them — so scanning the
+// raw text finds the prose as well as the rules and reports it as a rule that
+// disagrees with itself.
+const rules = stylesheet.replace(/\/\*[\s\S]*?\*\//g, '');
+const offenders = [...rules.matchAll(/@media\s+([^{]+)\{/g)]
+  .map((match) => normalise(match[1]))
+  .filter((query) => query.includes(`max-width: ${compactMax}px`))
+  .filter((query) => query !== wanted);
+
+if (offenders.length > 0) {
+  fail(
+    `${STYLESHEET} has ${offenders.length} media quer${offenders.length === 1 ? 'y' : 'ies'} at the layout boundary that\n` +
+      `  do not spell out the whole condition:\n` +
+      offenders.map((query) => `    @media ${query}`).join('\n') +
+      `\n  Each must read exactly:\n    @media ${wanted}\n` +
+      `  A width-only copy stops applying on a short screen — a phone in\n` +
+      `  landscape is ${compactMax + 77}px wide — while the compact tree is still mounted.`,
+  );
+}
+
+console.log(
+  `breakpoint: the layout condition is "${wanted}" in both places, ` +
+    `and --breakpoint-md is ${themeMin}px.`,
+);
