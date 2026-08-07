@@ -48,8 +48,7 @@ export function ShareDialog({ onClose }: ShareDialogProps) {
       cancelled = true;
       controller.abort(new DOMException('Share dialog closed.', 'AbortError'));
     };
-    // Snapshot is taken once when the dialog opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the snapshot is taken once, at open
   }, []);
 
   const copy = async () => {

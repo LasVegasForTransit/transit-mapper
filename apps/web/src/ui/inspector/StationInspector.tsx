@@ -64,7 +64,7 @@ export function StationInspector({ id }: StationInspectorProps) {
     // focusNameToken is the real trigger; id/readOnly/consumeFocusName are
     // read fresh, not watched — re-selecting the same station on an
     // already-mounted instance shouldn't refire this.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focusNameToken is the only trigger
   }, [focusNameToken]);
 
   if (!station) return <EmptyInspector />;
