@@ -89,6 +89,15 @@ export function WayInspector({ id }: WayInspectorProps) {
       }),
   );
   const canCombine = namedWay?.wayIds.length === 2 && carriagewaysAreOneWay;
+  /** Why combining is unavailable, or null when it is available. One string,
+   *  used both as the button's tooltip and as visible text beneath it — a
+   *  finger has no way to reach a tooltip, and this button is disabled
+   *  exactly when something non-obvious happened to the street. */
+  const combineHint = canCombine
+    ? null
+    : namedWay && namedWay.wayIds.length !== 2
+      ? `This street is ${namedWay.wayIds.length} segments; combining works on a two-carriageway street. Merge the split segments first.`
+      : 'Both halves must be one-way to combine into a two-way street.';
   const separateCarriageways = useEditor((s) => s.separateCarriageways);
   const combineCarriageways = useEditor((s) => s.combineCarriageways);
   const mergeWaysAction = useEditor((s) => s.mergeWays);
@@ -185,11 +194,7 @@ export function WayInspector({ id }: WayInspectorProps) {
                   className="ghost-btn"
                   disabled={!canCombine}
                   title={
-                    namedWay.wayIds.length !== 2
-                      ? `This street is ${namedWay.wayIds.length} segments; combining works on a two-carriageway street. Merge the split segments first.`
-                      : !carriagewaysAreOneWay
-                        ? 'Both halves must be one-way to combine into a two-way street.'
-                        : 'Merge the two one-way carriageways back into one two-way street'
+                    combineHint ?? 'Merge the two one-way carriageways back into one two-way street'
                   }
                   onClick={() => combineCarriageways(namedWay.id)}
                 >
@@ -198,6 +203,12 @@ export function WayInspector({ id }: WayInspectorProps) {
               )}
             </div>
           )}
+          {/* The reason it is disabled, on screen rather than in a `title`.
+              Disabling a button and putting the only explanation in a tooltip
+              is the same as not explaining it on a phone, where there is no
+              hover to reveal one — and this button is disabled precisely when
+              something non-obvious happened to the street. */}
+          {!readOnly && combineHint && <p className="insp-sub">{combineHint}</p>}
           {namedWay && (namedWay.wayIds.length === 2 || hasCapturedMedian) && (
             // Gated on the captured component, not the member count: the
             // median is a property of the street and must stay editable after
