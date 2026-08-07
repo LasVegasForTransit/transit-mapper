@@ -28,6 +28,11 @@ how something looks or behaves in the editor, say how you checked it in
 the description. TransitMapper is in open beta, so current behavior and data
 formats are not a stable compatibility promise.
 
+Pull requests land by rebase merge, so your commits reach `main` exactly
+as you wrote them — see [the enforcement
+model](docs/development/explanation/enforcement-model.md#merge-method)
+for why. Write commit messages you'd want to read in `main`'s history.
+
 ## Community expectations
 
 Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
