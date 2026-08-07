@@ -129,6 +129,25 @@ describe('Workbench responsive mounting', () => {
     expect(markup).toContain('aria-expanded="false"');
   });
 
+  it('keeps the tool rail inside the workbench, not over the map', () => {
+    // The rail used to float over the map and fade out whenever the sheet
+    // expanded — which arming a tool does, because a tool has options to
+    // show. That took every tool, both zoom buttons and the attribution off
+    // the screen at once. Inside the workbench it cannot be covered by the
+    // panel above it: it comes after that panel rather than under it.
+    const markup = renderWorkbench(true);
+    const workbench = markup.slice(markup.indexOf('compact-workbench'));
+
+    expect(workbench).toContain('data-slot="mode"');
+    expect(workbench.indexOf('workbench-rail')).toBeGreaterThan(
+      workbench.indexOf('workbench-panel'),
+    );
+    // The simulation moved in here with it, off the top bar.
+    expect(workbench).toContain('data-slot="mobile-sim"');
+    // And nothing in the compact tree still fades the dock away.
+    expect(markup).not.toContain('opacity-0');
+  });
+
   it('keeps the docked layout but narrows the top row between the two widths', () => {
     // 768-1088: too wide for the sheet, too narrow for three view labels
     // beside a full simulation ladder. This is the band where the segmented

@@ -148,6 +148,42 @@ function useToolbarFit(
   return fit;
 }
 
+/**
+ * Publishes the workbench's rendered height as `--workbench-h`.
+ *
+ * MapLibre's zoom and attribution controls live outside React's tree, so the
+ * only way to keep them clear of a surface whose height changes with its
+ * contents is to tell CSS what that height currently is. The alternative in
+ * the file until now was `.maplibregl-ctrl-bottom-right { bottom: 60px }`,
+ * a hand-picked number matched to one state of one layout: measured at
+ * 390x844 the dock ended at x=346 and those controls began at x=346, and
+ * expanding the sheet buried them entirely.
+ *
+ * Zero when the compact layout is not mounted, so the desktop rules that
+ * read it fall back to their own clearance rather than to a stale number
+ * left behind by a resize.
+ */
+function usePublishedHeight(box: RefObject<HTMLElement | null>, mobile: boolean): void {
+  useEffect(() => {
+    const root = document.documentElement;
+    const el = box.current;
+    if (!mobile || !el) {
+      root.style.removeProperty('--workbench-h');
+      return;
+    }
+    const publish = () => {
+      root.style.setProperty('--workbench-h', `${Math.round(el.getBoundingClientRect().height)}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--workbench-h');
+    };
+  }, [box, mobile]);
+}
+
 export interface WorkbenchProps {
   /** File menu / system name / Hide-UI toggle. Docks into the menu panel's
    *  own header on desktop; mobile has nowhere else for it to live, since
@@ -273,10 +309,49 @@ export function Workbench({
     if (hasSupplementalContent) setSheetExpanded(true);
   }, [hasSupplementalContent]);
 
+  usePublishedHeight(sheetRef, mobile);
+
   const showingSupplemental = hasSupplementalContent;
 
   return (
     <>
+      {/* ---- the compact layout's top bar.
+          ANCHORED, not floating: full-bleed, flush to the top edge, a
+          hairline rule instead of a shadow, and no corner radius. It sits
+          outside the inset overlay below because an 8px margin is exactly
+          what stops a bar reading as part of the screen rather than as a
+          card dropped on it.
+
+          That is the whole reason this is one row. The three floating cards
+          it replaces — a 322x128 slab holding the system name, the view
+          switch and the simulation clock stacked, plus a 44x158 column of
+          icons beside it — covered the top 166px of a 390x844 screen and
+          disagreed with each other about padding (6px vs 4px), which left
+          their first icons 2px out of line and their bottom edges 30px
+          apart.
+
+          The simulation moves to the workbench with the tool rail: it is
+          canvas state, it belongs with the other canvas state, and a new
+          system with no schedule should not spend a permanent row on a
+          clock that reports nothing. ---- */}
+      {mobile && (
+        <div
+          // viewport-fit=cover extends the viewport under the notch and the
+          // status bar, so the bar needs that inset back as padding or its
+          // contents sit beneath them. Zero on every device without one.
+          style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+          className="compact-top-bar zen-cluster"
+          ref={actionsCollapsedRef}
+        >
+          <div className="compact-top-bar-row">
+            {brand}
+            {viewSwitch}
+            <div className="actions-collapsed">{primaryToolbar}</div>
+          </div>
+        </div>
+      )}
+      {mobile && uiHidden && <ZenRestore />}
+
       {/* The overlay grid: empty cells (most of the map) let clicks fall
           straight through to it; only cells with a real card in them
           intercept — the standard "controls float over a canvas" trick. */}
@@ -287,46 +362,6 @@ export function Workbench({
           gridTemplateRows: `auto auto 1fr var(--controls-clearance)`,
         }}
       >
-        {/* ---- mobile-only top bar (desktop folds brand into the menu
-            panel's own header, and viewSwitcher/primaryToolbar into their
-            own docked cards instead — see below). A flex row divides the
-            width between the two clusters instead of guessing a max-width
-            constant for the right one — the same trap the old AppShell hit.
-            The right cluster scrolls horizontally rather than wrapping,
-            since it has more buttons than a phone's width can ever show in
-            one row. ---- */}
-        {/* Mobile renders the SAME brand/viewSwitcher/primaryToolbar slots as
-            desktop — narrower is a LAYOUT problem: the left card stacks
-            title over navigation (CSS hides the brand's non-title pieces);
-            the right column is `.actions-collapsed`, whose CSS keeps only
-            the primary actions and reveals the ⋯ overflow that carries the
-            rest (see TopBarActions). */}
-        {mobile && (
-          <div
-            // viewport-fit=cover extends the viewport under the notch and the
-            // status bar, so the top cluster needs that inset back or its own
-            // first row sits beneath them. Zero on every device without one.
-            style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
-            className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center gap-2"
-          >
-            <div className="flex w-full items-start justify-between gap-2">
-              <div className="top-chrome-card pointer-events-auto min-w-0 flex-1 overflow-hidden px-2 py-1.5">
-                <div className="mobile-topleft">
-                  <div className="mobile-topleft-row">{brand}</div>
-                  {viewSwitch}
-                  {simControlsCompact}
-                </div>
-              </div>
-              <div
-                ref={actionsCollapsedRef}
-                className="actions-collapsed top-chrome-card zen-cluster pointer-events-auto flex shrink-0 flex-col items-center gap-1 p-1"
-              >
-                {primaryToolbar}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ---- desktop-only docked cards. The workspace panel and the
             supplemental panel are the two that genuinely want a grid cell:
             both are full-height columns pinned to an edge. Everything that
@@ -427,60 +462,56 @@ export function Workbench({
           </div>
         )}
 
-        {/* ---- tool dock: same flex-centering as the view switch above.
-            The fade-while-expanded below is a MOBILE-only concern (so the
-            dock doesn't sit under the sheet's own content) — sheetExpanded
-            itself isn't mobile-gated (any selection sets it, desktop
-            included, so the Details sheet is already open if the user
-            later shrinks the window), so `mobile &&` is load-bearing here:
-            without it the dock silently vanishes on desktop the moment
-            anything gets selected. Confirmed live — this exact regression
-            is why it is called out instead of assumed. ---- */}
-        <div
-          className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 ${
-            mobile ? 'pb-14' : 'pb-0'
-          }`}
-        >
-          {importStatus && <div className="pointer-events-auto">{importStatus}</div>}
-          <div
-            className={`transition-opacity duration-150 ${
-              mobile && sheetExpanded
-                ? 'pointer-events-none opacity-0'
-                : 'pointer-events-auto opacity-100'
-            }`}
-          >
-            {modeToolbar}
+        {/* ---- tool dock, floating over the map's bottom edge. Desktop
+            only: the compact layout puts the same toolbar inside the
+            workbench instead, pinned to its bottom edge, where it cannot be
+            covered by the panel above it.
+
+            It used to be here at every width, faded out whenever the
+            compact sheet expanded. That fade is why choosing a tool — which
+            expands the sheet to show that tool's options — took every tool,
+            both zoom buttons and the attribution off the screen at once:
+            nine of nine map-surface controls, none reachable, with no
+            prompt to collapse the sheet first. ---- */}
+        {!mobile && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 pb-0">
+            {importStatus && <div className="pointer-events-auto">{importStatus}</div>}
+            <div className="pointer-events-auto">{modeToolbar}</div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* ---- mobile-only bottom sheet — the one active rendering of the
-          menu/supplemental panel at this breakpoint. Zen mode collapses it
-          flush with the bottom edge (below its own peek height) rather than
-          unmounting it — same "shrink in place" treatment as MenuCard. ---- */}
+      {/* ---- the compact layout's workbench: the bottom half of the same
+          anchored frame the top bar starts.
+
+          ONE surface holding three things, in this order from its top edge
+          down: a drag handle naming what is showing, the contextual panel,
+          and — pinned to the bottom, outside the panel's scroll — the tool
+          rail and the simulation transport.
+
+          The rail lives in here rather than floating over the map because
+          that is what makes it impossible to cover. Nothing in this surface
+          can occlude anything else in it: growing the panel moves the rail
+          down the DOM, not on top of it. It also puts the controls you use
+          most within a thumb's reach of the bottom edge, which is where a
+          hand actually is.
+
+          Zen mode collapses it flush rather than unmounting it, so the
+          panel's scroll position and the sheet's own state survive. ---- */}
       {mobile && (
         <div
           ref={sheetRef}
-          // 62dvh, not 62vh: a mobile browser's vh is fixed to the viewport
-          // with the URL bar retracted, so a vh-sized sheet is taller than the
-          // space it has for as long as that bar is showing.
-          //
-          // bottom is the keyboard's height when one is open, so the sheet
-          // rides above it instead of being typed into from behind; it is the
-          // home-indicator inset otherwise, since viewport-fit=cover put the
-          // viewport's bottom edge underneath the indicator. Padding rather
-          // than a margin, so the sheet's surface still reaches the edge.
+          // bottom is the keyboard's height when one is open, so the
+          // workbench rides above it instead of being typed into from
+          // behind; it is the home-indicator inset otherwise, since
+          // viewport-fit=cover put the viewport's bottom edge underneath the
+          // indicator. Padding rather than a margin, so the surface still
+          // reaches the edge.
           style={{
             bottom: keyboardInset > 0 ? keyboardInset : undefined,
             paddingBottom: keyboardInset > 0 ? undefined : 'env(safe-area-inset-bottom, 0px)',
           }}
-          className={`absolute inset-x-0 bottom-0 z-[5] flex flex-col rounded-t-2xl border-t border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-level3)] transition-[max-height,opacity] duration-200 ease-[cubic-bezier(0.2,0.7,0.3,1)] ${
-            uiHidden
-              ? 'pointer-events-none max-h-0 overflow-hidden opacity-0'
-              : sheetExpanded
-                ? 'max-h-[62dvh]'
-                : 'max-h-14 overflow-hidden'
-          }`}
+          className={`compact-workbench ${uiHidden ? 'is-hidden' : sheetExpanded ? 'is-open' : 'is-closed'}`}
         >
           <SheetHandle
             expanded={sheetExpanded}
@@ -503,12 +534,38 @@ export function Workbench({
               <Icon name="chevronDown" size={15} style={{ transform: 'rotate(90deg)' }} /> Workspace
             </button>
           )}
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="workbench-panel">
             {showingSupplemental ? supplementalPanel : menuPanel}
+          </div>
+          {importStatus && <div className="workbench-status">{importStatus}</div>}
+          {/* Outside .workbench-panel's scroll on purpose: these are the
+              persistent controls, and they stay put while the panel above
+              them scrolls. */}
+          <div className="workbench-rail zen-cluster">
+            <div className="workbench-rail-sim">{simControlsCompact}</div>
+            {modeToolbar}
           </div>
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Zen mode's way back on a compact screen.
+ *
+ * The Hide-UI toggle used to sit permanently in the top bar for this reason
+ * alone — it was the only control that survived its own collapse. That cost
+ * 34px of the second-most-prominent position in the bar, every session,
+ * for something used once. This costs nothing until the chrome is actually
+ * hidden.
+ */
+function ZenRestore() {
+  const { toggleUi } = useUi();
+  return (
+    <button type="button" className="zen-restore" onClick={toggleUi} aria-label="Show UI (\)">
+      <Icon name="sidebar" size={18} />
+    </button>
   );
 }
 
