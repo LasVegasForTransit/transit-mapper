@@ -84,6 +84,11 @@ const AboutDialog = lazy(() =>
 
 const SHARE_PREFIX = '/s/';
 
+/** How long a document may take to arrive before the silence is worth
+ *  explaining. Long enough that a healthy local read never trips it, short
+ *  enough that a stalled one doesn't leave someone guessing. */
+const SLOW_LOAD_NOTICE_MS = 1_000;
+
 // Every message this app can show, and the order it shows them in, lives in
 // ui/appBanner.ts. What reaches state here is the *cause* — see NoticeCause.
 
@@ -131,7 +136,11 @@ export function App() {
   const store = useEditorStore();
   const { shortcutsOpen, closeShortcuts, uiHidden, activeDialog, openDialog, closeDialog } =
     useUi();
-  const [ready, setReady] = useState(false);
+  // Whether the document on screen is the one the app went looking for. Owned
+  // by the store, because that is where it decides which changes to accept —
+  // mirroring it into local state here would let the two disagree.
+  const documentStatus = useEditor((s) => s.documentStatus);
+  const [slowToLoad, setSlowToLoad] = useState(false);
   // Why bootstrap produced no document, and nothing else. What it produced is
   // the store's business; keeping the two apart means neither can contradict
   // the other, which is what the pair of booleans this replaced could do.
@@ -157,10 +166,12 @@ export function App() {
         .then((system) => store.getState().setSystem(system, { readOnly: true }))
         .catch((e: Error) => {
           if (e.name !== 'AbortError') setBootstrap({ kind: 'share-failed', reason: e.message });
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setReady(true);
         });
+      // No "finished" flag to set either way. A share that loads calls
+      // setSystem, which is what ends the wait; a share that doesn't leaves the
+      // placeholder locked, so an empty canvas can't be mistaken for the shared
+      // system — or quietly autosaved into this browser's library as if it were
+      // a new one, which is what used to happen.
       return () => controller.abort();
     }
     // Load whichever system was last open; migrate the old single-slot
@@ -192,10 +203,19 @@ export function App() {
         // contain the only copy of an agency-scale document and recover on
         // the next attempt.
         setBootstrap({ kind: 'storage-unavailable' });
-        setReady(false);
         return;
       }
       const { system, isBrandNew } = result;
+      // The user got here first — they took the "Start a new system" way out
+      // of a failed attempt, and this attempt then succeeded. Their document
+      // stays. Replacing what somebody is already working in would be the same
+      // theft the loading guard exists to prevent, only later and with more
+      // work lost, so the saved one is named rather than installed.
+      if (store.getState().documentStatus === 'ready') {
+        setBootstrap({ kind: 'ok' });
+        setNotice('saved-system-arrived');
+        return;
+      }
       if (result.encounteredCorruption) setNotice('corrupt-system');
       // A loaded system is already durable, and legacy reads migrate as part
       // of loading. Only a genuinely new document needs a bootstrap write;
@@ -211,26 +231,42 @@ export function App() {
       // which a returning user hits too (they deleted their only system) —
       // conflating the two would re-show onboarding to someone who's seen it.
       if (!hasSeenOnboarding()) openDialog('onboarding');
-      setReady(true);
     })();
     return () => {
       disposed = true;
     };
   }, [store, report, openDialog, bootstrapAttempt]);
 
+  // A wait nobody noticed does not need announcing, and a message that flashes
+  // for 40ms on every single load is worse than silence. Only a wait somebody
+  // has begun to feel earns a sentence.
+  useEffect(() => {
+    if (documentStatus === 'ready') {
+      setSlowToLoad(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setSlowToLoad(true), SLOW_LOAD_NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [documentStatus, bootstrapAttempt]);
+
   // Content and camera changes share one debounce/write lane. A pan that lands
   // next to an edit therefore serializes the document once, not once for each
   // source of state; pagehide and update reloads flush this same pending value.
+  //
+  // Held back until a real document is on screen. The coordinator queues on
+  // camera changes as well as content, so attaching it to the placeholder
+  // would write an empty system into the library under its own fresh id the
+  // first time anyone panned the map — while the real one was still loading.
   const persistence = useRef<PersistenceCoordinator | null>(null);
   useEffect(() => {
-    if (!ready) return;
+    if (documentStatus !== 'ready') return;
     const coordinator = attachPersistenceCoordinator(store, report);
     persistence.current = coordinator;
     return () => {
       if (persistence.current === coordinator) persistence.current = null;
       coordinator.detach();
     };
-  }, [store, report, ready]);
+  }, [store, report, documentStatus]);
 
   const flushPendingSave = useCallback(() => persistence.current?.flush(), []);
   const recordSaveOutcome = useCallback(
@@ -291,11 +327,23 @@ export function App() {
     updateWaiting: needRefresh,
     offlineReady,
     notice,
+    documentSlowToLoad: slowToLoad,
   });
   const runBannerAction = (kind: AppBannerActionKind) => {
     switch (kind) {
       case 'retry-bootstrap':
         setBootstrapAttempt((attempt) => attempt + 1);
+        return;
+      case 'start-new-system':
+        // The way out when storage or a shared link can't be reached. Writing
+        // immediately rather than waiting for the first edit: the write is how
+        // anyone finds out whether storage is working now, and someone who
+        // just chose to start over deserves that answer before they've drawn
+        // anything, not after.
+        store.getState().newSystem();
+        setBootstrap({ kind: 'ok' });
+        setActiveId(store.getState().system.id);
+        void saveToLibrary(store.getState().system).then(report);
         return;
       case 'reload':
         reload();
@@ -310,22 +358,15 @@ export function App() {
   };
   const banner = descriptor ? <AppBanner banner={descriptor} onAction={runBannerAction} /> : null;
 
-  if (!ready) {
-    return (
-      <div className="app" data-zen={uiHidden || undefined}>
-        <div className="absolute inset-x-0 top-3 z-20 flex justify-center px-3">
-          <div className="max-w-[560px]">
-            {banner ?? (
-              <div className="app-banner" role="status" aria-live="polite">
-                Opening your saved systems…
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // There is deliberately no branch here for "not loaded yet". Everything below
+  // is already in memory before the first byte is read from storage — the HTML,
+  // the chunks, the font, the store's placeholder system — so replacing all of
+  // it with a status message withholds something that costs nothing to show,
+  // and does so at the moment the app knows least about whether the wait will
+  // end. It used to, and the two paths that never finished loading (storage
+  // unavailable, a shared link that wouldn't fetch) left the product as a
+  // single sentence with one button. Waiting is now a banner over a working
+  // editor. See docs/product/explanation/design-principles.md.
   return (
     // data-zen cascades to every opted-in chrome element via CSS attribute
     // selectors (see app.css's "Zen mode" block: .zen-label, .zen-cluster,
@@ -334,7 +375,11 @@ export function App() {
     // sit under this same root but carry none of those classes, so they're
     // untouched by it.
     <div className="app" data-zen={uiHidden || undefined}>
-      {ready && <MapCanvas onBasemapUnavailable={() => setNotice('basemap-unavailable')} />}
+      {/* Mounted immediately, so the basemap's network round-trip runs
+          alongside the storage read instead of queueing behind it. The camera
+          starts on the placeholder's viewport and jumps to the real one when
+          the document's id changes — see MapCanvas's system subscription. */}
+      <MapCanvas onBasemapUnavailable={() => setNotice('basemap-unavailable')} />
       {/* Outside the chrome, like the banner above: right-clicking still has
           to offer its actions when the UI is hidden, since hiding the panels
           is exactly when the menu is the only way to reach them. */}

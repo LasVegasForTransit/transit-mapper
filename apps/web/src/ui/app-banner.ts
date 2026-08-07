@@ -32,10 +32,14 @@ export type BootstrapOutcome =
  * whether it had one at the instant the tiles failed.
  */
 export type NoticeCause =
-  'corrupt-system' | 'corrupt-open' | 'dialog-failed' | 'basemap-unavailable';
+  | 'corrupt-system'
+  | 'corrupt-open'
+  | 'dialog-failed'
+  | 'basemap-unavailable'
+  | 'saved-system-arrived';
 
 export type AppBannerActionKind =
-  'retry-bootstrap' | 'reload' | 'dismiss-offline-ready' | 'dismiss-notice';
+  'retry-bootstrap' | 'start-new-system' | 'reload' | 'dismiss-offline-ready' | 'dismiss-notice';
 
 export interface AppBannerAction {
   kind: AppBannerActionKind;
@@ -71,7 +75,21 @@ export interface AppBannerInputs {
    *  Workbox's signal about caching, not a claim about connectivity. */
   offlineReady: boolean;
   notice: NoticeCause | null;
+  /** The saved document is taking long enough that the silence needs
+   *  explaining. Deliberately not "is loading": the editor is on screen and
+   *  usable the whole time, and announcing a wait nobody noticed would invent
+   *  one. Only a wait somebody has started to feel is worth a sentence. */
+  documentSlowToLoad: boolean;
 }
+
+/** Offered wherever startup could not produce the document it went looking
+ *  for. Retrying is the first answer, but a retry that keeps failing leaves
+ *  someone with a working editor they are not allowed to type into, so there
+ *  has to be a way forward that does not depend on the thing that is broken. */
+const bootstrapFailureActions: AppBannerAction[] = [
+  { kind: 'retry-bootstrap', label: 'Try again' },
+  { kind: 'start-new-system', label: 'Start a new system' },
+];
 
 function saveMessage(outcome: SaveOutcome): string | null {
   if (outcome === 'full')
@@ -101,6 +119,13 @@ function noticeMessage(cause: NoticeCause): string {
     // clicked a row and deserves to know why nothing happened.
     case 'corrupt-open':
       return 'That system couldn’t be read, so it can’t be opened. Its data is still saved and hasn’t been deleted.';
+    // The user started a blank system while storage was still being read, and
+    // then the read succeeded. Their blank one stays on screen, because
+    // replacing what somebody is already working in is exactly the theft this
+    // whole area exists to prevent — but the other one is not lost, and saying
+    // where it went is the difference between a choice and a disappearance.
+    case 'saved-system-arrived':
+      return 'Your saved system finished loading after you started this one. Nothing was replaced — open it from My systems whenever you want it.';
   }
 }
 
@@ -130,7 +155,7 @@ export function resolveAppBanner(inputs: AppBannerInputs): AppBannerDescriptor |
       layout: 'inline',
       message:
         'Your saved systems are temporarily unavailable. Nothing was replaced; retry when browser storage is available again.',
-      actions: [{ kind: 'retry-bootstrap', label: 'Try again' }],
+      actions: bootstrapFailureActions,
       dismiss: null,
       live: 'alert',
     };
@@ -138,9 +163,9 @@ export function resolveAppBanner(inputs: AppBannerInputs): AppBannerDescriptor |
   if (inputs.bootstrap.kind === 'share-failed')
     return {
       tone: 'danger',
-      layout: 'plain',
+      layout: 'inline',
       message: `Couldn’t open shared system: ${inputs.bootstrap.reason}`,
-      actions: [],
+      actions: bootstrapFailureActions,
       dismiss: null,
       live: 'alert',
     };
@@ -182,6 +207,19 @@ export function resolveAppBanner(inputs: AppBannerInputs): AppBannerDescriptor |
       message: noticeMessage(inputs.notice),
       actions: [],
       dismiss: { kind: 'dismiss-notice', label: 'Dismiss' },
+      live: 'status',
+    };
+
+  // Last, and only once the wait is long enough to be felt. The editor is
+  // already on screen and working by this point, so this explains why the
+  // canvas is empty rather than asking anyone to wait for it.
+  if (inputs.documentSlowToLoad)
+    return {
+      tone: 'update',
+      layout: 'plain',
+      message: 'Still opening your saved system…',
+      actions: [],
+      dismiss: null,
       live: 'status',
     };
 

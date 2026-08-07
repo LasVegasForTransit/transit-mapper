@@ -10,6 +10,7 @@ const calm: AppBannerInputs = {
   updateWaiting: false,
   offlineReady: false,
   notice: null,
+  documentSlowToLoad: false,
 };
 
 describe('which message the app shows', () => {
@@ -37,6 +38,38 @@ describe('which message the app shows', () => {
   });
 });
 
+describe('a startup that produced no document', () => {
+  // Both of these used to leave the editor as a sentence and one button, so a
+  // retry that keeps failing meant a working editor nobody was allowed to type
+  // into. Every failure has to offer a way forward that does not depend on the
+  // thing that is broken.
+  const failures: AppBannerInputs[] = [
+    { ...calm, bootstrap: { kind: 'storage-unavailable' } },
+    { ...calm, bootstrap: { kind: 'share-failed', reason: 'network error' } },
+  ];
+
+  it('always offers a way forward that is not another retry', () => {
+    for (const inputs of failures) {
+      expect(resolveAppBanner(inputs)?.actions.map((a) => a.kind)).toContain('start-new-system');
+    }
+  });
+
+  it('offers the retry first, because retrying is the answer that keeps the data', () => {
+    for (const inputs of failures) {
+      expect(resolveAppBanner(inputs)?.actions[0]?.kind).toBe('retry-bootstrap');
+    }
+  });
+
+  // Storage being unreachable is not the same as the data being gone, and a
+  // message that blurs the two invites someone to give up on work that is
+  // still sitting there.
+  it('says nothing was replaced when storage could not be reached', () => {
+    const message = resolveAppBanner(failures[0])?.message ?? '';
+
+    expect(message).toContain('Nothing was replaced');
+  });
+});
+
 describe('which message wins', () => {
   // A failing autosave is the only one still getting worse while it goes
   // unread, so it outranks every message describing something already settled.
@@ -47,6 +80,7 @@ describe('which message wins', () => {
       updateWaiting: true,
       offlineReady: true,
       notice: 'corrupt-system',
+      documentSlowToLoad: true,
     };
 
     expect(resolveAppBanner(everything)?.message).toContain('storage is full');
@@ -59,9 +93,20 @@ describe('which message wins', () => {
       updateWaiting: true,
     };
 
-    expect(resolveAppBanner(inputs)?.actions).toEqual([
-      { kind: 'retry-bootstrap', label: 'Try again' },
+    expect(resolveAppBanner(inputs)?.actions.map((a) => a.kind)).toEqual([
+      'retry-bootstrap',
+      'start-new-system',
     ]);
+  });
+
+  // The editor is on screen and working the whole time it waits, so a message
+  // about waiting must never crowd out one about something being wrong.
+  it('puts every real problem above the note that loading is slow', () => {
+    const slow = { ...calm, documentSlowToLoad: true };
+
+    expect(resolveAppBanner({ ...slow, save: 'full' })?.message).toContain('storage is full');
+    expect(resolveAppBanner({ ...slow, notice: 'dialog-failed' })?.message).toContain('dialog');
+    expect(resolveAppBanner(slow)?.message).toContain('Still opening');
   });
 
   it('puts a waiting update above both pieces of good news', () => {
@@ -88,6 +133,7 @@ describe('how a message reads', () => {
     'corrupt-open',
     'dialog-failed',
     'basemap-unavailable',
+    'saved-system-arrived',
   ];
 
   it('has a sentence for every cause', () => {
