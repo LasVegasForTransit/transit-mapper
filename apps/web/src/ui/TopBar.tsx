@@ -65,6 +65,13 @@ export function TopBarBrand() {
   const name = useEditor((s) => s.system.name);
   const readOnly = useEditor((s) => s.readOnly);
   const setName = useEditor((s) => s.setName);
+  // The store holds a blank placeholder until the saved document arrives, and
+  // that placeholder has a name — "Untitled system". Showing it would put a
+  // real-looking name on a document that is not the one being opened, and the
+  // field would be dead anyway, since the store refuses content changes while
+  // it waits. An empty, disabled field says the same thing without asserting
+  // something false, and it is the same width either way, so nothing shifts.
+  const loading = useEditor((s) => s.documentStatus) === 'loading';
   const { uiHidden, toggleUi } = useUi();
   return (
     <>
@@ -82,7 +89,8 @@ export function TopBarBrand() {
       ) : (
         <input
           className="system-name"
-          value={name}
+          value={loading ? '' : name}
+          disabled={loading}
           aria-label="System name"
           onChange={(e) => setName(e.target.value)}
           onKeyDown={blurOnEnter}

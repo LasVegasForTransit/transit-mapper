@@ -10,6 +10,7 @@ import {
   type PerfPageWindow,
   PERF_STORAGE_CONTRACT,
 } from './browserContract';
+import { waitForLoadedDocument } from './journeys';
 
 const PWA_RUNTIME_REPORT_FILENAME = 'pwa-runtime-report.json';
 
@@ -155,7 +156,10 @@ export async function verifyCacheEvictedOfflineReload(
     await installPerformanceInstrumentation(page);
     await page.goto(`${previewUrl}/`, { waitUntil: 'load', timeout: 60_000 });
     const name = page.getByLabel('System name');
-    await name.waitFor({ state: 'visible', timeout: 60_000 });
+    // The shell paints before the saved system has been read, so waiting for
+    // this field to appear proves nothing about what is in it. Wait for the
+    // app's own readiness statement instead.
+    await waitForLoadedDocument(page);
     const initialDocumentName = await name.inputValue();
     if (initialDocumentName !== fixture.name) {
       const storageState = await page.evaluate((storage) => {
@@ -196,7 +200,7 @@ export async function verifyCacheEvictedOfflineReload(
     await session.send('Network.clearBrowserCache');
     await context.setOffline(true);
     await page.reload({ waitUntil: 'load', timeout: 60_000 });
-    await name.waitFor({ state: 'visible', timeout: 60_000 });
+    await waitForLoadedDocument(page);
     const documentName = await name.inputValue();
     if (documentName !== fixture.name) {
       throw new Error(

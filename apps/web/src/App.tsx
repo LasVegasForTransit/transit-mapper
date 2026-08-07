@@ -379,7 +379,15 @@ export function App() {
     // by threading uiHidden through props. MapCanvas and the banner below
     // sit under this same root but carry none of those classes, so they're
     // untouched by it.
-    <div className="app" data-zen={uiHidden || undefined}>
+    //
+    // data-document-status publishes the one thing that is no longer visible
+    // from outside now that the shell renders unconditionally: whether what is
+    // on screen is the document the app went looking for. Anything driving the
+    // editor — the performance harness, most of all — used to get that answer
+    // for free, because the chrome did not exist until the document had
+    // loaded. Deleting that gate deleted the signal with it, so it is stated
+    // here rather than inferred from whichever element happened to appear last.
+    <div className="app" data-zen={uiHidden || undefined} data-document-status={documentStatus}>
       {/* Mounted immediately, so the basemap's network round-trip runs
           alongside the storage read instead of queueing behind it. The camera
           starts on the placeholder's viewport and jumps to the real one when

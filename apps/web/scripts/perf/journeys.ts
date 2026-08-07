@@ -592,6 +592,20 @@ export async function runMeasuredJourney(
   };
 }
 
+/**
+ * Block until the editor is showing the document it went looking for.
+ *
+ * `.app[data-document-status]` is the app's own statement of that, published
+ * because the shell now paints before any of it is known. Waiting on a DOM
+ * element instead only proves the interface exists, which it does immediately.
+ */
+export async function waitForLoadedDocument(page: Page): Promise<void> {
+  await page.locator('.app[data-document-status="ready"]').first().waitFor({
+    state: 'attached',
+    timeout: 60_000,
+  });
+}
+
 export async function waitForScenarioReady(
   page: Page,
   scenario: PerfScenario,
@@ -603,8 +617,14 @@ export async function waitForScenarioReady(
     timeout: 60_000,
   });
   if (scenario.surface === 'editor') {
+    // Wait for the document, not for the chrome. The editor renders its whole
+    // shell before the saved system has been read, so the name field being on
+    // screen no longer means anything has loaded — it used to, back when the
+    // app withheld the interface until bootstrap finished, and this assertion
+    // was quietly relying on that. Read the name only once the app says the
+    // document on screen is the one it went looking for.
+    await waitForLoadedDocument(page);
     const name = page.getByLabel('System name');
-    await name.waitFor({ state: 'visible', timeout: 60_000 });
     if ((await name.inputValue()) !== expectedName) {
       throw new Error(`${scenario.id} fixture did not become the active system.`);
     }
