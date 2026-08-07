@@ -629,7 +629,7 @@ function routeOverGraph(
   queue.push({ key: START, distance: 0, order: 0 });
   if (opts.operations) opts.operations.statesDiscovered++;
 
-  let goal: string | null = null;
+  let goal: string;
   while (true) {
     const candidate = queue.pop();
     if (!candidate) return null; // exhausted without reaching TO

@@ -417,10 +417,9 @@ async function performDrawAndPersistenceProof(
     const cycles = await page.evaluate(
       () => (window as PerfPageWindow).__perfProductionPersistence?.cycles ?? [],
     );
-    throw new Error(
-      `The production persistence cycle did not settle: ${JSON.stringify(cycles)}. ` +
-        `${String(error)}`,
-    );
+    throw new Error(`The production persistence cycle did not settle: ${JSON.stringify(cycles)}.`, {
+      cause: error,
+    });
   }
   const durable = await page.evaluate(
     async ({ expected, storage }) => {
@@ -663,7 +662,8 @@ export async function waitForScenarioReady(
     );
     throw new Error(
       `${scenario.id} ${loadPhase} load never produced a proven system paint: ` +
-        `${JSON.stringify(diagnostics)}. Original error: ${String(error)}`,
+        `${JSON.stringify(diagnostics)}.`,
+      { cause: error },
     );
   }
   await waitForResponsePaint(page);

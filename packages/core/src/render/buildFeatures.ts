@@ -100,7 +100,7 @@ function bundleSlots(byWay: Map<string, Service[]>): Map<string, number> {
   const slots = new Map<string, number>();
   for (const sid of order) {
     const ways = serviceWays.get(sid) ?? [];
-    let slot = 0;
+    let slot: number;
     for (let k = 0; ; k++) {
       const cand = nthSlot(k);
       if (ways.every((w) => !occupied.get(w)?.has(cand))) {
