@@ -296,7 +296,7 @@ app.post('/api/systems', async (c) => {
   }
 
   let system;
-  let preview: Uint8Array | null = null;
+  let preview: Uint8Array | null;
   try {
     const body = JSON.parse(raw) as { system?: unknown; preview?: unknown };
     system = parseSystem(body.system);
@@ -397,7 +397,7 @@ app.patch('/api/systems/:id', async (c) => {
   }
 
   let system;
-  let preview: Uint8Array | null = null;
+  let preview: Uint8Array | null;
   try {
     const body = JSON.parse(raw) as { system?: unknown; preview?: unknown };
     system = parseSystem(body.system);

@@ -20,7 +20,7 @@
     "lint": {
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/eslint.config.js",
+        "$TURBO_ROOT$/eslint.config.ts",
         "$TURBO_ROOT$/packages/eslint-plugin/src/**"
       ],
       "outputs": []
@@ -64,6 +64,7 @@
         "//#check:migrations",
         "//#check:structure",
         "//#check:breakpoint",
+        "//#check:config",
         "//#check:documents",
         "//#check:reference"
       ],
@@ -75,7 +76,7 @@
     },
     "//#lint:root": {
       "inputs": [
-        "$TURBO_ROOT$/eslint.config.js",
+        "$TURBO_ROOT$/eslint.config.ts",
         "$TURBO_ROOT$/packages/eslint-plugin/src/**",
         "$TURBO_ROOT$/scripts/**",
         "$TURBO_ROOT$/turbo/**"
@@ -118,6 +119,10 @@
       ],
       "outputs": []
     },
+    "//#check:config": {
+      "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": []
+    },
     "//#check:documents": {
       "inputs": [
         "$TURBO_ROOT$/*.md",
@@ -129,7 +134,7 @@
     },
     "//#check:reference": {
       "inputs": [
-        "$TURBO_ROOT$/.prettierrc.json",
+        "$TURBO_ROOT$/prettier.config.mjs",
         "$TURBO_ROOT$/docs/development/reference/checks.md",
         "$TURBO_ROOT$/scripts/generate-checks-reference.ts"
       ],

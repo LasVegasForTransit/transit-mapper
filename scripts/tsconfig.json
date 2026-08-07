@@ -13,7 +13,18 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": ["node"],
+    // Not for anything under scripts/. `eslint.config.ts` imports
+    // `@transitmapper/eslint-plugin`, whose `exports` map points straight at
+    // TypeScript source, and that source imports its own modules with a `.ts`
+    // suffix. Typechecking the config therefore means typechecking the plugin
+    // under the plugin's own rule. Safe here because nothing in this project
+    // emits.
+    "allowImportingTsExtensions": true
   },
-  "include": ["**/*.ts"]
+  // `eslint.config.ts` lives at the repository root but has no other project to
+  // belong to, and ESLint loads it through jiti without typechecking it. Left
+  // out, the config that governs every rule would be the one file nothing
+  // compiles.
+  "include": ["**/*.ts", "../eslint.config.ts"]
 }

@@ -184,7 +184,7 @@ function placeLabel(
 
   for (const placement of PLACEMENTS) {
     let x = cx;
-    let y = cy;
+    let y: number;
     let anchor: PlacedLabel['anchor'] = 'middle';
     let box: LabelBox;
 

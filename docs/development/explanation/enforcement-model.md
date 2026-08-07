@@ -128,6 +128,40 @@ new files fail before they are added. Pre-commit runs the same validator with
 
 **If it fires:** rename the file to the displayed shape and update its imports.
 
+### config-shape
+
+`check:config` gives every tool one place and one format: `<tool>.config.<ext>`
+at the root of whatever it configures, where `<ext>` is `ts` unless the tool
+cannot load TypeScript.
+
+The repository reached that shape on its own — `vite.config.ts`, five
+`vitest.config.ts`, `perf.config.ts`, `turbo/generators/config.ts` — and then
+drifted, because nothing said so. `eslint.config.js` stayed JavaScript while
+everything around it became TypeScript, and Prettier kept the `.prettierrc.json`
+name it was born with. Neither was a decision. Both were what the tool's
+quickstart printed.
+
+That is the failure the check prevents. Every new tool arrives with its own
+default filename and its own preferred format, and a repository that accepts
+each default ends up with a root nobody can predict. Somebody looking for a
+setting has to know the tool before they can find the file.
+
+Three rules do it. A `.toolrc` name is rejected, because it carries no extension
+an editor can use. A `<tool>.config.<ext>` file must be TypeScript unless the
+tool appears in `NOT_TYPESCRIPT` with the reason it cannot be. Any other JSON,
+YAML, or TOML file sitting at a module root must appear in `OWNED_PATHS`, which
+holds the names their own tools define and nobody can rename — `package.json`,
+`turbo.json`, `wrangler.toml`, `pnpm-workspace.yaml`.
+
+**If it fires:** rename the file to the displayed shape. If the tool cannot read
+any other name or cannot load TypeScript, add it to the matching list in
+`scripts/check-config.ts` together with the reason, so the exemption is a
+decision somebody made rather than a default nobody questioned.
+
+**It will not fire** on a data file deeper in a tree. Only the immediate
+children of a module root are configuration; a `.json` under `src/` or
+`public/` is content or a fixture.
+
 ### test-layout
 
 Vitest globs alone cannot enforce the test boundary: a test placed elsewhere

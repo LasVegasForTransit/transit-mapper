@@ -1,12 +1,12 @@
-// @ts-check
+// TypeScript rather than JavaScript, which is what every other config file in
+// this repository is and what `check:config` enforces. ESLint loads this
+// through jiti; without that dependency it resolves to nothing and every rule
+// below silently stops applying.
 //
-// The baseline only. The repo-specific, type-aware rules that encode the
-// invariants in AGENTS.md land in track 3; this file exists so there is a
-// mechanism for them to land into.
-//
-// Deliberately free of repository-specific paths so track 9 can extract it
-// unchanged. `website` has no ESLint at all, which makes this the org's
-// first configuration and therefore the shared one.
+// Deliberately free of repository-specific paths apart from the scoped blocks
+// at the end, so the org's other repositories can adopt the baseline unchanged.
+// `website` has no ESLint at all, which makes this the org's first
+// configuration and therefore the shared one.
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';

@@ -75,6 +75,11 @@ const CHECKS: Check[] = [
     fix: "set --breakpoint-md to one more than COMPACT_LAYOUT_QUERY's max-width",
   },
   {
+    command: 'check:config',
+    fails: 'a tool is configured under a name other than `<tool>.config.<ext>`',
+    fix: 'rename the file, or record the tool in scripts/check-config.ts',
+  },
+  {
     command: 'check:documents',
     fails:
       'a required document is missing, lacks a required section, has them out of order, or uses a stock phrase',
