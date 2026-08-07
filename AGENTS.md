@@ -49,6 +49,7 @@ says **nothing**, the rule holds only because you follow it.
 | Parameter and prop types are named interfaces, even single-use ones             | `interface ShareDialogProps { onClose: () => void }`, not an inline object type                                          | **nothing**                     |
 | New module and asset filenames use kebab-case unless tooling requires otherwise | One predictable convention keeps imports and generated artifacts easy to find                                            | **nothing**                     |
 | Selection-dependent controls go in the right-hand inspector                     | one dynamic surface, not several                                                                                         | **nothing**                     |
+| The app shell renders before any load, fetch, or check resolves                 | see [waiting is something the app does](docs/product/explanation/design-principles.md)                                   | **nothing**                     |
 
 The `HTMLRewriter` row is unenforced by choice. The two places the Worker builds markup by interpolation are both
 correct, and telling a safe interpolation from an unsafe one needs value

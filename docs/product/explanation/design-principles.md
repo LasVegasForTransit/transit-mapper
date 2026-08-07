@@ -107,3 +107,56 @@ as something to click through. `packages/core/src/model/validate.ts`'s
 are checked and tested so the repair stays provable, but never shown to
 anyone — there used to be a top-bar panel that showed them, and it was
 deleted once the states it reported became impossible to reach.
+
+## Waiting is something the app does, not something it asks for
+
+Someone who opens the editor has already decided what they want to do.
+Replacing the interface with a status message turns that intent into a
+wait, and it does so at the moment the app knows least about whether the
+wait will end. The interface is not what is missing: the HTML, the code,
+the font, and an empty document are all in memory before the first byte
+is read from storage. Showing a sentence instead withholds something that
+costs nothing to show.
+
+The same reasoning applies to failure. A step that did not work is a
+reason to say so, not a reason to take the tool away — and it is worth
+being precise about which step. Storage that cannot be reached says
+nothing about whether the map draws; a basemap that will not load says
+nothing about whether the work is safe. Collapsing all of them into one
+blank screen tells the reader the largest possible thing went wrong,
+which is almost never true. When something does fail, name the cause the
+reader can act on rather than the exception text: "you're offline" is an
+answer, and "Failed to fetch" is not. A failure that leaves someone
+stuck also needs a way forward that does not depend on the broken thing,
+or a retry that keeps failing becomes a blocker with extra steps.
+
+Three things legitimately block, and nothing else does. A modal the
+person opened themselves, because they asked for it. A render error that
+has already unmounted the tree, because there is no longer an interface
+to keep. And a refused change that would otherwise destroy data the app
+cannot currently see — refusing an edit is not the same as refusing to
+appear, and the first is sometimes the only honest option.
+
+One tempting shortcut is worth naming as a mistake. `navigator.onLine`
+being `false` is reliable and may be used to explain a failure that
+already happened. `true` means only that the machine is attached to some
+network, which a captive portal and a dead uplink both satisfy — so it
+may never gate a control. Disabling a button on a signal that lies
+invents a block out of nothing and stops the request that would have
+worked.
+
+In practice: `apps/web/src/App.tsx` has no branch for "not loaded yet" and
+renders the map, workbench, and toolbars unconditionally; every wait and
+every failure is a banner over a working editor, decided by
+`resolveAppBanner` in `apps/web/src/ui/app-banner.ts`. What can't be
+allowed yet is refused at one seam rather than hidden — `documentStatus`
+in `apps/web/src/editor/store.ts` turns away changes to the document
+while the saved one is still arriving, and deliberately changes no chrome,
+so nothing moves when it clears. `attachInitialStyleFallback` in
+`apps/web/src/map/initialStyleFallback.ts` is the older instance of the
+same rule: a basemap that does not answer within 1.5 seconds is swapped
+for a bundled blank style and mentioned in a banner, rather than being
+waited on. Messages are stored as causes (`NoticeCause`) rather than as
+sentences, so the wording is derived at render time and a failure can be
+reworded by something that changes afterwards — which is how a blank
+basemap starts naming the network the moment the browser goes offline.
