@@ -20,8 +20,26 @@ import { mediaQuery, useMediaQuery } from './media-query';
  * `.pointer-badge` and `.chip-key` in ui/app.css.
  */
 
-/** Viewport width. Layout's question, and only layout's. */
-const COMPACT_LAYOUT_QUERY = '(max-width: 767px)';
+/**
+ * Viewport SIZE. Layout's question, and only layout's.
+ *
+ * Height is in here because a phone turned sideways is 844x390, and asking
+ * about width alone handed it the desktop layout: a 280px workspace card
+ * taking a third of the width and 96% of a 390px-tall screen, with the tool
+ * dock overlapping it and landing under the home indicator. Measured, that
+ * left 40% of the screen as map. The compact layout gives the same device
+ * about 73%.
+ *
+ * 500px, not something derived from the width breakpoint: this is the height
+ * below which a docked full-height side card stops being able to hold a
+ * useful list, which is a different observation from "767px is where two
+ * 280px columns stop leaving a map between them". Every phone in landscape is
+ * under it; no tablet or laptop in normal use is.
+ *
+ * ui/app.css mirrors this exactly. The two must move together — grep for the
+ * comment that names this constant.
+ */
+const COMPACT_LAYOUT_QUERY = '(max-width: 767px), (max-height: 500px)';
 
 /**
  * The primary pointer cannot be precise. Decides hit tolerance — see

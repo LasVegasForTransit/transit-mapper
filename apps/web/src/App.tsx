@@ -423,11 +423,13 @@ export function App() {
           presentation toggle. Offsets clear the top bar when it's there and
           sit near the top edge when it isn't. */}
       {banner && (
-        <div
-          className={`pointer-events-none absolute inset-x-0 z-20 flex justify-center px-3 ${
-            uiHidden ? 'top-3' : 'top-[136px] md:top-[68px]'
-          }`}
-        >
+        // The vertical offset is app.css's, not a Tailwind `md:` pair: it has
+        // to clear whichever top chrome is actually mounted, and that is
+        // useCompactLayout()'s decision, which asks about height as well as
+        // width. `md:` cannot express the height half — a phone in landscape
+        // is 844px wide and would take the desktop offset over the compact
+        // chrome. Zen mode rides on [data-zen], like every other chrome rule.
+        <div className="app-banner-slot pointer-events-none absolute inset-x-0 z-20 flex justify-center px-3">
           {/* Sized by its content, capped at 560px — not `w-full`. Two of the
               four banners are one-liners, and forcing every one to 560px left
               a short message hugging the left edge with a dead half-card of
