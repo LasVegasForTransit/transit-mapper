@@ -3003,10 +3003,14 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
                   }
                 : sv,
             );
+            // Same staleness case createRoutedService resyncs for — a new
+            // branch on an existing service newly serves this way too.
             return {
               activeWayId: null,
               addingPatternForServiceId: null,
-              system: touch({ ...s.system, services }),
+              system: touch(
+                resyncAutoNamedStations({ ...s.system, services }, new Set([activeWayId])),
+              ),
               selection: { kind: 'service', id: addingPatternForServiceId },
             };
           }
@@ -3860,10 +3864,15 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           spanStart: DEFAULT_SPAN_START,
           spanEnd: DEFAULT_SPAN_END,
         };
-        set((s) => ({
-          system: touch({ ...s.system, services: [...s.system.services, service] }),
-          selection: { kind: 'service', id },
-        }));
+        set((s) => {
+          const withService = { ...s.system, services: [...s.system.services, service] };
+          // Same staleness case createRoutedService resyncs for — the plain
+          // "draw a line" path also newly serves whatever this way carries.
+          return {
+            system: touch(resyncAutoNamedStations(withService, new Set([wayId]))),
+            selection: { kind: 'service', id },
+          };
+        });
         return id;
       },
 
@@ -4048,8 +4057,10 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
                 },
           ),
         };
+        // Extending or closing a terminus rides new legs the pattern didn't
+        // cover before — same staleness case createRoutedService resyncs for.
         set({
-          system: touch(nextSystem),
+          system: touch(resyncAutoNamedStations(nextSystem, new Set(legs.map((l) => l.wayId)))),
           selection: { kind: 'service', id: source.serviceId },
           activePatternId: source.patternId,
           armedTerminus: null,

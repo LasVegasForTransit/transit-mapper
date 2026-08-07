@@ -149,6 +149,14 @@ export function patternWayIds(pattern: Pattern): string[] {
   return patternLegs(pattern).map((l) => l.wayId);
 }
 
+// Cached by the Service object's own reference, same convention as wayById
+// (wayPath.ts) — every mutation in the store replaces a Service with a new
+// object rather than editing it in place, so identity is a safe cache key.
+// servicesAtStation calls this once per service on every invocation, and
+// resyncAutoNamedStations can invoke servicesAtStation many times in one
+// pass without any service actually changing in between.
+const serviceWayIdsCache = new WeakMap<Service, string[]>();
+
 /** Every way a service touches across ALL its patterns, deduplicated — the
  *  right unit for "does this way carry this service" (rendering bundle/
  *  offset counts, interchange detection, …), where a service having two
@@ -161,7 +169,11 @@ export function patternWayIds(pattern: Pattern): string[] {
  *  one for "does this line actually reach this point" — use
  *  patternCoversWayAt for that. */
 export function serviceWayIds(service: Service): string[] {
-  return [...new Set(service.patterns.flatMap((p) => patternLegs(p).map((l) => l.wayId)))];
+  let ids = serviceWayIdsCache.get(service);
+  if (ids) return ids;
+  ids = [...new Set(service.patterns.flatMap((p) => patternLegs(p).map((l) => l.wayId)))];
+  serviceWayIdsCache.set(service, ids);
+  return ids;
 }
 
 /** The stretch of its way a leg covers, as an ordered [lo, hi] pair in the

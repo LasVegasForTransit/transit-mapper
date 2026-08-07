@@ -1,4 +1,4 @@
-import type { LngLat, Way } from '../system';
+import type { LngLat, Node, Way } from '../system';
 
 const CORNER_SAMPLES = 10; // interpolated points per rounded corner.
 // Each corner is cut back this fraction of its shorter adjacent segment before
@@ -103,5 +103,31 @@ export function wayById(ways: Way[]): Map<string, Way> {
   if (index) return index;
   index = new Map(ways.map((w) => [w.id, w]));
   wayByIdCache.set(ways, index);
+  return index;
+}
+
+// Cached by the nodes array's own reference, same convention as wayById
+// above — every Node[]-by-wayId consumer otherwise re-scans every Node in
+// the system per lookup. Deliberately NOT shared with routeGraph.ts's own
+// topologyIndexes: that cache builds a *point-index* map (wayId -> raw
+// control-point indexes) in the same single pass as three other maps its
+// Dijkstra core needs, and is keyed on the (ways, nodes) pair together —
+// deriving it from this Node-object map would add a re-filter step to a
+// pathfinding hot path for no real gain. This is the general-purpose form
+// for anything that needs the actual Node objects touching a way.
+const nodesByWayIdCache = new WeakMap<Node[], Map<string, Node[]>>();
+
+export function nodesByWayId(nodes: Node[]): Map<string, Node[]> {
+  let index = nodesByWayIdCache.get(nodes);
+  if (index) return index;
+  index = new Map();
+  for (const node of nodes) {
+    for (const ref of node.refs) {
+      const list = index.get(ref.wayId);
+      if (list) list.push(node);
+      else index.set(ref.wayId, [node]);
+    }
+  }
+  nodesByWayIdCache.set(nodes, index);
   return index;
 }
