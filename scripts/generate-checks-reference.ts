@@ -80,6 +80,12 @@ const CHECKS: Check[] = [
     fix: 'rename the file, or record the tool in scripts/check-config.ts',
   },
   {
+    command: 'check:debt',
+    fails:
+      'a suppression ledger gained an entry, or a suppressed file was changed without shrinking',
+    fix: 'fix the finding rather than recording it, then `eslint --prune-suppressions`',
+  },
+  {
     command: 'check:documents',
     fails:
       'a required document is missing, lacks a required section, has them out of order, or uses a stock phrase',
