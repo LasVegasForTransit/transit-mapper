@@ -1,7 +1,7 @@
 import { useEditor, useEditorStore } from '../editor/EditorProvider';
 import { forkSystem } from '@transitmapper/core/model/serialize';
 import { blurOnEnter } from './formUtils';
-import { DropdownMenu, DropdownMenuItem } from './DropdownMenu';
+import { DropdownMenu, DropdownMenuChoice, DropdownMenuItem } from './DropdownMenu';
 import { DrivingSidePopover } from './DrivingSidePopover';
 import { ExportSplitButton } from './ExportSplitButton';
 import { FileMenu } from './FileMenu';
@@ -52,6 +52,54 @@ export function ViewSwitch() {
           {v.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * The same control where three side-by-side labels do not fit: one button
+ * wearing the current view's name, opening the same three choices.
+ *
+ * Not a phone special case — Workbench picks this the moment the top row is
+ * narrower than the segmented control needs, which is anything under about
+ * 1090px. Before it existed the segmented control simply overflowed its bar,
+ * and because `.top-app-bar` scrolls with no scrollbar the overflow was
+ * silent: at 768px "Diagram" rendered 0 of its 63px and there was no way to
+ * reach the Diagram view at all, on iPad in either orientation and on any
+ * phone held sideways.
+ *
+ * A button rather than a narrower segmented control because the label is
+ * what the segmented control was mostly for — it answers "which view am I
+ * in" without being read as three choices you have room to compare. The
+ * second tap it costs buys back roughly 180px of a 390px bar, and picking a
+ * view is something you do once and then work inside.
+ */
+export function ViewSwitchCompact() {
+  const { viewMode, setViewMode } = useView();
+  const { uiHidden } = useUi();
+  const ref = useInertRef<HTMLDivElement>(uiHidden);
+  const current = VIEW_MODES.find((v) => v.mode === viewMode) ?? VIEW_MODES[0];
+  return (
+    <div ref={ref} className="zen-collapse-cluster">
+      <DropdownMenu
+        align="start"
+        trigger={
+          <button type="button" className="view-switch-btn" aria-label={`View: ${current.label}`}>
+            <span className="view-switch-label">{current.label}</span>
+            <Icon name="chevronDown" size={14} />
+          </button>
+        }
+      >
+        {VIEW_MODES.map((v) => (
+          <DropdownMenuChoice
+            key={v.mode}
+            checked={v.mode === viewMode}
+            onSelect={() => setViewMode(v.mode)}
+          >
+            {v.label}
+          </DropdownMenuChoice>
+        ))}
+      </DropdownMenu>
     </div>
   );
 }
