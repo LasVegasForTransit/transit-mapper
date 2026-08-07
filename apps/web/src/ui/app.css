@@ -3777,6 +3777,24 @@ button.chip-removable-label:hover {
   }
 }
 
+/* The dock centres on the MAP, not on the window.
+   Its container used to span the full width, so its centre was the viewport's
+   — 148px left of the map's own centre at 1280px, and far enough left at
+   768px that the dock's first button painted on top of the workspace panel
+   (measured: 56x66px of overlap, dock winning the z-order). The panel's
+   column is the one fixed thing to subtract; the Inspector opposite it comes
+   and goes, and chasing that would move the dock every time a selection
+   changed. */
+.dock-slot {
+  left: calc(var(--panel-w) + var(--overlay-gap));
+  right: 0;
+}
+/* Zen mode collapses the panel to its brand row, so the map starts at the
+   left edge again and the dock should follow it. */
+[data-zen] .dock-slot {
+  left: 0;
+}
+
 /* ---- dialogs and menus on a small screen ----
 
    A centred 440px box is a desktop object. On a phone it lands mid-screen

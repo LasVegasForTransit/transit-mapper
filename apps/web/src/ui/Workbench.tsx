@@ -196,17 +196,32 @@ function useToolbarFit(
 function usePublishedHeight(box: RefObject<HTMLElement | null>, mobile: boolean): void {
   useEffect(() => {
     const root = document.documentElement;
-    const el = box.current;
-    if (!mobile || !el) {
+    if (!mobile) {
       root.style.removeProperty('--workbench-h');
       return;
     }
+    // Re-read the ref on every publish rather than closing over the node this
+    // effect happened to see. The effect's only dependency is `mobile`, so a
+    // remount that keeps the layout compact would otherwise leave this
+    // measuring a node that is no longer on the page.
     const publish = () => {
+      const el = box.current;
+      if (!el) return;
       root.style.setProperty('--workbench-h', `${Math.round(el.getBoundingClientRect().height)}px`);
     };
     publish();
+
+    // A ResizeObserver is the whole mechanism. It reports the workbench's own
+    // box changing for any reason — a detent, a rail that rewraps when the
+    // screen turns sideways, the simulation strip appearing — which is
+    // precisely the set of events MapLibre's controls need to hear about.
+    //
+    // Verifying this in the browser pane is not possible: its viewport
+    // override changes the metrics without dispatching `resize` or waking any
+    // observer, so a rotation there leaves the published value untouched. That
+    // is the harness, not this code. Check it on a real device.
     const observer = new ResizeObserver(publish);
-    observer.observe(el);
+    if (box.current) observer.observe(box.current);
     return () => {
       observer.disconnect();
       root.style.removeProperty('--workbench-h');
@@ -508,7 +523,7 @@ export function Workbench({
             nine of nine map-surface controls, none reachable, with no
             prompt to collapse the sheet first. ---- */}
         {!mobile && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 pb-0">
+          <div className="dock-slot pointer-events-none absolute bottom-0 flex flex-col items-center gap-2">
             {importStatus && <div className="pointer-events-auto">{importStatus}</div>}
             <div className="pointer-events-auto">{modeToolbar}</div>
           </div>
