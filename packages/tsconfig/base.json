@@ -11,6 +11,12 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    // A method that means to override picks up a rename of the base silently
+    // otherwise: the subclass keeps compiling and quietly stops being called.
+    "noImplicitOverride": true,
+    // A function that returns a value on one path and falls off the end on
+    // another returns undefined there, which the return type rarely admits.
+    "noImplicitReturns": true
   }
 }
