@@ -19,7 +19,12 @@ interface EditorProviderProps {
 
 export function EditorProvider({ children }: EditorProviderProps) {
   const storeRef = useRef<EditorStore | null>(null);
-  if (storeRef.current === null) storeRef.current = createEditorStore();
+  // `loading`, because the running editor always goes looking in storage (or
+  // at a shared link) for the document it should be showing. The empty system
+  // the store starts with is a placeholder for that, and the store refuses
+  // content changes to it until the real one lands — see documentStatus.
+  if (storeRef.current === null)
+    storeRef.current = createEditorStore({ documentStatus: 'loading' });
   const actionsRef = useRef<SelectionActionRegistry | null>(null);
   if (actionsRef.current === null) actionsRef.current = createSelectionActions(storeRef.current);
 
