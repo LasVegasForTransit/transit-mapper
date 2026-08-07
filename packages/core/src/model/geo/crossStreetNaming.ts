@@ -9,7 +9,7 @@ import { servicesAtStation } from '../../sim/frequency';
 import type { LngLat, NamedWay, Node, Station, StationAnchor, TransitSystem, Way } from '../system';
 import { haversineMeters } from './spherical';
 import { pathLengthMeters } from './measurement';
-import { resolveWayPath, wayById } from './wayPath';
+import { nodesByWayId, resolveWayPath, wayById } from './wayPath';
 import { servedWaysByDistance } from './snapIndex';
 
 /** Which cross-street naming convention a stop reads as. 'intersection'
@@ -81,27 +81,6 @@ function namedWayByWayId(namedWays: NamedWay[]): Map<string, NamedWay> {
   return index;
 }
 
-// Cached by the nodes array's own reference, same convention as wayById
-// (wayPath.ts) — crossStreetsAtNode and walkOneDirection each otherwise
-// scan every Node in the system per lookup, which adds up on a real
-// imported system with thousands of nodes.
-const nodesByWayIdCache = new WeakMap<Node[], Map<string, Node[]>>();
-
-function nodesByWayId(nodes: Node[]): Map<string, Node[]> {
-  let index = nodesByWayIdCache.get(nodes);
-  if (index) return index;
-  index = new Map();
-  for (const node of nodes) {
-    for (const ref of node.refs) {
-      const list = index.get(ref.wayId);
-      if (list) list.push(node);
-      else index.set(ref.wayId, [node]);
-    }
-  }
-  nodesByWayIdCache.set(nodes, index);
-  return index;
-}
-
 /** Which naming convention this stop should read as. Prefers what's already
  *  serving it (an interchange keeps its rail-derived "&" name even once a
  *  bus also calls there); falls back to the anchored way's own type when no
@@ -132,8 +111,18 @@ function resolveNamingStyle(
   // This is still a best-effort guess, not a guarantee: the catalog
   // deliberately allows a tram to run on a 'road'-typed way, so a station
   // placed there can still go stale in naming convention if a tram service
-  // is drawn through it later. The Inspector's "Suggest name" button is the
-  // recourse.
+  // is drawn through it later. Kept deliberately, rather than defaulting to
+  // 'intersection' until a service exists: every store action that can newly
+  // serve a station now calls resyncAutoNamedStations (editor/store.ts —
+  // createRoutedService, attachReturnPath, addServiceToWay, the
+  // pattern-leg-adding branch of finishWay, commitTerminusGesture's terminus
+  // extension), so the tram-on-road case corrects itself the moment a real
+  // service actually proves the guess wrong. That leaves this heuristic
+  // giving correct, immediate UX for the common case, with resync as the
+  // safety net for the rest — not two independent guesses that can drift.
+  // The Inspector's "Suggest name" button remains the manual recourse for
+  // whatever's left (a moved station, a station named before this code
+  // existed, etc).
   const nativeModes = anchoredWays.flatMap((w) =>
     modesForWayType(w.typeId).filter((m) => m.wayTypeIds[0] === w.typeId),
   );

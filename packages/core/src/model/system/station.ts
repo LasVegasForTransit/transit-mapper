@@ -26,7 +26,14 @@ export interface Station {
    *  resyncAutoNamedStations may safely overwrite when a later action (e.g.
    *  drawing a service through a previously-unserved stop) changes what the
    *  suggestion would be; a user's own name is never touched automatically,
-   *  no matter what changes around it. */
+   *  no matter what changes around it.
+   *
+   *  Nothing in the type system ties this to `name` — TypeScript can't reject
+   *  a `{ ...station, name: x }` that forgets it. Any code that sets `.name`
+   *  outside setStationName/withSuggestedName (editor/store.ts) must decide
+   *  this deliberately: real, agency-sourced text (e.g. gtfsImport.ts's
+   *  stop_name) leaves it unset, since that name is strictly better than a
+   *  guess and must never be silently replaced. */
   autoNamed?: boolean;
   /** Position as a network node, snapped onto its way's path. */
   coord: LngLat;
