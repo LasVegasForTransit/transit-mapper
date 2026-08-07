@@ -2086,9 +2086,18 @@ input[type='range'] {
 .lp-popover[data-state='closed'] {
   animation: pop-out 110ms ease-in;
 }
+/* min-width, not `min-width: 0`. Three equal columns in a 340px popover come
+   to 94px each, and `min-width: 0` let them shrink below their own headings:
+   "Infrastructure" is 105px and ran 11px past its column, putting its All
+   toggle underneath the "Reference" heading beside it. Two headings printed
+   on top of each other, at every viewport width, because the popover is
+   340px on a desktop too.
+
+   With a real floor the row wraps instead — two columns, then one — which is
+   what `flex-wrap: wrap` above was always for. */
 .lp-col {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 130px;
+  min-width: 130px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -2097,7 +2106,16 @@ input[type='range'] {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 4px;
+}
+/* Belt and braces: a longer catalog heading in some future language must
+   shorten rather than reach its neighbour. */
+.lp-col-head .panel-section-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .lp-all {
   font-size: var(--md-sys-typescale-label-small-size);
@@ -3743,6 +3761,100 @@ button.chip-removable-label:hover {
      the attribution completely. */
   .maplibregl-ctrl-bottom-right {
     bottom: calc(var(--workbench-h) + 8px);
+  }
+}
+
+/* ---- dialogs and menus on a small screen ----
+
+   A centred 440px box is a desktop object. On a phone it lands mid-screen
+   with its primary action furthest from the thumb, and the ones with real
+   content overflow: the Keyboard shortcuts dialog put 22 of its key chips at
+   x=394, past both its own edge and the 390px viewport.
+
+   Anchored to the bottom instead, full width, with the same grabber the
+   workbench uses — one presentation for "a surface came up from the bottom",
+   whether it is the inspector or a dialog. Nothing about the dialogs
+   themselves changes; this is where they appear, not what they are. */
+@media (max-width: 767px), (max-height: 500px) {
+  .modal {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    transform: none;
+    width: 100%;
+    max-width: none;
+    max-height: 92dvh;
+    border-radius: 16px 16px 0 0;
+    padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  /* The grabber, drawn rather than added to every dialog's markup: it says
+     "this came from the bottom edge" and matches the workbench's own. */
+  .modal::before {
+    content: '';
+    display: block;
+    width: 32px;
+    height: 4px;
+    margin: 4px auto 12px;
+    border-radius: 2px;
+    background: var(--md-sys-color-outline-variant);
+  }
+  .modal[data-state='open'] {
+    animation: sheet-in 200ms var(--motion-chrome-curve);
+  }
+  /* Every dialog that carried its own width or a two-column body gives both
+     up here. The export form was hiding 456 of its 856px behind a 240px
+     column, and its map preview had 67px to draw in. */
+  .modal.export-modal,
+  .modal.schedule-modal,
+  .modal.shortcuts-modal,
+  .modal.onboarding-modal {
+    width: 100%;
+    max-width: none;
+    height: auto;
+    max-height: 92dvh;
+  }
+  .export-body,
+  .shortcuts-grid {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+  }
+  .export-controls {
+    width: auto;
+  }
+  /* Menus come from the bottom edge too, for the same reason: a 180px
+     dropdown hanging off a 34px icon in the top-right corner is the furthest
+     point on the screen from a thumb. */
+  .dropdown-menu-content {
+    min-width: min(340px, calc(100vw - 24px));
+  }
+  /* One column, and scrollable. Three 94px columns of two-line labels was
+     always cramped; worse, the popover had no scroll, so with the workbench
+     open six of its eighteen toggles — Bus, Commuter rail, Gondola/aerial,
+     Ferry, Aerial/gondola, Ferry route — were physically unreachable, with
+     nothing to say that collapsing the workbench would free them. */
+  .lp-popover {
+    width: calc(100vw - 24px);
+    flex-direction: column;
+    gap: 12px;
+    max-height: 70dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .lp-col {
+    flex: none;
+    min-width: 0;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
 }
 

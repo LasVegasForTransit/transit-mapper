@@ -38,14 +38,16 @@ describe('SidebarPanel', () => {
     expect(markup).not.toContain('Vehicles');
   });
 
-  it('renders Diagram presentation controls as the sidebar workspace', () => {
+  it('gives Diagram the network list rather than a second Layers control', () => {
+    // Diagram is a schematic projection OF the network, so it shows the same
+    // lines. It used to have a workspace of its own holding mode checkboxes
+    // and a Landmarks toggle — the Layers control's, off the same
+    // ViewProvider state — and on a phone both copies were on screen at once.
     const markup = renderSidebar('diagram');
 
     expect(markup).toContain('Diagram');
-    expect(markup).toContain('Services');
-    expect(markup).toContain('Reference');
-    expect(markup).toContain('Landmarks');
-    expect(markup).not.toContain('Group by');
+    expect(markup).toContain('Lines');
+    expect(markup).not.toContain('Landmarks');
   });
 
   it('uses native controls in a labelled region rather than nesting controls in a listbox', () => {
@@ -63,6 +65,7 @@ describe('SidebarPanel', () => {
       'Stations',
       'Complexes and facilities',
     ]);
-    expect(sidebarSectionsForView('diagram')).toEqual(['Services', 'Reference']);
+    // Diagram borrows the network's, deliberately — see sidebarOutline.
+    expect(sidebarSectionsForView('diagram')).toEqual(['Lines', 'Vehicles']);
   });
 });

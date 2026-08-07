@@ -71,9 +71,16 @@ export function limitSidebarPatterns(
 }
 
 export function sidebarSectionsForView(viewMode: ViewMode): string[] {
-  if (viewMode === 'network') return ['Lines', 'Vehicles'];
   if (viewMode === 'infrastructure') return ['Corridors', 'Stations', 'Complexes and facilities'];
-  return ['Services', 'Reference'];
+  // Diagram borrows the network's sections. It is a schematic projection OF
+  // that network — the same lines without the geography — so the list of
+  // lines is exactly as useful there, and picking one still selects it.
+  //
+  // It used to have sections of its own, holding mode checkboxes and a
+  // Landmarks toggle. Those belong to the Layers control, read from the same
+  // ViewProvider state, and in Diagram view on a phone both copies were on
+  // screen at once.
+  return ['Lines', 'Vehicles'];
 }
 
 export function lineStopsForService(system: TransitSystem, serviceId: string): SidebarPattern[] {
