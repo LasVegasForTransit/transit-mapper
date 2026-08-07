@@ -45,6 +45,7 @@
     "check:structure": "tsx scripts/check-project-structure.ts",
     "check:breakpoint": "tsx scripts/check-breakpoint.ts",
     "check:config": "tsx scripts/check-config.ts",
+    "check:debt": "tsx scripts/check-debt.ts",
     "gen": "turbo gen",
     "check:generators": "tsx scripts/check-generators.ts",
     "check:env": "tsx scripts/doctor.ts",

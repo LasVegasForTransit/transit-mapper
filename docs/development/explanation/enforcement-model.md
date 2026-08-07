@@ -162,6 +162,42 @@ decision somebody made rather than a default nobody questioned.
 children of a module root are configuration; a `.json` under `src/` or
 `public/` is content or a fixture.
 
+### lint-debt
+
+Turning on a rule that reports a thousand findings has two bad answers. Fix
+them all first, and the rule lands in six months or never. Set the rule to
+warn, and it reports forever while nothing changes.
+
+The third answer is a ledger. `eslint --suppress-all` records a count per file
+per rule, so existing findings stop failing the build and the rule binds on
+everything new. ESLint reads that ledger from the working directory, and every
+package lints from its own, so each package carries its own —
+`apps/web/eslint-suppressions.json` and three others. There is no shared file
+for two branches to conflict over.
+
+ESLint enforces one half by itself: grow a count and it reports every violation
+in that file rather than only the new one, so the pressure lands on the file
+instead of the counter.
+
+`check:debt` enforces the other half, against the Git merge base. The ledger
+may not grow — no file gains an entry, no count rises, and a ledger that
+existed on the base branch may not disappear. And a changed file that carries
+entries has to come out strictly better: fewer suppressed findings, or fewer
+lines.
+
+That second rule is what stops a 4,000-line file being edited around forever.
+It is gameable by deleting a blank line, which is accepted: the point is to put
+the debt in front of whoever opened the file, not to make it impossible to walk
+past.
+
+A ledger that does not exist on the base branch is reported and allowed,
+because the branch that turns a rule on is the one branch where every entry is
+new by construction. Deleting a ledger to reach that state again fails.
+
+**If it fires:** fix the finding rather than recording it. If you removed one,
+run `eslint --prune-suppressions` so the count matches. If you edited a file
+that carries debt, take some of it with you.
+
 ### test-layout
 
 Vitest globs alone cannot enforce the test boundary: a test placed elsewhere
