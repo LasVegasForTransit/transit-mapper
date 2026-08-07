@@ -903,6 +903,40 @@ input[type='range'] {
 [data-inspector-state='closed'] .panel-right {
   animation: fade-out 160ms var(--motion-chrome-curve) forwards;
 }
+/* Below the layout fork there is no floating card any more — Workbench puts
+   this element inside the bottom sheet, and the SHEET is the card. Everything
+   above that makes .panel a card in its own right has to come off, or it
+   reads as a card inside a card and, worse, keeps a width the sheet never
+   asked for.
+
+   That width was the visible bug. --panel-w is 280px, so the inspector sat at
+   280px inside a full-width sheet: a dead gutter of 40px at 320, 110px (28%
+   of the screen) at 390, and 487px (63.5%) at 767, with the card's own left
+   border flush against the screen edge and nothing but white to its right.
+   SidebarPanel never had the problem because it does not go through Panel at
+   all — it renders a bare .panel-body — so the sheet's two states looked like
+   two different products.
+
+   max-height and overflow-y come off for a second reason: the sheet is
+   already a bounded scroller, and a bounded scroller inside a bounded
+   scroller means the inner one steals the drag. It also forced overflow-x to
+   compute as auto, so anything wider than the content box grew a horizontal
+   scrollbar INSIDE the panel. */
+@media (max-width: 767px) {
+  .panel {
+    width: 100%;
+    max-height: none;
+    overflow-y: visible;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  /* Matches .panel-body's horizontal padding, so the Details and Workspace
+     states of the sheet put their text on the same left edge. */
+  .panel-right {
+    padding: 4px 16px 12px;
+  }
+}
 /* A row is a set of explicit slots (start/end), not children left to imply
    their own position via DOM order + ad hoc margins — .panel-brand-start
    grows to fill the middle, .panel-brand-end always lands flush right via
@@ -3316,8 +3350,10 @@ button.chip-removable-label:hover {
    re-measure.
 
    Below --breakpoint-md, Workbench swaps floating panels for the bottom
-   sheet (which has no width to squeeze), so panels keep a constant, readable
-   --panel-w — only the tool dock and top bar chrome adapt further down. */
+   sheet. This used to say the sheet "has no width to squeeze", and so left
+   panels at a constant --panel-w down there — which is exactly backwards.
+   The sheet is full-bleed and hands the panel every pixel of the screen; it
+   was the 280px panel that refused them. See .panel's own compact rule. */
 
 /* 860px: the tool dock's widest state stops clearing the full-height right
    panel's column. */
