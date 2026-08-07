@@ -57,6 +57,16 @@
      with viewport-fit=cover that edge is now UNDER the indicator rather than
      above it. */
   --controls-clearance: calc(120px + env(safe-area-inset-bottom, 0px));
+  /* The compact workbench's rendered height, republished on every resize by
+     usePublishedHeight. Declared here rather than written only from JS: an
+     undeclared custom property lets the CSS optimiser fold
+     `calc(var(--workbench-h, 96px) + 8px)` into a flat 104px, and it did —
+     MapLibre's controls sat 39px inside the workbench and never moved when
+     the height changed. Declaring it makes the reference real.
+
+     The value is a placeholder for the frames before the first measurement,
+     and for every width where no workbench is mounted. */
+  --workbench-h: 96px;
   font-family: 'Public Sans', system-ui, sans-serif;
   letter-spacing: -0.006em;
 }
@@ -3634,15 +3644,186 @@ button.chip-removable-label:hover {
     justify-content: center;
     gap: 6px;
   }
-  /* Keep MapLibre's zoom/attribution clear of the bottom sheet. The sheet's
-     peek header is always present below this width (Workbench mounts the
-     sheet layout here, see useCompactLayout), so this is unconditional
-     rather than reacting to sheet state. A second copy of this rule at
-     760px/68px used to sit further up the file; it never applied, because
-     this block wins on source order at every width it covered. */
+  /* Keep MapLibre's zoom and attribution clear of the workbench. Its height
+     changes with its own contents and with which detent it is at, so this
+     reads the height the workbench publishes (see usePublishedHeight)
+     rather than a hand-picked constant. The fallback covers the frames
+     before the first measurement lands.
+
+     The number this replaces was 60px, matched to one state of one layout.
+     Measured at 390x844 it left the zoom group starting at exactly the x
+     where the tool dock ended, and expanding the sheet buried both it and
+     the attribution completely. */
   .maplibregl-ctrl-bottom-right {
-    bottom: 60px;
+    bottom: calc(var(--workbench-h) + 8px);
   }
+}
+
+/* The only way back once zen mode has hidden the chrome on a compact
+   screen. The Hide-UI toggle lives in the ... menu, and that menu is inside
+   the bar zen mode just collapsed — so this is deliberately outside every
+   .zen-* class, and only rendered while `uiHidden` is true. */
+.zen-restore {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  right: 8px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface-variant);
+  box-shadow: var(--md-sys-elevation-level2);
+}
+
+/* ---- the compact layout's two anchored surfaces ----
+
+   Below the layout condition the chrome stops floating. A top bar and a
+   bottom workbench sit flush against the screen's own edges, full-bleed,
+   separated from the map by a hairline rather than by a shadow. The map owns
+   everything between them and nothing overlaps anything.
+
+   What this replaces: five floating cards, four corner radii (4px on
+   MapLibre's zoom group, 8px, 12px on the tool clusters, 16px on the sheet)
+   and three elevation treatments, stacked 6-8px apart along the bottom edge.
+   Anchored bars have no corners to disagree about, which is why this removes
+   the mismatched padding, the 30px stair-step between the two top cards and
+   the 63x34 void in the corner of the left one, all at once.
+
+   The workbench keeps a top radius because it moves. The top bar has none
+   because it does not. */
+.compact-top-bar {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  z-index: 6;
+  background: var(--md-sys-color-surface);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+.compact-top-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 8px;
+  min-width: 0;
+}
+/* The system name is the one elastic thing in the row: every other control
+   is content-sized, so the name absorbs whatever is left and ellipsises
+   rather than pushing a neighbour off the edge. */
+.compact-top-bar .system-name {
+  width: auto;
+  min-width: 0;
+  flex: 1;
+}
+/* Hide-UI leaves this row. It is already in the ... menu, and a row this
+   tight cannot spend 34px on the second-most-prominent position for
+   something used once a session. Zen mode's way back is .zen-restore below,
+   which only exists while the chrome is hidden. */
+.compact-top-bar .brand-hide-ui {
+  display: none;
+}
+/* Horizontal here, unlike the vertical column it replaces. */
+.compact-top-bar .actions-collapsed {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+/* The view switch must be able to give up its label before the row runs out
+   of room; it is the only control here with text that can shorten. */
+.compact-top-bar .view-switch-btn {
+  min-width: 0;
+}
+.compact-top-bar .view-switch-label {
+  max-width: 110px;
+}
+
+/* ---- the workbench ---- */
+.compact-workbench {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 16px 16px 0 0;
+  background: var(--md-sys-color-surface);
+  box-shadow: var(--md-sys-elevation-level3);
+  transition:
+    max-height 200ms var(--motion-chrome-curve),
+    opacity 200ms var(--motion-chrome-curve);
+}
+/* Three states, not two.
+
+   `is-closed` collapses the PANEL, not the surface. The handle and the rail
+   are always the workbench's real content, so the resting height falls out
+   of what they measure instead of a constant that has to be kept in sync
+   with them — the previous sheet's `max-h-14` was exactly such a constant,
+   and it clipped its own back link.
+
+   `is-open` is capped as a fraction of the viewport rather than a fixed
+   height, so on a short screen the surface cannot rise past the top bar. At
+   667x375 the old sheet put its own handle over the ... menu and made
+   Export, Share, Redo and the shortcuts unreachable.
+
+   dvh, not vh: a mobile browser's vh is measured against the viewport with
+   the URL bar retracted and never changes, so a vh-sized surface is taller
+   than the space it has for as long as that bar is showing. */
+.compact-workbench.is-open {
+  max-height: min(62dvh, calc(100dvh - 96px));
+}
+.compact-workbench.is-hidden {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+/* The one scroller in this surface. The rail below it is a sibling, so the
+   panel scrolling never moves the tools, and closing the panel never takes
+   the tools with it. */
+.workbench-panel {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transition: max-height 200ms var(--motion-chrome-curve);
+}
+.compact-workbench.is-closed .workbench-panel,
+.compact-workbench.is-closed .sheet-back {
+  max-height: 0;
+  min-height: 0;
+  flex: none;
+  overflow: hidden;
+  padding-block: 0;
+  border: 0;
+}
+.workbench-status {
+  display: flex;
+  justify-content: center;
+  flex: none;
+  padding: 4px 8px 0;
+}
+/* Pinned to the bottom edge, inside the surface. Never covered by the panel
+   above it, because it is not underneath the panel — it is after it. */
+.workbench-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 6px 0 8px;
+  border-top: 1px solid var(--md-sys-color-surface-container-highest);
+}
+/* Only there when there is something to simulate — SimControls renders
+   nothing until a service has a schedule. */
+.workbench-rail-sim:empty {
+  display: none;
 }
 
 /* ---- mobile top chrome: title + navigation left, vertical actions right ---- */
