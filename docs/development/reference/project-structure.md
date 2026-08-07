@@ -172,12 +172,20 @@ selection.
 These modules may read the editor store and invoke actions but do not duplicate
 domain rules.
 
+`ui/Workbench.tsx` is the single owner of where every surface sits, at every
+viewport. Below the layout condition it mounts a different tree: two
+edge-anchored bars with the map between them, rather than floating cards. See
+[The compact layout](../explanation/compact-layout.md) for that tree, its
+detents, and the traps in `--workbench-h`.
+
 #### Device
 
 `apps/web/src/device` reads what the browser reports about the machine it is
 running on. `media-query.ts` is the single `matchMedia` primitive; `capabilities.ts`
-exposes viewport width, pointer precision, and hover as independent answers, so
-layout and input tolerance each adapt on their own evidence. It depends on
+exposes viewport size, pointer precision, and hover as independent answers, so
+layout and input tolerance each adapt on their own evidence. Size, not width:
+the layout condition asks about height too, because a phone held sideways is
+wide and short. It depends on
 nothing else in the application, and the user interface, map, theme, and
 installation modules all read it. A difference that is only visual belongs in a
 CSS media query instead, beside the rules it coordinates with.
