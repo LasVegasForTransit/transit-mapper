@@ -8,7 +8,7 @@ vi.mock('react', async () => {
 
 import { EditorProvider } from '../../src/editor/EditorProvider';
 import { UiProvider } from '../../src/ui/UiProvider';
-import { Workbench } from '../../src/ui/Workbench';
+import { detentFor, step, Workbench, type SupplementalKind } from '../../src/ui/Workbench';
 
 /** Answers each query independently, so width and pointer can disagree. */
 function matchMedia(matches: (query: string) => boolean): typeof window.matchMedia {
@@ -41,7 +41,14 @@ interface MediaEnvironment {
   hoverless?: boolean;
 }
 
-function renderWorkbench(environment: boolean | MediaEnvironment): string {
+interface WorkbenchOverrides {
+  supplemental?: SupplementalKind;
+}
+
+function renderWorkbench(
+  environment: boolean | MediaEnvironment,
+  overrides: WorkbenchOverrides = {},
+): string {
   const { narrow, short, coarse, roomy, hoverless } =
     typeof environment === 'boolean'
       ? {
@@ -84,7 +91,7 @@ function renderWorkbench(environment: boolean | MediaEnvironment): string {
           brand={slot('brand')}
           menuPanel={slot('menu')}
           supplementalPanel={slot('supplemental')}
-          hasSupplementalContent={false}
+          supplemental={overrides.supplemental ?? 'none'}
           primaryToolbar={slot('primary')}
           viewSwitcher={slot('view')}
           viewSwitcherCompact={slot('view-compact')}
@@ -143,6 +150,14 @@ describe('Workbench responsive mounting', () => {
     expect(markup).toContain('aria-expanded="false"');
   });
 
+  it('shows the details panel whatever put it there', () => {
+    for (const supplemental of ['tool-draft', 'selection'] as const) {
+      const markup = renderWorkbench(true, { supplemental });
+      expect(markup, supplemental).toContain('data-slot="supplemental"');
+      expect(markup, supplemental).not.toContain('data-slot="menu"');
+    }
+  });
+
   it('keeps the tool rail inside the workbench, not over the map', () => {
     // The rail used to float over the map and fade out whenever the sheet
     // expanded — which arming a tool does, because a tool has options to
@@ -198,5 +213,49 @@ describe('Workbench responsive mounting', () => {
     expect(occurrences(markup, 'data-slot="mobile-sim"')).toBe(1);
     expect(occurrences(markup, 'data-slot="desktop-sim"')).toBe(0);
     expect(occurrences(markup, 'aria-label="Expand panel"')).toBe(1);
+  });
+});
+
+/**
+ * How far the workbench opens is a plain function of what it is showing, so
+ * it is tested as one — the same shape editor/pointerIntent.ts and
+ * Inspector's supplementalContentFor use, and testable without a renderer
+ * (effects do not run in a static render, so the component test above can
+ * only ever observe the initial stop).
+ */
+describe('how far the workbench opens', () => {
+  it('leaves the map alone for an armed tool', () => {
+    // You armed a tool in order to work ON the map. Its options name
+    // themselves in the handle and wait there. One boolean used to serve
+    // this and a selection alike, jumping straight to 62dvh: at 390x844
+    // that left 155px of map — 18% — with the line you were about to draw
+    // underneath the panel.
+    expect(detentFor('tool-draft')).toBe('closed');
+  });
+
+  it('opens halfway for a selection, so the object stays visible', () => {
+    expect(detentFor('selection')).toBe('half');
+  });
+
+  it('does not move on its own when there is nothing to show', () => {
+    // Null, not 'closed': clearing a selection must not slam a workbench the
+    // user opened deliberately.
+    expect(detentFor('none')).toBeNull();
+  });
+});
+
+describe('dragging the workbench handle', () => {
+  it('moves one stop per drag, in the direction of the drag', () => {
+    expect(step('closed', 1)).toBe('half');
+    expect(step('half', 1)).toBe('full');
+    expect(step('full', -1)).toBe('half');
+    expect(step('half', -1)).toBe('closed');
+  });
+
+  it('clamps at both ends rather than wrapping', () => {
+    // Wrapping would send a downward drag at the bottom stop straight to
+    // full-screen, which is the opposite of what the hand just asked for.
+    expect(step('closed', -1)).toBe('closed');
+    expect(step('full', 1)).toBe('full');
   });
 });

@@ -40,6 +40,36 @@ import { useUi } from './UiProvider';
  */
 const ROOMY_TOP_ROW_QUERY = '(min-width: 1089px)';
 
+/** What the one dynamic surface is showing. Mirrors Inspector's
+ *  SupplementalContent union, narrowed to what layout needs to know. */
+export type SupplementalKind = 'none' | 'selection' | 'tool-draft';
+
+/**
+ * How far the compact workbench is open.
+ *
+ * Three stops, not two. The old sheet had a 56px peek and a 62dvh open, and
+ * anything worth showing jumped straight to the taller one — so arming a
+ * drawing tool, which shows that tool's options, buried the map you were
+ * about to draw on. Measured at 390x844 that left 155px of map, 18% of the
+ * screen, with the line you were drawing underneath the panel.
+ *
+ * `half` is what a selection wants: enough to read and edit an object while
+ * still seeing it. `full` is what a long list wants, and you ask for it.
+ */
+export type Detent = 'closed' | 'half' | 'full';
+
+const DETENTS: Detent[] = ['closed', 'half', 'full'];
+
+/** The stop a newly-shown panel opens to. Arming a tool is something you did
+ *  in order to work ON the map, so it announces itself in the handle and
+ *  stays out of the way; selecting an object is something you did in order to
+ *  look at the object. */
+export function detentFor(kind: SupplementalKind): Detent | null {
+  if (kind === 'selection') return 'half';
+  if (kind === 'tool-draft') return 'closed';
+  return null;
+}
+
 /** How much of the action bar's content fits. Each step is narrower than the
  *  one before it, so the first that fits is the most complete that fits.
  *  app.css owns what each one drops, keyed off `[data-fit]`. */
@@ -201,9 +231,12 @@ export interface WorkbenchProps {
    *  docks it as its own card on the right; mobile swaps the sheet over to
    *  it. Null when there's nothing to show. */
   supplementalPanel: ReactNode;
-  /** Whether supplementalPanel actually has something to show right now —
-   *  drives the mobile sheet's List⇄Details toggle. */
-  hasSupplementalContent: boolean;
+  /** What supplementalPanel is showing right now, if anything. Drives the
+   *  compact sheet's List⇄Details toggle, and — because the two mean
+   *  different things about how much of the map you still need — how far the
+   *  workbench opens for it. Mirrors Inspector's SupplementalContent without
+   *  taking a dependency on it. */
+  supplemental: SupplementalKind;
   /** Undo/redo/export/share/issues/layers/keyboard — the transient-action
    *  cluster, distinct from viewSwitcher (persistent canvas state). */
   primaryToolbar: ReactNode;
@@ -262,7 +295,7 @@ export function Workbench({
   brand,
   menuPanel,
   supplementalPanel,
-  hasSupplementalContent,
+  supplemental,
   primaryToolbar,
   viewSwitcher,
   viewSwitcherCompact,
@@ -287,7 +320,7 @@ export function Workbench({
   const roomyTopRow = useMediaQuery(ROOMY_TOP_ROW_QUERY);
   const compactTopRow = mobile || !roomyTopRow;
   const viewSwitch = compactTopRow ? viewSwitcherCompact : viewSwitcher;
-  const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [detent, setDetent] = useState<Detent>('closed');
   const clearSelection = useEditor((s) => s.select);
   const backToSelectTool = useEditor((s) => s.setTool);
   // Only for `inert` below — CSS attribute selectors (see app.css's
@@ -306,12 +339,13 @@ export function Workbench({
   const toolbarFit = useToolbarFit(actionsSlotRef, actionsFullRef, mobile);
 
   useEffect(() => {
-    if (hasSupplementalContent) setSheetExpanded(true);
-  }, [hasSupplementalContent]);
+    const opening = detentFor(supplemental);
+    if (opening) setDetent(opening);
+  }, [supplemental]);
 
   usePublishedHeight(sheetRef, mobile);
 
-  const showingSupplemental = hasSupplementalContent;
+  const showingSupplemental = supplemental !== 'none';
 
   return (
     <>
@@ -511,11 +545,11 @@ export function Workbench({
             bottom: keyboardInset > 0 ? keyboardInset : undefined,
             paddingBottom: keyboardInset > 0 ? undefined : 'env(safe-area-inset-bottom, 0px)',
           }}
-          className={`compact-workbench ${uiHidden ? 'is-hidden' : sheetExpanded ? 'is-open' : 'is-closed'}`}
+          className={`compact-workbench ${uiHidden ? 'is-hidden' : `is-${detent}`}`}
         >
           <SheetHandle
-            expanded={sheetExpanded}
-            setExpanded={setSheetExpanded}
+            detent={detent}
+            setDetent={setDetent}
             title={showingSupplemental ? 'Details' : 'Workspace'}
           />
           {showingSupplemental && (
@@ -679,14 +713,21 @@ function MenuCard({ brand, children }: MenuCardProps) {
 }
 
 interface SheetHandleProps {
-  expanded: boolean;
-  setExpanded: (v: boolean | ((prev: boolean) => boolean)) => void;
+  detent: Detent;
+  setDetent: (v: Detent | ((prev: Detent) => Detent)) => void;
   title: string;
 }
 
-function SheetHandle({ expanded, setExpanded, title }: SheetHandleProps) {
+/** One stop along, in whichever direction, clamped at the ends. */
+export function step(from: Detent, direction: 1 | -1): Detent {
+  const next = DETENTS.indexOf(from) + direction;
+  return DETENTS[Math.min(DETENTS.length - 1, Math.max(0, next))];
+}
+
+function SheetHandle({ detent, setDetent, title }: SheetHandleProps) {
   const dragStartY = useRef<number | null>(null);
   const suppressClick = useRef(false);
+  const expanded = detent !== 'closed';
 
   const onPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
     dragStartY.current = e.clientY;
@@ -697,11 +738,16 @@ function SheetHandle({ expanded, setExpanded, title }: SheetHandleProps) {
     dragStartY.current = null;
     if (startY === null) return;
     const dy = e.clientY - startY;
-    // A real drag (past a small slop) sets the state explicitly by
-    // direction and swallows the click that follows; a short tap falls
-    // through to onClick so keyboard activation keeps working too.
+    // A real drag (past a small slop) moves ONE stop in the direction it
+    // went, and swallows the click that follows; a short tap falls through
+    // to onClick so keyboard activation keeps working too.
+    //
+    // One stop per drag rather than a distance-to-nearest-stop calculation:
+    // the surface does not follow the finger (its height is a CSS
+    // transition, not a live drag), so a gesture that skipped a stop would
+    // land somewhere the user has no way to predict from what they saw.
     if (Math.abs(dy) > 24) {
-      setExpanded(dy < 0);
+      setDetent((current) => step(current, dy < 0 ? 1 : -1));
       suppressClick.current = true;
     }
   };
@@ -710,7 +756,10 @@ function SheetHandle({ expanded, setExpanded, title }: SheetHandleProps) {
       suppressClick.current = false;
       return;
     }
-    setExpanded((v) => !v);
+    // Tapping is the two-state gesture it always was: open to the middle
+    // stop, or close. `full` is a drag away, deliberately — it covers most
+    // of the map, so it should take a deliberate gesture.
+    setDetent((current) => (current === 'closed' ? 'half' : 'closed'));
   };
 
   return (
