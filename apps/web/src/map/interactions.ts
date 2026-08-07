@@ -33,6 +33,7 @@ import {
   pointAtT,
   primaryAnchor,
   slicePathByT,
+  wayById,
 } from '@transitmapper/core/model/geo';
 import { facilityType, mode } from '@transitmapper/core/model/catalog';
 import { profileWidthM } from '@transitmapper/core/model/profile';
@@ -1664,22 +1665,18 @@ export function attachInteractions(
 
   /**
    * When freehand-dragging near an existing way of a type the draft can't
-   * merge with (so the exact-type snap above found nothing) and the drag is
-   * running roughly PARALLEL to it rather than crossing it, bend the drawn
-   * point onto an offset copy of that way's path — "run alongside this
-   * corridor" without landing on it or forming any junction. A passive
-   * assist: it only nudges a point that's already close and roughly
-   * aligned — move the cursor away and it stops applying, the same as any
-   * other snap here.
+   * merge with (so the exact-type snap above found nothing) and the CURRENT
+   * drag direction is running roughly PARALLEL to it rather than crossing
+   * it, bend the drawn point onto an offset copy of that way's path — "run
+   * alongside this corridor" without landing on it or forming any junction.
+   * A passive assist: it only nudges a point that's already close and
+   * roughly aligned — move the cursor away and it stops applying, the same
+   * as any other snap here.
    */
-  const followCorridor = (
-    wayId: string,
-    endpoint: LngLat,
-    behind: LngLat,
-    raw: LngLat,
-  ): LngLat | null => {
+  const followCorridor = (wayId: string, endpoint: LngLat, raw: LngLat): LngLat | null => {
     const state = store.getState();
-    const drawing = state.system.ways.find((w) => w.id === wayId);
+    const waysById = wayById(state.system.ways);
+    const drawing = waysById.get(wayId);
     if (!drawing) return null;
     const modeSpec = mode(state.draftModeId);
     const baseToleranceM = modeSpec.corridorToleranceM ?? CONFLATION_TOLERANCE_M;
@@ -1690,18 +1687,30 @@ export function attachInteractions(
       new Set([wayId]),
     );
     if (!candidate) return null;
-    const way = state.system.ways.find((w) => w.id === candidate.wayId);
+    const way = waysById.get(candidate.wayId);
     if (!way) return null;
+    // A way of the SAME type as the draft belongs to the exact-type snap
+    // above (which already ran and found nothing at the tighter radius) —
+    // corridor-following only ever bends toward a genuinely incompatible
+    // type, per its own doc comment. Without this, a same-type way just
+    // outside the tight snap radius but inside this wider one gets treated
+    // as "incompatible" and offset alongside instead of left alone,
+    // planting an unwanted parallel duplicate.
+    if (way.typeId === drawing.typeId) return null;
     const path = resolveWayPath(way);
     if (path.length < 2) return null;
     const totalM = pathLengthMeters(path);
     if (totalM < 1e-6) return null;
 
-    const [bx, by] = metersFromOrigin(endpoint, behind);
-    const dragLen = Math.hypot(bx, by);
-    if (dragLen < 1e-6) return null;
-    const dragX = -bx / dragLen;
-    const dragY = -by / dragLen;
+    // The CURRENT drag direction (endpoint → raw), not the way's already-
+    // committed heading (endpoint → behind, fixed before this call) — the
+    // gate below exists to tell "dragging alongside this corridor" apart
+    // from "crossing it," and only the live cursor direction can answer
+    // that. Using the fixed prior heading here would keep passing even
+    // after a sharp turn mid-drag, bending a deliberate crossing sideways.
+    const drag = unitVectorMeters(endpoint, raw);
+    if (!drag) return null;
+    const [dragX, dragY] = drag;
 
     const near = nearestOnPath(path, candidate.coord);
     if (!near) return null;
@@ -1709,13 +1718,13 @@ export function attachInteractions(
     // point — short enough to stay local on a long way, wide enough not to
     // be numerical noise on a short one.
     const tEps = Math.min(0.05, Math.max(0.002, 2 / totalM));
-    const [tx, ty] = metersFromOrigin(
+    const tangent = unitVectorMeters(
       pointAtT(path, Math.max(0, near.t - tEps)),
       pointAtT(path, Math.min(1, near.t + tEps)),
     );
-    const tanLen = Math.hypot(tx, ty);
-    if (tanLen < 1e-6) return null;
-    const cosAngle = Math.abs((dragX * tx + dragY * ty) / tanLen);
+    if (!tangent) return null;
+    const [tx, ty] = tangent;
+    const cosAngle = Math.abs(dragX * tx + dragY * ty);
     if (cosAngle < CORRIDOR_FOLLOW_MIN_COS) return null;
 
     const halfSpanM =
@@ -1723,8 +1732,15 @@ export function attachInteractions(
         profileWidthM(way.profile) / 2 + profileWidthM(drawing.profile) / 2,
         baseToleranceM,
       ) + CORRIDOR_FOLLOW_CLEARANCE_M;
-    const plus = offsetPolyline(path, halfSpanM);
-    const minus = offsetPolyline(path, -halfSpanM);
+    // Only the neighborhood around the drag actually gets consulted below
+    // (via nearestOnPath), so offset just that window instead of the whole
+    // way — offsetPolyline's per-point cost otherwise scales with a long
+    // imported way's full point count, on every drag frame.
+    const windowMarginM = halfSpanM + baseToleranceM * CORRIDOR_FOLLOW_TOLERANCE_SCALE + 20;
+    const window = windowAroundArcLength(path, near.t * totalM, windowMarginM);
+    if (window.length < 2) return null;
+    const plus = offsetPolyline(window, halfSpanM);
+    const minus = offsetPolyline(window, -halfSpanM);
     const nearPlus = nearestOnPath(plus, raw);
     const nearMinus = nearestOnPath(minus, raw);
     const chosen =
@@ -1772,7 +1788,7 @@ export function attachInteractions(
     if (otherWay) return { coord: otherWay.coord, snapWayId: otherWay.wayId };
     const heading = wayHeadingAnchor(wayId, atStart);
     if (endpoint && heading) {
-      const followed = followCorridor(wayId, endpoint, heading, raw);
+      const followed = followCorridor(wayId, endpoint, raw);
       if (followed) return { coord: followed };
       const straight = continueStraight(endpoint, heading, raw, snapMeters(straightSnapPx));
       if (straight) return { coord: straight };
@@ -3131,6 +3147,45 @@ function distToSegment(p: ScreenPoint, a: ScreenPoint, b: ScreenPoint): number {
 }
 
 /**
+ * The unit direction vector from `a` to `b`, in local meters — null when the
+ * two points are coincident, since a zero-length vector has no direction.
+ * Shared by every heading/tangent gate in this file (continueStraight,
+ * followCorridor) that needs "which way does this line point," so the
+ * meters-space normalization lives in exactly one place.
+ */
+function unitVectorMeters(a: LngLat, b: LngLat): [number, number] | null {
+  const [dx, dy] = metersFromOrigin(a, b);
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return null;
+  return [dx / len, dy / len];
+}
+
+/**
+ * A slice of `path`'s own points spanning at least `marginM` on either side
+ * of arc-length position `nearM`, clamped to the path's bounds — enough
+ * neighborhood for offsetPolyline's normal computation to stay accurate
+ * without processing the whole path. followCorridor only ever consults the
+ * offset near the drag point, but a long imported way can run thousands of
+ * points, and this runs on every drag frame.
+ */
+function windowAroundArcLength(path: LngLat[], nearM: number, marginM: number): LngLat[] {
+  const loBound = nearM - marginM;
+  const hiBound = nearM + marginM;
+  let acc = 0;
+  let loIdx = -1;
+  let hiIdx = path.length - 1;
+  for (let i = 1; i < path.length; i++) {
+    if (loIdx === -1 && acc >= loBound) loIdx = i - 1;
+    acc += haversineMeters(path[i - 1], path[i]);
+    if (acc >= hiBound) {
+      hiIdx = i;
+      break;
+    }
+  }
+  return path.slice(loIdx === -1 ? 0 : loIdx, hiIdx + 1);
+}
+
+/**
  * Snap the vector from→to to the nearest 45° increment, as seen on screen.
  *
  * Measured in local meters rather than in raw degrees. A degree of longitude
@@ -3177,11 +3232,10 @@ export function continueStraight(
   maxDeviationMeters: number,
 ): LngLat | null {
   // Vector endpoint→behind, so the way's direction of travel is its negation.
-  const [bx, by] = metersFromOrigin(endpoint, behind);
-  const dirLen = Math.hypot(bx, by);
-  if (dirLen < 1e-6) return null;
-  const nx = -bx / dirLen;
-  const ny = -by / dirLen;
+  const behindUnit = unitVectorMeters(endpoint, behind);
+  if (!behindUnit) return null;
+  const nx = -behindUnit[0];
+  const ny = -behindUnit[1];
   const [rx, ry] = metersFromOrigin(endpoint, raw);
   const along = rx * nx + ry * ny;
   if (along <= 0) return null; // only continue forward, never fold back over itself
