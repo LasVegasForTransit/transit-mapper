@@ -41,4 +41,28 @@ describe('the action bar step ladder', () => {
     expect(CSS).toContain(`.actions-full[data-fit='${last}'] .act-secondary`);
     expect(CSS).toContain(`.actions-full[data-fit='${last}'] .act-overflow`);
   });
+
+  /**
+   * The ladder's real invariant, and the one that actually broke: hiding a
+   * button is only safe while the ⋯ menu is showing, because that menu is the
+   * only other place `.act-tertiary` and `.act-secondary` live. `tertiary`
+   * used to hide the two help actions while the menu was still `display:none`
+   * — Settings has exactly one call site and it is inside that menu, so it
+   * was unreachable at 1280x800. Dropping label TEXT (`.btn-label`) does not
+   * count: the buttons themselves stay on the bar.
+   */
+  it('shows the overflow menu at every step that hides an action', () => {
+    const hidesAnAction = (step: string) =>
+      CSS.includes(`.actions-full[data-fit='${step}'] .act-tertiary`) ||
+      CSS.includes(`.actions-full[data-fit='${step}'] .act-secondary`);
+
+    for (const step of TOOLBAR_FITS) {
+      if (!hidesAnAction(step)) continue;
+      expect(
+        CSS,
+        `[data-fit='${step}'] hides an action but never reveals .act-overflow, ` +
+          `so whatever it hid has no remaining path`,
+      ).toContain(`.actions-full[data-fit='${step}'] .act-overflow`);
+    }
+  });
 });
