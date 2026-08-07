@@ -3,6 +3,7 @@ import { useEditor } from '../editor/EditorProvider';
 import { getOrCreateShare, stopSharing } from '../share/api';
 import { getMyShare } from '../share/myShares';
 import { withLiveCamera } from '../camera/liveCamera';
+import { useOnlineStatus } from '../network/useOnlineStatus';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
 
@@ -21,6 +22,7 @@ export function ShareDialog({ onClose }: ShareDialogProps) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const online = useOnlineStatus();
   // Only a share this browser holds the edit token for can be stopped — a
   // dedup hit onto someone else's row isn't ours to revoke.
   const [revocable, setRevocable] = useState(false);
@@ -78,7 +80,20 @@ export function ShareDialog({ onClose }: ShareDialogProps) {
     >
       {status === 'loading' && <p className="panel-hint">Creating a shareable link…</p>}
 
-      {status === 'error' && <p className="error-text">Something went wrong. {error}</p>}
+      {/* Being offline is named because it is the one cause the reader can do
+          something about, and because "Something went wrong. Failed to fetch"
+          is what they got instead. The exception text still follows when there
+          is a network, since then it is the only clue anyone has. */}
+      {status === 'error' &&
+        (online ? (
+          <p className="error-text">Something went wrong. {error}</p>
+        ) : (
+          <p className="error-text">
+            You’re offline, so this link couldn’t be created. Sharing needs a connection because the
+            link is served from TransitMapper rather than from this device — your system is
+            untouched, and this works again once you reconnect.
+          </p>
+        ))}
 
       {status === 'stopped' && (
         <p className="panel-hint">This link no longer works. Share again to create a new one.</p>

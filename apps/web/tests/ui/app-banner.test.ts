@@ -11,6 +11,7 @@ const calm: AppBannerInputs = {
   offlineReady: false,
   notice: null,
   documentSlowToLoad: false,
+  online: true,
 };
 
 describe('which message the app shows', () => {
@@ -23,7 +24,7 @@ describe('which message the app shows', () => {
       { ...calm, save: 'full' },
       { ...calm, save: 'unavailable' },
       { ...calm, bootstrap: { kind: 'storage-unavailable' } },
-      { ...calm, bootstrap: { kind: 'share-failed', reason: 'boom' } },
+      { ...calm, bootstrap: { kind: 'share-failed' } },
       { ...calm, updateWaiting: true },
     ];
 
@@ -45,7 +46,7 @@ describe('a startup that produced no document', () => {
   // thing that is broken.
   const failures: AppBannerInputs[] = [
     { ...calm, bootstrap: { kind: 'storage-unavailable' } },
-    { ...calm, bootstrap: { kind: 'share-failed', reason: 'network error' } },
+    { ...calm, bootstrap: { kind: 'share-failed' } },
   ];
 
   it('always offers a way forward that is not another retry', () => {
@@ -81,6 +82,7 @@ describe('which message wins', () => {
       offlineReady: true,
       notice: 'corrupt-system',
       documentSlowToLoad: true,
+      online: false,
     };
 
     expect(resolveAppBanner(everything)?.message).toContain('storage is full');
@@ -124,6 +126,61 @@ describe('which message wins', () => {
     const inputs: AppBannerInputs = { ...calm, offlineReady: true, notice: 'dialog-failed' };
 
     expect(resolveAppBanner(inputs)?.message).toContain('available offline');
+  });
+});
+
+describe('naming the network as the reason', () => {
+  // The two failures a reader can actually do something about, and the two the
+  // browser used to describe with the text of a fetch exception.
+  const remoteFailures: AppBannerInputs[] = [
+    { ...calm, bootstrap: { kind: 'share-failed' } },
+    { ...calm, notice: 'basemap-unavailable' },
+  ];
+
+  it('says so when the browser has no network', () => {
+    for (const inputs of remoteFailures) {
+      expect(resolveAppBanner({ ...inputs, online: false })?.message).toContain('offline');
+    }
+  });
+
+  it('does not claim offline when the browser thinks it has a network', () => {
+    for (const inputs of remoteFailures) {
+      expect(resolveAppBanner({ ...inputs, online: true })?.message).not.toContain('offline');
+    }
+  });
+
+  // The message is derived from the cause each render rather than frozen when
+  // the failure happened, so losing the network afterwards rewords it. That is
+  // the entire reason `notice` holds a cause instead of a sentence.
+  it('rewords a failure that already happened when the network drops later', () => {
+    const cause: AppBannerInputs = { ...calm, notice: 'basemap-unavailable' };
+
+    expect(resolveAppBanner({ ...cause, online: true })?.message).not.toEqual(
+      resolveAppBanner({ ...cause, online: false })?.message,
+    );
+  });
+
+  // Being offline explains why something failed. It never means the user's own
+  // work is at risk, and a message that blurs the two causes real alarm.
+  it('says the work is safe whenever it blames the network', () => {
+    for (const inputs of remoteFailures) {
+      const message = resolveAppBanner({ ...inputs, online: false })?.message ?? '';
+      expect(message).toMatch(/still saved|aren’t stored on this device/);
+    }
+  });
+
+  // Local failures have nothing to do with connectivity, and blaming the
+  // network for them would send someone off checking their wifi.
+  it('leaves messages about local storage alone', () => {
+    const local: AppBannerInputs[] = [
+      { ...calm, save: 'full' },
+      { ...calm, bootstrap: { kind: 'storage-unavailable' } },
+      { ...calm, notice: 'corrupt-system' },
+    ];
+
+    for (const inputs of local) {
+      expect(resolveAppBanner({ ...inputs, online: false })?.message).not.toContain('offline');
+    }
   });
 });
 

@@ -30,6 +30,7 @@ import {
   type BootstrapOutcome,
   type NoticeCause,
 } from './ui/app-banner';
+import { useOnlineStatus } from './network/useOnlineStatus';
 import { ImportProgressPill } from './ui/ImportProgressPill';
 import { MapContextMenu } from './ui/MapContextMenu';
 import { Inspector, useSupplementalContent } from './ui/Inspector';
@@ -154,6 +155,9 @@ export function App() {
   // rather than here because writes happen in dialogs too, and a failure
   // there is exactly as silent and exactly as costly.
   const { outcome: saveState, report } = useSaveStatus();
+  // Only ever used to explain a failure that already happened — see
+  // network/useOnlineStatus for why the "online" direction is never acted on.
+  const online = useOnlineStatus();
   const { installState, recordUndoableEdit, setEditable } = useInstall();
 
   // Bootstrap: shared link → read-only load; otherwise local autosave or fresh.
@@ -165,7 +169,7 @@ export function App() {
       fetchShare(id, { signal: controller.signal })
         .then((system) => store.getState().setSystem(system, { readOnly: true }))
         .catch((e: Error) => {
-          if (e.name !== 'AbortError') setBootstrap({ kind: 'share-failed', reason: e.message });
+          if (e.name !== 'AbortError') setBootstrap({ kind: 'share-failed' });
         });
       // No "finished" flag to set either way. A share that loads calls
       // setSystem, which is what ends the wait; a share that doesn't leaves the
@@ -328,6 +332,7 @@ export function App() {
     offlineReady,
     notice,
     documentSlowToLoad: slowToLoad,
+    online,
   });
   const runBannerAction = (kind: AppBannerActionKind) => {
     switch (kind) {

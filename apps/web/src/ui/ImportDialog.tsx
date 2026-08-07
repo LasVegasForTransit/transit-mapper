@@ -7,6 +7,7 @@ import {
   importOsmWays,
   type ImportCategory,
 } from '@transitmapper/core/model/import';
+import { useOnlineStatus } from '../network/useOnlineStatus';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
 
@@ -29,6 +30,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
   const [skipped, setSkipped] = useState(0);
   const [error, setError] = useState('');
   const request = useRef<AbortController | null>(null);
+  const online = useOnlineStatus();
 
   const toggle = (c: ImportCategory) =>
     setCategories((prev) => {
@@ -148,9 +150,15 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
         </p>
       )}
 
+      {/* Offline is named rather than guessed at. When there IS a network the
+          message stays as it was: a failed Overpass request is far more often
+          the service being busy than anything about this browser, and
+          packages/core's import.ts already words that carefully. */}
       {status === 'error' && (
         <p className="error-text" style={{ marginTop: 8 }}>
-          {error}
+          {online
+            ? error
+            : 'You’re offline, so streets couldn’t be fetched. Importing reads from OpenStreetMap, which needs a connection — everything already in your system is untouched.'}
         </p>
       )}
       {status === 'done' && (

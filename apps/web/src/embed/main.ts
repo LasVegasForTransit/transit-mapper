@@ -272,7 +272,15 @@ async function start(): Promise<void> {
     if (status) status.hidden = true;
   } catch (e) {
     map.remove();
-    fail((e as Error).message);
+    // An embed is nothing but a remote system on a remote basemap, so being
+    // offline explains the entire failure and the exception text explains
+    // none of it. Checked here rather than subscribed to: this page has no
+    // React and nothing to re-render if the network comes back.
+    fail(
+      navigator.onLine
+        ? (e as Error).message
+        : 'This map needs a connection, and the browser is offline.',
+    );
   } finally {
     window.removeEventListener('pagehide', cancel);
   }
