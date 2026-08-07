@@ -48,7 +48,8 @@ deepens.
 - [The three views](product/explanation/views.md) — Network, Infrastructure,
   Diagram, and why "the Infrastructure view is 2D" is a hard rule.
 - [Design principles](product/explanation/design-principles.md) — catalog-driven
-  kinds, style/domain separation, menus versus modes.
+  kinds, style/domain separation, menus versus modes, and why the app never
+  blocks you to wait.
 - [Geometry and routing](product/explanation/geometry-and-routing.md) — how lane
   offsets, junction footprints, and the route graph are derived.
 - [The simulation](product/explanation/simulation.md) — the simulated clock, why the

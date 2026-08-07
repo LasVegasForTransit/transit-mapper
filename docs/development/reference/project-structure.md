@@ -161,6 +161,9 @@ store and core projectors.
 controls, dialogs, onboarding, and accessibility semantics.
 `apps/web/src/ui/useKeyboardInset.ts` reports how much of the viewport an
 on-screen keyboard covers, which no layout-viewport measurement exposes.
+`apps/web/src/ui/app-banner.ts` decides which single application-level message
+is showing and what it says, as a pure function of save state, startup outcome,
+update state, and connectivity; it holds the copy for every one of them.
 `apps/web/src/theme` maps the operating system color preference to application
 tokens. `apps/web/src/assets` holds source-distributed browser binaries beside
 their required licenses, while `apps/web/src/i18n` owns user-visible message
@@ -190,8 +193,10 @@ storage engine.
 
 `apps/web/src/import` coordinates user-selected external data and progress
 reporting. `apps/web/src/network` owns browser request scheduling and failure
-behavior. Classification and model construction remain in core; these modules
-own browser capabilities, cancellation, and interaction continuity.
+behavior, including `useOnlineStatus`, which subscribes to the browser's own
+connectivity signal so a failure can name the network as its cause.
+Classification and model construction remain in core; these modules own browser
+capabilities, cancellation, and interaction continuity.
 
 #### Simulation host
 
