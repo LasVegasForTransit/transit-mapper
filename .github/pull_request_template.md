@@ -1,18 +1,3 @@
-<!--
-CI runs `pnpm check`, so there is no checklist here for anything it already
-checks.
-
-Prose rules: docs/development/reference/document-standards.md
-
-Leave out:
-
-  - the list of files you changed
-  - a walk through the diff
-  - adjectives with no number, like "much faster"
-  - emoji headings
-  - checkboxes for things CI already proves
--->
-
 ## TL;DR
 
 <!-- A one-sentence description of all changes. -->
@@ -29,6 +14,6 @@ Leave out:
 <!-- A prose-based description of any unresolved blockers, broken into
      paragraphs or a checklist containing items, each of which can be easily
      turned into a separate GitHub issue or literally mention an existing
-     Github issue. Follow-ups can be grouped by subheading as needed for
+     GitHub issue. Follow-ups can be grouped by subheading as needed for
      improved organization. Every checklist item needs to be a readable
-     issue title. -->
+     issue title that says what needs doing on its own. -->

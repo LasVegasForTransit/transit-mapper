@@ -33,6 +33,24 @@ as you wrote them — see [the enforcement
 model](docs/development/explanation/enforcement-model.md#merge-method)
 for why. Write commit messages you'd want to read in `main`'s history.
 
+The description fills in the three headings the template gives you: a
+one-sentence **TL;DR**, the **Changes** in prose with the reasoning behind
+them, and **Follow-ups and Next Work** for anything unresolved. CI runs
+`pnpm check`, so there is no checklist for anything a command already
+verifies.
+
+Leave out the list of files you changed, a walk through the diff, adjectives
+with no number behind them such as "much faster", emoji headings, and
+checkboxes for things CI already proves. Each follow-up checklist item is
+written as an issue title that says what needs doing to someone who has not
+read the pull request.
+
+If an AI agent wrote the changes or the description, keep its generated-with
+footer at the bottom of the pull request body, and co-author its commits to
+it with a `Co-authored-by:` trailer. A reviewer reads agent-written code
+differently and cannot do that without being told. Whoever opens the pull
+request answers for what is in it either way.
+
 ## Community expectations
 
 Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
