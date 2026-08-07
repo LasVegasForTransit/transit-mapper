@@ -5,7 +5,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react';
-import { FACILITY_TYPES, MODE_ORDER, MODES, WAY_TYPES } from '@transitmapper/core/model/catalog';
+import { FACILITY_TYPES, MODES, WAY_TYPES } from '@transitmapper/core/model/catalog';
 import type { EditorState, Selection } from '../editor/store';
 import { useEditor } from '../editor/EditorProvider';
 import { Icon } from './Icon';
@@ -17,7 +17,7 @@ import {
   sidebarTabStopKey,
 } from './sidebarOutline';
 import { useListboxKeyboardNav } from './useListboxKeyboardNav';
-import { useView } from './ViewProvider';
+import { useView, type ViewMode } from './ViewProvider';
 
 const LIST_CAP = 150;
 
@@ -87,6 +87,14 @@ function sidebarTabIndexFor(tabStopKey: string | null) {
   };
 }
 
+/** What the workspace calls itself, per view. Diagram borrows the network's
+ *  list, so it says so rather than claiming to be a different workspace. */
+const WORKSPACE_TITLE: Record<ViewMode, string> = {
+  network: 'Network',
+  infrastructure: 'Infrastructure',
+  diagram: 'Diagram',
+};
+
 export function SidebarPanel() {
   const system = useEditor((state) => state.system);
   const selection = useEditor((state) => state.selection);
@@ -108,23 +116,28 @@ export function SidebarPanel() {
     addMultiSelection,
   };
 
-  if (viewMode === 'diagram') return <DiagramWorkspace />;
-
   return (
     <div
       className="panel-body sidebar-workspace"
       ref={containerRef}
       role="region"
-      aria-label={`${viewMode === 'network' ? 'Network' : 'Infrastructure'} workspace`}
+      aria-label={`${WORKSPACE_TITLE[viewMode]} workspace`}
       onKeyDown={onKeyDown}
     >
-      <div className="sidebar-workspace-title">
-        {viewMode === 'network' ? 'Network' : 'Infrastructure'}
-      </div>
-      {viewMode === 'network' ? (
-        <NetworkWorkspace {...commonProps} />
-      ) : (
+      <div className="sidebar-workspace-title">{WORKSPACE_TITLE[viewMode]}</div>
+      {/* Diagram shows the network's own list. It is a schematic projection
+          OF that network — the same lines, drawn without geography — so the
+          list of lines is exactly as useful there, and picking one still
+          selects it.
+
+          It used to have a workspace of its own holding mode checkboxes and
+          a Landmarks toggle. Those are the Layers control's, read from the
+          same ViewProvider state, and in Diagram view on a phone both copies
+          were on screen at once. One control, one place. */}
+      {viewMode === 'infrastructure' ? (
         <InfrastructureWorkspace {...commonProps} />
+      ) : (
+        <NetworkWorkspace {...commonProps} />
       )}
     </div>
   );
@@ -633,37 +646,5 @@ function InfrastructureWorkspace({ system, selection, selectAndFocus }: SharedWo
         <ShowMore hiddenCount={visiblePlaces.hiddenCount} onClick={() => expand('places')} />
       </SidebarSection>
     </>
-  );
-}
-
-function DiagramWorkspace() {
-  const { visibleModes, toggleMode, showAllModes, showLandmarks, toggleLandmarks } = useView();
-  return (
-    <div className="panel-body sidebar-workspace" aria-label="Diagram presentation">
-      <div className="sidebar-workspace-title">Diagram</div>
-      <SidebarSection title="Services" count={visibleModes.size}>
-        <div className="sidebar-section-actions">
-          <button type="button" className="link-btn" onClick={showAllModes}>
-            Show all
-          </button>
-        </div>
-        {MODE_ORDER.map((modeId) => (
-          <label key={modeId} className="sidebar-check-row">
-            <input
-              type="checkbox"
-              checked={visibleModes.has(modeId)}
-              onChange={() => toggleMode(modeId)}
-            />
-            <span>{MODES[modeId].label}</span>
-          </label>
-        ))}
-      </SidebarSection>
-      <SidebarSection title="Reference">
-        <label className="sidebar-check-row">
-          <input type="checkbox" checked={showLandmarks} onChange={toggleLandmarks} />
-          <span>Landmarks</span>
-        </label>
-      </SidebarSection>
-    </div>
   );
 }
