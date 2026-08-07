@@ -5,14 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && tsx scripts/perf/report-bundle.ts && tsx scripts/perf/verify-pwa-output.ts",
+    "build": "tsc -b tsconfig.build.json && vite build && tsx scripts/perf/report-bundle.ts && tsx scripts/perf/verify-pwa-output.ts",
     "generate:icons": "tsx scripts/generate-app-icons.ts",
     "check:icons": "tsx scripts/generate-app-icons.ts --check",
     "preview": "vite preview",
     "perf": "tsx scripts/perf/run.ts",
     "perf:record": "tsx scripts/perf/run.ts --record",
     "perf:soak": "tsx scripts/perf/run.ts --soak",
-    "typecheck": "tsc -b --noEmit && tsc -p tsconfig.scripts.json",
+    "typecheck": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
     "verify": "tsx tests/verify.test.ts && vitest run",
     "lint": "eslint ."
   },

@@ -7,13 +7,14 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc -b --noEmit",
+    "typecheck": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
     "lint": "eslint .",
     "verify": "vitest run"
   },
   "devDependencies": {
-    "vitest": "catalog:",
+    "@transitmapper/tsconfig": "workspace:*",
+    "@typescript-eslint/parser": "catalog:",
     "eslint": "catalog:",
-    "@typescript-eslint/parser": "catalog:"
+    "vitest": "catalog:"
   }
 }

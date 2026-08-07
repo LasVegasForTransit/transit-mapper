@@ -1,9 +1,7 @@
+// Every TypeScript file in this package. The language service resolves a file
+// by walking up to the nearest `tsconfig.json`, so anything this leaves out has
+// no types in an editor and is rejected by type-aware lint.
 {
-  "extends": "@transitmapper/tsconfig/base.json",
-  "compilerOptions": {
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "jsx": "react-jsx",
-    "types": ["vite-plugin-pwa/client"]
-  },
-  "include": ["src", "tests"]
+  "extends": "./tsconfig.build.json",
+  "include": ["src", "tests", "vitest.config.ts"]
 }

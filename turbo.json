@@ -57,7 +57,7 @@
         "check:icons",
         "//#format:check",
         "//#lint:root",
-        "//#typecheck:scripts",
+        "//#typecheck:root",
         "//#check:filenames",
         "//#check:contract",
         "//#check:docs",
@@ -83,8 +83,14 @@
       ],
       "outputs": []
     },
-    "//#typecheck:scripts": {
-      "inputs": ["$TURBO_ROOT$/scripts/**", "$TURBO_ROOT$/package.json"],
+    "//#typecheck:root": {
+      "inputs": [
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/turbo/**",
+        "$TURBO_ROOT$/eslint.config.ts",
+        "$TURBO_ROOT$/tsconfig.json",
+        "$TURBO_ROOT$/package.json"
+      ],
       "outputs": []
     },
     "//#check:filenames": {

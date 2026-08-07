@@ -38,8 +38,8 @@ const CHECKS: Check[] = [
     fix: 'pnpm lint:fix',
   },
   {
-    command: 'typecheck:scripts',
-    fails: 'a file under scripts/ does not compile',
+    command: 'typecheck:root',
+    fails: 'repository tooling — scripts/, turbo/, or eslint.config.ts — does not compile',
     fix: 'fix the type error; do not add `any`',
   },
   {

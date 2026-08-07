@@ -1,13 +1,20 @@
+// Every TypeScript file in this application: sources, the Node tooling under
+// scripts/, the tests, and the three build configs at the root.
+//
+// TypeScript's language service resolves a file by walking up to the nearest
+// `tsconfig.json` and nothing else — it never looks for a differently named
+// config. A file left out of this one therefore has no types in an editor, and
+// type-aware lint rejects it rather than checking it.
+//
+// `vite/client` stays alongside `node` because the tests and tools import
+// browser sources that read `import.meta.env`. Admitting both type sets here is
+// the cost of covering both kinds of program in one config, and it is why
+// `tsconfig.build.json` still exists: that one has no Node globals, and it is
+// what decides whether `src` is browser-clean.
 {
-  "extends": "@transitmapper/tsconfig/base.json",
+  "extends": "./tsconfig.build.json",
   "compilerOptions": {
-    "useDefineForClassFields": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "allowImportingTsExtensions": true,
-    "jsx": "react-jsx",
-    "types": ["vite/client"]
+    "types": ["node", "vite/client"]
   },
-  // Browser sources only. Node tooling and tests are typechecked separately by
-  // tsconfig.scripts.json so Node globals do not enter the production config.
-  "include": ["src"]
+  "include": ["src", "tests", "scripts", "vite.config.ts", "vitest.config.ts", "perf.config.ts"]
 }

@@ -1,0 +1,42 @@
+{
+  "scripts/bootstrap/lib/shell.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "scripts/bootstrap/phases/cloudflare-verify.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "scripts/bootstrap/phases/repo-config.ts": {
+    "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    }
+  },
+  "scripts/bootstrap/phases/workspace.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "scripts/check-docs-links.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 6
+    }
+  },
+  "scripts/check-document-standards.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "scripts/check-project-structure.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 4
+    }
+  },
+  "scripts/check-workspace-contract.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  }
+}

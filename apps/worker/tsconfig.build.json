@@ -1,0 +1,16 @@
+// Workers-runtime sources only, and the authority on what deploys.
+//
+// Node's globals are deliberately absent. `tsconfig.json` beside this one
+// admits them, because the Node-run verifier and the tooling under scripts/
+// have to be covered by the config the language service actually reads. That
+// makes this the file that decides what `src` may reference: a Worker source
+// reaching for something only Node provides compiles under the wide config and
+// fails here.
+{
+  "extends": "@transitmapper/tsconfig/base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["src", "worker-configuration.d.ts"]
+}
