@@ -30,4 +30,5 @@ Leave out:
      paragraphs or a checklist containing items, each of which can be easily
      turned into a separate GitHub issue or literally mention an existing
      Github issue. Follow-ups can be grouped by subheading as needed for
-     improved organization. -->
+     improved organization. Every checklist item needs to be a readable
+     issue title. -->
