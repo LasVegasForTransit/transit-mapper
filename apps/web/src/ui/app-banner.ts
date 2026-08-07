@@ -20,7 +20,12 @@ import type { SaveOutcome } from '../storage/localStore';
  *  `documentStatus`; this is only the reason, which the store cannot know.
  *  Keeping them apart means the two can never contradict each other. */
 export type BootstrapOutcome =
-  { kind: 'ok' } | { kind: 'storage-unavailable' } | { kind: 'share-failed'; reason: string };
+  | { kind: 'ok' }
+  | { kind: 'storage-unavailable' }
+  // Carries no message. The exception text for a fetch with no route is some
+  // variation on "Failed to fetch", which told the reader nothing and was the
+  // whole of what this banner used to say after a colon.
+  | { kind: 'share-failed' };
 
 /**
  * Something that already happened and is worth reading once.
@@ -80,6 +85,10 @@ export interface AppBannerInputs {
    *  usable the whole time, and announcing a wait nobody noticed would invent
    *  one. Only a wait somebody has started to feel is worth a sentence. */
   documentSlowToLoad: boolean;
+  /** Whether the browser currently believes it has a network. Used only to
+   *  explain a failure that already happened — see network/useOnlineStatus for
+   *  why the `true` direction means nothing and is never acted on. */
+  online: boolean;
 }
 
 /** Offered wherever startup could not produce the document it went looking
@@ -99,7 +108,7 @@ function saveMessage(outcome: SaveOutcome): string | null {
   return null;
 }
 
-function noticeMessage(cause: NoticeCause): string {
+function noticeMessage(cause: NoticeCause, online: boolean): string {
   switch (cause) {
     // The common case by far is a chunk whose filename changed under a tab
     // that was left open, so "reload" is the actual fix rather than a shrug.
@@ -107,9 +116,14 @@ function noticeMessage(cause: NoticeCause): string {
       return 'That dialog couldn’t be loaded. Your system is safe — reload the page and try again.';
     // Says what still works, because most of it does: the basemap is a
     // backdrop from a third-party host, and everything the user has drawn is
-    // ours.
+    // ours. Being offline is the likeliest reason by a wide margin and the
+    // only one the reader can act on, so it is named when it applies — and
+    // because this is derived at render time rather than frozen when the
+    // tiles failed, going offline afterwards rewords it.
     case 'basemap-unavailable':
-      return 'The background map couldn’t be loaded, so the map behind your system is blank. Your system is unaffected and still saved.';
+      return online
+        ? 'The background map couldn’t be loaded, so the map behind your system is blank. Your system is unaffected and still saved.'
+        : 'You’re offline, so the background map is blank. Everything you’ve drawn is here and still saved — the map fills in when you reconnect.';
     // Deliberately says the damaged copy still exists. "Your work is gone" and
     // "your work is here but unreadable" call for very different reactions,
     // and only one of them is true.
@@ -164,7 +178,9 @@ export function resolveAppBanner(inputs: AppBannerInputs): AppBannerDescriptor |
     return {
       tone: 'danger',
       layout: 'inline',
-      message: `Couldn’t open shared system: ${inputs.bootstrap.reason}`,
+      message: inputs.online
+        ? 'That shared system couldn’t be opened. The link may have expired, or the server may be unreachable right now.'
+        : 'You’re offline, so that shared system couldn’t be opened. Shared links are fetched from the server every time and aren’t stored on this device.',
       actions: bootstrapFailureActions,
       dismiss: null,
       live: 'alert',
@@ -204,7 +220,7 @@ export function resolveAppBanner(inputs: AppBannerInputs): AppBannerDescriptor |
     return {
       tone: 'danger',
       layout: 'wrapped',
-      message: noticeMessage(inputs.notice),
+      message: noticeMessage(inputs.notice, inputs.online),
       actions: [],
       dismiss: { kind: 'dismiss-notice', label: 'Dismiss' },
       live: 'status',
