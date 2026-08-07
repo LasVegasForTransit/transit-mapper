@@ -2902,6 +2902,19 @@ input[type='range'] {
 .shortcuts-group {
   margin-bottom: 8px;
 }
+/* The gesture list sits outside the keyboard grid, because it is not a
+   column of that grid — it answers the same questions with a hand instead of
+   a keyboard, and it should read as its own answer rather than as a fourth
+   category of shortcut. */
+.shortcuts-touch {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--md-sys-color-surface-container-highest);
+}
+.shortcuts-touch .shortcut-keys {
+  font-size: var(--md-sys-typescale-label-medium-size);
+  color: var(--md-sys-color-on-surface-variant);
+}
 .shortcuts-group-title {
   font-size: var(--md-sys-typescale-label-small-size);
   text-transform: uppercase;

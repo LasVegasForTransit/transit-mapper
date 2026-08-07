@@ -74,9 +74,45 @@ export function ShortcutsDialog({ onClose }: ShortcutsDialogProps) {
         ))}
       </div>
 
+      {/* Every gesture below already worked — map/touch-gestures.ts has
+          implemented all four since it was written. Nothing in the interface
+          said so: a grep for "long press", "double tap", "two finger" or
+          "pinch" across the app returned four hits, all of them code
+          comments and none of them on screen. The only in-app help was this
+          dialog, listing keys a phone does not have.
+
+          So this is documentation of what exists, not a new capability, and
+          it is here rather than in a touch-only surface because the two
+          columns explain each other — "long press" IS right-click, and
+          knowing that is what makes the rest of the list usable by finger. */}
+      <section className="shortcuts-group shortcuts-touch">
+        <h3 className="shortcuts-group-title">By finger</h3>
+        <div className="shortcut-row">
+          <span className="shortcut-desc">Use the current tool</span>
+          <span className="shortcut-keys">drag one finger</span>
+        </div>
+        <div className="shortcut-row">
+          <span className="shortcut-desc">Pan the map</span>
+          <span className="shortcut-keys">drag two fingers</span>
+        </div>
+        <div className="shortcut-row">
+          <span className="shortcut-desc">Zoom</span>
+          <span className="shortcut-keys">pinch</span>
+        </div>
+        <div className="shortcut-row">
+          <span className="shortcut-desc">Finish the line you are drawing</span>
+          <span className="shortcut-keys">double-tap</span>
+        </div>
+        <div className="shortcut-row">
+          <span className="shortcut-desc">Open the actions menu (right-click)</span>
+          <span className="shortcut-keys">long press</span>
+        </div>
+      </section>
+
       <p className="shortcuts-foot">
         Pan also works by right-drag or <kbd>Space</kbd>-drag · Alt-click deletes a point or station
-        · Shift constrains to 45°.
+        · Shift constrains to 45°. Erase and Split are on the Select tool&rsquo;s own menu, which is
+        how a finger reaches them.
       </p>
     </Modal>
   );

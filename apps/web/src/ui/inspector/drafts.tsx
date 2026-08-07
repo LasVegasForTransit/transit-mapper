@@ -93,6 +93,13 @@ function WayDraftInspector() {
         </span>
       </div>
       <div className="insp-kind">Drawing tool · options apply to what you draw next</div>
+      {/* How to STOP drawing, which is the one thing you cannot work out by
+          trying. Both gestures already worked — interactions.ts has bound
+          double-click to finishWay since it was written, and the touch
+          adapter maps a double tap onto it — but nothing said so anywhere in
+          the interface, so on a phone the only visible way to end a line was
+          a key the device does not have. */}
+      <p className="panel-hint">Double-tap the last point to finish, or press Enter.</p>
       <div className="insp-section">
         {networkFirst && currentMode.wayTypeIds.length > 1 && (
           <>
@@ -243,7 +250,7 @@ function StationDraftInspector() {
           </p>
         ) : (
           <p className="panel-hint">
-            Click to place a stop — it snaps onto the line under it. Draw full station footprints in
+            Tap to place a stop — it snaps onto the line under it. Draw full station footprints in
             the Infrastructure view.
           </p>
         )}

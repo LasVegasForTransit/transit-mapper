@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { useEditor } from '../editor/EditorProvider';
 import { useSelectionActions } from '../editor/useSelectionActions';
 import type { MultiSelectItem, Selection, Tool } from '../editor/store';
@@ -101,11 +101,45 @@ export function useSupplementalContent(): SupplementalContent {
   });
 }
 
+/**
+ * What is being inspected, as a value that changes when the SUBJECT changes.
+ *
+ * Not a render key — the panel is deliberately not remounted for every kind
+ * (see renderInspectorContent's own note) — just something to compare so the
+ * scroll reset below knows a different object is showing.
+ */
+function subjectOf(content: SupplementalContent, selection: Selection, count: number): string {
+  if (content.kind === 'tool-draft') return `tool:${content.tool}`;
+  if (count > 0) return `multi:${count}`;
+  return selection ? `${selection.kind}:${selection.id}` : 'none';
+}
+
 export function Inspector() {
   const selection = useEditor((s) => s.selection);
   const multiSelection = useEditor((s) => s.multiSelection);
   const content = useSupplementalContent();
   const { mounted, closing } = useDelayedUnmount(content.kind !== 'none', 160);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const subject = subjectOf(content, selection, multiSelection.length);
+
+  // A panel scrolled halfway down keeps that offset when a different object
+  // is put into it, because the scroll lives on a container that never
+  // unmounts. Measured: selecting a line after scrolling a station's panel
+  // opened at scrollTop 134 — the first thing showing was "MODE", with the
+  // line's own name and its tabs above the fold. You pick a line and get an
+  // anonymous form.
+  //
+  // Walks up to whichever element actually scrolls, because that differs by
+  // layout: the docked card is its own scroller, the compact workbench's
+  // panel is one level further out.
+  useEffect(() => {
+    for (let el = rootRef.current?.parentElement; el; el = el.parentElement) {
+      if (el.scrollHeight > el.clientHeight && getComputedStyle(el).overflowY !== 'visible') {
+        el.scrollTop = 0;
+        return;
+      }
+    }
+  }, [subject]);
 
   const current =
     content.kind === 'tool-draft' ? (
@@ -118,7 +152,9 @@ export function Inspector() {
 
   if (!mounted) return null;
   return (
-    <div data-inspector-state={closing ? 'closed' : 'open'}>{current ?? lastContent.current}</div>
+    <div ref={rootRef} data-inspector-state={closing ? 'closed' : 'open'}>
+      {current ?? lastContent.current}
+    </div>
   );
 }
 
