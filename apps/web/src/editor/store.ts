@@ -109,7 +109,10 @@ import {
   createGroup as createGroupEntity,
   createStation,
 } from '@transitmapper/core/model/system';
-import { suggestStopName } from '@transitmapper/core/model/geo/crossStreetNaming';
+import {
+  resyncAutoNamedStations,
+  suggestStopName,
+} from '@transitmapper/core/model/geo/crossStreetNaming';
 import { withoutAlreadyImported, type ImportedNetwork } from '@transitmapper/core/model/import';
 import type {
   RunDirection,
@@ -183,6 +186,15 @@ const GROUP_FOOTPRINT_HALF_SIZE_M = 20; // a ~40m default facility-complex site
 
 export interface SetSystemOptions {
   readOnly?: boolean;
+}
+
+export interface SetStationNameOptions {
+  /** True when this call is itself an auto-suggestion (the Inspector's
+   *  "Suggest name" button) rather than the user typing their own text —
+   *  keeps the station's autoNamed flag set, so resyncAutoNamedStations may
+   *  still correct it later. Omitted (or false) clears autoNamed for good:
+   *  once someone types their own text, nothing overwrites it again. */
+  auto?: boolean;
 }
 
 export interface ApplyImportedReconciliation {
@@ -702,7 +714,7 @@ export interface EditorState {
    *  never for this id), so it's safe to call unconditionally on mount. */
   consumeFocusName: (id: string) => void;
   moveStation: (id: string, coord: LngLat, anchor?: StationAnchor) => void;
-  setStationName: (id: string, name: string) => void;
+  setStationName: (id: string, name: string, options?: SetStationNameOptions) => void;
   /** How long a vehicle dwells here before departing, in seconds — undefined
    *  reverts to the animation's own default (see sim/vehicles.ts). */
   setStationDwellSeconds: (id: string, seconds: number | undefined) => void;
@@ -3671,10 +3683,17 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         };
         // Routing over what's already there adds no infrastructure at all now —
         // only a service that names the stretches it uses.
-        set((s) => ({
-          system: touch({ ...s.system, services: [...s.system.services, service] }),
-          selection: { kind: 'service', id },
-        }));
+        set((s) => {
+          const withService = { ...s.system, services: [...s.system.services, service] };
+          // A station riding one of these ways could have been unserved when
+          // its name was auto-suggested — resolveNamingStyle's fallback has to
+          // guess a style before any service exists, and this line might prove
+          // that guess wrong (see resyncAutoNamedStations).
+          return {
+            system: touch(resyncAutoNamedStations(withService)),
+            selection: { kind: 'service', id },
+          };
+        });
         return id;
       },
 
@@ -4300,8 +4319,8 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
                 { kind: 'split' as const, outbound: diverged, inbound: returnLegs },
               ],
         );
-        set((s) => ({
-          system: touch({
+        set((s) => {
+          const withReturnPath = {
             ...s.system,
             services: s.system.services.map((sv) =>
               sv.id !== serviceId
@@ -4311,9 +4330,14 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
                     patterns: sv.patterns.map((p) => (p.id === patternId ? { ...p, sections } : p)),
                   },
             ),
-          }),
-          routeDraft: null,
-        }));
+          };
+          // The return trip can newly cover a station the outbound leg never
+          // reached — same staleness case createRoutedService resyncs for.
+          return {
+            system: touch(resyncAutoNamedStations(withReturnPath)),
+            routeDraft: null,
+          };
+        });
         return true;
       },
 
@@ -4509,14 +4533,16 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         let station = createStation(coord, anchor);
         // Computed once, here, never again automatically — moving or
         // re-anchoring a station must never silently overwrite a name the
-        // user (or this suggestion) already gave it. The Inspector's own
-        // "Suggest name" button is the only other place this runs.
+        // user (or this suggestion) already gave it. autoNamed marks it as
+        // still eligible for resyncAutoNamedStations to correct later, if a
+        // service drawn afterward reveals the initial guess was wrong; the
+        // Inspector's "Suggest name" button is the only other place this runs.
         const suggested = suggestStopName({
           system: get().system,
           coord,
           anchors: station.anchors,
         });
-        if (suggested.name) station = { ...station, name: suggested.name };
+        if (suggested.name) station = { ...station, name: suggested.name, autoNamed: true };
         set((s) => ({
           system: touch({ ...s.system, stations: [...s.system.stations, station] }),
           selection: { kind: 'station', id: station.id },
@@ -4543,7 +4569,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           coord,
           anchors,
           footprint,
-          ...(suggested.name ? { name: suggested.name } : {}),
+          ...(suggested.name ? { name: suggested.name, autoNamed: true } : {}),
         };
         set((s) => ({
           system: touch({ ...s.system, stations: [...s.system.stations, station] }),
@@ -4562,11 +4588,13 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           }),
         })),
 
-      setStationName: (id, name) =>
+      setStationName: (id, name, options) =>
         set((s) => ({
           system: touch({
             ...s.system,
-            stations: s.system.stations.map((st) => (st.id === id ? { ...st, name } : st)),
+            stations: s.system.stations.map((st) =>
+              st.id === id ? { ...st, name, autoNamed: options?.auto ?? false } : st,
+            ),
           }),
         })),
 

@@ -108,7 +108,7 @@ export function StationInspector({ id }: StationInspectorProps) {
                 coord: st.coord,
                 anchors: st.anchors,
               });
-              if (suggested.name) setStationName(id, suggested.name);
+              if (suggested.name) setStationName(id, suggested.name, { auto: true });
             }}
           />
         )}

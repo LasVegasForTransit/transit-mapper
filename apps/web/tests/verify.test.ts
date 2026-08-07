@@ -12513,6 +12513,47 @@ function buildGrid() {
   );
 }
 
+// --- cross-street auto-naming: resyncs once a later service proves the unserved guess wrong ---
+{
+  fresh();
+  const ew = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ew, [-115.2, 36.1]);
+  store.getState().addWayPoint(ew, [-115.1, 36.1]);
+  store.getState().finishWay();
+  store.getState().nameWay(ew, 'Home St');
+  const ns = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ns, [-115.15, 36.05]);
+  store.getState().addWayPoint(ns, [-115.15, 36.15]);
+  store.getState().finishWay();
+  store.getState().nameWay(ns, 'Cross Ave');
+  // finishWay already forms the crossing junction, splitting 'ew' at it.
+
+  const ewAfterSplit = store
+    .getState()
+    .system.ways.find((w) => w.points.some((p) => p[0] === -115.15 && p[1] === 36.1))!;
+  const stId = store.getState().addStation([-115.15, 36.1], { wayId: ewAfterSplit.id, t: 1 });
+  const placed = store.getState().system.stations.find((s) => s.id === stId)!;
+  check(
+    'an unserved road-anchored station is auto-named along-street and marked autoNamed',
+    placed.name === 'Home St @ Cross Ave' && placed.autoNamed === true,
+  );
+
+  // Draw a tram line over the whole of the station's own way — tram is
+  // street-running, so a 'road'-typed way is a legal alignment for it.
+  const sys = store.getState().system;
+  const homeWay = sys.ways.find((w) => w.id === ewAfterSplit.id)!;
+  const from = anchorOnWay(homeWay, homeWay.points[0])!;
+  const to = anchorOnWay(homeWay, homeWay.points[homeWay.points.length - 1])!;
+  const routed = routeBetween(sys, from, to, { allowedTypeIds: new Set(['road']) })!;
+  store.getState().createRoutedService(routed.spans, 'tram');
+
+  const resynced = store.getState().system.stations.find((s) => s.id === stId)!;
+  check(
+    'the tram line resyncs the still-autoNamed station to intersection style',
+    resynced.name === 'Home St & Cross Ave' && resynced.autoNamed === true,
+  );
+}
+
 // --- the crossing scan only looks at ways that could actually cross ---
 // wayCrossings compares every segment of one way against every segment of
 // another, with no bbox reject, and formCrossingJunctions runs it on every

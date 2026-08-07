@@ -361,3 +361,29 @@ export function suggestStopName(query: CrossStreetQuery): SuggestedStopName {
   if (!winner) return { style, name: home };
   return { style, name: formatName(style, home, winner.name, false, winner.direction) };
 }
+
+/**
+ * Re-suggests every still-`autoNamed` station's name against the current
+ * document. A name is only ever computed automatically at two moments: when
+ * a station is first placed, and here — called after an action that could
+ * newly serve a previously-unserved stop (drawing a service through it,
+ * attaching a return path), the case resolveNamingStyle's own fallback
+ * can't get right in advance, since it has to guess a style before any
+ * service exists.
+ *
+ * A user's own typed text is never touched: `autoNamed` clears the moment
+ * anyone sets a station's name directly, and only stations where it's still
+ * set are eligible here. Returns `system` unchanged (same reference) when
+ * nothing needed updating, so callers can cheaply skip a store update.
+ */
+export function resyncAutoNamedStations(system: TransitSystem): TransitSystem {
+  let changed = false;
+  const stations = system.stations.map((st) => {
+    if (!st.autoNamed) return st;
+    const suggested = suggestStopName({ system, coord: st.coord, anchors: st.anchors });
+    if (!suggested.name || suggested.name === st.name) return st;
+    changed = true;
+    return { ...st, name: suggested.name };
+  });
+  return changed ? { ...system, stations } : system;
+}

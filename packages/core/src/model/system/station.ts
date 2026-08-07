@@ -20,6 +20,14 @@ export interface Platform {
 export interface Station {
   id: string;
   name?: string;
+  /** True while `name` is still exactly what suggestStopName last computed
+   *  for this station — never set once a user types their own text into the
+   *  name field. Gates which stations model/geo/crossStreetNaming.ts's
+   *  resyncAutoNamedStations may safely overwrite when a later action (e.g.
+   *  drawing a service through a previously-unserved stop) changes what the
+   *  suggestion would be; a user's own name is never touched automatically,
+   *  no matter what changes around it. */
+  autoNamed?: boolean;
   /** Position as a network node, snapped onto its way's path. */
   coord: LngLat;
   /**

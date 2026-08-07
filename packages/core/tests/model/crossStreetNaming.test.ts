@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { suggestStopName } from '../../src/model/geo/crossStreetNaming';
+import { resyncAutoNamedStations, suggestStopName } from '../../src/model/geo/crossStreetNaming';
 import { defaultProfileFor } from '../../src/model/profile';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
 import type { NamedWay, Node, TransitSystem, Way, WayPointRef } from '../../src/model/system';
 
 // Real-meter-scale coordinate helpers — CROSS_STREET_AT_JUNCTION_M (20),
@@ -448,5 +448,95 @@ describe('suggestStopName', () => {
       anchors: [{ wayId: 'home', t: 0.5 }],
     });
     expect(result.style).toBe('intersection');
+  });
+});
+
+describe('resyncAutoNamedStations', () => {
+  const junction: [number, number] = [east(-115.2, 100), LAT0];
+  const home = aRoad('home', [[-115.2, LAT0], junction]);
+  const cross = aRoad('cross', [
+    [junction[0], north(LAT0, -50)],
+    [junction[0], north(LAT0, 50)],
+  ]);
+  const baseSystem = (): TransitSystem =>
+    aSystem({
+      ways: [home, cross],
+      namedWays: [
+        namedWay('nw-home', 'Home St', ['home']),
+        namedWay('nw-cross', 'Cross Ave', ['cross']),
+      ],
+      nodes: [
+        node('n1', junction, [
+          { wayId: 'home', pointIndex: 1 },
+          { wayId: 'cross', pointIndex: 0 },
+        ]),
+      ],
+    });
+
+  it("corrects an auto-named station's style once a service proves the unserved guess wrong", () => {
+    // Named while unserved: 'home' is road-typed, so the fallback guesses
+    // along-street style — "Home St @ Cross Ave" — before any service exists.
+    const unserved = baseSystem();
+    const preview = suggestStopName({
+      system: unserved,
+      coord: junction,
+      anchors: [{ wayId: 'home', t: 1 }],
+    });
+    expect(preview).toEqual({ style: 'alongStreet', name: 'Home St @ Cross Ave' });
+
+    // A tram — street-running, so 'home' is a legal alignment for it — now
+    // rides that same way, which the services-based branch reads as
+    // intersection style instead.
+    const withTram: TransitSystem = {
+      ...unserved,
+      stations: [
+        aStation(
+          'st1',
+          junction,
+          { wayId: 'home', t: 1 },
+          { name: preview.name!, autoNamed: true },
+        ),
+      ],
+      services: [aService('svc1', [aPattern('p1', [home], ['home'])], { modeId: 'tram' })],
+    };
+    const resynced = resyncAutoNamedStations(withTram);
+    const station = resynced.stations.find((s) => s.id === 'st1')!;
+    expect(station.name).toBe('Home St & Cross Ave');
+    expect(station.autoNamed, 'stays eligible for a further resync later').toBe(true);
+  });
+
+  it("never touches a station's name once a user has typed their own", () => {
+    const withTram: TransitSystem = {
+      ...baseSystem(),
+      stations: [
+        aStation(
+          'st1',
+          junction,
+          { wayId: 'home', t: 1 },
+          { name: 'My Custom Stop Name', autoNamed: false },
+        ),
+      ],
+      services: [aService('svc1', [aPattern('p1', [home], ['home'])], { modeId: 'tram' })],
+    };
+    const resynced = resyncAutoNamedStations(withTram);
+    expect(resynced.stations[0].name).toBe('My Custom Stop Name');
+  });
+
+  it('returns the same system reference when no auto-named station needs correcting', () => {
+    // No service exists here, same as baseSystem() alone — the unserved
+    // fallback's along-street guess is already what's stored, so recomputing
+    // against this exact system must be a no-op.
+    const system: TransitSystem = {
+      ...baseSystem(),
+      stations: [
+        aStation(
+          'st1',
+          junction,
+          { wayId: 'home', t: 1 },
+          { name: 'Home St @ Cross Ave', autoNamed: true },
+        ),
+      ],
+    };
+    expect(resyncAutoNamedStations(system)).toBe(system);
   });
 });
