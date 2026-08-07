@@ -1,0 +1,23 @@
+{
+  "src/index.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "tests/shares.test.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    }
+  },
+  "tests/verify.test.ts": {
+    "@typescript-eslint/no-misused-spread": {
+      "count": 2
+    }
+  }
+}

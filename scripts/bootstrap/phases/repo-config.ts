@@ -64,9 +64,7 @@ function rulesetState(): Drift | ToolRow {
   return { label: 'Branch ruleset', status: 'ready', detail: `"${BRANCH_RULESET.name}" matches` };
 }
 
-interface SecurityState {
-  [key: string]: { status?: string } | undefined;
-}
+type SecurityState = Record<string, { status?: string } | undefined>;
 
 function securityState(): Drift | ToolRow {
   const repo = ghApi('repos/:owner/:repo --jq .security_and_analysis');
@@ -298,7 +296,7 @@ export async function runRepoConfigPhase(options: { doctor: boolean }): Promise<
         current.ok && typeof current.data === 'object' && current.data !== null
           ? ghApi(
               '--method PUT repos/:owner/:repo/actions/permissions',
-              actionsPolicyBody(current.data as Record<string, unknown>),
+              actionsPolicyBody(current.data),
             )
           : current;
       applied.push(

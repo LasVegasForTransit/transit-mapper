@@ -1,11 +1,12 @@
+// Every TypeScript file in this package, which is what the name has to mean.
+//
+// TypeScript's language service — the thing an editor and `projectService`
+// both use — resolves a file by walking up to the nearest `tsconfig.json` and
+// nothing else. A file this config leaves out therefore has no types anywhere
+// outside a `tsc` run: no editor errors, and type-aware lint rejects it
+// outright. So this is the wide one, and `tsconfig.build.json` is where the
+// production scope is narrowed.
 {
-  "extends": "@transitmapper/tsconfig/base.json",
-  "compilerOptions": {
-    // DOM only for the ambient fetch/crypto/structuredClone typings (part of
-    // lib.dom.d.ts) — core has no actual DOM/browser dependency, but these
-    // WHATWG globals are what both consumers (browser + Workers runtime)
-    // provide at runtime, and core must type-check standalone for either.
-    "lib": ["ES2022", "DOM"]
-  },
-  "include": ["src", "tests"]
+  "extends": "./tsconfig.build.json",
+  "include": ["src", "tests", "vitest.config.ts"]
 }

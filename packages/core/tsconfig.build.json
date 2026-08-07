@@ -1,0 +1,17 @@
+// Production sources only, and the authority on what core is allowed to be.
+//
+// `tsconfig.json` beside this one is deliberately wider — it exists so editors
+// and type-aware lint can place every file in the package — which means it is
+// not the file to reach for when tightening what `src` may depend on. Tighten
+// here.
+{
+  "extends": "@transitmapper/tsconfig/base.json",
+  "compilerOptions": {
+    // DOM only for the ambient fetch/crypto/structuredClone typings (part of
+    // lib.dom.d.ts) — core has no actual DOM/browser dependency, but these
+    // WHATWG globals are what both consumers (browser + Workers runtime)
+    // provide at runtime, and core must type-check standalone for either.
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src"]
+}

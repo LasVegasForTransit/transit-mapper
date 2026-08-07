@@ -1,17 +1,20 @@
+// Every TypeScript file in this application: Worker sources, the workerd tests,
+// the Node-run sequential verifier, the tooling under scripts/, and the Vitest
+// config.
+//
+// TypeScript's language service resolves a file by walking up to the nearest
+// `tsconfig.json` and nothing else — it never looks for a differently named
+// config. A file left out of this one therefore has no types in an editor, and
+// type-aware lint rejects it rather than checking it.
+//
+// All three type sets are listed because this one program contains all three
+// kinds of file: workerd sources, `cloudflare:test` suites, and a Node script
+// that imports from `src`. `types` replaces rather than extends the inherited
+// array, so omitting any one breaks that third of the program.
 {
-  "extends": "@transitmapper/tsconfig/base.json",
+  "extends": "./tsconfig.build.json",
   "compilerOptions": {
-    "lib": ["ES2022"],
-    // vitest-pool-workers/types declares the `cloudflare:test` module the
-    // workerd tests import.
-    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-pool-workers/types"]
+    "types": ["node", "@cloudflare/workers-types", "@cloudflare/vitest-pool-workers/types"]
   },
-  "include": [
-    "src",
-    "tests/**/*.test.ts",
-    "tests/**/*.test.tsx",
-    "vitest.config.ts",
-    "worker-configuration.d.ts"
-  ],
-  "exclude": ["tests/verify.test.ts"]
+  "include": ["src", "tests", "scripts", "vitest.config.ts", "worker-configuration.d.ts"]
 }

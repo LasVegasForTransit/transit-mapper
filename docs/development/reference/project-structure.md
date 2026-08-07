@@ -19,7 +19,7 @@ apps/worker ──┘
 apps/web ────────> packages/pwa-updater
 
 all TypeScript packages ──> packages/tsconfig
-repository linting ───────> packages/eslint-plugin
+repository linting ───────> packages/config-eslint ──> packages/eslint-plugin
 ```
 
 The domain model does not import browser state, React, MapLibre, or Worker
@@ -33,6 +33,7 @@ rules portable across the browser and workerd runtimes.
 packages/
   core/           Shared domain, geometry, rendering, simulation, and contracts
   pwa-updater/    Editor update lifecycle
+  config-eslint/  The org's ESLint baseline, as a function
   eslint-plugin/  Repository-specific lint rules
   tsconfig/       Shared TypeScript compiler policy
 apps/
@@ -107,6 +108,22 @@ The updater translates service-worker registration events into a promptable
 state. The web application decides where to show the update notice and when a
 person may activate the waiting version. This prevents an update from
 replacing an editing session without consent.
+
+### ESLint baseline
+
+`packages/config-eslint` owns the rule set itself, as two functions a
+repository calls from its `eslint.config.ts`. `defineTypeAwareConfig` takes the
+directory holding that config and returns the baseline with every rule that
+needs a type checker; `defineConfig` returns the syntax-only subset for a
+repository with no project covering each file.
+
+#### Baseline rules
+
+The baseline is the org's, not this repository's, and carries nothing that
+names a path here. Repository-specific scoping is passed in as extra config
+objects and lands after the baseline and before the Prettier reset. Departures
+from the upstream presets are recorded in the module beside the count of
+findings that justified each one.
 
 ### ESLint plugin
 

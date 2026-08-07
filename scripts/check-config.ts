@@ -81,6 +81,12 @@ const TOOL_OWNED = [
   /^tsconfig(\.[a-z0-9-]+)?\.json$/,
   /^turbo\.json$/,
   /^wrangler\.toml$/,
+  // ESLint's suppression ledger, written by `--suppress-all` and read from the
+  // working directory. Every package lints from its own directory, so every
+  // package that carries debt has one. Pointing them all at a single shared
+  // file would mean repeating --suppressions-location in each `lint` script,
+  // and one missed copy silently reads an empty ledger.
+  /^eslint-suppressions\.json$/,
 ];
 
 /**
@@ -95,9 +101,6 @@ const OWNED_PATHS = new Set([
   // release-please reads both by these exact names, passed nowhere.
   'release-please-config.json',
   '.release-please-manifest.json',
-  // ESLint's suppression ledger. Relocating it with --suppressions-location
-  // would mean repeating that flag in five separate lint invocations.
-  'eslint-suppressions.json',
   // A shared tsconfig fragment other packages reach by
   // `@transitmapper/tsconfig/base.json`. Renaming it means editing every
   // `extends` in the workspace for no gain.

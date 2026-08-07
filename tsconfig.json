@@ -1,0 +1,37 @@
+// Repository tooling: the checks and generators under scripts/, the package
+// scaffolding under turbo/, and eslint.config.ts itself.
+//
+// At the root rather than inside scripts/ because TypeScript's language
+// service resolves a file by walking up to the nearest `tsconfig.json`, and a
+// `.ts` file at the repository root would otherwise reach nothing at all.
+// `eslint.config.ts` and `turbo/generators/config.ts` are both loaded at
+// runtime by tools that transpile without typechecking, so without this they
+// are the two files nothing compiles.
+//
+// No `tsconfig.build.json` beside this one, unlike every package: nothing here
+// ships. These are programs `tsx` runs in place.
+//
+// An independent leaf — no composite, no references. `tsc -b --noEmit` raises
+// TS6310 once a project has outgoing references.
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noEmit": true,
+    "types": ["node"],
+    // Not for anything under scripts/. `eslint.config.ts` imports
+    // `@transitmapper/config-eslint` and `@transitmapper/eslint-plugin`, whose
+    // `exports` maps point straight at TypeScript source, and that source
+    // imports its own modules with a `.ts` suffix. Typechecking the config
+    // therefore means typechecking those packages under their own rule. Safe
+    // because nothing here emits.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["scripts", "turbo", "eslint.config.ts"]
+}

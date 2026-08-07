@@ -62,7 +62,7 @@ function extractLinks(absPath: string, root: string, content: string): Link[] {
   const lines = content.split('\n');
   let inFence = false;
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!;
+    const line = lines[i];
     if (line.startsWith('```')) {
       inFence = !inFence;
       continue;
@@ -127,8 +127,8 @@ function extractAnchors(content: string): Set<string> {
       continue;
     }
     if (inFence) continue;
-    const m = line.match(/^#{1,6}\s+(.+?)\s*#*\s*$/);
-    if (m) anchors.add(slugify(m[1]!));
+    const m = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
+    if (m) anchors.add(slugify(m[1]));
     ANCHOR_ID_RE.lastIndex = 0;
     let a: RegExpExecArray | null;
     while ((a = ANCHOR_ID_RE.exec(line)) !== null) {

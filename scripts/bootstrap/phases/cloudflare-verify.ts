@@ -21,7 +21,7 @@ export async function runCloudflareVerifyPhase(): Promise<PhaseResult> {
 
   const toml = readFileSync(WRANGLER_TOML, 'utf8');
 
-  const dbIdMatch = toml.match(/database_id\s*=\s*"([^"]+)"/);
+  const dbIdMatch = /database_id\s*=\s*"([^"]+)"/.exec(toml);
   const dbId = dbIdMatch?.[1];
   if (!dbId || dbId === PLACEHOLDER_DB_ID) {
     rows.push({
@@ -45,9 +45,9 @@ export async function runCloudflareVerifyPhase(): Promise<PhaseResult> {
     }
   }
 
-  const hasCustomDomainRoute = /\[\[routes\]\]/.test(toml) && /custom_domain\s*=\s*true/.test(toml);
+  const hasCustomDomainRoute = toml.includes('[[routes]]') && /custom_domain\s*=\s*true/.test(toml);
   if (hasCustomDomainRoute) {
-    const patternMatch = toml.match(/pattern\s*=\s*"([^"]+)"/);
+    const patternMatch = /pattern\s*=\s*"([^"]+)"/.exec(toml);
     rows.push({
       label: 'Custom domain route',
       status: 'ready',

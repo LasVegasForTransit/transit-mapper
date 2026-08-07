@@ -36,7 +36,6 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck:scripts": "tsc -p scripts/tsconfig.json --noEmit",
     "check:contract": "tsx scripts/check-workspace-contract.ts",
     "check:filenames": "tsx scripts/check-file-names.ts",
     "check": "tsx scripts/run-checks.ts",
@@ -51,26 +50,24 @@
     "check:env": "tsx scripts/doctor.ts",
     "gen:checks": "tsx scripts/generate-checks-reference.ts",
     "check:reference": "tsx scripts/generate-checks-reference.ts --check",
-    "check:documents": "tsx scripts/check-document-standards.ts"
+    "check:documents": "tsx scripts/check-document-standards.ts",
+    "typecheck:root": "tsc -b tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@clack/prompts": "catalog:",
+    "@transitmapper/config-eslint": "workspace:*",
+    "@transitmapper/eslint-plugin": "workspace:*",
+    "@turbo/gen": "catalog:",
     "@types/node": "catalog:",
-    "turbo": "catalog:",
-    "tsx": "catalog:",
-    "typescript": "catalog:",
-    "@eslint-community/eslint-plugin-eslint-comments": "catalog:",
-    "@eslint/js": "catalog:",
     "eslint": "catalog:",
-    "eslint-config-prettier": "catalog:",
     "eslint-plugin-react-hooks": "catalog:",
     "jiti": "catalog:",
     "lint-staged": "catalog:",
     "prettier": "catalog:",
-    "typescript-eslint": "catalog:",
-    "vitest": "catalog:",
-    "@transitmapper/eslint-plugin": "workspace:*",
-    "@turbo/gen": "catalog:"
+    "tsx": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "lint-staged": {
     "*": "prettier --write --ignore-unknown",

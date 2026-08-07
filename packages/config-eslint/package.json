@@ -1,23 +1,27 @@
 {
-  "name": "@transitmapper/core",
+  "name": "@transitmapper/config-eslint",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": {
-    "./testing/fixtures": "./tests/support/fixtures.test.ts",
-    "./*": "./src/*.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
     "lint": "eslint .",
     "verify": "vitest run"
   },
-  "dependencies": {
-    "fflate": "catalog:"
-  },
   "devDependencies": {
     "@transitmapper/tsconfig": "workspace:*",
-    "@types/geojson": "catalog:",
     "vitest": "catalog:"
+  },
+  "dependencies": {
+    "@eslint-community/eslint-plugin-eslint-comments": "catalog:",
+    "@eslint/js": "catalog:",
+    "eslint-config-prettier": "catalog:",
+    "typescript-eslint": "catalog:"
+  },
+  "peerDependencies": {
+    "eslint": "catalog:"
   }
 }
