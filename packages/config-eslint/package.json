@@ -19,6 +19,7 @@
     "@eslint-community/eslint-plugin-eslint-comments": "catalog:",
     "@eslint/js": "catalog:",
     "eslint-config-prettier": "catalog:",
+    "eslint-plugin-sonarjs": "catalog:",
     "typescript-eslint": "catalog:"
   },
   "peerDependencies": {

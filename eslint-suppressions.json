@@ -4,13 +4,32 @@
       "count": 2
     }
   },
+  "scripts/bootstrap/phases/auth.ts": {
+    "sonarjs/cognitive-complexity": {
+      "count": 1
+    }
+  },
   "scripts/bootstrap/phases/cloudflare-verify.ts": {
     "@typescript-eslint/require-await": {
       "count": 1
     }
   },
+  "scripts/bootstrap/phases/provision.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "scripts/bootstrap/phases/repo-config.ts": {
     "@typescript-eslint/no-unnecessary-type-conversion": {
+      "count": 1
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "sonarjs/cognitive-complexity": {
       "count": 1
     }
   },
@@ -22,10 +41,19 @@
   "scripts/check-docs-links.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 6
+    },
+    "complexity": {
+      "count": 1
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 1
     }
   },
   "scripts/check-document-standards.ts": {
     "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "sonarjs/cognitive-complexity": {
       "count": 1
     }
   },
@@ -37,6 +65,23 @@
   "scripts/check-workspace-contract.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 2
+    },
+    "complexity": {
+      "count": 3
+    },
+    "max-depth": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 3
+    }
+  },
+  "turbo/generators/config.ts": {
+    "max-lines-per-function": {
+      "count": 1
     }
   }
 }
