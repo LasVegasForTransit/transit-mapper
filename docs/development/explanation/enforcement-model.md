@@ -64,6 +64,25 @@ pull request, requires the `Validate` check to pass, and forbids deleting
 or force-pushing the branch. `scripts/bootstrap/standards.ts` holds it as
 data, and `pnpm bootstrap` reports drift or applies it.
 
+That protection is scoped to `main` on purpose. Amending your own commits,
+force-pushing your own branch, rebasing onto a moved base — all of that is
+normal work on a feature branch, and nothing here restricts it. The rule
+is that `main` itself never gets deleted or force-pushed, not that history
+is sacred everywhere.
+
+### Merge method
+
+Pull requests land by rebase merge only. Squash merging and merge commits
+are both off at the repository level, so a pull request's commits replay
+onto `main` unchanged — same diff, same message, same author — instead of
+folding into one commit or gaining a merge commit of their own. `main`'s
+history stays a straight line: reading it top to bottom is reading the
+project's actual sequence of changes, not a sequence of squash commits
+each hiding a PR's worth of intermediate ones.
+
+Write commits on a feature branch the way you want them to read in
+`main`, since that is exactly how they will land.
+
 ### Required approvals
 
 The ruleset asks for zero approving reviews, which is deliberate and
