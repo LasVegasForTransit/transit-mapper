@@ -112,6 +112,7 @@ import {
 import {
   resyncAutoNamedStations,
   suggestStopName,
+  type SuggestedStopName,
 } from '@transitmapper/core/model/geo/crossStreetNaming';
 import { withoutAlreadyImported, type ImportedNetwork } from '@transitmapper/core/model/import';
 import type {
@@ -715,6 +716,11 @@ export interface EditorState {
   consumeFocusName: (id: string) => void;
   moveStation: (id: string, coord: LngLat, anchor?: StationAnchor) => void;
   setStationName: (id: string, name: string, options?: SetStationNameOptions) => void;
+  /** Recomputes a station's name from its current position and applies it,
+   *  the same suggestion addStation/addDrawnStation compute at placement —
+   *  the Inspector's "Suggest name" button, for after a move makes the
+   *  original guess stale. A no-op if nothing can be suggested. */
+  suggestStationName: (id: string) => void;
   /** How long a vehicle dwells here before departing, in seconds — undefined
    *  reverts to the animation's own default (see sim/vehicles.ts). */
   setStationDwellSeconds: (id: string, seconds: number | undefined) => void;
@@ -771,6 +777,18 @@ function centroidOf(ring: LngLat[]): LngLat {
   const cx = ring.reduce((sum, p) => sum + p[0], 0) / ring.length;
   const cy = ring.reduce((sum, p) => sum + p[1], 0) / ring.length;
   return [cx, cy];
+}
+
+/** Applies a computed name suggestion onto a station-shaped object, marking
+ *  it `autoNamed` — shared by addStation/addDrawnStation, the only two
+ *  places a station gets its initial name. A null suggestion leaves `base`
+ *  untouched (same reference), matching "leave the name unset" everywhere
+ *  else a suggestion comes up empty. */
+function withSuggestedName<T extends { name?: string; autoNamed?: boolean }>(
+  base: T,
+  suggested: SuggestedStopName,
+): T {
+  return suggested.name ? { ...base, name: suggested.name, autoNamed: true } : base;
 }
 
 function touch(system: TransitSystem): TransitSystem {
@@ -3683,6 +3701,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         };
         // Routing over what's already there adds no infrastructure at all now —
         // only a service that names the stretches it uses.
+        const riddenWayIds = new Set(legs.map((l) => l.wayId));
         set((s) => {
           const withService = { ...s.system, services: [...s.system.services, service] };
           // A station riding one of these ways could have been unserved when
@@ -3690,7 +3709,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           // guess a style before any service exists, and this line might prove
           // that guess wrong (see resyncAutoNamedStations).
           return {
-            system: touch(resyncAutoNamedStations(withService)),
+            system: touch(resyncAutoNamedStations(withService, riddenWayIds)),
             selection: { kind: 'service', id },
           };
         });
@@ -4333,8 +4352,12 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           };
           // The return trip can newly cover a station the outbound leg never
           // reached — same staleness case createRoutedService resyncs for.
+          // Only the return legs themselves are new coverage; the shared/
+          // outbound legs already existed before this call.
           return {
-            system: touch(resyncAutoNamedStations(withReturnPath)),
+            system: touch(
+              resyncAutoNamedStations(withReturnPath, new Set(returnLegs.map((l) => l.wayId))),
+            ),
             routeDraft: null,
           };
         });
@@ -4530,7 +4553,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         }),
 
       addStation: (coord, anchor) => {
-        let station = createStation(coord, anchor);
+        const bare = createStation(coord, anchor);
         // Computed once, here, never again automatically — moving or
         // re-anchoring a station must never silently overwrite a name the
         // user (or this suggestion) already gave it. autoNamed marks it as
@@ -4540,9 +4563,9 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         const suggested = suggestStopName({
           system: get().system,
           coord,
-          anchors: station.anchors,
+          anchors: bare.anchors,
         });
-        if (suggested.name) station = { ...station, name: suggested.name, autoNamed: true };
+        const station = withSuggestedName(bare, suggested);
         set((s) => ({
           system: touch({ ...s.system, stations: [...s.system.stations, station] }),
           selection: { kind: 'station', id: station.id },
@@ -4564,13 +4587,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         if (hit) coord = hit.coord;
         const anchors = hit ? [{ wayId: hit.wayId, t: hit.t }] : [];
         const suggested = suggestStopName({ system: get().system, coord, anchors });
-        const station: Station = {
-          id,
-          coord,
-          anchors,
-          footprint,
-          ...(suggested.name ? { name: suggested.name, autoNamed: true } : {}),
-        };
+        const station = withSuggestedName<Station>({ id, coord, anchors, footprint }, suggested);
         set((s) => ({
           system: touch({ ...s.system, stations: [...s.system.stations, station] }),
           selection: { kind: 'station', id },
@@ -4597,6 +4614,17 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
             ),
           }),
         })),
+
+      suggestStationName: (id) => {
+        const st = get().system.stations.find((s) => s.id === id);
+        if (!st) return;
+        const suggested = suggestStopName({
+          system: get().system,
+          coord: st.coord,
+          anchors: st.anchors,
+        });
+        if (suggested.name) get().setStationName(id, suggested.name, { auto: true });
+      },
 
       setStationDwellSeconds: (id, seconds) =>
         set((s) => ({

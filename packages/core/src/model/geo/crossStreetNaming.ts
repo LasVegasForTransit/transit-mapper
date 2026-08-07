@@ -6,7 +6,7 @@
 import { modesForWayType } from '../catalog';
 import { laneCapacity } from '../profile';
 import { servicesAtStation } from '../../sim/frequency';
-import type { LngLat, NamedWay, Node, StationAnchor, TransitSystem, Way } from '../system';
+import type { LngLat, NamedWay, Node, Station, StationAnchor, TransitSystem, Way } from '../system';
 import { haversineMeters } from './spherical';
 import { pathLengthMeters } from './measurement';
 import { resolveWayPath, wayById } from './wayPath';
@@ -30,6 +30,16 @@ const STOP_NAMING_STYLE: Partial<Record<string, StopNamingStyle>> = {
 
 function stopNamingStyle(modeId: string): StopNamingStyle {
   return STOP_NAMING_STYLE[modeId] ?? 'intersection';
+}
+
+/** Intersection wins over along-street whenever the modes in play disagree —
+ *  matches an interchange keeping its rail-derived "&" name even once a bus
+ *  also calls there. Shared by resolveNamingStyle's two branches (modes
+ *  actually serving the stop, and modes that could plausibly serve it once
+ *  one does), which otherwise differ only in what they map to a mode id. */
+function styleFromModeIds(modeIds: string[]): StopNamingStyle {
+  const styles = new Set(modeIds.map(stopNamingStyle));
+  return styles.has('intersection') ? 'intersection' : 'alongStreet';
 }
 
 /** How close a stop's coordinate must be to a Node to read as "at" that
@@ -56,9 +66,18 @@ export interface CrossStreetQuery {
   anchors: StationAnchor[];
 }
 
+// Cached by the namedWays array's own reference, same convention as
+// nodesByWayId below and wayById (wayPath.ts) — suggestStopName rebuilds
+// this on every call otherwise, and resyncAutoNamedStations calls it once
+// per autoNamed station against the same namedWays array each time.
+const namedWayByWayIdCache = new WeakMap<NamedWay[], Map<string, NamedWay>>();
+
 function namedWayByWayId(namedWays: NamedWay[]): Map<string, NamedWay> {
-  const index = new Map<string, NamedWay>();
+  let index = namedWayByWayIdCache.get(namedWays);
+  if (index) return index;
+  index = new Map();
   for (const nw of namedWays) for (const wayId of nw.wayIds) index.set(wayId, nw);
+  namedWayByWayIdCache.set(namedWays, index);
   return index;
 }
 
@@ -99,8 +118,7 @@ function resolveNamingStyle(
     anchors,
   });
   if (services.length > 0) {
-    const styles = new Set(services.map((sv) => stopNamingStyle(sv.modeId)));
-    return styles.has('intersection') ? 'intersection' : 'alongStreet';
+    return styleFromModeIds(services.map((sv) => sv.modeId));
   }
   const waysById = wayById(system.ways);
   const anchoredWays = anchors
@@ -120,8 +138,7 @@ function resolveNamingStyle(
     modesForWayType(w.typeId).filter((m) => m.wayTypeIds[0] === w.typeId),
   );
   if (nativeModes.length === 0) return 'intersection';
-  const styles = new Set(nativeModes.map((m) => stopNamingStyle(m.id)));
-  return styles.has('intersection') ? 'intersection' : 'alongStreet';
+  return styleFromModeIds(nativeModes.map((m) => m.id));
 }
 
 /** Distinct NamedWay names carried by the stop's own anchored way(s). */
@@ -143,6 +160,20 @@ function namedWayImportance(nw: NamedWay, waysById: Map<string, Way>): number {
     if (way) total += laneCapacity(way.profile);
   }
   return total;
+}
+
+/** Resolves a way ref's NamedWay, skipping unnamed and home-named arms.
+ *  Shared by crossStreetsAtNode's junction scan and walkOneDirection's
+ *  pass-through check — both need exactly this filter before deciding what
+ *  to do with a genuinely different name. */
+function nonHomeName(
+  wayId: string,
+  namedWayIndex: Map<string, NamedWay>,
+  homeNames: Set<string>,
+): string | null {
+  const nw = namedWayIndex.get(wayId);
+  if (!nw || nw.name.trim() === '' || homeNames.has(nw.name)) return null;
+  return nw.name;
 }
 
 interface JunctionCrossStreets {
@@ -173,10 +204,8 @@ function crossStreetsAtNode(
   if (!best) return null;
   const candidates = new Map<string, NamedWay>(); // name -> representative NamedWay
   for (const ref of best.node.refs) {
-    if (homeWayIds.has(ref.wayId)) continue;
-    const nw = namedWayIndex.get(ref.wayId);
-    if (!nw || nw.name.trim() === '' || homeNames.has(nw.name)) continue;
-    candidates.set(nw.name, nw);
+    const name = nonHomeName(ref.wayId, namedWayIndex, homeNames);
+    if (name) candidates.set(name, namedWayIndex.get(ref.wayId)!);
   }
   if (candidates.size === 0) return null;
   const ranked = [...candidates.values()].sort((a, b) => {
@@ -207,20 +236,6 @@ interface CorridorHit {
    *  order, not a compass direction or a service's travel direction (which
    *  usually doesn't exist yet at naming time — see resolveNamingStyle). */
   direction: 'ahead' | 'behind';
-}
-
-/** Resolves a way ref's NamedWay, skipping unnamed and home-named arms.
- *  Shared by crossStreetsAtNode's junction scan and walkOneDirection's
- *  pass-through check — both need exactly this filter before deciding what
- *  to do with a genuinely different name. */
-function nonHomeName(
-  wayId: string,
-  namedWayIndex: Map<string, NamedWay>,
-  homeNames: Set<string>,
-): string | null {
-  const nw = namedWayIndex.get(wayId);
-  if (!nw || nw.name.trim() === '' || homeNames.has(nw.name)) return null;
-  return nw.name;
 }
 
 /** Walks the stop's own corridor in one direction from its projection point,
@@ -282,17 +297,22 @@ function walkOneDirection(
   return null;
 }
 
+// Where the cross street was found, relative to home — collapses what were
+// separate atJunction/direction params into one, since the two were never
+// independent: a junction hit never carries a direction, and a corridor-walk
+// hit always does.
+type CrossStreetPosition = 'junction' | 'ahead' | 'behind';
+
 function formatName(
   style: StopNamingStyle,
   home: string,
   cross: string | null,
-  atJunction: boolean,
-  direction: 'ahead' | 'behind' | null,
+  position: CrossStreetPosition,
 ): string {
   if (!cross) return home;
   if (style === 'intersection') return `${home} & ${cross}`;
-  if (atJunction) return `${home} @ ${cross}`;
-  return direction === 'behind' ? `${home} after ${cross}` : `${home} before ${cross}`;
+  if (position === 'junction') return `${home} @ ${cross}`;
+  return position === 'behind' ? `${home} after ${cross}` : `${home} before ${cross}`;
 }
 
 /** Suggests a name for a station or stop from the real street names already
@@ -326,7 +346,7 @@ export function suggestStopName(query: CrossStreetQuery): SuggestedStopName {
       waysCrossNear(system, coord, first.wayId, candidate.wayId),
     );
     if (!cross) return { style, name: first.name };
-    return { style, name: formatName(style, first.name, cross.name, true, null) };
+    return { style, name: formatName(style, first.name, cross.name, 'junction') };
   }
 
   if (homeNames.size === 0) return { style, name: null };
@@ -334,7 +354,7 @@ export function suggestStopName(query: CrossStreetQuery): SuggestedStopName {
   const homeWayIds = new Set(anchors.map((a) => a.wayId));
 
   const atNode = crossStreetsAtNode(system, coord, homeWayIds, homeNames, namedWayIndex, waysById);
-  if (atNode) return { style, name: formatName(style, home, atNode.crossNames[0], true, null) };
+  if (atNode) return { style, name: formatName(style, home, atNode.crossNames[0], 'junction') };
 
   const anchor = anchors[0];
   const way = waysById.get(anchor.wayId);
@@ -359,7 +379,22 @@ export function suggestStopName(query: CrossStreetQuery): SuggestedStopName {
   );
   const winner = ahead && (!behind || ahead.distM <= behind.distM) ? ahead : (behind ?? null);
   if (!winner) return { style, name: home };
-  return { style, name: formatName(style, home, winner.name, false, winner.direction) };
+  return { style, name: formatName(style, home, winner.name, winner.direction) };
+}
+
+/** Whether `station` could plausibly be affected by a change touching
+ *  `affectedWayIds` — anchored to one of them, or within the same search
+ *  radius suggestStopName itself uses to find a free-floating stop's
+ *  nearest streets. A station anywhere else in the document can't have its
+ *  suggested name change as a result of that specific change. */
+function mayBeAffectedBy(
+  system: TransitSystem,
+  station: Pick<Station, 'coord' | 'anchors'>,
+  affectedWayIds: Set<string>,
+): boolean {
+  if (station.anchors.some((a) => affectedWayIds.has(a.wayId))) return true;
+  const nearby = servedWaysByDistance(station.coord, system.ways, CROSS_STREET_SEARCH_RADIUS_M);
+  return nearby.some((n) => affectedWayIds.has(n.wayId));
 }
 
 /**
@@ -371,15 +406,26 @@ export function suggestStopName(query: CrossStreetQuery): SuggestedStopName {
  * can't get right in advance, since it has to guess a style before any
  * service exists.
  *
+ * `affectedWayIds`, when given, narrows the pass to stations that could
+ * plausibly be affected by whatever just changed (see mayBeAffectedBy) —
+ * the normal case, since a new service or return path only ever changes
+ * what serves the ways it actually rides. Omit it for a full document
+ * rescan; nothing in this module needs one today, but it keeps the
+ * function honest about what it does when given no scope to narrow by.
+ *
  * A user's own typed text is never touched: `autoNamed` clears the moment
  * anyone sets a station's name directly, and only stations where it's still
  * set are eligible here. Returns `system` unchanged (same reference) when
  * nothing needed updating, so callers can cheaply skip a store update.
  */
-export function resyncAutoNamedStations(system: TransitSystem): TransitSystem {
+export function resyncAutoNamedStations(
+  system: TransitSystem,
+  affectedWayIds?: Set<string>,
+): TransitSystem {
   let changed = false;
   const stations = system.stations.map((st) => {
     if (!st.autoNamed) return st;
+    if (affectedWayIds && !mayBeAffectedBy(system, st, affectedWayIds)) return st;
     const suggested = suggestStopName({ system, coord: st.coord, anchors: st.anchors });
     if (!suggested.name || suggested.name === st.name) return st;
     changed = true;

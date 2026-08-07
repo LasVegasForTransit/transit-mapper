@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useEditor, useEditorStore } from '../../editor/EditorProvider';
-import { suggestStopName } from '@transitmapper/core/model/geo/crossStreetNaming';
+import { useEditor } from '../../editor/EditorProvider';
 import type { Service } from '@transitmapper/core/model/system';
 import {
   activeSchedule,
@@ -31,13 +30,13 @@ export interface StationInspectorProps {
 // Physical (footprint/platforms — Infrastructure-view detail), Complex
 // (transfer grouping). One concern at a time.
 export function StationInspector({ id }: StationInspectorProps) {
-  const store = useEditorStore();
   const station = useEditor((s) => s.system.stations.find((st) => st.id === id));
   // Narrow selectors, not the whole `system` — see ServiceInspector's note.
   const ways = useEditor((s) => s.system.ways);
   const services = useEditor((s) => s.system.services);
   const readOnly = useEditor((s) => s.readOnly);
   const setStationName = useEditor((s) => s.setStationName);
+  const suggestStationName = useEditor((s) => s.suggestStationName);
   const setStationDwellSeconds = useEditor((s) => s.setStationDwellSeconds);
   const setStationMajorStop = useEditor((s) => s.setStationMajorStop);
   const deleteStation = useEditor((s) => s.deleteStation);
@@ -99,17 +98,7 @@ export function StationInspector({ id }: StationInspectorProps) {
             icon="redo"
             size={15}
             label="Suggest a name from nearby cross streets"
-            onClick={() => {
-              const state = store.getState();
-              const st = state.system.stations.find((s) => s.id === id);
-              if (!st) return;
-              const suggested = suggestStopName({
-                system: state.system,
-                coord: st.coord,
-                anchors: st.anchors,
-              });
-              if (suggested.name) setStationName(id, suggested.name, { auto: true });
-            }}
+            onClick={() => suggestStationName(id)}
           />
         )}
       </div>
