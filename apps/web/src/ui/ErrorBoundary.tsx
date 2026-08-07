@@ -33,13 +33,13 @@ interface ErrorBoundaryState {
  * counterpart, and this is the documented way to write one.
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { failed: false };
+  override state: ErrorBoundaryState = { failed: false };
 
   static getDerivedStateFromError(): ErrorBoundaryState {
     return { failed: true };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  override componentDidCatch(error: Error, info: ErrorInfo) {
     // No error reporting service exists yet, so the console is the only record
     // there is. Logged rather than swallowed: a boundary that hides the stack
     // trades one silent failure for another.
@@ -47,7 +47,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     this.props.onError?.();
   }
 
-  render() {
+  override render() {
     if (!this.state.failed) return this.props.children;
     // Deliberately does not promise the work is saved. This component cannot
     // know that — a save may have failed, or the last 400ms of edits may
