@@ -65,3 +65,8 @@ overrides:
   brace-expansion@>=4.0.0 <5.0.9: ^5.0.9
   fast-uri@<3.1.5: ^3.1.5
   undici@>=7.0.0 <7.29.0: ^7.29.0
+  # GHSA-5p4m-2wfm-xmqj: quadratic CPU consumption parsing !!omap. Reached only
+  # through eslint's config loader, so nothing here ever feeds it untrusted
+  # YAML — but the audit gate is a floor, not a judgement call, and 4.x is not
+  # getting the fix backported below 4.3.1.
+  js-yaml@>=4.0.0 <4.3.1: ^4.3.1
