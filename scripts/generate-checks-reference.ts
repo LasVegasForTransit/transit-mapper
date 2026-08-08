@@ -128,8 +128,8 @@ const CHECKS: Check[] = [
   },
   {
     command: 'verify',
-    fails: 'a test fails',
-    fix: 'fix the code, or the test if the test was wrong',
+    fails: 'a test fails, or packages/core drops below its coverage floor',
+    fix: 'fix the code, or the test if the test was wrong; add a test if coverage fell',
   },
 ];
 

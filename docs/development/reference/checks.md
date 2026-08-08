@@ -31,7 +31,7 @@ pnpm check --fix  # everything a machine can repair
 | `check:types`       | worker-configuration.d.ts no longer matches wrangler.toml                                                                     | `pnpm --filter @transitmapper/worker types`                                                               |
 | `check:icons`       | generated app icons no longer match their source and provenance                                                               | `pnpm --filter @transitmapper/web generate:icons`                                                         |
 | `typecheck`         | TypeScript rejects the code in any package                                                                                    | `fix the type error`                                                                                      |
-| `verify`            | a test fails                                                                                                                  | `fix the code, or the test if the test was wrong`                                                         |
+| `verify`            | a test fails, or packages/core drops below its coverage floor                                                                 | `fix the code, or the test if the test was wrong; add a test if coverage fell`                            |
 
 ## Checks that run elsewhere
 
