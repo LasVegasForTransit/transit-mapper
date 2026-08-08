@@ -39,9 +39,6 @@
     }
   },
   "scripts/check-docs-links.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 6
-    },
     "complexity": {
       "count": 1
     },
@@ -57,15 +54,7 @@
       "count": 1
     }
   },
-  "scripts/check-project-structure.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 4
-    }
-  },
   "scripts/check-workspace-contract.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    },
     "complexity": {
       "count": 3
     },

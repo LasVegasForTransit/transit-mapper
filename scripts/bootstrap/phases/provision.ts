@@ -119,7 +119,11 @@ export async function runProvisionPhase(options: { doctor: boolean }): Promise<P
       {
         label: 'D1 database',
         status: 'failed',
-        detail: created.stderr.split('\n')[0] || 'wrangler d1 create failed',
+        // First non-blank line, not first line: wrangler sometimes leads with an
+        // empty one, and `??` would happily report that as the reason.
+        detail:
+          created.stderr.split('\n').find((line) => line.trim().length > 0) ??
+          'wrangler d1 create failed',
       },
     ]);
     return { success: false };

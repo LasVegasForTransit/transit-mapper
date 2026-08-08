@@ -156,9 +156,10 @@ function judge(path: string): Offence | undefined {
 
   const shaped = CONFIG_NAME.exec(name);
   if (shaped?.groups) {
-    const { tool, ext } = shaped.groups;
-    if (ext.toLowerCase() === 'ts') return undefined;
-    const exempt = NOT_TYPESCRIPT.find((e) => e.tool === tool.toLowerCase());
+    const tool = (shaped.groups.tool ?? '').toLowerCase();
+    const ext = (shaped.groups.ext ?? '').toLowerCase();
+    if (ext === 'ts') return undefined;
+    const exempt = NOT_TYPESCRIPT.find((e) => e.tool === tool);
     if (!exempt) {
       return {
         path,
@@ -166,7 +167,7 @@ function judge(path: string): Offence | undefined {
         fix: `rewrite it as ${tool}.config.ts, or add ${tool} to NOT_TYPESCRIPT in this script with the reason it cannot`,
       };
     }
-    if (exempt.ext !== ext.toLowerCase()) {
+    if (exempt.ext !== ext) {
       return {
         path,
         problem: `is a ${ext} config where NOT_TYPESCRIPT records ${tool} as ${exempt.ext}`,

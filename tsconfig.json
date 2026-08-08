@@ -23,6 +23,13 @@
     "noUnusedParameters": true,
     "noImplicitOverride": true,
     "noImplicitReturns": true,
+    // `array[i]` and `record[key]` are typed as always present without this,
+    // and a guard around one then reads as dead code to
+    // `no-unnecessary-condition` — which is how check-debt.ts ended up
+    // declaring both levels of its ledger optional by hand to make the rule
+    // agree with reality. The compiler flag and that lint rule only make sense
+    // together.
+    "noUncheckedIndexedAccess": true,
     "noEmit": true,
     "types": ["node"],
     // Not for anything under scripts/. `eslint.config.ts` imports

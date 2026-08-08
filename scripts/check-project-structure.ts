@@ -215,9 +215,9 @@ function owningSection(
 }
 
 function documentedSourcePaths(source: string): string[] {
-  return [...source.matchAll(/\b((?:apps|packages)\/[A-Za-z0-9_.-]+\/src\/[A-Za-z0-9_.-]+)/g)].map(
-    (match) => match[1],
-  );
+  return [...source.matchAll(/\b((?:apps|packages)\/[A-Za-z0-9_.-]+\/src\/[A-Za-z0-9_.-]+)/g)]
+    .map((match) => match[1])
+    .filter((path) => path !== undefined);
 }
 
 function documentedPackagePaths(source: string, sections: Heading[]): string[] {
@@ -228,7 +228,9 @@ function documentedPackagePaths(source: string, sections: Heading[]): string[] {
           ...source
             .slice(section.start, section.end)
             .matchAll(/\b((?:apps|packages)\/[A-Za-z0-9_.-]+)/g),
-        ].map((match) => match[1]),
+        ]
+          .map((match) => match[1])
+          .filter((path) => path !== undefined),
       ),
     ),
   ];
