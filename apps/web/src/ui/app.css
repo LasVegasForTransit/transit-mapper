@@ -33,6 +33,34 @@
   --breakpoint-md: 768px;
 }
 
+/* Registered, not merely declared, so `getComputedStyle` resolves them.
+   An unregistered custom property hands back its raw token stream —
+   `getPropertyValue('--map-pad-top')` returns the literal string
+   "calc(48px + 0px)" — and `parseFloat` on that is NaN. The camera read four
+   NaNs, fell back to zero, and held no padding at all while every value here
+   looked correct in devtools. Declaring a syntax makes each one compute to a
+   real length before anyone reads it. */
+@property --map-pad-top {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+@property --map-pad-bottom {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+@property --map-pad-left {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+@property --map-pad-right {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
 :root {
   /* Floor for readable panel content — below the width this needs, Workbench
      switches to the bottom sheet instead of squeezing this narrower. Wide
@@ -67,16 +95,30 @@
      with viewport-fit=cover that edge is now UNDER the indicator rather than
      above it. */
   --controls-clearance: calc(120px + env(safe-area-inset-bottom, 0px));
-  /* The compact workbench's rendered height, republished on every resize by
-     usePublishedHeight. Declared here rather than written only from JS: an
-     undeclared custom property lets the CSS optimiser fold
-     `calc(var(--workbench-h, 96px) + 8px)` into a flat 104px, and it did —
-     MapLibre's controls sat 39px inside the workbench and never moved when
-     the height changed. Declaring it makes the reference real.
+  /* ---- what the chrome covers ----
 
-     The value is a placeholder for the frames before the first measurement,
-     and for every width where no workbench is mounted. */
-  --workbench-h: 96px;
+     The map is full-bleed behind the chrome, so it has no idea any of this is
+     here. Two things need to be told, and both read these four numbers:
+     MapLibre's own controls, which must not sit under the bottom bar, and the
+     CAMERA, which until now centred everything on the whole canvas instead of
+     the part you can see. Every fitBounds in MapCanvas passed one symmetric
+     number — 60, 100, 120 — so zooming to a line put it a quarter of the
+     chrome's height off centre with its ends behind the bars.
+
+     Declared here because layout owns them, and read by the camera rather
+     than measured. Measuring the rendered chrome is what the deleted
+     `--workbench-h` did: a ResizeObserver writing a pixel height onto
+     document.documentElement so one CSS line could read it back.
+
+     Deliberately conservative where the chrome's height varies. The compact
+     workbench grows by the simulation strip's ~40px when a service has a
+     schedule, and these keep clear of it either way: too much clearance puts
+     the zoom buttons slightly higher over the map, which costs nothing, while
+     too little puts them inside the workbench. */
+  --map-pad-top: 64px;
+  --map-pad-bottom: 88px;
+  --map-pad-left: calc(var(--panel-w) + 2 * var(--overlay-gap));
+  --map-pad-right: var(--overlay-gap);
   font-family: 'Public Sans', system-ui, sans-serif;
   letter-spacing: -0.006em;
 }
@@ -3702,6 +3744,26 @@ button.chip-removable-label:hover {
    rules dodge is mounted by useCompactLayout(), which now also answers yes to
    a short viewport. */
 @media (max-width: 767px), (max-height: 500px) {
+  /* The compact chrome's own footprint — see the base values in :root. Both
+     bars run the full width here, so the map loses height at top and bottom
+     and nothing at the sides.
+
+     The bottom figure clears the workbench at rest with its simulation strip
+     showing, which is the tallest it gets without someone opening the panel.
+     A panel the user opened is expected to cover the map; that is what
+     opening it means.
+
+     168 is measured at 390x844, not estimated: a 37px drag handle over a
+     125px rail (a 56px tool row and the 34px simulation strip), plus borders.
+     Re-measure it if the rail's contents change — an estimate was 152 here
+     first, and left the zoom buttons 15px inside the workbench. */
+  :root {
+    --map-pad-top: calc(48px + env(safe-area-inset-top, 0px));
+    --map-pad-bottom: calc(168px + env(safe-area-inset-bottom, 0px));
+    --map-pad-left: 0px;
+    --map-pad-right: 0px;
+  }
+
   /* Icon-only tools — Figma-style compact dock on phones. The standard
      width above is for the label-bearing desktop button; icon-only mobile
      buttons go back to sizing themselves to their (identical) icon. */
@@ -3739,18 +3801,17 @@ button.chip-removable-label:hover {
     width: 100%;
     max-width: none;
   }
-  /* Keep MapLibre's zoom and attribution clear of the workbench. Its height
-     changes with its own contents and with which detent it is at, so this
-     reads the height the workbench publishes (see usePublishedHeight)
-     rather than a hand-picked constant. The fallback covers the frames
-     before the first measurement lands.
+  /* MapLibre's controls sit inside the map, which is full-bleed behind the
+     chrome, so they need to be told where the bottom bar is. Same number the
+     camera uses, for the same reason — one declaration, two readers.
 
-     The number this replaces was 60px, matched to one state of one layout.
-     Measured at 390x844 it left the zoom group starting at exactly the x
-     where the tool dock ended, and expanding the sheet buried both it and
-     the attribution completely. */
+     This replaced a ResizeObserver that measured the workbench and wrote its
+     height to the document root on every change. The rig existed to keep this
+     one line accurate through a detent, and it did not need to: a panel the
+     user opened is meant to cover the map. Clearing the workbench at rest is
+     the whole job, and that is a constant. */
   .maplibregl-ctrl-bottom-right {
-    bottom: calc(var(--workbench-h) + 8px);
+    bottom: var(--map-pad-bottom);
   }
 }
 
@@ -4185,6 +4246,15 @@ button.chip-removable-label:hover {
     flex-direction: row;
     justify-content: center;
     gap: 12px;
+  }
+  /* One row instead of two, so the chrome the map has to keep clear of shrinks
+     with it. Left where the rule that causes it is, rather than as a fourth
+     copy of the number up in :root.
+
+     128 measured at 844x390, same as the portrait figure above: estimated at
+     112 first, which left the zoom buttons 15px inside the workbench. */
+  :root {
+    --map-pad-bottom: calc(128px + env(safe-area-inset-bottom, 0px));
   }
 }
 

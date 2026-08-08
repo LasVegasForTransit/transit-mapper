@@ -56,7 +56,7 @@ between them, and nothing overlaps anything else.
 │                                       │
 │                 M A P                 │  the band between the two bars
 │                            ┌──┐       │
-│                            │+ │       │  MapLibre reads --workbench-h
+│                            │+ │       │  MapLibre reads --map-pad-bottom
 ╞═══════════════════════════════════════╡  .compact-workbench — 16px top radius, it moves
 │ ▭   Line 1                        ⌄   │  SheetHandle
 │     detail panel (the one scroller)   │  .workbench-panel
@@ -96,25 +96,46 @@ somewhere the user could not have predicted.
 Every stop is a fraction of the viewport height, capped so the surface can
 never rise above the top bar.
 
-## `--workbench-h`
+## What the chrome covers
 
-`usePublishedHeight` writes the workbench's rendered height to
-`--workbench-h` on the document root on every resize.
-`.maplibregl-ctrl-bottom-right` reads it to stay clear of the workbench.
-MapLibre renders those controls outside React's tree, so this variable is
-their only way to learn the workbench's current height.
+The map is full-bleed behind the chrome, so it has no idea any of it is there.
+Four custom properties in `app.css` say what it covers:
 
-Two rules protect that channel:
+```
+--map-pad-top  --map-pad-bottom  --map-pad-left  --map-pad-right
+```
 
-- `--workbench-h` must be declared in `:root`, even though only JavaScript
-  writes to it. Left undeclared, the CSS optimizer folds
-  `calc(var(--workbench-h, 96px) + 8px)` into a flat constant, and the
-  controls stop moving.
-- The `bottom` rule that reads `--workbench-h` must carry no `transition`
-  of its own. With one, the computed value freezes at whatever it read
-  when the transition first ran, instead of tracking the variable — the
-  workbench's own height already animates via `max-height`, so the
-  consumer must update immediately or not at all.
+They are declared beside the rules that create the chrome — the base values in
+`:root` describe the docked layout, and the compact and short-viewport blocks
+override them — so there is one source and two readers.
+
+`MapCanvas` reads them and calls `map.setPadding()`, which makes every camera
+operation frame inside the visible band. Without it, `fitBounds` centres on the
+whole canvas: at 844×390 the map's centre landed 40px below the middle of the
+band you can see, and content fitted to bounds ran under both bars. The three
+fits in that file add their own margin to these values rather than passing a
+bare number, because `fitBounds`'s `padding` replaces the map's padding instead
+of adding to it.
+
+`.maplibregl-ctrl-bottom-right` reads `--map-pad-bottom` for the same reason:
+MapLibre renders its controls inside the map, which does not know where the
+bottom bar is.
+
+Three things to know before changing them:
+
+- **They are registered with `@property`**, and have to be. An unregistered
+  custom property hands back its raw token stream, so
+  `getPropertyValue('--map-pad-top')` returns the string `calc(48px + 0px)` and
+  `parseFloat` gives `NaN`. The camera read four of those, fell back to zero,
+  and held no padding while devtools showed every value as correct.
+- **The bottom figures are measured, not estimated.** 168px portrait and 128px
+  landscape, both taken from the rendered workbench. Estimates of 152 and 112
+  went in first and left the zoom buttons 15px inside it. Re-measure if the
+  rail's contents change.
+- **They describe the chrome at rest**, not at whichever detent the panel is
+  on. A panel the user opened is meant to cover the map; that is what opening
+  it means. An earlier version tracked the live height with a `ResizeObserver`
+  that wrote it to the document root, and the tracking was never the point.
 
 ## Density is a property of the container
 

@@ -4,6 +4,7 @@ import maplibregl, {
   type LayerSpecification,
   type Map as MLMap,
   type MapSourceDataEvent,
+  type PaddingOptions,
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEditorStore } from '../editor/EditorProvider';
@@ -145,6 +146,50 @@ export interface MapCanvasProps {
 
 interface MapErrorLike {
   error?: unknown;
+}
+
+/**
+ * How much of the map the chrome is sitting on top of.
+ *
+ * The map is full-bleed behind an opaque top bar and an opaque bottom bar (and
+ * on desktop a docked panel), so its canvas is larger than the part anyone can
+ * see. MapLibre takes that as padding: a camera told about it centres and fits
+ * inside the visible band instead of the whole canvas.
+ *
+ * Read from CSS rather than measured. app.css declares `--map-pad-*` beside the
+ * rules that create the chrome, which makes one source for two readers — this,
+ * and the rule that lifts MapLibre's own controls off the bottom bar. Measuring
+ * the rendered chrome instead is what an earlier version did, via a
+ * ResizeObserver that wrote a height onto the document root for CSS to read
+ * back; the numbers were never the hard part.
+ */
+function chromePadding(el: HTMLElement): PaddingOptions {
+  const style = getComputedStyle(el);
+  const side = (name: string) => Number.parseFloat(style.getPropertyValue(name)) || 0;
+  return {
+    top: side('--map-pad-top'),
+    bottom: side('--map-pad-bottom'),
+    left: side('--map-pad-left'),
+    right: side('--map-pad-right'),
+  };
+}
+
+/**
+ * The chrome's footprint plus room to breathe, for one framing operation.
+ *
+ * `fitBounds` takes padding as part of CameraOptions, so a bare number there
+ * REPLACES whatever `setPadding` established rather than adding to it. All
+ * three fits in this file passed one — 60, 100, 120 — which is how content
+ * ended up framed behind the bars even though the map knew where they were.
+ */
+function framePadding(el: HTMLElement, margin: number): PaddingOptions {
+  const chrome = chromePadding(el);
+  return {
+    top: chrome.top + margin,
+    bottom: chrome.bottom + margin,
+    left: chrome.left + margin,
+    right: chrome.right + margin,
+  };
 }
 
 export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
@@ -292,7 +337,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // the whole thing (or may be framing empty space).
     if (viewMode === 'diagram' && prevMode !== 'diagram') {
       const bounds = systemBounds(computeDiagramSystem(store.getState().system));
-      if (bounds) map.fitBounds(bounds, { padding: 60, duration: 500 });
+      const el = containerRef.current;
+      if (bounds && el) map.fitBounds(bounds, { padding: framePadding(el, 60), duration: 500 });
     }
     // A bare setLayoutProperty/setData pair doesn't reliably self-schedule a
     // repaint outside MapLibre's normal interaction-driven render loop (seen
@@ -355,6 +401,12 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       touchPitch: false, // a two-finger drag pans; it must never tilt the map instead
       attributionControl: false, // replaced below with a compact (collapsed-to-an-"i") one
     });
+    // Before anything frames anything. Every camera operation from here —
+    // fitBounds, flyTo, the initial frame — then keeps inside the band the
+    // chrome leaves visible, rather than centring on a canvas whose top and
+    // bottom are behind opaque bars.
+    map.setPadding(chromePadding(containerRef.current), { duration: 0 });
+
     // Rotation would leave a reader unable to get back to north, and every
     // projection in this app assumes an unrotated camera (see render/project).
     map.touchZoomRotate.disableRotation();
@@ -1143,6 +1195,17 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       if (initialMapLoaded) recoverMapStyle();
     };
     map.on('style.load', onStyleLoad);
+    // Which numbers CSS reports depends on media queries — the compact layout
+    // covers the top and bottom edges, the docked one covers a column at the
+    // left — and every change that flips one of those also resizes this
+    // container. Re-reading on resize therefore covers crossing the layout
+    // boundary and turning a phone sideways, without a second source of truth
+    // for either.
+    const onResize = () => {
+      const el = containerRef.current;
+      if (el) map.setPadding(chromePadding(el), { duration: 0 });
+    };
+    map.on('resize', onResize);
     styleSwitchControllerRef.current = createStyleSwitchController({
       map,
       initialScheme: initialColorScheme,
@@ -1255,7 +1318,11 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
               [west, south],
               [east, north],
             ],
-            { padding: 120, maxZoom: 19, duration: 600 },
+            {
+              padding: containerRef.current ? framePadding(containerRef.current, 120) : 120,
+              maxZoom: 19,
+              duration: 600,
+            },
           );
         },
       });
@@ -1398,7 +1465,11 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         const focus = selectionFocus(s.system, s.selection);
         if (focus) {
           if (focus.needsInfrastructureView) setViewMode('infrastructure');
-          map.fitBounds(focus.bounds, { padding: 100, maxZoom: 18, duration: 500 });
+          map.fitBounds(focus.bounds, {
+            padding: containerRef.current ? framePadding(containerRef.current, 100) : 100,
+            maxZoom: 18,
+            duration: 500,
+          });
         }
       }
     });
