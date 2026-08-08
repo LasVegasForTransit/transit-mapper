@@ -134,6 +134,11 @@ const ELSEWHERE: Check[] = [
     fails: 'the subject is not a conventional commit, or exceeds 72 characters',
     fix: 'reword the commit',
   },
+  {
+    command: 'commit-msg hook',
+    fails: 'a Co-Authored-By footer sits outside the footer block, or has no address',
+    fix: 'move it to the end of the message, as Name <email>',
+  },
 ];
 
 function table(checks: Check[]): string {

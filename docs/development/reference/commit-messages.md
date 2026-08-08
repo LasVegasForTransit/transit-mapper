@@ -1,8 +1,10 @@
 # Commit messages
 
-The `.githooks/commit-msg` hook enforces the two rules a machine can check
-without judgement: the subject is a conventional commit, and it is at most
-72 characters. Everything else here is convention, held up by review.
+The `.githooks/commit-msg` hook enforces the rules a machine can check without
+judgement: the subject is a conventional commit, it is at most 72 characters,
+and any attribution footer is shaped so git can read it. `prepare-commit-msg`
+adds that footer when an agent is running git. Everything else here is
+convention, held up by review.
 
 ## Subject
 
@@ -79,26 +81,45 @@ A commit written with help from a coding agent ends with a trailer naming it:
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ```
 
-One trailer per agent, in the trailer block at the very end, after any
-`BREAKING CHANGE:` footer. Name the model that wrote it, not the tool that
-ran it, so `git log --format='%(trailers:key=Co-Authored-By)'` answers "which
+One trailer per agent, in the footer block at the very end, beside any
+`BREAKING CHANGE:` footer. Name the model that wrote it, not the tool that ran
+it, so `git log --format='%(trailers:key=Co-Authored-By)'` answers "which
 model touched this" years later.
 
-This was convention nobody had written down until now, and it shows: 19 of
-the 200 commits before this one carry the trailer and 181 do not. Nothing was
-stripping them — the `commit-msg` hook only ever read the subject line, and
-there is no `prepare-commit-msg` hook. Each agent was relying on its own
-configuration, and those disagreed.
+**A person writing their own commit adds nothing.** Attribution says an agent
+helped; silence says one did not, and that is the common case for a human at a
+keyboard. Nothing requires the footer.
 
-Whether an agent helped is not something a hook can determine, so the rule
-that it must be there is carried by whoever writes the commit. What the hook
-does check is the shape, because a malformed trailer is worse than none: it
-looks like attribution and does not parse as one.
+You should not have to remember this. `prepare-commit-msg` adds a footer
+whenever an agent is the thing running git, which it knows from `AI_AGENT` or
+`CLAUDECODE` in the environment. That hook is a floor rather than the whole
+rule: the environment says which _tool_ is running and never which _model_ —
+`ANTHROPIC_MODEL` is empty even under Claude Code — so it can only write
+`Claude Code`. An agent that names its own model writes a better footer, and
+the hook never overwrites one that is already there, so the precise version
+survives and only a missing one gets the fallback.
+
+This was convention nobody had written down until now, and it shows: 19 of the
+200 commits before this one carry the trailer and 181 do not. Nothing was
+stripping them — the `commit-msg` hook only ever read the subject line, and
+there was no `prepare-commit-msg` hook at all. Each agent was relying on its
+own configuration, and those disagreed.
+
+`commit-msg` checks the shape of any footer it finds, because a malformed one
+is worse than none: it looks like attribution and parses as nothing.
 
 ## What the hook will not catch
 
-It checks the subject and the shape of any attribution trailer, and nothing
-else. A body that restates the diff, a `feat` with no body, a wrong type, or
-a missing `Co-Authored-By` all pass the hook and get caught in review. The
-hook exists to stop the mechanical mistakes, not to replace reading the
+It checks the subject and the shape of any attribution footer, and nothing
+else. A body that restates the diff, a `feat` with no body, and a wrong type
+all pass and get caught in review.
+
+Attribution is the one rule split across both hooks, because neither half
+works alone: `prepare-commit-msg` can add a footer only while the agent is
+still the process running git, and `commit-msg` can check a footer's shape but
+never whether one was owed. A commit made by an agent outside that hook — a
+`git commit` from a container without the environment, say — passes both and
+carries no attribution.
+
+The hooks exist to stop the mechanical mistakes, not to replace reading the
 message.
