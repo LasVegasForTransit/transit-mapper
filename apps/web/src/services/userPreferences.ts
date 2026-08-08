@@ -23,7 +23,7 @@ function getDefaultUnitSystem(): UnitSystem {
 type Listener = () => void;
 const listeners = new Set<Listener>();
 
-export interface UserPreferences {
+interface UserPreferences {
   unitSystem: UnitSystem;
 }
 
@@ -78,7 +78,7 @@ function subscribe(listener: Listener): () => void {
   };
 }
 
-export function useUserPreferences(): UserPreferences {
+function useUserPreferences(): UserPreferences {
   return useSyncExternalStore(subscribe, getCachedSnapshot, getCachedSnapshot);
 }
 

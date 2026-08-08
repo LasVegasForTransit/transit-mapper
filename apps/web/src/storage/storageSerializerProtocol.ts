@@ -4,12 +4,12 @@ export interface StorageSerializerRequest {
   system: TransitSystem;
 }
 
-export interface StorageSerializerSuccess {
+interface StorageSerializerSuccess {
   kind: 'done';
   serialized: string;
 }
 
-export interface StorageSerializerFailure {
+interface StorageSerializerFailure {
   kind: 'error';
   message: string;
 }

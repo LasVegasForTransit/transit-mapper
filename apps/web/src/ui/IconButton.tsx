@@ -3,7 +3,7 @@ import { Icon, type IconName } from './Icon';
 
 /** MD3-style emphasis, loudest last — see app.css's ".btn" comment for what
  *  each one looks like and when to reach for it. */
-export type ButtonVariant = 'plain' | 'tonal' | 'bordered' | 'primary';
+type ButtonVariant = 'plain' | 'tonal' | 'bordered' | 'primary';
 
 /**
  * The one icon-only button used everywhere in the app's chrome — toolbar

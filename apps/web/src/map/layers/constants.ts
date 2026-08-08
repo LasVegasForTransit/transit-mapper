@@ -2,7 +2,7 @@
 // core (render/constants.ts) when buildFeatures did — the Worker stamps the
 // same values onto features when it draws a system without a map. Re-exported
 // here so every existing import of this module keeps working unchanged.
-export { HANDLE_ICON, HANDLE_INK, widthPxAtZ14 } from '@transitmapper/core/render/constants';
+export { HANDLE_ICON, HANDLE_INK } from '@transitmapper/core/render/constants';
 
 export const SRC_WAYS = 'tm-ways';
 export const SRC_SERVICES = 'tm-services';

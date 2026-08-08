@@ -111,7 +111,7 @@ function readIndex(): LibraryEntry[] {
  */
 export type SaveOutcome = 'saved' | 'full' | 'unavailable';
 
-export interface SaveMeasurement {
+interface SaveMeasurement {
   documentBytes: number;
   serializeMs: number;
   documentWriteMs: number;
@@ -190,12 +190,6 @@ export function loadSystemEntry(id: string): LoadResult {
     // a future version that can repair them should still find them.
     return { status: 'corrupt' };
   }
-}
-
-/** Thin wrapper for callers that genuinely can't act on the difference. */
-export function loadSystemById(id: string): TransitSystem | null {
-  const result = loadSystemEntry(id);
-  return result.status === 'ok' ? result.system : null;
 }
 
 /** Saves the full system AND keeps its index entry (name/updatedAt) in sync

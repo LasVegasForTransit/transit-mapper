@@ -2,7 +2,7 @@ import type { PreviewWorkerEvent, PreviewWorkerRequest } from './previewWorkerPr
 
 const PREVIEW_WORKER_TIMEOUT_MS = 10_000;
 
-export interface PreviewWorker {
+interface PreviewWorker {
   onmessage: ((event: MessageEvent<PreviewWorkerEvent>) => void) | null;
   onerror: ((event: ErrorEvent) => void) | null;
   postMessage(message: PreviewWorkerRequest): void;

@@ -47,7 +47,7 @@ function flatViewportForMap(map: MLMap): Viewport {
  *  project() — pass the export dialog's own preview map instance (already
  *  framed to the whole system) rather than always reading the live app map,
  *  so the SVG matches whatever framing the user chose. */
-export function svgMarkup(
+function svgMarkup(
   system: TransitSystem,
   view: ViewOptions,
   map: MLMap,

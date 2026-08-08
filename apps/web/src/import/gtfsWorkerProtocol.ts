@@ -7,21 +7,21 @@ export interface GtfsWorkerRequest {
 
 export type GtfsWorkerPhase = 'inflate-and-index' | 'building-routes';
 
-export interface GtfsWorkerPhaseEvent {
+interface GtfsWorkerPhaseEvent {
   kind: 'phase';
   phase: GtfsWorkerPhase;
 }
 
-export interface GtfsWorkerBatchEvent {
+interface GtfsWorkerBatchEvent {
   kind: 'batch';
   batch: GtfsImportBatch;
 }
 
-export interface GtfsWorkerDoneEvent {
+interface GtfsWorkerDoneEvent {
   kind: 'done';
 }
 
-export interface GtfsWorkerErrorEvent {
+interface GtfsWorkerErrorEvent {
   kind: 'error';
   message: string;
 }

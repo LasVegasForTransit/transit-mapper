@@ -1,4 +1,4 @@
-export type BundleEncoding = 'raw' | 'gzip' | 'brotli';
+type BundleEncoding = 'raw' | 'gzip' | 'brotli';
 
 export interface BundleEntrySize {
   entry: string;

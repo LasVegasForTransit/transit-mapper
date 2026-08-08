@@ -63,10 +63,6 @@ export function useCoarsePointer(): boolean {
   return useMediaQuery(COARSE_POINTER_QUERY);
 }
 
-export function useHoverCapable(): boolean {
-  return !useMediaQuery(NO_HOVER_QUERY);
-}
-
 /**
  * The same answers outside React, for callers that run before or beside the
  * component tree. Snapshots, not subscriptions: a caller re-reads on an event

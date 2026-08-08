@@ -4,12 +4,12 @@ export interface PreviewWorkerRequest {
   data: string;
 }
 
-export interface PreviewWorkerSuccess {
+interface PreviewWorkerSuccess {
   kind: 'done';
   markup: string;
 }
 
-export interface PreviewWorkerFailure {
+interface PreviewWorkerFailure {
   kind: 'error';
   message: string;
 }

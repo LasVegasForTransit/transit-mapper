@@ -4,7 +4,7 @@ import type { TransitSystem } from '@transitmapper/core/model/system';
 import { patternStops } from '@transitmapper/core/sim/serviceStats';
 import type { ViewMode } from './ViewProvider';
 
-export interface SidebarStop {
+interface SidebarStop {
   stationId: string;
   name: string;
 }

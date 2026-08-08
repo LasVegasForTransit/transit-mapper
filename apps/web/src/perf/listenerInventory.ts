@@ -1,6 +1,6 @@
 export type PerfListenerTarget = 'window' | 'document' | 'map-canvas';
 
-export interface PerfListenerLocation {
+interface PerfListenerLocation {
   scriptUrl?: string;
   scriptId?: string;
   lineNumber: number;

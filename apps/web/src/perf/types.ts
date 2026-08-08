@@ -1,8 +1,6 @@
-import type { TransitSystem } from '@transitmapper/core/model/system';
-
 export type PerfFixtureId = 'small' | 'dense' | 'published' | 'rtc';
 export type PerfScenarioId = 'small' | 'dense' | 'rtc' | 'share' | 'embed';
-export type PerfSurface = 'editor' | 'share' | 'embed';
+type PerfSurface = 'editor' | 'share' | 'embed';
 export type PerfProfileId = 'desktop' | 'mobile';
 export type PerfRunMode = 'audit' | 'smoke';
 
@@ -67,7 +65,7 @@ export interface PerfViewport {
   deviceScaleFactor: number;
 }
 
-export interface PerfNetworkProfile {
+interface PerfNetworkProfile {
   name: 'Fast 4G';
   downloadThroughputBytesPerSecond: number;
   uploadThroughputBytesPerSecond: number;
@@ -239,7 +237,7 @@ export interface PerfScenarioSummary {
   };
 }
 
-export type PerfReportStatus = 'ok' | 'unavailable';
+type PerfReportStatus = 'ok' | 'unavailable';
 
 export interface PerfCalibration {
   benchmark: 'integer-mix-v1';
@@ -284,17 +282,7 @@ export interface CreateUnavailablePerfReportOptions {
   calibration?: PerfCalibration;
 }
 
-export interface GeneratePerfFixtureOptions {
-  scenario: PerfScenario;
-}
-
-export interface PerfFixture {
-  scenario: PerfScenario;
-  system: TransitSystem;
-}
-
-export type PerfBudgetViolationKind =
-  'absolute' | 'regression' | 'bundle-regression' | 'baseline-missing';
+type PerfBudgetViolationKind = 'absolute' | 'regression' | 'bundle-regression' | 'baseline-missing';
 
 export interface PerfBudgetViolation {
   kind: PerfBudgetViolationKind;
@@ -309,7 +297,7 @@ export interface PerfBudgetViolation {
   message: string;
 }
 
-export type PerfBudgetStatus = 'pass' | 'fail' | 'unavailable';
+type PerfBudgetStatus = 'pass' | 'fail' | 'unavailable';
 
 export interface PerfBudgetEvaluation {
   status: PerfBudgetStatus;

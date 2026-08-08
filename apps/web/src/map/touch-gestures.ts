@@ -38,7 +38,7 @@ interface ScreenPoint {
   y: number;
 }
 
-export type SyntheticMouseEvent = 'mousedown' | 'mousemove' | 'mouseup' | 'click' | 'dblclick';
+type SyntheticMouseEvent = 'mousedown' | 'mousemove' | 'mouseup' | 'click' | 'dblclick';
 
 /**
  * What this adapter needs from the dispatch it feeds.

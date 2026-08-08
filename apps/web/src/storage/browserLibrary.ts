@@ -22,7 +22,7 @@ import {
 } from './localStore';
 import { serializeSystemOffThread } from './serializeSystem';
 
-export type { LibraryEntry, LoadResult, SaveOutcome } from './localStore';
+export type { LibraryEntry, SaveOutcome } from './localStore';
 export type { LibraryListResult, LibraryLoadResult } from './libraryStore';
 
 function unavailableDatabase(): LibraryDatabase {
@@ -70,11 +70,6 @@ export function listLibrary(): Promise<LibraryListResult> {
 
 export function loadSystemEntry(id: string): Promise<LibraryLoadResult> {
   return getBrowserStore().load(id);
-}
-
-export async function loadSystemById(id: string): Promise<TransitSystem | null> {
-  const result = await loadSystemEntry(id);
-  return result.status === 'ok' ? result.system : null;
 }
 
 export function saveToLibrary(system: TransitSystem): Promise<SaveOutcome> {

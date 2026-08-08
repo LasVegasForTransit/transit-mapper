@@ -1,7 +1,6 @@
 import type { InstallState } from './install';
 
-export type InstallSettingsPresentationKind =
-  'installed' | 'desktop-required' | 'native' | 'guidance';
+type InstallSettingsPresentationKind = 'installed' | 'desktop-required' | 'native' | 'guidance';
 
 export interface InstallSettingsPresentation {
   kind: InstallSettingsPresentationKind;

@@ -86,6 +86,11 @@ const CHECKS: Check[] = [
     fix: 'fix the finding rather than recording it, then `eslint --prune-suppressions`',
   },
   {
+    command: 'check:deadcode',
+    fails: 'a file, export, type, or dependency is unreferenced',
+    fix: 'delete it — or declare the entry point in knip.config.ts if it is reached from outside the import graph',
+  },
+  {
     command: 'check:documents',
     fails:
       'a required document is missing, lacks a required section, has them out of order, or uses a stock phrase',

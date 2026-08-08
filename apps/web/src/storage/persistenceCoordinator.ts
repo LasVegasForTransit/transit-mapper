@@ -18,7 +18,7 @@ export interface PersistenceStore {
   ): () => void;
 }
 
-export interface PersistenceScheduler {
+interface PersistenceScheduler {
   schedule(callback: () => void, delayMs: number): number;
   cancel(id: number): void;
   subscribePageHide(listener: () => void): () => void;
