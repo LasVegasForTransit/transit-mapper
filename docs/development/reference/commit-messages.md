@@ -88,16 +88,29 @@ model touched this" years later.
 
 **A person writing their own commit adds nothing.** Attribution says an agent
 helped; silence says one did not, and that is the common case for a human at a
-keyboard. Nothing requires the footer.
+keyboard. Nothing asks a person for a footer.
 
-You should not have to remember this. `prepare-commit-msg` adds a footer
-whenever an agent is the thing running git, which it knows from `AI_AGENT` or
-`CLAUDECODE` in the environment. That hook is a floor rather than the whole
-rule: the environment says which _tool_ is running and never which _model_ —
+**An agent cannot skip it.** Both hooks read the same signal — `AI_AGENT` or
+`CLAUDECODE` in the environment, neither of which a person has set:
+
+- `prepare-commit-msg` writes a footer, so nobody has to remember.
+- `commit-msg` refuses the commit if there is none, so removing it fails
+  rather than passing quietly.
+
+The pair matters. Adding it automatically is convenient and, on its own, only
+a default: an agent that rewrites the message loses the footer and the commit
+still lands claiming a human wrote it. The check is what makes the rule hold.
+
+`prepare-commit-msg` is a floor rather than the whole rule, because the
+environment says which _tool_ is running and never which _model_ —
 `ANTHROPIC_MODEL` is empty even under Claude Code — so it can only write
 `Claude Code`. An agent that names its own model writes a better footer, and
-the hook never overwrites one that is already there, so the precise version
+neither hook overwrites one that is already there, so the precise version
 survives and only a missing one gets the fallback.
+
+Committing by hand from inside an agent's own terminal matches that signal
+too. The footer is added for you there, so the check only fires if it was
+taken back out.
 
 This was convention nobody had written down until now, and it shows: 19 of the
 200 commits before this one carry the trailer and 181 do not. Nothing was
@@ -114,12 +127,12 @@ It checks the subject and the shape of any attribution footer, and nothing
 else. A body that restates the diff, a `feat` with no body, and a wrong type
 all pass and get caught in review.
 
-Attribution is the one rule split across both hooks, because neither half
-works alone: `prepare-commit-msg` can add a footer only while the agent is
-still the process running git, and `commit-msg` can check a footer's shape but
-never whether one was owed. A commit made by an agent outside that hook — a
-`git commit` from a container without the environment, say — passes both and
-carries no attribution.
+Attribution is split across both hooks, and the gap that remains is the
+environment itself. Both halves read `AI_AGENT` and `CLAUDECODE`, so an agent
+committing somewhere those are unset — a container that does not forward them,
+or a tool that does not set them — is indistinguishable from a person and
+passes. Widening the signal is how that gap closes; there is no way to see it
+in the diff afterwards.
 
 The hooks exist to stop the mechanical mistakes, not to replace reading the
 message.
