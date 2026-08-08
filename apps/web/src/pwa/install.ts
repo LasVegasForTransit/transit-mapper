@@ -56,9 +56,19 @@ export interface InstallBannerVisibility {
   eligible: boolean;
   uiHidden: boolean;
   readOnly: boolean;
+  /** Whether resolveAppBanner is already showing something. The two live in
+   *  different places — the notice floats centred over the map, the invitation
+   *  docks to the right edge — so nothing in CSS stops both being on screen at
+   *  once, and the pairing reads as two unrelated cards competing. */
+  appNoticeShowing: boolean;
 }
 
 export function shouldShowInstallBanner(visibility: InstallBannerVisibility): boolean {
+  // The invitation always loses. It is a suggestion with no deadline, and
+  // everything resolveAppBanner produces is a failure or an interruption the
+  // person has to deal with first. It comes back on its own once the notice
+  // clears, so nothing is lost by yielding.
+  if (visibility.appNoticeShowing) return false;
   return visibility.eligible && !visibility.uiHidden && !visibility.readOnly;
 }
 

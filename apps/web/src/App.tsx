@@ -455,6 +455,7 @@ export function App() {
             eligible: installState.eligible,
             uiHidden,
             readOnly,
+            appNoticeShowing: descriptor !== null,
           }) ? (
             <InstallBanner />
           ) : undefined
