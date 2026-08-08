@@ -73,6 +73,11 @@ const NOT_TYPESCRIPT: Exemption[] = [
     why: 'Prettier ships zero dependencies and registers no TypeScript loader.',
   },
   {
+    tool: 'dependency-cruiser',
+    ext: 'mjs',
+    why: 'dependency-cruiser loads a TypeScript config only when `interpret` finds a transpiler registered for it, and none is.',
+  },
+  {
     tool: 'jscpd',
     ext: 'json',
     why: 'jscpd ships zero dependencies and reads JSON only. Its default name is `.jscpd.json`; `--config` puts it back in the convention.',

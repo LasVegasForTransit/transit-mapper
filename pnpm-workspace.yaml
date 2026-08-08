@@ -30,6 +30,7 @@ catalog:
   '@types/react': '^18.3.12'
   '@types/react-dom': '^18.3.1'
   '@vitejs/plugin-react': '^4.3.4'
+  dependency-cruiser: '^18.1.1'
   eslint: '^10.8.0'
   eslint-config-prettier: '^10.1.8'
   eslint-plugin-react-hooks: '^7.1.1'

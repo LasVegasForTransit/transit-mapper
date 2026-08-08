@@ -68,6 +68,7 @@
         "//#check:debt",
         "//#check:deadcode",
         "//#check:duplication",
+        "//#check:boundaries",
         "//#check:documents",
         "//#check:reference"
       ],
@@ -142,6 +143,10 @@
       "outputs": []
     },
     "//#check:duplication": {
+      "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": []
+    },
+    "//#check:boundaries": {
       "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     },
