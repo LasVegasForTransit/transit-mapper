@@ -33,13 +33,14 @@ pnpm check --fix  # everything a machine can repair
 Not every guard belongs in `pnpm check`. These run at a layer where they
 make sense — a disposable CI runner, or the moment before a push.
 
-| Check                       | Fails when                                                                         | Fix                                                 |
-| --------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `check:generators (CI)`     | a generator emits code that does not pass pnpm check                               | `run the generator by hand and repair the template` |
-| `check:env (pre-push)`      | node_modules disagrees with the lockfile                                           | `pnpm install --frozen-lockfile`                    |
-| `gitleaks (pre-commit, CI)` | a secret appears in the changes                                                    | `remove it, then rotate it — assume it is burned`   |
-| `pnpm preflight`            | the toolchain, Cloudflare resources, or GitHub governance differ from the standard | `pnpm bootstrap`                                    |
-| `commit-msg hook`           | the subject is not a conventional commit, or exceeds 72 characters                 | `reword the commit`                                 |
+| Check                       | Fails when                                                                         | Fix                                                  |
+| --------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `check:generators (CI)`     | a generator emits code that does not pass pnpm check                               | `run the generator by hand and repair the template`  |
+| `check:env (pre-push)`      | node_modules disagrees with the lockfile                                           | `pnpm install --frozen-lockfile`                     |
+| `gitleaks (pre-commit, CI)` | a secret appears in the changes                                                    | `remove it, then rotate it — assume it is burned`    |
+| `pnpm preflight`            | the toolchain, Cloudflare resources, or GitHub governance differ from the standard | `pnpm bootstrap`                                     |
+| `commit-msg hook`           | the subject is not a conventional commit, or exceeds 72 characters                 | `reword the commit`                                  |
+| `commit-msg hook`           | a Co-Authored-By footer sits outside the footer block, or has no address           | `move it to the end of the message, as Name <email>` |
 
 ## Adding a check
 
