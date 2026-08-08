@@ -3307,6 +3307,28 @@ button.chip-removable-label:hover {
     opacity: 1;
   }
 }
+/* A surface on its way out stops taking taps the moment it starts leaving.
+ *
+ * Every closing animation here runs for 110-160ms, and the element stays in
+ * the DOM for all of it — `[data-inspector-state='closed'] .panel-right` even
+ * uses `forwards`, so it sits at opacity 0 and full size until React unmounts
+ * it. Anything under it is invisible and unreachable for that window, which is
+ * how a tap on the tool rail during a collapse landed on `.insp-section`
+ * instead: the panel was gone to look at and still there to hit.
+ *
+ * One rule for every surface rather than a prop threaded through each: the
+ * closing state is already in the DOM as an attribute, because Radix writes
+ * `data-state` and Inspector writes `data-inspector-state`.
+ *
+ * `inert` would be stronger — it takes the subtree out of the focus order too
+ * — but it is not expressible in CSS, and a keyboard user cannot tab into
+ * something during a 140ms exit anyway. */
+[data-state='closed'],
+[data-inspector-state='closed'],
+[data-inspector-state='closed'] .panel-right {
+  pointer-events: none;
+}
+
 @keyframes fade-out {
   from {
     opacity: 1;
