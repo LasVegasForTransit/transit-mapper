@@ -129,9 +129,11 @@ export function createBrowserInstallEnvironment(): InstallEnvironment {
     // regex this replaced (`/android|iphone|ipad|ipod|mobile/`) called an iPad
     // a phone and a Mac an iPad, because iPadOS reports itself as a Mac.
     isDesktop: () => !compactLayoutSnapshot() && hoverCapableSnapshot(),
-    isStandalone: () =>
-      window.matchMedia?.('(display-mode: standalone)').matches === true ||
-      (navigator as Navigator & { standalone?: boolean }).standalone === true,
+    isStandalone: () => {
+      const displayMode = window.matchMedia('(display-mode: standalone)').matches;
+      const iosHomeScreen = (navigator as Navigator & { standalone?: boolean }).standalone ?? false;
+      return displayMode || iosHomeScreen;
+    },
     browser: () => browserFromUserAgent(navigator.userAgent),
     storage: window.localStorage,
     addEventListener: (type, listener) => window.addEventListener(type, listener),

@@ -43,7 +43,8 @@ export function mediaQuery(query: string): MediaQueryStore {
       return () => list.removeListener(onChange);
     },
     snapshot() {
-      return typeof window !== 'undefined' && window.matchMedia?.(query).matches === true;
+      if (typeof window === 'undefined' || !window.matchMedia) return false;
+      return window.matchMedia(query).matches;
     },
   };
   stores.set(query, store);

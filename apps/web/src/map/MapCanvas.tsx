@@ -163,6 +163,13 @@ interface MapErrorLike {
  * ResizeObserver that wrote a height onto the document root for CSS to read
  * back; the numbers were never the hard part.
  */
+/** The cast is load-bearing: `getSource` is typed `Source`, which has no
+ *  `setData`. */
+function clearActionAnchor(): void {
+  const source = getMap()?.getSource(SRC_ACTION_ANCHOR) as GeoJSONSource | undefined;
+  source?.setData({ type: 'FeatureCollection', features: [] });
+}
+
 function chromePadding(el: HTMLElement): PaddingOptions {
   const style = getComputedStyle(el);
   const side = (name: string) => Number.parseFloat(style.getPropertyValue(name)) || 0;
@@ -212,16 +219,14 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   contextMenuOpenRef.current = contextMenuAt !== null || terminusConnectionChoice !== null;
   useEffect(() => {
     if (contextMenuAt !== null || terminusConnectionChoice !== null) return;
-    const source = getMap()?.getSource(SRC_ACTION_ANCHOR) as GeoJSONSource | undefined;
-    source?.setData({ type: 'FeatureCollection', features: [] });
+    clearActionAnchor();
     // The controller holds the last real map pointer. Re-evaluate it now that
     // the menu no longer owns focus instead of consuming the next mouse move.
     refreshPointerIntentRef.current?.();
   }, [contextMenuAt, terminusConnectionChoice]);
   const { viewMode, setViewMode, visibleModes, visibleWayTypes, showLandmarks } = useView();
   useEffect(() => {
-    const source = getMap()?.getSource(SRC_ACTION_ANCHOR) as GeoJSONSource | undefined;
-    source?.setData({ type: 'FeatureCollection', features: [] });
+    clearActionAnchor();
     clearArmedTerminusForViewChange(store);
     setTerminusConnectionChoice((choice) => {
       choice?.dismiss();
