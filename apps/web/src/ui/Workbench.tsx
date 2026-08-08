@@ -178,57 +178,6 @@ function useToolbarFit(
   return fit;
 }
 
-/**
- * Publishes the workbench's rendered height as `--workbench-h`.
- *
- * MapLibre's zoom and attribution controls live outside React's tree, so the
- * only way to keep them clear of a surface whose height changes with its
- * contents is to tell CSS what that height currently is. The alternative in
- * the file until now was `.maplibregl-ctrl-bottom-right { bottom: 60px }`,
- * a hand-picked number matched to one state of one layout: measured at
- * 390x844 the dock ended at x=346 and those controls began at x=346, and
- * expanding the sheet buried them entirely.
- *
- * Zero when the compact layout is not mounted, so the desktop rules that
- * read it fall back to their own clearance rather than to a stale number
- * left behind by a resize.
- */
-function usePublishedHeight(box: RefObject<HTMLElement | null>, mobile: boolean): void {
-  useEffect(() => {
-    const root = document.documentElement;
-    if (!mobile) {
-      root.style.removeProperty('--workbench-h');
-      return;
-    }
-    // Re-read the ref on every publish rather than closing over the node this
-    // effect happened to see. The effect's only dependency is `mobile`, so a
-    // remount that keeps the layout compact would otherwise leave this
-    // measuring a node that is no longer on the page.
-    const publish = () => {
-      const el = box.current;
-      if (!el) return;
-      root.style.setProperty('--workbench-h', `${Math.round(el.getBoundingClientRect().height)}px`);
-    };
-    publish();
-
-    // A ResizeObserver is the whole mechanism. It reports the workbench's own
-    // box changing for any reason — a detent, a rail that rewraps when the
-    // screen turns sideways, the simulation strip appearing — which is
-    // precisely the set of events MapLibre's controls need to hear about.
-    //
-    // Verifying this in the browser pane is not possible: its viewport
-    // override changes the metrics without dispatching `resize` or waking any
-    // observer, so a rotation there leaves the published value untouched. That
-    // is the harness, not this code. Check it on a real device.
-    const observer = new ResizeObserver(publish);
-    if (box.current) observer.observe(box.current);
-    return () => {
-      observer.disconnect();
-      root.style.removeProperty('--workbench-h');
-    };
-  }, [box, mobile]);
-}
-
 export interface WorkbenchProps {
   /** File menu / system name / Hide-UI toggle. Docks into the menu panel's
    *  own header on desktop; mobile has nowhere else for it to live, since
@@ -357,8 +306,6 @@ export function Workbench({
     const opening = detentFor(supplemental);
     if (opening) setDetent(opening);
   }, [supplemental]);
-
-  usePublishedHeight(sheetRef, mobile);
 
   const showingSupplemental = supplemental !== 'none';
 
