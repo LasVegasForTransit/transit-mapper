@@ -1,0 +1,14 @@
+// Production sources only. See tsconfig.json beside this one for why the split
+// exists.
+{
+  "extends": "@transitmapper/tsconfig/base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"],
+    // The package's `exports` map points at TypeScript source rather than a
+    // build, so its own modules and tests import each other with a `.ts`
+    // suffix. Nothing here emits, which is what makes that legal.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src"]
+}

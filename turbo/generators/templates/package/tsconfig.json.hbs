@@ -1,20 +1,8 @@
+// Every TypeScript file in this package. TypeScript's language service resolves
+// a file by walking up to the nearest `tsconfig.json` and only that name, so
+// anything left out here has no types in an editor and is rejected outright by
+// type-aware lint rather than checked.
 {
-  // An independent leaf: no composite, no references. `tsc -b --noEmit`
-  // raises TS6310 once a project has outgoing references.
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "skipLibCheck": true,
-    "isolatedModules": true,
-    "moduleDetection": "force",
-    "noEmit": true,
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "types": ["node"]
-  },
-  "include": ["src", "tests"]
+  "extends": "./tsconfig.build.json",
+  "include": ["src", "tests", "vitest.config.ts"]
 }
