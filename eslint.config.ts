@@ -28,6 +28,20 @@ export default defineTypeAwareConfig(
     rules: {
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'error',
+      // MapLibre declares `once(type, listener?): this | Promise<any>` — one
+      // signature, optional listener, union return. Passing a listener returns
+      // `this` at runtime and nothing is ever pending, but the declared union
+      // makes every such call look like an unawaited promise. That was 18 of
+      // the 19 findings this rule reported here, and it would report one more
+      // for every new file that touches the map. Freezing them in the ledger
+      // would keep a false positive alive forever, so the call is allowed
+      // instead.
+      '@typescript-eslint/no-floating-promises': [
+        'error',
+        {
+          allowForKnownSafeCalls: [{ from: 'package', package: 'maplibre-gl', name: 'once' }],
+        },
+      ],
     },
   },
   {

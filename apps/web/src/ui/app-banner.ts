@@ -46,7 +46,7 @@ export type NoticeCause =
 export type AppBannerActionKind =
   'retry-bootstrap' | 'start-new-system' | 'reload' | 'dismiss-offline-ready' | 'dismiss-notice';
 
-export interface AppBannerAction {
+interface AppBannerAction {
   kind: AppBannerActionKind;
   /** Button text, or the accessible name when the action renders as an icon. */
   label: string;

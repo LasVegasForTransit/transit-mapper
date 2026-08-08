@@ -59,6 +59,23 @@
       "count": 1
     }
   },
+  "src/model/geo/crossStreetNaming.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "complexity": {
+      "count": 2
+    },
+    "max-params": {
+      "count": 2
+    },
+    "sonarjs/cognitive-complexity": {
+      "count": 2
+    }
+  },
   "src/model/geo/serviceLane.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
@@ -88,6 +105,14 @@
   },
   "src/model/geo/wayPath.ts": {
     "max-params": {
+      "count": 1
+    }
+  },
+  "src/model/geocode.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/prefer-optional-chain": {
       "count": 1
     }
   },
@@ -402,6 +427,14 @@
       "count": 1
     }
   },
+  "tests/model/crossStreetNaming.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "max-lines": {
+      "count": 1
+    }
+  },
   "tests/model/documentRepair.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
@@ -413,6 +446,11 @@
     },
     "@typescript-eslint/require-await": {
       "count": 1
+    }
+  },
+  "tests/model/majorRoad.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 8
     }
   },
   "tests/model/patternRuns.test.ts": {

@@ -189,7 +189,7 @@ interface SetSystemOptions {
   readOnly?: boolean;
 }
 
-export interface SetStationNameOptions {
+interface SetStationNameOptions {
   /** True when this call is itself an auto-suggestion (the Inspector's
    *  "Suggest name" button) rather than the user typing their own text —
    *  keeps the station's autoNamed flag set, so resyncAutoNamedStations may
@@ -236,7 +236,7 @@ interface ApplyGtfsImportBatch {
 export type SelectVariant = 'select' | 'erase' | 'split';
 
 /** See EditorState.documentStatus. */
-export type DocumentStatus = 'loading' | 'ready';
+type DocumentStatus = 'loading' | 'ready';
 
 export interface EditorState {
   system: TransitSystem;

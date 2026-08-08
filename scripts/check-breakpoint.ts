@@ -52,6 +52,9 @@ if (!declaration) {
   fail(`could not find COMPACT_LAYOUT_QUERY in ${CAPABILITIES}. Update this check with it.`);
 }
 const condition = declaration[1];
+if (condition === undefined) {
+  fail(`COMPACT_LAYOUT_QUERY in ${CAPABILITIES} has no readable value. Update this check.`);
+}
 
 const compactWidth = /\(max-width:\s*(\d+)px\)/.exec(condition);
 if (!compactWidth) {
@@ -97,7 +100,7 @@ const wanted = normalise(condition);
 // disagrees with itself.
 const rules = stylesheet.replace(/\/\*[\s\S]*?\*\//g, '');
 const offenders = [...rules.matchAll(/@media\s+([^{]+)\{/g)]
-  .map((match) => normalise(match[1]))
+  .map((match) => normalise(match[1] ?? ''))
   .filter((query) => query.includes(`max-width: ${compactMax}px`))
   .filter((query) => query !== wanted);
 
