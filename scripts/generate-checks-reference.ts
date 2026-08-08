@@ -91,6 +91,11 @@ const CHECKS: Check[] = [
     fix: 'delete it — or declare the entry point in knip.config.ts if it is reached from outside the import graph',
   },
   {
+    command: 'check:duplication',
+    fails: 'copy-pasted code exceeds the recorded share of the codebase',
+    fix: 'extract the shared part, or lower nothing — the threshold only goes down',
+  },
+  {
     command: 'check:documents',
     fails:
       'a required document is missing, lacks a required section, has them out of order, or uses a stock phrase',

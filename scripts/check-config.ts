@@ -72,6 +72,11 @@ const NOT_TYPESCRIPT: Exemption[] = [
     ext: 'mjs',
     why: 'Prettier ships zero dependencies and registers no TypeScript loader.',
   },
+  {
+    tool: 'jscpd',
+    ext: 'json',
+    why: 'jscpd ships zero dependencies and reads JSON only. Its default name is `.jscpd.json`; `--config` puts it back in the convention.',
+  },
 ];
 
 /** Names a tool defines for itself, valid at any scanned root. */

@@ -75,6 +75,9 @@ catalogs:
     jiti:
       specifier: ^2.6.1
       version: 2.7.0
+    jscpd:
+      specifier: ^5.0.14
+      version: 5.0.14
     jsdom:
       specifier: ^29.1.1
       version: 29.1.1
@@ -177,6 +180,9 @@ importers:
       jiti:
         specifier: 'catalog:'
         version: 2.7.0
+      jscpd:
+        specifier: 'catalog:'
+        version: 5.0.14
       knip:
         specifier: 'catalog:'
         version: 6.32.0
@@ -3735,6 +3741,44 @@ packages:
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
+
+  jscpd-darwin-arm64@5.0.14:
+    resolution: {integrity: sha512-Ojjl79SBuj9tEW6WbjZ1a/1ZOR89dneH9yLQYQu8WyWaQownttnx7RYFEHU6aGhS4jIvwUEbr+1wxzFTb37cwg==}
+    cpu: [arm64]
+    os: [darwin]
+
+  jscpd-darwin-x64@5.0.14:
+    resolution: {integrity: sha512-DxFg5XvjMZ81iVeqillnM5apqcGCfNTbroNF+mPLr7RkHLGH6mudLgtO+ILL/hfpZXy1bF9oIY5BSudPmN/k9A==}
+    cpu: [x64]
+    os: [darwin]
+
+  jscpd-linux-arm64-gnu@5.0.14:
+    resolution: {integrity: sha512-1uw+XBHEt9pONXNICSp5HpaVWPjG6mQ6deDXaq9Yb0xCNJkX4/8gmn0vhzekIyZD2DspRYKPUolbDsqm/HEdYg==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  jscpd-linux-x64-gnu@5.0.14:
+    resolution: {integrity: sha512-dFTbyyrm+Z9pcXIVzJQCw8QAgiNqIiO69sm4AfA7/wFdPoizoVzjhaXsYXcSV4bs0aoPiWbNazg0J0HgslT/5A==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  jscpd-linux-x64-musl@5.0.14:
+    resolution: {integrity: sha512-SayS7qQJvixyy9eR0+UjepkTsUUwqvlsiuSxfIdHgG2qzqoh/thnkgiu4By8fsiiDpQONsQrRrZDwHRQ3GDrBQ==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  jscpd-windows-x64-msvc@5.0.14:
+    resolution: {integrity: sha512-DqjxlVkUanlahGgY2lY7Zkrau4BUTI+AwWky+bPGK4kSK2AIOaUziY9Q19u8b58idXmJA9FKK98Fuu4ajNXVjQ==}
+    cpu: [x64]
+    os: [win32]
+
+  jscpd@5.0.14:
+    resolution: {integrity: sha512-zge+FPZZAymt2Do5Z0+QHyIn4/XcUhrO/W7of9HcHZfx2AK8++dYhLA1uWtwXj47ml3Of8PbcUW4wUWvYMCc3w==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   jsdom@29.1.1:
     resolution: {integrity: sha512-ECi4Fi2f7BdJtUKTflYRTiaMxIB0O6zfR1fX0GXpUrf6flp8QIYn1UT20YQqdSOfk2dfkCwS8LAFoJDEppNK5Q==}
@@ -8029,6 +8073,33 @@ snapshots:
   jiti@2.7.0: {}
 
   js-tokens@4.0.0: {}
+
+  jscpd-darwin-arm64@5.0.14:
+    optional: true
+
+  jscpd-darwin-x64@5.0.14:
+    optional: true
+
+  jscpd-linux-arm64-gnu@5.0.14:
+    optional: true
+
+  jscpd-linux-x64-gnu@5.0.14:
+    optional: true
+
+  jscpd-linux-x64-musl@5.0.14:
+    optional: true
+
+  jscpd-windows-x64-msvc@5.0.14:
+    optional: true
+
+  jscpd@5.0.14:
+    optionalDependencies:
+      jscpd-darwin-arm64: 5.0.14
+      jscpd-darwin-x64: 5.0.14
+      jscpd-linux-arm64-gnu: 5.0.14
+      jscpd-linux-x64-gnu: 5.0.14
+      jscpd-linux-x64-musl: 5.0.14
+      jscpd-windows-x64-msvc: 5.0.14
 
   jsdom@29.1.1:
     dependencies:

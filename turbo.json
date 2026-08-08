@@ -67,6 +67,7 @@
         "//#check:config",
         "//#check:debt",
         "//#check:deadcode",
+        "//#check:duplication",
         "//#check:documents",
         "//#check:reference"
       ],
@@ -137,6 +138,10 @@
       "outputs": []
     },
     "//#check:deadcode": {
+      "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": []
+    },
+    "//#check:duplication": {
       "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     },

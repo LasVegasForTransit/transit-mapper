@@ -39,6 +39,7 @@ catalog:
   # ESLint loads eslint.config.ts through jiti. Without it the flat config
   # resolves to nothing and every rule silently stops applying.
   jiti: '^2.6.1'
+  jscpd: '^5.0.14'
   jsdom: '^29.1.1'
   knip: '^6.32.0'
   lucide-react: '^1.27.0'
