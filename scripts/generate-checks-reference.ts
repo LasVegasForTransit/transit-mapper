@@ -96,6 +96,11 @@ const CHECKS: Check[] = [
     fix: 'extract the shared part, or lower nothing — the threshold only goes down',
   },
   {
+    command: 'check:boundaries',
+    fails: 'a module imports across a boundary the project map forbids, or a cycle exists',
+    fix: 'move the shared code into packages/core, or break the cycle',
+  },
+  {
     command: 'check:documents',
     fails:
       'a required document is missing, lacks a required section, has them out of order, or uses a stock phrase',
