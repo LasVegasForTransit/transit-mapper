@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/kucherenko/jscpd/master/packages/jscpd/schema.json",
+  "path": ["apps", "packages", "scripts"],
+  "format": ["typescript", "tsx"],
+  "minTokens": 100,
+  "minLines": 10,
+  "threshold": 0.8,
+  "reporters": ["console", "threshold"],
+  "absolute": true,
+  "gitignore": true,
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.turbo/**",
+    "**/.wrangler/**",
+    "**/worker-configuration.d.ts",
+    "apps/web/tests/verify.test.ts"
+  ]
+}
