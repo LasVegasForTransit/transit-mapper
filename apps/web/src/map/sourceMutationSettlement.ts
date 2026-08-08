@@ -4,9 +4,9 @@ export interface SettledSourceDataEvent {
   isSourceLoaded: boolean;
 }
 
-export type SourceDataListener = (event: SettledSourceDataEvent) => void;
-export type SourceLoadingListener = (sourceId: string) => void;
-export type RenderListener = () => void;
+type SourceDataListener = (event: SettledSourceDataEvent) => void;
+type SourceLoadingListener = (sourceId: string) => void;
+type RenderListener = () => void;
 
 export interface SourceMutationSettlementHost {
   /** Observe loading of the underlying source data, excluding tile requests. */

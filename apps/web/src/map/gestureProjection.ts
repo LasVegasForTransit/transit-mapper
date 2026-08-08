@@ -18,7 +18,7 @@ import type {
   Way,
 } from '@transitmapper/core/model/system';
 
-export interface GestureWayPointTarget {
+interface GestureWayPointTarget {
   wayId: string;
   pointIndex: number;
 }
@@ -63,7 +63,7 @@ export interface ProjectionOperationCounts {
 export type GestureProjectionResult =
   { kind: 'preview'; projection: GestureProjection } | { kind: 'none' } | { kind: 'abort' };
 
-export interface GestureProjectionFinish {
+interface GestureProjectionFinish {
   rebuild: boolean;
   hadPreview: boolean;
 }

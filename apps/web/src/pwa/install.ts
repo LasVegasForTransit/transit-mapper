@@ -1,12 +1,12 @@
 import { compactLayoutSnapshot, hoverCapableSnapshot } from '../device/capabilities';
 
-export type InstallBrowser = 'chromium' | 'safari' | 'firefox' | 'other';
+type InstallBrowser = 'chromium' | 'safari' | 'firefox' | 'other';
 
-export interface InstallPromptEvent {
+interface InstallPromptEvent {
   prompt: () => Promise<void>;
 }
 
-export interface InstallStorage {
+interface InstallStorage {
   getItem: (key: string) => string | null;
   setItem: (key: string, value: string) => void;
 }

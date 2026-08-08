@@ -24,14 +24,14 @@ import type { SimClock } from './simClock';
 // clock instance handed to it, so it's a window-level view onto that instance
 // for a human at a console — not a way for app code to reach the clock.
 
-export interface SimDevState {
+interface SimDevState {
   simMs: number;
   clock: string;
   speedId: string;
   paused: boolean;
 }
 
-export interface SimDevHandle {
+interface SimDevHandle {
   /** Jump to a time of day, "HH:MM", keeping the current day of the week
    *  (or moving to `dayIndex`, 0 = Monday). Returns the new clock reading. */
   setTime: (hhmm: string, dayIndex?: number) => string;

@@ -2,7 +2,7 @@ import { mediaQuery, useMediaQuery } from '../device/media-query';
 
 export type ColorScheme = 'light' | 'dark';
 
-export const DARK_SCHEME_QUERY = '(prefers-color-scheme: dark)';
+const DARK_SCHEME_QUERY = '(prefers-color-scheme: dark)';
 
 export function getSystemColorScheme(): ColorScheme {
   return mediaQuery(DARK_SCHEME_QUERY).snapshot() ? 'dark' : 'light';

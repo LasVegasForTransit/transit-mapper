@@ -7,14 +7,14 @@ export interface RawGestureMeasurements {
   sourceUploadCount: number | null;
 }
 
-export interface GestureGateMetrics {
+interface GestureGateMetrics {
   inputToNextPaintP95Ms: number;
   paintedFrameP95Ms: number;
   paintedFramesOver33Ratio: number;
   maxUnexpectedLongTaskMs: number;
 }
 
-export interface GestureCounters {
+interface GestureCounters {
   sourceUploadCount: number | null;
   paintedFrameCount: number;
   unexpectedLongTaskCount: number;

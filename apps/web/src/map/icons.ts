@@ -85,8 +85,6 @@ function rasterize(name: IconName, color: string, fill: boolean): Uint8ClampedAr
 // iconName itself lives in core (render/iconName.ts) — buildFeatures runs
 // there now and needs to name images without a DOM to rasterize them into.
 // Re-exported here so this module stays the one place the app asks about icons.
-export { iconName };
-
 export interface EnsureIconOptions {
   /** Raster ink can change with the map theme without changing the canonical
    * image ID stamped into GeoJSON features. */

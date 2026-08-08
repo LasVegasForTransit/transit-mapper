@@ -3,7 +3,6 @@ import type {
   CreateUnavailablePerfReportOptions,
   PerfMetricName,
   PerfMetricSummary,
-  PerfMetricValues,
   PerfReport,
   PerfSample,
   PerfScenario,
@@ -229,8 +228,4 @@ export function createUnavailablePerfReport(
     samples: [],
     scenarios: [],
   };
-}
-
-export function metricValue(metrics: PerfMetricValues, metric: PerfMetricName): number {
-  return metrics[metric];
 }

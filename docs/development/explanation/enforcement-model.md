@@ -179,6 +179,10 @@ ESLint enforces one half by itself: grow a count and it reports every violation
 in that file rather than only the new one, so the pressure lands on the file
 instead of the counter.
 
+Reading the ledger from the working directory is also why ESLint does not run
+at layer 1. `lint-staged` runs from the repository root, where it would see
+none of them and report every frozen finding as a fresh failure.
+
 `check:debt` enforces the other half, against the Git merge base. The ledger
 may not grow — no file gains an entry, no count rises, and a ledger that
 existed on the base branch may not disappear. And a changed file that carries

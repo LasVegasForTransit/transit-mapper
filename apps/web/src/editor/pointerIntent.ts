@@ -50,7 +50,7 @@ export interface ModifierState {
 }
 
 /** A drawing state that gives the next pointer press a more specific verb. */
-export type ArmedInteraction = 'none' | 'network-extending' | 'network-return';
+type ArmedInteraction = 'none' | 'network-extending' | 'network-return';
 
 export type PointerBadge =
   | 'extend'

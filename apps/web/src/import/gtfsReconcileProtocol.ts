@@ -5,13 +5,13 @@ export interface GtfsReconcileRequest {
   serviceIds: string[];
 }
 
-export interface GtfsReconcileSuccess {
+interface GtfsReconcileSuccess {
   kind: 'done';
   system: TransitSystem;
   reconciled: number;
 }
 
-export interface GtfsReconcileFailure {
+interface GtfsReconcileFailure {
   kind: 'error';
   message: string;
 }

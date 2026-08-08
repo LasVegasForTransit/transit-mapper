@@ -144,12 +144,12 @@ function rafThrottle<A extends unknown[]>(fn: (...args: A) => void) {
  *  the gesture keeps "where did the box land" in one place and "what counts
  *  as caught by it" in another — the Select tool and the Lines tool answer
  *  the second question differently and share the first. */
-export interface MarqueeProbe {
+interface MarqueeProbe {
   inBox: (coord: LngLat) => boolean;
   pathInBox: (path: LngLat[]) => boolean;
 }
 
-export type MarqueeCollector = (probe: MarqueeProbe, system: TransitSystem) => MultiSelectItem[];
+type MarqueeCollector = (probe: MarqueeProbe, system: TransitSystem) => MultiSelectItem[];
 
 export interface TerminusConnectionChoice {
   x: number;

@@ -1,4 +1,4 @@
-export interface BuildManifestEntry {
+interface BuildManifestEntry {
   file: string;
   name?: string;
   src?: string;
@@ -11,7 +11,7 @@ export interface BuildManifestEntry {
 
 export type BuildManifest = Record<string, BuildManifestEntry>;
 
-export interface WebAppManifestIcon {
+interface WebAppManifestIcon {
   src: string;
   sizes?: string;
   type?: string;

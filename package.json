@@ -46,6 +46,7 @@
     "check:breakpoint": "tsx scripts/check-breakpoint.ts",
     "check:config": "tsx scripts/check-config.ts",
     "check:debt": "tsx scripts/check-debt.ts",
+    "check:deadcode": "knip --max-issues 0",
     "gen": "turbo gen",
     "check:generators": "tsx scripts/check-generators.ts",
     "check:env": "tsx scripts/doctor.ts",
@@ -63,6 +64,7 @@
     "eslint": "catalog:",
     "eslint-plugin-react-hooks": "catalog:",
     "jiti": "catalog:",
+    "knip": "catalog:",
     "lint-staged": "catalog:",
     "prettier": "catalog:",
     "tsx": "catalog:",
@@ -71,7 +73,6 @@
     "vitest": "catalog:"
   },
   "lint-staged": {
-    "*": "prettier --write --ignore-unknown",
-    "*.{ts,tsx}": "eslint --fix"
+    "*": "prettier --write --ignore-unknown"
   }
 }

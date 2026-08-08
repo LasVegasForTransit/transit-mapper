@@ -66,6 +66,7 @@
         "//#check:breakpoint",
         "//#check:config",
         "//#check:debt",
+        "//#check:deadcode",
         "//#check:documents",
         "//#check:reference"
       ],
@@ -132,6 +133,10 @@
     },
     "//#check:debt": {
       "cache": false,
+      "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": []
+    },
+    "//#check:deadcode": {
       "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     },

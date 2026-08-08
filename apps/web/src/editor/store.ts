@@ -185,7 +185,7 @@ const STATION_DRAW_ANCHOR_M = 60; // a ~60m default station footprint
 const PLATFORM_HALF_SIZE_M = 12; // a ~24m default platform, sized to fit inside
 const GROUP_FOOTPRINT_HALF_SIZE_M = 20; // a ~40m default facility-complex site
 
-export interface SetSystemOptions {
+interface SetSystemOptions {
   readOnly?: boolean;
 }
 
@@ -198,19 +198,19 @@ export interface SetStationNameOptions {
   auto?: boolean;
 }
 
-export interface ApplyImportedReconciliation {
+interface ApplyImportedReconciliation {
   /** Main-thread object identity captured before the Worker started. */
   expectedSystem: TransitSystem;
   result: ReconcileImportedSystemResult;
 }
 
-export interface GtfsImportPieces {
+interface GtfsImportPieces {
   ways: Way[];
   services: Service[];
   stations: Station[];
 }
 
-export interface ApplyGtfsImportBatch {
+interface ApplyGtfsImportBatch {
   /** Document that owned the import when the background operation began. */
   targetSystemId: string;
   pieces: GtfsImportPieces;

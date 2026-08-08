@@ -12,9 +12,15 @@ cd "$(git rev-parse --show-toplevel)"
 STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
 [ -z "$STAGED" ] && exit 0
 
-# Formats everything prettier understands and applies eslint --fix to
-# TypeScript. Both rewrite in place and re-stage; neither fails on anything
-# fixable.
+# Formats everything Prettier understands, rewriting in place and re-staging.
+#
+# ESLint deliberately does not run here. Every package lints from its own
+# directory and reads its own eslint-suppressions.json from there, and
+# lint-staged runs from the repository root — so an ESLint pass at this layer
+# sees none of the ledgers and reports 1,351 frozen findings as fresh
+# failures. A hook that blocks a commit over debt somebody else recorded is
+# the fastest way to teach people --no-verify. Layers 2 and 3 run the real
+# lint, from the right directories.
 if ! pnpm --silent exec lint-staged; then
   printf '\n  Commit blocked: lint-staged could not fix everything.\n'
   printf '    fix:  pnpm check --fix\n\n' >&2

@@ -14,17 +14,17 @@ import { attachPaintedFrameCapture } from './paintedFrameCapture';
 /** Runtime A/B toggles, flipped from the devtools console to attribute cost —
  *  e.g. `__perf.vehicles = false` then re-run `await __panBench()` to see the
  *  vehicle loop's share of the pan frame budget. */
-export interface DevPerfFlags {
+interface DevPerfFlags {
   vehicles: boolean;
 }
 
-export interface PerfStationSnapshot {
+interface PerfStationSnapshot {
   coord: [number, number];
   revision: number;
   wayCount: number;
 }
 
-export interface PerfOverlaySnapshot {
+interface PerfOverlaySnapshot {
   sourceExists: boolean;
   layerExists: boolean;
   sourceLoaded: boolean;

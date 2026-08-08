@@ -3,12 +3,12 @@ import {
   type SourceMutationSettlementHost,
 } from './sourceMutationSettlement';
 
-export interface StationGestureSettlementMutation {
+interface StationGestureSettlementMutation {
   mutate(): void;
   fallback(): void;
 }
 
-export interface StationGestureSettlementRefresh {
+interface StationGestureSettlementRefresh {
   mutate(): void;
 }
 

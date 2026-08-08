@@ -40,6 +40,7 @@ catalog:
   # resolves to nothing and every rule silently stops applying.
   jiti: '^2.6.1'
   jsdom: '^29.1.1'
+  knip: '^6.32.0'
   lucide-react: '^1.27.0'
   maplibre-gl: '^4.7.1'
   playwright-core: '^1.62.0'

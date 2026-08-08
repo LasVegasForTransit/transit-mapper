@@ -1,6 +1,6 @@
 import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 
-export type PanelSlot = 'left' | 'right';
+type PanelSlot = 'left' | 'right';
 
 interface PanelProps extends HTMLAttributes<HTMLElement> {
   /** Which overlay-grid slot this card docks into — see .app-chrome's

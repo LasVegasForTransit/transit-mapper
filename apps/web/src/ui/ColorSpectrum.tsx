@@ -57,7 +57,7 @@ function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
 function hsvToHex(h: number, s: number, v: number): string {
   return rgbToHex(...hsvToRgb(h, s, v));
 }
-export const HEX_RE = /^#?[0-9a-fA-F]{6}$/;
+const HEX_RE = /^#?[0-9a-fA-F]{6}$/;
 
 interface ColorSpectrumProps {
   value: string;

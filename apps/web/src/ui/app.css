@@ -1771,51 +1771,6 @@ input[type='range'] {
   flex: none;
 }
 
-/* ---- catalog select (swatch + label trigger over a DropdownMenu — see
-   CatalogSelect.tsx) — the "Line type" / "Way type" / "Service" pickers,
-   distinguished from a plain .opt-select by carrying the catalog entry's own
-   render color so entries read at a glance instead of by name alone. */
-.cs-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  height: 32px;
-  min-width: 132px;
-  padding: 0 8px;
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: var(--md-sys-typescale-label-large-size);
-  border: 1px solid var(--md-sys-color-outline-variant);
-  background: var(--md-sys-color-surface);
-  color: var(--md-sys-color-on-surface);
-  cursor: pointer;
-  transition: background 140ms ease;
-}
-.cs-trigger:hover:not(:disabled) {
-  background: var(--md-sys-color-surface-container);
-}
-.cs-trigger:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.cs-trigger-left {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.cs-trigger-swatch,
-.cs-item-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  flex: none;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tm-fixed-black) 15%, transparent);
-}
-
 /* ---- export split (MD3 compound) button: main action + quick-export caret ---- */
 .split-btn-root {
   position: relative;

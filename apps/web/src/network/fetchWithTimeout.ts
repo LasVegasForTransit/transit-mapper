@@ -1,4 +1,4 @@
-export const DEFAULT_API_TIMEOUT_MS = 20_000;
+const DEFAULT_API_TIMEOUT_MS = 20_000;
 
 export class RequestTimeoutError extends Error {
   constructor(readonly timeoutMs: number) {

@@ -29,13 +29,13 @@ import {
 // (constant); and the one component that displays the time subscribes and
 // throttles itself.
 
-export interface SimClockSettings {
+interface SimClockSettings {
   speedId: string;
   paused: boolean;
 }
 
-export type SimClockListener = (simMs: number) => void;
-export type SimClockSettingsListener = (settings: SimClockSettings) => void;
+type SimClockListener = (simMs: number) => void;
+type SimClockSettingsListener = (settings: SimClockSettings) => void;
 
 export interface SimClock {
   /** The current simulated instant, in ms since Monday 00:00. */

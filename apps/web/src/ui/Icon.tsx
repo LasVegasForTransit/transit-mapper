@@ -46,7 +46,7 @@ import {
 // to changed, from a hand-drawn 24x24 path to a real icon. `map/icons.ts`
 // reuses this same ICONS map to rasterize on-map pictograms, so the React UI
 // and the map canvas still share one vocabulary, not two.
-export const ICONS = {
+const ICONS = {
   cursor: MousePointer2,
   line: Route,
   station: Circle,

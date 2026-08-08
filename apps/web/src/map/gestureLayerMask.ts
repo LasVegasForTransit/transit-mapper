@@ -24,7 +24,7 @@ export interface GestureFilterExclusion {
   ids: string[];
 }
 
-export interface GestureFilterRule {
+interface GestureFilterRule {
   layerId: string;
   sourceId: string;
   exclusions: GestureFilterExclusion[];
