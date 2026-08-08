@@ -139,6 +139,11 @@ const ELSEWHERE: Check[] = [
     fails: 'a Co-Authored-By footer sits outside the footer block, or has no address',
     fix: 'move it to the end of the message, as Name <email>',
   },
+  {
+    command: 'commit-msg hook',
+    fails: 'an agent is committing with no Co-Authored-By footer',
+    fix: 'end the message with the model that wrote it',
+  },
 ];
 
 function table(checks: Check[]): string {

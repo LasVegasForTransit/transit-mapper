@@ -41,6 +41,7 @@ make sense — a disposable CI runner, or the moment before a push.
 | `pnpm preflight`            | the toolchain, Cloudflare resources, or GitHub governance differ from the standard | `pnpm bootstrap`                                     |
 | `commit-msg hook`           | the subject is not a conventional commit, or exceeds 72 characters                 | `reword the commit`                                  |
 | `commit-msg hook`           | a Co-Authored-By footer sits outside the footer block, or has no address           | `move it to the end of the message, as Name <email>` |
+| `commit-msg hook`           | an agent is committing with no Co-Authored-By footer                               | `end the message with the model that wrote it`       |
 
 ## Adding a check
 

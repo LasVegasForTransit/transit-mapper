@@ -32,18 +32,36 @@ if [ "$LENGTH" -gt 72 ]; then
   exit 1
 fi
 
-# Attribution trailers, when the message has any.
+# Attribution.
 #
-# Whether an agent helped write a commit is not something this script can
-# determine, so it cannot require the trailer — that rule is carried by
-# whoever writes the message. What it can check is the shape, and that is
-# worth checking: a malformed Co-Authored-By looks like attribution and does
-# not parse as one, so `git log --format='%(trailers:key=Co-Authored-By)'`
-# reports nothing and the credit is silently lost.
 # Strip comments the way git does before it stores the message, so the
 # scissors line and everything under it does not count as the last paragraph.
 BODY=$(grep -v '^#' "$MSG_FILE")
 WRITTEN=$(printf '%s\n' "$BODY" | grep -ci '^Co-Authored-By:' || true)
+
+# An agent has to say so. `prepare-commit-msg` already writes the footer from
+# the same signal, so reaching this check with none means it was removed or
+# the commit came in by a path that skipped that hook — either way the commit
+# is about to claim a human wrote it.
+#
+# A person at a keyboard sets none of these, so a hand-written commit needs
+# nothing. Someone typing `git commit` inside an agent's own terminal does
+# match, and will already have had the footer added for them; this only fires
+# if it was taken back out.
+if [ -z "$WRITTEN" ] || [ "$WRITTEN" -eq 0 ]; then
+  if [ -n "${AI_AGENT:-}" ] || [ "${CLAUDECODE:-}" = "1" ]; then
+    printf '\n  Commit blocked: an agent is committing without attribution.\n\n' >&2
+    [ -n "${AI_AGENT:-}" ] && printf '    AI_AGENT:    %s\n' "$AI_AGENT" >&2
+    [ "${CLAUDECODE:-}" = "1" ] && printf '    CLAUDECODE:  1\n' >&2
+    printf '\n    End the message with the model that wrote it:\n\n' >&2
+    printf '      Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>\n\n' >&2
+    printf '    A footer is added for you by .githooks/prepare-commit-msg, so\n' >&2
+    printf '    seeing this means it was removed, or this commit arrived by a\n' >&2
+    printf '    path that hook does not cover.\n\n' >&2
+    printf '    see:  docs/development/reference/commit-messages.md\n\n' >&2
+    exit 1
+  fi
+fi
 
 if [ "$WRITTEN" -gt 0 ]; then
   # Placement, checked against the last blank-line-separated paragraph rather
