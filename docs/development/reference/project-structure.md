@@ -193,7 +193,7 @@ domain rules.
 viewport. Below the layout condition it mounts a different tree: two
 edge-anchored bars with the map between them, rather than floating cards. See
 [The compact layout](../explanation/compact-layout.md) for that tree, its
-detents, and the traps in `--workbench-h`.
+detents, and the four properties that tell the map what the chrome covers.
 
 #### Device
 
