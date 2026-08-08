@@ -74,7 +74,7 @@ function main(): void {
     // A rename reports both the old and the new path; the old one is the
     // migration that stopped existing under the name Wrangler recorded.
     const path = paths[0];
-    if (!path || !MIGRATION_PATH.test(path)) continue;
+    if (!status || !path || !MIGRATION_PATH.test(path)) continue;
     if (status.startsWith('A')) continue;
     offences.push({ status, path });
   }

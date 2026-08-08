@@ -57,8 +57,8 @@ function parseAccountIds(stdout: string): string[] {
     rowRe.lastIndex = 0;
     const match = rowRe.exec(line);
     if (!match) continue;
-    const name = match[1].trim();
-    const id = match[2].trim();
+    const name = (match[1] ?? '').trim();
+    const id = (match[2] ?? '').trim();
     if (name.toLowerCase() === 'account name') continue;
     ids.push(id);
   }
@@ -142,11 +142,11 @@ export async function runCiSecretsPhase(
   }
 
   const accountIds = parseAccountIds(whoami.stdout);
-  if (accountIds.length === 0) {
+  const accountId = accountIds[0];
+  if (accountId === undefined) {
     log.error('Could not parse an account id out of `wrangler whoami` output.');
     return { success: false };
   }
-  const accountId = accountIds[0];
   log.info(`Using Cloudflare account id ${accountId} (from \`wrangler whoami\`).`);
 
   const existing = readCiEnvironment(accountId);

@@ -108,7 +108,9 @@ function shellTokens(command: string): ShellToken[] | undefined {
   };
 
   for (let index = 0; index < command.length; index += 1) {
-    const character = command[index];
+    // charAt rather than [index]: it returns a string for any input, so the
+    // lookahead below stays simple under noUncheckedIndexedAccess.
+    const character = command.charAt(index);
     if (escaped) {
       token += character;
       escaped = false;
@@ -152,7 +154,7 @@ function shellTokens(command: string): ShellToken[] | undefined {
       character === ')'
     ) {
       pushToken();
-      const next = command[index + 1];
+      const next = command.charAt(index + 1);
       if ((character === '&' || character === '|') && next === character) {
         pushOperator(`${character}${next}`);
         index += 1;
@@ -197,7 +199,7 @@ function directVerifyEntries(command: string): DirectVerifyDiscovery {
   const entries: string[] = [];
   const unverifiable: string[] = [];
   for (let index = 0; index < tokens.length; index += 1) {
-    if (tokens[index].value !== 'tsx') continue;
+    if (tokens[index]?.value !== 'tsx') continue;
 
     const end = tokens.findIndex(
       (token, tokenIndex) => tokenIndex > index && SHELL_OPERATORS.has(token.value),
@@ -207,8 +209,9 @@ function directVerifyEntries(command: string): DirectVerifyDiscovery {
     const rendered = ['tsx', ...args.map((argument) => argument.value)].join(' ');
     let argument = 0;
 
-    while (argument < args.length && args[argument].value.startsWith('-')) {
-      const option = args[argument].value;
+    for (;;) {
+      const option = args[argument]?.value;
+      if (!option?.startsWith('-')) break;
       if (option === '--') {
         argument += 1;
         break;

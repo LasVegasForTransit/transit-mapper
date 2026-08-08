@@ -49,7 +49,7 @@ function validate(path: string): Violation | undefined {
   const match = MODULE_FILE.exec(path);
   if (!match) return undefined;
 
-  const [, tree, relativePath] = match;
+  const [, tree, relativePath = ''] = match;
   const filename = relativePath.split('/').at(-1) ?? '';
   if (tree === 'src') {
     if (SOURCE_FILE.test(filename)) return undefined;
