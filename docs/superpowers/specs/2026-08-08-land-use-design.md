@@ -48,7 +48,7 @@ thing, so those features are additions rather than a second architecture.
 
 | Question           | Decision                                                                                                                                       |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| First slice        | Reference layers, with a legend and click-to-inspect. No modelling, no time axis.                                                              |
+| First slice        | Reference layers, with a legend and click-to-inspect. No modelling, and no modelled time axis — only whichever vintages the pipeline fetched.  |
 | Coverage           | Pluggable. The app reads a manifest URL. Curated regions build in CI; anyone may host their own.                                               |
 | Analysis substrate | Hex binning is a defined pipeline stage, built but unpublished in the first release.                                                           |
 | Renderer           | Today's map library. Everything except pushing values at the renderer stays pure, so a future engine replaces one shim.                        |
@@ -213,7 +213,7 @@ a reader who takes the obvious one loses a day.
 | Census boundaries              | `www2.census.gov/geo/tiger/TIGER2025/BG/tl_2025_32_bg.zip`                                     | 4.9 MB block groups for Nevada. Swap `BG` for `TRACT`, `TABBLOCK20`, `PLACE`.                                                                                                           |
 | Jobs                           | `lehd.ces.census.gov/data/lodes/LODES8/nv/`                                                    | `wac`, `rac`, `od`. Use `JT01` (primary jobs), not `JT00`, which double-counts multi-job holders. `SE01`–`SE03` split by earnings for value-of-time.                                    |
 | Pollution                      | Harvard Dataverse `doi:10.7910/DVN/RLR5AX`                                                     | `EJSCREEN_2024_BG_*.csv`, 417 MB. `PM25`, `OZONE`, `DSLPM`, `PTRAF`, `NO2`, `PRE1960PCT`                                                                                                |
-| Land cover                     | `www.mrlc.gov/downloads/sciweb1/shared/mrlc/data-bundles/Annual_NLCD_LndCov_2024_CU_C1V1.zip`  | 1.44 GB CONUS. Clip through the MRLC viewer rather than pulling whole.                                                                                                                  |
+| Land cover _(deferred)_        | `www.mrlc.gov/downloads/sciweb1/shared/mrlc/data-bundles/Annual_NLCD_LndCov_2024_CU_C1V1.zip`  | 1.44 GB CONUS. Clip through the MRLC viewer rather than pulling whole.                                                                                                                  |
 | Stop-level ridership           | `webgis.rtcsnv.com/arcgis/rest/services/Web/HUB/FeatureServer` layers 23–26                    | `BoardingsperWeekday`, `AlightingsperWeekday`, `WeekdayBoardingsperTrip`, and Saturday/Sunday equivalents. 3,767 stops, four seasonal snapshots.                                        |
 
 Three traps in the above. The Census API requires a key and answers a keyless
@@ -251,8 +251,12 @@ answers where that generalizes and where it does not.
 Census tables and boundaries, jobs data, pollution, land cover, and EPA's
 location database are single national files with a uniform schema keyed by
 GEOID. Build them once and every US city has population, income, vehicle access,
-commute mode, jobs, pollution, and land cover from the day this ships. There is
-no per-city work in any of them.
+commute mode, jobs, and pollution from the day this ships. There is no per-city
+work in any of them.
+
+Land cover belongs to that group by shape but not by schedule: it is raster
+rather than vector, and the first release builds no raster path, so it waits.
+Everything else in the list is vector or a plain table.
 
 That floor is higher than it looks. It is most of what the established transit
 sketching tools sell. Only parcels and zoning are genuinely per-jurisdiction.
@@ -481,9 +485,11 @@ A lens without a legend is decoration. The card that appears is not a passive
 key.
 
 Its title names the measure and its vintage. Selecting the title switches
-measure or year. Selecting a colour class filters the map to it. The source line
-opens provenance: publisher, retrieval date, licence, and the classification
-method that produced the breaks.
+measure, or switches between the vintages the pipeline actually fetched — a
+short list of published years, not a scrubbable timeline, and nothing modelled.
+Selecting a colour class filters the map to it. The source line opens
+provenance: publisher, retrieval date, licence, and the classification method
+that produced the breaks.
 
 That last item is not decoration either. An advocate presenting to a council
 member has to answer where a number came from without leaving the map.
