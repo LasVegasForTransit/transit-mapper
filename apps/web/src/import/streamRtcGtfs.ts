@@ -39,6 +39,25 @@ function abortError(signal: AbortSignal | undefined): Error {
     : new DOMException('The GTFS import was canceled.', 'AbortError');
 }
 
+/** The proxy answers a failed upstream fetch with a JSON body naming the
+ * agency's own status, and that status is the only part a reader can act on:
+ * RTC refusing us is a different situation from our own server being down,
+ * and it needs a different response from whoever sees it. Reporting the
+ * proxy's 502 alone threw that distinction away and sent people looking at
+ * the wrong system. */
+async function importFailureMessage(response: Response): Promise<string> {
+  try {
+    const body: unknown = await response.json();
+    if (body !== null && typeof body === 'object' && 'error' in body) {
+      const { error } = body;
+      if (typeof error === 'string' && error.length > 0) return error;
+    }
+  } catch {
+    // Not JSON, so the status is genuinely all we know.
+  }
+  return `GTFS import failed (${response.status}).`;
+}
+
 /** Download the RTC archive, then hand every CPU-heavy phase to a dedicated
  * Worker. The async generator yields one bounded batch at a time and yields a
  * main-thread task between batches so store commits and pointer input can
@@ -56,7 +75,7 @@ export async function* streamRtcGtfsBatches(
       fetcher: options.fetcher,
     },
   );
-  if (!response.ok) throw new Error(`GTFS import failed (${response.status}).`);
+  if (!response.ok) throw new Error(await importFailureMessage(response));
   const archive = await response.arrayBuffer();
   if (options.signal?.aborted) throw abortError(options.signal);
 
@@ -122,13 +141,13 @@ export async function* streamRtcGtfsBatches(
 
     for (;;) {
       if (failure) throw failure;
-      if (events.length === 0) {
+      const event = events.shift();
+      if (event === undefined) {
         await new Promise<void>((resolve) => {
           wake = resolve;
         });
         continue;
       }
-      const event = events.shift()!;
       if (event.kind === 'phase') {
         options.onPhase?.(event.phase);
         continue;

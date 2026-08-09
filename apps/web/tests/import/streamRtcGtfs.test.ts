@@ -38,8 +38,8 @@ class FakeGtfsWorker {
   }
 }
 
-const fetchArchive = vi.fn(
-  async () => new Response(new Uint8Array([1, 2, 3]), { status: 200 }),
+const fetchArchive = vi.fn(() =>
+  Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 200 })),
 ) as typeof fetch;
 
 afterEach(() => {
@@ -64,6 +64,31 @@ describe('RTC GTFS Worker stream', () => {
     expect(batches).toHaveLength(1);
     expect(worker.transferred).toBe(1);
     expect(worker.terminated).toBe(true);
+  });
+
+  it('reports the agency status the proxy names rather than the proxy status', async () => {
+    const refused = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error: 'RTC GTFS feed unavailable (403)' }), {
+          status: 502,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    ) as typeof fetch;
+
+    await expect(
+      streamRtcGtfsBatches({ fetcher: refused, workerFactory: () => new FakeGtfsWorker() }).next(),
+    ).rejects.toThrow('RTC GTFS feed unavailable (403)');
+  });
+
+  it('falls back to the status when a failed response carries no stated cause', async () => {
+    const empty = vi.fn(() =>
+      Promise.resolve(new Response('gateway timeout', { status: 504 })),
+    ) as typeof fetch;
+
+    await expect(
+      streamRtcGtfsBatches({ fetcher: empty, workerFactory: () => new FakeGtfsWorker() }).next(),
+    ).rejects.toThrow('GTFS import failed (504).');
   });
 
   it('terminates the Worker when the user cancels', async () => {

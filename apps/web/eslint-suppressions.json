@@ -244,9 +244,6 @@
     }
   },
   "src/import/streamRtcGtfs.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
     },
@@ -984,11 +981,6 @@
   },
   "tests/embed/config.test.ts": {
     "@typescript-eslint/no-unnecessary-type-conversion": {
-      "count": 1
-    }
-  },
-  "tests/import/streamRtcGtfs.test.ts": {
-    "@typescript-eslint/require-await": {
       "count": 1
     }
   },
