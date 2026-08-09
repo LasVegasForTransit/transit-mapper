@@ -458,9 +458,9 @@ app.delete('/api/systems/:id', async (c) => {
 // CORS headers, so the browser can't fetch it directly; this endpoint (same
 // origin as the app) sidesteps that.
 //
-// Cached at the edge for a day. The feed is ~6 MB and an agency publishes a
+// Cached at the edge for a day. The feed is ~15 MB and an agency publishes a
 // new one every few weeks, so re-fetching per request was pure waste — and
-// worse, it was an amplifier: one request here meant 6 MB pulled from RTC's
+// worse, it was an amplifier: one request here meant 15 MB pulled from RTC's
 // servers, with nothing stopping a script from doing that in a loop. Now the
 // first request of the day pays for it and the rest are served from cache.
 const GTFS_FEED_URL = 'https://developer.rtcsnv.com/transitData/google_transit.zip';
@@ -472,6 +472,19 @@ app.get('/api/gtfs/rtc', async (c) => {
   if (cached) return cached;
 
   const upstream = await fetch(GTFS_FEED_URL, {
+    headers: {
+      // A Worker's fetch sends no User-Agent at all, and RTC's host sits
+      // behind a WAF that answered the resulting header-less subrequest with
+      // 403 while serving 200 to every ordinary client — which broke import
+      // for everyone at once and looked like a size or timeout problem from
+      // the browser. Identifying ourselves is also the courteous thing: an
+      // agency reading its own logs can see who pulls the feed and how to
+      // reach us. Both hosts being on Cloudflare is likely part of why the
+      // rule fires, so if 403s return, the next step is asking RTC to
+      // allowlist rather than guessing at more headers.
+      'user-agent': `TransitMapper/1.0 (+${c.env.SITE_URL})`,
+      accept: 'application/zip, application/octet-stream;q=0.9, */*;q=0.8',
+    },
     // Belt and braces: Cloudflare's own fetch cache keeps this from hitting
     // RTC even when the response cache above has been evicted.
     cf: { cacheEverything: true, cacheTtl: GTFS_CACHE_SECONDS },
@@ -598,7 +611,7 @@ app.get('/s/:id/preview.png', async (c) => {
   // No stored card (an API-created share, or a browser that couldn't
   // rasterize) falls back to the site-wide image rather than 404ing, so the
   // og:image on the share page is never a broken link.
-  if (!live || !row?.preview) {
+  if (!live || !row.preview) {
     return c.env.ASSETS.fetch(new Request(new URL('/og-image.png', c.req.raw.url), c.req.raw));
   }
 
