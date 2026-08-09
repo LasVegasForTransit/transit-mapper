@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.3.0...v0.3.1) (2026-08-09)
+
+
+### Bug Fixes
+
+* drop the upstream cache layer that cannot be purged ([9204e26](https://github.com/LasVegasForTransit/transit-mapper/commit/9204e26d4b4aaca46f6b04ad851148bf882ac20c))
+* stop caching RTC's refusal for a day and re-serving it ([4ef4539](https://github.com/LasVegasForTransit/transit-mapper/commit/4ef45399c0a800b6cfc2d869b6176a91a9a5b08c))
+
 ## [0.3.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.2.0...v0.3.0) (2026-08-09)
 
 
