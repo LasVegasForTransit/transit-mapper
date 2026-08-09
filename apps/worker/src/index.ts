@@ -482,16 +482,19 @@ app.get('/api/gtfs/rtc', async (c) => {
       'user-agent': `TransitMapper (+${c.env.SITE_URL})`,
       accept: 'application/zip, application/octet-stream;q=0.9, */*;q=0.8',
     },
-    cf: {
-      cacheEverything: true,
-      // Per-status, not one TTL for everything. `cacheTtl` applies to every
-      // response, so a single refusal from the agency's WAF was pinned at the
-      // edge for a day and re-served to everyone who asked — and each retry
-      // refreshed it, which turns a transient refusal into an outage that
-      // outlives its own cause and hides whether any fix worked. Only a
-      // success is worth keeping.
-      cacheTtlByStatus: { '200-299': GTFS_CACHE_SECONDS, '300-399': 0, '400-599': 0 },
-    },
+    // No `cf` cache override. There used to be one — `cacheEverything` with a
+    // day-long `cacheTtl` — as belt and braces behind the response cache
+    // above. It is what turned a refusal into an outage: `cacheTtl` applies to
+    // every status, so one 403 from the agency's WAF was pinned at the edge
+    // for a day and re-served to everyone, and each retry refreshed it. A
+    // failure that outlives its own cause is bad on its own; worse, nothing
+    // can tell whether a fix worked while a stale refusal is being replayed,
+    // and that layer cannot be purged from here because the zone is not ours.
+    //
+    // `caches.default` above already stops the amplification this was added
+    // for, and it only ever stores a success, because this handler returns
+    // before `cache.put` on anything else. One cache we control beats two
+    // where the second can hold a failure we cannot clear.
   });
   if (!upstream.ok || !upstream.body) {
     // Carry the agency's own trace id. A 403 here is theirs to explain, and
