@@ -482,7 +482,10 @@ app.get('/api/gtfs/rtc', async (c) => {
       // reach us. Both hosts being on Cloudflare is likely part of why the
       // rule fires, so if 403s return, the next step is asking RTC to
       // allowlist rather than guessing at more headers.
-      'user-agent': `TransitMapper/1.0 (+${c.env.SITE_URL})`,
+      // No version: this Worker has no honest one to state. The package
+      // version is managed by release tooling and is not bundled here, and a
+      // literal would be a number nobody maintains.
+      'user-agent': `TransitMapper (+${c.env.SITE_URL})`,
       accept: 'application/zip, application/octet-stream;q=0.9, */*;q=0.8',
     },
     // Belt and braces: Cloudflare's own fetch cache keeps this from hitting
