@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.3.1...v0.3.2) (2026-08-09)
+
+
+### Bug Fixes
+
+* **web:** keep closed menu triggers clickable ([8318d3f](https://github.com/LasVegasForTransit/transit-mapper/commit/8318d3f3a00989aa3ff92535067a422438632f0a))
+
 ## [0.3.1](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.3.0...v0.3.1) (2026-08-09)
 
 
