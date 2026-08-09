@@ -473,27 +473,38 @@ app.get('/api/gtfs/rtc', async (c) => {
 
   const upstream = await fetch(GTFS_FEED_URL, {
     headers: {
-      // A Worker's fetch sends no User-Agent at all, and RTC's host sits
-      // behind a WAF that answered the resulting header-less subrequest with
-      // 403 while serving 200 to every ordinary client — which broke import
-      // for everyone at once and looked like a size or timeout problem from
-      // the browser. Identifying ourselves is also the courteous thing: an
-      // agency reading its own logs can see who pulls the feed and how to
-      // reach us. Both hosts being on Cloudflare is likely part of why the
-      // rule fires, so if 403s return, the next step is asking RTC to
-      // allowlist rather than guessing at more headers.
-      // No version: this Worker has no honest one to state. The package
-      // version is managed by release tooling and is not bundled here, and a
-      // literal would be a number nobody maintains.
+      // A Worker's fetch sends no User-Agent at all. Identifying ourselves is
+      // the courteous thing regardless — an agency reading its own logs can
+      // see who pulls the feed and how to reach us — but it did not stop
+      // RTC's WAF refusing us, so it is not the remedy it was hoped to be.
+      // No version: the package version is managed by release tooling and is
+      // not bundled here, so a literal would be a number nobody maintains.
       'user-agent': `TransitMapper (+${c.env.SITE_URL})`,
       accept: 'application/zip, application/octet-stream;q=0.9, */*;q=0.8',
     },
-    // Belt and braces: Cloudflare's own fetch cache keeps this from hitting
-    // RTC even when the response cache above has been evicted.
-    cf: { cacheEverything: true, cacheTtl: GTFS_CACHE_SECONDS },
+    cf: {
+      cacheEverything: true,
+      // Per-status, not one TTL for everything. `cacheTtl` applies to every
+      // response, so a single refusal from the agency's WAF was pinned at the
+      // edge for a day and re-served to everyone who asked — and each retry
+      // refreshed it, which turns a transient refusal into an outage that
+      // outlives its own cause and hides whether any fix worked. Only a
+      // success is worth keeping.
+      cacheTtlByStatus: { '200-299': GTFS_CACHE_SECONDS, '300-399': 0, '400-599': 0 },
+    },
   });
   if (!upstream.ok || !upstream.body) {
-    return c.json({ error: `RTC GTFS feed unavailable (${upstream.status})` }, 502);
+    // Carry the agency's own trace id. A 403 here is theirs to explain, and
+    // the first thing they will ask for is the ray that produced it — without
+    // it the report is "your server said no sometimes", which goes nowhere.
+    const ray = upstream.headers.get('cf-ray');
+    return c.json(
+      {
+        error: `RTC GTFS feed unavailable (${upstream.status})`,
+        ...(ray ? { upstreamRay: ray } : {}),
+      },
+      502,
+    );
   }
 
   const response = new Response(upstream.body, {
