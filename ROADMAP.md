@@ -61,6 +61,16 @@ This phase makes a shared TransitMapper link work well anywhere it's pasted, and
 
 This is where sketching starts turning into real planning and advocacy work.
 
+- **Land use on the map.** See the ground a line runs over: zoning, assessed land value, people,
+  jobs, and pollution, drawn as a shaded layer with a legend that names its source and its year.
+  Click anywhere and every dataset loaded for that place answers at once. National layers work in
+  any US city from the start; local layers like parcels and zoning arrive region by region.
+  Ridership sketching and travel-time comparison both need this underneath them, so it comes first.
+  See [the design](docs/superpowers/specs/2026-08-08-land-use-design.md).
+- **A normalized land use dataset.** Zoning is published by every city in its own vocabulary, and
+  no open dataset reconciles them. Building that corpus is what makes the layer above work in more
+  than one city, and it is worth publishing in its own right — the existing reconciled datasets are
+  either closed or sold.
 - **Ridership sketching.** Estimate how many people a proposed line might actually serve. This is
   the point where the simulation has to start remembering what happened — crowding and bunching
   are consequences of history, and today's simulator deliberately keeps none. See
