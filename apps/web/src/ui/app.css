@@ -3313,14 +3313,19 @@ button.chip-removable-label:hover {
  * how a tap on the tool rail during a collapse landed on `.insp-section`
  * instead: the panel was gone to look at and still there to hit.
  *
- * One rule for every surface rather than a prop threaded through each: the
- * closing state is already in the DOM as an attribute, because Radix writes
- * `data-state` and Inspector writes `data-inspector-state`.
+ * Radix writes `data-state` on both a floating surface and its trigger. The
+ * selectors therefore name the actual surfaces explicitly: a bare
+ * `[data-state='closed']` also matches every closed menu/popover trigger and
+ * makes the controls impossible to open. Inspector owns a separate state
+ * attribute, so its existing root and panel selectors stay explicit too.
  *
  * `inert` would be stronger — it takes the subtree out of the focus order too
  * — but it is not expressible in CSS, and a keyboard user cannot tab into
  * something during a 140ms exit anyway. */
-[data-state='closed'],
+.dropdown-menu-content[data-state='closed'],
+.popover-content[data-state='closed'],
+.modal-backdrop[data-state='closed'],
+.modal[data-state='closed'],
 [data-inspector-state='closed'],
 [data-inspector-state='closed'] .panel-right {
   pointer-events: none;

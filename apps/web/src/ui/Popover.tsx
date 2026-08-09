@@ -38,7 +38,12 @@ export function Popover({
     <RdxPopover.Root open={open} onOpenChange={onOpenChange}>
       <RdxPopover.Trigger asChild>{trigger}</RdxPopover.Trigger>
       <RdxPopover.Portal>
-        <RdxPopover.Content className={className} align={align} side={side} sideOffset={8}>
+        <RdxPopover.Content
+          className={`popover-content ${className}`.trim()}
+          align={align}
+          side={side}
+          sideOffset={8}
+        >
           {children}
         </RdxPopover.Content>
       </RdxPopover.Portal>
