@@ -4,6 +4,7 @@ import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OnboardingDialog } from '../../src/ui/onboarding/OnboardingDialog';
+import { ONBOARDING_SLIDES } from '../../src/ui/onboarding/slides';
 
 interface MockModalProps {
   title: string;
@@ -72,6 +73,28 @@ afterEach(() => {
 });
 
 describe('OnboardingDialog', () => {
+  it('teaches the four product outcomes in a single coherent sequence', () => {
+    const slides = ONBOARDING_SLIDES as Array<{
+      outcome?: string;
+      scene?: string;
+      visualDescription?: string;
+    }>;
+
+    expect(slides.map((slide) => slide.outcome)).toEqual([
+      'service',
+      'infrastructure',
+      'operations',
+      'simulation',
+    ]);
+    expect(slides.map((slide) => slide.scene)).toEqual([
+      'draw',
+      'infrastructure',
+      'operations',
+      'simulate',
+    ]);
+    expect(slides.every((slide) => (slide.visualDescription?.length ?? 0) > 0)).toBe(true);
+  });
+
   it('moves forward and back through the introduction', () => {
     act(() => root.render(<OnboardingDialog onClose={vi.fn()} onComplete={vi.fn()} />));
 
