@@ -140,7 +140,17 @@ function roadNodes(ways: Way[]): Node[] {
     }));
 }
 
-function stationOnWay(id: string, name: string, way: Way, t: number, majorStop = false): Station {
+interface StationOnWayOptions {
+  t: number;
+  majorStop?: boolean;
+}
+
+function stationOnWay(
+  id: string,
+  name: string,
+  way: Way,
+  { t, majorStop = false }: StationOnWayOptions,
+): Station {
   return {
     id,
     name,
@@ -231,17 +241,32 @@ const centralStation: Station = {
 };
 
 const stations: Station[] = [
-  stationOnWay('port-mason-stop-west-market', 'West Market', westFirst, 0.2, true),
-  stationOnWay('port-mason-stop-civic-square', 'Civic Square', westSecond, 0.45),
-  stationOnWay('port-mason-stop-riverfront', 'Riverfront', bridge, 0.35),
-  stationOnWay('port-mason-stop-downtown', 'Downtown', downtownTrunk, 0.45),
+  stationOnWay('port-mason-stop-west-market', 'West Market', westFirst, {
+    t: 0.2,
+    majorStop: true,
+  }),
+  stationOnWay('port-mason-stop-civic-square', 'Civic Square', westSecond, { t: 0.45 }),
+  stationOnWay('port-mason-stop-riverfront', 'Riverfront', bridge, { t: 0.35 }),
+  stationOnWay('port-mason-stop-downtown', 'Downtown', downtownTrunk, { t: 0.45 }),
   centralStation,
-  stationOnWay('port-mason-stop-eastgate', 'Eastgate', eastgateBranch, 1, true),
-  stationOnWay('port-mason-stop-airport-road', 'Airport Road', airportEast, 0.55),
-  stationOnWay('port-mason-stop-airport', 'Port Mason Airport', airportFinal, 0, true),
-  stationOnWay('port-mason-stop-university', 'Port Mason University', railNorth, 0, true),
-  stationOnWay('port-mason-stop-midtown', 'Midtown', railNorth, 0.58),
-  stationOnWay('port-mason-stop-south-works', 'South Works', railSouth, 1, true),
+  stationOnWay('port-mason-stop-eastgate', 'Eastgate', eastgateBranch, {
+    t: 1,
+    majorStop: true,
+  }),
+  stationOnWay('port-mason-stop-airport-road', 'Airport Road', airportEast, { t: 0.55 }),
+  stationOnWay('port-mason-stop-airport', 'Port Mason Airport', airportFinal, {
+    t: 0,
+    majorStop: true,
+  }),
+  stationOnWay('port-mason-stop-university', 'Port Mason University', railNorth, {
+    t: 0,
+    majorStop: true,
+  }),
+  stationOnWay('port-mason-stop-midtown', 'Midtown', railNorth, { t: 0.58 }),
+  stationOnWay('port-mason-stop-south-works', 'South Works', railSouth, {
+    t: 1,
+    majorStop: true,
+  }),
 ];
 
 /** The one valid domain system all four onboarding scenes project. */
