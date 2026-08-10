@@ -1,0 +1,19 @@
+{
+  "name": "@transitmapper/github-metadata",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "verify": "vitest run"
+  },
+  "devDependencies": {
+    "@transitmapper/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "vitest": "catalog:"
+  }
+}

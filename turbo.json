@@ -70,6 +70,7 @@
         "//#check:duplication",
         "//#check:boundaries",
         "//#check:documents",
+        "//#check:github-metadata",
         "//#check:reference"
       ],
       "outputs": []
@@ -156,6 +157,17 @@
         "$TURBO_ROOT$/LICENSE",
         "$TURBO_ROOT$/docs/**",
         "$TURBO_ROOT$/scripts/check-document-standards.ts"
+      ],
+      "outputs": []
+    },
+    "//#check:github-metadata": {
+      "inputs": [
+        "$TURBO_ROOT$/.github/ISSUE_TEMPLATE/**",
+        "$TURBO_ROOT$/.github/pull_request_template.md",
+        "$TURBO_ROOT$/.github/workflows/contribution-metadata.yml",
+        "$TURBO_ROOT$/packages/github-metadata/src/**",
+        "$TURBO_ROOT$/scripts/bootstrap/standards.ts",
+        "$TURBO_ROOT$/scripts/check-github-metadata.ts"
       ],
       "outputs": []
     },
