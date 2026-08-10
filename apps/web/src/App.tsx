@@ -12,12 +12,7 @@ import {
   saveToLibrary,
   type SaveOutcome,
 } from './storage/browserLibrary';
-import {
-  getActiveId,
-  hasSeenOnboarding,
-  markOnboardingSeen,
-  setActiveId,
-} from './storage/localStore';
+import { getActiveId, hasSeenOnboarding, setActiveId } from './storage/localStore';
 import {
   attachPersistenceCoordinator,
   type PersistenceCoordinator,
@@ -41,7 +36,6 @@ import { TopBarActions, TopBarBrand, ViewSwitch, ViewSwitchCompact } from './ui/
 import { useSaveStatus } from './ui/SaveStatusProvider';
 import { useUi } from './ui/UiProvider';
 import { Workbench } from './ui/Workbench';
-import { continueFirstRunOnboarding } from './ui/onboarding/first-run';
 import { InstallBanner } from './ui/InstallBanner';
 import { useInstall } from './pwa/InstallProvider';
 import { shouldShowInstallBanner } from './pwa/install';
@@ -77,12 +71,9 @@ const SystemsDialog = lazy(() =>
 const SettingsDialog = lazy(() =>
   import('./ui/SettingsDialog').then((m) => ({ default: m.SettingsDialog })),
 );
-const OnboardingDialog = lazy(() =>
-  import('./ui/onboarding/OnboardingDialog').then((m) => ({ default: m.OnboardingDialog })),
-);
-const NewSystemLocationDialog = lazy(() =>
-  import('./ui/newSystem/NewSystemLocationDialog').then((m) => ({
-    default: m.NewSystemLocationDialog,
+const FirstRunDialogs = lazy(() =>
+  import('./ui/onboarding/first-run-dialogs').then((module) => ({
+    default: module.FirstRunDialogs,
   })),
 );
 const AboutDialog = lazy(() =>
@@ -519,33 +510,14 @@ export function App() {
           <SettingsDialog onClose={closeDialog} />
         </LazyDialog>
       )}
-      {activeDialog === 'onboarding' && (
+      {(activeDialog === 'onboarding' || activeDialog === 'newSystemLocation') && (
         <LazyDialog onFailure={dialogFailed}>
-          <OnboardingDialog
-            onClose={closeDialog}
-            onComplete={() => {
-              markOnboardingSeen();
-              closeDialog();
-            }}
-          />
-        </LazyDialog>
-      )}
-      {activeDialog === 'newSystemLocation' && (
-        <LazyDialog onFailure={dialogFailed}>
-          <NewSystemLocationDialog
-            onClose={() => {
-              closeDialog();
-              // Only the bootstrap trigger (mode: 'importIntoActive') should
-              // chain into onboarding — the explicit File-menu/Systems-dialog
-              // "New system" action (mode: 'create') closes plain.
-              continueFirstRunOnboarding({
-                mode: newSystemLocationMode,
-                hasSeenOnboarding: hasSeenOnboarding(),
-                actions: store.getState(),
-                openOnboarding: () => openDialog('onboarding'),
-              });
-            }}
-            mode={newSystemLocationMode}
+          <FirstRunDialogs
+            activeDialog={activeDialog}
+            actions={store.getState()}
+            closeDialog={closeDialog}
+            newSystemLocationMode={newSystemLocationMode}
+            openDialog={openDialog}
           />
         </LazyDialog>
       )}
