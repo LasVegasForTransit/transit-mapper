@@ -700,19 +700,11 @@
       "count": 1
     }
   },
-  "src/ui/onboarding/OnboardingDialog.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/ui/onboarding/OnboardingPreviewMap.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
+  "src/ui/sidebarOutline.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
       "count": 2
     },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "max-lines-per-function": {
+    "@typescript-eslint/prefer-nullish-coalescing": {
       "count": 1
     }
   },
@@ -877,7 +869,7 @@
   },
   "tests/ui/onboarding/fixtureProjection.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
+      "count": 1
     }
   },
   "tests/verify.test.ts": {

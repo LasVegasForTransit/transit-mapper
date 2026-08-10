@@ -250,10 +250,12 @@ store and core projectors.
 
 `apps/web/src/ui` owns React presentation, workbench layout, inspector
 controls, dialogs, onboarding, and accessibility semantics.
-`apps/web/src/ui/sidebarOutline.ts` derives view-specific outline rows from the
-domain model without React state. `SidebarPanel.tsx` owns the per-view query,
-expansion, list limits, scroll position, selection wiring, and local recovery
-boundaries that present that projection.
+The onboarding slide data selects one of four passive scenes, while
+`ui/onboarding/fixtureSystem.ts` owns the single valid local Port Mason
+proposal and the simulation inputs derived from it. Pure scene helpers derive
+drawing, clock, and vehicle frames; `OnboardingPreviewMap.tsx` and its map
+controller adapt those frames to the production feature projection without
+reading or mutating editor state.
 `apps/web/src/ui/useKeyboardInset.ts` reports how much of the viewport an
 on-screen keyboard covers, which no layout-viewport measurement exposes.
 `apps/web/src/ui/app-banner.ts` decides which single application-level message
