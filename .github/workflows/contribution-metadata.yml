@@ -46,7 +46,9 @@ jobs:
       - name: Validate and publish final status
         run: |
           set +e
-          pnpm github:validate --event "$GITHUB_EVENT_PATH" --json > contribution-metadata.json
+          # pnpm's normal lifecycle prefix is not JSON. Keep the redirected
+          # file parseable so a policy exit of 1 can still publish failure.
+          pnpm --silent github:validate --event "$GITHUB_EVENT_PATH" --json > contribution-metadata.json
           result=$?
           set -e
 

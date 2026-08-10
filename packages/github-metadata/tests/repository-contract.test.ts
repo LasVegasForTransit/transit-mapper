@@ -51,3 +51,14 @@ describe('repository contribution templates', () => {
     expect(source.replace(/<!--[\s\S]*?-->/g, '').trim()).toBe('');
   });
 });
+
+describe('repository contribution workflows', () => {
+  it('keeps policy failure output parseable before replacing the pending status', async () => {
+    const workflow = await readFile(
+      resolve(ROOT, '.github/workflows/contribution-metadata.yml'),
+      'utf8',
+    );
+
+    expect(workflow).toContain('pnpm --silent github:validate --event "$GITHUB_EVENT_PATH" --json');
+  });
+});
