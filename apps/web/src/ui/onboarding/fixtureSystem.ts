@@ -39,12 +39,23 @@ function roadId(
   return `port-mason-road-${bank}-${direction}-${primary}-${secondary}`;
 }
 
-function gridRoad(id: string, a: LngLat, b: LngLat): Way {
+function streetMidpoint(id: string, a: LngLat, b: LngLat): LngLat {
+  let signature = 0;
+  for (const character of id) signature += character.charCodeAt(0);
+  const direction = signature % 2 === 0 ? 1 : -1;
+  const bend = (0.00045 + (signature % 4) * 0.00016) * direction;
+  const horizontal = Math.abs(a[0] - b[0]) > Math.abs(a[1] - b[1]);
+  return horizontal
+    ? [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + bend]
+    : [(a[0] + b[0]) / 2 + bend, (a[1] + b[1]) / 2];
+}
+
+function gridRoad(id: string, a: LngLat, b: LngLat, bend = true): Way {
   return {
     id,
     typeId: 'road',
-    points: [a, b],
-    geometry: 'straight',
+    points: bend ? [a, streetMidpoint(id, a, b), b] : [a, b],
+    geometry: bend ? 'freeform' : 'straight',
     grade: 'atGrade',
     profile: defaultProfileFor('road'),
     source: 'osm',
@@ -82,8 +93,42 @@ const bridge: Way = gridRoad(
   'port-mason-harbor-bridge',
   [WEST_X[2], STREET_Y[CROSSTOWN_ROW]],
   [EAST_X[0], STREET_Y[CROSSTOWN_ROW]],
+  false,
 );
-const roadWays = [...bankRoads('west', WEST_X), ...bankRoads('east', EAST_X), bridge];
+
+function arterialRoad(id: string, points: LngLat[]): Way {
+  return {
+    id,
+    typeId: 'road',
+    points,
+    geometry: 'freeform',
+    grade: 'atGrade',
+    profile: defaultProfileFor('road'),
+    source: 'osm',
+  };
+}
+
+const westernArc = arterialRoad('port-mason-road-western-market-arc', [
+  [WEST_X[0], STREET_Y[0]],
+  [-122.497, 37.734],
+  [-122.501, 37.758],
+  [-122.486, 37.775],
+  [WEST_X[2], STREET_Y[3]],
+]);
+const easternArc = arterialRoad('port-mason-road-east-belt', [
+  [EAST_X[0], STREET_Y[0]],
+  [-122.442, 37.731],
+  [-122.417, 37.731],
+  [-122.414, 37.766],
+  [EAST_X[2], STREET_Y[3]],
+]);
+const roadWays = [
+  ...bankRoads('west', WEST_X),
+  ...bankRoads('east', EAST_X),
+  westernArc,
+  easternArc,
+  bridge,
+];
 
 const UNIVERSITY: LngLat = [EAST_X[0] + 0.002, STREET_Y[3] + 0.009];
 const FREIGHT_JUNCTION: LngLat = [EAST_X[0] + 0.002, STREET_Y[2] + 0.004];
@@ -319,43 +364,6 @@ export const ONBOARDING_PLACE_LABELS: OnboardingPlaceLabel[] = [
     priority: 'primary',
   },
 ];
-
-interface OnboardingContextProperties {
-  kind: 'river';
-  name: string;
-}
-
-/** Geographic context is presentation-only because water and neighborhoods
- * are not TransitSystem entities. It is still fixed local data: no basemap or
- * tile request is needed to explain why the bridge controls Crosstown. */
-export const ONBOARDING_CONTEXT_FEATURES: GeoJSON.FeatureCollection<
-  GeoJSON.Polygon,
-  OnboardingContextProperties
-> = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      properties: { kind: 'river', name: 'Mason River' },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [-122.464, 37.728],
-            [-122.447, 37.728],
-            [-122.448, 37.744],
-            [-122.445, 37.759],
-            [-122.449, 37.777],
-            [-122.465, 37.779],
-            [-122.463, 37.76],
-            [-122.466, 37.745],
-            [-122.464, 37.728],
-          ],
-        ],
-      },
-    },
-  ],
-};
 
 export const ONBOARDING_NEW_RAIL_PATH = railDowntownLink.points;
 

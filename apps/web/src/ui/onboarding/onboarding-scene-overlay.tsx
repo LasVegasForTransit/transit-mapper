@@ -48,9 +48,10 @@ function ServiceKey() {
 interface OperatingCardProps {
   clockLabel: string;
   running: boolean;
+  showPatterns: boolean;
 }
 
-function OperatingCard({ clockLabel, running }: OperatingCardProps) {
+function OperatingCard({ clockLabel, running, showPatterns }: OperatingCardProps) {
   return (
     <div className="onboarding-operating-card">
       <div className="onboarding-operating-card-head">
@@ -68,6 +69,14 @@ function OperatingCard({ clockLabel, running }: OperatingCardProps) {
         <span>Every 10 min</span>
         <span>6 AM–11 PM</span>
       </div>
+      {showPatterns ? (
+        <div className="onboarding-pattern-list">
+          <small>Patterns</small>
+          {crosstown?.patterns.map((pattern) => (
+            <span key={pattern.id}>{pattern.name}</span>
+          ))}
+        </div>
+      ) : null}
       <strong>
         {ONBOARDING_FLEET} {ONBOARDING_FLEET === 1 ? 'vehicle' : 'vehicles'} required
       </strong>
@@ -108,12 +117,22 @@ export function OnboardingSceneOverlay({
       ) : null}
       {scene === 'infrastructure' ? (
         <div className="onboarding-infrastructure-callout">
-          <span className="onboarding-new-link-swatch" aria-hidden="true" />
-          New downtown rail link
+          <span>
+            <i className="onboarding-imported-swatch" aria-hidden="true" />
+            Imported streets + freight track
+          </span>
+          <span>
+            <i className="onboarding-new-link-swatch" aria-hidden="true" />
+            New downtown rail link
+          </span>
         </div>
       ) : null}
       {scene === 'operations' || scene === 'simulate' ? (
-        <OperatingCard clockLabel={clockLabel} running={scene === 'simulate'} />
+        <OperatingCard
+          clockLabel={clockLabel}
+          running={scene === 'simulate'}
+          showPatterns={scene === 'operations'}
+        />
       ) : null}
     </>
   );

@@ -3,6 +3,11 @@ import { servicesAtStation } from '@transitmapper/core/sim/frequency';
 import { describe, expect, it } from 'vitest';
 import * as onboardingFixture from '../../../src/ui/onboarding/fixtureSystem';
 import { ONBOARDING_FIXTURE_SYSTEM } from '../../../src/ui/onboarding/fixtureSystem';
+import {
+  ONBOARDING_CONTEXT_FEATURES,
+  ONBOARDING_STREET_FEATURES,
+} from '../../../src/ui/onboarding/port-mason-context';
+
 describe('onboarding fixture projection', () => {
   it('models a valid early Port Mason proposal instead of generic demo geometry', () => {
     expect(validateSystem(ONBOARDING_FIXTURE_SYSTEM)).toEqual([]);
@@ -49,6 +54,18 @@ describe('onboarding fixture projection', () => {
     expect(importedFreightTrack).toHaveLength(2);
     expect(downtownLink?.typeId).toBe('lightRail');
     expect(downtownLink?.source).toBeUndefined();
+  });
+
+  it('projects irregular streets and recognizable place context instead of an abstract grid', () => {
+    expect(ONBOARDING_STREET_FEATURES.features.length).toBeGreaterThan(20);
+    expect(
+      ONBOARDING_STREET_FEATURES.features.some(
+        (feature) => feature.geometry.coordinates.length > 2,
+      ),
+    ).toBe(true);
+    expect(
+      new Set(ONBOARDING_CONTEXT_FEATURES.features.map((feature) => feature.properties.kind)),
+    ).toEqual(new Set(['airport', 'district', 'park', 'river']));
   });
 
   it('produces measurable runs and a nonzero operating requirement', () => {

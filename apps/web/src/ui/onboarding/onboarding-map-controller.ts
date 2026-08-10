@@ -14,7 +14,6 @@ import {
 import { layerSpecsForScheme, localBlankStyleForScheme } from '../../map/mapTheme';
 import type { ColorScheme } from '../../theme/systemColorScheme';
 import {
-  ONBOARDING_CONTEXT_FEATURES,
   ONBOARDING_DRAW_PATH,
   ONBOARDING_DRAW_SYSTEM,
   ONBOARDING_FIXTURE_SYSTEM,
@@ -23,6 +22,7 @@ import {
   ONBOARDING_SERVICE_COLOR,
   onboardingViewOptions,
 } from './fixtureSystem';
+import { ONBOARDING_CONTEXT_FEATURES, ONBOARDING_STREET_FEATURES } from './port-mason-context';
 import { pathPrefix, vehicleFeaturesAt } from './scene-geometry';
 import { onboardingSceneFrame } from './scene-timing';
 import type { OnboardingSceneId } from './slides';
@@ -31,6 +31,7 @@ const CONTEXT_SOURCE = 'onboarding-place-context';
 const DRAW_SOURCE = 'onboarding-draw-preview';
 const CURSOR_SOURCE = 'onboarding-draw-cursor';
 const NEW_LINK_SOURCE = 'onboarding-new-link';
+const STREET_SOURCE = 'onboarding-street-context';
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
 export interface MountOnboardingMapOptions {
@@ -105,6 +106,7 @@ function resolveSystems(scene: OnboardingSceneId): SceneSystems {
 
 function addOnboardingSources(map: MapLibreMap): void {
   map.addSource(CONTEXT_SOURCE, { type: 'geojson', data: ONBOARDING_CONTEXT_FEATURES });
+  map.addSource(STREET_SOURCE, { type: 'geojson', data: ONBOARDING_STREET_FEATURES });
   map.addSource(DRAW_SOURCE, { type: 'geojson', data: EMPTY_FC });
   map.addSource(CURSOR_SOURCE, { type: 'geojson', data: EMPTY_FC });
   map.addSource(NEW_LINK_SOURCE, {
@@ -115,16 +117,72 @@ function addOnboardingSources(map: MapLibreMap): void {
 
 function addContextLayers(map: MapLibreMap, dark: boolean): void {
   map.addLayer({
+    id: 'onboarding-downtown-district',
+    type: 'fill',
+    source: CONTEXT_SOURCE,
+    filter: ['==', ['get', 'kind'], 'district'],
+    paint: { 'fill-color': dark ? '#202522' : '#ece9df', 'fill-opacity': 0.9 },
+  });
+  map.addLayer({
+    id: 'onboarding-park',
+    type: 'fill',
+    source: CONTEXT_SOURCE,
+    filter: ['==', ['get', 'kind'], 'park'],
+    paint: { 'fill-color': dark ? '#173027' : '#dcebdc', 'fill-opacity': 0.92 },
+  });
+  map.addLayer({
+    id: 'onboarding-airport',
+    type: 'fill',
+    source: CONTEXT_SOURCE,
+    filter: ['==', ['get', 'kind'], 'airport'],
+    paint: { 'fill-color': dark ? '#24241f' : '#eeeade', 'fill-opacity': 0.94 },
+  });
+  map.addLayer({
     id: 'onboarding-river',
     type: 'fill',
     source: CONTEXT_SOURCE,
+    filter: ['==', ['get', 'kind'], 'river'],
     paint: { 'fill-color': dark ? '#17313e' : '#dceaf0', 'fill-opacity': 0.95 },
   });
   map.addLayer({
     id: 'onboarding-river-edge',
     type: 'line',
     source: CONTEXT_SOURCE,
+    filter: ['==', ['get', 'kind'], 'river'],
     paint: { 'line-color': dark ? '#285164' : '#b8d4df', 'line-width': 1.5 },
+  });
+  map.addLayer({
+    id: 'onboarding-airport-edge',
+    type: 'line',
+    source: CONTEXT_SOURCE,
+    filter: ['==', ['get', 'kind'], 'airport'],
+    paint: {
+      'line-color': dark ? '#605d4d' : '#aaa183',
+      'line-width': 1.3,
+      'line-dasharray': [2, 1.5],
+    },
+  });
+  map.addLayer({
+    id: 'onboarding-street-casing',
+    type: 'line',
+    source: STREET_SOURCE,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': dark ? '#080a09' : '#d0cec6',
+      'line-width': ['match', ['get', 'kind'], 'arterial', 5, 3.4],
+      'line-opacity': 0.95,
+    },
+  });
+  map.addLayer({
+    id: 'onboarding-streets',
+    type: 'line',
+    source: STREET_SOURCE,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': dark ? '#4b534f' : '#85847f',
+      'line-width': ['match', ['get', 'kind'], 'arterial', 3.2, 1.8],
+      'line-opacity': 0.9,
+    },
   });
 }
 
@@ -177,6 +235,17 @@ function addDemonstrationLayers(map: MapLibreMap): void {
     type: 'circle',
     source: CURSOR_SOURCE,
     paint: { 'circle-radius': 3, 'circle-color': ONBOARDING_SERVICE_COLOR },
+  });
+  map.addLayer({
+    id: 'onboarding-vehicle-emphasis',
+    type: 'circle',
+    source: SRC_VEHICLES,
+    paint: {
+      'circle-radius': 7,
+      'circle-color': ['get', 'color'],
+      'circle-stroke-width': 3,
+      'circle-stroke-color': '#ffffff',
+    },
   });
 }
 

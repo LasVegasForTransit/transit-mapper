@@ -38,7 +38,25 @@ describe('OnboardingSceneOverlay', () => {
     expect(container.textContent).toContain('Crosstown');
     expect(container.textContent).toContain('Every 10 min');
     expect(container.textContent).toContain('6 AM–11 PM');
+    expect(container.textContent).toContain('Eastgate');
+    expect(container.textContent).toContain('Airport');
     expect(container.textContent).toMatch(/\d+ vehicles required/);
+  });
+
+  it('contrasts imported infrastructure with the one proposed rail link', () => {
+    act(() =>
+      root.render(
+        <OnboardingSceneOverlay
+          scene="infrastructure"
+          failed={false}
+          description="The proposal reuses Port Mason infrastructure."
+          clockLabel="6:00 AM"
+        />,
+      ),
+    );
+
+    expect(container.textContent).toContain('Imported streets + freight track');
+    expect(container.textContent).toContain('New downtown rail link');
   });
 
   it('shows the simulated time as part of the operating consequence', () => {
