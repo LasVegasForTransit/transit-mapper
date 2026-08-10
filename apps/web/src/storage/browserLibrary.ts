@@ -21,19 +21,19 @@ import {
   type SaveOutcome,
 } from './localStore';
 import { serializeSystemOffThread } from './serializeSystem';
+import { deserializeSystemOffThread } from './deserialize-system';
 
 export type { LibraryEntry, SaveOutcome } from './localStore';
 export type { LibraryListResult, LibraryLoadResult } from './libraryStore';
 
 function unavailableDatabase(): LibraryDatabase {
-  const fail = (): never => {
-    throw new DOMException('IndexedDB is unavailable.', 'SecurityError');
-  };
+  const fail = (): Promise<never> =>
+    Promise.reject(new DOMException('IndexedDB is unavailable.', 'SecurityError'));
   return {
-    list: async () => fail(),
-    load: async () => fail(),
-    save: async () => fail(),
-    delete: async () => fail(),
+    list: fail,
+    load: fail,
+    save: fail,
+    delete: fail,
   };
 }
 
@@ -60,6 +60,7 @@ function getBrowserStore(): LibraryStore {
       setDatabaseHistory: setIndexedDbLibraryHistory,
     },
     serialize: serializeSystemOffThread,
+    deserialize: deserializeSystemOffThread,
   });
   return browserStore;
 }

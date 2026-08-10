@@ -10,18 +10,33 @@ import { useImportProgress } from './UiProvider';
 export function ImportProgressPill() {
   const { importProgress } = useImportProgress();
   if (!importProgress) return null;
-  const { label, done, total, state, cancel } = importProgress;
+  const { label, done, total, unit = 'routes', state, cancel, dismiss, retry } = importProgress;
 
   return (
     <div className={`import-progress-pill ${state}`} role="status" aria-live="polite">
       {state === 'loading' && <span className="import-progress-spinner" aria-hidden="true" />}
       <span>
         {label}
-        {state === 'loading' && total > 0 ? ` — ${done}/${total} routes` : ''}
+        {state === 'loading' && total > 0 ? ` — ${done}/${total} ${unit}` : ''}
       </span>
       {state === 'loading' && cancel && (
         <button type="button" className="import-progress-cancel" onClick={cancel}>
           Cancel
+        </button>
+      )}
+      {state !== 'loading' && retry && (
+        <button type="button" className="import-progress-cancel" onClick={retry}>
+          Retry missed areas
+        </button>
+      )}
+      {state !== 'loading' && dismiss && (
+        <button
+          type="button"
+          className="import-progress-cancel"
+          onClick={dismiss}
+          aria-label="Dismiss import status"
+        >
+          Dismiss
         </button>
       )}
     </div>

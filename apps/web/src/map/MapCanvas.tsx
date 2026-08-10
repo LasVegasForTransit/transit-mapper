@@ -821,6 +821,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       if (sourceIds.length === 0) return;
       const { system, selection, activePatternId, armedTerminus } = store.getState();
       const laneDetail = laneDetailNow();
+      const infrastructure = viewRef.current.viewMode === 'infrastructure';
       const b = map.getBounds();
       // Expand the lane-detail cull bounds by half a viewport on each side, so a
       // way just off-screen is already lane-rendered when it scrolls in (no
@@ -830,8 +831,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       const mLat = (b.getNorth() - b.getSouth()) * 0.5;
       const view: ViewOptions = {
         ...viewRef.current,
+        zoom: map.getZoom(),
         laneDetail,
-        bounds: laneDetail
+        bounds: infrastructure
           ? [
               [b.getWest() - mLng, b.getSouth() - mLat],
               [b.getEast() + mLng, b.getNorth() + mLat],
@@ -1173,13 +1175,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       });
     };
 
-    // Lane-detail geometry (SRC_LANES/JUNCTIONS/…) is viewport-scoped, so a pan
-    // or a zoom-threshold cross needs a rebuild. But panBy(duration:0) fires
-    // moveend once PER MOUSE-MOVE, and re-tessellating the heavy lane sources
-    // on every one made them flicker (setData briefly clears them) and lag the
-    // camera (jump/misalign) during an infrastructure-view drag. Debounce it:
-    // during the gesture MapLibre just pans the existing geometry (smooth,
-    // aligned), and we rebuild ONCE, ~after it settles.
+    // Viewport-scoped infrastructure rebuilds after settled pans/zoom bands;
+    // debouncing avoids per-mouse-move GeoJSON churn during panBy(duration:0).
     let laneRefreshTimer: number | undefined;
     const LANE_REFRESH_DEBOUNCE_MS = 130;
     const scheduleLaneRefresh = () => {
@@ -1513,14 +1510,16 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       }
     });
 
-    // Crossing the lane-detail zoom threshold swaps the whole rendering mode;
-    // panning while AT lane detail changes which ways are in view. Either one
-    // needs a data refresh — a plain pan below the threshold doesn't.
-    let wasLaneDetail = false;
+    const detailBucket = () => {
+      if (viewRef.current.viewMode !== 'infrastructure') return -1;
+      const zoom = map.getZoom();
+      return zoom < 11 ? 0 : zoom < 13 ? 1 : zoom < LANE_DETAIL_MIN_ZOOM ? 2 : 3;
+    };
+    let previousDetailBucket = detailBucket();
     const onZoom = () => {
-      const now = laneDetailNow();
-      if (now !== wasLaneDetail) {
-        wasLaneDetail = now;
+      const now = detailBucket();
+      if (now !== previousDetailBucket) {
+        previousDetailBucket = now;
         scheduleLaneRefresh(); // debounced: swap fan⇄lane-detail after the zoom settles, not mid-zoom
       }
     };
@@ -1537,7 +1536,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       setLiveCamera({ center: [c.lng, c.lat], zoom: map.getZoom() });
       // Debounced — a lane-detail pan rebuilds once it settles, not per
       // mouse-move (moveend fires per mouse-move from panBy(duration:0)).
-      if (laneDetailNow()) scheduleLaneRefresh();
+      if (viewRef.current.viewMode === 'infrastructure') scheduleLaneRefresh();
     };
     map.on('moveend', onMoveEnd);
 

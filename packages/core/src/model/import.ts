@@ -1,10 +1,9 @@
 // P4 — import real infrastructure. The generalized model already accommodates
 // this: a Way is a Way whether hand-drawn or pulled from OpenStreetMap, so
 // importing is just another Way *producer* — a `source` marker is the only
-// difference. Two layers, deliberately split for testability:
-//  - pure, network-free transforms (classifyOsmWay, osmElementsToWays,
-//    buildOverpassQuery) that fixture-based tests can exercise directly;
-//  - importOsmWays, the one function that actually calls the network.
+// difference. This module is deliberately network-free: query construction,
+// response conversion and seam reconciliation run in both browser workers
+// and workerd, while the Cloudflare gateway owns all upstream I/O.
 import { wayType, type Grade, type ProfileTemplateLane } from './catalog';
 import { haversineMeters, nearestOnPath } from './geo';
 import { junctionGroupOf, wayTypeIndex, withSingleTypeArms } from './junctions';
@@ -620,6 +619,86 @@ export interface OsmWayElement {
   members?: { type: string; ref: number; role: string }[];
 }
 
+function validOsmGeometry(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every((point) => {
+      if (point === null || typeof point !== 'object') return false;
+      const fields = point as Record<string, unknown>;
+      return (
+        typeof fields.lat === 'number' &&
+        Number.isFinite(fields.lat) &&
+        fields.lat >= -90 &&
+        fields.lat <= 90 &&
+        typeof fields.lon === 'number' &&
+        Number.isFinite(fields.lon) &&
+        fields.lon >= -180 &&
+        fields.lon <= 180
+      );
+    })
+  );
+}
+
+function validOsmMembers(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every((member) => {
+      if (member === null || typeof member !== 'object') return false;
+      const fields = member as Record<string, unknown>;
+      return (
+        typeof fields.type === 'string' &&
+        ['node', 'way', 'relation'].includes(fields.type) &&
+        typeof fields.ref === 'number' &&
+        Number.isSafeInteger(fields.ref) &&
+        fields.ref > 0 &&
+        typeof fields.role === 'string'
+      );
+    })
+  );
+}
+
+function validOsmNodes(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every((node) => typeof node === 'number' && Number.isSafeInteger(node) && node > 0)
+  );
+}
+
+function validOsmTags(value: unknown): boolean {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.values(value).every((tag) => typeof tag === 'string')
+  );
+}
+
+function validOsmElement(value: unknown): value is OsmWayElement {
+  if (value === null || typeof value !== 'object') return false;
+  const element = value as Record<string, unknown>;
+  if (
+    typeof element.type !== 'string' ||
+    !['node', 'way', 'relation'].includes(element.type) ||
+    typeof element.id !== 'number' ||
+    !Number.isSafeInteger(element.id) ||
+    element.id <= 0
+  ) {
+    return false;
+  }
+  if (element.geometry !== undefined && !validOsmGeometry(element.geometry)) return false;
+  if (element.nodes !== undefined && !validOsmNodes(element.nodes)) return false;
+  if (element.tags !== undefined && !validOsmTags(element.tags)) return false;
+  return element.members === undefined || validOsmMembers(element.members);
+}
+
+/** Validate the untrusted `elements` array shared by the gateway and browser Worker. */
+export function parseOsmElementsPayload(value: unknown): OsmWayElement[] {
+  if (!Array.isArray(value) || !value.every(validOsmElement)) {
+    throw new Error('Invalid OpenStreetMap response.');
+  }
+  return value;
+}
+
 /** OSM restriction values this import understands. `no_*` forbids one
  *  movement; `only_*` permits one and forbids the rest. Anything outside this
  *  vocabulary — including typos, which do occur — is ignored rather than
@@ -969,107 +1048,6 @@ export function osmElementsToWays(
   return osmElementsToNetwork(elements, drivingSide).ways;
 }
 
-/**
- * Public Overpass endpoints, tried in order. These are free, shared, and
- * routinely busy — a 504 or 429 from the first one says nothing about the
- * query, only that this instance is loaded right now, so falling through to
- * a mirror turns the most common failure into a slower success instead of an
- * error the user can only respond to by clicking Import again.
- *
- * Both were checked from a browser, which is the constraint that matters: an
- * Overpass mirror that works from curl is useless here if it doesn't send
- * CORS headers. `overpass.osm.jp` is deliberately absent for that reason —
- * it answers curl but fails the browser's preflight.
- */
-const OVERPASS_ENDPOINTS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-];
-
-/**
- * Statuses worth trying another endpoint for: overload and rate limiting,
- * not a malformed query (400), which every mirror would reject alike.
- *
- * In a browser this is a partial signal at best. Overpass's own error pages
- * often omit the CORS headers its successful responses carry, so an overload
- * reaches us as a thrown TypeError with no status at all. That's why the
- * loop treats a thrown fetch as "try the next mirror" rather than as a fatal
- * network error.
- */
-const OVERPASS_RETRYABLE = new Set([429, 502, 503, 504]);
-const OVERPASS_ENDPOINT_TIMEOUT_MS = 15_000;
-
-export interface ImportOsmOptions {
-  signal?: AbortSignal;
-  endpointTimeoutMs?: number;
-  /** Injectable for deterministic network-boundary tests. */
-  fetcher?: typeof fetch;
-}
-
-type OverpassFetchResult =
-  { ok: true; status: number; elements: OsmWayElement[] } | { ok: false; status: number };
-
-async function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  let onAbort: (() => void) | undefined;
-  const aborted = new Promise<never>((_resolve, reject) => {
-    onAbort = () =>
-      reject(
-        signal.reason instanceof Error
-          ? signal.reason
-          : new DOMException('OSM import canceled.', 'AbortError'),
-      );
-    if (signal.aborted) onAbort();
-    else signal.addEventListener('abort', onAbort, { once: true });
-  });
-  try {
-    return await Promise.race([promise, aborted]);
-  } finally {
-    if (onAbort) signal.removeEventListener('abort', onAbort);
-  }
-}
-
-async function fetchOverpass(
-  endpoint: string,
-  query: string,
-  options: ImportOsmOptions,
-): Promise<OverpassFetchResult> {
-  if (options.signal?.aborted) {
-    throw options.signal.reason instanceof Error
-      ? options.signal.reason
-      : new DOMException('OSM import canceled.', 'AbortError');
-  }
-  const controller = new AbortController();
-  const relayAbort = () => controller.abort(options.signal?.reason);
-  options.signal?.addEventListener('abort', relayAbort, { once: true });
-  const timer = setTimeout(
-    () => controller.abort(new DOMException('Overpass request timed out.', 'TimeoutError')),
-    options.endpointTimeoutMs ?? OVERPASS_ENDPOINT_TIMEOUT_MS,
-  );
-  try {
-    const response = await withAbort(
-      (options.fetcher ?? fetch)(endpoint, {
-        method: 'POST',
-        headers: { 'content-type': 'text/plain' },
-        body: query,
-        signal: controller.signal,
-      }),
-      controller.signal,
-    );
-    if (!response.ok) return { ok: false, status: response.status };
-    // Response headers are not completion. Keep the endpoint deadline and
-    // caller cancellation connected while a busy mirror dribbles or stalls
-    // its JSON body.
-    const data = await withAbort(
-      response.json() as Promise<{ elements?: OsmWayElement[] }>,
-      controller.signal,
-    );
-    return { ok: true, status: response.status, elements: data.elements ?? [] };
-  } finally {
-    clearTimeout(timer);
-    options.signal?.removeEventListener('abort', relayAbort);
-  }
-}
-
 /** An import filtered against what a system already holds, plus how much was
  *  dropped — the dialog reports it, since "imported 0 ways" and "all 149 of
  *  these are already here" mean very different things to someone who just
@@ -1244,42 +1222,4 @@ export function withoutAlreadyImported(
     identityAdditions,
     junctionAdditions,
   };
-}
-
-/** Fetch OSM ways for the given categories within a bounding box from the
- *  public Overpass API and convert them to catalog-typed Ways plus the
- *  junctions and street identities between them. The only function here that
- *  touches the network. */
-export async function importOsmWays(
-  bbox: ImportBBox,
-  categories: ImportCategory[],
-  drivingSide: DrivingSide = 'right',
-  options: ImportOsmOptions = {},
-): Promise<ImportedNetwork> {
-  if (categories.length === 0)
-    return { ways: [], nodes: [], namedWays: [], medians: [], turnRestrictions: [] };
-  const query = buildOverpassQuery(bbox, categories);
-
-  let lastError = '';
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    let res: OverpassFetchResult;
-    try {
-      res = await fetchOverpass(endpoint, query, options);
-    } catch {
-      if (options.signal?.aborted) {
-        throw options.signal.reason instanceof Error
-          ? options.signal.reason
-          : new DOMException('OSM import canceled.', 'AbortError');
-      }
-      // No status to read: offline, or — far more often — a busy Overpass
-      // whose error page dropped the CORS headers. Both look identical from
-      // here, so the message stays honest about not knowing which.
-      lastError = 'no OpenStreetMap server answered';
-      continue;
-    }
-    if (res.ok) return osmElementsToNetwork(res.elements, drivingSide);
-    if (!OVERPASS_RETRYABLE.has(res.status)) throw new Error(`OSM import failed (${res.status}).`);
-    lastError = `every OpenStreetMap server is busy (${res.status})`;
-  }
-  throw new Error(`OSM import failed — ${lastError}. Try again in a moment.`);
 }

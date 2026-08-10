@@ -1,17 +1,12 @@
 // @vitest-environment jsdom
 
-import { act, type ReactNode } from 'react';
+import { act, useEffect, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { aRoad } from '@transitmapper/core/testing/fixtures';
-import type { ImportedNetwork } from '@transitmapper/core/model/import';
-import { EditorProvider } from '../../src/editor/EditorProvider';
-import { createEditorStore, type EditorStore } from '../../src/editor/store';
 import { NewSystemLocationDialog } from '../../src/ui/newSystem/NewSystemLocationDialog';
 
 interface MockModalProps {
   title: string;
-  onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
 }
@@ -25,81 +20,90 @@ vi.mock('../../src/ui/Modal', () => ({
   ),
 }));
 
-// The real LocationPickerMap owns an actual MapLibre instance — this stub
-// exposes the same imperative handle (flyTo resolves immediately, getBounds
-// returns a fixed box) without mounting one, the same way OnboardingDialog's
-// test stubs OnboardingPreviewMap.
+const camera = {
+  center: [-115.05, 36.12] as [number, number],
+  zoom: 10.25,
+  bounds: { west: -115.3, south: 35.95, east: -114.8, north: 36.35 },
+};
+let currentCamera = camera;
+const fitBoundsMock = vi.fn(async () => {});
+const flyToMock = vi.fn(async () => {});
+
 vi.mock('../../src/ui/newSystem/LocationPickerMap', () => ({
   LocationPickerMap: ({
     handleRef,
+    onCameraChange,
   }: {
-    onPick: (center: [number, number]) => void;
     handleRef: { current: unknown };
+    onCameraChange: (value: typeof camera) => void;
   }) => {
     handleRef.current = {
-      flyTo: () => Promise.resolve(),
-      getBounds: () => ({ west: -115.3, south: 36.0, east: -115.1, north: 36.2 }),
+      flyTo: flyToMock,
+      fitBounds: fitBoundsMock,
+      getCamera: () => currentCamera,
     };
-    return <div />;
+    useEffect(() => onCameraChange(camera), [onCameraChange]);
+    return <div aria-label="Location map" />;
   },
 }));
 
-vi.mock('../../src/storage/localStore', () => ({
-  setActiveId: () => undefined,
+const calls = {
+  setSystem: [] as unknown[],
+  setTool: [] as string[],
+  setViewMode: [] as string[],
+  background: [] as unknown[],
+};
+let mockSystem: { id: string; drivingSide: 'right' | 'left'; viewport?: unknown };
+const store = {
+  getState: () => ({
+    system: mockSystem,
+    setSystem: (system: typeof mockSystem) => {
+      calls.setSystem.push(system);
+      mockSystem = system;
+    },
+    setViewport: (viewport: unknown) => {
+      mockSystem = { ...mockSystem, viewport };
+    },
+    setDrivingSide: (drivingSide: 'right' | 'left') => {
+      mockSystem = { ...mockSystem, drivingSide };
+    },
+    setTool: (tool: string) => calls.setTool.push(tool),
+  }),
+};
+
+vi.mock('../../src/editor/EditorProvider', () => ({ useEditorStore: () => store }));
+vi.mock('../../src/storage/localStore', () => ({ setActiveId: () => undefined }));
+vi.mock('../../src/ui/UiProvider', () => ({
+  useImportProgress: () => ({ importProgress: null, setImportProgress: vi.fn() }),
+}));
+vi.mock('../../src/ui/ViewProvider', () => ({
+  useView: () => ({ setViewMode: (mode: string) => calls.setViewMode.push(mode) }),
+}));
+vi.mock('../../src/import/background-osm-import', () => ({
+  beginBackgroundOsmImport: (options: unknown) => calls.background.push(options),
 }));
 
-type ImportOsmNetwork = (typeof import('../../src/import/import-osm-network'))['importOsmNetwork'];
-
-const importOsmNetworkMock = vi.fn<ImportOsmNetwork>();
-vi.mock('../../src/import/import-osm-network', () => ({
-  importOsmNetwork: (...args: Parameters<ImportOsmNetwork>) => importOsmNetworkMock(...args),
+const searchPlacesMock = vi.fn();
+vi.mock('../../src/network/search-places', () => ({
+  searchPlaces: (...args: unknown[]) => searchPlacesMock(...args),
 }));
-
-const searchPlacesMock = vi.fn(
-  (
-    _query: string,
-    _options?: unknown,
-  ): Promise<{ label: string; center: [number, number]; countryCode?: string }[]> =>
-    Promise.resolve([]),
-);
-vi.mock('@transitmapper/core/model/geocode', () => ({
-  searchPlaces: (query: string, options?: unknown) => searchPlacesMock(query, options),
+vi.mock('@transitmapper/core/model/serialize', () => ({
+  createEmptySystem: () => ({ id: 'new-system', drivingSide: 'right', ways: [] }),
 }));
 
 let container: HTMLDivElement;
 let root: Root;
-let store: EditorStore;
-
-function importedNetwork(): ImportedNetwork {
-  return {
-    ways: [
-      aRoad('w1', [
-        [-115.15, 36.1],
-        [-115.14, 36.2],
-      ]),
-    ],
-    nodes: [],
-    namedWays: [],
-    medians: [],
-    turnRestrictions: [],
-  };
-}
-
-function renderDialog(onClose: () => void): void {
-  act(() => {
-    root.render(
-      <EditorProvider store={store}>
-        <NewSystemLocationDialog onClose={onClose} mode="create" />
-      </EditorProvider>,
-    );
-  });
-}
 
 beforeEach(() => {
   (
     globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
-  store = createEditorStore();
+  calls.setSystem = [];
+  calls.setTool = [];
+  calls.setViewMode = [];
+  calls.background = [];
+  currentCamera = camera;
+  mockSystem = { id: 'existing', drivingSide: 'right' };
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -111,113 +115,138 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function findButton(label: string): HTMLButtonElement {
-  const button = [...container.querySelectorAll('button')].find((b) =>
-    b.textContent.includes(label),
+function button(label: string): HTMLButtonElement {
+  const found = [...container.querySelectorAll('button')].find((candidate) =>
+    candidate.textContent?.includes(label),
   );
-  if (!button) throw new Error(`Expected a "${label}" button`);
-  return button;
+  if (!found) throw new Error(`Expected button ${label}`);
+  return found;
 }
 
-// Drives a real pick through the search flow (the only user-facing path this
-// test can reach — the map itself is stubbed out): type a query, let the
-// debounce elapse, click the one result it resolves to.
-async function pickViaSearch(): Promise<void> {
-  searchPlacesMock.mockResolvedValue([{ label: 'Las Vegas, NV', center: [-115.14, 36.17] }]);
+function setSearchInput(value: string): void {
   const input = container.querySelector('input');
-  if (!input) throw new Error('Expected the search input');
-  const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-  if (!descriptor?.set) throw new Error('Expected the native input value setter');
+  if (!(input instanceof HTMLInputElement)) throw new Error('Expected the place search input.');
+  const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  if (!descriptor?.set) throw new Error('Expected the native input value setter.');
+  const setter = descriptor.set;
   act(() => {
-    descriptor.set?.call(input, 'Las Vegas');
+    Reflect.apply(setter, input, [value]);
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
+}
+
+async function searchAndChoose(result: {
+  label: string;
+  center: [number, number];
+  boundingBox?: typeof camera.bounds;
+}) {
+  searchPlacesMock.mockResolvedValue([result]);
+  setSearchInput('Las Vegas Valley');
   await act(async () => {
-    vi.advanceTimersByTime(400);
+    button('Search').click();
     await Promise.resolve();
     await Promise.resolve();
   });
-  const result = findButton('Las Vegas, NV');
   await act(async () => {
-    result.click();
+    button(result.label).click();
     await Promise.resolve();
   });
 }
 
 describe('NewSystemLocationDialog', () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  it('searches only on submission and fits a validated metro bounding box', async () => {
+    act(() => root.render(<NewSystemLocationDialog onClose={vi.fn()} mode="create" />));
+    setSearchInput('Las Vegas');
+    expect(searchPlacesMock).not.toHaveBeenCalled();
 
-  it('creates and activates the system before the import is attempted, and imports afterward', async () => {
-    let systemActiveWhenImportStarted: string | undefined;
-    importOsmNetworkMock.mockImplementation(() => {
-      systemActiveWhenImportStarted = store.getState().system.id;
-      return Promise.resolve(importedNetwork());
+    await searchAndChoose({
+      label: 'Las Vegas Valley',
+      center: [-115.1, 36.1],
+      boundingBox: camera.bounds,
     });
-    const originalSystem = store.getState().system;
+
+    expect(searchPlacesMock).toHaveBeenCalledTimes(1);
+    expect(fitBoundsMock).toHaveBeenCalledWith(camera.bounds);
+    expect(flyToMock).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('km²');
+    expect(container.textContent).toContain('tiles');
+  });
+
+  it('creates the target once, preserves the metro camera, and lands in Infrastructure Select before background import', async () => {
     const onClose = vi.fn();
-    renderDialog(onClose);
+    act(() => root.render(<NewSystemLocationDialog onClose={onClose} mode="create" />));
+    await searchAndChoose({
+      label: 'Las Vegas Valley',
+      center: [-115.1, 36.1],
+      boundingBox: camera.bounds,
+    });
 
-    await pickViaSearch();
-
-    const confirmBtn = findButton('Use this location');
-    expect(confirmBtn.disabled).toBe(false);
     await act(async () => {
-      confirmBtn.click();
-      await Promise.resolve();
+      button('Use this metro area').click();
+      button('Use this metro area').click();
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    // The system was created+activated before the OSM Worker ever ran — if
-    // Overpass were down, this order is what leaves the user on a real,
-    // correctly-centered system instead of stuck behind the dialog.
-    expect(systemActiveWhenImportStarted).not.toBe(originalSystem.id);
-    expect(systemActiveWhenImportStarted).toBe(store.getState().system.id);
-    expect(store.getState().system.ways.map((way) => way.id)).toEqual(['w1']);
-    expect(store.getState().tool).toBe('way');
+    expect(calls.setSystem).toHaveLength(1);
+    expect(calls.setSystem[0]).toMatchObject({
+      id: 'new-system',
+      viewport: { center: camera.center, zoom: camera.zoom },
+    });
+    expect(calls.setTool).toEqual(['select']);
+    expect(calls.setViewMode).toEqual(['infrastructure']);
     expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('leaves a correctly-centered, usable system in place when the import fails', async () => {
-    importOsmNetworkMock.mockRejectedValue(new Error('OSM import failed — no server answered.'));
-    const originalSystem = store.getState().system;
-    const onClose = vi.fn();
-    renderDialog(onClose);
-
-    await pickViaSearch();
-    const confirmBtn = findButton('Use this location');
-    await act(async () => {
-      confirmBtn.click();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
+    expect(calls.background).toHaveLength(1);
+    expect(calls.background[0]).toMatchObject({
+      targetSystemId: 'new-system',
+      bounds: camera.bounds,
+      categories: ['road', 'bike'],
     });
-
-    // The system still got created and activated even though the import
-    // itself failed — the dialog stays open (onClose not called) so the
-    // user can retry, but they are not stuck on a blank, uninitialized app.
-    expect(store.getState().system.id).not.toBe(originalSystem.id);
-    expect(store.getState().system.viewport).toEqual({ center: [-115.14, 36.17], zoom: 16 });
-    expect(store.getState().system.ways).toEqual([]);
-    expect(onClose).not.toHaveBeenCalled();
-    expect(container.textContent).toContain('OSM import failed');
   });
 
-  it('lets a blank canvas skip stand in for a failed or declined import', () => {
-    const originalSystem = store.getState().system;
-    const onClose = vi.fn();
-    renderDialog(onClose);
-
-    const skipBtn = [...container.querySelectorAll('button')].find((b) =>
-      b.textContent.includes('Continue with a blank canvas'),
+  it('rechecks the settled camera before creating a system', async () => {
+    let settleFit = () => {};
+    fitBoundsMock.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          settleFit = resolve;
+        }),
     );
-    if (!skipBtn) throw new Error('Expected the skip button');
-    act(() => skipBtn.click());
+    act(() => root.render(<NewSystemLocationDialog onClose={vi.fn()} mode="create" />));
+    await searchAndChoose({
+      label: 'Las Vegas Valley',
+      center: [-115.1, 36.1],
+      boundingBox: camera.bounds,
+    });
+    currentCamera = {
+      ...camera,
+      bounds: { west: -120, south: 30, east: -110, north: 40 },
+    };
 
-    expect(store.getState().system.id).not.toBe(originalSystem.id);
-    expect(store.getState().tool).toBe('way');
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(importOsmNetworkMock).not.toHaveBeenCalled();
+    await act(async () => {
+      button('Use this metro area').click();
+      settleFit();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(calls.setSystem).toEqual([]);
+    expect(calls.background).toEqual([]);
+    expect(container.textContent).toContain(
+      'Zoom in until the visible area is 5,000 km² or smaller.',
+    );
+  });
+
+  it('shows place-search failures instead of silently presenting no results', async () => {
+    searchPlacesMock.mockRejectedValue(new Error('Place search is temporarily unavailable.'));
+    act(() => root.render(<NewSystemLocationDialog onClose={vi.fn()} mode="create" />));
+    setSearchInput('Las Vegas');
+    await act(async () => {
+      button('Search').click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Place search is temporarily unavailable.');
   });
 });

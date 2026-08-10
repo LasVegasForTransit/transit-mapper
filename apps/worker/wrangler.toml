@@ -1,5 +1,5 @@
 name = "transitmapper"
-main = "src/index.ts"
+main = "src/entry.ts"
 compatibility_date = "2025-07-01"
 
 # Worker logs are off by default, which is a poor way to launch: the first
@@ -49,6 +49,51 @@ namespace_id = "1001"
   limit = 20
   period = 60
 
+# Nominatim permits at most one request per second and forbids client-side
+# autocomplete. Search is explicit in the UI, cached for seven days, and this
+# separate per-client ceiling prevents one browser from consuming the beta's
+# whole upstream budget.
+[[ratelimits]]
+name = "PLACE_SEARCH_LIMITER"
+namespace_id = "1002"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+# Cache misses share one deliberately conservative upstream budget per
+# Cloudflare location. This is an early abuse shield; PLACE_SEARCH_GATE below
+# is the strongly consistent authority that enforces Nominatim's aggregate
+# one-request-per-second application limit across every location.
+[[ratelimits]]
+name = "PLACE_UPSTREAM_LIMITER"
+namespace_id = "1004"
+
+  [ratelimits.simple]
+  limit = 1
+  period = 10
+
+[[durable_objects.bindings]]
+name = "PLACE_SEARCH_GATE"
+class_name = "PlaceSearchGate"
+
+# Declarative class lifecycle avoids a D1 migration and provisions the
+# recommended SQLite-backed Durable Object on the first deployment.
+[exports.PlaceSearchGate]
+type = "durable-object"
+storage = "sqlite"
+
+# Metro imports need many bounded Overpass tiles. Sixty per minute lets one
+# sequential import advance while preventing parallel scripts from turning
+# this Worker into a public-mirror amplifier.
+[[ratelimits]]
+name = "OSM_TILE_LIMITER"
+namespace_id = "1003"
+
+  [ratelimits.simple]
+  limit = 60
+  period = 60
+
 [[d1_databases]]
 binding = "DB"
 database_name = "transitmapper"
@@ -67,3 +112,6 @@ custom_domain = true
 # Override locally via a gitignored .dev.vars (SITE_URL=http://localhost:8787)
 # if you want locally-fetched tags to reflect the real local origin.
 SITE_URL = "https://map.lasvegasfortransit.org"
+# Kept in configuration because Nominatim requires applications to be able to
+# switch providers without shipping new browser or Worker code.
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"

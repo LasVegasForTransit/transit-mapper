@@ -37,7 +37,13 @@ function bindings(source: string): string[] {
   if (!match) return [];
   return match[1]
     .split('\n')
-    .map((line) => line.trim().replace(/"/g, "'").replace(/\s+/g, ' '))
+    .map((line) =>
+      line
+        .trim()
+        .replace(/"/g, "'")
+        .replace(/import\('[^']*\/src\/entry'\)/g, "import('./src/entry')")
+        .replace(/\s+/g, ' '),
+    )
     .filter((line) => line.length > 0)
     .sort();
 }

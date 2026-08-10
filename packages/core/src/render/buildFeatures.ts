@@ -25,6 +25,13 @@ import {
   patternRunSegments,
 } from '../model/geo';
 import { nearWaysForStations, servicesByWay, visibleWaysFor } from './featureMemo';
+import { nodesForWays, waysInBoundsFor } from './way-bounds-index';
+import {
+  importedCenterlineFeature,
+  isOsmImportedWay,
+  shouldProjectWayLabel,
+  showsTopologyWay,
+} from './infrastructure-detail';
 import { mergeAdjacentServiceLines } from './mergeServiceLines';
 import { directionalLanes, isOneWay, wayCapacity } from '../model/profile';
 import { wayIntersectsBounds, wayLaneGeometry } from '../geometry/streets';
@@ -409,6 +416,8 @@ export interface ViewOptions {
   /** True at lane-detail zooms in the Infrastructure view — ways in view
    *  render as real per-lane geometry instead of the offset fan. */
   laneDetail?: boolean;
+  /** Live map zoom used for semantic imported-infrastructure detail. */
+  zoom?: number;
   /** Current viewport (with margin), so lane geometry only derives for ways
    *  actually on screen. Only consulted when laneDetail is set. */
   bounds?: [LngLat, LngLat];
@@ -884,6 +893,7 @@ function projectPhysicalFeatures({
 
 function projectWayLabels(
   system: TransitSystem,
+  selection: Highlight,
   view: ViewOptions,
   indexes: SharedProjectionIndexes,
   network: boolean,
@@ -895,20 +905,58 @@ function projectWayLabels(
   const labels: Feature<LineString>[] = [];
   for (const namedWay of system.namedWays) {
     if (counts) counts.featureNamedWayVisitCount++;
-    if (!namedWay.name) continue;
-    for (const wayId of namedWay.wayIds) {
-      const way = indexes.waysById.get(wayId);
-      if (!way || !view.visibleWayTypes.has(way.typeId)) continue;
-      const path = resolveWayPath(way);
-      if (path.length < 2) continue;
-      labels.push({
-        type: 'Feature',
-        properties: { name: namedWay.name },
-        geometry: { type: 'LineString', coordinates: path },
-      });
-    }
+    labels.push(...namedWayLabelFeatures(namedWay, indexes, view, selection));
   }
   return labels;
+}
+
+function namedWayLabelFeatures(
+  namedWay: TransitSystem['namedWays'][number],
+  indexes: SharedProjectionIndexes,
+  view: ViewOptions,
+  selection: Highlight,
+): Feature<LineString>[] {
+  if (!namedWay.name) return [];
+  return namedWay.wayIds.flatMap((wayId) => {
+    const way = indexes.waysById.get(wayId);
+    if (!shouldProjectWayLabel(way, view, selection?.kind === 'way' ? selection.id : null)) {
+      return [];
+    }
+    const path = resolveWayPath(way);
+    return path.length < 2
+      ? []
+      : [
+          {
+            type: 'Feature',
+            properties: { name: namedWay.name },
+            geometry: { type: 'LineString', coordinates: path },
+          },
+        ];
+  });
+}
+
+function emitImportedOrDetailedWay(options: {
+  way: Way;
+  path: LngLat[];
+  color: string;
+  width: number;
+  dashed: boolean;
+  zoom?: number;
+  ways: Feature<LineString>[];
+  detailed: () => void;
+}): void {
+  const { way, path, color, width, dashed, zoom, ways, detailed } = options;
+  if (!isOsmImportedWay(way) || (zoom ?? 15) >= 15) {
+    detailed();
+    return;
+  }
+  ways.push(importedCenterlineFeature({ way, path, color, width, dashed }));
+}
+
+function requiredMapValue<K, V>(map: Map<K, V>, key: K): V {
+  const value = map.get(key);
+  if (value === undefined) throw new Error('Expected a projection index entry.');
+  return value;
 }
 
 function projectFacilities(
@@ -978,6 +1026,11 @@ function projectTopologyFeatures({
 }: ProjectTopologyFeaturesOptions): TopologyProjectionResult {
   const selId = selection?.id ?? null;
   const { waysById, servicesByWay: byWay, serviceSlots: slots } = indexes;
+  const selectedWayId = selection?.kind === 'way' ? selId : null;
+  const topologyWays =
+    !network && view.bounds
+      ? waysInBoundsFor(system.ways, view.bounds, selectedWayId ?? undefined)
+      : system.ways;
 
   // A way's own infra line, fanned out into `way.capacity` parallel lanes/
   // tracks in the Infrastructure view — a real physical cross-section instead
@@ -1110,7 +1163,10 @@ function projectTopologyFeatures({
   if (needsJunctionGeometry) {
     if (counts) counts.featureJunctionPassCount++;
     const laneNodes: { node: TransitSystem['nodes'][number]; g: JunctionGeometry }[] = [];
-    for (const node of system.nodes) {
+    const junctionCandidates = view.bounds
+      ? nodesForWays(system.nodes, topologyWays)
+      : system.nodes;
+    for (const node of junctionCandidates) {
       if (counts) counts.featureJunctionNodeVisitCount++;
       const relevant = node.refs.some((r) => {
         const w = waysById.get(r.wayId);
@@ -1152,9 +1208,9 @@ function projectTopologyFeatures({
   }
 
   if (projection.topology.enabled) {
-    for (const way of system.ways) {
+    for (const way of topologyWays) {
       if (counts) counts.featureTopologyWayVisitCount++;
-      if (!view.visibleWayTypes.has(way.typeId)) continue;
+      if (!showsTopologyWay(way, view, selectedWayId)) continue;
       const path = resolveWayPath(way);
       if (path.length < 2) continue;
       const bundle = byWay.get(way.id) ?? [];
@@ -1171,13 +1227,19 @@ function projectTopologyFeatures({
         }
         if (!projection.topology.ways) continue;
         const unassigned = UNASSIGNED_FAMILIES.has(wayType(way.typeId).family);
-        emitCrossSection(
+        const color = unassigned ? UNASSIGNED_COLOR : base.color;
+        const width = unassigned ? UNASSIGNED_WIDTH : base.width;
+        const dashed = unassigned || !!base.dashed;
+        emitImportedOrDetailedWay({
           way,
           path,
-          unassigned ? UNASSIGNED_COLOR : base.color,
-          unassigned ? UNASSIGNED_WIDTH : base.width,
-          unassigned ? true : !!base.dashed,
-        );
+          color,
+          width,
+          dashed,
+          zoom: view.zoom,
+          ways,
+          detailed: () => emitCrossSection(way, path, color, width, dashed),
+        });
         continue;
       }
 
@@ -1191,7 +1253,16 @@ function projectTopologyFeatures({
           emitLaneDetail(way);
         }
       } else if (projection.topology.ways && !network && showWayWhenServed(way.typeId)) {
-        emitCrossSection(way, path, base.color, base.width, !!base.dashed);
+        emitImportedOrDetailedWay({
+          way,
+          path,
+          color: base.color,
+          width: base.width,
+          dashed: !!base.dashed,
+          zoom: view.zoom,
+          ways,
+          detailed: () => emitCrossSection(way, path, base.color, base.width, !!base.dashed),
+        });
       }
 
       // One-way infrastructure reads as one-way in the SCHEMATIC too:
@@ -1363,7 +1434,7 @@ function projectTopologyFeatures({
         const ontoLane = (t: number): number =>
           Math.max(0, Math.min(1, (t * wayMeters - trims.start) / laneMeters));
         for (const [laneId, svcs] of byLane) {
-          const lane = laneById.get(laneId)!;
+          const lane = requiredMapValue(laneById, laneId);
           // w14 = the lane's overlay half-width in z14 px; today it only FLAGS a
           // lane-detail overlay (the layer's zoom-clamped SERVICE_WIDTH_EXPR draws
           // the band), but it carries the metric so a per-lane width can use it later.
@@ -1490,7 +1561,7 @@ export function buildFeatures(
       })
     : { footprints: [], platforms: [], handles: [] };
   const wayLabels = projection.wayLabels
-    ? projectWayLabels(system, view, indexes, network, counts)
+    ? projectWayLabels(system, selection, view, indexes, network, counts)
     : [];
   const facilities = projection.facilities ? projectFacilities(system, network, counts) : [];
 
