@@ -333,10 +333,11 @@ request creates the matching tag and GitHub release; no version, changelog, or
 release input is copied into workflow settings by hand.
 
 GitHub suppresses ordinary workflow events caused by its own workflow token,
-so the release job explicitly dispatches the shared CI workflow against the
-generated branch. That check attaches to the release commit and satisfies the
-same default-branch rule as a contributor-authored pull request without a
-personal token or manually maintained secret.
+so the release job validates the generated pull request metadata itself,
+publishes the canonical metadata status, and explicitly dispatches the shared
+CI workflow against the generated branch. Both checks attach to the release
+commit and satisfy the same default-branch rules as a contributor-authored
+pull request without a personal token or manually maintained secret.
 
 The production workflow bundles the static application, Worker module,
 deployment configuration, and migrations once. It archives and attests that

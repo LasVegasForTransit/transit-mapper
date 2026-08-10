@@ -61,4 +61,20 @@ describe('repository contribution workflows', () => {
 
     expect(workflow).toContain('pnpm --silent github:validate --event "$GITHUB_EVENT_PATH" --json');
   });
+
+  it('publishes metadata for release pull requests created by the workflow token', async () => {
+    const workflow = await readFile(
+      resolve(ROOT, '.github/workflows/deploy-production.yml'),
+      'utf8',
+    );
+
+    expect(workflow).toContain('statuses: write');
+    expect(workflow).toContain('STATUS_CONTEXT: Contribution metadata');
+    expect(workflow).toContain('actor: "github-actions[bot]"');
+    expect(workflow).toContain('headBranch: $pr.headRefName');
+    expect(workflow).toContain(
+      'pnpm --silent github:validate --kind pull-request --input "$metadata" --json',
+    );
+    expect(workflow).toContain('-f context="$STATUS_CONTEXT"');
+  });
 });

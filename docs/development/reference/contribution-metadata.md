@@ -107,6 +107,13 @@ and creates or updates one marked bot comment with the exact corrections.
 When an edit satisfies the contract, it removes the label and deletes the
 managed comment. Other labels and human comments are untouched.
 
+GitHub does not emit another workflow event for a pull request created with a
+workflow's own token. The trusted Release Please job therefore validates its
+generated pull request with the same actor-and-branch contract and publishes
+the same `Contribution metadata` status directly. It also dispatches the
+shared `Validate` workflow, so release pull requests satisfy both required
+checks without a personal token.
+
 `scripts/bootstrap/standards.ts` remains the source of truth for which commit
 statuses block merging. `scripts/check-github-metadata.ts` keeps its status
 name aligned with the trusted workflow. Agent instructions and optional
