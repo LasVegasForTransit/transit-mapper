@@ -26,8 +26,15 @@ vi.mock('../../src/ui/Modal', () => ({
   ),
 }));
 
+interface MockPreviewMapProps {
+  scene: string;
+  description: string;
+}
+
 vi.mock('../../src/ui/onboarding/OnboardingPreviewMap', () => ({
-  OnboardingPreviewMap: () => <div />,
+  OnboardingPreviewMap: ({ scene, description }: MockPreviewMapProps) => (
+    <div role="img" aria-label={description} data-scene={scene} />
+  ),
 }));
 
 let container: HTMLDivElement;
@@ -99,6 +106,12 @@ describe('OnboardingDialog', () => {
     act(() => root.render(<OnboardingDialog onClose={vi.fn()} onComplete={vi.fn()} />));
 
     expectSelectedStep(1);
+    expect(container.textContent).toContain('1 of 4');
+    expect(container.textContent).toContain('Draw a line. TransitMapper finds the path.');
+    expect(container.querySelector('[role="img"]')?.getAttribute('aria-label')).toContain(
+      'Crosstown',
+    );
+    expect(container.querySelector('[data-scene="draw"]')).not.toBeNull();
     expect(
       [...container.querySelectorAll('button')].some((button) => button.textContent === 'Back'),
     ).toBe(false);
@@ -147,12 +160,22 @@ describe('OnboardingDialog', () => {
     expect(onComplete).not.toHaveBeenCalled();
   });
 
+  it('presents the land-use future note without mislabeling it as beta status', () => {
+    act(() => root.render(<OnboardingDialog onClose={vi.fn()} onComplete={vi.fn()} />));
+
+    act(() => stepButton(4).click());
+    expect(container.textContent).toContain(
+      'Coming later: explore how transit and land use shape each other.',
+    );
+    expect(container.querySelector('.onboarding-note-label')).toBeNull();
+  });
+
   it('completes from the final action', () => {
     const onComplete = vi.fn();
     act(() => root.render(<OnboardingDialog onClose={vi.fn()} onComplete={onComplete} />));
 
     act(() => stepButton(4).click());
-    clickButton('Start drawing');
+    clickButton('Draw your first service');
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 });

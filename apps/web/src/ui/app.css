@@ -3370,6 +3370,299 @@ kbd {
   }
 }
 
+/* One evolving proposal replaces the old thumbnail comparison. These rules
+   follow the new scene DOM and intentionally sit after the legacy selectors
+   while the removed three-preview classes disappear from markup. */
+.onboarding-modal {
+  width: 860px;
+  height: min(720px, calc(100dvh - 32px));
+}
+.onboarding-modal .modal-head {
+  margin-bottom: 10px;
+}
+.onboarding-modal .modal-head h2 {
+  max-width: 26ch;
+  font-size: clamp(22px, 3vw, 30px);
+  line-height: 1.14;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.onboarding-body {
+  gap: 16px;
+}
+.onboarding-explanation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  flex: 0 0 auto;
+}
+.onboarding-copy {
+  max-width: 72ch;
+  line-height: 1.52;
+}
+.onboarding-note {
+  margin: 0;
+}
+.onboarding-note-plain {
+  padding-left: 10px;
+  border-radius: 10px;
+}
+.onboarding-scene {
+  width: 100%;
+  height: clamp(330px, 48vh, 430px);
+  min-height: 330px;
+  flex: 1 1 auto;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 16px;
+  background: var(--md-sys-color-surface-container);
+  box-shadow: inset 0 1px color-mix(in srgb, var(--md-sys-color-surface) 70%, transparent);
+}
+.onboarding-map-frame,
+.onboarding-preview-map {
+  width: 100%;
+  height: 100%;
+}
+.onboarding-scene-label,
+.onboarding-draw-hint,
+.onboarding-infrastructure-callout,
+.onboarding-operating-card {
+  z-index: 2;
+  background: color-mix(in srgb, var(--md-sys-color-surface) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 80%, transparent);
+  box-shadow: var(--md-sys-elevation-level2);
+  backdrop-filter: blur(10px);
+}
+.onboarding-scene-label {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: var(--md-sys-typescale-label-small-size);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+.onboarding-draw-hint,
+.onboarding-infrastructure-callout {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  color: var(--md-sys-color-on-surface);
+  font-size: var(--md-sys-typescale-label-medium-size);
+  font-weight: 550;
+}
+.onboarding-new-link-swatch {
+  display: block;
+  width: 24px;
+  height: 5px;
+  border-radius: 999px;
+  background: repeating-linear-gradient(90deg, #3157d5 0 6px, transparent 6px 9px);
+}
+.onboarding-operating-card {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: min(245px, calc(100% - 28px));
+  padding: 13px;
+  border-radius: 12px;
+  color: var(--md-sys-color-on-surface);
+}
+.onboarding-operating-card-head,
+.onboarding-operating-card-head span,
+.onboarding-service-key span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.onboarding-operating-card-head {
+  justify-content: space-between;
+  font-size: var(--md-sys-typescale-label-large-size);
+  font-weight: 650;
+}
+.onboarding-operating-card-head time {
+  font-family: var(--mono);
+  font-size: var(--md-sys-typescale-label-small-size);
+  color: var(--md-sys-color-on-surface-variant);
+}
+.onboarding-operating-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 11px 0 9px;
+}
+.onboarding-operating-values span,
+.onboarding-fallback-values span {
+  padding: 4px 7px;
+  border-radius: 7px;
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: var(--md-sys-typescale-label-small-size);
+}
+.onboarding-operating-card strong {
+  font-size: var(--md-sys-typescale-body-small-size);
+  font-weight: 650;
+}
+.onboarding-service-key {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 18px;
+  font-size: var(--md-sys-typescale-label-medium-size);
+  font-weight: 600;
+}
+.onboarding-service-swatch {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 4px;
+  border-radius: 999px;
+}
+.onboarding-preview-fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-content: center;
+  gap: 16px;
+  padding: 28px;
+  text-align: center;
+  background:
+    radial-gradient(
+      circle at 50% 20%,
+      var(--md-sys-color-surface-container-high) 0,
+      transparent 48%
+    ),
+    var(--md-sys-color-surface-container);
+}
+.onboarding-preview-fallback p {
+  max-width: 52ch;
+  margin: 0;
+  color: var(--md-sys-color-on-surface-variant);
+  line-height: 1.55;
+}
+.onboarding-fallback-values {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.onboarding-place-label {
+  display: block;
+  padding: 3px 6px;
+  border-radius: 5px;
+  white-space: nowrap;
+  color: var(--md-sys-color-on-surface);
+  background: color-mix(in srgb, var(--md-sys-color-surface) 78%, transparent);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--md-sys-color-shadow) 22%, transparent);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  pointer-events: none;
+}
+.onboarding-place-label-secondary {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 10px;
+  font-weight: 550;
+}
+.onboarding-river-label {
+  color: #315f72;
+  background: transparent;
+  box-shadow: none;
+  font-style: italic;
+  font-weight: 550;
+  transform: rotate(-78deg);
+}
+.onboarding-foot {
+  margin-top: 16px;
+}
+.onboarding-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  justify-self: center;
+}
+.onboarding-step-count {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: var(--md-sys-typescale-label-small-size);
+  font-variant-numeric: tabular-nums;
+}
+.onboarding-dots {
+  justify-self: auto;
+}
+.onboarding-next {
+  white-space: nowrap;
+}
+.onboarding-dot::before {
+  transition:
+    width 140ms var(--motion-chrome-curve),
+    border-radius 140ms var(--motion-chrome-curve),
+    background-color 140ms var(--motion-chrome-curve);
+}
+.onboarding-dot.active::before {
+  width: 20px;
+  border-radius: 999px;
+}
+
+@media (max-width: 620px) {
+  .onboarding-modal {
+    padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .onboarding-modal .modal-head h2 {
+    max-width: calc(100% - 44px);
+    font-size: 22px;
+  }
+  .onboarding-body {
+    gap: 14px;
+  }
+  .onboarding-copy {
+    line-height: 1.48;
+  }
+  .onboarding-scene {
+    height: auto;
+    min-height: 0;
+    flex: 0 0 auto;
+  }
+  .onboarding-map-frame {
+    height: clamp(210px, 34vh, 275px);
+  }
+  .onboarding-place-label-secondary {
+    display: none;
+  }
+  .onboarding-operating-card {
+    position: static;
+    width: auto;
+    margin: 10px;
+    background: var(--md-sys-color-surface);
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+  .onboarding-foot {
+    gap: 8px 12px;
+    margin-top: 12px;
+  }
+  .onboarding-progress {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-dot::before {
+    transition: none;
+  }
+}
+
 .insp-field {
   margin-top: 8px;
 }

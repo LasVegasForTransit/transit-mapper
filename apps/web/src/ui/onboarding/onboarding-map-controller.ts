@@ -37,8 +37,6 @@ export interface MountOnboardingMapOptions {
   container: HTMLElement;
   colorScheme: ColorScheme;
   scene: OnboardingSceneId;
-  system?: TransitSystem;
-  view?: ViewOptions;
   reducedMotion: boolean;
   onFailure: (error: unknown) => void;
   onClockChange: (label: string) => void;
@@ -93,21 +91,15 @@ function pointCollection(
   };
 }
 
-function resolveSystems(
-  scene: OnboardingSceneId,
-  system?: TransitSystem,
-  view?: ViewOptions,
-): SceneSystems {
-  const resolvedSystem =
-    system ?? (scene === 'draw' ? ONBOARDING_DRAW_SYSTEM : ONBOARDING_FIXTURE_SYSTEM);
+function resolveSystems(scene: OnboardingSceneId): SceneSystems {
+  const resolvedSystem = scene === 'draw' ? ONBOARDING_DRAW_SYSTEM : ONBOARDING_FIXTURE_SYSTEM;
   const completeSystem = scene === 'draw' ? ONBOARDING_DRAW_SYSTEM : resolvedSystem;
   return {
     resolvedSystem,
     completeSystem,
     baseSystem:
       scene === 'draw' ? { ...completeSystem, services: [], stations: [] } : resolvedSystem,
-    resolvedView:
-      view ?? onboardingViewOptions(scene === 'infrastructure' ? 'infrastructure' : 'network'),
+    resolvedView: onboardingViewOptions(scene === 'infrastructure' ? 'infrastructure' : 'network'),
   };
 }
 
@@ -309,7 +301,7 @@ function initializeScene(
  * cleanup. React owns when scenes change; this controller owns MapLibre's
  * sources, markers, animation, and resize lifecycle. */
 export function mountOnboardingMap(options: MountOnboardingMapOptions): () => void {
-  const systems = resolveSystems(options.scene, options.system, options.view);
+  const systems = resolveSystems(options.scene);
   let map: MapLibreMap;
   try {
     map = new maplibregl.Map({
