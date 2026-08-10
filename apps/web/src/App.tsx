@@ -41,6 +41,7 @@ import { TopBarActions, TopBarBrand, ViewSwitch, ViewSwitchCompact } from './ui/
 import { useSaveStatus } from './ui/SaveStatusProvider';
 import { useUi } from './ui/UiProvider';
 import { Workbench } from './ui/Workbench';
+import { continueFirstRunOnboarding } from './ui/onboarding/first-run';
 import { InstallBanner } from './ui/InstallBanner';
 import { useInstall } from './pwa/InstallProvider';
 import { shouldShowInstallBanner } from './pwa/install';
@@ -537,9 +538,12 @@ export function App() {
               // Only the bootstrap trigger (mode: 'importIntoActive') should
               // chain into onboarding — the explicit File-menu/Systems-dialog
               // "New system" action (mode: 'create') closes plain.
-              if (newSystemLocationMode === 'importIntoActive' && !hasSeenOnboarding()) {
-                openDialog('onboarding');
-              }
+              continueFirstRunOnboarding({
+                mode: newSystemLocationMode,
+                hasSeenOnboarding: hasSeenOnboarding(),
+                actions: store.getState(),
+                openOnboarding: () => openDialog('onboarding'),
+              });
             }}
             mode={newSystemLocationMode}
           />
