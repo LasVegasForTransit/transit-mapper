@@ -80,7 +80,7 @@ afterEach(() => {
 });
 
 describe('OnboardingDialog', () => {
-  it('teaches the four product outcomes in a single coherent sequence', () => {
+  it('introduces the product before teaching its four capabilities', () => {
     const slides = ONBOARDING_SLIDES as Array<{
       outcome?: string;
       scene?: string;
@@ -88,12 +88,14 @@ describe('OnboardingDialog', () => {
     }>;
 
     expect(slides.map((slide) => slide.outcome)).toEqual([
+      'purpose',
       'service',
       'infrastructure',
       'operations',
       'simulation',
     ]);
     expect(slides.map((slide) => slide.scene)).toEqual([
+      'welcome',
       'draw',
       'infrastructure',
       'operations',
@@ -106,20 +108,25 @@ describe('OnboardingDialog', () => {
     act(() => root.render(<OnboardingDialog onClose={vi.fn()} onComplete={vi.fn()} />));
 
     expectSelectedStep(1);
-    expect(container.textContent).toContain('1 of 4');
-    expect(container.textContent).toContain('Draw a line. TransitMapper finds the path.');
-    expect(container.querySelector('[role="img"]')?.getAttribute('aria-label')).toContain(
-      'Crosstown',
+    expect(container.textContent).toContain('1 of 5');
+    expect(container.textContent).toContain('Welcome to TransitMapper');
+    expect(container.textContent).toContain(
+      'TransitMapper is a tool for imagining, designing, and testing public transit systems on a real map.',
     );
-    expect(container.querySelector('[data-scene="draw"]')).not.toBeNull();
+    expect(container.textContent).toContain(
+      'Start with a place and design the transit system you want to see there.',
+    );
+    expect(container.querySelector('[data-scene="welcome"]')).not.toBeNull();
     expect(container.textContent).not.toContain('Open beta');
     expect(container.querySelector('.onboarding-note')).toBeNull();
     expect(
       [...container.querySelectorAll('button')].some((button) => button.textContent === 'Back'),
     ).toBe(false);
-    clickButton('Next');
+    clickButton('See how it works');
 
     expectSelectedStep(2);
+    expect(container.textContent).toContain('Draw a line. TransitMapper finds the path.');
+    expect(container.querySelector('[data-scene="draw"]')).not.toBeNull();
     clickButton('Back');
 
     expectSelectedStep(1);
@@ -148,8 +155,8 @@ describe('OnboardingDialog', () => {
     act(() => {
       stepButton(2).dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'End' }));
     });
-    expectSelectedStep(4);
-    expect(document.activeElement).toBe(stepButton(4));
+    expectSelectedStep(5);
+    expect(document.activeElement).toBe(stepButton(5));
   });
 
   it('dismisses without completing', () => {
@@ -165,7 +172,7 @@ describe('OnboardingDialog', () => {
   it('explains future land-use simulation in the normal slide copy', () => {
     act(() => root.render(<OnboardingDialog onClose={vi.fn()} onComplete={vi.fn()} />));
 
-    act(() => stepButton(4).click());
+    act(() => stepButton(5).click());
     expect(container.textContent).toContain(
       'Future versions will also let you explore how transit and land use shape each other.',
     );
@@ -176,7 +183,7 @@ describe('OnboardingDialog', () => {
     const onComplete = vi.fn();
     act(() => root.render(<OnboardingDialog onClose={vi.fn()} onComplete={onComplete} />));
 
-    act(() => stepButton(4).click());
+    act(() => stepButton(5).click());
     clickButton('Draw your first service');
     expect(onComplete).toHaveBeenCalledTimes(1);
   });

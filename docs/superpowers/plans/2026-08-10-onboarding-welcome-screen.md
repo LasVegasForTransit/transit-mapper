@@ -20,7 +20,7 @@
 - Modify: `apps/web/src/ui/onboarding/OnboardingDialog.tsx`
 - Modify: `apps/web/src/ui/app.css`
 
-- [ ] **Step 1: Write the failing dialog tests**
+- [x] **Step 1: Write the failing dialog tests**
 
 Replace the four-outcome expectation with the five-screen contract:
 
@@ -63,7 +63,7 @@ expectSelectedStep(1);
 
 Update keyboard navigation to expect End to select step 5. Update the land-use and completion cases to select step 5.
 
-- [ ] **Step 2: Add the failing static-welcome timing assertion**
+- [x] **Step 2: Add the failing static-welcome timing assertion**
 
 Add this case to `scene-timing.test.ts`:
 
@@ -77,7 +77,7 @@ it('keeps the welcome overview complete and still', () => {
 });
 ```
 
-- [ ] **Step 3: Run the focused tests and verify RED**
+- [x] **Step 3: Run the focused tests and verify RED**
 
 Run:
 
@@ -87,7 +87,7 @@ pnpm --filter @transitmapper/web exec vitest run tests/ui/OnboardingDialog.test.
 
 Expected: FAIL because the first slide is still `draw`, the sequence has four screens, `welcome` is not an `OnboardingSceneId`, and **See how it works** is absent.
 
-- [ ] **Step 4: Add the purpose-first slide**
+- [x] **Step 4: Add the purpose-first slide**
 
 Extend the unions in `slides.tsx`:
 
@@ -112,7 +112,7 @@ Insert this object before the drawing slide:
 
 Add `invitation?: string` to `OnboardingSlideData`. Update the module comment to say that the welcome screen establishes purpose before one Port Mason proposal develops across the four capability screens.
 
-- [ ] **Step 5: Render the invitation and the welcome transition**
+- [x] **Step 5: Render the invitation and the welcome transition**
 
 After the body paragraph in `OnboardingDialog.tsx`, render the optional invitation as its own emphasized paragraph:
 
@@ -136,7 +136,7 @@ Change the footer label expression to preserve the final action while naming the
 
 Do not change completion or close handlers.
 
-- [ ] **Step 6: Give the invitation restrained emphasis**
+- [x] **Step 6: Give the invitation restrained emphasis**
 
 Add beside `.onboarding-copy` in `apps/web/src/ui/app.css`:
 
@@ -154,7 +154,7 @@ Add beside `.onboarding-copy` in `apps/web/src/ui/app.css`:
 
 Use existing tokens only. Do not add a pill, card, badge, icon, or decorative treatment.
 
-- [ ] **Step 7: Run the focused tests and verify GREEN**
+- [x] **Step 7: Run the focused tests and verify GREEN**
 
 Run:
 

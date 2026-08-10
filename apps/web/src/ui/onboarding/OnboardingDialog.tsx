@@ -34,6 +34,7 @@ export function OnboardingDialog({ onClose, onComplete }: OnboardingDialogProps)
       >
         <div className="onboarding-explanation">
           <p className="onboarding-copy">{slide.body}</p>
+          {slide.invitation ? <p className="onboarding-invitation">{slide.invitation}</p> : null}
         </div>
         <OnboardingPreviewMap
           key={slide.scene}
@@ -115,7 +116,11 @@ function OnboardingFooter({ index, onIndexChange, onComplete }: OnboardingFooter
           index === ONBOARDING_SLIDES.length - 1 ? onComplete() : onIndexChange(index + 1)
         }
       >
-        {index === ONBOARDING_SLIDES.length - 1 ? 'Draw your first service' : 'Next'}
+        {index === ONBOARDING_SLIDES.length - 1
+          ? 'Draw your first service'
+          : index === 0
+            ? 'See how it works'
+            : 'Next'}
       </button>
     </div>
   );

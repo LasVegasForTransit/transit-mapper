@@ -1,18 +1,29 @@
-export type OnboardingSceneId = 'draw' | 'infrastructure' | 'operations' | 'simulate';
-type OnboardingOutcome = 'service' | 'infrastructure' | 'operations' | 'simulation';
+export type OnboardingSceneId = 'welcome' | 'draw' | 'infrastructure' | 'operations' | 'simulate';
+type OnboardingOutcome = 'purpose' | 'service' | 'infrastructure' | 'operations' | 'simulation';
 
 export interface OnboardingSlideData {
   title: string;
   body: string;
+  invitation?: string;
   outcome: OnboardingOutcome;
   scene: OnboardingSceneId;
   /** Names the relationship conveyed by the non-interactive scene. */
   visualDescription: string;
 }
 
-/** One Port Mason proposal develops across all four slides. The map supplies
- * the evidence; the copy names the action and consequence in public language. */
+/** The welcome screen establishes purpose before one Port Mason proposal
+ * develops across four capability screens. The map supplies the evidence; the
+ * copy names the action and consequence in public language. */
 export const ONBOARDING_SLIDES: OnboardingSlideData[] = [
+  {
+    title: 'Welcome to TransitMapper',
+    body: 'TransitMapper is a tool for imagining, designing, and testing public transit systems on a real map.',
+    invitation: 'Start with a place and design the transit system you want to see there.',
+    outcome: 'purpose',
+    scene: 'welcome',
+    visualDescription:
+      'A completed Port Mason transit system connects West Market, downtown, Eastgate, South Works, the university, and the airport with bus and light-rail services.',
+  },
   {
     title: 'Draw a line. TransitMapper finds the path.',
     body: 'Sketch the trip people should be able to make. Bus service follows streets already on the map. When new infrastructure is needed, TransitMapper creates a basic alignment you can refine.',

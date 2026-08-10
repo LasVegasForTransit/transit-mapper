@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { onboardingSceneFrame } from '../../../src/ui/onboarding/scene-timing';
 
 describe('onboarding scene timing', () => {
+  it('keeps the welcome overview complete and still', () => {
+    expect(onboardingSceneFrame('welcome', 2_000, false)).toMatchObject({
+      routeProgress: 1,
+      cursorVisible: false,
+      animateVehicles: false,
+    });
+  });
+
   it('settles the drawing gesture on the complete route', () => {
     expect(onboardingSceneFrame('draw', 0, false)).toMatchObject({
       routeProgress: 0,
