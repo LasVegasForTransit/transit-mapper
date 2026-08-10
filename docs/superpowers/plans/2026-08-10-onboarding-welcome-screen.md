@@ -217,7 +217,7 @@ docs(web): explain onboarding purpose scene
 - Modify only if verification finds a defect in the files named above.
 - Capture: `/Users/williecubed/.codex/visualizations/2026/08/10/transit-mapper-onboarding-welcome/`
 
-- [ ] **Step 1: Run the repository gate**
+- [x] **Step 1: Run the repository gate**
 
 Run:
 
@@ -227,7 +227,7 @@ CI=1 pnpm check
 
 Expected: all repository tasks pass, including formatting, lint, typecheck, tests, docs, filenames, and invariants.
 
-- [ ] **Step 2: Inspect all five screens in the running app**
+- [x] **Step 2: Inspect all five screens in the running app**
 
 Start the web app with:
 
@@ -243,11 +243,11 @@ Open **Replay intro**. Verify:
 - Back, progress tabs, close, and the final action remain reachable;
 - the phone layout scrolls without clipping the map, inspector, or footer.
 
-- [ ] **Step 3: Capture every screen at desktop and phone sizes**
+- [x] **Step 3: Capture every screen at desktop and phone sizes**
 
 Save five desktop screenshots and five 390-by-844 screenshots with numbered filenames. Include both sizes in the handoff so the full purpose-to-capability sequence can be reviewed without reopening the app.
 
-- [ ] **Step 4: Check the final tree and commit state**
+- [x] **Step 4: Check the final tree and commit state**
 
 Run:
 
