@@ -164,7 +164,7 @@ pnpm --filter @transitmapper/web exec vitest run tests/ui/OnboardingDialog.test.
 
 Expected: PASS with the welcome screen first, five tab stops, a static overview, and unchanged final completion.
 
-- [ ] **Step 8: Commit the behavior**
+- [x] **Step 8: Commit the behavior**
 
 Stage only the four source/test files and `apps/web/src/ui/app.css`, then run `git commit` with:
 
@@ -182,15 +182,15 @@ what they are looking at before the dialog starts teaching interactions.
 - Modify: `apps/web/src/ui/onboarding/fixtureSystem.ts`
 - Modify: `docs/development/reference/project-structure.md`
 
-- [ ] **Step 1: Update the fixture ownership comment**
+- [x] **Step 1: Update the fixture ownership comment**
 
 Change the fixture comment from “all four onboarding scenes” to “all five onboarding screens.” The complete fixture supplies the welcome overview and the three later complete-system scenes; the drawing scene continues to use its dedicated projection.
 
-- [ ] **Step 2: Update the project structure reference**
+- [x] **Step 2: Update the project structure reference**
 
 Replace “one of four passive scenes” with text stating that slide data selects a purpose overview followed by four passive capability scenes. Record that the purpose overview projects the completed local Port Mason system without animation or editor mutation.
 
-- [ ] **Step 3: Run documentation and focused web checks**
+- [x] **Step 3: Run documentation and focused web checks**
 
 Run:
 
@@ -202,7 +202,7 @@ pnpm --filter @transitmapper/web typecheck
 
 Expected: all three commands exit 0.
 
-- [ ] **Step 4: Commit the documentation**
+- [x] **Step 4: Commit the documentation**
 
 Stage the fixture comment and project-structure reference, then run `git commit` with:
 

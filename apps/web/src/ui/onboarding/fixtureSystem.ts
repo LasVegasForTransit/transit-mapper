@@ -314,7 +314,7 @@ const stations: Station[] = [
   }),
 ];
 
-/** The one valid domain system all four onboarding scenes project. */
+/** The one valid domain system all five onboarding screens project. */
 export const ONBOARDING_FIXTURE_SYSTEM: TransitSystem = {
   ...createEmptySystem(0),
   id: 'port-mason-onboarding-fixture',

@@ -250,9 +250,10 @@ store and core projectors.
 
 `apps/web/src/ui` owns React presentation, workbench layout, inspector
 controls, dialogs, onboarding, and accessibility semantics.
-The onboarding slide data selects one of four passive scenes, while
-`ui/onboarding/fixtureSystem.ts` owns the single valid local Port Mason
-proposal and the simulation inputs derived from it;
+The onboarding slide data selects a purpose overview followed by four passive
+capability scenes. The overview projects the completed Port Mason system
+without animation or editor mutation, while `ui/onboarding/fixtureSystem.ts`
+owns that single valid local proposal and the simulation inputs derived from it;
 `ui/onboarding/port-mason-context.ts` adds its tile-free river, districts, and
 street context. Pure scene helpers derive drawing and vehicle frames;
 `OnboardingPreviewMap.tsx` and its map controller adapt those frames to the
