@@ -8,6 +8,7 @@ vi.mock('react', async () => {
 
 import { EditorProvider } from '../../src/editor/EditorProvider';
 import { UiProvider } from '../../src/ui/UiProvider';
+import { ViewProvider } from '../../src/ui/ViewProvider';
 import { detentFor, step, Workbench, type SupplementalKind } from '../../src/ui/Workbench';
 
 /** Answers each query independently, so width and pointer can disagree. */
@@ -86,21 +87,23 @@ function renderWorkbench(
   const slot = (name: string) => <span data-slot={name}>{name}</span>;
   return renderToStaticMarkup(
     <EditorProvider>
-      <UiProvider>
-        <Workbench
-          brand={slot('brand')}
-          menuPanel={slot('menu')}
-          supplementalPanel={slot('supplemental')}
-          supplemental={overrides.supplemental ?? 'none'}
-          primaryToolbar={slot('primary')}
-          viewSwitcher={slot('view')}
-          viewSwitcherCompact={slot('view-compact')}
-          simControls={slot('desktop-sim')}
-          simControlsCompact={slot('mobile-sim')}
-          modeToolbar={slot('mode')}
-          installBanner={slot('install')}
-        />
-      </UiProvider>
+      <ViewProvider>
+        <UiProvider>
+          <Workbench
+            brand={slot('brand')}
+            menuPanel={slot('menu')}
+            supplementalPanel={slot('supplemental')}
+            supplemental={overrides.supplemental ?? 'none'}
+            primaryToolbar={slot('primary')}
+            viewSwitcher={slot('view')}
+            viewSwitcherCompact={slot('view-compact')}
+            simControls={slot('desktop-sim')}
+            simControlsCompact={slot('mobile-sim')}
+            modeToolbar={slot('mode')}
+            installBanner={slot('install')}
+          />
+        </UiProvider>
+      </ViewProvider>
     </EditorProvider>,
   );
 }

@@ -111,22 +111,37 @@ function makePattern(scenarioId: PerfFixtureId, patternIndex: number, way: Way):
   };
 }
 
-function makeServices(scenarioId: PerfFixtureId, ways: Way[]): Service[] {
+function makeServices(
+  scenarioId: PerfFixtureId,
+  ways: Way[],
+): {
+  lines: TransitSystem['lines'];
+  services: Service[];
+} {
   const patternCount = PERF_FIXTURES[scenarioId].counts.patterns;
 
-  return Array.from({ length: patternCount }, (_, patternIndex) => {
+  const services = Array.from({ length: patternCount }, (_, patternIndex) => {
     const wayIndex = Math.floor((patternIndex * ways.length) / patternCount);
+    const pattern = makePattern(scenarioId, patternIndex, ways[wayIndex]);
     return {
       id: `${scenarioId}-service-${patternIndex.toString().padStart(3, '0')}`,
-      name: `Route ${patternIndex + 1}`,
       modeId: 'bus',
-      color: FIXTURE_COLORS[patternIndex % FIXTURE_COLORS.length],
       frequencyMinutes: 15,
       spanStart: '05:00',
       spanEnd: '01:00',
-      patterns: [makePattern(scenarioId, patternIndex, ways[wayIndex])],
+      path: {
+        id: `${scenarioId}-service-${patternIndex.toString().padStart(3, '0')}`,
+        sections: pattern.sections,
+      },
     };
   });
+  const lines = services.map((service, index) => ({
+    id: `${scenarioId}-line-${index.toString().padStart(3, '0')}`,
+    name: `Route ${index + 1}`,
+    color: FIXTURE_COLORS[index % FIXTURE_COLORS.length],
+    serviceIds: [service.id],
+  }));
+  return { lines, services };
 }
 
 /**
@@ -138,6 +153,7 @@ export function generatePerfFixture(scenarioId: PerfFixtureId): TransitSystem {
   const ways = makeWays(scenarioId);
   const base = createEmptySystem(0);
   const definition = PERF_FIXTURES[scenarioId];
+  const network = makeServices(scenarioId, ways);
 
   return {
     ...base,
@@ -149,7 +165,7 @@ export function generatePerfFixture(scenarioId: PerfFixtureId): TransitSystem {
     },
     ways,
     stations: makeStations(scenarioId, ways),
-    services: makeServices(scenarioId, ways),
+    ...network,
   };
 }
 
@@ -158,6 +174,6 @@ export function countPerfFixture(system: TransitSystem): PerfFixtureCounts {
     ways: system.ways.length,
     points: system.ways.reduce((sum, way) => sum + way.points.length, 0),
     stations: system.stations.length,
-    patterns: system.services.reduce((sum, service) => sum + service.patterns.length, 0),
+    patterns: system.services.length,
   };
 }

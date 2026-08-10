@@ -22,6 +22,26 @@ function rtcLikeArchive(): Uint8Array {
   });
 }
 
+function multiServiceArchive(): Uint8Array {
+  return zipSync({
+    'routes.txt': strToU8(
+      'route_id,route_short_name,route_long_name,route_type\nR1,10,Crosstown,3\n',
+    ),
+    'trips.txt': strToU8(
+      'route_id,service_id,trip_id,direction_id,shape_id,trip_headsign\nR1,WK,T1,,S1,Downtown\nR1,WK,T2,,S2,Airport\n',
+    ),
+    'stops.txt': strToU8(
+      'stop_id,stop_name,stop_lat,stop_lon\nA,Alpha,36.10,-115.20\nB,Beta,36.11,-115.19\nC,Central,36.12,-115.18\n',
+    ),
+    'stop_times.txt': strToU8(
+      'trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,08:00:00,08:00:00,A,1\nT1,08:10:00,08:10:00,B,2\nT2,08:00:00,08:00:00,B,1\nT2,08:10:00,08:10:00,C,2\n',
+    ),
+    'shapes.txt': strToU8(
+      'shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence\nS1,36.10,-115.20,1\nS1,36.11,-115.19,2\nS2,36.11,-115.19,1\nS2,36.12,-115.18,2\n',
+    ),
+  });
+}
+
 describe('GTFS archive batching', () => {
   it('inflates, decodes, indexes, and batches an archive without network access', () => {
     const batches = gtfsArchiveToBatches(rtcLikeArchive(), 1);
@@ -30,5 +50,12 @@ describe('GTFS archive batching', () => {
     expect(batches.map((batch) => batch.routesDone)).toEqual([1, 2]);
     expect(batches.every((batch) => batch.routesTotal === 2)).toBe(true);
     expect(batches.flatMap((batch) => batch.pieces.services)).toHaveLength(2);
+  });
+
+  it('uses GTFS headsigns before ordinal labels for sibling Services', () => {
+    const [batch] = gtfsArchiveToBatches(multiServiceArchive(), 10);
+
+    expect(batch.pieces.lines).toHaveLength(1);
+    expect(batch.pieces.services.map((service) => service.name)).toEqual(['Downtown', 'Airport']);
   });
 });

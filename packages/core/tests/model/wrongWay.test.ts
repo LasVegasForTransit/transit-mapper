@@ -10,6 +10,7 @@ import { makeOneWay, makeTwoWay } from '../../src/model/profile';
 import { validateSystemQuick } from '../../src/model/validate';
 import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
 import { wayById } from '../../src/model/geo';
+import { servicePattern } from '../../src/model/line-service';
 import type { LngLat, TransitSystem, Way } from '../../src/model/system';
 
 const S: LngLat = [-115.2, 36.1];
@@ -34,7 +35,7 @@ function withStreetOneWay(sys: TransitSystem, direction: 'forward' | 'backward')
 }
 
 const legsAgainst = (sys: TransitSystem) =>
-  wrongWayLegs(wayById(sys.ways), sys.services[0].patterns[0], 'outbound');
+  wrongWayLegs(wayById(sys.ways), servicePattern(sys.services[0]), 'outbound');
 
 describe('a line on a street that was two-way when it was drawn', () => {
   it('runs against nothing while the street stays two-way', () => {
@@ -74,8 +75,8 @@ describe('what the planner is told', () => {
 
   it('reports the line, not the street, so clicking it selects the line', () => {
     const sys = withStreetOneWay(lineOnTwoWayStreet(), 'backward');
-    const issue = validateSystemQuick(sys).find((i) => i.id.startsWith('wrong-way-'))!;
-    expect(issue).toBeDefined();
+    const issue = validateSystemQuick(sys).find((i) => i.id.startsWith('wrong-way-'));
+    if (!issue) throw new Error('Expected a wrong-way issue');
     expect(issue.target).toEqual({ kind: 'service', id: 'bus' });
     expect(issue.message).toContain('against the traffic');
   });

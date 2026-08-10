@@ -47,21 +47,22 @@ export function servicePointActionProvider(store: EditorStore): SelectionActionP
     // conversion action would turn one exact handle into competing commands.
     if (serviceHit?.terminusSide) return [];
     if (serviceHit?.serviceId !== serviceId || !serviceHit.position) return [];
+    const position = serviceHit.position;
 
     const actions: SelectionAction[] = [
       {
         id: 'service.cutHere',
-        label: 'Divide line here',
-        hint: 'Two lines over the same track; delete either half',
+        label: 'Divide Service here',
+        hint: 'Two Services under the same Line; delete either half',
         group: 'cut',
-        run: () => store.getState().divideServiceAt(serviceId, serviceHit.position!),
+        run: () => store.getState().divideServiceAt(serviceId, position),
       },
       {
         id: 'service.endHere',
-        label: 'End line here',
+        label: 'End Service here',
         hint: 'Keeps the longer side and ends it at this point',
         group: 'cut',
-        run: () => store.getState().endPatternAt(serviceId, serviceHit.position!),
+        run: () => store.getState().endPatternAt(serviceId, position),
       },
     ];
     return actions;
@@ -80,12 +81,12 @@ export function wayPointActionProvider(store: EditorStore): SelectionActionProvi
   return ({ refs, corridorHit, system }: ActionContext) => {
     const [wayId] = refIds(refs, 'way');
     if (!wayId || refs.length !== 1) return [];
-    if (!corridorHit || corridorHit.wayId !== wayId) return [];
+    if (corridorHit?.wayId !== wayId) return [];
     const way = system.ways.find((w) => w.id === wayId);
     const actions: SelectionAction[] = [
       {
         id: 'way.splitHere',
-        label: 'Split corridor here',
+        label: 'Split path here',
         hint: 'Two streets, each editable on its own',
         group: 'cut',
         run: () => store.getState().splitWayAtT(wayId, corridorHit.t),

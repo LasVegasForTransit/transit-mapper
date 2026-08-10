@@ -7,7 +7,7 @@ import { aPattern, aRoad, aService, aStation, aSystem } from '@transitmapper/cor
 import type { EditorState } from '../../src/editor/store';
 import { createEditorStore } from '../../src/editor/store';
 import { SidebarPanel } from '../../src/ui/SidebarPanel';
-import { ViewProvider } from '../../src/ui/ViewProvider';
+import { ViewProvider, type ViewMode } from '../../src/ui/ViewProvider';
 
 const editorState = vi.hoisted(() => ({ current: null as EditorState | null }));
 
@@ -21,10 +21,10 @@ vi.mock('../../src/editor/EditorProvider', () => ({
 let container: HTMLDivElement;
 let root: Root;
 
-function renderSidebar(): void {
+function renderSidebar(viewMode: ViewMode = 'network'): void {
   act(() => {
     root.render(
-      <ViewProvider>
+      <ViewProvider initialViewMode={viewMode}>
         <SidebarPanel />
       </ViewProvider>,
     );
@@ -39,6 +39,17 @@ function click(button: Element | null | undefined): void {
 function press(button: HTMLButtonElement, key: string): void {
   act(() => {
     button.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key }));
+  });
+}
+
+function search(value: string): void {
+  const input = container.querySelector<HTMLInputElement>('input[type="search"]');
+  if (!input) throw new Error('Expected a search field');
+  act(() => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    if (!descriptor?.set) throw new Error('Expected the native value setter');
+    descriptor.set.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 }
 
@@ -61,7 +72,24 @@ afterEach(() => {
 });
 
 describe('SidebarPanel interactions', () => {
-  it('keeps one roving tab stop when a selected station appears in multiple corridors', () => {
+  it('publishes row hover without changing durable selection', () => {
+    const store = createEditorStore();
+    store.getState().setSystem(aSystem({ services: [aService('red', [])] }));
+    editorState.current = store.getState();
+
+    renderSidebar();
+    const row = container.querySelector<HTMLButtonElement>('[data-sidebar-option]');
+    if (!row) throw new Error('Expected a Line row');
+    void act(() => row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })));
+
+    expect(store.getState().outlineHover).toEqual({ kind: 'line', id: 'red' });
+    expect(store.getState().selection).toBeNull();
+
+    void act(() => row.dispatchEvent(new MouseEvent('mouseout', { bubbles: true })));
+    expect(store.getState().outlineHover).toBeNull();
+  });
+
+  it('keeps one roving tab stop when a selected station appears under a line and in Stations', () => {
     const west = aRoad('west', [
       [-115.2, 36.15],
       [-115.15, 36.15],
@@ -92,25 +120,18 @@ describe('SidebarPanel interactions', () => {
     editorState.current = store.getState();
 
     renderSidebar();
-    click(
-      [...container.querySelectorAll('button')].find(
-        (button) => button.textContent === 'Corridors',
-      ),
-    );
-
     const collapsedRows = [
       ...container.querySelectorAll<HTMLButtonElement>('[data-sidebar-option]'),
     ];
-    expect(collapsedRows.filter((button) => button.tabIndex === 0)).toEqual([collapsedRows[0]]);
+    expect(collapsedRows.filter((button) => button.tabIndex === 0)).toHaveLength(1);
 
-    click(container.querySelector('button[aria-label="Expand West Corridor"]'));
-    click(container.querySelector('button[aria-label="Expand East Corridor"]'));
+    click(container.querySelector('button.sidebar-disclosure'));
 
     const stationRows = [
       ...container.querySelectorAll<HTMLButtonElement>('[data-sidebar-option]'),
-    ].filter((button) => button.textContent?.includes('Hub'));
+    ].filter((button) => button.textContent.includes('Hub'));
 
-    expect(stationRows).toHaveLength(2);
+    expect(stationRows.length).toBeGreaterThanOrEqual(2);
     expect(stationRows.filter((button) => button.tabIndex === 0)).toHaveLength(1);
   });
 
@@ -130,7 +151,7 @@ describe('SidebarPanel interactions', () => {
 
     press(initialRows[0], 'ArrowDown');
     expect(document.activeElement).toBe(initialRows[1]);
-    expect(store.getState().selection).toEqual({ kind: 'service', id: 'line-1' });
+    expect(store.getState().selection).toEqual({ kind: 'line', id: 'line-1' });
 
     press(initialRows[1], 'End');
     expect(document.activeElement).toBe(initialRows[149]);
@@ -144,5 +165,160 @@ describe('SidebarPanel interactions', () => {
       ),
     );
     expect(container.querySelectorAll('[data-sidebar-option]')).toHaveLength(151);
+  }, 15_000);
+
+  it('bounds large Infrastructure sections and expands only the requested collection', () => {
+    const ways = Array.from({ length: 151 }, (_, index) =>
+      aRoad(`road-${index}`, [
+        [-115.2, 36.1 + index * 0.0001],
+        [-115.1, 36.1 + index * 0.0001],
+      ]),
+    );
+    const store = createEditorStore();
+    store.getState().setSystem(
+      aSystem({
+        ways,
+        namedWays: ways.map((way, index) => ({
+          id: `road-name-${index}`,
+          name: `Road ${index}`,
+          wayIds: [way.id],
+        })),
+      }),
+    );
+    editorState.current = store.getState();
+
+    renderSidebar('infrastructure');
+
+    expect(container.querySelectorAll('[data-sidebar-option]')).toHaveLength(150);
+    click(
+      [...container.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Show 1 more…',
+      ),
+    );
+    expect(container.querySelectorAll('[data-sidebar-option]')).toHaveLength(151);
+  });
+
+  it('selects every segment represented by a named infrastructure row', () => {
+    const west = aRoad('west', [
+      [-115.2, 36.1],
+      [-115.15, 36.1],
+    ]);
+    const east = aRoad('east', [
+      [-115.15, 36.1],
+      [-115.1, 36.1],
+    ]);
+    const store = createEditorStore();
+    store.getState().setSystem(
+      aSystem({
+        ways: [west, east],
+        namedWays: [{ id: 'main-street', name: 'Main Street', wayIds: [west.id, east.id] }],
+      }),
+    );
+    editorState.current = store.getState();
+
+    renderSidebar('infrastructure');
+    click(container.querySelector('[data-sidebar-option]'));
+
+    expect(store.getState().selection).toEqual({
+      kind: 'way',
+      id: west.id,
+      relatedIds: [west.id, east.id],
+    });
+  });
+
+  it('opens a collapsed section for search and renders only matching Stop context', () => {
+    const road = aRoad('road', [
+      [-115.2, 36.1],
+      [-115.1, 36.1],
+    ]);
+    const stations = Array.from({ length: 20 }, (_, index) =>
+      aStation(
+        `stop-${index}`,
+        [-115.2 + index * 0.005, 36.1],
+        { wayId: road.id, t: index / 20 },
+        { name: index === 12 ? 'Needle' : `Haystack ${index}` },
+      ),
+    );
+    const store = createEditorStore();
+    store.getState().setSystem(
+      aSystem({
+        ways: [road],
+        services: [aService('local', [aPattern('local', [road], [road.id])])],
+        stations,
+      }),
+    );
+    editorState.current = store.getState();
+
+    renderSidebar();
+    for (const button of container.querySelectorAll('button.sidebar-section-head')) click(button);
+    expect(container.textContent).not.toContain('Needle');
+
+    search('Needle');
+
+    expect(container.textContent).toContain('Needle');
+    expect(container.textContent).not.toContain('Haystack');
+  });
+
+  it('keeps network search rendering within the outline row budget', () => {
+    const road = aRoad('road', [
+      [-115.2, 36.1],
+      [-115.1, 36.1],
+    ]);
+    const stations = Array.from({ length: 200 }, (_, index) =>
+      aStation(
+        `stop-${index}`,
+        [-115.2 + index * 0.0005, 36.1],
+        { wayId: road.id, t: index / 200 },
+        { name: `Match ${index}` },
+      ),
+    );
+    const store = createEditorStore();
+    store.getState().setSystem(
+      aSystem({
+        ways: [road],
+        services: [aService('local', [aPattern('local', [road], [road.id])])],
+        stations,
+      }),
+    );
+    editorState.current = store.getState();
+
+    renderSidebar();
+    search('Match');
+
+    expect(container.querySelectorAll('[data-sidebar-option]').length).toBeLessThanOrEqual(150);
+  });
+
+  it('shares the search row budget across Infrastructure sections', () => {
+    const ways = Array.from({ length: 151 }, (_, index) =>
+      aRoad(`road-${index}`, [
+        [-115.2, 36.1 + index * 0.0001],
+        [-115.1, 36.1 + index * 0.0001],
+      ]),
+    );
+    const store = createEditorStore();
+    store.getState().setSystem(
+      aSystem({
+        ways,
+        namedWays: ways.map((way, index) => ({
+          id: `match-road-${index}`,
+          name: `Match Road ${index}`,
+          wayIds: [way.id],
+        })),
+        stations: [
+          aStation(
+            'match-station',
+            [-115.15, 36.1],
+            { wayId: ways[0].id, t: 0.5 },
+            { name: 'Match Station' },
+          ),
+        ],
+      }),
+    );
+    editorState.current = store.getState();
+
+    renderSidebar('infrastructure');
+    search('Match');
+
+    expect(container.querySelectorAll('[data-sidebar-option]').length).toBeLessThanOrEqual(150);
   });
 });

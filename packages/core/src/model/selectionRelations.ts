@@ -21,6 +21,7 @@ import {
   resolveWayPath,
 } from './geo';
 import { junctionGroupOf } from './junctions';
+import { servicePattern } from './line-service';
 import type { LngLat, Node, Pattern, Service, TransitSystem, Way } from './system';
 import { polylineCrossings, type WayCrossing } from './validate';
 
@@ -137,9 +138,9 @@ export function runsAlongside(
   );
 }
 
-/** True when any pattern of the service rides this way. */
+/** True when the service rides this way. */
 export function serviceRidesWay(service: Service, wayId: string): boolean {
-  return service.patterns.some((p) => patternWayIds(p).includes(wayId));
+  return patternWayIds(servicePattern(service)).includes(wayId);
 }
 
 /** True when a service somewhere in the system rides this way. */
@@ -185,24 +186,22 @@ export function terminiMeet(
   const b = serviceOf(system, bServiceId);
   if (!a || !b || a.id === b.id) return null;
   let best: TerminusMeeting | null = null;
-  for (const ap of a.patterns) {
-    const aEnds = patternTermini(system, ap);
-    for (const bp of b.patterns) {
-      const bEnds = patternTermini(system, bp);
-      for (const ae of aEnds) {
-        for (const be of bEnds) {
-          const distanceM = haversineMeters(ae.coord, be.coord);
-          if (distanceM > TERMINI_MEET_M) continue;
-          if (best && best.distanceM <= distanceM) continue;
-          best = {
-            aPatternId: ap.id,
-            aEnd: ae.end,
-            bPatternId: bp.id,
-            bEnd: be.end,
-            distanceM,
-          };
-        }
-      }
+  const ap = servicePattern(a);
+  const bp = servicePattern(b);
+  const aEnds = patternTermini(system, ap);
+  const bEnds = patternTermini(system, bp);
+  for (const ae of aEnds) {
+    for (const be of bEnds) {
+      const distanceM = haversineMeters(ae.coord, be.coord);
+      if (distanceM > TERMINI_MEET_M) continue;
+      if (best && best.distanceM <= distanceM) continue;
+      best = {
+        aPatternId: ap.id,
+        aEnd: ae.end,
+        bPatternId: bp.id,
+        bEnd: be.end,
+        distanceM,
+      };
     }
   }
   return best;
@@ -222,17 +221,11 @@ export function servicesShareOrCross(
   const b = serviceOf(system, bServiceId);
   if (!a || !b || a.id === b.id) return false;
 
-  const aWays = new Set(a.patterns.flatMap((p) => patternWayIds(p)));
-  if (b.patterns.some((p) => patternWayIds(p).some((id) => aWays.has(id)))) return true;
-
-  for (const ap of a.patterns) {
-    const aPath = patternPath(system.ways, ap);
-    if (aPath.length < 2) continue;
-    for (const bp of b.patterns) {
-      const bPath = patternPath(system.ways, bp);
-      if (bPath.length < 2) continue;
-      if (polylineCrossings(aPath, bPath).length > 0) return true;
-    }
-  }
-  return false;
+  const ap = servicePattern(a);
+  const bp = servicePattern(b);
+  const aWays = new Set(patternWayIds(ap));
+  if (patternWayIds(bp).some((id) => aWays.has(id))) return true;
+  const aPath = patternPath(system.ways, ap);
+  const bPath = patternPath(system.ways, bp);
+  return aPath.length >= 2 && bPath.length >= 2 && polylineCrossings(aPath, bPath).length > 0;
 }

@@ -116,7 +116,9 @@ function deleteSelection(c: KeyContext): void {
   const sel = s.selection;
   if (!sel) return;
   if (sel.kind === 'way') s.deleteWay(sel.id);
-  else if (sel.kind === 'service') s.deleteService(sel.id);
+  // A Stop row uses a Service selection plus stopId so the map and Inspector
+  // retain operational context. It is not permission to delete the Service.
+  else if (sel.kind === 'service' && !sel.stopId) s.deleteService(sel.id);
   else if (sel.kind === 'station') s.deleteStation(sel.id);
   else if (sel.kind === 'facility') s.deleteFacility(sel.id);
   else if (sel.kind === 'group') s.deleteGroup(sel.id);
@@ -336,7 +338,8 @@ export const KEY_BINDINGS: KeyBinding[] = [
     description: 'Flip direction (reverse the cross-section)',
     when: hasLaneTarget,
     run: (c) => {
-      const way = laneTargetWay(c)!;
+      const way = laneTargetWay(c);
+      if (!way) return;
       c.editor.getState().setWayProfile(way.id, flipProfile(way.profile));
     },
   },
@@ -431,7 +434,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
 export function matchesKey(e: KeyboardEvent, key: string, mod = false, shift = false): boolean {
   const modHeld = e.metaKey || e.ctrlKey;
   if (mod) {
-    if (!modHeld || !!e.shiftKey !== shift) return false;
+    if (!modHeld || e.shiftKey !== shift) return false;
   } else if (modHeld) {
     return false;
   }

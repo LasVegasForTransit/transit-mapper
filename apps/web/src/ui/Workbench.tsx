@@ -16,6 +16,7 @@ import { IconButton } from './IconButton';
 import { Panel } from './Panel';
 import { useInertRef } from './useInertRef';
 import { useUi } from './UiProvider';
+import { useView, type ViewMode } from './ViewProvider';
 
 /**
  * Whether the top row can afford the wide rendering of the view switch and
@@ -59,6 +60,12 @@ export type SupplementalKind = 'none' | 'selection' | 'tool-draft';
 export type Detent = 'closed' | 'half' | 'full';
 
 const DETENTS: Detent[] = ['closed', 'half', 'full'];
+
+const OUTLINE_TITLE: Record<ViewMode, string> = {
+  network: 'Network outline',
+  infrastructure: 'Infrastructure outline',
+  diagram: 'Diagram outline',
+};
 
 /** The stop a newly-shown panel opens to. Arming a tool is something you did
  *  in order to work ON the map, so it announces itself in the handle and
@@ -269,29 +276,18 @@ export function Workbench({
   importStatus,
   installBanner,
 }: WorkbenchProps) {
-  // Width only. Pointer type is a separate question with its own answer (see
-  // device/capabilities.ts) — a touchscreen laptop keeps these docked cards
-  // and still gets finger-sized hit tolerances on the map.
+  // Layout size and pointer precision stay independent.
   const mobile = useCompactLayout();
-  // A second, narrower question than `mobile`, and not the same one: this is
-  // about whether the top row's contents fit, not about which tree mounts.
-  // See ROOMY_TOP_ROW_QUERY.
-  //
-  // Read into a variable first. Folding it into the `||` below reads better
-  // and is a conditional hook call: `mobile` short-circuits it away, so
-  // crossing the layout breakpoint changed the hook order and React threw
-  // mid-resize. Confirmed live.
+  // Always call the narrower top-row query; short-circuiting it changes hook order.
   const roomyTopRow = useMediaQuery(ROOMY_TOP_ROW_QUERY);
   const compactTopRow = mobile || !roomyTopRow;
   const viewSwitch = compactTopRow ? viewSwitcherCompact : viewSwitcher;
   const [detent, setDetent] = useState<Detent>('closed');
   const clearSelection = useEditor((s) => s.select);
   const backToSelectTool = useEditor((s) => s.setTool);
-  // Only for `inert` below — CSS attribute selectors (see app.css's
-  // ".zen-cluster") handle every visual part of the collapse on their own;
-  // `inert` isn't expressible in CSS, so it's the one thing that still
-  // needs uiHidden read directly here rather than falling out of a class.
+  // CSS handles the visual collapse; React owns the non-visual inert state.
   const { uiHidden } = useUi();
+  const { viewMode } = useView();
   // Only the sheet reacts to the keyboard; the docked desktop cards are not
   // bottom-anchored and no desktop keyboard covers the viewport.
   const keyboardInset = useKeyboardInset();
@@ -512,7 +508,7 @@ export function Workbench({
           <SheetHandle
             detent={detent}
             setDetent={setDetent}
-            title={showingSupplemental ? 'Details' : 'Workspace'}
+            title={showingSupplemental ? 'Details' : OUTLINE_TITLE[viewMode]}
           />
           {showingSupplemental && (
             // Whichever put supplementalPanel here — a selection, an armed
@@ -527,7 +523,8 @@ export function Workbench({
                 backToSelectTool('select');
               }}
             >
-              <Icon name="chevronDown" size={15} style={{ transform: 'rotate(90deg)' }} /> Workspace
+              <Icon name="chevronDown" size={15} style={{ transform: 'rotate(90deg)' }} />{' '}
+              {OUTLINE_TITLE[viewMode]}
             </button>
           )}
           <div className="workbench-panel">
@@ -576,6 +573,7 @@ interface MenuCardProps {
 function MenuCard({ brand, children }: MenuCardProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { uiHidden } = useUi();
+  const { viewMode } = useView();
   const cardRef = useRef<HTMLElement | null>(null);
   const openWidthRef = useRef(0);
   const collapsedWidthRef = useRef(0);
@@ -653,19 +651,18 @@ function MenuCard({ brand, children }: MenuCardProps) {
   }, [uiHidden]);
 
   return (
-    <Panel ref={cardRef} slot="left" className="menu-card" aria-label="System workspace">
+    <Panel ref={cardRef} slot="left" className="menu-card" aria-label={OUTLINE_TITLE[viewMode]}>
       <div className="panel-brand">
         <div className="panel-brand-row">{brand}</div>
       </div>
       <div className="panel-head">
+        <span className="panel-head-title">{OUTLINE_TITLE[viewMode]}</span>
         <IconButton
-          icon="chevronDown"
+          icon={collapsed ? 'panelOpen' : 'sidebar'}
           size={16}
-          iconStyle={{ transform: collapsed ? 'rotate(-90deg)' : undefined }}
-          label={collapsed ? 'Expand' : 'Collapse'}
+          label={collapsed ? 'Show outline' : 'Hide outline'}
           onClick={() => setCollapsed((c) => !c)}
         />
-        <span className="panel-head-title">Workspace</span>
       </div>
       <div className={`collapsible ${collapsed ? 'collapsed' : ''}`}>
         <div className="collapsible-inner">{children}</div>

@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorProvider } from '../../src/editor/EditorProvider';
 import { UiProvider } from '../../src/ui/UiProvider';
+import { ViewProvider } from '../../src/ui/ViewProvider';
 import { Workbench } from '../../src/ui/Workbench';
 
 /** What each `[data-fit]` step costs. app.css decides this for real by hiding
@@ -38,20 +39,22 @@ function renderWorkbench(): void {
   act(() => {
     currentRoot.render(
       <EditorProvider>
-        <UiProvider>
-          <Workbench
-            brand={slot('brand')}
-            menuPanel={slot('menu')}
-            supplementalPanel={null}
-            supplemental="none"
-            primaryToolbar={slot('primary')}
-            viewSwitcher={slot('view')}
-            viewSwitcherCompact={<span data-slot="view-compact" />}
-            simControls={slot('desktop-sim')}
-            simControlsCompact={slot('mobile-sim')}
-            modeToolbar={slot('mode')}
-          />
-        </UiProvider>
+        <ViewProvider>
+          <UiProvider>
+            <Workbench
+              brand={slot('brand')}
+              menuPanel={slot('menu')}
+              supplementalPanel={null}
+              supplemental="none"
+              primaryToolbar={slot('primary')}
+              viewSwitcher={slot('view')}
+              viewSwitcherCompact={<span data-slot="view-compact" />}
+              simControls={slot('desktop-sim')}
+              simControlsCompact={slot('mobile-sim')}
+              modeToolbar={slot('mode')}
+            />
+          </UiProvider>
+        </ViewProvider>
       </EditorProvider>,
     );
   });

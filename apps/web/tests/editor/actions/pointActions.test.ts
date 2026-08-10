@@ -18,8 +18,8 @@ describe('service point actions', () => {
         id: 'line',
         name: 'Line',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [],
+
+        path: { id: 'line', sections: [] },
       },
     ];
 
@@ -64,17 +64,15 @@ describe('service point actions', () => {
         id: 'line',
         name: 'Line',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [
-          {
-            id: 'loop',
-            sections: oneSection([
-              wholeLeg('out'),
-              wholeLeg('return'),
-              wholeLeg('out', 'againstPoints'),
-            ]),
-          },
-        ],
+
+        path: {
+          id: 'line',
+          sections: oneSection([
+            wholeLeg('out'),
+            wholeLeg('return'),
+            wholeLeg('out', 'againstPoints'),
+          ]),
+        },
       },
     ];
     store.getState().setSystem(system);
@@ -85,16 +83,10 @@ describe('service point actions', () => {
       at: [-115.1875, 36.1],
       serviceHit: {
         serviceId: 'line',
-        patternId: 'loop',
+        patternId: 'line',
         run: 'outbound',
         legIndex: 1,
-        position: patternPositionAt(
-          system.ways,
-          system.services[0].patterns[0],
-          'outbound',
-          1,
-          0.25,
-        )!,
+        position: patternPositionAt(system.ways, system.services[0].path, 'outbound', 1, 0.25)!,
       },
     });
     expect(actions.find((action) => action.id === 'service.endHere')?.hint).toBe(
@@ -103,7 +95,7 @@ describe('service point actions', () => {
     actions.find((action) => action.id === 'service.endHere')!.run();
 
     expect(
-      patternRunLegs(store.getState().system.services[0].patterns[0], 'outbound').map(
+      patternRunLegs(store.getState().system.services[0].path, 'outbound').map(
         ({ leg }) => leg.wayId,
       ),
     ).toEqual(['return', 'out']);
@@ -130,13 +122,11 @@ describe('service point actions', () => {
         id: 'line',
         name: 'Line',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [
-          {
-            id: 'loop',
-            sections: oneSection([wholeLeg('loop'), wholeLeg('loop', 'againstPoints')]),
-          },
-        ],
+
+        path: {
+          id: 'line',
+          sections: oneSection([wholeLeg('loop'), wholeLeg('loop', 'againstPoints')]),
+        },
       },
     ];
     store.getState().setSystem(system);
@@ -147,21 +137,15 @@ describe('service point actions', () => {
       at: [-115.195, 36.1],
       serviceHit: {
         serviceId: 'line',
-        patternId: 'loop',
+        patternId: 'line',
         run: 'outbound',
         legIndex: 1,
-        position: patternPositionAt(
-          system.ways,
-          system.services[0].patterns[0],
-          'outbound',
-          1,
-          0.5,
-        )!,
+        position: patternPositionAt(system.ways, system.services[0].path, 'outbound', 1, 0.5)!,
       },
     });
     actions.find((action) => action.id === 'service.endHere')!.run();
 
-    const legs = patternRunLegs(store.getState().system.services[0].patterns[0], 'outbound');
+    const legs = patternRunLegs(store.getState().system.services[0].path, 'outbound');
     expect(legs).toHaveLength(2);
     expect(legs[0].leg).toEqual(wholeLeg('loop'));
     expect(legs[1].leg.extent).toEqual({ kind: 'stretch', fromT: 0.5, toT: 1 });
@@ -191,17 +175,15 @@ describe('service point actions', () => {
         id: 'line',
         name: 'Line',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [
-          {
-            id: 'couplet',
-            sections: [
-              { kind: 'shared', legs: [wholeLeg('trunk')] },
-              { kind: 'split', outbound: [wholeLeg('outbound')], inbound: [wholeLeg('inbound')] },
-              { kind: 'shared', legs: [wholeLeg('north')] },
-            ],
-          },
-        ],
+
+        path: {
+          id: 'line',
+          sections: [
+            { kind: 'shared', legs: [wholeLeg('trunk')] },
+            { kind: 'split', outbound: [wholeLeg('outbound')], inbound: [wholeLeg('inbound')] },
+            { kind: 'shared', legs: [wholeLeg('north')] },
+          ],
+        },
       },
     ];
     store.getState().setSystem(system);
@@ -212,21 +194,15 @@ describe('service point actions', () => {
       at: [-115.182, 36.1],
       serviceHit: {
         serviceId: 'line',
-        patternId: 'couplet',
+        patternId: 'line',
         run: 'outbound',
         legIndex: 1,
-        position: patternPositionAt(
-          system.ways,
-          system.services[0].patterns[0],
-          'outbound',
-          1,
-          0.8,
-        )!,
+        position: patternPositionAt(system.ways, system.services[0].path, 'outbound', 1, 0.8)!,
       },
     });
     actions.find((action) => action.id === 'service.endHere')!.run();
 
-    const sections = store.getState().system.services[0].patterns[0].sections;
+    const sections = store.getState().system.services[0].path.sections;
     expect(sections).toHaveLength(2);
     expect(sections[1].kind).toBe('split');
   });

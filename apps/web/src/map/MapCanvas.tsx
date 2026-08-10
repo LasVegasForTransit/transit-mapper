@@ -199,6 +199,14 @@ function framePadding(el: HTMLElement, margin: number): PaddingOptions {
   };
 }
 
+const HEAVY_FEATURE_SOURCES = new Set([SRC_WAYS, SRC_SERVICES]);
+const ID_PROMOTED_SOURCES = new Set([SRC_WAYS, SRC_STATIONS, SRC_FACILITIES]);
+
+function promoteIdForSource(sourceId: string): string | undefined {
+  if (sourceId === SRC_SERVICES) return 'serviceId';
+  return ID_PROMOTED_SOURCES.has(sourceId) ? 'id' : undefined;
+}
+
 export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   const colorScheme = useSystemColorScheme();
   const initialColorSchemeRef = useRef(colorScheme);
@@ -463,7 +471,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       if (s.activeWayId) return [s.activeWayId];
       if (s.selection?.kind === 'way') return [s.selection.id];
       if (s.selection?.kind === 'service') {
-        const svc = s.system.services.find((sv) => sv.id === s.selection!.id);
+        const selectedServiceId = s.selection.id;
+        const svc = s.system.services.find((sv) => sv.id === selectedServiceId);
         return svc ? serviceWayIds(svc) : [];
       }
       return [];
@@ -539,18 +548,13 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         // little ground → almost nothing drops) — max-zoom fidelity and the
         // exact source `Way.points` are untouched. Kept modest; revisit if any
         // mid-zoom kinking shows.
-        const heavy = src === SRC_WAYS || src === SRC_SERVICES;
+        const heavy = HEAVY_FEATURE_SOURCES.has(src);
         // Stable feature ids for selection via setFeatureState (see
         // applySelectionState): way/station/facility features key on `id`,
         // service features on `serviceId` (a service's fan across its ways all
         // light together). Lets selection flip feature-state instead of
         // re-uploading these sources.
-        const promoteId =
-          src === SRC_SERVICES
-            ? 'serviceId'
-            : src === SRC_WAYS || src === SRC_STATIONS || src === SRC_FACILITIES
-              ? 'id'
-              : undefined;
+        const promoteId = promoteIdForSource(src);
         map.addSource(src, {
           type: 'geojson',
           data: emptyFC,
@@ -584,6 +588,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       LYR_FACILITY_SELECTED,
     ];
     let appliedSelectionStates: Array<{ source: string; id: string }> = [];
+    let appliedOutlineHoverStates: Array<{ source: string; id: string }> = [];
     // Whatever's under the cursor right now (feature-state `hover`), so the halo
     // layers light a hover too, not only a selection.
     let hovered: { source: string; id: string } | null = null;
@@ -593,7 +598,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // on the 121k-waypoint services source during a zoom). Keep them hidden
     // unless something is actually selected OR hovered — the common idle case.
     const updateHaloVisibility = () => {
-      const visible = appliedSelectionStates.length > 0 || hovered !== null;
+      const visible =
+        appliedSelectionStates.length > 0 ||
+        appliedOutlineHoverStates.length > 0 ||
+        hovered !== null;
       for (const layer of HALO_LAYERS) {
         if (map.getLayer(layer))
           map.setLayoutProperty(layer, 'visibility', visible ? 'visible' : 'none');
@@ -627,29 +635,54 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       for (const { source, id } of appliedSelectionStates)
         map.removeFeatureState({ source, id }, 'selected');
       appliedSelectionStates = [];
-      const { system, selection } = store.getState();
+      for (const { source, id } of appliedOutlineHoverStates)
+        map.removeFeatureState({ source, id }, 'outlineHover');
+      appliedOutlineHoverStates = [];
+      const { system, selection, outlineHover } = store.getState();
       const mark = (source: string, id: string) => {
         map.setFeatureState({ source, id }, { selected: true });
         appliedSelectionStates.push({ source, id });
       };
-      if (selection?.kind === 'way') {
-        mark(SRC_WAYS, selection.id);
-        // A selected way also lights the services riding it — most guideway
-        // types draw no bare line when served, so the service line is the only
-        // thing on screen to highlight for a way selection.
-        for (const svc of servicesByWay(system.services, viewRef.current.visibleModes).get(
-          selection.id,
-        ) ?? []) {
-          mark(SRC_SERVICES, svc.id);
+      const markOutlineHover = (source: string, id: string) => {
+        map.setFeatureState({ source, id }, { outlineHover: true });
+        appliedOutlineHoverStates.push({ source, id });
+      };
+      const markObject = (
+        target: typeof selection,
+        markFeature: (source: string, id: string) => void,
+      ) => {
+        if (target?.kind === 'way') {
+          for (const wayId of target.relatedIds ?? [target.id]) {
+            markFeature(SRC_WAYS, wayId);
+            // A selected way also lights the services riding it — most guideway
+            // types draw no bare line when served, so the service line is the only
+            // thing on screen to highlight for a way selection.
+            for (const svc of servicesByWay(system.services, viewRef.current.visibleModes).get(
+              wayId,
+            ) ?? []) {
+              markFeature(SRC_SERVICES, svc.id);
+            }
+          }
+        } else if (target?.kind === 'service') {
+          markFeature(SRC_SERVICES, target.id);
+          if (target.stopId) markFeature(SRC_STATIONS, target.stopId);
+        } else if (target?.kind === 'line') {
+          const line = system.lines.find((candidate) => candidate.id === target.id);
+          const serviceIds = new Set(line?.serviceIds ?? []);
+          for (const service of system.services) {
+            if (!serviceIds.has(service.id)) continue;
+            markFeature(SRC_SERVICES, service.id);
+            for (const wayId of serviceWayIds(service)) markFeature(SRC_WAYS, wayId);
+          }
+        } else if (target?.kind === 'station') {
+          markFeature(SRC_STATIONS, target.id);
+        } else if (target?.kind === 'facility') {
+          markFeature(SRC_FACILITIES, target.id);
         }
-      } else if (selection?.kind === 'service') {
-        mark(SRC_SERVICES, selection.id);
-      } else if (selection?.kind === 'station') {
-        mark(SRC_STATIONS, selection.id);
-      } else if (selection?.kind === 'facility') {
-        mark(SRC_FACILITIES, selection.id);
-      }
-      setRouteFocus(selection?.kind === 'service');
+      };
+      markObject(selection, mark);
+      markObject(outlineHover, markOutlineHover);
+      setRouteFocus(selection?.kind === 'service' || selection?.kind === 'line');
       updateHaloVisibility();
       map.triggerRepaint();
     };
@@ -1415,7 +1448,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         (s.selection !== prev.selection ||
           s.activeWayId !== prev.activeWayId ||
           s.activePatternId !== prev.activePatternId ||
-          s.armedTerminus !== prev.armedTerminus) &&
+          s.armedTerminus !== prev.armedTerminus ||
+          s.outlineHover !== prev.outlineHover) &&
         map.getSource(SRC_SERVICES)
       ) {
         if (gestureActive) {

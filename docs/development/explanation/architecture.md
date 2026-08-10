@@ -295,7 +295,7 @@ focus, view visibility, landmarks, and simulation without moving the camera.
 Style requests are deferred during drawing and direct manipulation, and a
 failed runtime request leaves the working style in place.
 
-Colors stored on services, ways, facilities, lanes, and vehicles are domain
+Colors stored on Lines, Ways, facilities, lanes, and vehicles are domain
 data. A theme may add a neutral contrast casing around them, but it must never
 transform those colors. Downloaded PNG/SVG output and generated share
 previews are a separate portability boundary and always render with the light
@@ -457,8 +457,9 @@ means additive. Procedure is in
 ### Domain model
 
 A **Way** is infrastructure: an alignment with a lane cross-section. A
-**Service** is a route running over ways. One way carries many services; one
-service traverses many ways.
+**Line** is the name and color an agency designates on its public map. A
+**Service** is one mode-specific operation under that Line, with one path and
+schedule. One Way carries many Services; one Service traverses many Ways.
 
 Keep them separate and you can widen a street without touching the routes on
 it, or delete a route without deleting the street.
@@ -467,7 +468,8 @@ it, or delete a route without deleting the street.
 | ---------- | ------------------------------------------ |
 | `System`   | One document: a regional network           |
 | `Way`      | A physical alignment and its cross-section |
-| `Service`  | A route traversing a sequence of ways      |
+| `Line`     | A public identity grouping Services        |
+| `Service`  | One mode-specific operation over Ways      |
 | `Node`     | A junction where ways meet                 |
 | `Station`  | A boarding place with land and structures  |
 | `Facility` | A structure within a station               |

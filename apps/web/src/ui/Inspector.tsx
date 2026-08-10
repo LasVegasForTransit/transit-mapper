@@ -13,6 +13,7 @@ import { WayInspector } from './inspector/WayInspector';
 import { StationInspector } from './inspector/StationInspector';
 import { FacilityInspector } from './inspector/FacilityInspector';
 import { GroupInspector } from './inspector/GroupInspector';
+import { LineInspector } from './inspector/LineInspector';
 
 function renderInspectorContent(
   selection: Selection,
@@ -20,6 +21,7 @@ function renderInspectorContent(
 ): ReactNode {
   if (multiSelection.length > 0) return <MultiInspector items={multiSelection} />;
   if (!selection) return null;
+  if (selection.kind === 'line') return <LineInspector key={selection.id} id={selection.id} />;
   // key={id}: switching selection to a DIFFERENT service must remount, not
   // reuse this instance — its "Custom" frequency/span disclosure is local
   // state derived once at mount from that service's own values (see
@@ -111,7 +113,9 @@ export function useSupplementalContent(): SupplementalContent {
 function subjectOf(content: SupplementalContent, selection: Selection, count: number): string {
   if (content.kind === 'tool-draft') return `tool:${content.tool}`;
   if (count > 0) return `multi:${count}`;
-  return selection ? `${selection.kind}:${selection.id}` : 'none';
+  return selection
+    ? `${selection.kind}:${selection.id}${selection.kind === 'service' && selection.stopId ? `:stop:${selection.stopId}` : ''}`
+    : 'none';
 }
 
 export function Inspector() {
@@ -162,7 +166,8 @@ const MULTI_KIND_LABEL: Record<MultiSelectItem['kind'], string> = {
   way: 'way',
   station: 'station',
   facility: 'facility',
-  service: 'line',
+  line: 'line',
+  service: 'service',
 };
 
 interface MultiInspectorProps {

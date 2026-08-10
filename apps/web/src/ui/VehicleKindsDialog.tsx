@@ -60,7 +60,7 @@ export function VehicleKindsDialog({
       {
         id: shortId(),
         modeId,
-        label: `${MODES[modeId]?.label ?? 'Vehicle'} kind`,
+        label: `${MODES[modeId].label} kind`,
         widthM: 2.6,
         lengthM: 12,
       },
@@ -69,7 +69,7 @@ export function VehicleKindsDialog({
   return (
     <Modal
       title="Vehicle kinds"
-      description="Define specific vehicles a line can be assigned to run — its real size (drives the Infrastructure-view footprint) and top speed (drives how fast it animates). A service left unassigned keeps using its mode's plain default."
+      description="Define specific vehicles a service can be assigned to run — its real size (drives the Infrastructure-view footprint) and top speed (drives how fast it animates). A service left unassigned keeps using its mode's plain default."
       onClose={onClose}
       className="schedule-modal"
     >

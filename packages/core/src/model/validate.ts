@@ -1,6 +1,11 @@
 import { wayType, type Grade } from './catalog';
 import { junctionGroupOf, junctionTypeIds } from './junctions';
 import {
+  servicePattern,
+  validateLineServiceMembership,
+  type LineServiceMembershipIssue,
+} from './line-service';
+import {
   haversineMeters,
   patternHasSplit,
   patternRunSegments,
@@ -27,6 +32,7 @@ export const LEG_JOIN_TOLERANCE_M = 1;
  *  — core cannot import the store's type, and the two are kept assignable on
  *  purpose so IssuesPopover can hand a target straight to selectAndFocus. */
 export type IssueTarget =
+  | { kind: 'line'; id: string }
   | { kind: 'way'; id: string }
   | { kind: 'station'; id: string }
   | { kind: 'service'; id: string }
@@ -112,7 +118,7 @@ export interface CrossingScanOptions {
  */
 function wrongWayIssues(
   waysById: Map<string, Way>,
-  service: { id: string; name: string },
+  service: { id: string; name?: string },
   pattern: Pattern,
 ): Issue[] {
   const runs: RunDirection[] = patternHasSplit(pattern) ? ['outbound', 'inbound'] : ['outbound'];
@@ -125,7 +131,7 @@ function wrongWayIssues(
   return [
     {
       id: `wrong-way-${service.id}-${pattern.id}`,
-      message: `"${service.name}" runs against the traffic on ${n} one-way ${n === 1 ? 'street' : 'streets'}.`,
+      message: `"${service.name ?? 'This service'}" runs against the traffic on ${n} one-way ${n === 1 ? 'street' : 'streets'}.`,
       target: { kind: 'service', id: service.id },
     },
   ];
@@ -146,7 +152,7 @@ const SPLIT_FACING_TOLERANCE_M = 600;
  *  every other check would accept, because each half is continuous on its own. */
 function splitGapIssues(
   waysById: Map<string, Way>,
-  service: { id: string; name: string },
+  service: { id: string; name?: string },
   pattern: Pattern,
 ): Issue[] {
   const out: Issue[] = [];
@@ -162,7 +168,7 @@ function splitGapIssues(
     if (Math.max(far, near) <= SPLIT_FACING_TOLERANCE_M) return;
     out.push({
       id: `split-too-far-${service.id}-${pattern.id}-${i}`,
-      message: `"${service.name}" has an outward and a return trip that never meet — they were split against stretches that are nowhere near each other.`,
+      message: `"${service.name ?? 'This service'}" has an outward and a return trip that never meet — they were split against stretches that are nowhere near each other.`,
       target: { kind: 'service', id: service.id },
     });
   });
@@ -189,6 +195,53 @@ function sectionRunPath(
     .flatMap((seg) => seg.path);
 }
 
+function membershipIssue(issue: LineServiceMembershipIssue): Issue {
+  switch (issue.kind) {
+    case 'duplicate-line-id':
+      return {
+        id: `duplicate-line-id-${issue.lineId}`,
+        message: 'More than one public Line uses the same document ID.',
+        audience: 'document',
+        target: { kind: 'line', id: issue.lineId },
+      };
+    case 'duplicate-service-id':
+      return {
+        id: `duplicate-service-id-${issue.serviceId}`,
+        message: 'More than one Service uses the same document ID.',
+        audience: 'document',
+        target: { kind: 'service', id: issue.serviceId },
+      };
+    case 'empty-line':
+      return {
+        id: `empty-line-${issue.lineId}`,
+        message: 'A public Line has no Service.',
+        audience: 'document',
+        target: { kind: 'line', id: issue.lineId },
+      };
+    case 'missing-service':
+      return {
+        id: `missing-line-service-${issue.lineId}-${issue.serviceId}`,
+        message: 'A public Line refers to a Service that does not exist.',
+        audience: 'document',
+        target: { kind: 'line', id: issue.lineId },
+      };
+    case 'duplicate-membership':
+      return {
+        id: `duplicate-service-membership-${issue.serviceId}`,
+        message: 'A Service belongs to more than one public Line.',
+        audience: 'document',
+        target: { kind: 'service', id: issue.serviceId },
+      };
+    case 'orphaned-service':
+      return {
+        id: `orphaned-service-${issue.serviceId}`,
+        message: 'A Service does not belong to a public Line.',
+        audience: 'document',
+        target: { kind: 'service', id: issue.serviceId },
+      };
+  }
+}
+
 /**
  * The cheap half of validateSystem: ghost/orphan record checks and
  * mismatched-type junctions, all a single O(n) pass (the orphan-station check
@@ -198,7 +251,7 @@ function sectionRunPath(
  * this cheap tier.
  */
 export function validateSystemQuick(system: TransitSystem): Issue[] {
-  const issues: Issue[] = [];
+  const issues = validateLineServiceMembership(system).map(membershipIssue);
 
   for (const way of system.ways) {
     if (way.points.length < 2) {
@@ -216,7 +269,7 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
     if (serviceWayIds(service).length === 0) {
       issues.push({
         id: `ghost-service-${service.id}`,
-        message: `"${service.name}" doesn't run over any way.`,
+        message: `"${service.name ?? 'This service'}" doesn't run over any way.`,
         target: { kind: 'service', id: service.id },
       });
     }
@@ -229,46 +282,43 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
     // Continuity is per DIRECTION. A couplet's outbound and inbound halves are
     // two different streets a block apart, so asking one walk to cover both
     // would report every couplet as broken forever.
-    for (const pattern of service.patterns) {
-      // An unsplit pattern's inbound run is its outbound run reversed — same
-      // joins, same coordinates, same answer — so it is walked once. This runs
-      // reactively on every store change, and doubling that for every system
-      // that has never seen a couplet buys nothing.
-      const runs: RunDirection[] = patternHasSplit(pattern)
-        ? ['outbound', 'inbound']
-        : ['outbound'];
-      for (const run of runs) {
-        const segments = patternRunSegments(waysById, pattern, run);
-        if (segments.length === 0 && patternHasSplit(pattern)) {
-          issues.push({
-            id: `empty-run-${service.id}-${pattern.id}-${run}`,
-            message: `"${service.name}" has no ${RUN_NOUN[run]} path — it goes out and never comes back.`,
-            target: { kind: 'service', id: service.id },
-          });
-          continue;
-        }
-        for (let i = 1; i < segments.length; i++) {
-          const prevEnd = segments[i - 1].path[segments[i - 1].path.length - 1];
-          const nextStart = segments[i].path[0];
-          if (haversineMeters(prevEnd, nextStart) <= LEG_JOIN_TOLERANCE_M) continue;
-          issues.push({
-            // An unsplit pattern keeps the id it had before directions
-            // existed: these are React keys and selection targets in
-            // IssuesPopover, so preserving them makes this a pure addition.
-            id: patternHasSplit(pattern)
-              ? `broken-pattern-${service.id}-${pattern.id}-${run}-${i}`
-              : `broken-pattern-${service.id}-${pattern.id}-${i}`,
-            message: patternHasSplit(pattern)
-              ? `"${service.name}" has a gap in its ${RUN_NOUN[run]} route where it leaves one way and joins the next.`
-              : `"${service.name}" has a gap in its route where it leaves one way and joins the next.`,
-            target: { kind: 'service', id: service.id },
-          });
-          break; // one report per direction; the first break is the useful one
-        }
+    const pattern = servicePattern(service);
+    // An unsplit pattern's inbound run is its outbound run reversed — same
+    // joins, same coordinates, same answer — so it is walked once. This runs
+    // reactively on every store change, and doubling that for every system
+    // that has never seen a couplet buys nothing.
+    const runs: RunDirection[] = patternHasSplit(pattern) ? ['outbound', 'inbound'] : ['outbound'];
+    for (const run of runs) {
+      const segments = patternRunSegments(waysById, pattern, run);
+      if (segments.length === 0 && patternHasSplit(pattern)) {
+        issues.push({
+          id: `empty-run-${service.id}-${pattern.id}-${run}`,
+          message: `"${service.name}" has no ${RUN_NOUN[run]} path — it goes out and never comes back.`,
+          target: { kind: 'service', id: service.id },
+        });
+        continue;
       }
-      issues.push(...splitGapIssues(waysById, service, pattern));
-      issues.push(...wrongWayIssues(waysById, service, pattern));
+      for (let i = 1; i < segments.length; i++) {
+        const prevEnd = segments[i - 1].path[segments[i - 1].path.length - 1];
+        const nextStart = segments[i].path[0];
+        if (haversineMeters(prevEnd, nextStart) <= LEG_JOIN_TOLERANCE_M) continue;
+        issues.push({
+          // An unsplit pattern keeps the id it had before directions
+          // existed: these are React keys and selection targets in
+          // IssuesPopover, so preserving them makes this a pure addition.
+          id: patternHasSplit(pattern)
+            ? `broken-pattern-${service.id}-${pattern.id}-${run}-${i}`
+            : `broken-pattern-${service.id}-${pattern.id}-${i}`,
+          message: patternHasSplit(pattern)
+            ? `"${service.name}" has a gap in its ${RUN_NOUN[run]} route where it leaves one way and joins the next.`
+            : `"${service.name}" has a gap in its route where it leaves one way and joins the next.`,
+          target: { kind: 'service', id: service.id },
+        });
+        break; // one report per direction; the first break is the useful one
+      }
     }
+    issues.push(...splitGapIssues(waysById, service, pattern));
+    issues.push(...wrongWayIssues(waysById, service, pattern));
   }
 
   const wayIds = new Set(system.ways.map((w) => w.id));
@@ -276,7 +326,7 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
     if (station.anchors.some((a) => !wayIds.has(a.wayId))) {
       issues.push({
         id: `orphan-station-${station.id}`,
-        message: `"${station.name || 'A station'}" is anchored to a way that no longer exists.`,
+        message: `"${station.name ?? 'A station'}" is anchored to a way that no longer exists.`,
         audience: 'document',
         target: { kind: 'station', id: station.id },
       });

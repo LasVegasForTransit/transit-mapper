@@ -19,11 +19,20 @@ describe('network gesture store transactions', () => {
     const extension = aRoad('extension', [B, C]);
     const pattern = aPattern('branch', [trunk], ['trunk']);
     const sibling = aPattern('sibling', [trunk], ['trunk']);
-    const service = aService('bus', [pattern, sibling]);
+    const service = aService('bus', [pattern]);
+    const siblingService = aService('bus-sibling', [sibling]);
     const station = aStation('station', B, { wayId: 'trunk', t: 1 });
     const original = aSystem({
       ways: [trunk, extension],
-      services: [service],
+      services: [service, siblingService],
+      lines: [
+        {
+          id: 'bus-line',
+          name: 'Bus line',
+          color: '#e4572e',
+          serviceIds: [service.id, siblingService.id],
+        },
+      ],
       stations: [station],
       nodes: [
         {
@@ -40,7 +49,7 @@ describe('network gesture store transactions', () => {
     store.getState().setSystem(original);
     const source = {
       serviceId: service.id,
-      patternId: pattern.id,
+      patternId: service.id,
       side: 'end' as const,
       purpose: 'extend' as const,
     };
@@ -54,8 +63,10 @@ describe('network gesture store transactions', () => {
     expect(committed.nodes).toBe(original.nodes);
     expect(committed.stations).toBe(original.stations);
     expect(committed.services[0].id).toBe(service.id);
-    expect(committed.services[0].patterns[0].sections).toHaveLength(2);
-    expect(committed.services[0].patterns[1]).toBe(sibling);
+    expect(committed.services[0].path.sections).toHaveLength(2);
+    expect(committed.services.find((candidate) => candidate.id === siblingService.id)?.path).toBe(
+      siblingService.path,
+    );
 
     store.getState().undo();
     expect(store.getState().system).toBe(original);
@@ -65,18 +76,19 @@ describe('network gesture store transactions', () => {
     const road = aRoad('road', [A, B]);
     const pattern = aPattern('branch', [road], ['road']);
     const original = aSystem({ ways: [road], services: [aService('bus', [pattern])] });
-    const position = patternPositionAt([road], pattern, 'outbound', 0, 1)!;
+    const position = patternPositionAt([road], original.services[0].path, 'outbound', 0, 1);
+    if (!position) throw new Error('Expected the service terminus position');
     const store = createEditorStore();
     store.getState().setSystem(original);
     store.getState().armTerminus({
       serviceId: 'bus',
-      patternId: 'branch',
+      patternId: 'bus',
       side: 'end',
       position,
     });
     const source = {
       serviceId: 'bus',
-      patternId: 'branch',
+      patternId: 'bus',
       side: 'end' as const,
       purpose: 'return' as const,
     };
@@ -128,10 +140,11 @@ describe('network gesture store transactions', () => {
         },
       ],
     });
-    const targetPosition = patternPositionAt(ways, pattern, 'outbound', 0, 1)!;
+    const targetPosition = patternPositionAt(ways, original.services[0].path, 'outbound', 0, 1);
+    if (!targetPosition) throw new Error('Expected the target service position');
     const source = {
       serviceId: 'bus',
-      patternId: 'branch',
+      patternId: 'bus',
       side: 'end' as const,
       purpose: 'return' as const,
     };
@@ -145,7 +158,7 @@ describe('network gesture store transactions', () => {
     store.getState().setSystem(original);
 
     expect(store.getState().commitTerminusGesture(source, target, plan)).toBe(true);
-    expect(store.getState().system.services[0].patterns[0].sections).toMatchObject([
+    expect(store.getState().system.services[0].path.sections).toMatchObject([
       { kind: 'shared' },
       { kind: 'split' },
     ]);
@@ -169,10 +182,16 @@ describe('network gesture store transactions', () => {
     });
     const targetService = aService('target', [targetPattern], { color: '#abcdef' });
     const original = aSystem({ ways: [first, second], services: [dragged, targetService] });
-    const targetPosition = patternPositionAt([first, second], targetPattern, 'outbound', 0, 0)!;
+    const targetPosition = patternPositionAt(
+      [first, second],
+      targetService.path,
+      'outbound',
+      0,
+      0,
+    )!;
     const source = {
       serviceId: dragged.id,
-      patternId: draggedPattern.id,
+      patternId: dragged.id,
       side: 'end' as const,
       purpose: 'extend' as const,
     };
@@ -180,7 +199,7 @@ describe('network gesture store transactions', () => {
       kind: 'service-position' as const,
       serviceId: targetService.id,
       position: targetPosition,
-      terminus: { patternId: targetPattern.id, side: 'start' as const },
+      terminus: { patternId: targetService.id, side: 'start' as const },
     };
     const plan = planTerminusGesture(original, source, target);
     const store = createEditorStore();
@@ -220,14 +239,10 @@ describe('network gesture store transactions', () => {
     const original = aSystem({
       ways: [desiredKeep, connector, desiredOther, alternateKeep, alternateOther],
       services: [
-        aService('dragged', [
-          aPattern('alternate-a', [alternateKeep], ['alternate-keep']),
-          desiredA,
-        ]),
-        aService('target', [
-          aPattern('alternate-b', [alternateOther], ['alternate-other']),
-          desiredB,
-        ]),
+        aService('alternate-a', [aPattern('alternate-a', [alternateKeep], ['alternate-keep'])]),
+        aService('desired-a', [desiredA]),
+        aService('alternate-b', [aPattern('alternate-b', [alternateOther], ['alternate-other'])]),
+        aService('desired-b', [desiredB]),
       ],
       nodes: [
         {
@@ -249,15 +264,21 @@ describe('network gesture store transactions', () => {
       ],
     });
     const source = {
-      serviceId: 'dragged',
+      serviceId: 'desired-a',
       patternId: 'desired-a',
       side: 'end' as const,
       purpose: 'extend' as const,
     };
     const target = {
       kind: 'service-position' as const,
-      serviceId: 'target',
-      position: patternPositionAt(original.ways, desiredB, 'outbound', 0, 0)!,
+      serviceId: 'desired-b',
+      position: patternPositionAt(
+        original.ways,
+        original.services.find((service) => service.id === 'desired-b')!.path,
+        'outbound',
+        0,
+        0,
+      )!,
       terminus: { patternId: 'desired-b', side: 'start' as const },
     };
     const plan = planTerminusGesture(original, source, target);
@@ -267,7 +288,7 @@ describe('network gesture store transactions', () => {
     expect(store.getState().commitTerminusGesture(source, target, plan, 'through')).toBe(true);
     const joined = store
       .getState()
-      .system.services[0].patterns.find((pattern) => pattern.id === 'desired-a')!;
+      .system.services.find((service) => service.id === 'desired-a')!.path;
     expect(patternLegs(joined).map((leg) => leg.wayId)).toEqual([
       'desired-keep',
       'connector',
@@ -315,14 +336,14 @@ describe('network gesture store transactions', () => {
     });
     const source = {
       serviceId: 'source-service',
-      patternId: 'source-pattern',
+      patternId: 'source-service',
       side: 'end' as const,
       purpose: 'extend' as const,
     };
     const target = {
       kind: 'service-position' as const,
       serviceId: 'target-service',
-      position: patternPositionAt(original.ways, targetPattern, 'outbound', 0, 0.5)!,
+      position: patternPositionAt(original.ways, original.services[1].path, 'outbound', 0, 0.5)!,
     };
     const plan = planTerminusGesture(original, source, target);
     const store = createEditorStore();
@@ -377,21 +398,21 @@ describe('network gesture store transactions', () => {
     });
     const source = {
       serviceId: 'bus',
-      patternId: 'branch',
+      patternId: 'bus',
       side: 'end' as const,
       purpose: 'extend' as const,
     };
     const target = {
       kind: 'service-position' as const,
       serviceId: 'bus',
-      position: patternPositionAt(ways, pattern, 'outbound', 0, 1)!,
+      position: patternPositionAt(ways, original.services[0].path, 'outbound', 0, 1)!,
     };
     const plan = planTerminusGesture(original, source, target);
     const store = createEditorStore();
     store.getState().setSystem(original);
     store.getState().commitTerminusGesture(source, target, plan);
     const committed = store.getState().system;
-    const committedPattern = committed.services[0].patterns[0];
+    const committedPattern = committed.services[0].path;
 
     expect(patternRunLegs(committedPattern, 'outbound').map(({ leg }) => leg.wayId)).toEqual([
       'a-b',
@@ -417,9 +438,15 @@ describe('network gesture store transactions', () => {
     store.getState().setSystem(aSystem({ ways: [road], services: [aService('bus', [pattern])] }));
     store.getState().armTerminus({
       serviceId: 'bus',
-      patternId: 'branch',
+      patternId: 'bus',
       side: 'end',
-      position: patternPositionAt([road], pattern, 'outbound', 0, 1)!,
+      position: patternPositionAt(
+        [road],
+        store.getState().system.services[0].path,
+        'outbound',
+        0,
+        1,
+      )!,
     });
 
     store.getState().setTool('way');

@@ -7,13 +7,15 @@
 import { unzipSync, strFromU8 } from 'fflate';
 import { shortId } from './ids';
 import { deriveServiceLevels, type DerivedServiceLevel } from './gtfsSchedule';
+import { gtfsServiceName, lineFromGtfsRoute, serviceFromGtfsPattern } from './gtfsService';
 import { defaultProfileFor, makeOneWay } from './profile';
 import { wayType } from './catalog';
 import { haversineMeters, nearestOnPath, resolveWayPath, wholeLeg, oneSection } from './geo';
-import type { LngLat, Pattern, Service, Station, Way } from './system';
+import type { Line, LngLat, Pattern, Service, Station, Way } from './system';
 
 export interface GtfsImportResult {
   ways: Way[];
+  lines: Line[];
   services: Service[];
   stations: Station[];
 }
@@ -168,8 +170,9 @@ export function pairRouteShapes(
   const buckets = new Map<string, string[]>();
   for (const id of shapeIds) {
     const dir = shapeDirection.get(id) ?? '';
-    if (!buckets.has(dir)) buckets.set(dir, []);
-    buckets.get(dir)!.push(id);
+    const bucket = buckets.get(dir) ?? [];
+    bucket.push(id);
+    buckets.set(dir, bucket);
   }
   const dirs = [...buckets.keys()];
   // One bucket means the feed never said which direction anything runs.
@@ -232,6 +235,7 @@ interface GtfsIndex {
   shapePaths: Map<string, LngLat[]>;
   shapeToRoute: Map<string, string>;
   shapeToTrip: Map<string, string>;
+  headsignByShape: Map<string, string>;
   shapeDirection: Map<string, string>;
   shapeTripCount: Map<string, number>;
   stopTimesByTrip: Map<string, { seq: number; stopId: string }[]>;
@@ -278,6 +282,7 @@ function buildGtfsIndex(files: GtfsFiles): GtfsIndex {
   // representative stop sequence in every feed this needs to handle.
   const shapeToRoute = new Map<string, string>();
   const shapeToTrip = new Map<string, string>();
+  const headsignByShape = new Map<string, string>();
   /** Which of the route's two directions a shape belongs to. gtfsSchedule.ts
    *  already reads direction_id for headway maths and throws it away; kept
    *  here because it is half of what says two shapes are one line. */
@@ -292,6 +297,7 @@ function buildGtfsIndex(files: GtfsFiles): GtfsIndex {
     if (shapeToRoute.has(t.shape_id)) continue;
     shapeToRoute.set(t.shape_id, t.route_id);
     shapeToTrip.set(t.shape_id, t.trip_id);
+    if (t.trip_headsign) headsignByShape.set(t.shape_id, t.trip_headsign);
     shapeDirection.set(t.shape_id, String(t.direction_id ?? ''));
   }
 
@@ -319,6 +325,7 @@ function buildGtfsIndex(files: GtfsFiles): GtfsIndex {
     shapePaths,
     shapeToRoute,
     shapeToTrip,
+    headsignByShape,
     stopTimesByTrip,
     routeShapeIds,
     serviceLevelByRoute: deriveServiceLevels({
@@ -341,6 +348,7 @@ function piecesForRoutes(
 ): GtfsImportResult {
   const ways: Way[] = [];
   const wayIdByShape = new Map<string, string>();
+  const lines: Line[] = [];
   const services: Service[] = [];
 
   for (const routeId of routeIds) {
@@ -350,6 +358,7 @@ function piecesForRoutes(
     const kind = classifyGtfsRouteType(Number(route.route_type));
 
     const patterns: Pattern[] = [];
+    const sourceShapesByPattern: string[][] = [];
     // Two shapes that end where the other begins are the two directions of one
     // line, not two branches of it. Importing them as branches is what this
     // used to do, and it is wrong in a way that reads as right: the map draws
@@ -399,6 +408,7 @@ function piecesForRoutes(
         id: shortId(),
         sections: [{ kind: 'split', outbound: [wholeLeg(outWay)], inbound: [wholeLeg(backWay)] }],
       });
+      sourceShapesByPattern.push([outbound, inbound]);
     }
     for (const shapeId of pairing.singles) {
       const wayId = mintWay(shapeId);
@@ -407,20 +417,20 @@ function piecesForRoutes(
       // end to end — the one case where direction and extent need no
       // derivation at all.
       patterns.push({ id: shortId(), sections: oneSection([wholeLeg(wayId)]) });
+      sourceShapesByPattern.push([shapeId]);
     }
     if (patterns.length === 0) continue;
 
-    services.push({
-      id: shortId(),
-      name: route.route_short_name || route.route_long_name || `Route ${routeId}`,
-      modeId: kind.modeId,
-      color: route.route_color ? `#${route.route_color}` : '#e4572e',
-      patterns,
-      // How often it runs, recovered from the feed. Spread rather than
-      // assigned field by field so a route whose timing couldn't be read
-      // stays exactly as it was before: no headway, no span, one vehicle.
-      ...(index.serviceLevelByRoute.get(routeId) ?? {}),
+    const serviceIds = patterns.map((pattern, serviceIndex) => {
+      const sourceShapes = sourceShapesByPattern[serviceIndex] ?? [];
+      const name =
+        patterns.length > 1 ? gtfsServiceName(sourceShapes, index, serviceIndex + 1) : undefined;
+      services.push(
+        serviceFromGtfsPattern(pattern, kind.modeId, name, index.serviceLevelByRoute.get(routeId)),
+      );
+      return pattern.id;
     });
+    lines.push(lineFromGtfsRoute(route, routeId, serviceIds));
   }
 
   const newStations: Station[] = [];
@@ -464,7 +474,7 @@ function piecesForRoutes(
     }
   }
 
-  return { ways, services, stations: newStations };
+  return { ways, lines, services, stations: newStations };
 }
 
 /**

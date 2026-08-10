@@ -46,6 +46,7 @@ import type {
   TransitSystem,
 } from '../model/system';
 import { HANDLE_ICON, widthPxAtZ14 } from './constants';
+import { lineForService, linesByServiceId, servicePattern } from '../model/line-service';
 
 /** What the renderer needs to know about the current selection: which single
  *  object is highlighted, if any. Deliberately structural rather than an
@@ -68,38 +69,59 @@ const LANE_SPACING_PX = 3; // perpendicular gap between a way's own capacity lan
 const WITHIN_LANE_SPACING_PX = 1.5; // gap between services sharing ONE lane in Infrastructure lane-detail
 const SERVICE_LANE_FRACTION = 0.6; // a service overlay fills ~60% of its lane's width (leaves the lane markings visible)
 
-// Continuity-aware bundle offsets. Each service gets ONE constant offset slot
-// for its entire path — chosen greedily as the smallest-magnitude slot free on
-// EVERY way it rides — so a through-line keeps a single offset end to end (no
+function serviceColor(system: TransitSystem, service: Service): string {
+  return lineForService(system, service.id)?.color ?? UNASSIGNED_COLOR;
+}
+
+// Continuity-aware bundle offsets. Each public Line gets ONE constant offset
+// slot across the union of its Services — chosen greedily as the
+// smallest-magnitude slot free on EVERY way it rides — so a Line keeps a
+// single offset end to end (no
 // sideways "jog" where a shared stretch begins or ends, which is what made two
 // connected lines read as not intersecting) while services sharing a segment
 // still fan apart. Slot order 0, +1, -1, +2, -2… keeps a bundle roughly
 // centered; a lone service stays at 0 (centered), unchanged from before.
 // Deterministic (services processed in byWay's stable creation order) and
-// memoized on the byWay Map identity (itself memoized on system.services), so
-// selection/viewport rebuilds reuse it.
-const bundleSlotCache = new WeakMap<Map<string, Service[]>, Map<string, number>>();
-function bundleSlots(byWay: Map<string, Service[]>): Map<string, number> {
-  const cached = bundleSlotCache.get(byWay);
+// memoized on both route geometry and Line membership identity.
+const bundleSlotCache = new WeakMap<
+  Map<string, Service[]>,
+  WeakMap<TransitSystem['lines'], Map<string, number>>
+>();
+function bundleSlots(
+  byWay: Map<string, Service[]>,
+  lines: TransitSystem['lines'],
+): Map<string, number> {
+  let byLines = bundleSlotCache.get(byWay);
+  if (!byLines) {
+    byLines = new WeakMap();
+    bundleSlotCache.set(byWay, byLines);
+  }
+  const cached = byLines.get(lines);
   if (cached) return cached;
-  const serviceWays = new Map<string, string[]>();
-  const order: string[] = []; // stable: each service the first time it appears
+  const ownership = linesByServiceId(lines);
+  const entityWays = new Map<string, Set<string>>();
+  const servicesByEntity = new Map<string, string[]>();
+  const order: string[] = [];
   for (const [wayId, svcs] of byWay) {
     for (const s of svcs) {
-      let ws = serviceWays.get(s.id);
-      if (!ws) {
-        ws = [];
-        serviceWays.set(s.id, ws);
-        order.push(s.id);
+      const entityId = ownership.get(s.id)?.id ?? `service:${s.id}`;
+      let ways = entityWays.get(entityId);
+      if (!ways) {
+        ways = new Set();
+        entityWays.set(entityId, ways);
+        order.push(entityId);
       }
-      ws.push(wayId);
+      ways.add(wayId);
+      const serviceIds = servicesByEntity.get(entityId) ?? [];
+      if (!serviceIds.includes(s.id)) serviceIds.push(s.id);
+      servicesByEntity.set(entityId, serviceIds);
     }
   }
   const nthSlot = (k: number): number => (k === 0 ? 0 : k % 2 === 1 ? (k + 1) / 2 : -k / 2); // 0,+1,-1,+2,-2,…
   const occupied = new Map<string, Set<number>>();
   const slots = new Map<string, number>();
-  for (const sid of order) {
-    const ways = serviceWays.get(sid) ?? [];
+  for (const entityId of order) {
+    const ways = [...(entityWays.get(entityId) ?? [])];
     let slot: number;
     for (let k = 0; ; k++) {
       const cand = nthSlot(k);
@@ -108,7 +130,7 @@ function bundleSlots(byWay: Map<string, Service[]>): Map<string, number> {
         break;
       }
     }
-    slots.set(sid, slot);
+    for (const serviceId of servicesByEntity.get(entityId) ?? []) slots.set(serviceId, slot);
     for (const w of ways) {
       let set = occupied.get(w);
       if (!set) {
@@ -118,7 +140,7 @@ function bundleSlots(byWay: Map<string, Service[]>): Map<string, number> {
       set.add(slot);
     }
   }
-  bundleSlotCache.set(byWay, slots);
+  byLines.set(lines, slots);
   return slots;
 }
 
@@ -157,13 +179,12 @@ interface ServiceWayOccurrence {
 
 function serviceWayOccurrences(service: Service, wayId: string): ServiceWayOccurrence[] {
   const occurrences: ServiceWayOccurrence[] = [];
-  for (const pattern of service.patterns) {
-    for (const run of PATTERN_RUNS) {
-      patternRunLegs(pattern, run).forEach(({ leg }, legIndex) => {
-        if (leg.wayId !== wayId) return;
-        occurrences.push({ patternId: pattern.id, run, legIndex, range: legRange(leg), leg });
-      });
-    }
+  const pattern = servicePattern(service);
+  for (const run of PATTERN_RUNS) {
+    patternRunLegs(pattern, run).forEach(({ leg }, legIndex) => {
+      if (leg.wayId !== wayId) return;
+      occurrences.push({ patternId: pattern.id, run, legIndex, range: legRange(leg), leg });
+    });
   }
   return occurrences;
 }
@@ -177,21 +198,20 @@ function wayPatternIndex(byWay: Map<string, Service[]>): Map<string, WayPatternE
     for (const svc of svcs) {
       if (seen.has(svc.id)) continue;
       seen.add(svc.id);
-      for (const pattern of svc.patterns) {
-        // Walked per direction rather than over the flat leg list, so the
-        // entries say which lanes are ACTUALLY ridden. The list used to be
-        // walked once and each leg drawn on both curbs, which is right for a
-        // two-way street and wrong for a one-way couplet — it would paint the
-        // outward street's return curb with a line no vehicle ever runs on.
-        for (const run of PATTERN_RUNS) {
-          const ordered = patternRunLegs(pattern, run);
-          ordered.forEach(({ leg, index: wayIdx, forward }, i) => {
-            let arr = index.get(leg.wayId);
-            if (!arr) index.set(leg.wayId, (arr = []));
-            const next = ordered[i + 1]?.leg.wayId;
-            arr.push({ svc, pattern, wayIdx, forward, ...(next ? { nextWayId: next } : {}) });
-          });
-        }
+      const pattern = servicePattern(svc);
+      // Walked per direction rather than over the flat leg list, so the
+      // entries say which lanes are ACTUALLY ridden. The list used to be
+      // walked once and each leg drawn on both curbs, which is right for a
+      // two-way street and wrong for a one-way couplet — it would paint the
+      // outward street's return curb with a line no vehicle ever runs on.
+      for (const run of PATTERN_RUNS) {
+        const ordered = patternRunLegs(pattern, run);
+        ordered.forEach(({ leg, index: wayIdx, forward }, i) => {
+          let arr = index.get(leg.wayId);
+          if (!arr) index.set(leg.wayId, (arr = []));
+          const next = ordered[i + 1]?.leg.wayId;
+          arr.push({ svc, pattern, wayIdx, forward, ...(next ? { nextWayId: next } : {}) });
+        });
       }
     }
   }
@@ -209,10 +229,11 @@ function wayPatternIndex(byWay: Map<string, Service[]>): Map<string, WayPatternE
  * both directions share yields nothing here, because an arrow on it would be
  * a lie in one of the two directions.
  *
- * Deduplicated by geometry start/end so two branches of one service riding the
- * same one-directional stretch do not stack arrows on top of each other.
+ * Deduplicated by geometry start/end so repeated legs of one Service on the
+ * same one-directional stretch do not stack arrows.
  */
 function oneDirectionalStretches(
+  system: TransitSystem,
   waysById: Map<string, Way>,
   services: Service[],
   wayId: string,
@@ -220,41 +241,40 @@ function oneDirectionalStretches(
   const out: { path: LngLat[]; color: string }[] = [];
   const seen = new Set<string>();
   for (const svc of services) {
-    for (const pattern of svc.patterns) {
-      // Which stretches this pattern rides BOTH ways, whatever sections they
-      // sit in. An arrow means "one-way as far as this line is concerned", so
-      // a stretch the line also comes back along must not get one — and after
-      // a couplet's two streets are merged into one, the split section's two
-      // sides land on that one street and would otherwise draw opposing
-      // chevrons on it. Asked of the resolved runs rather than of the section
-      // kinds, so it holds however the sections got that way.
-      const ridden = new Map<string, number>();
-      for (const run of PATTERN_RUNS) {
-        for (const { leg } of patternRunLegs(pattern, run)) {
-          ridden.set(leg.wayId, (ridden.get(leg.wayId) ?? 0) | (run === 'outbound' ? 1 : 2));
-        }
+    const pattern = servicePattern(svc);
+    // Which stretches this pattern rides BOTH ways, whatever sections they
+    // sit in. An arrow means "one-way as far as this line is concerned", so
+    // a stretch the line also comes back along must not get one — and after
+    // a couplet's two streets are merged into one, the split section's two
+    // sides land on that one street and would otherwise draw opposing
+    // chevrons on it. Asked of the resolved runs rather than of the section
+    // kinds, so it holds however the sections got that way.
+    const ridden = new Map<string, number>();
+    for (const run of PATTERN_RUNS) {
+      for (const { leg } of patternRunLegs(pattern, run)) {
+        ridden.set(leg.wayId, (ridden.get(leg.wayId) ?? 0) | (run === 'outbound' ? 1 : 2));
       }
-      const bothWays = (wayIdOn: string) => ridden.get(wayIdOn) === 3;
-      if (bothWays(wayId)) continue;
-      for (const section of pattern.sections) {
-        if (section.kind === 'shared') continue;
-        const sides: { legs: PatternLeg[]; run: RunDirection }[] =
-          section.kind === 'split'
-            ? [
-                { legs: section.outbound, run: 'outbound' },
-                { legs: section.inbound, run: 'inbound' },
-              ]
-            : [{ legs: section.legs, run: 'outbound' as RunDirection }];
-        for (const side of sides) {
-          const wanted = new Set(side.legs.filter((l) => l.wayId === wayId));
-          if (wanted.size === 0) continue;
-          for (const seg of patternRunSegments(waysById, pattern, side.run)) {
-            if (!wanted.has(seg.leg) || seg.path.length < 2) continue;
-            const key = `${seg.path[0].join()}>${seg.path[seg.path.length - 1].join()}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            out.push({ path: seg.path, color: svc.color });
-          }
+    }
+    const bothWays = (wayIdOn: string) => ridden.get(wayIdOn) === 3;
+    if (bothWays(wayId)) continue;
+    for (const section of pattern.sections) {
+      if (section.kind === 'shared') continue;
+      const sides: { legs: PatternLeg[]; run: RunDirection }[] =
+        section.kind === 'split'
+          ? [
+              { legs: section.outbound, run: 'outbound' },
+              { legs: section.inbound, run: 'inbound' },
+            ]
+          : [{ legs: section.legs, run: 'outbound' as RunDirection }];
+      for (const side of sides) {
+        const wanted = new Set(side.legs.filter((l) => l.wayId === wayId));
+        if (wanted.size === 0) continue;
+        for (const seg of patternRunSegments(waysById, pattern, side.run)) {
+          if (!wanted.has(seg.leg) || seg.path.length < 2) continue;
+          const key = `${seg.path[0].join()}>${seg.path[seg.path.length - 1].join()}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push({ path: seg.path, color: serviceColor(system, svc) });
         }
       }
     }
@@ -622,7 +642,7 @@ function buildSharedProjectionIndexes(
     waysById,
     servicesByWay: servicesByWayIndex,
     serviceSlots: projection.topology.services
-      ? bundleSlots(servicesByWayIndex)
+      ? bundleSlots(servicesByWayIndex, system.lines)
       : new Map<string, number>(),
   };
 }
@@ -653,6 +673,7 @@ function projectStations(
     const near = nearestOnPath(resolveWayPath(way), coord);
     return near ? serviceCoversWayAt(service, wayId, near.t) : true;
   };
+  const ownership = linesByServiceId(system.lines);
 
   return stations.map((station, stationIndex) => {
     if (counts) counts.featureStationVisitCount++;
@@ -672,8 +693,15 @@ function projectStations(
           ),
         )
       : [];
-    const color = anchorServices[0]?.color ?? servingServices[0]?.color ?? NEUTRAL_STATION;
-    const interchange = servingServices.length > 1;
+    const color = anchorServices[0]
+      ? serviceColor(system, anchorServices[0])
+      : servingServices[0]
+        ? serviceColor(system, servingServices[0])
+        : NEUTRAL_STATION;
+    const servingLineIds = new Set(
+      servingServices.map((service) => ownership.get(service.id)?.id ?? `service:${service.id}`),
+    );
+    const interchange = servingLineIds.size > 1;
     return {
       type: 'Feature',
       properties: {
@@ -712,40 +740,37 @@ function projectServiceTermini(
   if (selection?.kind !== 'service') return [];
   const service = system.services.find((candidate) => candidate.id === selection.id);
   if (!service) return [];
-  const interactivePatternId = service.patterns.some((pattern) => pattern.id === activePatternId)
-    ? activePatternId
-    : service.patterns[0]?.id;
+  const pattern = servicePattern(service);
+  const interactivePatternId = pattern.id === activePatternId ? activePatternId : pattern.id;
   const pending: Array<Feature<Point> & { properties: Record<string, unknown> }> = [];
-  for (const pattern of service.patterns) {
-    const outbound = patternRunLegs(pattern, 'outbound');
-    const ends: Array<{ side: 'start' | 'end'; entry: (typeof outbound)[number] | undefined }> = [
-      { side: 'start', entry: outbound[0] },
-      { side: 'end', entry: outbound[outbound.length - 1] },
-    ];
-    for (const { side, entry } of ends) {
-      if (!entry) continue;
-      const way = indexes.waysById.get(entry.leg.wayId);
-      if (!way) continue;
-      const [lo, hi] = legRange(entry.leg);
-      const isStart = side === 'start';
-      const t = isStart === entry.forward ? lo : hi;
-      pending.push({
-        type: 'Feature',
-        properties: {
-          serviceId: service.id,
-          patternId: pattern.id,
-          side,
-          modeId: service.modeId,
-          interactive: false,
-          ...(armedTerminus?.serviceId === service.id &&
-          armedTerminus.patternId === pattern.id &&
-          armedTerminus.side === side
-            ? { armedReturn: true }
-            : {}),
-        },
-        geometry: { type: 'Point', coordinates: pointAtT(resolveWayPath(way), t) },
-      });
-    }
+  const outbound = patternRunLegs(pattern, 'outbound');
+  const ends: Array<{ side: 'start' | 'end'; entry: (typeof outbound)[number] | undefined }> = [
+    { side: 'start', entry: outbound[0] },
+    { side: 'end', entry: outbound[outbound.length - 1] },
+  ];
+  for (const { side, entry } of ends) {
+    if (!entry) continue;
+    const way = indexes.waysById.get(entry.leg.wayId);
+    if (!way) continue;
+    const [lo, hi] = legRange(entry.leg);
+    const isStart = side === 'start';
+    const t = isStart === entry.forward ? lo : hi;
+    pending.push({
+      type: 'Feature',
+      properties: {
+        serviceId: service.id,
+        patternId: pattern.id,
+        side,
+        modeId: service.modeId,
+        interactive: false,
+        ...(armedTerminus?.serviceId === service.id &&
+        armedTerminus.patternId === pattern.id &&
+        armedTerminus.side === side
+          ? { armedReturn: true }
+          : {}),
+      },
+      geometry: { type: 'Point', coordinates: pointAtT(resolveWayPath(way), t) },
+    });
   }
   const coincident = new Map<string, number>();
   for (const feature of pending) {
@@ -1190,7 +1215,12 @@ function projectTopologyFeatures({
       // Skipped when the way itself is one-way, because the chevrons above
       // already say it and two sets of arrows on one line is noise.
       if (projection.topology.serviceArrows && network && !wayIsOneWay) {
-        for (const one of oneDirectionalStretches(waysById, byWay.get(way.id) ?? [], way.id)) {
+        for (const one of oneDirectionalStretches(
+          system,
+          waysById,
+          byWay.get(way.id) ?? [],
+          way.id,
+        )) {
           serviceArrows.push({
             type: 'Feature',
             properties: { id: way.id, color: one.color },
@@ -1221,7 +1251,7 @@ function projectTopologyFeatures({
         properties: {
           serviceId: svc.id,
           wayId: way.id,
-          color: svc.color,
+          color: serviceColor(system, svc),
           width: modeRender(svc.modeId).width,
           underground,
           elevated,

@@ -42,9 +42,24 @@ export function aPattern(
 export function aService(
   id: string,
   patterns: Pattern[],
-  overrides: Partial<Service> = {},
-): Service {
-  return { id, name: id, modeId: 'bus', color: '#e4572e', patterns, ...overrides };
+  overrides: Partial<Service> & { color?: string } = {},
+): Service & { color?: string } {
+  const pattern = patterns.at(0);
+  const { color, ...serviceOverrides } = overrides;
+  return {
+    id,
+    name: id,
+    modeId: 'bus',
+    path: pattern
+      ? {
+          id,
+          sections: pattern.sections,
+          ...(pattern.skippedStops ? { skippedStops: pattern.skippedStops } : {}),
+        }
+      : { id, sections: [] },
+    ...(color ? { color } : { color: '#e4572e' }),
+    ...serviceOverrides,
+  };
 }
 
 /** An otherwise-empty system holding exactly these records. Tests that care
@@ -52,7 +67,16 @@ export function aService(
  *  a node is what the store creates deliberately and half these tests exist
  *  to check what happens when one is absent. */
 export function aSystem(parts: Partial<TransitSystem> = {}): TransitSystem {
-  return { ...createEmptySystem(0), ...parts };
+  const system = { ...createEmptySystem(0), ...parts };
+  if (parts.services && !parts.lines) {
+    system.lines = parts.services.map((service) => ({
+      id: service.id,
+      name: service.name ?? service.id,
+      color: (service as Service & { color?: string }).color ?? '#e4572e',
+      serviceIds: [service.id],
+    }));
+  }
+  return system;
 }
 
 /** A station anchored partway along a way. `t` runs along the WAY's own point

@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '../../src/model/catalog';
 import { wholeLeg, wholeLegs, oneSection } from '../../src/model/geo';
 import { wayById } from '../../src/model/geo/wayPath';
-import { aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
 import type { Pattern, Service } from '../../src/model/system';
 import { buildFeatures, type ViewOptions } from '../../src/render/buildFeatures';
 
@@ -18,6 +18,43 @@ const NETWORK_VIEW: ViewOptions = {
 };
 
 describe('buildFeatures service lines', () => {
+  it('treats sibling Services as one public Line for offsets and interchanges', () => {
+    const way = aRoad('shared', [
+      [-115.2, 36.14],
+      [-115.16, 36.14],
+    ]);
+    const services = [
+      aService('local', [{ id: 'local', sections: oneSection([wholeLeg(way.id)]) }]),
+      aService('express', [{ id: 'express', sections: oneSection([wholeLeg(way.id)]) }]),
+    ];
+    const system = aSystem({
+      ways: [way],
+      services,
+      lines: [
+        {
+          id: 'red',
+          name: 'Red Line',
+          color: '#e5252a',
+          serviceIds: services.map((service) => service.id),
+        },
+      ],
+      stations: [
+        aStation('shared-stop', [-115.18, 36.14], { wayId: way.id, t: 0.5 }, { name: 'Central' }),
+      ],
+    });
+
+    const features = buildFeatures(system, null, [], NETWORK_VIEW);
+    const offsets = features.services.features
+      .filter((feature) => !feature.properties?.hitTarget)
+      .map((feature) => {
+        const offset: unknown = feature.properties?.offset;
+        return typeof offset === 'number' ? offset : undefined;
+      });
+
+    expect(new Set(offsets)).toEqual(new Set([0]));
+    expect(features.stations.features[0].properties?.interchange).toBe(false);
+  });
+
   it('draws a bundled service on a bent corridor as one line, not one per way', () => {
     // A right-angle bend — a north-south way meeting an east-west one — with
     // TWO services riding both, so the bundle offset is non-zero (a lone
@@ -42,7 +79,7 @@ describe('buildFeatures service lines', () => {
 
     const fc = buildFeatures(system, null, [], NETWORK_VIEW);
     const svc1Features = fc.services.features.filter(
-      (f) => f.properties?.serviceId === 'svc1' && !f.properties?.hitTarget,
+      (f) => f.properties?.serviceId === 'svc1' && !f.properties.hitTarget,
     );
 
     // One continuous feature for svc1's whole route, not one per way.
@@ -94,8 +131,12 @@ describe('buildFeatures service lines', () => {
     expect(painted).toHaveLength(1);
     expect(painted[0].geometry.coordinates).toHaveLength(3);
     expect(painted[0].properties?.offset).not.toBe(0);
-    expect(hits.map((feature) => feature.properties?.legIndex).sort()).toEqual([0, 0, 1, 1, 2, 2]);
-    expect(hits.every((feature) => feature.properties?.patternId === 'repeat')).toBe(true);
+    const legIndexes = hits.map((feature) => {
+      const legIndex: unknown = feature.properties?.legIndex;
+      return typeof legIndex === 'number' ? legIndex : undefined;
+    });
+    expect(legIndexes.sort()).toEqual([0, 0, 1, 1, 2, 2]);
+    expect(hits.every((feature) => feature.properties?.patternId === 'svc')).toBe(true);
     expect(
       hits.every((feature) => feature.properties?.offset === painted[0].properties?.offset),
     ).toBe(true);
@@ -142,22 +183,35 @@ describe('service editing affordances', () => {
     [-115.19, 36.1],
     [-115.18, 36.09],
   ]);
-  const service = aService('line', [
+  const northService = aService('north-service', [
     {
-      id: 'north-pattern',
+      id: 'north-service',
       sections: oneSection([wholeLeg('trunk'), wholeLeg('north')]),
     },
+  ]);
+  const southService = aService('south-service', [
     {
-      id: 'south-pattern',
+      id: 'south-service',
       sections: oneSection([wholeLeg('trunk'), wholeLeg('south')]),
     },
   ]);
-  const system = aSystem({ ways: [trunk, north, south], services: [service] });
+  const system = aSystem({
+    ways: [trunk, north, south],
+    services: [northService, southService],
+    lines: [
+      {
+        id: 'line',
+        name: 'Line',
+        color: '#e4572e',
+        serviceIds: [northService.id, southService.id],
+      },
+    ],
+  });
 
   it('Network service selection produces no corridor control-point handles', () => {
     const features = buildFeatures(
       system,
-      { kind: 'service', id: service.id },
+      { kind: 'service', id: northService.id },
       ['trunk', 'north', 'south'],
       NETWORK_VIEW,
     );
@@ -165,15 +219,15 @@ describe('service editing affordances', () => {
     expect(features.handles.features).toEqual([]);
   });
 
-  it('service termini identify every branch side and focused interaction', () => {
+  it('service termini identify the singular path and focused interaction', () => {
     const features = buildFeatures(
       system,
-      { kind: 'service', id: service.id },
+      { kind: 'service', id: northService.id },
       [],
       NETWORK_VIEW,
       null,
       null,
-      { activePatternId: 'south-pattern' } as never,
+      { activePatternId: 'north-service' } as never,
     );
     const termini = (
       features as typeof features & {
@@ -199,36 +253,20 @@ describe('service editing affordances', () => {
       })),
     ).toEqual([
       {
-        serviceId: 'line',
-        patternId: 'north-pattern',
+        serviceId: 'north-service',
+        patternId: 'north-service',
         side: 'start',
         modeId: 'bus',
-        interactive: false,
+        interactive: true,
         at: [-115.2, 36.1],
       },
       {
-        serviceId: 'line',
-        patternId: 'north-pattern',
+        serviceId: 'north-service',
+        patternId: 'north-service',
         side: 'end',
         modeId: 'bus',
         interactive: true,
         at: [-115.18, 36.11],
-      },
-      {
-        serviceId: 'line',
-        patternId: 'south-pattern',
-        side: 'start',
-        modeId: 'bus',
-        interactive: true,
-        at: [-115.2, 36.1],
-      },
-      {
-        serviceId: 'line',
-        patternId: 'south-pattern',
-        side: 'end',
-        modeId: 'bus',
-        interactive: true,
-        at: [-115.18, 36.09],
       },
     ]);
   });
@@ -236,16 +274,16 @@ describe('service editing affordances', () => {
   it('marks only the exact armed terminus as the one-way return origin', () => {
     const features = buildFeatures(
       system,
-      { kind: 'service', id: service.id },
+      { kind: 'service', id: southService.id },
       [],
       NETWORK_VIEW,
       null,
       null,
       {
-        activePatternId: 'south-pattern',
+        activePatternId: 'south-service',
         armedTerminus: {
-          serviceId: 'line',
-          patternId: 'south-pattern',
+          serviceId: 'south-service',
+          patternId: 'south-service',
           side: 'end',
         },
       },
@@ -257,8 +295,8 @@ describe('service editing affordances', () => {
         .map((feature) => feature.properties),
     ).toMatchObject([
       {
-        serviceId: 'line',
-        patternId: 'south-pattern',
+        serviceId: 'south-service',
+        patternId: 'south-service',
         side: 'end',
         armedReturn: true,
       },
@@ -266,7 +304,7 @@ describe('service editing affordances', () => {
   });
 
   it('does not project service termini into Diagram', () => {
-    const features = buildFeatures(system, { kind: 'service', id: service.id }, [], {
+    const features = buildFeatures(system, { kind: 'service', id: northService.id }, [], {
       ...NETWORK_VIEW,
       viewMode: 'diagram',
     });
@@ -277,7 +315,7 @@ describe('service editing affordances', () => {
   it('Infrastructure service selection retains corridor control points', () => {
     const features = buildFeatures(
       system,
-      { kind: 'service', id: service.id },
+      { kind: 'service', id: northService.id },
       ['trunk', 'north', 'south'],
       { ...NETWORK_VIEW, viewMode: 'infrastructure' },
     );

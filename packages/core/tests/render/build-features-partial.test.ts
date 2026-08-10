@@ -27,30 +27,27 @@ function fixture(): TransitSystem {
         },
       },
     ],
+    lines: [{ id: 'route-line', name: 'Route', color: '#2ea44f', serviceIds: ['route'] }],
     services: [
       {
         id: 'route',
-        name: 'Route',
         modeId: 'bus',
-        color: '#2ea44f',
-        patterns: [
-          {
-            id: 'route-pattern',
-            sections: [
-              {
-                kind: 'shared',
-                legs: [
-                  {
-                    wayId: 'road',
-                    direction: 'withPoints',
-                    extent: { kind: 'whole' },
-                    lane: { kind: 'auto' },
-                  },
-                ],
-              },
-            ],
-          },
-        ],
+        path: {
+          id: 'route',
+          sections: [
+            {
+              kind: 'shared',
+              legs: [
+                {
+                  wayId: 'road',
+                  direction: 'withPoints',
+                  extent: { kind: 'whole' },
+                  lane: { kind: 'auto' },
+                },
+              ],
+            },
+          ],
+        },
       },
     ],
     stations: [

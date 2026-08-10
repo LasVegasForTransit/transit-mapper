@@ -1080,7 +1080,7 @@ input[type='range'] {
     border-radius: 0;
     box-shadow: none;
   }
-  /* Matches .panel-body's horizontal padding, so the Details and Workspace
+  /* Matches .panel-body's horizontal padding, so the Details and outline
      states of the sheet put their text on the same left edge. */
   .panel-right {
     padding: 4px 16px 12px;
@@ -1108,15 +1108,10 @@ input[type='range'] {
   padding: 12px 8px 8px;
   border-bottom: 1px solid var(--md-sys-color-surface-container-highest);
 }
-/* One row, always — FileMenu icon, then the system name filling the
-   middle (flex-grow, capped by its own max-width), then the toggle. Never
-   wraps: FileMenu is icon-only in every state (see FileMenu.tsx) and the
-   toggle is a fixed 34px, so the only thing that ever changes size here
+/* One row, always — app menu, then the system name filling the
+   middle (flex-grow, capped by its own max-width). The only thing that changes size here
    is the system name itself, which just grows or shrinks within the row
-   rather than forcing a second line. margin-left:auto on .brand-hide-ui
-   (below) is what actually pins the toggle to the row's far right edge —
-   not relied on here, so this row doesn't need to reason about leftover
-   space itself. */
+   rather than forcing a second line. */
 .panel-brand-row {
   display: flex;
   align-items: center;
@@ -1141,13 +1136,12 @@ input[type='range'] {
 [data-zen] .panel-brand {
   align-self: flex-start;
 }
-/* Pins the Hide-UI toggle to the row's far right edge directly, rather
-   than relying on justify-content to distribute leftover space across
-   every child — the one thing that has to be true regardless of how wide
-   FileMenu or the system name end up being on either side of it. */
-.brand-hide-ui {
-  margin-left: auto;
-  flex: 0 0 auto;
+.app-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  min-width: 38px;
+  padding-inline: 7px 5px;
 }
 .panel-brand-start {
   display: flex;
@@ -1225,6 +1219,9 @@ input[type='range'] {
     opacity 120ms var(--motion-chrome-curve),
     padding 200ms var(--motion-chrome-curve);
   transition-delay: 0ms, 140ms, 0ms;
+}
+.panel-head > .icon-btn {
+  margin-left: auto;
 }
 /* The workspace toggle itself is meaningless once zen mode has force-
    collapsed the list below it — it fades along with the list rather than
@@ -1398,38 +1395,27 @@ input[type='range'] {
 .sidebar-workspace {
   padding-inline: 8px;
 }
-.sidebar-workspace-title {
-  padding: 2px 8px 10px;
-  font-size: var(--md-sys-typescale-title-medium-size);
-  font-weight: 600;
-}
-.sidebar-grouping {
-  padding: 0 8px 12px;
-  color: var(--md-sys-color-on-surface-variant);
-  font-size: var(--md-sys-typescale-label-medium-size);
-}
-.sidebar-segmented {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px;
-  margin-top: 6px;
-  padding: 2px;
-  border-radius: 8px;
-  background: var(--md-sys-color-surface-container);
-}
-.sidebar-segmented button {
-  min-height: 30px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--md-sys-color-on-surface-variant);
-  font: inherit;
-  cursor: pointer;
-}
-.sidebar-segmented button[aria-pressed='true'] {
+.sidebar-outline-heading {
+  position: sticky;
+  top: -8px;
+  z-index: 1;
+  padding: 10px 0 12px;
   background: var(--md-sys-color-surface);
+}
+.sidebar-search {
+  width: calc(100% - 16px);
+  min-height: 34px;
+  margin: 0 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 8px;
+  background: var(--md-sys-color-surface-container-low);
   color: var(--md-sys-color-on-surface);
-  box-shadow: var(--md-sys-elevation-level1);
+  font: inherit;
+}
+.sidebar-search:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 1px;
 }
 .sidebar-section {
   border-top: 1px solid var(--md-sys-color-surface-container-highest);
@@ -1470,6 +1456,12 @@ input[type='range'] {
   grid-template-columns: 28px minmax(0, 1fr);
   align-items: start;
 }
+.sidebar-service-row {
+  grid-template-columns: 24px minmax(0, 1fr);
+}
+.sidebar-service-row .sidebar-disclosure {
+  width: 24px;
+}
 .sidebar-disclosure {
   display: grid;
   width: 28px;
@@ -1509,6 +1501,12 @@ input[type='range'] {
 }
 .sidebar-show-more {
   margin: 4px 8px;
+}
+.sidebar-empty {
+  margin: 4px 8px 8px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: var(--md-sys-typescale-body-small-size);
+  line-height: 1.4;
 }
 .sidebar-section-actions {
   display: flex;
@@ -4132,13 +4130,6 @@ button.chip-removable-label:hover {
   width: auto;
   min-width: 0;
   flex: 1;
-}
-/* Hide-UI leaves this row. It is already in the ... menu, and a row this
-   tight cannot spend 34px on the second-most-prominent position for
-   something used once a session. Zen mode's way back is .zen-restore below,
-   which only exists while the chrome is hidden. */
-.compact-top-bar .brand-hide-ui {
-  display: none;
 }
 /* Horizontal here, unlike the vertical column it replaces. */
 .compact-top-bar .actions-collapsed {

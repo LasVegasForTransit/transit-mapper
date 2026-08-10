@@ -157,7 +157,16 @@ export const ICON_NODES: Record<IconName, IconNode> = {
     ['path', { d: 'm15 14 5-5-5-5', key: '12vg1m' }],
     ['path', { d: 'M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13', key: '6uklza' }],
   ],
-  sidebar: [['rect', { width: '18', height: '18', x: '3', y: '3', rx: '2', key: 'afitv7' }]],
+  sidebar: [
+    ['rect', { width: '18', height: '18', x: '3', y: '3', rx: '2', key: 'afitv7' }],
+    ['path', { d: 'M9 3v18', key: 'fh3hqa' }],
+    ['path', { d: 'm16 15-3-3 3-3', key: '14y99z' }],
+  ],
+  panelOpen: [
+    ['rect', { width: '18', height: '18', x: '3', y: '3', rx: '2', key: 'afitv7' }],
+    ['path', { d: 'M9 3v18', key: 'fh3hqa' }],
+    ['path', { d: 'm14 9 3 3-3 3', key: '1c7hxl' }],
+  ],
   door: [
     ['path', { d: 'M11 20H2', key: 'nlcfvz' }],
     [

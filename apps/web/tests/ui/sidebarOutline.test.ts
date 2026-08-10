@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { aPattern, aRoad, aService, aStation, aSystem } from '@transitmapper/core/testing/fixtures';
 import {
+  infrastructureSections,
   limitSidebarItems,
-  limitSidebarPatterns,
-  lineStopsForService,
-  networkCorridors,
+  servicesForSidebarLine,
+  sidebarSectionsForView,
   sidebarTabStopKey,
+  stopsForService,
 } from '../../src/ui/sidebarOutline';
 
-describe('sidebar list limits', () => {
-  it('applies one shared row budget to a combined section', () => {
+describe('sidebar outline information architecture', () => {
+  it('caps large collections without changing their logical count', () => {
     const items = Array.from({ length: 300 }, (_, index) => index);
 
     expect(limitSidebarItems(items, false, 150)).toEqual({
@@ -19,54 +20,40 @@ describe('sidebar list limits', () => {
     expect(limitSidebarItems(items, true, 150)).toEqual({ items, hiddenCount: 0 });
   });
 
-  it('applies one stop budget across every pattern of an expanded line', () => {
-    const patterns = [
-      {
-        patternId: 'main',
-        name: undefined,
-        stops: Array.from({ length: 100 }, (_, index) => ({
-          stationId: `main-${index}`,
-          name: `Main ${index}`,
-        })),
-      },
-      {
-        patternId: 'branch',
-        name: 'Branch',
-        stops: Array.from({ length: 100 }, (_, index) => ({
-          stationId: `branch-${index}`,
-          name: `Branch ${index}`,
-        })),
-      },
-    ];
-
-    const limited = limitSidebarPatterns(patterns, false, 150);
-
-    expect(limited.items[0].stops).toHaveLength(100);
-    expect(limited.items[1].stops).toHaveLength(50);
-    expect(limited.hiddenCount).toBe(50);
+  it('uses concrete nouns for each top-level view and does not expose corridors', () => {
+    expect(sidebarSectionsForView('network')).toEqual(['Lines', 'Stations']);
+    expect(sidebarSectionsForView('diagram')).toEqual(['Lines', 'Stations']);
+    expect(sidebarSectionsForView('infrastructure')).toEqual([
+      'Roads',
+      'Railways and guideways',
+      'Trails',
+      'Waterways',
+      'Other infrastructure',
+      'Stations',
+      'Facilities',
+    ]);
   });
-});
 
-describe('sidebar keyboard entry', () => {
-  it('resumes at a visible selection and falls back when that selection is hidden', () => {
-    expect(sidebarTabStopKey('service:first', 'service:selected', true)).toBe('service:selected');
-    expect(sidebarTabStopKey('service:first', 'station:hidden', false)).toBe('service:first');
+  it('resumes keyboard entry at a visible selection and falls back when hidden', () => {
+    expect(sidebarTabStopKey('line:first', 'service:selected', true)).toBe('service:selected');
+    expect(sidebarTabStopKey('line:first', 'station:hidden', false)).toBe('line:first');
   });
-});
 
-describe('lineStopsForService', () => {
-  it('orders a line’s stops by outbound travel rather than station storage order', () => {
+  it('orders a service’s stops by outbound travel rather than station storage order', () => {
     const road = aRoad('charleston', [
       [-115.2, 36.15],
       [-115.1, 36.15],
     ]);
     const system = aSystem({
       ways: [road],
-      services: [
-        aService('red', [aPattern('main', [road], [road.id])], {
+      services: [aService('red-service', [aPattern('red-service', [road], [road.id])])],
+      lines: [
+        {
+          id: 'red',
           name: 'Red Line',
-          modeId: 'lightRail',
-        }),
+          color: '#e5252a',
+          serviceIds: ['red-service'],
+        },
       ],
       stations: [
         aStation('west', [-115.18, 36.15], { wayId: road.id, t: 0.2 }, { name: 'West' }),
@@ -74,10 +61,16 @@ describe('lineStopsForService', () => {
       ].reverse(),
     });
 
-    expect(lineStopsForService(system, 'red')).toEqual([
+    expect(stopsForService(system, 'red-service')).toEqual([
+      { stationId: 'west', name: 'West' },
+      { stationId: 'east', name: 'East' },
+    ]);
+    expect(servicesForSidebarLine(system, 'red')).toEqual([
       {
-        patternId: 'main',
-        name: undefined,
+        serviceId: 'red-service',
+        name: 'red-service',
+        explicitName: 'red-service',
+        modeId: 'bus',
         stops: [
           { stationId: 'west', name: 'West' },
           { stationId: 'east', name: 'East' },
@@ -85,70 +78,116 @@ describe('lineStopsForService', () => {
       },
     ]);
   });
-});
 
-describe('networkCorridors', () => {
-  it('aggregates named infrastructure and excludes roads with no service', () => {
-    const trunkA = aRoad('trunk-a', [
+  it('includes calls served only by a split return path', () => {
+    const outward = aRoad('outward', [
       [-115.2, 36.15],
-      [-115.15, 36.15],
-    ]);
-    const trunkB = aRoad('trunk-b', [
-      [-115.15, 36.15],
       [-115.1, 36.15],
     ]);
-    const unrelated = aRoad('unrelated', [
-      [-115.2, 36.2],
-      [-115.1, 36.2],
+    const inbound = aRoad('inbound', [
+      [-115.1, 36.151],
+      [-115.2, 36.151],
     ]);
     const system = aSystem({
-      ways: [trunkA, trunkB, unrelated],
-      namedWays: [
-        { id: 'charleston', name: 'Charleston Boulevard', wayIds: ['trunk-a', 'trunk-b'] },
-      ],
+      ways: [outward, inbound],
       services: [
-        aService('red', [aPattern('main', [trunkA, trunkB], ['trunk-a', 'trunk-b'])], {
-          name: 'Red Line',
-        }),
+        aService('red-service', [
+          {
+            id: 'red-service',
+            sections: [
+              {
+                kind: 'split',
+                outbound: [
+                  {
+                    wayId: outward.id,
+                    direction: 'withPoints',
+                    extent: { kind: 'whole' },
+                    lane: { kind: 'auto' },
+                  },
+                ],
+                inbound: [
+                  {
+                    wayId: inbound.id,
+                    direction: 'withPoints',
+                    extent: { kind: 'whole' },
+                    lane: { kind: 'auto' },
+                  },
+                ],
+              },
+            ],
+          },
+        ]),
       ],
-      stations: [aStation('hub', [-115.15, 36.15], { wayId: 'trunk-a', t: 1 }, { name: 'Hub' })],
+      lines: [{ id: 'red', name: 'Red', color: '#e5252a', serviceIds: ['red-service'] }],
+      stations: [
+        aStation('out-stop', [-115.18, 36.15], { wayId: outward.id, t: 0.2 }, { name: 'Out' }),
+        aStation(
+          'return-stop',
+          [-115.18, 36.151],
+          { wayId: inbound.id, t: 0.8 },
+          { name: 'Return' },
+        ),
+      ],
     });
 
-    expect(networkCorridors(system)).toEqual([
-      {
-        id: 'named:charleston',
-        label: 'Charleston Boulevard',
-        typeId: 'road',
-        wayIds: ['trunk-a', 'trunk-b'],
-        serviceIds: ['red'],
-        stationIds: ['hub'],
-      },
+    expect(stopsForService(system, 'red-service').map((stop) => stop.name)).toEqual([
+      'Out',
+      'Return',
     ]);
   });
 
-  it('keeps a service-carrying way without a named identity as a fallback corridor', () => {
-    const track = aRoad(
-      'airport-track',
+  it('includes an inbound call skipped only on the outbound run of a shared path', () => {
+    const road = aRoad('shared', [
+      [-115.2, 36.15],
+      [-115.1, 36.15],
+    ]);
+    const service = aService('red-service', [aPattern('red-service', [road], [road.id])]);
+    service.path.skippedStops = { outbound: ['middle'] };
+    const system = aSystem({
+      ways: [road],
+      services: [service],
+      lines: [{ id: 'red', name: 'Red', color: '#e5252a', serviceIds: ['red-service'] }],
+      stations: [
+        aStation('middle', [-115.15, 36.15], { wayId: road.id, t: 0.5 }, { name: 'Middle' }),
+      ],
+    });
+
+    expect(stopsForService(system, 'red-service')).toEqual([
+      { stationId: 'middle', name: 'Middle' },
+    ]);
+  });
+
+  it('groups physical ways into infrastructure families without inventing corridors', () => {
+    const road = aRoad('road', [
+      [-115.2, 36.1],
+      [-115.1, 36.1],
+    ]);
+    const rail = aRoad(
+      'rail',
       [
-        [-115.16, 36.1],
-        [-115.14, 36.08],
+        [-115.2, 36.2],
+        [-115.1, 36.2],
       ],
       { typeId: 'lightRail' },
     );
-    const system = aSystem({
-      ways: [track],
-      services: [aService('airport', [aPattern('main', [track], [track.id])])],
-    });
+    const sections = infrastructureSections(
+      aSystem({
+        ways: [road, rail],
+        namedWays: [
+          { id: 'road-name', name: 'Main Street', wayIds: [road.id] },
+          { id: 'rail-name', name: 'Silver Track', wayIds: [rail.id] },
+        ],
+      }),
+    );
 
-    expect(networkCorridors(system)).toEqual([
-      {
-        id: 'way:airport-track',
-        label: 'Light rail / tram',
-        typeId: 'lightRail',
-        wayIds: ['airport-track'],
-        serviceIds: ['airport'],
-        stationIds: [],
-      },
+    expect(
+      sections.map((section) => [
+        section.title,
+        section.items.map((item) => [item.name, item.wayIds]),
+      ]),
+    ).toEqual([
+      ['Roads', [['Main Street', ['road']]]],
+      ['Railways and guideways', [['Silver Track', ['rail']]]],
     ]);
   });
 });

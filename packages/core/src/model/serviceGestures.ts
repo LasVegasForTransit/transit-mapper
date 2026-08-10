@@ -9,6 +9,7 @@ import {
   resolveWayPath,
 } from './geo';
 import { anchorOnWay, routeBetween, type RouteSpan } from './routeGraph';
+import { servicePattern } from './line-service';
 import type { PatternPosition } from './serviceEdits';
 import type { LngLat, Node, Pattern, TransitSystem, Way } from './system';
 
@@ -50,7 +51,7 @@ function isInteriorOutboundPosition(pattern: Pattern, position: PatternPosition)
   if (position.patternId !== pattern.id || position.run !== 'outbound') return false;
   const run = patternRunLegs(pattern, 'outbound');
   const entry = run[position.legIndex];
-  if (!entry || entry.leg.wayId !== position.wayId) return false;
+  if (entry?.leg.wayId !== position.wayId) return false;
   const [lo, hi] = legRange(entry.leg);
   const startT = entry.forward ? lo : hi;
   const endT = entry.forward ? hi : lo;
@@ -179,11 +180,11 @@ function terminusAnchor(
   source: TerminusGestureSource,
 ): { way: Way; coord: LngLat } | null {
   const service = system.services.find((candidate) => candidate.id === source.serviceId);
-  const pattern = service?.patterns.find((candidate) => candidate.id === source.patternId);
+  const pattern = service?.id === source.patternId ? servicePattern(service) : undefined;
   if (!pattern) return null;
   const run = patternRunLegs(pattern, 'outbound');
   const entry = source.side === 'start' ? run[0] : run[run.length - 1];
-  const way = entry && system.ways.find((candidate) => candidate.id === entry.leg.wayId);
+  const way = entry ? system.ways.find((candidate) => candidate.id === entry.leg.wayId) : undefined;
   if (!entry || !way) return null;
   const [lo, hi] = legRange(entry.leg);
   const t = (source.side === 'start') === entry.forward ? lo : hi;
@@ -229,7 +230,7 @@ export function planTerminusGesture(
   target: TerminusGestureTarget,
 ): TerminusGesturePlan {
   const service = system.services.find((candidate) => candidate.id === source.serviceId);
-  const pattern = service?.patterns.find((candidate) => candidate.id === source.patternId);
+  const pattern = service?.id === source.patternId ? servicePattern(service) : undefined;
   const from = terminusAnchor(system, source);
   if (!service || !pattern || !from)
     return { kind: 'refuse', reason: 'missing-source', baseSystem: system, system, spans: [] };

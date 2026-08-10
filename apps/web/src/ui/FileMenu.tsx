@@ -20,7 +20,7 @@ export function FileMenu() {
   // value anyway). Read it imperatively instead.
   const store = useEditorStore();
   const readOnly = useEditor((s) => s.readOnly);
-  const { openDialog, openNewSystemLocation } = useUi();
+  const { openDialog, openNewSystemLocation, toggleUi, uiHidden } = useUi();
 
   return (
     <DropdownMenu
@@ -28,11 +28,12 @@ export function FileMenu() {
       trigger={
         <button
           type="button"
-          className="btn btn-plain icon-only"
+          className="btn btn-plain app-menu-trigger"
           title="TransitMapper menu"
           aria-label="TransitMapper menu"
         >
-          <Icon name="file" size={17} />
+          <Icon name="line" size={18} />
+          <Icon name="chevronDown" size={12} />
         </button>
       }
     >
@@ -60,6 +61,11 @@ export function FileMenu() {
           <DropdownMenuSeparator />
         </>
       )}
+      <DropdownMenuItem onSelect={toggleUi}>
+        <Icon name={uiHidden ? 'panelOpen' : 'sidebar'} size={17} />
+        {uiHidden ? 'Show interface' : 'Hide interface'}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
       <DropdownMenuItem onSelect={() => openDialog('about')}>
         <span className="dropdown-menu-icon-spacer" aria-hidden="true" /> About TransitMapper…
       </DropdownMenuItem>

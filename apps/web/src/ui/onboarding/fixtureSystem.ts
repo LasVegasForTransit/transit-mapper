@@ -114,10 +114,8 @@ const busPattern: Pattern = {
 
 const busService: Service = {
   id: 'onboarding-bus-service',
-  name: 'Crosstown',
   modeId: 'bus',
-  color: LINE_COLORS[0],
-  patterns: [busPattern],
+  path: { id: 'service-bus', sections: busPattern.sections },
   frequencyMinutes: 10,
 };
 
@@ -128,10 +126,8 @@ const railPattern: Pattern = {
 
 const railService: Service = {
   id: 'onboarding-rail-service',
-  name: 'Valley Line',
   modeId: 'lightRail',
-  color: LINE_COLORS[1],
-  patterns: [railPattern],
+  path: { id: 'service-rail', sections: railPattern.sections },
   frequencyMinutes: 12,
 };
 
@@ -143,6 +139,20 @@ export const ONBOARDING_FIXTURE_SYSTEM: TransitSystem = {
   name: 'Community network',
   ways: [roadA, roadB, railSpine],
   stations,
+  lines: [
+    {
+      id: 'onboarding-bus-line',
+      name: 'Crosstown',
+      color: LINE_COLORS[0],
+      serviceIds: [busService.id],
+    },
+    {
+      id: 'onboarding-rail-line',
+      name: 'Valley Line',
+      color: LINE_COLORS[1],
+      serviceIds: [railService.id],
+    },
+  ],
   services: [busService, railService],
   nodes: [junctionNode],
 };
@@ -157,8 +167,8 @@ const stats = serviceStats(
   busService,
   busService.frequencyMinutes,
 );
-const animatedPattern = stats?.patterns[0];
-if (!animatedPattern || !animatedPattern.plan) {
+const animatedPattern = stats?.path;
+if (!animatedPattern?.plan) {
   throw new Error('Onboarding fixture pattern failed to measure — check fixtureSystem.ts');
 }
 
@@ -172,7 +182,7 @@ if (!animatedPattern || !animatedPattern.plan) {
 export const ONBOARDING_PATTERN_STATS = animatedPattern;
 export const ONBOARDING_INBOUND_CUM_LENGTHS = cumulativeLengths(animatedPattern.inboundPath);
 export const ONBOARDING_VEHICLE_PROFILE = effectiveVehicleKind([], busService).profile;
-export const ONBOARDING_SERVICE_COLOR = busService.color;
+export const ONBOARDING_SERVICE_COLOR = LINE_COLORS[0];
 
 /** The preview keeps one system connected across the sequence. Infrastructure
  *  hides its service overlay so the roads, tracks, and junction are legible

@@ -3,7 +3,7 @@ import type { Facility } from './facility';
 import type { Group } from './group';
 import type { NamedWay, Median } from './namedWay';
 import type { ApproachControl, Node, TurnRestriction } from './node';
-import type { Service } from './service';
+import type { Line, Service } from './service';
 import type { Station } from './station';
 import type { DrivingSide, Viewport } from './valueTypes';
 import type { VehicleKind } from './vehicleKind';
@@ -11,7 +11,7 @@ import type { Way } from './way';
 
 export interface TransitSystem {
   /** Schema version, for migrations. */
-  version: 14;
+  version: 15;
   id: string;
   name: string;
   description?: string;
@@ -19,6 +19,7 @@ export interface TransitSystem {
   createdAt: number;
   updatedAt: number;
   ways: Way[];
+  lines: Line[];
   services: Service[];
   stations: Station[];
   facilities: Facility[];

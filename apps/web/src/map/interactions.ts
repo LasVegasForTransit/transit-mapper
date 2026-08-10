@@ -39,6 +39,7 @@ import { facilityType, mode } from '@transitmapper/core/model/catalog';
 import { profileWidthM } from '@transitmapper/core/model/profile';
 import { anchorOnWay, routePath } from '@transitmapper/core/model/routeGraph';
 import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
+import { lineForService, servicePattern } from '@transitmapper/core/model/line-service';
 import {
   planTerminusGesture,
   type TerminusGesturePlan,
@@ -150,6 +151,20 @@ interface MarqueeProbe {
 }
 
 type MarqueeCollector = (probe: MarqueeProbe, system: TransitSystem) => MultiSelectItem[];
+
+function publicLineTarget(
+  state: EditorState,
+  target: MultiSelectItem,
+  hasExplicitTerminus: boolean,
+): MultiSelectItem {
+  if (hasExplicitTerminus || target.kind !== 'service') return target;
+  const line = lineForService(state.system, target.id);
+  if (!line) return target;
+  const lineIsActive =
+    state.multiSelection.some((item) => item.kind === 'line' && item.id === line.id) ||
+    (state.selection?.kind === 'line' && state.selection.id === line.id);
+  return lineIsActive ? { kind: 'line', id: line.id } : target;
+}
 
 export interface TerminusConnectionChoice {
   x: number;
@@ -1153,7 +1168,7 @@ export function attachInteractions(
         : station?.platforms?.find((p) => p.id === platformId)?.points[index];
     const apply = (coord: LngLat) => {
       if (kind === 'footprint') store.getState().moveFootprintPoint(stationId, index, coord);
-      else store.getState().movePlatformPoint(stationId, platformId!, index, coord);
+      else if (platformId) store.getState().movePlatformPoint(stationId, platformId, index, coord);
     };
     let moved = false;
     const throttled = rafThrottle(apply);
@@ -1317,11 +1332,15 @@ export function attachInteractions(
    *  A box dragged over one boulevard covers the street and every service on
    *  it; which of those you meant is what picking up the tool already said,
    *  so nothing here has to guess. */
-  const collectServices: MarqueeCollector = ({ pathInBox }, system) => {
+  const collectLines: MarqueeCollector = ({ pathInBox }, system) => {
     const items: MultiSelectItem[] = [];
-    for (const service of system.services) {
-      if (service.patterns.some((p) => pathInBox(patternPath(system.ways, p))))
-        items.push({ kind: 'service', id: service.id });
+    const servicesById = new Map(system.services.map((service) => [service.id, service]));
+    for (const line of system.lines) {
+      const touched = line.serviceIds.some((serviceId) => {
+        const service = servicesById.get(serviceId);
+        return !!service && pathInBox(patternPath(system.ways, servicePattern(service)));
+      });
+      if (touched) items.push({ kind: 'line', id: line.id });
     }
     return items;
   };
@@ -1577,7 +1596,7 @@ export function attachInteractions(
         extendAtStart = resume.end === 'start';
         st.resumeWay(wayId);
         const ridingService = st.system.services.find((sv) =>
-          sv.patterns.some((p) => patternLegs(p).some((l) => l.wayId === wayId)),
+          patternLegs(servicePattern(sv)).some((leg) => leg.wayId === wayId),
         );
         st.select(
           ridingService ? { kind: 'service', id: ridingService.id } : { kind: 'way', id: wayId },
@@ -2154,7 +2173,9 @@ export function attachInteractions(
         .system.services.find((service) => service.id === source.serviceId);
       setSharingPreview(
         coords.length >= 2 ? [coords] : [],
-        sourceService?.color ?? store.getState().draftColor,
+        (sourceService
+          ? lineForService(store.getState().system, sourceService.id)?.color
+          : undefined) ?? store.getState().draftColor,
       );
       setEndpointHint(coords.at(-1) ?? null);
       publishPointerIntent(ev, undefined, true);
@@ -2417,17 +2438,19 @@ export function attachInteractions(
             // its (often-hidden) bare WAY_LAYERS one — try both, same as a
             // plain click's own hit-testing does.
             //
-            // And resolve it to the same THING a plain click would: clicking a
-            // line selects the service, so shift-clicking one has to add the
-            // service. It used to add the way underneath instead, which meant
-            // shift-clicking two visible transit lines produced two streets
-            // and no way to act on the lines at all.
+            // And resolve it to the same public identity a plain first click
+            // would: shift-clicking two visible transit lines produces two
+            // Lines, not two technical Services or the streets beneath them.
             const wayHit = featureAt(e, WAY_LAYERS);
             const serviceHit = wayHit ? undefined : featureAt(e, SERVICE_LAYERS);
             const serviceId = serviceHit?.properties.serviceId as string | undefined;
             const wayId = wayHit ? (wayHit.properties.id as string) : undefined;
-            if (serviceId) st.extendSelection({ kind: 'service', id: serviceId });
-            else if (wayId) st.extendSelection({ kind: 'way', id: wayId });
+            if (serviceId) {
+              const line = lineForService(st.system, serviceId);
+              st.extendSelection(
+                line ? { kind: 'line', id: line.id } : { kind: 'service', id: serviceId },
+              );
+            } else if (wayId) st.extendSelection({ kind: 'way', id: wayId });
             // Truly empty space under the cursor — rubber-band select
             // instead of toggling a single (nonexistent) target.
             else startMarqueeSelect(e, collectInfrastructure);
@@ -2480,7 +2503,7 @@ export function attachInteractions(
         // two apart is the whole reason this tool exists — a box over a
         // boulevard would otherwise have to guess between the street and the
         // eleven routes on it.
-        startMarqueeSelect(e, collectServices);
+        startMarqueeSelect(e, collectLines);
         break;
       }
       case 'way':
@@ -2599,10 +2622,14 @@ export function attachInteractions(
         } else if (WAY_LAYERS.includes(hit.layer.id)) {
           st.select({ kind: 'way', id: hit.properties.id as string });
         } else {
-          // A service line. Click to select the service; click it again to add a
-          // control point to the way it runs on.
+          // A rendered Service belongs to a public Line. The first click stays
+          // at that understandable public identity; clicking the same Line
+          // again deliberately descends to its technical Service. In
+          // Infrastructure, one further click on that selected Service edits
+          // the physical way beneath it.
           const serviceId = hit.properties.serviceId as string;
           const wayId = hit.properties.wayId as string;
+          const line = lineForService(st.system, serviceId);
           if (
             !opts.isNetworkMode() &&
             st.selection?.kind === 'service' &&
@@ -2613,6 +2640,10 @@ export function attachInteractions(
               st.insertWayPoint(wayId, insertIndexOnPolygon(way.points, e.point), coord);
               st.formCrossingJunctions(wayId);
             }
+          } else if (line && st.selection?.kind === 'line' && st.selection.id === line.id) {
+            st.select({ kind: 'service', id: serviceId });
+          } else if (line) {
+            st.select({ kind: 'line', id: line.id });
           } else {
             st.select({ kind: 'service', id: serviceId });
           }
@@ -2677,7 +2708,7 @@ export function attachInteractions(
       const anchor =
         hit.geometry.type === 'Point' ? (hit.geometry.coordinates as LngLat) : lngLatOf(e);
       const service = st.system.services.find((candidate) => candidate.id === serviceId);
-      const pattern = service?.patterns.find((candidate) => candidate.id === patternId);
+      const pattern = service && service.id === patternId ? servicePattern(service) : undefined;
       const run = 'outbound' as const;
       const runLegs = pattern ? patternRunLegs(pattern, run) : [];
       const legIndex = side === 'start' ? 0 : runLegs.length - 1;
@@ -2714,7 +2745,7 @@ export function attachInteractions(
     }
     const { serviceId, patternId, run, legIndex } = hit.properties;
     const service = st.system.services.find((candidate) => candidate.id === serviceId);
-    const pattern = service?.patterns.find((candidate) => candidate.id === patternId);
+    const pattern = service && service.id === patternId ? servicePattern(service) : undefined;
     const leg =
       pattern && (run === 'outbound' || run === 'inbound') && typeof legIndex === 'number'
         ? patternRunLegs(pattern, run)[legIndex]
@@ -2763,8 +2794,10 @@ export function attachInteractions(
       st.clearMultiSelection();
       return;
     }
-    const { target, serviceHit, corridorHit, anchor } = hit;
+    let { target } = hit;
+    const { serviceHit, corridorHit, anchor } = hit;
     const terminus = featureAt(e, [LYR_SERVICE_TERMINI_HIT]);
+    target = publicLineTarget(st, target, Boolean(terminus));
     // A terminus owns its menu: its side-aware conversion cannot safely share
     // a two-service merge group. Service-body right-clicks retain the ordinary
     // multi-select behavior below.

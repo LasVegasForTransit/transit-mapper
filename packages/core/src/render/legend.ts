@@ -11,7 +11,13 @@ export interface LegendEntry {
  *  SVG markup builder, and the Worker's preview renderer so all three show
  *  the same legend. */
 export function legendEntriesFor(system: TransitSystem, view: ViewOptions): LegendEntry[] {
-  return system.services
-    .filter((sv) => view.visibleModes.has(sv.modeId))
-    .map((sv) => ({ color: sv.color, label: sv.name || 'Unnamed line' }));
+  const serviceById = new Map(system.services.map((service) => [service.id, service]));
+  return system.lines
+    .filter((line) =>
+      line.serviceIds.some((serviceId) => {
+        const service = serviceById.get(serviceId);
+        return service ? view.visibleModes.has(service.modeId) : false;
+      }),
+    )
+    .map((line) => ({ color: line.color, label: line.name || 'Unnamed line' }));
 }

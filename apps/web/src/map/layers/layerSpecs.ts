@@ -1,4 +1,4 @@
-import type { LayerSpecification } from 'maplibre-gl';
+import type { ExpressionSpecification, LayerSpecification } from 'maplibre-gl';
 import {
   FOOTPRINT_FILL_OPACITY,
   PLATFORM_FILL_OPACITY,
@@ -93,15 +93,14 @@ import {
   SRC_WAY_LABELS,
 } from './constants';
 
+const HOVERED_FEATURE: ExpressionSpecification = [
+  'any',
+  ['boolean', ['feature-state', 'hover'], false],
+  ['boolean', ['feature-state', 'outlineHover'], false],
+];
+
 export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
   return [
-    // Paint order, bottom-up: reference landmarks first (fixed context, not
-    // system data — must sit under everything the user actually draws), then
-    // the lane-detail STREET SURFACE (junction fills + lane asphalt +
-    // markings — it's the ground), then station/complex footprints and
-    // platforms ON TOP of it (a station area overlays the road it straddles —
-    // painting streets later buried footprints, the "station boundaries are
-    // invisible" bug), then ways/services/stations above those.
     {
       // Hand-placed reference points (the Strip, UNLV, downtown, the airport,
       // …) — static context, not user data (see map/landmarks.ts). Muted and
@@ -299,7 +298,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
           'case',
           ['boolean', ['feature-state', 'selected'], false],
           0.18,
-          ['boolean', ['feature-state', 'hover'], false],
+          HOVERED_FEATURE,
           0.1,
           0,
         ],
@@ -399,7 +398,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
           'case',
           ['boolean', ['feature-state', 'selected'], false],
           0.18,
-          ['boolean', ['feature-state', 'hover'], false],
+          HOVERED_FEATURE,
           0.1,
           0,
         ],
@@ -534,7 +533,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
           'case',
           ['boolean', ['feature-state', 'selected'], false],
           0.18,
-          ['boolean', ['feature-state', 'hover'], false],
+          HOVERED_FEATURE,
           0.1,
           0,
         ],
@@ -840,7 +839,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
           'case',
           ['boolean', ['feature-state', 'selected'], false],
           0.18,
-          ['boolean', ['feature-state', 'hover'], false],
+          HOVERED_FEATURE,
           0.1,
           0,
         ],

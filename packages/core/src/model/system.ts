@@ -16,3 +16,4 @@ export * from './system/facility';
 export * from './system/group';
 export * from './system/vehicleKind';
 export * from './system/document';
+export * from './line-service';

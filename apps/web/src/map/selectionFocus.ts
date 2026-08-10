@@ -48,78 +48,109 @@ function memberCoords(system: TransitSystem, memberIds: string[]): LngLat[] {
       );
     const w = system.ways.find((w) => w.id === id);
     if (w) coords.push(...resolveWayPath(w));
+    const line = system.lines.find((candidate) => candidate.id === id);
+    const serviceIds = line ? new Set(line.serviceIds) : new Set([id]);
+    const wayIds = new Set(
+      system.services
+        .filter((service) => serviceIds.has(service.id))
+        .flatMap((service) => serviceWayIds(service)),
+    );
+    coords.push(
+      ...system.ways.filter((way) => wayIds.has(way.id)).flatMap((way) => resolveWayPath(way)),
+    );
   }
   return coords;
 }
 
+function focusBounds(coords: LngLat[], needsInfrastructureView: boolean): SelectionFocus | null {
+  const bounds = bboxOf(coords);
+  return bounds ? { bounds, needsInfrastructureView } : null;
+}
+
+function wayFocus(system: TransitSystem, id: string, relatedIds?: string[]): SelectionFocus | null {
+  const selectedWayIds = new Set(relatedIds ?? [id]);
+  const coords = system.ways
+    .filter((way) => selectedWayIds.has(way.id))
+    .flatMap((way) => resolveWayPath(way));
+  const served = system.services.some((service) =>
+    serviceWayIds(service).some((wayId) => selectedWayIds.has(wayId)),
+  );
+  return focusBounds(coords, !served);
+}
+
+function serviceFocus(system: TransitSystem, id: string, stopId?: string): SelectionFocus | null {
+  const station = stopId ? system.stations.find((candidate) => candidate.id === stopId) : undefined;
+  if (station) return focusBounds([station.coord], false);
+  const service = system.services.find((candidate) => candidate.id === id);
+  if (!service) return null;
+  const wayIds = new Set(serviceWayIds(service));
+  return focusBounds(
+    system.ways.filter((way) => wayIds.has(way.id)).flatMap((way) => resolveWayPath(way)),
+    false,
+  );
+}
+
+function lineFocus(system: TransitSystem, id: string): SelectionFocus | null {
+  const line = system.lines.find((candidate) => candidate.id === id);
+  if (!line) return null;
+  const serviceIds = new Set(line.serviceIds);
+  const wayIds = new Set(
+    system.services
+      .filter((service) => serviceIds.has(service.id))
+      .flatMap((service) => serviceWayIds(service)),
+  );
+  return focusBounds(
+    system.ways.filter((way) => wayIds.has(way.id)).flatMap((way) => resolveWayPath(way)),
+    false,
+  );
+}
+
+function groupFocus(system: TransitSystem, id: string): SelectionFocus | null {
+  const group = system.groups.find((candidate) => candidate.id === id);
+  if (!group) return null;
+  return group.footprint
+    ? focusBounds(group.footprint, true)
+    : focusBounds(memberCoords(system, group.memberIds), false);
+}
+
+function nodeFocus(system: TransitSystem, id: string): SelectionFocus | null {
+  const node = system.nodes.find((candidate) => candidate.id === id);
+  if (!node) return null;
+  const pad = 0.0012;
+  return {
+    bounds: [
+      [node.coord[0] - pad, node.coord[1] - pad],
+      [node.coord[0] + pad, node.coord[1] + pad],
+    ],
+    needsInfrastructureView: true,
+  };
+}
+
 export function selectionFocus(system: TransitSystem, selection: Selection): SelectionFocus | null {
   if (!selection) return null;
-
   switch (selection.kind) {
     case 'station': {
-      const st = system.stations.find((s) => s.id === selection.id);
-      if (!st) return null;
-      const bounds = bboxOf([st.coord, ...(st.footprint ?? [])]);
-      return bounds ? { bounds, needsInfrastructureView: false } : null;
+      const station = system.stations.find((candidate) => candidate.id === selection.id);
+      return station ? focusBounds([station.coord, ...(station.footprint ?? [])], false) : null;
     }
     case 'facility': {
-      const f = system.facilities.find((f) => f.id === selection.id);
-      if (!f) return null;
-      const coords = Array.isArray(f.geometry[0])
-        ? (f.geometry as LngLat[])
-        : [f.geometry as LngLat];
-      const bounds = bboxOf(coords);
-      // Facilities only ever render in the Infrastructure view.
-      return bounds ? { bounds, needsInfrastructureView: true } : null;
+      const facility = system.facilities.find((candidate) => candidate.id === selection.id);
+      if (!facility) return null;
+      const coords = Array.isArray(facility.geometry[0])
+        ? (facility.geometry as LngLat[])
+        : [facility.geometry as LngLat];
+      return focusBounds(coords, true);
     }
-    case 'way': {
-      const w = system.ways.find((w) => w.id === selection.id);
-      if (!w) return null;
-      const bounds = bboxOf(resolveWayPath(w));
-      if (!bounds) return null;
-      // A way's OWN line only ever renders in Infrastructure — but a
-      // SERVED way's riding service(s) get the same selection highlight too
-      // (see buildFeatures), so Network already shows something there.
-      const served = system.services.some((sv) => serviceWayIds(sv).includes(w.id));
-      return { bounds, needsInfrastructureView: !served };
-    }
-    case 'service': {
-      const svc = system.services.find((sv) => sv.id === selection.id);
-      if (!svc) return null;
-      const wayIds = serviceWayIds(svc);
-      const coords = system.ways
-        .filter((w) => wayIds.includes(w.id))
-        .flatMap((w) => resolveWayPath(w));
-      const bounds = bboxOf(coords);
-      return bounds ? { bounds, needsInfrastructureView: false } : null;
-    }
-    case 'group': {
-      const g = system.groups.find((g) => g.id === selection.id);
-      if (!g) return null;
-      if (g.footprint) {
-        const bounds = bboxOf(g.footprint);
-        return bounds ? { bounds, needsInfrastructureView: true } : null;
-      }
-      // A plain (footprint-less) group has no shape of its own — frame
-      // whatever it bundles instead; no view is forced since members can be
-      // any kind, and most render fine in Network too.
-      const bounds = bboxOf(memberCoords(system, g.memberIds));
-      return bounds ? { bounds, needsInfrastructureView: false } : null;
-    }
-    case 'node': {
-      const n = system.nodes.find((n) => n.id === selection.id);
-      if (!n) return null;
-      // A tight box around the junction; footprints only render in
-      // Infrastructure at lane-detail zooms.
-      const pad = 0.0012;
-      return {
-        bounds: [
-          [n.coord[0] - pad, n.coord[1] - pad],
-          [n.coord[0] + pad, n.coord[1] + pad],
-        ],
-        needsInfrastructureView: true,
-      };
-    }
+    case 'way':
+      return wayFocus(system, selection.id, selection.relatedIds);
+    case 'service':
+      return serviceFocus(system, selection.id, selection.stopId);
+    case 'line':
+      return lineFocus(system, selection.id);
+    case 'group':
+      return groupFocus(system, selection.id);
+    case 'node':
+      return nodeFocus(system, selection.id);
     default:
       return null;
   }

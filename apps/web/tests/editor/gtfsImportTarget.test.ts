@@ -15,13 +15,14 @@ describe('streaming GTFS import ownership', () => {
       pieces: {
         ways: [],
         stations: [],
+        lines: [],
         services: [
           {
             id: 'late-service',
             name: 'Late service',
             modeId: 'bus',
-            color: '#000000',
-            patterns: [],
+
+            path: { id: 'late-service', sections: [] },
           },
         ],
       },
