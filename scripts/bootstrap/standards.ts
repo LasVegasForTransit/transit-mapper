@@ -6,23 +6,14 @@
  * them. Changing the standard means editing this file, not the phase.
  */
 
-import { CONTRIBUTION_METADATA_STATUS } from '../../packages/github-metadata/src/validation.ts';
-
-// Shared with the metadata workflow and its repository contract test. It is
-// added to the live required checks only after the foundation workflow has
-// reported successfully on a canary pull request.
-export { CONTRIBUTION_METADATA_STATUS };
-
-export const REQUIRED_STATUS_CHECKS = [
-  { context: 'Validate' },
-  { context: CONTRIBUTION_METADATA_STATUS },
-] as const;
+export const REQUIRED_STATUS_CHECKS = [{ context: 'Validate' }] as const;
 
 /** Rules on the default branch, as a GitHub repository ruleset. */
 export const BRANCH_RULESET = {
   name: 'org-standard',
   target: 'branch',
   enforcement: 'active',
+  bypass_actors: [],
   conditions: { ref_name: { include: ['~DEFAULT_BRANCH'], exclude: [] } },
   rules: [
     // The branch cannot be deleted or force-pushed. These two make history

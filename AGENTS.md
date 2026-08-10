@@ -130,26 +130,33 @@ those.
 ## Agent configuration
 
 `.claude/` holds Claude-specific mechanism only: a hook that formats after an
-edit, and denied reads on secret-bearing paths. It introduces no rule that
-exists nowhere else. Delete the directory entirely and `pnpm check` accepts
-the same trees — CI proves that on every pull request, because CI has no
-agent. See [`.claude/README.md`](.claude/README.md).
+edit, denied reads on secret-bearing paths, and the generated adapter for the
+shared contribution plugin. Durable rules also live in repository checks or
+this portable file; the harness layer only stops unsafe actions earlier.
+See [`.claude/README.md`](.claude/README.md).
 
 ## Create GitHub issues and pull requests
 
-For ordinary creation, render and validate repository metadata through the
-noninteractive wrappers rather than constructing Markdown or calling
-`gh issue create` or `gh pr create` directly:
+Use the mandatory `github-contribution` skill from the pinned
+`lvbt-contributions` plugin whenever a user authorizes creating an issue or
+pull request. It carries the organization checklist, readable templates, and
+the only approved creation helper:
 
 ```bash
-pnpm github:create-issue --input <payload-json>
-pnpm github:create-pr --input <payload-json>
+node plugins/lvbt-contributions/scripts/github-create.mjs issue \
+  --type bug|feature --title <title> --body-file <file>
+node plugins/lvbt-contributions/scripts/github-create.mjs pr \
+  --title <title> --body-file <file> --base main
 ```
 
-Use `--dry-run --json` to inspect the rendered hidden-marker body without
-writing to GitHub. If a user explicitly requires another connector, render
-the same body through the wrapper's dry run, validate it with
-`pnpm github:validate`, create it through that connector, then re-fetch and
-validate what GitHub stored. The GitHub workflows remain authoritative; this
-agent rule only catches mistakes earlier. The payload schemas and policy are
-in [Contribution metadata](docs/development/reference/contribution-metadata.md).
+Preview with `--dry-run --json`, remove every bracketed prompt, and inspect the
+complete visible Markdown before creating anything. Do not call
+`gh issue create`, `gh pr create`, equivalent `gh api` routes, or connector
+creation tools directly. The helper creates through authenticated `gh`,
+re-fetches what GitHub stored, and returns the verified URL.
+
+Humans use the native organization issue forms and pull request template.
+Agents use the same visible structure; there are no hidden markers or
+GitHub-side prose checks. `pnpm check:repository-tooling` verifies that this
+repository still consumes the pinned organization release without shadowing
+its inherited templates.

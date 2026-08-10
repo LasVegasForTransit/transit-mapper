@@ -18,9 +18,8 @@ matching tag and GitHub release; the same workflow then runs the full CI
 checks, builds and attests a deployment archive, applies pending D1 migrations
 from it, deploys its exact Worker and web files, and smoke-tests the live site.
 Because GitHub suppresses pull-request events created by a workflow token, the
-release job publishes both required commit statuses on the generated branch
-itself: it validates the automation exemption for `Contribution metadata` and
-dispatches the shared `Validate` workflow.
+release job explicitly dispatches the shared `Validate` workflow on the
+generated branch.
 
 Ordinary feature merges therefore do not deploy immediately. They accumulate
 in the generated release pull request until that pull request is merged. Do

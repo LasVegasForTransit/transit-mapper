@@ -55,11 +55,7 @@
     "gen:checks": "tsx scripts/generate-checks-reference.ts",
     "check:reference": "tsx scripts/generate-checks-reference.ts --check",
     "check:documents": "tsx scripts/check-document-standards.ts",
-    "check:github-metadata": "tsx scripts/check-github-metadata.ts",
-    "github:validate": "tsx packages/github-metadata/src/validate-cli.ts",
-    "github:create-issue": "tsx packages/github-metadata/src/create-issue-cli.ts",
-    "github:create-pr": "tsx packages/github-metadata/src/create-pr-cli.ts",
-    "github:reconcile-issue": "tsx packages/github-metadata/src/reconcile-issue-cli.ts",
+    "check:repository-tooling": "tsx scripts/check-repository-tooling.ts",
     "typecheck:root": "tsc -b tsconfig.json --noEmit"
   },
   "devDependencies": {

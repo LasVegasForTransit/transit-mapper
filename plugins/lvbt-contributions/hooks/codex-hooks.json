@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|mcp__github__create_issue|mcp__github__create_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $PLUGIN_ROOT/hooks/codex-pre-tool-use.mjs",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
