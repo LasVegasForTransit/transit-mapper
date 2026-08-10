@@ -1,10 +1,9 @@
-import { createEmptySystem } from '@transitmapper/core/model/serialize';
-import { defaultProfileFor } from '@transitmapper/core/model/profile';
-import { cumulativeLengths, oneSection, pointAtT, wholeLeg } from '@transitmapper/core/model/geo';
 import { LINE_COLORS } from '@transitmapper/core/model/catalog';
-import { effectiveVehicleKind, serviceStats } from '@transitmapper/core/sim/serviceStats';
-import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
+import { cumulativeLengths, oneSection, pointAtT, wholeLeg } from '@transitmapper/core/model/geo';
+import { defaultProfileFor } from '@transitmapper/core/model/profile';
+import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type {
+  LngLat,
   Node,
   Pattern,
   Service,
@@ -12,181 +11,386 @@ import type {
   TransitSystem,
   Way,
 } from '@transitmapper/core/model/system';
+import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
+import {
+  effectiveVehicleKind,
+  serviceStats,
+  type PatternStats,
+} from '@transitmapper/core/sim/serviceStats';
+import type { VehicleMotionProfile } from '@transitmapper/core/sim/timetable';
 
-// A tiny, hand-built system for the onboarding dialog's live previews — never
-// saved, never shown to buildFeatures' callers as anything but a picture.
-// Built from plain object literals plus real model helpers (defaultProfileFor,
-// oneSection/wholeLeg), not @transitmapper/core/testing/fixtures builders:
-// those exist for tests, and importing a testing module into a shipped
-// feature would be a layering violation the rest of the codebase doesn't have.
+// Port Mason is deliberately place-shaped rather than geographically neutral.
+// A river divides two differently sized street grids, one bridge constrains
+// Crosstown, and the rail service has to leave a former freight alignment to
+// reach the downtown transfer. It is still a small early proposal: two
+// services and one branch decision, not a finished metropolitan network.
 
-const CROSSING: [number, number] = [-115.176, 36.13];
+const WEST_X = [-122.49, -122.478, -122.466] as const;
+const EAST_X = [-122.446, -122.434, -122.422] as const;
+const STREET_Y = [37.738, 37.748, 37.758, 37.768] as const;
+const CROSSTOWN_ROW = 2;
 
-// Two roads crossing at CROSSING, sharing that exact coordinate as a control
-// point on both — the same shape the editor's own junction-splitting leaves
-// behind, so the Infrastructure preview shows a real junction, not two lines
-// that happen to overlap.
-const roadA: Way = {
-  id: 'onboarding-road-a',
-  typeId: 'road',
-  points: [[-115.1815, 36.1287], CROSSING, [-115.1705, 36.1318]],
-  geometry: 'straight',
-  grade: 'atGrade',
-  profile: defaultProfileFor('road'),
-};
-
-const roadB: Way = {
-  id: 'onboarding-road-b',
-  typeId: 'road',
-  points: [[-115.1776, 36.1255], CROSSING, [-115.1744, 36.1345]],
-  geometry: 'straight',
-  grade: 'atGrade',
-  profile: defaultProfileFor('road'),
-};
-
-// A light-rail spine crosses the bus route at Central. Its geographic bends
-// are deliberate: Network follows the actual corridor while Diagram snaps it
-// into a schematic, so the final comparison teaches a visible difference.
-const railSpine: Way = {
-  id: 'onboarding-rail-spine',
-  typeId: 'lightRail',
-  points: [[-115.1752, 36.1245], CROSSING, [-115.1718, 36.1355]],
-  geometry: 'straight',
-  grade: 'atGrade',
-  profile: defaultProfileFor('lightRail'),
-};
-
-// Only the two ROADS share the junction. The rail spine runs through the same
-// coordinate without joining it: a junction is a lane graph, and a road and a
-// light-rail line have no lanes that feed each other, so the app refuses to
-// form one (see validate.ts's findMismatchedTypeJunctions). What the two of
-// them meeting really needs is a level crossing, which the model has no
-// primitive for yet.
-const junctionNode: Node = {
-  id: 'onboarding-junction',
-  coord: CROSSING,
-  refs: [
-    { wayId: roadA.id, pointIndex: 1 },
-    { wayId: roadB.id, pointIndex: 1 },
-  ],
-};
-
-function crossingT(way: Way): number {
-  const lengths = cumulativeLengths(way.points);
-  return lengths[1] / lengths[lengths.length - 1];
+function roadId(
+  bank: 'west' | 'east',
+  direction: 'horizontal' | 'vertical',
+  primary: number,
+  secondary: number,
+): string {
+  return `port-mason-road-${bank}-${direction}-${primary}-${secondary}`;
 }
 
-function stopOnWay(id: string, name: string, way: Way, t: number): Stop {
+function gridRoad(id: string, a: LngLat, b: LngLat): Way {
+  return {
+    id,
+    typeId: 'road',
+    points: [a, b],
+    geometry: 'straight',
+    grade: 'atGrade',
+    profile: defaultProfileFor('road'),
+    source: 'osm',
+  };
+}
+
+function bankRoads(bank: 'west' | 'east', xs: readonly number[]): Way[] {
+  const ways: Way[] = [];
+  for (let row = 0; row < STREET_Y.length; row++) {
+    for (let column = 0; column < xs.length - 1; column++) {
+      ways.push(
+        gridRoad(
+          roadId(bank, 'horizontal', row, column),
+          [xs[column], STREET_Y[row]],
+          [xs[column + 1], STREET_Y[row]],
+        ),
+      );
+    }
+  }
+  for (let column = 0; column < xs.length; column++) {
+    for (let row = 0; row < STREET_Y.length - 1; row++) {
+      ways.push(
+        gridRoad(
+          roadId(bank, 'vertical', column, row),
+          [xs[column], STREET_Y[row]],
+          [xs[column], STREET_Y[row + 1]],
+        ),
+      );
+    }
+  }
+  return ways;
+}
+
+const bridge: Way = gridRoad(
+  'port-mason-harbor-bridge',
+  [WEST_X[2], STREET_Y[CROSSTOWN_ROW]],
+  [EAST_X[0], STREET_Y[CROSSTOWN_ROW]],
+);
+const roadWays = [...bankRoads('west', WEST_X), ...bankRoads('east', EAST_X), bridge];
+
+const UNIVERSITY: LngLat = [EAST_X[0] + 0.002, STREET_Y[3] + 0.009];
+const FREIGHT_JUNCTION: LngLat = [EAST_X[0] + 0.002, STREET_Y[2] + 0.004];
+const CENTRAL: LngLat = [EAST_X[1], STREET_Y[CROSSTOWN_ROW]];
+const SOUTH_WORKS: LngLat = [EAST_X[0] + 0.002, STREET_Y[0] - 0.007];
+
+function railWay(id: string, points: LngLat[], imported: boolean): Way {
+  return {
+    id,
+    typeId: 'lightRail',
+    points,
+    geometry: 'straight',
+    // Grade separation lets the former freight alignment cross the street
+    // grid without pretending every crossing is a rail/road junction.
+    grade: 'elevated',
+    profile: defaultProfileFor('lightRail'),
+    ...(imported ? { source: 'osm' } : {}),
+  };
+}
+
+const railNorth = railWay('port-mason-rail-north-freight', [UNIVERSITY, FREIGHT_JUNCTION], true);
+const railDowntownLink = railWay(
+  'port-mason-rail-downtown-link',
+  [FREIGHT_JUNCTION, CENTRAL],
+  false,
+);
+const railSouth = railWay('port-mason-rail-south-freight', [CENTRAL, SOUTH_WORKS], true);
+const railWays = [railNorth, railDowntownLink, railSouth];
+
+function coordinateKey(coord: LngLat): string {
+  return `${coord[0]},${coord[1]}`;
+}
+
+/** The imported road grid is already physical infrastructure. Explicit road
+ * nodes make every block corner a real junction instead of a visual crossing.
+ * Rail refs stay out: the elevated track crosses roads but never feeds them. */
+function roadNodes(ways: Way[]): Node[] {
+  const refs = new Map<string, { coord: LngLat; refs: Node['refs'] }>();
+  for (const way of ways) {
+    for (let pointIndex = 0; pointIndex < way.points.length; pointIndex++) {
+      const coord = way.points[pointIndex];
+      const key = coordinateKey(coord);
+      const entry = refs.get(key) ?? { coord, refs: [] };
+      entry.refs.push({ wayId: way.id, pointIndex });
+      refs.set(key, entry);
+    }
+  }
+  return [...refs.values()]
+    .filter((entry) => entry.refs.length > 1)
+    .map((entry, index) => ({
+      id: `port-mason-road-node-${index}`,
+      coord: entry.coord,
+      refs: entry.refs,
+    }));
+}
+
+function stationOnWay(id: string, name: string, way: Way, t: number, majorStop = false): Station {
   return {
     id,
     name,
     coord: pointAtT(way.points, t),
     anchors: [{ wayId: way.id, t }],
+    ...(majorStop ? { majorStop: true } : {}),
   };
 }
 
-// Every stop is anchored to its corridor so Diagram carries it onto the
-// schematic geometry instead of leaving geographic stop dots floating beside
-// the straightened lines.
-const stops: Stop[] = [
-  stopOnWay('onboarding-stop-west', 'Westside', roadA, 0.18),
-  // Central sits where the train crosses the bus route, but it rides the BUS
-  // corridor only. Diagram keeps a stop on each corridor it is anchored to by
-  // straightening that corridor around it, and it can only hold two corridors
-  // together where they share a junction vertex — which a road and a rail
-  // line never do. Anchoring Central to both would leave the schematic
-  // drawing the train some 200 m away from its own stop.
-  {
-    id: 'onboarding-stop-transfer',
-    name: 'Central',
-    coord: CROSSING,
-    anchors: [{ wayId: roadA.id, t: crossingT(roadA) }],
-  },
-  stopOnWay('onboarding-stop-east', 'Eastside', roadA, 0.82),
-  stopOnWay('onboarding-stop-north', 'North', railSpine, 0.82),
-  stopOnWay('onboarding-stop-south', 'South', railSpine, 0.18),
-];
-
-const busPattern: Pattern = {
-  id: 'onboarding-bus-pattern',
-  sections: oneSection([wholeLeg(roadA.id)]),
-};
-
-const busService: Service = {
-  id: 'onboarding-bus-service',
-  modeId: 'bus',
-  path: { id: 'service-bus', sections: busPattern.sections },
-  frequencyMinutes: 10,
-};
-
-const railPattern: Pattern = {
-  id: 'onboarding-rail-pattern',
-  sections: oneSection([wholeLeg(railSpine.id)]),
-};
-
-const railService: Service = {
-  id: 'onboarding-rail-service',
-  modeId: 'lightRail',
-  path: { id: 'service-rail', sections: railPattern.sections },
-  frequencyMinutes: 12,
-};
-
-/** The one fixture system every onboarding slide's preview map renders —
- *  same data, different `viewMode` per slide. */
-export const ONBOARDING_FIXTURE_SYSTEM: TransitSystem = {
-  ...createEmptySystem(0),
-  id: 'onboarding-fixture',
-  name: 'Community network',
-  ways: [roadA, roadB, railSpine],
-  stops,
-  lines: [
-    {
-      id: 'onboarding-bus-line',
-      name: 'Crosstown',
-      color: LINE_COLORS[0],
-      serviceIds: [busService.id],
-    },
-    {
-      id: 'onboarding-rail-line',
-      name: 'Valley Line',
-      color: LINE_COLORS[1],
-      serviceIds: [railService.id],
-    },
-  ],
-  services: [busService, railService],
-  nodes: [junctionNode],
-};
-
-// The Crosstown bus is the one animated service. Select it explicitly instead
-// of relying on array position: this fixture deliberately contains multiple
-// services, and adding another should never silently change which one moves.
-const stats = serviceStats(
-  [roadA, roadB, railSpine],
-  stops,
-  [],
-  busService,
-  busService.frequencyMinutes,
-);
-const animatedPattern = stats?.path;
-if (!animatedPattern?.plan) {
-  throw new Error('Onboarding fixture pattern failed to measure — check fixtureSystem.ts');
+function findRoad(id: string): Way {
+  const way = roadWays.find((candidate) => candidate.id === id);
+  if (!way) throw new Error(`Missing Port Mason road ${id}`);
+  return way;
 }
 
-/** What slide 3's animation loop needs each frame: `runStateAt(simMs, ...)`
- *  for a vehicle position, then `pointAtDistance(path, cumLengths, distMeters)`
- *  for where to draw it. `runStateAt` reports which direction ("run") the
- *  vehicle is on; outbound and inbound are different geometry in general (a
- *  couplet's two directions ride different streets), so the caller needs
- *  both paths' arc lengths, not just the outbound one `PatternStats` already
- *  carries. */
-export const ONBOARDING_PATTERN_STATS = animatedPattern;
-export const ONBOARDING_INBOUND_CUM_LENGTHS = cumulativeLengths(animatedPattern.inboundPath);
-export const ONBOARDING_VEHICLE_PROFILE = effectiveVehicleKind([], busService).profile;
-export const ONBOARDING_SERVICE_COLOR = LINE_COLORS[0];
+const westFirst = findRoad(roadId('west', 'horizontal', CROSSTOWN_ROW, 0));
+const westSecond = findRoad(roadId('west', 'horizontal', CROSSTOWN_ROW, 1));
+const downtownTrunk = findRoad(roadId('east', 'horizontal', CROSSTOWN_ROW, 0));
+const eastgateBranch = findRoad(roadId('east', 'horizontal', CROSSTOWN_ROW, 1));
+const airportSouth = findRoad(roadId('east', 'vertical', 1, 1));
+const airportEast = findRoad(roadId('east', 'horizontal', 1, 1));
+const airportFinal = findRoad(roadId('east', 'vertical', 2, 0));
 
-/** The preview keeps one system connected across the sequence. Infrastructure
- *  hides its service overlay so the roads, tracks, and junction are legible
- *  rather than looking like a recolored copy of Network. */
+const commonCrosstownLegs = [
+  wholeLeg(westFirst.id),
+  wholeLeg(westSecond.id),
+  wholeLeg(bridge.id),
+  wholeLeg(downtownTrunk.id),
+];
+const eastgatePattern: Pattern = {
+  id: 'port-mason-crosstown-eastgate',
+  name: 'Eastgate',
+  sections: oneSection([...commonCrosstownLegs, wholeLeg(eastgateBranch.id)]),
+};
+const airportPattern: Pattern = {
+  id: 'port-mason-crosstown-airport',
+  name: 'Airport',
+  sections: oneSection([
+    ...commonCrosstownLegs,
+    wholeLeg(airportSouth.id, 'againstPoints'),
+    wholeLeg(airportEast.id),
+    wholeLeg(airportFinal.id, 'againstPoints'),
+  ]),
+};
+
+const crosstownService: Service = {
+  id: 'port-mason-crosstown',
+  name: 'Crosstown',
+  modeId: 'bus',
+  color: LINE_COLORS[0],
+  patterns: [eastgatePattern, airportPattern],
+  frequencyMinutes: 10,
+  spanStart: '06:00',
+  spanEnd: '23:00',
+};
+
+const harborPattern: Pattern = {
+  id: 'port-mason-harbor-line-pattern',
+  sections: oneSection([
+    wholeLeg(railNorth.id),
+    wholeLeg(railDowntownLink.id),
+    wholeLeg(railSouth.id),
+  ]),
+};
+const harborService: Service = {
+  id: 'port-mason-harbor-line',
+  name: 'Harbor Line',
+  modeId: 'lightRail',
+  color: LINE_COLORS[1],
+  patterns: [harborPattern],
+  frequencyMinutes: 12,
+  spanStart: '06:00',
+  spanEnd: '23:00',
+};
+
+const centralStation: Station = {
+  id: 'port-mason-central-exchange',
+  name: 'Central Exchange',
+  coord: CENTRAL,
+  majorStop: true,
+  anchors: [
+    { wayId: downtownTrunk.id, t: 1 },
+    { wayId: eastgateBranch.id, t: 0 },
+    { wayId: airportSouth.id, t: 1 },
+    { wayId: railDowntownLink.id, t: 1 },
+    { wayId: railSouth.id, t: 0 },
+  ],
+};
+
+const stations: Station[] = [
+  stationOnWay('port-mason-stop-west-market', 'West Market', westFirst, 0.2, true),
+  stationOnWay('port-mason-stop-civic-square', 'Civic Square', westSecond, 0.45),
+  stationOnWay('port-mason-stop-riverfront', 'Riverfront', bridge, 0.35),
+  stationOnWay('port-mason-stop-downtown', 'Downtown', downtownTrunk, 0.45),
+  centralStation,
+  stationOnWay('port-mason-stop-eastgate', 'Eastgate', eastgateBranch, 1, true),
+  stationOnWay('port-mason-stop-airport-road', 'Airport Road', airportEast, 0.55),
+  stationOnWay('port-mason-stop-airport', 'Port Mason Airport', airportFinal, 0, true),
+  stationOnWay('port-mason-stop-university', 'Port Mason University', railNorth, 0, true),
+  stationOnWay('port-mason-stop-midtown', 'Midtown', railNorth, 0.58),
+  stationOnWay('port-mason-stop-south-works', 'South Works', railSouth, 1, true),
+];
+
+/** The one valid domain system all four onboarding scenes project. */
+export const ONBOARDING_FIXTURE_SYSTEM: TransitSystem = {
+  ...createEmptySystem(0),
+  id: 'port-mason-onboarding-fixture',
+  name: 'Port Mason proposal',
+  viewport: { center: [-122.455, 37.755], zoom: 12.2 },
+  ways: [...roadWays, ...railWays],
+  stations,
+  services: [crosstownService, harborService],
+  nodes: roadNodes(roadWays),
+};
+
+/** Slide 1 reaches the first legible proposal, before the airport branch and
+ * rail idea appear. It is a projection of the same stable records, not a
+ * second hand-drawn illustration format. */
+export const ONBOARDING_DRAW_SYSTEM: TransitSystem = {
+  ...ONBOARDING_FIXTURE_SYSTEM,
+  services: [{ ...crosstownService, patterns: [eastgatePattern] }],
+  stations: stations.filter((station) =>
+    [
+      'port-mason-stop-west-market',
+      'port-mason-stop-civic-square',
+      'port-mason-stop-riverfront',
+      'port-mason-stop-downtown',
+      'port-mason-central-exchange',
+      'port-mason-stop-eastgate',
+    ].includes(station.id),
+  ),
+};
+
+export interface OnboardingPlaceLabel {
+  id: string;
+  label: string;
+  coord: LngLat;
+  priority: 'primary' | 'secondary';
+}
+
+export const ONBOARDING_PLACE_LABELS: OnboardingPlaceLabel[] = [
+  { id: 'west-market', label: 'West Market', coord: [WEST_X[0], STREET_Y[3]], priority: 'primary' },
+  { id: 'downtown', label: 'Downtown', coord: [EAST_X[0], STREET_Y[3]], priority: 'primary' },
+  { id: 'eastgate', label: 'Eastgate', coord: [EAST_X[2], STREET_Y[3]], priority: 'secondary' },
+  { id: 'university', label: 'University', coord: UNIVERSITY, priority: 'secondary' },
+  { id: 'south-works', label: 'South Works', coord: SOUTH_WORKS, priority: 'secondary' },
+  {
+    id: 'airport',
+    label: 'Port Mason Airport',
+    coord: [EAST_X[2], STREET_Y[0] - 0.003],
+    priority: 'primary',
+  },
+];
+
+interface OnboardingContextProperties {
+  kind: 'river';
+  name: string;
+}
+
+/** Geographic context is presentation-only because water and neighborhoods
+ * are not TransitSystem entities. It is still fixed local data: no basemap or
+ * tile request is needed to explain why the bridge controls Crosstown. */
+export const ONBOARDING_CONTEXT_FEATURES: GeoJSON.FeatureCollection<
+  GeoJSON.Polygon,
+  OnboardingContextProperties
+> = {
+  type: 'FeatureCollection',
+  features: [
+    {
+      type: 'Feature',
+      properties: { kind: 'river', name: 'Mason River' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [-122.464, 37.728],
+            [-122.447, 37.728],
+            [-122.448, 37.744],
+            [-122.445, 37.759],
+            [-122.449, 37.777],
+            [-122.465, 37.779],
+            [-122.463, 37.76],
+            [-122.466, 37.745],
+            [-122.464, 37.728],
+          ],
+        ],
+      },
+    },
+  ],
+};
+
+export const ONBOARDING_NEW_RAIL_PATH = railDowntownLink.points;
+
+function requiredServiceStats(service: Service) {
+  const stats = serviceStats(
+    ONBOARDING_FIXTURE_SYSTEM.ways,
+    ONBOARDING_FIXTURE_SYSTEM.stations,
+    ONBOARDING_FIXTURE_SYSTEM.vehicleKinds,
+    service,
+    service.frequencyMinutes,
+  );
+  if (!stats || stats.patterns.some((pattern) => !pattern.plan)) {
+    throw new Error(`Port Mason ${service.name} failed to produce a simulation plan`);
+  }
+  return stats;
+}
+
+const crosstownStats = requiredServiceStats(crosstownService);
+const harborStats = requiredServiceStats(harborService);
+
+export interface OnboardingVehicleRun {
+  id: string;
+  color: string;
+  stats: PatternStats;
+  inboundCumLengths: Float64Array;
+  profile: VehicleMotionProfile;
+}
+
+function vehicleRunsFor(service: Service, patterns: PatternStats[]): OnboardingVehicleRun[] {
+  const profile = effectiveVehicleKind(ONBOARDING_FIXTURE_SYSTEM.vehicleKinds, service).profile;
+  return patterns.map((stats) => ({
+    id: stats.pattern.id,
+    color: service.color,
+    stats,
+    inboundCumLengths: cumulativeLengths(stats.inboundPath),
+    profile,
+  }));
+}
+
+export const ONBOARDING_VEHICLE_RUNS = [
+  ...vehicleRunsFor(crosstownService, crosstownStats.patterns),
+  ...vehicleRunsFor(harborService, harborStats.patterns),
+];
+export const ONBOARDING_FLEET = crosstownStats.fleet;
+
+// Compatibility exports remain while the map task moves from the single old
+// animated pattern to ONBOARDING_VEHICLE_RUNS.
+export const ONBOARDING_PATTERN_STATS = crosstownStats.patterns[0];
+export const ONBOARDING_INBOUND_CUM_LENGTHS = cumulativeLengths(
+  ONBOARDING_PATTERN_STATS.inboundPath,
+);
+export const ONBOARDING_VEHICLE_PROFILE = effectiveVehicleKind(
+  ONBOARDING_FIXTURE_SYSTEM.vehicleKinds,
+  crosstownService,
+).profile;
+export const ONBOARDING_SERVICE_COLOR = crosstownService.color;
+export const ONBOARDING_DRAW_PATH = ONBOARDING_PATTERN_STATS.path;
+
+/** Infrastructure hides the colored service overlay so physical corridors
+ * carry the story. Every other scene keeps both proposed modes visible. */
 export function onboardingViewOptions(viewMode: ViewOptions['viewMode']): ViewOptions {
   return {
     viewMode,
