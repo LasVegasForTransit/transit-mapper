@@ -1,8 +1,5 @@
 {
   "src/index.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "max-lines": {
       "count": 1
     }

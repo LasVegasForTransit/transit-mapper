@@ -11,10 +11,21 @@ from OpenStreetMap into your system and plan on top of it.
    viewport.
 3. Pick categories: Streets, Heavy rail, Light rail / tram, Bike
    infrastructure.
-4. Click **Import into this system**.
+4. Check the calculated area and tile estimate, then click **Import in
+   background**.
 
-The import queries the Overpass API (a free public service; large areas can
-be slow or get rate-limited, so start with a neighborhood, not a metro).
+TransitMapper divides the visible rectangle into requests no larger than 100
+km² and imports them one at a time. One import may cover up to 5,000 km². For a
+larger rectangle, zoom in and reopen the dialog.
+
+The progress indicator does not block the editor. You can cancel, dismiss a
+finished status, or retry only the areas that did not finish. Each completed
+batch remains in the system after cancellation or an upstream failure.
+
+When starting a new system, submit a place search and then adjust the map. A
+place with a usable boundary is fitted whole; otherwise the picker uses a
+metro-scale zoom. The rectangle you leave visible becomes both the import
+boundary and the editor's saved opening view.
 
 ## What you get
 
@@ -98,8 +109,8 @@ junctions, adopt them under existing sketches.
 ## Practical notes
 
 - Import is additive but not duplicative: a street this system already
-  imported is skipped, and the dialog says how many it skipped. Undo reverses
-  an import in one step.
+  imported is skipped. Each bounded batch is one undo step, so work already
+  committed remains independently reversible while later tiles continue.
 - Importing again with more categories ticked adds the new infrastructure to
   the junctions you already have rather than laying a second set on top.
 - Importing a neighbouring area joins it to what you already have. Overpass
@@ -112,9 +123,9 @@ junctions, adopt them under existing sketches.
 - Junctions are formed **within** an import, not against what's already on
   the map. If you import over streets you drew yourself, the two networks sit
   side by side without joining; connect them with the usual editing tools.
-- A way clipped by the edge of the viewport keeps only the junctions inside
-  it. Its continuation lives outside the box you imported, so re-importing a
-  wider area is how you pick up the rest.
+- Re-running the same or an overlapping rectangle is safe. Existing OSM
+  sources are deduplicated while names, junction arms, medians, and turn
+  restrictions are joined across tile seams.
 - Crossings that stay unjoined are usually correct: OSM records a bridge or
   tunnel as genuinely not meeting the road it passes over.
 - Under left-hand traffic, forward traffic is placed on the left half of a
@@ -123,10 +134,10 @@ junctions, adopt them under existing sketches.
   those sides relative to the street's own direction, the same in every
   country. Changing the setting afterwards doesn't restack ways already
   imported.
-- Overpass is a free shared service that is often busy. The import tries
-  more than one public server before giving up, so a slow import is usually
-  it falling through to a second one rather than anything being wrong. If it
-  does fail, it's nearly always transient — try again.
+- TransitMapper's Worker identifies itself to the public OpenStreetMap
+  services, caches successful answers, and tries two Overpass mirrors. Busy,
+  timed-out, or dense tiles are retried or divided into smaller areas down to
+  1 km²; anything still unfinished is listed for **Retry missed areas**.
 - A turn ban is skipped when it names a street the import didn't bring in
   (a service road, a link road), since the remaining arms wouldn't describe
   the real junction.

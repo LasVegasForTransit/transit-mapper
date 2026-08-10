@@ -9,6 +9,8 @@ import {
 } from '@transitmapper/core/share/contract';
 import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from '@transitmapper/core/render/preview';
 import { checkPreviewPng, MAX_PREVIEW_BYTES } from '@transitmapper/core/render/pngBytes';
+import { handleOpenStreetMapWays, handlePlaceSearch } from './osm-gateway';
+import type { PlaceSearchGate } from './place-search-gate';
 
 interface RateLimiter {
   limit(options: { key: string }): Promise<{ success: boolean }>;
@@ -18,10 +20,19 @@ interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   SITE_URL: string;
+  /** Provider endpoint is configuration so production can move away from the
+   * public Nominatim service without rebuilding the application. */
+  NOMINATIM_URL: string;
   /** Ceiling on share creation — see the `[[ratelimits]]` block in
    *  wrangler.toml for why this endpoint in particular has one. Optional
    *  because `wrangler dev` doesn't provide it locally. */
   SHARE_CREATE_LIMITER?: RateLimiter;
+  /** Protect the public geocoding and Overpass commons independently. */
+  PLACE_SEARCH_LIMITER?: RateLimiter;
+  PLACE_UPSTREAM_LIMITER?: RateLimiter;
+  OSM_TILE_LIMITER?: RateLimiter;
+  /** Global public-Nominatim reservation coordinator. */
+  PLACE_SEARCH_GATE?: DurableObjectNamespace<PlaceSearchGate>;
 }
 
 const ANONYMOUS_SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days.
@@ -178,7 +189,7 @@ async function getActiveShare(db: D1Database, id: string): Promise<ShareRow | nu
   // cannot produce this system) and survivable for everything around it.
   let system: TransitSystem;
   try {
-    system = JSON.parse(row.data);
+    system = parseSystem(JSON.parse(row.data));
   } catch {
     console.error(`Share ${id} has unparseable data`);
     return null;
@@ -519,6 +530,16 @@ app.get('/api/gtfs/rtc', async (c) => {
   c.executionCtx.waitUntil(cache.put(c.req.raw, response.clone()));
   return response;
 });
+
+// Browser clients use same-origin gateways for public OpenStreetMap services.
+// The gateway module owns validation, success-only edge caching, upstream
+// identity, failover and response ceilings; keeping those constraints here
+// prevents every browser session from becoming an uncoordinated public-API
+// client.
+app.get('/api/places', (c) => handlePlaceSearch(c.req.raw, c.env, c.executionCtx));
+app.get('/api/openstreetmap/ways', (c) =>
+  handleOpenStreetMapWays(c.req.raw, c.env, c.executionCtx),
+);
 
 // oEmbed discovery/consumption: a publisher (WordPress, Ghost, Discourse,
 // Notion) that finds the <link rel="alternate"> on a share page fetches this

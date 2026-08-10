@@ -35,9 +35,15 @@ export interface ImportProgress {
   label: string;
   done: number;
   total: number;
+  /** Human unit for progress counts (routes, tiles, ways, files…). */
+  unit?: string;
   state: 'loading' | 'done' | 'error' | 'canceled';
   /** Present only while the background operation can still be interrupted. */
   cancel?: () => void;
+  /** Explicitly remove a completed, failed, or canceled operation. */
+  dismiss?: () => void;
+  /** Re-run only work the operation reported as unfinished. */
+  retry?: () => void;
 }
 
 // Ephemeral UI state (dialogs, overlays), kept separate from the editor/domain
@@ -66,20 +72,11 @@ interface UiState {
 }
 
 const UiContext = createContext<UiState | null>(null);
-
-// A background import's live status ticks once per GTFS batch — dozens of
-// times per import — and lives in its OWN context, separate from UiState
-// above. React re-renders every consumer of a Provider when its value
-// identity changes, regardless of which field a consumer actually reads, so
-// bundling this into the main UiContext used to re-render every always-
-// mounted useUi() caller (top bar, file menu, export button, the map canvas)
-// on every single tick even though none of them read it. Only
-// ImportProgressPill and GtfsImportDialog need this.
+// Per-batch updates stay outside UiContext to protect always-mounted consumers.
 interface ImportProgressState {
   importProgress: ImportProgress | null;
   setImportProgress: Dispatch<SetStateAction<ImportProgress | null>>;
 }
-
 const ImportProgressContext = createContext<ImportProgressState | null>(null);
 
 /** Where the map's action menu is open, in viewport pixels, or null. Its own

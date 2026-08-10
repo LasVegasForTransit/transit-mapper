@@ -1,29 +1,30 @@
-import { importOsmWays } from '@transitmapper/core/model/import';
-import type { OsmImportEvent, OsmImportRequest } from './osm-import-protocol';
+import { runOsmImport } from './osm-import-runtime';
+import type { OsmImportEvent, OsmImportWorkerMessage } from './osm-import-protocol';
 
 interface WorkerScope {
-  onmessage: ((event: MessageEvent<OsmImportRequest>) => void) | null;
+  onmessage: ((event: MessageEvent<OsmImportWorkerMessage>) => void) | null;
   postMessage(message: OsmImportEvent): void;
 }
 
 const workerScope = globalThis as unknown as WorkerScope;
-
-function serializedError(error: unknown): { name: string; message: string } {
-  return error instanceof Error
-    ? { name: error.name, message: error.message }
-    : { name: 'Error', message: 'OSM import failed.' };
-}
-
-async function handleImport(event: MessageEvent<OsmImportRequest>): Promise<void> {
-  try {
-    const { bbox, categories, drivingSide } = event.data;
-    const network = await importOsmWays(bbox, categories, drivingSide);
-    workerScope.postMessage({ kind: 'done', network });
-  } catch (error) {
-    workerScope.postMessage({ kind: 'error', error: serializedError(error) });
-  }
-}
+let active: { operationId: number; controller: AbortController } | null = null;
 
 workerScope.onmessage = (event) => {
-  void handleImport(event);
+  if (event.data.type === 'cancel') {
+    if (active?.operationId === event.data.operationId) {
+      active.controller.abort(new DOMException('OpenStreetMap import canceled.', 'AbortError'));
+    }
+    return;
+  }
+
+  active?.controller.abort(new DOMException('Superseded by a newer import.', 'AbortError'));
+  const { request } = event.data;
+  const controller = new AbortController();
+  active = { operationId: request.operationId, controller };
+  void runOsmImport(request, {
+    signal: controller.signal,
+    emit: (message) => workerScope.postMessage(message),
+  }).finally(() => {
+    if (active?.operationId === request.operationId) active = null;
+  });
 };

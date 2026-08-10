@@ -34,6 +34,7 @@ export interface LibraryStoreDependencies {
   database: LibraryDatabase;
   legacy: LegacyLibrary;
   serialize: (system: TransitSystem) => Promise<string>;
+  deserialize?: (serialized: string) => Promise<TransitSystem>;
 }
 
 export type LibraryLoadResult = LoadResult | { status: 'unavailable' };
@@ -68,25 +69,23 @@ interface DocumentSaveLane {
 
 function outcomeFor(error: unknown): SaveOutcome {
   const name = error instanceof Error ? error.name : '';
-  const code = error instanceof DOMException ? error.code : 0;
-  return name === 'QuotaExceededError' ||
-    name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
-    code === 22 ||
-    code === 1014
+  return name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED'
     ? 'full'
     : 'unavailable';
 }
 
-function parseRecord(record: StoredSystemRecord): LoadResult {
-  try {
-    return { status: 'ok', system: parseSystem(JSON.parse(record.serialized)) };
-  } catch {
-    return { status: 'corrupt' };
-  }
-}
-
 export function createLibraryStore(dependencies: LibraryStoreDependencies): LibraryStore {
   const saveLanes = new Map<string, DocumentSaveLane>();
+  const parseRecord = async (record: StoredSystemRecord): Promise<LoadResult> => {
+    try {
+      const system = dependencies.deserialize
+        ? await dependencies.deserialize(record.serialized)
+        : parseSystem(JSON.parse(record.serialized));
+      return { status: 'ok', system };
+    } catch {
+      return { status: 'corrupt' };
+    }
+  };
 
   const copyToDatabase = async (system: TransitSystem): Promise<SaveOutcome> => {
     const supersededAuthoritativeSnapshotId = dependencies.legacy.getAuthoritativeSnapshotId(
@@ -222,7 +221,7 @@ export function createLibraryStore(dependencies: LibraryStoreDependencies): Libr
       }
       if (record) {
         dependencies.legacy.setDatabaseHistory(true);
-        const parsed = parseRecord(record);
+        const parsed = await parseRecord(record);
         const legacy = dependencies.legacy.load(id);
         if (parsed.status === 'ok') {
           const authoritativeSnapshotId = dependencies.legacy.getAuthoritativeSnapshotId(id);

@@ -2,22 +2,45 @@ import type { ImportBBox, ImportCategory, ImportedNetwork } from '@transitmapper
 import type { DrivingSide } from '@transitmapper/core/model/system';
 
 export interface OsmImportRequest {
-  bbox: ImportBBox;
+  operationId: number;
+  targetSystemId: string;
+  bounds: ImportBBox;
+  /** Present when retrying missed areas; otherwise bounds is tiled normally. */
+  tiles?: ImportBBox[];
   categories: ImportCategory[];
   drivingSide: DrivingSide;
 }
 
-interface OsmImportSuccess {
-  kind: 'done';
+interface OsmImportProgressFields {
+  operationId: number;
+  completedTiles: number;
+  totalTiles: number;
+  convertedWays: number;
+}
+
+interface OsmImportProgressEvent extends OsmImportProgressFields {
+  type: 'progress';
+}
+
+interface OsmImportBatchEvent extends OsmImportProgressFields {
+  type: 'batch';
   network: ImportedNetwork;
 }
 
-interface OsmImportFailure {
-  kind: 'error';
-  error: {
-    name: string;
-    message: string;
-  };
+interface OsmImportTerminalEvent {
+  operationId: number;
+  completedTiles: number;
+  totalTiles: number;
+  convertedWays: number;
+  missedTiles: ImportBBox[];
 }
 
-export type OsmImportEvent = OsmImportSuccess | OsmImportFailure;
+export type OsmImportEvent =
+  | OsmImportProgressEvent
+  | OsmImportBatchEvent
+  | (OsmImportTerminalEvent & { type: 'done' })
+  | (OsmImportTerminalEvent & { type: 'canceled'; message: string })
+  | (OsmImportTerminalEvent & { type: 'error'; message: string });
+
+export type OsmImportWorkerMessage =
+  { type: 'start'; request: OsmImportRequest } | { type: 'cancel'; operationId: number };

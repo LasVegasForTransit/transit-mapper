@@ -177,6 +177,41 @@ The first should print a CSP header; the second should print `404` and
 `text/html`. A `200` on the second means the Worker isn't running for `/s/*`
 and every share link, preview image and embed is silently broken.
 
+After an OpenStreetMap gateway release, verify both resource routes before a
+controlled metro import:
+
+```bash
+curl -sS 'https://map.lasvegasfortransit.org/api/places?q=Las%20Vegas%20Valley'
+```
+
+```bash
+curl -sS 'https://map.lasvegasfortransit.org/api/openstreetmap/ways?west=-115.20&south=36.10&east=-115.19&north=36.11&categories=road,bike'
+```
+
+Both return JSON with `results` or `elements`. Errors carry `code`, `error`,
+and `retryable`; rate-limited responses also carry `Retry-After`. Place
+searches are limited to 10 per client per minute and OSM tiles to 60. An
+uncached place search also passes through `PLACE_UPSTREAM_LIMITER`, capped at
+one request per ten seconds in each Cloudflare location, then reserves the
+application-wide one-request-per-second slot through `PLACE_SEARCH_GATE`;
+cached results consume neither budget. The rate-limit binding rejects local
+bursts while the SQLite-backed Durable Object supplies the strongly consistent
+global guarantee. Successful place and tile responses cache for seven days
+and one day respectively; failures must not have a public cache lifetime.
+`NOMINATIM_URL` selects the geocoder so an operator can move to another
+compatible provider without rebuilding the Worker.
+
+For an import incident, tail logs while reproducing one small tile. A sequence
+of mirror failures followed by a success is normal failover. Persistent
+`upstream_invalid` points to a changed upstream payload; `tile_too_dense`
+should cause browser-side subdivision rather than end the whole import. Both
+geocoding and Overpass reads have application deadlines and decoded response
+ceilings, so a stalled or unbounded upstream cannot hold a Worker invocation
+open. Do not bypass the gateway with browser-to-Overpass fetching: that would
+remove the shared limits, cache, response ceiling, and identifying headers required by
+the [Nominatim policy](https://operations.osmfoundation.org/policies/nominatim/)
+and [Overpass commons guidance](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html).
+
 ## Not yet configured
 
 Stated plainly so nobody assumes otherwise:
