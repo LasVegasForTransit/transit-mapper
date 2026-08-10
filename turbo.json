@@ -70,7 +70,7 @@
         "//#check:duplication",
         "//#check:boundaries",
         "//#check:documents",
-        "//#check:github-metadata",
+        "//#check:repository-tooling",
         "//#check:reference"
       ],
       "outputs": []
@@ -160,14 +160,15 @@
       ],
       "outputs": []
     },
-    "//#check:github-metadata": {
+    "//#check:repository-tooling": {
       "inputs": [
-        "$TURBO_ROOT$/.github/ISSUE_TEMPLATE/**",
-        "$TURBO_ROOT$/.github/pull_request_template.md",
-        "$TURBO_ROOT$/.github/workflows/contribution-metadata.yml",
-        "$TURBO_ROOT$/packages/github-metadata/src/**",
-        "$TURBO_ROOT$/scripts/bootstrap/standards.ts",
-        "$TURBO_ROOT$/scripts/check-github-metadata.ts"
+        "$TURBO_ROOT$/.agents/plugins/marketplace.json",
+        "$TURBO_ROOT$/.claude/settings.json",
+        "$TURBO_ROOT$/.codex/hooks.json",
+        "$TURBO_ROOT$/.lvbt/repository-tooling.json",
+        "$TURBO_ROOT$/AGENTS.md",
+        "$TURBO_ROOT$/plugins/lvbt-contributions/**",
+        "$TURBO_ROOT$/scripts/check-repository-tooling.ts"
       ],
       "outputs": []
     },

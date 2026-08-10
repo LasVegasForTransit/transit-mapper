@@ -107,10 +107,10 @@ const CHECKS: Check[] = [
     fix: 'add the section or cut the phrase — see docs/development/reference/document-standards.md',
   },
   {
-    command: 'check:github-metadata',
+    command: 'check:repository-tooling',
     fails:
-      'the issue or pull request templates, workflow status, or governance status name disagree with the canonical contribution contract',
-    fix: 'make the template, trusted workflow, and governance standard consume the same metadata contract',
+      'the pinned LVBT contribution plugin, agent hooks, or inherited-template policy has drifted',
+    fix: 'restore the files from the pinned repository-tooling release, or upgrade the pin and adapters together',
   },
   {
     command: 'check:reference',

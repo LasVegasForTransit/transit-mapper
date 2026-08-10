@@ -29,6 +29,11 @@ any other rule. It contains two things:
   cannot enter model context in the first place. This is enforcement at the
   harness layer, and it is the one thing here that no repository check
   could replace.
+- The pinned LVBT marketplace and `lvbt-contributions` plugin. Its
+  `PreToolUse` hook stops direct issue and pull request creation before it can
+  bypass the organization template and checklist. The portable rule remains
+  in `AGENTS.md`; the plugin is Claude's enforcement mechanism for that
+  action.
 
 **`settings.local.json`** — personal preferences. Gitignored, and must stay
 that way. Under a Team plan the committed file is shared across every seat

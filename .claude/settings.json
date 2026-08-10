@@ -22,5 +22,17 @@
       "Read(**/*.key)",
       "Read(**/id_rsa*)"
     ]
+  },
+  "extraKnownMarketplaces": {
+    "lvbt": {
+      "source": {
+        "source": "github",
+        "repo": "LasVegasForTransit/repository-tooling",
+        "ref": "v1.0.1"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "lvbt-contributions@lvbt": true
   }
 }

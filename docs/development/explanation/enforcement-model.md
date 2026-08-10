@@ -45,7 +45,7 @@ result also depends on the current Git merge base, not only on file contents.
 
 | Layer          | What runs                                          | Blocks on                   |
 | -------------- | -------------------------------------------------- | --------------------------- |
-| 0 — agent      | format-on-edit hook in `.claude/`                  | nothing                     |
+| 0 — agent      | shared creation guard and format-on-edit hook      | action mistakes             |
 | 1 — pre-commit | `lint-staged`, staged filename validation, secrets | nothing a machine can fix   |
 | 2 — pre-push   | `pnpm check`                                       | everything                  |
 | 3 — CI         | `pnpm check`, plus a full secret scan              | everything, authoritatively |
@@ -72,16 +72,10 @@ is sacred everywhere.
 
 ### Merge method
 
-Pull requests land by rebase merge only. Squash merging and merge commits
-are both off at the repository level, so a pull request's commits replay
-onto `main` unchanged — same diff, same message, same author — instead of
-folding into one commit or gaining a merge commit of their own. `main`'s
-history stays a straight line: reading it top to bottom is reading the
-project's actual sequence of changes, not a sequence of squash commits
-each hiding a PR's worth of intermediate ones.
-
-Write commits on a feature branch the way you want them to read in
-`main`, since that is exactly how they will land.
+Pull requests land by rebase or squash merge. Merge commits are off, so
+`main` remains a straight line. Use rebase when the branch already tells a
+useful sequence; use squash when its intermediate commits are only working
+history.
 
 ### Required approvals
 
@@ -107,9 +101,16 @@ nothing for a check to inspect.
 rule. Reading `.dev.vars` leaves no trace in the repository, so no check
 can ever see it, and it is a denied read in `.claude/settings.json`.
 
-The test: delete `.claude/` and `pnpm check` must accept exactly the same
-trees. CI proves this on every pull request for free, because CI has no
-agent configuration at all.
+Creating a GitHub item is another action with no repository artifact. The
+pinned LVBT plugin therefore blocks direct creation in Codex and Claude and
+routes agents through the same readable structure humans receive from
+GitHub. `check:repository-tooling` verifies the pinned files and wiring, but
+GitHub does not police issue or pull request prose after creation.
+
+The durable rules remain testable without an agent process. CI does not run
+either harness, but `check:repository-tooling` verifies that their generated
+adapters still point at the same pinned plugin release and that the portable
+rule remains declared in `AGENTS.md`.
 
 ## Rules
 

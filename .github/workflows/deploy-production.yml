@@ -33,20 +33,11 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-      statuses: write
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - name: Checkout trusted release policy
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Setup Node + pnpm
-        uses: ./.github/actions/setup-node-pnpm
-
       - name: Run Release Please
         id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
@@ -54,63 +45,17 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      - name: Validate generated release pull request
+      - name: Dispatch validation for generated release pull request
         if: steps.release.outputs.prs_created == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_PR: ${{ steps.release.outputs.pr }}
-          STATUS_CONTEXT: Contribution metadata
         run: |
           set -euo pipefail
           release_branch=$(jq -er '.headBranchName' <<< "$RELEASE_PR")
-          release_pr=$(gh pr view "$release_branch" \
-            --repo "$GITHUB_REPOSITORY" \
-            --json title,body,isDraft,headRefName,headRefOid)
-          head_sha=$(jq -er '.headRefOid' <<< "$release_pr")
-          metadata="$RUNNER_TEMP/release-pr-metadata.json"
-          validation="$RUNNER_TEMP/release-pr-validation.json"
-
-          # GITHUB_TOKEN-created pull requests do not emit another workflow
-          # event. Validate the exact bot-and-branch exemption here, in the
-          # same trusted main-branch job that created the release pull request.
-          jq -n --argjson pr "$release_pr" '{
-            title: $pr.title,
-            body: ($pr.body // ""),
-            actor: "github-actions[bot]",
-            headBranch: $pr.headRefName,
-            draft: $pr.isDraft
-          }' > "$metadata"
-
-          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$head_sha" \
-            -f state=pending \
-            -f context="$STATUS_CONTEXT" \
-            -f description="Checking contribution metadata" \
-            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-
-          set +e
-          pnpm --silent github:validate --kind pull-request --input "$metadata" --json > "$validation"
-          result=$?
-          set -e
-
-          if [ "$result" -eq 0 ]; then
-            state=success
-            description="Contribution metadata is valid"
-          elif [ "$result" -eq 1 ]; then
-            state=failure
-            description=$(jq -r '.errors[0].message // "Contribution metadata is invalid"' "$validation")
-            description=${description:0:140}
-          else
-            state=error
-            description="Contribution metadata validation could not run"
-          fi
-
-          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$head_sha" \
-            -f state="$state" \
-            -f context="$STATUS_CONTEXT" \
-            -f description="$description" \
-            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-
-          [ "$result" -eq 0 ] || exit "$result"
+          # Pull requests created with GITHUB_TOKEN do not emit another
+          # pull_request event. Dispatch the one authoritative repository
+          # check explicitly so the generated branch can satisfy the ruleset.
           gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$release_branch"
 
   deploy:

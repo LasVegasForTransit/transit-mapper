@@ -20,7 +20,7 @@ apps/web ────────> packages/pwa-updater
 
 all TypeScript packages ──> packages/tsconfig
 repository linting ───────> packages/config-eslint ──> packages/eslint-plugin
-repository contribution tooling ──> packages/github-metadata
+repository contribution tooling ──> pinned LVBT plugin release
 ```
 
 The domain model does not import browser state, React, MapLibre, or Worker
@@ -34,7 +34,6 @@ rules portable across the browser and workerd runtimes.
 packages/
   core/           Shared domain, geometry, rendering, simulation, and contracts
   pwa-updater/    Editor update lifecycle
-  github-metadata/ Hidden-marker contribution policy and GitHub tooling
   config-eslint/  The org's ESLint baseline, as a function
   eslint-plugin/  Repository-specific lint rules
   tsconfig/       Shared TypeScript compiler policy
@@ -111,18 +110,18 @@ state. The web application decides where to show the update notice and when a
 person may activate the waiting version. This prevents an update from
 replacing an editing session without consent.
 
-### GitHub metadata
+### Contribution tooling
 
-`packages/github-metadata` owns the hidden-marker contract for issue and pull
-request bodies, title validation, noninteractive creation wrappers, and the
-pure reconciliation policy used by GitHub Actions. It is a repository-tooling
-leaf: no application imports it, and it has no production runtime effect.
+The organization-wide issue forms and pull request template live in
+`LasVegasForTransit/.github`. TransitMapper intentionally carries no local
+copy, because any local issue-template directory would shadow the complete
+organization default.
 
-Templates, workflows, agent wrappers, and bootstrap governance consume the
-same contract so early guidance and GitHub-side enforcement cannot silently
-diverge. The `pull_request_target` workflow executes only the trusted default
-branch copy and publishes its result on the proposed head commit. See
-[Contribution metadata](contribution-metadata.md).
+The pinned `lvbt-contributions` plugin under `plugins/` supplies one portable
+Agent Skill, a small creation helper, and harness-specific action guards.
+`.lvbt/repository-tooling.json` records the release and checksum;
+`check:repository-tooling` refuses local drift. This is repository tooling,
+not an application package, and no production code imports it.
 
 ### ESLint baseline
 
