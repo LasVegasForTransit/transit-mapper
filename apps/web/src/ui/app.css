@@ -3182,104 +3182,8 @@ kbd {
   line-height: 1.6;
   margin: 0;
 }
-.onboarding-note {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: fit-content;
-  max-width: 100%;
-  margin: -6px 0 0;
-  padding: 6px 10px 6px 7px;
-  border-radius: 999px;
-  background: var(--md-sys-color-surface-container);
-  color: var(--md-sys-color-on-surface-variant);
-  font-size: var(--md-sys-typescale-body-small-size);
-  line-height: 1.45;
-}
-.onboarding-note-label {
-  flex: 0 0 auto;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: var(--md-sys-color-primary-container);
-  color: var(--md-sys-color-on-primary-container);
-  font-size: var(--md-sys-typescale-label-small-size);
-  font-weight: var(--md-sys-typescale-label-small-weight);
-  letter-spacing: var(--md-sys-typescale-label-small-tracking);
-}
-.onboarding-single-preview {
-  width: 100%;
-  height: clamp(220px, 34vh, 320px);
-  flex: 1 1 auto;
-  min-height: 220px;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid var(--md-sys-color-surface-container-highest);
-  background: var(--md-sys-color-surface-container);
-  position: relative;
-}
-.onboarding-tri-preview {
-  display: flex;
-  gap: 8px;
-  width: 100%;
-  flex: 1 1 auto;
-  min-height: 140px;
-}
-.onboarding-tri-preview-item {
-  flex: 1;
-  min-height: 140px;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid var(--md-sys-color-surface-container-highest);
-  background: var(--md-sys-color-surface-container);
-}
 .onboarding-preview-map {
   width: 100%;
-}
-.onboarding-single-preview-map {
-  height: 100%;
-}
-.onboarding-preview-label {
-  flex: 0 0 auto;
-  padding: 10px 12px 0;
-  color: var(--md-sys-color-on-surface-variant);
-  font-size: var(--md-sys-typescale-label-medium-size);
-  font-weight: 500;
-}
-.onboarding-tri-preview-map {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-.onboarding-preview-key {
-  position: absolute;
-  z-index: 1;
-  top: 12px;
-  left: 12px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 7px 10px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 90%, transparent);
-  box-shadow: var(--md-sys-elevation-level1);
-  color: var(--md-sys-color-on-surface);
-  font-size: var(--md-sys-typescale-label-medium-size);
-}
-.onboarding-preview-key span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.onboarding-preview-frequency {
-  color: var(--md-sys-color-on-surface-variant);
-}
-.onboarding-service-swatch {
-  width: 18px;
-  height: 4px;
-  border-radius: 999px;
-  background: #e4572e;
 }
 .onboarding-foot {
   display: grid;
@@ -3338,20 +3242,6 @@ kbd {
   .onboarding-copy {
     font-size: var(--md-sys-typescale-body-medium-size);
   }
-  .onboarding-note {
-    align-items: flex-start;
-    border-radius: 12px;
-  }
-  .onboarding-single-preview {
-    height: clamp(180px, 35vh, 260px);
-    min-height: 180px;
-  }
-  .onboarding-tri-preview {
-    flex-direction: column;
-  }
-  .onboarding-tri-preview-item {
-    min-height: 120px;
-  }
   .onboarding-foot {
     grid-template-columns: 1fr auto;
     gap: 12px;
@@ -3370,9 +3260,8 @@ kbd {
   }
 }
 
-/* One evolving proposal replaces the old thumbnail comparison. These rules
-   follow the new scene DOM and intentionally sit after the legacy selectors
-   while the removed three-preview classes disappear from markup. */
+/* One evolving proposal replaces the old thumbnail comparison. Product-looking
+   controls appear only in the shared Service inspector preview. */
 .onboarding-modal {
   width: 860px;
   height: min(720px, calc(100dvh - 32px));
@@ -3401,13 +3290,6 @@ kbd {
   max-width: 72ch;
   line-height: 1.52;
 }
-.onboarding-note {
-  margin: 0;
-}
-.onboarding-note-plain {
-  padding-left: 10px;
-  border-radius: 10px;
-}
 .onboarding-scene {
   width: 100%;
   height: clamp(330px, 48vh, 430px);
@@ -3426,144 +3308,23 @@ kbd {
   width: 100%;
   height: 100%;
 }
-.onboarding-scene-label,
-.onboarding-draw-hint,
-.onboarding-infrastructure-callout,
-.onboarding-operating-card {
-  z-index: 2;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 92%, transparent);
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 80%, transparent);
-  box-shadow: var(--md-sys-elevation-level2);
-  backdrop-filter: blur(10px);
+.onboarding-scene-operations {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
 }
-.onboarding-scene-label {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  color: var(--md-sys-color-on-surface-variant);
-  font-size: var(--md-sys-typescale-label-small-size);
-  font-weight: 650;
-  letter-spacing: 0.02em;
+.onboarding-service-inspector-preview {
+  min-width: 0;
+  min-height: 0;
 }
-.onboarding-draw-hint,
-.onboarding-infrastructure-callout {
-  position: absolute;
-  left: 14px;
-  bottom: 14px;
-  padding: 7px 10px;
-  border-radius: 9px;
-  color: var(--md-sys-color-on-surface);
-  font-size: var(--md-sys-typescale-label-medium-size);
-  font-weight: 550;
-}
-.onboarding-draw-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-.onboarding-infrastructure-callout {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-}
-.onboarding-infrastructure-callout > span {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.onboarding-imported-swatch,
-.onboarding-new-link-swatch {
-  display: block;
-  width: 24px;
-  height: 5px;
-  border-radius: 999px;
-}
-.onboarding-imported-swatch {
-  background: var(--md-sys-color-outline);
-}
-.onboarding-new-link-swatch {
-  background: repeating-linear-gradient(90deg, #3157d5 0 6px, transparent 6px 9px);
-}
-.onboarding-operating-card {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  width: min(245px, calc(100% - 28px));
-  padding: 13px;
-  border-radius: 12px;
-  color: var(--md-sys-color-on-surface);
-}
-.onboarding-operating-card-head,
-.onboarding-operating-card-head span,
-.onboarding-service-key span {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.onboarding-operating-card-head {
-  justify-content: space-between;
-  font-size: var(--md-sys-typescale-label-large-size);
-  font-weight: 650;
-}
-.onboarding-operating-card-head time {
-  font-family: var(--mono);
-  font-size: var(--md-sys-typescale-label-small-size);
-  color: var(--md-sys-color-on-surface-variant);
-}
-.onboarding-operating-values {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 11px 0 9px;
-}
-.onboarding-operating-values span,
-.onboarding-fallback-values span {
-  padding: 4px 7px;
-  border-radius: 7px;
-  background: var(--md-sys-color-surface-container-high);
-  color: var(--md-sys-color-on-surface-variant);
-  font-size: var(--md-sys-typescale-label-small-size);
-}
-.onboarding-operating-card strong {
-  font-size: var(--md-sys-typescale-body-small-size);
-  font-weight: 650;
-}
-.onboarding-pattern-list {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: -1px 0 10px;
-}
-.onboarding-pattern-list small {
-  margin-right: 2px;
-  color: var(--md-sys-color-on-surface-variant);
-  font-size: var(--md-sys-typescale-label-small-size);
-}
-.onboarding-pattern-list span {
-  padding: 3px 7px;
-  border: 1px solid var(--md-sys-color-outline-variant);
-  border-radius: 999px;
-  color: var(--md-sys-color-on-surface);
-  font-size: var(--md-sys-typescale-label-small-size);
-}
-.onboarding-service-key {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px 18px;
-  font-size: var(--md-sys-typescale-label-medium-size);
-  font-weight: 600;
-}
-.onboarding-service-swatch {
-  display: inline-block;
-  flex: 0 0 auto;
-  width: 18px;
-  height: 4px;
-  border-radius: 999px;
+/* The production compact workbench owns its panel's scroller, so the shared
+   Panel deliberately becomes overflow:visible at the compact layout fork.
+   This embedded copy has no workbench scroller while its scene is fixed-height
+   above 620px; restore that missing boundary only in those configurations. */
+@media (max-width: 767px), (max-height: 500px) {
+  .onboarding-service-inspector-preview {
+    max-height: 100%;
+    overflow-y: auto;
+  }
 }
 .onboarding-preview-fallback {
   position: absolute;
@@ -3571,7 +3332,6 @@ kbd {
   z-index: 3;
   display: grid;
   place-content: center;
-  gap: 16px;
   padding: 28px;
   text-align: center;
   background:
@@ -3581,18 +3341,9 @@ kbd {
       transparent 48%
     ),
     var(--md-sys-color-surface-container);
-}
-.onboarding-preview-fallback p {
-  max-width: 52ch;
   margin: 0;
   color: var(--md-sys-color-on-surface-variant);
   line-height: 1.55;
-}
-.onboarding-fallback-values {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
 }
 .onboarding-place-label {
   display: block;
@@ -3677,13 +3428,12 @@ kbd {
   .onboarding-place-label-secondary {
     display: none;
   }
-  .onboarding-operating-card {
-    position: static;
-    width: auto;
-    margin: 10px;
-    background: var(--md-sys-color-surface);
-    box-shadow: none;
-    backdrop-filter: none;
+  .onboarding-scene-operations {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .onboarding-service-inspector-preview {
+    max-height: none;
+    overflow-y: visible;
   }
   .onboarding-foot {
     gap: 8px 12px;

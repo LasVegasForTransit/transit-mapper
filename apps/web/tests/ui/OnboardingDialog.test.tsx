@@ -112,6 +112,8 @@ describe('OnboardingDialog', () => {
       'Crosstown',
     );
     expect(container.querySelector('[data-scene="draw"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('Open beta');
+    expect(container.querySelector('.onboarding-note')).toBeNull();
     expect(
       [...container.querySelectorAll('button')].some((button) => button.textContent === 'Back'),
     ).toBe(false);
@@ -160,14 +162,14 @@ describe('OnboardingDialog', () => {
     expect(onComplete).not.toHaveBeenCalled();
   });
 
-  it('presents the land-use future note without mislabeling it as beta status', () => {
+  it('explains future land-use simulation in the normal slide copy', () => {
     act(() => root.render(<OnboardingDialog onClose={vi.fn()} onComplete={vi.fn()} />));
 
     act(() => stepButton(4).click());
     expect(container.textContent).toContain(
-      'Coming later: explore how transit and land use shape each other.',
+      'Future versions will also let you explore how transit and land use shape each other.',
     );
-    expect(container.querySelector('.onboarding-note-label')).toBeNull();
+    expect(container.querySelector('.onboarding-note')).toBeNull();
   });
 
   it('completes from the final action', () => {

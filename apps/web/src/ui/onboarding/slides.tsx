@@ -4,8 +4,6 @@ type OnboardingOutcome = 'service' | 'infrastructure' | 'operations' | 'simulati
 export interface OnboardingSlideData {
   title: string;
   body: string;
-  /** Quiet release-stability or future-looking context shown only where needed. */
-  note?: string;
   outcome: OnboardingOutcome;
   scene: OnboardingSceneId;
   /** Names the relationship conveyed by the non-interactive scene. */
@@ -18,7 +16,6 @@ export const ONBOARDING_SLIDES: OnboardingSlideData[] = [
   {
     title: 'Draw a line. TransitMapper finds the path.',
     body: 'Sketch the trip people should be able to make. Bus service follows streets already on the map. When new infrastructure is needed, TransitMapper creates a basic alignment you can refine.',
-    note: 'Open beta: features and workflows may change frequently before a stable release.',
     outcome: 'service',
     scene: 'draw',
     visualDescription:
@@ -38,15 +35,14 @@ export const ONBOARDING_SLIDES: OnboardingSlideData[] = [
     outcome: 'operations',
     scene: 'operations',
     visualDescription:
-      'The orange Crosstown service splits after Central Exchange into Eastgate and Airport branches, with stops and an operating card showing service every 10 minutes from 6 AM to 11 PM.',
+      'The orange Crosstown service splits after Central Exchange into Eastgate and Airport branches beside the Service inspector Schedule tab, which shows a 10-minute peak headway, daytime service, and the vehicles required.',
   },
   {
     title: 'Press play and watch the system operate.',
-    body: 'Vehicles follow the routes, stops, and schedules you designed. Move through the day or change the speed to see the system operating.',
-    note: 'Coming later: explore how transit and land use shape each other.',
+    body: 'Vehicles follow the routes, stops, and schedules you designed. Move through the day or change the speed to see the system operating. Future versions will also let you explore how transit and land use shape each other.',
     outcome: 'simulation',
     scene: 'simulate',
     visualDescription:
-      'Bus and light-rail vehicles move along the Port Mason routes while a clock advances, showing the schedules operating on the designed network.',
+      'Bus and light-rail vehicles move along the Port Mason routes, showing the schedules operating on the designed network.',
   },
 ];

@@ -49,8 +49,7 @@ describe('OnboardingPreviewMap', () => {
     act(() => root.render(<OnboardingPreviewMap scene="draw" description={description} />));
 
     expect(container.querySelector('.onboarding-preview-map')).toBeNull();
-    expect(container.textContent).toContain(description);
-    expect(container.textContent).toContain('Crosstown');
-    expect(container.textContent).toContain('Harbor Line');
+    expect(container.textContent).toBe(description);
+    expect(container.textContent).not.toContain('Harbor Line');
   });
 });

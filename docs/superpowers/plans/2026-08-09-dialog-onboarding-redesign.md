@@ -112,7 +112,7 @@ Commit subject: `feat(web): define onboarding scenes`
 
 **Interfaces:**
 
-- Produces: `ONBOARDING_FIXTURE_SYSTEM`, `ONBOARDING_DRAW_SYSTEM`, `ONBOARDING_CONTEXT_FEATURES`, `ONBOARDING_PLACE_LABELS`, `ONBOARDING_NEW_RAIL_PATH`, `ONBOARDING_DRAW_PATH`, `ONBOARDING_VEHICLE_RUNS`, `ONBOARDING_FLEET`, and `onboardingViewOptions(scene)`.
+- Produces: `ONBOARDING_FIXTURE_SYSTEM`, `ONBOARDING_DRAW_SYSTEM`, `ONBOARDING_CONTEXT_FEATURES`, `ONBOARDING_PLACE_LABELS`, `ONBOARDING_NEW_RAIL_PATH`, `ONBOARDING_DRAW_PATH`, `ONBOARDING_VEHICLE_RUNS`, `ONBOARDING_SERVICE_STATS`, and `onboardingViewOptions(scene)`.
 - Consumed by: Task 3.
 
 - [ ] **Step 1: Strengthen fixture tests around the actual proposal**
@@ -127,7 +127,7 @@ expect(crosstown.patterns.map((pattern) => pattern.name)).toEqual(['Eastgate', '
 expect(crosstown.frequencyMinutes).toBe(10);
 expect(crosstown.spanStart).toBe('06:00');
 expect(crosstown.spanEnd).toBe('23:00');
-expect(ONBOARDING_FLEET).toBeGreaterThan(0);
+expect(ONBOARDING_SERVICE_STATS.fleet).toBeGreaterThan(0);
 expect(validateSystem(ONBOARDING_FIXTURE_SYSTEM)).toEqual([]);
 ```
 
@@ -415,6 +415,7 @@ production Service inspector.
 
 - Create: `apps/web/src/ui/inspector/service-schedule-fields.tsx`
 - Create: `apps/web/src/ui/inspector/service-load-presentation.tsx`
+- Create: `apps/web/src/ui/inspector/service-inspector-heading.tsx`
 - Create: `apps/web/src/ui/onboarding/onboarding-service-inspector-preview.tsx`
 - Modify: `apps/web/src/ui/inspector/ServiceInspector.tsx`
 - Modify: `apps/web/src/ui/onboarding/onboarding-scene-overlay.tsx`
@@ -428,7 +429,7 @@ production Service inspector.
 - Create: `apps/web/tests/ui/inspector/service-schedule-fields.test.tsx`
 - Modify: `docs/development/reference/project-structure.md`
 
-- [ ] **Step 1: Write failing UI-contract tests**
+- [x] **Step 1: Write failing UI-contract tests**
 
 Assert that onboarding contains none of `Open beta`, `Network · Bus`,
 `Infrastructure`, `Service plan`, `System running`, `Following existing
@@ -446,7 +447,7 @@ pnpm --filter @transitmapper/web exec vitest run tests/ui/OnboardingDialog.test.
 Expected: FAIL because the fake chrome and note presentation still exist and
 the production Schedule fields are not shared.
 
-- [ ] **Step 2: Extract the production Schedule presentation**
+- [x] **Step 2: Extract the production Schedule presentation**
 
 Move the existing frequency and span controls into
 `service-schedule-fields.tsx`, preserving the live inspector's labels, presets,
@@ -456,21 +457,25 @@ onboarding fixture. Extract the pure rendered portion of `ServiceLoad` into
 `ServiceInspector.tsx` and pass only derived display values to the shared
 component.
 
-- [ ] **Step 3: Replace the fake overlay with a read-only inspector adapter**
+- [x] **Step 3: Replace the fake overlay with a read-only inspector adapter**
 
 Build `onboarding-service-inspector-preview.tsx` from the shared Service
-inspector heading, tabs, load presentation, and schedule fields. Render it only
-for the operations scene. Draw, infrastructure, and simulation remain map-only.
-Render preview failure as plain accessible description text.
+inspector heading, tabs, load presentation, schedule fields, and real `Panel`
+shell. Render it only for the operations scene. Draw, infrastructure, and
+simulation remain map-only. Render preview failure as plain accessible
+description text. When the embedded panel takes the compact shell without the
+compact workbench, preserve a local scroller anywhere the scene remains
+fixed-height. Disable its shared controls instead of making the whole panel
+inert, because an inert overflow container cannot receive wheel scrolling.
 
-- [ ] **Step 4: Remove special notes and overlay styling**
+- [x] **Step 4: Remove special notes and overlay styling**
 
 Remove the beta disclosure, scene chips, hint pill, infrastructure legend,
 fake operating card, clock, service key, fallback values, and their CSS. Fold
 the future land-use sentence into slide four's normal body. Remove any clock
 state and callbacks that no longer affect a visible product surface.
 
-- [ ] **Step 5: Run focused verification and inspect both live surfaces**
+- [x] **Step 5: Run focused verification and inspect both live surfaces**
 
 Run the focused tests from Step 1, then web lint and typecheck. Start the app and
 capture the four onboarding slides at desktop and phone sizes. Also inspect a
@@ -478,13 +483,13 @@ selected service's live Schedule tab. Confirm that the shared labels, values,
 selection styling, and layout match; confirm that no onboarding-only element
 could be mistaken for real product UI.
 
-- [ ] **Step 6: Document and run the full gate**
+- [x] **Step 6: Document and run the full gate**
 
 Update Project structure for the shared inspector presentation boundary, run
 `CI=1 pnpm check`, and treat any invented onboarding chrome, visual drift between
 the two Schedule renderings, or failed repository check as incomplete.
 
-- [ ] **Step 7: Commit the correction**
+- [x] **Step 7: Commit the correction**
 
 ```bash
 git add apps/web/src/ui/inspector apps/web/src/ui/onboarding apps/web/tests/ui docs/development/reference/project-structure.md

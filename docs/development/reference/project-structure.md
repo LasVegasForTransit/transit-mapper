@@ -254,9 +254,15 @@ The onboarding slide data selects one of four passive scenes, while
 `ui/onboarding/fixtureSystem.ts` owns the single valid local Port Mason
 proposal and the simulation inputs derived from it;
 `ui/onboarding/port-mason-context.ts` adds its tile-free river, districts, and
-street context. Pure scene helpers derive drawing, clock, and vehicle frames;
+street context. Pure scene helpers derive drawing and vehicle frames;
 `OnboardingPreviewMap.tsx` and its map controller adapt those frames to the
-production feature projection without reading or mutating editor state.
+production feature projection without reading or mutating editor state. The
+operations scene supplies fixture values to the same
+`ui/inspector/service-inspector-heading.tsx`,
+`ui/inspector/service-schedule-fields.tsx` and
+`ui/inspector/service-load-presentation.tsx` components used by the live
+Service inspector, inside the same `Panel` shell; the other scenes add no
+product-looking overlay.
 `apps/web/src/ui/useKeyboardInset.ts` reports how much of the viewport an
 on-screen keyboard covers, which no layout-viewport measurement exposes.
 `apps/web/src/ui/app-banner.ts` decides which single application-level message

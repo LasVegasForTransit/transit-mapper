@@ -383,6 +383,7 @@ function requiredServiceStats(service: Service) {
 
 const crosstownStats = requiredServiceStats(crosstownService);
 const harborStats = requiredServiceStats(harborService);
+export const ONBOARDING_SERVICE_STATS = crosstownStats;
 
 export interface OnboardingVehicleRun {
   id: string;
@@ -407,7 +408,6 @@ export const ONBOARDING_VEHICLE_RUNS = [
   ...vehicleRunsFor(crosstownService, crosstownStats.patterns),
   ...vehicleRunsFor(harborService, harborStats.patterns),
 ];
-export const ONBOARDING_FLEET = crosstownStats.fleet;
 
 export const ONBOARDING_PATTERN_STATS = crosstownStats.patterns[0];
 export const ONBOARDING_SERVICE_COLOR = crosstownService.color;

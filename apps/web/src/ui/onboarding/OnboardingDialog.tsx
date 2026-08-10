@@ -34,7 +34,6 @@ export function OnboardingDialog({ onClose, onComplete }: OnboardingDialogProps)
       >
         <div className="onboarding-explanation">
           <p className="onboarding-copy">{slide.body}</p>
-          {slide.note ? <OnboardingNote text={slide.note} /> : null}
         </div>
         <OnboardingPreviewMap
           key={slide.scene}
@@ -119,25 +118,5 @@ function OnboardingFooter({ index, onIndexChange, onComplete }: OnboardingFooter
         {index === ONBOARDING_SLIDES.length - 1 ? 'Draw your first service' : 'Next'}
       </button>
     </div>
-  );
-}
-
-interface OnboardingNoteProps {
-  text: string;
-}
-
-function OnboardingNote({ text }: OnboardingNoteProps) {
-  const label = 'Open beta';
-  if (!text.startsWith(`${label}: `)) {
-    return <p className="onboarding-note onboarding-note-plain">{text}</p>;
-  }
-  const body = text.slice(label.length + 2);
-
-  return (
-    <p className="onboarding-note">
-      <span className="onboarding-note-label">{label}</span>
-      <span className="sr-only">: </span>
-      <span>{body}</span>
-    </p>
   );
 }

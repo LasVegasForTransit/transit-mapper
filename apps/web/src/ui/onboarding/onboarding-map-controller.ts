@@ -1,7 +1,6 @@
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { SystemFeatures, ViewOptions } from '@transitmapper/core/render/buildFeatures';
-import { formatTimeOfDay, minutesOfDay } from '@transitmapper/core/sim/clock';
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap } from 'maplibre-gl';
 import { setExportFeatureData } from '../../map/export/exportLayerSetup';
 import {
@@ -40,7 +39,6 @@ export interface MountOnboardingMapOptions {
   scene: OnboardingSceneId;
   reducedMotion: boolean;
   onFailure: (error: unknown) => void;
-  onClockChange: (label: string) => void;
 }
 
 interface SceneSystems {
@@ -292,7 +290,6 @@ interface SceneAnimationOptions {
   scene: OnboardingSceneId;
   completeFeatures: SystemFeatures;
   reducedMotion: boolean;
-  onClockChange: (label: string) => void;
 }
 
 function startSceneAnimation({
@@ -300,22 +297,15 @@ function startSceneAnimation({
   scene,
   completeFeatures,
   reducedMotion,
-  onClockChange,
 }: SceneAnimationOptions): () => void {
   const startedAt = performance.now();
   let animationFrame: number | undefined;
-  let lastClock = '';
   const drawFrame = (now: number) => {
     const frame = onboardingSceneFrame(scene, now - startedAt, reducedMotion);
     if (scene === 'draw') {
       renderDrawFrame(map, completeFeatures, frame.routeProgress, frame.cursorVisible);
     } else if (scene === 'simulate') {
       sourceData(map, SRC_VEHICLES, vehicleFeaturesAt(frame.simMs));
-      const clock = formatTimeOfDay(minutesOfDay(frame.simMs));
-      if (clock !== lastClock) {
-        lastClock = clock;
-        onClockChange(clock);
-      }
     }
     const continuingDraw = scene === 'draw' && frame.routeProgress < 1;
     if (continuingDraw || frame.animateVehicles) animationFrame = requestAnimationFrame(drawFrame);
@@ -358,7 +348,6 @@ function initializeScene(
     scene: options.scene,
     completeFeatures,
     reducedMotion: options.reducedMotion,
-    onClockChange: options.onClockChange,
   });
   const resizeObserver =
     typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(() => fitScene(map));

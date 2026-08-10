@@ -1,8 +1,11 @@
 import { validateSystem } from '@transitmapper/core/model/validate';
 import { servicesAtStation } from '@transitmapper/core/sim/frequency';
 import { describe, expect, it } from 'vitest';
-import * as onboardingFixture from '../../../src/ui/onboarding/fixtureSystem';
-import { ONBOARDING_FIXTURE_SYSTEM } from '../../../src/ui/onboarding/fixtureSystem';
+import {
+  ONBOARDING_FIXTURE_SYSTEM,
+  ONBOARDING_SERVICE_STATS,
+  ONBOARDING_VEHICLE_RUNS,
+} from '../../../src/ui/onboarding/fixtureSystem';
 import {
   ONBOARDING_CONTEXT_FEATURES,
   ONBOARDING_STREET_FEATURES,
@@ -69,13 +72,8 @@ describe('onboarding fixture projection', () => {
   });
 
   it('produces measurable runs and a nonzero operating requirement', () => {
-    const runtime = onboardingFixture as unknown as {
-      ONBOARDING_FLEET?: number;
-      ONBOARDING_VEHICLE_RUNS?: Array<{ stats: { plan: unknown } }>;
-    };
-
-    expect(runtime.ONBOARDING_FLEET).toBeGreaterThan(0);
-    expect(runtime.ONBOARDING_VEHICLE_RUNS).toHaveLength(3);
-    expect(runtime.ONBOARDING_VEHICLE_RUNS?.every((run) => run.stats.plan !== null)).toBe(true);
+    expect(ONBOARDING_SERVICE_STATS.fleet).toBeGreaterThan(0);
+    expect(ONBOARDING_VEHICLE_RUNS).toHaveLength(3);
+    expect(ONBOARDING_VEHICLE_RUNS.every((run) => run.stats.plan !== null)).toBe(true);
   });
 });

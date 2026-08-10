@@ -23,75 +23,82 @@ afterEach(() => {
 });
 
 describe('OnboardingSceneOverlay', () => {
-  it('connects service settings to an operating requirement', () => {
+  it('uses the production Schedule presentation for operations', () => {
     act(() =>
       root.render(
         <OnboardingSceneOverlay
           scene="operations"
           failed={false}
           description="Crosstown splits into two branches."
-          clockLabel="6:00 AM"
         />,
       ),
     );
 
-    expect(container.textContent).toContain('Crosstown');
-    expect(container.textContent).toContain('Every 10 min');
-    expect(container.textContent).toContain('6 AM–11 PM');
-    expect(container.textContent).toContain('Eastgate');
-    expect(container.textContent).toContain('Airport');
-    expect(container.textContent).toMatch(/\d+ vehicles required/);
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Service name"]')?.value).toBe(
+      'Crosstown',
+    );
+    const inspector = container.querySelector('.onboarding-service-inspector-preview');
+    expect(inspector?.tagName).toBe('ASIDE');
+    expect(inspector?.classList.contains('panel')).toBe(true);
+    expect(inspector?.classList.contains('panel-right')).toBe(true);
+    expect(inspector?.hasAttribute('inert')).toBe(false);
+    expect(
+      [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].every(
+        (tab) => tab.disabled,
+      ),
+    ).toBe(true);
+    expect(container.textContent).toContain('Schedule');
+    expect(container.textContent).toContain('Peak headway');
+    expect(container.textContent).toContain('10 min');
+    expect(container.textContent).toContain('Span of service');
+    expect(container.textContent).toContain('Daytime');
+    expect(container.textContent).toContain('Round trip');
+    expect(container.textContent).toContain('Vehicles');
+    expect(container.textContent).not.toContain('Service plan');
   });
 
-  it('contrasts imported infrastructure with the one proposed rail link', () => {
+  it('leaves the infrastructure scene map-only', () => {
     act(() =>
       root.render(
         <OnboardingSceneOverlay
           scene="infrastructure"
           failed={false}
           description="The proposal reuses Port Mason infrastructure."
-          clockLabel="6:00 AM"
         />,
       ),
     );
 
-    expect(container.textContent).toContain('Imported streets + freight track');
-    expect(container.textContent).toContain('New downtown rail link');
+    expect(container.textContent).toBe('');
+    expect(container.textContent).not.toContain('Infrastructure');
+    expect(container.textContent).not.toContain('Imported streets + freight track');
+    expect(container.textContent).not.toContain('New downtown rail link');
   });
 
-  it('shows the simulated time as part of the operating consequence', () => {
+  it('leaves the simulation scene map-only', () => {
     act(() =>
       root.render(
         <OnboardingSceneOverlay
           scene="simulate"
           failed={false}
           description="Vehicles move through Port Mason."
-          clockLabel="8:35 AM"
         />,
       ),
     );
 
-    expect(container.textContent).toContain('System running');
-    expect(container.textContent).toContain('8:35 AM');
-    expect(container.textContent).toContain('Every 10 min');
+    expect(container.textContent).toBe('');
+    expect(container.textContent).not.toContain('System running');
+    expect(container.textContent).not.toContain('8:35 AM');
   });
 
-  it('keeps the scene explanation and key values when the map fails', () => {
+  it('uses only the scene explanation when the map fails', () => {
     const description = 'Crosstown follows existing streets across the river bridge.';
     act(() =>
-      root.render(
-        <OnboardingSceneOverlay
-          scene="draw"
-          failed
-          description={description}
-          clockLabel="6:00 AM"
-        />,
-      ),
+      root.render(<OnboardingSceneOverlay scene="draw" failed description={description} />),
     );
 
-    expect(container.textContent).toContain(description);
-    expect(container.textContent).toContain('Crosstown');
-    expect(container.textContent).toContain('Harbor Line');
+    expect(container.textContent).toBe(description);
     expect(container.textContent).not.toContain('Error');
+    expect(container.textContent).not.toContain('Network · Bus');
+    expect(container.textContent).not.toContain('Every 10 min');
   });
 });

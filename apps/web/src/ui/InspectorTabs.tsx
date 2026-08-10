@@ -12,9 +12,10 @@ export interface InspectorTabsProps {
   tabs: InspectorTab[];
   active: string;
   onChange: (id: string) => void;
+  disabled?: boolean;
 }
 
-export function InspectorTabs({ tabs, active, onChange }: InspectorTabsProps) {
+export function InspectorTabs({ tabs, active, onChange, disabled = false }: InspectorTabsProps) {
   if (tabs.length < 2) return null;
   return (
     <div className="insp-tabs" role="tablist">
@@ -24,6 +25,7 @@ export function InspectorTabs({ tabs, active, onChange }: InspectorTabsProps) {
           role="tab"
           aria-selected={active === t.id}
           className={`insp-tab ${active === t.id ? 'active' : ''}`}
+          disabled={disabled}
           onClick={() => onChange(t.id)}
         >
           {t.label}

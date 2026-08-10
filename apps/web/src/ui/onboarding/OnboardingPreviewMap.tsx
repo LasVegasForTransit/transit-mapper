@@ -20,7 +20,6 @@ export function OnboardingPreviewMap({
   const colorScheme = useSystemColorScheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
-  const [clockLabel, setClockLabel] = useState('6:00 AM');
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -34,21 +33,19 @@ export function OnboardingPreviewMap({
         console.error('[onboarding preview]', error);
         setFailed(true);
       },
-      onClockChange: setClockLabel,
     });
   }, [colorScheme, scene]);
 
   return (
-    <div className={`onboarding-scene ${className}`.trim()} role="img" aria-label={description}>
+    <div
+      className={`onboarding-scene onboarding-scene-${scene} ${className}`.trim()}
+      role="img"
+      aria-label={description}
+    >
       <div className="onboarding-map-frame" aria-hidden="true">
         {!failed ? <div ref={containerRef} className="onboarding-preview-map" /> : null}
       </div>
-      <OnboardingSceneOverlay
-        scene={scene}
-        failed={failed}
-        description={description}
-        clockLabel={clockLabel}
-      />
+      <OnboardingSceneOverlay scene={scene} failed={failed} description={description} />
     </div>
   );
 }
