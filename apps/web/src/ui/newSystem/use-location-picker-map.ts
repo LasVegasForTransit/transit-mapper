@@ -1,6 +1,7 @@
 import { useEffect, useImperativeHandle, useRef, type Ref } from 'react';
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import type { ImportBBox } from '@transitmapper/core/model/import';
+import { normalizeImportBounds } from '@transitmapper/core/model/import-area';
 import type { LngLat } from '@transitmapper/core/model/system';
 import { basemapStyleForScheme } from '../../map/mapTheme';
 import { useSystemColorScheme } from '../../theme/systemColorScheme';
@@ -23,18 +24,20 @@ interface UseLocationPickerMapOptions {
   handleRef: Ref<LocationPickerMapHandle>;
 }
 
-function cameraFrom(map: MLMap): PickerCamera {
+function cameraFrom(map: MLMap): PickerCamera | null {
   const center = map.getCenter();
   const bounds = map.getBounds();
+  const normalizedBounds = normalizeImportBounds({
+    west: bounds.getWest(),
+    south: bounds.getSouth(),
+    east: bounds.getEast(),
+    north: bounds.getNorth(),
+  });
+  if (!normalizedBounds) return null;
   return {
     center: [center.lng, center.lat],
     zoom: map.getZoom(),
-    bounds: {
-      west: bounds.getWest(),
-      south: bounds.getSouth(),
-      east: bounds.getEast(),
-      north: bounds.getNorth(),
-    },
+    bounds: normalizedBounds,
   };
 }
 
@@ -80,7 +83,10 @@ export function useLocationPickerMap({
       setMarker(map, markerRef, center);
       onPickRef.current(center);
     };
-    const report = () => onCameraRef.current?.(cameraFrom(map));
+    const report = () => {
+      const camera = cameraFrom(map);
+      if (camera) onCameraRef.current?.(camera);
+    };
     map.on('click', click);
     map.on('moveend', report);
     const resize = new ResizeObserver(() => map.resize());

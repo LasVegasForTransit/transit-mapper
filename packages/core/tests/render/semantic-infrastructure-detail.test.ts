@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptySystem } from '../../src/model/serialize';
 import { osmElementsToWays } from '../../src/model/import';
+import { oneSection, wholeLeg } from '../../src/model/geo';
 import type { TransitSystem, Way } from '../../src/model/system';
 import {
   buildFeatures,
   createFeatureBuildOperationCounts,
   type ViewOptions,
 } from '../../src/render/buildFeatures';
+import { aService } from '../support/fixtures.test';
 
 const view = (zoom: number): ViewOptions => ({
   viewMode: 'infrastructure',
@@ -141,6 +143,28 @@ describe('semantic infrastructure detail', () => {
     system.ways.push(gtfsWay);
 
     expect(renderedIds(system, 10)).toContain(gtfsWay.id);
+  });
+
+  it('keeps a transit service visible when low zoom hides its imported local street', () => {
+    const system = fixture();
+    const local = requiredWay(system, 'osm:3');
+    const service = aService('local-bus', [
+      { id: 'local-pattern', sections: oneSection([wholeLeg(local.id)]) },
+    ]);
+    system.services = [service];
+    const metroView = view(10);
+    metroView.visibleModes = new Set([service.modeId]);
+
+    const features = buildFeatures(system, null, [], metroView);
+
+    expect(features.ways.features.map((feature) => featureId(feature.properties))).not.toContain(
+      local.id,
+    );
+    expect(
+      features.services.features.some(
+        (feature) => feature.properties?.serviceId === service.id && !feature.properties.hitTarget,
+      ),
+    ).toBe(true);
   });
 
   it('creates regional GeoJSON only for ways inside padded bounds at Las Vegas import scale', () => {

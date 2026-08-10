@@ -14,6 +14,8 @@ interface BeginBackgroundOsmImportOptions {
   tiles?: ImportBBox[];
   categories: ImportCategory[];
   drivingSide: DrivingSide;
+  /** Test seam for the browser Worker lifecycle. */
+  workerStarter?: typeof startOsmImportWorker;
 }
 
 let nextOperationId = 10_000;
@@ -30,9 +32,11 @@ export function completedImportLabel(event: TerminalImportEvent, committedWays: 
 
 /** Own one background metro import from Worker start through retry/dismiss. */
 export function beginBackgroundOsmImport(options: BeginBackgroundOsmImportOptions): void {
+  if (options.store.getState().system.id !== options.targetSystemId) return;
   const operationId = ++nextOperationId;
   let committedWays = 0;
   let cancelWorker = () => {};
+  let ownerChanged = false;
   const dismiss = () =>
     options.setImportProgress((current) => (current?.operationId === operationId ? null : current));
   const cancel = () => cancelWorker();
@@ -49,9 +53,10 @@ export function beginBackgroundOsmImport(options: BeginBackgroundOsmImportOption
   loading(0, options.tiles?.length ?? 0, 'Preparing OpenStreetMap tiles…');
   const finish = (event: TerminalImportEvent) => {
     const partial = event.missedTiles.length > 0;
-    const retry = partial
-      ? () => beginBackgroundOsmImport({ ...options, tiles: event.missedTiles })
-      : undefined;
+    const retry =
+      partial && !ownerChanged
+        ? () => beginBackgroundOsmImport({ ...options, tiles: event.missedTiles })
+        : undefined;
     let state: ImportProgress['state'] = event.type;
     if (event.type === 'done') state = partial ? 'error' : 'done';
     options.setImportProgress({
@@ -66,7 +71,7 @@ export function beginBackgroundOsmImport(options: BeginBackgroundOsmImportOption
     });
   };
 
-  const running = startOsmImportWorker(
+  const running = (options.workerStarter ?? startOsmImportWorker)(
     {
       operationId,
       targetSystemId: options.targetSystemId,
@@ -83,7 +88,10 @@ export function beginBackgroundOsmImport(options: BeginBackgroundOsmImportOption
             network: event.network,
           });
           committedWays += result.added;
-          if (!result.applied) cancelWorker();
+          if (!result.applied) {
+            ownerChanged = true;
+            cancelWorker();
+          }
           return;
         }
         if (event.type === 'progress') {
@@ -97,7 +105,10 @@ export function beginBackgroundOsmImport(options: BeginBackgroundOsmImportOption
   );
   cancelWorker = running.cancel;
   const unsubscribe = options.store.subscribe((state) => {
-    if (state.system.id !== options.targetSystemId) cancelWorker();
+    if (state.system.id !== options.targetSystemId && !ownerChanged) {
+      ownerChanged = true;
+      cancelWorker();
+    }
   });
   void running.completion.finally(unsubscribe);
 }
