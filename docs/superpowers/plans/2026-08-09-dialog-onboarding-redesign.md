@@ -4,7 +4,7 @@
 
 **Goal:** Replace the generic onboarding previews with a four-scene Port Mason proposal that teaches service drawing, physical infrastructure, operations, and simulation, then leaves a genuine first run ready to draw a bus service.
 
-**Architecture:** Keep slide content declarative, build every map from one valid local `TransitSystem`, and derive motion from pure scene timing plus the production feature builder and simulation kernel. MapLibre owns geographic projection and fixture-positioned labels; React owns dialog navigation, accessible descriptions, the operating card, and the stable failure state.
+**Architecture:** Keep slide content declarative, build every map from one valid local `TransitSystem`, and derive motion from pure scene timing plus the production feature builder and simulation kernel. MapLibre owns geographic projection and fixture-positioned labels; React owns dialog navigation and accessible descriptions. The operations scene reuses the production Service inspector's Schedule presentation, while preview failure uses plain text rather than simulated editor UI.
 
 **Tech Stack:** React 19, TypeScript, MapLibre GL, TransitMapper core model/render/simulation modules, Vitest, repository sequential verifier, CSS.
 
@@ -15,7 +15,9 @@
 - Use the rule “Use reality first; create only what is missing.”
 - Infrastructure remains the model and Network drawing remains the shortcut.
 - Make no remote tile, geocoding, or basemap request from onboarding.
-- Use production `buildFeatures` and `runStateAt`; onboarding overlays may present but must not create serialized records.
+- Use production `buildFeatures` and `runStateAt`; onboarding presentation must not create serialized records.
+- Do not add onboarding-only scene chips, hint pills, legends, clocks, or controls that resemble product UI.
+- Reuse production inspector presentation whenever onboarding shows inspector UI.
 - A genuine first run enters Network with the Bus line tool ready; replay changes no editor or view state.
 - Reduced motion starts at a meaningful settled frame.
 - Preview failure preserves readable content and working navigation.
@@ -224,7 +226,7 @@ The map must:
 - settle immediately and leave vehicles static for reduced motion;
 - catch construction/load/render errors and expose a stable failed state without exception text.
 
-`onboarding-scene-overlay.tsx` renders the scene badge, the infrastructure callout, the schedule/fleet card, the advancing clock, and the fallback swatches/values. It has no editor-store dependency.
+`onboarding-scene-overlay.tsx` is revised by Task 7 to render only shared production inspector presentation and plain failure copy. It has no editor-store dependency.
 
 - [ ] **Step 5: Run geometry, dialog, lint, and type checks**
 
@@ -278,7 +280,7 @@ Remove the three-preview branch and old preview keys. Pass `scene` and `visualDe
 
 - [ ] **Step 4: Replace onboarding CSS with the approved hierarchy**
 
-Desktop uses one generous map and compact floating operating card. At the compact breakpoint, the modal remains a bottom sheet, the body scrolls, the preview stays singular, the operating card moves below the map, and footer actions remain reachable. Use shape plus text for the selected step, not color alone. Under `prefers-reduced-motion`, remove overlay transitions in addition to settling JavaScript motion.
+Desktop uses one generous map. At the compact breakpoint, the modal remains a bottom sheet, the body scrolls, the preview stays singular, the shared production Schedule presentation moves below the map, and footer actions remain reachable. Use shape plus text for the selected step, not color alone. Under `prefers-reduced-motion`, remove presentation transitions in addition to settling JavaScript motion.
 
 - [ ] **Step 5: Run dialog tests and responsive CSS contract checks**
 
@@ -377,11 +379,11 @@ Expected: PASS.
 
 - [ ] **Step 3: Inspect the live dialog at desktop and phone sizes**
 
-Start `pnpm --filter @transitmapper/web dev --host 127.0.0.1`, open onboarding, and capture all four slides at a normal desktop viewport and 390 by 844 pixels. Confirm route geometry follows visible streets, the river and place labels explain the shape, the operating card obscures no branch or transfer, every footer action remains reachable, and no three-card comparison remains.
+Start `pnpm --filter @transitmapper/web dev --host 127.0.0.1`, open onboarding, and capture all four slides at a normal desktop viewport and 390 by 844 pixels. Confirm route geometry follows visible streets, the river and place labels explain the shape, the shared Schedule presentation obscures no branch or transfer, every footer action remains reachable, and no three-card comparison remains.
 
 - [ ] **Step 4: Inspect reduced motion and preview failure**
 
-Emulate `prefers-reduced-motion: reduce` and confirm the first scene is complete and simulation vehicles are static. Exercise the preview failure state through its test hook or a local construction failure and confirm copy, Back/Next, step selection, swatches, frequency, span, and fleet remain readable.
+Emulate `prefers-reduced-motion: reduce` and confirm the first scene is complete and simulation vehicles are static. Exercise the preview failure state through its test hook or a local construction failure and confirm the scene description, Back/Next, and step selection remain readable.
 
 - [ ] **Step 5: Run the full gate**
 
@@ -401,3 +403,92 @@ git commit
 ```
 
 Commit subject: `docs(web): explain onboarding scene architecture`
+
+### Task 7: Remove invented onboarding chrome and share the real Schedule UI
+
+This task supersedes the overlay and note-card presentation described in Tasks
+3, 4, and 6. The map remains the complete visual for drawing, infrastructure,
+and simulation. Only operations adds product UI, and that UI comes from the
+production Service inspector.
+
+**Files:**
+
+- Create: `apps/web/src/ui/inspector/service-schedule-fields.tsx`
+- Create: `apps/web/src/ui/inspector/service-load-presentation.tsx`
+- Create: `apps/web/src/ui/onboarding/onboarding-service-inspector-preview.tsx`
+- Modify: `apps/web/src/ui/inspector/ServiceInspector.tsx`
+- Modify: `apps/web/src/ui/onboarding/onboarding-scene-overlay.tsx`
+- Modify: `apps/web/src/ui/onboarding/OnboardingPreviewMap.tsx`
+- Modify: `apps/web/src/ui/onboarding/OnboardingDialog.tsx`
+- Modify: `apps/web/src/ui/onboarding/slides.tsx`
+- Modify: `apps/web/src/ui/app.css`
+- Modify: `apps/web/tests/ui/OnboardingDialog.test.tsx`
+- Modify: `apps/web/tests/ui/onboarding/onboarding-scene-overlay.test.tsx`
+- Modify: `apps/web/tests/ui/onboarding/onboarding-preview-map.test.tsx`
+- Create: `apps/web/tests/ui/inspector/service-schedule-fields.test.tsx`
+- Modify: `docs/development/reference/project-structure.md`
+
+- [ ] **Step 1: Write failing UI-contract tests**
+
+Assert that onboarding contains none of `Open beta`, `Network · Bus`,
+`Infrastructure`, `Service plan`, `System running`, `Following existing
+streets`, or the onboarding-only imported/new-infrastructure legend. Assert that
+the operations scene contains the production labels `Schedule`, `Peak headway`,
+`Span of service`, `Round trip`, and `Vehicles`, plus the fixture's active
+schedule values. Assert that preview failure shows only the scene description.
+
+Run:
+
+```bash
+pnpm --filter @transitmapper/web exec vitest run tests/ui/OnboardingDialog.test.tsx tests/ui/onboarding/onboarding-scene-overlay.test.tsx tests/ui/onboarding/onboarding-preview-map.test.tsx tests/ui/inspector/service-schedule-fields.test.tsx
+```
+
+Expected: FAIL because the fake chrome and note presentation still exist and
+the production Schedule fields are not shared.
+
+- [ ] **Step 2: Extract the production Schedule presentation**
+
+Move the existing frequency and span controls into
+`service-schedule-fields.tsx`, preserving the live inspector's labels, presets,
+custom-schedule behavior, and callbacks. Add an explicit read-only mode for the
+onboarding fixture. Extract the pure rendered portion of `ServiceLoad` into
+`service-load-presentation.tsx`; keep editor hooks and core calculations in
+`ServiceInspector.tsx` and pass only derived display values to the shared
+component.
+
+- [ ] **Step 3: Replace the fake overlay with a read-only inspector adapter**
+
+Build `onboarding-service-inspector-preview.tsx` from the shared Service
+inspector heading, tabs, load presentation, and schedule fields. Render it only
+for the operations scene. Draw, infrastructure, and simulation remain map-only.
+Render preview failure as plain accessible description text.
+
+- [ ] **Step 4: Remove special notes and overlay styling**
+
+Remove the beta disclosure, scene chips, hint pill, infrastructure legend,
+fake operating card, clock, service key, fallback values, and their CSS. Fold
+the future land-use sentence into slide four's normal body. Remove any clock
+state and callbacks that no longer affect a visible product surface.
+
+- [ ] **Step 5: Run focused verification and inspect both live surfaces**
+
+Run the focused tests from Step 1, then web lint and typecheck. Start the app and
+capture the four onboarding slides at desktop and phone sizes. Also inspect a
+selected service's live Schedule tab. Confirm that the shared labels, values,
+selection styling, and layout match; confirm that no onboarding-only element
+could be mistaken for real product UI.
+
+- [ ] **Step 6: Document and run the full gate**
+
+Update Project structure for the shared inspector presentation boundary, run
+`CI=1 pnpm check`, and treat any invented onboarding chrome, visual drift between
+the two Schedule renderings, or failed repository check as incomplete.
+
+- [ ] **Step 7: Commit the correction**
+
+```bash
+git add apps/web/src/ui/inspector apps/web/src/ui/onboarding apps/web/tests/ui docs/development/reference/project-structure.md
+git commit
+```
+
+Commit subject: `fix(web): use real UI in onboarding`

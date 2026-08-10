@@ -154,9 +154,6 @@ the actual street geometry and turns across the bridge; it does not connect
 points with generic straight segments. Place labels establish why the service
 runs where it does.
 
-The first slide also carries the existing quiet open-beta disclosure. It does
-not spend a separate slide welcoming the reader.
-
 ### 2. Shape the physical network.
 
 Copy:
@@ -179,11 +176,11 @@ Copy:
 > service runs and when it starts and ends—TransitMapper shows what that
 > operating plan requires.
 
-The Network scene adds Crosstown's airport branch. A compact inset derived from
-the production inspector shows the selected service, `Every 10 min`,
-`6 AM–11 PM`, and the resulting vehicle requirement. It resembles the real
-Line, Schedule, and Route surfaces without reproducing an entire 280-pixel
-inspector inside the preview.
+The Network scene adds Crosstown's airport branch. Beside the map, a read-only
+rendering of the production Service inspector's Schedule tab shows the selected
+service, peak headway, span of service, and resulting vehicle requirement. The
+onboarding preview and editor share the same presentational components; the
+preview must not imitate the inspector with onboarding-only controls.
 
 ### 4. Press play and watch the system operate.
 
@@ -192,10 +189,10 @@ Copy:
 > Vehicles follow the routes, stops, and schedules you designed. Move through
 > the day or change the speed to see the system operating.
 
-Vehicles from the real simulation kernel move over both services while a small
-clock advances. The schedule label and fleet value stay visible so motion reads
-as a consequence of the operating plan, not decorative animation. A quiet note
-states: `Coming later: explore how transit and land use shape each other.`
+Vehicles from the real simulation kernel move over both services. The normal
+slide body also explains that a future release will let people explore how
+transit and land use shape each other. This future capability does not receive
+its own badge, note card, or simulated product control.
 
 The final action is `Draw your first service`.
 
@@ -206,17 +203,20 @@ into three cards, and mobile never stacks several miniature maps.
 
 The map remains local and deterministic. `buildFeatures` produces the same
 service, way, station, facility, and vehicle features used by the editor. The
-preview may add onboarding-only DOM presentation around those features:
+preview may add only the DOM presentation needed to render actual geography or
+actual product UI:
 
 - MapLibre markers for fictional place labels, positioned from fixture
   coordinates rather than percentages;
 - a passive pointer marker for the first slide;
-- a compact schedule and fleet card for the third and fourth slides;
-- a small scene label such as `Network` or `Infrastructure` where orientation
-  helps.
+- a read-only instance of the production Service inspector's Schedule
+  presentation for the operations slide.
 
-Those overlays describe the real fixture. They do not create records, mutate
-the fixture, or enter serialization.
+Onboarding does not add scene-name chips, mode badges, legends, hint pills,
+clocks, schedule cards, or other controls that are absent from the editor. The
+map itself communicates drawing, reused streets, new track, and simulation.
+Shared inspector components describe the real fixture without creating records,
+mutating the fixture, or entering serialization.
 
 Scene motion begins when a slide becomes active. The drawing demonstration
 plays once and settles on the complete service. Returning to the slide replays
@@ -230,8 +230,8 @@ The complete relationship must remain visible without motion.
 ## Component boundaries and data flow
 
 `apps/web/src/ui/onboarding/slides.tsx` remains the content authority. Each
-slide declares a scene identifier, title, body, optional note, and accessible
-visual description. It does not contain fixture geometry or animation logic.
+slide declares a scene identifier, title, body, and accessible visual
+description. It does not contain fixture geometry or animation logic.
 
 `apps/web/src/ui/onboarding/fixtureSystem.ts` owns the Port Mason
 `TransitSystem`, stable IDs, place-label coordinates, service schedules, and
@@ -243,9 +243,13 @@ production feature projection, framing, markers, and scene timing. Pure helpers
 that turn elapsed time into a drawing extent, cursor position, simulated time,
 or settled state stay outside React effects so ordinary Vitest can prove them.
 
-A new kebab-case `onboarding-scene-overlay.tsx` owns the schedule, fleet, scene,
-and fallback presentation. It accepts named interfaces and scene data; it does
-not read editor state.
+Shared kebab-case components under `apps/web/src/ui/inspector/` own the Schedule
+fields and service-load presentation used by both the live Service inspector and
+the onboarding preview. A small read-only onboarding adapter supplies fixture
+values and positions that real inspector presentation beside the operations
+map. `onboarding-scene-overlay.tsx` contains only that adapter and plain failure
+copy; it does not invent a separate onboarding control language or read editor
+state.
 
 `apps/web/src/ui/onboarding/OnboardingDialog.tsx` remains the carousel
 orchestrator. It chooses the current slide, supplies the scene to the preview,
@@ -256,7 +260,8 @@ The data flow is one-way:
 1. Slide selection chooses a scene identifier.
 2. The preview reads the immutable fixture and scene metadata.
 3. Pure timing helpers derive the current presentation frame.
-4. Map sources and DOM overlays render that frame.
+4. Map sources and, for operations, shared production inspector components
+   render that frame.
 5. No result returns to the editor or saved system.
 
 ## First-run handoff and replay
@@ -274,14 +279,14 @@ introduction again on a later visit.
 ## Responsive behavior
 
 Desktop retains a large centered dialog with one map occupying most of the
-body. The compact schedule card never covers the route branch or downtown
-transfer.
+body. On the operations slide, the read-only production Schedule presentation
+sits beside the map and never covers the route branch or downtown transfer.
 
 At phone and short-window breakpoints, the dialog remains a bottom sheet. The
 body scrolls independently while navigation stays reachable. Place labels
-reduce to the smallest set needed for the story. The schedule card moves below
-the map rather than floating over it. Preview framing is recomputed after every
-resize; a desktop fit is never reused on a phone.
+reduce to the smallest set needed for the story. The production Schedule
+presentation moves below the map rather than floating over it. Preview framing
+is recomputed after every resize; a desktop fit is never reused on a phone.
 
 The stepper gains visible `n of 4` context in addition to its keyboard and
 screen-reader labels. The active state may not depend on color alone.
@@ -296,12 +301,12 @@ region.
 
 Motion follows the reduced-motion rule above. Decorative pointer and vehicle
 markers are hidden from assistive technology because the scene description and
-visible operating card carry their meaning.
+visible Schedule presentation carry their meaning.
 
 Preview initialization or rendering failure never blocks navigation or takes
-away the copy. The visual area falls back to the accessible scene description,
-service swatches, and key values in a stable neutral card. It does not expose
-exception text or ask the reader to retry a local deterministic preview.
+away the copy. The visual area falls back to the accessible scene description
+as plain readable text. It does not expose exception text, imitate an editor
+surface, or ask the reader to retry a local deterministic preview.
 
 ## Verification
 
@@ -315,6 +320,10 @@ Automated verification covers:
   values;
 - every slide declares one of the four required outcome categories and a
   nonempty accessible visual description;
+- onboarding contains no beta pill, scene-name chip, hint pill, legend, clock,
+  or onboarding-only imitation of an editor control;
+- the operations scene renders the same Schedule fields and service-load
+  presentation used by the live Service inspector;
 - pure scene timing reaches the correct partial and settled drawing states;
 - reduced motion selects settled frames and suppresses continuous vehicle
   animation;
@@ -326,9 +335,10 @@ Automated verification covers:
 
 Manual browser acceptance captures and reviews every slide at a normal desktop
 viewport and at 390 by 844 pixels. It confirms that the system reads as a
-plausible early proposal, route geometry follows visible geography, schedule
-content does not obscure the map, all actions remain reachable, and reduced
-motion communicates the same four outcomes.
+plausible early proposal, route geometry follows visible geography, the real
+Schedule presentation does not obscure the map, no invented product UI appears,
+all actions remain reachable, and reduced motion communicates the same four
+outcomes.
 
 `pnpm check` is the completion gate.
 
@@ -350,6 +360,8 @@ The redesign is complete when:
 - no copy describes infrastructure as an optional layer added after a service;
 - the bus example follows existing streets and the rail example visibly uses
   both existing and newly created infrastructure;
+- every product-looking element matches a shared production component; no
+  onboarding-only chips, legends, clocks, or schedule controls remain;
 - desktop and mobile show one legible system rather than miniature comparison
   cards;
 - motion, reduced motion, preview failure, first-run completion, and replay all
