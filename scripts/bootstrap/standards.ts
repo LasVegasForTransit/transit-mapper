@@ -13,7 +13,10 @@ import { CONTRIBUTION_METADATA_STATUS } from '../../packages/github-metadata/src
 // reported successfully on a canary pull request.
 export { CONTRIBUTION_METADATA_STATUS };
 
-export const REQUIRED_STATUS_CHECKS = [{ context: 'Validate' }] as const;
+export const REQUIRED_STATUS_CHECKS = [
+  { context: 'Validate' },
+  { context: CONTRIBUTION_METADATA_STATUS },
+] as const;
 
 /** Rules on the default branch, as a GitHub repository ruleset. */
 export const BRANCH_RULESET = {
