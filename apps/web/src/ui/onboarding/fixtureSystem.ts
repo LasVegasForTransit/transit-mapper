@@ -409,16 +409,7 @@ export const ONBOARDING_VEHICLE_RUNS = [
 ];
 export const ONBOARDING_FLEET = crosstownStats.fleet;
 
-// Compatibility exports remain while the map task moves from the single old
-// animated pattern to ONBOARDING_VEHICLE_RUNS.
 export const ONBOARDING_PATTERN_STATS = crosstownStats.patterns[0];
-export const ONBOARDING_INBOUND_CUM_LENGTHS = cumulativeLengths(
-  ONBOARDING_PATTERN_STATS.inboundPath,
-);
-export const ONBOARDING_VEHICLE_PROFILE = effectiveVehicleKind(
-  ONBOARDING_FIXTURE_SYSTEM.vehicleKinds,
-  crosstownService,
-).profile;
 export const ONBOARDING_SERVICE_COLOR = crosstownService.color;
 export const ONBOARDING_DRAW_PATH = ONBOARDING_PATTERN_STATS.path;
 

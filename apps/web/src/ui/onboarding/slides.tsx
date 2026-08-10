@@ -1,5 +1,5 @@
 export type OnboardingSceneId = 'draw' | 'infrastructure' | 'operations' | 'simulate';
-export type OnboardingOutcome = 'service' | 'infrastructure' | 'operations' | 'simulation';
+type OnboardingOutcome = 'service' | 'infrastructure' | 'operations' | 'simulation';
 
 export interface OnboardingSlideData {
   title: string;

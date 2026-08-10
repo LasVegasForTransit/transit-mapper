@@ -14,7 +14,7 @@ interface ContinueFirstRunOnboardingOptions {
 
 /** Network drawing is the low-friction gesture, so a first run begins with the
  * commonest service over the streets the location step just imported. */
-export function armFirstService(actions: FirstServiceActions): void {
+function armFirstService(actions: FirstServiceActions): void {
   actions.setDraftMode('bus');
   actions.setTool('way');
 }
