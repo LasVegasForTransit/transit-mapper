@@ -12,7 +12,7 @@ class FakeGtfsWorker {
   postMessage(_message: GtfsWorkerRequest, transfer: Transferable[]): void {
     this.transferred = transfer.length;
     const batch: GtfsImportBatch = {
-      pieces: { ways: [], services: [], stations: [] },
+      pieces: { ways: [], lines: [], services: [], stations: [] },
       routesDone: 2,
       routesTotal: 2,
     };

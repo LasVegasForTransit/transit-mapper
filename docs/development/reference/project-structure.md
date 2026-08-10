@@ -61,6 +61,11 @@ and identifiers. Its operations accept and return domain values without
 depending on application state. Store actions in the web application compose
 these operations into undoable edits.
 
+`packages/core/src/model/line-service.ts` is the ownership boundary between
+public Lines and technical Services. It resolves Line membership, display
+labels, and mode summaries, and validates the one-way Line-to-Service relation
+when a document enters the model.
+
 #### Geometry
 
 `packages/core/src/geometry` derives lane centerlines, junction footprints,
@@ -190,6 +195,10 @@ store and core projectors.
 
 `apps/web/src/ui` owns React presentation, workbench layout, inspector
 controls, dialogs, onboarding, and accessibility semantics.
+`apps/web/src/ui/sidebarOutline.ts` derives view-specific outline rows from the
+domain model without React state. `SidebarPanel.tsx` owns the per-view query,
+expansion, list limits, scroll position, selection wiring, and local recovery
+boundaries that present that projection.
 `apps/web/src/ui/useKeyboardInset.ts` reports how much of the viewport an
 on-screen keyboard covers, which no layout-viewport measurement exposes.
 `apps/web/src/ui/app-banner.ts` decides which single application-level message

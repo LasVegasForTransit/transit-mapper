@@ -21,6 +21,7 @@ import { useSim } from '../SimProvider';
 import { useSimTime } from '../useSimTime';
 import { useView } from '../ViewProvider';
 import { EmptyInspector, formatMinutes, Stat } from './shared';
+import { lineForService, serviceDisplayLabel } from '@transitmapper/core/model/line-service';
 
 export interface StationInspectorProps {
   id: string;
@@ -34,6 +35,7 @@ export function StationInspector({ id }: StationInspectorProps) {
   // Narrow selectors, not the whole `system` — see ServiceInspector's note.
   const ways = useEditor((s) => s.system.ways);
   const services = useEditor((s) => s.system.services);
+  const system = useEditor((s) => s.system);
   const readOnly = useEditor((s) => s.readOnly);
   const setStationName = useEditor((s) => s.setStationName);
   const suggestStationName = useEditor((s) => s.suggestStationName);
@@ -81,7 +83,11 @@ export function StationInspector({ id }: StationInspectorProps) {
       <div className="insp-head">
         <span
           className="dot"
-          style={{ background: served[0]?.color ?? 'var(--md-sys-color-outline)' }}
+          style={{
+            background: served[0]
+              ? lineForService(system, served[0].id)?.color
+              : 'var(--md-sys-color-outline)',
+          }}
         />
         <input
           ref={nameInputRef}
@@ -106,7 +112,7 @@ export function StationInspector({ id }: StationInspectorProps) {
         {served.length > 1
           ? `Interchange · ${served.length} services`
           : served.length === 1
-            ? `Served by ${served[0].name}`
+            ? `Served by ${serviceDisplayLabel(system, served[0].id)}`
             : 'Station · a stop'}
       </div>
 
@@ -126,7 +132,11 @@ export function StationInspector({ id }: StationInspectorProps) {
                 className="svc-chip"
                 onClick={() => selectAndFocus({ kind: 'service', id: sv.id })}
               >
-                <span className="dot sm" style={{ background: sv.color }} /> {sv.name}
+                <span
+                  className="dot sm"
+                  style={{ background: lineForService(system, sv.id)?.color }}
+                />{' '}
+                {serviceDisplayLabel(system, sv.id)}
               </button>
             ))}
           </div>
@@ -326,7 +336,7 @@ function StationGrouping({ stationId, readOnly }: StationGroupingProps) {
             className="svc-chip"
             onClick={() => selectAndFocus({ kind: 'group', id: myGroup.id })}
           >
-            {myGroup.name || 'Complex'}
+            {myGroup.name ?? 'Complex'}
           </button>
           {myGroup.memberIds
             .filter((m) => m !== stationId)
@@ -339,7 +349,7 @@ function StationGrouping({ stationId, readOnly }: StationGroupingProps) {
                     className="chip-removable-label"
                     onClick={() => selectAndFocus({ kind: 'station', id: mid })}
                   >
-                    {st.name || 'Unnamed station'}
+                    {st.name ?? 'Unnamed station'}
                   </button>
                   {!readOnly && (
                     <button
@@ -361,7 +371,7 @@ function StationGrouping({ stationId, readOnly }: StationGroupingProps) {
             <option value="">Choose a station…</option>
             {otherStations.map((st) => (
               <option key={st.id} value={st.id}>
-                {st.name || 'Unnamed station'}
+                {st.name ?? 'Unnamed station'}
               </option>
             ))}
           </select>

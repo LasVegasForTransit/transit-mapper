@@ -118,7 +118,7 @@
   },
   "src/model/gtfsImport.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 7
+      "count": 6
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 2
@@ -241,26 +241,18 @@
       "count": 1
     }
   },
-  "src/model/selectionRelations.ts": {
-    "max-depth": {
-      "count": 2
-    },
-    "sonarjs/cognitive-complexity": {
-      "count": 1
-    }
-  },
   "src/model/serialize.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 5
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 7
+      "count": 6
     },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 1
     },
     "complexity": {
-      "count": 2
+      "count": 1
     },
     "max-lines": {
       "count": 1
@@ -277,7 +269,7 @@
       "count": 3
     },
     "@typescript-eslint/prefer-optional-chain": {
-      "count": 2
+      "count": 1
     },
     "complexity": {
       "count": 1
@@ -291,7 +283,7 @@
       "count": 3
     },
     "@typescript-eslint/prefer-optional-chain": {
-      "count": 2
+      "count": 1
     },
     "complexity": {
       "count": 1
@@ -303,20 +295,12 @@
       "count": 1
     }
   },
-  "src/model/throughRoute.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    }
-  },
   "src/model/validate.ts": {
-    "@typescript-eslint/prefer-nullish-coalescing": {
-      "count": 1
-    },
     "complexity": {
       "count": 3
     },
     "max-depth": {
-      "count": 5
+      "count": 4
     },
     "max-lines": {
       "count": 1
@@ -332,9 +316,6 @@
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
@@ -345,7 +326,7 @@
       "count": 6
     },
     "max-depth": {
-      "count": 8
+      "count": 6
     },
     "max-lines": {
       "count": 1
@@ -357,7 +338,7 @@
       "count": 7
     },
     "sonarjs/cognitive-complexity": {
-      "count": 5
+      "count": 4
     }
   },
   "src/render/featureMemo.ts": {
@@ -435,11 +416,6 @@
       "count": 1
     }
   },
-  "tests/model/documentRepair.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    }
-  },
   "tests/model/importNetwork.test.ts": {
     "@typescript-eslint/prefer-promise-reject-errors": {
       "count": 1
@@ -470,7 +446,7 @@
   },
   "tests/model/serviceGestures.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 5
+      "count": 4
     }
   },
   "tests/model/throughRoute.test.ts": {
@@ -483,19 +459,11 @@
       "count": 2
     }
   },
-  "tests/model/wrongWay.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    }
-  },
   "tests/render/buildFeatures.test.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 4
+      "count": 3
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
       "count": 1
     }
   },

@@ -6,6 +6,7 @@ import {
   type Grade,
 } from '@transitmapper/core/model/catalog';
 import { serviceWayIds } from '@transitmapper/core/model/geo';
+import { lineForService, serviceDisplayLabel } from '@transitmapper/core/model/line-service';
 import type { LineGeometry } from '@transitmapper/core/model/system';
 import { Icon } from '../Icon';
 import { Panel } from '../Panel';
@@ -66,6 +67,7 @@ export interface ServicesOnWayProps {
 
 export function ServicesOnWay({ wayId, activeServiceId, readOnly }: ServicesOnWayProps) {
   const allServices = useEditor((s) => s.system.services);
+  const system = useEditor((s) => s.system);
   const way = useEditor((s) => s.system.ways.find((w) => w.id === wayId));
   const services = allServices.filter((sv) => serviceWayIds(sv).includes(wayId));
   const selectAndFocus = useEditor((s) => s.selectAndFocus);
@@ -86,7 +88,8 @@ export function ServicesOnWay({ wayId, activeServiceId, readOnly }: ServicesOnWa
             className={`svc-chip ${sv.id === activeServiceId ? 'active' : ''}`}
             onClick={() => selectAndFocus({ kind: 'service', id: sv.id })}
           >
-            <span className="dot sm" style={{ background: sv.color }} /> {sv.name}
+            <span className="dot sm" style={{ background: lineForService(system, sv.id)?.color }} />{' '}
+            {serviceDisplayLabel(system, sv.id)}
           </button>
         ))}
       </div>

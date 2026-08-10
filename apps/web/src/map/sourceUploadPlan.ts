@@ -88,6 +88,7 @@ const SOURCE_DEPENDENCIES: Record<keyof TransitSystem, readonly SystemFeatureSou
     SRC_CONNECTORS,
     SRC_WAY_LABELS,
   ],
+  lines: [SRC_SERVICES, SRC_STATIONS, SRC_SERVICE_ARROWS],
   services: [
     SRC_WAYS,
     SRC_SERVICES,

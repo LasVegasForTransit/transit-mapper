@@ -16,26 +16,24 @@ function renderSidebar(viewMode: ViewMode = 'network'): string {
 }
 
 describe('SidebarPanel', () => {
-  it('renders the Network workspace with grouping and a vehicle placeholder', () => {
+  it('renders a view-specific Network outline', () => {
     const markup = renderSidebar();
 
-    expect(markup).toContain('Group by');
+    expect(markup).toContain('Network outline');
     expect(markup).toContain('Lines');
-    expect(markup).toContain('Corridors');
-    expect(markup).toContain('Vehicles');
-    expect(markup).toContain('Coming later');
-    expect(markup).not.toContain('Infrastructure');
+    expect(markup).toContain('Stations');
+    expect(markup).not.toContain('Workspace');
+    expect(markup).not.toContain('Corridors');
   });
 
-  it('renders the Infrastructure workspace instead of unused object categories', () => {
+  it('renders the physical categories in the Infrastructure outline', () => {
     const markup = renderSidebar('infrastructure');
 
-    expect(markup).toContain('Infrastructure');
-    expect(markup).toContain('Corridors');
+    expect(markup).toContain('Infrastructure outline');
     expect(markup).toContain('Stations');
-    expect(markup).toContain('Complexes and facilities');
-    expect(markup).not.toContain('Group by');
-    expect(markup).not.toContain('Vehicles');
+    expect(markup).toContain('Facilities');
+    expect(markup).not.toContain('Corridors');
+    expect(markup).not.toContain('Workspace');
   });
 
   it('gives Diagram the network list rather than a second Layers control', () => {
@@ -59,13 +57,16 @@ describe('SidebarPanel', () => {
   });
 
   it('assigns each view its expected workspace sections', () => {
-    expect(sidebarSectionsForView('network')).toEqual(['Lines', 'Vehicles']);
+    expect(sidebarSectionsForView('network')).toEqual(['Lines', 'Stations']);
     expect(sidebarSectionsForView('infrastructure')).toEqual([
-      'Corridors',
+      'Roads',
+      'Railways and guideways',
+      'Trails',
+      'Waterways',
+      'Other infrastructure',
       'Stations',
-      'Complexes and facilities',
+      'Facilities',
     ]);
-    // Diagram borrows the network's, deliberately — see sidebarOutline.
-    expect(sidebarSectionsForView('diagram')).toEqual(['Lines', 'Vehicles']);
+    expect(sidebarSectionsForView('diagram')).toEqual(['Lines', 'Stations']);
   });
 });

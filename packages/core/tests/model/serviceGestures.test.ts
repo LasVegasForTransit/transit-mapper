@@ -3,6 +3,7 @@ import { MODE_ORDER, mode } from '../../src/model/catalog';
 import { defaultProfileFor } from '../../src/model/profile';
 import { patternPositionAt } from '../../src/model/serviceEdits';
 import { planTerminusGesture } from '../../src/model/serviceGestures';
+import { servicePattern } from '../../src/model/line-service';
 import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
 import type { Way } from '../../src/model/system';
 
@@ -46,7 +47,7 @@ describe('service terminus gesture planning', () => {
 
     const result = planTerminusGesture(
       system,
-      { serviceId: 'service', patternId: 'branch', side: 'end', purpose: 'extend' },
+      { serviceId: 'service', patternId: 'service', side: 'end', purpose: 'extend' },
       { kind: 'corridor', wayId: 'second', coord: C },
     );
 
@@ -81,7 +82,7 @@ describe('service terminus gesture planning', () => {
 
       const result = planTerminusGesture(
         system,
-        { serviceId: service.id, patternId: pattern.id, side, purpose: 'extend' },
+        { serviceId: service.id, patternId: service.id, side, purpose: 'extend' },
         { kind: 'corridor', wayId: extension.id, coord: C },
       );
 
@@ -132,11 +133,12 @@ describe('service terminus gesture planning', () => {
         },
       ],
     });
-    const target = patternPositionAt(ways, pattern, 'outbound', 0, 1)!;
+    const target = patternPositionAt(ways, servicePattern(system.services[0]), 'outbound', 0, 1);
+    if (!target) throw new Error('Expected the terminus position');
 
     const result = planTerminusGesture(
       system,
-      { serviceId: 'bus', patternId: 'branch', side: 'end', purpose: 'extend' },
+      { serviceId: 'bus', patternId: 'bus', side: 'end', purpose: 'extend' },
       { kind: 'service-position', serviceId: 'bus', position: target },
     );
 
@@ -160,7 +162,7 @@ describe('service terminus gesture planning', () => {
 
     const result = planTerminusGesture(
       system,
-      { serviceId: 'bus', patternId: busPattern.id, side: 'end', purpose: 'extend' },
+      { serviceId: 'bus', patternId: 'bus', side: 'end', purpose: 'extend' },
       { kind: 'service-position', serviceId: 'rail', position: target },
     );
 
@@ -186,7 +188,7 @@ describe('service terminus gesture planning', () => {
 
     const result = planTerminusGesture(
       system,
-      { serviceId: 'bus', patternId: busPattern.id, side: 'end', purpose: 'extend' },
+      { serviceId: 'bus', patternId: 'bus', side: 'end', purpose: 'extend' },
       { kind: 'service-position', serviceId: 'target', position: target },
     );
 
@@ -217,7 +219,7 @@ describe('service terminus gesture planning', () => {
       system,
       {
         serviceId: 'dragged',
-        patternId: trackPattern.id,
+        patternId: 'dragged',
         side: 'end',
         purpose: 'extend',
       },
@@ -261,7 +263,7 @@ describe('service terminus gesture planning', () => {
 
     const result = planTerminusGesture(
       system,
-      { serviceId: 'service', patternId: 'branch', side: 'end', purpose: 'return' },
+      { serviceId: 'service', patternId: 'service', side: 'end', purpose: 'return' },
       target ?? {
         kind: 'service-position',
         serviceId: 'other',

@@ -48,14 +48,15 @@ ridership modeling later.
 The simulation adds no new stored records. It derives a small hierarchy from
 data a saved system already holds:
 
-|           |         |                                                                                                          |
-| --------- | ------- | -------------------------------------------------------------------------------------------------------- |
-| `Service` | stored  | identity, mode, color, and its schedule                                                                  |
-| `Pattern` | stored  | one path; a branch is a second pattern on the same service                                               |
-| Plan      | derived | for a given headway: how many vehicles the pattern needs, the cycle they share, and the terminal layover |
-| Run       | derived | vehicle _i_ of that plan                                                                                 |
+|               |         |                                                                                                 |
+| ------------- | ------- | ----------------------------------------------------------------------------------------------- |
+| `Line`        | stored  | public name and color, grouping one or more Services                                            |
+| `Service`     | stored  | one mode, one path, and its schedule                                                            |
+| `ServicePath` | stored  | the infrastructure sequence that Service operates                                               |
+| Plan          | derived | for a given headway: how many vehicles the Service needs, their cycle, and the terminal layover |
+| Run           | derived | vehicle _i_ of that plan                                                                        |
 
-A run has no id and no memory. "Vehicle 3 of the main pattern" is a coordinate,
+A run has no id and no memory. "Vehicle 3 of the Service" is a coordinate,
 not an object — two consecutive frames are unrelated calculations that happen
 to agree.
 
@@ -235,7 +236,7 @@ resolved, so a system half-asleep at 23:30 does roughly half the work.
 
 ## Routes that share a stop
 
-Two services down the same corridor are evaluated **independently** — each
+Two Services on the same Way are evaluated **independently** — each
 resolves its own schedule, plan and runs, and neither knows the other exists.
 Their vehicles already ride distinct lanes and draw at distinct offsets, so
 nothing needs coordinating.

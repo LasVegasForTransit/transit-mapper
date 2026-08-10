@@ -40,6 +40,7 @@ import type { TransitSystem } from '../model/system';
 //     gate, so they are unaffected.
 export const FEATURE_INPUT_ROLE: Record<keyof TransitSystem, 'render' | 'meta'> = {
   ways: 'render',
+  lines: 'render',
   services: 'render',
   stations: 'render',
   facilities: 'render',

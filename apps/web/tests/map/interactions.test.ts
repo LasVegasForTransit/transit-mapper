@@ -111,7 +111,7 @@ function serviceFeature(wayId: string): MapGeoJSONFeature {
   return {
     type: 'Feature',
     id: `service-${wayId}`,
-    properties: { serviceId: 'service', wayId, patternId: 'branch', run: 'outbound', legIndex: 0 },
+    properties: { serviceId: 'service', wayId, patternId: 'service', run: 'outbound', legIndex: 0 },
     geometry: {
       type: 'LineString',
       coordinates: [
@@ -500,11 +500,8 @@ describe('pointer work coalescing', () => {
         id: 'service',
         name: 'Service',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [
-          { id: 'near', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
-          { id: 'far', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
-        ],
+
+        path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
     store.getState().setSystem(system);
@@ -513,7 +510,7 @@ describe('pointer work coalescing', () => {
         [-115.25, 36.1005],
         [-115.2, 36.1005],
       ]),
-      serviceFeatureFor('near', [
+      serviceFeatureFor('service', [
         [-115.25, 36.1],
         [-115.2, 36.1],
       ]),
@@ -563,14 +560,14 @@ describe('pointer work coalescing', () => {
         id: 'service',
         name: 'Service',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('trunk')] }] }],
+
+        path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('trunk')] }] },
       },
     ];
     store.getState().setSystem(system);
     store.getState().select({ kind: 'service', id: 'service' });
-    store.getState().setActivePattern('branch');
-    const map = createMap(terminusFeature('branch', 'end', [-115.23, 36.1]));
+    store.getState().setActivePattern('service');
+    const map = createMap(terminusFeature('service', 'end', [-115.23, 36.1]));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
       onPointerIntent: (intent) => shown.push(intent),
@@ -591,7 +588,7 @@ describe('pointer work coalescing', () => {
     });
 
     map.fire('mouseup', mouseEvent(map, map.project([-115.2, 36.1])));
-    expect(store.getState().system.services[0].patterns[0].sections).toHaveLength(2);
+    expect(store.getState().system.services[0].path.sections).toHaveLength(2);
     store.getState().undo();
     expect(store.getState().system).toBe(system);
     detach();
@@ -658,19 +655,17 @@ describe('pointer work coalescing', () => {
         id: 'service',
         name: 'Service',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [
-          {
-            id: 'branch',
-            sections: [{ kind: 'shared', legs: [wholeLeg('a-b'), wholeLeg('b-c')] }],
-          },
-        ],
+
+        path: {
+          id: 'service',
+          sections: [{ kind: 'shared', legs: [wholeLeg('a-b'), wholeLeg('b-c')] }],
+        },
       },
     ];
     store.getState().setSystem(system);
     store.getState().select({ kind: 'service', id: 'service' });
     const position = {
-      patternId: 'branch',
+      patternId: 'service',
       run: 'outbound' as const,
       legIndex: 1,
       wayId: 'b-c',
@@ -679,11 +674,11 @@ describe('pointer work coalescing', () => {
     };
     store.getState().armTerminus({
       serviceId: 'service',
-      patternId: 'branch',
+      patternId: 'service',
       side: 'end',
       position,
     });
-    const map = createMap(terminusFeature('branch', 'end', [-115.21, 36.1]));
+    const map = createMap(terminusFeature('service', 'end', [-115.21, 36.1]));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
       onPointerIntent: (intent) => shown.push(intent),
@@ -699,7 +694,7 @@ describe('pointer work coalescing', () => {
 
     map.fire('mousedown', mouseEvent(map, map.project([-115.21, 36.1])));
     map.setFeatures(
-      serviceOccurrenceFeature('service', 'branch', 'a-b', 0, [
+      serviceOccurrenceFeature('service', 'service', 'a-b', 0, [
         [-115.25, 36.1],
         [-115.23, 36.1],
       ]),
@@ -717,7 +712,7 @@ describe('pointer work coalescing', () => {
 
     map.fire('mouseup', mouseEvent(map, map.project([-115.23, 36.1])));
     expect(store.getState().armedTerminus).toBeNull();
-    expect(store.getState().system.services[0].patterns[0].sections).toMatchObject([
+    expect(store.getState().system.services[0].path.sections).toMatchObject([
       { kind: 'shared' },
       { kind: 'split' },
     ]);
@@ -736,7 +731,7 @@ describe('pointer work coalescing', () => {
       aRoad('c-d', [c, d]),
       aRoad('d-b', [d, b]),
     ];
-    const pattern = aPattern('branch', ways, ['a-b', 'b-c']);
+    const pattern = aPattern('service', ways, ['a-b', 'b-c']);
     const system = aSystem({
       ways,
       services: [aService('service', [pattern])],
@@ -771,14 +766,14 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     store.getState().setSystem(system);
     store.getState().select({ kind: 'service', id: 'service' });
-    const map = createMap(terminusFeature('branch', 'end', c));
+    const map = createMap(terminusFeature('service', 'end', c));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
       onPointerIntent: (intent) => shown.push(intent),
     });
 
     map.fire('mousedown', mouseEvent(map, map.project(c)));
-    map.setFeatures(serviceOccurrenceFeature('service', 'branch', 'a-b', 0, [a, b]));
+    map.setFeatures(serviceOccurrenceFeature('service', 'service', 'a-b', 0, [a, b]));
     map.fire('mousemove', mouseEvent(map, map.project(b)));
     scheduler.pump();
 
@@ -788,7 +783,7 @@ describe('pointer work coalescing', () => {
       anchor: 'target',
     });
     map.fire('mouseup', mouseEvent(map, map.project(b)));
-    expect(store.getState().system.services[0].patterns[0].sections).toMatchObject([
+    expect(store.getState().system.services[0].path.sections).toMatchObject([
       { kind: 'shared' },
       { kind: 'split' },
     ]);
@@ -805,17 +800,17 @@ describe('pointer work coalescing', () => {
         id: 'service',
         name: 'Service',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] }],
+
+        path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
     store.getState().setSystem(system);
     store.getState().armTerminus({
       serviceId: 'service',
-      patternId: 'branch',
+      patternId: 'service',
       side: 'end',
       position: {
-        patternId: 'branch',
+        patternId: 'service',
         run: 'outbound',
         legIndex: 0,
         wayId: 'erasable',
@@ -823,7 +818,7 @@ describe('pointer work coalescing', () => {
         distanceMeters: 1,
       },
     });
-    const map = createMap(terminusFeature('branch', 'end', [-115.2, 36.1]));
+    const map = createMap(terminusFeature('service', 'end', [-115.2, 36.1]));
     const detach = attach(map, store);
 
     map.fire('mousedown', mouseEvent(map, map.project([-115.2, 36.1])));
@@ -845,17 +840,17 @@ describe('pointer work coalescing', () => {
         id: 'service',
         name: 'Service',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] }],
+
+        path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
     store.getState().setSystem(system);
     store.getState().armTerminus({
       serviceId: 'service',
-      patternId: 'branch',
+      patternId: 'service',
       side: 'end',
       position: {
-        patternId: 'branch',
+        patternId: 'service',
         run: 'outbound',
         legIndex: 0,
         wayId: 'erasable',
@@ -895,23 +890,21 @@ describe('pointer work coalescing', () => {
         id: 'service',
         name: 'Dragged',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('first')] }] }],
+
+        path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('first')] }] },
       },
       {
         id: 'target',
         name: 'Target',
         modeId: 'bus',
-        color: '#167d9a',
-        patterns: [
-          { id: 'target-branch', sections: [{ kind: 'shared', legs: [wholeLeg('second')] }] },
-        ],
+
+        path: { id: 'target', sections: [{ kind: 'shared', legs: [wholeLeg('second')] }] },
       },
     ];
     store.getState().setSystem(system);
     store.getState().select({ kind: 'service', id: 'service' });
-    const sourceTerminus = terminusFeature('branch', 'end', [-115.23, 36.1]);
-    const targetTerminus = terminusFeature('target-branch', 'start', [-115.23, 36.1]);
+    const sourceTerminus = terminusFeature('service', 'end', [-115.23, 36.1]);
+    const targetTerminus = terminusFeature('target', 'start', [-115.23, 36.1]);
     targetTerminus.properties = {
       ...targetTerminus.properties,
       serviceId: 'target',
@@ -969,21 +962,21 @@ describe('pointer work coalescing', () => {
         id: 'service',
         name: 'Bus',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('road')] }] }],
+
+        path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('road')] }] },
       },
       {
         id: 'rail-service',
         name: 'Rail',
         modeId: 'subway',
-        color: '#167d9a',
-        patterns: [{ id: 'rail-branch', sections: [{ kind: 'shared', legs: [wholeLeg('rail')] }] }],
+
+        path: { id: 'rail-service', sections: [{ kind: 'shared', legs: [wholeLeg('rail')] }] },
       },
     ];
     store.getState().setSystem(system);
     store.getState().select({ kind: 'service', id: 'service' });
-    const sourceTerminus = terminusFeature('branch', 'end', [-115.23, 36.1]);
-    const targetTerminus = terminusFeature('rail-branch', 'start', [-115.23, 36.1]);
+    const sourceTerminus = terminusFeature('service', 'end', [-115.23, 36.1]);
+    const targetTerminus = terminusFeature('rail-service', 'start', [-115.23, 36.1]);
     targetTerminus.properties = {
       ...targetTerminus.properties,
       serviceId: 'rail-service',
@@ -1517,7 +1510,7 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
-  it('focuses the clicked Network service occurrence without inserting a corridor point', () => {
+  it('selects the public Line first and descends to its Service on a second click', () => {
     installBrowserGlobals();
     const store = createEditorStore();
     const system = createEmptySystem();
@@ -1527,17 +1520,17 @@ describe('pointer work coalescing', () => {
         id: 'service',
         name: 'Service',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [
-          {
-            id: 'branch',
-            sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }],
-          },
-        ],
+
+        path: {
+          id: 'service',
+          sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }],
+        },
       },
     ];
+    system.lines = [
+      { id: 'public-line', name: 'Public Line', color: '#e5252a', serviceIds: ['service'] },
+    ];
     store.getState().setSystem(system);
-    store.getState().select({ kind: 'service', id: 'service' });
     const before = store.getState().system;
     const map = createMap(serviceFeature('erasable'));
     const detach = attach(map, store);
@@ -1545,8 +1538,12 @@ describe('pointer work coalescing', () => {
     map.fire('click', mouseEvent(map, map.project([-115.23, 36.1])));
 
     expect(store.getState().system).toEqual(before);
+    expect(store.getState().selection).toEqual({ kind: 'line', id: 'public-line' });
+
+    map.fire('click', mouseEvent(map, map.project([-115.23, 36.1])));
+
     expect(store.getState().selection).toEqual({ kind: 'service', id: 'service' });
-    expect(store.getState().activePatternId).toBe('branch');
+    expect(store.getState().activePatternId).toBe('service');
     detach();
   });
 
@@ -1560,11 +1557,8 @@ describe('pointer work coalescing', () => {
         id: 'service',
         name: 'Service',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [
-          { id: 'near', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
-          { id: 'far', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
-        ],
+
+        path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
     store.getState().setSystem(system);
@@ -1573,7 +1567,7 @@ describe('pointer work coalescing', () => {
         [-115.25, 36.11],
         [-115.2, 36.11],
       ]),
-      serviceFeatureFor('near', [
+      serviceFeatureFor('service', [
         [-115.25, 36.1],
         [-115.2, 36.1],
       ]),
@@ -1582,7 +1576,7 @@ describe('pointer work coalescing', () => {
 
     map.fire('click', mouseEvent(map, map.project([-115.23, 36.1002])));
 
-    expect(store.getState().activePatternId).toBe('near');
+    expect(store.getState().activePatternId).toBe('service');
     detach();
   });
 
@@ -1596,8 +1590,8 @@ describe('pointer work coalescing', () => {
         id: 'service',
         name: 'Service',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] }],
+
+        path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
     store.getState().setSystem(system);
@@ -1624,11 +1618,8 @@ describe('pointer work coalescing', () => {
         id: 'service',
         name: 'Service',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [
-          { id: 'first', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
-          { id: 'second', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
-        ],
+
+        path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
     store.getState().setSystem(system);
@@ -1637,14 +1628,14 @@ describe('pointer work coalescing', () => {
       [-115.2, 36.1],
     ];
     const map = createMap([
-      serviceFeatureFor('first', coordinates),
+      serviceFeatureFor('service', coordinates),
       serviceFeatureFor('second', coordinates),
     ]);
     const detach = attach(map, store);
 
     map.fire('click', mouseEvent(map, map.project([-115.23, 36.1])));
 
-    expect(store.getState().activePatternId).toBe('first');
+    expect(store.getState().activePatternId).toBe('service');
     detach();
   });
 
@@ -1658,14 +1649,14 @@ describe('pointer work coalescing', () => {
         id: 'service',
         name: 'Service',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] }],
+
+        path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
     store.getState().setSystem(system);
     const at: [number, number] = [-115.23, 36.1];
     const map = createMap([
-      terminusFeature('branch', 'end', at),
+      terminusFeature('service', 'end', at),
       serviceFeature('erasable'),
       wayFeature('erasable'),
     ]);
@@ -1682,7 +1673,7 @@ describe('pointer work coalescing', () => {
     map.fire('mouseup', right);
 
     expect(opened).toMatchObject([
-      { anchor: at, serviceHit: { terminusSide: 'end', patternId: 'branch', position: { t: 1 } } },
+      { anchor: at, serviceHit: { terminusSide: 'end', patternId: 'service', position: { t: 1 } } },
     ]);
     scheduler.fireKey('keydown', { key: 'Escape' });
     detach();
@@ -1697,10 +1688,8 @@ describe('pointer work coalescing', () => {
       id,
       name: id,
       modeId: 'bus',
-      color: '#e4572e',
-      patterns: [
-        { id: `${id}-branch`, sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
-      ],
+
+      path: { id, sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
     }));
     store.getState().setSystem(system);
     store.getState().addMultiSelection([
@@ -1708,10 +1697,7 @@ describe('pointer work coalescing', () => {
       { kind: 'service', id: 'other' },
     ]);
     const at: [number, number] = [-115.23, 36.1];
-    const map = createMap([
-      terminusFeature('service-branch', 'end', at),
-      serviceFeature('erasable'),
-    ]);
+    const map = createMap([terminusFeature('service', 'end', at), serviceFeature('erasable')]);
     const opened: Array<{ serviceHit?: ServiceActionHit }> = [];
     const detach = attach(map, store, {
       contextMenu: {
@@ -1779,8 +1765,8 @@ describe('pointer work coalescing', () => {
         id: 'service',
         name: 'Service',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [{ id: 'branch', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] }],
+
+        path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
     store.getState().setSystem(system);
@@ -1808,7 +1794,7 @@ describe('pointer work coalescing', () => {
       })
       .find((candidate) => candidate.id === 'service.endHere')!;
     action.run();
-    const leg = store.getState().system.services[0].patterns[0].sections[0];
+    const leg = store.getState().system.services[0].path.sections[0];
     expect(leg.kind === 'shared' && leg.legs[0].extent).toMatchObject({
       kind: 'stretch',
       toT: 1,
@@ -1865,13 +1851,11 @@ describe('pointer work coalescing', () => {
         id: 'service',
         name: 'Service',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [
-          {
-            id: 'branch',
-            sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }],
-          },
-        ],
+
+        path: {
+          id: 'service',
+          sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }],
+        },
       },
     ];
     store.getState().setSystem(system);
@@ -1895,7 +1879,7 @@ describe('pointer work coalescing', () => {
     expect(opened).toMatchObject([
       {
         at: [-115.23, 36.1],
-        serviceHit: { serviceId: 'service', patternId: 'branch', run: 'outbound', legIndex: 0 },
+        serviceHit: { serviceId: 'service', patternId: 'service', run: 'outbound', legIndex: 0 },
       },
     ]);
     expect(anchors.at(-1)).toEqual([-115.23, 36.1]);
@@ -2656,8 +2640,7 @@ describe('corridor-following an incompatible-type way', () => {
     ).toBe(true);
     expect(
       after.services
-        .flatMap((sv) => sv.patterns)
-        .flatMap((p) => patternLegs(p))
+        .flatMap((service) => patternLegs(service.path))
         .some((l) => l.wayId === 'road1'),
       'finishWay does not reabsorb it onto the road it was kept offset from',
     ).toBe(false);

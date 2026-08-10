@@ -9,6 +9,38 @@ import {
 } from '../../../src/editor/actions/serviceActions';
 
 describe('terminus service actions', () => {
+  it('groups all Services from two selected public Lines without changing their modes', () => {
+    const store = createEditorStore();
+    const system = createEmptySystem();
+    system.lines = [
+      { id: 'red', name: 'Red', color: '#f00', serviceIds: ['red-bus'] },
+      { id: 'blue', name: 'Blue', color: '#00f', serviceIds: ['blue-rail'] },
+    ];
+    system.services = [
+      { id: 'red-bus', modeId: 'bus', path: { id: 'red-bus', sections: [] } },
+      { id: 'blue-rail', modeId: 'subway', path: { id: 'blue-rail', sections: [] } },
+    ];
+    store.getState().setSystem(system);
+
+    const action = serviceActionProvider(store)({
+      system,
+      refs: [
+        { kind: 'line', id: 'red' },
+        { kind: 'line', id: 'blue' },
+      ],
+    }).find((candidate) => candidate.id === 'line.groupServices');
+
+    expect(action?.label).toBe('Group under one line');
+    action?.run();
+    expect(store.getState().system.lines).toEqual([
+      { id: 'red', name: 'Red', color: '#f00', serviceIds: ['red-bus', 'blue-rail'] },
+    ]);
+    expect(store.getState().system.services.map((service) => service.modeId)).toEqual([
+      'bus',
+      'subway',
+    ]);
+  });
+
   it('uses the standard through-service connection label', () => {
     expect(JOIN_THROUGH_SERVICE_LABEL).toBe('Join into a through-service');
   });
@@ -21,11 +53,8 @@ describe('terminus service actions', () => {
         id: 'line',
         name: 'Line',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [
-          { id: 'branch', sections: oneSection([wholeLeg('way')]) },
-          { id: 'other', sections: oneSection([wholeLeg('way')]) },
-        ],
+
+        path: { id: 'branch', sections: oneSection([wholeLeg('way')]) },
       },
     ];
     const arm = () =>
@@ -42,11 +71,6 @@ describe('terminus service actions', () => {
           distanceMeters: 100,
         },
       });
-
-    store.getState().setSystem(system);
-    arm();
-    store.getState().deletePattern('line', 'branch');
-    expect(store.getState().armedTerminus).toBeNull();
 
     store.getState().setSystem(system);
     arm();
@@ -72,8 +96,8 @@ describe('terminus service actions', () => {
         id: 'line',
         name: 'Line',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [{ id: 'branch', sections: oneSection([wholeLeg('way')]) }],
+
+        path: { id: 'branch', sections: oneSection([wholeLeg('way')]) },
       },
     ];
     store.getState().setSystem(system);
@@ -109,8 +133,8 @@ describe('terminus service actions', () => {
         id: 'line',
         name: 'Line',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [{ id: 'branch', sections: oneSection([wholeLeg('way')]) }],
+
+        path: { id: 'branch', sections: oneSection([wholeLeg('way')]) },
       },
     ];
 
@@ -130,8 +154,8 @@ describe('terminus service actions', () => {
         id: 'line',
         name: 'Line',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [{ id: 'branch', sections: oneSection([wholeLeg('way')]) }],
+
+        path: { id: 'branch', sections: oneSection([wholeLeg('way')]) },
       },
     ];
     store.getState().setSystem(system);

@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { patternPath, patternLegs } from '../../src/model/geo';
+import { servicePattern } from '../../src/model/line-service';
 import { throughRouteServices, throughRouteServicesAt } from '../../src/model/throughRoute';
 import { validateSystemQuick } from '../../src/model/validate';
 import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
@@ -35,8 +36,7 @@ describe('joining two lines into a through-route', () => {
     expect(next).not.toBeNull();
     expect(next!.services).toHaveLength(1);
     const [joined] = next!.services;
-    expect(joined.patterns).toHaveLength(1);
-    expect(patternLegs(joined.patterns[0]).map((l) => l.wayId)).toEqual(['west', 'east']);
+    expect(patternLegs(servicePattern(joined)).map((l) => l.wayId)).toEqual(['west', 'east']);
   });
 
   it('keeps the surviving line’s own name and colour', () => {
@@ -63,7 +63,7 @@ describe('joining two lines into a through-route', () => {
       ],
     });
     const next = throughRouteServices(system, 'a', 'b');
-    const joined = next!.services[0].patterns[0];
+    const joined = servicePattern(next!.services[0]);
     expect(patternLegs(joined).map((l) => l.wayId)).toEqual(['west', 'east']);
     // Travelling east means running `east` against its own point order.
     expect(patternLegs(joined)[1].direction).toBe('againstPoints');
@@ -72,7 +72,7 @@ describe('joining two lines into a through-route', () => {
     expect(path[path.length - 1][0]).toBeCloseTo(-115.19, 5);
   });
 
-  it('carries the joined line’s other branches over as branches', () => {
+  it('keeps the joined line’s sibling service attached to its public line', () => {
     const spur = aRoad('spur', [
       [-115.19, 36.15],
       [-115.19, 36.16],
@@ -81,18 +81,20 @@ describe('joining two lines into a through-route', () => {
       ways: [west, east, spur],
       services: [
         aService('a', [aPattern('pa', [west], ['west'])]),
-        aService('b', [aPattern('pb', [east], ['east']), aPattern('pb2', [spur], ['spur'])], {
-          name: 'Green',
-        }),
+        aService('b', [aPattern('pb', [east], ['east'])], { name: 'Main' }),
+        aService('b-spur', [aPattern('pb2', [spur], ['spur'])], { name: 'Spur' }),
+      ],
+      lines: [
+        { id: 'a-line', name: 'Blue', color: '#246bce', serviceIds: ['a'] },
+        { id: 'b-line', name: 'Green', color: '#2ea44f', serviceIds: ['b', 'b-spur'] },
       ],
     });
     const next = throughRouteServices(system, 'a', 'b');
-    const [joined] = next!.services;
-    expect(joined.patterns).toHaveLength(2);
-    expect(joined.patterns[1].name).toBe('Green');
+    expect(next!.services.map((service) => service.id)).toEqual(['a', 'b-spur']);
+    expect(next!.lines.find((line) => line.id === 'b-line')?.serviceIds).toEqual(['b-spur']);
   });
 
-  it('joins the exact requested branches even when another pair of termini is nearer', () => {
+  it('joins the exact requested service paths', () => {
     const desiredKeep = aRoad('desired-keep', [
       [-115.21, 36.15],
       [-115.2, 36.15],
@@ -105,25 +107,11 @@ describe('joining two lines into a through-route', () => {
       [-115.1995, 36.15],
       [-115.19, 36.15],
     ]);
-    const alternateKeep = aRoad('alternate-keep', [
-      [-115.31, 36.2],
-      [-115.3, 36.2],
-    ]);
-    const alternateOther = aRoad('alternate-other', [
-      [-115.3, 36.2],
-      [-115.29, 36.2],
-    ]);
     const system = aSystem({
-      ways: [desiredKeep, connector, desiredOther, alternateKeep, alternateOther],
+      ways: [desiredKeep, connector, desiredOther],
       services: [
-        aService('a', [
-          aPattern('alternate-a', [alternateKeep], ['alternate-keep']),
-          aPattern('desired-a', [desiredKeep], ['desired-keep']),
-        ]),
-        aService('b', [
-          aPattern('alternate-b', [alternateOther], ['alternate-other']),
-          aPattern('desired-b', [desiredOther], ['desired-other']),
-        ]),
+        aService('desired-a', [aPattern('desired-a', [desiredKeep], ['desired-keep'])]),
+        aService('desired-b', [aPattern('desired-b', [desiredOther], ['desired-other'])]),
       ],
       nodes: [
         {
@@ -145,7 +133,7 @@ describe('joining two lines into a through-route', () => {
       ],
     });
 
-    const next = throughRouteServicesAt(system, 'a', 'b', {
+    const next = throughRouteServicesAt(system, 'desired-a', 'desired-b', {
       aPatternId: 'desired-a',
       aEnd: 'end',
       bPatternId: 'desired-b',
@@ -153,11 +141,11 @@ describe('joining two lines into a through-route', () => {
       distanceM: 45,
     });
 
-    expect(
-      patternLegs(next!.services[0].patterns.find((pattern) => pattern.id === 'desired-a')!).map(
-        (leg) => leg.wayId,
-      ),
-    ).toEqual(['desired-keep', 'connector', 'desired-other']);
+    expect(patternLegs(servicePattern(next!.services[0])).map((leg) => leg.wayId)).toEqual([
+      'desired-keep',
+      'connector',
+      'desired-other',
+    ]);
   });
 
   it('refuses two lines of different modes', () => {
@@ -215,16 +203,16 @@ describe('a line whose two directions run different streets', () => {
           ? sv
           : {
               ...sv,
-              patterns: sv.patterns.map((pt) => ({
-                ...pt,
+              path: {
+                id: sv.id,
                 sections: [
                   {
                     kind: 'split' as const,
-                    outbound: patternLegs(pt),
-                    inbound: patternLegs(pt),
+                    outbound: patternLegs(servicePattern(sv)),
+                    inbound: patternLegs(servicePattern(sv)),
                   },
                 ],
-              })),
+              },
             },
       ),
     };
@@ -237,7 +225,7 @@ describe('a line whose two directions run different streets', () => {
   it('is left exactly as it was when the join is refused', () => {
     const before = couplet();
     throughRouteServices(before, 'a', 'b');
-    const still = before.services.find((sv) => sv.id === 'a')!.patterns[0];
-    expect(still.sections[0].kind).toBe('split');
+    const still = before.services.find((sv) => sv.id === 'a')!;
+    expect(still.path.sections[0].kind).toBe('split');
   });
 });

@@ -10,6 +10,7 @@ import type {
   Service,
   Way,
 } from '../system';
+import { servicePattern } from '../line-service';
 // Re-exported from where it used to be declared: RunDirection is a model
 // concept now (system/service.ts), but every caller reaches it through geo.
 export type { RunDirection } from '../system';
@@ -157,12 +158,11 @@ export function patternWayIds(pattern: Pattern): string[] {
 // pass without any service actually changing in between.
 const serviceWayIdsCache = new WeakMap<Service, string[]>();
 
-/** Every way a service touches across ALL its patterns, deduplicated — the
+/** Every way a Service touches, deduplicated — the
  *  right unit for "does this way carry this service" (rendering bundle/
- *  offset counts, interchange detection, …), where a service having two
- *  branches that share a trunk way must still count as ONE service on that
- *  way, not two. Use a pattern's own legs directly when you need one branch's
- *  ordered path specifically.
+ *  offset counts, interchange detection, …), where repeated legs on a shared
+ *  stretch must still count as one Service. Use the path's legs directly when
+ *  you need their ordered travel sequence.
  *
  *  Deliberately coarse: a service that covers 5% of a way still reports that
  *  way. That is the safe direction for reserving a render slot, and the wrong
@@ -171,7 +171,7 @@ const serviceWayIdsCache = new WeakMap<Service, string[]>();
 export function serviceWayIds(service: Service): string[] {
   let ids = serviceWayIdsCache.get(service);
   if (ids) return ids;
-  ids = [...new Set(service.patterns.flatMap((p) => patternLegs(p).map((l) => l.wayId)))];
+  ids = [...new Set(patternLegs(servicePattern(service)).map((leg) => leg.wayId))];
   serviceWayIdsCache.set(service, ids);
   return ids;
 }
@@ -232,17 +232,16 @@ export function patternCoversWayAt(pattern: Pattern, wayId: string, t: number): 
   });
 }
 
-/** Whether this service reaches position `t` on `wayId`, across all its
- *  branches. */
+/** Whether this service reaches position `t` on `wayId`. */
 export function serviceCoversWayAt(service: Service, wayId: string, t: number): boolean {
-  return service.patterns.some((p) => patternCoversWayAt(p, wayId, t));
+  return patternCoversWayAt(servicePattern(service), wayId, t);
 }
 
 /** Whether any of a service's legs covers less than a whole way. Almost always
  *  false, which is worth knowing: it lets the extent-aware paths in rendering
  *  skip their extra work entirely for a system nobody has trimmed. */
 export function serviceHasPartialLeg(service: Service): boolean {
-  return service.patterns.some((p) => patternLegs(p).some((l) => !legIsWhole(l)));
+  return patternLegs(servicePattern(service)).some((leg) => !legIsWhole(leg));
 }
 
 /**
@@ -250,16 +249,14 @@ export function serviceHasPartialLeg(service: Service): boolean {
  * the way's own parameterization — what rendering needs to draw the line where
  * it actually runs.
  *
- * Merged, because two branches of one service overlapping on a shared trunk
- * are one line on the ground, not two stacked on top of each other. A service
+ * Merged, because repeated legs of one Service on the same stretch are one
+ * operation on the ground, not stacked duplicates. A Service
  * that covers the way end to end yields the single range `[0, 1]`.
  */
 export function serviceRangesOnWay(service: Service, wayId: string): [number, number][] {
   const ranges: [number, number][] = [];
-  for (const pattern of service.patterns) {
-    for (const leg of patternLegs(pattern)) {
-      if (leg.wayId === wayId) ranges.push(legRange(leg));
-    }
+  for (const leg of patternLegs(servicePattern(service))) {
+    if (leg.wayId === wayId) ranges.push(legRange(leg));
   }
   if (ranges.length <= 1) return ranges;
   ranges.sort((a, b) => a[0] - b[0]);

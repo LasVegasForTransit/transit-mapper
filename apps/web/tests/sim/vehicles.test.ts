@@ -11,7 +11,6 @@ import { createSimClock } from '../../src/sim/simClock';
 
 const patternStatsProbe = vi.hoisted(() => ({ calls: 0 }));
 const patternDependenciesProbe = vi.hoisted(() => ({ calls: 0 }));
-
 vi.mock('@transitmapper/core/sim/serviceStats', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@transitmapper/core/sim/serviceStats')>();
   return {
@@ -215,9 +214,9 @@ function runningSystem(): TransitSystem {
       id: 'service',
       name: 'Line',
       modeId: 'bus',
-      color: '#c33',
+
       frequencyMinutes: 10,
-      patterns: [{ id: 'pattern', sections: oneSection([wholeLeg(used.id)]) }],
+      path: { id: 'service', sections: oneSection([wholeLeg(used.id)]) },
     },
   ];
   return system;

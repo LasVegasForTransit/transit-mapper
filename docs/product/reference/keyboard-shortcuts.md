@@ -35,13 +35,13 @@ The single source of truth is `KEY_BINDINGS` in
 | Key                                          | Action                                                                                                      |
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `Esc`                                        | Back out one level: cancel the in-progress draw or armed flow, then drop the tool, then clear the selection |
-| `Enter`                                      | Commit the line or corridor being drawn                                                                     |
+| `Enter`                                      | Commit the Line, Service path, or Way being drawn                                                           |
 | `Delete` / `Backspace`                       | Delete the selection                                                                                        |
 | `Ctrl`/`⌘` + `Z`                             | Undo                                                                                                        |
 | `Ctrl`/`⌘` + `Shift` + `Z`, `Ctrl`/`⌘` + `Y` | Redo                                                                                                        |
 
 Undo/redo are the only browser-style keyboard combos the app claims. `Ctrl`/`⌘`
-also acts as a pointer modifier over corridor control points, as described
+also acts as a pointer modifier over Way control points, as described
 below; other keyboard combos pass through to the browser.
 
 ## Pointer modifiers
@@ -51,12 +51,12 @@ update while the pointer is stationary. Pointer-down locks the primary
 operation for that gesture; after a drag starts, only `Shift` may change its
 geometric constraint.
 
-| Modifier              | Pointer meaning                                                                                          |
-| --------------------- | -------------------------------------------------------------------------------------------------------- |
-| Hold `Space`          | Pan the camera in any view                                                                               |
-| Hold `Shift`          | Constrain a control-point move; during a drag, add or remove only the geometric constraint               |
-| Hold `Alt` / `Option` | Erase Infrastructure control points, or deliberately draw a separate corridor with the Network Line tool |
-| Hold `Ctrl` / `⌘`     | Split at an interior corridor control point, or extend from a corridor endpoint                          |
+| Modifier              | Pointer meaning                                                                                     |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| Hold `Space`          | Pan the camera in any view                                                                          |
+| Hold `Shift`          | Constrain a control-point move; during a drag, add or remove only the geometric constraint          |
+| Hold `Alt` / `Option` | Erase Infrastructure control points, or deliberately draw a separate Way with the Network Line tool |
+| Hold `Ctrl` / `⌘`     | Split at an interior Way control point, or extend from a Way endpoint                               |
 
 The full cursor, badge, preview, and result matrix is in
 [Editor interactions](editor-interactions.md#pointer-intent-reference).

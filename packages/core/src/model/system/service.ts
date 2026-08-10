@@ -1,5 +1,13 @@
 import type { ScheduleDayScope } from './valueTypes';
 
+/** The public identity a transportation agency designates on its map. */
+export interface Line {
+  id: string;
+  name: string;
+  color: string;
+  serviceIds: string[];
+}
+
 /**
  * One way in a pattern's path, and how much of it the pattern uses.
  *
@@ -83,13 +91,11 @@ export type PatternSection =
   | { kind: 'split'; outbound: PatternLeg[]; inbound: PatternLeg[] }
   | { kind: 'turnaround'; legs: PatternLeg[] };
 
-/** One path a service runs — more than one on the same service models a
- *  branch/variant sharing that service's identity (name/color/mode), e.g. a
- *  trunk splitting into an airport branch and a downtown branch.
+/** One operational path. A Service owns exactly one; agency-designated Lines
+ *  group sibling Services when multiple paths share a public identity.
  *
- *  Still branches, not directions: two directions of ONE path are two runs of
- *  one pattern (see PatternSection), because they share a stop list, a headway
- *  and a fleet, which two branches do not. */
+ *  Directions are still two runs of ONE path (see PatternSection), because
+ *  they share a stop derivation, headway, and fleet. */
 export interface Pattern {
   id: string;
   /** The pattern's path, in sections ordered along OUTBOUND travel.
@@ -123,9 +129,12 @@ export interface Pattern {
    * nothing.
    */
   skippedStops?: Partial<Record<RunDirection, string[]>>;
-  /** Optional label for a specific branch/variant, e.g. "via Airport". */
-  name?: string;
 }
+
+/** The one operational path owned by a Service. Its id matches the Service id
+ *  so existing geometry operations can address the path without introducing
+ *  a second identity. */
+export type ServicePath = Pattern;
 
 /** One named headway period within a service's full schedule — "Peak",
  *  "Off-Peak", "Weekend", etc. GTFS `frequencies.txt`-shaped (a headway +
@@ -142,19 +151,17 @@ export interface SchedulePeriod {
   frequencyMinutes: number;
 }
 
-/** A colored route that people ride, running over one or more patterns
- *  (paths) — a plain line has exactly one; a branch has two or more. */
+/** One mode-specific operation beneath a public Line. */
 export interface Service {
   id: string;
-  name: string;
+  /** Required only when a Line has multiple Services to distinguish. */
+  name?: string;
   /** Mode catalog id: "subway" | "bus" | "tram" | "gondola" | … */
   modeId: string;
   /** A specific VehicleKind (system.vehicleKinds) this service runs —
    *  unset (the common case) uses the mode's plain default size/speed. */
   vehicleKindId?: string;
-  /** Hex color, e.g. "#e4572e". */
-  color: string;
-  patterns: Pattern[];
+  path: ServicePath;
   /** Peak headway in minutes — how often a vehicle departs at the busiest
    *  time of day. Undefined = not yet specified. This is the quick,
    *  always-present control (Inspector's "Peak headway" field, and what

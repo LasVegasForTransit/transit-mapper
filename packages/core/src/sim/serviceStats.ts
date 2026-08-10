@@ -27,6 +27,7 @@ import {
   patternRunPath,
   anchorOnWayId,
 } from '../model/geo';
+import { servicePattern } from '../model/line-service';
 import type {
   LngLat,
   Pattern,
@@ -286,14 +287,11 @@ export function patternStats(
 }
 
 export interface ServiceStats {
-  patterns: PatternStats[];
-  /** Vehicles across every pattern — a branch runs its own, so a two-branch
-   *  service needs both fleets at once. */
+  /** Measurements for this Service's one path. */
+  path: PatternStats;
   fleet: number;
-  /** The longest round trip among this service's patterns; what someone means
-   *  by "how long does this line take end to end". */
-  longestRoundTripMs: number;
-  /** Recovery time at each terminal on the pattern that sets the round trip. */
+  roundTripMs: number;
+  /** Recovery time at each terminal. */
   layoverMs: number;
 }
 
@@ -309,15 +307,12 @@ export function serviceStats(
   headwayMinutes?: number,
 ): ServiceStats | null {
   const { profile } = effectiveVehicleKind(vehicleKinds, service);
-  const patterns = service.patterns
-    .map((pattern) => patternStats(ways, stations, pattern, profile, headwayMinutes))
-    .filter((stats): stats is PatternStats => stats !== null);
-  if (patterns.length === 0) return null;
-  const longest = patterns.reduce((a, b) => (b.roundTripMs > a.roundTripMs ? b : a));
+  const measured = patternStats(ways, stations, servicePattern(service), profile, headwayMinutes);
+  if (!measured) return null;
   return {
-    patterns,
-    fleet: patterns.reduce((sum, p) => sum + (p.plan?.fleet ?? 0), 0),
-    longestRoundTripMs: longest.roundTripMs,
-    layoverMs: longest.plan?.layoverMs ?? 0,
+    path: measured,
+    fleet: measured.plan?.fleet ?? 0,
+    roundTripMs: measured.roundTripMs,
+    layoverMs: measured.plan?.layoverMs ?? 0,
   };
 }

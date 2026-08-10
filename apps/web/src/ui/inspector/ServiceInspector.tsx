@@ -26,12 +26,11 @@ import {
   minutesOfDay,
 } from '@transitmapper/core/sim/clock';
 import { patternStops, serviceStats } from '@transitmapper/core/sim/serviceStats';
-import { ColorField } from '../ColorField';
+import { servicePattern } from '@transitmapper/core/model/line-service';
 import { InspectorTabs, type InspectorTab } from '../InspectorTabs';
 import { Panel } from '../Panel';
 import { blurOnEnter } from '../formUtils';
 import { Icon } from '../Icon';
-import { IconButton } from '../IconButton';
 import { useSim } from '../SimProvider';
 import { useSimTime } from '../useSimTime';
 import { useUnitPreference } from '../../services/userPreferences';
@@ -82,25 +81,20 @@ const DAY_SCOPE_LABEL: Record<ScheduleDayScope, string> = {
  * docs/product/reference/editor-interactions.md. Keep these strings together
  * so a copy regression cannot quietly turn model names into interface terms. */
 export const ROUTE_INSPECTOR_COPY = {
-  branchesLabel: 'Branches',
-  branchExplanation:
-    'Each branch is one service path this line runs — add a branch to model a line that splits.',
-  deleteBranch: 'Delete this branch',
-  corridorShape: 'Corridor shape',
-  mergeBranches:
-    "Combines this line's branches into another line of the same mode, then removes this line.",
+  pathShape: 'Path shape',
+  moveService:
+    'Moves this Service beneath another public Line without changing its mode, path, or schedule.',
   adoptTitle:
-    'Re-route this line onto already-built corridors near its sketch and remove the redundant sketch geometry',
+    'Re-route this Service onto nearby infrastructure and remove its redundant sketch geometry',
   adoptRefusal:
-    "No adoptable infrastructure found near this line's endpoints — build or import the corridors it should ride first.",
-  adoptHelp:
-    'Re-binds each branch onto nearby built corridors, following the sketched service path; stations move with it.',
-  corridorHelp:
-    'Drag a control point or corridor endpoint to reshape · click the corridor to add a control point · Ctrl/⌘-drag an endpoint to extend it · Alt/Option-drag to erase a section · Ctrl/⌘-click a control point to split the corridor there',
+    "No adoptable infrastructure was found near this Service's endpoints. Build or import its path first.",
+  adoptHelp: 'Fits this Service path to nearby infrastructure; anchored stations move with it.',
+  pathHelp:
+    'Drag a control point or endpoint to reshape · click the path to add a control point · Ctrl/⌘-drag an endpoint to extend it · Alt/Option-drag to erase a section · Ctrl/⌘-click a control point to split the path there',
 } as const;
 
-export function corridorCountLabel(count: number): string {
-  return `${count} corridor${count === 1 ? '' : 's'}`;
+export function segmentCountLabel(count: number): string {
+  return `${count} segment${count === 1 ? '' : 's'}`;
 }
 
 function formatSpan(start: string, end: string): string {
@@ -127,22 +121,16 @@ export interface ServiceInspectorProps {
 
 export function ServiceInspector({ id }: ServiceInspectorProps) {
   const unitSystem = useUnitPreference();
-  const service = useEditor((s) => s.system.services.find((sv) => sv.id === id));
-  // Narrow selectors, not the whole `system` — that object is a fresh
-  // reference on EVERY store mutation (any drag frame, any unrelated edit
-  // elsewhere, a GTFS batch merging in), so selecting it wholesale re-rendered
-  // this panel on every single one of those instead of only when something it
-  // actually reads (ways/services/palette) changed. Confirmed live: with a
-  // service selected, dragging an unrelated way re-rendered this at drag-
-  // frame rate.
+  const service = useEditor((s) => s.system.services.find((candidate) => candidate.id === id));
+  const lines = useEditor((s) => s.system.lines);
   const ways = useEditor((s) => s.system.ways);
-  const services = useEditor((s) => s.system.services);
   const stations = useEditor((s) => s.system.stations);
-  const palette = useEditor((s) => s.system.palette);
+  const selectedStopId = useEditor((s) =>
+    s.selection?.kind === 'service' && s.selection.id === id ? s.selection.stopId : undefined,
+  );
   const readOnly = useEditor((s) => s.readOnly);
   const setServiceName = useEditor((s) => s.setServiceName);
   const setServiceMode = useEditor((s) => s.setServiceMode);
-  const setServiceColor = useEditor((s) => s.setServiceColor);
   const setServiceFrequency = useEditor((s) => s.setServiceFrequency);
   const setServiceSpan = useEditor((s) => s.setServiceSpan);
   const setServiceSchedule = useEditor((s) => s.setServiceSchedule);
@@ -152,14 +140,9 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   const setWayGeometry = useEditor((s) => s.setWayGeometry);
   const setWayGrade = useEditor((s) => s.setWayGrade);
   const deleteService = useEditor((s) => s.deleteService);
-  const addPaletteColor = useEditor((s) => s.addPaletteColor);
   const selectAndFocus = useEditor((s) => s.selectAndFocus);
   const setActivePattern = useEditor((s) => s.setActivePattern);
-  const addingPatternForServiceId = useEditor((s) => s.addingPatternForServiceId);
-  const startAddingPattern = useEditor((s) => s.startAddingPattern);
-  const cancelAddingPattern = useEditor((s) => s.cancelAddingPattern);
-  const deletePattern = useEditor((s) => s.deletePattern);
-  const mergeServiceInto = useEditor((s) => s.mergeServiceInto);
+  const moveServiceToLine = useEditor((s) => s.moveServiceToLine);
   const adoptExistingInfrastructure = useEditor((s) => s.adoptExistingInfrastructure);
   const setStopSkipped = useEditor((s) => s.setStopSkipped);
   const makePatternTwoWay = useEditor((s) => s.makePatternTwoWay);
@@ -180,11 +163,18 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   const [spanCustomOpen, setSpanCustomOpen] = useState(
     () =>
       (service?.spanStart !== undefined || service?.spanEnd !== undefined) &&
-      !SPAN_PRESETS.some((p) => p.start === service?.spanStart && p.end === service?.spanEnd),
+      !SPAN_PRESETS.some((p) => p.start === service.spanStart && p.end === service.spanEnd),
   );
 
   if (!service) return <EmptyInspector />;
-  const singlePattern = service.patterns.length === 1 ? service.patterns[0] : null;
+  const singlePattern = servicePattern(service);
+  const line = lines.find((candidate) => candidate.serviceIds.includes(service.id));
+  const selectedStop = stations.find((station) => station.id === selectedStopId);
+  const serviceLabel =
+    service.name?.trim() ||
+    (line?.serviceIds.length === 1
+      ? line.name
+      : `Service ${Math.max(1, (line?.serviceIds.indexOf(service.id) ?? 0) + 1)}`);
   const singleWay =
     singlePattern && patternLegs(singlePattern).length === 1
       ? ways.find((w) => w.id === patternLegs(singlePattern)[0].wayId)
@@ -192,11 +182,8 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   // Measured along what the line actually rides, not by summing whole way
   // lengths: a way the pattern couldn't resolve contributes nothing, and once
   // a pattern can cover part of a way the two numbers stop agreeing.
-  const length = service.patterns.reduce(
-    (sum, p) => sum + pathLengthMeters(patternPath(ways, p)),
-    0,
-  );
-  const patternStops = service.patterns.map((p) => ({
+  const length = pathLengthMeters(patternPath(ways, singlePattern));
+  const patternStops = [singlePattern].map((p) => ({
     pattern: p,
     // Ride order from core's patternStops — the same derivation the simulation
     // dwells on, so the panel's "calls at" list and the stops a vehicle
@@ -214,7 +201,6 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
     skippedInbound: new Set(p.skippedStops?.inbound ?? []),
   }));
   const totalStops = new Set(patternStops.flatMap(({ stops }) => stops.map((st) => st.id))).size;
-  const isAddingBranch = addingPatternForServiceId === id;
   const hasFullSchedule = !!service.schedule && service.schedule.length > 0;
   // A mode may span several way types (e.g. tram: dedicated track or street-running
   // road) — offer every mode compatible with the way this service currently rides.
@@ -223,28 +209,31 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
     : MODE_ORDER.map((m) => MODES[m]);
 
   const tabs: InspectorTab[] = [
-    { id: 'line', label: 'Line' },
+    { id: 'line', label: 'Service' },
     { id: 'schedule', label: 'Schedule' },
-    { id: 'route', label: 'Route' },
+    { id: 'route', label: 'Path' },
   ];
 
   return (
     <Panel slot="right" aria-label="Selection details">
       <div className="insp-head">
-        <span className="dot" style={{ background: service.color }} />
+        <span className="dot" style={{ background: line?.color }} />
         <input
           className="insp-name"
           aria-label="Service name"
-          value={service.name}
+          placeholder={line?.serviceIds.length === 1 ? line.name : 'Service name'}
+          value={service.name ?? ''}
           disabled={readOnly}
           onChange={(e) => setServiceName(id, e.target.value)}
           onKeyDown={blurOnEnter}
         />
       </div>
       <div className="insp-kind">
+        {line?.name ? `${line.name} · ` : ''}
         {MODES[service.modeId]?.label ?? 'Service'} · {formatDistance(length, unitSystem)} ·{' '}
         {totalStops} stop
         {totalStops === 1 ? '' : 's'}
+        {selectedStop ? ` · Call at ${selectedStop.name || 'Unnamed station'}` : ''}
       </div>
 
       <InspectorTabs tabs={tabs} active={tab} onChange={setTab} />
@@ -297,16 +286,6 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
             </button>
           )}
 
-          <div className="insp-field">
-            <ColorField
-              value={service.color}
-              palette={palette}
-              disabled={readOnly}
-              onChange={(c) => setServiceColor(id, c)}
-              onAddToPalette={addPaletteColor}
-            />
-          </div>
-
           <div className="stats">
             <Stat label="Length" value={formatDistance(length, unitSystem)} />
             <Stat label="Stops" value={String(totalStops)} />
@@ -333,7 +312,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
       {scheduleOpen && (
         <Suspense fallback={null}>
           <ScheduleDialog
-            serviceName={service.name}
+            serviceName={serviceLabel}
             schedule={service.schedule}
             frequencyMinutes={service.frequencyMinutes}
             spanStart={service.spanStart}
@@ -360,7 +339,8 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
       {!readOnly && (
         <div className="insp-footer">
           <button className="danger-btn" onClick={() => deleteService(id)}>
-            <Icon name="trash" size={18} /> Delete service
+            <Icon name="trash" size={18} />{' '}
+            {line?.serviceIds.length === 1 ? 'Delete service and line' : 'Delete service'}
           </button>
         </div>
       )}
@@ -515,7 +495,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
           </div>
         )}
 
-        {!readOnly && (
+        {!readOnly && line && (
           <button
             type="button"
             className="link-btn"
@@ -531,7 +511,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
 
   function renderRouteSection() {
     if (!service) return null;
-    const mergeTargets = services.filter((sv) => sv.id !== id && sv.modeId === service.modeId);
+    const moveTargets = lines.filter((candidate) => candidate.id !== line?.id);
     return (
       <>
         {!readOnly && (
@@ -555,9 +535,9 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
         )}
         {singleWay && (
           <>
-            <label className="field-label">{ROUTE_INSPECTOR_COPY.corridorShape}</label>
-            {!readOnly && <p className="insp-sub">{ROUTE_INSPECTOR_COPY.corridorHelp}</p>}
-            <div className="chip-row" role="group" aria-label={ROUTE_INSPECTOR_COPY.corridorShape}>
+            <label className="field-label">{ROUTE_INSPECTOR_COPY.pathShape}</label>
+            {!readOnly && <p className="insp-sub">{ROUTE_INSPECTOR_COPY.pathHelp}</p>}
+            <div className="chip-row" role="group" aria-label={ROUTE_INSPECTOR_COPY.pathShape}>
               {GEOMETRY_OPTIONS.map(([g, label]) => (
                 <button
                   key={g}
@@ -578,10 +558,15 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
           </>
         )}
 
-        <label className="field-label">{ROUTE_INSPECTOR_COPY.branchesLabel}</label>
-        {!readOnly && <p className="insp-sub">{ROUTE_INSPECTOR_COPY.branchExplanation}</p>}
+        <label className="field-label">Service path</label>
+        {!readOnly && (
+          <p className="insp-sub">
+            This is the one path operated by this service. Add another service when the public line
+            has a branch, express pattern, or temporary shuttle.
+          </p>
+        )}
         <ul className="pattern-list">
-          {service.patterns.map((p, i) => {
+          {[singlePattern].map((p) => {
             const pWay = ways.find((w) => w.id === patternLegs(p)[0]?.wayId);
             return (
               <li key={p.id} className="pattern-row">
@@ -592,57 +577,23 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                   onClick={() => setActivePattern(p.id)}
                 >
                   <span className="dot ring" />
-                  <span className="pattern-name">
-                    {p.name || (i === 0 ? 'Main' : `Branch ${i}`)}
-                  </span>
+                  <span className="pattern-name">{serviceLabel}</span>
                   <span className="pattern-meta">
                     {formatDistance(pathLengthMeters(patternPath(ways, p)), unitSystem)} ·{' '}
-                    {corridorCountLabel(patternLegs(p).length)}
+                    {segmentCountLabel(patternLegs(p).length)}
                   </span>
                 </button>
-                {!readOnly && service.patterns.length > 1 && (
-                  <IconButton
-                    icon="trash"
-                    size={15}
-                    label={ROUTE_INSPECTOR_COPY.deleteBranch}
-                    onClick={() => deletePattern(id, p.id)}
-                  />
-                )}
               </li>
             );
           })}
         </ul>
         {!readOnly && (
           <>
-            {isAddingBranch ? (
-              <>
-                <p className="insp-sub">
-                  Draw the branch's path on the map — it joins this line once you finish.
-                </p>
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}
-                  onClick={cancelAddingPattern}
-                >
-                  Cancel adding branch
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                className="ghost-btn"
-                style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}
-                onClick={() => startAddingPattern(id)}
-              >
-                <Icon name="plus" size={17} /> Add branch
-              </button>
-            )}
             {singlePattern &&
               (patternHasCouplet(singlePattern) ? (
                 <>
                   <p className="insp-sub">
-                    This line runs two one-way paths. Its outward and return trips use different
+                    This Service runs two one-way paths. Its outward and return trips use different
                     streets.
                   </p>
                   <button
@@ -655,31 +606,31 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                   </button>
                 </>
               ) : null)}
-            {mergeTargets.length > 0 && (
+            {moveTargets.length > 0 && (
               <>
-                <label className="field-label" htmlFor="merge-into-select">
-                  Merge into another line
+                <label className="field-label" htmlFor="move-to-line-select">
+                  Move to another Line
                 </label>
-                <p className="insp-sub">{ROUTE_INSPECTOR_COPY.mergeBranches}</p>
+                <p className="insp-sub">{ROUTE_INSPECTOR_COPY.moveService}</p>
                 <select
-                  id="merge-into-select"
+                  id="move-to-line-select"
                   className="opt-select"
                   style={{ width: '100%', marginBottom: 12 }}
                   defaultValue=""
                   onChange={(e) => {
                     const targetId = e.target.value;
                     if (targetId) {
-                      mergeServiceInto(id, targetId);
+                      moveServiceToLine(id, targetId);
                       e.target.value = '';
                     }
                   }}
                 >
                   <option value="" disabled>
-                    Choose a line to merge into…
+                    Choose a Line…
                   </option>
-                  {mergeTargets.map((sv) => (
-                    <option key={sv.id} value={sv.id}>
-                      {sv.name || 'Unnamed line'}
+                  {moveTargets.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.name || 'Unnamed line'}
                     </option>
                   ))}
                 </select>
@@ -688,19 +639,14 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
           </>
         )}
 
-        {patternStops.map(({ pattern, stops, returnStops, skippedInbound }, i) =>
+        {patternStops.map(({ pattern, stops, returnStops, skippedInbound }) =>
           stops.length > 0 ? (
             <div key={pattern.id}>
-              <label className="field-label">
-                Stop sequence
-                {service.patterns.length > 1
-                  ? ` — ${pattern.name || (i === 0 ? 'Main' : `Branch ${i}`)}`
-                  : ''}
-              </label>
+              <label className="field-label">Stop sequence</label>
               {!readOnly && stops.length > 1 && (
                 <p className="insp-sub">
-                  A stop is a place this line can be cut. Ending it at a stop shortens the line; the
-                  street it runs on is not touched.
+                  A stop is a place this Service can be cut. Ending it at a stop shortens the
+                  Service; the street it runs on is not touched.
                 </p>
               )}
               <ol className="stop-list">
@@ -746,7 +692,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                           <button
                             type="button"
                             className="ghost-btn stop-action"
-                            title={`Cut this line back so it starts at ${st.name || 'this stop'}`}
+                            title={`Cut this Service back so it starts at ${st.name || 'this stop'}`}
                             onClick={() =>
                               trimPatternTo(
                                 id,
@@ -764,7 +710,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                           <button
                             type="button"
                             className="ghost-btn stop-action"
-                            title={`Cut this line back so it ends at ${st.name || 'this stop'}`}
+                            title={`Cut this Service back so it ends at ${st.name || 'this stop'}`}
                             onClick={() =>
                               trimPatternTo(
                                 id,
@@ -782,7 +728,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                           <button
                             type="button"
                             className="ghost-btn stop-action"
-                            title={`Cut this line in two here — both halves keep running on the same infrastructure`}
+                            title={`Cut this Service in two here — both halves keep running on the same infrastructure`}
                             onClick={() =>
                               splitServiceAt(
                                 id,
@@ -804,8 +750,8 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                 <>
                   <label className="field-label">Return trip</label>
                   <p className="insp-sub">
-                    This line&rsquo;s two directions run different streets, so the return trip calls
-                    at its own stops in its own order.
+                    This Service&rsquo;s two directions run different streets, so the return trip
+                    calls at its own stops in its own order.
                   </p>
                   <ol className="stop-list">
                     {returnStops.map((st) => (
@@ -867,13 +813,13 @@ function ServiceLoad({ service }: ServiceLoadProps) {
   if (!stats)
     return (
       <p className="panel-hint">
-        Draw this line over some infrastructure to see what running it takes.
+        Draw this Service over some infrastructure to see what running it takes.
       </p>
     );
 
-  const roundTrip = formatMinutes(stats.longestRoundTripMs / 60_000);
-  const stops = stats.patterns.reduce((most, p) => Math.max(most, p.stops.length), 0);
-  const dwell = stats.patterns.reduce((most, p) => Math.max(most, p.dwellMs), 0) / 60_000;
+  const roundTrip = formatMinutes(stats.roundTripMs / 60_000);
+  const stops = stats.path.stops.length;
+  const dwell = stats.path.dwellMs / 60_000;
 
   return (
     <>
@@ -892,8 +838,7 @@ function ServiceLoad({ service }: ServiceLoadProps) {
             ? `Running at ${when} with no frequency set, so it runs a single vehicle around a ${roundTrip} round trip.`
             : `At ${when} it runs every ${active.headwayMinutes} min${!pinnedPeriod && active.label ? ` (${active.label})` : ''}. ` +
               `${stops === 0 ? 'With no stops' : `${stops} stop${stops === 1 ? '' : 's'} and ${formatMinutes(dwell)} of dwell`}, a round trip takes ` +
-              `${roundTrip}, so holding that headway needs ${stats.fleet} vehicle${stats.fleet === 1 ? '' : 's'}` +
-              `${stats.patterns.length > 1 ? ` across ${stats.patterns.length} branches` : ''}, ` +
+              `${roundTrip}, so holding that headway needs ${stats.fleet} vehicle${stats.fleet === 1 ? '' : 's'}, ` +
               `each waiting ${formatMinutes(stats.layoverMs / 60_000)} at either end.`}
       </p>
     </>

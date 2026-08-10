@@ -15,34 +15,39 @@ import { Icon } from '../Icon';
 import { useView } from '../ViewProvider';
 import { EmptyInspector, Stat } from './shared';
 
-// A group member can be a station, a facility, or (transfer complexes formed
-// from LinesPanel) a service — resolve both its display name AND its real
+// A group member can be a station, facility, public Line, or technical Service
+// — resolve both its display name AND its real
 // selection kind, so clicking a row selects the right kind of thing instead
 // of always assuming "station".
 interface MemberLookup {
   stations: Station[];
   facilities: TransitSystem['facilities'];
+  lines: TransitSystem['lines'];
   services: TransitSystem['services'];
 }
 
 function memberInfo(
-  { stations, facilities, services }: MemberLookup,
+  { stations, facilities, lines, services }: MemberLookup,
   memberId: string,
 ): { selection: Selection; label: string } | null {
   const station = stations.find((s) => s.id === memberId);
   if (station)
     return {
       selection: { kind: 'station', id: memberId },
-      label: station.name || 'Unnamed station',
+      label: station.name ?? 'Unnamed station',
     };
   const facility = facilities.find((f) => f.id === memberId);
   if (facility)
     return {
       selection: { kind: 'facility', id: memberId },
-      label: facility.name || facilityType(facility.typeId).label,
+      label: facility.name ?? facilityType(facility.typeId).label,
     };
+  const line = lines.find((candidate) => candidate.id === memberId);
+  if (line)
+    return { selection: { kind: 'line', id: memberId }, label: line.name || 'Unnamed line' };
   const service = services.find((sv) => sv.id === memberId);
-  if (service) return { selection: { kind: 'service', id: memberId }, label: service.name };
+  if (service)
+    return { selection: { kind: 'service', id: memberId }, label: service.name ?? 'Service' };
   return null;
 }
 
@@ -57,6 +62,7 @@ export function GroupInspector({ id }: GroupInspectorProps) {
   // Narrow selectors, not the whole `system` — see ServiceInspector's note.
   const stations = useEditor((s) => s.system.stations);
   const facilities = useEditor((s) => s.system.facilities);
+  const lines = useEditor((s) => s.system.lines);
   const services = useEditor((s) => s.system.services);
   const palette = useEditor((s) => s.system.palette);
   const readOnly = useEditor((s) => s.readOnly);
@@ -108,7 +114,7 @@ export function GroupInspector({ id }: GroupInspectorProps) {
           <div className="svc-list">
             {group.memberIds.length === 0 && <span className="panel-hint">No members yet</span>}
             {group.memberIds.map((mid) => {
-              const info = memberInfo({ stations, facilities, services }, mid);
+              const info = memberInfo({ stations, facilities, lines, services }, mid);
               return (
                 <div key={mid} className="svc-chip chip-removable">
                   {info ? (

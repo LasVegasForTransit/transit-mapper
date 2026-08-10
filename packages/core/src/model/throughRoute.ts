@@ -2,10 +2,8 @@
  * Joining two lines that meet end to end into one line that runs the whole
  * way through.
  *
- * This is not what mergeServiceInto does. That makes one service carrying two
- * disjoint patterns — a branched line — which is the right model for a trunk
- * that splits, and the wrong one for two routes that ought to be through-
- * routed into a single ride.
+ * This is not a public Line grouping operation. Grouping preserves both
+ * Services; a through-route combines their paths into one continuous ride.
  *
  * The join is only offered where a vehicle could actually make it: if the two
  * termini are not the same point, the router has to find a path between them
@@ -26,6 +24,7 @@ import {
 } from './geo';
 import { materializeRouteSpans } from './routeLegs';
 import { anchorOnWay, routeBetween } from './routeGraph';
+import { servicePattern } from './line-service';
 import type { Pattern, PatternLeg, Service, TransitSystem, Way } from './system';
 import { LEG_JOIN_TOLERANCE_M } from './validate';
 import { terminiMeet, type TerminusMeeting } from './selectionRelations';
@@ -63,7 +62,7 @@ function wayAtEnd(
   end: 'start' | 'end',
 ): Way | undefined {
   const leg = end === 'start' ? legs[0] : legs[legs.length - 1];
-  return leg ? system.ways.find((w) => w.id === leg.wayId) : undefined;
+  return system.ways.find((way) => way.id === leg.wayId);
 }
 
 /**
@@ -99,11 +98,8 @@ function connectorLegs(
  * Join `otherId` onto `keepId` as one continuous line.
  *
  * The joined line keeps `keepId`'s name, colour, and schedule, because a
- * through-route is one of the two lines carrying on rather than a new thing
- * with no history. Any pattern of the source that was not the one joined
- * carries over as a branch, named after the source service if it had no name
- * of its own — the same rule mergeServiceInto uses, so a branch list still
- * reads as "which line was this".
+ * through-route is one of the two Services carrying on rather than a new
+ * thing with no history. Its public Line also survives.
  *
  * Returns null and changes nothing when the modes differ, when the termini do
  * not meet, or when no infrastructure connects them.
@@ -132,9 +128,9 @@ export function throughRouteServicesAt(
   const other = system.services.find((s) => s.id === otherId);
   if (!keep || !other || keep.id === other.id || keep.modeId !== other.modeId) return null;
 
-  const keepPattern = keep.patterns.find((p) => p.id === meeting.aPatternId);
-  const otherPattern = other.patterns.find((p) => p.id === meeting.bPatternId);
-  if (!keepPattern || !otherPattern) return null;
+  if (keep.id !== meeting.aPatternId || other.id !== meeting.bPatternId) return null;
+  const keepPattern = servicePattern(keep);
+  const otherPattern = servicePattern(other);
   // A line whose two directions run different streets cannot be spliced into
   // the middle of another one: the joint is where the two halves of a couplet
   // would have to be re-paired against the other line's, and nothing here
@@ -160,10 +156,6 @@ export function throughRouteServicesAt(
     ]),
   };
 
-  const carried = other.patterns
-    .filter((p) => p.id !== otherPattern.id)
-    .map((p) => ({ ...p, name: p.name ?? other.name }));
-
   return {
     ...system,
     services: system.services
@@ -172,10 +164,20 @@ export function throughRouteServicesAt(
         s.id === keepId
           ? {
               ...s,
-              patterns: [...s.patterns.map((p) => (p.id === joined.id ? joined : p)), ...carried],
+              path: {
+                id: s.id,
+                sections: joined.sections,
+                ...(joined.skippedStops ? { skippedStops: joined.skippedStops } : {}),
+              },
             }
           : s,
       ),
+    lines: system.lines
+      .map((line) => ({
+        ...line,
+        serviceIds: line.serviceIds.filter((serviceId) => serviceId !== otherId),
+      }))
+      .filter((line) => line.serviceIds.length > 0),
     updatedAt: Date.now(),
   };
 }

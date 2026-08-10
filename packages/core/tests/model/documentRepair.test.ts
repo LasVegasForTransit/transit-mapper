@@ -10,6 +10,7 @@ import { parseSystem } from '../../src/model/serialize';
 import { findMismatchedTypeJunctions, validateSystem } from '../../src/model/validate';
 import type { Node } from '../../src/model/system';
 import { patternLegs } from '../../src/model/geo';
+import { servicePattern } from '../../src/model/line-service';
 import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
 
 /** A road running east-west and a rail line running north-south, both with a
@@ -85,7 +86,9 @@ describe('a junction joining more than one way type', () => {
     // Nothing moves: the rail line still runs through the same coordinate,
     // which is what a level crossing looks like until the model has one.
     // (Within the float drift of parse's own longitude wrap, not exactly.)
-    const railEnd = loaded.ways.find((w) => w.id === 'rail')!.points[1];
+    const rail = loaded.ways.find((way) => way.id === 'rail');
+    if (!rail) throw new Error('Expected the repaired rail way');
+    const railEnd = rail.points[1];
     expect(railEnd[0]).toBeCloseTo(-115.15, 9);
     expect(railEnd[1]).toBeCloseTo(36.1, 9);
   });
@@ -147,7 +150,9 @@ describe('a line riding a way that cannot be drawn', () => {
   it('keeps the line, and only drops the leg that named the way', () => {
     const loaded = parseSystem(JSON.parse(JSON.stringify(savedWithLine())));
     expect(loaded.services.map((sv) => sv.id)).toEqual(['line']);
-    expect(patternLegs(loaded.services[0].patterns[0]).map((l) => l.wayId)).toEqual(['road-west']);
+    expect(patternLegs(servicePattern(loaded.services[0])).map((l) => l.wayId)).toEqual([
+      'road-west',
+    ]);
   });
 
   it('leaves a line that ends up riding nothing for the person to deal with', () => {
@@ -194,7 +199,7 @@ describe('a document that says nothing the model disallows', () => {
     expect(loaded.ways.map((w) => w.id)).toEqual(saved.ways.map((w) => w.id));
     expect(loaded.nodes.map((n) => n.refs)).toEqual(saved.nodes.map((n) => n.refs));
     expect(loaded.stations.map((st) => st.anchors)).toEqual(saved.stations.map((st) => st.anchors));
-    expect(loaded.services[0].patterns[0].sections).toEqual(saved.services[0].patterns[0].sections);
+    expect(loaded.services[0].path.sections).toEqual(saved.services[0].path.sections);
     expect(loaded.namedWays).toEqual(saved.namedWays);
   });
 });

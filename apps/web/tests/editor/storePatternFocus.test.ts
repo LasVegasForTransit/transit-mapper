@@ -5,8 +5,8 @@ import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
 import { createEditorStore } from '../../src/editor/store';
 
-describe('active service pattern focus', () => {
-  it('selecting a branched service focuses its first branch transiently', () => {
+describe('active service path focus', () => {
+  it('selecting a service focuses its singular path transiently', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [
@@ -27,11 +27,8 @@ describe('active service pattern focus', () => {
         id: 'line',
         name: 'Line',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [
-          { id: 'first', sections: oneSection([wholeLeg('trunk')]) },
-          { id: 'second', sections: oneSection([wholeLeg('trunk')]) },
-        ],
+
+        path: { id: 'line', sections: oneSection([wholeLeg('trunk')]) },
       },
     ];
     store.getState().setSystem(system);
@@ -44,10 +41,10 @@ describe('active service pattern focus', () => {
           activePatternId?: string | null;
         }
       ).activePatternId,
-    ).toBe('first');
+    ).toBe('line');
   });
 
-  it('keeps the active id valid when its pattern or service is deleted', () => {
+  it('clears the active path id when its service is deleted', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [
@@ -68,19 +65,13 @@ describe('active service pattern focus', () => {
         id: 'line',
         name: 'Line',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [
-          { id: 'first', sections: oneSection([wholeLeg('trunk')]) },
-          { id: 'second', sections: oneSection([wholeLeg('trunk')]) },
-        ],
+
+        path: { id: 'line', sections: oneSection([wholeLeg('trunk')]) },
       },
     ];
     store.getState().setSystem(system);
     store.getState().select({ kind: 'service', id: 'line' });
-    store.getState().setActivePattern('second');
-
-    store.getState().deletePattern('line', 'second');
-    expect(store.getState().activePatternId).toBe('first');
+    store.getState().setActivePattern('line');
 
     store.getState().deleteService('line');
     expect(store.getState().activePatternId).toBeNull();
@@ -108,24 +99,18 @@ describe('active service pattern focus', () => {
         id: 'line',
         name: 'Line',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [{ id: 'branch', sections: oneSection([wholeLeg('trunk')]) }],
+
+        path: { id: 'line', sections: oneSection([wholeLeg('trunk')]) },
       },
     ];
     store.getState().setSystem(system);
     store.getState().select({ kind: 'service', id: 'line' });
-    const position = patternPositionAt(
-      system.ways,
-      system.services[0].patterns[0],
-      'outbound',
-      0,
-      0.5,
-    )!;
+    const position = patternPositionAt(system.ways, system.services[0].path, 'outbound', 0, 0.5)!;
 
     const spawned = store.getState().divideServiceAt('line', position)!;
     const state = store.getState();
     expect(state.selection).toEqual({ kind: 'service', id: spawned });
-    expect(state.system.services.find((service) => service.id === spawned)?.patterns[0].id).toBe(
+    expect(state.system.services.find((service) => service.id === spawned)?.path.id).toBe(
       state.activePatternId,
     );
   });

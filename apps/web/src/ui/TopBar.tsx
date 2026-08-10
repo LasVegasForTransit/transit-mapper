@@ -104,7 +104,7 @@ export function ViewSwitchCompact() {
   );
 }
 
-/** File/brand/Hide-UI/system-name — Workbench's own brand prop, rendered
+/** App menu/system-name — Workbench's own brand prop, rendered
  *  into the menu panel's header on desktop (a floating card up here right
  *  above another one read as an overlap, not two panels) and into the top
  *  bar on mobile instead, where the menu panel is a bottom sheet with
@@ -120,7 +120,6 @@ export function TopBarBrand() {
   // it waits. An empty, disabled field says the same thing without asserting
   // something false, and it is the same width either way, so nothing shifts.
   const loading = useEditor((s) => s.documentStatus) === 'loading';
-  const { uiHidden, toggleUi } = useUi();
   return (
     <>
       {/* One row, always, in every state: FileMenu icon at the left (a
@@ -144,14 +143,6 @@ export function TopBarBrand() {
           onKeyDown={blurOnEnter}
         />
       )}
-      <span className="brand-hide-ui">
-        <IconButton
-          icon="sidebar"
-          size={17}
-          label={uiHidden ? 'Show UI (\\)' : 'Hide UI (\\)'}
-          onClick={toggleUi}
-        />
-      </span>
     </>
   );
 }

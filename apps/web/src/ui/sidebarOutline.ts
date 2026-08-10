@@ -1,34 +1,62 @@
-import { WAY_TYPES } from '@transitmapper/core/model/catalog';
-import { pathLengthMeters, patternPath, patternWayIds } from '@transitmapper/core/model/geo';
-import type { TransitSystem } from '@transitmapper/core/model/system';
+import {
+  FACILITY_TYPES,
+  MODES,
+  WAY_TYPES,
+  type WayFamily,
+} from '@transitmapper/core/model/catalog';
+import { pathLengthMeters, patternRunPath } from '@transitmapper/core/model/geo';
+import { linesById, servicePattern, servicesForLine } from '@transitmapper/core/model/line-service';
+import type { Facility, Line, Station, TransitSystem } from '@transitmapper/core/model/system';
 import { patternStops } from '@transitmapper/core/sim/serviceStats';
 import type { ViewMode } from './ViewProvider';
 
-interface SidebarStop {
+export interface SidebarStop {
   stationId: string;
   name: string;
 }
 
-export interface SidebarPattern {
-  patternId: string;
-  name: string | undefined;
+export interface SidebarService {
+  serviceId: string;
+  name: string;
+  explicitName?: string;
+  modeId: string;
   stops: SidebarStop[];
 }
 
-export interface NetworkCorridor {
-  id: string;
-  label: string;
-  typeId: string;
-  wayIds: string[];
-  serviceIds: string[];
-  stationIds: string[];
+interface SidebarSearchService extends SidebarService {
+  serviceMatch: boolean;
 }
 
-interface NetworkCorridorSource {
-  ways: TransitSystem['ways'];
-  namedWays: TransitSystem['namedWays'];
-  services: TransitSystem['services'];
-  stations: TransitSystem['stations'];
+export interface SidebarLineRow {
+  line: Line;
+  services: SidebarService[];
+  lineMatch: boolean;
+  searchServices: SidebarSearchService[];
+}
+
+export interface InfrastructureOutlineProjection {
+  sections: InfrastructureSection[];
+  stations: Station[];
+  facilities: Facility[];
+}
+
+function nonBlank(value: string | undefined, fallback: string): string {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : fallback;
+}
+
+export interface InfrastructureSection {
+  family: WayFamily;
+  title: string;
+  items: SidebarInfrastructureItem[];
+}
+
+export interface SidebarInfrastructureItem {
+  identityId: string;
+  name: string;
+  primaryWayId: string;
+  wayIds: string[];
+  typeLabel: string;
 }
 
 export interface LimitedSidebarItems<T> {
@@ -53,113 +81,156 @@ export function limitSidebarItems<T>(
   return { items: visible, hiddenCount: items.length - visible.length };
 }
 
-export function limitSidebarPatterns(
-  patterns: SidebarPattern[],
-  expanded: boolean,
-  limit: number,
-): LimitedSidebarItems<SidebarPattern> {
-  if (expanded) return { items: patterns, hiddenCount: 0 };
-
-  let remaining = limit;
-  const items = patterns.map((pattern) => {
-    const stops = pattern.stops.slice(0, remaining);
-    remaining -= stops.length;
-    return { ...pattern, stops };
-  });
-  const totalStops = patterns.reduce((total, pattern) => total + pattern.stops.length, 0);
-  return { items, hiddenCount: Math.max(0, totalStops - limit) };
-}
-
 export function sidebarSectionsForView(viewMode: ViewMode): string[] {
-  if (viewMode === 'infrastructure') return ['Corridors', 'Stations', 'Complexes and facilities'];
-  // Diagram borrows the network's sections. It is a schematic projection OF
-  // that network — the same lines without the geography — so the list of
-  // lines is exactly as useful there, and picking one still selects it.
-  //
-  // It used to have sections of its own, holding mode checkboxes and a
-  // Landmarks toggle. Those belong to the Layers control, read from the same
-  // ViewProvider state, and in Diagram view on a phone both copies were on
-  // screen at once.
-  return ['Lines', 'Vehicles'];
+  if (viewMode === 'infrastructure') {
+    return [
+      'Roads',
+      'Railways and guideways',
+      'Trails',
+      'Waterways',
+      'Other infrastructure',
+      'Stations',
+      'Facilities',
+    ];
+  }
+  return ['Lines', 'Stations'];
 }
 
-export function lineStopsForService(system: TransitSystem, serviceId: string): SidebarPattern[] {
+export function stopsForService(system: TransitSystem, serviceId: string): SidebarStop[] {
   const service = system.services.find((candidate) => candidate.id === serviceId);
   if (!service) return [];
-  return service.patterns.map((pattern) => {
-    const path = patternPath(system.ways, pattern);
+  const pattern = servicePattern(service);
+  const calls = (run: 'outbound' | 'inbound') => {
+    const path = patternRunPath(system.ways, pattern, run);
+    return patternStops(system.stations, pattern, path, pathLengthMeters(path), run);
+  };
+  const orderedCalls = [...calls('outbound'), ...calls('inbound')];
+  const seen = new Set<string>();
+  return orderedCalls.flatMap(({ station }) => {
+    if (seen.has(station.id)) return [];
+    seen.add(station.id);
+    return [
+      {
+        stationId: station.id,
+        name: nonBlank(station.name, 'Unnamed station'),
+      },
+    ];
+  });
+}
+
+export function servicesForSidebarLine(system: TransitSystem, lineId: string): SidebarService[] {
+  const lineName = linesById(system.lines).get(lineId)?.name;
+  return servicesForLine(system, lineId).map((service, index, services) => {
+    const explicitName = service.name?.trim();
+    const fallback =
+      services.length === 1 ? nonBlank(lineName, 'Unnamed line') : `Service ${index + 1}`;
     return {
-      patternId: pattern.id,
-      name: pattern.name,
-      stops: patternStops(system.stations, pattern, path, pathLengthMeters(path), 'outbound').map(
-        ({ station }) => ({
-          stationId: station.id,
-          name: station.name || 'Unnamed station',
-        }),
-      ),
+      serviceId: service.id,
+      ...(explicitName ? { explicitName } : {}),
+      name: nonBlank(explicitName, fallback),
+      modeId: service.modeId,
+      stops: stopsForService(system, service.id),
     };
   });
 }
 
-export function networkCorridors(system: NetworkCorridorSource): NetworkCorridor[] {
-  const wayById = new Map(system.ways.map((way) => [way.id, way]));
-  const serviceOrder = new Map(system.services.map((service, index) => [service.id, index]));
-  const stationOrder = new Map(system.stations.map((station, index) => [station.id, index]));
-  const serviceIdsByWay = new Map<string, Set<string>>();
-  system.services.forEach((service) => {
-    new Set(service.patterns.flatMap((pattern) => patternWayIds(pattern))).forEach((wayId) => {
-      const serviceIds = serviceIdsByWay.get(wayId) ?? new Set<string>();
-      serviceIds.add(service.id);
-      serviceIdsByWay.set(wayId, serviceIds);
-    });
-  });
-  const stationIdsByWay = new Map<string, Set<string>>();
-  system.stations.forEach((station) => {
-    station.anchors.forEach((anchor) => {
-      const stationIds = stationIdsByWay.get(anchor.wayId) ?? new Set<string>();
-      stationIds.add(station.id);
-      stationIdsByWay.set(anchor.wayId, stationIds);
-    });
-  });
-  const claimed = new Set<string>();
-  const corridors: NetworkCorridor[] = [];
-
-  const addCorridor = (id: string, label: string, wayIds: string[]) => {
-    const existingWayIds = wayIds.filter((wayId) => wayById.has(wayId));
-    const corridorServiceIds = new Set(
-      existingWayIds.flatMap((wayId) => [...(serviceIdsByWay.get(wayId) ?? [])]),
-    );
-    const serviceIds = [...corridorServiceIds].sort(
-      (left, right) => (serviceOrder.get(left) ?? 0) - (serviceOrder.get(right) ?? 0),
-    );
-    if (serviceIds.length === 0 || existingWayIds.length === 0) return;
-
-    const corridorStationIds = new Set(
-      existingWayIds.flatMap((wayId) => [...(stationIdsByWay.get(wayId) ?? [])]),
-    );
-    const stationIds = [...corridorStationIds].sort(
-      (left, right) => (stationOrder.get(left) ?? 0) - (stationOrder.get(right) ?? 0),
-    );
-    corridors.push({
-      id,
-      label,
-      typeId: wayById.get(existingWayIds[0])?.typeId ?? 'road',
-      wayIds: existingWayIds,
-      serviceIds,
-      stationIds,
-    });
-    existingWayIds.forEach((wayId) => claimed.add(wayId));
-  };
-
-  system.namedWays.forEach((namedWay) =>
-    addCorridor(`named:${namedWay.id}`, namedWay.name, namedWay.wayIds),
+function serviceSearchResult(
+  service: SidebarService,
+  serviceCount: number,
+  normalized: string,
+): SidebarSearchService | null {
+  const visibleServiceName = serviceCount > 1 ? service.name : undefined;
+  const serviceMatch = [service.explicitName, visibleServiceName, MODES[service.modeId].label].some(
+    (value) => value?.toLocaleLowerCase().includes(normalized),
   );
+  const stops = service.stops.filter((stop) => stop.name.toLocaleLowerCase().includes(normalized));
+  return serviceMatch || stops.length > 0 ? { ...service, stops, serviceMatch } : null;
+}
 
-  system.ways.forEach((way) => {
-    if (claimed.has(way.id)) return;
-    if (!serviceIdsByWay.has(way.id)) return;
-    addCorridor(`way:${way.id}`, WAY_TYPES[way.typeId]?.label ?? way.typeId, [way.id]);
+export function networkLineRows(system: TransitSystem, normalized: string): SidebarLineRow[] {
+  const rows: SidebarLineRow[] = [];
+  for (const line of system.lines) {
+    const services = servicesForSidebarLine(system, line.id);
+    const lineMatch = normalized.length > 0 && line.name.toLocaleLowerCase().includes(normalized);
+    const searchServices: SidebarSearchService[] = [];
+    if (normalized) {
+      for (const service of services) {
+        const result = serviceSearchResult(service, services.length, normalized);
+        if (result) searchServices.push(result);
+      }
+    }
+    if (!normalized || lineMatch || searchServices.length > 0) {
+      rows.push({ line, services, lineMatch, searchServices });
+    }
+  }
+  return rows;
+}
+
+const FAMILY_TITLES: Record<WayFamily, string> = {
+  roadway: 'Roads',
+  guideway: 'Railways and guideways',
+  path: 'Trails',
+  aerial: 'Other infrastructure',
+  water: 'Waterways',
+};
+
+export function infrastructureSections(system: TransitSystem): InfrastructureSection[] {
+  const waysById = new Map(system.ways.map((way) => [way.id, way]));
+  const byTitle = new Map<string, InfrastructureSection>();
+  for (const identity of system.namedWays) {
+    const ways = identity.wayIds.flatMap((wayId) => {
+      const way = waysById.get(wayId);
+      return way ? [way] : [];
+    });
+    const firstWay = ways.at(0);
+    if (!firstWay) continue;
+    const family = WAY_TYPES[firstWay.typeId].family;
+    const title = FAMILY_TITLES[family];
+    const typeLabels = [...new Set(ways.map((way) => WAY_TYPES[way.typeId].label))];
+    const section = byTitle.get(title) ?? { family, title, items: [] };
+    section.items.push({
+      identityId: identity.id,
+      name: nonBlank(
+        identity.name,
+        `Unnamed ${typeLabels.at(0)?.toLocaleLowerCase() ?? 'infrastructure'}`,
+      ),
+      primaryWayId: firstWay.id,
+      wayIds: ways.map((way) => way.id),
+      typeLabel: typeLabels.length === 1 ? typeLabels[0] : `${typeLabels.length} types`,
+    });
+    byTitle.set(title, section);
+  }
+  return ['Roads', 'Railways and guideways', 'Trails', 'Waterways', 'Other infrastructure'].flatMap(
+    (title) => {
+      const section = byTitle.get(title);
+      return section && section.items.length > 0 ? [section] : [];
+    },
+  );
+}
+
+export function infrastructureOutlineProjection(
+  system: TransitSystem,
+  normalized: string,
+): InfrastructureOutlineProjection {
+  const sections = infrastructureSections(system)
+    .map((section) => ({
+      ...section,
+      items: section.items.filter(
+        (item) =>
+          !normalized ||
+          [item.name, item.typeLabel].some((label) =>
+            label.toLocaleLowerCase().includes(normalized),
+          ),
+      ),
+    }))
+    .filter((section) => section.items.length > 0);
+  const stations = system.stations.filter(
+    (station) =>
+      !normalized || (station.name ?? 'Unnamed station').toLocaleLowerCase().includes(normalized),
+  );
+  const facilities = system.facilities.filter((facility) => {
+    const label = facility.name ?? FACILITY_TYPES[facility.typeId].label;
+    return !normalized || label.toLocaleLowerCase().includes(normalized);
   });
-
-  return corridors;
+  return { sections, stations, facilities };
 }

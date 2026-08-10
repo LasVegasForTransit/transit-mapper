@@ -6,6 +6,11 @@ import { roundTripMs } from '@transitmapper/core/sim/timetable';
 import { effectiveVehicleKind } from '@transitmapper/core/sim/serviceStats';
 import { planService, runStateAt } from '@transitmapper/core/sim/fleet';
 import { advanceSimMs, dayScopeAt, minutesOfDay, simSpeed } from '@transitmapper/core/sim/clock';
+import {
+  lineForService,
+  serviceDisplayLabel,
+  servicePattern,
+} from '@transitmapper/core/model/line-service';
 import type { EditorStore } from '../editor/store';
 import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from '../map/layers';
 import { vehiclesDisabledForPerf } from '../perf';
@@ -114,8 +119,8 @@ export function attachVehicleAnimation(
     const visibleServices = system.services.filter((service) => gate.isVisible(service));
     return {
       system,
-      source: map.getSource(SRC_VEHICLES) as GeoJSONSource | undefined,
-      infraSource: map.getSource(SRC_VEHICLES_INFRA) as GeoJSONSource | undefined,
+      source: map.getSource(SRC_VEHICLES),
+      infraSource: map.getSource(SRC_VEHICLES_INFRA),
       viewMode: gate.viewMode(),
       pinnedPeriod: gate.pinnedPeriod(),
       visibleServices,
@@ -298,45 +303,40 @@ export function attachVehicleAnimation(
       hasActiveService = true;
       const { widthM, lengthM, profile } = effectiveVehicleKind(system.vehicleKinds, service);
 
-      for (const pattern of service.patterns) {
-        const geometry = resolvePatternGeometry(
-          system,
-          pattern,
-          profile,
-          viewMode === 'infrastructure' ? service.modeId : undefined,
-        );
-        if (!geometry) continue;
-        const bounds = geometry.bbox;
-        if (bounds[2] < cullW || bounds[0] > cullE || bounds[3] < cullS || bounds[1] > cullN)
-          continue;
+      const pattern = servicePattern(service);
+      const color = lineForService(system, service.id)?.color ?? '#4b5563';
+      const geometry = resolvePatternGeometry(
+        system,
+        pattern,
+        profile,
+        viewMode === 'infrastructure' ? service.modeId : undefined,
+      );
+      if (!geometry) continue;
+      const bounds = geometry.bbox;
+      if (bounds[2] < cullW || bounds[0] > cullE || bounds[3] < cullS || bounds[1] > cullN)
+        continue;
 
-        const plan = planService(
-          roundTripMs(geometry.timetables),
-          active.headwayMinutes === undefined ? undefined : active.headwayMinutes * 60_000,
-        );
-        // The true plan retains its fleet and cycle. The cap only selects how
-        // many of those runs are drawn.
-        const shown = Math.min(plan.fleet, MAX_VEHICLES_PER_PATTERN);
-        if (shown < plan.fleet) noteClampedFleet(pattern.id, service.name, plan.fleet);
+      const plan = planService(
+        roundTripMs(geometry.timetables),
+        active.headwayMinutes === undefined ? undefined : active.headwayMinutes * 60_000,
+      );
+      // The true plan retains its fleet and cycle. The cap only selects how
+      // many of those runs are drawn.
+      const shown = Math.min(plan.fleet, MAX_VEHICLES_PER_PATTERN);
+      if (shown < plan.fleet)
+        noteClampedFleet(pattern.id, serviceDisplayLabel(system, service.id), plan.fleet);
 
-        for (let i = 0; i < shown; i++) {
-          const { distMeters, run } = runStateAt(simMs, geometry.timetables, plan, i, profile);
-          const { path, cumLengths, meters: legMeters } = geometry[run];
-          const along = Math.min(distMeters, legMeters);
-          const t = legMeters > 0 ? along / legMeters : 0;
-          const center = pointAtDistance(path, cumLengths, along);
+      for (let i = 0; i < shown; i++) {
+        const { distMeters, run } = runStateAt(simMs, geometry.timetables, plan, i, profile);
+        const { path, cumLengths, meters: legMeters } = geometry[run];
+        const along = Math.min(distMeters, legMeters);
+        const t = legMeters > 0 ? along / legMeters : 0;
+        const center = pointAtDistance(path, cumLengths, along);
 
-          if (viewMode === 'network') {
-            emit(center, service.color);
-          } else {
-            emitInfrastructure(
-              center,
-              bearingAtT(path, t, legMeters),
-              widthM,
-              lengthM,
-              service.color,
-            );
-          }
+        if (viewMode === 'network') {
+          emit(center, color);
+        } else {
+          emitInfrastructure(center, bearingAtT(path, t, legMeters), widthM, lengthM, color);
         }
       }
     }

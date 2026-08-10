@@ -96,6 +96,7 @@ import {
 } from '@transitmapper/core/model/throughRoute';
 import { shortId } from '@transitmapper/core/model/ids';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
+import { lineForService, servicePattern } from '@transitmapper/core/model/line-service';
 import {
   armRefKey,
   getComponent,
@@ -129,6 +130,7 @@ import type {
   Node,
   NodeControl,
   PatternLeg,
+  Pattern,
   Platform,
   SchedulePeriod,
   Service,
@@ -141,7 +143,7 @@ import type {
   WayPointRef,
 } from '@transitmapper/core/model/system';
 
-/** `lines` selects SERVICES and only services — a drag-select for routes,
+/** `lines` selects public Lines and only Lines — a drag-select for routes,
  *  offered in the Network view where lines are what you are working on. The
  *  Select tool stays the one that picks up and moves infrastructure.
  *  `demolish` is a persistent Infrastructure-view tool mode (not a
@@ -158,9 +160,35 @@ const DEFAULT_FREQUENCY_MINUTES = 10;
 const DEFAULT_SPAN_START = '06:00';
 const DEFAULT_SPAN_END = '23:00';
 
+function withServicePattern(service: Service, pattern: Pattern): Service {
+  return {
+    ...service,
+    path: {
+      id: service.id,
+      sections: pattern.sections,
+      ...(pattern.skippedStops ? { skippedStops: pattern.skippedStops } : {}),
+    },
+  };
+}
+
+function selectedServicePattern(
+  service: Service | undefined,
+  patternId: string,
+): Pattern | undefined {
+  return service?.id === patternId ? servicePattern(service) : undefined;
+}
+
+function pruneLineMembership(system: TransitSystem, services: Service[]): TransitSystem['lines'] {
+  const live = new Set(services.map((service) => service.id));
+  return system.lines
+    .map((line) => ({ ...line, serviceIds: line.serviceIds.filter((id) => live.has(id)) }))
+    .filter((line) => line.serviceIds.length > 0);
+}
+
 export type Selection =
-  | { kind: 'way'; id: string }
-  | { kind: 'service'; id: string }
+  | { kind: 'way'; id: string; relatedIds?: string[] }
+  | { kind: 'line'; id: string }
+  | { kind: 'service'; id: string; stopId?: string }
   | { kind: 'station'; id: string }
   | { kind: 'facility'; id: string }
   | { kind: 'group'; id: string }
@@ -174,7 +202,7 @@ export type Selection =
  *
  *  Declared in core as SelectionRef because the action registry takes a
  *  selection as its input and core cannot import from this app. A member may
- *  be a SERVICE as well as infrastructure — see deleteMultiSelection and
+ *  be a public Line or technical Service as well as infrastructure — see deleteMultiSelection and
  *  nudgeSelection, which each had to decide what that means. */
 export type MultiSelectItem = SelectionRef;
 
@@ -206,6 +234,7 @@ interface ApplyImportedReconciliation {
 
 interface GtfsImportPieces {
   ways: Way[];
+  lines: TransitSystem['lines'];
   services: Service[];
   stations: Station[];
 }
@@ -245,6 +274,8 @@ export interface EditorState {
    *  rather than describing the system. */
   selectVariant: SelectVariant;
   selection: Selection;
+  /** Transient outline hover; never persisted or added to edit history. */
+  outlineHover: Selection;
   /** Transient branch focus for service-owned map affordances. */
   activePatternId: string | null;
   /** A service terminus chosen for a follow-up gesture. This is deliberately
@@ -318,9 +349,10 @@ export interface EditorState {
   /** Non-null while armed to add the next clicked station/facility to this
    *  group's membership (the Inspector's "Add existing" flow). */
   pickingMemberForGroupId: string | null;
-  /** Non-null while armed to attach the next drawn way as a new pattern
-   *  (branch) on this service (the Inspector's "Add branch" flow). */
-  addingPatternForServiceId: string | null;
+  /** Non-null while the next path drawn will become a distinct technical
+   *  Service under an existing public Line. The mode and label are chosen
+   *  before drawing so the path cannot silently inherit the wrong operation. */
+  addingServiceDraft: { lineId: string; name: string; modeId: string } | null;
   /** True when viewing a shared snapshot — editing is disabled until forked. */
   readOnly: boolean;
   /** Whether the document on screen is the one the app went looking for.
@@ -370,6 +402,7 @@ export interface EditorState {
   /** Picks what a Select press does. A held Alt or Ctrl is unaffected. */
   setSelectVariant: (variant: SelectVariant) => void;
   select: (selection: Selection) => void;
+  setOutlineHover: (selection: Selection) => void;
   setActivePattern: (patternId: string | null) => void;
   armTerminus: (terminus: NonNullable<EditorState['armedTerminus']>) => void;
   clearArmedTerminus: () => void;
@@ -564,28 +597,29 @@ export interface EditorState {
   /** Create a service over an explicit routed span list (commitRouteDraft's
    *  backend; exposed for tests). */
   createRoutedService: (spans: RouteSpan[], modeId?: string) => string | null;
-  /** Re-bind every pattern of a sketched service onto EXISTING infrastructure:
-   *  routes between the pattern's endpoints along compatible ways (biased to
-   *  follow the sketch corridor), swaps the pattern onto them, re-anchors
-   *  stations, and deletes the now-orphaned sketch ways. Returns how many
-   *  patterns were rebound. */
+  /** Re-bind a sketched Service path onto EXISTING infrastructure: routes
+   *  between its endpoints along compatible ways (biased to follow the
+   *  sketch), swaps the path onto them, re-anchors stations, and deletes the
+   *  now-orphaned sketch ways. Returns 1 when the path was rebound. */
   adoptExistingInfrastructure: (serviceId: string) => number;
-  /** Import-time corridor conflation: for each given service's pattern(s),
+  /** Import-time geometry conflation: for each given Service path,
    *  detects interior stretches that run along already-existing compatible
-   *  infrastructure (including ways an earlier pattern in THIS call already
+   *  infrastructure (including ways an earlier Service in THIS call already
    *  materialized) and rebinds them to share it, deleting the now-redundant
-   *  solo way it replaces. Processes longest-pattern-first so a long trunk
-   *  route seeds the canonical shared way. Returns how many patterns were
+   *  solo way it replaces. Processes longest-path-first so a long trunk
+   *  route seeds the canonical shared way. Returns how many paths were
    *  reconciled onto shared infrastructure. */
   reconcileImportedServices: (serviceIds: string[]) => number;
   /** Commit a Worker result only when no edit replaced its input snapshot. */
   applyImportedReconciliation: (request: ApplyImportedReconciliation) => boolean;
 
-  // services (colored routes over ways). Returns null when the way's type has
-  // no compatible service modes (e.g. bike infrastructure carries no service).
+  // Creates a public Line and its first Service over this way. Returns null
+  // when the way's type has no compatible service modes.
   addServiceToWay: (wayId: string) => string | null;
+  setLineName: (id: string, name: string) => void;
+  setLineColor: (id: string, color: string) => void;
+  deleteLine: (id: string) => void;
   setServiceName: (id: string, name: string) => void;
-  setServiceColor: (id: string, color: string) => void;
   setServiceMode: (id: string, modeId: string) => void;
   /** Peak headway in minutes — undefined clears it (not yet specified). */
   setServiceFrequency: (id: string, minutes: number | undefined) => void;
@@ -604,29 +638,23 @@ export interface EditorState {
   /** Assigns (or clears, with undefined) which VehicleKind a service runs. */
   setServiceVehicleKind: (id: string, vehicleKindId: string | undefined) => void;
   deleteService: (id: string) => void;
-  /** Arm the Way tool so the next line drawn attaches as a new PATTERN
-   *  (branch) on this service instead of spawning its own service. */
-  startAddingPattern: (serviceId: string) => void;
-  cancelAddingPattern: () => void;
-  /** No-op if it's the service's only pattern — use deleteService instead. */
-  deletePattern: (serviceId: string, patternId: string) => void;
-  /** Turnkey "combine two lines into one branched corridor": every pattern
-   *  from `sourceId` joins `targetId`'s own patterns (named after the source
-   *  service if it doesn't already have its own pattern names, so the
-   *  branch list stays legible), then the now-empty source service is
-   *  deleted. No-op across different modes — a bus line and a rail line
-   *  can't become branches of the same physical corridor. */
-  mergeServiceInto: (sourceId: string, targetId: string) => void;
-  /** Join two lines that meet end to end into ONE continuous line, keeping
-   *  `keepId`'s identity — as opposed to mergeServiceInto, which makes them
-   *  two branches of one service. Returns false and changes nothing when the
+  /** Arm the Way tool so the next path drawn becomes another Service under
+   *  this public Line. */
+  startAddingServiceToLine: (lineId: string, details: { name: string; modeId: string }) => void;
+  cancelAddingService: () => void;
+  /** Move one technical Service beneath another public Line. If it was the
+   *  source Line's only Service, that now-empty Line is removed. */
+  moveServiceToLine: (serviceId: string, lineId: string) => void;
+  /** Join two Services that meet end to end into ONE continuous Service,
+   *  keeping `keepId`'s identity — as opposed to moveServiceToLine, which
+   *  changes only the public grouping. Returns false and changes nothing when the
    *  modes differ, the ends don't meet, or no infrastructure connects them;
    *  see core's throughRouteServices for why the last one refuses rather than
    *  leaving a gap. */
   throughRouteInto: (keepId: string, otherId: string) => boolean;
 
-  // editing a line in pieces (see model/patternEdits.ts)
-  /** Cut a line back so it terminates at position `t` on one of the ways it
+  // editing a Service path in pieces (see model/patternEdits.ts)
+  /** Cut a Service path back so it terminates at position `t` on one of the ways it
    *  runs over, dropping the stretch beyond that in ride order. The
    *  infrastructure is untouched — this shortens the line, not the street.
    *  `side` is which end of the line moves. */
@@ -637,7 +665,7 @@ export interface EditorState {
     t: number,
     side: 'start' | 'end',
   ) => boolean;
-  /** Exact-occurrence counterpart for a rendered line gesture. */
+  /** Exact-occurrence counterpart for a rendered Service-path gesture. */
   trimPatternAt: (serviceId: string, position: PatternPosition, side: 'start' | 'end') => boolean;
   /** Add routed legs beyond one terminus without changing the infrastructure
    * those legs run over. Returns false when the route cannot materialize. */
@@ -657,16 +685,16 @@ export interface EditorState {
     plan: TerminusGesturePlan,
     choice?: 'connect' | 'through',
   ) => boolean;
-  /** End one pattern at an exact displayed occurrence, keeping the longer
+  /** End a Service path at an exact displayed occurrence, keeping the longer
    * operating half. Returns false when that hit cannot make two valid halves. */
   endPatternAt: (serviceId: string, position: PatternPosition) => boolean;
-  /** Divide the focused pattern at its exact displayed occurrence. The longer
+  /** Divide the focused Service path at its exact displayed occurrence. The longer
    * half remains on this service; the shorter becomes a selected new service. */
   divideServiceAt: (serviceId: string, position: PatternPosition) => string | null;
-  /** Cut a line in two at position `t` on one of its ways. The shorter half
-   *  becomes a new service with its own name and colour, riding the same
-   *  infrastructure; both halves keep their schedule. Returns the new
-   *  service's id, or null when the cut lands on a terminus and there is
+  /** Cut a Service path in two at position `t` on one of its ways. The shorter
+   *  half becomes a new Service and public Line, riding the same infrastructure;
+   *  both halves keep their schedule. Returns the new Service id, or null when
+   *  the cut lands on a terminus and there is
    *  nothing to split. */
   splitServiceAt: (serviceId: string, patternId: string, wayId: string, t: number) => string | null;
   /** Stop calling at a station in ONE direction, or call there again. Only
@@ -690,10 +718,9 @@ export interface EditorState {
   /** Undo a couplet: both directions ride the outward trip's streets again. */
   makePatternTwoWay: (serviceId: string, patternId: string) => void;
   /** Take a stretch of a way out of existence: the way is cut around it and
-   *  the middle removed, and every line riding it is trimmed to match. A line
-   *  the stretch cut through survives as two patterns on the same service
-   *  rather than losing whichever half was shorter. Returns how many patterns
-   *  were affected. */
+   *  the middle removed, and every Service riding it is trimmed to match. A
+   *  Service cut through the middle becomes two sibling Services rather than
+   *  losing either usable half. Returns how many paths were affected. */
   deleteWayStretch: (wayId: string, fromT: number, toT: number) => number;
   /** Fuse the given ways into shared infrastructure wherever they run along
    *  each other — for a map drawn before lines shared by default, where the
@@ -933,16 +960,15 @@ function pruneConnectorsForWay(nodes: Node[], wayId: string): Node[] {
   });
 }
 
-// Remove a way, detach it from every service's patterns, and delete the
+// Remove a way, detach it from every Service path, and delete the
 // stations that rode it.
 //
-// A pattern is TRIMMED rather than merely stripped of the way: dropping a leg
+// A Service path is TRIMMED rather than merely stripped of the way: dropping a leg
 // out of the middle of a route leaves the two halves unjoined, and a pattern
 // that describes a path with a hole in it is one validateSystem reports. The
-// longer surviving run is kept, so deleting one block of a long line shortens
-// the line instead of destroying it — and deleting a line's only way still
-// removes the line, which is what the way tool's own delete has always meant.
-// Cutting a line deliberately and keeping BOTH halves is deleteWayStretch's
+// longer surviving run is kept, so deleting one block of a Service shortens
+// its path instead of destroying it — and deleting its only way still removes
+// the Service and its now-empty Line. Cutting a path deliberately and keeping BOTH halves is deleteWayStretch's
 // job, not this one.
 /**
  * A station's anchors with the one on `replacedWayId` swapped for `next`, or
@@ -962,36 +988,36 @@ function reanchored(station: Station, replacedWayId: string, next: StationAnchor
 function removeWay(system: TransitSystem, wayId: string): TransitSystem {
   const ways = system.ways.filter((w) => w.id !== wayId);
   const services = system.services
-    .map((s) => ({
-      ...s,
-      patterns: s.patterns
-        .map((p) => {
-          const filtered = mapSectionLegs(p.sections, (legs) =>
-            legs.filter((l) => l.wayId !== wayId),
+    .map((service) => {
+      const pattern = servicePattern(service);
+      const filtered = mapSectionLegs(pattern.sections, (legs) =>
+        legs.filter((leg) => leg.wayId !== wayId),
+      );
+      if (patternLegs({ ...pattern, sections: filtered }).length === patternLegs(pattern).length)
+        return service;
+      // Only once something was actually removed: a pattern that already
+      // had a break in it should keep it rather than be silently halved.
+      // Each section keeps its own longest continuous run, since a
+      // couplet's two halves break independently.
+      const sections = pruneSections(
+        mapSectionLegs(filtered, (legs) => {
+          const runs = splitLegsIntoRuns(legs, (a, b) => legsMeet(ways, a, b));
+          return runs.reduce(
+            (best, run) => (run.length > best.length ? run : best),
+            [] as PatternLeg[],
           );
-          if (patternLegs({ ...p, sections: filtered }).length === patternLegs(p).length) return p;
-          // Only once something was actually removed: a pattern that already
-          // had a break in it should keep it rather than be silently halved.
-          // Each section keeps its own longest continuous run, since a
-          // couplet's two halves break independently.
-          const sections = pruneSections(
-            mapSectionLegs(filtered, (legs) => {
-              const runs = splitLegsIntoRuns(legs, (a, b) => legsMeet(ways, a, b));
-              return runs.reduce(
-                (best, run) => (run.length > best.length ? run : best),
-                [] as PatternLeg[],
-              );
-            }),
-          );
-          return { ...p, sections };
-        })
-        .filter((p) => patternLegs(p).length > 0),
-    }))
-    .filter((s) => s.patterns.length > 0);
+        }),
+      );
+      return patternLegs({ ...pattern, sections }).length > 0
+        ? withServicePattern(service, { ...pattern, sections })
+        : null;
+    })
+    .filter((service): service is Service => service !== null);
   return {
     ...system,
     ways,
     services,
+    lines: pruneLineMembership(system, services),
     // A station riding another way as well survives, losing only this anchor —
     // deleting one carriageway must not delete a platform the other still serves.
     stations: system.stations
@@ -1389,19 +1415,17 @@ function splitWay(
   const tSplit =
     nearestOnPath(originalPath, way.points[index])?.t ??
     pathLengthMeters(pathA) / Math.max(1e-9, pathLengthMeters(originalPath));
-  const services = system.services.map((sv) => ({
-    ...sv,
-    patterns: sv.patterns.map((p) =>
-      patternLegs(p).some((l) => l.wayId === wayId)
-        ? {
-            ...p,
-            sections: normalizeSections(
-              mapSectionLegs(p.sections, (legs) => splitLegs(legs, wayId, newWayId, tSplit)),
-            ),
-          }
-        : p,
-    ),
-  }));
+  const services = system.services.map((service) => {
+    const pattern = servicePattern(service);
+    return patternLegs(pattern).some((leg) => leg.wayId === wayId)
+      ? withServicePattern(service, {
+          ...pattern,
+          sections: normalizeSections(
+            mapSectionLegs(pattern.sections, (legs) => splitLegs(legs, wayId, newWayId, tSplit)),
+          ),
+        })
+      : service;
+  });
 
   const stations = system.stations.map((st) => {
     if (!anchorOnWayId(st, wayId)) return st;
@@ -1409,7 +1433,8 @@ function splitWay(
     const onB = nearestOnPath(pathB, st.coord);
     if (!onA && !onB) return st;
     const useB = !!onB && (!onA || onB.distMeters < onA.distMeters);
-    const best = (useB ? onB : onA)!;
+    const best = useB ? onB : onA;
+    if (!best) return st;
     return { ...st, anchors: reanchored(st, wayId, { wayId: useB ? newWayId : wayId, t: best.t }) };
   });
 
@@ -1539,16 +1564,16 @@ function mergeWays(system: TransitSystem, keepId: string, otherId: string): Tran
     [otherId, resolveWayPath(b)],
   ]);
   const bReversed = combos[0].key === 'abR' || combos[0].key === 'bRa';
-  const services = system.services.map((sv) => ({
-    ...sv,
-    patterns: sv.patterns.map((p) => ({
-      ...p,
+  const services = system.services.map((service) => {
+    const pattern = servicePattern(service);
+    return withServicePattern(service, {
+      ...pattern,
       // normalizeSections, because merging a couplet's two one-way streets into
       // one two-way street lands both directions on the same ground: the line
       // still runs out and back, but it is no longer split, and left as a split
       // the schematic draws one-way chevrons BOTH ways along one street.
       sections: normalizeSections(
-        mapSectionLegs(p.sections, (legs) =>
+        mapSectionLegs(pattern.sections, (legs) =>
           mergeLegs(legs, keepId, otherId, {
             positionOf: (wayId, t) => {
               const old = oldPaths.get(wayId);
@@ -1559,8 +1584,8 @@ function mergeWays(system: TransitSystem, keepId: string, otherId: string): Tran
           }),
         ),
       ),
-    })),
-  }));
+    });
+  });
   const stations = system.stations.map((st) => {
     if (!anchorOnWayId(st, keepId) && !anchorOnWayId(st, otherId)) return st;
     const on = nearestOnPath(mergedPath, st.coord);
@@ -1791,22 +1816,22 @@ function formCrossingJunctions(
   return next;
 }
 
-// ---- editing a line in pieces ----------------------------------------------
+// ---- editing a Service path in pieces --------------------------------------
 
 /** A stretch shorter than this is a mis-click, not a request. 0.1% of a way. */
 const MIN_STRETCH_T = 1e-3;
 
-/** A colour no service on this system is already using, so two lines are never
- *  indistinguishable. The configured palette is preferred, but edits must not
- *  collapse two services onto the mode default once that palette is exhausted. */
+/** A colour no public Line on this system is already using, so two Lines are
+ *  never indistinguishable. The configured palette is preferred, but edits
+ *  must not collapse two Lines onto the mode default once it is exhausted. */
 function unusedPaletteColor(system: TransitSystem, modeId: string): string {
-  const used = new Set(system.services.map((s) => s.color.toLowerCase()));
+  const used = new Set(system.lines.map((line) => line.color.toLowerCase()));
   const paletteColor = system.palette.find((color) => !used.has(color.toLowerCase()));
   if (paletteColor) return paletteColor;
   const modeColor = modeRender(modeId).color;
   if (!used.has(modeColor.toLowerCase())) return modeColor;
 
-  // The palette is a preference, not a cap on how many distinct services can
+  // The palette is a preference, not a cap on how many distinct Lines can
   // exist. Start at a stable value derived from the mode and probe the RGB
   // space, so the same document state always receives the same next colour.
   let start = 0;
@@ -1815,7 +1840,7 @@ function unusedPaletteColor(system: TransitSystem, modeId: string): string {
     const color = `#${((start + offset) & 0xffffff).toString(16).padStart(6, '0')}`;
     if (!used.has(color)) return color;
   }
-  throw new Error('No unused service color remains.');
+  throw new Error('No unused Line color remains.');
 }
 
 /** Whether two consecutive legs actually join on the ground. Resolving them as
@@ -1930,7 +1955,7 @@ function conflatePatternOntoExisting(
 ): TransitSystem | null {
   let sys = system;
   const service = sys.services.find((sv) => sv.id === serviceId);
-  const pattern = service?.patterns.find((p) => p.id === patternId);
+  const pattern = selectedServicePattern(service, patternId);
   if (!service || !pattern) return null;
   const oldWayIds = [...new Set(patternWayIds(pattern))];
   const rawPath = patternPath(sys.ways, pattern);
@@ -1974,12 +1999,7 @@ function conflatePatternOntoExisting(
     ...sys,
     services: sys.services.map((sv) =>
       sv.id === serviceId
-        ? {
-            ...sv,
-            patterns: sv.patterns.map((p) =>
-              p.id === patternId ? { ...p, sections: oneSection(newLegs) } : p,
-            ),
-          }
+        ? withServicePattern(sv, { ...servicePattern(sv), sections: oneSection(newLegs) })
         : sv,
     ),
   };
@@ -1998,7 +2018,7 @@ function conflatePatternOntoExisting(
     if (!way || way.source) continue; // imported infrastructure is not a by-product
     if (sys.namedWays.some((n) => n.wayIds.includes(oldId))) continue; // somebody named it
     const stillRidden = sys.services.some((sv) =>
-      sv.patterns.some((p) => patternLegs(p).some((l) => l.wayId === oldId)),
+      patternLegs(servicePattern(sv)).some((leg) => leg.wayId === oldId),
     );
     if (!stillRidden) sys = removeWay(sys, oldId);
   }
@@ -2024,7 +2044,7 @@ function stitchFreshLegEnds(
   let sys = system;
   for (let guard = 0; guard < minted.size + 1; guard++) {
     const service = sys.services.find((sv) => sv.id === serviceId);
-    const pattern = service?.patterns.find((p) => p.id === patternId);
+    const pattern = selectedServicePattern(service, patternId);
     if (!pattern) return sys;
     const segments = patternSegments(wayById(sys.ways), pattern);
     let moved = false;
@@ -2278,13 +2298,12 @@ export function reconcileImportedSystem(
   for (const serviceId of serviceIds) {
     const service = next.services.find((candidate) => candidate.id === serviceId);
     if (!service) continue;
-    for (const pattern of service.patterns) {
-      targets.push({
-        serviceId,
-        patternId: pattern.id,
-        length: pathLengthMeters(patternPath(next.ways, pattern)),
-      });
-    }
+    const pattern = servicePattern(service);
+    targets.push({
+      serviceId,
+      patternId: pattern.id,
+      length: pathLengthMeters(patternPath(next.ways, pattern)),
+    });
   }
   targets.sort((a, b) => b.length - a.length);
 
@@ -2302,7 +2321,7 @@ export function reconcileImportedSystem(
       reconciled++;
     }
     const service = next.services.find((candidate) => candidate.id === target.serviceId);
-    const pattern = service?.patterns.find((candidate) => candidate.id === target.patternId);
+    const pattern = selectedServicePattern(service, target.patternId);
     for (const leg of pattern ? patternLegs(pattern) : []) established.add(leg.wayId);
   }
 
@@ -2324,7 +2343,7 @@ function nudgeSelection(
   dx: number,
   dy: number,
 ): TransitSystem {
-  // A selected SERVICE contributes nothing here on purpose: a line has no
+  // A selected Line or Service contributes nothing here on purpose: it has no
   // geometry of its own to move, and dragging one would have to move the
   // street under it — which also carries every other line on that street.
   // Whoever wants that selects the way.
@@ -2477,6 +2496,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
       tool: 'select',
       selectVariant: 'select',
       selection: null,
+      outlineHover: null,
       activePatternId: null,
       armedTerminus: null,
       cameraFocusToken: 0,
@@ -2499,7 +2519,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
       draftFacilityComplexMode: false,
       placingFacilityForGroupId: null,
       pickingMemberForGroupId: null,
-      addingPatternForServiceId: null,
+      addingServiceDraft: null,
       readOnly: false,
       canUndo: false,
       canRedo: false,
@@ -2515,6 +2535,8 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           documentStatus: 'ready',
           readOnly: opts?.readOnly === true,
           selection: null,
+          outlineHover: null,
+          addingServiceDraft: null,
           activePatternId: null,
           armedTerminus: null,
           multiSelection: [],
@@ -2615,6 +2637,8 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           documentStatus: 'ready',
           readOnly: false,
           selection: null,
+          outlineHover: null,
+          addingServiceDraft: null,
           multiSelection: [],
           activeWayId: null,
           armedTerminus: null,
@@ -2641,7 +2665,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
       setTool: (tool) => {
         get().finishWay();
         set((s) => {
-          // The Lines tool selects services and nothing else, so carrying an
+          // The Lines tool selects public Lines and nothing else, so carrying an
           // infrastructure selection into it produces a mixed group that no
           // action applies to — a marquee only ever ADDS, so those ways would
           // sit there until cleared by hand. Switching tools is the moment to
@@ -2650,8 +2674,8 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           return {
             tool,
             armedTerminus: null,
-            multiSelection: s.multiSelection.filter((i) => i.kind === 'service'),
-            selection: s.selection?.kind === 'service' ? s.selection : null,
+            multiSelection: s.multiSelection.filter((i) => i.kind === 'line'),
+            selection: s.selection?.kind === 'line' ? s.selection : null,
           };
         });
       },
@@ -2667,10 +2691,10 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           multiSelection: [],
           activePatternId:
             selection?.kind === 'service'
-              ? (s.system.services.find((service) => service.id === selection.id)?.patterns[0]
-                  ?.id ?? null)
+              ? (s.system.services.find((service) => service.id === selection.id)?.id ?? null)
               : null,
         })),
+      setOutlineHover: (outlineHover) => set({ outlineHover }),
 
       setActivePattern: (activePatternId) => set({ activePatternId }),
       armTerminus: (armedTerminus) =>
@@ -2683,8 +2707,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           multiSelection: [],
           activePatternId:
             selection?.kind === 'service'
-              ? (s.system.services.find((service) => service.id === selection.id)?.patterns[0]
-                  ?.id ?? null)
+              ? (s.system.services.find((service) => service.id === selection.id)?.id ?? null)
               : null,
           cameraFocusToken: s.cameraFocusToken + 1,
         })),
@@ -2749,11 +2772,19 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
               system = { ...system, stations: system.stations.filter((st) => st.id !== item.id) };
             else if (item.kind === 'facility')
               system = { ...system, facilities: system.facilities.filter((f) => f.id !== item.id) };
-            else
-              // Deleting a selected LINE takes the service and leaves the street
-              // it rode standing — the infrastructure is selectable in its own
-              // right, and nobody deleting a bus route means to demolish a road.
-              system = { ...system, services: system.services.filter((sv) => sv.id !== item.id) };
+            else if (item.kind === 'line') {
+              const line = system.lines.find((candidate) => candidate.id === item.id);
+              const serviceIds = new Set(line?.serviceIds ?? []);
+              system = {
+                ...system,
+                lines: system.lines.filter((candidate) => candidate.id !== item.id),
+                services: system.services.filter((service) => !serviceIds.has(service.id)),
+              };
+            } else {
+              // Deleting a selected Service leaves its infrastructure standing.
+              const services = system.services.filter((sv) => sv.id !== item.id);
+              system = { ...system, services, lines: pruneLineMembership(system, services) };
+            }
           }
           return { system: touch(system), multiSelection: [] };
         }),
@@ -2859,33 +2890,40 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         const modeId = modesForWayType(resolvedTypeId).some((m) => m.id === st.draftModeId)
           ? st.draftModeId
           : modesForWayType(resolvedTypeId)[0]?.id;
-        // While "add branch" is armed, this way becomes a new PATTERN on the
-        // target service once drawing finishes (see finishWay) instead of
-        // spawning its own separate service.
-        const addingBranch = !!st.addingPatternForServiceId;
+        // While Add service is armed, the drawn way becomes the new Service's
+        // path under the chosen public Line instead of spawning another Line.
+        const addingService = st.addingServiceDraft;
+        const serviceId = shortId();
         const service: Service | null =
-          modeId && !addingBranch && st.draftServiceEnabled
+          modeId && !addingService && st.draftServiceEnabled
             ? {
-                id: shortId(),
-                name: `Line ${nextLineNumber++}`,
+                id: serviceId,
                 modeId,
-                color: color ?? st.draftColor,
-                patterns: [{ id: shortId(), sections: oneSection([wholeLeg(wayId)]) }],
+                path: { id: serviceId, sections: oneSection([wholeLeg(wayId)]) },
                 frequencyMinutes: DEFAULT_FREQUENCY_MINUTES,
                 spanStart: DEFAULT_SPAN_START,
                 spanEnd: DEFAULT_SPAN_END,
               }
             : null;
+        const line = service
+          ? {
+              id: shortId(),
+              name: `Line ${nextLineNumber++}`,
+              color: color ?? st.draftColor,
+              serviceIds: [service.id],
+            }
+          : null;
         set((s) => ({
           system: touch({
             ...s.system,
             ways: [...s.system.ways, way],
+            lines: line ? [...s.system.lines, line] : s.system.lines,
             services: service ? [...s.system.services, service] : s.system.services,
           }),
           activeWayId: wayId,
-          selection: service
-            ? { kind: 'service', id: service.id }
-            : addingBranch
+          selection: line
+            ? { kind: 'line', id: line.id }
+            : addingService
               ? s.selection
               : { kind: 'way', id: wayId },
         }));
@@ -2977,7 +3015,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
       straightenWay: (wayId) => set((s) => ({ system: straightenWay(s.system, wayId) })),
 
       finishWay: () => {
-        const { activeWayId, addingPatternForServiceId } = get();
+        const { activeWayId, addingServiceDraft } = get();
         if (!activeWayId) return;
         const finishedWayId = activeWayId;
         set((s) => {
@@ -2986,32 +3024,43 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
             // The stub way (and its default service, if any) is discarded.
             return {
               activeWayId: null,
-              addingPatternForServiceId: null,
+              addingServiceDraft: null,
               system: touch(removeWay(s.system, activeWayId)),
               selection: null,
             };
           }
-          if (addingPatternForServiceId) {
-            const services = s.system.services.map((sv) =>
-              sv.id === addingPatternForServiceId
-                ? {
-                    ...sv,
-                    patterns: [
-                      ...sv.patterns,
-                      { id: shortId(), sections: oneSection([wholeLeg(activeWayId)]) },
-                    ],
-                  }
-                : sv,
+          if (addingServiceDraft) {
+            const owningLine = s.system.lines.find((line) => line.id === addingServiceDraft.lineId);
+            const parent = s.system.services.find((service) =>
+              owningLine?.serviceIds.includes(service.id),
+            );
+            if (!parent || !owningLine) return { activeWayId: null, addingServiceDraft: null };
+            const serviceId = shortId();
+            const service: Service = {
+              id: serviceId,
+              name: addingServiceDraft.name.trim(),
+              modeId: addingServiceDraft.modeId,
+              path: { id: serviceId, sections: oneSection([wholeLeg(activeWayId)]) },
+              frequencyMinutes: parent.frequencyMinutes,
+              spanStart: parent.spanStart,
+              spanEnd: parent.spanEnd,
+              schedule: parent.schedule,
+            };
+            const services = [...s.system.services, service];
+            const lines = s.system.lines.map((line) =>
+              line.id === owningLine.id
+                ? { ...line, serviceIds: [...line.serviceIds, serviceId] }
+                : line,
             );
             // Same staleness case createRoutedService resyncs for — a new
             // branch on an existing service newly serves this way too.
             return {
               activeWayId: null,
-              addingPatternForServiceId: null,
+              addingServiceDraft: null,
               system: touch(
-                resyncAutoNamedStations({ ...s.system, services }, new Set([activeWayId])),
+                resyncAutoNamedStations({ ...s.system, lines, services }, new Set([activeWayId])),
               ),
-              selection: { kind: 'service', id: addingPatternForServiceId },
+              selection: { kind: 'service', id: serviceId },
             };
           }
           return { activeWayId: null };
@@ -3031,10 +3080,8 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         // local one and the busway beside the road.
         if (!get().draftSeparate) {
           for (const svc of get().system.services) {
-            const pattern = svc.patterns.find((p) =>
-              patternLegs(p).some((l) => l.wayId === finishedWayId),
-            );
-            if (!pattern) continue;
+            const pattern = servicePattern(svc);
+            if (!patternLegs(pattern).some((leg) => leg.wayId === finishedWayId)) continue;
             const next = conflatePatternOntoExisting(get().system, svc.id, pattern.id);
             if (next) set({ system: touch(next) });
             break;
@@ -3175,6 +3222,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           system: touch({
             ...s.system,
             ways: [...s.system.ways, ...pieces.ways],
+            lines: [...s.system.lines, ...pieces.lines],
             services: [...s.system.services, ...pieces.services],
             stations: [...s.system.stations, ...pieces.stations],
           }),
@@ -3194,6 +3242,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
             system: touch({
               ...s.system,
               ways: [...s.system.ways, ...pieces.ways],
+              lines: [...s.system.lines, ...pieces.lines],
               services: [...s.system.services, ...pieces.services],
               stations: [...s.system.stations, ...pieces.stations],
             }),
@@ -3554,18 +3603,17 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
             reversed: (wayId: string): boolean => wayId === other.id && !sameDir,
           };
           const rebound = s.system.services.map((sv) => ({
-            ...sv,
-            patterns: sv.patterns.map((pt) => ({
-              ...pt,
+            ...withServicePattern(sv, {
+              ...servicePattern(sv),
               // Then normalize: with both directions now on the keeper, a couplet
               // over this boulevard is a line running one two-way street, and
               // saying otherwise would draw one-way chevrons both ways along it.
               sections: normalizeSections(
-                mapSectionLegs(pt.sections, (legs) =>
+                mapSectionLegs(servicePattern(sv).sections, (legs) =>
                   mergeLegs(legs, keeper.id, other.id, rebindRemap),
                 ),
               ),
-            })),
+            }),
           }));
 
           let system = removeWay({ ...s.system, stations, nodes, services: rebound }, other.id);
@@ -3695,10 +3743,8 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         const id = shortId();
         const service: Service = {
           id,
-          name: `Line ${nextLineNumber++}`,
           modeId: resolvedModeId,
-          color: st.draftColor,
-          patterns: [{ id: shortId(), sections: oneSection(legs) }],
+          path: { id, sections: oneSection(legs) },
           frequencyMinutes: DEFAULT_FREQUENCY_MINUTES,
           spanStart: DEFAULT_SPAN_START,
           spanEnd: DEFAULT_SPAN_END,
@@ -3707,14 +3753,24 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         // only a service that names the stretches it uses.
         const riddenWayIds = new Set(legs.map((l) => l.wayId));
         set((s) => {
-          const withService = { ...s.system, services: [...s.system.services, service] };
+          const line = {
+            id: shortId(),
+            name: `Line ${nextLineNumber++}`,
+            color: st.draftColor,
+            serviceIds: [service.id],
+          };
+          const withService = {
+            ...s.system,
+            lines: [...s.system.lines, line],
+            services: [...s.system.services, service],
+          };
           // A station riding one of these ways could have been unserved when
           // its name was auto-suggested — resolveNamingStyle's fallback has to
           // guess a style before any service exists, and this line might prove
           // that guess wrong (see resyncAutoNamedStations).
           return {
             system: touch(resyncAutoNamedStations(withService, riddenWayIds)),
-            selection: { kind: 'service', id },
+            selection: { kind: 'line', id: line.id },
           };
         });
         return id;
@@ -3726,104 +3782,81 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         if (!service) return 0;
         const allowed = new Set(mode(service.modeId).wayTypeIds);
         let sys = st.system;
-        let rebound = 0;
+        const pattern = servicePattern(service);
+        const oldWayIds = [...new Set(patternWayIds(pattern))];
+        const sketchPath = patternPath(sys.ways, pattern);
+        if (sketchPath.length < 2) return 0;
+        const exclude = new Set(oldWayIds);
+        const candidates = sys.ways.filter((w) => allowed.has(w.typeId) && !exclude.has(w.id));
+        const sA = snap(candidates, sketchPath[0], ADOPT_SNAP_M);
+        const sB = snap(candidates, sketchPath[sketchPath.length - 1], ADOPT_SNAP_M);
+        if (!sA || !sB) return 0;
+        const wayA = sys.ways.find((w) => w.id === sA.wayId);
+        const wayB = sys.ways.find((w) => w.id === sB.wayId);
+        if (!wayA || !wayB) return 0;
+        const from = anchorOnWay(wayA, sA.coord);
+        const to = anchorOnWay(wayB, sB.coord);
+        if (!from || !to || patternHasSplit(pattern)) return 0;
 
-        for (const pattern of service.patterns) {
-          const oldWayIds = [...new Set(patternWayIds(pattern))];
-          const sketchPath = patternPath(sys.ways, pattern);
-          if (sketchPath.length < 2) continue;
-          const exclude = new Set(oldWayIds);
-          const candidates = sys.ways.filter((w) => allowed.has(w.typeId) && !exclude.has(w.id));
-          const sA = snap(candidates, sketchPath[0], ADOPT_SNAP_M);
-          const sB = snap(candidates, sketchPath[sketchPath.length - 1], ADOPT_SNAP_M);
-          if (!sA || !sB) continue;
-          const wayA = sys.ways.find((w) => w.id === sA.wayId);
-          const wayB = sys.ways.find((w) => w.id === sB.wayId);
-          if (!wayA || !wayB) continue;
-          const from = anchorOnWay(wayA, sA.coord);
-          const to = anchorOnWay(wayB, sB.coord);
-          if (!from || !to) continue;
-          // Adoption replaces a pattern's whole path with one routed line, which
-          // for a couplet would silently discard the direction it was drawn
-          // with. Refuse rather than flatten: the planner drew two one-way paths
-          // on purpose, and re-routing each of them separately is a different
-          // gesture than this one.
-          if (patternHasSplit(pattern)) continue;
-          // 'preferLegal': failure here is `continue`, which leaves the pattern
-          // silently un-adopted with nothing said. A flagged adoption is the
-          // better of the two, since the wrong-way issue then names it.
-          const res = routeBetween(sys, from, to, {
-            allowedTypeIds: allowed,
-            excludeWayIds: exclude,
-            biasPath: sketchPath,
-            biasWeight: ADOPT_BIAS_WEIGHT,
-            travel: 'preferLegal',
-          });
-          if (!res) continue;
-          const adoptedLegs = materializeRouteSpans(sys, res.spans);
-          if (!adoptedLegs) continue;
-          const adoptedWayIds = [...new Set(adoptedLegs.map((l) => l.wayId))];
+        const res = routeBetween(sys, from, to, {
+          allowedTypeIds: allowed,
+          excludeWayIds: exclude,
+          biasPath: sketchPath,
+          biasWeight: ADOPT_BIAS_WEIGHT,
+          travel: 'preferLegal',
+        });
+        if (!res) return 0;
+        const adoptedLegs = materializeRouteSpans(sys, res.spans);
+        if (!adoptedLegs) return 0;
+        const adoptedWayIds = [...new Set(adoptedLegs.map((leg) => leg.wayId))];
 
-          // Swap the pattern onto the adopted ways.
-          sys = {
-            ...sys,
-            services: sys.services.map((sv) =>
-              sv.id === serviceId
-                ? {
-                    ...sv,
-                    patterns: sv.patterns.map((p) =>
-                      // Adoption replaces the whole path, so any direction
-                      // structure it had goes with it — see the note on
-                      // materializeRouteSpans about re-routing each direction.
-                      p.id === pattern.id ? { ...p, sections: oneSection(adoptedLegs) } : p,
-                    ),
-                  }
-                : sv,
-            ),
-          };
+        sys = {
+          ...sys,
+          services: sys.services.map((candidate) =>
+            candidate.id === serviceId
+              ? withServicePattern(candidate, {
+                  ...pattern,
+                  sections: oneSection(adoptedLegs),
+                })
+              : candidate,
+          ),
+        };
 
-          // Stations that rode the sketch follow the service onto the adopted
-          // ways (nearest within tolerance); too far away, they detach but
-          // survive as free stations rather than being deleted.
-          const newWays = sys.ways.filter((w) => adoptedWayIds.includes(w.id));
-          sys = {
-            ...sys,
-            stations: sys.stations.map((stn) => {
-              if (!stn.anchors.some((a) => exclude.has(a.wayId))) return stn;
-              let best: StationAnchor | undefined;
-              let bestD = ADOPT_STATION_REANCHOR_M;
-              for (const nw of newWays) {
-                const on = nearestOnPath(resolveWayPath(nw), stn.coord);
-                if (on && on.distMeters < bestD) {
-                  bestD = on.distMeters;
-                  best = { wayId: nw.id, t: on.t };
-                }
+        const newWays = sys.ways.filter((way) => adoptedWayIds.includes(way.id));
+        sys = {
+          ...sys,
+          stations: sys.stations.map((station) => {
+            if (!station.anchors.some((anchor) => exclude.has(anchor.wayId))) return station;
+            let best: StationAnchor | undefined;
+            let bestDistance = ADOPT_STATION_REANCHOR_M;
+            for (const way of newWays) {
+              const nearest = nearestOnPath(resolveWayPath(way), station.coord);
+              if (nearest && nearest.distMeters < bestDistance) {
+                bestDistance = nearest.distMeters;
+                best = { wayId: way.id, t: nearest.t };
               }
-              // Too far from anything adopted: the station drops the anchors
-              // that named the sketch and survives free, rather than being
-              // deleted. Anchors on ways NOT being replaced are untouched.
-              const detached = stn.anchors.filter((a) => !exclude.has(a.wayId));
-              if (!best) return { ...stn, anchors: detached };
-              return { ...stn, anchors: [best, ...detached.filter((a) => a.wayId !== best.wayId)] };
-            }),
-          };
+            }
+            const detached = station.anchors.filter((anchor) => !exclude.has(anchor.wayId));
+            if (!best) return { ...station, anchors: detached };
+            return {
+              ...station,
+              anchors: [best, ...detached.filter((anchor) => anchor.wayId !== best.wayId)],
+            };
+          }),
+        };
 
-          // Sketch geometry nothing rides anymore is redundant — but never
-          // silently delete anything imported or deliberately named.
-          for (const oldId of oldWayIds) {
-            const w = sys.ways.find((x) => x.id === oldId);
-            if (!w || w.source) continue;
-            const ridden = sys.services.some((sv) =>
-              sv.patterns.some((p) => patternLegs(p).some((l) => l.wayId === oldId)),
-            );
-            const named = sys.namedWays.some((n) => n.wayIds.includes(oldId));
-            if (!ridden && !named) sys = removeWay(sys, oldId);
-          }
-          rebound++;
+        for (const oldId of oldWayIds) {
+          const way = sys.ways.find((candidate) => candidate.id === oldId);
+          if (!way || way.source) continue;
+          const ridden = sys.services.some((candidate) =>
+            patternLegs(servicePattern(candidate)).some((leg) => leg.wayId === oldId),
+          );
+          const named = sys.namedWays.some((namedWay) => namedWay.wayIds.includes(oldId));
+          if (!ridden && !named) sys = removeWay(sys, oldId);
         }
 
-        if (rebound > 0) set({ system: touch(sys) });
-        return rebound;
+        set({ system: touch(sys) });
+        return 1;
       },
 
       reconcileImportedServices: (serviceIds) => {
@@ -3856,38 +3889,68 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         // surprise once you do open the panel.
         const service: Service = {
           id,
-          name: `Line ${nextLineNumber++}`,
           modeId,
-          color,
-          patterns: [{ id: shortId(), sections: oneSection([wholeLeg(wayId)]) }],
+          path: { id, sections: oneSection([wholeLeg(wayId)]) },
           frequencyMinutes: DEFAULT_FREQUENCY_MINUTES,
           spanStart: DEFAULT_SPAN_START,
           spanEnd: DEFAULT_SPAN_END,
         };
         set((s) => {
-          const withService = { ...s.system, services: [...s.system.services, service] };
+          const line = {
+            id: shortId(),
+            name: `Line ${nextLineNumber++}`,
+            color,
+            serviceIds: [service.id],
+          };
+          const withService = {
+            ...s.system,
+            lines: [...s.system.lines, line],
+            services: [...s.system.services, service],
+          };
           // Same staleness case createRoutedService resyncs for — the plain
           // "draw a line" path also newly serves whatever this way carries.
           return {
             system: touch(resyncAutoNamedStations(withService, new Set([wayId]))),
-            selection: { kind: 'service', id },
+            selection: { kind: 'line', id: line.id },
           };
         });
         return id;
       },
+
+      setLineName: (id, name) =>
+        set((s) => ({
+          system: touch({
+            ...s.system,
+            lines: s.system.lines.map((line) => (line.id === id ? { ...line, name } : line)),
+          }),
+        })),
+      setLineColor: (id, color) =>
+        set((s) => ({
+          system: touch({
+            ...s.system,
+            lines: s.system.lines.map((line) => (line.id === id ? { ...line, color } : line)),
+          }),
+        })),
+      deleteLine: (id) =>
+        set((s) => {
+          const line = s.system.lines.find((candidate) => candidate.id === id);
+          if (!line) return {};
+          const removed = new Set(line.serviceIds);
+          return {
+            system: touch({
+              ...s.system,
+              lines: s.system.lines.filter((candidate) => candidate.id !== id),
+              services: s.system.services.filter((service) => !removed.has(service.id)),
+            }),
+            selection: s.selection?.kind === 'line' && s.selection.id === id ? null : s.selection,
+          };
+        }),
 
       setServiceName: (id, name) =>
         set((s) => ({
           system: touch({
             ...s.system,
             services: s.system.services.map((sv) => (sv.id === id ? { ...sv, name } : sv)),
-          }),
-        })),
-      setServiceColor: (id, color) =>
-        set((s) => ({
-          system: touch({
-            ...s.system,
-            services: s.system.services.map((sv) => (sv.id === id ? { ...sv, color } : sv)),
           }),
         })),
       setServiceMode: (id, modeId) =>
@@ -3938,42 +4001,37 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         })),
 
       deleteService: (id) =>
-        set((s) => ({
-          system: touch({ ...s.system, services: s.system.services.filter((sv) => sv.id !== id) }),
-          selection: s.selection?.kind === 'service' && s.selection.id === id ? null : s.selection,
-          activePatternId:
-            s.selection?.kind === 'service' && s.selection.id === id ? null : s.activePatternId,
-          armedTerminus: s.armedTerminus?.serviceId === id ? null : s.armedTerminus,
-        })),
+        set((s) => {
+          const services = s.system.services.filter((sv) => sv.id !== id);
+          return {
+            system: touch({
+              ...s.system,
+              services,
+              lines: pruneLineMembership(s.system, services),
+            }),
+            selection:
+              s.selection?.kind === 'service' && s.selection.id === id ? null : s.selection,
+            activePatternId:
+              s.selection?.kind === 'service' && s.selection.id === id ? null : s.activePatternId,
+            armedTerminus: s.armedTerminus?.serviceId === id ? null : s.armedTerminus,
+          };
+        }),
 
-      startAddingPattern: (serviceId) => set({ addingPatternForServiceId: serviceId, tool: 'way' }),
-      cancelAddingPattern: () => set({ addingPatternForServiceId: null }),
-      deletePattern: (serviceId, patternId) =>
-        set((s) => ({
-          system: touch({
-            ...s.system,
-            services: s.system.services.map((sv) =>
-              sv.id === serviceId && sv.patterns.length > 1
-                ? { ...sv, patterns: sv.patterns.filter((p) => p.id !== patternId) }
-                : sv,
-            ),
-          }),
-          activePatternId:
-            s.activePatternId === patternId
-              ? (s.system.services
-                  .find((service) => service.id === serviceId)
-                  ?.patterns.find((pattern) => pattern.id !== patternId)?.id ?? null)
-              : s.activePatternId,
-          armedTerminus:
-            s.armedTerminus?.serviceId === serviceId && s.armedTerminus.patternId === patternId
-              ? null
-              : s.armedTerminus,
-        })),
+      startAddingServiceToLine: (lineId, details) =>
+        set({
+          addingServiceDraft: {
+            lineId,
+            name: details.name.trim(),
+            modeId: details.modeId,
+          },
+          tool: 'way',
+        }),
+      cancelAddingService: () => set({ addingServiceDraft: null }),
 
       extendPatternTerminus: (serviceId, patternId, side, spans) => {
         const st = get();
         const service = st.system.services.find((candidate) => candidate.id === serviceId);
-        const pattern = service?.patterns.find((candidate) => candidate.id === patternId);
+        const pattern = selectedServicePattern(service, patternId);
         const legs = materializeRouteSpans(st.system, spans);
         const extended = pattern && legs ? extendPatternTerminusInCore(pattern, side, legs) : null;
         if (!extended) return false;
@@ -3981,14 +4039,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           system: touch({
             ...state.system,
             services: state.system.services.map((candidate) =>
-              candidate.id !== serviceId
-                ? candidate
-                : {
-                    ...candidate,
-                    patterns: candidate.patterns.map((current) =>
-                      current.id === patternId ? extended : current,
-                    ),
-                  },
+              candidate.id !== serviceId ? candidate : withServicePattern(candidate, extended),
             ),
           }),
         }));
@@ -4005,7 +4056,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         if (plan.kind === 'refuse') return refuse();
         if (plan.kind === 'connection-choice' && !choice) return false;
         const service = plan.system.services.find((candidate) => candidate.id === source.serviceId);
-        const pattern = service?.patterns.find((candidate) => candidate.id === source.patternId);
+        const pattern = selectedServicePattern(service, source.patternId);
         if (!service || !pattern) return refuse();
 
         if (plan.kind === 'connection-choice' && choice === 'through') {
@@ -4049,12 +4100,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           services: plan.system.services.map((candidate) =>
             candidate.id !== source.serviceId
               ? candidate
-              : {
-                  ...candidate,
-                  patterns: candidate.patterns.map((currentPattern) =>
-                    currentPattern.id === source.patternId ? nextPattern : currentPattern,
-                  ),
-                },
+              : withServicePattern(candidate, nextPattern),
           ),
         };
         // Extending or closing a terminus rides new legs the pattern didn't
@@ -4071,21 +4117,14 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
       endPatternAt: (serviceId, position) => {
         const st = get();
         const service = st.system.services.find((candidate) => candidate.id === serviceId);
-        const pattern = service?.patterns.find((candidate) => candidate.id === position.patternId);
+        const pattern = selectedServicePattern(service, position.patternId);
         const ended = pattern ? endPatternAtPosition(st.system.ways, pattern, position) : null;
         if (!ended) return false;
         set((state) => ({
           system: touch({
             ...state.system,
             services: state.system.services.map((candidate) =>
-              candidate.id !== serviceId
-                ? candidate
-                : {
-                    ...candidate,
-                    patterns: candidate.patterns.map((current) =>
-                      current.id === position.patternId ? ended.pattern : current,
-                    ),
-                  },
+              candidate.id !== serviceId ? candidate : withServicePattern(candidate, ended.pattern),
             ),
           }),
         }));
@@ -4095,7 +4134,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
       divideServiceAt: (serviceId, position) => {
         const st = get();
         const service = st.system.services.find((candidate) => candidate.id === serviceId);
-        const pattern = service?.patterns.find((candidate) => candidate.id === position.patternId);
+        const pattern = selectedServicePattern(service, position.patternId);
         const division = pattern
           ? dividePatternAtPosition(st.system.ways, pattern, position)
           : null;
@@ -4104,10 +4143,10 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         const spawned: Service = {
           ...service,
           id: newId,
-          name: `${service.name} 2`,
-          color: unusedPaletteColor(st.system, service.modeId),
-          patterns: [{ ...division.divided, id: shortId() }],
+          name: service.name ? `${service.name} 2` : 'Service 2',
+          path: { id: newId, sections: division.divided.sections },
         };
+        const sourceLine = lineForService(st.system, serviceId);
         set((state) => ({
           system: touch({
             ...state.system,
@@ -4115,18 +4154,20 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
               ...state.system.services.map((candidate) =>
                 candidate.id !== serviceId
                   ? candidate
-                  : {
-                      ...candidate,
-                      patterns: candidate.patterns.map((current) =>
-                        current.id === position.patternId ? division.remaining : current,
-                      ),
-                    },
+                  : withServicePattern(candidate, division.remaining),
               ),
               spawned,
             ],
+            lines: sourceLine
+              ? state.system.lines.map((line) =>
+                  line.id === sourceLine.id
+                    ? { ...line, serviceIds: [...line.serviceIds, newId] }
+                    : line,
+                )
+              : state.system.lines,
           }),
           selection: { kind: 'service', id: newId },
-          activePatternId: spawned.patterns[0].id,
+          activePatternId: spawned.id,
         }));
         return newId;
       },
@@ -4134,7 +4175,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
       trimPatternAt: (serviceId, position, side) => {
         const st = get();
         const service = st.system.services.find((candidate) => candidate.id === serviceId);
-        const pattern = service?.patterns.find((candidate) => candidate.id === position.patternId);
+        const pattern = selectedServicePattern(service, position.patternId);
         const trimmed = pattern
           ? trimPatternAtPosition(st.system.ways, pattern, position, side)
           : null;
@@ -4143,14 +4184,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           system: touch({
             ...state.system,
             services: state.system.services.map((candidate) =>
-              candidate.id !== serviceId
-                ? candidate
-                : {
-                    ...candidate,
-                    patterns: candidate.patterns.map((current) =>
-                      current.id === position.patternId ? trimmed : current,
-                    ),
-                  },
+              candidate.id !== serviceId ? candidate : withServicePattern(candidate, trimmed),
             ),
           }),
         }));
@@ -4160,7 +4194,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
       trimPatternTo: (serviceId, patternId, wayId, t, side) => {
         const st = get();
         const service = st.system.services.find((candidate) => candidate.id === serviceId);
-        const pattern = service?.patterns.find((candidate) => candidate.id === patternId);
+        const pattern = selectedServicePattern(service, patternId);
         if (!pattern) return false;
         // Trim at the leg NEAREST the end being moved, so dragging a terminus
         // back over a way the line visits twice shortens the right visit. On a
@@ -4175,12 +4209,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
             services: state.system.services.map((candidate) =>
               candidate.id !== serviceId
                 ? candidate
-                : {
-                    ...candidate,
-                    patterns: candidate.patterns.map((current) =>
-                      current.id === patternId ? { ...current, sections } : current,
-                    ),
-                  },
+                : withServicePattern(candidate, { ...pattern, sections }),
             ),
           }),
         }));
@@ -4190,7 +4219,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
       setStopSkipped: (serviceId, patternId, run, stationId, skipped) =>
         set((s) => {
           const service = s.system.services.find((sv) => sv.id === serviceId);
-          const pattern = service?.patterns.find((p) => p.id === patternId);
+          const pattern = selectedServicePattern(service, patternId);
           if (!pattern) return {};
           const current = new Set(pattern.skippedStops?.[run] ?? []);
           if (skipped) current.add(stationId);
@@ -4213,9 +4242,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
             system: touch({
               ...s.system,
               services: s.system.services.map((sv) =>
-                sv.id !== serviceId
-                  ? sv
-                  : { ...sv, patterns: sv.patterns.map((p) => (p.id === patternId ? updated : p)) },
+                sv.id !== serviceId ? sv : withServicePattern(sv, updated),
               ),
             }),
           };
@@ -4224,7 +4251,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
       splitServiceAt: (serviceId, patternId, wayId, t) => {
         const st = get();
         const service = st.system.services.find((sv) => sv.id === serviceId);
-        const pattern = service?.patterns.find((p) => p.id === patternId);
+        const pattern = selectedServicePattern(service, patternId);
         if (!service || !pattern) return null;
         // Cutting a line in two is trimming it twice, from opposite ends — which
         // means a couplet's halves are each cut on both their streets, and each
@@ -4254,24 +4281,25 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         const spawned: Service = {
           ...service,
           id: newId,
-          name: `${service.name} 2`,
+          name: service.name ? `${service.name} 2` : undefined,
+          path: { id: newId, sections: divided.sections },
+        };
+        const newLine = {
+          id: shortId(),
+          name: `${lineForService(st.system, serviceId)?.name ?? 'Line'} 2`,
           color: unusedPaletteColor(st.system, service.modeId),
-          patterns: [{ ...divided, id: shortId() }],
+          serviceIds: [newId],
         };
         set((s) => ({
           system: touch({
             ...s.system,
             services: [
               ...s.system.services.map((sv) =>
-                sv.id !== serviceId
-                  ? sv
-                  : {
-                      ...sv,
-                      patterns: sv.patterns.map((p) => (p.id === patternId ? remaining : p)),
-                    },
+                sv.id !== serviceId ? sv : withServicePattern(sv, remaining),
               ),
               spawned,
             ],
+            lines: [...s.system.lines, newLine],
           }),
           selection: { kind: 'service', id: newId },
         }));
@@ -4281,7 +4309,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
       startReturnPathDraft: (serviceId, patternId) => {
         const st = get();
         const service = st.system.services.find((sv) => sv.id === serviceId);
-        const pattern = service?.patterns.find((p) => p.id === patternId);
+        const pattern = selectedServicePattern(service, patternId);
         if (!service || !pattern) return false;
         // Drawn FROM the far end of the outward trip, because that is where a
         // return trip starts. The planner then traces it back down whatever
@@ -4312,7 +4340,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
       attachReturnPath: (serviceId, patternId, spans) => {
         const st = get();
         const service = st.system.services.find((sv) => sv.id === serviceId);
-        const pattern = service?.patterns.find((p) => p.id === patternId);
+        const pattern = selectedServicePattern(service, patternId);
         if (!service || !pattern || spans.length === 0) return false;
         const returnLegs = materializeRouteSpans(st.system, spans);
         if (!returnLegs || returnLegs.length === 0) return false;
@@ -4353,12 +4381,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
           const withReturnPath = {
             ...s.system,
             services: s.system.services.map((sv) =>
-              sv.id !== serviceId
-                ? sv
-                : {
-                    ...sv,
-                    patterns: sv.patterns.map((p) => (p.id === patternId ? { ...p, sections } : p)),
-                  },
+              sv.id !== serviceId ? sv : withServicePattern(sv, { ...pattern, sections }),
             ),
           };
           // The return trip can newly cover a station the outbound leg never
@@ -4378,7 +4401,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
       makePatternTwoWay: (serviceId, patternId) =>
         set((s) => {
           const service = s.system.services.find((sv) => sv.id === serviceId);
-          const pattern = service?.patterns.find((p) => p.id === patternId);
+          const pattern = selectedServicePattern(service, patternId);
           if (!pattern || !patternHasSplit(pattern)) return {};
           // The outward trip's streets are the ones that survive: they are what
           // the line was before anyone drew a return path, and the return
@@ -4390,12 +4413,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
               services: s.system.services.map((sv) =>
                 sv.id !== serviceId
                   ? sv
-                  : {
-                      ...sv,
-                      patterns: sv.patterns.map((p) =>
-                        p.id === patternId ? { ...p, sections: oneSection(legs) } : p,
-                      ),
-                    },
+                  : withServicePattern(sv, { ...pattern, sections: oneSection(legs) }),
               ),
             }),
           };
@@ -4415,33 +4433,44 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         // — the extents are measured in its current parameterization, and the
         // splits below change that.
         let affected = 0;
+        const replacementIds = new Map<string, string[]>();
+        const services = st.system.services.flatMap((service) => {
+          const pattern = servicePattern(service);
+          const before = patternLegs(pattern);
+          const legs = removeStretchFromLegs(before, wayId, lo, hi);
+          if (legs.length === before.length && legs.every((leg, index) => leg === before[index])) {
+            replacementIds.set(service.id, [service.id]);
+            return [service];
+          }
+          affected++;
+          if (legs.length === 0) {
+            replacementIds.set(service.id, []);
+            return [];
+          }
+          const runs = splitLegsIntoRuns(legs, (a, b) => legsMeet(st.system.ways, a, b));
+          const divided = runs.map((run, index) => {
+            const id = index === 0 ? service.id : shortId();
+            return withServicePattern(
+              { ...service, id, ...(index > 0 ? { name: `Service ${index + 1}` } : {}) },
+              { ...pattern, id, sections: oneSection(run) },
+            );
+          });
+          replacementIds.set(
+            service.id,
+            divided.map((candidate) => candidate.id),
+          );
+          return divided;
+        });
         let sys: TransitSystem = {
           ...st.system,
-          services: st.system.services.map((sv) => ({
-            ...sv,
-            patterns: sv.patterns.flatMap((p) => {
-              const before = patternLegs(p);
-              const legs = removeStretchFromLegs(before, wayId, lo, hi);
-              if (legs.length === before.length && legs.every((l, i) => l === before[i]))
-                return [p];
-              affected++;
-              if (legs.length === 0) return [];
-              // Taking a stretch out from under a line can leave it in two
-              // disconnected halves. Both survive, as two patterns of the one
-              // service — dropping the shorter half would be throwing away half
-              // a line without asking.
-              // Against the ways as they still are: the splits below have not
-              // happened yet, and these extents are in the current geometry.
-              const runs = splitLegsIntoRuns(legs, (a, b) => legsMeet(st.system.ways, a, b));
-              return runs.map((run, i) => ({
-                ...p,
-                id: i === 0 ? p.id : shortId(),
-                sections: oneSection(run),
-              }));
-            }),
-          })),
+          services,
+          lines: st.system.lines
+            .map((line) => ({
+              ...line,
+              serviceIds: line.serviceIds.flatMap((id) => replacementIds.get(id) ?? []),
+            }))
+            .filter((line) => line.serviceIds.length > 0),
         };
-        sys = { ...sys, services: sys.services.filter((sv) => sv.patterns.length > 0) };
 
         // Then cut the way itself: split at both ends of the stretch and remove
         // the middle. The HIGH end first — splitting there leaves the low end's
@@ -4492,8 +4521,8 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
               ? undefined
               : Math.min(separationM * 1.5 + 5, MERGE_MAX_TOLERANCE_M);
           for (const svc of sys.services) {
-            for (const pattern of svc.patterns) {
-              if (!patternLegs(pattern).some((l) => l.wayId === way.id)) continue;
+            const pattern = servicePattern(svc);
+            if (patternLegs(pattern).some((leg) => leg.wayId === way.id)) {
               const next = conflatePatternOntoExisting(
                 sys,
                 svc.id,
@@ -4536,29 +4565,34 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}) {
         return true;
       },
 
-      mergeServiceInto: (sourceId, targetId) =>
+      moveServiceToLine: (sourceId, targetLineId) =>
         set((s) => {
           const source = s.system.services.find((sv) => sv.id === sourceId);
-          const target = s.system.services.find((sv) => sv.id === targetId);
-          if (!source || !target || source.id === target.id || source.modeId !== target.modeId)
-            return {};
-          // Each carried-over pattern keeps its own name if it already had one
-          // (a source that was itself already branched); otherwise it's named
-          // after the service it came from, so the merged list still reads as
-          // "which physical line did this branch used to be."
-          const carried = source.patterns.map((p) => ({ ...p, name: p.name ?? source.name }));
+          const sourceLine = lineForService(s.system, sourceId);
+          const targetLine = s.system.lines.find((line) => line.id === targetLineId);
+          if (!source || !sourceLine || !targetLine) return {};
+          if (sourceLine.id === targetLine.id) return {};
           return {
             system: touch({
               ...s.system,
-              services: s.system.services
-                .filter((sv) => sv.id !== sourceId)
-                .map((sv) =>
-                  sv.id === targetId ? { ...sv, patterns: [...sv.patterns, ...carried] } : sv,
-                ),
+              services: s.system.services.map((service) =>
+                service.id === sourceId && !service.name
+                  ? { ...service, name: sourceLine.name }
+                  : service,
+              ),
+              lines: s.system.lines
+                .map((line) =>
+                  line.id === targetLine.id
+                    ? { ...line, serviceIds: [...line.serviceIds, sourceId] }
+                    : line.id === sourceLine.id
+                      ? { ...line, serviceIds: line.serviceIds.filter((id) => id !== sourceId) }
+                      : line,
+                )
+                .filter((line) => line.serviceIds.length > 0),
             }),
             selection:
               s.selection?.kind === 'service' && s.selection.id === sourceId
-                ? { kind: 'service', id: targetId }
+                ? { kind: 'service', id: sourceId }
                 : s.selection,
           };
         }),

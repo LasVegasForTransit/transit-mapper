@@ -3,24 +3,26 @@
 A saved document is one `TransitSystem` (defined in
 [`src/model/system.ts`](../../../packages/core/src/model/system.ts)): a regional, multimodal
 network. The model's central split is **infrastructure versus service**: a
-`Way` is the physical carrier, a `Service` is a colored route people ride,
-and many services can share one way.
+`Way` is the physical carrier, a `Line` is the public identity an agency puts
+on its map, and a `Service` is one mode-specific operation beneath that Line.
+Many Services can share one Way.
 
 All kind fields (`typeId`, `modeId`, `kindId`, and so on) are string ids
 into the catalogs; see [Catalogs](catalogs.md). The schema is versioned
-(currently v10) and migrated on load in `packages/core/src/model/serialize.ts`, so older
+(currently v15) and migrated on load in `packages/core/src/model/serialize.ts`, so older
 saves and shared snapshots keep working.
 
 ## TransitSystem
 
 | Field                       | Meaning                                                         |
 | --------------------------- | --------------------------------------------------------------- |
-| `version`                   | Schema version (10).                                            |
+| `version`                   | Schema version (15).                                            |
 | `id`, `name`, `description` | Identity.                                                       |
 | `viewport`                  | Saved camera (`center`, `zoom`).                                |
 | `ways`                      | Physical infrastructure.                                        |
-| `services`                  | Transit lines.                                                  |
-| `stations`                  | Stops / stations.                                               |
+| `lines`                     | Public map identities grouping one or more Services.            |
+| `services`                  | Mode-specific operations, each with one path and schedule.      |
+| `stations`                  | Physical passenger places; Service calls are derived Stops.     |
 | `facilities`                | Catalog-typed point and area features.                          |
 | `groups`                    | Bundles of members; a facility complex when it has a footprint. |
 | `nodes`                     | Junctions — coordinates shared by 2+ ways.                      |
@@ -133,23 +135,41 @@ carriageways of a boulevard, a trail crossing many junction-split segments.
 What the identity is _called_ in the UI ("Street", "Line", "Trail") comes
 from the way family's catalog noun.
 
-## Service, Pattern, SchedulePeriod
+## Line, Service, ServicePath, SchedulePeriod
 
-A `Service` is a colored route: `name`, `modeId` (mode catalog), `color`,
-and one or more `Pattern`s. A plain line has one pattern; two or more model
-branches sharing the service's identity ("via Airport"). Still branches, not
-directions — the two directions of one path are two readings of a single
-pattern, because they share a stop list, a headway and a fleet, which two
-branches do not.
+A `Line` is the rider-facing name and color an agency designates on a map. It
+owns an ordered `serviceIds` list. A `Service` is the technical operation: one
+mode, one path, one vehicle type, and one schedule. A Line normally has one
+Service, which the outline hides to keep the common case simple. A branching,
+express, or temporary replacement operation is another Service beneath the
+same Line. Each Service remains single-mode; a Line may be multimodal when the
+agency chooses to present those Services under one public identity.
 
-A pattern's path is a list of sections, ordered along outbound travel, each
+A Service's singular `path` is a list of sections, ordered along outbound travel, each
 holding legs — one leg per way it runs over:
 
 ```ts
-interface Pattern {
+interface Line {
+  id: string;
+  name: string;
+  color: string;
+  serviceIds: string[];
+}
+
+interface Service {
+  id: string;
+  name?: string;
+  modeId: string;
+  path: ServicePath;
+  frequencyMinutes?: number;
+  spanStart?: string;
+  spanEnd?: string;
+  schedule?: SchedulePeriod[];
+}
+
+interface ServicePath {
   id: string;
   sections: PatternSection[];
-  name?: string;
 }
 
 type PatternSection =
@@ -167,14 +187,14 @@ interface PatternLeg {
 
 Two axes meet here and confusing them is the mistake the naming exists to
 prevent. `direction` is about a **way**: which end of that way's own stored
-point order the leg is entered at. A section's kind is about a **line**: which
+point order the leg is entered at. A section's kind is about a **Service**: which
 of its two directions of service ride that stretch at all.
 
 The outbound direction reads the sections in order, taking `legs` or
 `outbound`. The inbound direction reads them in reverse, taking `legs` or
 `inbound`, reversed within each section and each leg's travel direction
-flipped. A plain line is a single `shared` section, so its return trip is its
-outward trip reversed — which is what every line was before v12.
+flipped. A plain Service path is a single `shared` section, so its return trip
+is its outward trip reversed.
 
 `split` is a one-way couplet: the outward trip up one street, the return down
 another. `turnaround` is ridden once, where the vehicle reverses — a loop round
@@ -215,10 +235,15 @@ what the simulation runs on — see [The simulation](../explanation/simulation.m
 
 ## Station
 
+A Station is a physical passenger place. A Stop is not a separate saved
+object: it is the call a particular Service makes at a Station its path
+reaches. This keeps one shared station from becoming duplicate stop records
+when several Services call there.
+
 | Field          | Meaning                                                                                                                                   |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `coord`        | Network-node position, snapped onto its way.                                                                                              |
-| `anchor`       | `{wayId, t}` — normalized arc-length position along the way; how a station follows its way when the alignment is reshaped.                |
+| `anchors`      | `{wayId, t}` entries — normalized positions on the Ways this Station serves and follows when they are reshaped.                           |
 | `footprint`    | The station's land: a boundary polygon drawn in the Infrastructure view.                                                                  |
 | `platforms`    | Platform polygons inside the station (`edges: 1` side, `2` island).                                                                       |
 | `dwellSeconds` | How long a vehicle waits here. Counts toward the round trip, so it feeds fleet size — see [The simulation](../explanation/simulation.md). |

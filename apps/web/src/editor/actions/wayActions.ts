@@ -114,8 +114,8 @@ export function wayActionProvider(store: EditorStore): SelectionActionProvider {
     if (corridorMergeWouldAbsorb(system, ordered)) {
       actions.push({
         id: 'way.mergeCorridor',
-        label: 'Merge into one corridor',
-        hint: 'Lines on the others move onto the longest',
+        label: 'Merge overlapping paths',
+        hint: 'Service paths on the others move onto the longest',
         group: 'merge',
         run: () => store.getState().mergeWaysIntoCorridor(ordered),
       });

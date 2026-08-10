@@ -111,7 +111,7 @@ export function closePatternTerminus(
   if (closingLegs.length === 0 || pattern.sections.some((section) => section.kind !== 'shared'))
     return null;
   const exact = patternPositionAt(ways, pattern, target.run, target.legIndex, target.t);
-  if (!exact || exact.wayId !== target.wayId) return null;
+  if (exact?.wayId !== target.wayId) return null;
 
   const outbound = patternRunLegs(pattern, 'outbound');
   const terminus = side === 'start' ? outbound[0] : outbound[outbound.length - 1];
@@ -305,7 +305,7 @@ export interface PatternDivision {
   divided: Pattern;
 }
 
-/** Divide a focused shared pattern while deliberately leaving its service's other branches alone. */
+/** Divide one Service path into two independently usable paths. */
 export function dividePatternAtPosition(
   ways: Way[],
   pattern: Pattern,
