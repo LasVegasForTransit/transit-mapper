@@ -107,6 +107,12 @@ const CHECKS: Check[] = [
     fix: 'add the section or cut the phrase — see docs/development/reference/document-standards.md',
   },
   {
+    command: 'check:github-metadata',
+    fails:
+      'the issue or pull request templates, workflow status, or governance status name disagree with the canonical contribution contract',
+    fix: 'make the template, trusted workflow, and governance standard consume the same metadata contract',
+  },
+  {
     command: 'check:reference',
     fails: 'this page no longer matches the registry it is generated from',
     fix: 'pnpm gen:checks',

@@ -1,15 +1,29 @@
 ---
 name: Bug report
-about: Something behaves differently than it should
+about: Tell us about behavior that did not work as expected
+title: ''
 labels: bug
+assignees: ''
 ---
 
-**What you did**
+<!-- transitmapper:issue:bug -->
 
-**What you expected**
+<!-- transitmapper:reproduction:start -->
+<!-- Describe the shortest sequence that reproduces the problem. -->
 
-**What happened instead**
+<!-- transitmapper:reproduction:end -->
 
-**Anything else** — browser, a share link that reproduces it, a screenshot.
-A link to a system that shows the problem is the single most useful thing
-you can include.
+<!-- transitmapper:expected:start -->
+<!-- Describe what you expected to happen. -->
+
+<!-- transitmapper:expected:end -->
+
+<!-- transitmapper:actual:start -->
+<!-- Describe what happened instead. -->
+
+<!-- transitmapper:actual:end -->
+
+<!-- transitmapper:evidence:start -->
+<!-- Optional: add screenshots, recordings, logs, or relevant context. -->
+
+<!-- transitmapper:evidence:end -->

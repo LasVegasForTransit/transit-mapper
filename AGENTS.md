@@ -134,3 +134,22 @@ edit, and denied reads on secret-bearing paths. It introduces no rule that
 exists nowhere else. Delete the directory entirely and `pnpm check` accepts
 the same trees — CI proves that on every pull request, because CI has no
 agent. See [`.claude/README.md`](.claude/README.md).
+
+## Create GitHub issues and pull requests
+
+For ordinary creation, render and validate repository metadata through the
+noninteractive wrappers rather than constructing Markdown or calling
+`gh issue create` or `gh pr create` directly:
+
+```bash
+pnpm github:create-issue --input <payload-json>
+pnpm github:create-pr --input <payload-json>
+```
+
+Use `--dry-run --json` to inspect the rendered hidden-marker body without
+writing to GitHub. If a user explicitly requires another connector, render
+the same body through the wrapper's dry run, validate it with
+`pnpm github:validate`, create it through that connector, then re-fetch and
+validate what GitHub stored. The GitHub workflows remain authoritative; this
+agent rule only catches mistakes earlier. The payload schemas and policy are
+in [Contribution metadata](docs/development/reference/contribution-metadata.md).
