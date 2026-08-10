@@ -5,7 +5,11 @@ import {
   type ImportBBox,
   type ImportCategory,
 } from '@transitmapper/core/model/import';
-import { importAreaKm2, tileImportArea } from '@transitmapper/core/model/import-area';
+import {
+  importAreaKm2,
+  normalizeImportBounds,
+  tileImportArea,
+} from '@transitmapper/core/model/import-area';
 import { useEditorStore } from '../editor/EditorProvider';
 import { beginBackgroundOsmImport } from '../import/background-osm-import';
 import { getMap } from '../map/mapRef';
@@ -19,16 +23,54 @@ interface ImportDialogProps {
   onClose: () => void;
 }
 
-function currentBounds(): ImportBBox | null {
+interface CurrentImportArea {
+  bounds: ImportBBox | null;
+  invalid: boolean;
+}
+
+function currentImportArea(): CurrentImportArea {
   const bounds = getMap()?.getBounds();
-  return bounds
-    ? {
-        west: bounds.getWest(),
-        south: bounds.getSouth(),
-        east: bounds.getEast(),
-        north: bounds.getNorth(),
-      }
-    : null;
+  if (!bounds) return { bounds: null, invalid: false };
+  const normalized = normalizeImportBounds({
+    west: bounds.getWest(),
+    south: bounds.getSouth(),
+    east: bounds.getEast(),
+    north: bounds.getNorth(),
+  });
+  return { bounds: normalized ?? null, invalid: normalized === undefined };
+}
+
+interface ImportAreaStatusProps {
+  areaKm2: number;
+  estimatedTiles: number;
+  hasBounds: boolean;
+  invalid: boolean;
+  tooLarge: boolean;
+}
+
+function ImportAreaStatus(props: ImportAreaStatusProps) {
+  const { areaKm2, estimatedTiles, hasBounds, invalid, tooLarge } = props;
+  if (invalid) {
+    return (
+      <p className="error-text" style={{ marginTop: 8 }}>
+        Zoom in until the visible area is smaller than one world copy.
+      </p>
+    );
+  }
+  if (!hasBounds) return null;
+  return (
+    <p className={tooLarge ? 'error-text' : 'panel-hint'} style={{ marginTop: 8 }}>
+      {Math.round(areaKm2).toLocaleString()} km² · about {estimatedTiles.toLocaleString()} tiles
+      {tooLarge ? ' — Close this dialog and zoom in below 5,000 km².' : ''}
+    </p>
+  );
+}
+
+function withCategoryToggled(previous: Set<ImportCategory>, category: ImportCategory) {
+  const next = new Set(previous);
+  if (next.has(category)) next.delete(category);
+  else next.add(category);
+  return next;
 }
 
 export function ImportDialog({ onClose }: ImportDialogProps) {
@@ -37,21 +79,22 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
   const [categories, setCategories] = useState<Set<ImportCategory>>(
     () => new Set(['road', 'bike']),
   );
-  const bounds = currentBounds();
+  const { bounds, invalid: invalidArea } = currentImportArea();
   const areaKm2 = bounds ? importAreaKm2(bounds) : 0;
   const estimatedTiles = useMemo(() => (bounds ? tileImportArea(bounds).length : 0), [bounds]);
   const tooLarge = areaKm2 > MAX_IMPORT_AREA_KM2;
+  const blocked =
+    !bounds ||
+    invalidArea ||
+    tooLarge ||
+    categories.size === 0 ||
+    importProgress?.state === 'loading';
 
   const toggle = (category: ImportCategory) =>
-    setCategories((previous) => {
-      const next = new Set(previous);
-      if (next.has(category)) next.delete(category);
-      else next.add(category);
-      return next;
-    });
+    setCategories((previous) => withCategoryToggled(previous, category));
 
   const run = () => {
-    if (!bounds || categories.size === 0 || tooLarge || importProgress?.state === 'loading') return;
+    if (blocked) return;
     const state = store.getState();
     beginBackgroundOsmImport({
       store,
@@ -73,9 +116,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
         <button
           className="primary-btn"
           style={{ marginTop: 16, width: '100%', justifyContent: 'center' }}
-          disabled={
-            !bounds || tooLarge || categories.size === 0 || importProgress?.state === 'loading'
-          }
+          disabled={blocked}
           onClick={run}
         >
           <Icon name="download" size={18} />{' '}
@@ -104,12 +145,13 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
           </button>
         ))}
       </div>
-      {bounds && (
-        <p className={tooLarge ? 'error-text' : 'panel-hint'} style={{ marginTop: 8 }}>
-          {Math.round(areaKm2).toLocaleString()} km² · about {estimatedTiles.toLocaleString()} tiles
-          {tooLarge ? ' — Close this dialog and zoom in below 5,000 km².' : ''}
-        </p>
-      )}
+      <ImportAreaStatus
+        areaKm2={areaKm2}
+        estimatedTiles={estimatedTiles}
+        hasBounds={Boolean(bounds)}
+        invalid={invalidArea}
+        tooLarge={tooLarge}
+      />
     </Modal>
   );
 }

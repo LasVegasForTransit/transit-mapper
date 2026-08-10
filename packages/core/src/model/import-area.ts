@@ -16,6 +16,42 @@ const emptyNetwork = (): ImportedNetwork => ({
 
 const radians = (degrees: number): number => (degrees * Math.PI) / 180;
 
+const wrappedLongitude = (longitude: number): number =>
+  ((((longitude + 180) % 360) + 360) % 360) - 180;
+
+/**
+ * Convert MapLibre bounds from its continuous world-copy coordinates into
+ * the canonical OSM rectangle representation. A viewport may legitimately
+ * report 170..190 around the antimeridian; imports express that as 170..-170.
+ * More than one whole world cannot be represented as one bounded import.
+ */
+export function normalizeImportBounds(bounds: ImportBBox): ImportBBox | undefined {
+  if (
+    ![bounds.west, bounds.south, bounds.east, bounds.north].every(Number.isFinite) ||
+    bounds.south < -90 ||
+    bounds.north > 90 ||
+    bounds.south >= bounds.north
+  ) {
+    return undefined;
+  }
+  if (
+    bounds.west >= -180 &&
+    bounds.west <= 180 &&
+    bounds.east >= -180 &&
+    bounds.east <= 180 &&
+    bounds.west !== bounds.east
+  ) {
+    return bounds;
+  }
+  const span = bounds.east - bounds.west;
+  if (span <= 0 || span >= 360) return undefined;
+  const west = wrappedLongitude(bounds.west);
+  const wrappedEast = wrappedLongitude(bounds.east);
+  const east = wrappedEast === -180 && bounds.east > 0 ? 180 : wrappedEast;
+  if (west === east) return undefined;
+  return { west, south: bounds.south, east, north: bounds.north };
+}
+
 function orderedSegments(bounds: ImportBBox): ImportBBox[] {
   if (bounds.west < bounds.east) return [bounds];
   return [

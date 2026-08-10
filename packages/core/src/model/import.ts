@@ -1093,7 +1093,7 @@ export function withoutAlreadyImported(
   network: ImportedNetwork,
   existingWays: Way[],
   existingNamedWays: NamedWay[] = [],
-  existingNodes: Node[] = [],
+  existingNodes?: Node[],
 ): DedupedImport {
   const existingBySource = new Map<string, Way>();
   for (const way of existingWays) if (way.source) existingBySource.set(way.source, way);
@@ -1102,7 +1102,10 @@ export function withoutAlreadyImported(
   // New way id -> the already-present way it duplicates, when refs into it
   // can still be trusted to line up.
   const rePointTo = new Map<string, string>();
-  const dropped = new Set<string>();
+  // Imported lane key -> the corresponding retained lane key. A way can keep
+  // its point alignment while somebody edits its cross-section, so lane ids
+  // are only re-pointed when the ordered lane semantics still match.
+  const laneRePointTo = new Map<string, string>();
   let duplicateWays = 0;
 
   for (const way of network.ways) {
@@ -1112,8 +1115,21 @@ export function withoutAlreadyImported(
       continue;
     }
     duplicateWays++;
-    dropped.add(way.id);
-    if (existing.points.length === way.points.length) rePointTo.set(way.id, existing.id);
+    if (existing.points.length === way.points.length) {
+      rePointTo.set(way.id, existing.id);
+      if (
+        existing.profile.lanes.length === way.profile.lanes.length &&
+        way.profile.lanes.every((lane, index) => {
+          const retained = existing.profile.lanes[index];
+          return retained.kindId === lane.kindId && retained.direction === lane.direction;
+        })
+      ) {
+        way.profile.lanes.forEach((lane, index) => {
+          const retained = existing.profile.lanes[index];
+          laneRePointTo.set(`${way.id}:${lane.id}`, `${existing.id}:${retained.id}`);
+        });
+      }
+    }
   }
 
   const keptWayIds = new Set(keptWays.map((w) => w.id));
@@ -1131,7 +1147,7 @@ export function withoutAlreadyImported(
   // Which existing junction, if any, an incoming one already is — matched by
   // a shared (way, point) arm, which is exact and needs no coordinates.
   const existingNodeByArm = new Map<string, Node>();
-  for (const node of existingNodes) {
+  for (const node of existingNodes ?? []) {
     for (const ref of node.refs) existingNodeByArm.set(`${ref.wayId}:${ref.pointIndex}`, node);
   }
 
@@ -1166,9 +1182,14 @@ export function withoutAlreadyImported(
       continue;
     }
 
-    // Every arm already in the system, and no existing junction recognises
-    // any of them: nothing new to record.
-    if (!refs.some((r) => keptWayIds.has(r.wayId))) continue;
+    // A later tile can be the first one that contains BOTH long ways at an
+    // intersection even though earlier tiles already committed each way on
+    // its own. In that case every arm is re-pointed, but the node itself is
+    // genuinely new topology and must still be recorded.
+    // A caller that omitted the existing node collection cannot distinguish
+    // that case from an exact re-import, so retain the legacy conservative
+    // behavior there and require at least one genuinely new arm.
+    if (existingNodes === undefined && !refs.some((ref) => keptWayIds.has(ref.wayId))) continue;
     nodes.push({ ...node, refs });
   }
 
@@ -1177,23 +1198,25 @@ export function withoutAlreadyImported(
   // and puts the shared boundary way in both — the way is then renamed by one
   // identity and not the other, and the member count that gates the
   // carriageway tools counts it twice.
-  const identityKey = (name: string, wayIds: string[]): string =>
-    `${typeOfWay.get(wayIds[0]) ?? ''}\u0000${name}`;
-  const existingByKey = new Map<string, NamedWay>();
-  for (const identity of existingNamedWays) {
-    if (identity.wayIds.length > 0)
-      existingByKey.set(identityKey(identity.name, identity.wayIds), identity);
-  }
-
   const namedWays: NamedWay[] = [];
-  const identityAdditions: { id: string; wayIds: string[] }[] = [];
+  const identityAdditionsById = new Map<string, Set<string>>();
   for (const identity of network.namedWays) {
     const wayIds = identity.wayIds.map(resolve).filter((id): id is string => id !== undefined);
     if (wayIds.length < 2) continue;
-    const existing = existingByKey.get(identityKey(identity.name, wayIds));
+    // Names are not metro-wide identifiers: different municipalities commonly
+    // have an unrelated Main Street, and divided carriageway pairs deliberately
+    // keep separate two-member identities. A shared retained way is the stable
+    // evidence that this identity continues one already committed at a seam.
+    const existing = existingNamedWays.find((candidate) =>
+      candidate.wayIds.some((wayId) => wayIds.includes(wayId)),
+    );
     if (existing) {
       const additions = wayIds.filter((id) => !existing.wayIds.includes(id));
-      if (additions.length > 0) identityAdditions.push({ id: existing.id, wayIds: additions });
+      if (additions.length > 0) {
+        const accumulated = identityAdditionsById.get(existing.id) ?? new Set<string>();
+        additions.forEach((wayId) => accumulated.add(wayId));
+        identityAdditionsById.set(existing.id, accumulated);
+      }
       continue;
     }
     // Same reasoning as junctions: an identity spanning only ways that were
@@ -1202,7 +1225,27 @@ export function withoutAlreadyImported(
     namedWays.push({ ...identity, wayIds });
   }
 
+  const identityAdditions = [...identityAdditionsById].map(([id, wayIds]) => ({
+    id,
+    wayIds: [...wayIds],
+  }));
   const keptIds = new Set(namedWays.map((n) => n.id));
+  const turnRestrictionsByKey = new Map<string, TurnRestriction>();
+  for (const entry of network.turnRestrictions) {
+    const separator = entry.key.indexOf(':');
+    if (separator < 0) continue;
+    const incomingWayId = entry.key.slice(0, separator);
+    const resolvedKey = keptWayIds.has(incomingWayId) ? entry.key : laneRePointTo.get(entry.key);
+    if (!resolvedKey) continue;
+    const allowedTargets = entry.restriction.allowedTargets.map(resolve);
+    // Losing one target changes the meaning of both no_* and only_*
+    // restrictions, so an edited/unresolvable target makes the whole entry
+    // unsafe rather than silently more restrictive.
+    if (allowedTargets.some((wayId) => wayId === undefined)) continue;
+    turnRestrictionsByKey.set(resolvedKey, {
+      allowedTargets: allowedTargets.filter((wayId): wayId is string => wayId !== undefined),
+    });
+  }
   return {
     network: {
       ways: keptWays,
@@ -1212,11 +1255,10 @@ export function withoutAlreadyImported(
       nodes: withSingleTypeArms(nodes, typeOfWay),
       namedWays,
       medians: network.medians.filter((m) => keptIds.has(m.id)),
-      // A restriction on a way this import didn't keep is already recorded
-      // against the copy that is present.
-      turnRestrictions: network.turnRestrictions.filter((t) =>
-        keptWayIds.has(t.key.slice(0, t.key.indexOf(':'))),
-      ),
+      turnRestrictions: [...turnRestrictionsByKey].map(([key, restriction]) => ({
+        key,
+        restriction,
+      })),
     },
     duplicateWays,
     identityAdditions,
