@@ -28,7 +28,7 @@
       "source": {
         "source": "github",
         "repo": "LasVegasForTransit/repository-tooling",
-        "ref": "v1.0.1"
+        "ref": "v0.1.0"
       }
     }
   },
