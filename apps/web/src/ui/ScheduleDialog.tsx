@@ -58,9 +58,8 @@ function seedPeriods(
  * stuffed into a 280px side panel.
  *
  * Owns its own draft array locally and commits the WHOLE array back via
- * onSave on every change (store.ts's setServiceSchedule is a one-shot
- * replace) — there's no separate Save step, matching how every other field
- * in this app's Inspector already commits live rather than on submit.
+ * onSave as one replacement; there is no separate Save step because Inspector
+ * fields already commit live rather than on submit.
  */
 export function ScheduleDialog({
   serviceName,
@@ -114,14 +113,14 @@ export function ScheduleDialog({
     >
       <p className="panel-hint">
         Each period is its own days + time window + headway. The map runs whichever period covers
-        the current simulated time — outside every period, this line doesn&rsquo;t run at all. Pin a
-        period in the simulation controls to see it at any hour.
+        the current simulated time — outside every period, this Service doesn&rsquo;t run at all.
+        Pin a period in the simulation controls to see it at any hour.
       </p>
 
       {periods.length === 0 ? (
         <p className="panel-hint">
-          No periods yet — this line is using its plain peak headway instead. Add one below to split
-          it out.
+          No periods yet — this Service is using its plain peak headway instead. Add one below to
+          split it out.
         </p>
       ) : (
         <ul className="schedule-list">

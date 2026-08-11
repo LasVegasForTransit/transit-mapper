@@ -2,10 +2,14 @@ import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { anchorOnWay, type RouteSpan } from '@transitmapper/core/model/routeGraph';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import { aPattern, aRoad, aService } from '@transitmapper/core/testing/fixtures';
-import { describe, expect, it, vi } from 'vitest';
+import { aPattern, aRoad, aService, aStation } from '@transitmapper/core/testing/fixtures';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRoutingCommands } from '../../../src/editor/store/commands/routing-commands';
 import { createEditorRuntime } from '../../../src/editor/store/runtime';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function routableSystem(): TransitSystem {
   const system = createEmptySystem();
@@ -29,10 +33,7 @@ function routableSystem(): TransitSystem {
 }
 
 function commandsFor(runtime: ReturnType<typeof createEditorRuntime>, createId = vi.fn()) {
-  return createRoutingCommands(runtime, {
-    createId,
-    removeWay: (system) => system,
-  });
+  return createRoutingCommands(runtime, { createId });
 }
 
 describe('routing commands', () => {
@@ -186,6 +187,40 @@ describe('routing commands', () => {
     expect(updated.path.sections.some((section) => section.kind === 'turnaround')).toBe(true);
     expect(runtime.read().system.lines).toEqual([line]);
     expect(runtime.read().system.services).toHaveLength(1);
+  });
+
+  it('adopts existing infrastructure with one content commit and one undo entry', () => {
+    const built = aRoad('built', [
+      [-115.28, 36.2],
+      [-115.12, 36.2],
+    ]);
+    const sketch = aRoad('sketch', [
+      [-115.28, 36.202],
+      [-115.12, 36.202],
+    ]);
+    const service = aService('service', [aPattern('service', [sketch], [sketch.id])]);
+    const system: TransitSystem = {
+      ...createEmptySystem(),
+      ways: [built, sketch],
+      lines: [{ id: 'line', name: 'Line 1', color: '#123456', serviceIds: [service.id] }],
+      services: [service],
+      stations: [aStation('station', [-115.25, 36.202], { wayId: sketch.id, t: 0.2 })],
+    };
+    const runtime = createEditorRuntime();
+    runtime.installDocument(system, { tool: 'lines' });
+    const commands = commandsFor(runtime);
+    let systemWrites = 0;
+    runtime.subscribe((next, previous) => {
+      if (next.system !== previous.system) systemWrites++;
+    });
+
+    expect(commands.adoptExistingInfrastructure(service.id)).toBe(1);
+    expect(runtime.read().system.ways.map((way) => way.id)).toEqual(['built']);
+    expect(systemWrites).toBe(1);
+
+    runtime.history.undo();
+    expect(runtime.read().system).toBe(system);
+    expect(runtime.read().canUndo).toBe(false);
   });
 
   it('keeps invalid infrastructure and return-path operations reference-preserving', () => {

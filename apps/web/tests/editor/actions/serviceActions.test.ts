@@ -14,11 +14,17 @@ describe('terminus service actions', () => {
     const system = createEmptySystem();
     system.lines = [
       { id: 'red', name: 'Red', color: '#f00', serviceIds: ['red-bus'] },
-      { id: 'blue', name: 'Blue', color: '#00f', serviceIds: ['blue-rail'] },
+      {
+        id: 'blue',
+        name: 'Blue',
+        color: '#00f',
+        serviceIds: ['blue-rail', 'blue-bus'],
+      },
     ];
     system.services = [
       { id: 'red-bus', modeId: 'bus', path: { id: 'red-bus', sections: [] } },
       { id: 'blue-rail', modeId: 'subway', path: { id: 'blue-rail', sections: [] } },
+      { id: 'blue-bus', modeId: 'bus', path: { id: 'blue-bus', sections: [] } },
     ];
     store.commands.document.setSystem(system);
 
@@ -33,12 +39,21 @@ describe('terminus service actions', () => {
     expect(action?.label).toBe('Group under one line');
     action?.run();
     expect(store.getState().system.lines).toEqual([
-      { id: 'red', name: 'Red', color: '#f00', serviceIds: ['red-bus', 'blue-rail'] },
+      {
+        id: 'red',
+        name: 'Red',
+        color: '#f00',
+        serviceIds: ['red-bus', 'blue-rail', 'blue-bus'],
+      },
     ]);
     expect(store.getState().system.services.map((service) => service.modeId)).toEqual([
       'bus',
       'subway',
+      'bus',
     ]);
+
+    store.commands.history.undo();
+    expect(store.getState().system).toBe(system);
   });
 
   it('uses the standard through-service connection label', () => {

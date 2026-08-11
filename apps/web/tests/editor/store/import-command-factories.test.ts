@@ -1,14 +1,16 @@
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createImportCommands } from '../../../src/editor/store/commands/import-commands';
 import { createEditorRuntime } from '../../../src/editor/store/runtime';
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 function createCommands() {
   const runtime = createEditorRuntime();
-  const commands = createImportCommands(runtime, {
-    formCrossings: (system) => system,
-  });
+  const commands = createImportCommands(runtime);
   return { runtime, commands };
 }
 
@@ -130,9 +132,7 @@ describe('import command factories', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const system = createEmptySystem();
     const runtime = createEditorRuntime({ documentStatus: 'loading', initialSystem: system });
-    const commands = createImportCommands(runtime, {
-      formCrossings: (candidate) => candidate,
-    });
+    const commands = createImportCommands(runtime);
     const network = {
       ways: [],
       nodes: [],
@@ -178,13 +178,21 @@ describe('import command factories', () => {
   it('commits imported ways and crossing formation as one history entry', () => {
     const runtime = createEditorRuntime();
     const system = createEmptySystem();
+    system.ways = [
+      {
+        id: 'existing-way',
+        typeId: 'road',
+        geometry: 'straight',
+        grade: 'atGrade',
+        profile: defaultProfileFor('road'),
+        points: [
+          [-115.15, 36.05],
+          [-115.15, 36.15],
+        ],
+      },
+    ];
     runtime.installDocument(system, { tool: 'select' });
-    const commands = createImportCommands(runtime, {
-      formCrossings: (candidate, wayId) => ({
-        ...candidate,
-        nodes: [...candidate.nodes, { id: `crossing-${wayId}`, coord: [-115.15, 36.1], refs: [] }],
-      }),
-    });
+    const commands = createImportCommands(runtime);
     let systemWrites = 0;
     runtime.subscribe((next, previous) => {
       if (next.system !== previous.system) systemWrites++;
@@ -230,7 +238,10 @@ describe('import command factories', () => {
       ],
     });
 
-    expect(runtime.read().system.nodes[0]?.id).toBe('crossing-way');
+    expect(runtime.read().system.nodes).toHaveLength(1);
+    const refWayIds = runtime.read().system.nodes[0]?.refs.map((ref) => ref.wayId) ?? [];
+    expect(refWayIds).toContain('existing-way');
+    expect(refWayIds).toContain('way');
     expect(runtime.read().system.lines[0]?.serviceIds).toEqual(['service']);
     expect(runtime.read().system.services[0]?.path.id).toBe('service');
     expect(systemWrites).toBe(1);

@@ -40,6 +40,11 @@ describe('way property transform identity', () => {
     expect(withWayGrade(system, road.id, road.grade)).toBe(system);
     expect(withWayClass(system, road.id, road.classId)).toBe(system);
     expect(withWayProfile(system, road.id, road.profile)).toBe(system);
+    expect(
+      withWayProfile(system, road.id, {
+        lanes: road.profile.lanes.map((lane) => ({ ...lane })),
+      }),
+    ).toBe(system);
     expect(withWayCapacity(system, road.id, laneCapacity(road.profile), 'right')).toBe(system);
   });
 

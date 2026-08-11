@@ -98,22 +98,10 @@ function createStationLifecycleCommands(runtime: EditorRuntime): StationLifecycl
         result: undefined,
       })),
     deleteStation: (id) =>
-      runtime.commitContent(undefined, (state) => {
-        const system = deleteSelection(state.system, [{ kind: 'station', id }]);
-        if (system === state.system) {
-          return { system: state.system, result: undefined };
-        }
-        return {
-          system,
-          transient: {
-            selection:
-              state.selection?.kind === 'station' && state.selection.id === id
-                ? null
-                : state.selection,
-          },
-          result: undefined,
-        };
-      }),
+      runtime.commitContent(undefined, ({ system }) => ({
+        system: deleteSelection(system, [{ kind: 'station', id }]),
+        result: undefined,
+      })),
   };
 }
 

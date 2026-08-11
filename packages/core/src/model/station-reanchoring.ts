@@ -1,8 +1,27 @@
 import { anchorOnWayId, nearestOnPath, resolveWayPath } from './geo';
-import type { Station, TransitSystem } from './system';
+import type { Station, StationAnchor, TransitSystem } from './system';
 
 const COORDINATE_IDENTITY_TOLERANCE_M = 1e-6;
 const ANCHOR_IDENTITY_TOLERANCE = 1e-12;
+
+/** Replace one way attachment and keep at most one attachment to the destination way. */
+export function replacedStationAnchors(
+  station: Station,
+  replacedWayId: string,
+  next: StationAnchor,
+): StationAnchor[] {
+  const kept = station.anchors.filter(
+    (anchor) => anchor.wayId !== replacedWayId && anchor.wayId !== next.wayId,
+  );
+  const anchors = [next, ...kept];
+  return anchors.length === station.anchors.length &&
+    anchors.every(
+      (anchor, index) =>
+        anchor.wayId === station.anchors[index].wayId && anchor.t === station.anchors[index].t,
+    )
+    ? station.anchors
+    : anchors;
+}
 
 /**
  * Reproject every station riding `wayId` from its last known coordinate onto

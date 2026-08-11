@@ -3,18 +3,8 @@ import { patternWayIds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { aPattern, aRoad, aService } from '@transitmapper/core/testing/fixtures';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  createWayCommands,
-  type WayCommandOperations,
-} from '../../../src/editor/store/commands/way-commands';
+import { createWayCommands } from '../../../src/editor/store/commands/way-commands';
 import { createEditorRuntime } from '../../../src/editor/store/runtime';
-
-function operations(overrides: Partial<WayCommandOperations> = {}): WayCommandOperations {
-  return {
-    formCrossings: (system) => system,
-    ...overrides,
-  };
-}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -25,7 +15,7 @@ describe('way command factory', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const runtime = createEditorRuntime({ documentStatus: 'loading' });
     const createId = vi.fn(() => 'forbidden');
-    const commands = createWayCommands(runtime, operations({ createId }));
+    const commands = createWayCommands(runtime, { createId });
     const before = runtime.read().system;
 
     expect(commands.beginWay('road', 'straight')).toBeNull();
@@ -44,7 +34,7 @@ describe('way command factory', () => {
       .mockReturnValueOnce('way')
       .mockReturnValueOnce('service')
       .mockReturnValueOnce('line');
-    const commands = createWayCommands(runtime, operations({ createId }));
+    const commands = createWayCommands(runtime, { createId });
     let systemWrites = 0;
     runtime.subscribe((next, previous) => {
       if (next.system !== previous.system) systemWrites++;
@@ -72,7 +62,7 @@ describe('way command factory', () => {
   it('rejects an unknown explicit way type before allocating ids', () => {
     const runtime = createEditorRuntime();
     const createId = vi.fn(() => 'forbidden');
-    const commands = createWayCommands(runtime, operations({ createId }));
+    const commands = createWayCommands(runtime, { createId });
     const before = runtime.read().system;
 
     expect(commands.beginWay('constructor', 'straight')).toBeNull();
@@ -89,7 +79,7 @@ describe('way command factory', () => {
       draftPresetId: 'railSingle',
       draftServiceEnabled: false,
     });
-    const commands = createWayCommands(runtime, operations({ createId: vi.fn(() => 'rail-way') }));
+    const commands = createWayCommands(runtime, { createId: vi.fn(() => 'rail-way') });
 
     expect(commands.beginWay('heavyRail')).toBe('rail-way');
     expect(runtime.read().system.ways[0]).toMatchObject({
@@ -119,18 +109,7 @@ describe('way command factory', () => {
       draftSeparate: false,
     });
     const createId = vi.fn(() => 'branch-service');
-    const conflatePattern = vi.fn((current: TransitSystem) => ({
-      ...current,
-      description: 'conflated',
-    }));
-    const formCrossings = vi.fn((current: TransitSystem) => ({
-      ...current,
-      name: 'Crossings formed',
-    }));
-    const commands = createWayCommands(
-      runtime,
-      operations({ createId, conflatePattern, formCrossings }),
-    );
+    const commands = createWayCommands(runtime, { createId });
     let systemWrites = 0;
     runtime.subscribe((next, previous) => {
       if (next.system !== previous.system) systemWrites++;
@@ -154,13 +133,9 @@ describe('way command factory', () => {
         serviceIds: ['parent', 'branch-service'],
       },
     ]);
-    expect(runtime.read().system.description).toBe('conflated');
-    expect(runtime.read().system.name).toBe('Crossings formed');
     expect(runtime.read().selection).toEqual({ kind: 'service', id: 'branch-service' });
     expect(runtime.read().activeWayId).toBeNull();
     expect(runtime.read().addingServiceDraft).toBeNull();
-    expect(conflatePattern).toHaveBeenCalledOnce();
-    expect(formCrossings).toHaveBeenCalledOnce();
     expect(systemWrites).toBe(1);
   });
 
@@ -181,8 +156,7 @@ describe('way command factory', () => {
       activeWayId: way.id,
       selection: { kind: 'service', id: service.id },
     });
-    const formCrossings = vi.fn((system: TransitSystem) => system);
-    const commands = createWayCommands(runtime, operations({ formCrossings }));
+    const commands = createWayCommands(runtime);
     let systemWrites = 0;
     runtime.subscribe((next, previous) => {
       if (next.system !== previous.system) systemWrites++;
@@ -194,7 +168,6 @@ describe('way command factory', () => {
     expect(runtime.read().system.lines).toEqual([]);
     expect(runtime.read().system.services).toEqual([]);
     expect(runtime.read().selection).toBeNull();
-    expect(formCrossings).not.toHaveBeenCalled();
     expect(systemWrites).toBe(1);
   });
 
@@ -206,7 +179,7 @@ describe('way command factory', () => {
     const system = { ...createEmptySystem(1), ways: [road] };
     const runtime = createEditorRuntime();
     runtime.installDocument(system, { tool: 'select' });
-    const commands = createWayCommands(runtime, operations());
+    const commands = createWayCommands(runtime);
     let systemWrites = 0;
     runtime.subscribe((next, previous) => {
       if (next.system !== previous.system) systemWrites++;

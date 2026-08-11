@@ -1,7 +1,4 @@
-import { conflatePatternOntoExisting } from '@transitmapper/core/model/corridor-edits';
-import { formCrossingJunctions } from '@transitmapper/core/model/crossing-edits';
 import { shortId } from '@transitmapper/core/model/ids';
-import { removeWayFromSystem } from '@transitmapper/core/model/way-removal';
 import { liveCamera } from '../../camera/liveCamera';
 import { createDocumentCommands, createHistoryCommands } from './commands/document-commands';
 import { createFacilityCommands } from './commands/facility-commands';
@@ -25,18 +22,10 @@ import { createEditorRuntime } from './runtime';
 export function createEditorStore(options: CreateEditorStoreOptions = {}): EditorStore {
   const runtime = createEditorRuntime(options);
   const networkCommands = createNetworkCommands(runtime);
-  const importCommands = createImportCommands(runtime, {
-    formCrossings: formCrossingJunctions,
-  });
-  const routingCommands = createRoutingCommands(runtime, {
-    removeWay: removeWayFromSystem,
-  });
-  const wayOperations = {
-    createId: shortId,
-    conflatePattern: conflatePatternOntoExisting,
-    formCrossings: formCrossingJunctions,
-  };
-  const wayCommands = createWayCommands(runtime, wayOperations);
+  const importCommands = createImportCommands(runtime);
+  const routingCommands = createRoutingCommands(runtime);
+  const wayOptions = { createId: shortId };
+  const wayCommands = createWayCommands(runtime, wayOptions);
   const serviceCommands: ServiceCommands = {
     ...createServiceMetadataCommands(runtime),
     ...createServicePatternCommands(runtime),
@@ -47,7 +36,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}): Edito
   const commands: EditorCommands = {
     document: createDocumentCommands(runtime),
     history: createHistoryCommands(runtime),
-    tools: createToolCommands(runtime, wayOperations),
+    tools: createToolCommands(runtime, wayOptions),
     selection: createSelectionCommands(runtime),
     ways: wayCommands,
     network: networkCommands,

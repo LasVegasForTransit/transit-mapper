@@ -14,6 +14,7 @@ interface SelectionActionCommandGroups {
     | 'endPatternAt'
     | 'makePatternTwoWay'
     | 'moveServiceToLine'
+    | 'moveServicesToLine'
     | 'throughRouteInto'
   >;
   ways: Pick<WayCommands, 'splitWayAtT'>;

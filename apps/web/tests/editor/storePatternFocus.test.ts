@@ -108,7 +108,8 @@ describe('active service path focus', () => {
     system.lines = [{ id: 'public-line', name: 'Line', color: '#e4572e', serviceIds: ['line'] }];
     store.commands.document.setSystem(system);
     store.commands.selection.select({ kind: 'service', id: 'line' });
-    const position = patternPositionAt(system.ways, system.services[0].path, 'outbound', 0, 0.5)!;
+    const position = patternPositionAt(system.ways, system.services[0].path, 'outbound', 0, 0.5);
+    if (!position) throw new Error('Expected a position on the fixture path');
 
     const spawned = store.commands.services.divideServiceAt('line', position);
     if (!spawned) throw new Error('Expected the fixture command to divide the service');

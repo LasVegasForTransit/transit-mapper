@@ -17,8 +17,7 @@ export interface FacilityClass {
   label: string;
   /** Whether crossing a way of this class is treated as needing grade
    *  separation by default when a physically-incompatible way (a guideway)
-   *  is drawn across it — see formCrossingJunctions' auto-elevate branch in
-   *  apps/web/src/editor/store.ts. Only meaningful for the road WayType's
+   *  is drawn across it — see crossing-edits.ts. Only meaningful for road
    *  classes; unset elsewhere. */
   major?: boolean;
 }

@@ -1,56 +1,34 @@
-import { haversineMeters, oneSection, patternLegs, patternSegments, wayById } from './geo';
+import { patternLegs } from './geo';
 import { pruneLineMembership, withServicePattern } from './line-service';
-import { mapSectionLegs, pruneSections, splitLegsIntoRuns } from './patternEdits';
+import { mapSectionLegs } from './patternEdits';
+import { longestContinuousPatternSections } from './pattern-continuity';
 import type { SelectionRef } from './selectionActions';
 import { removeGroupMembers } from './system/group';
-import type {
-  NamedWay,
-  Node,
-  Pattern,
-  PatternLeg,
-  Service,
-  Station,
-  TransitSystem,
-  Way,
-} from './system';
+import type { NamedWay, Node, Pattern, Service, Station, TransitSystem, Way } from './system';
 
-const JOIN_REUSE_TOLERANCE_M = 0.75;
-
-function legsMeet(ways: Way[], a: PatternLeg, b: PatternLeg): boolean {
-  const segments = patternSegments(wayById(ways), {
-    id: 'selection-deletion-probe',
-    sections: oneSection([a, b]),
+function withoutWaysFromPattern(
+  pattern: Pattern,
+  wayIds: ReadonlySet<string>,
+  ways: Way[],
+): Pattern | null {
+  if (!patternLegs(pattern).some((leg) => wayIds.has(leg.wayId))) return pattern;
+  const filtered = mapSectionLegs(pattern.sections, (legs) => {
+    if (!legs.some((leg) => wayIds.has(leg.wayId))) return legs;
+    return legs.filter((leg) => !wayIds.has(leg.wayId));
   });
-  if (segments.length < 2) return false;
-  const previousPath = segments[0].path;
-  const nextPath = segments[1].path;
-  const previousEnd = previousPath[previousPath.length - 1];
-  const nextStart = nextPath[0];
-  return haversineMeters(previousEnd, nextStart) <= JOIN_REUSE_TOLERANCE_M;
-}
-
-function withoutWayFromPattern(pattern: Pattern, wayId: string, ways: Way[]): Pattern | null {
-  if (!patternLegs(pattern).some((leg) => leg.wayId === wayId)) return pattern;
-  const filtered = mapSectionLegs(pattern.sections, (legs) =>
-    legs.filter((leg) => leg.wayId !== wayId),
-  );
-  const sections = pruneSections(
-    mapSectionLegs(filtered, (legs) => {
-      const runs = splitLegsIntoRuns(legs, (a, b) => legsMeet(ways, a, b));
-      return runs.reduce<PatternLeg[]>(
-        (longest, run) => (run.length > longest.length ? run : longest),
-        [],
-      );
-    }),
-  );
+  const sections = longestContinuousPatternSections(ways, filtered);
   return sections.length === 0 ? null : { ...pattern, sections };
 }
 
-function withoutWayFromServices(services: Service[], wayId: string, ways: Way[]): Service[] {
+function withoutWaysFromServices(
+  services: Service[],
+  wayIds: ReadonlySet<string>,
+  ways: Way[],
+): Service[] {
   let changed = false;
   const remaining: Service[] = [];
   for (const service of services) {
-    const pattern = withoutWayFromPattern(service.path, wayId, ways);
+    const pattern = withoutWaysFromPattern(service.path, wayIds, ways);
     if (!pattern) {
       changed = true;
       continue;
@@ -61,11 +39,11 @@ function withoutWayFromServices(services: Service[], wayId: string, ways: Way[])
   return changed ? remaining : services;
 }
 
-function withoutWayFromStations(stations: Station[], wayId: string): Station[] {
+function withoutWaysFromStations(stations: Station[], wayIds: ReadonlySet<string>): Station[] {
   let changed = false;
   const remaining: Station[] = [];
   for (const station of stations) {
-    const anchors = station.anchors.filter((anchor) => anchor.wayId !== wayId);
+    const anchors = station.anchors.filter((anchor) => !wayIds.has(anchor.wayId));
     if (anchors.length === station.anchors.length) {
       remaining.push(station);
       continue;
@@ -76,13 +54,13 @@ function withoutWayFromStations(stations: Station[], wayId: string): Station[] {
   return changed ? remaining : stations;
 }
 
-function withoutWayFromNodes(nodes: Node[], wayId: string): Node[] {
+function withoutWaysFromNodes(nodes: Node[], wayIds: ReadonlySet<string>): Node[] {
   let changed = false;
   const remaining: Node[] = [];
   for (const node of nodes) {
-    const refs = node.refs.filter((ref) => ref.wayId !== wayId);
+    const refs = node.refs.filter((ref) => !wayIds.has(ref.wayId));
     const connectors = node.connectors?.filter(
-      (connector) => connector.from.wayId !== wayId && connector.to.wayId !== wayId,
+      (connector) => !wayIds.has(connector.from.wayId) && !wayIds.has(connector.to.wayId),
     );
     if (refs.length < 2) {
       changed = true;
@@ -107,17 +85,20 @@ interface NamedWayRemoval {
   removedIds: Set<string>;
 }
 
-function withoutWayFromNamedWays(namedWays: NamedWay[], wayId: string): NamedWayRemoval {
+function withoutWaysFromNamedWays(
+  namedWays: NamedWay[],
+  removedWayIds: ReadonlySet<string>,
+): NamedWayRemoval {
   let changed = false;
   const removedIds = new Set<string>();
   const remaining: NamedWay[] = [];
   for (const namedWay of namedWays) {
-    if (!namedWay.wayIds.includes(wayId)) {
+    if (!namedWay.wayIds.some((wayId) => removedWayIds.has(wayId))) {
       remaining.push(namedWay);
       continue;
     }
     changed = true;
-    const wayIds = namedWay.wayIds.filter((id) => id !== wayId);
+    const wayIds = namedWay.wayIds.filter((id) => !removedWayIds.has(id));
     if (wayIds.length > 0) remaining.push({ ...namedWay, wayIds });
     else removedIds.add(namedWay.id);
   }
@@ -135,16 +116,17 @@ function withoutKeys<Value>(
 
 function withoutWayRestrictions(
   restrictions: TransitSystem['turnRestrictions'],
-  wayId: string,
+  wayIds: ReadonlySet<string>,
 ): TransitSystem['turnRestrictions'] {
   let changed = false;
   const next: TransitSystem['turnRestrictions'] = {};
   for (const [key, restriction] of Object.entries(restrictions)) {
-    if (key.startsWith(`${wayId}:`)) {
+    const separator = key.indexOf(':');
+    if (separator >= 0 && wayIds.has(key.slice(0, separator))) {
       changed = true;
       continue;
     }
-    const allowedTargets = restriction.allowedTargets.filter((target) => target !== wayId);
+    const allowedTargets = restriction.allowedTargets.filter((target) => !wayIds.has(target));
     if (allowedTargets.length !== restriction.allowedTargets.length) changed = true;
     next[key] =
       allowedTargets.length === restriction.allowedTargets.length
@@ -154,25 +136,26 @@ function withoutWayRestrictions(
   return changed ? next : restrictions;
 }
 
-function removeWay(system: TransitSystem, wayId: string): TransitSystem {
-  if (!system.ways.some((way) => way.id === wayId)) return system;
-  const ways = system.ways.filter((way) => way.id !== wayId);
-  const named = withoutWayFromNamedWays(system.namedWays, wayId);
-  const services = withoutWayFromServices(system.services, wayId, ways);
+function removeWays(system: TransitSystem, selectedWayIds: ReadonlySet<string>): TransitSystem {
+  const wayIds = new Set(
+    system.ways.filter((way) => selectedWayIds.has(way.id)).map((way) => way.id),
+  );
+  if (wayIds.size === 0) return system;
+  const ways = system.ways.filter((way) => !wayIds.has(way.id));
+  const named = withoutWaysFromNamedWays(system.namedWays, wayIds);
+  const services = withoutWaysFromServices(system.services, wayIds, ways);
+  const approachKeys = new Set([...wayIds].flatMap((wayId) => [`${wayId}:start`, `${wayId}:end`]));
   return {
     ...system,
     ways,
     lines: pruneLineMembership(system.lines, services),
     services,
-    stations: withoutWayFromStations(system.stations, wayId),
-    nodes: withoutWayFromNodes(system.nodes, wayId),
+    stations: withoutWaysFromStations(system.stations, wayIds),
+    nodes: withoutWaysFromNodes(system.nodes, wayIds),
     namedWays: named.namedWays,
     medians: withoutKeys(system.medians, named.removedIds),
-    turnRestrictions: withoutWayRestrictions(system.turnRestrictions, wayId),
-    approachControls: withoutKeys(
-      system.approachControls,
-      new Set([`${wayId}:start`, `${wayId}:end`]),
-    ),
+    turnRestrictions: withoutWayRestrictions(system.turnRestrictions, wayIds),
+    approachControls: withoutKeys(system.approachControls, approachKeys),
   };
 }
 
@@ -188,6 +171,36 @@ function withoutSelected<RecordType extends { id: string }>(
   return records.filter((record) => !ids.has(record.id));
 }
 
+function withoutSkippedStations(pattern: Pattern, stationIds: ReadonlySet<string>): Pattern {
+  const skipped = pattern.skippedStops;
+  if (!skipped) return pattern;
+  const outbound = (skipped.outbound ?? []).filter((id) => !stationIds.has(id));
+  const inbound = (skipped.inbound ?? []).filter((id) => !stationIds.has(id));
+  const unchanged =
+    outbound.length === (skipped.outbound?.length ?? 0) &&
+    inbound.length === (skipped.inbound?.length ?? 0);
+  if (unchanged) return pattern;
+  const { skippedStops: _removed, ...bare } = pattern;
+  if (outbound.length + inbound.length === 0) return bare;
+  return {
+    ...bare,
+    skippedStops: {
+      ...(outbound.length > 0 ? { outbound } : {}),
+      ...(inbound.length > 0 ? { inbound } : {}),
+    },
+  };
+}
+
+function removeSkippedStations(services: Service[], stationIds: ReadonlySet<string>): Service[] {
+  if (stationIds.size === 0) return services;
+  const next = services.map((service) => {
+    const pattern = withoutSkippedStations(service.path, stationIds);
+    if (pattern === service.path) return service;
+    return withServicePattern(service, pattern);
+  });
+  return next.every((service, index) => service === services[index]) ? services : next;
+}
+
 function removedRecordIds(before: TransitSystem, after: TransitSystem): Set<string> {
   const live = new Set([
     ...after.ways.map((record) => record.id),
@@ -195,9 +208,17 @@ function removedRecordIds(before: TransitSystem, after: TransitSystem): Set<stri
     ...after.services.map((record) => record.id),
     ...after.stations.map((record) => record.id),
     ...after.facilities.map((record) => record.id),
+    ...after.namedWays.map((record) => record.id),
   ]);
   return new Set(
-    [before.ways, before.lines, before.services, before.stations, before.facilities]
+    [
+      before.ways,
+      before.lines,
+      before.services,
+      before.stations,
+      before.facilities,
+      before.namedWays,
+    ]
       .flat()
       .map((record) => record.id)
       .filter((id) => !live.has(id)),
@@ -233,8 +254,16 @@ export function deleteSelection(system: TransitSystem, items: SelectionRef[]): T
   ) {
     next = system;
   }
-  for (const wayId of wayIds) next = removeWay(next, wayId);
+  next = removeWays(next, wayIds);
   if (next === system) return system;
+  const liveStationIds = new Set(next.stations.map((station) => station.id));
+  const removedStationIds = new Set(
+    system.stations
+      .filter((station) => !liveStationIds.has(station.id))
+      .map((station) => station.id),
+  );
+  const cleanedServices = removeSkippedStations(next.services, removedStationIds);
+  if (cleanedServices !== next.services) next = { ...next, services: cleanedServices };
   const removedIds = removedRecordIds(system, next);
   return removeGroupMembers(next, removedIds);
 }

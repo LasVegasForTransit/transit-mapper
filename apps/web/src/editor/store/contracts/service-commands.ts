@@ -29,6 +29,7 @@ export interface ServiceCommands {
   readonly startAddingServiceToLine: (lineId: string, details: AddServiceToLineDetails) => void;
   readonly cancelAddingService: () => void;
   readonly moveServiceToLine: (serviceId: string, lineId: string) => void;
+  readonly moveServicesToLine: (serviceIds: readonly string[], lineId: string) => void;
   readonly throughRouteInto: (keepId: string, otherId: string) => boolean;
   readonly trimPatternTo: (
     ...args: [serviceId: string, patternId: string, wayId: string, t: number, side: 'start' | 'end']

@@ -4,7 +4,7 @@ import { resyncAutoNamedStations } from '@transitmapper/core/model/geo/crossStre
 import { shortId } from '@transitmapper/core/model/ids';
 import { deleteSelection } from '@transitmapper/core/model/selection-deletion';
 import {
-  moveServiceToLine as moveServiceRecord,
+  moveServicesToLine as moveServiceRecords,
   setLineColor,
   setLineName,
   setServiceFrequency,
@@ -16,7 +16,6 @@ import {
   setVehicleKinds as setVehicleKindRecords,
 } from '@transitmapper/core/model/system';
 import type { Line, Service, TransitSystem } from '@transitmapper/core/model/system';
-import type { EditorState } from '../contracts';
 import type { ServiceCommands } from '../contracts/service-commands';
 import {
   DEFAULT_FREQUENCY_MINUTES,
@@ -44,6 +43,7 @@ type ServiceMetadataCommands = Pick<
   | 'startAddingServiceToLine'
   | 'cancelAddingService'
   | 'moveServiceToLine'
+  | 'moveServicesToLine'
 >;
 
 function commitServiceChange(
@@ -157,103 +157,51 @@ function createServicePropertyCommands(runtime: EditorRuntime): ServicePropertyC
   };
 }
 
-type ServiceLifecycleCommands = Pick<
+type ServiceDeletionCommands = Pick<ServiceCommands, 'deleteLine' | 'deleteService'>;
+type ServiceMembershipCommands = Pick<
   ServiceCommands,
-  | 'deleteLine'
-  | 'deleteService'
-  | 'startAddingServiceToLine'
-  | 'cancelAddingService'
-  | 'moveServiceToLine'
+  'startAddingServiceToLine' | 'cancelAddingService' | 'moveServiceToLine' | 'moveServicesToLine'
 >;
 
-type ServiceDeletionCommands = Pick<ServiceCommands, 'deleteLine' | 'deleteService'>;
-type ServiceMembershipCommands = Omit<ServiceLifecycleCommands, keyof ServiceDeletionCommands>;
-
-function referencesRemovedLine(
-  selection: EditorState['selection'],
+function commitMoveServicesToLine(
+  runtime: EditorRuntime,
+  serviceIds: readonly string[],
   lineId: string,
-  serviceIds: ReadonlySet<string>,
-): boolean {
-  return (
-    (selection?.kind === 'line' && selection.id === lineId) ||
-    (selection?.kind === 'service' && serviceIds.has(selection.id))
-  );
-}
-
-function withoutRemovedLineSelections(
-  selections: EditorState['multiSelection'],
-  lineId: string,
-  serviceIds: ReadonlySet<string>,
-): EditorState['multiSelection'] {
-  const remaining = selections.filter(
-    (selection) => !referencesRemovedLine(selection, lineId, serviceIds),
-  );
-  return remaining.length === selections.length ? selections : remaining;
+): void {
+  runtime.commitContent(undefined, (state) => {
+    const movingIds = new Set(serviceIds);
+    const sourceLineIds = new Set(
+      state.system.lines
+        .filter((line) => line.serviceIds.some((serviceId) => movingIds.has(serviceId)))
+        .map((line) => line.id),
+    );
+    sourceLineIds.delete(lineId);
+    const system = moveServiceRecords(state.system, serviceIds, lineId);
+    const remainingLineIds = new Set(system.lines.map((line) => line.id));
+    const selectedSourceLine =
+      state.selection?.kind === 'line' &&
+      sourceLineIds.has(state.selection.id) &&
+      !remainingLineIds.has(state.selection.id);
+    return {
+      system,
+      transient: selectedSourceLine ? { selection: { kind: 'line', id: lineId } } : undefined,
+      result: undefined,
+    };
+  });
 }
 
 function createServiceDeletionCommands(runtime: EditorRuntime): ServiceDeletionCommands {
   return {
-    deleteLine(id) {
-      runtime.commitContent(undefined, (state) => {
-        const line = state.system.lines.find((candidate) => candidate.id === id);
-        if (!line) return { system: state.system, result: undefined };
-        const serviceIds = new Set(line.serviceIds);
-        const patternIds = new Set(
-          state.system.services
-            .filter((service) => serviceIds.has(service.id))
-            .map((service) => service.path.id),
-        );
-        const system = deleteSelection(state.system, [{ kind: 'line', id }]);
-        return {
-          system,
-          transient: {
-            selection: referencesRemovedLine(state.selection, id, serviceIds)
-              ? null
-              : state.selection,
-            outlineHover: referencesRemovedLine(state.outlineHover, id, serviceIds)
-              ? null
-              : state.outlineHover,
-            multiSelection: withoutRemovedLineSelections(state.multiSelection, id, serviceIds),
-            activePatternId:
-              state.activePatternId && patternIds.has(state.activePatternId)
-                ? null
-                : state.activePatternId,
-            armedTerminus:
-              state.armedTerminus && serviceIds.has(state.armedTerminus.serviceId)
-                ? null
-                : state.armedTerminus,
-            addingServiceDraft:
-              state.addingServiceDraft?.lineId === id ? null : state.addingServiceDraft,
-            routeDraft:
-              state.routeDraft?.returnFor && serviceIds.has(state.routeDraft.returnFor.serviceId)
-                ? null
-                : state.routeDraft,
-          },
-          result: undefined,
-        };
-      });
-    },
-
-    deleteService(id) {
-      runtime.commitContent(undefined, (state) => {
-        const removed = state.system.services.find((service) => service.id === id);
-        const system = deleteSelection(state.system, [{ kind: 'service', id }]);
-        if (!removed || system === state.system) return { system: state.system, result: undefined };
-        return {
-          system,
-          transient: {
-            selection:
-              state.selection?.kind === 'service' && state.selection.id === id
-                ? null
-                : state.selection,
-            activePatternId:
-              state.activePatternId === removed.path.id ? null : state.activePatternId,
-            armedTerminus: state.armedTerminus?.serviceId === id ? null : state.armedTerminus,
-          },
-          result: undefined,
-        };
-      });
-    },
+    deleteLine: (id) =>
+      runtime.commitContent(undefined, ({ system }) => ({
+        system: deleteSelection(system, [{ kind: 'line', id }]),
+        result: undefined,
+      })),
+    deleteService: (id) =>
+      runtime.commitContent(undefined, ({ system }) => ({
+        system: deleteSelection(system, [{ kind: 'service', id }]),
+        result: undefined,
+      })),
   };
 }
 
@@ -275,40 +223,12 @@ function createServiceMembershipCommands(runtime: EditorRuntime): ServiceMembers
     },
 
     moveServiceToLine(serviceId, lineId) {
-      runtime.commitContent(undefined, (state) => {
-        const sourceLine = state.system.lines.find((line) => line.serviceIds.includes(serviceId));
-        const system = moveServiceRecord(state.system, serviceId, lineId);
-        if (!sourceLine || system.lines.some((line) => line.id === sourceLine.id)) {
-          return { system, result: undefined };
-        }
-        return {
-          system,
-          transient: {
-            selection:
-              state.selection?.kind === 'line' && state.selection.id === sourceLine.id
-                ? { kind: 'line', id: lineId }
-                : state.selection,
-            outlineHover:
-              state.outlineHover?.kind === 'line' && state.outlineHover.id === sourceLine.id
-                ? null
-                : state.outlineHover,
-            multiSelection: state.multiSelection.filter(
-              (selection) => selection.kind !== 'line' || selection.id !== sourceLine.id,
-            ),
-            addingServiceDraft:
-              state.addingServiceDraft?.lineId === sourceLine.id ? null : state.addingServiceDraft,
-          },
-          result: undefined,
-        };
-      });
+      commitMoveServicesToLine(runtime, [serviceId], lineId);
     },
-  };
-}
 
-function createServiceLifecycleCommands(runtime: EditorRuntime): ServiceLifecycleCommands {
-  return {
-    ...createServiceDeletionCommands(runtime),
-    ...createServiceMembershipCommands(runtime),
+    moveServicesToLine(serviceIds, lineId) {
+      commitMoveServicesToLine(runtime, serviceIds, lineId);
+    },
   };
 }
 
@@ -316,6 +236,7 @@ export function createServiceMetadataCommands(runtime: EditorRuntime): ServiceMe
   return {
     ...createServiceCreationCommands(runtime),
     ...createServicePropertyCommands(runtime),
-    ...createServiceLifecycleCommands(runtime),
+    ...createServiceDeletionCommands(runtime),
+    ...createServiceMembershipCommands(runtime),
   };
 }

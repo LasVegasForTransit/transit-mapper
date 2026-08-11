@@ -1,20 +1,13 @@
 import { withComponent } from '@transitmapper/core/model/components';
 import { reconcileImportedSystem } from '@transitmapper/core/model/corridor-edits';
+import { formCrossingJunctions } from '@transitmapper/core/model/crossing-edits';
 import { withoutAlreadyImported, type ImportedNetwork } from '@transitmapper/core/model/import';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { ImportCommands } from '../contracts/import-routing-commands';
 import type { EditorRuntime } from '../runtime';
 
-export interface ImportCommandOperations {
-  formCrossings(system: TransitSystem, wayId: string): TransitSystem;
-}
-
-function withCrossings(
-  system: TransitSystem,
-  wayIds: string[],
-  operations: ImportCommandOperations,
-): TransitSystem {
-  return wayIds.reduce((current, wayId) => operations.formCrossings(current, wayId), system);
+function withCrossings(system: TransitSystem, wayIds: string[]): TransitSystem {
+  return wayIds.reduce((current, wayId) => formCrossingJunctions(current, wayId), system);
 }
 
 interface ImportWaysResult {
@@ -23,11 +16,7 @@ interface ImportWaysResult {
   skipped: number;
 }
 
-function importedWaysResult(
-  system: TransitSystem,
-  incoming: ImportedNetwork,
-  operations: ImportCommandOperations,
-): ImportWaysResult {
+function importedWaysResult(system: TransitSystem, incoming: ImportedNetwork): ImportWaysResult {
   const { network, duplicateWays, identityAdditions, junctionAdditions } = withoutAlreadyImported(
     incoming,
     system.ways,
@@ -79,7 +68,6 @@ function importedWaysResult(
     system: withCrossings(
       imported,
       ways.map((way) => way.id),
-      operations,
     ),
     added: ways.length,
     skipped: duplicateWays,
@@ -88,11 +76,7 @@ function importedWaysResult(
 
 type GtfsPieces = Parameters<ImportCommands['importGtfs']>[0];
 
-function withGtfsPieces(
-  system: TransitSystem,
-  pieces: GtfsPieces,
-  operations: ImportCommandOperations,
-): TransitSystem {
+function withGtfsPieces(system: TransitSystem, pieces: GtfsPieces): TransitSystem {
   const imported = {
     ...system,
     ways: [...system.ways, ...pieces.ways],
@@ -103,7 +87,6 @@ function withGtfsPieces(
   return withCrossings(
     imported,
     pieces.ways.map((way) => way.id),
-    operations,
   );
 }
 
@@ -116,14 +99,11 @@ function hasGtfsPieces(pieces: GtfsPieces): boolean {
   );
 }
 
-export function createImportCommands(
-  runtime: EditorRuntime,
-  operations: ImportCommandOperations,
-): ImportCommands {
+export function createImportCommands(runtime: EditorRuntime): ImportCommands {
   return {
     importWays(incoming) {
       return runtime.commitContent({ added: 0, skipped: 0 }, (state) => {
-        const imported = importedWaysResult(state.system, incoming, operations);
+        const imported = importedWaysResult(state.system, incoming);
         return {
           system: imported.system,
           result: { added: imported.added, skipped: imported.skipped },
@@ -136,7 +116,7 @@ export function createImportCommands(
         if (state.system.id !== targetSystemId) {
           return { system: state.system, result: null };
         }
-        const imported = importedWaysResult(state.system, network, operations);
+        const imported = importedWaysResult(state.system, network);
         return {
           system: imported.system,
           result: { added: imported.added, skipped: imported.skipped },
@@ -150,7 +130,7 @@ export function createImportCommands(
           return { system: state.system, result: undefined };
         }
         return {
-          system: withGtfsPieces(state.system, pieces, operations),
+          system: withGtfsPieces(state.system, pieces),
           result: undefined,
         };
       });
@@ -165,7 +145,7 @@ export function createImportCommands(
           return { system: state.system, result: true };
         }
         return {
-          system: withGtfsPieces(state.system, pieces, operations),
+          system: withGtfsPieces(state.system, pieces),
           result: true,
         };
       });

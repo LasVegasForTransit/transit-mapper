@@ -12,8 +12,8 @@ export interface Facility {
 }
 
 /** A new facility of the given catalog type at `geometry` — the one place a
- *  bare Facility literal gets constructed (see editor/store.ts's
- *  addFacility). */
+ *  bare Facility literal gets constructed, including from editor facility
+ *  commands. */
 export function createFacility(typeId: string, geometry: LngLat | LngLat[]): Facility {
   return { id: shortId(), typeId, geometry };
 }

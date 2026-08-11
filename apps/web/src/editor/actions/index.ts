@@ -28,20 +28,19 @@ export function createSelectionActions(store: SelectionActionStore): SelectionAc
   const whenEditable =
     (provider: ReturnType<typeof wayActionProvider>) => (ctx: Parameters<typeof provider>[0]) =>
       store.getState().readOnly ? [] : provider(ctx);
+  const wayActions = whenEditable(wayActionProvider(store));
+  const serviceActions = whenEditable(serviceActionProvider(store));
+  const servicePointActions = whenEditable(servicePointActionProvider(store));
+  const wayPointActions = whenEditable(wayPointActionProvider(store));
+  const commonActions = whenEditable(commonActionProvider(store));
 
-  registry.register(whenEditable(wayActionProvider(store)));
-  registry.register(whenEditable(serviceActionProvider(store)));
+  registry.register(wayActions);
+  registry.register(serviceActions);
   // Point-anchored cuts come before the whole-object merges: when a click has
   // a place, what it can do THERE is the more specific answer.
-  registry.register((ctx) =>
-    isTerminusMenu(ctx) ? [] : whenEditable(servicePointActionProvider(store))(ctx),
-  );
-  registry.register((ctx) =>
-    isTerminusMenu(ctx) ? [] : whenEditable(wayPointActionProvider(store))(ctx),
-  );
-  registry.register((ctx) =>
-    isTerminusMenu(ctx) ? [] : whenEditable(commonActionProvider(store))(ctx),
-  );
+  registry.register((ctx) => (isTerminusMenu(ctx) ? [] : servicePointActions(ctx)));
+  registry.register((ctx) => (isTerminusMenu(ctx) ? [] : wayPointActions(ctx)));
+  registry.register((ctx) => (isTerminusMenu(ctx) ? [] : commonActions(ctx)));
   return registry;
 }
 

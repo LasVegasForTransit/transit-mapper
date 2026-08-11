@@ -1,9 +1,7 @@
 import { PROFILE_PRESETS } from '@transitmapper/core/model/catalog';
-import { conflatePatternOntoExisting } from '@transitmapper/core/model/corridor-edits';
 import { shortId } from '@transitmapper/core/model/ids';
 import { buildProfile } from '@transitmapper/core/model/profile';
 import { deleteSelection } from '@transitmapper/core/model/selection-deletion';
-import type { TransitSystem } from '@transitmapper/core/model/system';
 import {
   closeWayLoop as closeLoopInSystem,
   deleteWayPoint as deletePointInSystem,
@@ -28,18 +26,8 @@ import { createDraftWay, createOneWayBranch } from '../internal-operations/way-c
 import { finishActiveWay } from '../internal-operations/way-finishing';
 import type { EditorRuntime } from '../runtime';
 
-export interface WayCommandOperations {
-  /** Resolves same-grade crossings after the completed stroke is finalized. */
-  formCrossings: (system: TransitSystem, wayId: string) => TransitSystem;
-  /** Injectable for focused tests; production uses core corridor conflation. */
-  conflatePattern?: (system: TransitSystem, serviceId: string, patternId: string) => TransitSystem;
-  createId?: () => string;
-}
-
-interface ResolvedWayOperations {
-  formCrossings: (system: TransitSystem, wayId: string) => TransitSystem;
-  conflatePattern: (system: TransitSystem, serviceId: string, patternId: string) => TransitSystem;
-  createId: () => string;
+interface WayCommandOptions {
+  readonly createId?: () => string;
 }
 
 type DrawingCommands = Pick<
@@ -62,14 +50,11 @@ type AttributeCommands = Omit<
   keyof DrawingCommands | keyof PointCommands | keyof LifecycleCommands
 >;
 
-function createDrawingCommands(
-  runtime: EditorRuntime,
-  operations: ResolvedWayOperations,
-): DrawingCommands {
+function createDrawingCommands(runtime: EditorRuntime, createId: () => string): DrawingCommands {
   return {
     beginOneWayBranch(fromWayId, end) {
       return runtime.commitContent(null, (state) => {
-        const change = createOneWayBranch(state, fromWayId, end, operations.createId);
+        const change = createOneWayBranch(state, fromWayId, end, createId);
         return {
           system: change?.system ?? state.system,
           transient: change?.transient,
@@ -79,7 +64,7 @@ function createDrawingCommands(
     },
     beginWay(typeId, geometry, color) {
       return runtime.commitContent(null, (state) => {
-        const change = createDraftWay(state, { typeId, geometry, color }, operations.createId);
+        const change = createDraftWay(state, { typeId, geometry, color }, createId);
         return {
           system: change?.system ?? state.system,
           transient: change?.transient,
@@ -95,11 +80,7 @@ function createDrawingCommands(
     finishWay() {
       if (!runtime.read().activeWayId) return;
       runtime.commitContent(undefined, (state) => {
-        const change = finishActiveWay(state, {
-          createId: operations.createId,
-          conflatePattern: operations.conflatePattern,
-          formCrossings: operations.formCrossings,
-        });
+        const change = finishActiveWay(state, createId);
         return { ...change, result: undefined };
       });
     },
@@ -159,23 +140,10 @@ function createLifecycleCommands(
 ): LifecycleCommands {
   return {
     deleteWay(id) {
-      runtime.commitContent(undefined, (state) => {
-        const system = deleteSelection(state.system, [{ kind: 'way', id }]);
-        return {
-          system,
-          transient:
-            system === state.system
-              ? undefined
-              : {
-                  selection:
-                    state.selection?.kind === 'way' && state.selection.id === id
-                      ? null
-                      : state.selection,
-                  activeWayId: state.activeWayId === id ? null : state.activeWayId,
-                },
-          result: undefined,
-        };
-      });
+      runtime.commitContent(undefined, ({ system }) => ({
+        system: deleteSelection(system, [{ kind: 'way', id }]),
+        result: undefined,
+      }));
     },
     splitWayAt(wayId, index) {
       runtime.commitContent(undefined, ({ system }) => ({
@@ -256,17 +224,13 @@ function createAttributeCommands(
 /** Builds one stable WayCommands group around the editor's guarded runtime. */
 export function createWayCommands(
   runtime: EditorRuntime,
-  operations: WayCommandOperations,
+  options: WayCommandOptions = {},
 ): WayCommands {
-  const resolved: ResolvedWayOperations = {
-    createId: operations.createId ?? shortId,
-    conflatePattern: operations.conflatePattern ?? conflatePatternOntoExisting,
-    formCrossings: operations.formCrossings,
-  };
+  const createId = options.createId ?? shortId;
   return {
-    ...createDrawingCommands(runtime, resolved),
-    ...createPointCommands(runtime, resolved.createId),
-    ...createLifecycleCommands(runtime, resolved.createId),
-    ...createAttributeCommands(runtime, resolved.createId),
+    ...createDrawingCommands(runtime, createId),
+    ...createPointCommands(runtime, createId),
+    ...createLifecycleCommands(runtime, createId),
+    ...createAttributeCommands(runtime, createId),
   };
 }

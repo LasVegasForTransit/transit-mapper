@@ -1,6 +1,6 @@
 import { pointAtT, resolveWayPath } from './geo';
 import type { SelectionRef } from './selectionActions';
-import type { Facility, LngLat, Station, TransitSystem, Way } from './system';
+import type { Facility, LngLat, Node, Station, TransitSystem, Way, WayPointRef } from './system';
 
 function translate(coord: LngLat, dx: number, dy: number): LngLat {
   return [coord[0] + dx, coord[1] + dy];
@@ -24,6 +24,43 @@ function movedWays(
 
 function sameCoordinate(a: LngLat, b: LngLat): boolean {
   return a[0] === b[0] && a[1] === b[1];
+}
+
+function refMoved(ref: WayPointRef, changedWays: Map<string, Way>): boolean {
+  return changedWays.get(ref.wayId)?.points[ref.pointIndex] !== undefined;
+}
+
+function disconnectedNode(node: Node, refs: WayPointRef[], movedWayIds: Set<string>): Node {
+  const next = { ...node, refs };
+  if (!node.connectors) return next;
+  const connectors = node.connectors.filter(
+    (connector) => !movedWayIds.has(connector.from.wayId) && !movedWayIds.has(connector.to.wayId),
+  );
+  if (connectors.length === node.connectors.length) return next;
+  if (connectors.length > 0) return { ...next, connectors };
+  const { connectors: _removed, ...withoutConnectors } = next;
+  return withoutConnectors;
+}
+
+function movedNodes(nodes: Node[], changedWays: Map<string, Way>, dx: number, dy: number): Node[] {
+  let changed = false;
+  const next: Node[] = [];
+  for (const node of nodes) {
+    const movedRefs = node.refs.filter((ref) => refMoved(ref, changedWays));
+    if (movedRefs.length === 0) {
+      next.push(node);
+      continue;
+    }
+    changed = true;
+    if (movedRefs.length === node.refs.length) {
+      next.push({ ...node, coord: translate(node.coord, dx, dy) });
+      continue;
+    }
+    const refs = node.refs.filter((ref) => !refMoved(ref, changedWays));
+    if (refs.length < 2) continue;
+    next.push(disconnectedNode(node, refs, new Set(movedRefs.map((ref) => ref.wayId))));
+  }
+  return changed ? next : nodes;
 }
 
 interface MoveStationsOptions {
@@ -87,6 +124,7 @@ export function nudgeSelection(
   if (dx === 0 && dy === 0) return system;
   const wayIds = ids(items, 'way');
   const moved = movedWays(system.ways, wayIds, dx, dy);
+  const nodes = movedNodes(system.nodes, moved.changed, dx, dy);
   const stations = movedStations(system.stations, {
     selectedStationIds: ids(items, 'station'),
     selectedWayIds: wayIds,
@@ -97,10 +135,11 @@ export function nudgeSelection(
   const facilities = movedFacilities(system.facilities, ids(items, 'facility'), dx, dy);
   if (
     moved.ways === system.ways &&
+    nodes === system.nodes &&
     stations === system.stations &&
     facilities === system.facilities
   ) {
     return system;
   }
-  return { ...system, ways: moved.ways, stations, facilities };
+  return { ...system, ways: moved.ways, nodes, stations, facilities };
 }

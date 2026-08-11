@@ -20,7 +20,9 @@ import {
   profileWidthM,
   separateProfiles,
 } from './profile';
-import type { LngLat, NamedWay, Station, StationAnchor, TransitSystem, Way } from './system';
+import { reanchorStationsOnWay, replacedStationAnchors } from './station-reanchoring';
+import type { LaneConnector, LngLat, NamedWay, Node, TransitSystem, Way } from './system';
+import { remapWayEndpointMetadata, type WayEndpointRemap } from './way-endpoint-metadata';
 import { joinWayPointToWay } from './way-point-edits';
 import { removeWayFromSystem } from './way-removal';
 
@@ -120,16 +122,12 @@ export function separateCarriageways(
     newWayId,
   };
 }
+type CarriagewayDirection = 'forward' | 'backward';
 
-function reanchored(station: Station, replacedWayId: string, next: StationAnchor): StationAnchor[] {
-  const kept = station.anchors.filter(
-    (anchor) => anchor.wayId !== replacedWayId && anchor.wayId !== next.wayId,
-  );
-  return [next, ...kept];
-}
-
-function oneDirectionOnly(way: Way): boolean {
-  return new Set(directionalLanes(way.profile).map((lane) => lane.direction)).size <= 1;
+function oneWayDirection(profile: Way['profile']): CarriagewayDirection | null {
+  const directions = [...new Set(directionalLanes(profile).map((lane) => lane.direction))];
+  const direction = directions.length === 1 ? directions[0] : null;
+  return direction === 'forward' || direction === 'backward' ? direction : null;
 }
 
 function samePointDirection(first: Way, second: Way): boolean {
@@ -154,40 +152,187 @@ function nearestPointIndex(points: LngLat[], coord: LngLat): number {
   return bestIndex;
 }
 
+function remapConnector(
+  connector: LaneConnector,
+  otherWayId: string,
+  keeperWayId: string,
+): LaneConnector {
+  const from =
+    connector.from.wayId === otherWayId
+      ? { ...connector.from, wayId: keeperWayId }
+      : connector.from;
+  const to =
+    connector.to.wayId === otherWayId ? { ...connector.to, wayId: keeperWayId } : connector.to;
+  return from === connector.from && to === connector.to ? connector : { from, to };
+}
+
+function uniqueRefs(refs: Node['refs']): Node['refs'] {
+  const seen = new Set<string>();
+  return refs.filter((ref) => {
+    const key = `${ref.wayId}:${ref.pointIndex}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function uniqueConnectors(connectors: LaneConnector[]): LaneConnector[] {
+  const seen = new Set<string>();
+  return connectors.filter((connector) => {
+    const key = `${connector.from.wayId}:${connector.from.laneId}>${connector.to.wayId}:${connector.to.laneId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+interface CollapsedJunctions {
+  ways: Way[];
+  nodes: Node[];
+  movedWayIds: string[];
+}
+
+function collapsedJunctions(
+  ways: Way[],
+  nodes: Node[],
+  keeper: Way,
+  other: Way,
+): CollapsedJunctions {
+  const movedPoints = new Map<string, Map<number, LngLat>>();
+  const remappedNodes = nodes
+    .map((node) => {
+      const otherRefs = node.refs.filter((ref) => ref.wayId === other.id);
+      if (otherRefs.length === 0) return node;
+      const refs = uniqueRefs(
+        node.refs.map((ref) =>
+          ref.wayId === other.id
+            ? {
+                wayId: keeper.id,
+                pointIndex: nearestPointIndex(keeper.points, other.points[ref.pointIndex]),
+              }
+            : ref,
+        ),
+      );
+      const keeperRef = refs.find((ref) => ref.wayId === keeper.id);
+      const coord = keeperRef ? keeper.points[keeperRef.pointIndex] : node.coord;
+      if (refs.length >= 2 && keeperRef) {
+        for (const ref of refs) {
+          const indexes = movedPoints.get(ref.wayId) ?? new Map<number, LngLat>();
+          indexes.set(ref.pointIndex, coord);
+          movedPoints.set(ref.wayId, indexes);
+        }
+      }
+      const connectors = node.connectors
+        ? uniqueConnectors(
+            node.connectors.map((connector) => remapConnector(connector, other.id, keeper.id)),
+          )
+        : undefined;
+      return { ...node, coord, refs, ...(connectors ? { connectors } : {}) };
+    })
+    .filter((node) => node.refs.length >= 2);
+  const remappedWays = ways.map((way) => {
+    const indexes = movedPoints.get(way.id);
+    if (!indexes) return way;
+    const points = way.points.map((point, index) => indexes.get(index) ?? point);
+    return points.every((point, index) => point === way.points[index]) ? way : { ...way, points };
+  });
+  return { ways: remappedWays, nodes: remappedNodes, movedWayIds: [...movedPoints.keys()] };
+}
+
+function reanchorMovedWays(
+  system: TransitSystem,
+  ways: Way[],
+  stations: TransitSystem['stations'],
+  wayIds: string[],
+): TransitSystem['stations'] {
+  let nextStations = stations;
+  for (const wayId of wayIds) {
+    const next = { ...system, ways, stations: nextStations };
+    nextStations = reanchorStationsOnWay(next, wayId);
+  }
+  return nextStations;
+}
+
 interface CarriagewayPair {
   keeper: Way;
   other: Way;
   sameDirection: boolean;
+  backwardProfile: Way['profile'];
+  forwardProfile: Way['profile'];
 }
 
-function carriagewayPair(system: TransitSystem, namedWayId: string): CarriagewayPair | null {
+function namedCarriagewayWays(
+  system: TransitSystem,
+  namedWayId: string,
+): readonly [Way, Way] | null {
   const identity = system.namedWays.find((namedWay) => namedWay.id === namedWayId);
   if (identity?.wayIds.length !== 2) return null;
   const first = system.ways.find((way) => way.id === identity.wayIds[0]);
   const second = system.ways.find((way) => way.id === identity.wayIds[1]);
   if (!first?.points[1] || !second?.points[1]) return null;
-  if (first.typeId !== second.typeId || !oneDirectionOnly(first) || !oneDirectionOnly(second)) {
-    return null;
-  }
-  const runsForward = (way: Way) =>
-    directionalLanes(way.profile).every((lane) => lane.direction === 'forward');
-  const keeper = runsForward(first) ? first : runsForward(second) ? second : first;
-  const other = keeper === first ? second : first;
-  return { keeper, other, sameDirection: samePointDirection(keeper, other) };
+  if (first.typeId !== second.typeId) return null;
+  return [first, second];
+}
+
+function carriagewayPair(system: TransitSystem, namedWayId: string): CarriagewayPair | null {
+  const ways = namedCarriagewayWays(system, namedWayId);
+  if (!ways) return null;
+  const [first, second] = ways;
+  const firstDirection = oneWayDirection(first.profile);
+  const secondDirection = oneWayDirection(second.profile);
+  if (!firstDirection || !secondDirection) return null;
+  let [keeper, other] = [first, second];
+  if (firstDirection === 'backward' && secondDirection === 'forward')
+    [keeper, other] = [second, first];
+  const sameDirection = samePointDirection(keeper, other);
+  const alignedOtherProfile = sameDirection ? other.profile : flipProfile(other.profile);
+  const keeperDirection = oneWayDirection(keeper.profile);
+  const otherDirection = oneWayDirection(alignedOtherProfile);
+  if (!keeperDirection || !otherDirection || keeperDirection === otherDirection) return null;
+  const profiles = {
+    [keeperDirection]: keeper.profile,
+    [otherDirection]: alignedOtherProfile,
+  } as Record<CarriagewayDirection, Way['profile']>;
+  return {
+    keeper,
+    other,
+    sameDirection,
+    backwardProfile: profiles.backward,
+    forwardProfile: profiles.forward,
+  };
+}
+
+function carriagewayEndpointRemap(
+  source: Way,
+  destination: Way,
+  sameDirection: boolean,
+): WayEndpointRemap {
+  const endpoint = (end: 'start' | 'end') => ({ way: destination, end });
+  return {
+    source,
+    start: endpoint(sameDirection ? 'start' : 'end'),
+    end: endpoint(sameDirection ? 'end' : 'start'),
+  };
 }
 
 /** Collapses a one-way pair back onto its forward carriageway. */
 export function combineCarriageways(system: TransitSystem, namedWayId: string): TransitSystem {
   const pair = carriagewayPair(system, namedWayId);
   if (!pair) return system;
-  const { keeper, other, sameDirection } = pair;
+  const { keeper, other, sameDirection, backwardProfile, forwardProfile } = pair;
   const median = getComponent(system.medians, namedWayId);
   const combined = combineProfiles(
-    sameDirection ? other.profile : flipProfile(other.profile),
-    keeper.profile,
+    backwardProfile,
+    forwardProfile,
     median?.widthM,
     median?.kindId,
     system.drivingSide,
+  );
+  const combinedKeeper = { ...keeper, profile: combined };
+  const endpointMetadata = remapWayEndpointMetadata(
+    system,
+    [carriagewayEndpointRemap(other, combinedKeeper, sameDirection)],
+    new Map([[other.id, keeper.id]]),
   );
   const keeperPath = resolveWayPath(keeper);
   const stations = system.stations.map((station) => {
@@ -196,30 +341,20 @@ export function combineCarriageways(system: TransitSystem, namedWayId: string): 
     return nearest
       ? {
           ...station,
-          anchors: reanchored(station, other.id, { wayId: keeper.id, t: nearest.t }),
+          anchors: replacedStationAnchors(station, other.id, {
+            wayId: keeper.id,
+            t: nearest.t,
+          }),
         }
       : station;
   });
-  const aligned = keeper.points.length === other.points.length;
-  const mapIndex = (index: number) =>
-    aligned ? index : nearestPointIndex(keeper.points, other.points[index]);
-  const nodes = system.nodes
-    .map((node) => {
-      const refs = node.refs.map((ref) =>
-        ref.wayId === other.id ? { wayId: keeper.id, pointIndex: mapIndex(ref.pointIndex) } : ref,
-      );
-      const seen = new Set<string>();
-      return {
-        ...node,
-        refs: refs.filter((ref) => {
-          const key = `${ref.wayId}:${ref.pointIndex}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        }),
-      };
-    })
-    .filter((node) => node.refs.length >= 2);
+  const junctions = collapsedJunctions(system.ways, system.nodes, keeper, other);
+  const reanchoredStations = reanchorMovedWays(
+    system,
+    junctions.ways,
+    stations,
+    junctions.movedWayIds,
+  );
   const otherPath = resolveWayPath(other);
   const services = system.services.map((service) => {
     if (!patternLegs(service.path).some((leg) => leg.wayId === other.id)) return service;
@@ -238,7 +373,18 @@ export function combineCarriageways(system: TransitSystem, namedWayId: string): 
       ),
     });
   });
-  const removed = removeWayFromSystem({ ...system, stations, nodes, services }, other.id);
+  const removed = removeWayFromSystem(
+    {
+      ...system,
+      ways: junctions.ways,
+      stations: reanchoredStations,
+      nodes: junctions.nodes,
+      services,
+      approachControls: endpointMetadata.approachControls,
+      turnRestrictions: endpointMetadata.turnRestrictions,
+    },
+    other.id,
+  );
   return {
     ...removed,
     ways: removed.ways.map((way) => (way.id === keeper.id ? { ...way, profile: combined } : way)),

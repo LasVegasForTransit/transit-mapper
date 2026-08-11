@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEditor, useEditorCommands } from '../../editor/EditorProvider';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
-import { importOsmWays } from '@transitmapper/core/model/import';
 import { searchPlaces, type PlaceResult } from '@transitmapper/core/model/geocode';
 import type { DrivingSide, LngLat } from '@transitmapper/core/model/system';
+import { importOsmNetwork } from '../../import/import-osm-network';
 import { setActiveId } from '../../storage/localStore';
 import { Icon } from '../Icon';
 import { Modal } from '../Modal';
@@ -162,7 +162,7 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
       await settled.current;
       const bbox = mapHandle.current?.getBounds();
       if (!bbox) throw new Error('Map is not ready yet — try again.');
-      const network = await importOsmWays(bbox, ['road', 'bike'], drivingSide, {
+      const network = await importOsmNetwork(bbox, ['road', 'bike'], drivingSide, {
         signal: controller.signal,
       });
       const imported = commands.imports.applyImportedNetwork({ targetSystemId, network });

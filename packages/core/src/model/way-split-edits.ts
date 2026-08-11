@@ -11,16 +11,28 @@ import {
 import { shortId } from './ids';
 import { withServicePattern } from './line-service';
 import { mapSectionLegs, normalizeSections, splitLegs } from './patternEdits';
-import type { LngLat, Node, Station, StationAnchor, TransitSystem, Way } from './system';
+import { replacedStationAnchors } from './station-reanchoring';
+import type { LngLat, Node, Station, TransitSystem, Way } from './system';
+import { remapWayEndpointMetadata, remapWaySplitTurnTargets } from './way-endpoint-metadata';
 import { insertWayPoint } from './way-point-edits';
 
 export type CreateWaySplitId = () => string;
 
-function reanchored(station: Station, replacedWayId: string, next: StationAnchor): StationAnchor[] {
-  const kept = station.anchors.filter(
-    (anchor) => anchor.wayId !== replacedWayId && anchor.wayId !== next.wayId,
-  );
-  return [next, ...kept];
+/** @internal Result used by core workflows that must identify the new half. */
+interface WaySplitOperationResult {
+  system: TransitSystem;
+  newWayId: string;
+}
+
+function mapPreservingReference<Value>(values: Value[], update: (value: Value) => Value): Value[] {
+  let changed = false;
+  const next: Value[] = [];
+  for (const value of values) {
+    const updated = update(value);
+    if (updated !== value) changed = true;
+    next.push(updated);
+  }
+  return changed ? next : values;
 }
 
 function splitServices(
@@ -29,7 +41,7 @@ function splitServices(
   newWayId: string,
   t: number,
 ): TransitSystem['services'] {
-  return system.services.map((service) => {
+  return mapPreservingReference(system.services, (service) => {
     const pattern = service.path;
     if (!patternLegs(pattern).some((leg) => leg.wayId === wayId)) return service;
     return withServicePattern(service, {
@@ -50,7 +62,7 @@ interface SplitStationOptions {
 
 function splitStations(stations: Station[], options: SplitStationOptions): Station[] {
   const { wayId, newWayId, firstPath, secondPath } = options;
-  return stations.map((station) => {
+  return mapPreservingReference(stations, (station) => {
     if (!anchorOnWayId(station, wayId)) return station;
     const onFirst = nearestOnPath(firstPath, station.coord);
     const onSecond = nearestOnPath(secondPath, station.coord);
@@ -59,7 +71,7 @@ function splitStations(stations: Station[], options: SplitStationOptions): Stati
     if (!nearest) return station;
     return {
       ...station,
-      anchors: reanchored(station, wayId, {
+      anchors: replacedStationAnchors(station, wayId, {
         wayId: useSecond ? newWayId : wayId,
         t: nearest.t,
       }),
@@ -81,18 +93,60 @@ function remapSplitConnectors(nodes: Node[], wayId: string, newWayId: string): N
   });
 }
 
+interface SplitNodesOptions {
+  way: Way;
+  index: number;
+  newWayId: string;
+  createId: CreateWaySplitId;
+}
+
+function splitNodes(nodes: Node[], options: SplitNodesOptions): Node[] {
+  const { way, index, newWayId, createId } = options;
+  let next = nodes.map((node) => {
+    if (!node.refs.some((ref) => ref.wayId === way.id && ref.pointIndex >= index)) return node;
+    return {
+      ...node,
+      refs: node.refs.flatMap((ref) => {
+        if (ref.wayId !== way.id || ref.pointIndex < index) return [ref];
+        if (ref.pointIndex === index) return [ref, { wayId: newWayId, pointIndex: 0 }];
+        return [{ wayId: newWayId, pointIndex: ref.pointIndex - index }];
+      }),
+    };
+  });
+  const alreadyLinked = next.some(
+    (node) =>
+      node.refs.some((ref) => ref.wayId === way.id && ref.pointIndex === index) &&
+      node.refs.some((ref) => ref.wayId === newWayId && ref.pointIndex === 0),
+  );
+  if (!alreadyLinked) {
+    next = [
+      ...next,
+      {
+        id: createId(),
+        coord: way.points[index],
+        refs: [
+          { wayId: way.id, pointIndex: index },
+          { wayId: newWayId, pointIndex: 0 },
+        ],
+      },
+    ];
+  }
+  return remapSplitConnectors(next, way.id, newWayId);
+}
+
 /**
- * Splits a way at an existing control point and repairs every dependent
- * service, station, node, connector, and shared street identity.
+ * Splits a way at an existing control point, repairs its dependents, and
+ * reports the identity it creates for internal workflows.
+ * @internal
  */
-export function splitWayAtIndex(
+export function splitWayAtIndexResult(
   system: TransitSystem,
   wayId: string,
   index: number,
   createId: CreateWaySplitId = shortId,
-): TransitSystem {
+): WaySplitOperationResult | null {
   const way = system.ways.find((candidate) => candidate.id === wayId);
-  if (!way || index <= 0 || index >= way.points.length - 1) return system;
+  if (!way || index <= 0 || index >= way.points.length - 1) return null;
 
   const newWayId = createId();
   const first: Way = { ...way, points: way.points.slice(0, index + 1) };
@@ -102,35 +156,7 @@ export function splitWayAtIndex(
     second,
   ];
 
-  let nodes = system.nodes.map((node) => {
-    if (!node.refs.some((ref) => ref.wayId === wayId && ref.pointIndex >= index)) return node;
-    return {
-      ...node,
-      refs: node.refs.flatMap((ref) => {
-        if (ref.wayId !== wayId || ref.pointIndex < index) return [ref];
-        if (ref.pointIndex === index) return [ref, { wayId: newWayId, pointIndex: 0 }];
-        return [{ wayId: newWayId, pointIndex: ref.pointIndex - index }];
-      }),
-    };
-  });
-  const splitAlreadyLinked = nodes.some(
-    (node) =>
-      node.refs.some((ref) => ref.wayId === wayId && ref.pointIndex === index) &&
-      node.refs.some((ref) => ref.wayId === newWayId && ref.pointIndex === 0),
-  );
-  if (!splitAlreadyLinked) {
-    nodes = [
-      ...nodes,
-      {
-        id: createId(),
-        coord: way.points[index],
-        refs: [
-          { wayId, pointIndex: index },
-          { wayId: newWayId, pointIndex: 0 },
-        ],
-      },
-    ];
-  }
+  const nodes = splitNodes(system.nodes, { way, index, newWayId, createId });
 
   const firstPath = resolveWayPath(first);
   const secondPath = resolveWayPath(second);
@@ -145,35 +171,80 @@ export function splitWayAtIndex(
     firstPath,
     secondPath,
   });
-  nodes = remapSplitConnectors(nodes, wayId, newWayId);
-  const namedWays = system.namedWays.map((namedWay) =>
+  const namedWays = mapPreservingReference(system.namedWays, (namedWay) =>
     namedWay.wayIds.includes(wayId)
       ? { ...namedWay, wayIds: [...namedWay.wayIds, newWayId] }
       : namedWay,
   );
+  const endpointMetadata = remapWayEndpointMetadata(system, [
+    {
+      source: way,
+      start: { way: first, end: 'start' },
+      end: { way: second, end: 'end' },
+    },
+  ]);
+  const turnRestrictions = remapWaySplitTurnTargets(system, endpointMetadata.turnRestrictions, {
+    sourceWayId: wayId,
+    splitIndex: index,
+    newWayId,
+  });
 
-  return { ...system, ways, nodes, services, stations, namedWays };
+  return {
+    newWayId,
+    system: {
+      ...system,
+      ways,
+      nodes,
+      services,
+      stations,
+      namedWays,
+      ...endpointMetadata,
+      turnRestrictions,
+    },
+  };
 }
 
-/** Splits at normalized distance, inserting a real control point when needed. */
+export function splitWayAtIndex(
+  system: TransitSystem,
+  wayId: string,
+  index: number,
+  createId: CreateWaySplitId = shortId,
+): TransitSystem {
+  return splitWayAtIndexResult(system, wayId, index, createId)?.system ?? system;
+}
+
+/**
+ * Splits at normalized distance, inserting a real control point when needed,
+ * and reports the identity it creates for internal workflows.
+ * @internal
+ */
+export function splitWayAtPositionResult(
+  system: TransitSystem,
+  wayId: string,
+  t: number,
+  createId: CreateWaySplitId = shortId,
+): WaySplitOperationResult | null {
+  if (!Number.isFinite(t) || t <= 0 || t >= 1) return null;
+  const way = system.ways.find((candidate) => candidate.id === wayId);
+  if (!way) return null;
+  const path = resolveWayPath(way);
+  if (path.length < 2) return null;
+  const coord = pointAtT(path, t);
+  const existing = way.points.findIndex((point) => haversineMeters(point, coord) < 0.75);
+  if (existing === 0 || existing === way.points.length - 1) return null;
+  if (existing > 0) return splitWayAtIndexResult(system, wayId, existing, createId);
+
+  const insertion = nearestInsertionPoint(way.points, coord);
+  if (!insertion || insertion.index <= 0 || insertion.index >= way.points.length) return null;
+  const inserted = insertWayPoint(system, wayId, insertion.index, coord);
+  return splitWayAtIndexResult(inserted, wayId, insertion.index, createId);
+}
+
 export function splitWayAtPosition(
   system: TransitSystem,
   wayId: string,
   t: number,
   createId: CreateWaySplitId = shortId,
 ): TransitSystem {
-  if (!Number.isFinite(t) || t <= 0 || t >= 1) return system;
-  const way = system.ways.find((candidate) => candidate.id === wayId);
-  if (!way) return system;
-  const path = resolveWayPath(way);
-  if (path.length < 2) return system;
-  const coord = pointAtT(path, t);
-  const existing = way.points.findIndex((point) => haversineMeters(point, coord) < 0.75);
-  if (existing === 0 || existing === way.points.length - 1) return system;
-  if (existing > 0) return splitWayAtIndex(system, wayId, existing, createId);
-
-  const insertion = nearestInsertionPoint(way.points, coord);
-  if (!insertion || insertion.index <= 0 || insertion.index >= way.points.length) return system;
-  const inserted = insertWayPoint(system, wayId, insertion.index, coord);
-  return splitWayAtIndex(inserted, wayId, insertion.index, createId);
+  return splitWayAtPositionResult(system, wayId, t, createId)?.system ?? system;
 }

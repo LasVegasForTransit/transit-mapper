@@ -30,6 +30,20 @@ function withoutWay(namedWays: NamedWay[], wayId: string): NamedWay[] {
   });
 }
 
+function sameProfile(left: CrossSection, right: CrossSection): boolean {
+  if (left === right) return true;
+  if (left.lanes.length !== right.lanes.length) return false;
+  return left.lanes.every((lane, index) => {
+    const other = right.lanes[index];
+    return (
+      lane.id === other.id &&
+      lane.kindId === other.kindId &&
+      lane.widthM === other.widthM &&
+      lane.direction === other.direction
+    );
+  });
+}
+
 /** Replaces geometry and remeasures stations anchored to the rendered path. */
 export function withWayGeometry(
   system: TransitSystem,
@@ -64,7 +78,7 @@ export function withWayProfile(
   const way = system.ways.find((candidate) => candidate.id === id);
   if (!way) return system;
   const resolvedClassId = classId ?? way.classId;
-  if (way.profile === profile && way.classId === resolvedClassId) return system;
+  if (sameProfile(way.profile, profile) && way.classId === resolvedClassId) return system;
   const laneIds = new Set(profile.lanes.map((lane) => lane.id));
   const nodes = system.nodes.map((node) => {
     if (!node.connectors) return node;

@@ -1499,7 +1499,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       // Chrome-driven selection (Objects list, keyboard nav, Inspector jump
       // links, Issues) asks for this via selectAndFocus bumping the token —
       // a direct map click already shows the user where the thing is and
-      // never touches this. See editor/store.ts's cameraFocusToken comment.
+      // never touches this. The selection command group owns the token.
       if (s.cameraFocusToken !== prev.cameraFocusToken) {
         const focus = selectionFocus(s.system, s.selection);
         if (focus) {

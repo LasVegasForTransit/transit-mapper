@@ -4,15 +4,9 @@
 // duplicate overlapping geometry. Pure and network-free like the rest of
 // geo/ — no store, no side effects.
 //
-// This is the interior-matching piece `adoptExistingInfrastructure` (in
-// editor/store.ts) doesn't have: that function only snaps a sketch's two
-// ENDPOINTS onto existing ways and lets a corridor-biased Dijkstra fill the
-// middle from EXISTING topology. It has no notion of "this stretch in the
-// MIDDLE of the new path runs along an existing way" — which is exactly the
-// case that matters here, since routes sharing a trunk corridor commonly
-// diverge at BOTH ends (one continues north, one turns west), so their
-// endpoints never land near the same existing way even though their middle
-// overlaps completely.
+// This supplies the interior matching that routing-edits' endpoint-snapped,
+// corridor-biased Dijkstra cannot: routes may share a middle trunk while
+// diverging at both ends, so neither endpoint lands near the shared Way.
 
 import { bearingDegrees, haversineMeters } from './spherical';
 import { projectOnSegment } from './measurement';

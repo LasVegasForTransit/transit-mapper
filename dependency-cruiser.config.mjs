@@ -27,7 +27,7 @@ export default {
       comment:
         'Each editor command group receives the shared store runtime and composes core transforms. ' +
         'Importing another command group creates an implicit command order and a second route to ' +
-        'mutation; cross-group orchestration belongs in the runtime that constructs them.',
+        'mutation; shared workflows belong in internal operations used by each group.',
       from: { path: '^apps/web/src/editor/store/commands/' },
       to: { path: '^apps/web/src/editor/store/commands/' },
     },
@@ -35,11 +35,34 @@ export default {
       name: 'editor-command-groups-do-not-import-the-public-entry',
       severity: 'error',
       comment:
-        'The public editor/store.ts entry constructs the command groups. A command importing it ' +
+        'The create-editor-store composition root constructs the command groups, while store.ts ' +
+        'only re-exports the public facade. A command importing that facade ' +
         'would invert that dependency and give the module access to a second store instance or ' +
         'public facade instead of its injected runtime.',
       from: { path: '^apps/web/src/editor/store/commands/' },
       to: { path: '^apps/web/src/editor/store\\.ts$' },
+    },
+    {
+      name: 'editor-internal-operations-are-headless',
+      severity: 'error',
+      comment:
+        'Shared editor workflows may compose pure core transforms and editor data contracts only. ' +
+        'Importing UI, commands, or the public store facade would turn an internal operation into ' +
+        'a hidden orchestration or mutation path.',
+      from: { path: '^apps/web/src/editor/store/internal-operations/' },
+      to: {
+        pathNot:
+          '^(packages/core/|apps/web/src/editor/store/(contracts(?:\\.ts|/)|state\\.ts|internal-operations/))',
+      },
+    },
+    {
+      name: 'editor-runtime-owns-vanilla-zustand',
+      severity: 'error',
+      comment:
+        'The editor runtime is the single raw Zustand writer. Other modules use its read, ' +
+        'subscription, transient-update, and atomic-content ports.',
+      from: { pathNot: '^apps/web/src/editor/store/runtime\\.ts$' },
+      to: { path: 'node_modules/.*zustand.*/vanilla' },
     },
     {
       name: 'editor-command-dependencies-are-an-allowlist',

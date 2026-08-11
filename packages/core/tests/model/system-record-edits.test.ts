@@ -4,6 +4,7 @@ import {
   deleteLine,
   moveFacility,
   moveServiceToLine,
+  moveServicesToLine,
   moveStation,
   renameGroup,
   setFacilityName,
@@ -168,6 +169,36 @@ describe('service record edits', () => {
     const system = aSystem({ services: [service] });
 
     expect(moveServiceToLine(system, service.id, service.id)).toBe(system);
+  });
+
+  it('moves several services between lines as one immutable transformation', () => {
+    const first = aService('first', [firstPattern], { name: undefined });
+    const second = aService('second', [secondPattern], { name: undefined });
+    const target = aService('target', []);
+    const system = aSystem({
+      ways: [way],
+      services: [first, second, target],
+      lines: [
+        { id: 'source-line', name: 'Blue', color: '#246bce', serviceIds: [first.id, second.id] },
+        { id: 'target-line', name: 'Red', color: '#e5252a', serviceIds: [target.id] },
+      ],
+      groups: [{ id: 'family', memberIds: ['source-line', 'target-line'] }],
+    });
+
+    const next = moveServicesToLine(system, [first.id, second.id], 'target-line');
+
+    expect(next.lines).toEqual([
+      {
+        id: 'target-line',
+        name: 'Red',
+        color: '#e5252a',
+        serviceIds: [target.id, first.id, second.id],
+      },
+    ]);
+    expect(next.services.slice(0, 2).map((service) => service.name)).toEqual(['Blue', 'Blue']);
+    expect(next.groups).toEqual([{ id: 'family', memberIds: ['target-line'] }]);
+    expect(next.updatedAt).toBe(system.updatedAt);
+    expect(moveServicesToLine(system, [], 'target-line')).toBe(system);
   });
 });
 

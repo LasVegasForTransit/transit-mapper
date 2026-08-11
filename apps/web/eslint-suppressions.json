@@ -842,11 +842,6 @@
       "count": 1
     }
   },
-  "tests/editor/storePatternFocus.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    }
-  },
   "tests/embed/config.test.ts": {
     "@typescript-eslint/no-unnecessary-type-conversion": {
       "count": 1
@@ -1006,23 +1001,6 @@
   "tests/ui/ExportPreviewMap.test.ts": {
     "@typescript-eslint/no-invalid-void-type": {
       "count": 2
-    }
-  },
-  "tests/ui/NewSystemLocationDialog.test.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    },
-    "@typescript-eslint/unbound-method": {
-      "count": 1
     }
   },
   "tests/ui/about-dialog.test.tsx": {

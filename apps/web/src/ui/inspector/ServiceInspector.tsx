@@ -53,8 +53,8 @@ const VehicleKindsDialog = lazy(() =>
 );
 
 // Turnkey presets so setting up a working schedule is a click, not typing —
-// matches store.ts's DEFAULT_FREQUENCY_MINUTES/DEFAULT_SPAN_* (a fresh
-// line's frequency/span always lands on one of these chips, never in the
+// matches internal-operations/service-creation.ts's defaults (a fresh
+// Service's frequency/span always lands on one of these chips, never in the
 // "Custom" fallback). "Custom" reveals the raw number/time inputs this
 // section used to be, for anything a preset can't express.
 const FREQUENCY_PRESETS = [5, 10, 15, 20, 30, 60];
@@ -784,9 +784,9 @@ interface ServiceLoadProps {
 }
 
 /**
- * What this line is doing right now, and what running it costs.
+ * What this Service is doing right now, and what running it costs.
  *
- * The schedule fields below say what a line is *configured* to do. This says
+ * The schedule fields below say what a Service is *configured* to do. This says
  * what that amounts to — and, crucially, shows the chain between them. Stops
  * and dwell lengthen the round trip; the round trip and the headway decide how
  * many vehicles it takes. All three used to be computed on every animation

@@ -25,9 +25,9 @@ export interface TurnRestriction {
 
 /**
  * A junction: a coordinate genuinely shared by two or more ways' control
- * points (not just two paths that happen to cross visually). `refs` are kept
- * in sync with `Way.points` by every store mutation that inserts, deletes, or
- * moves a control point — see editor/store.ts's cascadeMove/shiftNodeRefsFor*.
+ * points (not just two paths that happen to cross visually). Pure Way-edit
+ * transforms keep `refs` in sync with `Way.points`; see
+ * model/way-point-edits.ts and model/way-split-edits.ts.
  */
 export interface Node {
   id: string;

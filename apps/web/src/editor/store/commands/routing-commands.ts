@@ -1,6 +1,11 @@
 import { oneSection } from '@transitmapper/core/model/geo';
 import { shortId } from '@transitmapper/core/model/ids';
 import { materializeRouteSpans } from '@transitmapper/core/model/routeLegs';
+import {
+  adoptExistingInfrastructure,
+  withReturnPath,
+  withRoutedService,
+} from '@transitmapper/core/model/routing-edits';
 import type { Line, Service } from '@transitmapper/core/model/system';
 import type { RoutingCommands } from '../contracts/import-routing-commands';
 import {
@@ -9,18 +14,11 @@ import {
   DEFAULT_SPAN_START,
   nextDefaultLineName,
 } from '../internal-operations/service-creation';
-import {
-  adoptExistingInfrastructure,
-  extendedRouteDraft,
-  returnPathDraft,
-  withReturnPath,
-  withRoutedService,
-  type RoutingInfrastructureOperations,
-} from '../internal-operations/routing';
+import { extendedRouteDraft, returnPathDraft } from '../internal-operations/routing';
 import type { EditorRuntime } from '../runtime';
 
-export interface RoutingCommandOperations extends RoutingInfrastructureOperations {
-  createId?: () => string;
+interface RoutingCommandOptions {
+  readonly createId?: () => string;
 }
 
 type DraftCommands = Pick<
@@ -128,14 +126,11 @@ function createDraftCommands(runtime: EditorRuntime, createId: () => string): Dr
   };
 }
 
-function createInfrastructureCommands(
-  runtime: EditorRuntime,
-  operations: RoutingCommandOperations,
-): InfrastructureCommands {
+function createInfrastructureCommands(runtime: EditorRuntime): InfrastructureCommands {
   return {
     adoptExistingInfrastructure(serviceId) {
       return runtime.commitContent(0, (state) => {
-        const change = adoptExistingInfrastructure(state.system, serviceId, operations);
+        const change = adoptExistingInfrastructure(state.system, serviceId);
         return { system: change.system, result: change.rebound };
       });
     },
@@ -162,10 +157,10 @@ function createInfrastructureCommands(
 /** Builds one stable routing command group for an editor runtime. */
 export function createRoutingCommands(
   runtime: EditorRuntime,
-  operations: RoutingCommandOperations,
+  options: RoutingCommandOptions = {},
 ): RoutingCommands {
   return {
-    ...createDraftCommands(runtime, operations.createId ?? shortId),
-    ...createInfrastructureCommands(runtime, operations),
+    ...createDraftCommands(runtime, options.createId ?? shortId),
+    ...createInfrastructureCommands(runtime),
   };
 }

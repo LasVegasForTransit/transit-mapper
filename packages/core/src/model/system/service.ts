@@ -185,6 +185,10 @@ interface ServiceDocument {
   services: Service[];
 }
 
+interface VehicleKindAwareServiceDocument extends ServiceDocument {
+  vehicleKinds: { id: string; modeId: string }[];
+}
+
 interface LineDocument {
   lines: Line[];
 }
@@ -229,12 +233,23 @@ export function setServiceName<System extends ServiceDocument>(
   return setServiceProperty(system, id, 'name', name);
 }
 
-export function setServiceMode<System extends ServiceDocument>(
+export function setServiceMode<System extends VehicleKindAwareServiceDocument>(
   system: System,
   id: string,
   modeId: string,
 ): System {
-  return setServiceProperty(system, id, 'modeId', modeId);
+  return replaceService(system, id, (service) => {
+    if (service.modeId === modeId) return service;
+    const assignedKind = service.vehicleKindId
+      ? system.vehicleKinds.find((kind) => kind.id === service.vehicleKindId)
+      : undefined;
+    if (assignedKind?.modeId === modeId) return { ...service, modeId };
+    // Vehicle assignments are mode-scoped. Keeping an incompatible hidden id
+    // would make simulation use equipment the inspector can no longer show.
+    const updated = { ...service, modeId };
+    delete updated.vehicleKindId;
+    return updated;
+  });
 }
 
 export function setServiceFrequency<System extends ServiceDocument>(
@@ -258,13 +273,35 @@ export function setServiceSpan<System extends ServiceDocument>(
   );
 }
 
+function schedulesEqual(
+  left: SchedulePeriod[] | undefined,
+  right: SchedulePeriod[] | undefined,
+): boolean {
+  if (left === right) return true;
+  if (left?.length !== right?.length) return false;
+  if (left === undefined || right === undefined) return false;
+  return left.every((period, index) => {
+    const other = right[index];
+    return (
+      period.id === other.id &&
+      period.label === other.label &&
+      period.days === other.days &&
+      period.spanStart === other.spanStart &&
+      period.spanEnd === other.spanEnd &&
+      period.frequencyMinutes === other.frequencyMinutes
+    );
+  });
+}
+
 export function setServiceSchedule<System extends ServiceDocument>(
   system: System,
   id: string,
   periods: SchedulePeriod[] | undefined,
 ): System {
   const schedule = periods && periods.length > 0 ? periods : undefined;
-  return setServiceProperty(system, id, 'schedule', schedule);
+  return replaceService(system, id, (service) =>
+    schedulesEqual(service.schedule, schedule) ? service : { ...service, schedule },
+  );
 }
 
 export function setServiceVehicleKind<System extends ServiceDocument>(
@@ -351,5 +388,17 @@ export function moveServiceToLine<System extends LineServiceGroupDocument>(
   return removeGroupMembers(
     { ...system, services, lines },
     new Set(lines.some((line) => line.id === sourceLine.id) ? [] : [sourceLine.id]),
+  );
+}
+
+/** Move several Services under one public Line in the supplied order. */
+export function moveServicesToLine<System extends LineServiceGroupDocument>(
+  system: System,
+  serviceIds: readonly string[],
+  targetLineId: string,
+): System {
+  return serviceIds.reduce(
+    (current, serviceId) => moveServiceToLine(current, serviceId, targetLineId),
+    system,
   );
 }

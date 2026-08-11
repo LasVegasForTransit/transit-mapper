@@ -53,10 +53,11 @@ function lineActions(
     label: 'Group under one line',
     hint: 'Keep both operations while presenting them as one public Line',
     group: 'merge',
-    run: () => {
-      for (const service of sourceServices)
-        store.commands.services.moveServiceToLine(service.id, targetLineId);
-    },
+    run: () =>
+      store.commands.services.moveServicesToLine(
+        sourceServices.map((service) => service.id),
+        targetLineId,
+      ),
   });
   return actions;
 }

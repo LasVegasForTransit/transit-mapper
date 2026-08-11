@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { createEditorStore } from '../../src/editor/store';
 
@@ -11,6 +11,10 @@ beforeEach(() => {
   // The guard warns on every refusal so a swallowed edit is visible in
   // development. The cases below refuse on purpose.
   vi.spyOn(console, 'warn').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('a store still waiting for its document', () => {

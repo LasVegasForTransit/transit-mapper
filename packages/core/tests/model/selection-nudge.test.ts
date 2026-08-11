@@ -103,4 +103,152 @@ describe('multi-selection nudging', () => {
     expect(next.stations[0].coord[0]).toBeCloseTo(2.25);
     expect(next.stations[0].coord[1]).toBeCloseTo(3);
   });
+
+  it('moves a junction when every referenced point moves together', () => {
+    const east = aRoad('east', [
+      [0, 0],
+      [1, 0],
+    ]);
+    const north = aRoad('north', [
+      [0, 0],
+      [0, 1],
+    ]);
+    const node = {
+      id: 'junction',
+      coord: [0, 0] as [number, number],
+      refs: [
+        { wayId: east.id, pointIndex: 0 },
+        { wayId: north.id, pointIndex: 0 },
+      ],
+    };
+    const system = aSystem({ ways: [east, north], nodes: [node] });
+
+    const next = nudgeSelection(
+      system,
+      [
+        { kind: 'way', id: east.id },
+        { kind: 'way', id: north.id },
+      ],
+      2,
+      3,
+    );
+
+    expect(next.nodes[0]).toEqual({ ...node, coord: [2, 3] });
+    expect(next.nodes[0].refs).toBe(node.refs);
+  });
+
+  it('disconnects a moved arm while preserving the junction between stationary arms', () => {
+    const east = aRoad('east', [
+      [0, 0],
+      [1, 0],
+    ]);
+    const north = aRoad('north', [
+      [0, 0],
+      [0, 1],
+    ]);
+    const west = aRoad('west', [
+      [0, 0],
+      [-1, 0],
+    ]);
+    const eastLane = east.profile.lanes[0].id;
+    const northLane = north.profile.lanes[0].id;
+    const westLane = west.profile.lanes[0].id;
+    const retainedConnector = {
+      from: { wayId: north.id, laneId: northLane },
+      to: { wayId: west.id, laneId: westLane },
+    };
+    const system = aSystem({
+      ways: [east, north, west],
+      nodes: [
+        {
+          id: 'junction',
+          coord: [0, 0],
+          refs: [
+            { wayId: east.id, pointIndex: 0 },
+            { wayId: north.id, pointIndex: 0 },
+            { wayId: west.id, pointIndex: 0 },
+          ],
+          connectors: [
+            {
+              from: { wayId: east.id, laneId: eastLane },
+              to: { wayId: north.id, laneId: northLane },
+            },
+            retainedConnector,
+          ],
+        },
+      ],
+    });
+
+    const next = nudgeSelection(system, [{ kind: 'way', id: east.id }], 2, 3);
+
+    expect(next.nodes[0]).toEqual({
+      ...system.nodes[0],
+      refs: [
+        { wayId: north.id, pointIndex: 0 },
+        { wayId: west.id, pointIndex: 0 },
+      ],
+      connectors: [retainedConnector],
+    });
+  });
+
+  it('removes a partial junction that has fewer than two stationary refs', () => {
+    const east = aRoad('east', [
+      [0, 0],
+      [1, 0],
+    ]);
+    const north = aRoad('north', [
+      [0, 0],
+      [0, 1],
+    ]);
+    const system = aSystem({
+      ways: [east, north],
+      nodes: [
+        {
+          id: 'junction',
+          coord: [0, 0],
+          refs: [
+            { wayId: east.id, pointIndex: 0 },
+            { wayId: north.id, pointIndex: 0 },
+          ],
+        },
+      ],
+    });
+
+    const next = nudgeSelection(system, [{ kind: 'way', id: east.id }], 2, 3);
+
+    expect(next.nodes).toEqual([]);
+  });
+
+  it('preserves unrelated node references when a detached way moves', () => {
+    const detached = aRoad('detached', [
+      [2, 2],
+      [3, 2],
+    ]);
+    const east = aRoad('east', [
+      [0, 0],
+      [1, 0],
+    ]);
+    const north = aRoad('north', [
+      [0, 0],
+      [0, 1],
+    ]);
+    const system = aSystem({
+      ways: [detached, east, north],
+      nodes: [
+        {
+          id: 'junction',
+          coord: [0, 0],
+          refs: [
+            { wayId: east.id, pointIndex: 0 },
+            { wayId: north.id, pointIndex: 0 },
+          ],
+        },
+      ],
+    });
+
+    const next = nudgeSelection(system, [{ kind: 'way', id: detached.id }], 2, 3);
+
+    expect(next.nodes).toBe(system.nodes);
+    expect(next.nodes[0]).toBe(system.nodes[0]);
+  });
 });

@@ -159,7 +159,7 @@ function ScenarioPicker() {
       <>
         <span className="panel-section-label">Service scenario</span>
         <p className="panel-hint">
-          Show every line at one point in its schedule, whatever the clock says.
+          Show every Service at one point in its schedule, whatever the clock says.
         </p>
         <div className="chip-row" role="group" aria-label="Service scenario">
           <button

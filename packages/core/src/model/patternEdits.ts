@@ -40,11 +40,17 @@ export function mapSectionLegs(
   sections: PatternSection[],
   fn: (legs: PatternLeg[]) => PatternLeg[],
 ): PatternSection[] {
-  return sections.map((section) =>
-    section.kind === 'split'
-      ? { ...section, outbound: fn(section.outbound), inbound: fn(section.inbound) }
-      : { ...section, legs: fn(section.legs) },
-  );
+  return sections.map((section) => {
+    if (section.kind === 'split') {
+      const outbound = fn(section.outbound);
+      const inbound = fn(section.inbound);
+      return outbound === section.outbound && inbound === section.inbound
+        ? section
+        : { ...section, outbound, inbound };
+    }
+    const legs = fn(section.legs);
+    return legs === section.legs ? section : { ...section, legs };
+  });
 }
 
 /**
@@ -180,6 +186,14 @@ export interface MergeRemap {
   reversed: (wayId: string) => boolean;
 }
 
+function legsUseSameLane(left: PatternLeg, right: PatternLeg): boolean {
+  if (left.lane.kind !== right.lane.kind) return false;
+  return (
+    left.lane.kind === 'auto' ||
+    (right.lane.kind === 'pinned' && left.lane.laneId === right.lane.laneId)
+  );
+}
+
 /**
  * Rewrite legs for two ways merged end-to-end into one, `otherId` folded into
  * `keepId`.
@@ -209,8 +223,12 @@ export function mergeLegs(
 
   const out: PatternLeg[] = [];
   for (const leg of remapped) {
-    const last = out[out.length - 1];
-    if (last && last.wayId === leg.wayId && last.direction === leg.direction) {
+    const last = out.at(-1);
+    if (
+      last?.wayId === leg.wayId &&
+      last.direction === leg.direction &&
+      legsUseSameLane(last, leg)
+    ) {
       const [lastLo, lastHi] = legRange(last);
       const [lo, hi] = legRange(leg);
       if (Math.min(lastHi, hi) >= Math.max(lastLo, lo) - TOUCH_T) {

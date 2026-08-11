@@ -233,16 +233,19 @@ Station design therefore spans all three, and that is deliberate: the
 alternative files a feature's logic beside its UI, and logic that sits
 beside UI can only be tested through the UI.
 
-| Building block           | Responsibility                                                          | Does not contain                      |
-| ------------------------ | ----------------------------------------------------------------------- | ------------------------------------- |
-| `packages/core`          | Every rule about what a transit system is and how it is drawn           | Storage, transport, interaction state |
-| `apps/web`               | Interaction state, map rendering, the store all mutation passes through | Domain rules                          |
-| `apps/worker`            | Accepting, storing, and serving snapshots                               | Domain rules; a second parser         |
-| `packages/eslint-plugin` | Lint rules for invariants the compiler cannot express                   | Anything specific to one app          |
+| Building block           | Responsibility                                                               | Does not contain                      |
+| ------------------------ | ---------------------------------------------------------------------------- | ------------------------------------- |
+| `packages/core`          | Every rule about what a transit system is and how it is drawn                | Storage, transport, interaction state |
+| `apps/web`               | Interaction state, command composition, map rendering, and browser workflows | Domain rules                          |
+| `apps/worker`            | Accepting, storing, and serving snapshots                                    | Domain rules; a second parser         |
+| `packages/eslint-plugin` | Lint rules for invariants the compiler cannot express                        | Anything specific to one app          |
 
 The core depends on neither application. Neither application depends on the
-other. That direction is the only structural rule, and it is what keeps the
-core testable on its own.
+other. This package direction keeps core testable on its own. Inside the web
+application, dependency-cruiser also keeps editor command groups independent:
+they may use contracts, the shared runtime, shared internal operations, and
+core transforms, but may not import sibling command groups or the public store
+entry.
 
 ### Level 2 — `packages/core`
 
@@ -263,20 +266,87 @@ preview be drawn where there is no MapLibre and no DOM.
 
 ### Level 2 — `apps/web`
 
-| Block   | Responsibility                                                            |
-| ------- | ------------------------------------------------------------------------- |
-| Editor  | The store: every mutation, undo checkpoints, junction and station upkeep  |
-| Map     | MapLibre integration, layer emission, and the pointer state machine       |
-| UI      | React components. Read the store, dispatch actions, hold no domain logic. |
-| Share   | Export formats, preview rendering, and the publishing client              |
-| Storage | The local document library                                                |
-| Sim     | Vehicle animation along service patterns                                  |
-| PWA     | Editor-only installation and offline-runtime integration                  |
+| Block   | Responsibility                                                               |
+| ------- | ---------------------------------------------------------------------------- |
+| Editor  | Reactive data, stable command composition, mutation policy, and undo history |
+| Map     | MapLibre integration, layer emission, and the pointer state machine          |
+| UI      | React components. Subscribe to data, invoke commands, hold no domain logic.  |
+| Share   | Export formats, preview rendering, and the publishing client                 |
+| Storage | The local document library                                                   |
+| Import  | Browser Worker orchestration for external networks                           |
+| Sim     | Vehicle animation along service paths                                        |
+| PWA     | Editor-only installation and offline-runtime integration                     |
 
 Map and Sim sit outside React on purpose. Both update every frame, and
 reconciling a React tree that often is the difference between a map that
 pans smoothly and one that stutters. They read the store and write to
 MapLibre sources directly.
+
+#### Editor mutation flow
+
+```mermaid
+flowchart LR
+  clients["React, map, keyboard, background workflows"] --> commands["Stable grouped commands"]
+  commands --> coreTransforms["Pure core transforms"]
+  coreTransforms --> commands
+  commands --> runtime["One editor runtime"]
+  runtime --> zustand["Data-only Zustand state"]
+  runtime <--> history["Per-store history controller"]
+```
+
+`apps/web/src/editor/store.ts` is a thin public barrel. The
+`create-editor-store` composition factory creates one vanilla Zustand store
+and constructs the `document`, `history`, `tools`, `selection`, `ways`,
+`network`, `imports`, `routing`, `services`, `stations`, `facilities`, and
+`groups` command objects once. `EditorState` contains reactive data only;
+`EditorStore` exposes read-only observation plus that stable `commands` object,
+not raw `setState`.
+
+Commands decide when an edit happens and which transient editor data changes
+with it. Pure `TransitSystem` transformations belong in `packages/core`; they
+preserve the input reference when nothing changes and know nothing about
+timestamps or history. Shared web-only workflows, such as finishing a drawn
+Way or materializing a route draft, live in internal operations rather than
+one command group calling another.
+
+The runtime is the only raw Zustand mutation seam. An atomic content commit
+checks loading and read-only state, finalizes one resulting system, prunes
+lane-keyed data and transient pointers to removed records, stamps `updatedAt`
+once, records one history entry, and writes associated transient changes in the
+same store update. Transient selection and tool changes remain available in
+read-only documents. Nested gesture checkpoints still use that one per-store
+history controller. Saved viewport
+persistence deliberately bypasses undo history and `updatedAt`; undo and redo
+preserve the current viewport instead of restoring an older camera.
+
+Installing or creating a document resets state that belongs to the previous
+document: selection and hover, active Service-path and terminus focus,
+multi-selection, active Way drawing, route drafts, facility-group placement
+and picking, Service addition, and pending Station-name focus. User choices for
+future drafts, such as Way, Service, and Facility preferences, remain in the
+editor instance.
+
+#### Import Worker flow
+
+```mermaid
+flowchart LR
+  dialog["Import dialog"] --> client["Abort-aware import client"]
+  client --> worker["Dedicated browser Worker"]
+  worker --> coreImport["Core OSM import"]
+  coreImport --> osm[(OpenStreetMap)]
+  worker --> client
+  client --> command["Atomic editor import command"]
+```
+
+OpenStreetMap fetch, retry, parsing, classification, and model construction run
+in a dedicated browser Worker. The main thread sends only the bounding box,
+category list, and driving side, then receives an `ImportedNetwork` built by
+the same core transform used in tests. Cancellation terminates the Worker, so
+no live `AbortSignal`, store, or browser callback crosses the structured-clone
+boundary. The main thread remains responsible for accepting the result into
+the intended document through one guarded editor command. GTFS follows the
+same ownership rule: its Workers import core directly and return data rather
+than mutating editor state.
 
 ### Appearance and map styles
 

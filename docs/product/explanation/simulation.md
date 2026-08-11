@@ -84,17 +84,17 @@ pattern top speed already followed before a vehicle kind existed to override
 it.
 
 One consequence worth expecting: a round trip now takes a little longer than
-distance ÷ speed ever suggested, and a line whose stops sit close together can
+distance ÷ speed ever suggested, and a Service whose stops sit close together can
 spend the whole run never actually reaching its vehicle's nominal top speed.
 That grows the round trip — and can grow the fleet a headway needs — a little
 further than stops and dwell alone already did.
 
 ## Why "every 10 minutes" is exactly true
 
-Set a line's headway to 10 minutes and its stops are served every 10 minutes —
+Set a Service's headway to 10 minutes and its stops are served every 10 minutes —
 not approximately, exactly. That comes from building the cycle **from** the
 headway rather than the other way round, which is also how an agency sizes a
-line:
+Service:
 
 ```
 fleet   = ⌈(round trip + minimum layover) ÷ headway⌉
@@ -111,8 +111,8 @@ wrong.
 The round trip is the outward trip **plus** the return, not twice either. Each
 direction carries its own timetable, measured against its own path, because a
 one-way couplet's return trip is a different street with its own length and its
-own stops. For a line that comes back the way it went the two are equal and the
-round trip is exactly twice the one-way time, so nothing about such a line
+own stops. For a Service that comes back the way it went the two are equal and
+the round trip is exactly twice the one-way time, so nothing about such a Service
 changed when this stopped being assumed.
 
 That is also why a returning vehicle's position is walked forward along the
@@ -173,7 +173,7 @@ It advances by real elapsed time multiplied by the current speed:
 | 4×           | 240                               | 6 minutes        |
 
 At the default, one real second is one simulated minute. A fresh session starts
-at Monday 08:00 — mid-morning on purpose, since a new line defaults to a
+at Monday 08:00 — mid-morning on purpose, since a new Service defaults to a
 06:00–23:00 span and starting at midnight would open onto an empty map.
 
 Two deliberate behaviors:
@@ -191,7 +191,7 @@ reader writes times — 24-hour or 12-hour, in their own language.
 
 ## What's running right now
 
-A line only runs when its schedule says it does. At 03:00 a route with a
+A Service only runs when its schedule says it does. At 03:00 an operation with a
 06:00–23:00 span shows no vehicles, because at 03:00 it isn't running — which
 is what a span of service means.
 
@@ -199,7 +199,7 @@ The rules, in the order they apply:
 
 1. A detailed `schedule` supersedes the flat fields. The first period whose day
    scope and span both cover the current simulated time wins, and its headway
-   is what the line runs. An hour no period covers is an hour with no service.
+   is what the Service runs. An hour no period covers is an hour with no service.
 2. Otherwise `frequencyMinutes`, bounded by `spanStart`/`spanEnd`.
 3. A service with nothing set at all runs all day at no stated frequency — one
    vehicle. That is the fallback for anything whose timing is unknown, and it
@@ -213,7 +213,7 @@ models dates, months, or holidays.
 
 Following the clock answers "what does the network look like now". The other
 question — "what does peak look like next to midday" — shouldn't require
-waiting for the right hour. So a schedule period can be **pinned**: every line
+waiting for the right hour. So a schedule period can be **pinned**: every Service
 then runs that period's configuration whatever the clock says, spans and day
 scopes included.
 
@@ -222,8 +222,8 @@ services, the way the layer filters come from the catalogs. A system whose
 periods are "Rush" and "Quiet" offers exactly those, and one that has never
 had a schedule edited offers none — the control doesn't appear at all.
 
-A line with no period by the pinned name doesn't run in that scenario, which
-is the honest answer for a weekday-only express under "Weekend". A line with
+A Service with no period by the pinned name doesn't run in that scenario, which
+is the honest answer for a weekday-only express under "Weekend". A Service with
 no detailed schedule runs its flat headway in every scenario.
 
 The clock keeps ticking while a scenario is pinned — vehicles still need a
@@ -289,7 +289,7 @@ about four updates a second.
 | `packages/core/src/sim/fleet.ts`            | fleet size, cycle time, layover, and where run _i_ is. Pure.                   |
 | `packages/core/src/sim/frequency.ts`        | which services call at a stop, and their combined frequency. Pure.             |
 | `packages/core/src/sim/timetable.ts`        | travel — accelerating, cruising, braking — and dwell, along one pattern. Pure. |
-| `packages/core/src/sim/serviceStats.ts`     | the one measurement of a line: path, stops, timetable, plan. Pure.             |
+| `packages/core/src/sim/serviceStats.ts`     | the one measurement of a Service: path, stops, timetable, plan. Pure.          |
 | `packages/core/src/geometry/vehicleLane.ts` | the lane-accurate polyline one leg of a pattern rides. Pure.                   |
 | `apps/web/src/sim/simClock.ts`              | the `SimClock` instance: the mutable number and its subscribers.               |
 | `apps/web/src/sim/vehicles.ts`              | the stable browser animation API facade.                                       |

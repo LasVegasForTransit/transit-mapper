@@ -17,12 +17,6 @@ function importStore(
     documentStatus: options.documentStatus ?? 'ready',
   };
   return {
-    commands: {
-      imports: {
-        applyGtfsImportBatch: () => true,
-        applyImportedReconciliation: () => true,
-      },
-    },
     getState: () => snapshot,
     subscribe: () => () => undefined,
   };

@@ -112,12 +112,11 @@ function resolveNamingStyle(
   // deliberately allows a tram to run on a 'road'-typed way, so a station
   // placed there can still go stale in naming convention if a tram service
   // is drawn through it later. Kept deliberately, rather than defaulting to
-  // 'intersection' until a service exists: every store action that can newly
-  // serve a station now calls resyncAutoNamedStations (editor/store.ts —
-  // createRoutedService, attachReturnPath, addServiceToWay, the
-  // pattern-leg-adding branch of finishWay, commitTerminusGesture's terminus
-  // extension), so the tram-on-road case corrects itself the moment a real
-  // service actually proves the guess wrong. That leaves this heuristic
+  // 'intersection' until a service exists: each editor command or shared
+  // internal operation that can newly serve a station calls
+  // resyncAutoNamedStations (service metadata and gesture commands, routing,
+  // and Way finishing), so the tram-on-road case corrects itself the moment a
+  // real service actually proves the guess wrong. That leaves this heuristic
   // giving correct, immediate UX for the common case, with resync as the
   // safety net for the rest — not two independent guesses that can drift.
   // The Inspector's "Suggest name" button remains the manual recourse for

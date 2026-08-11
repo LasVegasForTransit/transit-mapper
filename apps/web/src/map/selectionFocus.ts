@@ -1,7 +1,7 @@
 // What the camera should frame when a chrome-driven selection happens (the
 // Objects list, keyboard nav, Inspector "jump to member" links, Issues) —
-// see editor/store.ts's cameraFocusToken and MapCanvas.tsx's effect that
-// consumes it. Lives under map/ (not model/geo.ts) because it depends on
+// the editor selection commands bump cameraFocusToken and MapCanvas consumes
+// it. Lives under map/ (not model/geo.ts) because it depends on
 // Selection, an editor-state concept the domain model itself knows nothing
 // about.
 import type { Selection } from '../editor/store';

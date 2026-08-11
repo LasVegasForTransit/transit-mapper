@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 
-import { act } from 'react';
+import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ReactNode } from 'react';
+import { aRoad } from '@transitmapper/core/testing/fixtures';
+import type { ImportedNetwork } from '@transitmapper/core/model/import';
+import { EditorProvider } from '../../src/editor/EditorProvider';
+import { createEditorStore, type EditorStore } from '../../src/editor/store';
 import { NewSystemLocationDialog } from '../../src/ui/newSystem/NewSystemLocationDialog';
 
 interface MockModalProps {
@@ -11,10 +14,6 @@ interface MockModalProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
-}
-
-interface MockImportedNetworkRequest {
-  network: unknown;
 }
 
 vi.mock('../../src/ui/Modal', () => ({
@@ -45,53 +44,15 @@ vi.mock('../../src/ui/newSystem/LocationPickerMap', () => ({
   },
 }));
 
-const calls: { setSystem: unknown[]; importWays: unknown[]; setTool: unknown[] } = {
-  setSystem: [],
-  importWays: [],
-  setTool: [],
-};
-let mockSystem: { id: string; drivingSide: string; viewport?: unknown } = {
-  id: 'existing',
-  drivingSide: 'right',
-};
-
-vi.mock('../../src/editor/EditorProvider', () => ({
-  useEditor: <Value,>(selector: (state: { system: typeof mockSystem }) => Value): Value =>
-    selector({ system: mockSystem }),
-  useEditorCommands: () => ({
-    document: {
-      setSystem: (system: typeof mockSystem) => {
-        calls.setSystem.push(system);
-        mockSystem = system;
-      },
-      setViewport: (viewport: unknown) => {
-        mockSystem = { ...mockSystem, viewport };
-      },
-    },
-    network: {
-      setDrivingSide: (side: string) => {
-        mockSystem = { ...mockSystem, drivingSide: side };
-      },
-    },
-    imports: {
-      applyImportedNetwork: (request: MockImportedNetworkRequest) => {
-        calls.importWays.push(request.network);
-        return { added: 1, skipped: 0 };
-      },
-    },
-    tools: {
-      setTool: (tool: string) => calls.setTool.push(tool),
-    },
-  }),
-}));
-
 vi.mock('../../src/storage/localStore', () => ({
   setActiveId: () => undefined,
 }));
 
-const importOsmWaysMock = vi.fn();
-vi.mock('@transitmapper/core/model/import', () => ({
-  importOsmWays: (...args: unknown[]) => importOsmWaysMock(...args),
+type ImportOsmNetwork = (typeof import('../../src/import/import-osm-network'))['importOsmNetwork'];
+
+const importOsmNetworkMock = vi.fn<ImportOsmNetwork>();
+vi.mock('../../src/import/import-osm-network', () => ({
+  importOsmNetwork: (...args: Parameters<ImportOsmNetwork>) => importOsmNetworkMock(...args),
 }));
 
 const searchPlacesMock = vi.fn(
@@ -105,21 +66,40 @@ vi.mock('@transitmapper/core/model/geocode', () => ({
   searchPlaces: (query: string, options?: unknown) => searchPlacesMock(query, options),
 }));
 
-vi.mock('@transitmapper/core/model/serialize', () => ({
-  createEmptySystem: () => ({ id: 'new-system', drivingSide: 'right', ways: [] }),
-}));
-
 let container: HTMLDivElement;
 let root: Root;
+let store: EditorStore;
+
+function importedNetwork(): ImportedNetwork {
+  return {
+    ways: [
+      aRoad('w1', [
+        [-115.15, 36.1],
+        [-115.14, 36.2],
+      ]),
+    ],
+    nodes: [],
+    namedWays: [],
+    medians: [],
+    turnRestrictions: [],
+  };
+}
+
+function renderDialog(onClose: () => void): void {
+  act(() => {
+    root.render(
+      <EditorProvider store={store}>
+        <NewSystemLocationDialog onClose={onClose} mode="create" />
+      </EditorProvider>,
+    );
+  });
+}
 
 beforeEach(() => {
   (
     globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
-  calls.setSystem = [];
-  calls.importWays = [];
-  calls.setTool = [];
-  mockSystem = { id: 'existing', drivingSide: 'right' };
+  store = createEditorStore();
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -133,7 +113,7 @@ afterEach(() => {
 
 function findButton(label: string): HTMLButtonElement {
   const button = [...container.querySelectorAll('button')].find((b) =>
-    b.textContent?.includes(label),
+    b.textContent.includes(label),
   );
   if (!button) throw new Error(`Expected a "${label}" button`);
   return button;
@@ -146,9 +126,10 @@ async function pickViaSearch(): Promise<void> {
   searchPlacesMock.mockResolvedValue([{ label: 'Las Vegas, NV', center: [-115.14, 36.17] }]);
   const input = container.querySelector('input');
   if (!input) throw new Error('Expected the search input');
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+  const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+  if (!descriptor?.set) throw new Error('Expected the native input value setter');
   act(() => {
-    setter.call(input, 'Las Vegas');
+    descriptor.set?.call(input, 'Las Vegas');
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
   await act(async () => {
@@ -169,12 +150,13 @@ describe('NewSystemLocationDialog', () => {
 
   it('creates and activates the system before the import is attempted, and imports afterward', async () => {
     let systemActiveWhenImportStarted: string | undefined;
-    importOsmWaysMock.mockImplementation(() => {
-      systemActiveWhenImportStarted = mockSystem.id;
-      return { ways: [{ id: 'w1' }], nodes: [], namedWays: [], medians: [], turnRestrictions: [] };
+    importOsmNetworkMock.mockImplementation(() => {
+      systemActiveWhenImportStarted = store.getState().system.id;
+      return Promise.resolve(importedNetwork());
     });
+    const originalSystem = store.getState().system;
     const onClose = vi.fn();
-    act(() => root.render(<NewSystemLocationDialog onClose={onClose} mode="create" />));
+    renderDialog(onClose);
 
     await pickViaSearch();
 
@@ -187,20 +169,21 @@ describe('NewSystemLocationDialog', () => {
       await Promise.resolve();
     });
 
-    // The system was created+activated before importOsmWays ever ran — if
+    // The system was created+activated before the OSM Worker ever ran — if
     // Overpass were down, this order is what leaves the user on a real,
     // correctly-centered system instead of stuck behind the dialog.
-    expect(calls.setSystem).toHaveLength(1);
-    expect(systemActiveWhenImportStarted).toBe('new-system');
-    expect(calls.importWays).toHaveLength(1);
-    expect(calls.setTool).toEqual(['way']);
+    expect(systemActiveWhenImportStarted).not.toBe(originalSystem.id);
+    expect(systemActiveWhenImportStarted).toBe(store.getState().system.id);
+    expect(store.getState().system.ways.map((way) => way.id)).toEqual(['w1']);
+    expect(store.getState().tool).toBe('way');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('leaves a correctly-centered, usable system in place when the import fails', async () => {
-    importOsmWaysMock.mockRejectedValue(new Error('OSM import failed — no server answered.'));
+    importOsmNetworkMock.mockRejectedValue(new Error('OSM import failed — no server answered.'));
+    const originalSystem = store.getState().system;
     const onClose = vi.fn();
-    act(() => root.render(<NewSystemLocationDialog onClose={onClose} mode="create" />));
+    renderDialog(onClose);
 
     await pickViaSearch();
     const confirmBtn = findButton('Use this location');
@@ -214,26 +197,27 @@ describe('NewSystemLocationDialog', () => {
     // The system still got created and activated even though the import
     // itself failed — the dialog stays open (onClose not called) so the
     // user can retry, but they are not stuck on a blank, uninitialized app.
-    expect(calls.setSystem).toHaveLength(1);
-    expect(calls.setSystem[0]).toMatchObject({ id: 'new-system' });
+    expect(store.getState().system.id).not.toBe(originalSystem.id);
+    expect(store.getState().system.viewport).toEqual({ center: [-115.14, 36.17], zoom: 16 });
+    expect(store.getState().system.ways).toEqual([]);
     expect(onClose).not.toHaveBeenCalled();
     expect(container.textContent).toContain('OSM import failed');
   });
 
-  it('lets a blank canvas skip stand in for a failed or declined import', async () => {
+  it('lets a blank canvas skip stand in for a failed or declined import', () => {
+    const originalSystem = store.getState().system;
     const onClose = vi.fn();
-    act(() => root.render(<NewSystemLocationDialog onClose={onClose} mode="create" />));
+    renderDialog(onClose);
 
     const skipBtn = [...container.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes('Continue with a blank canvas'),
+      b.textContent.includes('Continue with a blank canvas'),
     );
     if (!skipBtn) throw new Error('Expected the skip button');
     act(() => skipBtn.click());
 
-    expect(calls.setSystem).toHaveLength(1);
-    expect(calls.setSystem[0]).toMatchObject({ id: 'new-system' });
-    expect(calls.setTool).toEqual(['way']);
+    expect(store.getState().system.id).not.toBe(originalSystem.id);
+    expect(store.getState().tool).toBe('way');
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(importOsmWaysMock).not.toHaveBeenCalled();
+    expect(importOsmNetworkMock).not.toHaveBeenCalled();
   });
 });

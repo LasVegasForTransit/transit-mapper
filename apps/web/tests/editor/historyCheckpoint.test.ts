@@ -34,13 +34,52 @@ describe('editor history checkpoints', () => {
 
   it('cancels a gesture by restoring the exact starting snapshot', () => {
     const store = createEditorStore();
+    const system = createEmptySystem();
+    system.stations = [{ id: 'selected-before-drag', coord: [-115.3, 36.2], anchors: [] }];
+    store.commands.document.setSystem(system);
     const before = store.getState().system;
+    const selection = { kind: 'station' as const, id: 'selected-before-drag' };
+    store.commands.selection.select(selection);
 
     store.commands.history.beginHistoryCheckpoint();
     store.commands.stations.addStation([-115.2, 36.1]);
     store.commands.history.cancelHistoryCheckpoint();
 
     expect(store.getState().system).toBe(before);
+    expect(store.getState().selection).toBe(selection);
     expect(store.getState().canUndo).toBe(false);
+  });
+
+  it('refuses undo and redo until the open checkpoint is resolved', () => {
+    const store = createEditorStore();
+    const initial = store.getState().system;
+    store.commands.document.setName('Before gesture');
+
+    store.commands.history.beginHistoryCheckpoint();
+    store.commands.document.setName('During gesture');
+    const duringGesture = store.getState().system;
+    store.commands.history.undo();
+    expect(store.getState().system).toBe(duringGesture);
+    store.commands.history.redo();
+
+    expect(store.getState().system).toBe(duringGesture);
+    store.commands.history.commitHistoryCheckpoint();
+    store.commands.history.undo();
+    expect(store.getState().system.name).toBe('Before gesture');
+    store.commands.history.undo();
+    expect(store.getState().system).toBe(initial);
+  });
+
+  it('prunes transient references that an undo removes from the document', () => {
+    const store = createEditorStore();
+    const stationId = store.commands.stations.addStation([-115.2, 36.1]);
+    if (!stationId) throw new Error('Expected the station command to create a record');
+    store.commands.selection.setOutlineHover({ kind: 'station', id: stationId });
+
+    store.commands.history.undo();
+
+    expect(store.getState().system.stations).toHaveLength(0);
+    expect(store.getState().focusNameStationId).toBeNull();
+    expect(store.getState().outlineHover).toBeNull();
   });
 });

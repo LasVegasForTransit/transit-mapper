@@ -63,6 +63,12 @@ import reconciliation: the short-lived GTFS reconciliation Worker imports the
 same pure code without pulling in Zustand or the editor. Commands in the web
 application compose these operations into undoable edits.
 
+Focused transformation modules name the invariant they maintain. For example,
+`routing-edits.ts` owns routed Service insertion, return-path application, and
+infrastructure adoption; `way-endpoint-metadata.ts` remaps controls and turn
+restrictions when Ways split or merge; and `station-reanchoring.ts` is the one
+anchor-replacement and reprojection implementation shared by those workflows.
+
 `packages/core/src/model/line-service.ts` is the ownership boundary between
 public Lines and technical Services. It resolves Line membership, display
 labels, and mode summaries, and validates the one-way Line-to-Service relation
@@ -176,36 +182,47 @@ updater for activation state.
 
 #### Editing
 
-`apps/web/src/editor` owns the Zustand store, undo history, editing actions,
-selection, keyboard routing, and gesture transactions.
+`apps/web/src/editor` owns the Zustand store, undo history, grouped editor
+commands, selection, keyboard routing, and gesture transactions.
 
-`apps/web/src/editor/store.ts` is the editor store's thin public entry. It
-creates one vanilla Zustand store and exposes a data-only `EditorState` snapshot
-plus one stable `commands` object grouped by document, history, tool, selection,
-way, network, import, routing, service, station, facility, and group concerns.
-React selectors therefore subscribe only to reactive data; reading a command
-never makes a component depend on unrelated state changes.
+`apps/web/src/editor/store.ts` is a thin public barrel. `create-editor-store.ts`
+creates one vanilla Zustand store and its command groups. `EditorStore` exposes
+only reads, subscription, and stable `commands`—not raw `setState`. Its
+`EditorState` snapshot is data-only, so command access creates no reactive
+dependency.
 
-`apps/web/src/editor/store` owns the state contract, command contracts, runtime,
-history controller, and command implementations. The runtime is the only place
-that writes the Zustand store. It applies the loading and read-only guards and
-records each atomic content commit with the per-store history controller in the
-same write. Commands receive that shared runtime instead of
-importing another command group, which keeps the groups independently testable
-and prevents a second mutation or history path from emerging.
+`apps/web/src/editor/EditorProvider.tsx` supplies that store to React.
+`useEditor(selector)` subscribes to data, `useEditorCommands()` reads commands,
+and `useEditorStore()` supports orchestration that needs fresh event-boundary
+reads or subscriptions. The provider accepts an injected real store for tests
+and embedded editors; there is no singleton or mock-only state path.
 
-Domain calculations that need no application state live in core. Editor
-commands choose when to run them and how their result affects transient editor
-state; the GTFS reconciliation Worker calls the core transform directly and
-returns a document candidate for the active editor to accept or reject.
+`apps/web/src/editor/store` owns contracts, composition, runtime, history,
+internal operations, and commands. Only the runtime writes Zustand. Each atomic
+content commit applies loading/read-only guards, prunes invalid lane and
+transient references, stamps once, and records history in the same write.
+Viewport persistence bypasses timestamps and history; undo and redo preserve
+the current viewport. Read-only documents still allow transient tools and
+selection. Commands use the runtime, never sibling groups; dependency-cruiser
+enforces that direction and their import allowlist.
+
+Installing a document resets its predecessor's selection, focus, drawing,
+routing, group, Service-addition, and Station-name workflows. Preferences for
+future Ways, Services, and Facilities remain with the editor instance.
+
+Application-independent domain calculations live in core. Pure transforms
+preserve no-op identity and leave timestamps and history to the runtime.
+Workers return core-built candidates for editor commands to accept or reject.
+Shared editor workflows live under `store/internal-operations`, avoiding
+command-to-command calls.
 
 `apps/web/src/editor/pointerIntent.ts` resolves a press into an operation from
 its target and modifier channels alone, without browser or map state, so
 presentation and dispatch reach the same decision.
 `apps/web/src/editor/input-tuning.ts` declares the hit, snap, and drag
 tolerances for each pointer precision. `apps/web/src/camera` holds the live map
-camera outside the saved system. Domain mutations pass
-through editor actions; map and UI modules do not modify records directly.
+camera outside the saved system. Domain mutations pass through grouped editor
+commands; map and UI modules do not modify records directly.
 
 #### Map rendering
 
@@ -262,12 +279,18 @@ storage engine.
 
 #### Imports and networking
 
-`apps/web/src/import` coordinates user-selected external data and progress
-reporting. `apps/web/src/network` owns browser request scheduling and failure
-behavior, including `useOnlineStatus`, which subscribes to the browser's own
-connectivity signal so a failure can name the network as its cause.
-Classification and model construction remain in core; these modules own browser
-capabilities, cancellation, and interaction continuity.
+`apps/web/src/import` coordinates external data and progress.
+`import-osm-network.ts` owns the main-thread Promise and cancellation,
+`osm-import-protocol.ts` the structured-clone boundary, and
+`osm-import-worker.ts` core's OpenStreetMap work. Every outcome terminates the
+short-lived Worker. GTFS follows the same direction: Workers return core-built
+candidates; commands verify the target document and commit atomically.
+
+`apps/web/src/network` owns browser request scheduling and failure behavior,
+including `useOnlineStatus`, which subscribes to the browser's own connectivity
+signal so a failure can name the network as its cause. Classification and model
+construction remain in core; the web import modules own browser capabilities,
+cancellation, and interaction continuity.
 
 #### Simulation host
 

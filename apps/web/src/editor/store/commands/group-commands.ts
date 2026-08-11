@@ -18,7 +18,7 @@ import type { EditorRuntime } from '../runtime';
 
 const GROUP_FOOTPRINT_HALF_SIZE_M = 20;
 
-export interface GroupCommandDependencies {
+interface GroupCommandDependencies {
   readonly readCameraCenter: () => LngLat;
 }
 
@@ -115,22 +115,10 @@ function createGroupMembershipCommands(runtime: EditorRuntime): GroupMembershipC
         result: undefined,
       })),
     deleteGroup: (id) =>
-      runtime.commitContent(undefined, (state) => {
-        const system = deleteGroup(state.system, id);
-        if (system === state.system) {
-          return { system: state.system, result: undefined };
-        }
-        return {
-          system,
-          transient: {
-            selection:
-              state.selection?.kind === 'group' && state.selection.id === id
-                ? null
-                : state.selection,
-          },
-          result: undefined,
-        };
-      }),
+      runtime.commitContent(undefined, ({ system }) => ({
+        system: deleteGroup(system, id),
+        result: undefined,
+      })),
   };
 }
 
