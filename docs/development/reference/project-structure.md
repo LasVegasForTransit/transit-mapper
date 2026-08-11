@@ -249,8 +249,8 @@ tokens. `apps/web/src/assets` holds source-distributed browser binaries beside
 their required licenses, while `apps/web/src/i18n` owns user-visible message
 selection.
 `apps/web/src/services` exposes browser-local preferences to UI consumers.
-These modules may read the editor store and invoke actions but do not duplicate
-domain rules.
+These modules may read the editor store and invoke grouped commands but do not
+duplicate domain rules.
 
 `ui/Workbench.tsx` is the single owner of where every surface sits, at every
 viewport. Below the layout condition it mounts a different tree: two
@@ -282,7 +282,7 @@ storage engine.
 `apps/web/src/import` coordinates external data and progress.
 `import-osm-network.ts` owns the main-thread Promise and cancellation,
 `osm-import-protocol.ts` the structured-clone boundary, and
-`osm-import-worker.ts` core's OpenStreetMap work. Every outcome terminates the
+`osm-import-worker.ts` runs core's OpenStreetMap work. Every outcome terminates the
 short-lived Worker. GTFS follows the same direction: Workers return core-built
 candidates; commands verify the target document and commit atomically.
 

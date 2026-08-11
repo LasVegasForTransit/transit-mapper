@@ -299,9 +299,9 @@ export interface SystemFeatures {
   lanes: FeatureCollection<LineString>;
   laneMarkings: FeatureCollection<LineString>;
   laneArrows: FeatureCollection<LineString>;
-  /** Travel arrows for stretches only ONE direction of a line rides. Carries
-   *  the service colour, because these sit on top of the line rather than on
-   *  the asphalt beneath it. */
+  /** Travel arrows for stretches only ONE direction of a Service rides.
+   *  Carries the public Line colour, because these sit on top of the line
+   *  rather than on the asphalt beneath it. */
   serviceArrows: FeatureCollection<LineString>;
   junctions: FeatureCollection<Polygon>;
   connectors: FeatureCollection<LineString>;

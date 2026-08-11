@@ -1,4 +1,4 @@
-// How many vehicles a pattern runs, and where each one is at a given moment.
+// How many vehicles a Service runs, and where each one is at a given moment.
 //
 // This is where "every 10 minutes" stops being approximately true. The
 // animation used to divide the round trip by the headway, floor it, and then
@@ -7,9 +7,9 @@
 // typed into the inspector was close to, but not, what the map showed.
 //
 // Here the CYCLE is built from the headway instead of the other way round,
-// which is also how a real agency sizes a line: work out how long a round trip
-// takes, round it up to a whole number of headways, and the leftover is
-// recovery time the vehicle spends sitting at the end of the line. Fleet size
+// which is also how a real agency sizes a Service: work out how long a round
+// trip takes, round it up to a whole number of headways, and the leftover is
+// recovery time the vehicle spends sitting at the terminus. Fleet size
 // falls out of that, and because the cycle is an exact multiple of the
 // headway, consecutive vehicles pass every stop exactly one headway apart —
 // including across the wrap from the last vehicle back to the first, which is
@@ -25,19 +25,17 @@ import {
 } from './timetable';
 import type { RunDirection } from '../model/system';
 
-/** Every line gets at least this much recovery time per round trip, however
- *  short it is — a vehicle that reached the end of the line and instantly
+/** Every Service gets at least this much recovery time per round trip,
+ *  however short it is — a vehicle that reached the terminus and instantly
  *  turned around would be running a schedule no operator could keep. */
 const MIN_LAYOVER_MS = 2 * 60_000;
 
-/** …and a long line gets proportionally more, since recovery time in practice
- *  scales with how much there is to recover from. Not a stored, editable
- *  figure yet: it's a plausible default, and making it per-service is a schema
- *  change worth making only once someone wants to tune it. */
+/** Longer Services get proportionally more recovery. This plausible default
+ *  remains global until operators need a per-Service override. */
 const LAYOVER_FRACTION = 0.05;
 
 export interface ServicePlan {
-  /** How many vehicles this pattern runs at once. */
+  /** How many vehicles this Service runs at once. */
   fleet: number;
   /** The full out-and-back cycle one vehicle repeats, an exact whole number
    *  of headways. */
@@ -74,10 +72,10 @@ function minimumLayoverMs(roundTripMs: number): number {
 }
 
 /**
- * Size a pattern's fleet for a headway.
+ * Size a Service's fleet for a headway.
  *
  * With no headway (a service that has never had one set — which is every
- * GTFS-imported route today) this plans a single vehicle running the line on
+ * GTFS-imported route today) this plans a single vehicle running the Service on
  * its own, which is the behavior those services have always had.
  */
 export function planService(roundTripMs: number, headwayMs?: number): ServicePlan {

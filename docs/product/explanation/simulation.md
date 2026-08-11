@@ -121,7 +121,7 @@ both directions can be measured against once they are different ground.
 
 The leftover time isn't a fudge factor. It's recovery time: a vehicle sitting
 at the end of the line before starting back, which is what actually happens.
-Every line gets at least two minutes of it, and longer lines get more.
+Every Service gets at least two minutes of it, and longer Services get more.
 
 Some consequences worth expecting:
 
@@ -133,7 +133,7 @@ Some consequences worth expecting:
   whose timing couldn't be established — including an imported one whose feed
   publishes no departure times.
 
-The map draws at most twelve vehicles per pattern. That is a **rendering** cap,
+The map draws at most twelve vehicles per Service. That is a **rendering** cap,
 not a modeling one: the plan keeps its true fleet and headway and only the
 first twelve are drawn, so very frequent service on a long line shows gaps
 rather than wrong spacing. Clamping the fleet itself would shorten the cycle

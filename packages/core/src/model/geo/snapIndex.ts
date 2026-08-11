@@ -374,15 +374,9 @@ export function servedWaysByDistance(
   for (const seg of grid.oversize) consider(seg);
   // Nearest first, ties broken by id — NOT grid-scan order.
   //
-  // This order is observable: buildFeatures colors a station from the first
-  // service riding the first way in this list, so returning ids in whatever
-  // order the cell buckets happened to be walked in meant a station's color
-  // was a function of the index's internal layout. That was already latent,
-  // and it becomes a live flicker the moment the grid is maintained
-  // incrementally (updating a way in place necessarily changes bucket order),
-  // so the ordering has to be pinned to something intrinsic first.
-  // "The nearest way's service colors the station" is also simply the more
-  // defensible rule than "whichever the scan reached first".
+  // buildFeatures colors a station from the public Line of the first Service
+  // riding the nearest Way. Bucket-scan order made that color depend on the
+  // index's internal layout and flicker after maintenance, so pin ties to IDs.
   const ranked: ServedWayDistance[] = [];
   for (const [wayId, distMeters] of bestByWay) {
     if (distMeters <= maxMeters) ranked.push({ wayId, distMeters });
