@@ -6,8 +6,8 @@ import { KEY_BINDINGS, type KeyContext } from '../../src/editor/keymap';
 describe('editor keymap', () => {
   it('does not delete a Service when its selected subject is a Stop call', () => {
     const store = createEditorStore();
-    store.getState().setSystem(aSystem({ services: [aService('local', [])] }));
-    store.getState().select({ kind: 'service', id: 'local', stopId: 'station' });
+    store.commands.document.setSystem(aSystem({ services: [aService('local', [])] }));
+    store.commands.selection.select({ kind: 'service', id: 'local', stopId: 'station' });
     const binding = KEY_BINDINGS.find((candidate) => candidate.description === 'Delete selection');
     if (!binding) throw new Error('Delete selection binding is missing');
 

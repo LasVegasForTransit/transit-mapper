@@ -82,46 +82,47 @@ const zoom = (c: KeyContext, d: number) => c.map.zoomTo(c.map.getZoom() + d, { d
 // without also losing the current tool or selection.
 function backOut(c: KeyContext): void {
   const s = c.editor.getState();
+  const commands = c.editor.commands;
   if (s.armedTerminus) {
-    s.clearArmedTerminus();
+    commands.selection.clearArmedTerminus();
   } else if (s.routeDraft) {
-    s.cancelRouteDraft();
+    commands.routing.cancelRouteDraft();
   } else if (s.placingFacilityForGroupId) {
-    s.cancelPlacingFacility();
+    commands.groups.cancelPlacingFacility();
   } else if (s.pickingMemberForGroupId) {
-    s.cancelPickingMember();
+    commands.groups.cancelPickingMember();
   } else if (s.activeWayId) {
-    s.finishWay();
+    commands.ways.finishWay();
   } else if (s.multiSelection.length > 0) {
-    s.clearMultiSelection();
+    commands.selection.clearMultiSelection();
   } else if (s.tool !== 'select') {
-    s.setTool('select');
+    commands.tools.setTool('select');
   } else if (s.selection) {
-    s.select(null);
+    commands.selection.select(null);
   }
 }
 
 function commitDraw(c: KeyContext): void {
   const s = c.editor.getState();
-  if (s.routeDraft) s.commitRouteDraft();
-  else if (s.activeWayId) s.finishWay();
+  if (s.routeDraft) c.editor.commands.routing.commitRouteDraft();
+  else if (s.activeWayId) c.editor.commands.ways.finishWay();
 }
 
 function deleteSelection(c: KeyContext): void {
   const s = c.editor.getState();
   if (s.multiSelection.length > 0) {
-    s.deleteMultiSelection();
+    c.editor.commands.selection.deleteMultiSelection();
     return;
   }
   const sel = s.selection;
   if (!sel) return;
-  if (sel.kind === 'way') s.deleteWay(sel.id);
+  if (sel.kind === 'way') c.editor.commands.ways.deleteWay(sel.id);
   // A Stop row uses a Service selection plus stopId so the map and Inspector
   // retain operational context. It is not permission to delete the Service.
-  else if (sel.kind === 'service' && !sel.stopId) s.deleteService(sel.id);
-  else if (sel.kind === 'station') s.deleteStation(sel.id);
-  else if (sel.kind === 'facility') s.deleteFacility(sel.id);
-  else if (sel.kind === 'group') s.deleteGroup(sel.id);
+  else if (sel.kind === 'service' && !sel.stopId) c.editor.commands.services.deleteService(sel.id);
+  else if (sel.kind === 'station') c.editor.commands.stations.deleteStation(sel.id);
+  else if (sel.kind === 'facility') c.editor.commands.facilities.deleteFacility(sel.id);
+  else if (sel.kind === 'group') c.editor.commands.groups.deleteGroup(sel.id);
 }
 
 // The way lane shortcuts operate on: the one being drawn right now, else the
@@ -136,7 +137,7 @@ const hasLaneTarget = (c: KeyContext) => editable(c) && laneTargetWay(c) !== nul
 
 function stepLanes(c: KeyContext, delta: number): void {
   const way = laneTargetWay(c);
-  if (way) c.editor.getState().setWayCapacity(way.id, wayCapacity(way) + delta);
+  if (way) c.editor.commands.ways.setWayCapacity(way.id, wayCapacity(way) + delta);
 }
 
 // One-key drawing tools, straight from the catalog's way families — the
@@ -145,9 +146,8 @@ function drawFamily(family: WayFamily): (c: KeyContext) => void {
   return (c) => {
     const entry = wayTypesByFamily().find((e) => e.family === family);
     if (!entry) return;
-    const s = c.editor.getState();
-    s.setDraftWayType(entry.typeIds[0]);
-    s.setTool('way');
+    c.editor.commands.tools.setDraftWayType(entry.typeIds[0]);
+    c.editor.commands.tools.setTool('way');
   };
 }
 
@@ -156,20 +156,20 @@ export const KEY_BINDINGS: KeyBinding[] = [
     group: 'Tools',
     keys: ['v'],
     description: 'Select & edit',
-    run: (c) => c.editor.getState().setTool('select'),
+    run: (c) => c.editor.commands.tools.setTool('select'),
   },
   {
     group: 'Tools',
     keys: ['e'],
     description: 'Select lines',
-    run: (c) => c.editor.getState().setTool('lines'),
+    run: (c) => c.editor.commands.tools.setTool('lines'),
   },
   {
     group: 'Tools',
     keys: ['l'],
     description: 'Draw way / line (last kind)',
     when: editable,
-    run: (c) => c.editor.getState().setTool('way'),
+    run: (c) => c.editor.commands.tools.setTool('way'),
   },
   {
     group: 'Tools',
@@ -197,21 +197,21 @@ export const KEY_BINDINGS: KeyBinding[] = [
     keys: ['s'],
     description: 'Add station',
     when: editable,
-    run: (c) => c.editor.getState().setTool('station'),
+    run: (c) => c.editor.commands.tools.setTool('station'),
   },
   {
     group: 'Tools',
     keys: ['f'],
     description: 'Place facility',
     when: editable,
-    run: (c) => c.editor.getState().setTool('facility'),
+    run: (c) => c.editor.commands.tools.setTool('facility'),
   },
   {
     group: 'Tools',
     keys: ['b'],
     description: 'Demolish streets',
     when: editable,
-    run: (c) => c.editor.getState().setTool('demolish'),
+    run: (c) => c.editor.commands.tools.setTool('demolish'),
   },
 
   {
@@ -278,7 +278,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     repeatable: true,
     mod: true,
     when: (c) => editable(c) && c.editor.getState().canUndo,
-    run: (c) => c.editor.getState().undo(),
+    run: (c) => c.editor.commands.history.undo(),
   },
   {
     group: 'Edit',
@@ -288,7 +288,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     mod: true,
     shift: true,
     when: (c) => editable(c) && c.editor.getState().canRedo,
-    run: (c) => c.editor.getState().redo(),
+    run: (c) => c.editor.commands.history.redo(),
   },
   {
     group: 'Edit',
@@ -297,7 +297,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     repeatable: true,
     mod: true,
     when: (c) => editable(c) && c.editor.getState().canRedo,
-    run: (c) => c.editor.getState().redo(),
+    run: (c) => c.editor.commands.history.redo(),
   },
 
   {
@@ -340,7 +340,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     run: (c) => {
       const way = laneTargetWay(c);
       if (!way) return;
-      c.editor.getState().setWayProfile(way.id, flipProfile(way.profile));
+      c.editor.commands.ways.setWayProfile(way.id, flipProfile(way.profile));
     },
   },
   {
@@ -354,13 +354,13 @@ export const KEY_BINDINGS: KeyBinding[] = [
       // With a way in hand, toggle IT; with just the drawing tool armed,
       // toggle the draft Direction so the NEXT way draws one-way.
       if (way)
-        s.setWayProfile(
+        c.editor.commands.ways.setWayProfile(
           way.id,
           isOneWay(way.profile)
             ? makeTwoWay(way.profile, s.system.drivingSide)
             : makeOneWay(way.profile, 'forward'),
         );
-      else s.setDraftOneWay(!s.draftOneWay);
+      else c.editor.commands.tools.setDraftOneWay(!s.draftOneWay);
     },
   },
   // 1–9 pick the numbered cross-section preset (the same chips the toolbar
@@ -382,8 +382,8 @@ export const KEY_BINDINGS: KeyBinding[] = [
       const typeId = way?.typeId ?? s.draftWayTypeId;
       const preset = profilePresetsForWayType(typeId)[i];
       if (!preset) return;
-      if (way) s.applyProfilePreset(way.id, preset.id);
-      else s.setDraftPreset(preset.id);
+      if (way) c.editor.commands.ways.applyProfilePreset(way.id, preset.id);
+      else c.editor.commands.tools.setDraftPreset(preset.id);
     },
   })),
 

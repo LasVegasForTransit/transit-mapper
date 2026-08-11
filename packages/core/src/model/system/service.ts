@@ -1,4 +1,5 @@
 import type { ScheduleDayScope } from './valueTypes';
+import { removeGroupMembers } from './group';
 
 /** The public identity a transportation agency designates on its map. */
 export interface Line {
@@ -178,4 +179,177 @@ export interface Service {
    *  or empty = this service just uses frequencyMinutes/spanStart/spanEnd
    *  above. See ScheduleDialog.tsx. */
   schedule?: SchedulePeriod[];
+}
+
+interface ServiceDocument {
+  services: Service[];
+}
+
+interface LineDocument {
+  lines: Line[];
+}
+
+interface LineServiceDocument extends LineDocument, ServiceDocument {}
+
+interface LineServiceGroupDocument extends LineServiceDocument {
+  groups: import('./group').Group[];
+}
+
+function replaceService<System extends ServiceDocument>(
+  system: System,
+  id: string,
+  update: (service: Service) => Service,
+): System {
+  const index = system.services.findIndex((service) => service.id === id);
+  if (index < 0) return system;
+  const current = system.services[index];
+  const service = update(current);
+  if (service === current) return system;
+  const services = [...system.services];
+  services[index] = service;
+  return { ...system, services };
+}
+
+function setServiceProperty<System extends ServiceDocument, Property extends keyof Service>(
+  system: System,
+  id: string,
+  property: Property,
+  value: Service[Property],
+): System {
+  return replaceService(system, id, (service) =>
+    Object.is(service[property], value) ? service : { ...service, [property]: value },
+  );
+}
+
+export function setServiceName<System extends ServiceDocument>(
+  system: System,
+  id: string,
+  name: string,
+): System {
+  return setServiceProperty(system, id, 'name', name);
+}
+
+export function setServiceMode<System extends ServiceDocument>(
+  system: System,
+  id: string,
+  modeId: string,
+): System {
+  return setServiceProperty(system, id, 'modeId', modeId);
+}
+
+export function setServiceFrequency<System extends ServiceDocument>(
+  system: System,
+  id: string,
+  frequencyMinutes: number | undefined,
+): System {
+  return setServiceProperty(system, id, 'frequencyMinutes', frequencyMinutes);
+}
+
+export function setServiceSpan<System extends ServiceDocument>(
+  system: System,
+  id: string,
+  spanStart: string | undefined,
+  spanEnd: string | undefined,
+): System {
+  return replaceService(system, id, (service) =>
+    service.spanStart === spanStart && service.spanEnd === spanEnd
+      ? service
+      : { ...service, spanStart, spanEnd },
+  );
+}
+
+export function setServiceSchedule<System extends ServiceDocument>(
+  system: System,
+  id: string,
+  periods: SchedulePeriod[] | undefined,
+): System {
+  const schedule = periods && periods.length > 0 ? periods : undefined;
+  return setServiceProperty(system, id, 'schedule', schedule);
+}
+
+export function setServiceVehicleKind<System extends ServiceDocument>(
+  system: System,
+  id: string,
+  vehicleKindId: string | undefined,
+): System {
+  return setServiceProperty(system, id, 'vehicleKindId', vehicleKindId);
+}
+
+function replaceLine<System extends LineDocument>(
+  system: System,
+  id: string,
+  update: (line: Line) => Line,
+): System {
+  const index = system.lines.findIndex((line) => line.id === id);
+  if (index < 0) return system;
+  const current = system.lines[index];
+  const line = update(current);
+  if (line === current) return system;
+  const lines = [...system.lines];
+  lines[index] = line;
+  return { ...system, lines };
+}
+
+export function setLineName<System extends LineDocument>(
+  system: System,
+  id: string,
+  name: string,
+): System {
+  return replaceLine(system, id, (line) => (line.name === name ? line : { ...line, name }));
+}
+
+export function setLineColor<System extends LineDocument>(
+  system: System,
+  id: string,
+  color: string,
+): System {
+  return replaceLine(system, id, (line) => (line.color === color ? line : { ...line, color }));
+}
+
+/** Delete one public Line and every operational Service it owns. */
+export function deleteLine<System extends LineServiceGroupDocument>(
+  system: System,
+  id: string,
+): System {
+  const line = system.lines.find((candidate) => candidate.id === id);
+  if (!line) return system;
+  const removedServiceIds = new Set(line.serviceIds);
+  const services = system.services.filter((service) => !removedServiceIds.has(service.id));
+  return removeGroupMembers(
+    {
+      ...system,
+      lines: system.lines.filter((candidate) => candidate !== line),
+      services: services.length === system.services.length ? system.services : services,
+    },
+    new Set([id, ...removedServiceIds]),
+  );
+}
+
+/** Move one Service between public Lines, removing an emptied source Line. */
+export function moveServiceToLine<System extends LineServiceGroupDocument>(
+  system: System,
+  serviceId: string,
+  targetLineId: string,
+): System {
+  const service = system.services.find((candidate) => candidate.id === serviceId);
+  const sourceLine = system.lines.find((line) => line.serviceIds.includes(serviceId));
+  const targetLine = system.lines.find((line) => line.id === targetLineId);
+  if (!service || !sourceLine || !targetLine || sourceLine === targetLine) return system;
+
+  const services = service.name
+    ? system.services
+    : system.services.map((candidate) =>
+        candidate === service ? { ...candidate, name: sourceLine.name } : candidate,
+      );
+  const lines = system.lines
+    .map((line) => {
+      if (line === targetLine) return { ...line, serviceIds: [...line.serviceIds, serviceId] };
+      if (line !== sourceLine) return line;
+      return { ...line, serviceIds: line.serviceIds.filter((id) => id !== serviceId) };
+    })
+    .filter((line) => line.serviceIds.length > 0);
+  return removeGroupMembers(
+    { ...system, services, lines },
+    new Set(lines.some((line) => line.id === sourceLine.id) ? [] : [sourceLine.id]),
+  );
 }

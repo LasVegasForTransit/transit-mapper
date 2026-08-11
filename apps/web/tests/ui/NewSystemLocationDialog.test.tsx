@@ -13,6 +13,10 @@ interface MockModalProps {
   footer?: ReactNode;
 }
 
+interface MockImportedNetworkRequest {
+  network: unknown;
+}
+
 vi.mock('../../src/ui/Modal', () => ({
   Modal: ({ title, children, footer }: MockModalProps) => (
     <section aria-label={title}>
@@ -52,9 +56,10 @@ let mockSystem: { id: string; drivingSide: string; viewport?: unknown } = {
 };
 
 vi.mock('../../src/editor/EditorProvider', () => ({
-  useEditorStore: () => ({
-    getState: () => ({
-      system: mockSystem,
+  useEditor: <Value,>(selector: (state: { system: typeof mockSystem }) => Value): Value =>
+    selector({ system: mockSystem }),
+  useEditorCommands: () => ({
+    document: {
       setSystem: (system: typeof mockSystem) => {
         calls.setSystem.push(system);
         mockSystem = system;
@@ -62,15 +67,21 @@ vi.mock('../../src/editor/EditorProvider', () => ({
       setViewport: (viewport: unknown) => {
         mockSystem = { ...mockSystem, viewport };
       },
+    },
+    network: {
       setDrivingSide: (side: string) => {
         mockSystem = { ...mockSystem, drivingSide: side };
       },
-      importWays: (network: unknown) => {
-        calls.importWays.push(network);
+    },
+    imports: {
+      applyImportedNetwork: (request: MockImportedNetworkRequest) => {
+        calls.importWays.push(request.network);
         return { added: 1, skipped: 0 };
       },
+    },
+    tools: {
       setTool: (tool: string) => calls.setTool.push(tool),
-    }),
+    },
   }),
 }));
 
@@ -158,7 +169,7 @@ describe('NewSystemLocationDialog', () => {
 
   it('creates and activates the system before the import is attempted, and imports afterward', async () => {
     let systemActiveWhenImportStarted: string | undefined;
-    importOsmWaysMock.mockImplementation(async () => {
+    importOsmWaysMock.mockImplementation(() => {
       systemActiveWhenImportStarted = mockSystem.id;
       return { ways: [{ id: 'w1' }], nodes: [], namedWays: [], medians: [], turnRestrictions: [] };
     });

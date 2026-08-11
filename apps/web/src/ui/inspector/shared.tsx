@@ -1,4 +1,4 @@
-import { useEditor } from '../../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../../editor/EditorProvider';
 import {
   GRADE_ORDER,
   GRADES,
@@ -70,8 +70,8 @@ export function ServicesOnWay({ wayId, activeServiceId, readOnly }: ServicesOnWa
   const system = useEditor((s) => s.system);
   const way = useEditor((s) => s.system.ways.find((w) => w.id === wayId));
   const services = allServices.filter((sv) => serviceWayIds(sv).includes(wayId));
-  const selectAndFocus = useEditor((s) => s.selectAndFocus);
-  const addServiceToWay = useEditor((s) => s.addServiceToWay);
+  const { selectAndFocus } = useEditorCommands().selection;
+  const { addServiceToWay } = useEditorCommands().services;
 
   // A way type with no compatible modes (e.g. bike) carries no service.
   const canAddService = way ? modesForWayType(way.typeId).length > 0 : false;

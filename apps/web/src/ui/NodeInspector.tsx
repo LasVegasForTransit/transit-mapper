@@ -5,7 +5,7 @@
 // guides redraw live, and future routing reads the same edges. "Automatic"
 // junctions (no stored connectors) show the derived defaults; the first
 // toggle materializes them as an explicit, stored graph.
-import { useEditor } from '../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../editor/EditorProvider';
 import {
   classifyTurn,
   effectiveConnectors,
@@ -112,13 +112,15 @@ export function NodeInspector({ id }: NodeInspectorProps) {
   const ways = useEditor((s) => s.system.ways);
   const namedWays = useEditor((s) => s.system.namedWays);
   const readOnly = useEditor((s) => s.readOnly);
-  const setNodeControl = useEditor((s) => s.setNodeControl);
-  const setNodeConnectors = useEditor((s) => s.setNodeConnectors);
-  const disconnectNodeWay = useEditor((s) => s.disconnectNodeWay);
   const turnRestrictions = useEditor((s) => s.system.turnRestrictions);
-  const setTurnRestriction = useEditor((s) => s.setTurnRestriction);
   const approachControls = useEditor((s) => s.system.approachControls);
-  const setApproachControl = useEditor((s) => s.setApproachControl);
+  const {
+    setNodeControl,
+    setNodeConnectors,
+    disconnectNodeWay,
+    setTurnRestriction,
+    setApproachControl,
+  } = useEditorCommands().network;
   const [tab, setTab] = useState<string>('turns');
 
   if (!node) return null;
@@ -215,7 +217,9 @@ export function NodeInspector({ id }: NodeInspectorProps) {
     } else {
       const additions: LaneConnector[] = [];
       for (const t of targets) {
-        const outbound = outgoingLanes(waysById.get(t.wayId)!, t.end);
+        const targetWay = waysById.get(t.wayId);
+        if (!targetWay) continue;
+        const outbound = outgoingLanes(targetWay, t.end);
         if (outbound.length === 0) continue;
         additions.push({
           from: { wayId: inArm.wayId, laneId: lane.id },

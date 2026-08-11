@@ -8,7 +8,7 @@ import {
   createSelectionActionRegistry,
   type SelectionActionRegistry,
 } from '@transitmapper/core/model/selectionActions';
-import type { EditorStore } from '../store';
+import type { SelectionActionStore } from './action-store';
 import { commonActionProvider } from './commonActions';
 import { servicePointActionProvider, wayPointActionProvider } from './pointActions';
 import { serviceActionProvider } from './serviceActions';
@@ -21,7 +21,7 @@ import { wayActionProvider } from './wayActions';
  * action offered by any provider mutates the system, so one wrapper is both
  * shorter and impossible to forget when the next provider is written.
  */
-export function createSelectionActions(store: EditorStore): SelectionActionRegistry {
+export function createSelectionActions(store: SelectionActionStore): SelectionActionRegistry {
   const registry = createSelectionActionRegistry();
   const isTerminusMenu = (ctx: Parameters<ReturnType<typeof serviceActionProvider>>[0]) =>
     Boolean(ctx.serviceHit?.terminusSide);

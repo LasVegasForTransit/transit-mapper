@@ -30,7 +30,7 @@ export type LaneDirection = 'forward' | 'backward' | 'both' | 'none';
  *  simulation semantics, not topology. `levelCrossing` is distinct from the
  *  rest: it's not a traffic-control choice someone picks, but the marker a
  *  guideway-crosses-a-non-major-road junction always carries (see
- *  formCrossingJunctions in apps/web/src/editor/store.ts) — a real at-grade
+ *  formCrossingJunctions in model/crossing-edits.ts) — a real at-grade
  *  crossing between two physically incompatible way types, gates and all,
  *  as opposed to an ordinary same-type intersection. */
 export type NodeControl = 'uncontrolled' | 'signal' | 'stop' | 'roundabout' | 'levelCrossing';

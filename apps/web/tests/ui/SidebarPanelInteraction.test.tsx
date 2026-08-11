@@ -2,31 +2,24 @@
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { aPattern, aRoad, aService, aStation, aSystem } from '@transitmapper/core/testing/fixtures';
-import type { EditorState } from '../../src/editor/store';
-import { createEditorStore } from '../../src/editor/store';
+import { EditorProvider } from '../../src/editor/EditorProvider';
+import { createEditorStore, type EditorStore } from '../../src/editor/store';
 import { SidebarPanel } from '../../src/ui/SidebarPanel';
 import { ViewProvider, type ViewMode } from '../../src/ui/ViewProvider';
-
-const editorState = vi.hoisted(() => ({ current: null as EditorState | null }));
-
-vi.mock('../../src/editor/EditorProvider', () => ({
-  useEditor: <T,>(selector: (state: EditorState) => T): T => {
-    if (!editorState.current) throw new Error('Editor state was not initialized');
-    return selector(editorState.current);
-  },
-}));
 
 let container: HTMLDivElement;
 let root: Root;
 
-function renderSidebar(viewMode: ViewMode = 'network'): void {
+function renderSidebar(store: EditorStore, viewMode: ViewMode = 'network'): void {
   act(() => {
     root.render(
-      <ViewProvider initialViewMode={viewMode}>
-        <SidebarPanel />
-      </ViewProvider>,
+      <EditorProvider store={store}>
+        <ViewProvider initialViewMode={viewMode}>
+          <SidebarPanel />
+        </ViewProvider>
+      </EditorProvider>,
     );
   });
 }
@@ -67,17 +60,14 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
-  editorState.current = null;
-  vi.restoreAllMocks();
 });
 
 describe('SidebarPanel interactions', () => {
   it('publishes row hover without changing durable selection', () => {
     const store = createEditorStore();
-    store.getState().setSystem(aSystem({ services: [aService('red', [])] }));
-    editorState.current = store.getState();
+    store.commands.document.setSystem(aSystem({ services: [aService('red', [])] }));
 
-    renderSidebar();
+    renderSidebar(store);
     const row = container.querySelector<HTMLButtonElement>('[data-sidebar-option]');
     if (!row) throw new Error('Expected a Line row');
     void act(() => row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })));
@@ -115,11 +105,9 @@ describe('SidebarPanel interactions', () => {
       stations: [hub],
     });
     const store = createEditorStore();
-    store.getState().setSystem(system);
-    store.getState().selectAndFocus({ kind: 'station', id: hub.id });
-    editorState.current = store.getState();
-
-    renderSidebar();
+    store.commands.document.setSystem(system);
+    store.commands.selection.selectAndFocus({ kind: 'station', id: hub.id });
+    renderSidebar(store);
     const collapsedRows = [
       ...container.querySelectorAll<HTMLButtonElement>('[data-sidebar-option]'),
     ];
@@ -140,10 +128,8 @@ describe('SidebarPanel interactions', () => {
       aService(`line-${index}`, [], { name: `Line ${String(index).padStart(3, '0')}` }),
     );
     const store = createEditorStore();
-    store.getState().setSystem(aSystem({ services }));
-    editorState.current = store.getState();
-
-    renderSidebar();
+    store.commands.document.setSystem(aSystem({ services }));
+    renderSidebar(store);
 
     const initialRows = [...container.querySelectorAll<HTMLButtonElement>('[data-sidebar-option]')];
     expect(initialRows).toHaveLength(150);
@@ -175,7 +161,7 @@ describe('SidebarPanel interactions', () => {
       ]),
     );
     const store = createEditorStore();
-    store.getState().setSystem(
+    store.commands.document.setSystem(
       aSystem({
         ways,
         namedWays: ways.map((way, index) => ({
@@ -185,9 +171,8 @@ describe('SidebarPanel interactions', () => {
         })),
       }),
     );
-    editorState.current = store.getState();
 
-    renderSidebar('infrastructure');
+    renderSidebar(store, 'infrastructure');
 
     expect(container.querySelectorAll('[data-sidebar-option]')).toHaveLength(150);
     click(
@@ -208,15 +193,14 @@ describe('SidebarPanel interactions', () => {
       [-115.1, 36.1],
     ]);
     const store = createEditorStore();
-    store.getState().setSystem(
+    store.commands.document.setSystem(
       aSystem({
         ways: [west, east],
         namedWays: [{ id: 'main-street', name: 'Main Street', wayIds: [west.id, east.id] }],
       }),
     );
-    editorState.current = store.getState();
 
-    renderSidebar('infrastructure');
+    renderSidebar(store, 'infrastructure');
     click(container.querySelector('[data-sidebar-option]'));
 
     expect(store.getState().selection).toEqual({
@@ -240,16 +224,15 @@ describe('SidebarPanel interactions', () => {
       ),
     );
     const store = createEditorStore();
-    store.getState().setSystem(
+    store.commands.document.setSystem(
       aSystem({
         ways: [road],
         services: [aService('local', [aPattern('local', [road], [road.id])])],
         stations,
       }),
     );
-    editorState.current = store.getState();
 
-    renderSidebar();
+    renderSidebar(store);
     for (const button of container.querySelectorAll('button.sidebar-section-head')) click(button);
     expect(container.textContent).not.toContain('Needle');
 
@@ -273,16 +256,15 @@ describe('SidebarPanel interactions', () => {
       ),
     );
     const store = createEditorStore();
-    store.getState().setSystem(
+    store.commands.document.setSystem(
       aSystem({
         ways: [road],
         services: [aService('local', [aPattern('local', [road], [road.id])])],
         stations,
       }),
     );
-    editorState.current = store.getState();
 
-    renderSidebar();
+    renderSidebar(store);
     search('Match');
 
     expect(container.querySelectorAll('[data-sidebar-option]').length).toBeLessThanOrEqual(150);
@@ -296,7 +278,7 @@ describe('SidebarPanel interactions', () => {
       ]),
     );
     const store = createEditorStore();
-    store.getState().setSystem(
+    store.commands.document.setSystem(
       aSystem({
         ways,
         namedWays: ways.map((way, index) => ({
@@ -314,9 +296,8 @@ describe('SidebarPanel interactions', () => {
         ],
       }),
     );
-    editorState.current = store.getState();
 
-    renderSidebar('infrastructure');
+    renderSidebar(store, 'infrastructure');
     search('Match');
 
     expect(container.querySelectorAll('[data-sidebar-option]').length).toBeLessThanOrEqual(150);

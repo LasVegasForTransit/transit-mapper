@@ -41,6 +41,11 @@ interface FrameScheduler {
   fireKey: (type: 'keydown' | 'keyup', event: Partial<KeyboardEvent>) => void;
 }
 
+function required<Value>(value: Value | null): Value {
+  if (value === null) throw new Error('Expected the fixture command to return a value');
+  return value;
+}
+
 function installBrowserGlobals(): FrameScheduler {
   let nextId = 0;
   let frames = new Map<number, FrameRequestCallback>();
@@ -480,7 +485,7 @@ describe('pointer work coalescing', () => {
   it('queries the rendered hit stack once for one pointer event', () => {
     installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setTool('select');
+    store.commands.tools.setTool('select');
     const map = createMap(stationFeature('station'));
     const detach = attach(map, store);
 
@@ -504,7 +509,7 @@ describe('pointer work coalescing', () => {
         path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap([
       serviceFeatureFor('far', [
         [-115.25, 36.1005],
@@ -564,9 +569,9 @@ describe('pointer work coalescing', () => {
         path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('trunk')] }] },
       },
     ];
-    store.getState().setSystem(system);
-    store.getState().select({ kind: 'service', id: 'service' });
-    store.getState().setActivePattern('service');
+    store.commands.document.setSystem(system);
+    store.commands.selection.select({ kind: 'service', id: 'service' });
+    store.commands.selection.setActivePattern('service');
     const map = createMap(terminusFeature('service', 'end', [-115.23, 36.1]));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -589,7 +594,7 @@ describe('pointer work coalescing', () => {
 
     map.fire('mouseup', mouseEvent(map, map.project([-115.2, 36.1])));
     expect(store.getState().system.services[0].path.sections).toHaveLength(2);
-    store.getState().undo();
+    store.commands.history.undo();
     expect(store.getState().system).toBe(system);
     detach();
   });
@@ -662,8 +667,8 @@ describe('pointer work coalescing', () => {
         },
       },
     ];
-    store.getState().setSystem(system);
-    store.getState().select({ kind: 'service', id: 'service' });
+    store.commands.document.setSystem(system);
+    store.commands.selection.select({ kind: 'service', id: 'service' });
     const position = {
       patternId: 'service',
       run: 'outbound' as const,
@@ -672,7 +677,7 @@ describe('pointer work coalescing', () => {
       t: 1,
       distanceMeters: 1,
     };
-    store.getState().armTerminus({
+    store.commands.selection.armTerminus({
       serviceId: 'service',
       patternId: 'service',
       side: 'end',
@@ -764,8 +769,8 @@ describe('pointer work coalescing', () => {
       ],
     });
     const store = createEditorStore();
-    store.getState().setSystem(system);
-    store.getState().select({ kind: 'service', id: 'service' });
+    store.commands.document.setSystem(system);
+    store.commands.selection.select({ kind: 'service', id: 'service' });
     const map = createMap(terminusFeature('service', 'end', c));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -804,8 +809,8 @@ describe('pointer work coalescing', () => {
         path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
-    store.getState().setSystem(system);
-    store.getState().armTerminus({
+    store.commands.document.setSystem(system);
+    store.commands.selection.armTerminus({
       serviceId: 'service',
       patternId: 'service',
       side: 'end',
@@ -844,8 +849,8 @@ describe('pointer work coalescing', () => {
         path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
-    store.getState().setSystem(system);
-    store.getState().armTerminus({
+    store.commands.document.setSystem(system);
+    store.commands.selection.armTerminus({
       serviceId: 'service',
       patternId: 'service',
       side: 'end',
@@ -901,8 +906,8 @@ describe('pointer work coalescing', () => {
         path: { id: 'target', sections: [{ kind: 'shared', legs: [wholeLeg('second')] }] },
       },
     ];
-    store.getState().setSystem(system);
-    store.getState().select({ kind: 'service', id: 'service' });
+    store.commands.document.setSystem(system);
+    store.commands.selection.select({ kind: 'service', id: 'service' });
     const sourceTerminus = terminusFeature('service', 'end', [-115.23, 36.1]);
     const targetTerminus = terminusFeature('target', 'start', [-115.23, 36.1]);
     targetTerminus.properties = {
@@ -933,7 +938,7 @@ describe('pointer work coalescing', () => {
     chooser!.connectPaths();
     expect(store.getState().system.services).toHaveLength(2);
     expect(store.getState().system.nodes).toHaveLength(1);
-    store.getState().undo();
+    store.commands.history.undo();
     expect(store.getState().system).toBe(system);
     detach();
   });
@@ -973,8 +978,8 @@ describe('pointer work coalescing', () => {
         path: { id: 'rail-service', sections: [{ kind: 'shared', legs: [wholeLeg('rail')] }] },
       },
     ];
-    store.getState().setSystem(system);
-    store.getState().select({ kind: 'service', id: 'service' });
+    store.commands.document.setSystem(system);
+    store.commands.selection.select({ kind: 'service', id: 'service' });
     const sourceTerminus = terminusFeature('service', 'end', [-115.23, 36.1]);
     const targetTerminus = terminusFeature('rail-service', 'start', [-115.23, 36.1]);
     targetTerminus.properties = {
@@ -1009,7 +1014,7 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap(handleFeature(2));
     const detach = attach(map, store, {
       networkMode: false,
@@ -1026,7 +1031,7 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap(handleFeature(1));
     const detach = attach(map, store, {
       networkMode: false,
@@ -1047,7 +1052,7 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap(handleFeature(1));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -1075,8 +1080,8 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
-    store.getState().setTool('way');
+    store.commands.document.setSystem(system);
+    store.commands.tools.setTool('way');
     const map = createMap([serviceFeature('erasable'), wayFeature('erasable')]);
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -1100,8 +1105,8 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
-    store.getState().setTool('way');
+    store.commands.document.setSystem(system);
+    store.commands.tools.setTool('way');
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -1127,9 +1132,13 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
-    store.getState().setTool('way');
-    store.getState().startRouteDraft({ wayId: 'erasable', insertIndex: 1, coord: [-115.24, 36.1] });
+    store.commands.document.setSystem(system);
+    store.commands.tools.setTool('way');
+    store.commands.routing.startRouteDraft({
+      wayId: 'erasable',
+      insertIndex: 1,
+      coord: [-115.24, 36.1],
+    });
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -1155,9 +1164,13 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
-    store.getState().setTool('way');
-    store.getState().startRouteDraft({ wayId: 'erasable', insertIndex: 1, coord: [-115.24, 36.1] });
+    store.commands.document.setSystem(system);
+    store.commands.tools.setTool('way');
+    store.commands.routing.startRouteDraft({
+      wayId: 'erasable',
+      insertIndex: 1,
+      coord: [-115.24, 36.1],
+    });
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -1186,7 +1199,7 @@ describe('pointer work coalescing', () => {
   it('starts an existing Network station drag instead of panning the map', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = store.getState().addStation([-115.2, 36.1]);
+    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
     const map = createMap(stationFeature(stationId));
     const lifecycle: string[] = [];
     const detach = attach(map, store, {
@@ -1209,7 +1222,7 @@ describe('pointer work coalescing', () => {
   it('lets a settling station preview start the next drag immediately', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = store.getState().addStation([-115.2, 36.1]);
+    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
     const map = createMap(settlingStationFeature(stationId));
     const lifecycle: string[] = [];
     const detach = attach(map, store, {
@@ -1232,7 +1245,7 @@ describe('pointer work coalescing', () => {
   it('starts an existing Network facility drag instead of panning the map', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const facilityId = store.getState().addFacility('entrance', [-115.2, 36.1]);
+    const facilityId = required(store.commands.facilities.addFacility('entrance', [-115.2, 36.1]));
     const map = createMap(facilityFeature(facilityId));
     const lifecycle: string[] = [];
     const detach = attach(map, store, {
@@ -1255,7 +1268,7 @@ describe('pointer work coalescing', () => {
   it('publishes erase and deletes an Alt-clicked Network station', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = store.getState().addStation([-115.2, 36.1]);
+    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
     const map = createMap(stationFeature(stationId));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -1284,8 +1297,8 @@ describe('pointer work coalescing', () => {
     // Alt-click above, which fires the same events WITHOUT altKey.
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = store.getState().addStation([-115.2, 36.1]);
-    store.getState().setSelectVariant('erase');
+    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
+    store.commands.tools.setSelectVariant('erase');
     const map = createMap(stationFeature(stationId));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -1312,8 +1325,8 @@ describe('pointer work coalescing', () => {
     vi.useFakeTimers();
     installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = store.getState().addStation([-115.2, 36.1]);
-    store.getState().setSelectVariant('erase');
+    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
+    store.commands.tools.setSelectVariant('erase');
     const map = createMap(stationFeature(stationId));
     const detach = attach(map, store);
 
@@ -1327,7 +1340,7 @@ describe('pointer work coalescing', () => {
   it('publishes erase and deletes an Alt-clicked Network facility', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const facilityId = store.getState().addFacility('entrance', [-115.2, 36.1]);
+    const facilityId = required(store.commands.facilities.addFacility('entrance', [-115.2, 36.1]));
     const map = createMap(facilityFeature(facilityId));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -1352,7 +1365,7 @@ describe('pointer work coalescing', () => {
   it('keeps Shift-click on a Network station as multi-selection instead of a drag', () => {
     installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = store.getState().addStation([-115.2, 36.1]);
+    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
     const map = createMap(stationFeature(stationId));
     const detach = attach(map, store);
 
@@ -1366,9 +1379,9 @@ describe('pointer work coalescing', () => {
   it('drags all selected Network items when starting from a station', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = store.getState().addStation([-115.2, 36.1]);
-    const facilityId = store.getState().addFacility('entrance', [-115.21, 36.1]);
-    store.getState().addMultiSelection([
+    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
+    const facilityId = required(store.commands.facilities.addFacility('entrance', [-115.21, 36.1]));
+    store.commands.selection.addMultiSelection([
       { kind: 'station', id: stationId },
       { kind: 'facility', id: facilityId },
     ]);
@@ -1392,9 +1405,9 @@ describe('pointer work coalescing', () => {
   it('drags all selected Network items when starting from a facility', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = store.getState().addStation([-115.21, 36.1]);
-    const facilityId = store.getState().addFacility('entrance', [-115.2, 36.1]);
-    store.getState().addMultiSelection([
+    const stationId = required(store.commands.stations.addStation([-115.21, 36.1]));
+    const facilityId = required(store.commands.facilities.addFacility('entrance', [-115.2, 36.1]));
+    store.commands.selection.addMultiSelection([
       { kind: 'station', id: stationId },
       { kind: 'facility', id: facilityId },
     ]);
@@ -1420,8 +1433,8 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [{ ...erasableWay(), typeId: 'heavyRail' }];
-    store.getState().setSystem(system);
-    store.getState().setTool('way');
+    store.commands.document.setSystem(system);
+    store.commands.tools.setTool('way');
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -1443,8 +1456,8 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
-    store.getState().setTool('way');
+    store.commands.document.setSystem(system);
+    store.commands.tools.setTool('way');
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -1467,8 +1480,8 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
-    store.getState().setTool('way');
+    store.commands.document.setSystem(system);
+    store.commands.tools.setTool('way');
     const map = createMap(serviceFeature('erasable'));
     const detach = attach(map, store);
 
@@ -1493,7 +1506,7 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap(wayFeature('erasable'));
     const lifecycle: string[] = [];
     const detach = attach(map, store, {
@@ -1530,7 +1543,7 @@ describe('pointer work coalescing', () => {
     system.lines = [
       { id: 'public-line', name: 'Public Line', color: '#e5252a', serviceIds: ['service'] },
     ];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const before = store.getState().system;
     const map = createMap(serviceFeature('erasable'));
     const detach = attach(map, store);
@@ -1561,7 +1574,7 @@ describe('pointer work coalescing', () => {
         path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap([
       serviceFeatureFor('far', [
         [-115.25, 36.11],
@@ -1594,8 +1607,8 @@ describe('pointer work coalescing', () => {
         path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
-    store.getState().setSystem(system);
-    const stationId = store.getState().addStation([-115.23, 36.1008]);
+    store.commands.document.setSystem(system);
+    const stationId = required(store.commands.stations.addStation([-115.23, 36.1008]));
     const map = createMap([
       serviceFeature('erasable'),
       stationFeature(stationId, [-115.23, 36.1008]),
@@ -1622,7 +1635,7 @@ describe('pointer work coalescing', () => {
         path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const coordinates: [number, number][] = [
       [-115.25, 36.1],
       [-115.2, 36.1],
@@ -1653,7 +1666,7 @@ describe('pointer work coalescing', () => {
         path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const at: [number, number] = [-115.23, 36.1];
     const map = createMap([
       terminusFeature('service', 'end', at),
@@ -1691,8 +1704,8 @@ describe('pointer work coalescing', () => {
 
       path: { id, sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
     }));
-    store.getState().setSystem(system);
-    store.getState().addMultiSelection([
+    store.commands.document.setSystem(system);
+    store.commands.selection.addMultiSelection([
       { kind: 'service', id: 'service' },
       { kind: 'service', id: 'other' },
     ]);
@@ -1730,7 +1743,7 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap(wayFeature('erasable'));
     const shown: Array<PointerIntent | null> = [];
     let menuOpen = false;
@@ -1769,7 +1782,7 @@ describe('pointer work coalescing', () => {
         path: { id: 'service', sections: [{ kind: 'shared', legs: [wholeLeg('erasable')] }] },
       },
     ];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap(serviceFeature('erasable'));
     const opened: Array<{ anchor: [number, number]; serviceHit?: ServiceActionHit }> = [];
     const detach = attach(map, store, {
@@ -1809,7 +1822,7 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap(wayFeature('erasable'));
     const opened: Array<{ anchor: [number, number]; corridorHit?: { wayId: string; t: number } }> =
       [];
@@ -1858,7 +1871,7 @@ describe('pointer work coalescing', () => {
         },
       },
     ];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap(serviceFeature('erasable'));
     const anchors: Array<[number, number] | null> = [];
     const opened: unknown[] = [];
@@ -1894,7 +1907,7 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap(handleFeature(1));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -1918,8 +1931,8 @@ describe('pointer work coalescing', () => {
   it('publishes the resolver anchor and preview for a supported network draw', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
     const map = createMap();
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -1942,7 +1955,7 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap(handleFeature(1));
     const detach = attach(map, store, {
       networkMode: false,
@@ -1963,7 +1976,7 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap(handleFeature(1));
     const detach = attach(map, store, {
       networkMode: false,
@@ -1971,7 +1984,7 @@ describe('pointer work coalescing', () => {
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
-    store.getState().setSystem(store.getState().system, { readOnly: true });
+    store.commands.document.setSystem(store.getState().system, { readOnly: true });
 
     expect(map.getCanvas().style.cursor).toBe('not-allowed');
     detach();
@@ -1982,7 +1995,7 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap(handleFeature(1));
     const shown: Array<PointerIntent | null> = [];
     let menuOpen = false;
@@ -2009,7 +2022,7 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const map = createMap(handleFeature(1));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -2032,13 +2045,13 @@ describe('pointer work coalescing', () => {
 
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
-    store.getState().setTool('way');
+    store.commands.tools.setTool('way');
     expect(shown.at(-1)).toBeNull();
 
-    store.getState().setTool('select');
+    store.commands.tools.setTool('select');
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
-    store.getState().setSystem(store.getState().system, { readOnly: true });
+    store.commands.document.setSystem(store.getState().system, { readOnly: true });
     expect(shown.at(-1)).toBeNull();
 
     detach();
@@ -2047,9 +2060,9 @@ describe('pointer work coalescing', () => {
   it('freehand drawing samples raw movement once per frame and keeps the release point', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
-    store.getState().setDraftGeometry('freeform');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
+    store.commands.tools.setDraftGeometry('freeform');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -2086,9 +2099,9 @@ describe('pointer work coalescing', () => {
     const waysAfterNudge = (tuning: InputTuning): number => {
       const scheduler = installBrowserGlobals();
       const store = createEditorStore();
-      store.getState().setSystem(createEmptySystem());
-      store.getState().setTool('way');
-      store.getState().setDraftGeometry('freeform');
+      store.commands.document.setSystem(createEmptySystem());
+      store.commands.tools.setTool('way');
+      store.commands.tools.setDraftGeometry('freeform');
       const map = createMap();
       const detach = attach(map, store, {
         tuning,
@@ -2111,8 +2124,8 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
-    store.getState().setTool('select');
+    store.commands.document.setSystem(system);
+    store.commands.tools.setTool('select');
     const map = createMap(handleFeature(1));
     const detach = attach(map, store);
 
@@ -2138,8 +2151,8 @@ describe('pointer work coalescing', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
     system.ways = [erasableWay()];
-    store.getState().setSystem(system);
-    store.getState().setTool('select');
+    store.commands.document.setSystem(system);
+    store.commands.tools.setTool('select');
     const map = createMap(handleFeature(1));
     const lifecycle: string[] = [];
     const detach = attach(map, store, {
@@ -2171,8 +2184,8 @@ describe('pointer work coalescing', () => {
   it('reports the exact boundary around a camera drag', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('select');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('select');
     const map = createMap();
     const lifecycle: string[] = [];
     const detach = attach(map, store, {
@@ -2199,9 +2212,9 @@ describe('touch gestures', () => {
   it('draws with one finger, using the tool rather than the camera', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
-    store.getState().setDraftGeometry('freeform');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
+    store.commands.tools.setDraftGeometry('freeform');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -2226,8 +2239,8 @@ describe('touch gestures', () => {
     vi.useFakeTimers();
     installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -2250,8 +2263,8 @@ describe('touch gestures', () => {
     vi.useFakeTimers();
     installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -2274,8 +2287,8 @@ describe('touch gestures', () => {
     vi.useFakeTimers();
     installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -2296,8 +2309,8 @@ describe('touch gestures', () => {
     vi.useFakeTimers();
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -2322,8 +2335,8 @@ describe('touch gestures', () => {
     vi.useFakeTimers();
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = store.getState().addStation([-115.2, 36.1]);
-    store.getState().setSelectVariant('erase');
+    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
+    store.commands.tools.setSelectVariant('erase');
     const map = createMap(stationFeature(stationId));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
@@ -2341,9 +2354,9 @@ describe('touch gestures', () => {
   it('pans with two fingers and draws nothing', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
-    store.getState().setDraftGeometry('freeform');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
+    store.commands.tools.setDraftGeometry('freeform');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -2375,9 +2388,9 @@ describe('touch gestures', () => {
     // touch dragging across the map and start drawing on it.
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
-    store.getState().setDraftGeometry('freeform');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
+    store.commands.tools.setDraftGeometry('freeform');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -2399,9 +2412,9 @@ describe('touch gestures', () => {
   it('holds a still finger below the drag threshold as a tap, not a draw', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
-    store.getState().setDraftGeometry('freeform');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
+    store.commands.tools.setDraftGeometry('freeform');
     const map = createMap();
     const detach = attach(map, store, {
       tuning: COARSE_POINTER_TUNING,
@@ -2423,8 +2436,8 @@ describe('touch gestures', () => {
     vi.useFakeTimers();
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -2447,8 +2460,8 @@ describe('touch gestures', () => {
     vi.useFakeTimers();
     installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -2470,8 +2483,8 @@ describe('touch gestures', () => {
     vi.useFakeTimers();
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('select');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('select');
     const map = createMap();
     const opened: number[] = [];
     const detach = attach(map, store, {
@@ -2498,8 +2511,8 @@ describe('closing a way back onto its own start', () => {
   it("shows the endpoint-hint ring over a way's own start vertex once it has 3 points", () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -2533,8 +2546,8 @@ describe('closing a way back onto its own start', () => {
   it('does not offer to close a loop with only 2 committed points', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -2555,8 +2568,8 @@ describe('closing a way back onto its own start', () => {
   it("closes a ring by clicking back on a way's own start vertex, forming a real junction", () => {
     installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().setTool('way');
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.tools.setTool('way');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -2587,7 +2600,7 @@ describe('corridor-following an incompatible-type way', () => {
   it('bends a rail line dragged close to and parallel with an existing road, offset from it', () => {
     installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(
+    store.commands.document.setSystem(
       aSystem({
         ways: [
           aRoad('road1', [
@@ -2600,8 +2613,8 @@ describe('corridor-following an incompatible-type way', () => {
     // heavyRail can't merge with a road (disjoint wayTypeIds) — the exact-
     // type snap in resolveEnd can never match this candidate, so any bend
     // toward it has to be followCorridor's doing.
-    store.getState().setDraftWayType('heavyRail');
-    store.getState().setTool('way');
+    store.commands.tools.setDraftWayType('heavyRail');
+    store.commands.tools.setTool('way');
     const map = createMap();
     const detach = attach(map, store, { networkMode: false });
 
@@ -2632,7 +2645,7 @@ describe('corridor-following an incompatible-type way', () => {
       2,
     );
 
-    store.getState().finishWay();
+    store.commands.ways.finishWay();
     const after = store.getState().system;
     expect(
       after.ways.some((w) => w.id === wayId),
@@ -2650,7 +2663,7 @@ describe('corridor-following an incompatible-type way', () => {
   it('does not bend a line dragged nowhere near an existing way', () => {
     installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(
+    store.commands.document.setSystem(
       aSystem({
         ways: [
           aRoad('road1', [
@@ -2660,8 +2673,8 @@ describe('corridor-following an incompatible-type way', () => {
         ],
       }),
     );
-    store.getState().setDraftWayType('heavyRail');
-    store.getState().setTool('way');
+    store.commands.tools.setDraftWayType('heavyRail');
+    store.commands.tools.setTool('way');
     const map = createMap();
     const detach = attach(map, store, { networkMode: false });
 
@@ -2681,7 +2694,7 @@ describe('corridor-following an incompatible-type way', () => {
   it('does not bend a way toward another way of the SAME type', () => {
     installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(
+    store.commands.document.setSystem(
       aSystem({
         ways: [
           aRoad('road1', [
@@ -2691,9 +2704,9 @@ describe('corridor-following an incompatible-type way', () => {
         ],
       }),
     );
-    store.getState().setDraftWayType('road');
-    store.getState().setDraftMode('bus'); // corridorToleranceM unset -> 20m base
-    store.getState().setTool('way');
+    store.commands.tools.setDraftWayType('road');
+    store.commands.tools.setDraftMode('bus'); // corridorToleranceM unset -> 20m base
+    store.commands.tools.setTool('way');
     const map = createMap();
     // A tighter zoom than the mock's default z14, matching real street-
     // editing zoom, where the exact-type snap's pixel-derived radius shrinks
@@ -2728,7 +2741,7 @@ describe('corridor-following an incompatible-type way', () => {
   it('does not bend toward a corridor when the drag turns sharply away from the established heading', () => {
     installBrowserGlobals();
     const store = createEditorStore();
-    store.getState().setSystem(
+    store.commands.document.setSystem(
       aSystem({
         ways: [
           aRoad('road1', [
@@ -2738,8 +2751,8 @@ describe('corridor-following an incompatible-type way', () => {
         ],
       }),
     );
-    store.getState().setDraftWayType('heavyRail');
-    store.getState().setTool('way');
+    store.commands.tools.setDraftWayType('heavyRail');
+    store.commands.tools.setTool('way');
     const map = createMap();
     const detach = attach(map, store, { networkMode: false });
 

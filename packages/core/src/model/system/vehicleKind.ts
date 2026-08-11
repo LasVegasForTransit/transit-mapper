@@ -30,3 +30,15 @@ export interface VehicleKind {
    *  vehicles. */
   decelMps2?: number;
 }
+
+interface VehicleKindDocument {
+  vehicleKinds: VehicleKind[];
+}
+
+/** Replace a document's rolling-stock definitions without timestamp policy. */
+export function setVehicleKinds<System extends VehicleKindDocument>(
+  system: System,
+  kinds: VehicleKind[],
+): System {
+  return system.vehicleKinds === kinds ? system : { ...system, vehicleKinds: kinds };
+}

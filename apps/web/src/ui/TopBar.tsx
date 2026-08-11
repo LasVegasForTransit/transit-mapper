@@ -1,4 +1,4 @@
-import { useEditor, useEditorStore } from '../editor/EditorProvider';
+import { useEditor, useEditorCommands, useEditorStore } from '../editor/EditorProvider';
 import { forkSystem } from '@transitmapper/core/model/serialize';
 import { blurOnEnter } from './formUtils';
 import { DropdownMenu, DropdownMenuChoice, DropdownMenuItem } from './DropdownMenu';
@@ -112,7 +112,7 @@ export function ViewSwitchCompact() {
 export function TopBarBrand() {
   const name = useEditor((s) => s.system.name);
   const readOnly = useEditor((s) => s.readOnly);
-  const setName = useEditor((s) => s.setName);
+  const { setName } = useEditorCommands().document;
   // The store holds a blank placeholder until the saved document arrives, and
   // that placeholder has a name — "Untitled system". Showing it would put a
   // real-looking name on a document that is not the one being opened, and the
@@ -174,11 +174,12 @@ export function TopBarBrand() {
 export function TopBarActions() {
   const store = useEditorStore();
   const readOnly = useEditor((s) => s.readOnly);
-  const setSystem = useEditor((s) => s.setSystem);
   const canUndo = useEditor((s) => s.canUndo);
   const canRedo = useEditor((s) => s.canRedo);
-  const undo = useEditor((s) => s.undo);
-  const redo = useEditor((s) => s.redo);
+  const {
+    document: { setSystem },
+    history: { undo, redo },
+  } = useEditorCommands();
   const { openShortcuts, openDialog, toggleUi } = useUi();
 
   const fork = () => {

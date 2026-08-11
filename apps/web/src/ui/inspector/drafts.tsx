@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useEditor } from '../../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../../editor/EditorProvider';
 import {
   FACILITY_TYPES,
   WAY_FAMILIES,
@@ -52,23 +52,25 @@ export function ToolDraftInspector({ tool }: ToolDraftInspectorProps) {
  */
 function WayDraftInspector() {
   const draftWayTypeId = useEditor((s) => s.draftWayTypeId);
-  const setDraftWayType = useEditor((s) => s.setDraftWayType);
   const draftModeId = useEditor((s) => s.draftModeId);
   const draftGeometry = useEditor((s) => s.draftGeometry);
-  const setDraftGeometry = useEditor((s) => s.setDraftGeometry);
   const draftColor = useEditor((s) => s.draftColor);
-  const setDraftColor = useEditor((s) => s.setDraftColor);
   const draftGrade = useEditor((s) => s.draftGrade);
-  const setDraftGrade = useEditor((s) => s.setDraftGrade);
   const draftClassId = useEditor((s) => s.draftClassId);
-  const setDraftClassId = useEditor((s) => s.setDraftClassId);
   const draftPresetId = useEditor((s) => s.draftPresetId);
-  const setDraftPreset = useEditor((s) => s.setDraftPreset);
   const draftOneWay = useEditor((s) => s.draftOneWay);
-  const setDraftOneWay = useEditor((s) => s.setDraftOneWay);
-  const setDraftServiceEnabled = useEditor((s) => s.setDraftServiceEnabled);
   const palette = useEditor((s) => s.system.palette);
-  const addPaletteColor = useEditor((s) => s.addPaletteColor);
+  const {
+    setDraftWayType,
+    setDraftGeometry,
+    setDraftColor,
+    setDraftGrade,
+    setDraftClassId,
+    setDraftPreset,
+    setDraftOneWay,
+    setDraftServiceEnabled,
+    addPaletteColor,
+  } = useEditorCommands().tools;
   const { viewMode } = useView();
 
   const type = wayType(draftWayTypeId);
@@ -272,12 +274,12 @@ function FacilityDraftInspector() {
   const complexMode = useEditor((s) => s.draftFacilityComplexMode);
   const placingFor = useEditor((s) => s.placingFacilityForGroupId);
   const groups = useEditor((s) => s.system.groups);
-  const cancelPlacingFacility = useEditor((s) => s.cancelPlacingFacility);
+  const { cancelPlacingFacility } = useEditorCommands().groups;
 
   const placingGroup = placingFor ? groups.find((g) => g.id === placingFor) : undefined;
-  const typeLabel = FACILITY_TYPES[draftFacilityTypeId]?.label.toLowerCase() ?? 'facility';
+  const typeLabel = FACILITY_TYPES[draftFacilityTypeId].label.toLowerCase();
   const article = /^[aeiou]/.test(typeLabel) ? 'an' : 'a';
-  const isArea = FACILITY_TYPES[draftFacilityTypeId]?.geometryKind === 'area';
+  const isArea = FACILITY_TYPES[draftFacilityTypeId].geometryKind === 'area';
 
   // One plain sentence that matches what a click actually does. The WHAT
   // (entrance/depot/… or Complex) is the tool's flyout variant, not a menu

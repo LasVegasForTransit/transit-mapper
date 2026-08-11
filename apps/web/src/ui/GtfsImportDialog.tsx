@@ -1,7 +1,8 @@
-import { useEditor, useEditorStore } from '../editor/EditorProvider';
+import { useBackgroundImportStore, useEditorCommands } from '../editor/EditorProvider';
 import { streamRtcGtfsBatches } from '../import/streamRtcGtfs';
 import { reconcileRtcGtfs } from '../import/reconcileRtcGtfs';
 import { waitForQuiet } from '../import/waitForQuiet';
+import { backgroundImportBlockMessage } from '../import/background-import-store';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
 import { useImportProgress } from './UiProvider';
@@ -12,6 +13,20 @@ interface GtfsImportDialogProps {
 
 let nextImportOperationId = 0;
 
+function abortImport(controller: AbortController, message: string): never {
+  const reason = new DOMException(message, 'AbortError');
+  controller.abort(reason);
+  throw reason;
+}
+
+function requireAcceptedImport(
+  accepted: boolean,
+  controller: AbortController,
+  rejectionMessage: string,
+): void {
+  if (!accepted) abortImport(controller, rejectionMessage);
+}
+
 /** RTC Southern Nevada's real, current bus network — imported whole (no
  *  bbox/category picker like street import: it's one fixed feed) as a
  *  comparison baseline next to whatever's being proposed. Confirming here
@@ -20,9 +35,8 @@ let nextImportOperationId = 0;
  *  several seconds, and nothing about that should trap the user behind a
  *  modal — see streamRtcGtfsBatches for why it's batched at all. */
 export function GtfsImportDialog({ onClose }: GtfsImportDialogProps) {
-  const applyGtfsImportBatch = useEditor((s) => s.applyGtfsImportBatch);
-  const applyImportedReconciliation = useEditor((s) => s.applyImportedReconciliation);
-  const store = useEditorStore();
+  const { applyGtfsImportBatch, applyImportedReconciliation } = useEditorCommands().imports;
+  const store = useBackgroundImportStore();
   const { importProgress, setImportProgress } = useImportProgress();
 
   const run = () => {
@@ -47,7 +61,7 @@ export function GtfsImportDialog({ onClose }: GtfsImportDialogProps) {
       cancel,
     });
     onClose();
-    (async () => {
+    void (async () => {
       try {
         let routesTotal = 0;
         const importedServiceIds: string[] = [];
@@ -68,14 +82,12 @@ export function GtfsImportDialog({ onClose }: GtfsImportDialogProps) {
             });
           },
         })) {
-          if (!applyGtfsImportBatch({ targetSystemId, pieces })) {
-            const reason = new DOMException(
-              'RTC import stopped because a different system was opened.',
-              'AbortError',
-            );
-            controller.abort(reason);
-            throw reason;
-          }
+          requireAcceptedImport(
+            applyGtfsImportBatch({ targetSystemId, pieces }),
+            controller,
+            backgroundImportBlockMessage(store, targetSystemId) ??
+              'RTC import stopped because the target rejected this batch.',
+          );
           importedServiceIds.push(...pieces.services.map((s) => s.id));
           routesTotal = total;
           setImportProgress({
@@ -116,6 +128,8 @@ export function GtfsImportDialog({ onClose }: GtfsImportDialogProps) {
               signal: attempt.signal,
             });
             if (applyImportedReconciliation({ expectedSystem, result })) break;
+            const blocked = backgroundImportBlockMessage(store, targetSystemId);
+            if (blocked) abortImport(controller, blocked);
           } catch (error) {
             if (controller.signal.aborted) throw controller.signal.reason;
             if (!attempt.signal.aborted) throw error;

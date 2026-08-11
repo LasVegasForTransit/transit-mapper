@@ -282,6 +282,11 @@ function check(name: string, cond: boolean) {
   if (!cond) failures++;
 }
 
+function required<Value>(value: Value | null): Value {
+  if (value === null) throw new Error('Expected a content command to return a value');
+  return value;
+}
+
 /** Whole-way legs in stored point order — the shape a hand-built fixture wants
  *  when direction and extent aren't what it's testing. Use wholeLegs when the
  *  fixture's ways genuinely need their direction derived from geometry. */
@@ -292,47 +297,46 @@ const legFrom = (l: PatternLeg): number => legRange(l)[0];
 const legTo = (l: PatternLeg): number => legRange(l)[1];
 
 const store = createEditorStore();
-const ed = store.getState();
-const fresh = () => ed.setSystem(createEmptySystem());
+const fresh = () => store.commands.document.setSystem(createEmptySystem());
 const servicesOnWay = (wid: string) =>
   store.getState().system.services.filter((s) => serviceWayIds(s).includes(wid));
 
 // --- drawing a way creates a way + one service ---
 fresh();
-const a = store.getState().beginWay('lightRail', 'straight');
-store.getState().addWayPoint(a, [-115.24, 36.1]);
-store.getState().addWayPoint(a, [-115.17, 36.16]);
-store.getState().addWayPoint(a, [-115.1, 36.1]);
-store.getState().finishWay();
+const a = required(store.commands.ways.beginWay('lightRail', 'straight'));
+store.commands.ways.addWayPoint(a, [-115.24, 36.1]);
+store.commands.ways.addWayPoint(a, [-115.17, 36.16]);
+store.commands.ways.addWayPoint(a, [-115.1, 36.1]);
+store.commands.ways.finishWay();
 let sys = store.getState().system;
 check('way defined by 3 control points', sys.ways.find((w) => w.id === a)!.points.length === 3);
 check('drawing a way creates exactly one service', sys.services.length === 1);
 check('the service runs over that way', patternWayIds(sys.services[0].path)[0] === a);
 
 // --- multiple services share one way (the service/infra split) ---
-const svc2 = store.getState().addServiceToWay(a);
+const svc2 = required(store.commands.services.addServiceToWay(a));
 check('a way can carry multiple services', servicesOnWay(a).length === 2);
 check('added service is distinct', svc2 !== store.getState().system.services[0].id);
 
 // --- bare infrastructure: bike ways carry no service (catalog-driven, no default mode) ---
 fresh();
 check('bike way type has no compatible service modes', modesForWayType('bike').length === 0);
-const bikeWay = store.getState().beginWay('bike', 'straight');
-store.getState().addWayPoint(bikeWay, [-115.2, 36.1]);
-store.getState().addWayPoint(bikeWay, [-115.1, 36.1]);
-store.getState().finishWay();
+const bikeWay = required(store.commands.ways.beginWay('bike', 'straight'));
+store.commands.ways.addWayPoint(bikeWay, [-115.2, 36.1]);
+store.commands.ways.addWayPoint(bikeWay, [-115.1, 36.1]);
+store.commands.ways.finishWay();
 check('drawing a bike way creates no service', store.getState().system.services.length === 0);
 check(
   'addServiceToWay on a bike way returns null',
-  store.getState().addServiceToWay(bikeWay) === null,
+  store.commands.services.addServiceToWay(bikeWay) === null,
 );
 
 // --- roads draw exactly like every other way (this is the fix: roads used to not drag) ---
 fresh();
-const road = store.getState().beginWay('road', 'straight');
-store.getState().addWayPoint(road, [-115.2, 36.1]);
-store.getState().addWayPoint(road, [-115.1, 36.2]);
-store.getState().finishWay();
+const road = required(store.commands.ways.beginWay('road', 'straight'));
+store.commands.ways.addWayPoint(road, [-115.2, 36.1]);
+store.commands.ways.addWayPoint(road, [-115.1, 36.2]);
+store.commands.ways.finishWay();
 check(
   'road way created with 2 points via the same beginWay/addWayPoint path',
   store.getState().system.ways[0].points.length === 2,
@@ -438,10 +442,10 @@ check(
 // --- Pattern.lanes round-trips through serialize/parse ---
 {
   fresh();
-  const w = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(w, [-115.2, 36.12]);
-  store.getState().addWayPoint(w, [-115.1, 36.12]);
-  store.getState().finishWay();
+  const w = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(w, [-115.2, 36.12]);
+  store.commands.ways.addWayPoint(w, [-115.1, 36.12]);
+  store.commands.ways.finishWay();
   const svc = store.getState().system.services[0];
   const laneId = defaultLaneFor(store.getState().system.ways[0].profile, 'forward')!;
   // Hand-build a leg lane pin and round-trip the whole system.
@@ -503,21 +507,21 @@ check(
 // extendRouteDraft → commitRouteDraft).
 {
   fresh();
-  store.getState().setDraftMode('bus');
-  const road = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(road, [-115.3, 36.1]);
-  store.getState().addWayPoint(road, [-115.2, 36.1]);
-  store.getState().addWayPoint(road, [-115.1, 36.1]);
-  store.getState().finishWay();
+  store.commands.tools.setDraftMode('bus');
+  const road = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(road, [-115.3, 36.1]);
+  store.commands.ways.addWayPoint(road, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const s1Id = store.getState().system.services[0].id;
   const w = store.getState().system.ways.find((x) => x.id === road)!;
   // Interior anchors (mid-corridor, as a real click would land) so the route
   // genuinely traverses the existing way rather than a degenerate end sliver.
   const from = anchorOnWay(w, [-115.28, 36.1])!;
   const to = anchorOnWay(w, [-115.12, 36.1])!;
-  store.getState().startRouteDraft(from);
-  const extended = store.getState().extendRouteDraft(to);
-  const newId = store.getState().commitRouteDraft();
+  store.commands.routing.startRouteDraft(from);
+  const extended = store.commands.routing.extendRouteDraft(to);
+  const newId = required(store.commands.routing.commitRouteDraft());
   check('route-draft extends along the existing way', extended === true);
   check(
     'committing a routed draft adds a second service',
@@ -535,21 +539,21 @@ check(
 // shared stretch (no sideways jog where the shared segment begins/ends) ---
 {
   fresh();
-  store.getState().setDraftMode('lightRail');
-  const A = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(A, [-115.3, 36.1]);
-  store.getState().addWayPoint(A, [-115.2, 36.1]);
-  store.getState().addWayPoint(A, [-115.1, 36.1]);
-  store.getState().finishWay();
+  store.commands.tools.setDraftMode('lightRail');
+  const A = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(A, [-115.3, 36.1]);
+  store.commands.ways.addWayPoint(A, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(A, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const aId = store.getState().system.services[0].id;
   // Route a second service along A's MIDDLE. The way is left alone — the new
   // service's leg just names the stretch it uses — so the through-line still
   // rides one way end to end and the joiner draws only over the shared middle.
   const waysBefore = store.getState().system.ways.length;
   const w = store.getState().system.ways.find((x) => x.id === A)!;
-  store.getState().startRouteDraft(anchorOnWay(w, [-115.27, 36.1])!);
-  store.getState().extendRouteDraft(anchorOnWay(w, [-115.13, 36.1])!);
-  const bId = store.getState().commitRouteDraft()!;
+  store.commands.routing.startRouteDraft(anchorOnWay(w, [-115.27, 36.1])!);
+  store.commands.routing.extendRouteDraft(anchorOnWay(w, [-115.13, 36.1])!);
+  const bId = required(store.commands.routing.commitRouteDraft());
 
   check(
     'a service terminating mid-way leaves the way whole — no split, no fragment',
@@ -598,7 +602,7 @@ check(
   // way is no longer the same as reaching every point on it, so "which lines
   // serve this stop" has to ask where the line actually goes — otherwise the
   // stop wrongly reads as an interchange.
-  store.getState().addStation([-115.295, 36.1]);
+  store.commands.stations.addStation([-115.295, 36.1]);
   const withStop = buildFeatures(store.getState().system, null, [], {
     viewMode: 'network',
     ...filters,
@@ -609,7 +613,7 @@ check(
     endStop.properties?.interchange === false,
   );
   // …and one inside the shared stretch still is.
-  store.getState().addStation([-115.2, 36.1]);
+  store.commands.stations.addStation([-115.2, 36.1]);
   const shared = buildFeatures(store.getState().system, null, [], {
     viewMode: 'network',
     ...filters,
@@ -624,10 +628,10 @@ check(
 // you zoom into the MIDDLE of a long way (both its vertices off-screen) ---
 {
   fresh();
-  const w = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(w, [-115.3, 36.1]);
-  store.getState().addWayPoint(w, [-115.0, 36.1]);
-  store.getState().finishWay();
+  const w = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(w, [-115.3, 36.1]);
+  store.commands.ways.addWayPoint(w, [-115.0, 36.1]);
+  store.commands.ways.finishWay();
   const way = store.getState().system.ways.find((x) => x.id === w)!;
   // A tiny viewport in the MIDDLE of the way — both endpoints far outside it.
   check(
@@ -914,12 +918,12 @@ check(
 
 {
   fresh();
-  store.getState().setDraftMode('bus');
-  const road = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(road, [-115.2, 36.12]);
-  store.getState().addWayPoint(road, [-115.1, 36.12]);
-  store.getState().finishWay();
-  store.getState().setWayCapacity(road, 2);
+  store.commands.tools.setDraftMode('bus');
+  const road = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(road, [-115.2, 36.12]);
+  store.commands.ways.addWayPoint(road, [-115.1, 36.12]);
+  store.commands.ways.finishWay();
+  store.commands.ways.setWayCapacity(road, 2);
   const sys = store.getState().system;
   const svcId = sys.services[0].id;
   const center = resolveWayPath(sys.ways.find((w) => w.id === road)!);
@@ -959,12 +963,12 @@ check(
 // --- patternLanePath: the polyline a vehicle rides in Infrastructure view ---
 {
   fresh();
-  store.getState().setDraftMode('bus');
-  const w = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(w, [-115.2, 36.1]);
-  store.getState().addWayPoint(w, [-115.15, 36.1]);
-  store.getState().addWayPoint(w, [-115.1, 36.1]);
-  store.getState().finishWay();
+  store.commands.tools.setDraftMode('bus');
+  const w = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(w, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(w, [-115.15, 36.1]);
+  store.commands.ways.addWayPoint(w, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const sys = store.getState().system;
   const waysById2 = wayById(sys.ways);
   const way = sys.ways[0];
@@ -994,15 +998,15 @@ check(
   // continuous path (no duplicated junction point, matching patternPath's own
   // stitching convention).
   fresh();
-  store.getState().setDraftMode('bus');
-  const a = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(a, [-115.3, 36.2]);
-  store.getState().addWayPoint(a, [-115.2, 36.2]);
-  store.getState().finishWay();
-  const b = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(b, [-115.2, 36.2]);
-  store.getState().addWayPoint(b, [-115.1, 36.2]);
-  store.getState().finishWay();
+  store.commands.tools.setDraftMode('bus');
+  const a = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(a, [-115.3, 36.2]);
+  store.commands.ways.addWayPoint(a, [-115.2, 36.2]);
+  store.commands.ways.finishWay();
+  const b = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(b, [-115.2, 36.2]);
+  store.commands.ways.addWayPoint(b, [-115.1, 36.2]);
+  store.commands.ways.finishWay();
   const multiWaysById = wayById(store.getState().system.ways);
   const multiPattern = { id: 'mp', sections: oneSection(wholeLegs(multiWaysById, [a, b])) };
   const multiPath = serviceLanePath(multiPattern, multiWaysById, 'bus');
@@ -1014,30 +1018,30 @@ check(
 
 // --- a station snaps onto a way and follows it when reshaped ---
 fresh();
-const h = store.getState().beginWay('road', 'straight');
-store.getState().addWayPoint(h, [-115.24, 36.1]);
-store.getState().addWayPoint(h, [-115.1, 36.1]);
-store.getState().finishWay();
+const h = required(store.commands.ways.beginWay('road', 'straight'));
+store.commands.ways.addWayPoint(h, [-115.24, 36.1]);
+store.commands.ways.addWayPoint(h, [-115.1, 36.1]);
+store.commands.ways.finishWay();
 const s1 = snap(store.getState().system.ways, [-115.17, 36.104], 5000);
 check('snap finds the nearby way', !!s1 && s1.wayId === h);
-const stId = store.getState().addStation(s1!.coord, { wayId: h, t: s1!.t });
+const stId = required(store.commands.stations.addStation(s1!.coord, { wayId: h, t: s1!.t }));
 const beforeLat = store.getState().system.stations.find((s) => s.id === stId)!.coord[1];
-store.getState().moveWayPoint(h, 0, [-115.24, 36.16]);
-store.getState().moveWayPoint(h, 1, [-115.1, 36.16]);
+store.commands.ways.moveWayPoint(h, 0, [-115.24, 36.16]);
+store.commands.ways.moveWayPoint(h, 1, [-115.1, 36.16]);
 const afterLat = store.getState().system.stations.find((s) => s.id === stId)!.coord[1];
 check('station follows its way when reshaped', afterLat > beforeLat + 0.02);
 
 // --- snap picks the NEAREST of several candidate ways ---
 {
   fresh();
-  const near = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(near, [-115.101, 36.1]);
-  store.getState().addWayPoint(near, [-115.101, 36.2]);
-  store.getState().finishWay();
-  const far = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(far, [-115.15, 36.1]);
-  store.getState().addWayPoint(far, [-115.15, 36.2]);
-  store.getState().finishWay();
+  const near = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(near, [-115.101, 36.1]);
+  store.commands.ways.addWayPoint(near, [-115.101, 36.2]);
+  store.commands.ways.finishWay();
+  const far = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(far, [-115.15, 36.1]);
+  store.commands.ways.addWayPoint(far, [-115.15, 36.2]);
+  store.commands.ways.finishWay();
   const best = snap(store.getState().system.ways, [-115.1, 36.15], 50000);
   check('snap picks the nearer of two candidate ways', best?.wayId === near);
 }
@@ -1045,10 +1049,10 @@ check('station follows its way when reshaped', afterLat > beforeLat + 0.02);
 // --- resuming a way from its open endpoint (turnkey continuation) ---
 {
   fresh();
-  const rw = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(rw, [-115.2, 36.1]);
-  store.getState().addWayPoint(rw, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const rw = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(rw, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(rw, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
 
   const endHit = nearestOpenEndpoint(
     store.getState().system.ways,
@@ -1078,13 +1082,13 @@ check('station follows its way when reshaped', afterLat > beforeLat + 0.02);
   check('nearestOpenEndpoint returns null outside the radius', farAway === null);
 
   // Resuming appends at the end and prepends at the start — same way, no new service.
-  store.getState().resumeWay(rw);
+  store.commands.ways.resumeWay(rw);
   check(
     'resumeWay makes it the active way without creating a new one',
     store.getState().activeWayId === rw && store.getState().system.ways.length === 1,
   );
-  store.getState().addWayPoint(rw, [-115.0, 36.1]);
-  store.getState().insertWayPoint(rw, 0, [-115.3, 36.1]);
+  store.commands.ways.addWayPoint(rw, [-115.0, 36.1]);
+  store.commands.ways.insertWayPoint(rw, 0, [-115.3, 36.1]);
   const extended = store.getState().system.ways.find((w) => w.id === rw)!;
   check('extending at the end appends', extended.points[extended.points.length - 1][0] === -115.0);
   check('extending at the start prepends', extended.points[0][0] === -115.3);
@@ -1093,14 +1097,14 @@ check('station follows its way when reshaped', afterLat > beforeLat + 0.02);
 
 // --- interchange emerges where a station sits on two ways' services ---
 fresh();
-const la = store.getState().beginWay('lightRail', 'straight');
-store.getState().addWayPoint(la, [-115.2, 36.1]);
-store.getState().addWayPoint(la, [-115.0, 36.1]);
-store.getState().finishWay();
-const lb = store.getState().beginWay('road', 'straight');
-store.getState().addWayPoint(lb, [-115.1, 36.0]);
-store.getState().addWayPoint(lb, [-115.1, 36.2]);
-store.getState().finishWay();
+const la = required(store.commands.ways.beginWay('lightRail', 'straight'));
+store.commands.ways.addWayPoint(la, [-115.2, 36.1]);
+store.commands.ways.addWayPoint(la, [-115.0, 36.1]);
+store.commands.ways.finishWay();
+const lb = required(store.commands.ways.beginWay('road', 'straight'));
+store.commands.ways.addWayPoint(lb, [-115.1, 36.0]);
+store.commands.ways.addWayPoint(lb, [-115.1, 36.2]);
+store.commands.ways.finishWay();
 {
   const near = new Set(
     servedWayIds([-115.1, 36.1], store.getState().system.ways, INTERCHANGE_METERS),
@@ -1113,23 +1117,23 @@ store.getState().finishWay();
 
 // --- deleting a way removes its services and stations ---
 fresh();
-const dc = store.getState().beginWay('road', 'straight');
-store.getState().addWayPoint(dc, [-115.2, 36.1]);
-store.getState().addWayPoint(dc, [-115.0, 36.1]);
-store.getState().finishWay();
-store.getState().addStation([-115.1, 36.1], { wayId: dc, t: 0.5 });
-store.getState().deleteWay(dc);
+const dc = required(store.commands.ways.beginWay('road', 'straight'));
+store.commands.ways.addWayPoint(dc, [-115.2, 36.1]);
+store.commands.ways.addWayPoint(dc, [-115.0, 36.1]);
+store.commands.ways.finishWay();
+store.commands.stations.addStation([-115.1, 36.1], { wayId: dc, t: 0.5 });
+store.commands.ways.deleteWay(dc);
 check('deleting a way removes its service', store.getState().system.services.length === 0);
 check('deleting a way removes its stations', store.getState().system.stations.length === 0);
 
 // --- deleting one service leaves the way and other services ---
 fresh();
-const kc = store.getState().beginWay('lightRail', 'straight');
-store.getState().addWayPoint(kc, [-115.2, 36.1]);
-store.getState().addWayPoint(kc, [-115.0, 36.1]);
-store.getState().finishWay();
-const extra = store.getState().addServiceToWay(kc);
-store.getState().deleteService(extra!);
+const kc = required(store.commands.ways.beginWay('lightRail', 'straight'));
+store.commands.ways.addWayPoint(kc, [-115.2, 36.1]);
+store.commands.ways.addWayPoint(kc, [-115.0, 36.1]);
+store.commands.ways.finishWay();
+const extra = required(store.commands.services.addServiceToWay(kc));
+store.commands.services.deleteService(extra);
 check(
   'deleting a service keeps the way',
   store.getState().system.ways.some((w) => w.id === kc),
@@ -1139,7 +1143,7 @@ check('deleting a service keeps the other services', servicesOnWay(kc).length ==
 // --- removing part of a way (the eraser deletes control points) ---
 {
   fresh();
-  const ec = store.getState().beginWay('road', 'straight');
+  const ec = required(store.commands.ways.beginWay('road', 'straight'));
   (
     [
       [-115.3, 36.1],
@@ -1147,10 +1151,10 @@ check('deleting a service keeps the other services', servicesOnWay(kc).length ==
       [-115.1, 36.1],
       [-115.0, 36.1],
     ] as LngLat[]
-  ).forEach((p) => store.getState().addWayPoint(ec, p));
-  store.getState().finishWay();
+  ).forEach((p) => store.commands.ways.addWayPoint(ec, p));
+  store.commands.ways.finishWay();
   const before = store.getState().system.ways.find((w) => w.id === ec)!.points.length;
-  store.getState().deleteWayPoint(ec, 1);
+  store.commands.ways.deleteWayPoint(ec, 1);
   const w = store.getState().system.ways.find((ww) => ww.id === ec)!;
   check('deleteWayPoint removes one control point', before === 4 && w.points.length === 3);
   check('the right control point was removed', w.points[1][0] === -115.1);
@@ -1159,11 +1163,11 @@ check('deleting a service keeps the other services', servicesOnWay(kc).length ==
 // --- geometry: straight vs curved on a way ---
 {
   fresh();
-  const g = store.getState().beginWay('lightRail', 'curved');
-  store.getState().addWayPoint(g, [-115.2, 36.1]);
-  store.getState().addWayPoint(g, [-115.16, 36.16]);
-  store.getState().addWayPoint(g, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const g = required(store.commands.ways.beginWay('lightRail', 'curved'));
+  store.commands.ways.addWayPoint(g, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(g, [-115.16, 36.16]);
+  store.commands.ways.addWayPoint(g, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const way = store.getState().system.ways.find((w) => w.id === g)!;
   const straight = resolveWayPath({ ...way, geometry: 'straight' });
   const curved = resolveWayPath({ ...way, geometry: 'curved' });
@@ -1315,10 +1319,10 @@ check('deleting a service keeps the other services', servicesOnWay(kc).length ==
 // --- fork ---
 fresh();
 {
-  const fa = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(fa, [-115.2, 36.1]);
-  store.getState().addWayPoint(fa, [-115.0, 36.1]);
-  store.getState().finishWay();
+  const fa = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(fa, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(fa, [-115.0, 36.1]);
+  store.commands.ways.finishWay();
 }
 sys = store.getState().system;
 const forked = forkSystem(sys);
@@ -1327,12 +1331,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- parse: v3 round-trips ways/services/station anchor ---
 {
   fresh();
-  const pc = store.getState().beginWay('lightRail', 'curved');
-  store.getState().addWayPoint(pc, [-115.2, 36.1]);
-  store.getState().addWayPoint(pc, [-115.1, 36.15]);
-  store.getState().finishWay();
-  store.getState().addServiceToWay(pc);
-  store.getState().addStation([-115.15, 36.12], { wayId: pc, t: 0.4 });
+  const pc = required(store.commands.ways.beginWay('lightRail', 'curved'));
+  store.commands.ways.addWayPoint(pc, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(pc, [-115.1, 36.15]);
+  store.commands.ways.finishWay();
+  store.commands.services.addServiceToWay(pc);
+  store.commands.stations.addStation([-115.15, 36.12], { wayId: pc, t: 0.4 });
   const before = store.getState().system;
   const round = parseSystem(JSON.parse(JSON.stringify(before)));
   check('parse round-trips ways', round.ways.length === before.ways.length);
@@ -1455,10 +1459,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- modes + grade (infrastructure vertical alignment) ---
 {
   fresh();
-  const gc = store.getState().beginWay('heavyRail', 'straight');
-  store.getState().addWayPoint(gc, [-115.2, 36.1]);
-  store.getState().addWayPoint(gc, [-115.0, 36.1]);
-  store.getState().finishWay();
+  const gc = required(store.commands.ways.beginWay('heavyRail', 'straight'));
+  store.commands.ways.addWayPoint(gc, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(gc, [-115.0, 36.1]);
+  store.commands.ways.finishWay();
   const svc = store.getState().system.services.find((s) => serviceWayIds(s).includes(gc))!;
   check(
     'subway is a valid mode',
@@ -1466,7 +1470,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
   const way = () => store.getState().system.ways.find((w) => w.id === gc)!;
   check('way defaults to at grade', way().grade === 'atGrade');
-  store.getState().setWayGrade(gc, 'underground');
+  store.commands.ways.setWayGrade(gc, 'underground');
   check('setWayGrade sets the grade', way().grade === 'underground');
   const round = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
   check('parse round-trips way grade', round.ways[0].grade === 'underground');
@@ -1504,21 +1508,21 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // parallel lane/track features, Infrastructure-view only ---
 {
   fresh();
-  const road = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(road, [-115.2, 36.1]);
-  store.getState().addWayPoint(road, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().setWayCapacity(road, 4);
+  const road = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(road, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.setWayCapacity(road, 4);
   check(
     'setWayCapacity updates the way',
     wayCapacity(store.getState().system.ways.find((w) => w.id === road)!) === 4,
   );
-  store.getState().setWayCapacity(road, 0);
+  store.commands.ways.setWayCapacity(road, 0);
   check(
     'setWayCapacity clamps to a minimum of 1',
     wayCapacity(store.getState().system.ways.find((w) => w.id === road)!) === 1,
   );
-  store.getState().setWayCapacity(road, 4);
+  store.commands.ways.setWayCapacity(road, 4);
 
   const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(['road']) };
   const infra = buildFeatures(store.getState().system, null, [], {
@@ -1538,7 +1542,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     "network view hides a bare way's infra line regardless of capacity",
     net.ways.features.filter((f) => f.properties?.id === road).length === 0,
   );
-  const svc = store.getState().addServiceToWay(road)!;
+  const svc = required(store.commands.services.addServiceToWay(road));
   const netServed = buildFeatures(store.getState().system, null, [], {
     viewMode: 'network',
     ...filters,
@@ -1556,12 +1560,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- P3: station footprints & platforms ---
 {
   fresh();
-  const stId = store.getState().addStation([-115.15, 36.1]);
+  const stId = required(store.commands.stations.addStation([-115.15, 36.1]));
   check(
     'station starts with no footprint',
     store.getState().system.stations[0].footprint === undefined,
   );
-  store.getState().addStationFootprint(stId);
+  store.commands.stations.addStationFootprint(stId);
   const withFootprint = () => store.getState().system.stations.find((s) => s.id === stId)!;
   check(
     'addStationFootprint gives it a 4-corner default square',
@@ -1573,23 +1577,23 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     Math.abs((square[0][0] + square[2][0]) / 2 - -115.15) < 1e-9,
   );
 
-  store.getState().moveFootprintPoint(stId, 0, [-115.1501, 36.1001]);
+  store.commands.stations.moveFootprintPoint(stId, 0, [-115.1501, 36.1001]);
   check('moveFootprintPoint edits one corner', withFootprint().footprint![0][0] === -115.1501);
 
-  const platformId = store.getState().addPlatform(stId);
+  const platformId = required(store.commands.stations.addPlatform(stId));
   check(
     'addPlatform adds a platform to the station',
     withFootprint().platforms?.length === 1 && withFootprint().platforms![0].id === platformId,
   );
-  store.getState().movePlatformPoint(stId, platformId, 1, [-115.14, 36.09]);
+  store.commands.stations.movePlatformPoint(stId, platformId, 1, [-115.14, 36.09]);
   check(
     'movePlatformPoint edits one platform corner',
     withFootprint().platforms![0].points[1][0] === -115.14,
   );
-  store.getState().deletePlatform(stId, platformId);
+  store.commands.stations.deletePlatform(stId, platformId);
   check('deletePlatform removes it', withFootprint().platforms?.length === 0);
 
-  store.getState().deleteStationFootprint(stId);
+  store.commands.stations.deleteStationFootprint(stId);
   check(
     'deleteStationFootprint clears the footprint (and any platforms)',
     withFootprint().footprint === undefined,
@@ -1599,7 +1603,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- P3: catalog-typed facilities ---
 {
   fresh();
-  const facId = store.getState().addFacility('bikeDock', [-115.16, 36.12]);
+  const facId = required(store.commands.facilities.addFacility('bikeDock', [-115.16, 36.12]));
   check(
     'addFacility creates it and selects it',
     store.getState().system.facilities.length === 1 &&
@@ -1609,17 +1613,17 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     'facility keeps its catalog type',
     store.getState().system.facilities[0].typeId === 'bikeDock',
   );
-  store.getState().moveFacility(facId, [-115.161, 36.121]);
+  store.commands.facilities.moveFacility(facId, [-115.161, 36.121]);
   check(
     'moveFacility updates its geometry',
     (store.getState().system.facilities[0].geometry as LngLat)[0] === -115.161,
   );
-  store.getState().setFacilityName(facId, 'Main entrance dock');
+  store.commands.facilities.setFacilityName(facId, 'Main entrance dock');
   check(
     'setFacilityName renames it',
     store.getState().system.facilities[0].name === 'Main entrance dock',
   );
-  store.getState().deleteFacility(facId);
+  store.commands.facilities.deleteFacility(facId);
   check(
     'deleteFacility removes it and clears the selection',
     store.getState().system.facilities.length === 0 && store.getState().selection === null,
@@ -1629,33 +1633,33 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- P3: grouping (station complexes / line families) ---
 {
   fresh();
-  const a = store.getState().addStation([-115.2, 36.1]);
-  const b = store.getState().addStation([-115.2001, 36.1001]);
-  const c = store.getState().addStation([-115.2002, 36.1002]);
-  const groupId = store.getState().createGroup([a, b], 'Downtown complex');
+  const a = required(store.commands.stations.addStation([-115.2, 36.1]));
+  const b = required(store.commands.stations.addStation([-115.2001, 36.1001]));
+  const c = required(store.commands.stations.addStation([-115.2002, 36.1002]));
+  const groupId = required(store.commands.groups.createGroup([a, b], 'Downtown complex'));
   check(
     'createGroup bundles the given members',
     store.getState().system.groups[0].memberIds.length === 2,
   );
-  store.getState().addGroupMember(groupId, c);
+  store.commands.groups.addGroupMember(groupId, c);
   check(
     'addGroupMember adds a third member',
     store.getState().system.groups[0].memberIds.includes(c),
   );
-  store.getState().addGroupMember(groupId, c);
+  store.commands.groups.addGroupMember(groupId, c);
   check(
     'addGroupMember is idempotent (no duplicate)',
     store.getState().system.groups[0].memberIds.filter((m) => m === c).length === 1,
   );
-  store.getState().removeGroupMember(groupId, b);
+  store.commands.groups.removeGroupMember(groupId, b);
   check(
     'removeGroupMember removes just that member',
     !store.getState().system.groups[0].memberIds.includes(b) &&
       store.getState().system.groups[0].memberIds.includes(a),
   );
-  store.getState().renameGroup(groupId, 'Renamed complex');
+  store.commands.groups.renameGroup(groupId, 'Renamed complex');
   check('renameGroup renames it', store.getState().system.groups[0].name === 'Renamed complex');
-  store.getState().deleteGroup(groupId);
+  store.commands.groups.deleteGroup(groupId);
   check('deleteGroup removes it', store.getState().system.groups.length === 0);
 }
 
@@ -1668,7 +1672,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     [-115.17, 36.14],
     [-115.19, 36.14],
   ];
-  const groupId = store.getState().createFacilityComplex(drawnRing);
+  const groupId = required(store.commands.groups.createFacilityComplex(drawnRing));
   check(
     'createFacilityComplex creates a footprint-having group and selects it',
     store.getState().system.groups.length === 1 &&
@@ -1688,18 +1692,20 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     !!store.getState().system.groups[0].color,
   );
 
-  store.getState().moveGroupFootprintPoint(groupId, 0, [-115.1801, 36.1301]);
+  store.commands.groups.moveGroupFootprintPoint(groupId, 0, [-115.1801, 36.1301]);
   check(
     'moveGroupFootprintPoint edits one corner',
     store.getState().system.groups[0].footprint![0][0] === -115.1801,
   );
 
-  store.getState().startPlacingFacility(groupId);
+  store.commands.groups.startPlacingFacility(groupId);
   check(
     'startPlacingFacility arms placement and switches to the facility tool',
     store.getState().placingFacilityForGroupId === groupId && store.getState().tool === 'facility',
   );
-  const facId = store.getState().placeFacilityInGroup(groupId, 'busBay', [-115.179, 36.129]);
+  const facId = required(
+    store.commands.groups.placeFacilityInGroup(groupId, 'busBay', [-115.179, 36.129]),
+  );
   check(
     'placeFacilityInGroup creates the facility',
     store.getState().system.facilities.some((f) => f.id === facId && f.typeId === 'busBay'),
@@ -1717,25 +1723,25 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     store.getState().selection?.kind === 'group' && store.getState().selection?.id === groupId,
   );
 
-  const looseStation = store.getState().addStation([-115.181, 36.131]);
-  store.getState().startPickingMember(groupId);
+  const looseStation = required(store.commands.stations.addStation([-115.181, 36.131]));
+  store.commands.groups.startPickingMember(groupId);
   check('startPickingMember arms picking', store.getState().pickingMemberForGroupId === groupId);
-  store.getState().addGroupMember(groupId, looseStation);
-  store.getState().cancelPickingMember();
+  store.commands.groups.addGroupMember(groupId, looseStation);
+  store.commands.groups.cancelPickingMember();
   check(
     'picking flow (addGroupMember + cancel) adds the existing station and disarms',
     store.getState().system.groups[0].memberIds.includes(looseStation) &&
       store.getState().pickingMemberForGroupId === null,
   );
 
-  store.getState().deleteGroupFootprint(groupId);
+  store.commands.groups.deleteGroupFootprint(groupId);
   check(
     'deleteGroupFootprint clears the footprint but keeps members',
     store.getState().system.groups[0].footprint === undefined &&
       store.getState().system.groups[0].memberIds.length === 2,
   );
 
-  store.getState().addGroupFootprint(groupId);
+  store.commands.groups.addGroupFootprint(groupId);
   check(
     'addGroupFootprint re-adds a default footprint',
     store.getState().system.groups[0].footprint?.length === 4,
@@ -1746,9 +1752,9 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // opt-in specialization, not a required shape for every group ---
 {
   fresh();
-  const a = store.getState().addStation([-115.2, 36.1]);
-  const b = store.getState().addStation([-115.2001, 36.1001]);
-  store.getState().createGroup([a, b], 'Transfer complex');
+  const a = required(store.commands.stations.addStation([-115.2, 36.1]));
+  const b = required(store.commands.stations.addStation([-115.2001, 36.1001]));
+  store.commands.groups.createGroup([a, b], 'Transfer complex');
   check(
     'a plain group has no footprint',
     store.getState().system.groups[0].footprint === undefined,
@@ -1758,12 +1764,14 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- On-map labels: name flows into station/facility feature properties ---
 {
   fresh();
-  const namedId = store.getState().addStation([-115.16, 36.12]);
-  store.getState().setStationName(namedId, 'Downtown');
-  const unnamedId = store.getState().addStation([-115.17, 36.13]);
-  const facId = store.getState().addFacility('depot', [-115.18, 36.14]);
-  store.getState().setFacilityName(facId, 'Maintenance Yard');
-  const unnamedFacId = store.getState().addFacility('entrance', [-115.19, 36.15]);
+  const namedId = required(store.commands.stations.addStation([-115.16, 36.12]));
+  store.commands.stations.setStationName(namedId, 'Downtown');
+  const unnamedId = required(store.commands.stations.addStation([-115.17, 36.13]));
+  const facId = required(store.commands.facilities.addFacility('depot', [-115.18, 36.14]));
+  store.commands.facilities.setFacilityName(facId, 'Maintenance Yard');
+  const unnamedFacId = required(
+    store.commands.facilities.addFacility('entrance', [-115.19, 36.15]),
+  );
 
   const view = {
     viewMode: 'network' as const,
@@ -1803,10 +1811,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- P3: footprints/platforms/facilities render in Infrastructure view only ---
 {
   fresh();
-  const stId = store.getState().addStation([-115.15, 36.1]);
-  store.getState().addStationFootprint(stId);
-  store.getState().addPlatform(stId);
-  store.getState().addFacility('entrance', [-115.151, 36.101]);
+  const stId = required(store.commands.stations.addStation([-115.15, 36.1]));
+  store.commands.stations.addStationFootprint(stId);
+  store.commands.stations.addPlatform(stId);
+  store.commands.facilities.addFacility('entrance', [-115.151, 36.101]);
   // Empty way-type filter on purpose — footprints/platforms/facilities render
   // independent of way-type visibility, only gated by view mode.
   const emptyView = {
@@ -1843,12 +1851,14 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check('network view hides facilities', net.facilities.features.length === 0);
   check('network view hides physical handles too', net.physicalHandles.features.length === 0);
 
-  const groupId = store.getState().createFacilityComplex([
-    [-115.2, 36.13],
-    [-115.18, 36.13],
-    [-115.18, 36.15],
-    [-115.2, 36.15],
-  ]);
+  const groupId = required(
+    store.commands.groups.createFacilityComplex([
+      [-115.2, 36.13],
+      [-115.18, 36.13],
+      [-115.18, 36.15],
+      [-115.2, 36.15],
+    ]),
+  );
   const infraWithGroup = buildFeatures(
     store.getState().system,
     null,
@@ -1916,12 +1926,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- P3: v3 serialize round-trips footprints, platforms, facilities, groups ---
 {
   fresh();
-  const stId = store.getState().addStation([-115.15, 36.1]);
-  store.getState().addStationFootprint(stId);
-  store.getState().addPlatform(stId);
-  store.getState().addFacility('depot', [-115.16, 36.11]);
-  const other = store.getState().addStation([-115.17, 36.12]);
-  store.getState().createGroup([stId, other], 'Complex');
+  const stId = required(store.commands.stations.addStation([-115.15, 36.1]));
+  store.commands.stations.addStationFootprint(stId);
+  store.commands.stations.addPlatform(stId);
+  store.commands.facilities.addFacility('depot', [-115.16, 36.11]);
+  const other = required(store.commands.stations.addStation([-115.17, 36.12]));
+  store.commands.groups.createGroup([stId, other], 'Complex');
   const round = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
   check(
     'parse round-trips a station footprint',
@@ -1942,12 +1952,14 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // A facility complex's footprint + color used to be silently dropped by
   // parseSystem (never read at all) — real data loss on save/reload.
-  const complexId = store.getState().createFacilityComplex([
-    [-115.2, 36.13],
-    [-115.18, 36.13],
-    [-115.18, 36.15],
-    [-115.2, 36.15],
-  ]);
+  const complexId = required(
+    store.commands.groups.createFacilityComplex([
+      [-115.2, 36.13],
+      [-115.18, 36.13],
+      [-115.18, 36.15],
+      [-115.2, 36.15],
+    ]),
+  );
   const roundComplex = parseSystem(JSON.parse(JSON.stringify(store.getState().system))).groups.find(
     (g) => g.id === complexId,
   );
@@ -1963,16 +1975,16 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 {
   fresh();
   // Way A: a straight line the junction will land on mid-segment.
-  const wA = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(wA, [-115.2, 36.1]);
-  store.getState().addWayPoint(wA, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const wA = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(wA, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(wA, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   // Way B ends exactly where A's midpoint is — join them.
-  const wB = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(wB, [-115.15, 36.2]);
-  store.getState().addWayPoint(wB, [-115.15, 36.1]);
-  store.getState().finishWay();
-  store.getState().joinWayPointToWay(wB, 1, wA, [-115.15, 36.1]);
+  const wB = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(wB, [-115.15, 36.2]);
+  store.commands.ways.addWayPoint(wB, [-115.15, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.joinWayPointToWay(wB, 1, wA, [-115.15, 36.1]);
 
   let s = store.getState().system;
   check(
@@ -1994,7 +2006,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // Moving the junction (on EITHER way) must cascade to the other — the exact
   // bug the plan doc calls out ("junctions silently desync when you edit them").
-  store.getState().moveWayPoint(wB, 1, [-115.16, 36.05]);
+  store.commands.ways.moveWayPoint(wB, 1, [-115.16, 36.05]);
   s = store.getState().system;
   check(
     'moving the shared point on one way also moves it on the other (no desync)',
@@ -2005,7 +2017,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // Inserting a point earlier in way A must shift the node's ref index, not
   // leave it pointing at the wrong (now-shifted) point.
-  store.getState().insertWayPoint(wA, 0, [-115.22, 36.09]);
+  store.commands.ways.insertWayPoint(wA, 0, [-115.22, 36.09]);
   s = store.getState().system;
   const wARef = s.nodes[0].refs.find((r) => r.wayId === wA)!;
   check("insertWayPoint shifts the node's ref index on that way", wARef.pointIndex === 2);
@@ -2016,7 +2028,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // Deleting the OTHER end of way A (not the junction point) must not disturb
   // the node's ref into way A, only reindex it.
-  store.getState().deleteWayPoint(wA, 0);
+  store.commands.ways.deleteWayPoint(wA, 0);
   s = store.getState().system;
   const wARef2 = s.nodes[0].refs.find((r) => r.wayId === wA)!;
   check("deleteWayPoint before the node's index shifts it back down", wARef2.pointIndex === 1);
@@ -2027,10 +2039,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // Way B needs a third point first: it's sitting at exactly 2 right now, and
   // deleting its junction end would ghost it — deleteWayPoint refuses that
   // (see store.ts), which is exactly what the next check below proves.
-  store.getState().insertWayPoint(wB, 0, [-115.15, 36.25]);
+  store.commands.ways.insertWayPoint(wB, 0, [-115.15, 36.25]);
   s = store.getState().system;
   const wBRefIndex = s.nodes[0].refs.find((r) => r.wayId === wB)!.pointIndex;
-  store.getState().deleteWayPoint(wB, wBRefIndex);
+  store.commands.ways.deleteWayPoint(wB, wBRefIndex);
   s = store.getState().system;
   check(
     'deleting the shared point on one way drops the node (no longer a real junction)',
@@ -2041,18 +2053,18 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // deleting its only remaining non-junction point would ghost the way AND,
   // as a side effect, desync the junction — refused outright instead.
   fresh();
-  const armA = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(armA, [-115.2, 36.1]);
-  store.getState().addWayPoint(armA, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const armB = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(armB, [-115.15, 36.2]);
-  store.getState().addWayPoint(armB, [-115.15, 36.1]);
-  store.getState().finishWay();
-  store.getState().joinWayPointToWay(armB, 1, armA, [-115.15, 36.1]);
+  const armA = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(armA, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(armA, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const armB = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(armB, [-115.15, 36.2]);
+  store.commands.ways.addWayPoint(armB, [-115.15, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.joinWayPointToWay(armB, 1, armA, [-115.15, 36.1]);
   s = store.getState().system;
   check('setup: a fresh junction with a 2-point arm exists', s.nodes.length === 1);
-  store.getState().deleteWayPoint(armB, 1);
+  store.commands.ways.deleteWayPoint(armB, 1);
   s = store.getState().system;
   check(
     "deleting a junction arm's own point is refused when the arm has only 2",
@@ -2061,17 +2073,17 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // deleteWay must strip any surviving refs to the removed way.
   fresh();
-  const wC = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(wC, [-115.2, 36.1]);
-  store.getState().addWayPoint(wC, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const wD = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(wD, [-115.15, 36.2]);
-  store.getState().addWayPoint(wD, [-115.15, 36.1]);
-  store.getState().finishWay();
-  store.getState().joinWayPointToWay(wD, 1, wC, [-115.15, 36.1]);
+  const wC = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(wC, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(wC, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const wD = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(wD, [-115.15, 36.2]);
+  store.commands.ways.addWayPoint(wD, [-115.15, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.joinWayPointToWay(wD, 1, wC, [-115.15, 36.1]);
   check('setup: node exists before delete', store.getState().system.nodes.length === 1);
-  store.getState().deleteWay(wC);
+  store.commands.ways.deleteWay(wC);
   check(
     'deleteWay removes the node once its junction partner is gone',
     store.getState().system.nodes.length === 0,
@@ -2118,15 +2130,15 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // A system round-tripped through JSON keeps its explicit v4 nodes intact.
   fresh();
-  const wE = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(wE, [-115.2, 36.1]);
-  store.getState().addWayPoint(wE, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const wF = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(wF, [-115.15, 36.2]);
-  store.getState().addWayPoint(wF, [-115.15, 36.1]);
-  store.getState().finishWay();
-  store.getState().joinWayPointToWay(wF, 1, wE, [-115.15, 36.1]);
+  const wE = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(wE, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(wE, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const wF = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(wF, [-115.15, 36.2]);
+  store.commands.ways.addWayPoint(wF, [-115.15, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.joinWayPointToWay(wF, 1, wE, [-115.15, 36.1]);
   const v4Round = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
   check(
     'v4 round-trip preserves the explicit node',
@@ -2139,23 +2151,23 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 {
   // A 2-arm junction: the crossing corridor's end joined onto a through way.
   fresh();
-  const through = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(through, [-115.2, 36.1]);
-  store.getState().addWayPoint(through, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const spur = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(spur, [-115.15, 36.2]);
-  store.getState().addWayPoint(spur, [-115.15, 36.1]);
-  store.getState().finishWay();
-  store.getState().joinWayPointToWay(spur, 1, through, [-115.15, 36.1]);
+  const through = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(through, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(through, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const spur = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(spur, [-115.15, 36.2]);
+  store.commands.ways.addWayPoint(spur, [-115.15, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.joinWayPointToWay(spur, 1, through, [-115.15, 36.1]);
 
   const junctionId = store.getState().system.nodes[0].id;
   const stayingPoint = store
     .getState()
     .system.ways.find((w) => w.id === through)!
     .points[1].slice() as [number, number];
-  store.getState().select({ kind: 'node', id: junctionId });
-  store.getState().disconnectNodeWay(junctionId, spur);
+  store.commands.selection.select({ kind: 'node', id: junctionId });
+  store.commands.network.disconnectNodeWay(junctionId, spur);
 
   let s = store.getState().system;
   check('disconnecting one of two arms deletes the junction outright', s.nodes.length === 0);
@@ -2178,30 +2190,30 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // lane connectors with it — a connector naming a way that no longer meets
   // here would break junctionGeometry.
   fresh();
-  const main = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(main, [-115.2, 36.1]);
-  store.getState().addWayPoint(main, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const north = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(north, [-115.15, 36.2]);
-  store.getState().addWayPoint(north, [-115.15, 36.1]);
-  store.getState().finishWay();
-  const south = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(south, [-115.15, 36.0]);
-  store.getState().addWayPoint(south, [-115.15, 36.1]);
-  store.getState().finishWay();
-  store.getState().joinWayPointToWay(north, 1, main, [-115.15, 36.1]);
-  store.getState().joinWayPointToWay(south, 1, main, [-115.15, 36.1]);
+  const main = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(main, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(main, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const north = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(north, [-115.15, 36.2]);
+  store.commands.ways.addWayPoint(north, [-115.15, 36.1]);
+  store.commands.ways.finishWay();
+  const south = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(south, [-115.15, 36.0]);
+  store.commands.ways.addWayPoint(south, [-115.15, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.joinWayPointToWay(north, 1, main, [-115.15, 36.1]);
+  store.commands.ways.joinWayPointToWay(south, 1, main, [-115.15, 36.1]);
 
   s = store.getState().system;
   const threeArm = s.nodes[0];
   check('setup: all three ways meet at one junction', threeArm.refs.length === 3);
   const laneOf = (wayId: string) => s.ways.find((w) => w.id === wayId)!.profile.lanes[0].id;
-  store.getState().setNodeConnectors(threeArm.id, [
+  store.commands.network.setNodeConnectors(threeArm.id, [
     { from: { wayId: south, laneId: laneOf(south) }, to: { wayId: north, laneId: laneOf(north) } },
     { from: { wayId: north, laneId: laneOf(north) }, to: { wayId: main, laneId: laneOf(main) } },
   ]);
-  store.getState().disconnectNodeWay(threeArm.id, south);
+  store.commands.network.disconnectNodeWay(threeArm.id, south);
 
   s = store.getState().system;
   check('a 3-arm junction survives shedding one arm', s.nodes.length === 1);
@@ -2220,14 +2232,14 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // The bug this primitive exists for: drawing a road across a rail line no
   // longer wires them into one junction on commit.
   fresh();
-  const rail = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(rail, [-115.2, 36.1]);
-  store.getState().addWayPoint(rail, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const road = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(road, [-115.15, 36.05]);
-  store.getState().addWayPoint(road, [-115.15, 36.15]);
-  store.getState().finishWay();
+  const rail = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(rail, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(rail, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const road = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(road, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(road, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
   check(
     'a road drawn across a rail line forms no junction',
     store.getState().system.nodes.length === 0,
@@ -2245,7 +2257,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     grade: 'atGrade' as const,
     profile: defaultProfileFor(typeId),
   });
-  store.getState().importWays({
+  store.commands.imports.importWays({
     ways: [
       wayOf('mixed-road-west', 'road', [
         [-115.2, 36.1],
@@ -2292,7 +2304,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // The same rule keeps a bike path joined to the street it meets: both are
   // in the street junction group, and a cyclist really does turn there.
   fresh();
-  store.getState().importWays({
+  store.commands.imports.importWays({
     ways: [
       wayOf('bike-street-west', 'road', [
         [-115.2, 36.1],
@@ -2326,29 +2338,29 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- multi-select: toggle, bulk move (nudge), bulk delete ---
 {
   fresh();
-  const wayA = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(wayA, [-115.2, 36.1]);
-  store.getState().addWayPoint(wayA, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const stId = store.getState().addStation([-115.25, 36.05]); // free-floating, not anchored to wayA
-  const facId = store.getState().addFacility('entrance', [-115.15, 36.2]);
+  const wayA = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(wayA, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(wayA, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const stId = required(store.commands.stations.addStation([-115.25, 36.05])); // free-floating, not anchored to wayA
+  const facId = required(store.commands.facilities.addFacility('entrance', [-115.15, 36.2]));
 
-  store.getState().toggleMultiSelect({ kind: 'way', id: wayA });
-  store.getState().toggleMultiSelect({ kind: 'station', id: stId });
+  store.commands.selection.toggleMultiSelect({ kind: 'way', id: wayA });
+  store.commands.selection.toggleMultiSelect({ kind: 'station', id: stId });
   check('toggleMultiSelect builds up the group', store.getState().multiSelection.length === 2);
   check('multi-select clears the single Inspector selection', store.getState().selection === null);
 
-  store.getState().toggleMultiSelect({ kind: 'station', id: stId });
+  store.commands.selection.toggleMultiSelect({ kind: 'station', id: stId });
   check(
     'toggling an already-selected item removes it',
     store.getState().multiSelection.length === 1,
   );
-  store.getState().toggleMultiSelect({ kind: 'station', id: stId });
-  store.getState().toggleMultiSelect({ kind: 'facility', id: facId });
+  store.commands.selection.toggleMultiSelect({ kind: 'station', id: stId });
+  store.commands.selection.toggleMultiSelect({ kind: 'facility', id: facId });
   check('group now has all 3 kinds', store.getState().multiSelection.length === 3);
 
   const before = store.getState().system;
-  store.getState().nudgeMultiSelection(0.01, 0.02);
+  store.commands.selection.nudgeMultiSelection(0.01, 0.02);
   let s = store.getState().system;
   check(
     'nudge moves every point of a selected way',
@@ -2368,10 +2380,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // A station anchored to a way that's ALSO in the group must not be
   // double-moved — it already follows via the way's own reanchor.
-  const anchoredSt = store.getState().addStation([-115.15, 36.1], { wayId: wayA, t: 0.5 });
-  store.getState().toggleMultiSelect({ kind: 'station', id: anchoredSt });
+  const anchoredSt = required(
+    store.commands.stations.addStation([-115.15, 36.1], { wayId: wayA, t: 0.5 }),
+  );
+  store.commands.selection.toggleMultiSelect({ kind: 'station', id: anchoredSt });
   const wayPointBefore = store.getState().system.ways.find((w) => w.id === wayA)!.points[0];
-  store.getState().nudgeMultiSelection(0.005, 0.005);
+  store.commands.selection.nudgeMultiSelection(0.005, 0.005);
   s = store.getState().system;
   const expectedCoord = pointAtT(resolveWayPath(s.ways.find((w) => w.id === wayA)!), 0.5);
   const actualCoord = s.stations.find((st) => st.id === anchoredSt)!.coord;
@@ -2389,7 +2403,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     'group still has 4 members before bulk delete',
     store.getState().multiSelection.length === 4,
   );
-  store.getState().deleteMultiSelection();
+  store.commands.selection.deleteMultiSelection();
   s = store.getState().system;
   check('bulk delete removes the way', !s.ways.some((w) => w.id === wayA));
   check(
@@ -2405,22 +2419,24 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // batch (updateWayPointsBatch) ---
 {
   fresh();
-  const wayA = store.getState().beginWay('lightRail', 'straight'); // E-W
-  store.getState().addWayPoint(wayA, [-115.2, 36.1]);
-  store.getState().addWayPoint(wayA, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const wayB = store.getState().beginWay('lightRail', 'straight'); // N-S, a different
-  store.getState().addWayPoint(wayB, [-115.3, 36.3]); // shape/orientation than wayA, so
-  store.getState().addWayPoint(wayB, [-115.3, 36.0]); // reanchoring against the wrong way
-  store.getState().finishWay(); // in the batch would be numerically obvious.
-  const stOnA = store.getState().addStation([-115.15, 36.1], { wayId: wayA, t: 0.5 });
+  const wayA = required(store.commands.ways.beginWay('lightRail', 'straight')); // E-W
+  store.commands.ways.addWayPoint(wayA, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(wayA, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const wayB = required(store.commands.ways.beginWay('lightRail', 'straight')); // N-S, a different
+  store.commands.ways.addWayPoint(wayB, [-115.3, 36.3]); // shape/orientation than wayA, so
+  store.commands.ways.addWayPoint(wayB, [-115.3, 36.0]); // reanchoring against the wrong way
+  store.commands.ways.finishWay(); // in the batch would be numerically obvious.
+  const stOnA = required(
+    store.commands.stations.addStation([-115.15, 36.1], { wayId: wayA, t: 0.5 }),
+  );
 
-  store.getState().toggleMultiSelect({ kind: 'way', id: wayA });
-  store.getState().toggleMultiSelect({ kind: 'way', id: wayB });
+  store.commands.selection.toggleMultiSelect({ kind: 'way', id: wayA });
+  store.commands.selection.toggleMultiSelect({ kind: 'way', id: wayB });
   check('both ways are in the group', store.getState().multiSelection.length === 2);
 
   const before = store.getState().system;
-  store.getState().nudgeMultiSelection(0.02, -0.03);
+  store.commands.selection.nudgeMultiSelection(0.02, -0.03);
   const s = store.getState().system;
   const newWayA = s.ways.find((w) => w.id === wayA)!;
   const newWayB = s.ways.find((w) => w.id === wayB)!;
@@ -2451,14 +2467,16 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // (longer) total silently drags every station toward the new far end ---
 {
   fresh();
-  const w = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(w, [-115.2, 36.1]);
-  store.getState().addWayPoint(w, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const midStation = store.getState().addStation([-115.15, 36.1], { wayId: w, t: 0.5 });
+  const w = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(w, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(w, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const midStation = required(
+    store.commands.stations.addStation([-115.15, 36.1], { wayId: w, t: 0.5 }),
+  );
   const before = store.getState().system.stations.find((s) => s.id === midStation)!.coord;
 
-  store.getState().addWayPoint(w, [-115.0, 36.1]); // extend the far endpoint
+  store.commands.ways.addWayPoint(w, [-115.0, 36.1]); // extend the far endpoint
   const afterFirst = store.getState().system.stations.find((s) => s.id === midStation)!;
   check(
     "extending a way's endpoint does not move a station anchored earlier on the way",
@@ -2470,7 +2488,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     afterFirst.anchors.find((a) => a.wayId === w)!.t < 0.5,
   );
 
-  store.getState().addWayPoint(w, [-114.9, 36.1]); // extend again
+  store.commands.ways.addWayPoint(w, [-114.9, 36.1]); // extend again
   const afterSecond = store.getState().system.stations.find((s) => s.id === midStation)!.coord;
   check(
     "a second endpoint extension still preserves the station's absolute position",
@@ -2482,10 +2500,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // stretch of a line removable without a station at each end ---
 {
   fresh();
-  const way = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(way, [-115.2, 36.1]);
-  store.getState().addWayPoint(way, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const way = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(way, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(way, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const line = store.getState().system.services[0].id;
   const registry = createSelectionActions(store);
   const refs: MultiSelectItem[] = [{ kind: 'service', id: line }];
@@ -2541,10 +2559,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // Cut at a point, and the far half becomes its own line — how a stretch in
   // the middle comes out: cut at both ends, delete the middle.
   fresh();
-  const way2 = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(way2, [-115.2, 36.1]);
-  store.getState().addWayPoint(way2, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const way2 = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(way2, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(way2, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const line2 = store.getState().system.services[0].id;
   const refs2: MultiSelectItem[] = [{ kind: 'service', id: line2 }];
   const pattern2 = store.getState().system.services.find((service) => service.id === line2)!.path;
@@ -2571,10 +2589,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // A way divides at a click too, which splitWayAt alone could not do: it
   // only ever cut at an existing control point.
   fresh();
-  const way3 = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(way3, [-115.2, 36.1]);
-  store.getState().addWayPoint(way3, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const way3 = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(way3, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(way3, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const refs3: MultiSelectItem[] = [{ kind: 'way', id: way3 }];
   const divide = registry
     .actionsFor({
@@ -2592,18 +2610,18 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- a duplicate street offers its own way out ---
 {
   fresh();
-  store.getState().setDraftServiceEnabled(false);
-  const road = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(road, [-115.2, 36.1]);
-  store.getState().addWayPoint(road, [-115.1, 36.1]);
-  store.getState().finishWay();
+  store.commands.tools.setDraftServiceEnabled(false);
+  const road = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(road, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   // A second street laid alongside it, carrying a line — what a stroke drawn
   // just outside snapping range leaves behind.
-  store.getState().setDraftServiceEnabled(true);
-  const beside = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(beside, [-115.19, 36.10028]);
-  store.getState().addWayPoint(beside, [-115.11, 36.10028]);
-  store.getState().finishWay();
+  store.commands.tools.setDraftServiceEnabled(true);
+  const beside = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(beside, [-115.19, 36.10028]);
+  store.commands.ways.addWayPoint(beside, [-115.11, 36.10028]);
+  store.commands.ways.finishWay();
   check('the duplicate survived drawing', store.getState().system.ways.length === 2);
 
   const registry = createSelectionActions(store);
@@ -2619,22 +2637,22 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- picking up the Lines tool drops an infrastructure selection ---
 {
   fresh();
-  const w = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(w, [-115.2, 36.1]);
-  store.getState().addWayPoint(w, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const w = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(w, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(w, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const line = store.getState().system.lines[0].id;
-  store.getState().setTool('select');
-  store.getState().toggleMultiSelect({ kind: 'way', id: w });
-  store.getState().toggleMultiSelect({ kind: 'line', id: line });
+  store.commands.tools.setTool('select');
+  store.commands.selection.toggleMultiSelect({ kind: 'way', id: w });
+  store.commands.selection.toggleMultiSelect({ kind: 'line', id: line });
   check('the group holds both kinds first', store.getState().multiSelection.length === 2);
-  store.getState().setTool('lines');
+  store.commands.tools.setTool('lines');
   check(
     'the Lines tool keeps only the lines, so its marquee cannot build a group nothing applies to',
     store.getState().multiSelection.length === 1 &&
       store.getState().multiSelection[0].kind === 'line',
   );
-  store.getState().setTool('select');
+  store.commands.tools.setTool('select');
 }
 
 // --- selecting LINES: services join the multi-select group, the action
@@ -2642,46 +2660,46 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 {
   fresh();
   // Two lines meeting nose to tail at [-115.15, 36.1].
-  const wayW = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(wayW, [-115.2, 36.1]);
-  store.getState().addWayPoint(wayW, [-115.15, 36.1]);
-  store.getState().finishWay();
-  const wayE = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(wayE, [-115.15, 36.1]);
-  store.getState().addWayPoint(wayE, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const wayW = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(wayW, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(wayW, [-115.15, 36.1]);
+  store.commands.ways.finishWay();
+  const wayE = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(wayE, [-115.15, 36.1]);
+  store.commands.ways.addWayPoint(wayE, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const [lineW, lineE] = store.getState().system.services.map((sv) => sv.id);
 
-  store.getState().toggleMultiSelect({ kind: 'service', id: lineW });
-  store.getState().toggleMultiSelect({ kind: 'service', id: lineE });
+  store.commands.selection.toggleMultiSelect({ kind: 'service', id: lineW });
+  store.commands.selection.toggleMultiSelect({ kind: 'service', id: lineE });
   check('a service can be part of a multi-selection', store.getState().multiSelection.length === 2);
 
   // Selecting one thing and then shift-clicking a second has to end up with
   // both, not just the second.
-  store.getState().clearMultiSelection();
-  store.getState().select({ kind: 'service', id: lineW });
-  store.getState().extendSelection({ kind: 'service', id: lineE });
+  store.commands.selection.clearMultiSelection();
+  store.commands.selection.select({ kind: 'service', id: lineW });
+  store.commands.selection.extendSelection({ kind: 'service', id: lineE });
   check(
     'extending a single selection groups both, not just the second',
     store.getState().multiSelection.length === 2,
   );
-  store.getState().clearMultiSelection();
-  store.getState().select({ kind: 'service', id: lineW });
-  store.getState().extendSelection({ kind: 'service', id: lineW });
+  store.commands.selection.clearMultiSelection();
+  store.commands.selection.select({ kind: 'service', id: lineW });
+  store.commands.selection.extendSelection({ kind: 'service', id: lineW });
   check(
     '…and extending onto the one thing already selected groups it once',
     store.getState().multiSelection.length === 1,
   );
-  store.getState().clearMultiSelection();
-  store.getState().select({ kind: 'service', id: lineW });
-  store.getState().toggleMultiSelect({ kind: 'service', id: lineE });
+  store.commands.selection.clearMultiSelection();
+  store.commands.selection.select({ kind: 'service', id: lineW });
+  store.commands.selection.toggleMultiSelect({ kind: 'service', id: lineE });
   check(
     'a plain toggle still builds the group from scratch',
     store.getState().multiSelection.length === 1,
   );
-  store.getState().clearMultiSelection();
-  store.getState().toggleMultiSelect({ kind: 'service', id: lineW });
-  store.getState().toggleMultiSelect({ kind: 'service', id: lineE });
+  store.commands.selection.clearMultiSelection();
+  store.commands.selection.toggleMultiSelect({ kind: 'service', id: lineW });
+  store.commands.selection.toggleMultiSelect({ kind: 'service', id: lineE });
 
   const registry = createSelectionActions(store);
   const refs = store.getState().multiSelection;
@@ -2739,23 +2757,23 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // Nudging a group that holds a line leaves the line alone — a service has
   // no geometry of its own to move.
   fresh();
-  const road = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(road, [-115.2, 36.2]);
-  store.getState().addWayPoint(road, [-115.1, 36.2]);
-  store.getState().finishWay();
+  const road = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(road, [-115.2, 36.2]);
+  store.commands.ways.addWayPoint(road, [-115.1, 36.2]);
+  store.commands.ways.finishWay();
   const line = store.getState().system.services[0].id;
-  store.getState().toggleMultiSelect({ kind: 'service', id: line });
+  store.commands.selection.toggleMultiSelect({ kind: 'service', id: line });
   const pointsBefore = JSON.stringify(
     store.getState().system.ways.find((w) => w.id === road)!.points,
   );
-  store.getState().nudgeMultiSelection(0.01, 0.01);
+  store.commands.selection.nudgeMultiSelection(0.01, 0.01);
   check(
     'nudging a selected line moves no infrastructure',
     JSON.stringify(store.getState().system.ways.find((w) => w.id === road)!.points) ===
       pointsBefore,
   );
 
-  store.getState().deleteMultiSelection();
+  store.commands.selection.deleteMultiSelection();
   check(
     'deleting a selected line removes the service',
     store.getState().system.services.length === 0,
@@ -2767,10 +2785,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // joining them get a real junction, and only with the way that was picked ---
 {
   fresh();
-  const ns = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ns, [-115.2, 36.0]);
-  store.getState().addWayPoint(ns, [-115.2, 36.2]);
-  store.getState().finishWay();
+  const ns = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ns, [-115.2, 36.0]);
+  store.commands.ways.addWayPoint(ns, [-115.2, 36.2]);
+  store.commands.ways.finishWay();
 
   const registry = createSelectionActions(store);
   const refs = store.getState().multiSelection;
@@ -2790,18 +2808,22 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // re-snaps stations, and links the split point as a real junction ---
 {
   fresh();
-  const trunk = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(trunk, [-115.3, 36.1]);
-  store.getState().addWayPoint(trunk, [-115.2, 36.1]);
-  store.getState().addWayPoint(trunk, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().setWayGrade(trunk, 'underground');
+  const trunk = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(trunk, [-115.3, 36.1]);
+  store.commands.ways.addWayPoint(trunk, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(trunk, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.setWayGrade(trunk, 'underground');
   const svc = store.getState().system.services.find((sv) => serviceWayIds(sv).includes(trunk))!.id;
   // A station riding each half, so the re-snap can be checked on both sides.
-  const westStop = store.getState().addStation([-115.25, 36.1], { wayId: trunk, t: 0.25 });
-  const eastStop = store.getState().addStation([-115.15, 36.1], { wayId: trunk, t: 0.75 });
+  const westStop = required(
+    store.commands.stations.addStation([-115.25, 36.1], { wayId: trunk, t: 0.25 }),
+  );
+  const eastStop = required(
+    store.commands.stations.addStation([-115.15, 36.1], { wayId: trunk, t: 0.75 }),
+  );
 
-  store.getState().splitWayAt(trunk, 1); // split at the middle control point
+  store.commands.ways.splitWayAt(trunk, 1); // split at the middle control point
   let s = store.getState().system;
   check('splitWayAt produces exactly one new way', s.ways.length === 2);
   const wayA = s.ways.find((w) => w.id === trunk)!;
@@ -2843,7 +2865,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // Moving the shared split point still cascades to both halves (it's a
   // real Node now, not just two ways that happen to touch).
-  store.getState().moveWayPoint(trunk, 1, [-115.2, 36.05]);
+  store.commands.ways.moveWayPoint(trunk, 1, [-115.2, 36.05]);
   s = store.getState().system;
   check(
     'the split point still cascades on move, like any other junction',
@@ -2853,21 +2875,21 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // Splitting at an endpoint (nothing to split off) is a documented no-op.
   fresh();
-  const short = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(short, [-115.2, 36.1]);
-  store.getState().addWayPoint(short, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().splitWayAt(short, 0);
+  const short = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(short, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(short, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.splitWayAt(short, 0);
   check('splitting at an endpoint is a no-op', store.getState().system.ways.length === 1);
 }
 
 // --- Service frequency + span: additive fields, round-trip through parse ---
 {
   fresh();
-  const wayId = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(wayId, [-115.2, 36.1]);
-  store.getState().addWayPoint(wayId, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const wayId = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(wayId, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(wayId, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const svcId = store.getState().system.services[0].id;
   // A fresh line now seeds a sensible default headway (see store.ts's
   // DEFAULT_FREQUENCY_MINUTES) instead of starting unset.
@@ -2875,8 +2897,8 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     'frequency starts at the default headway',
     store.getState().system.services[0].frequencyMinutes === 10,
   );
-  store.getState().setServiceFrequency(svcId, 8);
-  store.getState().setServiceSpan(svcId, '05:00', '01:00');
+  store.commands.services.setServiceFrequency(svcId, 8);
+  store.commands.services.setServiceSpan(svcId, '05:00', '01:00');
   let svc = store.getState().system.services.find((s) => s.id === svcId)!;
   check('setServiceFrequency sets the peak headway', svc.frequencyMinutes === 8);
   check('setServiceSpan sets start/end', svc.spanStart === '05:00' && svc.spanEnd === '01:00');
@@ -2886,7 +2908,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     'frequency/span round-trip through parse',
     svc.frequencyMinutes === 8 && svc.spanStart === '05:00' && svc.spanEnd === '01:00',
   );
-  store.getState().setServiceFrequency(svcId, undefined);
+  store.commands.services.setServiceFrequency(svcId, undefined);
   check(
     'frequency can be cleared back to unset',
     store.getState().system.services.find((s) => s.id === svcId)!.frequencyMinutes === undefined,
@@ -2897,10 +2919,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // Services, each with its own path and schedule ---
 {
   fresh();
-  const trunk = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(trunk, [-115.3, 36.1]);
-  store.getState().addWayPoint(trunk, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const trunk = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(trunk, [-115.3, 36.1]);
+  store.commands.ways.addWayPoint(trunk, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const svcId = store
     .getState()
     .system.services.find((sv) => serviceWayIds(sv).includes(trunk))!.id;
@@ -2910,23 +2932,24 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     store.getState().system.lines.find((line) => line.id === lineId)!.serviceIds.length === 1,
   );
 
-  store
-    .getState()
-    .startAddingServiceToLine(lineId, { name: 'Branch service', modeId: 'lightRail' });
+  store.commands.services.startAddingServiceToLine(lineId, {
+    name: 'Branch service',
+    modeId: 'lightRail',
+  });
   check(
     'startAddingServiceToLine arms the flag and switches to the way tool',
     store.getState().addingServiceDraft?.lineId === lineId && store.getState().tool === 'way',
   );
 
   // Draw a fresh way for the branch — it should NOT spawn its own service.
-  const branchWay = store.getState().beginWay('lightRail', 'straight');
+  const branchWay = required(store.commands.ways.beginWay('lightRail', 'straight'));
   check(
     'drawing while armed creates no second service',
     store.getState().system.services.length === 1,
   );
-  store.getState().addWayPoint(branchWay, [-115.2, 36.1]);
-  store.getState().addWayPoint(branchWay, [-115.15, 36.2]);
-  store.getState().finishWay();
+  store.commands.ways.addWayPoint(branchWay, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(branchWay, [-115.15, 36.2]);
+  store.commands.ways.finishWay();
 
   const branchService = store
     .getState()
@@ -2963,17 +2986,18 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check('the branch-only way renders its own service line too', branchFeatures.length === 1);
 
   // Cancel: no-op on the model, just clears the flag.
-  store
-    .getState()
-    .startAddingServiceToLine(lineId, { name: 'Cancelled service', modeId: 'lightRail' });
-  store.getState().cancelAddingService();
+  store.commands.services.startAddingServiceToLine(lineId, {
+    name: 'Cancelled service',
+    modeId: 'lightRail',
+  });
+  store.commands.services.cancelAddingService();
   check(
     'cancelAddingService clears the flag without adding a service',
     store.getState().addingServiceDraft === null &&
       store.getState().system.lines.find((line) => line.id === lineId)!.serviceIds.length === 2,
   );
 
-  store.getState().deleteService(branchService.id);
+  store.commands.services.deleteService(branchService.id);
   check(
     'deleting one service preserves the public line and its remaining service',
     store.getState().system.lines.find((line) => line.id === lineId)?.serviceIds[0] === svcId,
@@ -3011,12 +3035,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // A service with zero patterns is a ghost, same as the old empty-wayIds case.
   fresh();
-  const ghostWay = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(ghostWay, [-115.2, 36.1]);
-  store.getState().addWayPoint(ghostWay, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const ghostWay = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(ghostWay, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(ghostWay, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const ghostSvcId = store.getState().system.services[0].id;
-  store.getState().deleteWay(ghostWay); // drops the way, and with it the service's only pattern
+  store.commands.ways.deleteWay(ghostWay); // drops the way, and with it the service's only pattern
   check(
     'removeWay drops a now-patternless service entirely',
     !store.getState().system.services.some((s) => s.id === ghostSvcId),
@@ -3035,7 +3059,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // trusts an incoming way's points as given.
   fresh();
   const ghostWay = 'ghost';
-  store.getState().importWays({
+  store.commands.imports.importWays({
     ways: [
       {
         id: ghostWay,
@@ -3059,7 +3083,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // An orphaned station: anchor points at a way id that doesn't exist.
   fresh();
-  const stId = store.getState().addStation([-115.15, 36.1], { wayId: 'nonexistent', t: 0.5 });
+  const stId = required(
+    store.commands.stations.addStation([-115.15, 36.1], {
+      wayId: 'nonexistent',
+      t: 0.5,
+    }),
+  );
   issues = validateSystem(store.getState().system);
   check(
     'flags a station anchored to a missing way',
@@ -3072,7 +3101,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   fresh();
   const wX = 'vx';
   const wY = 'vy';
-  store.getState().importWays({
+  store.commands.imports.importWays({
     ways: [
       {
         id: wX,
@@ -3119,7 +3148,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   fresh();
   const wRoad = 'vroad';
   const wRail = 'vrail';
-  store.getState().importWays({
+  store.commands.imports.importWays({
     ways: [
       {
         id: wRoad,
@@ -3162,14 +3191,14 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // Parallel ways that never cross at all: no false positive.
   fresh();
-  const wP = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(wP, [-115.2, 36.1]);
-  store.getState().addWayPoint(wP, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const wQ = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(wQ, [-115.2, 36.11]);
-  store.getState().addWayPoint(wQ, [-115.1, 36.11]);
-  store.getState().finishWay();
+  const wP = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(wP, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(wP, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const wQ = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(wQ, [-115.2, 36.11]);
+  store.commands.ways.addWayPoint(wQ, [-115.1, 36.11]);
+  store.commands.ways.finishWay();
   check(
     'parallel, non-crossing ways raise no crossing issue',
     !validateSystem(store.getState().system).some((i) => i.id.startsWith('crossing-')),
@@ -3187,11 +3216,11 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
   check('formatUsdCompact renders thousands', formatUsdCompact(2_500) === '$3K');
 
-  const heavy = store.getState().beginWay('heavyRail', 'straight');
-  store.getState().addWayPoint(heavy, [-115.2, 36.1]);
-  store.getState().addWayPoint(heavy, [-115.1, 36.1]); // ~9.2km ≈ 5.7mi at this latitude
-  store.getState().finishWay();
-  store.getState().setWayGrade(heavy, 'underground');
+  const heavy = required(store.commands.ways.beginWay('heavyRail', 'straight'));
+  store.commands.ways.addWayPoint(heavy, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(heavy, [-115.1, 36.1]); // ~9.2km ≈ 5.7mi at this latitude
+  store.commands.ways.finishWay();
+  store.commands.ways.setWayGrade(heavy, 'underground');
   const heavyWay = store.getState().system.ways.find((w) => w.id === heavy)!;
   const heavyCost = estimateWayCapitalCost(heavyWay);
   check('underground heavy rail gets a cost estimate', heavyCost !== null);
@@ -3207,10 +3236,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       ) < 1,
   );
 
-  const ferry = store.getState().beginWay('water', 'straight');
-  store.getState().addWayPoint(ferry, [-115.2, 36.1]);
-  store.getState().addWayPoint(ferry, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const ferry = required(store.commands.ways.beginWay('water', 'straight'));
+  store.commands.ways.addWayPoint(ferry, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(ferry, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   check(
     'a ferry route (no linear right-of-way cost concept) gets no estimate, not a misleading number',
     estimateWayCapitalCost(store.getState().system.ways.find((w) => w.id === ferry)!) === null,
@@ -3222,13 +3251,13 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   fresh();
   check('systemBounds is null for an empty system', systemBounds(store.getState().system) === null);
 
-  const wayId = store.getState().beginWay('heavyRail', 'straight');
-  store.getState().addWayPoint(wayId, [-115.2, 36.1]);
-  store.getState().addWayPoint(wayId, [-115.1, 36.2]);
-  store.getState().finishWay();
-  const stId = store.getState().addStation([-115.25, 36.05]);
-  store.getState().addStationFootprint(stId); // extends the bbox further southwest
-  const facId = store.getState().addFacility('depot', [-115.05, 36.25]); // extends northeast
+  const wayId = required(store.commands.ways.beginWay('heavyRail', 'straight'));
+  store.commands.ways.addWayPoint(wayId, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(wayId, [-115.1, 36.2]);
+  store.commands.ways.finishWay();
+  const stId = required(store.commands.stations.addStation([-115.25, 36.05]));
+  store.commands.stations.addStationFootprint(stId); // extends the bbox further southwest
+  const facId = required(store.commands.facilities.addFacility('depot', [-115.05, 36.25])); // extends northeast
 
   const bounds = systemBounds(store.getState().system);
   check('systemBounds returns [sw, ne]', bounds !== null);
@@ -3243,7 +3272,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       maxLng >= -115.05 && maxLat >= 36.25,
     );
   }
-  store.getState().deleteFacility(facId);
+  store.commands.facilities.deleteFacility(facId);
 
   const view = {
     viewMode: 'network' as const,
@@ -4224,7 +4253,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 
   fresh();
-  store.getState().importWays(osmElementsToNetwork(named));
+  store.commands.imports.importWays(osmElementsToNetwork(named));
   check(
     "importWays appends the import's street identities",
     store.getState().system.namedWays.length === 1,
@@ -4341,9 +4370,9 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 
   fresh();
-  store.getState().importWays(osmElementsToNetwork(area));
+  store.commands.imports.importWays(osmElementsToNetwork(area));
   const beforeNodes = store.getState().system.nodes.length;
-  store.getState().importWays(osmElementsToNetwork(withBike));
+  store.commands.imports.importWays(osmElementsToNetwork(withBike));
   const shared = store
     .getState()
     .system.nodes.filter((n) => n.coord[0] === -115.15 && n.coord[1] === 36.1);
@@ -4461,8 +4490,8 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // And the store applies the merge, so no way ends up in two identities.
   fresh();
-  store.getState().importWays(osmElementsToNetwork(namedArea));
-  store.getState().importWays(osmElementsToNetwork(namedNeighbour));
+  store.commands.imports.importWays(osmElementsToNetwork(namedArea));
+  store.commands.imports.importWays(osmElementsToNetwork(namedNeighbour));
   const memberships = new Map<string, number>();
   for (const n of store.getState().system.namedWays)
     for (const id of n.wayIds) memberships.set(id, (memberships.get(id) ?? 0) + 1);
@@ -4497,8 +4526,8 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // And the store enforces it, whatever the caller passes.
   fresh();
-  store.getState().importWays(osmElementsToNetwork(area));
-  const second = store.getState().importWays(osmElementsToNetwork(area));
+  store.commands.imports.importWays(osmElementsToNetwork(area));
+  const second = store.commands.imports.importWays(osmElementsToNetwork(area));
   check(
     'the store skips duplicates rather than trusting the caller',
     store.getState().system.ways.length === 2,
@@ -4665,7 +4694,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // End to end through the store.
   fresh();
-  store.getState().importWays(osmElementsToNetwork(junction('no_left_turn')));
+  store.commands.imports.importWays(osmElementsToNetwork(junction('no_left_turn')));
   check(
     'the store records the imported turn restrictions',
     Object.keys(store.getState().system.turnRestrictions).length > 0,
@@ -4678,7 +4707,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     ),
   );
   // And deleting the approach takes them with it, via touch()'s pruning.
-  store.getState().deleteWay(storedFrom.id);
+  store.commands.ways.deleteWay(storedFrom.id);
   check(
     'deleting the approach drops its imported restrictions',
     Object.keys(store.getState().system.turnRestrictions).length === 0,
@@ -4815,14 +4844,14 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // End to end: the store gets a two-member identity with its median, which
   // is exactly what the Combine affordance requires.
   fresh();
-  store.getState().importWays(osmElementsToNetwork(divided));
+  store.commands.imports.importWays(osmElementsToNetwork(divided));
   const nw = store.getState().system.namedWays[0];
   check('the store receives a two-carriageway identity', nw.wayIds.length === 2);
   check(
     'with its median stored against it',
     getComponent(store.getState().system.medians, nw.id) !== undefined,
   );
-  store.getState().combineCarriageways(nw.id);
+  store.commands.network.combineCarriageways(nw.id);
   const after = store.getState().system;
   check('so the divided street combines into one two-way street', after.ways.length === 1);
   check(
@@ -5062,7 +5091,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       source: 'osm:124',
     },
   ];
-  store.getState().importWays({
+  store.commands.imports.importWays({
     ways: imported,
     nodes: [
       {
@@ -5133,16 +5162,20 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       profile: defaultProfileFor('road'),
     },
   ];
-  store
-    .getState()
-    .importWays({ ways: overpass, nodes: [], namedWays: [], medians: [], turnRestrictions: [] });
+  store.commands.imports.importWays({
+    ways: overpass,
+    nodes: [],
+    namedWays: [],
+    medians: [],
+    turnRestrictions: [],
+  });
   check(
     'an elevated way crossing a surface street is not flagged',
     !validateSystem(store.getState().system).some((i) => i.id.startsWith('crossing-')),
   );
 
   fresh();
-  store.getState().importWays({
+  store.commands.imports.importWays({
     ways: overpass.map((w) => ({ ...w, grade: 'atGrade' as const })),
     nodes: [],
     namedWays: [],
@@ -5337,15 +5370,15 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     toggleUi() {},
   } as unknown as KeyContext;
   fresh();
-  store.getState().setTool('way');
-  const kc2 = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(kc2, [-115.2, 36.1]);
-  store.getState().addWayPoint(kc2, [-115.1, 36.1]);
+  store.commands.tools.setTool('way');
+  const kc2 = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(kc2, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(kc2, [-115.1, 36.1]);
   resolveBinding(KEY_BINDINGS, evt({ key: 'Escape' }), ctx)?.run(ctx);
   check('Escape command stops the current way draw', !store.getState().activeWayId);
   resolveBinding(KEY_BINDINGS, evt({ key: 'l' }), ctx)?.run(ctx);
   check("'l' selects the way tool", store.getState().tool === 'way');
-  store.getState().setSystem(store.getState().system, { readOnly: true });
+  store.commands.document.setSystem(store.getState().system, { readOnly: true });
   check(
     'way-tool binding gated in read-only',
     resolveBinding(KEY_BINDINGS, evt({ key: 'l' }), ctx) === null,
@@ -5360,9 +5393,9 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     !store.getState().canUndo && !store.getState().canRedo,
   );
 
-  const stationId = store.getState().addStation([-115.2, 36.1]);
+  const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
   check('adding a station is undoable', store.getState().canUndo);
-  store.getState().undo();
+  store.commands.history.undo();
   check(
     'undo removes the station',
     !store.getState().system.stations.some((s) => s.id === stationId),
@@ -5374,29 +5407,29 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check('undoing the only step leaves nothing left to undo', !store.getState().canUndo);
   check('undo makes a redo available', store.getState().canRedo);
 
-  store.getState().redo();
+  store.commands.history.redo();
   check(
     'redo restores the station',
     store.getState().system.stations.some((s) => s.id === stationId),
   );
   check('redoing the only step leaves nothing left to redo', !store.getState().canRedo);
 
-  store.getState().undo();
-  store.getState().addStation([-115.3, 36.2]); // a fresh action after undo invalidates redo
+  store.commands.history.undo();
+  store.commands.stations.addStation([-115.3, 36.2]); // a fresh action after undo invalidates redo
   check('a new action after undo clears the redo stack', !store.getState().canRedo);
 
   check(
     'undo on an empty stack is a no-op, not a crash',
     (() => {
       fresh();
-      store.getState().undo();
+      store.commands.history.undo();
       return !store.getState().canUndo;
     })(),
   );
 
   fresh();
-  store.getState().addStation([-115.2, 36.1]);
-  store.getState().setSystem(store.getState().system, { readOnly: true });
+  store.commands.stations.addStation([-115.2, 36.1]);
+  store.commands.document.setSystem(store.getState().system, { readOnly: true });
   check(
     'loading a system (even the same one) resets history',
     !store.getState().canUndo && !store.getState().canRedo,
@@ -5407,17 +5440,17 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // edits under viewport noise, and pressing Ctrl+Z mostly just un-pans.
   fresh();
   check('panning alone starts with nothing to undo', !store.getState().canUndo);
-  store.getState().setViewport({ center: [-115.5, 36.5], zoom: 12 });
+  store.commands.document.setViewport({ center: [-115.5, 36.5], zoom: 12 });
   check('setViewport does not create an undo step', !store.getState().canUndo);
-  store.getState().addStation([-115.2, 36.1]);
+  store.commands.stations.addStation([-115.2, 36.1]);
   check('a real edit after panning is still undoable', store.getState().canUndo);
-  store.getState().setViewport({ center: [-115.6, 36.6], zoom: 13 });
+  store.commands.document.setViewport({ center: [-115.6, 36.6], zoom: 13 });
   check(
     "panning after a real edit doesn't add a second (viewport) undo step",
     (() => {
       let steps = 0;
       while (store.getState().canUndo) {
-        store.getState().undo();
+        store.commands.history.undo();
         steps++;
       }
       return steps === 1;
@@ -5429,12 +5462,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // way it points at is genuinely gone, not on every undo/redo ---
 {
   fresh();
-  const w = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(w, [-115.2, 36.1]);
-  store.getState().addWayPoint(w, [-115.15, 36.1]);
+  const w = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(w, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(w, [-115.15, 36.1]);
   check('drawing sets activeWayId to the way being drawn', store.getState().activeWayId === w);
 
-  store.getState().undo();
+  store.commands.history.undo();
   check(
     'undoing one point of an in-progress way keeps activeWayId set',
     store.getState().activeWayId === w,
@@ -5444,20 +5477,20 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     store.getState().system.ways.find((x) => x.id === w)!.points.length === 1,
   );
 
-  store.getState().redo();
+  store.commands.history.redo();
   check(
     'redo mirrors undo: activeWayId survives while the way still exists',
     store.getState().activeWayId === w &&
       store.getState().system.ways.find((x) => x.id === w)!.points.length === 2,
   );
 
-  store.getState().undo(); // back to 1 point
-  store.getState().undo(); // back to the way existing with 0 points (still "exists")
+  store.commands.history.undo(); // back to 1 point
+  store.commands.history.undo(); // back to the way existing with 0 points (still "exists")
   check(
     'a way undone back to zero points still counts as existing',
     store.getState().activeWayId === w,
   );
-  store.getState().undo(); // back to before beginWay: the way is gone entirely
+  store.commands.history.undo(); // back to before beginWay: the way is gone entirely
   check(
     "undoing past a way's own creation clears activeWayId",
     store.getState().activeWayId === null,
@@ -5467,23 +5500,23 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- undo/redo: gesture checkpoints coalesce into one step, discard no-ops ---
 {
   fresh();
-  const wayId = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(wayId, [-115.2, 36.1]);
-  store.getState().addWayPoint(wayId, [-115.1, 36.1]);
+  const wayId = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(wayId, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(wayId, [-115.1, 36.1]);
   const stepsBeforeDrag = countUndoSteps();
 
-  store.getState().beginHistoryCheckpoint();
-  store.getState().moveWayPoint(wayId, 1, [-115.05, 36.1]);
-  store.getState().moveWayPoint(wayId, 1, [-115.02, 36.15]);
-  store.getState().moveWayPoint(wayId, 1, [-115.0, 36.2]);
-  store.getState().commitHistoryCheckpoint();
+  store.commands.history.beginHistoryCheckpoint();
+  store.commands.ways.moveWayPoint(wayId, 1, [-115.05, 36.1]);
+  store.commands.ways.moveWayPoint(wayId, 1, [-115.02, 36.15]);
+  store.commands.ways.moveWayPoint(wayId, 1, [-115.0, 36.2]);
+  store.commands.history.commitHistoryCheckpoint();
   check(
     'a whole drag (many moves) coalesces into exactly one undo step',
     countUndoSteps() === stepsBeforeDrag + 1,
   );
 
   const movedPoint = store.getState().system.ways.find((w) => w.id === wayId)!.points[1];
-  store.getState().undo();
+  store.commands.history.undo();
   const revertedPoint = store.getState().system.ways.find((w) => w.id === wayId)!.points[1];
   check(
     'undoing the coalesced drag reverts to before the whole drag, not one move step',
@@ -5492,12 +5525,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // An Escape-cancelled drag restores the exact checkpoint snapshot instead
   // of serializing changed agency-scale collections to discover equivalence.
-  store.getState().redo();
+  store.commands.history.redo();
   const stepsBeforeNoOpDrag = countUndoSteps();
   const beforeCancelledDrag = store.getState().system;
-  store.getState().beginHistoryCheckpoint();
-  store.getState().moveWayPoint(wayId, 1, [-114.9, 36.3]);
-  store.getState().cancelHistoryCheckpoint();
+  store.commands.history.beginHistoryCheckpoint();
+  store.commands.ways.moveWayPoint(wayId, 1, [-114.9, 36.3]);
+  store.commands.history.cancelHistoryCheckpoint();
   check(
     'canceling a checkpoint restores its exact snapshot and pushes no undo step',
     store.getState().system === beforeCancelledDrag && countUndoSteps() === stepsBeforeNoOpDrag,
@@ -5506,10 +5539,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   function countUndoSteps(): number {
     let n = 0;
     while (store.getState().canUndo) {
-      store.getState().undo();
+      store.commands.history.undo();
       n++;
     }
-    for (let i = 0; i < n; i++) store.getState().redo();
+    for (let i = 0; i < n; i++) store.commands.history.redo();
     return n;
   }
 }
@@ -5553,7 +5586,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     'Undo binding is gated by canUndo',
     resolveBinding(KEY_BINDINGS, evt({ key: 'z', ctrlKey: true }), ctx) === null,
   );
-  store.getState().addStation([-115.2, 36.1]);
+  store.commands.stations.addStation([-115.2, 36.1]);
   const undone = resolveBinding(KEY_BINDINGS, evt({ key: 'z', ctrlKey: true }), ctx);
   check(
     "Ctrl+Z resolves to the Undo binding once there's something to undo",
@@ -5600,10 +5633,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // distinct icon, so nothing on the map collapses to an interchangeable dot ---
 {
   fresh();
-  const road = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(road, [-115.2, 36.1]);
-  store.getState().addWayPoint(road, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const road = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(road, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(['road']) };
   const withHandles = buildFeatures(store.getState().system, null, [road], {
     viewMode: 'infrastructure',
@@ -5634,7 +5667,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   const iconsSeen = new Set<string>();
   for (const typeId of FACILITY_TYPE_ORDER) {
-    store.getState().addFacility(typeId, [-115.15, 36.1]);
+    store.commands.facilities.addFacility(typeId, [-115.15, 36.1]);
   }
   const infra = buildFeatures(store.getState().system, null, [], {
     viewMode: 'infrastructure',
@@ -5693,19 +5726,19 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // a newly added meta field with no case here fails rather than going unchecked.
 {
   fresh();
-  const fiRoad = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(fiRoad, [-115.2, 36.1]);
-  store.getState().addWayPoint(fiRoad, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const fiCross = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(fiCross, [-115.15, 36.05]);
-  store.getState().addWayPoint(fiCross, [-115.15, 36.15]);
-  store.getState().finishWay();
-  store.getState().formCrossingJunctions(fiCross);
-  store.getState().addStation([-115.15, 36.1]);
-  store.getState().addFacility(FACILITY_TYPE_ORDER[0], [-115.14, 36.11]);
-  store.getState().addServiceToWay(fiRoad);
-  store.getState().nameWay(fiRoad, 'Decatur Avenue');
+  const fiRoad = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(fiRoad, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(fiRoad, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const fiCross = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(fiCross, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(fiCross, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
+  store.commands.network.formCrossingJunctions(fiCross);
+  store.commands.stations.addStation([-115.15, 36.1]);
+  store.commands.facilities.addFacility(FACILITY_TYPE_ORDER[0], [-115.14, 36.11]);
+  store.commands.services.addServiceToWay(fiRoad);
+  store.commands.ways.nameWay(fiRoad, 'Decatur Avenue');
 
   const fiView = {
     viewMode: 'infrastructure' as const,
@@ -5798,18 +5831,20 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   };
 
   fresh();
-  const dwA = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(dwA, [-115.2, 36.1]);
-  store.getState().addWayPoint(dwA, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const dwB = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(dwB, [-115.15, 36.2]);
-  store.getState().addWayPoint(dwB, [-115.15, 36.1]);
-  store.getState().finishWay();
+  const dwA = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(dwA, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(dwA, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const dwB = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(dwB, [-115.15, 36.2]);
+  store.commands.ways.addWayPoint(dwB, [-115.15, 36.1]);
+  store.commands.ways.finishWay();
   // Joins B onto A's midpoint — A gets a genuine interior node, not just an
   // endpoint junction, exercising the harder case (see joinWayPointToWay).
-  store.getState().joinWayPointToWay(dwB, 1, dwA, [-115.15, 36.1]);
-  const dwStationId = store.getState().addStation([-115.15, 36.15], { wayId: dwB, t: 0.5 });
+  store.commands.ways.joinWayPointToWay(dwB, 1, dwA, [-115.15, 36.1]);
+  const dwStationId = required(
+    store.commands.stations.addStation([-115.15, 36.15], { wayId: dwB, t: 0.5 }),
+  );
 
   const real = store.getState().system;
   const diagram = computeDiagramSystem(real);
@@ -5860,10 +5895,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 
   fresh();
-  const soloWay = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(soloWay, [-115.2, 36.1]);
-  store.getState().addWayPoint(soloWay, [-115.19, 36.1003]);
-  store.getState().finishWay();
+  const soloWay = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(soloWay, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(soloWay, [-115.19, 36.1003]);
+  store.commands.ways.finishWay();
   const soloDiagram = computeDiagramSystem(store.getState().system);
   check(
     'a single unjoined way still gets a valid 2-point straightened path',
@@ -6189,8 +6224,8 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   try {
     const run = (presses: [number, number][]) => {
       const s = createEditorStore();
-      s.getState().setSystem(createEmptySystem());
-      s.getState().setTool('station');
+      s.commands.document.setSystem(createEmptySystem());
+      s.commands.tools.setTool('station');
       const map = createFakeMap();
       const detach = attachInteractions(map as never, s, {
         tuning: FINE_POINTER_TUNING,
@@ -6264,17 +6299,17 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     // deliberately wider than the one draft way type.
     {
       const s = createEditorStore();
-      s.getState().setSystem(createEmptySystem());
+      s.commands.document.setSystem(createEmptySystem());
       const map = createFakeMap();
       const roadStart = map.unproject({ x: 400, y: 300 });
       const roadEnd = map.unproject({ x: 600, y: 300 });
-      const roadId = s.getState().beginWay('road', 'straight');
-      s.getState().addWayPoint(roadId, [roadStart.lng, roadStart.lat]);
-      s.getState().addWayPoint(roadId, [roadEnd.lng, roadEnd.lat]);
-      s.getState().finishWay();
-      s.getState().setDraftWayType('lightRail');
-      s.getState().setDraftMode('tram');
-      s.getState().setTool('way');
+      const roadId = required(s.commands.ways.beginWay('road', 'straight'));
+      s.commands.ways.addWayPoint(roadId, [roadStart.lng, roadStart.lat]);
+      s.commands.ways.addWayPoint(roadId, [roadEnd.lng, roadEnd.lat]);
+      s.commands.ways.finishWay();
+      s.commands.tools.setDraftWayType('lightRail');
+      s.commands.tools.setDraftMode('tram');
+      s.commands.tools.setTool('way');
 
       const detach = attachInteractions(map as never, s, {
         tuning: FINE_POINTER_TUNING,
@@ -6314,8 +6349,8 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     // different one, with nothing on screen saying the assist had grabbed.
     {
       const s = createEditorStore();
-      s.getState().setSystem(createEmptySystem());
-      s.getState().setTool('way');
+      s.commands.document.setSystem(createEmptySystem());
+      s.commands.tools.setTool('way');
       const map = createFakeMap();
       const detach = attachInteractions(map as never, s, {
         tuning: FINE_POINTER_TUNING,
@@ -6376,8 +6411,8 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     // corner and then rendered a curve through it.
     {
       const s = createEditorStore();
-      s.getState().setSystem(createEmptySystem());
-      s.getState().setTool('way');
+      s.commands.document.setSystem(createEmptySystem());
+      s.commands.tools.setTool('way');
       const map = createFakeMap();
       const detach = attachInteractions(map as never, s, {
         tuning: FINE_POINTER_TUNING,
@@ -6998,28 +7033,28 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- vehicle catalogs: store actions ---
 {
   fresh();
-  const wayId = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(wayId, [-115.2, 36.1]);
-  store.getState().addWayPoint(wayId, [-115.19, 36.1]);
-  store.getState().finishWay();
-  store.getState().setDraftMode('bus');
-  const serviceId = store.getState().addServiceToWay(wayId)!;
+  const wayId = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(wayId, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(wayId, [-115.19, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.tools.setDraftMode('bus');
+  const serviceId = required(store.commands.services.addServiceToWay(wayId));
 
-  store
-    .getState()
-    .setVehicleKinds([{ id: 'vk1', modeId: 'bus', label: 'Test bus', widthM: 2.6, lengthM: 12 }]);
+  store.commands.services.setVehicleKinds([
+    { id: 'vk1', modeId: 'bus', label: 'Test bus', widthM: 2.6, lengthM: 12 },
+  ]);
   check(
     "setVehicleKinds replaces the system's whole list",
     store.getState().system.vehicleKinds.length === 1,
   );
 
-  store.getState().setServiceVehicleKind(serviceId, 'vk1');
+  store.commands.services.setServiceVehicleKind(serviceId, 'vk1');
   check(
     'setServiceVehicleKind assigns a kind to a service',
     store.getState().system.services.find((s) => s.id === serviceId)?.vehicleKindId === 'vk1',
   );
 
-  store.getState().setServiceVehicleKind(serviceId, undefined);
+  store.commands.services.setServiceVehicleKind(serviceId, undefined);
   check(
     'setServiceVehicleKind(undefined) clears the assignment',
     store.getState().system.services.find((s) => s.id === serviceId)?.vehicleKindId === undefined,
@@ -7029,11 +7064,11 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- store: profile editing, presets ---
 {
   fresh();
-  const r = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(r, [-115.2, 36.1]);
-  store.getState().addWayPoint(r, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().applyProfilePreset(r, 'roadBoulevard');
+  const r = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(r, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.applyProfilePreset(r, 'roadBoulevard');
   const way = store.getState().system.ways.find((w) => w.id === r)!;
   check(
     "applyProfilePreset installs the preset's lanes",
@@ -7044,7 +7079,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   const custom = {
     lanes: way.profile.lanes.map((l) => (l.kindId === 'drive' ? { ...l, widthM: 3.05 } : l)),
   };
-  store.getState().setWayProfile(r, custom);
+  store.commands.ways.setWayProfile(r, custom);
   check(
     'setWayProfile replaces the cross-section',
     store
@@ -7057,40 +7092,40 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- store: shared identity (NamedWay) ---
 {
   fresh();
-  const a = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(a, [-115.2, 36.1]);
-  store.getState().addWayPoint(a, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const b = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(b, [-115.2, 36.11]);
-  store.getState().addWayPoint(b, [-115.1, 36.11]);
-  store.getState().finishWay();
+  const a = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(a, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(a, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const b = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(b, [-115.2, 36.11]);
+  store.commands.ways.addWayPoint(b, [-115.1, 36.11]);
+  store.commands.ways.finishWay();
 
-  store.getState().nameWay(a, 'Decatur Avenue');
+  store.commands.ways.nameWay(a, 'Decatur Avenue');
   check(
     'naming a way creates a shared identity',
     store
       .getState()
       .system.namedWays.some((n) => n.name === 'Decatur Avenue' && n.wayIds.includes(a)),
   );
-  store.getState().nameWay(b, 'Decatur Avenue');
+  store.commands.ways.nameWay(b, 'Decatur Avenue');
   check(
     'naming a second way with the same name joins the identity',
     store.getState().system.namedWays.filter((n) => n.name === 'Decatur Avenue').length === 1 &&
       store.getState().system.namedWays[0].wayIds.length === 2,
   );
-  store.getState().nameWay(a, 'Decatur Ave');
+  store.commands.ways.nameWay(a, 'Decatur Ave');
   check(
     'renaming through one member renames the shared identity',
     store.getState().system.namedWays[0].name === 'Decatur Ave' &&
       store.getState().system.namedWays[0].wayIds.length === 2,
   );
-  store.getState().nameWay(b, '');
+  store.commands.ways.nameWay(b, '');
   check(
     'an empty name removes the way from its identity',
     !store.getState().system.namedWays[0]?.wayIds.includes(b),
   );
-  store.getState().deleteWay(a);
+  store.commands.ways.deleteWay(a);
   check(
     'deleting the last member deletes the identity',
     store.getState().system.namedWays.length === 0,
@@ -7100,13 +7135,13 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- store: identity survives splitting (a street cut by an intersection) ---
 {
   fresh();
-  const a = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(a, [-115.2, 36.1]);
-  store.getState().addWayPoint(a, [-115.15, 36.1]);
-  store.getState().addWayPoint(a, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().nameWay(a, 'Charleston Blvd');
-  store.getState().splitWayAt(a, 1);
+  const a = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(a, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(a, [-115.15, 36.1]);
+  store.commands.ways.addWayPoint(a, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.nameWay(a, 'Charleston Blvd');
+  store.commands.ways.splitWayAt(a, 1);
   const nw = store.getState().system.namedWays[0];
   check(
     'both split halves stay under the one identity',
@@ -7117,15 +7152,15 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- store: mergeWays (inverse of split) ---
 {
   fresh();
-  const a = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(a, [-115.2, 36.1]);
-  store.getState().addWayPoint(a, [-115.15, 36.1]);
-  store.getState().addWayPoint(a, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().splitWayAt(a, 1);
+  const a = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(a, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(a, [-115.15, 36.1]);
+  store.commands.ways.addWayPoint(a, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.splitWayAt(a, 1);
   const halves = store.getState().system.ways.map((w) => w.id);
   check('split made two ways', halves.length === 2);
-  store.getState().mergeWays(halves[0], halves[1]);
+  store.commands.network.mergeWays(halves[0], halves[1]);
   const merged = store.getState().system;
   check('mergeWays restores one way', merged.ways.length === 1 && merged.ways[0].id === halves[0]);
   check('merged way has the full point run', merged.ways[0].points.length === 3);
@@ -7139,15 +7174,15 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
   // Merging two ways that don't touch is refused.
   fresh();
-  const x = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(x, [-115.2, 36.1]);
-  store.getState().addWayPoint(x, [-115.18, 36.1]);
-  store.getState().finishWay();
-  const y = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(y, [-115.1, 36.2]);
-  store.getState().addWayPoint(y, [-115.08, 36.2]);
-  store.getState().finishWay();
-  store.getState().mergeWays(x, y);
+  const x = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(x, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(x, [-115.18, 36.1]);
+  store.commands.ways.finishWay();
+  const y = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(y, [-115.1, 36.2]);
+  store.commands.ways.addWayPoint(y, [-115.08, 36.2]);
+  store.commands.ways.finishWay();
+  store.commands.network.mergeWays(x, y);
   check(
     "mergeWays refuses ways that don't share an endpoint",
     store.getState().system.ways.length === 2,
@@ -7157,12 +7192,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- store: separate/combine carriageways ---
 {
   fresh();
-  const r = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(r, [-115.2, 36.1]);
-  store.getState().addWayPoint(r, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().applyProfilePreset(r, 'roadArterial4');
-  const newId = store.getState().separateCarriageways(r)!;
+  const r = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(r, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.applyProfilePreset(r, 'roadArterial4');
+  const newId = required(store.commands.network.separateCarriageways(r));
   check(
     'separateCarriageways returns the new carriageway',
     !!newId && store.getState().system.ways.length === 2,
@@ -7183,7 +7218,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
   const nw = store.getState().system.namedWays.find((n) => n.wayIds.includes(r));
   check('both carriageways share one identity', !!nw && nw.wayIds.includes(newId));
-  check('a one-way way refuses to separate', store.getState().separateCarriageways(r) === null);
+  check(
+    'a one-way way refuses to separate',
+    store.commands.network.separateCarriageways(r) === null,
+  );
 
   const median = getComponent(store.getState().system.medians, nw!.id);
   check(
@@ -7191,13 +7229,13 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     !!median && median.widthM > 0,
   );
 
-  store.getState().setMedianWidth(nw!.id, 6);
+  store.commands.network.setMedianWidth(nw!.id, 6);
   check(
     'setMedianWidth overrides the captured width',
     getComponent(store.getState().system.medians, nw!.id)?.widthM === 6,
   );
 
-  store.getState().combineCarriageways(nw!.id);
+  store.commands.network.combineCarriageways(nw!.id);
   const combined = store.getState().system;
   check(
     'combineCarriageways restores a single way',
@@ -7219,15 +7257,15 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // re-run through the same crossing-junction pass a finished draw gets ---
 {
   fresh();
-  const trunk = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(trunk, [-115.2, 36.1]);
-  store.getState().addWayPoint(trunk, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().applyProfilePreset(trunk, 'roadArterial4');
-  const cross = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(cross, [-115.15, 36.15]);
-  store.getState().addWayPoint(cross, [-115.15, 36.05]);
-  store.getState().finishWay();
+  const trunk = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(trunk, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(trunk, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.applyProfilePreset(trunk, 'roadArterial4');
+  const cross = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(cross, [-115.15, 36.15]);
+  store.commands.ways.addWayPoint(cross, [-115.15, 36.05]);
+  store.commands.ways.finishWay();
   check(
     'the trunk and cross street share a junction before separating',
     store.getState().system.nodes.some((n) => {
@@ -7236,7 +7274,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     }),
   );
 
-  const backId = store.getState().separateCarriageways(trunk)!;
+  const backId = required(store.commands.network.separateCarriageways(trunk));
   const sys = store.getState().system;
   check(
     'separating carriageways preserves junctions with crossing streets',
@@ -7288,7 +7326,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       ],
     },
   ];
-  store.getState().importWays(osmElementsToNetwork(divided));
+  store.commands.imports.importWays(osmElementsToNetwork(divided));
   const sys = store.getState().system;
   const carriageways = sys.ways.filter((w) => w.source === 'osm:1' || w.source === 'osm:2');
   const cross = sys.ways.find((w) => w.source === 'osm:3')!;
@@ -7305,9 +7343,14 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     (w) =>
       !isOneWay(w.profile) || directionalLanes(w.profile).every((l) => l.direction === 'backward'),
   )!;
-  const stId = store.getState().addStation(discarded.points[0], { wayId: discarded.id, t: 0 });
+  const stId = required(
+    store.commands.stations.addStation(discarded.points[0], {
+      wayId: discarded.id,
+      t: 0,
+    }),
+  );
 
-  store.getState().combineCarriageways(nw.id);
+  store.commands.network.combineCarriageways(nw.id);
   const after = store.getState().system;
   const survivor = after.ways.find((w) => w.id !== cross.id)!;
   check(
@@ -7337,22 +7380,22 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- lane-keyed components don't outlive their lanes ---
 {
   fresh();
-  const w = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(w, [-115.2, 36.1]);
-  store.getState().addWayPoint(w, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const w = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(w, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(w, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const laneId = store
     .getState()
     .system.ways.find((x) => x.id === w)!
     .profile.lanes.find((l) => l.kindId === 'drive')!.id;
-  store.getState().setTurnRestriction(w, laneId, []);
+  store.commands.network.setTurnRestriction(w, laneId, []);
   check(
     'a turn restriction is stored against the lane',
     Object.keys(store.getState().system.turnRestrictions).length === 1,
   );
 
   // Deleting the way takes its lanes with it.
-  store.getState().deleteWay(w);
+  store.commands.ways.deleteWay(w);
   check(
     'deleting the way drops its turn restrictions',
     Object.keys(store.getState().system.turnRestrictions).length === 0,
@@ -7360,16 +7403,16 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   // Replacing the cross-section mints fresh lane ids, so the old key is dead.
   fresh();
-  const v = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(v, [-115.2, 36.1]);
-  store.getState().addWayPoint(v, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const v = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(v, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(v, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const vLane = store
     .getState()
     .system.ways.find((x) => x.id === v)!
     .profile.lanes.find((l) => l.kindId === 'drive')!.id;
-  store.getState().setTurnRestriction(v, vLane, []);
-  store.getState().applyProfilePreset(v, 'roadArterial4');
+  store.commands.network.setTurnRestriction(v, vLane, []);
+  store.commands.ways.applyProfilePreset(v, 'roadArterial4');
   check(
     'applying a preset drops restrictions on the lanes it replaced',
     !Object.keys(store.getState().system.turnRestrictions).includes(laneRefKey(v, vLane)),
@@ -7380,8 +7423,8 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     .getState()
     .system.ways.find((x) => x.id === v)!
     .profile.lanes.find((l) => l.kindId === 'drive')!.id;
-  store.getState().setTurnRestriction(v, liveLane, []);
-  store.getState().setWayGrade(v, 'elevated');
+  store.commands.network.setTurnRestriction(v, liveLane, []);
+  store.commands.ways.setWayGrade(v, 'elevated');
   check(
     'an unrelated edit leaves a live restriction alone',
     Object.keys(store.getState().system.turnRestrictions).length === 1,
@@ -7391,13 +7434,13 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- the carriageway affordances survive an ordinary edit ---
 {
   fresh();
-  const r = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(r, [-115.2, 36.1]);
-  store.getState().addWayPoint(r, [-115.15, 36.1]);
-  store.getState().addWayPoint(r, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().applyProfilePreset(r, 'roadArterial4');
-  const other = store.getState().separateCarriageways(r)!;
+  const r = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(r, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(r, [-115.15, 36.1]);
+  store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.applyProfilePreset(r, 'roadArterial4');
+  const other = required(store.commands.network.separateCarriageways(r));
   const nwId = store.getState().system.namedWays.find((n) => n.wayIds.includes(r))!.id;
   check(
     'separating captures a median',
@@ -7407,7 +7450,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // Splitting one carriageway is an ordinary edit — a cross street does it
   // automatically. The identity grows past two members, which used to hide
   // both the Combine button and the median field for good.
-  store.getState().splitWayAt(other, 1);
+  store.commands.ways.splitWayAt(other, 1);
   check(
     'a split takes the identity past two members',
     store.getState().system.namedWays.find((n) => n.id === nwId)!.wayIds.length > 2,
@@ -7416,7 +7459,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     'but the captured median is still there to edit',
     getComponent(store.getState().system.medians, nwId) !== undefined,
   );
-  store.getState().setMedianWidth(nwId, 7);
+  store.commands.network.setMedianWidth(nwId, 7);
   check(
     'and it is still editable',
     getComponent(store.getState().system.medians, nwId)?.widthM === 7,
@@ -7425,19 +7468,19 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // combineCarriageways refuses two two-way ways under one identity, so the
   // UI's disabled state and the action agree.
   fresh();
-  const a = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(a, [-115.2, 36.1]);
-  store.getState().addWayPoint(a, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const b = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(b, [-115.2, 36.11]);
-  store.getState().addWayPoint(b, [-115.1, 36.11]);
-  store.getState().finishWay();
-  store.getState().nameWay(a, 'Twin Street');
-  store.getState().nameWay(b, 'Twin Street');
+  const a = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(a, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(a, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const b = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(b, [-115.2, 36.11]);
+  store.commands.ways.addWayPoint(b, [-115.1, 36.11]);
+  store.commands.ways.finishWay();
+  store.commands.ways.nameWay(a, 'Twin Street');
+  store.commands.ways.nameWay(b, 'Twin Street');
   const twin = store.getState().system.namedWays.find((n) => n.name === 'Twin Street')!;
   const waysBefore = store.getState().system.ways.length;
-  store.getState().combineCarriageways(twin.id);
+  store.commands.network.combineCarriageways(twin.id);
   check(
     'combining refuses two two-way ways sharing an identity',
     store.getState().system.ways.length === waysBefore,
@@ -7447,17 +7490,17 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- store: auto-junctions where ways cross (the SimCity moment) ---
 {
   fresh();
-  const ew = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ew, [-115.2, 36.1]);
-  store.getState().addWayPoint(ew, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const ns = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ns, [-115.15, 36.05]);
-  store.getState().addWayPoint(ns, [-115.15, 36.15]);
-  store.getState().finishWay();
+  const ew = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ew, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(ew, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const ns = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
 
   // finishWay auto-formed the junction already; an explicit re-run is a no-op.
-  store.getState().formCrossingJunctions(ns);
+  store.commands.network.formCrossingJunctions(ns);
   const after = store.getState().system;
   check('crossing forms exactly one junction node', after.nodes.length === 1);
   check('the junction has four arms (both ways split)', after.ways.length === 4);
@@ -7476,17 +7519,17 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // Grade separation: an ELEVATED way crossing a surface street is an
   // overpass, never an intersection.
   fresh();
-  const surface = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(surface, [-115.2, 36.1]);
-  store.getState().addWayPoint(surface, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().setDraftGrade('elevated');
-  const freeway = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(freeway, [-115.15, 36.05]);
-  store.getState().addWayPoint(freeway, [-115.15, 36.15]);
-  store.getState().finishWay();
-  store.getState().setDraftGrade('atGrade');
-  store.getState().formCrossingJunctions(freeway);
+  const surface = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(surface, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(surface, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.tools.setDraftGrade('elevated');
+  const freeway = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(freeway, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(freeway, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
+  store.commands.tools.setDraftGrade('atGrade');
+  store.commands.network.formCrossingJunctions(freeway);
   check(
     'different grades never auto-join (overpass, not intersection)',
     store.getState().system.nodes.length === 0 && store.getState().system.ways.length === 2,
@@ -7496,15 +7539,15 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- store: auto-elevate a guideway crossing a major road ---
 {
   fresh();
-  const road = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(road, [-115.15, 36.05]);
-  store.getState().addWayPoint(road, [-115.15, 36.15]);
-  store.getState().finishWay();
-  store.getState().setWayClassId(road, 'arterial'); // major
-  const rail = store.getState().beginWay('heavyRail', 'straight');
-  store.getState().addWayPoint(rail, [-115.2, 36.1]);
-  store.getState().addWayPoint(rail, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const road = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(road, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(road, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
+  store.commands.ways.setWayClassId(road, 'arterial'); // major
+  const rail = required(store.commands.ways.beginWay('heavyRail', 'straight'));
+  store.commands.ways.addWayPoint(rail, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(rail, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const after = store.getState().system;
   const railPieces = after.ways.filter((w) => w.typeId === 'heavyRail');
   check('the rail line is auto-split into three pieces', railPieces.length === 3);
@@ -7537,14 +7580,14 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // not an auto-elevate ---
 {
   fresh();
-  const road = store.getState().beginWay('road', 'straight'); // defaults to collector, not major
-  store.getState().addWayPoint(road, [-115.15, 36.05]);
-  store.getState().addWayPoint(road, [-115.15, 36.15]);
-  store.getState().finishWay();
-  const rail = store.getState().beginWay('heavyRail', 'straight');
-  store.getState().addWayPoint(rail, [-115.2, 36.1]);
-  store.getState().addWayPoint(rail, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const road = required(store.commands.ways.beginWay('road', 'straight')); // defaults to collector, not major
+  store.commands.ways.addWayPoint(road, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(road, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
+  const rail = required(store.commands.ways.beginWay('heavyRail', 'straight'));
+  store.commands.ways.addWayPoint(rail, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(rail, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const after = store.getState().system;
   check(
     'nothing is elevated over a minor road',
@@ -7581,17 +7624,17 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // branch regardless of either way's class.
 {
   fresh();
-  const ew = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ew, [-115.2, 36.1]);
-  store.getState().addWayPoint(ew, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().setWayClassId(ew, 'arterial');
-  const ns = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ns, [-115.15, 36.05]);
-  store.getState().addWayPoint(ns, [-115.15, 36.15]);
-  store.getState().finishWay();
-  store.getState().setWayClassId(ns, 'arterial');
-  store.getState().formCrossingJunctions(ns);
+  const ew = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ew, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(ew, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.setWayClassId(ew, 'arterial');
+  const ns = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
+  store.commands.ways.setWayClassId(ns, 'arterial');
+  store.commands.network.formCrossingJunctions(ns);
   const after = store.getState().system;
   check(
     'two major roads crossing still form an ordinary junction, not a viaduct',
@@ -7604,20 +7647,20 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- store: a guideway crossing two major roads elevates over both ---
 {
   fresh();
-  const roadA = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(roadA, [-115.18, 36.05]);
-  store.getState().addWayPoint(roadA, [-115.18, 36.15]);
-  store.getState().finishWay();
-  store.getState().setWayClassId(roadA, 'arterial');
-  const roadB = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(roadB, [-115.12, 36.05]);
-  store.getState().addWayPoint(roadB, [-115.12, 36.15]);
-  store.getState().finishWay();
-  store.getState().setWayClassId(roadB, 'arterial');
-  const rail = store.getState().beginWay('heavyRail', 'straight');
-  store.getState().addWayPoint(rail, [-115.2, 36.1]);
-  store.getState().addWayPoint(rail, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const roadA = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(roadA, [-115.18, 36.05]);
+  store.commands.ways.addWayPoint(roadA, [-115.18, 36.15]);
+  store.commands.ways.finishWay();
+  store.commands.ways.setWayClassId(roadA, 'arterial');
+  const roadB = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(roadB, [-115.12, 36.05]);
+  store.commands.ways.addWayPoint(roadB, [-115.12, 36.15]);
+  store.commands.ways.finishWay();
+  store.commands.ways.setWayClassId(roadB, 'arterial');
+  const rail = required(store.commands.ways.beginWay('heavyRail', 'straight'));
+  store.commands.ways.addWayPoint(rail, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(rail, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const after = store.getState().system;
   const railPieces = after.ways.filter((w) => w.typeId === 'heavyRail');
   check('crossing two major roads produces five rail pieces', railPieces.length === 5);
@@ -7634,17 +7677,17 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- store: junction semantics (control, connectors) ---
 {
   fresh();
-  const ew = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ew, [-115.2, 36.1]);
-  store.getState().addWayPoint(ew, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const ns = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ns, [-115.15, 36.05]);
-  store.getState().addWayPoint(ns, [-115.15, 36.15]);
-  store.getState().finishWay();
-  store.getState().formCrossingJunctions(ns);
+  const ew = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ew, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(ew, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const ns = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
+  store.commands.network.formCrossingJunctions(ns);
   const node = store.getState().system.nodes[0];
-  store.getState().setNodeControl(node.id, 'signal');
+  store.commands.network.setNodeControl(node.id, 'signal');
   check('setNodeControl stores the control', store.getState().system.nodes[0].control === 'signal');
 
   const sys = store.getState().system;
@@ -7658,20 +7701,20 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       to: { wayId: armB.id, laneId: armB.profile.lanes[1].id },
     },
   ];
-  store.getState().setNodeConnectors(node.id, conn);
+  store.commands.network.setNodeConnectors(node.id, conn);
   check(
     'setNodeConnectors stores the lane graph',
     store.getState().system.nodes[0].connectors?.length === 1,
   );
   // Deleting a referenced lane prunes its connectors.
-  store.getState().setWayProfile(armA.id, {
+  store.commands.ways.setWayProfile(armA.id, {
     lanes: armA.profile.lanes.filter((l) => l.id !== armA.profile.lanes[1].id),
   });
   check(
     'removing a lane prunes connectors that referenced it',
     !store.getState().system.nodes[0].connectors,
   );
-  store.getState().setNodeConnectors(node.id, undefined);
+  store.commands.network.setNodeConnectors(node.id, undefined);
   check(
     'setNodeConnectors(undefined) reverts to heuristic',
     store.getState().system.nodes[0].connectors === undefined,
@@ -7681,25 +7724,25 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- store: deleting a way cleans identity + connectors ---
 {
   fresh();
-  const a = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(a, [-115.2, 36.1]);
-  store.getState().addWayPoint(a, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const b = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(b, [-115.15, 36.05]);
-  store.getState().addWayPoint(b, [-115.15, 36.15]);
-  store.getState().finishWay();
-  store.getState().formCrossingJunctions(b);
+  const a = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(a, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(a, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const b = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(b, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(b, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
+  store.commands.network.formCrossingJunctions(b);
   const arms = store.getState().system.ways;
   const nodeId = store.getState().system.nodes[0].id;
-  store.getState().setNodeConnectors(nodeId, [
+  store.commands.network.setNodeConnectors(nodeId, [
     {
       from: { wayId: arms[0].id, laneId: arms[0].profile.lanes[1].id },
       to: { wayId: arms[1].id, laneId: arms[1].profile.lanes[1].id },
     },
   ]);
-  store.getState().nameWay(arms[0].id, 'Sahara Ave');
-  store.getState().deleteWay(arms[0].id);
+  store.commands.ways.nameWay(arms[0].id, 'Sahara Ave');
+  store.commands.ways.deleteWay(arms[0].id);
   const sys = store.getState().system;
   check(
     'deleting a way drops its identity membership',
@@ -8013,10 +8056,10 @@ check(
 // --- R2: lane-detail rendering emission (LOD + viewport scoping) ---
 {
   fresh();
-  const r = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(r, [-115.2, 36.1]);
-  store.getState().addWayPoint(r, [-115.1, 36.1]);
-  store.getState().finishWay();
+  const r = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(r, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(['road']) };
 
   const infraFar = buildFeatures(store.getState().system, null, [], {
@@ -8073,7 +8116,7 @@ check(
   });
   check('network view never lane-renders', net.lanes.features.length === 0);
 
-  store.getState().setWayGrade(r, 'underground');
+  store.commands.ways.setWayGrade(r, 'underground');
   const tunnel = buildFeatures(store.getState().system, null, [], {
     viewMode: 'infrastructure',
     ...filters,
@@ -8088,19 +8131,19 @@ check(
 // --- R2: draft preset shapes newly drawn ways ---
 {
   fresh();
-  store.getState().setDraftWayType('road');
-  store.getState().setDraftPreset('roadBoulevard');
-  const r = store.getState().beginWay();
-  store.getState().addWayPoint(r, [-115.2, 36.1]);
-  store.getState().addWayPoint(r, [-115.1, 36.1]);
-  store.getState().finishWay();
+  store.commands.tools.setDraftWayType('road');
+  store.commands.tools.setDraftPreset('roadBoulevard');
+  const r = required(store.commands.ways.beginWay());
+  store.commands.ways.addWayPoint(r, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const way = store.getState().system.ways[0];
   check(
     "armed draft preset shapes the new way's profile",
     way.profile.lanes.some((l) => l.kindId === 'median'),
   );
   check('armed draft preset sets the class too', way.classId === 'arterial');
-  store.getState().setDraftWayType('heavyRail');
+  store.commands.tools.setDraftWayType('heavyRail');
   check('changing way type clears the armed preset', store.getState().draftPresetId === null);
 }
 
@@ -8108,14 +8151,14 @@ check(
 {
   // A real 4-way crossing built through the store (auto-junction on finish).
   fresh();
-  const ew = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ew, [-115.2, 36.1]);
-  store.getState().addWayPoint(ew, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const ns = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ns, [-115.15, 36.05]);
-  store.getState().addWayPoint(ns, [-115.15, 36.15]);
-  store.getState().finishWay();
+  const ew = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ew, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(ew, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const ns = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
   const sys = store.getState().system;
   check(
     'finishing a crossing way auto-forms the junction (no manual call)',
@@ -8181,7 +8224,7 @@ check(
 
   // Stored connectors override the defaults.
   const custom = [conns[0]];
-  store.getState().setNodeConnectors(sys.nodes[0].id, custom);
+  store.commands.network.setNodeConnectors(sys.nodes[0].id, custom);
   const sys2 = store.getState().system;
   check(
     'stored connectors override the heuristic',
@@ -8207,14 +8250,14 @@ check(
 // (geometry/junctions.ts + editor/store.ts) ---
 {
   fresh();
-  const ew = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ew, [-115.2, 36.1]);
-  store.getState().addWayPoint(ew, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const ns = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ns, [-115.15, 36.05]);
-  store.getState().addWayPoint(ns, [-115.15, 36.15]);
-  store.getState().finishWay();
+  const ew = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ew, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(ew, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const ns = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
   let sys = store.getState().system;
   let waysById = new Map(sys.ways.map((w) => [w.id, w]));
   const node = sys.nodes[0];
@@ -8231,7 +8274,7 @@ check(
   );
   const oneTarget = unrestricted[0].to.wayId;
 
-  store.getState().setTurnRestriction(inArm.wayId, inLane.id, [oneTarget]);
+  store.commands.network.setTurnRestriction(inArm.wayId, inLane.id, [oneTarget]);
   sys = store.getState().system;
   waysById = new Map(sys.ways.map((w) => [w.id, w]));
   const restricted = defaultConnectors(node, waysById, sys.turnRestrictions).filter(
@@ -8242,7 +8285,7 @@ check(
     restricted.length > 0 && restricted.every((c) => c.to.wayId === oneTarget),
   );
 
-  store.getState().setTurnRestriction(inArm.wayId, inLane.id, []);
+  store.commands.network.setTurnRestriction(inArm.wayId, inLane.id, []);
   sys = store.getState().system;
   waysById = new Map(sys.ways.map((w) => [w.id, w]));
   const blockedDefaults = defaultConnectors(node, waysById, sys.turnRestrictions);
@@ -8253,7 +8296,7 @@ check(
 
   // A restriction also holds against an explicit user-set connector added
   // before the restriction existed — it's never silently bypassed.
-  store.getState().setNodeConnectors(node.id, unrestricted);
+  store.commands.network.setNodeConnectors(node.id, unrestricted);
   sys = store.getState().system;
   waysById = new Map(sys.ways.map((w) => [w.id, w]));
   const effectiveWithStoredOverride = effectiveConnectors(node, waysById, sys.turnRestrictions);
@@ -8264,7 +8307,7 @@ check(
     ),
   );
 
-  store.getState().setTurnRestriction(inArm.wayId, inLane.id, undefined);
+  store.commands.network.setTurnRestriction(inArm.wayId, inLane.id, undefined);
   sys = store.getState().system;
   check(
     'clearing a restriction (undefined) removes it from the component map',
@@ -8337,16 +8380,16 @@ check(
 // --- per-approach traffic control override (editor/store.ts) ---
 {
   fresh();
-  const ew2 = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ew2, [-115.2, 36.1]);
-  store.getState().addWayPoint(ew2, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const ns2 = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ns2, [-115.15, 36.05]);
-  store.getState().addWayPoint(ns2, [-115.15, 36.15]);
-  store.getState().finishWay();
+  const ew2 = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ew2, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(ew2, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const ns2 = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ns2, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(ns2, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
   const node2 = store.getState().system.nodes[0];
-  store.getState().setNodeControl(node2.id, 'signal');
+  store.commands.network.setNodeControl(node2.id, 'signal');
   const waysById4 = new Map(store.getState().system.ways.map((w) => [w.id, w]));
   const arm = junctionGeometry(node2, waysById4)!.arms[0];
 
@@ -8355,7 +8398,7 @@ check(
     getComponent(store.getState().system.approachControls, armRefKey(arm.wayId, arm.end)) ===
       undefined,
   );
-  store.getState().setApproachControl(arm.wayId, arm.end, 'stop');
+  store.commands.network.setApproachControl(arm.wayId, arm.end, 'stop');
   check(
     'setApproachControl stores an explicit per-approach override',
     getComponent(store.getState().system.approachControls, armRefKey(arm.wayId, arm.end))
@@ -8365,13 +8408,13 @@ check(
     'the whole-node control is untouched by a per-approach override',
     store.getState().system.nodes.find((n) => n.id === node2.id)?.control === 'signal',
   );
-  store.getState().setApproachControl(arm.wayId, arm.end, 'uncontrolled');
+  store.commands.network.setApproachControl(arm.wayId, arm.end, 'uncontrolled');
   check(
     "an explicit 'uncontrolled' override is distinct from having no override at all",
     getComponent(store.getState().system.approachControls, armRefKey(arm.wayId, arm.end))
       ?.control === 'uncontrolled',
   );
-  store.getState().setApproachControl(arm.wayId, arm.end, undefined);
+  store.commands.network.setApproachControl(arm.wayId, arm.end, undefined);
   check(
     'clearing the override (undefined) removes it, reverting to the junction default',
     getComponent(store.getState().system.approachControls, armRefKey(arm.wayId, arm.end)) ===
@@ -8429,12 +8472,12 @@ check(
 // --- R3: two-arm straight-through joints stay seamless ---
 {
   fresh();
-  const a = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(a, [-115.2, 36.1]);
-  store.getState().addWayPoint(a, [-115.15, 36.1]);
-  store.getState().addWayPoint(a, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().splitWayAt(a, 1);
+  const a = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(a, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(a, [-115.15, 36.1]);
+  store.commands.ways.addWayPoint(a, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.splitWayAt(a, 1);
   const sys = store.getState().system;
   const waysById = new Map(sys.ways.map((w) => [w.id, w]));
   const g = junctionGeometry(sys.nodes[0], waysById)!;
@@ -8448,14 +8491,14 @@ check(
 // --- R3: lane-detail rendering emits junction footprints + connector guides ---
 {
   fresh();
-  const ew = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ew, [-115.2, 36.1]);
-  store.getState().addWayPoint(ew, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const ns = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ns, [-115.15, 36.05]);
-  store.getState().addWayPoint(ns, [-115.15, 36.15]);
-  store.getState().finishWay();
+  const ew = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ew, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(ew, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const ns = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
   const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(['road']) };
   const fc = buildFeatures(store.getState().system, null, [], {
     viewMode: 'infrastructure',
@@ -8490,12 +8533,12 @@ check(
 // --- R4: street name labels + lane keyboard shortcuts ---
 {
   fresh();
-  const r = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(r, [-115.2, 36.1]);
-  store.getState().addWayPoint(r, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().nameWay(r, 'Decatur Avenue');
-  store.getState().separateCarriageways(r);
+  const r = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(r, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.nameWay(r, 'Decatur Avenue');
+  store.commands.network.separateCarriageways(r);
   const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(['road']) };
   const infra = buildFeatures(store.getState().system, null, [], {
     viewMode: 'infrastructure',
@@ -8517,12 +8560,12 @@ check(
 // --- bare infrastructure toggle: draw roads WITHOUT auto-creating a line ---
 {
   fresh();
-  store.getState().setDraftWayType('road');
-  store.getState().setDraftServiceEnabled(false);
-  const r = store.getState().beginWay();
-  store.getState().addWayPoint(r, [-115.2, 36.1]);
-  store.getState().addWayPoint(r, [-115.1, 36.1]);
-  store.getState().finishWay();
+  store.commands.tools.setDraftWayType('road');
+  store.commands.tools.setDraftServiceEnabled(false);
+  const r = required(store.commands.ways.beginWay());
+  store.commands.ways.addWayPoint(r, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   check(
     'service toggle off: drawing a road creates NO service',
     store.getState().system.services.length === 0,
@@ -8533,15 +8576,15 @@ check(
   );
 
   // Picking a mode is an explicit "draw a line" — it re-enables services.
-  store.getState().setDraftMode('bus');
+  store.commands.tools.setDraftMode('bus');
   check(
     'choosing a mode re-enables service creation',
     store.getState().draftServiceEnabled === true,
   );
-  const r2 = store.getState().beginWay();
-  store.getState().addWayPoint(r2, [-115.2, 36.2]);
-  store.getState().addWayPoint(r2, [-115.1, 36.2]);
-  store.getState().finishWay();
+  const r2 = required(store.commands.ways.beginWay());
+  store.commands.ways.addWayPoint(r2, [-115.2, 36.2]);
+  store.commands.ways.addWayPoint(r2, [-115.1, 36.2]);
+  store.commands.ways.finishWay();
   check(
     'after re-enabling, drawing creates the service again',
     store.getState().system.services.length === 1,
@@ -8557,12 +8600,12 @@ check(
 function buildGrid() {
   fresh();
   const draw = (pts: LngLat[]) => {
-    const w = store.getState().beginWay('road', 'straight');
-    for (const p of pts) store.getState().addWayPoint(w, p);
-    store.getState().finishWay();
+    const w = required(store.commands.ways.beginWay('road', 'straight'));
+    for (const p of pts) store.commands.ways.addWayPoint(w, p);
+    store.commands.ways.finishWay();
     return w;
   };
-  store.getState().setDraftServiceEnabled(false); // bare streets
+  store.commands.tools.setDraftServiceEnabled(false); // bare streets
   draw([
     [-115.3, 36.2],
     [-115.1, 36.2],
@@ -8575,7 +8618,7 @@ function buildGrid() {
     [-115.2, 36.05],
     [-115.2, 36.25],
   ]); // NS, crossing both
-  store.getState().setDraftServiceEnabled(true);
+  store.commands.tools.setDraftServiceEnabled(true);
 }
 
 // --- routeBetween: shortest path through junctions, mid-way anchors ---
@@ -8632,7 +8675,7 @@ function buildGrid() {
   )!;
   const res = routeBetween(sys, from, to, { allowedTypeIds: new Set(['road']) })!;
   const waysBefore = sys.ways.length;
-  const svcId = store.getState().createRoutedService(res.spans, 'bus');
+  const svcId = required(store.commands.routing.createRoutedService(res.spans, 'bus'));
   const after = store.getState().system;
   check('createRoutedService creates the service', !!svcId && after.services.length === 1);
   const svc = after.services[0];
@@ -8676,14 +8719,14 @@ function buildGrid() {
     sys.ways.find((w) => w.id === s2.wayId)!,
     s2.coord,
   )!;
-  store.getState().startRouteDraft(from);
+  store.commands.routing.startRouteDraft(from);
   check('startRouteDraft opens an empty draft', store.getState().routeDraft?.spans.length === 0);
   check(
     'extendRouteDraft appends routed spans',
-    store.getState().extendRouteDraft(to) === true &&
+    store.commands.routing.extendRouteDraft(to) === true &&
       store.getState().routeDraft!.spans.length === 3,
   );
-  const svcId = store.getState().commitRouteDraft();
+  const svcId = required(store.commands.routing.commitRouteDraft());
   check(
     'commitRouteDraft creates the service and clears the draft',
     !!svcId &&
@@ -8691,8 +8734,8 @@ function buildGrid() {
       store.getState().system.services.length === 1,
   );
 
-  store.getState().startRouteDraft(from);
-  store.getState().cancelRouteDraft();
+  store.commands.routing.startRouteDraft(from);
+  store.commands.routing.cancelRouteDraft();
   check(
     'cancelRouteDraft clears without creating anything',
     store.getState().routeDraft === null && store.getState().system.services.length === 1,
@@ -8703,12 +8746,12 @@ function buildGrid() {
 // degenerate same-segment path in the browser) ---
 {
   fresh();
-  store.getState().setDraftServiceEnabled(false);
-  const r = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(r, [-115.3, 36.1]);
-  store.getState().addWayPoint(r, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().setDraftServiceEnabled(true);
+  store.commands.tools.setDraftServiceEnabled(false);
+  const r = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(r, [-115.3, 36.1]);
+  store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.tools.setDraftServiceEnabled(true);
   const way = store.getState().system.ways[0];
 
   const from = anchorOnWay(way, [-115.27, 36.1])!;
@@ -8732,9 +8775,9 @@ function buildGrid() {
       Math.abs(path[1][0] - -115.14) < 1e-6,
   );
 
-  store.getState().startRouteDraft(from);
-  check('extend along the same way succeeds', store.getState().extendRouteDraft(to) === true);
-  const svcId = store.getState().commitRouteDraft();
+  store.commands.routing.startRouteDraft(from);
+  check('extend along the same way succeeds', store.commands.routing.extendRouteDraft(to) === true);
+  const svcId = required(store.commands.routing.commitRouteDraft());
   const sys = store.getState().system;
   check('committing a same-way route creates the service', !!svcId && sys.services.length === 1);
   const ridden = patternWayIds(sys.services[0].path);
@@ -8755,19 +8798,22 @@ function buildGrid() {
   buildGrid();
   // Sketch a bus line roughly along the top road, offset ~200m north — the
   // Network-view sketch flow (service enabled) creating parallel geometry.
-  const sketch = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(sketch, [-115.28, 36.202]);
-  store.getState().addWayPoint(sketch, [-115.12, 36.202]);
-  store.getState().finishWay();
+  const sketch = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(sketch, [-115.28, 36.202]);
+  store.commands.ways.addWayPoint(sketch, [-115.12, 36.202]);
+  store.commands.ways.finishWay();
   const before = store.getState().system;
   const svc = before.services[0];
   check('sketch created its own service + parallel geometry', !!svc && before.ways.length > 7);
   // A station riding the sketch, to prove it follows the adoption.
-  const st1 = store
-    .getState()
-    .addStation([-115.25, 36.202], { wayId: patternWayIds(svc.path)[0], t: 0.2 });
+  const st1 = required(
+    store.commands.stations.addStation([-115.25, 36.202], {
+      wayId: patternWayIds(svc.path)[0],
+      t: 0.2,
+    }),
+  );
 
-  const rebound = store.getState().adoptExistingInfrastructure(svc.id);
+  const rebound = store.commands.routing.adoptExistingInfrastructure(svc.id);
   const after = store.getState().system;
   const adopted = after.services.find((sv) => sv.id === svc.id)!;
   check('adoptExistingInfrastructure rebinds the pattern', rebound === 1);
@@ -8876,20 +8922,20 @@ function buildGrid() {
 {
   fresh();
   const origin: LngLat = [-115.2, 36.1];
-  store.getState().setDraftMode('bus');
+  store.commands.tools.setDraftMode('bus');
 
   // Both lines are laid as DELIBERATELY separate infrastructure, which is the
   // state a GTFS import arrives in — importGtfs mints one way per shape and
   // never goes through finishWay, so nothing conflates them on the way in.
   // Drawing them by hand would now share them at commit, which is the whole
   // point of this test: reconcile is what fixes the mess an import leaves.
-  store.getState().setDraftSeparate(true);
+  store.commands.tools.setDraftSeparate(true);
 
   // Trunk: a long solo-way pattern, as a freshly-imported GTFS shape would be.
-  const trunk = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(trunk, offsetMeters(origin, 0, 0));
-  store.getState().addWayPoint(trunk, offsetMeters(origin, 400, 0));
-  store.getState().finishWay();
+  const trunk = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(trunk, offsetMeters(origin, 0, 0));
+  store.commands.ways.addWayPoint(trunk, offsetMeters(origin, 400, 0));
+  store.commands.ways.finishWay();
   const trunkSvc = store
     .getState()
     .system.services.find((service) => patternWayIds(service.path).includes(trunk))!;
@@ -8898,11 +8944,11 @@ function buildGrid() {
   // (offset 3m, spanning only the middle 200m) — diverges at both ends by
   // simply not covering the trunk's outer stretches, the exact "shares a
   // trunk, doesn't share termini" shape this feature targets.
-  store.getState().setDraftSeparate(true);
-  const shuttle = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(shuttle, offsetMeters(origin, 100, 3));
-  store.getState().addWayPoint(shuttle, offsetMeters(origin, 300, 3));
-  store.getState().finishWay();
+  store.commands.tools.setDraftSeparate(true);
+  const shuttle = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(shuttle, offsetMeters(origin, 100, 3));
+  store.commands.ways.addWayPoint(shuttle, offsetMeters(origin, 300, 3));
+  store.commands.ways.finishWay();
   const shuttleSvc = store
     .getState()
     .system.services.find((service) => patternWayIds(service.path).includes(shuttle))!;
@@ -8913,7 +8959,7 @@ function buildGrid() {
     before.ways.length === 2 && before.services.length === 2,
   );
 
-  const reconciled = store.getState().reconcileImportedServices([trunkSvc.id, shuttleSvc.id]);
+  const reconciled = store.commands.imports.reconcileImportedServices([trunkSvc.id, shuttleSvc.id]);
   const after = store.getState().system;
   check('exactly one pattern (the shuttle) needed reconciling', reconciled === 1);
 
@@ -8964,15 +9010,17 @@ function buildGrid() {
     'facility tool starts in PLACE mode, not complex mode',
     store.getState().draftFacilityComplexMode === false,
   );
-  store.getState().setDraftFacilityComplexMode(true);
+  store.commands.tools.setDraftFacilityComplexMode(true);
   check('complex mode is opt-in', store.getState().draftFacilityComplexMode === true);
-  store.getState().setDraftFacilityType('depot');
+  store.commands.tools.setDraftFacilityType('depot');
   check(
     'picking a facility type leaves complex mode',
     store.getState().draftFacilityComplexMode === false,
   );
   // Area facilities can be placed as polygons directly.
-  const fid = store.getState().addFacility('depot', squareFootprint([-115.15, 36.1], 15));
+  const fid = required(
+    store.commands.facilities.addFacility('depot', squareFootprint([-115.15, 36.1], 15)),
+  );
   const fac = store.getState().system.facilities.find((f) => f.id === fid)!;
   check(
     'an area facility placed by click gets a real polygon',
@@ -8984,23 +9032,23 @@ function buildGrid() {
 {
   // Direction toggle: newly drawn ways come out one-way, travel = draw direction.
   fresh();
-  store.getState().setDraftServiceEnabled(false);
-  store.getState().setDraftOneWay(true);
-  const r = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(r, [-115.3, 36.1]);
-  store.getState().addWayPoint(r, [-115.1, 36.1]);
-  store.getState().finishWay();
+  store.commands.tools.setDraftServiceEnabled(false);
+  store.commands.tools.setDraftOneWay(true);
+  const r = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(r, [-115.3, 36.1]);
+  store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const way = store.getState().system.ways[0];
   check('draft one-way: drawn road is one-way', isOneWay(way.profile));
   check(
     'draft one-way: travel runs the draw direction (forward)',
     directionalLanes(way.profile).every((l) => l.direction === 'forward'),
   );
-  store.getState().setDraftOneWay(false);
+  store.commands.tools.setDraftOneWay(false);
 
   // Right-click endpoint branch: continues the street as a one-way segment.
-  store.getState().nameWay(r, 'Main Street');
-  const branchId = store.getState().beginOneWayBranch(r, 'end')!;
+  store.commands.ways.nameWay(r, 'Main Street');
+  const branchId = required(store.commands.ways.beginOneWayBranch(r, 'end'));
   const sys = store.getState().system;
   const branch = sys.ways.find((w) => w.id === branchId)!;
   check(
@@ -9030,19 +9078,19 @@ function buildGrid() {
     'branch becomes the active draw with one-way armed',
     store.getState().activeWayId === branchId && store.getState().draftOneWay === true,
   );
-  store.getState().cancelRouteDraft();
-  store.getState().finishWay();
-  store.getState().setDraftOneWay(false);
+  store.commands.routing.cancelRouteDraft();
+  store.commands.ways.finishWay();
+  store.commands.tools.setDraftOneWay(false);
 
   // Network view shows one-way chevrons on SERVED one-way ways.
   fresh();
-  store.getState().setDraftOneWay(true);
-  const ow = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ow, [-115.3, 36.1]);
-  store.getState().addWayPoint(ow, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().setDraftOneWay(false);
-  store.getState().addServiceToWay(ow);
+  store.commands.tools.setDraftOneWay(true);
+  const ow = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ow, [-115.3, 36.1]);
+  store.commands.ways.addWayPoint(ow, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.tools.setDraftOneWay(false);
+  store.commands.services.addServiceToWay(ow);
   const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(['road']) };
   const net = buildFeatures(store.getState().system, null, [], { viewMode: 'network', ...filters });
   check(
@@ -9051,7 +9099,7 @@ function buildGrid() {
   );
   // Flip it and the chevron path reverses.
   const wref = store.getState().system.ways.find((w) => w.id === ow)!;
-  store.getState().setWayProfile(ow, flipProfile(wref.profile));
+  store.commands.ways.setWayProfile(ow, flipProfile(wref.profile));
   const net2 = buildFeatures(store.getState().system, null, [], {
     viewMode: 'network',
     ...filters,
@@ -9060,7 +9108,7 @@ function buildGrid() {
   const c2 = net2.laneArrows.features[0].geometry.coordinates[0][0];
   check('flipping the way reverses the chevron direction', c1 !== c2);
   // Two-way ways show no chevrons.
-  store.getState().setWayProfile(ow, makeTwoWay(store.getState().system.ways[0].profile));
+  store.commands.ways.setWayProfile(ow, makeTwoWay(store.getState().system.ways[0].profile));
   const net3 = buildFeatures(store.getState().system, null, [], {
     viewMode: 'network',
     ...filters,
@@ -9071,16 +9119,16 @@ function buildGrid() {
 // --- station DRAWING: a dragged footprint is a real station ---
 {
   fresh();
-  store.getState().setDraftServiceEnabled(false);
-  const r = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(r, [-115.2, 36.1]);
-  store.getState().addWayPoint(r, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().setDraftServiceEnabled(true);
+  store.commands.tools.setDraftServiceEnabled(false);
+  const r = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(r, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.tools.setDraftServiceEnabled(true);
 
   // A footprint straddling the road: station anchors onto it.
   const fp = squareFootprint([-115.15, 36.1], 25);
-  const sid = store.getState().addDrawnStation(fp);
+  const sid = required(store.commands.stations.addDrawnStation(fp));
   const st1 = store.getState().system.stations.find((x) => x.id === sid)!;
   check('drawn station carries its footprint', st1.footprint === fp);
   check('drawn station anchors onto the way it straddles', primaryAnchor(st1)?.wayId === r);
@@ -9095,7 +9143,7 @@ function buildGrid() {
 
   // A footprint in empty desert: still a station, just free-standing.
   const fp2 = squareFootprint([-115.4, 36.3], 25);
-  const sid2 = store.getState().addDrawnStation(fp2);
+  const sid2 = required(store.commands.stations.addDrawnStation(fp2));
   const st2 = store.getState().system.stations.find((x) => x.id === sid2)!;
   check(
     'a footprint away from any way makes a free station',
@@ -9109,11 +9157,13 @@ function buildGrid() {
   fresh();
   // Define a station's land.
   const land = squareFootprint([-115.15, 36.1], 60);
-  const sid = store.getState().addDrawnStation(land);
-  store.getState().setStationName(sid, 'Bonneville Transit Center');
+  const sid = required(store.commands.stations.addDrawnStation(land));
+  store.commands.stations.setStationName(sid, 'Bonneville Transit Center');
 
   // A building drawn ON the land: real polygon, auto-joins the station.
-  const bldg = store.getState().addFacility('building', squareFootprint([-115.1502, 36.1002], 12));
+  const bldg = required(
+    store.commands.facilities.addFacility('building', squareFootprint([-115.1502, 36.1002], 12)),
+  );
   let sys = store.getState().system;
   const bf = sys.facilities.find((f) => f.id === bldg)!;
   check('a building is a drawn shape, not a point', Array.isArray(bf.geometry[0]));
@@ -9128,7 +9178,9 @@ function buildGrid() {
   );
 
   // A second structure joins the SAME complex (no duplicates).
-  const bay = store.getState().addFacility('busBay', squareFootprint([-115.1498, 36.0998], 8));
+  const bay = required(
+    store.commands.facilities.addFacility('busBay', squareFootprint([-115.1498, 36.0998], 8)),
+  );
   sys = store.getState().system;
   check(
     'further structures join the same complex',
@@ -9136,8 +9188,8 @@ function buildGrid() {
   );
 
   // An entrance point on the land joins too; one far away stays independent.
-  const door = store.getState().addFacility('entrance', [-115.1501, 36.1001]);
-  const remote = store.getState().addFacility('entrance', [-115.4, 36.4]);
+  const door = required(store.commands.facilities.addFacility('entrance', [-115.1501, 36.1001]));
+  const remote = required(store.commands.facilities.addFacility('entrance', [-115.4, 36.4]));
   sys = store.getState().system;
   check('a point access on the land joins the station', sys.groups[0].memberIds.includes(door));
   check(
@@ -9564,11 +9616,13 @@ function buildGrid() {
   fresh();
   const ids: string[] = [];
   for (let i = 0; i < 14; i++) {
-    const way = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(way, [-115.2 + i * 0.004, 36.1]);
-    store.getState().addWayPoint(way, [-115.2 + i * 0.004, 36.13]);
-    store.getState().finishWay();
-    ids.push(store.getState().addStation([-115.2 + i * 0.004, 36.11 + (i % 3) * 0.002]));
+    const way = required(store.commands.ways.beginWay('lightRail', 'straight'));
+    store.commands.ways.addWayPoint(way, [-115.2 + i * 0.004, 36.1]);
+    store.commands.ways.addWayPoint(way, [-115.2 + i * 0.004, 36.13]);
+    store.commands.ways.finishWay();
+    ids.push(
+      required(store.commands.stations.addStation([-115.2 + i * 0.004, 36.11 + (i % 3) * 0.002])),
+    );
   }
   const crowded = store.getState().system;
   crowded.name = 'Crowded';
@@ -9630,11 +9684,11 @@ function buildGrid() {
   const roomy = store.getState().system;
   const sparse: string[] = [];
   for (let i = 0; i < 4; i++) {
-    const way = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(way, [-115.4 + i * 0.3, 36.0]);
-    store.getState().addWayPoint(way, [-115.4 + i * 0.3, 36.4]);
-    store.getState().finishWay();
-    sparse.push(store.getState().addStation([-115.4 + i * 0.3, 36.2]));
+    const way = required(store.commands.ways.beginWay('lightRail', 'straight'));
+    store.commands.ways.addWayPoint(way, [-115.4 + i * 0.3, 36.0]);
+    store.commands.ways.addWayPoint(way, [-115.4 + i * 0.3, 36.4]);
+    store.commands.ways.finishWay();
+    sparse.push(required(store.commands.stations.addStation([-115.4 + i * 0.3, 36.2])));
   }
   const spaced = store.getState().system;
   sparse.forEach((id, i) => {
@@ -9741,12 +9795,12 @@ function buildGrid() {
 // --- render/preview: the card the Worker rasterizes for link unfurls ---
 {
   fresh();
-  const line = store.getState().beginWay('lightRail', 'straight');
-  store.getState().addWayPoint(line, [-115.22, 36.06]);
-  store.getState().addWayPoint(line, [-115.14, 36.16]);
-  store.getState().addWayPoint(line, [-115.12, 36.24]);
-  store.getState().finishWay();
-  const stationId = store.getState().addStation([-115.14, 36.16]);
+  const line = required(store.commands.ways.beginWay('lightRail', 'straight'));
+  store.commands.ways.addWayPoint(line, [-115.22, 36.06]);
+  store.commands.ways.addWayPoint(line, [-115.14, 36.16]);
+  store.commands.ways.addWayPoint(line, [-115.12, 36.24]);
+  store.commands.ways.finishWay();
+  const stationId = required(store.commands.stations.addStation([-115.14, 36.16]));
 
   const system = store.getState().system;
   system.name = 'Valley Rapid Transit';
@@ -10035,12 +10089,12 @@ function buildGrid() {
 // --- store: straightenWay ---
 {
   fresh();
-  const w = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(w, [-115.2, 36.1]);
-  store.getState().addWayPoint(w, [-115.17, 36.13]); // a wobble off the straight line
-  store.getState().addWayPoint(w, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().straightenWay(w);
+  const w = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(w, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(w, [-115.17, 36.13]); // a wobble off the straight line
+  store.commands.ways.addWayPoint(w, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.straightenWay(w);
   const straightened = store.getState().system.ways.find((way) => way.id === w)!;
   check('straighten drops the non-junction intermediate point', straightened.points.length === 2);
   check(
@@ -10051,17 +10105,17 @@ function buildGrid() {
   // A junction at the wobble point must survive straightening — the other
   // way's coincident control point can't be silently orphaned.
   fresh();
-  const wB = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(wB, [-115.2, 36.1]);
-  store.getState().addWayPoint(wB, [-115.17, 36.13]);
-  store.getState().addWayPoint(wB, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const wC = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(wC, [-115.17, 36.13]);
-  store.getState().addWayPoint(wC, [-115.17, 36.2]);
-  store.getState().finishWay();
-  store.getState().joinWayPointToWay(wC, 0, wB, [-115.17, 36.13]);
-  store.getState().straightenWay(wB);
+  const wB = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(wB, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(wB, [-115.17, 36.13]);
+  store.commands.ways.addWayPoint(wB, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const wC = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(wC, [-115.17, 36.13]);
+  store.commands.ways.addWayPoint(wC, [-115.17, 36.2]);
+  store.commands.ways.finishWay();
+  store.commands.ways.joinWayPointToWay(wC, 0, wB, [-115.17, 36.13]);
+  store.commands.ways.straightenWay(wB);
   const guarded = store.getState().system.ways.find((way) => way.id === wB)!;
   check("straighten keeps a point that's a real junction", guarded.points.length === 3);
   check(
@@ -11643,16 +11697,22 @@ function buildGrid() {
 // --- the same three edits, through the store and against real geometry ---
 {
   fresh();
-  store.getState().setDraftMode('bus');
-  const road = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(road, [-115.3, 36.1]);
-  store.getState().addWayPoint(road, [-115.1, 36.1]);
-  store.getState().finishWay();
+  store.commands.tools.setDraftMode('bus');
+  const road = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(road, [-115.3, 36.1]);
+  store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const line = store.getState().system.services[0];
   const pattern = line.path;
   const fullLength = pathLengthMeters(patternPath(store.getState().system.ways, pattern));
 
-  const trimmedCommitted = store.getState().trimPatternTo(line.id, pattern.id, road, 0.5, 'end');
+  const trimmedCommitted = store.commands.services.trimPatternTo(
+    line.id,
+    pattern.id,
+    road,
+    0.5,
+    'end',
+  );
   const trimmed = store.getState().system;
   check('trimming a line reports a committed service-path edit', trimmedCommitted);
   check(
@@ -11668,7 +11728,9 @@ function buildGrid() {
 
   // Cutting that half-line in two at its own midpoint: both halves survive, on
   // the same road.
-  const spawnedId = store.getState().splitServiceAt(line.id, pattern.id, road, 0.25);
+  const spawnedId = required(
+    store.commands.services.splitServiceAt(line.id, pattern.id, road, 0.25),
+  );
   const afterSplit = store.getState().system;
   check(
     'cutting a line in two produces a second line',
@@ -11707,7 +11769,7 @@ function buildGrid() {
   const c = P(-115.16, 36.1);
   const d = P(-115.2, 36.11);
   const e = P(-115.19, 36.11);
-  store.getState().setSystem(
+  store.commands.document.setSystem(
     parseSystem({
       version: 14,
       palette: ['#2ea44f'],
@@ -11746,7 +11808,7 @@ function buildGrid() {
     0,
     0.8,
   )!;
-  const dividedId = store.getState().divideServiceAt('focused', position);
+  const dividedId = required(store.commands.services.divideServiceAt('focused', position));
   const after = store.getState().system;
   const main = after.services.find((service) => service.id === 'focused')!;
   const divided = after.services.find((service) => service.id === dividedId)!;
@@ -11776,7 +11838,7 @@ function buildGrid() {
   const a = P(-115.2, 36.1);
   const b = P(-115.19, 36.1);
   const c = P(-115.18, 36.1);
-  store.getState().setSystem(
+  store.commands.document.setSystem(
     parseSystem({
       version: 14,
       ways: [
@@ -11806,7 +11868,7 @@ function buildGrid() {
   );
   const before = store.getState().system;
   const position = patternPositionAt(before.ways, before.services[0].path, 'outbound', 1, 0.25)!;
-  const ended = store.getState().endPatternAt('loop-line', position);
+  const ended = store.commands.services.endPatternAt('loop-line', position);
   check('ending a line at an exact occurrence commits', ended);
   check(
     'ending a line keeps the longer side of a repeated corridor',
@@ -11824,7 +11886,7 @@ function buildGrid() {
   const a = P(-115.2, 36.1);
   const b = P(-115.19, 36.1);
   const c = P(-115.18, 36.1);
-  store.getState().setSystem(
+  store.commands.document.setSystem(
     parseSystem({
       version: 14,
       ways: [
@@ -11845,9 +11907,9 @@ function buildGrid() {
     }),
   );
   const before = store.getState().system;
-  const extended = store
-    .getState()
-    .extendPatternTerminus('line', 'line', 'end', [{ wayId: 'b-c', fromPoint: 0, toPoint: 1 }]);
+  const extended = store.commands.services.extendPatternTerminus('line', 'line', 'end', [
+    { wayId: 'b-c', fromPoint: 0, toPoint: 1 },
+  ]);
   const after = store.getState().system;
   check('extending a line commits a service-path edit', extended);
   check(
@@ -11859,9 +11921,9 @@ function buildGrid() {
     after.services[0].path.sections.length === 2 &&
       after.services[0].path.sections[1].kind === 'shared',
   );
-  const extendedAtStart = store
-    .getState()
-    .extendPatternTerminus('line', 'line', 'start', [{ wayId: 'z-a', fromPoint: 1, toPoint: 0 }]);
+  const extendedAtStart = store.commands.services.extendPatternTerminus('line', 'line', 'start', [
+    { wayId: 'z-a', fromPoint: 1, toPoint: 0 },
+  ]);
   check('extending a line from its other terminus commits too', extendedAtStart);
   check(
     'a start-side extension reverses the route drawn outward from the old terminus',
@@ -11880,7 +11942,7 @@ function buildGrid() {
 // ridden ONCE per cycle. Drawing one used to be refused outright.
 {
   fresh();
-  store.getState().setDraftMode('bus');
+  store.commands.tools.setDraftMode('bus');
   const P = (lng: number, lat: number): LngLat => [lng, lat];
   const road = (id: string, pts: LngLat[]) => ({
     id,
@@ -11893,7 +11955,7 @@ function buildGrid() {
   const N = P(-115.2, 36.13);
   const NE = P(-115.1988, 36.13);
   const SE = P(-115.1988, 36.128);
-  store.getState().setSystem(
+  store.commands.document.setSystem(
     parseSystem({
       version: 3,
       ways: [
@@ -11906,10 +11968,10 @@ function buildGrid() {
       stations: [],
     }),
   );
-  const tSvc = store.getState().addServiceToWay('spine')!;
+  const tSvc = required(store.commands.services.addServiceToWay('spine'));
   const tPat = store.getState().system.services.find((sv) => sv.id === tSvc)!.path;
   // The loop starts and ends at the spine's far terminus.
-  const looped = store.getState().attachReturnPath(tSvc, tPat.id, [
+  const looped = store.commands.routing.attachReturnPath(tSvc, tPat.id, [
     { wayId: 'top', fromPoint: 0, toPoint: 1 },
     { wayId: 'side', fromPoint: 0, toPoint: 1 },
     { wayId: 'back', fromPoint: 0, toPoint: 1 },
@@ -11949,8 +12011,8 @@ function buildGrid() {
 // placed, and every line on the other drove past a stop it plainly calls at.
 {
   fresh();
-  store.getState().setDraftMode('bus');
-  store.getState().setSystem(
+  store.commands.tools.setDraftMode('bus');
+  store.commands.document.setSystem(
     parseSystem({
       version: 3,
       ways: [
@@ -11979,9 +12041,14 @@ function buildGrid() {
       stations: [],
     }),
   );
-  const centreId = store.getState().addStation([-115.2, 36.12], { wayId: 'northbound', t: 0.5 })!;
+  const centreId = required(
+    store.commands.stations.addStation([-115.2, 36.12], {
+      wayId: 'northbound',
+      t: 0.5,
+    }),
+  );
   // The same platform is reached from the other carriageway too.
-  store.getState().setSystem({
+  store.commands.document.setSystem({
     ...store.getState().system,
     stations: store
       .getState()
@@ -11991,8 +12058,8 @@ function buildGrid() {
           : { ...st, anchors: [...st.anchors, { wayId: 'southbound', t: 0.5 }] },
       ),
   });
-  const northSvc = store.getState().addServiceToWay('northbound')!;
-  const southSvc = store.getState().addServiceToWay('southbound')!;
+  const northSvc = required(store.commands.services.addServiceToWay('northbound'));
+  const southSvc = required(store.commands.services.addServiceToWay('southbound'));
 
   const callsAt = (svcId: string) => {
     const sys = store.getState().system;
@@ -12012,7 +12079,7 @@ function buildGrid() {
   );
 
   // Deleting one carriageway must not delete a platform the other still serves.
-  store.getState().deleteWay('southbound');
+  store.commands.ways.deleteWay('southbound');
   const after = store.getState().system.stations.find((st) => st.id === centreId);
   check('deleting one of its ways keeps the station', !!after);
   check(
@@ -12027,8 +12094,8 @@ function buildGrid() {
 // nowhere to live but an explicit record.
 {
   fresh();
-  store.getState().setDraftMode('bus');
-  store.getState().setSystem(
+  store.commands.tools.setDraftMode('bus');
+  store.commands.document.setSystem(
     parseSystem({
       version: 3,
       ways: [
@@ -12047,13 +12114,18 @@ function buildGrid() {
       stations: [],
     }),
   );
-  const sSvc = store.getState().addServiceToWay('street')!;
+  const sSvc = required(store.commands.services.addServiceToWay('street'));
   const sPat = store.getState().system.services.find((sv) => sv.id === sSvc)!.path;
   // Anchored explicitly: addStation places a station where it is told and does
   // not go looking for a way to bind it to, and an unanchored station is not a
   // stop on anything.
-  const northId = store.getState().addStation([-115.2, 36.13], { wayId: 'street', t: 0.75 })!;
-  store.getState().addStation([-115.2, 36.11], { wayId: 'street', t: 0.25 });
+  const northId = required(
+    store.commands.stations.addStation([-115.2, 36.13], {
+      wayId: 'street',
+      t: 0.75,
+    }),
+  );
+  store.commands.stations.addStation([-115.2, 36.11], { wayId: 'street', t: 0.25 });
 
   const idsOn = (run: 'outbound' | 'inbound') => {
     const sys = store.getState().system;
@@ -12066,7 +12138,7 @@ function buildGrid() {
 
   check('both directions call at both stops to begin with', idsOn('inbound').length === 2);
 
-  store.getState().setStopSkipped(sSvc, sPat.id, 'inbound', northId, true);
+  store.commands.services.setStopSkipped(sSvc, sPat.id, 'inbound', northId, true);
   check('skipping a stop removes it from that direction', !idsOn('inbound').includes(northId));
   check('the other direction still calls there', idsOn('outbound').includes(northId));
 
@@ -12079,7 +12151,7 @@ function buildGrid() {
   );
 
   // A skip names a station, and a station can be deleted after the fact.
-  store.getState().deleteStation(northId);
+  store.commands.stations.deleteStation(northId);
   const afterDelete = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
   const dp = afterDelete.services.find((sv) => sv.id === sSvc)!.path;
   check(
@@ -12087,7 +12159,7 @@ function buildGrid() {
     dp.skippedStops === undefined,
   );
 
-  store.getState().setStopSkipped(sSvc, sPat.id, 'inbound', northId, false);
+  store.commands.services.setStopSkipped(sSvc, sPat.id, 'inbound', northId, false);
   const cleared = store.getState().system.services.find((sv) => sv.id === sSvc)!.path;
   check('un-skipping the last stop drops the record entirely', cleared.skippedStops === undefined);
 }
@@ -12098,8 +12170,8 @@ function buildGrid() {
 // is the sharp version: one of the two ways it rides stops existing.
 {
   fresh();
-  store.getState().setDraftMode('bus');
-  store.getState().setSystem(
+  store.commands.tools.setDraftMode('bus');
+  store.commands.document.setSystem(
     parseSystem({
       version: 3,
       ways: [
@@ -12118,17 +12190,19 @@ function buildGrid() {
       stations: [],
     }),
   );
-  const backId = store.getState().separateCarriageways('blvd')!;
-  const cSvc = store.getState().addServiceToWay('blvd')!;
+  const backId = required(store.commands.network.separateCarriageways('blvd'));
+  const cSvc = required(store.commands.services.addServiceToWay('blvd'));
   const cPat = store.getState().system.services.find((sv) => sv.id === cSvc)!.path;
   check(
     'a couplet can run the two carriageways of one boulevard',
-    store.getState().attachReturnPath(cSvc, cPat.id, [{ wayId: backId, fromPoint: 1, toPoint: 0 }]),
+    store.commands.routing.attachReturnPath(cSvc, cPat.id, [
+      { wayId: backId, fromPoint: 1, toPoint: 0 },
+    ]),
   );
   const split = store.getState().system.services.find((sv) => sv.id === cSvc)!.path;
   check('its two directions run the two carriageways', patternHasSplit(split));
 
-  store.getState().combineCarriageways(store.getState().system.namedWays[0].id);
+  store.commands.network.combineCarriageways(store.getState().system.namedWays[0].id);
   const combined = store.getState().system.services.find((sv) => sv.id === cSvc);
   check('combining the carriageways does not delete the line', !!combined);
   const cp2 = combined!.path;
@@ -12173,7 +12247,7 @@ function buildGrid() {
   // Built as a document rather than drawn, because parseSystem derives a
   // junction wherever control points coincide and the headless draw flow has
   // no snapping to form them with.
-  store.getState().setSystem(
+  store.commands.document.setSystem(
     parseSystem({
       version: 3,
       ways: [
@@ -12186,14 +12260,14 @@ function buildGrid() {
       stations: [],
     }),
   );
-  store.getState().setDraftMode('bus');
-  const svc = store.getState().addServiceToWay('up')!;
+  store.commands.tools.setDraftMode('bus');
+  const svc = required(store.commands.services.addServiceToWay('up'));
   const outPattern = store.getState().system.services.find((sv) => sv.id === svc)!.path;
   check('a plain line starts with one undivided path', !patternHasSplit(outPattern));
 
   check(
     'drawing a return path starts from the far end of the outward trip',
-    store.getState().startReturnPathDraft(svc, outPattern.id),
+    store.commands.routing.startReturnPathDraft(svc, outPattern.id),
   );
 
   const anchorAt = (wayId: string, coord: LngLat) =>
@@ -12204,13 +12278,13 @@ function buildGrid() {
   const midOf = (a: LngLat, b: LngLat): LngLat => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
   check(
     'the return path can be traced round the block',
-    store.getState().extendRouteDraft(anchorAt('north', midOf(NWc, NEc))) &&
-      store.getState().extendRouteDraft(anchorAt('down', midOf(NEc, SEc))) &&
-      store.getState().extendRouteDraft(anchorAt('south', midOf(SEc, SWc))),
+    store.commands.routing.extendRouteDraft(anchorAt('north', midOf(NWc, NEc))) &&
+      store.commands.routing.extendRouteDraft(anchorAt('down', midOf(NEc, SEc))) &&
+      store.commands.routing.extendRouteDraft(anchorAt('south', midOf(SEc, SWc))),
   );
   check(
     'committing a return path keeps it on the same line',
-    store.getState().commitRouteDraft() === svc,
+    required(store.commands.routing.commitRouteDraft()) === svc,
   );
   check('the system still holds exactly one line', store.getState().system.services.length === 1);
 
@@ -12290,13 +12364,13 @@ function buildGrid() {
   // discarding the direction it was drawn with.
   check(
     'adopting infrastructure refuses to flatten a couplet',
-    store.getState().adoptExistingInfrastructure(svc) === 0,
+    store.commands.routing.adoptExistingInfrastructure(svc) === 0,
   );
 
   // Trimming cuts BOTH directions — the return's matching point is found on
   // its own street rather than assumed to be the same leg.
   const outBefore = pathLengthMeters(patternRunPath(store.getState().system.ways, cp, 'outbound'));
-  store.getState().trimPatternTo(svc, cp.id, 'up', 0.5, 'end');
+  store.commands.services.trimPatternTo(svc, cp.id, 'up', 0.5, 'end');
   const trimmedCp = store.getState().system.services.find((sv) => sv.id === svc)!.path;
   check('trimming a couplet keeps both of its directions', patternHasSplit(trimmedCp));
   check(
@@ -12320,7 +12394,7 @@ function buildGrid() {
     );
     check(
       'a return path that ends nowhere near the line is refused',
-      !store.getState().attachReturnPath(svc, trimmedCp.id, spansFarAway),
+      !store.commands.routing.attachReturnPath(svc, trimmedCp.id, spansFarAway),
     );
     check(
       'refusing a far-away return path leaves the line exactly as it was',
@@ -12337,7 +12411,9 @@ function buildGrid() {
     const beforeCount = store.getState().system.services.length;
     // 0.25, not 0.5: the trim above already cut `up` back to [0, 0.5], so 0.5
     // is now this line's terminus and cutting there is correctly refused.
-    const spawnedId = store.getState().splitServiceAt(svc, trimmedCp.id, 'up', 0.25);
+    const spawnedId = required(
+      store.commands.services.splitServiceAt(svc, trimmedCp.id, 'up', 0.25),
+    );
     const after = store.getState().system;
     check('cutting a couplet in two produces a second line', !!spawnedId);
     check('cutting a couplet adds exactly one line', after.services.length === beforeCount + 1);
@@ -12366,11 +12442,11 @@ function buildGrid() {
       !validateSystem(after).some((i) => i.id.startsWith('broken-pattern-')),
     );
     // Put the spawned half back so the checks below still see one line.
-    store.getState().deleteService(spawnedId!);
+    store.commands.services.deleteService(spawnedId);
   }
 
   // And it can be undone.
-  store.getState().makePatternTwoWay(svc, trimmedCp.id);
+  store.commands.services.makePatternTwoWay(svc, trimmedCp.id);
   const flat = store.getState().system.services.find((sv) => sv.id === svc)!.path;
   check('a couplet can be turned back into a two-way line', !patternHasSplit(flat));
   check(
@@ -12386,14 +12462,14 @@ function buildGrid() {
   // the road is cut, and the line survives as two pieces rather than losing
   // whichever half is shorter.
   fresh();
-  store.getState().setDraftMode('bus');
-  const road = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(road, [-115.3, 36.1]);
-  store.getState().addWayPoint(road, [-115.1, 36.1]);
-  store.getState().finishWay();
+  store.commands.tools.setDraftMode('bus');
+  const road = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(road, [-115.3, 36.1]);
+  store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
   const svcId = store.getState().system.services[0].id;
 
-  const affected = store.getState().deleteWayStretch(road, 0.4, 0.6);
+  const affected = store.commands.network.deleteWayStretch(road, 0.4, 0.6);
   const after = store.getState().system;
   check('deleting a stretch reports the line it cut', affected === 1);
   check('the road is left as the two pieces either side', after.ways.length === 2);
@@ -12418,11 +12494,11 @@ function buildGrid() {
   // spanning end-to-end degrades to a full-way removal, same as deleteWay,
   // rather than leaving a zero-length stub behind.
   fresh();
-  const road = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(road, [-115.3, 36.1]);
-  store.getState().addWayPoint(road, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().deleteWayStretch(road, 0, 1);
+  const road = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(road, [-115.3, 36.1]);
+  store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.network.deleteWayStretch(road, 0, 1);
   check(
     'a stretch spanning the whole way removes it entirely',
     !store.getState().system.ways.some((w) => w.id === road),
@@ -12435,15 +12511,15 @@ function buildGrid() {
   // preserves `source`, so the "Imported from OpenStreetMap" badge and the
   // Demolish tool's no-confirm-dialog decision both stay correct after a cut.
   fresh();
-  const road = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(road, [-115.3, 36.1]);
-  store.getState().addWayPoint(road, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().setSystem({
+  const road = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(road, [-115.3, 36.1]);
+  store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.document.setSystem({
     ...store.getState().system,
     ways: store.getState().system.ways.map((w) => (w.id === road ? { ...w, source: 'osm:1' } : w)),
   });
-  store.getState().deleteWayStretch(road, 0.4, 0.6);
+  store.commands.network.deleteWayStretch(road, 0.4, 0.6);
   const survivors = store.getState().system.ways;
   check('demolishing a stretch leaves two surviving pieces', survivors.length === 2);
   check(
@@ -12455,17 +12531,17 @@ function buildGrid() {
 // --- cross-street auto-naming: pre-filled on placement, never touched again ---
 {
   fresh();
-  const ew = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ew, [-115.2, 36.1]);
-  store.getState().addWayPoint(ew, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().nameWay(ew, 'Home St');
-  const ns = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ns, [-115.15, 36.05]);
-  store.getState().addWayPoint(ns, [-115.15, 36.15]);
-  store.getState().finishWay();
-  store.getState().nameWay(ns, 'Cross Ave');
-  store.getState().formCrossingJunctions(ns);
+  const ew = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ew, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(ew, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.nameWay(ew, 'Home St');
+  const ns = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
+  store.commands.ways.nameWay(ns, 'Cross Ave');
+  store.commands.network.formCrossingJunctions(ns);
 
   const ewAfterSplit = store
     .getState()
@@ -12473,14 +12549,19 @@ function buildGrid() {
   // No service rides either road yet, so the unserved/road-anchored default
   // applies — 'alongStreet' style ('@'), not the rail-style '&'; see the
   // dedicated crossStreetNaming.test.ts suite for that rule on its own.
-  const stId = store.getState().addStation([-115.15, 36.1], { wayId: ewAfterSplit.id, t: 1 });
+  const stId = required(
+    store.commands.stations.addStation([-115.15, 36.1], {
+      wayId: ewAfterSplit.id,
+      t: 1,
+    }),
+  );
   const placed = store.getState().system.stations.find((s) => s.id === stId)!;
   check(
     'placing a station on a named way pre-fills its name from the nearest cross street',
     placed.name === 'Home St @ Cross Ave',
   );
 
-  store.getState().moveStation(stId, [-115.12, 36.1]);
+  store.commands.stations.moveStation(stId, [-115.12, 36.1]);
   const moved = store.getState().system.stations.find((s) => s.id === stId)!;
   check(
     "moving a station leaves its auto-filled name untouched, even though it's no longer accurate",
@@ -12491,22 +12572,27 @@ function buildGrid() {
 // --- cross-street auto-naming: resyncs once a later service proves the unserved guess wrong ---
 {
   fresh();
-  const ew = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ew, [-115.2, 36.1]);
-  store.getState().addWayPoint(ew, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().nameWay(ew, 'Home St');
-  const ns = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ns, [-115.15, 36.05]);
-  store.getState().addWayPoint(ns, [-115.15, 36.15]);
-  store.getState().finishWay();
-  store.getState().nameWay(ns, 'Cross Ave');
+  const ew = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ew, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(ew, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.nameWay(ew, 'Home St');
+  const ns = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
+  store.commands.ways.nameWay(ns, 'Cross Ave');
   // finishWay already forms the crossing junction, splitting 'ew' at it.
 
   const ewAfterSplit = store
     .getState()
     .system.ways.find((w) => w.points.some((p) => p[0] === -115.15 && p[1] === 36.1))!;
-  const stId = store.getState().addStation([-115.15, 36.1], { wayId: ewAfterSplit.id, t: 1 });
+  const stId = required(
+    store.commands.stations.addStation([-115.15, 36.1], {
+      wayId: ewAfterSplit.id,
+      t: 1,
+    }),
+  );
   const placed = store.getState().system.stations.find((s) => s.id === stId)!;
   check(
     'an unserved road-anchored station is auto-named along-street and marked autoNamed',
@@ -12520,7 +12606,7 @@ function buildGrid() {
   const from = anchorOnWay(homeWay, homeWay.points[0])!;
   const to = anchorOnWay(homeWay, homeWay.points[homeWay.points.length - 1])!;
   const routed = routeBetween(sys, from, to, { allowedTypeIds: new Set(['road']) })!;
-  store.getState().createRoutedService(routed.spans, 'tram');
+  store.commands.routing.createRoutedService(routed.spans, 'tram');
 
   const resynced = store.getState().system.stations.find((s) => s.id === stId)!;
   check(
@@ -12602,20 +12688,20 @@ function buildGrid() {
 {
   fresh();
   const origin: LngLat = [-115.2, 36.1];
-  store.getState().setDraftMode('bus');
+  store.commands.tools.setDraftMode('bus');
 
-  const first = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(first, offsetMeters(origin, 0, 0));
-  store.getState().addWayPoint(first, offsetMeters(origin, 600, 0));
-  store.getState().finishWay();
+  const first = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(first, offsetMeters(origin, 0, 0));
+  store.commands.ways.addWayPoint(first, offsetMeters(origin, 600, 0));
+  store.commands.ways.finishWay();
   check('the first line lays its own road', store.getState().system.ways.length === 1);
 
   // A second line down the same street, started in empty space a few metres
   // off the first — which is what a mouse actually produces.
-  const second = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(second, offsetMeters(origin, 100, 4));
-  store.getState().addWayPoint(second, offsetMeters(origin, 500, 4));
-  store.getState().finishWay();
+  const second = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(second, offsetMeters(origin, 100, 4));
+  store.commands.ways.addWayPoint(second, offsetMeters(origin, 500, 4));
+  store.commands.ways.finishWay();
 
   const after = store.getState().system;
   check('a second line down the same street lays no second road', after.ways.length === 1);
@@ -12644,17 +12730,17 @@ function buildGrid() {
 {
   fresh();
   const origin: LngLat = [-115.2, 36.1];
-  store.getState().setDraftMode('bus');
-  const road = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(road, offsetMeters(origin, 0, 0));
-  store.getState().addWayPoint(road, offsetMeters(origin, 600, 0));
-  store.getState().finishWay();
+  store.commands.tools.setDraftMode('bus');
+  const road = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(road, offsetMeters(origin, 0, 0));
+  store.commands.ways.addWayPoint(road, offsetMeters(origin, 600, 0));
+  store.commands.ways.finishWay();
 
-  store.getState().setDraftSeparate(true);
-  const busway = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(busway, offsetMeters(origin, 100, 4));
-  store.getState().addWayPoint(busway, offsetMeters(origin, 500, 4));
-  store.getState().finishWay();
+  store.commands.tools.setDraftSeparate(true);
+  const busway = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(busway, offsetMeters(origin, 100, 4));
+  store.commands.ways.addWayPoint(busway, offsetMeters(origin, 500, 4));
+  store.commands.ways.finishWay();
 
   check(
     'Alt lays a second, independent road beside the first',
@@ -12674,15 +12760,15 @@ function buildGrid() {
   const origin: LngLat = [-115.2, 36.1];
   const drawPair = (modeId: string, wayTypeId: string, offsetM: number): number => {
     fresh();
-    store.getState().setDraftMode(modeId);
-    const a = store.getState().beginWay(wayTypeId, 'straight');
-    store.getState().addWayPoint(a, offsetMeters(origin, 0, 0));
-    store.getState().addWayPoint(a, offsetMeters(origin, 600, 0));
-    store.getState().finishWay();
-    const b = store.getState().beginWay(wayTypeId, 'straight');
-    store.getState().addWayPoint(b, offsetMeters(origin, 100, offsetM));
-    store.getState().addWayPoint(b, offsetMeters(origin, 500, offsetM));
-    store.getState().finishWay();
+    store.commands.tools.setDraftMode(modeId);
+    const a = required(store.commands.ways.beginWay(wayTypeId, 'straight'));
+    store.commands.ways.addWayPoint(a, offsetMeters(origin, 0, 0));
+    store.commands.ways.addWayPoint(a, offsetMeters(origin, 600, 0));
+    store.commands.ways.finishWay();
+    const b = required(store.commands.ways.beginWay(wayTypeId, 'straight'));
+    store.commands.ways.addWayPoint(b, offsetMeters(origin, 100, offsetM));
+    store.commands.ways.addWayPoint(b, offsetMeters(origin, 500, offsetM));
+    store.commands.ways.finishWay();
     return store.getState().system.ways.length;
   };
   check('a bus line 4m off an existing road rides that road', drawPair('bus', 'road', 4) === 1);
@@ -12710,17 +12796,17 @@ function buildGrid() {
   const origin: LngLat = [-115.2, 36.1];
   const twoParallelLines = (offsetM: number, secondFrom: number, secondTo: number): string[] => {
     fresh();
-    store.getState().setDraftMode('bus');
+    store.commands.tools.setDraftMode('bus');
     const ids: string[] = [];
     for (const [from, to, off] of [
       [0, 600, 0],
       [secondFrom, secondTo, offsetM],
     ] as [number, number, number][]) {
-      store.getState().setDraftSeparate(true); // as a map drawn before sharing
-      const w = store.getState().beginWay('road', 'straight');
-      store.getState().addWayPoint(w, offsetMeters(origin, from, off));
-      store.getState().addWayPoint(w, offsetMeters(origin, to, off));
-      store.getState().finishWay();
+      store.commands.tools.setDraftSeparate(true); // as a map drawn before sharing
+      const w = required(store.commands.ways.beginWay('road', 'straight'));
+      store.commands.ways.addWayPoint(w, offsetMeters(origin, from, off));
+      store.commands.ways.addWayPoint(w, offsetMeters(origin, to, off));
+      store.commands.ways.finishWay();
       ids.push(w);
     }
     return ids;
@@ -12733,7 +12819,7 @@ function buildGrid() {
     'two lines drawn separately really are two roads',
     store.getState().system.ways.length === 2,
   );
-  const absorbed = store.getState().mergeWaysIntoCorridor(doubled);
+  const absorbed = store.commands.network.mergeWaysIntoCorridor(doubled);
   const after = store.getState().system;
   check('merging reports what it absorbed', absorbed === 1);
   check('the two roads become one', after.ways.length === 1);
@@ -12757,7 +12843,7 @@ function buildGrid() {
   const overhanging = twoParallelLines(4, 300, 900);
   check(
     'an overhanging line still counts as absorbed',
-    store.getState().mergeWaysIntoCorridor(overhanging) === 1,
+    store.commands.network.mergeWaysIntoCorridor(overhanging) === 1,
   );
   const partial = store.getState().system;
   check(
@@ -12786,12 +12872,12 @@ function buildGrid() {
   const apart = twoParallelLines(300, 100, 500);
   check(
     'ways that are nowhere near each other are left alone',
-    store.getState().mergeWaysIntoCorridor(apart) === 0 &&
+    store.commands.network.mergeWaysIntoCorridor(apart) === 0 &&
       store.getState().system.ways.length === 2,
   );
   check(
     'merging needs at least two ways',
-    store.getState().mergeWaysIntoCorridor([apart[0]]) === 0,
+    store.commands.network.mergeWaysIntoCorridor([apart[0]]) === 0,
   );
 }
 
@@ -12882,10 +12968,10 @@ function buildGrid() {
 {
   fresh();
   const before = store.getState().canUndo;
-  store.getState().setSelectVariant('erase');
+  store.commands.tools.setSelectVariant('erase');
   check('picking a variant arms it', store.getState().selectVariant === 'erase');
   check('picking a variant creates no undo step', store.getState().canUndo === before);
-  store.getState().setSelectVariant('select');
+  store.commands.tools.setSelectVariant('select');
   check('a variant switches back off', store.getState().selectVariant === 'select');
 }
 
@@ -12895,12 +12981,12 @@ function buildGrid() {
 // list rows reading " 1" and " 2".
 {
   fresh();
-  store.getState().setDraftMode('bus');
-  const w = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(w, [-115.3, 36.1]);
-  store.getState().addWayPoint(w, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().separateCarriageways(w);
+  store.commands.tools.setDraftMode('bus');
+  const w = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(w, [-115.3, 36.1]);
+  store.commands.ways.addWayPoint(w, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.network.separateCarriageways(w);
   const sys = store.getState().system;
   const unnamed = sys.namedWays.find((n) => !n.name);
   check('separating carriageways mints an identity with no name', !!unnamed);
@@ -12908,7 +12994,7 @@ function buildGrid() {
   check(
     'naming it later still names every half',
     (() => {
-      store.getState().renameNamedWay(unnamed!.id, 'Decatur Avenue');
+      store.commands.ways.renameNamedWay(unnamed!.id, 'Decatur Avenue');
       const named = store.getState().system.namedWays.find((n) => n.id === unnamed!.id);
       return named?.name === 'Decatur Avenue' && named.wayIds.length === 2;
     })(),

@@ -11,12 +11,14 @@ import {
   serviceDisplayLabel,
   servicePattern,
 } from '@transitmapper/core/model/line-service';
-import type { EditorStore } from '../editor/store';
 import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from '../map/layers';
 import { vehiclesDisabledForPerf } from '../perf';
 import { resolvePatternGeometry } from './patternGeometry';
 import { nextActiveServiceMs, ScheduleResolver } from './serviceSchedule';
 import type { SimClock } from './simClock';
+import type { VehicleAnimationStore } from './vehicle-animation-store';
+
+export type { VehicleAnimationStore } from './vehicle-animation-store';
 
 /** Presentation state that controls whether and how vehicles are drawn. */
 export interface VehicleGate {
@@ -77,7 +79,7 @@ function noteClampedFleet(patternId: string, serviceName: string, fleet: number)
  */
 export function attachVehicleAnimation(
   map: MLMap,
-  store: EditorStore,
+  store: VehicleAnimationStore,
   clock: SimClock,
   gate: VehicleGate,
 ): () => void {

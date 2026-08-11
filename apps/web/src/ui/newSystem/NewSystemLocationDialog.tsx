@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useEditorStore } from '../../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../../editor/EditorProvider';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { importOsmWays } from '@transitmapper/core/model/import';
 import { searchPlaces, type PlaceResult } from '@transitmapper/core/model/geocode';
@@ -60,9 +60,10 @@ interface NewSystemLocationDialogProps {
 }
 
 type Status = 'idle' | 'importing' | 'error';
-
 export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDialogProps) {
-  const store = useEditorStore();
+  const commands = useEditorCommands();
+  const activeSystemId = useEditor((state) => state.system.id);
+  const activeDrivingSide = useEditor((state) => state.system.drivingSide);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PlaceResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -77,7 +78,6 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
   // actually settle before reading getBounds() — whichever of choosePlace/
   // pickOnMap ran last "wins," same as the picked state itself.
   const settled = useRef<Promise<void>>(Promise.resolve());
-
   useEffect(
     () => () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -86,7 +86,6 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
     },
     [],
   );
-
   const runSearch = (q: string) => {
     searchAbort.current?.abort(new DOMException('Superseded by a newer search.', 'AbortError'));
     if (q.trim().length === 0) {
@@ -111,13 +110,11 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
         setSearching(false);
       });
   };
-
   const onQueryChange = (value: string) => {
     setQuery(value);
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(() => runSearch(value), SEARCH_DEBOUNCE_MS);
   };
-
   const choosePlace = (place: PlaceResult) => {
     setPicked({
       center: place.center,
@@ -131,12 +128,10 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
     setQuery(place.label);
     settled.current = mapHandle.current?.flyTo(place.center, PICK_ZOOM) ?? Promise.resolve();
   };
-
   const pickOnMap = (center: LngLat) => {
     setPicked((prev) => ({ center, drivingSide: prev?.drivingSide }));
     settled.current = mapHandle.current?.flyTo(center, PICK_ZOOM) ?? Promise.resolve();
   };
-
   const confirm = async () => {
     if (!picked) return;
     setStatus('importing');
@@ -145,9 +140,8 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
     importAbort.current = controller;
     try {
       const drivingSide: DrivingSide =
-        picked.drivingSide ??
-        (mode === 'importIntoActive' ? store.getState().system.drivingSide : 'right');
-
+        picked.drivingSide ?? (mode === 'importIntoActive' ? activeDrivingSide : 'right');
+      let targetSystemId = activeSystemId;
       if (mode === 'create') {
         const system = createEmptySystem();
         system.viewport = { center: picked.center, zoom: PICK_ZOOM };
@@ -156,24 +150,28 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
         // System exists and is active BEFORE import is attempted — if
         // Overpass is down the user still lands on a real, correctly
         // centered empty system instead of stuck behind this dialog.
-        store.getState().setSystem(system, { readOnly: false });
+        commands.document.setSystem(system, { readOnly: false });
+        targetSystemId = system.id;
       } else {
-        store.getState().setViewport({ center: picked.center, zoom: PICK_ZOOM });
-        if (picked.drivingSide) store.getState().setDrivingSide(picked.drivingSide);
+        commands.document.setViewport({ center: picked.center, zoom: PICK_ZOOM });
+        if (picked.drivingSide) commands.network.setDrivingSide(picked.drivingSide);
       }
-
       // Wait for the camera to actually settle, then read the SAME
       // map.getBounds()-at-current-zoom convention ImportDialog.tsx uses —
       // not an approximation from center+zoom alone.
       await settled.current;
       const bbox = mapHandle.current?.getBounds();
       if (!bbox) throw new Error('Map is not ready yet — try again.');
-
       const network = await importOsmWays(bbox, ['road', 'bike'], drivingSide, {
         signal: controller.signal,
       });
-      store.getState().importWays(network);
-      store.getState().setTool('way');
+      const imported = commands.imports.applyImportedNetwork({ targetSystemId, network });
+      if (!imported) {
+        setError('This system can no longer accept that import. Nothing was changed.');
+        setStatus('error');
+        return;
+      }
+      commands.tools.setTool('way');
       onClose();
     } catch (e) {
       if (controller.signal.aborted) return;
@@ -192,8 +190,8 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
         if (picked.drivingSide) system.drivingSide = picked.drivingSide;
       }
       setActiveId(system.id);
-      store.getState().setSystem(system, { readOnly: false });
-      store.getState().setTool('way');
+      commands.document.setSystem(system, { readOnly: false });
+      commands.tools.setTool('way');
     }
     onClose();
   };

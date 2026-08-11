@@ -46,7 +46,7 @@ describe('network gesture store transactions', () => {
       ],
     });
     const store = createEditorStore();
-    store.getState().setSystem(original);
+    store.commands.document.setSystem(original);
     const source = {
       serviceId: service.id,
       patternId: service.id,
@@ -56,7 +56,7 @@ describe('network gesture store transactions', () => {
     const target = { kind: 'corridor' as const, wayId: extension.id, coord: C };
     const plan = planTerminusGesture(original, source, target);
 
-    expect(store.getState().commitTerminusGesture(source, target, plan)).toBe(true);
+    expect(store.commands.services.commitTerminusGesture(source, target, plan)).toBe(true);
 
     const committed = store.getState().system;
     expect(committed.ways).toBe(original.ways);
@@ -68,7 +68,7 @@ describe('network gesture store transactions', () => {
       siblingService.path,
     );
 
-    store.getState().undo();
+    store.commands.history.undo();
     expect(store.getState().system).toBe(original);
   });
 
@@ -79,8 +79,8 @@ describe('network gesture store transactions', () => {
     const position = patternPositionAt([road], original.services[0].path, 'outbound', 0, 1);
     if (!position) throw new Error('Expected the service terminus position');
     const store = createEditorStore();
-    store.getState().setSystem(original);
-    store.getState().armTerminus({
+    store.commands.document.setSystem(original);
+    store.commands.selection.armTerminus({
       serviceId: 'bus',
       patternId: 'bus',
       side: 'end',
@@ -95,7 +95,7 @@ describe('network gesture store transactions', () => {
     const target = { kind: 'corridor' as const, wayId: 'missing', coord: C };
     const plan = planTerminusGesture(original, source, target);
 
-    expect(store.getState().commitTerminusGesture(source, target, plan)).toBe(false);
+    expect(store.commands.services.commitTerminusGesture(source, target, plan)).toBe(false);
     expect(store.getState().system).toBe(original);
     expect(store.getState().armedTerminus).toBeNull();
     expect(store.getState().canUndo).toBe(false);
@@ -155,16 +155,16 @@ describe('network gesture store transactions', () => {
     };
     const plan = planTerminusGesture(original, source, target);
     const store = createEditorStore();
-    store.getState().setSystem(original);
+    store.commands.document.setSystem(original);
 
-    expect(store.getState().commitTerminusGesture(source, target, plan)).toBe(true);
+    expect(store.commands.services.commitTerminusGesture(source, target, plan)).toBe(true);
     expect(store.getState().system.services[0].path.sections).toMatchObject([
       { kind: 'shared' },
       { kind: 'split' },
     ]);
     expect(store.getState().system.ways).toBe(original.ways);
 
-    store.getState().undo();
+    store.commands.history.undo();
     expect(store.getState().system).toBe(original);
   });
 
@@ -203,11 +203,13 @@ describe('network gesture store transactions', () => {
     };
     const plan = planTerminusGesture(original, source, target);
     const store = createEditorStore();
-    store.getState().setSystem(original);
+    store.commands.document.setSystem(original);
 
-    expect(store.getState().commitTerminusGesture(source, target, plan)).toBe(false);
+    expect(store.commands.services.commitTerminusGesture(source, target, plan)).toBe(false);
     expect(store.getState().system).toBe(original);
-    expect(store.getState().commitTerminusGesture(source, target, plan, 'through')).toBe(true);
+    expect(store.commands.services.commitTerminusGesture(source, target, plan, 'through')).toBe(
+      true,
+    );
 
     expect(store.getState().system.services).toHaveLength(1);
     expect(store.getState().system.services[0]).toMatchObject({
@@ -218,7 +220,7 @@ describe('network gesture store transactions', () => {
       spanStart: '05:00',
       spanEnd: '01:00',
     });
-    store.getState().undo();
+    store.commands.history.undo();
     expect(store.getState().system).toBe(original);
   });
 
@@ -283,9 +285,11 @@ describe('network gesture store transactions', () => {
     };
     const plan = planTerminusGesture(original, source, target);
     const store = createEditorStore();
-    store.getState().setSystem(original);
+    store.commands.document.setSystem(original);
 
-    expect(store.getState().commitTerminusGesture(source, target, plan, 'through')).toBe(true);
+    expect(store.commands.services.commitTerminusGesture(source, target, plan, 'through')).toBe(
+      true,
+    );
     const joined = store
       .getState()
       .system.services.find((service) => service.id === 'desired-a')!.path;
@@ -314,9 +318,9 @@ describe('network gesture store transactions', () => {
     );
     const original = aSystem({ ways: [road, track] });
     const store = createEditorStore();
-    store.getState().setSystem(original);
+    store.commands.document.setSystem(original);
 
-    store.getState().formCrossingJunctions('road');
+    store.commands.network.formCrossingJunctions('road');
 
     expect(store.getState().system.nodes).toEqual([]);
     expect(store.getState().system.ways).toBe(original.ways);
@@ -347,10 +351,10 @@ describe('network gesture store transactions', () => {
     };
     const plan = planTerminusGesture(original, source, target);
     const store = createEditorStore();
-    store.getState().setSystem(original);
+    store.commands.document.setSystem(original);
 
     expect(plan.kind).toBe('connect');
-    expect(store.getState().commitTerminusGesture(source, target, plan)).toBe(true);
+    expect(store.commands.services.commitTerminusGesture(source, target, plan)).toBe(true);
     expect(store.getState().system.services.map((service) => service.id)).toEqual([
       'source-service',
       'target-service',
@@ -409,8 +413,8 @@ describe('network gesture store transactions', () => {
     };
     const plan = planTerminusGesture(original, source, target);
     const store = createEditorStore();
-    store.getState().setSystem(original);
-    store.getState().commitTerminusGesture(source, target, plan);
+    store.commands.document.setSystem(original);
+    store.commands.services.commitTerminusGesture(source, target, plan);
     const committed = store.getState().system;
     const committedPattern = committed.services[0].path;
 
@@ -435,8 +439,10 @@ describe('network gesture store transactions', () => {
     const store = createEditorStore();
     const road = aRoad('road', [A, B]);
     const pattern = aPattern('branch', [road], ['road']);
-    store.getState().setSystem(aSystem({ ways: [road], services: [aService('bus', [pattern])] }));
-    store.getState().armTerminus({
+    store.commands.document.setSystem(
+      aSystem({ ways: [road], services: [aService('bus', [pattern])] }),
+    );
+    store.commands.selection.armTerminus({
       serviceId: 'bus',
       patternId: 'bus',
       side: 'end',
@@ -449,7 +455,7 @@ describe('network gesture store transactions', () => {
       )!,
     });
 
-    store.getState().setTool('way');
+    store.commands.tools.setTool('way');
 
     expect(store.getState().armedTerminus).toBeNull();
   });

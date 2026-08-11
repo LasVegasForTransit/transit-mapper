@@ -68,6 +68,33 @@ export function servicePattern(service: Service): Pattern {
   return service.path;
 }
 
+/** Replace a Service's one path while keeping its identity authoritative. */
+export function withServicePattern(service: Service, pattern: Pattern): Service {
+  if (pattern === service.path) return service;
+  return {
+    ...service,
+    path: {
+      id: service.id,
+      sections: pattern.sections,
+      ...(pattern.skippedStops ? { skippedStops: pattern.skippedStops } : {}),
+    },
+  };
+}
+
+/** Remove dead Service memberships and public Lines left with no Services. */
+export function pruneLineMembership(lines: Line[], services: Service[]): Line[] {
+  const liveServiceIds = new Set(services.map((service) => service.id));
+  const next = lines.flatMap((line) => {
+    const serviceIds = line.serviceIds.filter((serviceId) => liveServiceIds.has(serviceId));
+    if (serviceIds.length === 0) return [];
+    if (serviceIds.length === line.serviceIds.length) return [line];
+    return [{ ...line, serviceIds }];
+  });
+  return next.length === lines.length && next.every((line, index) => line === lines[index])
+    ? lines
+    : next;
+}
+
 /** A Service label stays technical unless its Line is the only useful label. */
 export function serviceDisplayLabel(system: TransitSystem, serviceId: string): string {
   const service = system.services.find((candidate) => candidate.id === serviceId);

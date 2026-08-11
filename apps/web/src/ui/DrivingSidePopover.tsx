@@ -2,7 +2,7 @@
 // a regional/jurisdictional property, one value for the whole system, not
 // a per-mode/per-way-type view filter, so it lives in its own small popover
 // rather than folded into LayersPopover (which is pure view state).
-import { useEditor } from '../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../editor/EditorProvider';
 import type { DrivingSide } from '@transitmapper/core/model/system';
 import { IconButton } from './IconButton';
 import { Popover } from './Popover';
@@ -14,7 +14,7 @@ const DRIVING_SIDES: { value: DrivingSide; label: string }[] = [
 
 export function DrivingSidePopover() {
   const drivingSide = useEditor((s) => s.system.drivingSide);
-  const setDrivingSide = useEditor((s) => s.setDrivingSide);
+  const { setDrivingSide } = useEditorCommands().network;
   const readOnly = useEditor((s) => s.readOnly);
 
   return (

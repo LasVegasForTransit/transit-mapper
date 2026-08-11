@@ -272,6 +272,7 @@ export function attachInteractions(
   opts: AttachInteractionsOptions,
 ): () => void {
   const canvas = map.getCanvas();
+  const commands = store.commands;
   // Destructured once per attachment, not read per event: swapping tolerances
   // underneath a drag already in progress would change what the gesture means
   // halfway through it.
@@ -721,7 +722,7 @@ export function attachInteractions(
         ) {
           const hit = nearestOpenEndpoint(st.system.ways, lngLatOf(ev), snapMeters(snapPx));
           if (hit) {
-            st.beginOneWayBranch(hit.wayId, hit.end);
+            commands.ways.beginOneWayBranch(hit.wayId, hit.end);
             return;
           }
         }
@@ -729,8 +730,8 @@ export function attachInteractions(
         // route draft (snap-to-streets) as well as a way draw, so right-click
         // never leaves a draft hanging (a stuck draft would swallow every
         // later press and read as "drawing is broken").
-        if (st.routeDraft) st.commitRouteDraft();
-        else if (st.activeWayId) st.finishWay();
+        if (st.routeDraft) commands.routing.commitRouteDraft();
+        else if (st.activeWayId) commands.ways.finishWay();
         else openMenuAt(ev);
       }
     };
@@ -745,7 +746,7 @@ export function attachInteractions(
     const index = feature.properties.index as number;
     const original = wayPointAt(wayId, index);
     let moved = false;
-    const throttled = rafThrottle((c: LngLat) => store.getState().moveWayPoint(wayId, index, c));
+    const throttled = rafThrottle((c: LngLat) => commands.ways.moveWayPoint(wayId, index, c));
     const onMove = (ev: MapMouseEvent) => {
       moved = true;
       let c = lngLatOf(ev);
@@ -763,9 +764,9 @@ export function attachInteractions(
       if (moved) {
         // Dragging a point across another same-type, same-grade way forms a
         // real junction there, same as finishing a draw does.
-        store.getState().formCrossingJunctions(wayId);
+        commands.network.formCrossingJunctions(wayId);
       } else {
-        store.getState().select({ kind: 'way', id: wayId });
+        commands.selection.select({ kind: 'way', id: wayId });
       }
     };
     map.on('mousemove', onMove);
@@ -775,7 +776,7 @@ export function attachInteractions(
         throttled.cancel();
         map.off('mousemove', onMove);
         map.off('mouseup', onUp);
-        if (original) store.getState().moveWayPoint(wayId, index, original); // revert the live edit
+        if (original) commands.ways.moveWayPoint(wayId, index, original); // revert the live edit
       },
       { wayPoints: [{ wayId, pointIndex: index }] },
     );
@@ -811,9 +812,9 @@ export function attachInteractions(
         placeEnd(wayId, atStart, resolveEnd(wayId, atStart, lngLatOf(ev), constrainActive(ev)));
         // Pulling an end across another same-grade way forms a real junction
         // there, same as finishing a draw does.
-        store.getState().formCrossingJunctions(wayId);
+        commands.network.formCrossingJunctions(wayId);
       } else {
-        store.getState().select({ kind: 'way', id: wayId });
+        commands.selection.select({ kind: 'way', id: wayId });
       }
     };
     map.on('mousemove', onMove);
@@ -841,7 +842,7 @@ export function attachInteractions(
       throttled.flush();
       endGesture();
       map.off('mousemove', onMove);
-      if (!moved) store.getState().select({ kind: 'station', id });
+      if (!moved) commands.selection.select({ kind: 'station', id });
     };
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
@@ -850,7 +851,7 @@ export function attachInteractions(
         throttled.cancel();
         map.off('mousemove', onMove);
         map.off('mouseup', onUp);
-        if (originalCoord) store.getState().moveStation(id, originalCoord, originalAnchor); // revert
+        if (originalCoord) commands.stations.moveStation(id, originalCoord, originalAnchor); // revert
       },
       { stationIds: [id] },
     );
@@ -860,7 +861,7 @@ export function attachInteractions(
     suppressClick = true;
     const original = store.getState().system.facilities.find((f) => f.id === id)?.geometry;
     let moved = false;
-    const throttled = rafThrottle((c: LngLat) => store.getState().moveFacility(id, c));
+    const throttled = rafThrottle((c: LngLat) => commands.facilities.moveFacility(id, c));
     const onMove = (ev: MapMouseEvent) => {
       moved = true;
       throttled.call(lngLatOf(ev));
@@ -869,7 +870,7 @@ export function attachInteractions(
       throttled.flush();
       endGesture();
       map.off('mousemove', onMove);
-      if (!moved) store.getState().select({ kind: 'facility', id });
+      if (!moved) commands.selection.select({ kind: 'facility', id });
     };
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
@@ -879,7 +880,7 @@ export function attachInteractions(
         map.off('mousemove', onMove);
         map.off('mouseup', onUp);
         if (original && !Array.isArray(original[0]))
-          store.getState().moveFacility(id, original as LngLat); // revert
+          commands.facilities.moveFacility(id, original as LngLat); // revert
       },
       { facilityIds: [id] },
     );
@@ -913,7 +914,7 @@ export function attachInteractions(
     facilityBoundaryDraft = null;
     clearPreviews();
     if (!draft || draft.length < 3) return; // need at least a triangle for a real region
-    store.getState().createFacilityComplex(draft);
+    commands.groups.createFacilityComplex(draft);
     opts.focusFootprint(draft);
   };
 
@@ -950,7 +951,7 @@ export function attachInteractions(
       if (dragged) {
         const corners = rectCorners(startCoord, lngLatOf(ev));
         clearPreviews();
-        store.getState().createFacilityComplex(corners);
+        commands.groups.createFacilityComplex(corners);
         opts.focusFootprint(corners);
       } else {
         facilityBoundaryDraft = [startCoord];
@@ -972,7 +973,7 @@ export function attachInteractions(
     stationLandDraft = null;
     clearPreviews();
     if (!draft || draft.length < 3) return; // a border needs at least a triangle
-    store.getState().addDrawnStation(draft);
+    commands.stations.addDrawnStation(draft);
     opts.focusFootprint(draft);
   };
 
@@ -1007,7 +1008,7 @@ export function attachInteractions(
       if (dragged) {
         clearPreviews();
         const corners = rectCorners(startCoord, lngLatOf(ev));
-        store.getState().addDrawnStation(corners);
+        commands.stations.addDrawnStation(corners);
         opts.focusFootprint(corners);
         suppressClick = true;
       } else if (allowClickPoints) {
@@ -1045,7 +1046,7 @@ export function attachInteractions(
         clearPreviews();
         const st = store.getState();
         const corners = rectCorners(startCoord, lngLatOf(ev));
-        st.addFacility(st.draftFacilityTypeId, corners);
+        commands.facilities.addFacility(st.draftFacilityTypeId, corners);
         opts.focusFootprint(corners);
         suppressClick = true;
       }
@@ -1070,7 +1071,7 @@ export function attachInteractions(
     const flush = () => {
       frame = null;
       if (pendingDx === 0 && pendingDy === 0) return;
-      store.getState().nudgeMultiSelection(pendingDx, pendingDy);
+      commands.selection.nudgeMultiSelection(pendingDx, pendingDy);
       pendingDx = 0;
       pendingDy = 0;
     };
@@ -1101,7 +1102,7 @@ export function attachInteractions(
         if (frame !== null) cancelAnimationFrame(frame);
         flush(); // apply whatever hadn't been flushed yet, so `total` matches the store
         if (totalDx !== 0 || totalDy !== 0)
-          store.getState().nudgeMultiSelection(-totalDx, -totalDy); // revert
+          commands.selection.nudgeMultiSelection(-totalDx, -totalDy); // revert
       },
       {
         wayIds: selected.filter((item) => item.kind === 'way').map((item) => item.id),
@@ -1132,7 +1133,7 @@ export function attachInteractions(
       const group = store.getState().system.groups.find((g) => g.id === groupId);
       const original = group?.footprint?.[index];
       const apply = (coord: LngLat) =>
-        store.getState().moveGroupFootprintPoint(groupId, index, coord);
+        commands.groups.moveGroupFootprintPoint(groupId, index, coord);
       let moved = false;
       const throttled = rafThrottle(apply);
       const onMove = (ev: MapMouseEvent) => {
@@ -1143,7 +1144,7 @@ export function attachInteractions(
         throttled.flush();
         endGesture();
         map.off('mousemove', onMove);
-        if (!moved) store.getState().select({ kind: 'group', id: groupId });
+        if (!moved) commands.selection.select({ kind: 'group', id: groupId });
       };
       map.on('mousemove', onMove);
       map.once('mouseup', onUp);
@@ -1167,8 +1168,8 @@ export function attachInteractions(
         ? station?.footprint?.[index]
         : station?.platforms?.find((p) => p.id === platformId)?.points[index];
     const apply = (coord: LngLat) => {
-      if (kind === 'footprint') store.getState().moveFootprintPoint(stationId, index, coord);
-      else if (platformId) store.getState().movePlatformPoint(stationId, platformId, index, coord);
+      if (kind === 'footprint') commands.stations.moveFootprintPoint(stationId, index, coord);
+      else if (platformId) commands.stations.movePlatformPoint(stationId, platformId, index, coord);
     };
     let moved = false;
     const throttled = rafThrottle(apply);
@@ -1180,7 +1181,7 @@ export function attachInteractions(
       throttled.flush();
       endGesture();
       map.off('mousemove', onMove);
-      if (!moved) store.getState().select({ kind: 'station', id: stationId });
+      if (!moved) commands.selection.select({ kind: 'station', id: stationId });
     };
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
@@ -1394,7 +1395,7 @@ export function attachInteractions(
       };
       const st = store.getState();
       const items = collect({ inBox, pathInBox }, st.system);
-      if (items.length > 0) st.addMultiSelection(items);
+      if (items.length > 0) commands.selection.addMultiSelection(items);
     };
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
@@ -1447,16 +1448,18 @@ export function attachInteractions(
     const moveThrottle = rafThrottle((ev: MapMouseEvent) => {
       if (!started) {
         if (Math.hypot(ev.point.x - startPt.x, ev.point.y - startPt.y) < dragPx) return;
+        const st = store.getState();
+        const createdWayId = commands.ways.beginWay(st.draftWayTypeId, 'freeform');
+        if (createdWayId === null) return;
+        wayId = createdWayId;
         started = true;
         suppressClick = true;
-        const st = store.getState();
-        wayId = st.beginWay(st.draftWayTypeId, 'freeform');
-        st.addWayPoint(wayId, startCoord);
+        commands.ways.addWayPoint(wayId, startCoord);
         lastPt = startPt;
       }
       if (Math.hypot(ev.point.x - lastPt.x, ev.point.y - lastPt.y) < freehandSamplePx) return;
       lastPt = ev.point;
-      store.getState().addWayPoint(wayId, lngLatOf(ev));
+      commands.ways.addWayPoint(wayId, lngLatOf(ev));
     });
     const onMove = (ev: MapMouseEvent) => moveThrottle.call(ev);
     const onUp = (ev: MapMouseEvent) => {
@@ -1467,8 +1470,8 @@ export function attachInteractions(
         // point + finishWay coalesce with the sampled points from onMove
         // into the one undo step this whole freehand stroke should be.
         if (Math.hypot(ev.point.x - lastPt.x, ev.point.y - lastPt.y) > 0)
-          store.getState().addWayPoint(wayId, lngLatOf(ev));
-        store.getState().finishWay();
+          commands.ways.addWayPoint(wayId, lngLatOf(ev));
+        commands.ways.finishWay();
       }
       endGesture();
     };
@@ -1479,7 +1482,7 @@ export function attachInteractions(
         moveThrottle.cancel();
         map.off('mousemove', onMove);
         map.off('mouseup', onUp);
-        if (started) store.getState().deleteWay(wayId); // discard whatever was sampled so far
+        if (started) commands.ways.deleteWay(wayId); // discard whatever was sampled so far
       },
       { discoverNewWay: true },
     );
@@ -1524,7 +1527,7 @@ export function attachInteractions(
       if (hit) {
         const way = candidates.find((w) => w.id === hit.wayId);
         const anchor = way ? anchorOnWay(way, hit.coord) : null;
-        if (anchor) st.extendRouteDraft(anchor);
+        if (anchor) commands.routing.extendRouteDraft(anchor);
       }
       return;
     }
@@ -1532,7 +1535,7 @@ export function attachInteractions(
     // committed line rides existing infrastructure or keeps its own, and by
     // then this press is long gone. Only the press that STARTS a line arms it,
     // so Alt on a later node doesn't silently change the line's mind.
-    if (!st.activeWayId) st.setDraftSeparate(forceSeparate);
+    if (!st.activeWayId) commands.tools.setDraftSeparate(forceSeparate);
 
     // Network view, pressing ON existing compatible infrastructure: draw by
     // ROUTING along it (snap-to-streets) instead of laying new geometry, since
@@ -1562,7 +1565,7 @@ export function attachInteractions(
           const anchor = way ? anchorOnWay(way, hit.coord) : null;
           if (anchor) {
             suppressClick = true;
-            st.startRouteDraft(anchor);
+            commands.routing.startRouteDraft(anchor);
             return;
           }
         }
@@ -1594,15 +1597,17 @@ export function attachInteractions(
       if (resume) {
         wayId = resume.wayId;
         extendAtStart = resume.end === 'start';
-        st.resumeWay(wayId);
+        commands.ways.resumeWay(wayId);
         const ridingService = st.system.services.find((sv) =>
           patternLegs(servicePattern(sv)).some((leg) => leg.wayId === wayId),
         );
-        st.select(
+        commands.selection.select(
           ridingService ? { kind: 'service', id: ridingService.id } : { kind: 'way', id: wayId },
         );
       } else {
-        wayId = st.beginWay(st.draftWayTypeId, st.draftGeometry);
+        const createdWayId = commands.ways.beginWay(st.draftWayTypeId, st.draftGeometry);
+        if (createdWayId === null) return;
+        wayId = createdWayId;
         extendAtStart = false;
         const seed = snap(
           st.system.ways,
@@ -1611,8 +1616,8 @@ export function attachInteractions(
           new Set([wayId]),
           st.draftWayTypeId,
         );
-        st.addWayPoint(wayId, seed ? seed.coord : startCoord);
-        if (seed) st.joinWayPointToWay(wayId, 0, seed.wayId, seed.coord);
+        commands.ways.addWayPoint(wayId, seed ? seed.coord : startCoord);
+        if (seed) commands.ways.joinWayPointToWay(wayId, 0, seed.wayId, seed.coord);
       }
       activeExtendAtStart = extendAtStart;
     }
@@ -1823,11 +1828,10 @@ export function attachInteractions(
   const placeEnd = (wayId: string, atStart: boolean, end: ResolvedEnd): void => {
     const way = store.getState().system.ways.find((w) => w.id === wayId);
     const index = atStart ? 0 : (way?.points.length ?? 0);
-    if (atStart) store.getState().insertWayPoint(wayId, 0, end.coord);
-    else store.getState().addWayPoint(wayId, end.coord);
-    if (end.closesLoop) store.getState().closeWayLoop(wayId);
-    else if (end.snapWayId)
-      store.getState().joinWayPointToWay(wayId, index, end.snapWayId, end.coord);
+    if (atStart) commands.ways.insertWayPoint(wayId, 0, end.coord);
+    else commands.ways.addWayPoint(wayId, end.coord);
+    if (end.closesLoop) commands.ways.closeWayLoop(wayId);
+    else if (end.snapWayId) commands.ways.joinWayPointToWay(wayId, index, end.snapWayId, end.coord);
   };
 
   /**
@@ -1942,8 +1946,8 @@ export function attachInteractions(
   const placeOrSnapStation = (id: string, coord: LngLat) => {
     const ways = store.getState().system.ways;
     const s = snap(ways, coord, snapMeters(snapPx));
-    if (s) store.getState().moveStation(id, s.coord, { wayId: s.wayId, t: s.t });
-    else store.getState().moveStation(id, coord, undefined);
+    if (s) commands.stations.moveStation(id, s.coord, { wayId: s.wayId, t: s.t });
+    else commands.stations.moveStation(id, coord, undefined);
   };
 
   // Alt-drag erases control points: delete the one under the cursor, then any
@@ -1959,7 +1963,7 @@ export function attachInteractions(
     const eraseThrottle = rafThrottle((ev: MapMouseEvent) => {
       const f = featureAt(ev, [LYR_HANDLES, LYR_WAY_ENDPOINTS]);
       if (f)
-        store.getState().deleteWayPoint(f.properties.wayId as string, f.properties.index as number);
+        commands.ways.deleteWayPoint(f.properties.wayId as string, f.properties.index as number);
     });
     const onMove = (ev: MapMouseEvent) => {
       moved = true;
@@ -1993,23 +1997,21 @@ export function attachInteractions(
     );
     // This first deletion belongs inside the same checkpoint and projection
     // boundary as the subsequent frame-coalesced sweep.
-    store
-      .getState()
-      .deleteWayPoint(
-        firstHandle.properties.wayId as string,
-        firstHandle.properties.index as number,
-      );
+    commands.ways.deleteWayPoint(
+      firstHandle.properties.wayId as string,
+      firstHandle.properties.index as number,
+    );
   };
 
   function beginGesture(cancel: () => void, targets: EditGestureTargets = {}) {
     cancelActiveGesture = cancel;
     opts.onDirectManipulationStart?.();
     opts.onEditGestureStart?.(targets);
-    store.getState().beginHistoryCheckpoint();
+    commands.history.beginHistoryCheckpoint();
   }
   function endGesture() {
     cancelActiveGesture = null;
-    store.getState().commitHistoryCheckpoint();
+    commands.history.commitHistoryCheckpoint();
     opts.onEditGestureEnd?.();
     opts.onDirectManipulationEnd?.();
     clearPointerIntent();
@@ -2072,10 +2074,10 @@ export function attachInteractions(
       // fall through to the store's per-set auto-history instead, splitting
       // one sweep into several undo steps.
       if (!moved) {
-        store.getState().deleteWay(first.wayId);
+        commands.ways.deleteWay(first.wayId);
       } else {
         for (const [wayId, { lo, hi }] of hitRanges)
-          store.getState().deleteWayStretch(wayId, lo, hi);
+          commands.network.deleteWayStretch(wayId, lo, hi);
       }
       endGesture();
     };
@@ -2126,7 +2128,7 @@ export function attachInteractions(
   const finishTerminusGestureWithoutCommit = () => {
     activeTerminusSource = null;
     cancelActiveGesture = null;
-    store.getState().cancelHistoryCheckpoint();
+    commands.history.cancelHistoryCheckpoint();
     opts.onEditGestureEnd?.();
     opts.onDirectManipulationEnd?.();
     clearPreviews();
@@ -2195,7 +2197,7 @@ export function attachInteractions(
         finishTerminusGestureWithoutCommit();
         const choose = (choice: 'connect' | 'through') => {
           opts.setActionAnchor?.(null);
-          store.getState().commitTerminusGesture(source, resolved.target, resolved.plan, choice);
+          commands.services.commitTerminusGesture(source, resolved.target, resolved.plan, choice);
         };
         opts.openTerminusConnectionChoice?.({
           x: ev.originalEvent.clientX,
@@ -2204,13 +2206,13 @@ export function attachInteractions(
           joinThroughService: () => choose('through'),
           dismiss: () => {
             opts.setActionAnchor?.(null);
-            store.getState().clearArmedTerminus();
+            commands.selection.clearArmedTerminus();
           },
         });
         return;
       }
-      if (resolved) store.getState().commitTerminusGesture(source, resolved.target, resolved.plan);
-      else store.getState().clearArmedTerminus();
+      if (resolved) commands.services.commitTerminusGesture(source, resolved.target, resolved.plan);
+      else commands.selection.clearArmedTerminus();
       activeTerminusSource = null;
       endGesture();
     };
@@ -2221,7 +2223,7 @@ export function attachInteractions(
       map.off('mousemove', onMove);
       map.off('mouseup', onUp);
       activeTerminusSource = null;
-      store.getState().clearArmedTerminus();
+      commands.selection.clearArmedTerminus();
       clearPreviews();
       setEndpointHint(null);
     }, {});
@@ -2310,12 +2312,12 @@ export function attachInteractions(
 
     if (opts.isNetworkMode() && st.tool === 'select') {
       if (pointerIntent.primaryOperation === 'delete-station' && station) {
-        st.deleteStation(station.properties.id as string);
+        commands.stations.deleteStation(station.properties.id as string);
         suppressClick = true;
         return;
       }
       if (pointerIntent.primaryOperation === 'delete-facility' && facility) {
-        st.deleteFacility(facility.properties.id as string);
+        commands.facilities.deleteFacility(facility.properties.id as string);
         suppressClick = true;
         return;
       }
@@ -2357,7 +2359,10 @@ export function attachInteractions(
     }
 
     if (pointerIntent.primaryOperation === 'split-corridor' && handle && !endpoint) {
-      st.splitWayAt(handle.properties.wayId as string, handle.properties.index as number);
+      commands.ways.splitWayAt(
+        handle.properties.wayId as string,
+        handle.properties.index as number,
+      );
       suppressClick = true;
       return;
     }
@@ -2380,20 +2385,24 @@ export function attachInteractions(
       if (physicalHandle) {
         const kind = physicalHandle.properties.kind as 'footprint' | 'platform' | 'groupFootprint';
         if (kind === 'groupFootprint') {
-          st.deleteGroupFootprint(physicalHandle.properties.groupId as string);
+          commands.groups.deleteGroupFootprint(physicalHandle.properties.groupId as string);
         } else {
           const stationId = physicalHandle.properties.stationId as string;
-          if (kind === 'footprint') st.deleteStationFootprint(stationId);
-          else st.deletePlatform(stationId, physicalHandle.properties.platformId as string);
+          if (kind === 'footprint') commands.stations.deleteStationFootprint(stationId);
+          else
+            commands.stations.deletePlatform(
+              stationId,
+              physicalHandle.properties.platformId as string,
+            );
         }
         suppressClick = true;
       } else if (handle) {
         startErase(handle); // Alt-click removes a point; Alt-drag erases a section
       } else if (station) {
-        st.deleteStation(station.properties.id as string);
+        commands.stations.deleteStation(station.properties.id as string);
         suppressClick = true;
       } else if (facility) {
-        st.deleteFacility(facility.properties.id as string);
+        commands.facilities.deleteFacility(facility.properties.id as string);
         suppressClick = true;
       } else if (
         st.tool === 'way' &&
@@ -2428,11 +2437,21 @@ export function attachInteractions(
         // draggable target below sets suppressClick and would otherwise
         // swallow the click before onClick ever saw it.
         if (channels.constrain) {
-          if (handle) st.extendSelection({ kind: 'way', id: handle.properties.wayId as string });
+          if (handle)
+            commands.selection.extendSelection({
+              kind: 'way',
+              id: handle.properties.wayId as string,
+            });
           else if (facility)
-            st.extendSelection({ kind: 'facility', id: facility.properties.id as string });
+            commands.selection.extendSelection({
+              kind: 'facility',
+              id: facility.properties.id as string,
+            });
           else if (station)
-            st.extendSelection({ kind: 'station', id: station.properties.id as string });
+            commands.selection.extendSelection({
+              kind: 'station',
+              id: station.properties.id as string,
+            });
           else {
             // A served way's visible line is drawn as its SERVICE feature, not
             // its (often-hidden) bare WAY_LAYERS one — try both, same as a
@@ -2447,10 +2466,10 @@ export function attachInteractions(
             const wayId = wayHit ? (wayHit.properties.id as string) : undefined;
             if (serviceId) {
               const line = lineForService(st.system, serviceId);
-              st.extendSelection(
+              commands.selection.extendSelection(
                 line ? { kind: 'line', id: line.id } : { kind: 'service', id: serviceId },
               );
-            } else if (wayId) st.extendSelection({ kind: 'way', id: wayId });
+            } else if (wayId) commands.selection.extendSelection({ kind: 'way', id: wayId });
             // Truly empty space under the cursor — rubber-band select
             // instead of toggling a single (nonexistent) target.
             else startMarqueeSelect(e, collectInfrastructure);
@@ -2559,8 +2578,8 @@ export function attachInteractions(
       const hit = stationFeatureAt(e) ?? featureAt(e, [LYR_FACILITIES]);
       if (hit) {
         const memberId = hit.properties.id as string;
-        st.addGroupMember(st.pickingMemberForGroupId, memberId);
-        st.cancelPickingMember();
+        commands.groups.addGroupMember(st.pickingMemberForGroupId, memberId);
+        commands.groups.cancelPickingMember();
       }
       return;
     }
@@ -2572,8 +2591,8 @@ export function attachInteractions(
         // station creation there (land only), so a bare click does nothing.
         if (!opts.isNetworkMode()) break;
         const s = snap(st.system.ways, coord, snapMeters(snapPx));
-        if (s) st.addStation(s.coord, { wayId: s.wayId, t: s.t });
-        else st.addStation(coord);
+        if (s) commands.stations.addStation(s.coord, { wayId: s.wayId, t: s.t });
+        else commands.stations.addStation(coord);
         break;
       }
       case 'facility': {
@@ -2582,14 +2601,18 @@ export function attachInteractions(
         // simply PLACES the selected facility type right there — point kinds
         // as a marker, area kinds as a default square to reshape.
         if (st.placingFacilityForGroupId) {
-          st.placeFacilityInGroup(st.placingFacilityForGroupId, st.draftFacilityTypeId, coord);
+          commands.groups.placeFacilityInGroup(
+            st.placingFacilityForGroupId,
+            st.draftFacilityTypeId,
+            coord,
+          );
         } else if (!st.draftFacilityComplexMode) {
           const kind = facilityType(st.draftFacilityTypeId);
           // Size comes from the facility type itself (catalog), not from this
           // layer: how big a depot is when you drop one is a fact about
           // depots, and placing code has no standing to decide it.
           const half = kind.defaultHalfExtentM;
-          st.addFacility(
+          commands.facilities.addFacility(
             st.draftFacilityTypeId,
             kind.geometryKind === 'area' && half !== null ? squareFootprint(coord, half) : coord,
           );
@@ -2604,23 +2627,23 @@ export function attachInteractions(
           featureAt(e, [LYR_FACILITIES, LYR_HANDLES, ...SERVICE_LAYERS, ...WAY_LAYERS]) ??
           featureAt(e, [LYR_JUNCTIONS]);
         if (!hit) {
-          st.select(null);
+          commands.selection.select(null);
         } else if (hit.layer.id === LYR_JUNCTIONS) {
-          st.select({ kind: 'node', id: hit.properties.nodeId as string });
+          commands.selection.select({ kind: 'node', id: hit.properties.nodeId as string });
         } else if (hit.layer.id === LYR_SERVICE_TERMINI_HIT) {
-          st.select({ kind: 'service', id: hit.properties.serviceId as string });
-          st.setActivePattern(hit.properties.patternId as string);
+          commands.selection.select({ kind: 'service', id: hit.properties.serviceId as string });
+          commands.selection.setActivePattern(hit.properties.patternId as string);
         } else if (
           hit.layer.id === LYR_STATIONS ||
           (hit.layer.id === LYR_GESTURE_POINT && hit.properties.kind === 'station')
         ) {
-          st.select({ kind: 'station', id: hit.properties.id as string });
+          commands.selection.select({ kind: 'station', id: hit.properties.id as string });
         } else if (hit.layer.id === LYR_FACILITIES) {
-          st.select({ kind: 'facility', id: hit.properties.id as string });
+          commands.selection.select({ kind: 'facility', id: hit.properties.id as string });
         } else if (hit.layer.id === LYR_HANDLES) {
-          st.select({ kind: 'way', id: hit.properties.wayId as string });
+          commands.selection.select({ kind: 'way', id: hit.properties.wayId as string });
         } else if (WAY_LAYERS.includes(hit.layer.id)) {
-          st.select({ kind: 'way', id: hit.properties.id as string });
+          commands.selection.select({ kind: 'way', id: hit.properties.id as string });
         } else {
           // A rendered Service belongs to a public Line. The first click stays
           // at that understandable public identity; clicking the same Line
@@ -2637,18 +2660,18 @@ export function attachInteractions(
           ) {
             const way = st.system.ways.find((w) => w.id === wayId);
             if (way) {
-              st.insertWayPoint(wayId, insertIndexOnPolygon(way.points, e.point), coord);
-              st.formCrossingJunctions(wayId);
+              commands.ways.insertWayPoint(wayId, insertIndexOnPolygon(way.points, e.point), coord);
+              commands.network.formCrossingJunctions(wayId);
             }
           } else if (line && st.selection?.kind === 'line' && st.selection.id === line.id) {
-            st.select({ kind: 'service', id: serviceId });
+            commands.selection.select({ kind: 'service', id: serviceId });
           } else if (line) {
-            st.select({ kind: 'line', id: line.id });
+            commands.selection.select({ kind: 'line', id: line.id });
           } else {
-            st.select({ kind: 'service', id: serviceId });
+            commands.selection.select({ kind: 'service', id: serviceId });
           }
           const patternId = hit.properties.patternId;
-          if (typeof patternId === 'string') st.setActivePattern(patternId);
+          if (typeof patternId === 'string') commands.selection.setActivePattern(patternId);
         }
         break;
       }
@@ -2659,12 +2682,12 @@ export function attachInteractions(
     const st = store.getState();
     if (st.routeDraft) {
       e.preventDefault();
-      st.commitRouteDraft();
+      commands.routing.commitRouteDraft();
       return;
     }
     if (st.activeWayId) {
       e.preventDefault();
-      st.finishWay();
+      commands.ways.finishWay();
     } else if (facilityBoundaryDraft) {
       e.preventDefault();
       finishFacilityBoundaryDraft();
@@ -2790,8 +2813,8 @@ export function attachInteractions(
     const st = store.getState();
     const hit = rightClickTarget(e);
     if (!hit) {
-      st.select(null);
-      st.clearMultiSelection();
+      commands.selection.select(null);
+      commands.selection.clearMultiSelection();
       return;
     }
     let { target } = hit;
@@ -2802,15 +2825,15 @@ export function attachInteractions(
     // a two-service merge group. Service-body right-clicks retain the ordinary
     // multi-select behavior below.
     if (terminus) {
-      st.clearMultiSelection();
-      st.select(target);
+      commands.selection.clearMultiSelection();
+      commands.selection.select(target);
     }
     const inGroup = st.multiSelection.some((i) => i.kind === target.kind && i.id === target.id);
     const isSelected = st.selection?.kind === target.kind && st.selection.id === target.id;
-    if (!inGroup && !isSelected) st.select(target);
+    if (!inGroup && !isSelected) commands.selection.select(target);
     if (hit.target.kind === 'service') {
       const patternId = terminus?.properties.patternId;
-      if (typeof patternId === 'string') st.setActivePattern(patternId);
+      if (typeof patternId === 'string') commands.selection.setActivePattern(patternId);
     }
     // The map coordinate travels with the screen one: an action that cuts a
     // line where you clicked needs the place, not the pixel.
@@ -2841,7 +2864,7 @@ export function attachInteractions(
     const cancel = cancelActiveGesture;
     cancelActiveGesture = null;
     cancel(); // cleans up live handlers/previews and any gesture-local state
-    store.getState().cancelHistoryCheckpoint(); // restores the exact pre-gesture system
+    commands.history.cancelHistoryCheckpoint(); // restores the exact pre-gesture system
     opts.onEditGestureEnd?.();
     opts.onDirectManipulationEnd?.();
     lockedPrimaryOperation = undefined;

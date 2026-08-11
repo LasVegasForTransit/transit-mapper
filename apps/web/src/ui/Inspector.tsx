@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { useEditor } from '../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../editor/EditorProvider';
 import { useSelectionActions } from '../editor/useSelectionActions';
 import type { MultiSelectItem, Selection, Tool } from '../editor/store';
 import { Icon } from './Icon';
@@ -184,7 +184,7 @@ interface MultiInspectorProps {
 // and not the other.
 function MultiInspector({ items }: MultiInspectorProps) {
   const readOnly = useEditor((s) => s.readOnly);
-  const clearMultiSelection = useEditor((s) => s.clearMultiSelection);
+  const { clearMultiSelection } = useEditorCommands().selection;
   const { actions, note } = useSelectionActions();
 
   const counts = new Map<MultiSelectItem['kind'], number>();

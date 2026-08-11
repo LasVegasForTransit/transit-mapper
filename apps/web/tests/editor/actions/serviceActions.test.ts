@@ -20,7 +20,7 @@ describe('terminus service actions', () => {
       { id: 'red-bus', modeId: 'bus', path: { id: 'red-bus', sections: [] } },
       { id: 'blue-rail', modeId: 'subway', path: { id: 'blue-rail', sections: [] } },
     ];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
 
     const action = serviceActionProvider(store)({
       system,
@@ -58,7 +58,7 @@ describe('terminus service actions', () => {
       },
     ];
     const arm = () =>
-      store.getState().armTerminus({
+      store.commands.selection.armTerminus({
         serviceId: 'line',
         patternId: 'branch',
         side: 'end',
@@ -72,19 +72,19 @@ describe('terminus service actions', () => {
         },
       });
 
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     arm();
-    store.getState().deleteService('line');
+    store.commands.services.deleteService('line');
     expect(store.getState().armedTerminus).toBeNull();
 
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     arm();
-    store.getState().newSystem();
+    store.commands.document.newSystem();
     expect(store.getState().armedTerminus).toBeNull();
 
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     arm();
-    store.getState().setSystem(createEmptySystem());
+    store.commands.document.setSystem(createEmptySystem());
     expect(store.getState().armedTerminus).toBeNull();
   });
 
@@ -100,7 +100,7 @@ describe('terminus service actions', () => {
         path: { id: 'branch', sections: oneSection([wholeLeg('way')]) },
       },
     ];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
 
     expect(
       createSelectionActions(store)
@@ -158,7 +158,7 @@ describe('terminus service actions', () => {
         path: { id: 'branch', sections: oneSection([wholeLeg('way')]) },
       },
     ];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const before = store.getState().system;
     const action = serviceActionProvider(store)({
       system,

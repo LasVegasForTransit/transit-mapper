@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { patternPath, patternLegs } from '../../src/model/geo';
 import { servicePattern } from '../../src/model/line-service';
 import { throughRouteServices, throughRouteServicesAt } from '../../src/model/throughRoute';
+import type { TransitSystem } from '../../src/model/system';
 import { validateSystemQuick } from '../../src/model/validate';
 import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
 
@@ -30,23 +31,39 @@ function tailToHead() {
   });
 }
 
+function joinedSystem(system: TransitSystem | null): TransitSystem {
+  expect(system).not.toBeNull();
+  if (!system) throw new Error('The through-route fixture must join.');
+  return system;
+}
+
 describe('joining two lines into a through-route', () => {
   it('produces one line running the whole way through', () => {
-    const next = throughRouteServices(tailToHead(), 'a', 'b');
-    expect(next).not.toBeNull();
-    expect(next!.services).toHaveLength(1);
-    const [joined] = next!.services;
+    const system = tailToHead();
+    const next = joinedSystem(throughRouteServices(system, 'a', 'b'));
+    expect(next.updatedAt).toBe(system.updatedAt);
+    expect(next.services).toHaveLength(1);
+    const [joined] = next.services;
     expect(patternLegs(servicePattern(joined)).map((l) => l.wayId)).toEqual(['west', 'east']);
   });
 
+  it('removes the consumed service and emptied line from groups', () => {
+    const system = tailToHead();
+    system.groups = [{ id: 'group', memberIds: ['b'] }];
+
+    const next = joinedSystem(throughRouteServices(system, 'a', 'b'));
+
+    expect(next.groups[0].memberIds).toEqual([]);
+  });
+
   it('keeps the surviving line’s own name and colour', () => {
-    const next = throughRouteServices(tailToHead(), 'a', 'b');
-    expect(next!.services[0].name).toBe('Blue');
+    const next = joinedSystem(throughRouteServices(tailToHead(), 'a', 'b'));
+    expect(next.services[0].name).toBe('Blue');
   });
 
   it('leaves no gap for the validator to report', () => {
-    const next = throughRouteServices(tailToHead(), 'a', 'b');
-    expect(validateSystemQuick(next!).filter((i) => i.id.startsWith('broken-pattern'))).toEqual([]);
+    const next = joinedSystem(throughRouteServices(tailToHead(), 'a', 'b'));
+    expect(validateSystemQuick(next).filter((i) => i.id.startsWith('broken-pattern'))).toEqual([]);
   });
 
   it('reverses one line when the two lines meet head to head', () => {
@@ -62,12 +79,12 @@ describe('joining two lines into a through-route', () => {
         aService('b', [aPattern('pb', [eastReversed], ['east'])]),
       ],
     });
-    const next = throughRouteServices(system, 'a', 'b');
-    const joined = servicePattern(next!.services[0]);
+    const next = joinedSystem(throughRouteServices(system, 'a', 'b'));
+    const joined = servicePattern(next.services[0]);
     expect(patternLegs(joined).map((l) => l.wayId)).toEqual(['west', 'east']);
     // Travelling east means running `east` against its own point order.
     expect(patternLegs(joined)[1].direction).toBe('againstPoints');
-    const path = patternPath(next!.ways, joined);
+    const path = patternPath(next.ways, joined);
     expect(path[0][0]).toBeCloseTo(-115.21, 5);
     expect(path[path.length - 1][0]).toBeCloseTo(-115.19, 5);
   });
@@ -89,9 +106,9 @@ describe('joining two lines into a through-route', () => {
         { id: 'b-line', name: 'Green', color: '#2ea44f', serviceIds: ['b', 'b-spur'] },
       ],
     });
-    const next = throughRouteServices(system, 'a', 'b');
-    expect(next!.services.map((service) => service.id)).toEqual(['a', 'b-spur']);
-    expect(next!.lines.find((line) => line.id === 'b-line')?.serviceIds).toEqual(['b-spur']);
+    const next = joinedSystem(throughRouteServices(system, 'a', 'b'));
+    expect(next.services.map((service) => service.id)).toEqual(['a', 'b-spur']);
+    expect(next.lines.find((line) => line.id === 'b-line')?.serviceIds).toEqual(['b-spur']);
   });
 
   it('joins the exact requested service paths', () => {
@@ -133,15 +150,16 @@ describe('joining two lines into a through-route', () => {
       ],
     });
 
-    const next = throughRouteServicesAt(system, 'desired-a', 'desired-b', {
-      aPatternId: 'desired-a',
-      aEnd: 'end',
-      bPatternId: 'desired-b',
-      bEnd: 'start',
-      distanceM: 45,
-    });
-
-    expect(patternLegs(servicePattern(next!.services[0])).map((leg) => leg.wayId)).toEqual([
+    const next = joinedSystem(
+      throughRouteServicesAt(system, 'desired-a', 'desired-b', {
+        aPatternId: 'desired-a',
+        aEnd: 'end',
+        bPatternId: 'desired-b',
+        bEnd: 'start',
+        distanceM: 45,
+      }),
+    );
+    expect(patternLegs(servicePattern(next.services[0])).map((leg) => leg.wayId)).toEqual([
       'desired-keep',
       'connector',
       'desired-other',
@@ -225,7 +243,8 @@ describe('a line whose two directions run different streets', () => {
   it('is left exactly as it was when the join is refused', () => {
     const before = couplet();
     throughRouteServices(before, 'a', 'b');
-    const still = before.services.find((sv) => sv.id === 'a')!;
-    expect(still.path.sections[0].kind).toBe('split');
+    const service = before.services.find((candidate) => candidate.id === 'a');
+    if (!service) throw new Error('The retained service fixture must exist.');
+    expect(service.path.sections[0].kind).toBe('split');
   });
 });

@@ -11,13 +11,17 @@ describe('view-owned editor state', () => {
       [-115.19, 36.1],
     ]);
     const pattern = aPattern('branch', [road], ['road']);
+    const position = patternPositionAt([road], pattern, 'outbound', 0, 1);
+    if (!position) throw new Error('The fixture must have an end position.');
     const store = createEditorStore();
-    store.getState().setSystem(aSystem({ ways: [road], services: [aService('bus', [pattern])] }));
-    store.getState().armTerminus({
+    store.commands.document.setSystem(
+      aSystem({ ways: [road], services: [aService('bus', [pattern])] }),
+    );
+    store.commands.selection.armTerminus({
       serviceId: 'bus',
       patternId: 'branch',
       side: 'end',
-      position: patternPositionAt([road], pattern, 'outbound', 0, 1)!,
+      position,
     });
 
     clearArmedTerminusForViewChange(store);

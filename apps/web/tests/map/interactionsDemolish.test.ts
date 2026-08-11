@@ -147,11 +147,11 @@ afterEach(() => {
 describe('the Demolish tool', () => {
   it('removes a whole way on a plain click', () => {
     const store = createEditorStore();
-    store.getState().setSystem({
+    store.commands.document.setSystem({
       ...store.getState().system,
       ways: [straightRoad('r1')],
     });
-    store.getState().setTool('demolish');
+    store.commands.tools.setTool('demolish');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -165,11 +165,11 @@ describe('the Demolish tool', () => {
 
   it('removes only the swept stretch on a drag', () => {
     const store = createEditorStore();
-    store.getState().setSystem({
+    store.commands.document.setSystem({
       ...store.getState().system,
       ways: [straightRoad('r1')],
     });
-    store.getState().setTool('demolish');
+    store.commands.tools.setTool('demolish');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -196,11 +196,11 @@ describe('the Demolish tool', () => {
         [-115.15, 36.1],
       ],
     };
-    store.getState().setSystem({
+    store.commands.document.setSystem({
       ...store.getState().system,
       ways: [straightRoad('r1'), second],
     });
-    store.getState().setTool('demolish');
+    store.commands.tools.setTool('demolish');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -219,7 +219,7 @@ describe('the Demolish tool', () => {
 
     expect(before).toBe(false);
     expect(store.getState().canUndo).toBe(true);
-    store.getState().undo();
+    store.commands.history.undo();
     expect(
       store
         .getState()
@@ -231,8 +231,8 @@ describe('the Demolish tool', () => {
 
   it('does nothing on empty ground', () => {
     const store = createEditorStore();
-    store.getState().setSystem({ ...store.getState().system, ways: [straightRoad('r1')] });
-    store.getState().setTool('demolish');
+    store.commands.document.setSystem({ ...store.getState().system, ways: [straightRoad('r1')] });
+    store.commands.tools.setTool('demolish');
     const map = createMap();
     const detach = attach(map, store);
 
@@ -245,8 +245,8 @@ describe('the Demolish tool', () => {
 
   it('is inert in Network view', () => {
     const store = createEditorStore();
-    store.getState().setSystem({ ...store.getState().system, ways: [straightRoad('r1')] });
-    store.getState().setTool('demolish');
+    store.commands.document.setSystem({ ...store.getState().system, ways: [straightRoad('r1')] });
+    store.commands.tools.setTool('demolish');
     const map = createMap();
     const noop: AttachInteractionsOptions = {
       openShortcuts() {},

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useEditor } from '../../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../../editor/EditorProvider';
 import {
   FACILITY_TYPE_ORDER,
   FACILITY_TYPES,
@@ -66,12 +66,11 @@ export function GroupInspector({ id }: GroupInspectorProps) {
   const services = useEditor((s) => s.system.services);
   const palette = useEditor((s) => s.system.palette);
   const readOnly = useEditor((s) => s.readOnly);
-  const renameGroup = useEditor((s) => s.renameGroup);
-  const setGroupColor = useEditor((s) => s.setGroupColor);
-  const addPaletteColor = useEditor((s) => s.addPaletteColor);
-  const removeGroupMember = useEditor((s) => s.removeGroupMember);
-  const deleteGroup = useEditor((s) => s.deleteGroup);
-  const selectAndFocus = useEditor((s) => s.selectAndFocus);
+  const {
+    groups: { renameGroup, setGroupColor, removeGroupMember, deleteGroup },
+    tools: { addPaletteColor },
+    selection: { selectAndFocus },
+  } = useEditorCommands();
   const [tab, setTab] = useState<string>('members');
 
   if (!group) return <EmptyInspector />;
@@ -181,8 +180,7 @@ interface GroupFootprintProps {
 
 function GroupFootprint({ groupId, readOnly }: GroupFootprintProps) {
   const group = useEditor((s) => s.system.groups.find((g) => g.id === groupId));
-  const addGroupFootprint = useEditor((s) => s.addGroupFootprint);
-  const deleteGroupFootprint = useEditor((s) => s.deleteGroupFootprint);
+  const { addGroupFootprint, deleteGroupFootprint } = useEditorCommands().groups;
   const { setViewMode } = useView();
   if (!group) return null;
 
@@ -239,13 +237,11 @@ interface GroupPlacementProps {
 
 function GroupPlacement({ groupId, readOnly }: GroupPlacementProps) {
   const draftFacilityTypeId = useEditor((s) => s.draftFacilityTypeId);
-  const setDraftFacilityType = useEditor((s) => s.setDraftFacilityType);
   const placingFor = useEditor((s) => s.placingFacilityForGroupId);
   const pickingFor = useEditor((s) => s.pickingMemberForGroupId);
-  const startPlacingFacility = useEditor((s) => s.startPlacingFacility);
-  const cancelPlacingFacility = useEditor((s) => s.cancelPlacingFacility);
-  const startPickingMember = useEditor((s) => s.startPickingMember);
-  const cancelPickingMember = useEditor((s) => s.cancelPickingMember);
+  const { setDraftFacilityType } = useEditorCommands().tools;
+  const { startPlacingFacility, cancelPlacingFacility, startPickingMember, cancelPickingMember } =
+    useEditorCommands().groups;
 
   if (readOnly) return null;
   const placing = placingFor === groupId;

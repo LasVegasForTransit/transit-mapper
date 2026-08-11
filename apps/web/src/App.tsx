@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNod
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { MapCanvas } from './map/MapCanvas';
 import { getMap } from './map/mapRef';
-import { useEditor, useEditorStore } from './editor/EditorProvider';
+import { useEditor, useEditorCommands, useEditorStore } from './editor/EditorProvider';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { fetchShare } from './share/api';
 import {
@@ -141,6 +141,10 @@ function LazyDialog({ children, onFailure }: LazyDialogProps) {
 export function App() {
   const store = useEditorStore();
   const {
+    document: { newSystem, setSystem },
+    tools: { setTool },
+  } = useEditorCommands();
+  const {
     shortcutsOpen,
     closeShortcuts,
     uiHidden,
@@ -180,7 +184,7 @@ export function App() {
       const controller = new AbortController();
       const id = path.slice(SHARE_PREFIX.length).replace(/\/$/, '');
       fetchShare(id, { signal: controller.signal })
-        .then((system) => store.getState().setSystem(system, { readOnly: true }))
+        .then((system) => setSystem(system, { readOnly: true }))
         .catch((e: Error) => {
           if (e.name !== 'AbortError') setBootstrap({ kind: 'share-failed' });
         });
@@ -242,8 +246,8 @@ export function App() {
       if (disposed) return;
       setBootstrap({ kind: 'ok' });
       setActiveId(system.id);
-      store.getState().setSystem(system, { readOnly: false });
-      if (isBrandNew) store.getState().setTool('way');
+      setSystem(system, { readOnly: false });
+      if (isBrandNew) setTool('way');
       // isBrandNew means "no saved system found" — true for a genuine first
       // run AND for a returning user who deleted their only system, and
       // either way the blank system this bootstrap just created is the best
@@ -258,7 +262,7 @@ export function App() {
     return () => {
       disposed = true;
     };
-  }, [store, report, openDialog, openNewSystemLocation, bootstrapAttempt]);
+  }, [store, report, openDialog, openNewSystemLocation, bootstrapAttempt, setSystem, setTool]);
 
   // A wait nobody noticed does not need announcing, and a message that flashes
   // for 40ms on every single load is worse than silence. Only a wait somebody
@@ -364,13 +368,13 @@ export function App() {
         // anyone finds out whether storage is working now, and someone who
         // just chose to start over deserves that answer before they've drawn
         // anything, not after.
-        store.getState().newSystem();
+        newSystem();
         setBootstrap({ kind: 'ok' });
         setActiveId(store.getState().system.id);
         void saveToLibrary(store.getState().system).then(report);
         return;
       case 'reload':
-        reload();
+        void reload();
         return;
       case 'dismiss-offline-ready':
         dismissOfflineReady();

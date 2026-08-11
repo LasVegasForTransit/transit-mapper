@@ -22,6 +22,39 @@ export default {
       to: { circular: true },
     },
     {
+      name: 'editor-command-groups-are-independent',
+      severity: 'error',
+      comment:
+        'Each editor command group receives the shared store runtime and composes core transforms. ' +
+        'Importing another command group creates an implicit command order and a second route to ' +
+        'mutation; cross-group orchestration belongs in the runtime that constructs them.',
+      from: { path: '^apps/web/src/editor/store/commands/' },
+      to: { path: '^apps/web/src/editor/store/commands/' },
+    },
+    {
+      name: 'editor-command-groups-do-not-import-the-public-entry',
+      severity: 'error',
+      comment:
+        'The public editor/store.ts entry constructs the command groups. A command importing it ' +
+        'would invert that dependency and give the module access to a second store instance or ' +
+        'public facade instead of its injected runtime.',
+      from: { path: '^apps/web/src/editor/store/commands/' },
+      to: { path: '^apps/web/src/editor/store\\.ts$' },
+    },
+    {
+      name: 'editor-command-dependencies-are-an-allowlist',
+      severity: 'error',
+      comment:
+        'Command groups may know only their contracts, the shared runtime ports, shared internal ' +
+        'operations, and pure core transforms. Any other web dependency couples a command to UI ' +
+        'or orchestration state and bypasses the composition boundary.',
+      from: { path: '^apps/web/src/editor/store/commands/' },
+      to: {
+        pathNot:
+          '^(packages/core/|apps/web/src/editor/store/(contracts(?:\\.ts|/)|runtime\\.ts|internal-operations/))',
+      },
+    },
+    {
       name: 'apps-are-siblings',
       severity: 'error',
       comment:

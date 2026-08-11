@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
-import { useEditor } from '../../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../../editor/EditorProvider';
 import { MODE_ORDER, MODES, modesForWayType } from '@transitmapper/core/model/catalog';
 import {
   pathLengthMeters,
@@ -129,25 +129,27 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
     s.selection?.kind === 'service' && s.selection.id === id ? s.selection.stopId : undefined,
   );
   const readOnly = useEditor((s) => s.readOnly);
-  const setServiceName = useEditor((s) => s.setServiceName);
-  const setServiceMode = useEditor((s) => s.setServiceMode);
-  const setServiceFrequency = useEditor((s) => s.setServiceFrequency);
-  const setServiceSpan = useEditor((s) => s.setServiceSpan);
-  const setServiceSchedule = useEditor((s) => s.setServiceSchedule);
   const vehicleKinds = useEditor((s) => s.system.vehicleKinds);
-  const setServiceVehicleKind = useEditor((s) => s.setServiceVehicleKind);
-  const setVehicleKinds = useEditor((s) => s.setVehicleKinds);
-  const setWayGeometry = useEditor((s) => s.setWayGeometry);
-  const setWayGrade = useEditor((s) => s.setWayGrade);
-  const deleteService = useEditor((s) => s.deleteService);
-  const selectAndFocus = useEditor((s) => s.selectAndFocus);
-  const setActivePattern = useEditor((s) => s.setActivePattern);
-  const moveServiceToLine = useEditor((s) => s.moveServiceToLine);
-  const adoptExistingInfrastructure = useEditor((s) => s.adoptExistingInfrastructure);
-  const setStopSkipped = useEditor((s) => s.setStopSkipped);
-  const makePatternTwoWay = useEditor((s) => s.makePatternTwoWay);
-  const trimPatternTo = useEditor((s) => s.trimPatternTo);
-  const splitServiceAt = useEditor((s) => s.splitServiceAt);
+  const {
+    services: {
+      setServiceName,
+      setServiceMode,
+      setServiceFrequency,
+      setServiceSpan,
+      setServiceSchedule,
+      setServiceVehicleKind,
+      setVehicleKinds,
+      deleteService,
+      moveServiceToLine,
+      setStopSkipped,
+      makePatternTwoWay,
+      trimPatternTo,
+      splitServiceAt,
+    },
+    ways: { setWayGeometry, setWayGrade },
+    selection: { selectAndFocus, setActivePattern },
+    routing: { adoptExistingInfrastructure },
+  } = useEditorCommands();
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [vehicleKindsOpen, setVehicleKindsOpen] = useState(false);
   const [tab, setTab] = useState<string>('line');
