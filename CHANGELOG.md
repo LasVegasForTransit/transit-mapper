@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.3.2...v0.4.0) (2026-08-11)
+
+
+### Features
+
+* **editor:** reorganize the network sidebar ([395178a](https://github.com/LasVegasForTransit/transit-mapper/commit/395178ac40d9db5ebd893abb0d3fc0254184eb58))
+* enforce GitHub contribution metadata ([5ed1209](https://github.com/LasVegasForTransit/transit-mapper/commit/5ed1209d64d2a197f6f7a534895f6c6dd1b1c334))
+
+
+### Bug Fixes
+
+* **core:** preserve stops during corridor reconciliation ([e7f7dfd](https://github.com/LasVegasForTransit/transit-mapper/commit/e7f7dfd14d87f9cc1e3410c761d6a0817f8e3d49))
+* publish invalid contribution metadata status ([22a4ffc](https://github.com/LasVegasForTransit/transit-mapper/commit/22a4ffc083753f057fafef79f8675bbd806a2de7))
+* validate workflow-created release PRs ([307c3a0](https://github.com/LasVegasForTransit/transit-mapper/commit/307c3a08935f4787ccb355d37b30c381475f78b5))
+
 ## [0.3.2](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.3.1...v0.3.2) (2026-08-09)
 
 
