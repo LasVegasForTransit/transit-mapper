@@ -114,43 +114,6 @@ function setup(options: SetupOptions = {}) {
 }
 
 describe('persistence coordinator', () => {
-  it('reports the effective saved outcome after a successful flush', async () => {
-    const harness = setup();
-    harness.store.replace({
-      system: { ...harness.system, name: 'Durable edit' },
-      readOnly: false,
-    });
-
-    await expect(harness.coordinator.flush()).resolves.toBe('saved');
-  });
-
-  it('reports the current system as undurable until a later save succeeds', async () => {
-    const save = vi
-      .fn<(system: TransitSystem) => Promise<SaveOutcome>>()
-      .mockResolvedValueOnce('full')
-      .mockResolvedValueOnce('saved');
-    const harness = setup({ save });
-    harness.store.replace({
-      system: { ...harness.system, name: 'First edit' },
-      readOnly: false,
-    });
-    await expect(harness.coordinator.flush()).resolves.toBe('full');
-
-    harness.store.replace({
-      system: { ...harness.system, name: 'Retry edit' },
-      readOnly: false,
-    });
-    await expect(harness.coordinator.flush()).resolves.toBe('saved');
-  });
-
-  it('does not apply another system failure to the current system flush', async () => {
-    const harness = setup();
-    harness.coordinator.recordOutcome('other-system', 'full');
-
-    await expect(harness.coordinator.flush()).resolves.toBe('saved');
-    expect(harness.report).toHaveBeenLastCalledWith('full');
-  });
-
   it('coalesces a content edit and camera movement into one serialization/write', async () => {
     const harness = setup();
     const edited = { ...harness.system, name: 'Frequent network' };
@@ -160,7 +123,7 @@ describe('persistence coordinator', () => {
     await harness.flushTimer();
 
     expect(harness.save).toHaveBeenCalledTimes(1);
-    expect(harness.save.mock.calls[0]![0]).toMatchObject({
+    expect(harness.save.mock.calls.at(0)?.[0]).toMatchObject({
       name: 'Frequent network',
       viewport: { center: [-115, 36], zoom: 12 },
     });

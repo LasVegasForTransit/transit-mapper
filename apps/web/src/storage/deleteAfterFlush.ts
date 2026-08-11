@@ -1,7 +1,7 @@
 import type { SaveOutcome } from './localStore';
 
 export interface DeleteAfterFlushOptions {
-  flush: () => unknown | Promise<unknown>;
+  flush: () => unknown;
   deleteDocument: (id: string) => Promise<SaveOutcome>;
   discardDocument: (id: string) => void;
 }

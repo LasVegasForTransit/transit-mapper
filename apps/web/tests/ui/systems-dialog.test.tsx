@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
+import type { TransitSystem } from '@transitmapper/core/model/system';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -100,7 +101,7 @@ async function click(button: HTMLButtonElement): Promise<void> {
 }
 
 async function renderDialog(): Promise<void> {
-  await act(async () => {
+  act(() => {
     root.render(
       <SystemsDialog
         onClose={onClose}
@@ -129,10 +130,12 @@ beforeEach(() => {
     entries: [currentEntry, savedEntry],
     source: 'complete',
   });
-  state.loadSystemEntry.mockImplementation(async (id: string) => ({
-    status: 'ok',
-    system: { ...createEmptySystem(), id, name: id === savedEntry.id ? savedEntry.name : '' },
-  }));
+  state.loadSystemEntry.mockImplementation((id: string) =>
+    Promise.resolve({
+      status: 'ok',
+      system: { ...createEmptySystem(), id, name: id === savedEntry.id ? savedEntry.name : '' },
+    }),
+  );
   state.saveToLibrary.mockResolvedValue('saved');
   state.deleteFromLibrary.mockResolvedValue('saved');
   state.getMyShare.mockReturnValue(null);
@@ -140,7 +143,7 @@ beforeEach(() => {
   state.loadSystemPreviews.mockResolvedValue(undefined);
   onClose = vi.fn();
   onCorrupt = vi.fn();
-  flushPendingSave = vi.fn(async () => 'saved' as const);
+  flushPendingSave = vi.fn(() => Promise.resolve('saved' as const));
   recordSaveOutcome = vi.fn();
   discardPendingSave = vi.fn();
   container = document.createElement('div');
@@ -164,14 +167,14 @@ describe('My systems dialog', () => {
 
   it('flushes the current system before loading and opening another system', async () => {
     const order: string[] = [];
-    flushPendingSave.mockImplementation(async () => {
+    flushPendingSave.mockImplementation(() => {
       order.push('flush');
-      return 'saved';
+      return Promise.resolve('saved');
     });
     const savedSystem = { ...createEmptySystem(), id: savedEntry.id, name: savedEntry.name };
-    state.loadSystemEntry.mockImplementation(async () => {
+    state.loadSystemEntry.mockImplementation(() => {
       order.push('load');
-      return { status: 'ok', system: savedSystem };
+      return Promise.resolve({ status: 'ok', system: savedSystem });
     });
     await renderDialog();
 
@@ -260,21 +263,21 @@ describe('My systems dialog', () => {
     await click(buttonNamed('Duplicate Saved system'));
 
     expect(state.saveToLibrary).toHaveBeenCalledOnce();
-    const duplicate = state.saveToLibrary.mock.calls[0]?.[0];
-    expect(duplicate.id).not.toBe(savedEntry.id);
-    expect(recordSaveOutcome).toHaveBeenCalledWith(duplicate.id, 'saved');
+    const duplicate = state.saveToLibrary.mock.calls.at(0)?.at(0) as TransitSystem | undefined;
+    expect(duplicate?.id).not.toBe(savedEntry.id);
+    expect(recordSaveOutcome).toHaveBeenCalledWith(duplicate?.id, 'saved');
     expect(state.listLibrary).toHaveBeenCalledTimes(2);
   });
 
   it('flushes before deleting and discards pending recovery state', async () => {
     const order: string[] = [];
-    flushPendingSave.mockImplementation(async () => {
+    flushPendingSave.mockImplementation(() => {
       order.push('flush');
-      return 'saved';
+      return Promise.resolve('saved');
     });
-    state.deleteFromLibrary.mockImplementation(async () => {
+    state.deleteFromLibrary.mockImplementation(() => {
       order.push('delete');
-      return 'saved';
+      return Promise.resolve('saved');
     });
     discardPendingSave.mockImplementation(() => order.push('discard'));
     await renderDialog();
@@ -305,7 +308,7 @@ describe('My systems dialog', () => {
 
   it('renders a local map preview for each card', async () => {
     state.loadSystemPreviews.mockImplementation(
-      async ({
+      ({
         ids,
         onPreview,
       }: {
@@ -315,6 +318,7 @@ describe('My systems dialog', () => {
         for (const id of ids) {
           onPreview(id, { status: 'ready', svg: `<svg data-system="${id}" />` });
         }
+        return Promise.resolve();
       },
     );
 
@@ -326,7 +330,7 @@ describe('My systems dialog', () => {
 
   it('keeps Open and Delete reachable when a preview is unavailable', async () => {
     state.loadSystemPreviews.mockImplementation(
-      async ({
+      ({
         ids,
         onPreview,
       }: {
@@ -334,6 +338,7 @@ describe('My systems dialog', () => {
         onPreview: (id: string, preview: unknown) => void;
       }) => {
         for (const id of ids) onPreview(id, { status: 'unavailable' });
+        return Promise.resolve();
       },
     );
 

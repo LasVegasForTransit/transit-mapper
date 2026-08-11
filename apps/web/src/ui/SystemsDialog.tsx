@@ -14,10 +14,9 @@ import { setActiveId } from '../storage/localStore';
 import { deleteAfterFlush } from '../storage/deleteAfterFlush';
 import { getMyShare } from '../share/myShares';
 import { stopSharing } from '../share/api';
-import { blurOnEnter } from './formUtils';
 import { Icon } from './Icon';
-import { IconButton } from './IconButton';
 import { Modal } from './Modal';
+import { SystemLibraryEntry } from './system-library-entry';
 import { loadSystemPreviews, type SystemPreview } from './system-previews';
 import { readSystemsView, writeSystemsView, type SystemsView } from './systems-view-preference';
 import { useUi } from './UiProvider';
@@ -41,6 +40,41 @@ interface SystemsDialogProps {
   /** Reports a stored system that exists but won't parse, so the app can say
    *  so — the row stays in the list and its bytes stay on disk. */
   onCorrupt: () => void;
+}
+
+interface SelectReplacementOptions {
+  remaining: LibraryEntry[];
+  onCorrupt: () => void;
+  onUnavailable: () => void;
+  setSystem: ReturnType<typeof useEditorCommands>['document']['setSystem'];
+}
+
+async function selectReplacementAfterDelete({
+  remaining,
+  onCorrupt,
+  onUnavailable,
+  setSystem,
+}: SelectReplacementOptions): Promise<void> {
+  const first = remaining.at(0);
+  if (!first) {
+    const next = createEmptySystem();
+    setActiveId(next.id);
+    setSystem(next, { readOnly: false });
+    return;
+  }
+
+  const loaded = await loadSystemEntry(first.id);
+  if (loaded.status === 'unavailable') {
+    onUnavailable();
+    return;
+  }
+  if (loaded.status === 'corrupt') {
+    onCorrupt();
+    return;
+  }
+  if (loaded.status === 'missing') return;
+  setActiveId(loaded.system.id);
+  setSystem(loaded.system, { readOnly: false });
 }
 
 /** Replaces the old single-slot autosave with a real library: every saved
@@ -100,18 +134,17 @@ export function SystemsDialog({
 
   useEffect(() => {
     if (view !== 'cards' || entries.length === 0) return;
+    const previewIds = previewIdsRef.current;
     const entryIds = new Set(entries.map((entry) => entry.id));
-    for (const id of previewIdsRef.current) {
-      if (!entryIds.has(id)) previewIdsRef.current.delete(id);
+    for (const id of previewIds) {
+      if (!entryIds.has(id)) previewIds.delete(id);
     }
     setPreviews((current) =>
       Object.fromEntries(Object.entries(current).filter(([id]) => entryIds.has(id))),
     );
-    const ids = entries
-      .filter((entry) => !previewIdsRef.current.has(entry.id))
-      .map((entry) => entry.id);
+    const ids = entries.filter((entry) => !previewIds.has(entry.id)).map((entry) => entry.id);
     if (ids.length === 0) return;
-    for (const id of ids) previewIdsRef.current.add(id);
+    for (const id of ids) previewIds.add(id);
 
     let cancelled = false;
     const completed = new Set<string>();
@@ -128,7 +161,7 @@ export function SystemsDialog({
     return () => {
       cancelled = true;
       for (const id of ids) {
-        if (!completed.has(id)) previewIdsRef.current.delete(id);
+        if (!completed.has(id)) previewIds.delete(id);
       }
     };
   }, [entries, view]);
@@ -237,22 +270,13 @@ export function SystemsDialog({
     if (outcome !== 'saved') recordSaveOutcome(id, outcome);
     if (outcome === 'saved' && id === currentId) {
       const remaining = await refresh();
-      if (!remaining) return;
-      if (remaining.length === 0) {
-        const next = createEmptySystem();
-        setActiveId(next.id);
-        setSystem(next, { readOnly: false });
-      } else {
-        const loaded = await loadSystemEntry(remaining[0].id);
-        if (loaded.status === 'unavailable') {
-          setLibraryUnavailable(true);
-          return;
-        }
-        if (loaded.status === 'corrupt') onCorrupt();
-        if (loaded.status === 'ok') {
-          setActiveId(loaded.system.id);
-          setSystem(loaded.system, { readOnly: false });
-        }
+      if (remaining) {
+        await selectReplacementAfterDelete({
+          remaining,
+          onCorrupt,
+          onUnavailable: () => setLibraryUnavailable(true),
+          setSystem,
+        });
       }
     }
     setConfirmingId(null);
@@ -317,122 +341,27 @@ export function SystemsDialog({
             <span>Create one to start drawing your network.</span>
           </li>
         )}
-        {entries.map((entry) => {
-          const isActive = entry.id === currentId;
-          const isConfirming = confirmingId === entry.id;
-          const displayName = (isActive ? currentName : entry.name) || 'Untitled system';
-          const preview = previews[entry.id];
-          return (
-            <li key={entry.id} className={`systems-row ${isActive ? 'active' : ''}`}>
-              {view === 'cards' && (
-                <div className="systems-preview">
-                  {preview?.status === 'ready' ? (
-                    isActive ? (
-                      <img
-                        className="systems-preview-image"
-                        src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(preview.svg)}`}
-                        alt={`Map preview of ${displayName}`}
-                      />
-                    ) : (
-                      <button
-                        type="button"
-                        className="systems-preview-open"
-                        aria-label={`Open map preview of ${displayName}`}
-                        onClick={() => void open(entry.id)}
-                        disabled={openingId !== null}
-                      >
-                        <img
-                          className="systems-preview-image"
-                          src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(preview.svg)}`}
-                          alt={`Map preview of ${displayName}`}
-                        />
-                      </button>
-                    )
-                  ) : (
-                    <div
-                      className={`systems-preview-status ${preview ? 'unavailable' : 'loading'}`}
-                    >
-                      {preview ? 'Preview unavailable' : 'Loading preview…'}
-                    </div>
-                  )}
-                </div>
-              )}
-              <div className="systems-info">
-                <input
-                  className="systems-name-input"
-                  value={isActive ? currentName : entry.name}
-                  aria-label={`Name of ${displayName}`}
-                  onChange={(e) => rename(entry, e.target.value)}
-                  onKeyDown={blurOnEnter}
-                  disabled={openingId !== null}
-                />
-                <span className="systems-meta">
-                  {isActive ? 'Editing now' : `Edited ${relativeTime(entry.updatedAt)}`}
-                </span>
-              </div>
-              <div className="systems-actions">
-                <button
-                  type="button"
-                  className={`systems-open ${isActive ? 'current' : ''}`}
-                  onClick={() => void open(entry.id)}
-                  disabled={isActive || openingId !== null}
-                  aria-label={isActive ? 'Current system' : `Open ${displayName}`}
-                  title={isActive ? 'Current system' : 'Open'}
-                >
-                  <Icon name={isActive ? 'check' : 'door'} size={16} />
-                  {isActive ? 'Current' : openingId === entry.id ? 'Opening…' : 'Open'}
-                </button>
-                <span className="systems-secondary-actions">
-                  {getMyShare(entry.id) && (
-                    <IconButton
-                      icon="share"
-                      size={16}
-                      active
-                      label={`Shared — stop sharing ${displayName}`}
-                      onClick={() => revokeShare(entry.id)}
-                      disabled={openingId !== null}
-                    />
-                  )}
-                  <IconButton
-                    icon="copy"
-                    size={16}
-                    label={`Duplicate ${displayName}`}
-                    onClick={() => void duplicate(entry)}
-                    disabled={openingId !== null}
-                  />
-                  {isConfirming ? (
-                    <span className="systems-confirm">
-                      <button
-                        type="button"
-                        className="danger-btn systems-confirm-btn"
-                        onClick={() => void confirmDelete(entry.id)}
-                        disabled={openingId !== null}
-                      >
-                        Delete
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-btn systems-confirm-btn"
-                        onClick={() => setConfirmingId(null)}
-                        disabled={openingId !== null}
-                      >
-                        Cancel
-                      </button>
-                    </span>
-                  ) : (
-                    <IconButton
-                      icon="trash"
-                      size={16}
-                      label={`Delete ${displayName}`}
-                      onClick={() => setConfirmingId(entry.id)}
-                      disabled={openingId !== null}
-                    />
-                  )}
-                </span>
-              </div>
-            </li>
-          );
-        })}
+        {entries.map((entry) => (
+          <SystemLibraryEntry
+            key={entry.id}
+            currentName={currentName}
+            entry={entry}
+            isActive={entry.id === currentId}
+            isConfirming={confirmingId === entry.id}
+            openingId={openingId}
+            preview={previews[entry.id]}
+            relativeUpdatedAt={relativeTime(entry.updatedAt)}
+            shared={Boolean(getMyShare(entry.id))}
+            view={view}
+            onCancelDelete={() => setConfirmingId(null)}
+            onConfirmDelete={(id) => void confirmDelete(id)}
+            onDuplicate={(candidate) => void duplicate(candidate)}
+            onOpen={(id) => void open(id)}
+            onRename={rename}
+            onRequestDelete={setConfirmingId}
+            onRevokeShare={(id) => void revokeShare(id)}
+          />
+        ))}
       </ul>
     </Modal>
   );

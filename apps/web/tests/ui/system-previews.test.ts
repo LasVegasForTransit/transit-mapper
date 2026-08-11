@@ -23,8 +23,10 @@ describe('saved-system previews', () => {
 
     await loadSystemPreviews({
       ids: ['ready', 'damaged'],
-      load: async (id) =>
-        id === 'ready' ? { status: 'ok', system: { ...system, id } } : { status: 'corrupt' },
+      load: (id) =>
+        Promise.resolve(
+          id === 'ready' ? { status: 'ok', system: { ...system, id } } : { status: 'corrupt' },
+        ),
       render: () => '<svg>network</svg>',
       onPreview: (id, preview) => previews.set(id, preview),
     });
@@ -72,10 +74,10 @@ describe('saved-system previews', () => {
 
     await loadSystemPreviews({
       ids: ['load-failure', 'render-failure'],
-      load: async (id) => {
-        if (id === 'load-failure') throw new Error('read failed');
-        return { status: 'ok', system };
-      },
+      load: (id) =>
+        id === 'load-failure'
+          ? Promise.reject(new Error('read failed'))
+          : Promise.resolve({ status: 'ok', system }),
       render: () => {
         throw new Error('render failed');
       },

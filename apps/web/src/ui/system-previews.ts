@@ -25,8 +25,8 @@ export async function loadSystemPreviews({
   const work = async (): Promise<void> => {
     while (!isCancelled()) {
       const index = nextIndex++;
+      if (index >= ids.length) return;
       const id = ids[index];
-      if (id === undefined) return;
 
       let preview: SystemPreview;
       try {
