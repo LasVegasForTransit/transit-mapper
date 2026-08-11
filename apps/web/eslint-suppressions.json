@@ -534,12 +534,6 @@
     }
   },
   "src/storage/persistenceCoordinator.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     }
@@ -666,13 +660,7 @@
     }
   },
   "src/ui/SystemsDialog.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "max-lines-per-function": {
-      "count": 1
-    },
-    "sonarjs/cognitive-complexity": {
       "count": 1
     }
   },
@@ -989,10 +977,10 @@
   },
   "tests/storage/persistenceCoordinator.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 10
+      "count": 9
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 10
+      "count": 9
     },
     "@typescript-eslint/require-await": {
       "count": 4

@@ -100,7 +100,8 @@ export function createPersistenceCoordinator(
   };
   const drainSaves = async (): Promise<void> => {
     while (saveQueue.length > 0) {
-      const system = saveQueue.shift()!;
+      const system = saveQueue.shift();
+      if (!system) continue;
       try {
         const outcome = await options.save(system);
         recordOutcome(system.id, outcome);
@@ -122,7 +123,7 @@ export function createPersistenceCoordinator(
       // A snapshot can be enqueued after drainSaves observes an empty queue
       // but before this promise reaction runs. Restart here so that boundary
       // cannot strand the snapshot.
-      if (saveQueue.length > 0) ensureDrain();
+      if (saveQueue.length > 0) void ensureDrain();
     };
     void current.then(settled, settled);
     return current;
@@ -143,7 +144,7 @@ export function createPersistenceCoordinator(
     } else {
       saveQueue.push(system);
     }
-    ensureDrain();
+    void ensureDrain();
   };
   const flush = async (): Promise<SaveOutcome> => {
     cancelTimer();
