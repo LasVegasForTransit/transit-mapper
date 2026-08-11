@@ -10,7 +10,9 @@ class FakePreviewWorker {
   onmessage: ((event: MessageEvent<PreviewWorkerEvent>) => void) | null = null;
   onerror: ((event: ErrorEvent) => void) | null = null;
   terminated = false;
+  lastRequest: PreviewWorkerRequest | null = null;
   postMessage(message: PreviewWorkerRequest): void {
+    this.lastRequest = message;
     queueMicrotask(() => {
       const system = JSON.parse(message.data) as { id: string };
       this.onmessage?.({
@@ -36,6 +38,17 @@ describe('share preview Worker', () => {
       renderPreviewMarkup(JSON.stringify(system), { workerFactory: () => worker }),
     ).resolves.toContain(system.id);
     expect(worker.terminated).toBe(true);
+  });
+
+  it('passes the intended display width to the preview Worker', async () => {
+    const worker = new FakePreviewWorker();
+
+    await renderPreviewMarkup(JSON.stringify(createEmptySystem()), {
+      displayWidth: 280,
+      workerFactory: () => worker,
+    });
+
+    expect(worker.lastRequest).toMatchObject({ displayWidth: 280 });
   });
 
   it('terminates immediately when sharing is canceled', async () => {

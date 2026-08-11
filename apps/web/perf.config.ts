@@ -16,9 +16,10 @@ export const PERF_BASELINE_DIRECTORY = 'perf';
 export const BUNDLE_BUDGETS: BundleBudget[] = [
   {
     entry: 'main',
-    // These round delivery guardrails leave space for the simulator to grow
-    // while still making a material download increase an explicit decision.
-    maximumGzipBytes: 512_000,
+    // My systems adds an explicit switcher plus optional visual map cards.
+    // Preview drawing stays in the existing Worker; this <1% adjustment is
+    // the deliberate delivery allowance for the remaining interactive UI.
+    maximumGzipBytes: 516_000,
     maximumBrotliBytes: 450_560,
   },
   {
