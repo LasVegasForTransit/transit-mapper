@@ -28,9 +28,13 @@ vi.mock('../../src/editor/EditorProvider', () => ({
   useEditor: <T,>(selector: (editor: Record<string, unknown>) => T): T =>
     selector({
       system: { id: state.currentId, name: state.currentName },
+    }),
+  useEditorCommands: () => ({
+    document: {
       setName: state.setName,
       setSystem: state.setSystem,
-    }),
+    },
+  }),
 }));
 
 vi.mock('../../src/ui/UiProvider', () => ({
