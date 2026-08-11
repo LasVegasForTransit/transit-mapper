@@ -73,21 +73,9 @@ export function createFacilityCommands(runtime: EditorRuntime): FacilityCommands
         result: undefined,
       })),
     deleteFacility: (id) =>
-      runtime.commitContent(undefined, (state) => {
-        const system = deleteSelection(state.system, [{ kind: 'facility', id }]);
-        if (system === state.system) {
-          return { system: state.system, result: undefined };
-        }
-        return {
-          system,
-          transient: {
-            selection:
-              state.selection?.kind === 'facility' && state.selection.id === id
-                ? null
-                : state.selection,
-          },
-          result: undefined,
-        };
-      }),
+      runtime.commitContent(undefined, ({ system }) => ({
+        system: deleteSelection(system, [{ kind: 'facility', id }]),
+        result: undefined,
+      })),
   };
 }

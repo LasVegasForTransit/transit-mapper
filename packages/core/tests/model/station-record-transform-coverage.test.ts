@@ -44,6 +44,15 @@ describe('station record transform identity', () => {
     expect(next).not.toBe(station);
   });
 
+  it('preserves a station when the same automatic suggestion repeats', () => {
+    const station = aStation('station', [0, 0], undefined, {
+      name: 'Main & First',
+      autoNamed: true,
+    });
+
+    expect(withSuggestedStationName(station, 'Main & First')).toBe(station);
+  });
+
   it('preserves the input for missing stations and equal metadata', () => {
     const station = aStation('station', [0, 0], undefined, {
       name: 'Central',

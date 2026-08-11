@@ -4,9 +4,9 @@ import { getMap } from '../map/mapRef';
 import {
   IMPORT_CATEGORY_LABELS,
   IMPORT_CATEGORY_ORDER,
-  importOsmWays,
   type ImportCategory,
 } from '@transitmapper/core/model/import';
+import { importOsmNetwork } from '../import/import-osm-network';
 import { useOnlineStatus } from '../network/useOnlineStatus';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
@@ -81,7 +81,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
     setError('');
     try {
       const b = map.getBounds();
-      const network = await importOsmWays(
+      const network = await importOsmNetwork(
         { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() },
         [...categories],
         drivingSide,

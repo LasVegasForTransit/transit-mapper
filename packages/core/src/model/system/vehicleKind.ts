@@ -1,3 +1,5 @@
+import type { Service } from './service';
+
 /** A specific piece of rolling stock/equipment a service can be assigned to
  *  run — lets someone testing a transit system idea choose which vehicle a
  *  line actually uses (a short single-unit LRV vs. a long double-consist
@@ -33,6 +35,49 @@ export interface VehicleKind {
 
 interface VehicleKindDocument {
   vehicleKinds: VehicleKind[];
+  services: Service[];
+}
+
+function vehicleKindsEqual(left: VehicleKind[], right: VehicleKind[]): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  return left.every((kind, index) => {
+    const other = right[index];
+    return (
+      kind.id === other.id &&
+      kind.modeId === other.modeId &&
+      kind.label === other.label &&
+      kind.widthM === other.widthM &&
+      kind.lengthM === other.lengthM &&
+      kind.capacityPax === other.capacityPax &&
+      kind.topSpeedKmh === other.topSpeedKmh &&
+      kind.accelMps2 === other.accelMps2 &&
+      kind.decelMps2 === other.decelMps2
+    );
+  });
+}
+
+function servicesWithCompatibleKinds(services: Service[], kinds: VehicleKind[]): Service[] {
+  let changed = false;
+  const compatible: Service[] = [];
+  for (const service of services) {
+    if (!service.vehicleKindId) {
+      compatible.push(service);
+      continue;
+    }
+    const kind = kinds.find((candidate) => candidate.id === service.vehicleKindId);
+    if (kind?.modeId === service.modeId) {
+      compatible.push(service);
+      continue;
+    }
+    // Replacing the catalog cannot leave Services pointing at removed or
+    // newly mode-incompatible equipment.
+    changed = true;
+    const updated = { ...service };
+    delete updated.vehicleKindId;
+    compatible.push(updated);
+  }
+  return changed ? compatible : services;
 }
 
 /** Replace a document's rolling-stock definitions without timestamp policy. */
@@ -40,5 +85,9 @@ export function setVehicleKinds<System extends VehicleKindDocument>(
   system: System,
   kinds: VehicleKind[],
 ): System {
-  return system.vehicleKinds === kinds ? system : { ...system, vehicleKinds: kinds };
+  const vehicleKinds = vehicleKindsEqual(system.vehicleKinds, kinds) ? system.vehicleKinds : kinds;
+  const services = servicesWithCompatibleKinds(system.services, vehicleKinds);
+  return vehicleKinds === system.vehicleKinds && services === system.services
+    ? system
+    : { ...system, vehicleKinds, services };
 }

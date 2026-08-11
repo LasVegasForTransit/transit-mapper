@@ -7,16 +7,13 @@
 // "anchor points" — its two endpoints plus every control point a junction
 // Node references — so a route can turn at any junction, not just at way
 // ends. A click in the middle of a block becomes a VIRTUAL anchor connected
-// into its enclosing segment with partial costs; materializing the route
-// (editor/store.ts) later inserts a real control point + splits there.
+// into its segment with partial costs; routeLegs.ts preserves that fractional
+// endpoint as a Pattern-leg extent without splitting the Way.
 //
 // Pure and network-free like the rest of model/: everything is testable
-// data-in/data-out, and the store owns all mutation. This also makes the
-// Dijkstra core a safe future candidate for moving off the main thread (a Web
-// Worker) or server-side (apps/worker) if a real simulation ever needs to
-// route at a scale that matters — nothing here touches store.ts, the DOM, or
-// any other stateful context, so relocating it is a call-site change, not a
-// rewrite.
+// data-in/data-out, while the editor runtime owns application mutation. The
+// Dijkstra can therefore move to a Worker or server without a rewrite: nothing
+// here touches the editor runtime, DOM, or another stateful context.
 
 import { getComponent, laneRefKey } from './components';
 import { haversineMeters, nearestInsertionPoint } from './geo';

@@ -4,8 +4,13 @@ import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type { TransitSystem, Viewport } from '@transitmapper/core/model/system';
 import type { CreateEditorStoreOptions } from './contracts';
 import type { SetSystemOptions } from './contracts/document-commands';
-import { createHistoryController, type HistoryController } from './history';
+import {
+  createHistoryController,
+  type HistoryCommandsPort,
+  type HistoryController,
+} from './history';
 import { createInitialEditorState, type EditorState } from './state';
+import { pruneTransientReferences } from './transient-references';
 
 type MutationBlockReason = 'loading' | 'read-only';
 type TransientState = Omit<
@@ -24,6 +29,8 @@ interface InstallDocumentOptions extends SetSystemOptions {
   tool: EditorState['tool'];
 }
 
+type RunContent = <Result>(blockedResult: Result, operation: () => Result) => Result;
+
 export interface EditorRuntime {
   readonly read: () => EditorState;
   readonly getInitialState: () => EditorState;
@@ -31,7 +38,6 @@ export interface EditorRuntime {
   readonly updateTransient: (
     update: TransientPatch | ((state: EditorState) => TransientPatch),
   ) => void;
-  readonly runContent: <Result>(blockedResult: Result, operation: () => Result) => Result;
   readonly commitContent: <Result>(
     blockedResult: Result,
     operation: (state: EditorState) => ContentChange<Result>,
@@ -39,10 +45,10 @@ export interface EditorRuntime {
   readonly installDocument: (system: TransitSystem, options: InstallDocumentOptions) => void;
   readonly newDocument: () => void;
   readonly persistViewport: (viewport: Viewport) => void;
-  readonly history: HistoryController;
+  readonly history: HistoryCommandsPort;
 }
 
-export interface EditorRuntimeOptions extends CreateEditorStoreOptions {
+interface EditorRuntimeOptions extends CreateEditorStoreOptions {
   /** Test/composition injection; public editor stores still install documents explicitly. */
   initialSystem?: TransitSystem;
 }
@@ -70,6 +76,7 @@ function documentWorkflowReset(tool: EditorState['tool']): Partial<EditorState> 
     armedTerminus: null,
     multiSelection: [],
     activeWayId: null,
+    draftSeparate: false,
     routeDraft: null,
     placingFacilityForGroupId: null,
     pickingMemberForGroupId: null,
@@ -90,6 +97,37 @@ function patchChangesState(state: EditorState, patch: TransientPatch): boolean {
   );
 }
 
+function createContentCommitter(
+  store: StoreApi<EditorState>,
+  history: HistoryController,
+  runContent: RunContent,
+): EditorRuntime['commitContent'] {
+  return (blockedResult, operation) =>
+    runContent(blockedResult, () => {
+      const current = store.getState();
+      const change = operation(current);
+      const system =
+        change.system === current.system ? current.system : finalizedSystem(change.system);
+      const requestedTransient = change.transient ?? {};
+      const transientCandidate =
+        system !== current.system || change.transient
+          ? {
+              ...requestedTransient,
+              ...pruneTransientReferences({ ...current, ...requestedTransient, system }, system),
+            }
+          : undefined;
+      const transient =
+        transientCandidate && patchChangesState(current, transientCandidate)
+          ? transientCandidate
+          : undefined;
+      if (system !== current.system || transient) {
+        const availability = history.record(current.system, system);
+        store.setState({ ...transient, system, ...availability });
+      }
+      return change.result;
+    });
+}
+
 /** Owns the only raw Zustand writes for one editor instance. */
 export function createEditorRuntime(options: EditorRuntimeOptions = {}): EditorRuntime {
   const store: StoreApi<EditorState> = createStore<EditorState>()(() => {
@@ -108,30 +146,14 @@ export function createEditorRuntime(options: EditorRuntimeOptions = {}): EditorR
     store.setState(patch);
   };
 
-  const runContent: EditorRuntime['runContent'] = (blockedResult, operation) => {
+  const runContent: RunContent = (blockedResult, operation) => {
     const blocked = blockReason(store.getState());
     if (!blocked) return operation();
     warnBlockedEdit(blocked);
     return blockedResult;
   };
 
-  const commitContent: EditorRuntime['commitContent'] = (blockedResult, operation) => {
-    return runContent(blockedResult, () => {
-      const current = store.getState();
-      const change = operation(current);
-      const system =
-        change.system === current.system ? current.system : finalizedSystem(change.system);
-      const transient =
-        change.transient && patchChangesState(current, change.transient)
-          ? change.transient
-          : undefined;
-      if (system !== current.system || transient) {
-        const availability = history.record(current.system, system);
-        store.setState({ ...transient, system, ...availability });
-      }
-      return change.result;
-    });
-  };
+  const commitContent = createContentCommitter(store, history, runContent);
 
   const installDocument = (system: TransitSystem, installOptions: InstallDocumentOptions): void => {
     const availability = history.reset();
@@ -148,7 +170,6 @@ export function createEditorRuntime(options: EditorRuntimeOptions = {}): EditorR
     getInitialState: store.getInitialState,
     subscribe: store.subscribe,
     updateTransient,
-    runContent,
     commitContent,
     installDocument,
     newDocument: () => installDocument(createEmptySystem(), { tool: 'way', readOnly: false }),

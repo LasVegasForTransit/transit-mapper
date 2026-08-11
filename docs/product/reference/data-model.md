@@ -139,15 +139,18 @@ from the way family's catalog noun.
 ## Line, Service, ServicePath, SchedulePeriod
 
 A `Line` is the rider-facing name and color an agency designates on a map. It
-owns an ordered `serviceIds` list. A `Service` is the technical operation: one
-mode, one path, one vehicle type, and one schedule. A Line normally has one
-Service, which the outline hides to keep the common case simple. A branching,
-express, or temporary replacement operation is another Service beneath the
-same Line. Each Service remains single-mode; a Line may be multimodal when the
-agency chooses to present those Services under one public identity.
+owns an ordered `serviceIds` list but no mode, path, vehicle, or schedule of its
+own. A `Service` is the technical operation: one mode, one path, one vehicle
+type, and one schedule. Every Service belongs to exactly one Line, and every
+Line owns at least one Service. A Line normally has one Service, which the
+outline hides to keep the common case simple. A branching, express, or
+temporary replacement operation is another Service beneath the same Line.
+Each Service remains single-mode; a Line may be multimodal when the agency
+chooses to present those Services under one public identity.
 
-A Service's singular `path` is a list of sections, ordered along outbound travel, each
-holding legs — one leg per way it runs over:
+A Service's singular `path` has the same id as its Service and is a list of
+sections, ordered along outbound travel, each holding legs — one leg per Way it
+runs over:
 
 ```ts
 interface Line {
@@ -161,6 +164,7 @@ interface Service {
   id: string;
   name?: string;
   modeId: string;
+  vehicleKindId?: string;
   path: ServicePath;
   frequencyMinutes?: number;
   spanStart?: string;
@@ -204,17 +208,17 @@ a block at a terminus, belonging to neither direction.
 Sections rather than a per-leg direction tag, because a tag in one flat array
 makes an inbound-only leg's _position_ load-bearing: place it after a shared
 leg it should precede and the return path reads discontinuous, with nothing in
-the type to say which spelling was meant. A couplet at the end of a line
-survives either spelling; a couplet in the middle does not.
+the type to say which spelling was meant. A couplet at the end of a Service
+path survives either spelling; a couplet in the middle does not.
 
 `extent` is where the leg joins and leaves its way, as normalized arc-length
-along that way's resolved path — the same convention as `Station.anchor.t`,
-measured along the way rather than along travel, so `direction` remains the
-only thing that says which way round. Extents are what let a service cover part
-of a way. Before v10 a pattern named whole ways only, so a line that started or
-stopped mid-block was made to fit by splitting the way underneath it — which
-mutated that way for every other line riding it and left a permanent fragment
-behind.
+along that way's resolved path — the same convention as every
+`Station.anchors[].t`, measured along the way rather than along travel, so
+`direction` remains the only thing that says which way round. Extents are what
+let a Service cover part of a Way. Before v10 a path named whole Ways only, so
+a Service that started or stopped mid-block was made to fit by splitting the
+Way underneath it — which mutated that Way for every other Service riding it
+and left a permanent fragment behind.
 
 `lane` pins which lane the leg rides; `auto` resolves the default at render
 time (see `defaultLaneFor`), which is distinct from a pin that happens to name
@@ -243,12 +247,17 @@ when several Services call there.
 
 | Field          | Meaning                                                                                                                                   |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `coord`        | Network-node position, snapped onto its way.                                                                                              |
+| `coord`        | Map position; snapped onto an anchored Way when the Station is not free-floating.                                                         |
 | `anchors`      | `{wayId, t}` entries — normalized positions on the Ways this Station serves and follows when they are reshaped.                           |
 | `footprint`    | The station's land: a boundary polygon drawn in the Infrastructure view.                                                                  |
 | `platforms`    | Platform polygons inside the station (`edges: 1` side, `2` island).                                                                       |
 | `dwellSeconds` | How long a vehicle waits here. Counts toward the round trip, so it feeds fleet size — see [The simulation](../explanation/simulation.md). |
 | `majorStop`    | Label this stop from a lower zoom, like an interchange.                                                                                   |
+
+There is no singular `anchor` field. Direct station movement replaces the
+complete `anchors` collection with `[anchor]` when snapped to a Way or `[]`
+when free-floating; workflows that deliberately associate a Station with
+several Ways write the complete multi-anchor collection.
 
 ## Facility and Group
 

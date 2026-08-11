@@ -1,5 +1,4 @@
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import type { ImportCommands } from '../editor/store/contracts/import-routing-commands';
 
 interface BackgroundImportSnapshot {
   system: TransitSystem;
@@ -7,13 +6,8 @@ interface BackgroundImportSnapshot {
   documentStatus: 'loading' | 'ready';
 }
 
-interface BackgroundImportCommandGroups {
-  imports: Pick<ImportCommands, 'applyGtfsImportBatch' | 'applyImportedReconciliation'>;
-}
-
 /** Narrow imperative port for long-running imports that must watch snapshots. */
 export interface BackgroundImportStore {
-  readonly commands: BackgroundImportCommandGroups;
   readonly getState: () => BackgroundImportSnapshot;
   readonly subscribe: (
     listener: (state: BackgroundImportSnapshot, previous: BackgroundImportSnapshot) => void,

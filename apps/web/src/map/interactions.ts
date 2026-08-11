@@ -2426,7 +2426,7 @@ export function attachInteractions(
     // split off an endpoint), which is exactly why it was free to repurpose.
     // Ctrl/Cmd-click an interior handle splits the way there — each half
     // keeps the original's type/grade/class/capacity and can then be edited
-    // independently (see store.ts's splitWayAt doc comment). A no-op on an
+    // independently (see model/way-split-edits.ts). A no-op on an
     // endpoint (nothing to split off) or any other target.
     if (channels.secondary) return;
 

@@ -103,6 +103,48 @@ describe('service record transform identity', () => {
     const cleared = setServiceSchedule(scheduled, service.id, []);
     expect(cleared.services[0]).toHaveProperty('schedule', undefined);
   });
+
+  it('preserves fresh equal schedules and clears an incompatible vehicle after a mode change', () => {
+    const schedule: SchedulePeriod[] = [
+      {
+        id: 'all-day',
+        label: 'All day',
+        days: 'daily',
+        spanStart: '06:00',
+        spanEnd: '22:00',
+        frequencyMinutes: 15,
+      },
+    ];
+    const service = aService('service', [pattern], {
+      modeId: 'bus',
+      schedule,
+      vehicleKindId: 'bus-kind',
+    });
+    const system = aSystem({
+      ways: [way],
+      services: [service],
+      vehicleKinds: [
+        {
+          id: 'bus-kind',
+          modeId: 'bus',
+          label: 'Bus',
+          widthM: 2.5,
+          lengthM: 12,
+        },
+      ],
+    });
+
+    expect(
+      setServiceSchedule(
+        system,
+        service.id,
+        schedule.map((period) => ({ ...period })),
+      ),
+    ).toBe(system);
+    const next = setServiceMode(system, service.id, 'lightRail');
+    expect(next.services[0]).toMatchObject({ modeId: 'lightRail' });
+    expect(next.services[0]).not.toHaveProperty('vehicleKindId');
+  });
 });
 
 describe('line record transform identity', () => {

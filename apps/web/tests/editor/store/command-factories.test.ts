@@ -1,6 +1,5 @@
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { aRoad, aService } from '@transitmapper/core/testing/fixtures';
-import type { TransitSystem } from '@transitmapper/core/model/system';
 import {
   createDocumentCommands,
   createHistoryCommands,
@@ -12,8 +11,6 @@ import { describe, expect, it } from 'vitest';
 
 const finishingOperations = {
   createId: () => 'generated',
-  conflatePattern: (system: TransitSystem) => system,
-  formCrossings: (system: TransitSystem) => system,
 };
 
 describe('editor command factories', () => {

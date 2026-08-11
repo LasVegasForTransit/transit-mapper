@@ -23,19 +23,19 @@ import {
   nextDefaultLineName,
 } from './service-creation';
 
-export interface WayCreationOptions {
-  typeId?: string;
-  geometry?: LineGeometry;
-  color?: string;
+interface WayCreationOptions {
+  readonly typeId?: string;
+  readonly geometry?: LineGeometry;
+  readonly color?: string;
 }
 
-export interface WayCreationChange {
+interface WayCreationChange {
   system: TransitSystem;
   transient: Pick<EditorState, 'activeWayId' | 'selection'>;
   wayId: string;
 }
 
-export interface WayBranchChange {
+interface WayBranchChange {
   system: TransitSystem;
   transient: Pick<EditorState, 'activeWayId' | 'selection' | 'draftOneWay'>;
   wayId: string;

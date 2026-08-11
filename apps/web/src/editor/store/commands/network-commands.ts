@@ -19,8 +19,8 @@ import { deleteWayStretch } from '@transitmapper/core/model/way-stretch-edits';
 import type { NetworkCommands } from '../contracts/way-network-commands';
 import type { EditorRuntime } from '../runtime';
 
-export interface NetworkCommandOptions {
-  createId?: () => string;
+interface NetworkCommandOptions {
+  readonly createId?: () => string;
 }
 
 type NodeCommands = Pick<

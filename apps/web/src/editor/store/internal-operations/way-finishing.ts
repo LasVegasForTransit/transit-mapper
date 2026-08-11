@@ -1,3 +1,5 @@
+import { conflatePatternOntoExisting } from '@transitmapper/core/model/corridor-edits';
+import { formCrossingJunctions } from '@transitmapper/core/model/crossing-edits';
 import { patternLegs, oneSection, wholeLeg } from '@transitmapper/core/model/geo';
 import { servicePattern } from '@transitmapper/core/model/line-service';
 import { resyncAutoNamedStations } from '@transitmapper/core/model/geo/crossStreetNaming';
@@ -5,17 +7,7 @@ import { deleteSelection } from '@transitmapper/core/model/selection-deletion';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { EditorState } from '../state';
 
-export interface WayFinishingOperations {
-  readonly createId: () => string;
-  readonly conflatePattern: (
-    system: TransitSystem,
-    serviceId: string,
-    patternId: string,
-  ) => TransitSystem;
-  readonly formCrossings: (system: TransitSystem, wayId: string) => TransitSystem;
-}
-
-export interface WayFinishChange {
+interface WayFinishChange {
   system: TransitSystem;
   transient: Pick<
     EditorState,
@@ -60,15 +52,11 @@ function withAddedService(
   };
 }
 
-function withConflatedPattern(
-  system: TransitSystem,
-  wayId: string,
-  conflatePattern: WayFinishingOperations['conflatePattern'],
-): TransitSystem {
+function withConflatedPattern(system: TransitSystem, wayId: string): TransitSystem {
   for (const service of system.services) {
     const pattern = servicePattern(service);
     if (patternLegs(pattern).some((leg) => leg.wayId === wayId)) {
-      return conflatePattern(system, service.id, pattern.id);
+      return conflatePatternOntoExisting(system, service.id, pattern.id);
     }
   }
   return system;
@@ -79,10 +67,7 @@ function withConflatedPattern(
  * crossing formation are folded into this result so the runtime publishes
  * exactly one content commit and history records exactly one undo step.
  */
-export function finishActiveWay(
-  state: EditorState,
-  operations: WayFinishingOperations,
-): WayFinishChange {
+export function finishActiveWay(state: EditorState, createId: () => string): WayFinishChange {
   const wayId = state.activeWayId;
   const transient: WayFinishChange['transient'] = {
     activeWayId: null,
@@ -100,17 +85,10 @@ export function finishActiveWay(
     };
   }
 
-  const addition = withAddedService(
-    state.system,
-    wayId,
-    state.addingServiceDraft,
-    operations.createId,
-  );
-  let system = state.draftSeparate
-    ? addition.system
-    : withConflatedPattern(addition.system, wayId, operations.conflatePattern);
+  const addition = withAddedService(state.system, wayId, state.addingServiceDraft, createId);
+  let system = state.draftSeparate ? addition.system : withConflatedPattern(addition.system, wayId);
   if (system.ways.some((candidate) => candidate.id === wayId)) {
-    system = operations.formCrossings(system, wayId);
+    system = formCrossingJunctions(system, wayId);
   }
   return {
     system,

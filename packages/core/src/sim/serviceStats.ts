@@ -59,7 +59,7 @@ export interface ResolvedVehicle {
 }
 
 /** Which real vehicle a service runs: its assigned VehicleKind if it has one
- *  and that kind still exists, else the mode's plain default at the app's
+ *  and that kind still exists for the same mode, else the mode's plain default at the app's
  *  ambient default motion profile — the exact behavior every service had
  *  before vehicle kinds existed, so an unassigned service is never affected
  *  by the feature. Each of a kind's motion fields (top speed, acceleration,
@@ -70,7 +70,7 @@ export function effectiveVehicleKind(
   service: Service,
 ): ResolvedVehicle {
   const kind = service.vehicleKindId
-    ? vehicleKinds.find((k) => k.id === service.vehicleKindId)
+    ? vehicleKinds.find((k) => k.id === service.vehicleKindId && k.modeId === service.modeId)
     : undefined;
   if (kind) {
     return {
@@ -203,7 +203,7 @@ export interface PatternStats {
   /** Prefix-sum arc lengths for `path`, so a caller resolving a position every
    *  frame does not re-walk it. */
   cumLengths: Float64Array;
-  /** OUTBOUND path length — what "how long is this line" has always meant.
+  /** OUTBOUND path length — what "how long is this Service" means.
    *  A couplet whose return is longer under-reports here, which is the right
    *  trade against a number that describes neither direction. */
   meters: number;
@@ -297,7 +297,7 @@ export interface ServiceStats {
 
 /**
  * Measure a whole service. Returns null when nothing about it can be measured
- * yet (a line drawn over ways that resolve to no path).
+ * yet (a Service drawn over Ways that resolve to no path).
  */
 export function serviceStats(
   ways: Way[],

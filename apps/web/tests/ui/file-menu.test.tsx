@@ -1,22 +1,13 @@
 // @vitest-environment jsdom
 
-import { act } from 'react';
+import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { aSystem } from '@transitmapper/core/testing/fixtures';
+import { EditorProvider } from '../../src/editor/EditorProvider';
+import { createEditorStore, type EditorStore } from '../../src/editor/store';
 import { FileMenu } from '../../src/ui/FileMenu';
 import { TopBarBrand } from '../../src/ui/TopBar';
-
-const state = vi.hoisted(() => ({ readOnly: false }));
-
-vi.mock('../../src/editor/EditorProvider', () => ({
-  useEditor: <T,>(selector: (editor: Record<string, unknown>) => T): T =>
-    selector({
-      readOnly: state.readOnly,
-      system: { name: 'Test system' },
-    }),
-  useEditorCommands: () => ({ document: { setName: () => undefined } }),
-  useEditorStore: () => ({ getState: () => ({ system: {} }) }),
-}));
 
 vi.mock('../../src/ui/UiProvider', () => ({
   useUi: () => ({
@@ -29,6 +20,13 @@ vi.mock('../../src/ui/UiProvider', () => ({
 
 let container: HTMLDivElement;
 let root: Root;
+let store: EditorStore;
+
+function renderWithEditor(children: ReactNode): void {
+  act(() => {
+    root.render(<EditorProvider store={store}>{children}</EditorProvider>);
+  });
+}
 
 function openMenu(): void {
   const trigger = container.querySelector('button');
@@ -46,7 +44,8 @@ beforeEach(() => {
       IS_REACT_ACT_ENVIRONMENT: boolean;
     }
   ).IS_REACT_ACT_ENVIRONMENT = true;
-  state.readOnly = false;
+  store = createEditorStore();
+  store.commands.document.setSystem(aSystem({ name: 'Test system' }));
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -60,7 +59,7 @@ afterEach(() => {
 
 describe('File menu', () => {
   it('keeps file actions and adds About while editing', () => {
-    act(() => root.render(<FileMenu />));
+    renderWithEditor(<FileMenu />);
     openMenu();
 
     expect(document.body.textContent).toContain('New system');
@@ -71,8 +70,8 @@ describe('File menu', () => {
   });
 
   it('offers only About on a shared read-only system', () => {
-    state.readOnly = true;
-    act(() => root.render(<FileMenu />));
+    store.commands.document.setSystem(store.getState().system, { readOnly: true });
+    renderWithEditor(<FileMenu />);
     openMenu();
 
     expect(document.body.textContent).toContain('About TransitMapper…');
@@ -83,9 +82,10 @@ describe('File menu', () => {
   });
 
   it('keeps the application menu mounted in the read-only brand row', () => {
-    state.readOnly = true;
-    act(() => root.render(<TopBarBrand />));
+    store.commands.document.setSystem(store.getState().system, { readOnly: true });
+    renderWithEditor(<TopBarBrand />);
 
     expect(container.querySelector('button[aria-label="TransitMapper menu"]')).not.toBeNull();
+    expect(container.textContent).toContain('Test system');
   });
 });

@@ -67,7 +67,7 @@ function wayAtEnd(
 }
 
 /**
- * The legs that carry a vehicle from one line's terminus to the other's,
+ * The legs that carry a vehicle from one Service's terminus to the other's,
  * or null when nothing connects them. An empty array means the termini are
  * already the same point and no connector is needed.
  */
@@ -96,11 +96,11 @@ function connectorLegs(
 }
 
 /**
- * Join `otherId` onto `keepId` as one continuous line.
+ * Join `otherId` onto `keepId` as one continuous Service.
  *
- * The joined line keeps `keepId`'s name, colour, and schedule, because a
- * through-route is one of the two Services carrying on rather than a new
- * thing with no history. Its public Line also survives.
+ * The joined Service keeps `keepId`'s name and schedule because it is one of
+ * the two existing operations carrying on. Its public Line also survives with
+ * its rider-facing name and colour.
  *
  * Returns null and changes nothing when the modes differ, when the termini do
  * not meet, or when no infrastructure connects them.

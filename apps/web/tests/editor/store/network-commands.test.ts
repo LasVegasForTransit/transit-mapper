@@ -1,9 +1,13 @@
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type { TransitSystem, Way } from '@transitmapper/core/model/system';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createNetworkCommands } from '../../../src/editor/store/commands/network-commands';
 import { createEditorRuntime } from '../../../src/editor/store/runtime';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function road(id: string, points: Way['points']): Way {
   return {

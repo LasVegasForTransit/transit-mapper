@@ -66,7 +66,7 @@ export function junctionTypeIds(node: Node, waysById: Map<string, Way>): string[
  * deterministic rather than dependent on Map iteration order.
  *
  * The tempting alternative — keep every group, as one Node each — is the one
- * to avoid. Two Nodes at one coordinate is not cosmetic: cascadeMove finds
+ * to avoid. Two Nodes at one coordinate is not cosmetic: moveWayPoint finds
  * only the first, so dragging the junction moves one Node's arms and strands
  * the other's, and setNodeControl reaches only one of them. Losing the
  * minority group's junction is the lesser fault, and it is a fault nobody can

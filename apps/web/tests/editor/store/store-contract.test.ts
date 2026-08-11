@@ -1,7 +1,11 @@
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEditorStore, type EditorState } from '../../../src/editor/store';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('the editor store contract', () => {
   it('isolates state, commands, and history per editor instance', () => {
@@ -144,6 +148,10 @@ describe('the editor store contract', () => {
     const wayId = store.commands.ways.beginWay('road', 'straight');
     expect(stationId).not.toBeNull();
     expect(wayId).not.toBeNull();
+    if (!stationId || !wayId) throw new Error('Expected document workflow fixtures');
+
+    store.commands.selection.setOutlineHover({ kind: 'station', id: stationId });
+    store.commands.selection.addMultiSelection([{ kind: 'way', id: wayId }]);
 
     store.commands.routing.startRouteDraft({
       wayId: 'route-anchor',
@@ -156,6 +164,7 @@ describe('the editor store contract', () => {
       name: 'Branch',
       modeId: 'bus',
     });
+    store.commands.tools.setDraftSeparate(true);
     store.commands.selection.armTerminus({
       serviceId: 'service',
       patternId: 'pattern',
@@ -174,10 +183,12 @@ describe('the editor store contract', () => {
 
     expect(store.getState()).toMatchObject({
       selection: null,
+      outlineHover: null,
       activePatternId: null,
       armedTerminus: null,
       multiSelection: [],
       activeWayId: null,
+      draftSeparate: false,
       routeDraft: null,
       placingFacilityForGroupId: null,
       pickingMemberForGroupId: null,

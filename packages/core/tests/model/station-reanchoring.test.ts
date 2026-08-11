@@ -1,9 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { nearestOnPath, resolveWayPath } from '../../src/model/geo';
-import { reanchorStationsOnWay } from '../../src/model/station-reanchoring';
+import { reanchorStationsOnWay, replacedStationAnchors } from '../../src/model/station-reanchoring';
 import { aRoad, aStation, aSystem } from '../support/fixtures.test';
 
 describe('station reanchoring', () => {
+  it('replaces one way attachment without duplicating the destination way', () => {
+    const station = aStation('station', [0, 0], undefined, {
+      anchors: [
+        { wayId: 'removed', t: 0.2 },
+        { wayId: 'kept', t: 0.8 },
+        { wayId: 'unrelated', t: 0.5 },
+      ],
+    });
+
+    expect(replacedStationAnchors(station, 'removed', { wayId: 'kept', t: 0.3 })).toEqual([
+      { wayId: 'kept', t: 0.3 },
+      { wayId: 'unrelated', t: 0.5 },
+    ]);
+  });
+
   it('preserves the stations reference when reprojection changes nothing', () => {
     const way = aRoad('way', [
       [-115.2, 36.1],

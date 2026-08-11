@@ -13,9 +13,14 @@ import {
   wholeLeg,
 } from '../../src/model/geo';
 import { aPattern, aRoad, aStation } from '../support/fixtures.test';
-import { dwellStopsForPattern, patternStats, patternStops } from '../../src/sim/serviceStats';
+import {
+  dwellStopsForPattern,
+  effectiveVehicleKind,
+  patternStats,
+  patternStops,
+} from '../../src/sim/serviceStats';
 import type { VehicleMotionProfile } from '../../src/sim/timetable';
-import type { Pattern } from '../../src/model/system';
+import type { Pattern, Service, VehicleKind } from '../../src/model/system';
 
 const profile: VehicleMotionProfile = { speedMps: 15, accelMps2: 2, decelMps2: 2 };
 
@@ -36,6 +41,32 @@ const allStations = [
   aStation('west', [-115.18, 36.1], { wayId: 'w', t: 0.2 }),
   aStation('middle', [-115.15, 36.1], { wayId: 'w', t: 0.5 }),
 ];
+
+function requiredStats(pattern: Pattern, stations = allStations) {
+  const stats = patternStats(ways, stations, pattern, profile);
+  if (!stats) throw new Error('Expected the fixture pattern to resolve');
+  return stats;
+}
+
+describe('vehicle kind resolution', () => {
+  it('ignores an assigned kind whose mode does not match the service', () => {
+    const service: Service = {
+      id: 'service',
+      modeId: 'bus',
+      vehicleKindId: 'rail-kind',
+      path: { id: 'service', sections: [] },
+    };
+    const kind: VehicleKind = {
+      id: 'rail-kind',
+      modeId: 'lightRail',
+      label: 'Rail vehicle',
+      widthM: 9,
+      lengthM: 99,
+    };
+
+    expect(effectiveVehicleKind([kind], service)).toEqual(effectiveVehicleKind([], service));
+  });
+});
 
 describe('a line running a whole street', () => {
   it('calls at its stations in the order a rider reaches them', () => {
@@ -66,8 +97,8 @@ describe('a line terminating mid-block', () => {
   });
 
   it('reports a shorter round trip than the whole street', () => {
-    const half = patternStats(ways, allStations, halfStreet, profile)!;
-    const whole = patternStats(ways, allStations, wholeStreet, profile)!;
+    const half = requiredStats(halfStreet);
+    const whole = requiredStats(wholeStreet);
     expect(half.meters).toBeLessThan(whole.meters);
     expect(half.stops.map((s) => s.station.id)).toEqual(['west', 'middle']);
   });
@@ -75,13 +106,13 @@ describe('a line terminating mid-block', () => {
 
 describe('what a line amounts to', () => {
   it('reports a round trip of exactly twice the one-way time', () => {
-    const stats = patternStats(ways, allStations, wholeStreet, profile)!;
+    const stats = requiredStats(wholeStreet);
     expect(stats.roundTripMs).toBe(2 * stats.oneWayMs);
   });
 
   it('counts dwell as time standing still, on top of travel — and each stop costs more than that alone', () => {
-    const stats = patternStats(ways, allStations, wholeStreet, profile)!;
-    const moving = patternStats(ways, [], wholeStreet, profile)!;
+    const stats = requiredStats(wholeStreet);
+    const moving = requiredStats(wholeStreet, []);
     expect(stats.dwellMs).toBe(60_000);
     // Splitting one leg into several doesn't just add the dwell: each stop
     // also makes the vehicle brake to rest and accelerate again, which a
@@ -90,7 +121,7 @@ describe('what a line amounts to', () => {
   });
 
   it('hands back the path it measured, for callers placing positions on it', () => {
-    const stats = patternStats(ways, allStations, wholeStreet, profile)!;
+    const stats = requiredStats(wholeStreet);
     expect(stats.cumLengths[stats.cumLengths.length - 1]).toBeCloseTo(stats.meters, 6);
     expect(pathLengthMeters(stats.path)).toBeCloseTo(stats.meters, 6);
   });

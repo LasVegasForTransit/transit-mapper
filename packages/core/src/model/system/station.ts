@@ -47,8 +47,8 @@ export interface Station {
    * other one drove past a stop it plainly calls at — which a GTFS feed
    * reusing one stop_id for both directions produces on every import.
    *
-   * Ordered: the first is the one a bare "which way is this on" question gets,
-   * and the one whose alignment moves the station when it is reshaped.
+   * Ordered: the first is the one a bare "which way is this on" question gets.
+   * Reshaping any anchored way reprojects the shared station coordinate.
    */
   anchors: StationAnchor[];
   /** Physical boundary polygon, drawn in the infrastructure view. */
@@ -71,8 +71,8 @@ export interface Station {
 }
 
 /** A new, unanchored-unless-given station at `coord` — the one place a bare
- *  Station literal gets constructed, so every call site (editor/store.ts's
- *  addStation, any future importer) builds the identical shape. */
+ *  Station literal gets constructed, so editor station commands and future
+ *  importers build the identical shape. */
 export function createStation(coord: LngLat, anchor?: StationAnchor): Station {
   return { id: shortId(), coord, anchors: anchor ? [anchor] : [] };
 }
@@ -82,7 +82,8 @@ export function withSuggestedStationName<StationType extends Station>(
   station: StationType,
   name: string | null | undefined,
 ): StationType {
-  return name ? { ...station, name, autoNamed: true } : station;
+  if (!name || (station.name === name && station.autoNamed === true)) return station;
+  return { ...station, name, autoNamed: true };
 }
 
 interface StationDocument {

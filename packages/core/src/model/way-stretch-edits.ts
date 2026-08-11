@@ -1,20 +1,14 @@
-import {
-  haversineMeters,
-  oneSection,
-  patternLegs,
-  patternSegments,
-  resolveWayPath,
-  wayById,
-} from './geo';
+import { oneSection, patternLegs, resolveWayPath } from './geo';
 import { shortId } from './ids';
 import { withServicePattern } from './line-service';
-import { removeStretchFromLegs, splitLegsIntoRuns } from './patternEdits';
-import type { PatternLeg, Service, TransitSystem, Way } from './system';
+import { removeStretchFromLegs } from './patternEdits';
+import { splitContinuousLegRuns } from './pattern-continuity';
+import type { Service, TransitSystem } from './system';
+import { removeGroupMembers } from './system/group';
 import { removeWayFromSystem } from './way-removal';
 import { splitWayAtPositionWithResult } from './way-split-results';
 
 const MIN_STRETCH_T = 1e-3;
-const JOIN_TOLERANCE_M = 0.75;
 
 export type CreateWayStretchId = () => string;
 
@@ -43,17 +37,6 @@ interface StretchServiceChanges {
   affectedPatterns: number;
 }
 
-function legsMeet(ways: Way[], left: PatternLeg, right: PatternLeg): boolean {
-  const segments = patternSegments(wayById(ways), {
-    id: 'stretch-delete-probe',
-    sections: oneSection([left, right]),
-  });
-  if (segments.length < 2) return false;
-  const leftEnd = segments[0].path[segments[0].path.length - 1];
-  const rightStart = segments[1].path[0];
-  return haversineMeters(leftEnd, rightStart) <= JOIN_TOLERANCE_M;
-}
-
 function servicesWithoutStretch(system: TransitSystem, range: StretchRange): StretchServiceChanges {
   let affectedPatterns = 0;
   const replacementIds = new Map<string, string[]>();
@@ -72,7 +55,7 @@ function servicesWithoutStretch(system: TransitSystem, range: StretchRange): Str
       replacementIds.set(service.id, []);
       continue;
     }
-    const runs = splitLegsIntoRuns(legs, (left, right) => legsMeet(system.ways, left, right));
+    const runs = splitContinuousLegRuns(system.ways, legs);
     const divided = runs.map((run, index) => {
       const id = index === 0 ? service.id : range.createId();
       const dividedService =
@@ -116,6 +99,21 @@ function replaceLineServiceIds(
     : next;
 }
 
+function removedLineAndServiceIds(
+  before: TransitSystem,
+  after: TransitSystem,
+): ReadonlySet<string> {
+  const liveIds = new Set([
+    ...after.lines.map((line) => line.id),
+    ...after.services.map((service) => service.id),
+  ]);
+  return new Set(
+    [...before.lines, ...before.services]
+      .map((record) => record.id)
+      .filter((id) => !liveIds.has(id)),
+  );
+}
+
 /** Removes infrastructure and service coverage over a normalized way range. */
 export function deleteWayStretch(
   system: TransitSystem,
@@ -141,5 +139,6 @@ export function deleteWayStretch(
   const lowSplit = splitWayAtPositionWithResult(next, wayId, low, createId);
   next = lowSplit?.system ?? next;
   next = removeWayFromSystem(next, lowSplit?.newWayId ?? wayId);
+  next = removeGroupMembers(next, removedLineAndServiceIds(system, next));
   return { system: next, affectedPatterns: serviceChange.affectedPatterns };
 }

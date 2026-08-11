@@ -18,8 +18,8 @@ export interface Group {
 }
 
 /** A new group bundling `memberIds` (deduplicated) under `name` — the one
- *  place a bare Group literal gets constructed (see editor/store.ts's
- *  createGroup). */
+ *  place a bare Group literal gets constructed, including from editor group
+ *  commands. */
 export function createGroup(memberIds: string[], name?: string): Group {
   return { id: shortId(), name, memberIds: [...new Set(memberIds)] };
 }

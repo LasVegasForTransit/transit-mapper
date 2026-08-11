@@ -1167,10 +1167,8 @@ export function withoutAlreadyImported(
     }
     if (refs.length < 2) continue;
 
-    // A junction the system already has must gain the new arm, not a rival
-    // Node at the same coordinate. Two Nodes there is not cosmetic: cascadeMove
-    // finds only the first, so dragging the junction moves one Node's arms and
-    // strands the other's, and setNodeControl reaches only one of them.
+    // Reuse the existing junction: moveWayPoint and setNodeControl address one
+    // Node, so a coincident rival would leave half the junction behind.
     const existing = refs
       .map((r) => existingNodeByArm.get(`${r.wayId}:${r.pointIndex}`))
       .find((n) => n !== undefined);

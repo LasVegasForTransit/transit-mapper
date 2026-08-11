@@ -5,9 +5,8 @@ const CORNER_SAMPLES = 10; // interpolated points per rounded corner.
 // rounding — keeps a corner's cut point from ever reaching its neighbor's.
 const CORNER_FRACTION = 0.25;
 
-// Ways are immutably replaced on every change (see editor/store.ts) — an
-// UNCHANGED way keeps the exact same object reference across renders, so
-// caching by that reference is safe and needs no invalidation. This matters:
+// Core transforms preserve unchanged Way references, so this reference-keyed
+// cache needs no invalidation. This matters:
 // buildFeatures() calls resolveWayPath for every way (and, per station, for
 // every way again via servedWayIds) on every rebuild — during a drag that's
 // once per animation frame, and without this cache it was once per raw

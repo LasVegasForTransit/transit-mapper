@@ -1,15 +1,13 @@
 import { PROFILE_PRESETS, mode, modesForWayType, wayType } from '@transitmapper/core/model/catalog';
+import { shortId } from '@transitmapper/core/model/ids';
 import { modeRender } from '@transitmapper/core/style/catalogStyle';
 import type { EditorState, Tool } from '../contracts';
 import type { ToolCommands } from '../contracts/tool-selection-commands';
-import { finishActiveWay, type WayFinishingOperations } from '../internal-operations/way-finishing';
+import { finishActiveWay } from '../internal-operations/way-finishing';
 import type { EditorRuntime } from '../runtime';
 
-function updateIfChanged(
-  runtime: EditorRuntime,
-  key: Parameters<EditorRuntime['updateTransient']>[0],
-): void {
-  runtime.updateTransient(key);
+interface ToolCommandOptions {
+  readonly createId?: () => string;
 }
 
 type ToolSelectionCommands = Pick<ToolCommands, 'setTool' | 'setSelectVariant'>;
@@ -32,17 +30,17 @@ function transitionToTool(state: EditorState, tool: Tool): ToolTransition {
 
 function createToolSelectionCommands(
   runtime: EditorRuntime,
-  operations: WayFinishingOperations,
+  createId: () => string,
 ): ToolSelectionCommands {
   return {
     setTool(tool) {
       const state = runtime.read();
       if (state.activeWayId === null) {
-        updateIfChanged(runtime, transitionToTool(state, tool));
+        runtime.updateTransient(transitionToTool(state, tool));
         return;
       }
       const finished = runtime.commitContent(false, (current) => {
-        const change = finishActiveWay(current, operations);
+        const change = finishActiveWay(current, createId);
         const finishedState = { ...current, system: change.system, ...change.transient };
         return {
           system: change.system,
@@ -50,11 +48,10 @@ function createToolSelectionCommands(
           result: true,
         };
       });
-      if (!finished) updateIfChanged(runtime, transitionToTool(runtime.read(), tool));
+      if (!finished) runtime.updateTransient(transitionToTool(runtime.read(), tool));
     },
     setSelectVariant(variant) {
-      if (runtime.read().selectVariant !== variant)
-        updateIfChanged(runtime, { selectVariant: variant });
+      runtime.updateTransient({ selectVariant: variant });
     },
   };
 }
@@ -81,7 +78,7 @@ function createWayDraftCommands(runtime: EditorRuntime): WayDraftCommands {
       const modeId = compatible.some((candidate) => candidate.id === state.draftModeId)
         ? state.draftModeId
         : (compatible[0]?.id ?? state.draftModeId);
-      updateIfChanged(runtime, {
+      runtime.updateTransient({
         draftWayTypeId: typeId,
         draftModeId: modeId,
         draftColor: modeRender(modeId).color,
@@ -90,8 +87,7 @@ function createWayDraftCommands(runtime: EditorRuntime): WayDraftCommands {
       });
     },
     setDraftSeparate(separate) {
-      if (runtime.read().draftSeparate !== separate)
-        updateIfChanged(runtime, { draftSeparate: separate });
+      runtime.updateTransient({ draftSeparate: separate });
     },
     setDraftMode(modeId) {
       const state = runtime.read();
@@ -99,7 +95,7 @@ function createWayDraftCommands(runtime: EditorRuntime): WayDraftCommands {
       const wayTypeId = selectedMode.wayTypeIds.includes(state.draftWayTypeId)
         ? state.draftWayTypeId
         : (selectedMode.wayTypeIds[0] ?? state.draftWayTypeId);
-      updateIfChanged(runtime, {
+      runtime.updateTransient({
         draftModeId: modeId,
         draftWayTypeId: wayTypeId,
         draftColor: modeRender(modeId).color,
@@ -108,33 +104,29 @@ function createWayDraftCommands(runtime: EditorRuntime): WayDraftCommands {
       });
     },
     setDraftGeometry(geometry) {
-      if (runtime.read().draftGeometry !== geometry)
-        updateIfChanged(runtime, { draftGeometry: geometry });
+      runtime.updateTransient({ draftGeometry: geometry });
     },
     setDraftColor(color) {
-      if (runtime.read().draftColor !== color) updateIfChanged(runtime, { draftColor: color });
+      runtime.updateTransient({ draftColor: color });
     },
     setDraftGrade(grade) {
-      if (runtime.read().draftGrade !== grade) updateIfChanged(runtime, { draftGrade: grade });
+      runtime.updateTransient({ draftGrade: grade });
     },
     setDraftClassId(classId) {
-      if (runtime.read().draftClassId !== classId)
-        updateIfChanged(runtime, { draftClassId: classId });
+      runtime.updateTransient({ draftClassId: classId });
     },
     setDraftPreset(presetId) {
       const state = runtime.read();
       const preset = presetId ? PROFILE_PRESETS[presetId] : undefined;
       const nextPresetId = preset ? presetId : null;
       const classId = preset?.classId ?? state.draftClassId;
-      if (state.draftPresetId === nextPresetId && state.draftClassId === classId) return;
-      updateIfChanged(runtime, { draftPresetId: nextPresetId, draftClassId: classId });
+      runtime.updateTransient({ draftPresetId: nextPresetId, draftClassId: classId });
     },
     setDraftServiceEnabled(enabled) {
-      if (runtime.read().draftServiceEnabled !== enabled)
-        updateIfChanged(runtime, { draftServiceEnabled: enabled });
+      runtime.updateTransient({ draftServiceEnabled: enabled });
     },
     setDraftOneWay(on) {
-      if (runtime.read().draftOneWay !== on) updateIfChanged(runtime, { draftOneWay: on });
+      runtime.updateTransient({ draftOneWay: on });
     },
   };
 }
@@ -147,14 +139,10 @@ type FacilityDraftCommands = Pick<
 function createFacilityDraftCommands(runtime: EditorRuntime): FacilityDraftCommands {
   return {
     setDraftFacilityType(typeId) {
-      const state = runtime.read();
-      if (state.draftFacilityTypeId === typeId && !state.draftFacilityComplexMode) return;
-      updateIfChanged(runtime, { draftFacilityTypeId: typeId, draftFacilityComplexMode: false });
+      runtime.updateTransient({ draftFacilityTypeId: typeId, draftFacilityComplexMode: false });
     },
     setDraftFacilityComplexMode(on) {
-      if (runtime.read().draftFacilityComplexMode !== on) {
-        updateIfChanged(runtime, { draftFacilityComplexMode: on });
-      }
+      runtime.updateTransient({ draftFacilityComplexMode: on });
     },
     addPaletteColor(color) {
       if (runtime.read().system.palette.includes(color)) return;
@@ -169,10 +157,10 @@ function createFacilityDraftCommands(runtime: EditorRuntime): FacilityDraftComma
 /** Builds draft-preference and tool commands around narrow workflow operations. */
 export function createToolCommands(
   runtime: EditorRuntime,
-  operations: WayFinishingOperations,
+  options: ToolCommandOptions = {},
 ): ToolCommands {
   return {
-    ...createToolSelectionCommands(runtime, operations),
+    ...createToolSelectionCommands(runtime, options.createId ?? shortId),
     ...createWayDraftCommands(runtime),
     ...createFacilityDraftCommands(runtime),
   };

@@ -7,6 +7,7 @@ import {
 import { mergeWaysIntoCorridor } from '../../src/model/corridor-merge-edits';
 import { formCrossingJunctions } from '../../src/model/crossing-edits';
 import { patternWayIds } from '../../src/model/geo';
+import { defaultProfileFor, makeOneWay } from '../../src/model/profile';
 import { mergeWaysEndToEnd } from '../../src/model/way-merge-edits';
 import { removeWayFromSystem } from '../../src/model/way-removal';
 import { deleteWayStretch } from '../../src/model/way-stretch-edits';
@@ -78,6 +79,123 @@ describe('pure network edits', () => {
     expect(combined.updatedAt).toBe(system.updatedAt);
   });
 
+  it('maps an opposite-oriented carriageway junction to the coincident keeper point', () => {
+    const keeper = aRoad(
+      'keeper',
+      [
+        [0, 0],
+        [1, 0],
+        [2, 0],
+      ],
+      { profile: makeOneWay(defaultProfileFor('road'), 'forward') },
+    );
+    const other = aRoad(
+      'other',
+      [
+        [2, 0],
+        [1, 0],
+        [0, 0],
+      ],
+      { profile: makeOneWay(defaultProfileFor('road'), 'forward') },
+    );
+    const branch = aRoad('branch', [
+      [2, 0],
+      [2, 1],
+    ]);
+    const system = aSystem({
+      ways: [keeper, other, branch],
+      namedWays: [{ id: 'pair', name: 'Main Street', wayIds: [keeper.id, other.id] }],
+      nodes: [
+        {
+          id: 'junction',
+          coord: [2, 0],
+          refs: [
+            { wayId: other.id, pointIndex: 0 },
+            { wayId: branch.id, pointIndex: 0 },
+          ],
+        },
+      ],
+    });
+
+    const combined = combineCarriageways(system, 'pair');
+
+    expect(combined.nodes[0].refs).toEqual([
+      { wayId: keeper.id, pointIndex: 2 },
+      { wayId: branch.id, pointIndex: 0 },
+    ]);
+    const keeperRef = combined.nodes[0].refs[0];
+    const keeperPoint = combined.ways.find((way) => way.id === keeperRef.wayId)?.points[
+      keeperRef.pointIndex
+    ];
+    expect(keeperPoint).toEqual(combined.nodes[0].coord);
+  });
+
+  it('moves a sampled carriageway junction onto the nearest keeper point', () => {
+    const keeper = aRoad(
+      'keeper',
+      [
+        [0, 0],
+        [1, 0],
+        [2, 0],
+      ],
+      { profile: makeOneWay(defaultProfileFor('road'), 'forward') },
+    );
+    const other = aRoad(
+      'other',
+      [
+        [0, 0.1],
+        [1.8, 0.1],
+        [2, 0.1],
+      ],
+      { profile: makeOneWay(defaultProfileFor('road'), 'backward') },
+    );
+    const branch = aRoad('branch', [
+      [1.8, 0.1],
+      [3, 0],
+    ]);
+    const otherLane = other.profile.lanes[0];
+    const branchLane = branch.profile.lanes[0];
+    const system = aSystem({
+      ways: [keeper, other, branch],
+      namedWays: [{ id: 'pair', name: 'Main Street', wayIds: [keeper.id, other.id] }],
+      stations: [aStation('branch-stop', [1.8, 0.1], { wayId: branch.id, t: 0 })],
+      nodes: [
+        {
+          id: 'junction',
+          coord: [1.8, 0.1],
+          refs: [
+            { wayId: other.id, pointIndex: 1 },
+            { wayId: branch.id, pointIndex: 0 },
+          ],
+          connectors: [
+            {
+              from: { wayId: other.id, laneId: otherLane.id },
+              to: { wayId: branch.id, laneId: branchLane.id },
+            },
+          ],
+        },
+      ],
+    });
+
+    const combined = combineCarriageways(system, 'pair');
+
+    expect(combined.nodes[0]).toMatchObject({
+      coord: [2, 0],
+      refs: [
+        { wayId: keeper.id, pointIndex: 2 },
+        { wayId: branch.id, pointIndex: 0 },
+      ],
+    });
+    expect(combined.ways.find((way) => way.id === branch.id)?.points[0]).toEqual([2, 0]);
+    expect(combined.stations[0].coord).toEqual([2, 0]);
+    expect(combined.nodes[0].connectors).toEqual([
+      {
+        from: { wayId: keeper.id, laneId: otherLane.id },
+        to: { wayId: branch.id, laneId: branchLane.id },
+      },
+    ]);
+  });
+
   it('forms a real node and four arms where roads cross', () => {
     const horizontal = aRoad('horizontal', [
       [-115.2, 36.1],
@@ -125,6 +243,27 @@ describe('pure network edits', () => {
     expect(deleted.system.lines[0].serviceIds).toEqual(
       deleted.system.services.map((service) => service.id),
     );
+    expect(deleted.system.updatedAt).toBe(system.updatedAt);
+  });
+
+  it('deleting a complete way stretch prunes groups after its line and service disappear', () => {
+    const road = aRoad('road', [
+      [-115.2, 36.1],
+      [-115.1, 36.1],
+    ]);
+    const service = aService('service', [aPattern('path', [road], [road.id])]);
+    const system = aSystem({
+      ways: [road],
+      services: [service],
+      lines: [{ id: 'line', name: 'Line', color: '#e4572e', serviceIds: [service.id] }],
+      groups: [{ id: 'group', memberIds: [road.id, service.id, 'line'] }],
+    });
+
+    const deleted = deleteWayStretch(system, { wayId: road.id, fromT: 0, toT: 1 });
+
+    expect(deleted.system.lines).toEqual([]);
+    expect(deleted.system.services).toEqual([]);
+    expect(deleted.system.groups[0].memberIds).toEqual([]);
     expect(deleted.system.updatedAt).toBe(system.updatedAt);
   });
 

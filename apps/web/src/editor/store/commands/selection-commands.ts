@@ -53,20 +53,17 @@ function createFocusCommands(runtime: EditorRuntime): FocusCommands {
       runtime.updateTransient({ selection, multiSelection: [], activePatternId });
     },
     setOutlineHover(outlineHover) {
-      if (!sameSelection(runtime.read().outlineHover, outlineHover)) {
+      if (!sameSelection(runtime.read().outlineHover, outlineHover))
         runtime.updateTransient({ outlineHover });
-      }
     },
     setActivePattern(activePatternId) {
-      if (runtime.read().activePatternId !== activePatternId) {
-        runtime.updateTransient({ activePatternId });
-      }
+      runtime.updateTransient({ activePatternId });
     },
     armTerminus(armedTerminus) {
       runtime.updateTransient({ activePatternId: armedTerminus.patternId, armedTerminus });
     },
     clearArmedTerminus() {
-      if (runtime.read().armedTerminus !== null) runtime.updateTransient({ armedTerminus: null });
+      runtime.updateTransient({ armedTerminus: null });
     },
     selectAndFocus(selection) {
       const state = runtime.read();
@@ -127,7 +124,7 @@ function createMultiSelectionCommands(runtime: EditorRuntime): MultiSelectionCom
       });
     },
     clearMultiSelection() {
-      if (runtime.read().multiSelection.length > 0) runtime.updateTransient({ multiSelection: [] });
+      runtime.updateTransient({ multiSelection: [] });
     },
     deleteMultiSelection() {
       if (runtime.read().multiSelection.length === 0) return;

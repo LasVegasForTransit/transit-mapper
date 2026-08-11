@@ -28,10 +28,10 @@ interface VehicleKindsDialogProps {
 /**
  * System-wide manager for custom vehicle kinds — lets someone testing a
  * transit system idea define specific equipment (real size + top speed)
- * a line can be assigned to run, instead of every service of a mode
+ * a Service can be assigned to run, instead of every Service of a mode
  * sharing one fixed default. Same live-commit local-array pattern as
- * ScheduleDialog: owns its own draft array, commits the WHOLE array back
- * via onSave on every change (store.ts's setVehicleKinds is a one-shot
+ * ScheduleDialog: owns its own draft array, commits the WHOLE array back via
+ * onSave on every change (`commands.services.setVehicleKinds` is a one-shot
  * replace), no separate Save step.
  */
 export function VehicleKindsDialog({
