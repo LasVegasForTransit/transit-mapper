@@ -54,7 +54,6 @@ import type {
 import type { EditGestureTargets } from './gestureProjection';
 import {
   LYR_FACILITIES,
-  LYR_FOOTPRINTS_FILL,
   LYR_GESTURE_POINT,
   LYR_HANDLES,
   LYR_SERVICE_TERMINI_HIT,
@@ -73,6 +72,7 @@ import {
   SRC_PREVIEW,
   SRC_SHARING,
 } from './layers';
+
 /** A screen-space pixel coordinate (as opposed to LngLat's map-space one). */
 interface ScreenPoint {
   x: number;
@@ -80,8 +80,7 @@ interface ScreenPoint {
 }
 
 const SERVICE_LAYERS = [LYR_SERVICES_HIT, LYR_SERVICES_SOLID, LYR_SERVICES_UNDERGROUND];
-// Lane surfaces stand in for the fan at lane-detail zooms — they carry the
-// same `id` property, so way hit-testing works in both rendering modes.
+// Street lanes retain the corridor domain ID, so hit-testing works across LOD tiers.
 const WAY_LAYERS = [LYR_WAYS_SOLID, LYR_WAYS_DASHED, LYR_LANE_SURFACES];
 const HIT_TEST_LAYERS = [
   LYR_SERVICE_TERMINI_HIT,
@@ -90,7 +89,6 @@ const HIT_TEST_LAYERS = [
   LYR_PHYSICAL_HANDLES,
   LYR_GESTURE_POINT,
   LYR_STATIONS,
-  LYR_FOOTPRINTS_FILL,
   LYR_FACILITIES,
   LYR_JUNCTIONS,
   ...SERVICE_LAYERS,
@@ -105,7 +103,7 @@ const HIT_TEST_LAYERS = [
 // update the rubber-band SRC_PREVIEW source need it too — an un-throttled
 // setData still round-trips through the source's worker on every event, and
 // on a large system that backs up badly (see startDraw/startExtendDrag/the
-// facility+stop-land+structure rectangle drags below, all of which route
+// facility+station-land+structure rectangle drags below, all of which route
 // their preview writes through this).
 function rafThrottle<A extends unknown[]>(fn: (...args: A) => void) {
   let frame: number | null = null;
@@ -140,10 +138,6 @@ function rafThrottle<A extends unknown[]>(fn: (...args: A) => void) {
       pending = null;
     },
   };
-}
-
-function geoJsonSource(map: MLMap, sourceId: string): GeoJSONSource | undefined {
-  return map.getSource(sourceId) as GeoJSONSource | undefined;
 }
 
 /** What a marquee can ask about the box it just swept. Separating this from
@@ -247,6 +241,15 @@ export interface AttachInteractionsOptions {
    * takes numbers and asks nothing about the device, which is also why its
    * tests never need a media query to exercise either profile. */
   tuning: InputTuning;
+  /** Resolves a logical renderer layer to the currently interactive physical
+   * bank. Editor and transient layers return their one unchanged ID. */
+  resolveQueryLayerIds?: (logicalLayerId: string) => readonly string[];
+  /** Event delegation must cover both physical banks because activation does
+   * not recreate this controller. */
+  resolveEventLayerIds?: (logicalLayerId: string) => readonly string[];
+  /** Turns a physical bank suffix back into the stable logical identity used
+   * by selection and gesture dispatch. */
+  logicalLayerId?: (physicalLayerId: string) => string;
 }
 
 /**
@@ -285,6 +288,13 @@ export function attachInteractions(
   // underneath a drag already in progress would change what the gesture means
   // halfway through it.
   const { hitPx, snapPx, dragPx, freehandSamplePx, straightSnapPx } = opts.tuning;
+  const queryLayerIds = (logicalLayerId: string) =>
+    opts.resolveQueryLayerIds?.(logicalLayerId) ?? [logicalLayerId];
+  const eventLayerIds = (logicalLayerId: string) =>
+    opts.resolveEventLayerIds?.(logicalLayerId) ?? [logicalLayerId];
+  const logicalLayerId = (physicalLayerId: string) =>
+    opts.logicalLayerId?.(physicalLayerId) ?? physicalLayerId;
+  const featureLayerId = (feature: MapGeoJSONFeature) => logicalLayerId(feature.layer.id);
   let spaceHeld = false;
   let lastPointer: MapMouseEvent | null = null;
   let lockedPrimaryOperation: PointerOperation | undefined;
@@ -321,11 +331,12 @@ export function attachInteractions(
   // between events). Null when no click-points draft is in progress.
   let facilityBoundaryDraft: LngLat[] | null = null;
 
-  // Same, for a Station boundary being drawn click-by-click. Infrastructure
-  // owns the optional passenger place; Network owns the boarding-point Stop.
-  let stationBoundaryDraft: LngLat[] | null = null;
+  // Same, for a STATION's land being drawn click-by-click — in the
+  // Infrastructure view a station IS its land (everything there is 2D), so
+  // the Station tool only ever produces a border, never a bare point.
+  let stationLandDraft: LngLat[] | null = null;
 
-  // Every pointer gesture (draw, handle-drag, extend-drag, stop-drag,
+  // Every pointer gesture (draw, handle-drag, extend-drag, station-drag,
   // freehand, erase) registers how to abort itself here while it's in
   // progress. Escape (see the capture-phase listener below) calls whichever
   // one is live — this is what makes Escape actually stop the operation the
@@ -343,7 +354,7 @@ export function attachInteractions(
   const hitStack = (e: MapMouseEvent): MapGeoJSONFeature[] => {
     const cached = hitStackByEvent.get(e);
     if (cached) return cached;
-    const layers = HIT_TEST_LAYERS.filter((layer) => map.getLayer(layer));
+    const layers = HIT_TEST_LAYERS.flatMap(queryLayerIds).filter((layer) => map.getLayer(layer));
     const box: [[number, number], [number, number]] = [
       [e.point.x - hitPx, e.point.y - hitPx],
       [e.point.x + hitPx, e.point.y + hitPx],
@@ -394,12 +405,17 @@ export function attachInteractions(
   };
 
   const featureAt = (e: MapMouseEvent, layers: string[]): MapGeoJSONFeature | undefined => {
-    const existing = layers.filter((l) => map.getLayer(l));
+    const existingByLogicalLayer = layers.map((layer) =>
+      queryLayerIds(layer).filter((candidate) => map.getLayer(candidate)),
+    );
+    const existing = existingByLogicalLayer.flat();
     if (!existing.length) return undefined;
 
     const layerOrder = new Map<string, number>();
-    for (const layer of existing) {
-      if (!layerOrder.has(layer)) layerOrder.set(layer, layerOrder.size);
+    for (let index = 0; index < existingByLogicalLayer.length; index += 1) {
+      for (const physicalLayerId of existingByLogicalLayer[index]) {
+        layerOrder.set(physicalLayerId, index);
+      }
     }
     const hits = hitStack(e);
     let selectedLayer = Infinity;
@@ -429,13 +445,13 @@ export function attachInteractions(
     return selected;
   };
 
-  const stopFeatureAt = (e: MapMouseEvent): MapGeoJSONFeature | undefined => {
-    // A committed stop remains masked for the few frames in which its
+  const stationFeatureAt = (e: MapMouseEvent): MapGeoJSONFeature | undefined => {
+    // A committed station remains masked for the few frames in which its
     // one-feature source diff settles. Its visible gesture point must retain
     // the same hit behavior, or an immediate second drag would pan the map
-    // despite showing a draggable stop under the pointer.
+    // despite showing a draggable station under the pointer.
     const settling = featureAt(e, [LYR_GESTURE_POINT]);
-    if (settling?.properties.kind === 'stop') return settling;
+    if (settling?.properties.kind === 'station') return settling;
     return featureAt(e, [LYR_STATIONS]);
   };
 
@@ -539,7 +555,7 @@ export function attachInteractions(
         : 'interior-point';
     }
     if (featureAt(e, [LYR_PHYSICAL_HANDLES])) return 'control-point';
-    if (stopFeatureAt(e)) return 'stop';
+    if (stationFeatureAt(e)) return 'station';
     if (featureAt(e, [LYR_FACILITIES])) return 'facility';
     const serviceLine = featureAt(e, SERVICE_LAYERS);
     const wayLine = featureAt(e, WAY_LAYERS);
@@ -587,8 +603,8 @@ export function attachInteractions(
   ): PointerIntent => {
     const state = store.getState();
     // Demolish has one verb and isn't part of resolvePointerIntent's
-    // Select/Way/Stop/Facility vocabulary (route-service, corridor-
-    // splitting, stop/facility drag…) — short-circuit before that
+    // Select/Way/Station/Facility vocabulary (route-service, corridor-
+    // splitting, station/facility drag…) — short-circuit before that
     // function ever sees the tool, rather than widening its closed union
     // for a single unrelated case.
     if (state.tool === 'demolish') {
@@ -834,13 +850,13 @@ export function attachInteractions(
     });
   };
 
-  const startStopDrag = (id: string) => {
+  const startStationDrag = (id: string) => {
     suppressClick = true;
-    const st0 = store.getState().system.stops.find((s) => s.id === id);
+    const st0 = store.getState().system.stations.find((s) => s.id === id);
     const originalCoord = st0?.coord;
     const originalAnchor = st0 ? primaryAnchor(st0) : undefined;
     let moved = false;
-    const throttled = rafThrottle((c: LngLat) => placeOrSnapStop(id, c));
+    const throttled = rafThrottle((c: LngLat) => placeOrSnapStation(id, c));
     const onMove = (ev: MapMouseEvent) => {
       moved = true;
       throttled.call(lngLatOf(ev));
@@ -849,7 +865,7 @@ export function attachInteractions(
       throttled.flush();
       endGesture();
       map.off('mousemove', onMove);
-      if (!moved) commands.selection.select({ kind: 'stop', id });
+      if (!moved) commands.selection.select({ kind: 'station', id });
     };
     map.on('mousemove', onMove);
     map.once('mouseup', onUp);
@@ -858,9 +874,9 @@ export function attachInteractions(
         throttled.cancel();
         map.off('mousemove', onMove);
         map.off('mouseup', onUp);
-        if (originalCoord) commands.stops.moveStop(id, originalCoord, originalAnchor); // revert
+        if (originalCoord) commands.stations.moveStation(id, originalCoord, originalAnchor); // revert
       },
-      { stopIds: [id] },
+      { stationIds: [id] },
     );
   };
 
@@ -970,31 +986,32 @@ export function attachInteractions(
     map.once('mouseup', onUp);
   };
 
-  const cancelStationBoundaryDraft = () => {
-    stationBoundaryDraft = null;
+  const cancelStationLandDraft = () => {
+    stationLandDraft = null;
     clearPreviews();
   };
 
-  const finishStationBoundaryDraft = () => {
-    const draft = stationBoundaryDraft;
-    stationBoundaryDraft = null;
+  const finishStationLandDraft = () => {
+    const draft = stationLandDraft;
+    stationLandDraft = null;
     clearPreviews();
     if (!draft || draft.length < 3) return; // a border needs at least a triangle
     commands.stations.addDrawnStation(draft);
     opts.focusFootprint(draft);
   };
 
-  // Passenger-place tool in Infrastructure: the gesture produces a Station
-  // boundary — drag a rectangle, or click
+  // Station tool in the INFRASTRUCTURE view: everything there is 2D, so the
+  // only thing this gesture produces is LAND — drag a rectangle, or click
   // corner points (any shape) and double-click to close. Release of a drag
-  // creates the Station immediately and selects it. There is deliberately no
-  // click-a-point Stop here; Stops belong to the Network view.
-  const startStationBoundaryDraw = (e: MapMouseEvent, allowClickPoints: boolean) => {
+  // creates the station immediately: centered, anchored to the way it
+  // straddles, border attached, selected. There is deliberately no
+  // click-a-point station here; quick stops belong to the Network view.
+  const startStationLandDraw = (e: MapMouseEvent, allowClickPoints: boolean) => {
     const startCoord = lngLatOf(e);
 
-    if (stationBoundaryDraft) {
-      stationBoundaryDraft.push(startCoord);
-      setPreview(closedForPreview(stationBoundaryDraft));
+    if (stationLandDraft) {
+      stationLandDraft.push(startCoord);
+      setPreview(closedForPreview(stationLandDraft));
       suppressClick = true;
       return;
     }
@@ -1013,25 +1030,13 @@ export function attachInteractions(
       map.off('mousemove', onMove);
       if (dragged) {
         clearPreviews();
-        if (allowClickPoints) {
-          const corners = rectCorners(startCoord, lngLatOf(ev));
-          commands.stations.addDrawnStation(corners);
-          opts.focusFootprint(corners);
-        } else {
-          // Network has no area-creation gesture. A hand that moves during a
-          // tap still places the Stop at release rather than silently changing
-          // the object type or swallowing this and the following click.
-          const coord = lngLatOf(ev);
-          const system = store.getState().system;
-          const snapped = snap(system.ways, coord, snapMeters(snapPx));
-          if (snapped)
-            commands.stops.addStop(snapped.coord, { wayId: snapped.wayId, t: snapped.t });
-          else commands.stops.addStop(coord);
-        }
+        const corners = rectCorners(startCoord, lngLatOf(ev));
+        commands.stations.addDrawnStation(corners);
+        opts.focusFootprint(corners);
         suppressClick = true;
       } else if (allowClickPoints) {
         // Seed a click-points border, same grammar as site boundaries.
-        stationBoundaryDraft = [startCoord];
+        stationLandDraft = [startCoord];
         setPreview([startCoord, startCoord]);
         suppressClick = true;
       }
@@ -1073,7 +1078,7 @@ export function attachInteractions(
     map.once('mouseup', onUp);
   };
 
-  // Dragging any handle/stop/facility that's part of a 2+ multi-select
+  // Dragging any handle/station/facility that's part of a 2+ multi-select
   // group moves the WHOLE group together by the cumulative pointer delta —
   // "nudge this whole line" without redrawing it point by point. Applied as
   // incremental per-frame deltas (not absolute positions, unlike a single
@@ -1124,7 +1129,7 @@ export function attachInteractions(
       },
       {
         wayIds: selected.filter((item) => item.kind === 'way').map((item) => item.id),
-        stopIds: selected.filter((item) => item.kind === 'stop').map((item) => item.id),
+        stationIds: selected.filter((item) => item.kind === 'station').map((item) => item.id),
         facilityIds: selected.filter((item) => item.kind === 'facility').map((item) => item.id),
       },
     );
@@ -1138,7 +1143,7 @@ export function attachInteractions(
     return items.length > 1 && items.some((i) => i.kind === kind && i.id === id);
   };
 
-  // Drag a Station footprint/platform or a group (facility-complex) footprint
+  // Drag a station footprint/platform or a group (facility-complex) footprint
   // vertex to reshape it — the same plain reshape gesture as a way's interior
   // handle, just targeting that owner's own physical geometry instead.
   const startPhysicalHandleDrag = (feature: MapGeoJSONFeature) => {
@@ -1180,13 +1185,11 @@ export function attachInteractions(
 
     const stationId = feature.properties.stationId as string;
     const platformId = feature.properties.platformId as string | undefined;
-    const station = store
-      .getState()
-      .system.stations.find((candidate) => candidate.id === stationId);
+    const station = store.getState().system.stations.find((s) => s.id === stationId);
     const original =
       kind === 'footprint'
         ? station?.footprint?.[index]
-        : station?.platforms?.find((platform) => platform.id === platformId)?.points[index];
+        : station?.platforms?.find((p) => p.id === platformId)?.points[index];
     const apply = (coord: LngLat) => {
       if (kind === 'footprint') commands.stations.moveFootprintPoint(stationId, index, coord);
       else if (platformId) commands.stations.movePlatformPoint(stationId, platformId, index, coord);
@@ -1226,7 +1229,7 @@ export function attachInteractions(
    * to say what the commit will do.
    */
   const setSharingPreview = (runs: LngLat[][], color: string) => {
-    geoJsonSource(map, SRC_SHARING)?.setData({
+    (map.getSource(SRC_SHARING) as GeoJSONSource | undefined)?.setData({
       type: 'FeatureCollection',
       features: runs
         .filter((coords) => coords.length >= 2)
@@ -1273,7 +1276,7 @@ export function attachInteractions(
   }
 
   const setPreview = (coords: LngLat[] | null, properties: PreviewProperties = {}) => {
-    geoJsonSource(map, SRC_PREVIEW)?.setData({
+    (map.getSource(SRC_PREVIEW) as GeoJSONSource | undefined)?.setData({
       type: 'FeatureCollection',
       features: coords
         ? [
@@ -1290,7 +1293,7 @@ export function attachInteractions(
   // See onHoverMove: the "clicking here resumes/extends this way" ring,
   // shown at an open endpoint the Way tool is currently hovering near.
   const setEndpointHint = (coord: LngLat | null) => {
-    geoJsonSource(map, SRC_ENDPOINT_HINT)?.setData({
+    (map.getSource(SRC_ENDPOINT_HINT) as GeoJSONSource | undefined)?.setData({
       type: 'FeatureCollection',
       features: coord
         ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: coord } }]
@@ -1308,7 +1311,7 @@ export function attachInteractions(
       const ll = map.unproject(p as [number, number]);
       return [ll.lng, ll.lat];
     });
-    geoJsonSource(map, SRC_MARQUEE)?.setData({
+    (map.getSource(SRC_MARQUEE) as GeoJSONSource | undefined)?.setData({
       type: 'FeatureCollection',
       features: [
         {
@@ -1320,7 +1323,7 @@ export function attachInteractions(
     });
   };
   const clearMarquee = () => {
-    geoJsonSource(map, SRC_MARQUEE)?.setData({
+    (map.getSource(SRC_MARQUEE) as GeoJSONSource | undefined)?.setData({
       type: 'FeatureCollection',
       features: [],
     });
@@ -1339,7 +1342,7 @@ export function attachInteractions(
     const items: MultiSelectItem[] = [];
     for (const w of system.ways)
       if (pathInBox(resolveWayPath(w))) items.push({ kind: 'way', id: w.id });
-    for (const s of system.stops) if (inBox(s.coord)) items.push({ kind: 'stop', id: s.id });
+    for (const s of system.stations) if (inBox(s.coord)) items.push({ kind: 'station', id: s.id });
     for (const f of system.facilities) {
       const coord = Array.isArray(f.geometry[0])
         ? (f.geometry as LngLat[])[0]
@@ -1927,8 +1930,8 @@ export function attachInteractions(
       setPreview(closedForPreview([...facilityBoundaryDraft, lngLatOf(ev)]));
       return;
     }
-    if (stationBoundaryDraft) {
-      setPreview(closedForPreview([...stationBoundaryDraft, lngLatOf(ev)]));
+    if (stationLandDraft) {
+      setPreview(closedForPreview([...stationLandDraft, lngLatOf(ev)]));
       return;
     }
     clearPreviews();
@@ -1963,11 +1966,11 @@ export function attachInteractions(
     hoverThrottle.call(ev);
   };
 
-  const placeOrSnapStop = (id: string, coord: LngLat) => {
+  const placeOrSnapStation = (id: string, coord: LngLat) => {
     const ways = store.getState().system.ways;
     const s = snap(ways, coord, snapMeters(snapPx));
-    if (s) commands.stops.moveStop(id, s.coord, { wayId: s.wayId, t: s.t });
-    else commands.stops.moveStop(id, coord, undefined);
+    if (s) commands.stations.moveStation(id, s.coord, { wayId: s.wayId, t: s.t });
+    else commands.stations.moveStation(id, coord, undefined);
   };
 
   // Alt-drag erases control points: delete the one under the cursor, then any
@@ -2284,7 +2287,7 @@ export function attachInteractions(
     const handle = endpoint ?? featureAt(e, [LYR_HANDLES]);
     const physicalHandle = featureAt(e, [LYR_PHYSICAL_HANDLES]);
     const serviceTerminus = featureAt(e, [LYR_SERVICE_TERMINI_HIT]);
-    const stop = stopFeatureAt(e);
+    const station = stationFeatureAt(e);
     const facility = featureAt(e, [LYR_FACILITIES]);
 
     if (
@@ -2297,7 +2300,7 @@ export function attachInteractions(
     if (st.readOnly || opts.isDiagramMode()) {
       // Nothing is editable, but empty-space left-drag still pans — matching
       // the grab cursor and right-drag/space-drag, which already bypass this.
-      if (!endpoint && !handle && !physicalHandle && !stop && !facility) startPan(e, false);
+      if (!endpoint && !handle && !physicalHandle && !station && !facility) startPan(e, false);
       return;
     }
 
@@ -2334,8 +2337,8 @@ export function attachInteractions(
     }
 
     if (opts.isNetworkMode() && st.tool === 'select') {
-      if (pointerIntent.primaryOperation === 'delete-stop' && stop) {
-        commands.stops.deleteStop(stop.properties.id as string);
+      if (pointerIntent.primaryOperation === 'delete-station' && station) {
+        commands.stations.deleteStation(station.properties.id as string);
         suppressClick = true;
         return;
       }
@@ -2346,14 +2349,14 @@ export function attachInteractions(
       }
       // Shift-click and a 2+ item group are established Select gestures. Let
       // their branch below own the press rather than turning a resolved
-      // stop/facility move into a single-item drag before it gets there.
+      // station/facility move into a single-item drag before it gets there.
       if (
-        pointerIntent.primaryOperation === 'move-stop' &&
-        stop &&
+        pointerIntent.primaryOperation === 'move-station' &&
+        station &&
         !channels.constrain &&
-        !isGroupMember('stop', stop.properties.id as string)
+        !isGroupMember('station', station.properties.id as string)
       ) {
-        startStopDrag(stop.properties.id as string);
+        startStationDrag(station.properties.id as string);
         return;
       }
       if (
@@ -2421,8 +2424,8 @@ export function attachInteractions(
         suppressClick = true;
       } else if (handle) {
         startErase(handle); // Alt-click removes a point; Alt-drag erases a section
-      } else if (stop) {
-        commands.stops.deleteStop(stop.properties.id as string);
+      } else if (station) {
+        commands.stations.deleteStation(station.properties.id as string);
         suppressClick = true;
       } else if (facility) {
         commands.facilities.deleteFacility(facility.properties.id as string);
@@ -2470,10 +2473,10 @@ export function attachInteractions(
               kind: 'facility',
               id: facility.properties.id as string,
             });
-          else if (stop)
+          else if (station)
             commands.selection.extendSelection({
-              kind: 'stop',
-              id: stop.properties.id as string,
+              kind: 'station',
+              id: station.properties.id as string,
             });
           else {
             // A served way's visible line is drawn as its SERVICE feature, not
@@ -2516,8 +2519,9 @@ export function attachInteractions(
         else if (facility && isGroupMember('facility', facility.properties.id as string))
           startGroupDrag(e);
         else if (facility) startFacilityDrag(facility.properties.id as string);
-        else if (stop && isGroupMember('stop', stop.properties.id as string)) startGroupDrag(e);
-        else if (stop) startStopDrag(stop.properties.id as string);
+        else if (station && isGroupMember('station', station.properties.id as string))
+          startGroupDrag(e);
+        else if (station) startStationDrag(station.properties.id as string);
         else {
           // Grabbing a multi-selected way's LINE anywhere (not just a control-
           // point handle) still moves the whole group — the natural "grab and
@@ -2554,11 +2558,12 @@ export function attachInteractions(
         // the dblclick->finishWay that follows it. See isDoubleClickFinish.
         if (!isDoubleClickFinish(oe.detail)) startDraw(e, 'draw-service-and-corridor');
         break;
-      case 'stop':
-        if (stop) startStopDrag(stop.properties.id as string);
-        // Infrastructure draws a Station boundary. Network keeps its
-        // click-or-drag-to-place Stop behavior.
-        else startStationBoundaryDraw(e, !opts.isNetworkMode());
+      case 'station':
+        if (station) startStationDrag(station.properties.id as string);
+        // Infrastructure = 2D: the tool draws LAND (drag rect or click
+        // points). Network keeps its schematic click-a-stop via onClick;
+        // drag still draws land there too.
+        else startStationLandDraw(e, !opts.isNetworkMode());
         break;
       case 'facility':
         if (facility) startFacilityDrag(facility.properties.id as string);
@@ -2592,11 +2597,11 @@ export function attachInteractions(
     if (st.readOnly || opts.isDiagramMode() || spaceHeld) return;
     const coord = lngLatOf(e);
 
-    // Picking mode: the next stop/facility clicked joins the armed group;
+    // Picking mode: the next station/facility clicked joins the armed group;
     // clicking empty space does nothing (only Escape/the Inspector cancels),
     // so a mis-click can't silently drop the user out of the flow.
     if (st.pickingMemberForGroupId) {
-      const hit = stopFeatureAt(e) ?? featureAt(e, [LYR_FACILITIES]);
+      const hit = stationFeatureAt(e) ?? featureAt(e, [LYR_FACILITIES]);
       if (hit) {
         const memberId = hit.properties.id as string;
         commands.groups.addGroupMember(st.pickingMemberForGroupId, memberId);
@@ -2606,14 +2611,14 @@ export function attachInteractions(
     }
 
     switch (st.tool) {
-      case 'stop': {
+      case 'station': {
         // Point stops are a NETWORK-view (schematic) concept. In the
         // Infrastructure view everything is 2D — the mousedown gesture owns
-        // Station creation there (a passenger-place boundary), so a bare click does nothing.
+        // station creation there (land only), so a bare click does nothing.
         if (!opts.isNetworkMode()) break;
         const s = snap(st.system.ways, coord, snapMeters(snapPx));
-        if (s) commands.stops.addStop(s.coord, { wayId: s.wayId, t: s.t });
-        else commands.stops.addStop(coord);
+        if (s) commands.stations.addStation(s.coord, { wayId: s.wayId, t: s.t });
+        else commands.stations.addStation(coord);
         break;
       }
       case 'facility': {
@@ -2641,39 +2646,29 @@ export function attachInteractions(
         break;
       }
       case 'select': {
-        // Stops/handles/lines outrank the junction footprint under them.
+        // Stations/handles/lines outrank the junction footprint under them.
         const hit =
           featureAt(e, [LYR_SERVICE_TERMINI_HIT]) ??
-          stopFeatureAt(e) ??
-          featureAt(e, [
-            LYR_FACILITIES,
-            LYR_FOOTPRINTS_FILL,
-            LYR_HANDLES,
-            ...SERVICE_LAYERS,
-            ...WAY_LAYERS,
-          ]) ??
+          stationFeatureAt(e) ??
+          featureAt(e, [LYR_FACILITIES, LYR_HANDLES, ...SERVICE_LAYERS, ...WAY_LAYERS]) ??
           featureAt(e, [LYR_JUNCTIONS]);
         if (!hit) {
           commands.selection.select(null);
-        } else if (hit.layer.id === LYR_JUNCTIONS) {
+        } else if (featureLayerId(hit) === LYR_JUNCTIONS) {
           commands.selection.select({ kind: 'node', id: hit.properties.nodeId as string });
-        } else if (hit.layer.id === LYR_SERVICE_TERMINI_HIT) {
+        } else if (featureLayerId(hit) === LYR_SERVICE_TERMINI_HIT) {
           commands.selection.select({ kind: 'service', id: hit.properties.serviceId as string });
           commands.selection.setActivePattern(hit.properties.patternId as string);
         } else if (
-          hit.layer.id === LYR_STATIONS ||
-          (hit.layer.id === LYR_GESTURE_POINT && hit.properties.kind === 'stop')
+          featureLayerId(hit) === LYR_STATIONS ||
+          (featureLayerId(hit) === LYR_GESTURE_POINT && hit.properties.kind === 'station')
         ) {
-          commands.selection.select({ kind: 'stop', id: hit.properties.id as string });
-        } else if (hit.layer.id === LYR_FOOTPRINTS_FILL && hit.properties.stationId) {
-          commands.selection.select({ kind: 'station', id: hit.properties.stationId as string });
-        } else if (hit.layer.id === LYR_FOOTPRINTS_FILL && hit.properties.groupId) {
-          commands.selection.select({ kind: 'group', id: hit.properties.groupId as string });
-        } else if (hit.layer.id === LYR_FACILITIES) {
+          commands.selection.select({ kind: 'station', id: hit.properties.id as string });
+        } else if (featureLayerId(hit) === LYR_FACILITIES) {
           commands.selection.select({ kind: 'facility', id: hit.properties.id as string });
-        } else if (hit.layer.id === LYR_HANDLES) {
+        } else if (featureLayerId(hit) === LYR_HANDLES) {
           commands.selection.select({ kind: 'way', id: hit.properties.wayId as string });
-        } else if (WAY_LAYERS.includes(hit.layer.id)) {
+        } else if (WAY_LAYERS.includes(featureLayerId(hit))) {
           commands.selection.select({ kind: 'way', id: hit.properties.id as string });
         } else {
           // A rendered Service belongs to a public Line. The first click stays
@@ -2722,9 +2717,9 @@ export function attachInteractions(
     } else if (facilityBoundaryDraft) {
       e.preventDefault();
       finishFacilityBoundaryDraft();
-    } else if (stationBoundaryDraft) {
+    } else if (stationLandDraft) {
       e.preventDefault();
-      finishStationBoundaryDraft();
+      finishStationLandDraft();
     }
   };
 
@@ -2741,7 +2736,7 @@ export function attachInteractions(
   } | null => {
     const st = store.getState();
     const hit =
-      stopFeatureAt(e) ??
+      stationFeatureAt(e) ??
       featureAt(e, [
         LYR_FACILITIES,
         LYR_SERVICE_TERMINI_HIT,
@@ -2751,13 +2746,13 @@ export function attachInteractions(
       ]);
     if (!hit) return null;
     if (
-      hit.layer.id === LYR_STATIONS ||
-      (hit.layer.id === LYR_GESTURE_POINT && hit.properties.kind === 'stop')
+      featureLayerId(hit) === LYR_STATIONS ||
+      (featureLayerId(hit) === LYR_GESTURE_POINT && hit.properties.kind === 'station')
     )
-      return { target: { kind: 'stop', id: hit.properties.id as string }, anchor: lngLatOf(e) };
-    if (hit.layer.id === LYR_FACILITIES)
+      return { target: { kind: 'station', id: hit.properties.id as string }, anchor: lngLatOf(e) };
+    if (featureLayerId(hit) === LYR_FACILITIES)
       return { target: { kind: 'facility', id: hit.properties.id as string }, anchor: lngLatOf(e) };
-    if (hit.layer.id === LYR_SERVICE_TERMINI_HIT) {
+    if (featureLayerId(hit) === LYR_SERVICE_TERMINI_HIT) {
       const { serviceId, patternId, side } = hit.properties;
       const anchor =
         hit.geometry.type === 'Point' ? (hit.geometry.coordinates as LngLat) : lngLatOf(e);
@@ -2784,9 +2779,9 @@ export function attachInteractions(
           : {}),
       };
     }
-    if (hit.layer.id === LYR_HANDLES)
+    if (featureLayerId(hit) === LYR_HANDLES)
       return { target: { kind: 'way', id: hit.properties.wayId as string }, anchor: lngLatOf(e) };
-    if (WAY_LAYERS.includes(hit.layer.id)) {
+    if (WAY_LAYERS.includes(featureLayerId(hit))) {
       const wayId = hit.properties.id as string;
       const way = st.system.ways.find((candidate) => candidate.id === wayId);
       const near = way && nearestOnPath(resolveWayPath(way), lngLatOf(e));
@@ -2917,10 +2912,10 @@ export function attachInteractions(
       e.stopImmediatePropagation();
       cancelFacilityBoundaryDraft();
     }
-    if (stationBoundaryDraft) {
+    if (stationLandDraft) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      cancelStationBoundaryDraft();
+      cancelStationLandDraft();
     }
   };
   window.addEventListener('keydown', onEscapeCapture, true);
@@ -2969,7 +2964,7 @@ export function attachInteractions(
     const tool = store.getState().tool;
     if (
       tool === 'way' ||
-      tool === 'stop' ||
+      tool === 'station' ||
       tool === 'facility' ||
       tool === 'lines' ||
       tool === 'demolish'
@@ -2988,19 +2983,19 @@ export function attachInteractions(
   // show an affordance the current tool/readOnly state can't back up.
   const draggable = () =>
     store.getState().tool === 'select' && !store.getState().readOnly && !opts.isDiagramMode();
-  // Stops/handles/facilities: click-drag to select/reshape/reposition —
+  // Stations/handles/facilities: click-drag to select/reshape/reposition —
   // "grab" (not "pointer", which reads as "click this link/button") matches
   // the same drag-affordance convention as the map's own pan cursor. Which
-  // of these you're over is disambiguated by SHAPE, not cursor: a stop is
+  // of these you're over is disambiguated by SHAPE, not cursor: a station is
   // always a circle, a facility is always its own catalog pictogram, and a
   // reshape handle is always a plain solid square (see map/layers.ts) — none
   // of them can ever be mistaken for one another.
   // Only the Select tool's own drag affordance depends on draggable() (grab
-  // to reshape/move) — every drawing tool (way/stop/facility) still acts
+  // to reshape/move) — every drawing tool (way/station/facility) still acts
   // on a click regardless of what's under the cursor, so its own crosshair
   // from cursorFor() stays accurate there and must NOT be overridden to
   // "default". The one real gap this closes: read-only + Select tool used
-  // to keep showing "grab" over a stop even though a press there did
+  // to keep showing "grab" over a station even though a press there did
   // nothing (dragging disabled, and it's not empty space either, so the pan
   // fallback doesn't kick in) — that's the only case that becomes "default".
   // A way's open end shares this cursor too — a plain drag there reshapes
@@ -3078,16 +3073,17 @@ export function attachInteractions(
   map.on('mouseout', onPointerOut);
   map.on('click', onClick);
   map.on('dblclick', onDblClick);
-  map.on('mouseenter', LYR_STATIONS, onEnterHandle);
-  map.on('mouseleave', LYR_STATIONS, onLeaveFeature);
-  map.on('mouseenter', LYR_HANDLES, onEnterHandle);
-  map.on('mouseleave', LYR_HANDLES, onLeaveFeature);
-  map.on('mouseenter', LYR_WAY_ENDPOINTS, onEnterHandle);
-  map.on('mouseleave', LYR_WAY_ENDPOINTS, onLeaveFeature);
-  map.on('mouseenter', LYR_FACILITIES, onEnterHandle);
-  map.on('mouseleave', LYR_FACILITIES, onLeaveFeature);
-  map.on('mouseenter', LYR_PHYSICAL_HANDLES, onEnterHandle);
-  map.on('mouseleave', LYR_PHYSICAL_HANDLES, onLeaveFeature);
+  const delegatedHandleLayers = [
+    LYR_STATIONS,
+    LYR_HANDLES,
+    LYR_WAY_ENDPOINTS,
+    LYR_FACILITIES,
+    LYR_PHYSICAL_HANDLES,
+  ].flatMap(eventLayerIds);
+  for (const layerId of delegatedHandleLayers) {
+    map.on('mouseenter', layerId, onEnterHandle);
+    map.on('mouseleave', layerId, onLeaveFeature);
+  }
   canvas.addEventListener('contextmenu', onContextMenu);
 
   let lastTool = store.getState().tool;
@@ -3132,16 +3128,10 @@ export function attachInteractions(
     map.off('mouseout', onPointerOut);
     map.off('click', onClick);
     map.off('dblclick', onDblClick);
-    map.off('mouseenter', LYR_STATIONS, onEnterHandle);
-    map.off('mouseleave', LYR_STATIONS, onLeaveFeature);
-    map.off('mouseenter', LYR_HANDLES, onEnterHandle);
-    map.off('mouseleave', LYR_HANDLES, onLeaveFeature);
-    map.off('mouseenter', LYR_WAY_ENDPOINTS, onEnterHandle);
-    map.off('mouseleave', LYR_WAY_ENDPOINTS, onLeaveFeature);
-    map.off('mouseenter', LYR_FACILITIES, onEnterHandle);
-    map.off('mouseleave', LYR_FACILITIES, onLeaveFeature);
-    map.off('mouseenter', LYR_PHYSICAL_HANDLES, onEnterHandle);
-    map.off('mouseleave', LYR_PHYSICAL_HANDLES, onLeaveFeature);
+    for (const layerId of delegatedHandleLayers) {
+      map.off('mouseenter', layerId, onEnterHandle);
+      map.off('mouseleave', layerId, onLeaveFeature);
+    }
     canvas.removeEventListener('contextmenu', onContextMenu);
     window.removeEventListener('keydown', onEscapeCapture, true);
     window.removeEventListener('keydown', onModifierChange);
@@ -3163,7 +3153,7 @@ export function attachInteractions(
   // new vertex lands on the segment of the control polygon nearest the cursor.
   function insertIndexOnPolygon(points: LngLat[], pt: ScreenPoint): number {
     if (points.length < 2) return points.length;
-    const px = points.map((p) => map.project(p));
+    const px = points.map((p) => map.project(p as [number, number]));
     let best = points.length;
     let bestD = Infinity;
     for (let i = 0; i < px.length - 1; i++) {

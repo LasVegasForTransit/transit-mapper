@@ -34,11 +34,12 @@ export const PERF_BASELINE_DIRECTORY = 'perf';
 export const BUNDLE_BUDGETS: BundleBudget[] = [
   {
     entry: 'main',
-    // Stop and Station are now separate editing surfaces across the outline,
-    // inspector, and gestures. Shared row rendering keeps the measured main
-    // delta to 0.24%; this remains a sub-0.5% delivery-ceiling adjustment.
-    maximumGzipBytes: 518_144,
-    maximumBrotliBytes: 450_560,
+    // One intentional recalibration for the screen-space renderer foundation:
+    // cooperative preparation, stable scene diffs, and source recovery now
+    // ship in the editor. Major metric-mesh and Diagram work remains Worker-
+    // owned and must not consume this round delivery ceiling.
+    maximumGzipBytes: 550 * 1_024,
+    maximumBrotliBytes: 470 * 1_024,
   },
   {
     entry: 'embed',

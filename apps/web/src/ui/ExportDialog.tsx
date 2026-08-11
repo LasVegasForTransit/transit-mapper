@@ -99,7 +99,12 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
       await yieldForExportFeedback();
       if (controller.signal.aborted) throw controller.signal.reason;
       if (format === 'svg') {
-        await exportSvgFromMap(system, view, map, { title, legend }, filename, controller.signal);
+        await exportSvgFromMap(system, view, map, {
+          title,
+          legend,
+          filename,
+          signal: controller.signal,
+        });
       } else {
         await exportPngFromMap(map, { title, legend }, filename, controller.signal);
       }
@@ -124,7 +129,11 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
       onClose={close}
       className="export-modal"
       footer={
-        <button className="primary-btn export-run-btn" disabled={exporting} onClick={run}>
+        <button
+          className="primary-btn export-run-btn"
+          disabled={exporting}
+          onClick={() => void run()}
+        >
           <Icon name="download" size={18} />{' '}
           {exporting ? 'Exporting…' : `Export ${format.toUpperCase()}`}
         </button>

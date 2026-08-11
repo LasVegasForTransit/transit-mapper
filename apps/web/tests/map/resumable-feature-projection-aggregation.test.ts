@@ -1,0 +1,85 @@
+import type { Feature, LineString } from 'geojson';
+import { describe, expect, it } from 'vitest';
+import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
+import {
+  planResumableFeatureProjectionAggregation,
+  type ProjectionAggregationWorkUnit,
+} from '../../src/map/resumable-feature-projection-aggregation';
+import type { GeographicFeatureProjectionUnit } from '../../src/map/resumable-feature-projection';
+import { emptySystemFeatures } from '../../src/map/system-feature-sources';
+
+function line(id: string, hitTarget = false): Feature<LineString> {
+  return {
+    type: 'Feature',
+    id,
+    properties: hitTarget ? { hitTarget: true } : {},
+    geometry: {
+      type: 'LineString',
+      coordinates: [
+        [0, 0],
+        [1, 1],
+      ],
+    },
+  };
+}
+
+function part(services: Feature<LineString>[]): SystemFeatures {
+  const features = emptySystemFeatures();
+  features.services.features.push(...services);
+  return features;
+}
+
+function unit(id: string): GeographicFeatureProjectionUnit {
+  return {
+    id,
+    primary: { kind: 'corridor', ids: [id] },
+    sourceIds: ['tm-services'],
+    run: () => emptySystemFeatures(),
+  };
+}
+
+describe('resumable feature projection aggregation', () => {
+  it('aggregates in bounded chunks and preserves visual-before-hit service order', () => {
+    const units = [unit('a'), unit('b')];
+    const parts = [
+      part([line('visual-a'), line('hit-a', true), line('visual-b')]),
+      part([line('hit-b', true), line('visual-c')]),
+    ];
+    const plan = planResumableFeatureProjectionAggregation({ units, parts, batchSize: 2 });
+
+    const workUnits: ProjectionAggregationWorkUnit[] = [];
+    for (let index = 0; ; index++) {
+      const work = plan.units.unitAt(index);
+      if (!work) break;
+      workUnits.push(work);
+      work.run();
+    }
+
+    expect(plan.result().services.features.map((feature) => feature.id)).toEqual([
+      'visual-a',
+      'visual-b',
+      'visual-c',
+      'hit-a',
+      'hit-b',
+    ]);
+    expect(workUnits.every((work) => work.featureCount <= 2)).toBe(true);
+  });
+
+  it('rejects duplicate stable IDs without publishing a partial result', () => {
+    const units = [unit('a'), unit('b')];
+    const plan = planResumableFeatureProjectionAggregation({
+      units,
+      parts: [part([line('same')]), part([line('same')])],
+      batchSize: 1,
+    });
+
+    expect(() => {
+      for (let index = 0; ; index++) {
+        const work = plan.units.unitAt(index);
+        if (!work) break;
+        work.run();
+      }
+    }).toThrow('duplicate tm-services ID same');
+    expect(() => plan.result()).toThrow('Aggregation is incomplete');
+  });
+});

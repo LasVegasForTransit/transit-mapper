@@ -37,6 +37,15 @@ describe('map themes', () => {
     });
   });
 
+  it('gives the deterministic local canvas a same-origin glyph endpoint for text layers', () => {
+    const style = localBlankStyleForScheme('light');
+
+    expect(style.glyphs).toMatch(/^https?:\/\/[^/]+\/glyphs\/noto-sans-v1\//);
+    expect(style.glyphs).toContain('{fontstack}');
+    expect(style.glyphs).toContain('{range}');
+    expect(layerSpecsForScheme('light').some((layer) => layer.type === 'symbol')).toBe(true);
+  });
+
   it('keeps layer identity, source, filter, and order stable between schemes', () => {
     const identity = (scheme: 'light' | 'dark') =>
       layerSpecsForScheme(scheme).map((layer) => ({

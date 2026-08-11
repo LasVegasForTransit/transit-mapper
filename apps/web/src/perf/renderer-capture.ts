@@ -1,4 +1,7 @@
+import { laneKind } from '@transitmapper/core/model/catalog';
+import { widthPxAtZ14 } from '@transitmapper/core/render/constants';
 import type { PerfProfileId } from './types';
+import { PORT_MASON_RENDERER_CENTER } from './renderer-port-mason-fixture';
 
 export type RendererCaptureTheme = 'light' | 'dark';
 export type RendererCaptureViewMode = 'infrastructure' | 'network' | 'diagram';
@@ -12,6 +15,8 @@ export interface RendererCaptureCase {
   theme: RendererCaptureTheme;
   viewMode: RendererCaptureViewMode;
   detail: RendererCaptureDetail;
+  /** Displayed width of the fixture's reference road at this camera. */
+  targetCorridorWidthPx: number;
   zoom: number;
 }
 
@@ -23,6 +28,8 @@ export interface RendererFilmstripCase {
   viewMode: RendererCaptureViewMode;
   boundary: RendererFilmstripBoundary;
   frame: number;
+  /** Expected displayed width of the fixture's reference road in CSS pixels. */
+  targetCorridorWidthPx: number;
   zoom: number;
 }
 
@@ -54,6 +61,7 @@ export function rendererFixtureFilename(fixtureId: string): string {
 
 interface RendererCaptureDetailSample {
   detail: RendererCaptureDetail;
+  targetCorridorWidthPx: number;
   zoom: number;
 }
 
@@ -77,21 +85,58 @@ export interface RendererCaptureSelection {
 const PROFILES: readonly PerfProfileId[] = ['desktop', 'mobile'];
 const THEMES: readonly RendererCaptureTheme[] = ['light', 'dark'];
 const VIEW_MODES: readonly RendererCaptureViewMode[] = ['infrastructure', 'network', 'diagram'];
+const PORT_MASON_REFERENCE_ROAD_WIDTH_M =
+  laneKind('drive').defaultWidthM * 4 + laneKind('sidewalk').defaultWidthM * 2;
+const PORT_MASON_REFERENCE_ROAD_WIDTH_AT_Z14_PX = widthPxAtZ14(
+  PORT_MASON_REFERENCE_ROAD_WIDTH_M,
+  PORT_MASON_RENDERER_CENTER[1],
+);
+
+/** Converts a screen-space evidence target to the camera zoom at which the
+ * default Port Mason road reaches it. Keeping the capture cameras tied to the
+ * physical fixture prevents a profile or latitude change from silently moving
+ * the LOD transition out of the filmstrip that is meant to prove it. */
+export function rendererCaptureZoomForCorridorWidth(targetWidthPx: number): number {
+  if (!Number.isFinite(targetWidthPx) || targetWidthPx <= 0) {
+    throw new RangeError('Renderer capture corridor width must be finite and positive.');
+  }
+  return 14 + Math.log2(targetWidthPx / PORT_MASON_REFERENCE_ROAD_WIDTH_AT_Z14_PX);
+}
+
 const DETAIL_SAMPLES: readonly RendererCaptureDetailSample[] = [
-  { detail: 'overview', zoom: 11 },
-  { detail: 'overview-district', zoom: 13.75 },
-  { detail: 'district', zoom: 15 },
-  { detail: 'district-street', zoom: 16.5 },
-  { detail: 'street', zoom: 18 },
+  {
+    detail: 'overview',
+    targetCorridorWidthPx: PORT_MASON_REFERENCE_ROAD_WIDTH_AT_Z14_PX * 2 ** (11 - 14),
+    zoom: 11,
+  },
+  {
+    detail: 'overview-district',
+    targetCorridorWidthPx: 3,
+    zoom: rendererCaptureZoomForCorridorWidth(3),
+  },
+  {
+    detail: 'district',
+    targetCorridorWidthPx: 6,
+    zoom: rendererCaptureZoomForCorridorWidth(6),
+  },
+  {
+    detail: 'district-street',
+    targetCorridorWidthPx: 10.5,
+    zoom: rendererCaptureZoomForCorridorWidth(10.5),
+  },
+  {
+    detail: 'street',
+    targetCorridorWidthPx: PORT_MASON_REFERENCE_ROAD_WIDTH_AT_Z14_PX * 2 ** (18 - 14),
+    zoom: 18,
+  },
 ];
 const FILMSTRIP_BOUNDARIES: readonly {
   boundary: RendererFilmstripBoundary;
-  centerZoom: number;
+  targetWidthsPx: readonly number[];
 }[] = [
-  { boundary: 'overview-district', centerZoom: 13.75 },
-  { boundary: 'district-street', centerZoom: 16.5 },
+  { boundary: 'overview-district', targetWidthsPx: [1.75, 2, 3, 4, 4.5] },
+  { boundary: 'district-street', targetWidthsPx: [8, 9, 10.5, 12, 13] },
 ];
-const FILMSTRIP_ZOOM_OFFSETS = [-0.5, -0.25, 0, 0.25, 0.5] as const;
 const CONTEXT_SURFACES: readonly RendererContextSurface[] = [
   'editor',
   'export',
@@ -115,6 +160,7 @@ export function createRendererCapturePlan(phase: string): RendererCaptureCase[] 
             theme,
             viewMode,
             detail: sample.detail,
+            targetCorridorWidthPx: sample.targetCorridorWidthPx,
             zoom: sample.zoom,
           });
         }
@@ -130,15 +176,17 @@ export function createRendererCapturePlan(phase: string): RendererCaptureCase[] 
 export function createRendererFilmstripPlan(phase: string): RendererFilmstripCase[] {
   const captures: RendererFilmstripCase[] = [];
   for (const viewMode of VIEW_MODES) {
-    for (const { boundary, centerZoom } of FILMSTRIP_BOUNDARIES) {
-      for (let frame = 0; frame < FILMSTRIP_ZOOM_OFFSETS.length; frame++) {
+    for (const { boundary, targetWidthsPx } of FILMSTRIP_BOUNDARIES) {
+      for (let frame = 0; frame < targetWidthsPx.length; frame++) {
+        const targetCorridorWidthPx = targetWidthsPx[frame];
         captures.push({
           id: `${phase}-filmstrip-${viewMode}-${boundary}-${frame}`,
           phase,
           viewMode,
           boundary,
           frame,
-          zoom: centerZoom + FILMSTRIP_ZOOM_OFFSETS[frame],
+          targetCorridorWidthPx,
+          zoom: rendererCaptureZoomForCorridorWidth(targetCorridorWidthPx),
         });
       }
     }

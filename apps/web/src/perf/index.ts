@@ -12,6 +12,8 @@ import type { RawGestureMeasurements } from './gestureStats';
 import { attachPaintedFrameCapture } from './paintedFrameCapture';
 import { attachRendererCaptureHarness } from './renderer-capture-harness';
 import type { RendererStatsSnapshot } from './renderer-stats';
+import type { SourceBankDiagnostics } from '../map/source-bank';
+import { MAP_THEMES } from '../map/mapThemePalette';
 
 /** Runtime A/B toggles, flipped from the devtools console to attribute cost —
  *  e.g. `__perf.vehicles = false` then re-run `await __panBench()` to see the
@@ -29,14 +31,36 @@ interface PerfStopSnapshot {
 interface PerfOverlaySnapshot {
   sourceExists: boolean;
   layerExists: boolean;
+  symbolLayerExists: boolean;
+  overlayHealthy: boolean;
+  rendererLayerCount: number;
+  expectedRendererLayerCount: number;
   sourceLoaded: boolean;
   featureCount: number;
+}
+
+export interface PerfRenderSourceBankSnapshot {
+  activeBank: 'a' | 'b' | null;
+  stagingBank: 'a' | 'b' | null;
+  activeRevision: string | null;
+  activeVisualSourceIds: readonly string[];
+  activeVisualLayerIds: readonly string[];
+  activeVisualSourceId: string | null;
+  activeHitSourceId: string | null;
+  activeHitLayerIds: readonly string[];
+  activeVisualLayerId: string | null;
+  activeHitLayerId: string | null;
+  selectedFeatureStateSourceIds: readonly string[];
+  diagnostics: SourceBankDiagnostics;
 }
 
 export interface PerfHarnessOptions {
   stopSnapshot?: (stopId: string) => PerfStopSnapshot | null;
   overlaySnapshot?: () => PerfOverlaySnapshot;
   rendererStats?: () => RendererStatsSnapshot;
+  rendererSettled?: () => Promise<void>;
+  rendererSettlementVersion?: () => number;
+  renderSourceBankSnapshot?: () => PerfRenderSourceBankSnapshot;
 }
 
 declare global {
@@ -47,6 +71,7 @@ declare global {
     __panGestureBench?: (opts?: PanBenchOptions) => Promise<RawGestureMeasurements>;
     __zoomBench?: (opts?: ZoomBenchOptions) => Promise<FrameStats>;
     __perfSourceUploadCount?: () => number;
+    __perfSourceUploadTimings?: () => readonly SourceUploadTiming[];
     __perfProjectLngLat?: (coord: [number, number]) => { x: number; y: number };
     __perfStopSnapshot?: (stopId: string) => PerfStopSnapshot | null;
     __perfCameraSnapshot?: () => { center: [number, number]; zoom: number };
@@ -54,13 +79,95 @@ declare global {
     __perfStartPaintedFrameCapture?: () => void;
     __perfStopPaintedFrameCapture?: () => number[];
     __rendererStats?: () => RendererStatsSnapshot;
+    __perfRenderSourceBankSnapshot?: () => PerfRenderSourceBankSnapshot;
     __TRANSITMAPPER_PERF_RUN__?: boolean;
   }
 }
 
 export interface SourceUploadMeter {
   count: () => number;
+  snapshot: () => readonly SourceUploadTiming[];
   detach: () => void;
+}
+
+export interface SourceUploadTiming {
+  sourceId: string;
+  method: 'setData' | 'updateData';
+  callCount: number;
+  totalDurationMs: number;
+  maxDurationMs: number;
+}
+
+export interface RendererPerfFeatureState {
+  readonly sourceId: string;
+  readonly featureId: string;
+  readonly hover: boolean;
+  readonly selected: boolean;
+}
+
+export interface RendererPerfLayerFilter {
+  readonly layerId: string;
+  readonly filter: unknown;
+}
+
+function booleanFeatureState(state: unknown, key: string): boolean {
+  if (typeof state !== 'object' || state === null) return false;
+  const value: unknown = Reflect.get(state, key);
+  return value === true;
+}
+
+/** Reads the theme MapLibre actually retained, rather than the requested UI state. */
+export function rendererPerfMapScheme(map: MLMap): 'light' | 'dark' {
+  const style = (map as Partial<MLMap>).getStyle?.();
+  const backgroundLayerId =
+    style?.layers.find((layer) => layer.type === 'background')?.id ??
+    'transitmapper-local-background';
+  return map.getPaintProperty(backgroundLayerId, 'background-color') === MAP_THEMES.dark.background
+    ? 'dark'
+    : 'light';
+}
+
+/** Captures the feature-state values that are observable at one rendered point. */
+export function rendererPerfFeatureStatesAt(
+  map: MLMap,
+  bank: PerfRenderSourceBankSnapshot,
+  coordinate: [number, number],
+): RendererPerfFeatureState[] {
+  const layers = [...new Set([...bank.activeVisualLayerIds, ...bank.activeHitLayerIds])].filter(
+    (layerId) => map.getLayer(layerId) !== undefined,
+  );
+  const point = map.project(coordinate);
+  const seen = new Set<string>();
+  const states: RendererPerfFeatureState[] = [];
+  for (const feature of map.queryRenderedFeatures(point, { layers })) {
+    if (typeof feature.source !== 'string' || feature.id === undefined) continue;
+    const featureId = String(feature.id);
+    const key = `${feature.source}\u0000${featureId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const state: unknown = map.getFeatureState({ source: feature.source, id: feature.id });
+    states.push({
+      sourceId: feature.source,
+      featureId,
+      hover: booleanFeatureState(state, 'hover'),
+      selected: booleanFeatureState(state, 'selected'),
+    });
+  }
+  return states.sort(
+    (left, right) =>
+      left.sourceId.localeCompare(right.sourceId) || left.featureId.localeCompare(right.featureId),
+  );
+}
+
+/** Serializes the filters applied to every active renderer layer for evidence. */
+export function rendererPerfFilterSnapshot(
+  map: MLMap,
+  bank: PerfRenderSourceBankSnapshot,
+): RendererPerfLayerFilter[] {
+  const layerIds = [...new Set([...bank.activeVisualLayerIds, ...bank.activeHitLayerIds])].sort();
+  return layerIds.flatMap((layerId) =>
+    map.getLayer(layerId) ? [{ layerId, filter: map.getFilter(layerId) }] : [],
+  );
 }
 
 interface WrappedSetDataSource {
@@ -77,8 +184,27 @@ interface WrappedUpdateDataSource {
 
 export function attachSourceUploadMeter(map: MLMap): SourceUploadMeter {
   let uploads = 0;
+  const timings = new Map<string, SourceUploadTiming>();
   const wrappedSetDataSources: WrappedSetDataSource[] = [];
   const wrappedUpdateDataSources: WrappedUpdateDataSource[] = [];
+  const recordTiming = (
+    sourceId: string,
+    method: SourceUploadTiming['method'],
+    durationMs: number,
+  ) => {
+    const key = `${sourceId}\u0000${method}`;
+    const timing = timings.get(key) ?? {
+      sourceId,
+      method,
+      callCount: 0,
+      totalDurationMs: 0,
+      maxDurationMs: 0,
+    };
+    timing.callCount += 1;
+    timing.totalDurationMs += durationMs;
+    timing.maxDurationMs = Math.max(timing.maxDurationMs, durationMs);
+    timings.set(key, timing);
+  };
   for (const sourceId of Object.keys(map.getStyle().sources)) {
     const source = map.getSource(sourceId);
     if (!source) continue;
@@ -90,7 +216,12 @@ export function attachSourceUploadMeter(map: MLMap): SourceUploadMeter {
         data: Parameters<GeoJSONSource['setData']>[0],
       ) {
         uploads += 1;
-        return original.call(this, data);
+        const startedAt = performance.now();
+        try {
+          return original.call(this, data);
+        } finally {
+          recordTiming(sourceId, 'setData', performance.now() - startedAt);
+        }
       };
       geoJsonSource.setData = wrapped;
       wrappedSetDataSources.push({ source: geoJsonSource, original, wrapped });
@@ -102,7 +233,12 @@ export function attachSourceUploadMeter(map: MLMap): SourceUploadMeter {
         diff: Parameters<GeoJSONSource['updateData']>[0],
       ) {
         uploads += 1;
-        return original.call(this, diff);
+        const startedAt = performance.now();
+        try {
+          return original.call(this, diff);
+        } finally {
+          recordTiming(sourceId, 'updateData', performance.now() - startedAt);
+        }
       };
       geoJsonSource.updateData = wrapped;
       wrappedUpdateDataSources.push({ source: geoJsonSource, original, wrapped });
@@ -110,6 +246,7 @@ export function attachSourceUploadMeter(map: MLMap): SourceUploadMeter {
   }
   return {
     count: () => uploads,
+    snapshot: () => [...timings.values()].map((timing) => ({ ...timing })),
     detach: () => {
       for (const entry of wrappedSetDataSources) {
         if (entry.source.setData === entry.wrapped) entry.source.setData = entry.original;
@@ -143,8 +280,12 @@ export function attachPerfHarness(map: MLMap, options: PerfHarnessOptions = {}):
   const meter = automatedPerfRun() ? undefined : attachFrameMeter(map);
   const sourceUploads = attachSourceUploadMeter(map);
   const paintedFrames = attachPaintedFrameCapture(map);
-  const detachRendererCapture = attachRendererCaptureHarness(map);
+  const detachRendererCapture = attachRendererCaptureHarness(map, window, {
+    afterRendererSettled: options.rendererSettled,
+    settlementVersion: options.rendererSettlementVersion,
+  });
   window.__perfSourceUploadCount = sourceUploads.count;
+  window.__perfSourceUploadTimings = sourceUploads.snapshot;
   window.__perfProjectLngLat = (coord) => {
     const point = map.project(coord);
     const bounds = map.getCanvas().getBoundingClientRect();
@@ -157,6 +298,9 @@ export function attachPerfHarness(map: MLMap, options: PerfHarnessOptions = {}):
   if (options.stopSnapshot) window.__perfStopSnapshot = options.stopSnapshot;
   if (options.overlaySnapshot) window.__perfOverlaySnapshot = options.overlaySnapshot;
   if (options.rendererStats) window.__rendererStats = options.rendererStats;
+  if (options.renderSourceBankSnapshot) {
+    window.__perfRenderSourceBankSnapshot = options.renderSourceBankSnapshot;
+  }
   window.__perfStartPaintedFrameCapture = paintedFrames.start;
   window.__perfStopPaintedFrameCapture = paintedFrames.stop;
   if (meter) window.__frameStats = meter.stats;
@@ -173,11 +317,13 @@ export function attachPerfHarness(map: MLMap, options: PerfHarnessOptions = {}):
     delete window.__panGestureBench;
     delete window.__zoomBench;
     delete window.__perfSourceUploadCount;
+    delete window.__perfSourceUploadTimings;
     delete window.__perfProjectLngLat;
     delete window.__perfCameraSnapshot;
     delete window.__perfStopSnapshot;
     delete window.__perfOverlaySnapshot;
     delete window.__rendererStats;
+    delete window.__perfRenderSourceBankSnapshot;
     delete window.__perfStartPaintedFrameCapture;
     delete window.__perfStopPaintedFrameCapture;
   };

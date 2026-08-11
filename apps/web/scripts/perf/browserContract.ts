@@ -56,6 +56,10 @@ export interface GestureCaptureState {
 export interface BrowserOverlaySnapshot {
   sourceExists: boolean;
   layerExists: boolean;
+  symbolLayerExists: boolean;
+  overlayHealthy: boolean;
+  rendererLayerCount: number;
+  expectedRendererLayerCount: number;
   sourceLoaded: boolean;
   featureCount: number;
 }

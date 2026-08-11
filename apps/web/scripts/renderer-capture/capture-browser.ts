@@ -103,6 +103,14 @@ export async function seedEditor(page: Page, system: TransitSystem): Promise<voi
   } finally {
     page.off('pageerror', recordPageError);
   }
+  await page.waitForFunction(
+    () => {
+      const overlay = window.__perfOverlaySnapshot?.();
+      return overlay?.overlayHealthy && overlay.symbolLayerExists;
+    },
+    null,
+    { timeout: 60_000 },
+  );
   await page.waitForTimeout(1_750);
   await settleCapturePixels(page);
 }

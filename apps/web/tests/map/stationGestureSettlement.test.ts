@@ -27,11 +27,11 @@ function createSettlementHost() {
   };
   return {
     host,
-    fireLoaded() {
-      for (const listener of [...loadingListeners]) listener(SRC_STATIONS);
+    fireLoaded(sourceId = SRC_STATIONS) {
+      for (const listener of [...loadingListeners]) listener(sourceId);
       for (const listener of [...sourceListeners]) {
         listener({
-          sourceId: SRC_STATIONS,
+          sourceId,
           sourceDataType: 'content',
           isSourceLoaded: true,
         });
@@ -62,6 +62,27 @@ describe('stop gesture settlement ownership', () => {
     expect(released).toHaveBeenCalledOnce();
     expect(controller.ownsPreview()).toBe(false);
     expect(map.listenerCount()).toBe(0);
+  });
+
+  it('settles against the physical station bank active when the mutation begins', () => {
+    const map = createSettlementHost();
+    let sourceId = `${SRC_STATIONS}--bank-a`;
+    const released = vi.fn();
+    const controller = createStationGestureSettlementController({
+      host: map.host,
+      sourceId: () => sourceId,
+      isGestureActive: () => false,
+      onRelease: released,
+    });
+
+    controller.beginDiff({ mutate() {}, fallback() {} });
+    sourceId = `${SRC_STATIONS}--bank-b`;
+    map.fireLoaded(`${SRC_STATIONS}--bank-b`);
+    map.fireRender();
+    expect(released).not.toHaveBeenCalled();
+    map.fireLoaded(`${SRC_STATIONS}--bank-a`);
+    map.fireRender();
+    expect(released).toHaveBeenCalledOnce();
   });
 
   it('keeps a ready preview owned by an overlapping gesture until its end', () => {

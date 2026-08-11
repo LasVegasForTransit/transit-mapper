@@ -30,6 +30,26 @@ describe('performance chunk policy', () => {
     expect(performanceChunkName('/repo/apps/web/src/App.tsx')).toBeUndefined();
   });
 
+  it('keeps the cooperative renderer in a normal budgeted cache chunk', () => {
+    expect(performanceChunkName('/repo/apps/web/src/map/scene-draft.ts')).toBe('renderer-runtime');
+    expect(performanceChunkName('/repo/apps/web/src/map/scene-publication.ts')).toBeUndefined();
+    expect(
+      performanceChunkName('/repo/apps/web/src/map/cooperative-render-job-scheduler.ts'),
+    ).toBeUndefined();
+    expect(
+      performanceChunkName('/repo/packages/core/src/render/render-preparation-update-plan.ts'),
+    ).toBe('renderer-runtime');
+    expect(performanceChunkName('/repo/apps/web/src/map/MapCanvas.tsx')).toBeUndefined();
+    expect(
+      performanceChunkName('/repo/apps/web/src/map/system-feature-sources.ts'),
+    ).toBeUndefined();
+    expect(
+      performanceChunkKind('assets/renderer-runtime-AbCd1234.js', [
+        '/repo/apps/web/src/map/scene-draft.ts',
+      ]),
+    ).toBe('standard');
+  });
+
   it('grants the map engine exception only to a pure MapLibre output', () => {
     const mapLibreModule =
       '/repo/node_modules/.pnpm/maplibre-gl@4.7.1/node_modules/maplibre-gl/dist/maplibre-gl.js';

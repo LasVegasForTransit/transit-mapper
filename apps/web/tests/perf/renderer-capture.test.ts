@@ -3,6 +3,7 @@ import {
   createRendererCapturePlan,
   createRendererContextPlan,
   createRendererFilmstripPlan,
+  rendererCaptureZoomForCorridorWidth,
   rendererCaptureComparisons,
   selectRendererCaptureCases,
 } from '../../src/perf/renderer-capture';
@@ -60,15 +61,51 @@ describe('renderer capture planning', () => {
       viewMode: 'infrastructure',
       boundary: 'overview-district',
       frame: 0,
-      zoom: 13.25,
+      targetCorridorWidthPx: 1.75,
+      zoom: rendererCaptureZoomForCorridorWidth(1.75),
     });
+    expect(
+      filmstrip
+        .filter((capture) => capture.viewMode === 'infrastructure')
+        .map((capture) => capture.targetCorridorWidthPx),
+    ).toEqual([1.75, 2, 3, 4, 4.5, 8, 9, 10.5, 12, 13]);
     expect(filmstrip.at(-1)).toMatchObject({
       id: '00-baseline-filmstrip-diagram-district-street-4',
       viewMode: 'diagram',
       boundary: 'district-street',
       frame: 4,
-      zoom: 17,
+      targetCorridorWidthPx: 13,
+      zoom: rendererCaptureZoomForCorridorWidth(13),
     });
+  });
+
+  it('calibrates evidence zooms to the visible Port Mason road width', () => {
+    expect(rendererCaptureZoomForCorridorWidth(3)).toBeCloseTo(13.409, 3);
+    expect(rendererCaptureZoomForCorridorWidth(10.5)).toBeCloseTo(15.216, 3);
+    expect(() => rendererCaptureZoomForCorridorWidth(0)).toThrow(/finite and positive/);
+
+    const desktopInfrastructure = createRendererCapturePlan('01-lod').filter(
+      (capture) =>
+        capture.profile === 'desktop' &&
+        capture.theme === 'light' &&
+        capture.viewMode === 'infrastructure',
+    );
+    expect(desktopInfrastructure.map((capture) => capture.zoom)).toEqual([
+      11,
+      rendererCaptureZoomForCorridorWidth(3),
+      rendererCaptureZoomForCorridorWidth(6),
+      rendererCaptureZoomForCorridorWidth(10.5),
+      18,
+    ]);
+    expect(desktopInfrastructure.map((capture) => capture.targetCorridorWidthPx)).toEqual([
+      expect.any(Number),
+      3,
+      6,
+      10.5,
+      expect.any(Number),
+    ]);
+    expect(desktopInfrastructure[0].targetCorridorWidthPx).toBeLessThan(2);
+    expect(desktopInfrastructure.at(-1)?.targetCorridorWidthPx).toBeGreaterThan(12);
   });
 
   it('keeps contact-sheet evidence in baseline, previous, current, difference order', () => {

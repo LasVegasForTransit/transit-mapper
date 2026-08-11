@@ -41,6 +41,10 @@ export interface DividerPath {
    *  centerLine = opposing-directions separator (the double yellow);
    *  edgeLine = solid edge of the directional roadway. */
   kind: 'laneLine' | 'centerLine' | 'edgeLine';
+  /** Stable semantic boundary identity; geometry and array position can change
+   * while these adjacent model-owned lane IDs remain the same. */
+  beforeLaneId: string;
+  afterLaneId: string;
   path: LngLat[];
 }
 
@@ -110,7 +114,19 @@ const MAX_TRIMS_PER_WAY = 2;
 
 /** Derive (memoized) the full lane-level geometry for one way, with its
  *  ends optionally trimmed back where they meet junction footprints. */
-export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLaneGeometry {
+export interface ResolvedWayLaneGeometry {
+  geometry: WayLaneGeometry;
+  cacheHit: boolean;
+}
+
+/** Same geometry contract with truthful cache attribution for the renderer's
+ * performance counters. Callers that do not instrument projection keep using
+ * `wayLaneGeometry` below. */
+export function resolveWayLaneGeometry(
+  way: Way,
+  trimStartM = 0,
+  trimEndM = 0,
+): ResolvedWayLaneGeometry {
   let byTrim = cache.get(way);
   if (!byTrim) {
     byTrim = new Map();
@@ -118,7 +134,7 @@ export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLane
   }
   const key = `${trimStartM.toFixed(2)}:${trimEndM.toFixed(2)}`;
   const cached = byTrim.get(key);
-  if (cached) return cached;
+  if (cached) return { geometry: cached, cacheHit: true };
   while (byTrim.size >= MAX_TRIMS_PER_WAY) {
     const oldest = byTrim.keys().next();
     if (oldest.done) break;
@@ -167,10 +183,17 @@ export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLane
             (prev.direction === 'backward' && cur.direction === 'forward');
           dividers.push({
             kind: opposing ? 'centerLine' : 'laneLine',
+            beforeLaneId: prev.id,
+            afterLaneId: cur.id,
             path: offsetPolyline(center, b),
           });
         } else if (prevDir !== curDir) {
-          dividers.push({ kind: 'edgeLine', path: offsetPolyline(center, b) });
+          dividers.push({
+            kind: 'edgeLine',
+            beforeLaneId: prev.id,
+            afterLaneId: cur.id,
+            path: offsetPolyline(center, b),
+          });
         }
       }
     }
@@ -187,7 +210,11 @@ export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLane
 
   const result: WayLaneGeometry = { wayId: way.id, totalWidthM, lanes, dividers, arrows };
   byTrim.set(key, result);
-  return result;
+  return { geometry: result, cacheHit: false };
+}
+
+export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLaneGeometry {
+  return resolveWayLaneGeometry(way, trimStartM, trimEndM).geometry;
 }
 
 /**
@@ -247,30 +274,30 @@ export function wayIntersectsBounds(way: Way, bounds: [LngLat, LngLat], padDeg =
     // long road/track whose vertices are far apart culled its own lane detail
     // when you zoomed into its middle, even though it plainly crossed the view.
     if (lng >= minX && lng <= maxX && lat >= minY && lat <= maxY) return true;
-    if (i > 0 && segmentIntersectsBox(pts[i - 1], pts[i], minX, minY, maxX, maxY)) return true;
+    if (i > 0 && segmentIntersectsBox(pts[i - 1], pts[i], { minX, minY, maxX, maxY })) return true;
   }
   return false;
 }
 
 /** Liang–Barsky segment ∩ axis-aligned box — true when a→b crosses the box,
  *  including the case where both endpoints lie outside it. */
-function segmentIntersectsBox(
-  a: LngLat,
-  b: LngLat,
-  minX: number,
-  minY: number,
-  maxX: number,
-  maxY: number,
-): boolean {
+interface StreetBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+function segmentIntersectsBox(a: LngLat, b: LngLat, bounds: StreetBounds): boolean {
   const dx = b[0] - a[0],
     dy = b[1] - a[1];
   let t0 = 0,
     t1 = 1;
   const edges: [number, number][] = [
-    [-dx, a[0] - minX],
-    [dx, maxX - a[0]],
-    [-dy, a[1] - minY],
-    [dy, maxY - a[1]],
+    [-dx, a[0] - bounds.minX],
+    [dx, bounds.maxX - a[0]],
+    [-dy, a[1] - bounds.minY],
+    [dy, bounds.maxY - a[1]],
   ];
   for (const [p, q] of edges) {
     if (p === 0) {

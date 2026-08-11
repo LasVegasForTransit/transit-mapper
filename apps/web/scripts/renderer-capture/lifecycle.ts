@@ -33,6 +33,30 @@ export function rendererCaptureDigest(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+export interface RendererUntrackedSourceFile {
+  path: string;
+  bytes: Uint8Array;
+}
+
+/** Identifies the exact working source snapshot without mutating Git's index.
+ * The tracked binary diff captures staged and unstaged edits and deletions;
+ * sorted untracked paths plus bytes make a dirty capture reproducible even
+ * when HEAD alone still names the previous renderer phase. */
+export function rendererSourceContentDigest(
+  revision: string,
+  trackedDiff: Uint8Array,
+  untrackedFiles: readonly RendererUntrackedSourceFile[],
+): string {
+  const digest = createHash('sha256');
+  digest.update('revision\0').update(revision).update('\0tracked\0').update(trackedDiff);
+  for (const file of [...untrackedFiles].sort((left, right) =>
+    left.path.localeCompare(right.path),
+  )) {
+    digest.update('\0untracked\0').update(file.path).update('\0').update(file.bytes);
+  }
+  return digest.digest('hex');
+}
+
 export function rendererSourceIsDirty(porcelainStatus: string): boolean {
   return porcelainStatus.trim().length > 0;
 }

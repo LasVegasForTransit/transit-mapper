@@ -1,4 +1,4 @@
-export type PerformanceChunkName = 'map-engine' | 'react-runtime';
+export type PerformanceChunkName = 'map-engine' | 'react-runtime' | 'renderer-runtime';
 export type PerformanceChunkKind = 'map-engine' | 'standard';
 
 export const DEFAULT_CHUNK_MAXIMUM_RAW_BYTES = 500_000;
@@ -23,9 +23,22 @@ function isMapEngineModule(moduleId: string): boolean {
   return normalizedModuleId(moduleId).includes('/node_modules/.pnpm/maplibre-gl@');
 }
 
+function isRendererRuntimeModule(moduleId: string): boolean {
+  const normalizedId = normalizedModuleId(moduleId);
+  return (
+    /\/apps\/web\/src\/map\/(?:scene-(?:draft|feature|publication)|synchronous-|persistent-|resumable-feature-projection)[^/]*\.tsx?$/.test(
+      normalizedId,
+    ) ||
+    /\/packages\/core\/src\/render\/(?:dependency-index|dependency-invalidation|render-preparation(?:-[^/]+)?|render-projection-scope)\.ts$/.test(
+      normalizedId,
+    )
+  );
+}
+
 export function performanceChunkName(moduleId: string): PerformanceChunkName | undefined {
   const normalizedId = normalizedModuleId(moduleId);
   if (isMapEngineModule(normalizedId)) return 'map-engine';
+  if (isRendererRuntimeModule(normalizedId)) return 'renderer-runtime';
   if (
     normalizedId.includes('/node_modules/.pnpm/react@') ||
     normalizedId.includes('/node_modules/.pnpm/react-dom@') ||

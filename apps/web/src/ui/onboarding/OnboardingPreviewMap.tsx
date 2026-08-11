@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
-import maplibregl, { type GeoJSONSource } from 'maplibre-gl';
+import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
 import {
-  buildFeatures,
   registerMapIcons,
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
@@ -10,6 +9,7 @@ import {
   SRC_STATIONS,
   SRC_VEHICLES,
   SRC_WAYS,
+  type SystemFeatures,
   type ViewOptions,
 } from '../../map/layers';
 import { pointAtDistance, systemBounds } from '@transitmapper/core/model/geo';
@@ -25,6 +25,7 @@ import {
 import { useSystemColorScheme } from '../../theme/systemColorScheme';
 import { layerSpecsForScheme, localBlankStyleForScheme } from '../../map/mapTheme';
 import { createRenderSettlementMarker } from '../../map/render-settlement-marker';
+import { buildFeaturesForFittedMap } from '../../map/static-render-features';
 
 /**
  * A third, independent MapLibre instance — alongside the app's main map
@@ -57,6 +58,18 @@ interface OnboardingPreviewMapProps {
 }
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+
+function setOnboardingFeatureData(map: MLMap, features: SystemFeatures): void {
+  const setData = (id: string, data: GeoJSON.FeatureCollection) => {
+    map.getSource<GeoJSONSource>(id)?.setData(data);
+  };
+  setData(SRC_WAYS, features.ways);
+  setData(SRC_SERVICES, features.services);
+  setData(SRC_STATIONS, features.stations);
+  setData(SRC_FOOTPRINTS, features.footprints);
+  setData(SRC_PLATFORMS, features.platforms);
+  setData(SRC_FACILITIES, features.facilities);
+}
 
 export function OnboardingPreviewMap({
   system,
@@ -100,17 +113,6 @@ export function OnboardingPreviewMap({
           if (!map.getLayer(spec.id)) map.addLayer(spec);
         }
 
-        const fc = buildFeatures(renderedSystem, null, [], view);
-        const setData = (id: string, data: GeoJSON.FeatureCollection) => {
-          map.getSource<GeoJSONSource>(id)?.setData(data);
-        };
-        setData(SRC_WAYS, fc.ways);
-        setData(SRC_SERVICES, fc.services);
-        setData(SRC_STATIONS, fc.stops);
-        setData(SRC_FOOTPRINTS, fc.footprints);
-        setData(SRC_PLATFORMS, fc.platforms);
-        setData(SRC_FACILITIES, fc.facilities);
-
         // Resize before framing: fitBounds solves for the viewport it's told
         // about, so fitting against a stale container size (the dialog's
         // layout may not have settled yet at "load" time) frames the wrong
@@ -118,6 +120,9 @@ export function OnboardingPreviewMap({
         map.resize();
         const bounds = systemBounds(renderedSystem);
         if (bounds) map.fitBounds(bounds, { padding: 24, animate: false });
+
+        const fc = buildFeaturesForFittedMap(renderedSystem, view, map);
+        setOnboardingFeatureData(map, fc);
         map.once('idle', () => settlement.markSettled());
 
         if (animateVehicle) {
@@ -135,7 +140,7 @@ export function OnboardingPreviewMap({
               state.run === 'outbound'
                 ? pointAtDistance(path, cumLengths, state.distMeters)
                 : pointAtDistance(inboundPath, ONBOARDING_INBOUND_CUM_LENGTHS, state.distMeters);
-            setData(SRC_VEHICLES, {
+            map.getSource<GeoJSONSource>(SRC_VEHICLES)?.setData({
               type: 'FeatureCollection',
               features: [
                 {

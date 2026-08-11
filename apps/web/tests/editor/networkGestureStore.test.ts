@@ -5,12 +5,19 @@ import { patternLegs, patternRunLegs } from '@transitmapper/core/model/geo';
 import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
 import { planTerminusGesture } from '@transitmapper/core/model/serviceGestures';
 import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { createEditorStore } from '../../src/editor/store';
 const A: [number, number] = [-115.2, 36.1];
 const B: [number, number] = [-115.19, 36.1];
 const C: [number, number] = [-115.18, 36.1];
 const D: [number, number] = [-115.19, 36.11];
+const NETWORK_PRESENTATION = renderPresentationForViewport({
+  center: B,
+  zoom: 12,
+  width: 1_440,
+  height: 900,
+});
 
 describe('network gesture store transactions', () => {
   it('commits a terminus extension as one undo step without moving infrastructure or stops', () => {
@@ -291,7 +298,9 @@ describe('network gesture store transactions', () => {
     );
     const joined = store
       .getState()
-      .system.services.find((service) => service.id === 'desired-a')!.path;
+      .system.services[0].patterns.find((pattern) => pattern.id === 'desired-a');
+    expect(joined).toBeDefined();
+    if (!joined) throw new Error('expected the desired branch to remain after connection');
     expect(patternLegs(joined).map((leg) => leg.wayId)).toEqual([
       'desired-keep',
       'connector',
@@ -430,6 +439,7 @@ describe('network gesture store transactions', () => {
       viewMode: 'network',
       visibleModes: new Set(MODE_ORDER),
       visibleWayTypes: new Set(WAY_TYPE_ORDER),
+      presentation: NETWORK_PRESENTATION,
     });
     expect(rendered.serviceArrows.features).toHaveLength(3);
   });

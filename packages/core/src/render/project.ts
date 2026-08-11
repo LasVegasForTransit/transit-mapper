@@ -27,6 +27,26 @@ export interface Viewport {
   height: number;
 }
 
+/** Geographic extent visible at the four edges of a flat, north-up viewport.
+ * This is the inverse companion to `projector`: static renderers use it after
+ * fitting their final camera so viewport culling receives the same bounds a
+ * live MapLibre map would report. */
+export function viewportBounds(viewport: Viewport): [LngLat, LngLat] {
+  const worldSize = TILE_SIZE * 2 ** viewport.zoom;
+  const center = mercator(viewport.center);
+  const halfWidth = viewport.width / (worldSize * 2);
+  const halfHeight = viewport.height / (worldSize * 2);
+  const southwest = unmercator({
+    x: center.x - halfWidth,
+    y: center.y + halfHeight,
+  });
+  const northeast = unmercator({
+    x: center.x + halfWidth,
+    y: center.y - halfHeight,
+  });
+  return [southwest, northeast];
+}
+
 /** Projects a lng/lat onto the unit square, where (0,0) is the northwest
  *  corner of the world and (1,1) the southeast. Zoom-independent. */
 function mercator(lngLat: LngLat): ScreenPoint {

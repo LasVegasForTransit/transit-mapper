@@ -18,20 +18,45 @@ import {
   captureReferenceFixtures,
 } from './capture-scenes';
 import type { RendererCaptureManifest, RendererCaptureManifestEntry } from './capture-types';
+import { captureRendererLodAcceptance } from './lod-acceptance-runner';
 import {
   prepareRendererCaptureOutput,
   rendererCaptureDigest,
+  rendererSourceContentDigest,
   rendererSourceIsDirty,
 } from './lifecycle';
 
 const execFileAsync = promisify(execFile);
 
+const MAX_GIT_OUTPUT_BYTES = 64 * 1024 * 1024;
+
+async function gitOutput(args: readonly string[]): Promise<string> {
+  const { stdout } = await execFileAsync('git', [...args], {
+    encoding: 'utf8',
+    maxBuffer: MAX_GIT_OUTPUT_BYTES,
+  });
+  return stdout;
+}
+
 async function sourceProvenance(): Promise<RendererCaptureManifest['source']> {
-  const [{ stdout: revision }, { stdout: status }] = await Promise.all([
-    execFileAsync('git', ['rev-parse', 'HEAD']),
-    execFileAsync('git', ['status', '--porcelain', '--untracked-files=normal']),
+  const [revisionOutput, status, trackedDiff, untrackedOutput] = await Promise.all([
+    gitOutput(['rev-parse', 'HEAD']),
+    gitOutput(['status', '--porcelain', '--untracked-files=normal']),
+    gitOutput(['diff', '--binary', '--full-index', '--no-ext-diff', 'HEAD', '--']),
+    gitOutput(['ls-files', '--others', '--exclude-standard', '-z']),
   ]);
-  return { revision: revision.trim(), dirty: rendererSourceIsDirty(status) };
+  const revision = revisionOutput.trim();
+  const untrackedFiles = await Promise.all(
+    untrackedOutput
+      .split('\0')
+      .filter((path) => path.length > 0)
+      .map(async (path) => ({ path, bytes: await readFile(resolve(path)) })),
+  );
+  return {
+    revision,
+    dirty: rendererSourceIsDirty(status),
+    contentSha256: rendererSourceContentDigest(revision, Buffer.from(trackedDiff), untrackedFiles),
+  };
 }
 
 async function hashCaptureFiles(
@@ -92,6 +117,10 @@ export async function runRendererCapture(options: RendererCaptureCliOptions): Pr
       options.outputDirectory,
       await captureEvidence(browser, options),
     );
+    const lodAcceptance =
+      options.phase === '01-lod' && options.profile === 'all' && options.theme === 'all'
+        ? await captureRendererLodAcceptance(browser, options.outputDirectory, source)
+        : undefined;
     const manifest: RendererCaptureManifest = {
       schemaVersion: 1,
       phase: options.phase,
@@ -99,7 +128,7 @@ export async function runRendererCapture(options: RendererCaptureCliOptions): Pr
       selection: { profile: options.profile, theme: options.theme },
       generatedAt: new Date().toISOString(),
       source,
-      basemap: 'local-blank-v1',
+      basemap: 'local-blank-v2',
       captures: entries,
     };
     await writeFile(
@@ -107,7 +136,7 @@ export async function runRendererCapture(options: RendererCaptureCliOptions): Pr
       `${JSON.stringify(manifest, null, 2)}\n`,
       'utf8',
     );
-    await buildRendererContactSheet(options, entries);
+    await buildRendererContactSheet(options, entries, lodAcceptance);
     console.log(`renderer captures: ${options.outputDirectory}`);
   } catch (error) {
     await writeCaptureFailure(options, error);

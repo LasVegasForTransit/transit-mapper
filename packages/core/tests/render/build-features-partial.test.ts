@@ -1,12 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptySystem } from '../../src/model/serialize';
 import type { TransitSystem } from '../../src/model/system';
-import { buildFeatures, type SystemFeatures } from '../../src/render/buildFeatures';
+import {
+  buildFeatures,
+  type RenderViewOptions,
+  type SystemFeatures,
+} from '../../src/render/buildFeatures';
+import { STREET_TEST_PRESENTATION } from '../support/render-presentation.test';
 
-const view = {
+const view: RenderViewOptions = {
   viewMode: 'infrastructure' as const,
   visibleModes: new Set(['bus']),
   visibleWayTypes: new Set(['road']),
+  presentation: {
+    ...STREET_TEST_PRESENTATION,
+    bounds: {
+      southwest: [-115.21, 36.09],
+      northeast: [-115.09, 36.11],
+    },
+  },
 };
 
 function fixture(): TransitSystem {
@@ -107,6 +119,7 @@ function operationCounts() {
     featureCollectionBuildCount: 0,
     featureTopologyPassCount: 0,
     featureTopologyWayVisitCount: 0,
+    featureServiceWayVisitCount: 0,
     featureJunctionPassCount: 0,
     featureJunctionNodeVisitCount: 0,
     featureStopPassCount: 0,
@@ -121,6 +134,8 @@ function operationCounts() {
     featureWayLabelPassCount: 0,
     featureNamedWayVisitCount: 0,
     featureLaneGeometryBuildCount: 0,
+    featureLaneGeometryCacheHitCount: 0,
+    featureTierTransitionCount: 0,
   };
 }
 
