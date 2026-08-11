@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 import type { StyleSpecification } from 'maplibre-gl';
 import { MAP_THEMES } from '../../src/map/mapTheme';
 import {
@@ -22,8 +22,12 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function createMap(): StyleSwitchMap & { setStyle: ReturnType<typeof vi.fn> } {
-  const setStyle = vi.fn((..._args: Parameters<StyleSwitchMap['setStyle']>) => undefined);
+interface StyleSwitchMapHarness extends StyleSwitchMap {
+  setStyle: Mock<StyleSwitchMap['setStyle']>;
+}
+
+function createMap(): StyleSwitchMapHarness {
+  const setStyle = vi.fn<StyleSwitchMap['setStyle']>((..._args) => undefined);
   return {
     getStyle: () => style('current'),
     setStyle,
@@ -34,7 +38,7 @@ describe('style switch controller', () => {
   it('defers a scheme change until drawing or dragging finishes', async () => {
     const map = createMap();
     let active = true;
-    const fetchStyle = vi.fn(async () => style('dark'));
+    const fetchStyle = vi.fn(() => Promise.resolve(style('dark')));
     const controller = createStyleSwitchController({
       map,
       fetchStyle,
@@ -193,6 +197,25 @@ describe('style switch controller', () => {
     );
     expect(map.setStyle).toHaveBeenNthCalledWith(2, style('dark'), { diff: false });
     expect(recover).toHaveBeenCalledWith('dark', true);
+  });
+
+  it('reports a healthy differential switch as preserving renderer state', async () => {
+    const map = createMap();
+    const recover = vi.fn();
+    const controller = createStyleSwitchController({
+      map,
+      fetchStyle: () => Promise.resolve(style('dark')),
+      isInteractionActive: () => false,
+      recover,
+    });
+
+    await controller.request('dark');
+
+    expect(map.setStyle).toHaveBeenCalledOnce();
+    expect(map.setStyle.mock.calls[0]?.[0]).toEqual(style('dark'));
+    expect(map.setStyle.mock.calls[0]?.[1]?.diff).toBe(true);
+    expect(typeof map.setStyle.mock.calls[0]?.[1]?.transformStyle).toBe('function');
+    expect(recover).toHaveBeenCalledWith('dark', false);
   });
 });
 

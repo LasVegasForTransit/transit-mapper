@@ -14,12 +14,19 @@ import {
 } from '../../src/perf/renderer-capture';
 import { RENDERER_FIXTURE_DESCRIPTORS } from '../../src/perf/renderer-fixtures';
 import type { RendererCaptureCliOptions } from './cli';
-import { rendererContactSheetHtml, type RendererContactSheetCapture } from './contact-sheet';
+import {
+  rendererContactSheetHtml,
+  type RendererContactSheetAppendix,
+  type RendererContactSheetCapture,
+} from './contact-sheet';
 import type { RendererCaptureManifestEntry } from './capture-types';
 import { rendererCaptureDigest } from './lifecycle';
+import { loadValidRendererLodAcceptanceManifest } from './lod-acceptance-validation';
+import type { RendererLodAcceptanceManifest } from './lod-acceptance-types';
 
 const NUMBERED_PHASE = /^\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SHA_256 = /^[a-f0-9]{64}$/;
+const GIT_REVISION = /^[a-f0-9]{40}$/;
 
 export interface RendererEvidenceFile {
   id: string;
@@ -62,7 +69,29 @@ function hasCompleteManifestHeader(candidate: Record<string, unknown>, phase: st
   if (candidate.complete !== true) return false;
   if (!candidate.selection || typeof candidate.selection !== 'object') return false;
   const selection = candidate.selection as Record<string, unknown>;
-  return selection.profile === 'all' && selection.theme === 'all';
+  if (selection.profile !== 'all' || selection.theme !== 'all') return false;
+  if (!candidate.source || typeof candidate.source !== 'object') return false;
+  const source = candidate.source as Record<string, unknown>;
+  if (
+    typeof source.revision !== 'string' ||
+    !GIT_REVISION.test(source.revision) ||
+    typeof source.dirty !== 'boolean'
+  ) {
+    return false;
+  }
+  if (phase === '00-baseline') {
+    return (
+      candidate.basemap === 'local-blank-v1' ||
+      (candidate.basemap === 'local-blank-v2' &&
+        typeof source.contentSha256 === 'string' &&
+        SHA_256.test(source.contentSha256))
+    );
+  }
+  return (
+    candidate.basemap === 'local-blank-v2' &&
+    typeof source.contentSha256 === 'string' &&
+    SHA_256.test(source.contentSha256)
+  );
 }
 
 function captureFile(
@@ -87,7 +116,12 @@ function completeManifestFiles(
   manifest: unknown,
   phase: string,
   phaseDirectory: string,
-): Array<{ path: string; sha256: string }> | undefined {
+):
+  | {
+      files: Array<{ path: string; sha256: string }>;
+      source: { revision: string; dirty: boolean; contentSha256: string } | undefined;
+    }
+  | undefined {
   if (!manifest || typeof manifest !== 'object') return undefined;
   const candidate = manifest as Record<string, unknown>;
   if (!hasCompleteManifestHeader(candidate, phase)) return undefined;
@@ -103,7 +137,17 @@ function completeManifestFiles(
     if (!file) return undefined;
     files.push(file);
   }
-  return expected.size === 0 ? files : undefined;
+  if (expected.size !== 0) return undefined;
+  const rawSource = candidate.source as Record<string, unknown>;
+  const source =
+    typeof rawSource.contentSha256 === 'string'
+      ? {
+          revision: rawSource.revision as string,
+          dirty: rawSource.dirty as boolean,
+          contentSha256: rawSource.contentSha256,
+        }
+      : undefined;
+  return { files, source };
 }
 
 async function isSuccessfulPhase(root: string, phase: string): Promise<boolean> {
@@ -114,15 +158,23 @@ async function isSuccessfulPhase(root: string, phase: string): Promise<boolean> 
     const manifest = JSON.parse(
       await readFile(resolve(phaseDirectory, 'manifest.json'), 'utf8'),
     ) as unknown;
-    const files = completeManifestFiles(manifest, phase, phaseDirectory);
-    if (!files) return false;
+    const evidence = completeManifestFiles(manifest, phase, phaseDirectory);
+    if (!evidence) return false;
     const valid = await Promise.all(
-      files.map(async (file) => {
+      evidence.files.map(async (file) => {
         const bytes = await readFile(file.path);
         return rendererCaptureDigest(bytes) === file.sha256;
       }),
     );
-    return valid.every(Boolean);
+    if (!valid.every(Boolean)) return false;
+    if (phase !== '01-lod') return true;
+    if (!evidence.source) return false;
+    return Boolean(
+      await loadValidRendererLodAcceptanceManifest(
+        resolve(phaseDirectory, 'acceptance'),
+        evidence.source,
+      ),
+    );
   } catch {
     return false;
   }
@@ -183,6 +235,72 @@ interface ComparisonOptions {
   diffDirectory: string;
 }
 
+function rendererFixtureLabel(entry: RendererCaptureManifestEntry): string {
+  if (entry.fixtureId === 'onboarding') return 'Onboarding';
+  return (
+    RENDERER_FIXTURE_DESCRIPTORS.find((descriptor) => descriptor.id === entry.fixtureId)?.label ??
+    entry.fixtureId
+  );
+}
+
+/** Human-readable camera provenance shown beside every visual comparison. */
+export function rendererCaptureDescription(entry: RendererCaptureManifestEntry): string {
+  const zoom = entry.zoom === null ? 'fitted camera' : `z${entry.zoom.toFixed(3)}`;
+  const target =
+    entry.targetCorridorWidthPx === undefined
+      ? undefined
+      : `${entry.targetCorridorWidthPx.toFixed(2).replace(/\.?0+$/, '')} px target`;
+  const viewport = `${entry.viewport.width}×${entry.viewport.height} @${entry.viewport.pixelRatio}x`;
+  return [
+    rendererFixtureLabel(entry),
+    `${entry.profile}/${entry.theme}/${entry.viewMode}/${entry.detail}`,
+    zoom,
+    target,
+    viewport,
+  ]
+    .filter((part): part is string => part !== undefined)
+    .join(' · ');
+}
+
+export function rendererLodAcceptanceContactSheetAppendix(
+  manifest: RendererLodAcceptanceManifest,
+): RendererContactSheetAppendix {
+  return {
+    title: 'LOD acceptance',
+    suiteId: manifest.suiteId,
+    manifestPath: 'acceptance/manifest.json',
+    visuals: manifest.visuals.map((entry) => {
+      const target =
+        entry.camera.targetCorridorWidthPx === undefined
+          ? undefined
+          : `${entry.camera.targetCorridorWidthPx.toFixed(2).replace(/\.?0+$/, '')} px target`;
+      return {
+        id: entry.id,
+        path: `acceptance/${entry.file}`,
+        description: [
+          entry.fixture.id,
+          entry.surface,
+          entry.state,
+          `z${entry.camera.zoom.toFixed(3)}`,
+          target,
+          `${entry.camera.viewport.width}×${entry.camera.viewport.height} @${entry.camera.viewport.pixelRatio}x`,
+          `renderer ${entry.rendererStats.projectionCount}/${entry.rendererStats.fullUploadCount}/${entry.rendererStats.sourceUploadCount}`,
+        ]
+          .filter((part): part is string => part !== undefined)
+          .join(' · '),
+      };
+    }),
+    assertions: manifest.assertions.map((assertion) => ({
+      id: assertion.id,
+      passed: assertion.passed,
+      description:
+        assertion.kind === 'renderer-stats'
+          ? `committed Δ ${assertion.delta.projectionCount}/${assertion.delta.fullUploadCount}/${assertion.delta.sourceUploadCount}; editor Δ ${assertion.delta.editorProjectionCount}/${assertion.delta.editorSourceUploadCount}`
+          : `${assertion.before.visibleLayerIds[0] ?? 'unknown'} @ ${assertion.before.activeRevision} → ${assertion.afterPromotion.visibleLayerIds[0] ?? 'unknown'} @ ${assertion.afterPromotion.activeRevision}`,
+    })),
+  };
+}
+
 async function comparisonsForEntry({
   entry,
   outputDirectory,
@@ -216,6 +334,7 @@ async function comparisonsForEntry({
 export async function buildRendererContactSheet(
   options: RendererCaptureCliOptions,
   entries: RendererCaptureManifestEntry[],
+  lodAcceptance?: RendererLodAcceptanceManifest,
 ): Promise<void> {
   const root = dirname(options.outputDirectory);
   const phases = await successfulRendererPhaseDirectories(options.outputDirectory);
@@ -227,6 +346,7 @@ export async function buildRendererContactSheet(
   for (const entry of entries) {
     captures.push({
       id: entry.id,
+      description: rendererCaptureDescription(entry),
       comparisons: await comparisonsForEntry({
         entry,
         outputDirectory: options.outputDirectory,
@@ -239,7 +359,13 @@ export async function buildRendererContactSheet(
   }
   await writeFile(
     resolve(options.outputDirectory, 'index.html'),
-    rendererContactSheetHtml({ phase: options.phase, captures }),
+    rendererContactSheetHtml({
+      phase: options.phase,
+      captures,
+      ...(lodAcceptance
+        ? { appendix: rendererLodAcceptanceContactSheetAppendix(lodAcceptance) }
+        : {}),
+    }),
     'utf8',
   );
 }

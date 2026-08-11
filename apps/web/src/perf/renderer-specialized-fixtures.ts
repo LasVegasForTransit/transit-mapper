@@ -27,6 +27,37 @@ export function createJunctionFixture(id: string, angles: readonly number[]): Tr
   return rendererSystem({ id, name: id, viewport: { center, zoom: 17.5 }, ways, nodes: [node] });
 }
 
+/** Phase 2 acceptance counterpart to the geometry-only junction fixtures.
+ * Every branch has a valid through pattern from arm zero, so the evidence
+ * frame exercises service continuity at the shared node rather than merely
+ * drawing an unserved collection of roads with a suggestive filename. */
+export function createServedJunctionFixture(id: string, angles: readonly number[]): TransitSystem {
+  const system = createJunctionFixture(id, angles);
+  const trunk = system.ways[0];
+  if (!trunk || system.ways.length < 3) {
+    throw new RangeError('A served junction fixture requires at least three arms.');
+  }
+  return {
+    ...system,
+    services: system.ways.slice(1).map((branch, index) => ({
+      id: `${id}-service-${index + 1}`,
+      name: `Arm ${index + 1}`,
+      modeId: 'bus',
+      color: LINE_COLORS[index % LINE_COLORS.length],
+      frequencyMinutes: 10,
+      patterns: [
+        {
+          id: `${id}-pattern-${index + 1}`,
+          sections: oneSection([
+            wholeLeg(trunk.id, 'withPoints'),
+            wholeLeg(branch.id, 'againstPoints'),
+          ]),
+        },
+      ],
+    })),
+  };
+}
+
 export function createGradeStack(): TransitSystem {
   const center: LngLat = [-115.176, 36.13];
   const ways = [

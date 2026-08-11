@@ -15,6 +15,7 @@ import {
   performanceChunkFileName,
   performanceChunkName,
 } from './src/perf/chunkPolicy';
+import { OFFLINE_GLYPH_RANGE_FILES } from './src/perf/pwaPrecache';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const distDirectory = resolveBuildOutputDirectory(
@@ -58,6 +59,7 @@ export default defineConfig({
           'icons/*.{png,svg}',
           'apple-touch-icon.png',
           'assets/**/*.{js,css,png,svg,webp,woff,woff2}',
+          ...OFFLINE_GLYPH_RANGE_FILES,
         ],
         // embed.html is a separate product surface. Its entry remains
         // network-fetched, while chunks shared with the editor are naturally
@@ -156,6 +158,11 @@ export default defineConfig({
         privacy: 'privacy.html',
       },
       output: {
+        // Assign only the explicitly named cooperative-renderer modules to
+        // its cache boundary. Pulling their shared dependencies into that
+        // chunk would make the lightweight embed download editor-only work
+        // and inflate both entry graphs without changing capability.
+        onlyExplicitManualChunks: true,
         // Keep slow-changing runtimes cacheable across frequent editor
         // releases. Vite module-preloads these static imports in parallel.
         manualChunks: performanceChunkName,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { evaluateBundleBudgets } from '../../src/perf/bundleBudget';
 import type { BundleBudget, BundleEntrySize } from '../../src/perf/bundleBudget';
+import { BUNDLE_BUDGETS } from '../../perf.config';
 
 const budgets: BundleBudget[] = [
   {
@@ -16,6 +17,28 @@ const budgets: BundleBudget[] = [
 ];
 
 describe('bundle budgets', () => {
+  it('keeps the Phase 2 editor foundation inside its one-time round delivery ceiling', () => {
+    const main = BUNDLE_BUDGETS.find((budget) => budget.entry === 'main');
+    expect(main).toEqual({
+      entry: 'main',
+      maximumGzipBytes: 550 * 1_024,
+      maximumBrotliBytes: 470 * 1_024,
+    });
+    expect(
+      evaluateBundleBudgets(
+        [
+          {
+            entry: 'main',
+            rawBytes: 1_000_000,
+            gzipBytes: 550 * 1_024 + 1,
+            brotliBytes: 470 * 1_024,
+          },
+        ],
+        main ? [main] : [],
+      ),
+    ).toContainEqual(expect.objectContaining({ entry: 'main', encoding: 'gzip' }));
+  });
+
   it('gates delivered bytes without treating raw module size as a product ceiling', () => {
     const sizes: BundleEntrySize[] = [
       { entry: 'main', rawBytes: 99_999, gzipBytes: 499, brotliBytes: 399 },

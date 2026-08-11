@@ -28,10 +28,47 @@ five detail cameras, fractional-zoom filmstrips, the editor/onboarding/embed/
 export contexts, and dedicated Port Mason, density, scale, curve, junction,
 grade, rail, service-bundle, and Diagram fixtures.
 
+That regression corpus is fixed at 116 images: 60 editor-matrix frames, 30
+fractional filmstrip frames, 10 reference fixtures, and 16 context frames.
+Phase-specific proof never changes that count. `01-lod` adds a current-only
+`acceptance/` appendix with 21 frames for selected LOD blending, the tunnel
+boundary, served 3/4/5-arm junctions, moving-pan preload, production bank
+promotion, and live/static/SVG parity. Its separate manifest carries exact
+case IDs, file hashes, fixture and camera provenance, renderer counters, and
+machine assertions. The contact sheet renders this appendix after the stable
+baseline/current/difference comparisons.
+
+Filmstrip cameras are calibrated in screen space against the default Port
+Mason reference road, using that profile's physical width and the fixture's
+latitude. The Overview/District strip targets 1.75, 2, 3, 4, and 4.5 CSS px;
+the District/Street strip targets 8, 9, 10.5, 12, and 13 CSS px. The harness
+derives camera zoom from each target instead of embedding zoom guesses. A
+profile-width or reference-latitude change therefore moves the zooms
+automatically while keeping the evidence centered on the intended LOD
+boundaries. Each matrix and filmstrip manifest entry records both
+`targetCorridorWidthPx` and the derived zoom so the calibration remains
+auditable.
+
 A rerun clears only that exact phase directory. Earlier phases remain beside
 it so the sheet can show baseline, previous, current, and pixel-difference
 images. Generated captures are ignored build artifacts until a reviewed final
 set is deliberately promoted to visual-regression goldens.
+
+Canonical history accepts the legacy `00-baseline` manifest, including its
+`local-blank-v1` basemap. Every later phase must name a 40-character source
+revision, its dirty state, the 64-character exact source-content digest, and
+`local-blank-v2`; every declared image hash must match its bytes. `01-lod` is
+incomplete unless its exact acceptance appendix also validates. Diagnostic,
+partial, extra, duplicate, aliased, escaping, or assertion-failing evidence
+cannot become the previous successful phase.
+
+Every camera capture crosses the renderer's real settlement boundary. The
+driver waits for fonts, moves the camera and waits for its first MapLibre idle,
+waits for the latest cooperative presentation generation and its trailing
+refresh, forces one final repaint, waits for the resulting source/layout idle,
+and then waits two animation frames. This order matters: camera idle can occur
+before a newly projected GeoJSON patch has reached MapLibre's Worker. A plain
+canvas screenshot after `jumpTo` is not valid renderer evidence.
 
 Use `--skip-build` only when `apps/web/dist` is still the current instrumented
 build from a successful capture or performance run. `--profile desktop|mobile`
@@ -54,7 +91,7 @@ pnpm perf
 ```
 
 The command first builds and gates the production app, then builds a private
-instrumented variant, starts Vite preview on an isolated loopback port, and measures the
+instrumented variant, starts Vite preview on `127.0.0.1:4173`, and measures the
 complete desktop matrix. Bundle and PWA reports always describe the public
 production graph; the measurement-only harness is not counted as shipped
 payload. To diagnose one surface without replacing a baseline:
@@ -122,6 +159,9 @@ does not satisfy the startup gate.
 
 Each editor sample resolves a known fixture station from both its GeoJSON
 source and painted hit-test layer, then drags it with trusted pointer input.
+The offline proof selects the served station nearest the fixture camera; an
+unserved stop is intentionally absent from Network view and is not a valid
+pointer-edit target.
 An isolated Network-view station release replaces only the changed promoted-ID
 feature. The exact gesture preview remains visible and hit-testable until the
 station source reports loaded and a later map render occurs, so the reduced
@@ -152,45 +192,69 @@ It includes:
 - `report.json`, with every raw sample, min/median/p95/max, variance, standard
   deviation, coefficient of variation, cache hits/misses, source uploads, and
   full/gesture projection phase counters;
-- `bundle-report.json`, whose version 3 delivery graphs separate each entry's
-  eager document and static-import closure from files reached only through
-  dynamic imports. The `complete` entry graph is their union and remains the
-  bundle-budget authority. Separate graphs report dedicated Workers, the
-  service Worker and its Workbox runtime, install-only assets, and the complete
-  service-worker precache union;
+- `bundle-report.json`, covering each entry's complete static and dynamic
+  import graph in raw, gzip, and Brotli bytes plus every emitted JavaScript
+  chunk's raw size and budget;
 - `pwa-report.json`, the deterministic build-graph/precache comparison; and
 - `pwa-runtime-report.json`, proof that an installed editor reopened offline
   after Chrome's HTTP cache was cleared, populated a system overlay on its
   local blank map, and committed a real station edit.
 
-`perf:record` writes one Chrome trace per measured run. It does not create or
-replace a checked baseline. Freeze a comparison point only with the explicit
-flag:
+`perf:record` also writes one Chrome trace per measured run and refreshes the
+checked baseline at a stable path:
 
 ```bash
-pnpm perf:record -- --freeze-baseline
+pnpm perf:record
 # apps/web/perf/baseline.json
-# apps/web/perf/baseline.json.sha256
 
-pnpm perf:record -- --profile mobile --freeze-baseline
+pnpm perf:record -- --profile mobile
 # apps/web/perf/baseline-mobile.json
-# apps/web/perf/baseline-mobile.json.sha256
 ```
 
-The freeze is write-once and validates the complete cold editor/share/embed
-matrix, the fixed protocol, the 60-second window, required milestones,
-settlement, and CDP request totals before publication. The checksum companion
-makes an in-place edit fail closed. To replace a baseline, delete both files in
-an explicit reviewed change, run the same base and candidate artifacts on the
-same runner, and freeze the chosen report again. Review the complete baseline
-diff as measurement evidence; never replace it merely to make a regression
-disappear.
+Review baseline diffs as measurement evidence. Do not update one simply to
+make a regression disappear.
 
 `sourceUploadCount` means application-issued GeoJSON source mutations during
 the measured action. Both complete `setData` replacements and differential
 `updateData` calls count once. It is an operation counter, not a byte estimate;
 deterministic projection tests separately prove how many features a targeted
 mutation derives.
+
+Renderer diagnostics separate accepted projection CPU from settlement latency.
+`projectionDurationMs` sums only measured main-thread scheduler slices and the
+small synchronous planning seams for an accepted logical generation; time
+waiting for later animation frames is not CPU. `projectionSettlementLatencyMs`
+is the wall time until that generation's complete scene commits. The separate
+scheduled-duration total includes canceled and adaptively refined drafts, so
+cancellation thrash cannot look free. Editor-only handle and guide projection
+has its own counts and durations rather than contaminating committed geometry.
+Ordinary selection therefore means zero **committed** projection, full-upload,
+and source-upload deltas. It may still project and upload lightweight
+editor-owned handles, termini, or guides; the Phase 2 appendix records those
+editor counters separately instead of claiming selection is wholly
+feature-state-only.
+
+The same snapshot reports candidate and visible feature counts, generated
+visual and hit features, generated vertices, cache hits and misses, tier
+transitions, patch sizes, and complete-versus-differential uploads. Cooperative
+scheduling adds slice, unit, yield, canceled, and failed counts plus the longest
+slice, unit, and scene commit. Read these together: a faster projection
+accompanied by fewer visible features is a fidelity regression, while a high
+candidate-to-visible ratio points to culling rather than geometry as the next
+problem.
+
+Same-scale camera movement inside the accepted candidate envelope must report
+zero projection. A later projection is expected only when scale changes detail
+or the camera leaves that coverage. Wide/full source revisions load the hidden
+committed bank before one visibility flip; inspect physical source IDs and bank
+diagnostics rather than interpreting those calls as a mixed visible update.
+
+The scheduler normally rejects an over-budget unit and refines its batch. One
+final structurally minimal batch-one attempt may retain completed private work,
+yield, and commit so GC/JIT attribution cannot leave an initial city blank.
+That policy preserves visual continuity only: `maxProjectionUnitMs` and
+`maxProjectionSliceMs` still report the overrun, and either value above its
+budget fails performance review.
 
 Absolute startup gates use the five-run p95. Direct-manipulation gates combine
 the raw samples across all five runs, so one bad run cannot hide behind a
@@ -218,66 +282,25 @@ own parse and responsiveness costs. The compressed absolute limits are round
 delivery guardrails, not snapshots of the current build plus a few kilobytes,
 so ordinary feature work does not require ritual budget churn.
 
-The production build keeps MapLibre and React in stable cache chunks so an
-editor release does not make a returning browser download those runtimes
-again. MapLibre 4 is itself one prebundled module, so an output named
-`map-engine` whose source map contains only MapLibre modules has a narrow
-810 kB raw limit. Every other JavaScript output, including service-worker and
-nested outputs, is limited to 500 kB. These are enforced in
-`bundle-report.json`; Vite's generic warning threshold is not the only guard.
-Every delivery graph contains sorted file records with raw, gzip, and Brotli
-sizes plus a SHA-256 content digest. These records make an N-1 comparison able
-to distinguish added, removed, and changed files without counting a file twice
-when, for example, it belongs to both the editor graph and the independent
-precache union. The comparison also reports every graph separately and records
-membership transitions, so an unchanged file moving from lazy to eager cannot
-disappear inside a zero-byte overall delta. Production reporting requires the
-seven known dedicated Worker entry identities; missing, additional, or
-multiply emitted boundaries fail the build instead of silently shrinking or
-expanding the Worker graph.
+The production build keeps MapLibre, React, and the cooperative renderer in
+stable cache chunks so an editor release does not make a returning browser
+download those runtimes again. The renderer boundary contains only explicitly
+assigned editor modules; shared cartography stays shared with the embed. It has
+no size exception. MapLibre 4 is itself one prebundled module, so an output
+named `map-engine` whose source map contains only MapLibre modules has a narrow
+810 kB raw limit. Every other JavaScript output, including `renderer-runtime`,
+service-worker, and nested outputs, is limited to 500 kB.
+
+Phase 2 made one intentional absolute-delivery recalibration to 550 KiB gzip
+and 470 KiB Brotli for the main editor graph. That ceiling pays for cooperative
+preparation, stable scene diffs, and retained-source recovery; it is not future
+Diagram or metric-mesh headroom. Heavy later phases remain lazy Worker-owned,
+and the full protocol still rejects a checked or base-revision compressed
+median regression above 10%. These rules are enforced in `bundle-report.json`;
+Vite's generic warning threshold is not the only guard.
 
 Missing Chrome produces an `unavailable` report and a non-zero exit. The
 harness never writes placeholder timings.
-
-## Read anonymous field evidence
-
-The fixed harness remains the release gate. Production field samples answer a
-different question: how released builds behave on the coarse mix of devices,
-networks, cache states, and browser capabilities that people actually use.
-Only a release-tagged production build on the configured live origin is
-eligible. Sampling is 5% for the first 24 hours after the build, then 1%. One
-random decision is kept as `0` or `1` in `sessionStorage` under the public
-build id; blocked storage falls back to module memory. No random value or
-visitor id is retained or sent.
-
-Global Privacy Control and Do Not Track are checked before observers or
-sampling are installed and again by the Worker. A selected page sends at most
-one allowlisted, self-counted body on its first hidden or pagehide boundary.
-The body is refused above 8 KiB. See the public
-[Privacy policy](https://map.lasvegasfortransit.org/privacy) for the fields,
-purpose, retention, processor, and never-collected list.
-
-The browser client uses native `PerformanceObserver`, User Timing, Navigation
-Timing, and Resource Timing rather than adding a vitals dependency. LCP keeps
-the last reported candidate. CLS uses the standard maximum session window
-(less than one second between shifts and at most five seconds total) and
-excludes shifts after recent input. INP groups Event Timing durations by
-interaction id and uses the p98 rank approximation, but the observer's 40 ms
-threshold means a page with only faster interactions may report INP as null.
-Unsupported or unavailable APIs remain null. Field Resource Timing cannot
-prove a network quiet window, so `networkIdleMs` is also null; the controlled
-harness owns that measurement. Opaque cross-origin byte categories are null,
-never guessed.
-Page Resource Timing cannot observe service-worker install and precache
-requests, so `serviceWorkerBytes` remains null rather than reporting a
-misleading zero or partial script count.
-
-The synchronous entry code contains only the privacy, live-release/origin, and
-stable-sampling gates. It dynamically imports the observer and payload client
-only for a selected visit. First service-worker install precaches only the
-static editor closure, so this conditional client remains outside both an
-unsampled navigation and its install download. If selected or later fetched,
-the ordinary adaptive CacheFirst route retains it for subsequent use.
 
 ## Large-system persistence boundary
 
@@ -340,21 +363,16 @@ inside Xvfb instead of taking over a local desktop. A shorter diagnostic result
 cannot satisfy the leak gate; omit the override for ten-minute acceptance
 evidence. The baseline warms both PNG and SVG export paths before its first
 forced-GC snapshot so one-time initialization is not mistaken for retained
+growth. Before the final snapshot, a non-primary map click
+consumes Radix Menu's one-shot pointer-modality listeners. Keyboard actions
+legitimately arm one pair per mounted menu until the next pointer input; taking
+the snapshot before that input would count a transient state as retained
 growth.
 
 ## What “offline” means
 
-The service worker initially keeps the editor HTML, eager chunks and CSS, local
-font, favicon, and install metadata. Lazy tools, dedicated Workers, telemetry,
-and install artwork are cached when used. A returning or installed session may
-add at most 64 KiB of declared uncompressed payload during one idle period,
-after Save-Data, 2G-hint, and quota checks. The exposed readiness values mean:
-`essential` for a reopenable shell, `adaptive-pending` while optional assets
-remain, `complete` when the current first-party optional graph is present, and
-`deferred` when policy or a failure prevented background work. None includes
-the third-party basemap.
-
-The browser check writes a fixture once through
+The service worker keeps the editor HTML, eager and lazy editor chunks, local
+icons, and install metadata. The browser check writes a fixture once through
 the real legacy `localStorage` keys, loads the editor, and proves the
 application migrated both the complete document and library row into
 IndexedDB and removed the legacy document. It then installs the worker, clears

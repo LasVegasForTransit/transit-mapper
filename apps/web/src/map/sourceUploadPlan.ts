@@ -17,34 +17,27 @@ import {
   SRC_WAY_LABELS,
   SRC_WAYS,
 } from './layers';
+import {
+  ALL_SYSTEM_FEATURE_SOURCES,
+  type MapSystemFeatureSourceId,
+} from './system-feature-sources';
 
-/** Stable upload order for every system-derived MapLibre source.
- *
- * Keeping this list separate from the overlay's transient sources prevents a
- * content refresh from clearing gesture, route-draft, vehicle, or marquee
- * state. Initial loads, view changes, and style healing intentionally upload
- * the complete list. */
-export const ALL_SYSTEM_FEATURE_SOURCES = [
-  SRC_WAYS,
-  SRC_SERVICES,
-  SRC_STATIONS,
-  SRC_HANDLES,
-  SRC_SERVICE_TERMINI,
-  SRC_FOOTPRINTS,
-  SRC_PLATFORMS,
-  SRC_FACILITIES,
-  SRC_PHYSICAL_HANDLES,
-  SRC_LANES,
-  SRC_LANE_MARKINGS,
-  SRC_LANE_ARROWS,
-  SRC_SERVICE_ARROWS,
-  SRC_JUNCTIONS,
-  SRC_CONNECTORS,
-  SRC_WAY_LABELS,
-] as const;
-
-export type SystemFeatureSourceId = (typeof ALL_SYSTEM_FEATURE_SOURCES)[number];
+export { ALL_SYSTEM_FEATURE_SOURCES } from './system-feature-sources';
+export type SystemFeatureSourceId = MapSystemFeatureSourceId;
 export type SourceUploadRequest = 'all' | readonly SystemFeatureSourceId[];
+
+export interface SourceUploadTransition {
+  previous: TransitSystem;
+  next: TransitSystem;
+}
+
+export interface SourceUploadBatch {
+  sourceIds: readonly SystemFeatureSourceId[];
+  /** Present only when every coalesced request belongs to one continuous
+   * immutable document transition. Camera, view, and style requests have no
+   * model baseline and deliberately force source-authoritative projection. */
+  transition: SourceUploadTransition | null;
+}
 
 export interface SourceUploadPlanOptions {
   /** View changes and repaired styles can invalidate every derived collection
@@ -53,9 +46,10 @@ export interface SourceUploadPlanOptions {
 }
 
 export interface SourceUploadQueue {
-  add: (request: SourceUploadRequest) => void;
+  add: (request: SourceUploadRequest, transition?: SourceUploadTransition) => void;
   hasPending: () => boolean;
   take: () => readonly SystemFeatureSourceId[];
+  takeBatch: () => SourceUploadBatch;
 }
 
 const NO_SOURCES: readonly SystemFeatureSourceId[] = [];
@@ -168,25 +162,59 @@ export function sourceUploadsForSystemChange(
 export function createSourceUploadQueue(): SourceUploadQueue {
   const pending = new Set<SystemFeatureSourceId>();
   let allPending = false;
+  let transition: SourceUploadTransition | null = null;
+  let transitionEligible = true;
+
+  const sourceIds = () =>
+    allPending
+      ? ALL_SYSTEM_FEATURE_SOURCES
+      : ALL_SYSTEM_FEATURE_SOURCES.filter((sourceId) => pending.has(sourceId));
+
+  const reset = () => {
+    allPending = false;
+    pending.clear();
+    transition = null;
+    transitionEligible = true;
+  };
+
+  const takeBatch = (): SourceUploadBatch => {
+    const batch = {
+      sourceIds: sourceIds(),
+      transition: transitionEligible ? transition : null,
+    };
+    reset();
+    return batch;
+  };
 
   return {
-    add: (request) => {
+    add: (request, nextTransition) => {
+      if (request !== 'all' && request.length === 0) return;
       if (request === 'all') {
         allPending = true;
         pending.clear();
+      } else if (!allPending) {
+        for (const sourceId of request) pending.add(sourceId);
+      }
+
+      if (!nextTransition) {
+        transition = null;
+        transitionEligible = false;
         return;
       }
-      if (allPending) return;
-      for (const sourceId of request) pending.add(sourceId);
+      if (!transitionEligible) return;
+      if (!transition) {
+        transition = nextTransition;
+        return;
+      }
+      if (transition.next !== nextTransition.previous) {
+        transition = null;
+        transitionEligible = false;
+        return;
+      }
+      transition = { previous: transition.previous, next: nextTransition.next };
     },
     hasPending: () => allPending || pending.size > 0,
-    take: () => {
-      const sourceIds = allPending
-        ? ALL_SYSTEM_FEATURE_SOURCES
-        : ALL_SYSTEM_FEATURE_SOURCES.filter((sourceId) => pending.has(sourceId));
-      allPending = false;
-      pending.clear();
-      return sourceIds;
-    },
+    take: () => takeBatch().sourceIds,
+    takeBatch,
   };
 }

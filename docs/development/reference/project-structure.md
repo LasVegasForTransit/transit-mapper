@@ -87,10 +87,20 @@ results are memoized but never persisted. See
 #### Rendering
 
 `packages/core/src/render` projects a system into styled geographic features
-and portable SVG output. `packages/core/src/style` supplies catalog appearance
-and LVBT brand tokens without mixing presentation fields into the domain
-catalogs. The editor map, embed, exports, and social previews share this
-projection boundary so their representations remain consistent.
+and portable SVG output. Its presentation modules define displayed-size LOD,
+immutable dependency and viewport indexes, stable render identities, validated
+scenes, and scene diffs. The `RenderScene` compatibility boundary separates
+visual features from invisible hit geometry and imposes one deterministic
+paint order. The static visual resolver turns the same scene into explicit
+vector paint values for SVG rather than asking the serializer to interpret
+MapLibre expressions.
+
+`packages/core/src/style` supplies catalog appearance and LVBT brand tokens
+without mixing presentation fields into the domain catalogs. The editor map,
+embed, exports, and social previews share this projection boundary so their
+representations remain consistent. The current screen-space scene contract
+does not include watertight metric corridor meshes, and Diagram still uses the
+existing core layout path outside the geographic projection scheduler.
 
 #### Simulation
 
@@ -241,9 +251,26 @@ boundaries, platforms, and contained Stops.
 #### Map rendering
 
 `apps/web/src/map` adapts core rendering output to MapLibre sources, layers,
-pointer interaction, and canvas-backed exports. It may hold transient previews
-for continuous gestures, but committed geometry continues to come from the
-store and core projectors.
+pointer interaction, and exports. `MapCanvas.tsx` translates browser/editor
+events into calls on one `LiveMapRenderer`; committed geometry still comes from
+the store and core projectors.
+
+| Modules                                                                                         | Responsibility                                                                                          |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `render-presentation.ts`, `camera-render-preload.ts`                                            | Describe display scale and reusable camera coverage.                                                    |
+| `live-map-renderer.ts`                                                                          | Own accepted projection, scene publication, physical banks, and recovery. Start lifecycle changes here. |
+| `document-projection.ts`, `committed-feature-projection.ts`, `resumable-feature-projection*.ts` | Build dependency-scoped detached features and cancel superseded generations.                            |
+| `scene-draft*.ts`, `scene-source-state.ts`, `persistent-render-source-state.ts`                 | Normalize stable IDs and compute source-local changes without publishing partial work.                  |
+| `scene-publication*.ts`, `accepted-scene-store.ts`, `render-scene-source-updater.ts`            | Advance the accepted CPU scene only after source publication succeeds.                                  |
+| `source-bank*.ts`, `accepted-scene-recovery.ts`                                                 | Prewarm two physical banks, switch visual/hit ownership, and roll back failures.                        |
+| `editor-feature-state.ts`                                                                       | Own paint-only selection, hover, halos, and route focus.                                                |
+| `editor-overlays.ts`, `render-visibility.ts`                                                    | Own small editor geometry and mode/type filters outside committed projection.                           |
+
+Scoped scenes use a stable source base with persistent deltas, avoiding a full
+copy for one entity edit. Static map, embed, export, and SVG share the same
+presentation and scene normalization. Handles, termini, and guides stay in
+unbanked editor sources; camera changes inside the accepted envelope reuse the
+current scene.
 
 #### UI
 
@@ -350,9 +377,18 @@ dialog reports that its revision is unavailable instead of inventing one.
 precache validation that can run without browser automation. Browser traces
 and production-output checks consume that policy but do not redefine its
 budgets. Renderer fixture descriptors and measurement-only counters live at
-this boundary as well. `apps/web/scripts/renderer-capture` owns the Playwright
-driver, deterministic basemap substitution, phase lifecycle, and contact-sheet
-generation; it never becomes part of the public application graph.
+this boundary as well. Renderer counters distinguish candidate and visible
+features, generated vertices, cache reuse, tier transitions, full and patch
+uploads, cooperative slices and yields, canceled generations, failures, and
+the longest projection unit and scene commit.
+
+`apps/web/scripts/renderer-capture` owns the Playwright driver, deterministic
+basemap substitution, phase lifecycle, and contact-sheet generation. The
+measurement-only camera seam waits for presentation projection and the final
+MapLibre source/layout paint; it never becomes part of the public application
+graph. Phase-specific acceptance suites live in additive subdirectories with
+their own exact ID, provenance, hash, and assertion manifests, leaving the
+fixed 116-image cross-phase corpus unchanged.
 
 `apps/web/src/pwa/adaptive-cache-contract.ts` owns optional assets and offline
 readiness. The client obeys network, quota, and 64 KiB limits.
@@ -438,5 +474,7 @@ coordinate them with builds and checks, while the policy they enforce remains
 owned by the web performance module. Renderer evidence is generated under the
 ignored `apps/web/artifacts/renderer/` tree so exploratory phases do not add
 binary weight to the repository. The capture manifest and contact sheet are
-the review boundary; approved final images may later be promoted explicitly to
-tracked visual-regression fixtures.
+the review boundary. Successful post-baseline phases require current source
+and deterministic-basemap provenance; `01-lod` also requires its complete
+current-only acceptance appendix. Approved final images may later be promoted
+explicitly to tracked visual-regression fixtures.

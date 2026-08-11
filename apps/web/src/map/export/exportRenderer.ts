@@ -3,8 +3,10 @@ import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { basemapStyleForScheme } from '../mapTheme';
 import { armVisibilityAwareTimeout } from './visibilityAwareTimeout';
-import { buildFeatures, LYR_STATIONS, registerMapIcons, type ViewOptions } from '../layers';
+import { LYR_STATIONS, registerMapIcons, type ViewOptions } from '../layers';
 import { addExportSourcesAndLayers, setExportFeatureData } from './exportLayerSetup';
+import { buildFeaturesForFittedMap } from '../static-render-features';
+
 const DEFAULT_SIZE = { width: 1600, height: 1000 };
 const RENDER_TIMEOUT_MS = 20000;
 
@@ -21,6 +23,28 @@ export interface RenderedExport {
   map: MLMap;
   canvas: HTMLCanvasElement;
   dispose: () => void;
+}
+
+function configureExportStationPaint(map: MLMap): void {
+  if (!map.getLayer(LYR_STATIONS)) return;
+  map.setPaintProperty(LYR_STATIONS, 'circle-radius', [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    10,
+    ['case', ['get', 'interchange'], 2.2, 1.4],
+    14,
+    ['case', ['get', 'interchange'], 5, 3.5],
+  ]);
+  map.setPaintProperty(LYR_STATIONS, 'circle-stroke-width', [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    10,
+    0.7,
+    14,
+    2,
+  ]);
 }
 
 /**
@@ -98,37 +122,18 @@ export function renderSystemForExport(
         addExportSourcesAndLayers(map);
 
         // Export-only: a full-system export frames thousands of stops at once, so
-        // shrink stop circles here (on the export map, NOT the live map) to
+        // shrink station circles here (on the export map, NOT the live map) to
         // keep dense networks legible instead of a mass of full-size rings. Still
         // zoom-interpolated, so a small/sparse system (framed at a higher zoom)
         // keeps readable dots. Live-map dots keep their reasonable floor.
-        if (map.getLayer(LYR_STATIONS)) {
-          map.setPaintProperty(LYR_STATIONS, 'circle-radius', [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            10,
-            ['case', ['get', 'interchange'], 2.2, 1.4],
-            14,
-            ['case', ['get', 'interchange'], 5, 3.5],
-          ]);
-          map.setPaintProperty(LYR_STATIONS, 'circle-stroke-width', [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            10,
-            0.7,
-            14,
-            2,
-          ]);
-        }
+        configureExportStationPaint(map);
 
         // Resize BEFORE fitBounds — fitBounds reads the current container size.
         map.resize();
         const bounds = systemBounds(system);
         if (bounds) map.fitBounds(bounds, { padding, animate: false });
 
-        const fc = buildFeatures(system, null, [], view);
+        const fc = buildFeaturesForFittedMap(system, view, map);
         setExportFeatureData(map, fc);
 
         map.once('idle', () => {

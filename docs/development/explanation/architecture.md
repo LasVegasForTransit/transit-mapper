@@ -350,6 +350,75 @@ the intended document through one guarded editor command. GTFS follows the
 same ownership rule: its Workers import core directly and return data rather
 than mutating editor state.
 
+### Geographic rendering
+
+`RenderPresentation` separates saved facts from visible bounds, zoom, the CSS
+projection viewport, final displayed size, and pixel ratio. The two CSS sizes
+let an offscreen export choose detail for its displayed size; pixel ratio
+changes sharpness, not LOD. Corridors choose detail from their displayed CSS
+width rather than a global zoom:
+
+| Displayed width | Presentation                                      |
+| --------------- | ------------------------------------------------- |
+| Below 2 px      | Overview corridor silhouette                      |
+| 2–4 px          | Overview/District cross-fade                      |
+| 4–9 px          | District physical corridor width                  |
+| 9–12 px         | District/Street cross-fade                        |
+| 12 px and above | Street lanes, markings, junctions, and connectors |
+
+District enters at 3 px and leaves below 2 px; Street enters at 12 px and
+leaves below 9 px. Hysteresis stabilizes the tier while deterministic weights
+keep pixels history-independent. Availability fields retain the nearest tier
+when projection falls behind the camera.
+
+Core validates each projection as a `RenderScene`: stable scene-unique feature
+IDs, canonical paint order, and separate interaction-hit geometry. Live,
+static MapLibre, and SVG output share this normalization.
+
+`MapCanvas` supplies document, camera, and editor events to one
+`LiveMapRenderer`; it does not assemble the pipeline. A maintainer needs five
+concepts:
+
+```mermaid
+flowchart LR
+  Input["Document and presentation"] --> Projection["Projection"]
+  Projection --> Scene["Private scene"]
+  Scene --> Bank["Inactive bank"]
+  Bank --> Accepted["Accepted pixels and hits"]
+  Editor["Editor state"] --> Accepted
+```
+
+| Concept      | Owning modules                                                 | Rule                                                     |
+| ------------ | -------------------------------------------------------------- | -------------------------------------------------------- |
+| Presentation | `render-presentation`, `camera-render-preload`                 | Describe display scale and reusable camera coverage.     |
+| Projection   | `document-projection`, `resumable-feature-projection*`         | Produce detached features from immutable document state. |
+| Scene        | `scene-draft*`, `accepted-scene-store`                         | Normalize IDs and retain the accepted CPU scene.         |
+| Bank         | `source-bank*`, `accepted-scene-recovery`                      | Switch complete visual and hit revisions together.       |
+| Editor state | `editor-feature-state`, `editor-overlays`, `render-visibility` | Keep transient work out of committed projection.         |
+
+`LiveMapRenderer` owns one `DocumentProjector`, one accepted scene store, and
+the two physical banks. It alone advances the accepted revision. Dependency
+and viewport indexes restrict work to the affected visible closure; a camera
+still inside the accepted envelope performs no projection. Work stays private
+and side-effect free until publication and yields between bounded units.
+
+The inactive bank is prepared offscreen, loaded, and painted before one switch
+makes its visual and hit layers authoritative. Failure rolls back to the old
+bank. Small stable-ID changes use `updateData`; resets and recovery use
+`setData`, and recovery replays the complete accepted scene without projecting
+the document again.
+
+`EditorFeatureState` owns selection, hover, halo visibility, and selected-route
+focus. It follows the active bank using feature state and never uploads
+geometry. `editor-overlays` owns the separate unbanked handles, service
+termini, and junction guides; those may run a small editor-only projection.
+Mode/type visibility remains a layer filter.
+
+This pipeline changes presentation and delivery, not the underlying physical
+geometry model. It does not yet derive watertight metric corridor polygons or
+adaptively tessellated curves. Diagram remains on its existing layout path and
+outside the cooperative geographic projection scheduler.
+
 ### Appearance and map styles
 
 The operating system is the only appearance authority. `apps/web/src/theme/`

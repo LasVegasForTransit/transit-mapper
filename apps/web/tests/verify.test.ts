@@ -77,13 +77,15 @@ import {
 } from '../src/map/interactions';
 import { KEY_BINDINGS, matchesKey, resolveBinding, type KeyContext } from '../src/editor/keymap';
 import {
-  buildFeatures,
+  buildFeatures as buildFeaturesWithPresentation,
   buildHandles,
   buildPhysicalHandles,
   HANDLE_ICON,
   LAYER_SPECS,
   SRC_ENDPOINT_HINT,
   SRC_PREVIEW,
+  type RenderViewOptions,
+  type ViewOptions,
 } from '../src/map/layers';
 import { LANDMARKS, landmarksFeatureCollection } from '../src/map/landmarks';
 import { armVisibilityAwareTimeout } from '../src/map/export/visibilityAwareTimeout';
@@ -113,6 +115,7 @@ import { legendEntriesFor } from '../src/share/exportLegend';
 import { formatScaleMeters, niceScaleMeters } from '../src/share/exportScale';
 import { FEATURE_INPUT_ROLE } from '@transitmapper/core/render/featureInputs';
 import { fitBounds, metersPerPixel, projector } from '@transitmapper/core/render/project';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import {
   PREVIEW_FONT_FAMILY,
   PREVIEW_HEIGHT,
@@ -275,6 +278,68 @@ import {
   ONBOARDING_FIXTURE_SYSTEM,
   ONBOARDING_PATTERN_STATS,
 } from '../src/ui/onboarding/fixtureSystem';
+
+const DEFAULT_TEST_RENDER_PRESENTATION = renderPresentationForViewport({
+  // One deterministic world-scale camera preserves the old verifier's
+  // all-system candidate coverage while still crossing the strict renderer
+  // boundary with real screen-space facts.
+  center: [0, 0],
+  zoom: 0,
+  width: 1_440,
+  height: 900,
+});
+const STREET_TEST_RENDER_PRESENTATION = renderPresentationForViewport({
+  center: [-115.15, 36.1],
+  zoom: 20,
+  width: 1_440,
+  height: 900,
+});
+const STREET_SERVICE_TEST_RENDER_PRESENTATION = renderPresentationForViewport({
+  center: [-115.15, 36.12],
+  zoom: 20,
+  width: 1_440,
+  height: 900,
+});
+
+type BuildFeaturesArguments = Parameters<typeof buildFeaturesWithPresentation>;
+type TestBuildFeaturesArguments = [
+  system: BuildFeaturesArguments[0],
+  selection: BuildFeaturesArguments[1],
+  handleWayIds: BuildFeaturesArguments[2],
+  view: ViewOptions,
+  physicalHandleStationId?: BuildFeaturesArguments[4],
+  physicalHandleGroupId?: BuildFeaturesArguments[5],
+  options?: BuildFeaturesArguments[6],
+];
+
+/** Resolve the sequential verifier's semantic views at its renderer boundary.
+ * Individual LOD/culling cases continue to supply their own exact camera. */
+function buildFeatures(
+  ...args: TestBuildFeaturesArguments
+): ReturnType<typeof buildFeaturesWithPresentation> {
+  const [
+    system,
+    selection,
+    handleWayIds,
+    view,
+    physicalHandleStationId = null,
+    physicalHandleGroupId = null,
+    options = {},
+  ] = args;
+  const resolvedView: RenderViewOptions = {
+    ...view,
+    presentation: view.presentation ?? DEFAULT_TEST_RENDER_PRESENTATION,
+  };
+  return buildFeaturesWithPresentation(
+    system,
+    selection,
+    handleWayIds,
+    resolvedView,
+    physicalHandleStationId,
+    physicalHandleGroupId,
+    options,
+  );
+}
 
 let failures = 0;
 function check(name: string, cond: boolean) {
@@ -934,7 +999,7 @@ check(
 
   const infra = buildFeatures(sys, null, [], {
     viewMode: 'infrastructure',
-    laneDetail: true,
+    presentation: STREET_SERVICE_TEST_RENDER_PRESENTATION,
     ...filters,
   });
   const infraFeats = infra.services.features.filter(
@@ -1501,8 +1566,8 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 }
 
-// --- P2: physical cross-sections — capacity fans a way into that many
-// parallel lane/track features, Infrastructure-view only ---
+// --- P2: Overview rendering — capacity changes physical width, never the
+// number of distant corridor silhouettes ---
 {
   fresh();
   const road = required(store.commands.ways.beginWay('road', 'straight'));
@@ -1522,14 +1587,37 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   store.commands.ways.setWayCapacity(road, 4);
 
   const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(['road']) };
-  const infra = buildFeatures(store.getState().system, null, [], {
+  const overviewPresentation = renderPresentationForViewport({
+    center: [-115.15, 36.1],
+    zoom: 8,
+    width: 1440,
+    height: 900,
+  });
+  const oneLaneOverview = buildFeatures(store.getState().system, null, [], {
     viewMode: 'infrastructure',
     ...filters,
+    presentation: overviewPresentation,
   });
-  const roadFeatures = infra.ways.features.filter((f) => f.properties?.id === road);
-  check('infrastructure view fans a 4-lane road into 4 offset features', roadFeatures.length === 4);
-  const offsets = new Set(roadFeatures.map((f) => f.properties?.offset));
-  check('each lane gets a distinct offset', offsets.size === 4);
+  store.getState().setWayCapacity(road, 4);
+
+  const fourLaneOverview = buildFeatures(store.getState().system, null, [], {
+    viewMode: 'infrastructure',
+    ...filters,
+    presentation: overviewPresentation,
+  });
+  const oneLaneFeatures = oneLaneOverview.ways.features.filter((f) => f.properties?.id === road);
+  const fourLaneFeatures = fourLaneOverview.ways.features.filter((f) => f.properties?.id === road);
+  check(
+    'Overview emits one corridor silhouette regardless of lane count',
+    oneLaneFeatures.length === 1 && fourLaneFeatures.length === 1,
+  );
+  check(
+    'the Overview silhouette is centered and carries a stable render identity',
+    fourLaneFeatures[0].properties?.renderTier === 'overview' &&
+      fourLaneFeatures[0].properties.offset === 0 &&
+      typeof fourLaneFeatures[0].id === 'string' &&
+      fourLaneFeatures[0].id === oneLaneFeatures[0].id,
+  );
 
   // Network view is service-focused — a bare road's infra line (unserved) is
   // hidden entirely, and a road's own infra line stays hidden even once
@@ -5737,7 +5825,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   const fiView = {
     viewMode: 'infrastructure' as const,
-    laneDetail: true,
+    presentation: STREET_TEST_RENDER_PRESENTATION,
     visibleModes: new Set(Object.keys(MODES)),
     visibleWayTypes: new Set(WAY_TYPE_ORDER),
   };
@@ -8043,7 +8131,7 @@ check(
   Object.values(MODES).every((m) => (m.preferredLaneKindIds?.length ?? 0) > 0),
 );
 
-// --- R2: lane-detail rendering emission (LOD + viewport scoping) ---
+// --- R2: screen-space detail rendering emission (LOD + viewport scoping) ---
 {
   fresh();
   const r = required(store.commands.ways.beginWay('road', 'straight'));
@@ -8052,32 +8140,47 @@ check(
   store.commands.ways.finishWay();
   const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(['road']) };
 
+  const overviewPresentation = renderPresentationForViewport({
+    center: [-115.15, 36.1],
+    zoom: 8,
+    width: 1440,
+    height: 900,
+  });
   const infraFar = buildFeatures(store.getState().system, null, [], {
     viewMode: 'infrastructure',
     ...filters,
+    presentation: overviewPresentation,
   });
   check(
-    'without laneDetail the fan renders and lanes stay empty',
-    infraFar.lanes.features.length === 0 && infraFar.ways.features.length > 0,
+    'Overview emits one corridor silhouette and no lane geometry',
+    infraFar.lanes.features.length === 0 &&
+      infraFar.ways.features.length === 1 &&
+      infraFar.ways.features[0].properties?.renderTier === 'overview',
   );
 
+  const streetPresentation = renderPresentationForViewport({
+    center: [-115.15, 36.1],
+    zoom: 19,
+    width: 1440,
+    height: 900,
+  });
   const infraNear = buildFeatures(store.getState().system, null, [], {
     viewMode: 'infrastructure',
     ...filters,
-    laneDetail: true,
+    presentation: streetPresentation,
   });
   const wayObj = store.getState().system.ways[0];
   check(
-    'laneDetail emits one surface per surface lane',
+    'Street emits one surface per surface lane',
     infraNear.lanes.features.length === wayObj.profile.lanes.length,
   );
   check(
-    'laneDetail replaces the fan for that way',
+    'Street replaces the Overview and District corridor silhouettes for that way',
     infraNear.ways.features.filter((f) => f.properties?.id === r && !f.properties?.haloOnly)
       .length === 0,
   );
-  check('laneDetail emits markings', infraNear.laneMarkings.features.length > 0);
-  check('laneDetail emits direction arrows', infraNear.laneArrows.features.length > 0);
+  check('Street emits markings', infraNear.laneMarkings.features.length > 0);
+  check('Street emits direction arrows', infraNear.laneArrows.features.length > 0);
   check(
     'lane features carry a metric z14 pixel width',
     infraNear.lanes.features.every(
@@ -8085,24 +8188,26 @@ check(
     ),
   );
 
+  const offscreenPresentation = renderPresentationForViewport({
+    center: [-114.45, 36.55],
+    zoom: 19,
+    width: 1440,
+    height: 900,
+  });
   const offscreen = buildFeatures(store.getState().system, null, [], {
     viewMode: 'infrastructure',
     ...filters,
-    laneDetail: true,
-    bounds: [
-      [-114.5, 36.5],
-      [-114.4, 36.6],
-    ],
+    presentation: offscreenPresentation,
   });
   check(
-    'viewport scoping: offscreen ways keep the cheap fan',
-    offscreen.lanes.features.length === 0 && offscreen.ways.features.length > 0,
+    'viewport scoping: offscreen ways generate no visual tier',
+    offscreen.lanes.features.length === 0 && offscreen.ways.features.length === 0,
   );
 
   const net = buildFeatures(store.getState().system, null, [], {
     viewMode: 'network',
     ...filters,
-    laneDetail: true,
+    presentation: streetPresentation,
   });
   check('network view never lane-renders', net.lanes.features.length === 0);
 
@@ -8110,10 +8215,10 @@ check(
   const tunnel = buildFeatures(store.getState().system, null, [], {
     viewMode: 'infrastructure',
     ...filters,
-    laneDetail: true,
+    presentation: streetPresentation,
   });
   check(
-    'underground ways keep the dashed fan (no asphalt in a tunnel)',
+    'underground ways do not emit at-grade asphalt lane surfaces',
     tunnel.lanes.features.length === 0,
   );
 }
@@ -8493,7 +8598,7 @@ check(
   const fc = buildFeatures(store.getState().system, null, [], {
     viewMode: 'infrastructure',
     ...filters,
-    laneDetail: true,
+    presentation: STREET_TEST_RENDER_PRESENTATION,
   });
   check('lane detail emits the junction footprint', fc.junctions.features.length === 1);
   // Connector guides are scoped to the SELECTED junction — otherwise a complex
@@ -8511,13 +8616,16 @@ check(
   const sel = buildFeatures(store.getState().system, { kind: 'node', id: nodeId }, [], {
     viewMode: 'infrastructure',
     ...filters,
-    laneDetail: true,
+    presentation: STREET_TEST_RENDER_PRESENTATION,
   });
   check(
     "a selected junction's footprint is flagged",
     sel.junctions.features.some((f) => f.properties?.selected === true),
   );
-  check('a selected junction emits its connector guides', sel.connectors.features.length > 0);
+  check(
+    'selected junction guides stay out of the settled connector source',
+    sel.connectors.features.length === 0,
+  );
 }
 
 // --- R4: street name labels + lane keyboard shortcuts ---
@@ -9614,12 +9722,17 @@ function buildGrid() {
     visibleWayTypes: new Set(WAY_TYPE_ORDER),
   };
   const vp = fitBounds(systemBounds(crowded)!, { width: 1200, height: 630, padding: 56 });
-  const dense = systemSvg(crowded, view, projector(vp), {
-    title: crowded.name,
-    legend: [],
-    width: 1200,
-    height: 630,
-  });
+  const dense = systemSvg(
+    crowded,
+    { ...view, presentation: renderPresentationForViewport(vp) },
+    projector(vp),
+    {
+      title: crowded.name,
+      legend: [],
+      width: 1200,
+      height: 630,
+    },
+  );
 
   // Reconstruct each drawn label's box from the markup and check no two of
   // them intersect. Boxes are approximated the same way the renderer does.
@@ -9673,12 +9786,17 @@ function buildGrid() {
     if (st) st.name = `Stop ${i}`;
   });
   const vp2 = fitBounds(systemBounds(spaced)!, { width: 1200, height: 630, padding: 56 });
-  const roomySvg = systemSvg(spaced, view, projector(vp2), {
-    title: '',
-    legend: [],
-    width: 1200,
-    height: 630,
-  });
+  const roomySvg = systemSvg(
+    spaced,
+    { ...view, presentation: renderPresentationForViewport(vp2) },
+    projector(vp2),
+    {
+      title: '',
+      legend: [],
+      width: 1200,
+      height: 630,
+    },
+  );
   check(
     'a sparse map keeps every stop label',
     sparse.every((_, i) => roomySvg.includes(`Stop ${i}`)),
@@ -9843,20 +9961,20 @@ function buildGrid() {
     label: `Line ${i + 1}`,
   }));
   const cardHeight = PREVIEW_HEIGHT / 2;
+  const crowdedViewport = fitBounds(systemBounds(system)!, {
+    width: PREVIEW_WIDTH / 2,
+    height: cardHeight,
+    padding: 28,
+  });
   const crowded = systemSvg(
     system,
     {
       viewMode: 'network',
       visibleModes: new Set(MODE_ORDER),
       visibleWayTypes: new Set(WAY_TYPE_ORDER),
+      presentation: renderPresentationForViewport(crowdedViewport),
     },
-    projector(
-      fitBounds(systemBounds(system)!, {
-        width: PREVIEW_WIDTH / 2,
-        height: cardHeight,
-        padding: 28,
-      }),
-    ),
+    projector(crowdedViewport),
     {
       title: system.name,
       legend: manyLines,
@@ -9888,6 +10006,7 @@ function buildGrid() {
       viewMode: 'network',
       visibleModes: new Set(MODE_ORDER),
       visibleWayTypes: new Set(WAY_TYPE_ORDER),
+      presentation: renderPresentationForViewport(exportViewport),
     },
     projector(exportViewport),
     {

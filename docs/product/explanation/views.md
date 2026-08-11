@@ -20,6 +20,22 @@ junctions. Neither view is a simplification of the other; they're
 projections of the same data, and details like one-way direction surface
 in both (chevrons in Network, lane arrows in Infrastructure).
 
+## Screen-space detail
+
+The two geographic views choose detail from how wide each corridor appears on
+screen, not from one fixed zoom number. In Infrastructure, Overview is one
+clean silhouette regardless of lane count, District expands to the aggregate
+physical width, and Street introduces lane, marking, junction, and connector
+detail. Network uses the same bands to move service paths from a centered
+schematic placement toward their assigned lanes without displaying physical
+lane furniture. Adjacent scales blend over a few displayed pixels so a camera
+move does not make the map pop between drawings.
+
+This changes only what is legible at the current display size. It does not
+discard lanes, alter service routing, or produce a different settled export.
+Diagram remains a separate schematic projection; it does not pretend that its
+straightened geometry is geographic Street detail.
+
 ## Why the Infrastructure view is 2D
 
 This rule does real work: **everything drawn in the Infrastructure view

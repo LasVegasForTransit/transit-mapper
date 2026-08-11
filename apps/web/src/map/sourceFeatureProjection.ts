@@ -6,31 +6,26 @@ import type { TransitSystem } from '@transitmapper/core/model/system';
 import { featureCollectionStats } from '@transitmapper/core/render/feature-stats';
 import {
   buildFeatures,
+  createFeatureBuildOperationCounts,
   type FeatureBuildOperationCounts,
   type Highlight,
-  type SystemFeatureName,
+  type RenderViewOptions,
   type SystemFeatures,
-  type ViewOptions,
 } from '@transitmapper/core/render/buildFeatures';
+import type { RenderProjectionScope } from '@transitmapper/core/render/render-projection-scope';
+import type { RenderFeatureProjectionUnitScope } from '@transitmapper/core/render/render-feature-projection-unit';
+import type { RenderViewportCandidateSets } from '@transitmapper/core/render/render-viewport-candidates';
+import type { RenderPreparedSnapshot } from '@transitmapper/core/render/render-preparation';
 import {
-  SRC_CONNECTORS,
-  SRC_FACILITIES,
-  SRC_FOOTPRINTS,
   SRC_HANDLES,
-  SRC_SERVICE_TERMINI,
-  SRC_JUNCTIONS,
   SRC_LANE_ARROWS,
-  SRC_LANE_MARKINGS,
-  SRC_LANES,
-  SRC_PHYSICAL_HANDLES,
-  SRC_PLATFORMS,
   SRC_SERVICE_ARROWS,
   SRC_SERVICES,
   SRC_STATIONS,
-  SRC_WAY_LABELS,
   SRC_WAYS,
 } from './layers';
 import type { SystemFeatureSourceId } from './sourceUploadPlan';
+import { SYSTEM_FEATURE_NAME_BY_SOURCE } from './system-feature-sources';
 
 export interface SourceFeatureProjectionCounts
   extends FeatureBuildOperationCounts, DiagramLayoutOperationCounts {
@@ -39,13 +34,57 @@ export interface SourceFeatureProjectionCounts
   rendererGeneratedVertexCount: number;
 }
 
+/** Creates one isolated projection counter set. Cooperative generations and
+ * synchronous editor refreshes must never mutate the same object because
+ * their lifetimes can overlap across yielded frames. */
+export function createSourceFeatureProjectionCounts(): SourceFeatureProjectionCounts {
+  return {
+    ...createFeatureBuildOperationCounts(),
+    diagramTopologyBuildCount: 0,
+    diagramTopologyCacheHitCount: 0,
+    diagramStationBuildCount: 0,
+    diagramStationCacheHitCount: 0,
+    rendererCandidateFeatureCount: 0,
+    rendererGeneratedFeatureCount: 0,
+    rendererGeneratedVertexCount: 0,
+  };
+}
+
+const SOURCE_FEATURE_PROJECTION_COUNT_KEYS = Object.keys(
+  createSourceFeatureProjectionCounts(),
+) as Array<keyof SourceFeatureProjectionCounts>;
+
+function addProjectionCount(
+  target: SourceFeatureProjectionCounts,
+  source: SourceFeatureProjectionCounts,
+  key: keyof SourceFeatureProjectionCounts,
+): void {
+  target[key] += source[key];
+}
+
+/** Adds one privately completed physical attempt to its logical generation.
+ * Failed and canceled attempts never call this helper. */
+export function mergeSourceFeatureProjectionCounts(
+  target: SourceFeatureProjectionCounts,
+  source: SourceFeatureProjectionCounts,
+): void {
+  for (const key of SOURCE_FEATURE_PROJECTION_COUNT_KEYS) {
+    addProjectionCount(target, source, key);
+  }
+}
+
 export interface BuildFeaturesForSourcesOptions {
   system: TransitSystem;
   selection: Highlight;
   handleWayIds: string[];
-  view: ViewOptions;
+  view: RenderViewOptions;
   sourceIds: readonly SystemFeatureSourceId[];
-  stopIds?: readonly string[];
+  projectionScope?: RenderProjectionScope;
+  unitScope?: RenderFeatureProjectionUnitScope;
+  precomputedViewportCandidates?: RenderViewportCandidateSets;
+  preparedSnapshot?: RenderPreparedSnapshot;
+  selectionOwnedConnectors?: boolean;
+  stationIds?: readonly string[];
   physicalHandleStationId?: string | null;
   physicalHandleGroupId?: string | null;
   activePatternId?: string | null;
@@ -56,25 +95,6 @@ export interface BuildFeaturesForSourcesOptions {
   } | null;
   counts?: SourceFeatureProjectionCounts;
 }
-
-const FEATURE_NAME_BY_SOURCE: Record<SystemFeatureSourceId, SystemFeatureName> = {
-  [SRC_WAYS]: 'ways',
-  [SRC_SERVICES]: 'services',
-  [SRC_STATIONS]: 'stops',
-  [SRC_HANDLES]: 'handles',
-  [SRC_SERVICE_TERMINI]: 'serviceTermini',
-  [SRC_FOOTPRINTS]: 'footprints',
-  [SRC_PLATFORMS]: 'platforms',
-  [SRC_FACILITIES]: 'facilities',
-  [SRC_PHYSICAL_HANDLES]: 'physicalHandles',
-  [SRC_LANES]: 'lanes',
-  [SRC_LANE_MARKINGS]: 'laneMarkings',
-  [SRC_LANE_ARROWS]: 'laneArrows',
-  [SRC_SERVICE_ARROWS]: 'serviceArrows',
-  [SRC_JUNCTIONS]: 'junctions',
-  [SRC_CONNECTORS]: 'connectors',
-  [SRC_WAY_LABELS]: 'wayLabels',
-};
 
 /** Only these Diagram collections consume schematic coordinates. Physical
  * planning collections are deliberately empty outside Infrastructure view,
@@ -88,20 +108,10 @@ const DIAGRAM_LAYOUT_SOURCES = new Set<SystemFeatureSourceId>([
   SRC_SERVICE_ARROWS,
 ]);
 
-const SERVICE_CANDIDATE_SOURCES = new Set<SystemFeatureSourceId>([
-  SRC_WAYS,
-  SRC_SERVICES,
-  SRC_STATIONS,
-  SRC_SERVICE_TERMINI,
-  SRC_LANES,
-  SRC_LANE_MARKINGS,
-  SRC_LANE_ARROWS,
-  SRC_SERVICE_ARROWS,
-]);
-
 function candidateVisitCount(counts: SourceFeatureProjectionCounts): number {
   return (
     counts.featureTopologyWayVisitCount +
+    counts.featureServiceWayVisitCount +
     counts.featureJunctionNodeVisitCount +
     counts.featureStationVisitCount +
     counts.featureHandleWayVisitCount +
@@ -117,7 +127,6 @@ interface RecordProjectionDimensionsOptions {
   candidateVisitsBefore: number;
   features: SystemFeatures;
   sourceIds: readonly SystemFeatureSourceId[];
-  serviceCount: number;
 }
 
 function recordProjectionDimensions({
@@ -125,16 +134,11 @@ function recordProjectionDimensions({
   candidateVisitsBefore,
   features,
   sourceIds,
-  serviceCount,
 }: RecordProjectionDimensionsOptions): void {
   const output = featureCollectionStats(
-    sourceIds.map((sourceId) => features[FEATURE_NAME_BY_SOURCE[sourceId]]),
+    sourceIds.map((sourceId) => features[SYSTEM_FEATURE_NAME_BY_SOURCE[sourceId]]),
   );
-  const serviceCandidates = sourceIds.some((sourceId) => SERVICE_CANDIDATE_SOURCES.has(sourceId))
-    ? serviceCount
-    : 0;
-  counts.rendererCandidateFeatureCount +=
-    candidateVisitCount(counts) - candidateVisitsBefore + serviceCandidates;
+  counts.rendererCandidateFeatureCount += candidateVisitCount(counts) - candidateVisitsBefore;
   counts.rendererGeneratedFeatureCount += output.featureCount;
   counts.rendererGeneratedVertexCount += output.vertexCount;
 }
@@ -145,7 +149,12 @@ export function buildFeaturesForSources({
   handleWayIds,
   view,
   sourceIds,
-  stopIds,
+  projectionScope,
+  unitScope,
+  precomputedViewportCandidates,
+  preparedSnapshot,
+  selectionOwnedConnectors,
+  stationIds,
   physicalHandleStationId = null,
   physicalHandleGroupId = null,
   activePatternId = null,
@@ -166,8 +175,13 @@ export function buildFeaturesForSources({
     physicalHandleStationId,
     physicalHandleGroupId,
     {
-      requestedFeatures: sourceIds.map((sourceId) => FEATURE_NAME_BY_SOURCE[sourceId]),
-      stopIds,
+      requestedFeatures: sourceIds.map((sourceId) => SYSTEM_FEATURE_NAME_BY_SOURCE[sourceId]),
+      stationIds,
+      projectionScope,
+      unitScope,
+      precomputedViewportCandidates,
+      preparedSnapshot,
+      selectionOwnedConnectors,
       counts,
       activePatternId,
       armedTerminus,
@@ -179,7 +193,6 @@ export function buildFeaturesForSources({
       candidateVisitsBefore,
       features,
       sourceIds,
-      serviceCount: system.services.length,
     });
   }
   return features;

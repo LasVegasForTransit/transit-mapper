@@ -17,6 +17,8 @@ export interface RendererCaptureManifestEntry {
   viewMode: RendererCaptureCase['viewMode'] | 'context';
   detail: RendererCaptureCase['detail'] | 'context' | 'filmstrip' | 'reference';
   zoom: number | null;
+  /** Screen-space calibration for filmstrip frames; absent on other captures. */
+  targetCorridorWidthPx?: number;
   fixtureId: RendererFixtureId | 'onboarding';
   viewport: RendererCaptureViewport;
   camera: { center: [number, number]; zoom: number } | null;
@@ -33,7 +35,7 @@ export interface RendererCaptureManifest {
     theme: 'light' | 'dark' | 'all';
   };
   generatedAt: string;
-  source: { revision: string; dirty: boolean };
-  basemap: 'local-blank-v1';
+  source: { revision: string; dirty: boolean; contentSha256: string };
+  basemap: 'local-blank-v2';
   captures: RendererCaptureManifestEntry[];
 }

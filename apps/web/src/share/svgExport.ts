@@ -1,15 +1,17 @@
 import type { Map as MLMap } from 'maplibre-gl';
-import { systemSvg } from '@transitmapper/core/render/svg';
-import { fitBounds, metersPerPixel, type Viewport } from '@transitmapper/core/render/project';
+import { fitBounds, metersPerPixel } from '@transitmapper/core/render/project';
 import { scaleBarFor } from '@transitmapper/core/render/scaleBar';
 import type { ViewOptions } from '../map/layers';
 import { getMap } from '../map/mapRef';
 import { systemBounds } from '@transitmapper/core/model/geo';
-import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
+import type { TransitSystem } from '@transitmapper/core/model/system';
 import { legendEntriesFor, type LegendEntry } from './exportLegend';
 import { scaleBarSpec } from './exportScale';
 import { singleFlight } from './singleFlight';
 import { renderSvgInWorker } from './svgWorker';
+import { svgViewForFittedMap, svgViewForViewport } from './svg-render-view';
+import type { GroundPlaneProjection, GroundPlaneProjectionAnchor } from './svg-worker-projector';
+
 // The browser half of SVG export. The composition itself lives in core
 // (render/svg.ts) — this supplies the things only a live map knows: how big
 // the viewport is, how to project a coordinate, which way is north, and what
@@ -31,38 +33,41 @@ export interface SvgComposeOptions {
   legend: LegendEntry[];
 }
 
-function flatViewportForMap(map: MLMap): Viewport {
-  const container = map.getContainer();
-  const center = map.getCenter();
-  return {
-    center: [center.lng, center.lat],
-    zoom: map.getZoom(),
-    width: container.clientWidth,
-    height: container.clientHeight,
-  };
+interface ExportSvgFromMapOptions extends SvgComposeOptions {
+  filename?: string;
+  signal?: AbortSignal;
 }
 
-/** Vector export of the schematic, projected through the *given* map's own
- *  project() — pass the export dialog's own preview map instance (already
- *  framed to the whole system) rather than always reading the live app map,
- *  so the SVG matches whatever framing the user chose. */
-function svgMarkup(
-  system: TransitSystem,
-  view: ViewOptions,
-  map: MLMap,
-  opts: SvgComposeOptions,
-): string {
+function groundPlaneProjectionForMap(map: MLMap): GroundPlaneProjection {
   const container = map.getContainer();
-  const width = container.clientWidth;
-  const height = container.clientHeight;
-  return systemSvg(system, view, (lngLat: LngLat) => map.project(lngLat), {
-    title: opts.title,
-    legend: opts.legend,
-    width,
-    height,
-    bearing: map.getBearing(),
-    scaleBar: scaleBarSpec(map, Math.min(140, width * 0.3)),
-  });
+  const center = map.getCenter();
+  const samples: readonly [
+    readonly [number, number],
+    readonly [number, number],
+    readonly [number, number],
+    readonly [number, number],
+  ] = [
+    [0, 0],
+    [container.clientWidth, 0],
+    [0, container.clientHeight],
+    [container.clientWidth, container.clientHeight],
+  ];
+  const anchorAt = ([x, y]: readonly [number, number]): GroundPlaneProjectionAnchor => {
+    const coordinate = map.unproject([x, y]);
+    return {
+      coordinate: [coordinate.lng, coordinate.lat],
+      point: { x, y },
+    };
+  };
+  return {
+    centerLongitude: center.lng,
+    anchors: [
+      anchorAt(samples[0]),
+      anchorAt(samples[1]),
+      anchorAt(samples[2]),
+      anchorAt(samples[3]),
+    ],
+  };
 }
 
 /** Export from an already-framed map (e.g. the export dialog's own preview
@@ -72,10 +77,9 @@ export function exportSvgFromMap(
   system: TransitSystem,
   view: ViewOptions,
   map: MLMap,
-  opts: SvgComposeOptions,
-  filename = 'transit-system.svg',
-  signal?: AbortSignal,
+  options: ExportSvgFromMapOptions,
 ): Promise<void> {
+  const { filename = 'transit-system.svg', signal } = options;
   if (signal?.aborted) {
     return Promise.reject(
       signal.reason instanceof Error
@@ -84,30 +88,19 @@ export function exportSvgFromMap(
     );
   }
   const container = map.getContainer();
-
-  // ExportPreviewMap disables rotation and pitch, so its camera can use core's
-  // MapLibre-compatible pure Web Mercator projector in a Worker. Keep the
-  // exact live-map fallback for older callers that deliberately rotate a map;
-  // visual fidelity is more important than moving that unusual case off-thread.
-  if (map.getBearing() !== 0 || map.getPitch() !== 0) {
-    downloadBlob(
-      new Blob([svgMarkup(system, view, map, opts)], { type: 'image/svg+xml' }),
-      filename,
-    );
-    return Promise.resolve();
-  }
+  const renderView = svgViewForFittedMap(view, map);
 
   return renderSvgInWorker(
     {
       system,
-      view,
-      viewport: flatViewportForMap(map),
+      view: renderView,
+      projection: groundPlaneProjectionForMap(map),
       options: {
-        title: opts.title,
-        legend: opts.legend,
+        title: options.title,
+        legend: options.legend,
         width: container.clientWidth,
         height: container.clientHeight,
-        bearing: 0,
+        bearing: map.getBearing(),
         scaleBar: scaleBarSpec(map, Math.min(140, container.clientWidth * 0.3)),
       },
     },
@@ -144,10 +137,11 @@ const fullSystemSvgFlight = singleFlight(
     const viewport = bounds
       ? fitBounds(bounds, { width, height, padding: 56 })
       : { center: system.viewport.center, zoom: system.viewport.zoom, width, height };
+    const renderView = svgViewForViewport(view, viewport);
     try {
       const markup = await renderSvgInWorker({
         system,
-        view,
+        view: renderView,
         viewport,
         options: {
           title: system.name || 'Transit system',

@@ -57,6 +57,7 @@ async function captureEditorCases({
       viewMode: capture.viewMode,
       detail: capture.detail,
       zoom: capture.zoom,
+      targetCorridorWidthPx: capture.targetCorridorWidthPx,
       fixtureId: 'port-mason',
       viewport: {
         width: viewport.width,
@@ -139,6 +140,7 @@ export async function captureFractionalFilmstrips(
         viewMode: capture.viewMode,
         detail: 'filmstrip',
         zoom: capture.zoom,
+        targetCorridorWidthPx: capture.targetCorridorWidthPx,
         fixtureId: 'port-mason',
         viewport: {
           width: viewport.width,

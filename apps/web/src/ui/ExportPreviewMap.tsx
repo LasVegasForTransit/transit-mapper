@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react';
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
-import { buildFeatures, registerMapIcons, SRC_STATIONS, type ViewOptions } from '../map/layers';
+import { registerMapIcons, SRC_STATIONS, type ViewOptions } from '../map/layers';
 import { addExportSourcesAndLayers, setExportFeatureData } from '../map/export/exportLayerSetup';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { basemapStyleForScheme } from '../map/mapTheme';
 import { createRenderSettlementMarker } from '../map/render-settlement-marker';
+import { buildFeaturesForFittedMap } from '../map/static-render-features';
 
 /**
  * A second, read-only MapLibre instance for the export dialog — deliberately
@@ -43,6 +44,7 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
       pitchWithRotate: false,
     });
     mapRef.current = map;
+    const onCameraSettled = () => pushDataRef.current();
 
     map.on('load', () => {
       registerMapIcons(map, 'light');
@@ -60,6 +62,8 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
       pushDataRef.current();
       map.once('idle', () => settlement.markSettled());
       onReadyRef.current(map);
+      map.on('moveend', onCameraSettled);
+      map.on('resize', onCameraSettled);
     });
 
     const ro = new ResizeObserver(() => map.resize());
@@ -69,6 +73,8 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
       ro.disconnect();
       settlement.clear();
       mapRef.current = null;
+      map.off('moveend', onCameraSettled);
+      map.off('resize', onCameraSettled);
       map.remove();
     };
     // Mounts once; the preview map's own life (bounds fit, sources) starts
@@ -81,7 +87,7 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
     const map = mapRef.current;
     if (!map?.getSource(SRC_STATIONS)) return;
     if (containerRef.current) delete containerRef.current.dataset.renderSettled;
-    const fc = buildFeatures(system, null, [], view);
+    const fc = buildFeaturesForFittedMap(system, view, map);
     setExportFeatureData(map, fc);
     map.once('idle', () => {
       if (containerRef.current) containerRef.current.dataset.renderSettled = 'true';
