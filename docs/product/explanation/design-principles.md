@@ -27,8 +27,8 @@ model can be tested without caring about colors, and a visual restyle
 never needs a data migration.
 
 In practice: domain data lives in `src/model/`, and how it renders lives
-in `src/style/catalogStyle.ts`. The one exception is a service's line
-color, which stays with the domain data because "the red line" is part of
+in `src/style/catalogStyle.ts`. The one exception is a Line's color,
+which stays with the domain data because "the red line" is part of
 the line's identity, not just its paint.
 
 ## The rules of the system should be checkable without a browser

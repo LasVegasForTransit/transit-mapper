@@ -14,15 +14,8 @@ import { servicePattern, withServicePattern } from './line-service';
 import { pruneSections, splitLegsAt } from './patternEdits';
 import { materializeRouteSpans } from './routeLegs';
 import { anchorOnWay, routeBetween, type RouteSpan } from './routeGraph';
-import type {
-  Line,
-  LngLat,
-  Pattern,
-  PatternLeg,
-  Service,
-  StationAnchor,
-  TransitSystem,
-} from './system';
+import { reanchorStationsToReplacementWays } from './station-reanchoring';
+import type { Line, LngLat, Pattern, PatternLeg, Service, TransitSystem } from './system';
 import { removeWayFromSystem } from './way-removal';
 
 const ADOPT_SNAP_M = 500;
@@ -156,23 +149,6 @@ function routedAdoption(
   return adoptedLegs ? { oldWayIds, adoptedLegs } : null;
 }
 
-function nearestAdoptedAnchor(
-  system: TransitSystem,
-  adoptedWayIds: Set<string>,
-  coord: LngLat,
-): StationAnchor | undefined {
-  let best: StationAnchor | undefined;
-  let bestDistance = ADOPT_STATION_REANCHOR_M;
-  for (const way of system.ways) {
-    if (!adoptedWayIds.has(way.id)) continue;
-    const nearest = nearestOnPath(resolveWayPath(way), coord);
-    if (!nearest || nearest.distMeters >= bestDistance) continue;
-    bestDistance = nearest.distMeters;
-    best = { wayId: way.id, t: nearest.t };
-  }
-  return best;
-}
-
 function withAdoptedPattern(
   system: TransitSystem,
   serviceId: string,
@@ -192,16 +168,10 @@ function withAdoptedPattern(
             sections: oneSection(adoption.adoptedLegs),
           }),
     ),
-    stations: system.stations.map((station) => {
-      if (!station.anchors.some((anchor) => excluded.has(anchor.wayId))) return station;
-      const best = nearestAdoptedAnchor(system, adoptedWayIds, station.coord);
-      const detached = station.anchors.filter((anchor) => !excluded.has(anchor.wayId));
-      return best
-        ? {
-            ...station,
-            anchors: [best, ...detached.filter((anchor) => anchor.wayId !== best.wayId)],
-          }
-        : { ...station, anchors: detached };
+    stations: reanchorStationsToReplacementWays(system, {
+      replacedWayIds: excluded,
+      replacementWayIds: adoptedWayIds,
+      maxDistanceM: ADOPT_STATION_REANCHOR_M,
     }),
   };
 }

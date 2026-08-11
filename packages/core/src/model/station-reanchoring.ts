@@ -4,6 +4,12 @@ import type { Station, StationAnchor, TransitSystem } from './system';
 const COORDINATE_IDENTITY_TOLERANCE_M = 1e-6;
 const ANCHOR_IDENTITY_TOLERANCE = 1e-12;
 
+export interface ReplacementWayReanchoringOptions {
+  replacedWayIds: ReadonlySet<string>;
+  replacementWayIds: ReadonlySet<string>;
+  maxDistanceM: number;
+}
+
 /** Replace one way attachment and keep at most one attachment to the destination way. */
 export function replacedStationAnchors(
   station: Station,
@@ -57,6 +63,44 @@ export function reanchorStationsOnWay(system: TransitSystem, wayId: string): Sta
         candidate === anchor ? { ...candidate, t: projected.t } : candidate,
       ),
     };
+  });
+  return stations.some((station, index) => station !== system.stations[index])
+    ? stations
+    : system.stations;
+}
+
+/**
+ * Move station attachments away from Ways that are about to be removed.
+ * Stations too far from every replacement Way stay in the document but become
+ * detached from the removed geometry.
+ */
+export function reanchorStationsToReplacementWays(
+  system: TransitSystem,
+  options: ReplacementWayReanchoringOptions,
+): Station[] {
+  if (options.replacedWayIds.size === 0) return system.stations;
+  const replacements = system.ways
+    .filter((way) => options.replacementWayIds.has(way.id))
+    .map((way) => ({ id: way.id, path: resolveWayPath(way) }));
+  const stations = system.stations.map((station) => {
+    if (!station.anchors.some((anchor) => options.replacedWayIds.has(anchor.wayId))) {
+      return station;
+    }
+
+    let replacement: StationAnchor | undefined;
+    let bestDistance = options.maxDistanceM;
+    for (const way of replacements) {
+      const nearest = nearestOnPath(way.path, station.coord);
+      if (!nearest || nearest.distMeters >= bestDistance) continue;
+      bestDistance = nearest.distMeters;
+      replacement = { wayId: way.id, t: nearest.t };
+    }
+
+    const retained = station.anchors.filter((anchor) => !options.replacedWayIds.has(anchor.wayId));
+    const anchors = replacement
+      ? [replacement, ...retained.filter((anchor) => anchor.wayId !== replacement.wayId)]
+      : retained;
+    return { ...station, anchors };
   });
   return stations.some((station, index) => station !== system.stations[index])
     ? stations

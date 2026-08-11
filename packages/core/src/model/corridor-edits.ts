@@ -20,11 +20,12 @@ import { withServicePattern } from './line-service';
 import { defaultProfileFor, makeOneWay } from './profile';
 import { materializeRouteSpans } from './routeLegs';
 import { anchorOnWay, routeBetween } from './routeGraph';
-import { reanchorStationsOnWay } from './station-reanchoring';
+import { reanchorStationsOnWay, reanchorStationsToReplacementWays } from './station-reanchoring';
 import { deleteSelection } from './selection-deletion';
 import type { LngLat, Pattern, PatternLeg, TransitSystem, Way } from './system';
 
 const JOIN_REUSE_TOLERANCE_M = 0.75;
+const CORRIDOR_STATION_REANCHOR_M = 300;
 
 export interface ReconcileImportedSystemResult {
   system: TransitSystem;
@@ -173,13 +174,17 @@ function removeUnusedOldWays(
   oldWayIds: string[],
   newLegs: PatternLeg[],
 ): TransitSystem {
-  let next = system;
   const newWayIds = new Set(newLegs.map((leg) => leg.wayId));
-  for (const oldWayId of oldWayIds) {
-    if (!oldWayMustRemain(next, oldWayId, newWayIds)) {
-      next = removeOrphanWay(next, oldWayId);
-    }
-  }
+  const removedWayIds = new Set(
+    oldWayIds.filter((oldWayId) => !oldWayMustRemain(system, oldWayId, newWayIds)),
+  );
+  const stations = reanchorStationsToReplacementWays(system, {
+    replacedWayIds: removedWayIds,
+    replacementWayIds: newWayIds,
+    maxDistanceM: CORRIDOR_STATION_REANCHOR_M,
+  });
+  let next = stations === system.stations ? system : { ...system, stations };
+  for (const oldWayId of removedWayIds) next = removeOrphanWay(next, oldWayId);
   return next;
 }
 

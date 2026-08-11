@@ -305,9 +305,11 @@ not raw `setState`.
 Commands decide when an edit happens and which transient editor data changes
 with it. Pure `TransitSystem` transformations belong in `packages/core`; they
 preserve the input reference when nothing changes and know nothing about
-timestamps or history. Shared web-only workflows, such as finishing a drawn
-Way or materializing a route draft, live in internal operations rather than
-one command group calling another.
+timestamps or history. Shared web-only workflows needed by more than one
+command group, such as finishing a drawn Way, live in internal operations
+rather than one command group calling another. Orchestration used by only one
+group stays with that group; routing commands, for example, materialize and
+commit route drafts.
 
 The runtime is the only raw Zustand mutation seam. An atomic content commit
 checks loading and read-only state, finalizes one resulting system, prunes
@@ -562,7 +564,7 @@ needed and memoised in memory.
 
 That a lane is a travel lane of a given width is domain data. That it draws
 grey with white dashes is style. Keeping them apart means a restyle never
-needs a data migration. Service colour is the exception: the red line is
+needs a data migration. Line colour is the exception: the red line is
 called the red line, so its colour is identity, not paint.
 
 ### Persistence and versioning
