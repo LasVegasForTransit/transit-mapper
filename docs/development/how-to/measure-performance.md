@@ -10,6 +10,41 @@ hiding visible feedback, disabling a capability, weakening accessibility, or
 making settled output less accurate. Progressive detail must remain continuous
 and converge to the same correct result after the gesture.
 
+## Capture renderer evidence
+
+Renderer changes carry deterministic visual evidence alongside timing data:
+
+```bash
+pnpm renderer:capture -- --phase 00-baseline
+pnpm renderer:capture -- --phase 01-lod
+```
+
+The phase is a kebab-case artifact label. A complete run builds the same
+private instrumented application used by the performance protocol, replaces
+remote basemap styles with bundled source-free styles, and writes a browsable
+contact sheet under `apps/web/artifacts/renderer/<phase>/index.html`. It
+captures fixed desktop/mobile viewports, light/dark themes, all three views,
+five detail cameras, fractional-zoom filmstrips, the editor/onboarding/embed/
+export contexts, and dedicated Port Mason, density, scale, curve, junction,
+grade, rail, service-bundle, and Diagram fixtures.
+
+A rerun clears only that exact phase directory. Earlier phases remain beside
+it so the sheet can show baseline, previous, current, and pixel-difference
+images. Generated captures are ignored build artifacts until a reviewed final
+set is deliberately promoted to visual-regression goldens.
+
+Use `--skip-build` only when `apps/web/dist` is still the current instrumented
+build from a successful capture or performance run. `--profile desktop|mobile`
+and `--theme light|dark` produce a faster diagnostic subset; they intentionally
+omit the cross-surface, fixture, and filmstrip evidence that belongs to a
+complete phase boundary.
+
+Capture before renderer behavior changes, after every renderer phase, and
+after a later change to geometry, LOD thresholds, styling, labels, or layer
+ordering. A timing improvement is rejected when the contact sheet shows
+missing detail, popping, label instability, altered topology, reduced
+contrast, or an incorrect settled frame.
+
 ## Run the fixed protocol
 
 Install stable Google Chrome, then run:
@@ -334,3 +369,6 @@ hosted remotely. If the initial style errors or does not load within 1.5
 seconds, the editor switches to a bundled blank style. Geographic system
 geometry and editing affordances remain usable; remote basemap detail and
 text-symbol layers are unavailable until a connected reload.
+Profile or theme subsets are diagnostic captures. They are written to a
+`diagnostic-<phase>-<profile>-<theme>` sibling so they cannot replace the
+complete numbered phase used by contact-sheet history.

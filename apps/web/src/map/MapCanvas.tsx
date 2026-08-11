@@ -107,6 +107,7 @@ import {
   systemPaintReady,
 } from '../perf/mapPaintMark';
 import { INTERACTIVE_MARK, MAP_STYLE_READY_MARK, markOnce } from '../perf/startup-marks';
+import { createRendererStatsCollector, type RendererStatsCollector } from '../perf/renderer-stats';
 import { servicesByWay } from '@transitmapper/core/render/featureMemo';
 import { attachSimDevHandle } from '../sim/devHandle';
 import { attachVehicleAnimation } from '../sim/vehicles';
@@ -118,6 +119,73 @@ import { recoverMapStyleState } from './styleRecovery';
 import { preloadSelectionInspectorContent } from '../ui/inspector/selection-content-loader';
 const OWN_LAYER_IDS = new Set(LAYER_SPECS.map((l) => l.id));
 const PERF_HARNESS_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
+
+interface RendererProjectionMeasurement {
+  startedAt: number;
+  durationMs: number;
+  counts: SourceFeatureProjectionCounts;
+  cacheHitCount: number;
+  cacheMissCount: number;
+  candidateFeatureCount: number;
+  visibleFeatureCount: number;
+  generatedVertexCount: number;
+}
+
+function beginRendererProjection(
+  counts: SourceFeatureProjectionCounts,
+): RendererProjectionMeasurement {
+  return {
+    startedAt: performance.now(),
+    durationMs: 0,
+    counts,
+    cacheHitCount: counts.diagramTopologyCacheHitCount + counts.diagramStationCacheHitCount,
+    cacheMissCount:
+      counts.featureLaneGeometryBuildCount +
+      counts.diagramTopologyBuildCount +
+      counts.diagramStationBuildCount,
+    candidateFeatureCount: counts.rendererCandidateFeatureCount,
+    visibleFeatureCount: counts.rendererGeneratedFeatureCount,
+    generatedVertexCount: counts.rendererGeneratedVertexCount,
+  };
+}
+
+interface RendererProjectionRecordOptions {
+  laneDetail: boolean;
+  previousLaneDetail: boolean | undefined;
+  sourceUploads: number;
+}
+
+function recordRendererProjection(
+  collector: RendererStatsCollector,
+  measurement: RendererProjectionMeasurement,
+  options: RendererProjectionRecordOptions,
+): boolean {
+  if (!PERF_HARNESS_BUILD) return options.laneDetail;
+  const cacheHitCount =
+    measurement.counts.diagramTopologyCacheHitCount +
+    measurement.counts.diagramStationCacheHitCount;
+  const cacheMissCount =
+    measurement.counts.featureLaneGeometryBuildCount +
+    measurement.counts.diagramTopologyBuildCount +
+    measurement.counts.diagramStationBuildCount;
+  collector.recordProjection({
+    durationMs: measurement.durationMs,
+    candidateFeatureCount:
+      measurement.counts.rendererCandidateFeatureCount - measurement.candidateFeatureCount,
+    visibleFeatureCount:
+      measurement.counts.rendererGeneratedFeatureCount - measurement.visibleFeatureCount,
+    generatedVertexCount:
+      measurement.counts.rendererGeneratedVertexCount - measurement.generatedVertexCount,
+    cacheHitCount: cacheHitCount - measurement.cacheHitCount,
+    cacheMissCount: cacheMissCount - measurement.cacheMissCount,
+    tierTransitionCount:
+      options.previousLaneDetail !== undefined && options.previousLaneDetail !== options.laneDetail
+        ? 1
+        : 0,
+  });
+  collector.recordFullUpload(options.sourceUploads);
+  return options.laneDetail;
+}
 
 /** A local blank style has no glyph endpoint. Keep all geometry and icon-only
  * interaction layers, and omit only symbol layers whose text would otherwise
@@ -786,7 +854,12 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       diagramTopologyCacheHitCount: 0,
       diagramStopBuildCount: 0,
       diagramStopCacheHitCount: 0,
+      rendererCandidateFeatureCount: 0,
+      rendererGeneratedFeatureCount: 0,
+      rendererGeneratedVertexCount: 0,
     };
+    const rendererStats = createRendererStatsCollector();
+    let lastRecordedLaneDetail: boolean | undefined;
     let gestureActive = false;
     let directManipulationActive = false;
     let gestureProjection: GestureProjectionController | null = null;
@@ -839,6 +912,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         sourceIds = ALL_SYSTEM_FEATURE_SOURCES;
       }
       if (sourceIds.length === 0) return;
+      const measurement = beginRendererProjection(sourceProjectionCounts);
       const { system, selection, activePatternId, armedTerminus } = store.getState();
       const laneDetail = laneDetailNow();
       const infrastructure = viewRef.current.viewMode === 'infrastructure';
@@ -872,6 +946,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         armedTerminus,
         counts: sourceProjectionCounts,
       });
+      measurement.durationMs = performance.now() - measurement.startedAt;
       const sourceData: Record<SystemFeatureSourceId, GeoJSON.FeatureCollection> = {
         [SRC_WAYS]: fc.ways,
         [SRC_SERVICES]: fc.services,
@@ -899,6 +974,11 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         sourceUploads++;
       }
       recordFullProjection(projectionCounts, sourceUploads);
+      lastRecordedLaneDetail = recordRendererProjection(rendererStats, measurement, {
+        laneDetail,
+        previousLaneDetail: lastRecordedLaneDetail,
+        sourceUploads,
+      });
       // setData above cleared feature-state — re-apply the current selection.
       applySelectionState();
     };
@@ -1421,6 +1501,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
               featureCount: sourceLoaded ? map.querySourceFeatures(SRC_STATIONS).length : 0,
             };
           },
+          rendererStats: () => rendererStats.snapshot(),
         });
       }
       detachSimDev = attachSimDevHandle(simClock); // DEV-only __sim.setTime()/__sim.step() clock driver

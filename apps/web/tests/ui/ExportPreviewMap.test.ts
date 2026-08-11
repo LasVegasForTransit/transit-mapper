@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
+import type { EffectCallback } from 'react';
 
 interface FakeSource {
   setData: (data: GeoJSON.FeatureCollection) => void;
@@ -11,8 +12,8 @@ interface FakePreviewMap {
 }
 
 const previewHarness = vi.hoisted(() => ({
-  container: {},
-  effects: [] as Array<() => void | (() => void)>,
+  container: { dataset: {} },
+  effects: [] as EffectCallback[],
   maps: [] as FakePreviewMap[],
   refCalls: 0,
 }));
@@ -21,7 +22,7 @@ vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>();
   return {
     ...actual,
-    useEffect: (effect: () => void | (() => void)) => {
+    useEffect: (effect: EffectCallback) => {
       previewHarness.effects.push(effect);
     },
     useRef: <T>(initial: T) => {
@@ -42,6 +43,11 @@ vi.mock('maplibre-gl', () => {
 
     on(event: string, listener: () => void): this {
       if (event === 'load') this.loadListener = listener;
+      return this;
+    }
+
+    once(event: string, listener: () => void): this {
+      if (event === 'idle') listener();
       return this;
     }
 

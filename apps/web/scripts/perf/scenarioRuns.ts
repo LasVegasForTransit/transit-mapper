@@ -20,6 +20,7 @@ import {
   stopTrace,
 } from './browser';
 import { runMeasuredJourney, waitForScenarioReady } from './journeys';
+import { combineProductionPersistence } from './production-persistence';
 
 interface RunSampleOptions {
   browser: Browser;
@@ -147,22 +148,14 @@ async function runSample(options: RunSampleOptions): Promise<PerfSample | undefi
       warmNetwork: warmStartup.network,
       memory: coldMemory.memory,
       warmMemory: warmMemory.memory,
+      rendererStats: gesture.rendererStats,
+      warmRendererStats: warmGesture.rendererStats,
       persistence: {
         ...compatibilityPersistence,
-        production:
-          gesture.persistence && warmGesture.persistence
-            ? {
-                saveMs: Math.max(gesture.persistence.saveMs, warmGesture.persistence.saveMs),
-                workerSerializationMs: Math.max(
-                  gesture.persistence.workerSerializationMs,
-                  warmGesture.persistence.workerSerializationMs,
-                ),
-                indexedDbWriteMs: Math.max(
-                  gesture.persistence.indexedDbWriteMs,
-                  warmGesture.persistence.indexedDbWriteMs,
-                ),
-              }
-            : (gesture.persistence ?? warmGesture.persistence ?? undefined),
+        production: combineProductionPersistence({
+          cold: gesture.persistence,
+          warm: warmGesture.persistence,
+        }),
       },
       traceArtifact: options.tracePath
         ? relative(options.outputDirectory, options.tracePath)

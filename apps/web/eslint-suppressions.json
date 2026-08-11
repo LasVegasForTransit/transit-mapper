@@ -37,7 +37,7 @@
       "count": 4
     },
     "@typescript-eslint/prefer-optional-chain": {
-      "count": 2
+      "count": 1
     },
     "@typescript-eslint/prefer-promise-reject-errors": {
       "count": 2
@@ -64,9 +64,6 @@
     }
   },
   "scripts/perf/scenarioRuns.ts": {
-    "complexity": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     }
@@ -294,6 +291,14 @@
   "src/network/fetchWithTimeout.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
+    }
+  },
+  "src/perf/budget.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 2
     }
   },
   "src/perf/index.ts": {
@@ -787,6 +792,33 @@
   "tests/ui/ExportPreviewMap.test.ts": {
     "@typescript-eslint/no-invalid-void-type": {
       "count": 2
+    }
+  },
+  "tests/ui/NewSystemLocationDialog.test.tsx": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    },
+    "@typescript-eslint/unbound-method": {
+      "count": 1
+    }
+  },
+  "tests/ui/SidebarPanelInteraction.test.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "tests/ui/about-dialog.test.tsx": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
     }
   },
   "tests/ui/onboarding/fixtureProjection.test.ts": {

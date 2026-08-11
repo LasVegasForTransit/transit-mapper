@@ -24,6 +24,7 @@ import {
 } from './fixtureSystem';
 import { useSystemColorScheme } from '../../theme/systemColorScheme';
 import { layerSpecsForScheme, localBlankStyleForScheme } from '../../map/mapTheme';
+import { createRenderSettlementMarker } from '../../map/render-settlement-marker';
 
 /**
  * A third, independent MapLibre instance — alongside the app's main map
@@ -68,6 +69,7 @@ export function OnboardingPreviewMap({
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const settlement = createRenderSettlementMarker(containerRef.current);
     const renderedSystem = view.viewMode === 'diagram' ? computeDiagramSystem(system) : system;
     const previewLayerSpecs = layerSpecsForScheme(colorScheme).filter(
       (spec) => spec.type !== 'symbol',
@@ -100,7 +102,7 @@ export function OnboardingPreviewMap({
 
         const fc = buildFeatures(renderedSystem, null, [], view);
         const setData = (id: string, data: GeoJSON.FeatureCollection) => {
-          (map.getSource(id) as GeoJSONSource | undefined)?.setData(data);
+          map.getSource<GeoJSONSource>(id)?.setData(data);
         };
         setData(SRC_WAYS, fc.ways);
         setData(SRC_SERVICES, fc.services);
@@ -116,16 +118,15 @@ export function OnboardingPreviewMap({
         map.resize();
         const bounds = systemBounds(renderedSystem);
         if (bounds) map.fitBounds(bounds, { padding: 24, animate: false });
+        map.once('idle', () => settlement.markSettled());
 
         if (animateVehicle) {
           const { path, cumLengths, inboundPath, timetables, plan } = ONBOARDING_PATTERN_STATS;
-          // plan is non-null here — fixtureSystem.ts throws at module load
-          // otherwise, so ONBOARDING_PATTERN_STATS never reaches this file
-          // in that state.
+          if (!plan) throw new Error('The onboarding fixture must have a runnable service plan.');
           const mountedAt = performance.now();
           const tick = () => {
-            const simMs = (performance.now() - mountedAt) % plan!.cycleMs;
-            const state = runStateAt(simMs, timetables, plan!, 0, ONBOARDING_VEHICLE_PROFILE);
+            const simMs = (performance.now() - mountedAt) % plan.cycleMs;
+            const state = runStateAt(simMs, timetables, plan, 0, ONBOARDING_VEHICLE_PROFILE);
             // Outbound and inbound are different geometry in general (a
             // couplet's two directions ride different streets), so each
             // needs its own path + arc-lengths, not just the outbound pair
@@ -155,6 +156,7 @@ export function OnboardingPreviewMap({
 
     return () => {
       if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
+      settlement.clear();
       map.remove();
     };
     // Each slide can reuse this React component position with a different

@@ -348,7 +348,11 @@ dialog reports that its revision is unavailable instead of inventing one.
 
 `apps/web/src/perf` owns measurable performance policy, fixtures, reports, and
 precache validation that can run without browser automation. Browser traces
-and production-output checks consume, but do not redefine, it.
+and production-output checks consume that policy but do not redefine its
+budgets. Renderer fixture descriptors and measurement-only counters live at
+this boundary as well. `apps/web/scripts/renderer-capture` owns the Playwright
+driver, deterministic basemap substitution, phase lifecycle, and contact-sheet
+generation; it never becomes part of the public application graph.
 
 `apps/web/src/pwa/adaptive-cache-contract.ts` owns optional assets and offline
 readiness. The client obeys network, quota, and 64 KiB limits.
@@ -431,4 +435,8 @@ release and confirm that the public site serves its fingerprinted entry chunk.
 The web application's browser scenarios, committed baselines, and production
 verification tools live beside that application. Repository commands
 coordinate them with builds and checks, while the policy they enforce remains
-owned by the web performance module.
+owned by the web performance module. Renderer evidence is generated under the
+ignored `apps/web/artifacts/renderer/` tree so exploratory phases do not add
+binary weight to the repository. The capture manifest and contact sheet are
+the review boundary; approved final images may later be promoted explicitly to
+tracked visual-regression fixtures.

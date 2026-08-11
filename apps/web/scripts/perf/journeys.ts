@@ -9,6 +9,7 @@ import {
   projectedPointChanged,
 } from '../../src/perf/journeyProof';
 import { FIRST_SYSTEM_MAP_PAINT_MARK } from '../../src/perf/mapPaintMark';
+import type { RendererStatsSnapshot } from '../../src/perf/renderer-stats';
 import type {
   PerfGestureDiagnostics,
   PerfPhaseCounters,
@@ -61,7 +62,13 @@ interface JourneySummary {
   metrics: ReturnType<typeof summarizeGesture>['metrics'];
   diagnostics: PerfGestureDiagnostics;
   counters: Omit<PerfRuntimeCounters, 'domNodeCount'>;
+  rendererStats: RendererStatsSnapshot | null;
   persistence: PerfProductionPersistenceProbe | null;
+}
+
+/** Read the renderer-owned counters without walking or cloning scene geometry. */
+export function collectRendererStatsSnapshot(page: Page): Promise<RendererStatsSnapshot | null> {
+  return page.evaluate(() => (window as PerfPageWindow).__rendererStats?.() ?? null);
 }
 
 function waitForResponsePaint(page: Page): Promise<void> {
@@ -475,11 +482,7 @@ async function performDrawAndPersistenceProof(
       storage: PERF_STORAGE_CONTRACT,
     },
   );
-  if (
-    !durable.stored ||
-    durable.stored.revision !== after.revision ||
-    durable.stored.wayCount !== after.wayCount
-  ) {
+  if (durable.stored?.revision !== after.revision || durable.stored.wayCount !== after.wayCount) {
     throw new Error('IndexedDB did not contain the committed line draw.');
   }
   return {
@@ -554,6 +557,7 @@ export async function runMeasuredJourney(
   const phaseAfter = await page.evaluate(
     () => (window as PerfPageWindow).__mapProjectionCounts?.() ?? null,
   );
+  const rendererStats = await collectRendererStatsSnapshot(page);
   const phaseCounters: PerfPhaseCounters | null =
     phaseBefore && phaseAfter
       ? {
@@ -585,6 +589,7 @@ export async function runMeasuredJourney(
       ...summary.counters,
       phaseCounters,
     },
+    rendererStats,
     persistence: direct.productionPersistence,
   };
 }

@@ -10,6 +10,9 @@ import {
 import type { FrameStats } from './frameStats';
 import type { RawGestureMeasurements } from './gestureStats';
 import { attachPaintedFrameCapture } from './paintedFrameCapture';
+import { attachRendererCaptureHarness } from './renderer-capture-harness';
+import type { RendererStatsSnapshot } from './renderer-stats';
+
 /** Runtime A/B toggles, flipped from the devtools console to attribute cost —
  *  e.g. `__perf.vehicles = false` then re-run `await __panBench()` to see the
  *  vehicle loop's share of the pan frame budget. */
@@ -33,6 +36,7 @@ interface PerfOverlaySnapshot {
 export interface PerfHarnessOptions {
   stopSnapshot?: (stopId: string) => PerfStopSnapshot | null;
   overlaySnapshot?: () => PerfOverlaySnapshot;
+  rendererStats?: () => RendererStatsSnapshot;
 }
 
 declare global {
@@ -49,6 +53,7 @@ declare global {
     __perfOverlaySnapshot?: () => PerfOverlaySnapshot;
     __perfStartPaintedFrameCapture?: () => void;
     __perfStopPaintedFrameCapture?: () => number[];
+    __rendererStats?: () => RendererStatsSnapshot;
     __TRANSITMAPPER_PERF_RUN__?: boolean;
   }
 }
@@ -79,7 +84,7 @@ export function attachSourceUploadMeter(map: MLMap): SourceUploadMeter {
     if (!source) continue;
     const geoJsonSource = source as GeoJSONSource;
     if (typeof (source as Partial<GeoJSONSource>).setData === 'function') {
-      const original = geoJsonSource.setData;
+      const original = Reflect.get(geoJsonSource, 'setData');
       const wrapped: GeoJSONSource['setData'] = function setData(
         this: GeoJSONSource,
         data: Parameters<GeoJSONSource['setData']>[0],
@@ -91,7 +96,7 @@ export function attachSourceUploadMeter(map: MLMap): SourceUploadMeter {
       wrappedSetDataSources.push({ source: geoJsonSource, original, wrapped });
     }
     if (typeof (source as Partial<GeoJSONSource>).updateData === 'function') {
-      const original = geoJsonSource.updateData;
+      const original = Reflect.get(geoJsonSource, 'updateData');
       const wrapped: GeoJSONSource['updateData'] = function updateData(
         this: GeoJSONSource,
         diff: Parameters<GeoJSONSource['updateData']>[0],
@@ -138,6 +143,7 @@ export function attachPerfHarness(map: MLMap, options: PerfHarnessOptions = {}):
   const meter = automatedPerfRun() ? undefined : attachFrameMeter(map);
   const sourceUploads = attachSourceUploadMeter(map);
   const paintedFrames = attachPaintedFrameCapture(map);
+  const detachRendererCapture = attachRendererCaptureHarness(map);
   window.__perfSourceUploadCount = sourceUploads.count;
   window.__perfProjectLngLat = (coord) => {
     const point = map.project(coord);
@@ -150,6 +156,7 @@ export function attachPerfHarness(map: MLMap, options: PerfHarnessOptions = {}):
   };
   if (options.stopSnapshot) window.__perfStopSnapshot = options.stopSnapshot;
   if (options.overlaySnapshot) window.__perfOverlaySnapshot = options.overlaySnapshot;
+  if (options.rendererStats) window.__rendererStats = options.rendererStats;
   window.__perfStartPaintedFrameCapture = paintedFrames.start;
   window.__perfStopPaintedFrameCapture = paintedFrames.stop;
   if (meter) window.__frameStats = meter.stats;
@@ -160,6 +167,7 @@ export function attachPerfHarness(map: MLMap, options: PerfHarnessOptions = {}):
     meter?.detach();
     sourceUploads.detach();
     paintedFrames.detach();
+    detachRendererCapture();
     delete window.__frameStats;
     delete window.__panBench;
     delete window.__panGestureBench;
@@ -169,6 +177,7 @@ export function attachPerfHarness(map: MLMap, options: PerfHarnessOptions = {}):
     delete window.__perfCameraSnapshot;
     delete window.__perfStopSnapshot;
     delete window.__perfOverlaySnapshot;
+    delete window.__rendererStats;
     delete window.__perfStartPaintedFrameCapture;
     delete window.__perfStopPaintedFrameCapture;
   };

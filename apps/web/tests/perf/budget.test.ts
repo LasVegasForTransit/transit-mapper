@@ -69,6 +69,8 @@ function sample(
     warmNetwork: network,
     memory,
     warmMemory: memory,
+    rendererStats: null,
+    warmRendererStats: null,
     persistence: {
       serializedBytes: 0,
       parseMs: 0,

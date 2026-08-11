@@ -5,6 +5,8 @@ import { addExportSourcesAndLayers, setExportFeatureData } from '../map/export/e
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { basemapStyleForScheme } from '../map/mapTheme';
+import { createRenderSettlementMarker } from '../map/render-settlement-marker';
+
 /**
  * A second, read-only MapLibre instance for the export dialog — deliberately
  * separate from the app's main map (map/MapCanvas.tsx) so panning/zooming it
@@ -26,6 +28,7 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const settlement = createRenderSettlementMarker(containerRef.current);
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: basemapStyleForScheme('light'),
@@ -55,6 +58,7 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
       if (bounds) map.fitBounds(bounds, { padding: 40, animate: false });
 
       pushDataRef.current();
+      map.once('idle', () => settlement.markSettled());
       onReadyRef.current(map);
     });
 
@@ -63,6 +67,7 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
 
     return () => {
       ro.disconnect();
+      settlement.clear();
       mapRef.current = null;
       map.remove();
     };
@@ -75,8 +80,12 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
   const pushData = () => {
     const map = mapRef.current;
     if (!map?.getSource(SRC_STATIONS)) return;
+    if (containerRef.current) delete containerRef.current.dataset.renderSettled;
     const fc = buildFeatures(system, null, [], view);
     setExportFeatureData(map, fc);
+    map.once('idle', () => {
+      if (containerRef.current) containerRef.current.dataset.renderSettled = 'true';
+    });
   };
   const pushDataRef = useRef(pushData);
   pushDataRef.current = pushData;

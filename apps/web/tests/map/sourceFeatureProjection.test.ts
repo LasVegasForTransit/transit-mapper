@@ -78,12 +78,49 @@ function operationCounts() {
     ...createFeatureBuildOperationCounts(),
     diagramTopologyBuildCount: 0,
     diagramTopologyCacheHitCount: 0,
-    diagramStopBuildCount: 0,
-    diagramStopCacheHitCount: 0,
+      diagramStopBuildCount: 0,
+      diagramStopCacheHitCount: 0,
+      rendererCandidateFeatureCount: 0,
+      rendererGeneratedFeatureCount: 0,
+      rendererGeneratedVertexCount: 0,
   };
 }
 
 describe('MapLibre source feature projection', () => {
+  it('records source-scoped candidates and output dimensions inside projection', () => {
+    const counts = operationCounts();
+    const system = fixture();
+    system.services = [
+      {
+        id: 'line',
+        name: 'Line',
+        modeId: 'bus',
+        color: '#e4572e',
+        patterns: [
+          {
+            id: 'pattern',
+            sections: [{ kind: 'shared', legs: [wholeLeg('way')] }],
+          },
+        ],
+      },
+    ];
+
+    buildFeaturesForSources({
+      system,
+      selection: null,
+      handleWayIds: [],
+      view: networkView,
+      sourceIds: [SRC_STATIONS],
+      counts,
+    });
+
+    expect(counts).toMatchObject({
+      rendererCandidateFeatureCount: 2,
+      rendererGeneratedFeatureCount: 1,
+      rendererGeneratedVertexCount: 1,
+    });
+  });
+
   it('does not compute schematic topology for Diagram sources that are always hidden', () => {
     const counts = operationCounts();
 
