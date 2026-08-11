@@ -138,6 +138,15 @@ describe('Workbench responsive mounting', () => {
     expect(markup).not.toContain('aria-label="Expand panel"');
   });
 
+  it('keeps the sidebar toggle in the document header without a second outline heading', () => {
+    const markup = renderWorkbench(false);
+    const brandRow = markup.slice(markup.indexOf('class="panel-brand-row"'));
+
+    expect(brandRow.indexOf('aria-label="Hide outline"')).toBeGreaterThan(-1);
+    expect(markup).not.toContain('class="panel-head"');
+    expect(markup).not.toContain('>Network outline<');
+  });
+
   it('mobile mounts each subscribed slot once and exposes one sheet control', () => {
     const markup = renderWorkbench(true);
 
@@ -176,6 +185,16 @@ describe('Workbench responsive mounting', () => {
     );
     // The simulation moved in here with it, off the top bar.
     expect(workbench).toContain('data-slot="mobile-sim"');
+    // View state belongs with the other canvas controls, leaving the anchored
+    // identity row enough room to show the system name.
+    expect(workbench.indexOf('data-slot="view-compact"')).toBeGreaterThan(
+      workbench.indexOf('workbench-rail'),
+    );
+    const topBar = markup.slice(
+      markup.indexOf('class="compact-top-bar'),
+      markup.indexOf('class="compact-workbench'),
+    );
+    expect(topBar).not.toContain('data-slot="view-compact"');
     // And nothing in the compact tree still fades the dock away.
     expect(markup).not.toContain('opacity-0');
   });

@@ -16,20 +16,20 @@ function renderSidebar(viewMode: ViewMode = 'network'): string {
 }
 
 describe('SidebarPanel', () => {
-  it('renders a view-specific Network outline', () => {
+  it('renders Network sections in a view-specific labelled region', () => {
     const markup = renderSidebar();
 
-    expect(markup).toContain('Network outline');
+    expect(markup).toContain('aria-label="Network outline"');
     expect(markup).toContain('Lines');
     expect(markup).toContain('Stations');
     expect(markup).not.toContain('Workspace');
     expect(markup).not.toContain('Corridors');
   });
 
-  it('renders the physical categories in the Infrastructure outline', () => {
+  it('renders Infrastructure categories in a view-specific labelled region', () => {
     const markup = renderSidebar('infrastructure');
 
-    expect(markup).toContain('Infrastructure outline');
+    expect(markup).toContain('aria-label="Infrastructure outline"');
     expect(markup).toContain('Stations');
     expect(markup).toContain('Facilities');
     expect(markup).not.toContain('Corridors');
