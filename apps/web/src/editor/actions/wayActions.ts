@@ -18,7 +18,7 @@ import {
   wayCarriesService,
 } from '@transitmapper/core/model/selectionRelations';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import type { EditorStore } from '../store';
+import type { SelectionActionStore } from './action-store';
 
 /** How far apart two streets may be and still read as one having been laid by
  *  accident beside the other. Wider than the automatic corridor tolerance
@@ -50,7 +50,7 @@ function corridorMergeWouldAbsorb(system: TransitSystem, ordered: string[]): boo
   return rest.some((id) => wayCarriesService(system, id) && runsAlongside(system, id, keeper));
 }
 
-export function wayActionProvider(store: EditorStore): SelectionActionProvider {
+export function wayActionProvider(store: SelectionActionStore): SelectionActionProvider {
   return ({ system, refs }) => {
     const wayIds = refIds(refs, 'way');
     if (wayIds.length !== refs.length) return [];
@@ -77,7 +77,7 @@ export function wayActionProvider(store: EditorStore): SelectionActionProvider {
           label: 'Merge into the street beside it',
           hint: 'Moves this one’s lines onto the street it runs along',
           group: 'merge',
-          run: () => store.getState().mergeWaysIntoCorridor(ordered),
+          run: () => store.commands.network.mergeWaysIntoCorridor(ordered),
         },
       ];
     }
@@ -96,7 +96,7 @@ export function wayActionProvider(store: EditorStore): SelectionActionProvider {
           label: 'Join end to end',
           hint: 'One way instead of two, keeping the first one’s name',
           group: 'merge',
-          run: () => store.getState().mergeWays(a, b),
+          run: () => store.commands.network.mergeWays(a, b),
         });
       }
       if (crossingBetween(system, a, b)) {
@@ -105,7 +105,7 @@ export function wayActionProvider(store: EditorStore): SelectionActionProvider {
           label: 'Connect at crossing',
           hint: 'Split both where they cross so vehicles can turn between them',
           group: 'merge',
-          run: () => store.getState().formCrossingJunctions(a, b),
+          run: () => store.commands.network.formCrossingJunctions(a, b),
         });
       }
     }
@@ -117,7 +117,7 @@ export function wayActionProvider(store: EditorStore): SelectionActionProvider {
         label: 'Merge overlapping paths',
         hint: 'Service paths on the others move onto the longest',
         group: 'merge',
-        run: () => store.getState().mergeWaysIntoCorridor(ordered),
+        run: () => store.commands.network.mergeWaysIntoCorridor(ordered),
       });
     }
 

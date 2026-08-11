@@ -18,7 +18,7 @@ import {
   type SelectionActionProvider,
 } from '@transitmapper/core/model/selectionActions';
 import { isOneWay } from '@transitmapper/core/model/profile';
-import type { EditorStore } from '../store';
+import type { SelectionActionStore } from './action-store';
 
 // There is deliberately no distance check here.
 //
@@ -39,7 +39,7 @@ import type { EditorStore } from '../store';
  * "Cut here" leaves two lines you can delete either half of, which is how a
  * stretch in the middle comes out: cut at both ends, delete the middle.
  */
-export function servicePointActionProvider(store: EditorStore): SelectionActionProvider {
+export function servicePointActionProvider(store: SelectionActionStore): SelectionActionProvider {
   return ({ refs, serviceHit }: ActionContext) => {
     const [serviceId] = refIds(refs, 'service');
     if (!serviceId || refs.length !== 1) return [];
@@ -55,14 +55,14 @@ export function servicePointActionProvider(store: EditorStore): SelectionActionP
         label: 'Divide Service here',
         hint: 'Two Services under the same Line; delete either half',
         group: 'cut',
-        run: () => store.getState().divideServiceAt(serviceId, position),
+        run: () => store.commands.services.divideServiceAt(serviceId, position),
       },
       {
         id: 'service.endHere',
         label: 'End Service here',
         hint: 'Keeps the longer side and ends it at this point',
         group: 'cut',
-        run: () => store.getState().endPatternAt(serviceId, position),
+        run: () => store.commands.services.endPatternAt(serviceId, position),
       },
     ];
     return actions;
@@ -77,7 +77,7 @@ export function servicePointActionProvider(store: EditorStore): SelectionActionP
  * code already knows how to turn a position into an index by splicing a point
  * in; this exposes the same thing to a click.
  */
-export function wayPointActionProvider(store: EditorStore): SelectionActionProvider {
+export function wayPointActionProvider(store: SelectionActionStore): SelectionActionProvider {
   return ({ refs, corridorHit, system }: ActionContext) => {
     const [wayId] = refIds(refs, 'way');
     if (!wayId || refs.length !== 1) return [];
@@ -89,7 +89,7 @@ export function wayPointActionProvider(store: EditorStore): SelectionActionProvi
         label: 'Split path here',
         hint: 'Two streets, each editable on its own',
         group: 'cut',
-        run: () => store.getState().splitWayAtT(wayId, corridorHit.t),
+        run: () => store.commands.ways.splitWayAtT(wayId, corridorHit.t),
       },
     ];
     // Also offered from the Way Inspector's Lanes tab — surfaced here too so
@@ -103,7 +103,7 @@ export function wayPointActionProvider(store: EditorStore): SelectionActionProvi
         label: 'Separate carriageways',
         hint: 'Two one-way streets around a median, each draggable from its own end',
         group: 'cut',
-        run: () => store.getState().separateCarriageways(wayId),
+        run: () => store.commands.network.separateCarriageways(wayId),
       });
     }
     return actions;

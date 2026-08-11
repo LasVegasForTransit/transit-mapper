@@ -1,5 +1,4 @@
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import type { EditorStore } from '../editor/store';
 import { subscribeLiveCamera, withLiveCamera } from '../camera/liveCamera';
 import { saveToLibrary, type SaveOutcome } from './browserLibrary';
 import { saveEmergencyToLibrary, setActiveId } from './localStore';
@@ -12,17 +11,17 @@ export interface PersistenceSnapshot {
 }
 
 export interface PersistenceStore {
-  getState(): PersistenceSnapshot;
-  subscribe(
+  readonly getState: () => PersistenceSnapshot;
+  readonly subscribe: (
     listener: (next: PersistenceSnapshot, previous: PersistenceSnapshot) => void,
-  ): () => void;
+  ) => () => void;
 }
 
 interface PersistenceScheduler {
-  schedule(callback: () => void, delayMs: number): number;
-  cancel(id: number): void;
-  subscribePageHide(listener: () => void): () => void;
-  subscribeHidden(listener: () => void): () => void;
+  readonly schedule: (callback: () => void, delayMs: number) => number;
+  readonly cancel: (id: number) => void;
+  readonly subscribePageHide: (listener: () => void) => () => void;
+  readonly subscribeHidden: (listener: () => void) => () => void;
 }
 
 export interface PersistenceCoordinatorOptions {
@@ -39,12 +38,12 @@ export interface PersistenceCoordinatorOptions {
 
 export interface PersistenceCoordinator {
   /** Force the one pending content/camera snapshot to disk now. */
-  flush(): Promise<void>;
+  readonly flush: () => Promise<void>;
   /** Reconcile a library write performed outside the autosave lane. */
-  recordOutcome(id: string, outcome: SaveOutcome): void;
+  readonly recordOutcome: (id: string, outcome: SaveOutcome) => void;
   /** Forget a successfully deleted document after its pending save is flushed. */
-  discard(id: string): void;
-  detach(): void;
+  readonly discard: (id: string) => void;
+  readonly detach: () => void;
 }
 
 const browserScheduler: PersistenceScheduler = {
@@ -237,7 +236,7 @@ export function createPersistenceCoordinator(
 }
 
 export function attachPersistenceCoordinator(
-  store: EditorStore,
+  store: PersistenceStore,
   report: (outcome: SaveOutcome) => void,
 ): PersistenceCoordinator {
   return createPersistenceCoordinator({

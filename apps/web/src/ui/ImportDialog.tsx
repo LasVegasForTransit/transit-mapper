@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useEditor } from '../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../editor/EditorProvider';
 import { getMap } from '../map/mapRef';
 import {
   IMPORT_CATEGORY_LABELS,
@@ -20,8 +20,9 @@ interface ImportDialogProps {
 }
 
 export function ImportDialog({ onClose }: ImportDialogProps) {
-  const importWays = useEditor((s) => s.importWays);
+  const { applyImportedNetwork } = useEditorCommands().imports;
   const drivingSide = useEditor((s) => s.system.drivingSide);
+  const activeSystemId = useEditor((s) => s.system.id);
   const [categories, setCategories] = useState<Set<ImportCategory>>(
     () => new Set(['road', 'bike']),
   );
@@ -74,6 +75,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
     const map = getMap();
     if (!map || categories.size === 0) return;
     const controller = new AbortController();
+    const targetSystemId = activeSystemId;
     request.current = controller;
     setStatus('loading');
     setError('');
@@ -85,7 +87,13 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
         drivingSide,
         { signal: controller.signal },
       );
-      const { added, skipped: alreadyHere } = importWays(network);
+      const imported = applyImportedNetwork({ targetSystemId, network });
+      if (!imported) {
+        setError('This system can no longer accept that import. Nothing was changed.');
+        setStatus('error');
+        return;
+      }
+      const { added, skipped: alreadyHere } = imported;
       setCount(added);
       setSkipped(alreadyHere);
       setStatus('done');
@@ -108,7 +116,7 @@ export function ImportDialog({ onClose }: ImportDialogProps) {
           className="primary-btn"
           style={{ marginTop: 16, width: '100%', justifyContent: 'center' }}
           disabled={!zoomedInEnough || categories.size === 0 || status === 'loading'}
-          onClick={run}
+          onClick={() => void run()}
         >
           <Icon name="download" size={18} />{' '}
           {status === 'loading' ? 'Importing…' : 'Import into this system'}

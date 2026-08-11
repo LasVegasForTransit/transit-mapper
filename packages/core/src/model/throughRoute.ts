@@ -25,6 +25,7 @@ import {
 import { materializeRouteSpans } from './routeLegs';
 import { anchorOnWay, routeBetween } from './routeGraph';
 import { servicePattern } from './line-service';
+import { removeGroupMembers } from './system/group';
 import type { Pattern, PatternLeg, Service, TransitSystem, Way } from './system';
 import { LEG_JOIN_TOLERANCE_M } from './validate';
 import { terminiMeet, type TerminusMeeting } from './selectionRelations';
@@ -156,28 +157,37 @@ export function throughRouteServicesAt(
     ]),
   };
 
-  return {
-    ...system,
-    services: system.services
-      .filter((s) => s.id !== otherId)
-      .map((s) =>
-        s.id === keepId
-          ? {
-              ...s,
-              path: {
-                id: s.id,
-                sections: joined.sections,
-                ...(joined.skippedStops ? { skippedStops: joined.skippedStops } : {}),
-              },
-            }
-          : s,
-      ),
-    lines: system.lines
-      .map((line) => ({
-        ...line,
-        serviceIds: line.serviceIds.filter((serviceId) => serviceId !== otherId),
-      }))
-      .filter((line) => line.serviceIds.length > 0),
-    updatedAt: Date.now(),
-  };
+  const services = system.services
+    .filter((s) => s.id !== otherId)
+    .map((s) =>
+      s.id === keepId
+        ? {
+            ...s,
+            path: {
+              id: s.id,
+              sections: joined.sections,
+              ...(joined.skippedStops ? { skippedStops: joined.skippedStops } : {}),
+            },
+          }
+        : s,
+    );
+  const lines = system.lines
+    .map((line) => ({
+      ...line,
+      serviceIds: line.serviceIds.filter((serviceId) => serviceId !== otherId),
+    }))
+    .filter((line) => line.serviceIds.length > 0);
+  const liveLineIds = new Set(lines.map((line) => line.id));
+  const removedIds = new Set([
+    otherId,
+    ...system.lines.filter((line) => !liveLineIds.has(line.id)).map((line) => line.id),
+  ]);
+  return removeGroupMembers(
+    {
+      ...system,
+      services,
+      lines,
+    },
+    removedIds,
+  );
 }

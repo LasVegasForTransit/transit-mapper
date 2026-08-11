@@ -7,7 +7,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
-import { useEditor } from '../editor/EditorProvider';
+import { useEditorCommands } from '../editor/EditorProvider';
 import { useCompactLayout } from '../device/capabilities';
 import { useMediaQuery } from '../device/media-query';
 import { useKeyboardInset } from './useKeyboardInset';
@@ -40,11 +40,9 @@ import { useView, type ViewMode } from './ViewProvider';
  * rather than to something unreachable.
  */
 const ROOMY_TOP_ROW_QUERY = '(min-width: 1089px)';
-
 /** What the one dynamic surface is showing. Mirrors Inspector's
  *  SupplementalContent union, narrowed to what layout needs to know. */
 export type SupplementalKind = 'none' | 'selection' | 'tool-draft';
-
 /**
  * How far the compact workbench is open.
  *
@@ -60,7 +58,6 @@ export type SupplementalKind = 'none' | 'selection' | 'tool-draft';
 export type Detent = 'closed' | 'half' | 'full';
 
 const DETENTS: Detent[] = ['closed', 'half', 'full'];
-
 const OUTLINE_TITLE: Record<ViewMode, string> = {
   network: 'Network outline',
   infrastructure: 'Infrastructure outline',
@@ -283,9 +280,14 @@ export function Workbench({
   const compactTopRow = mobile || !roomyTopRow;
   const viewSwitch = compactTopRow ? viewSwitcherCompact : viewSwitcher;
   const [detent, setDetent] = useState<Detent>('closed');
-  const clearSelection = useEditor((s) => s.select);
-  const backToSelectTool = useEditor((s) => s.setTool);
-  // CSS handles the visual collapse; React owns the non-visual inert state.
+  const {
+    selection: { select: clearSelection },
+    tools: { setTool: backToSelectTool },
+  } = useEditorCommands();
+  // Only for `inert` below — CSS attribute selectors (see app.css's
+  // ".zen-cluster") handle every visual part of the collapse on their own;
+  // `inert` isn't expressible in CSS, so it's the one thing that still
+  // needs uiHidden read directly here rather than falling out of a class.
   const { uiHidden } = useUi();
   const { viewMode } = useView();
   // Only the sheet reacts to the keyboard; the docked desktop cards are not

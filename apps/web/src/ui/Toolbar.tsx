@@ -1,4 +1,4 @@
-import { useEditor } from '../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../editor/EditorProvider';
 import type { SelectVariant } from '../editor/store';
 import {
   FACILITY_TYPE_ORDER,
@@ -49,19 +49,21 @@ const lastTypeByFamily: Partial<Record<WayFamily, string>> = {};
  */
 export function Toolbar() {
   const tool = useEditor((s) => s.tool);
-  const setTool = useEditor((s) => s.setTool);
   const selectVariant = useEditor((s) => s.selectVariant);
-  const setSelectVariant = useEditor((s) => s.setSelectVariant);
   const readOnly = useEditor((s) => s.readOnly);
   const draftWayTypeId = useEditor((s) => s.draftWayTypeId);
-  const setDraftWayType = useEditor((s) => s.setDraftWayType);
   const draftModeId = useEditor((s) => s.draftModeId);
-  const setDraftMode = useEditor((s) => s.setDraftMode);
-  const setDraftPreset = useEditor((s) => s.setDraftPreset);
   const draftFacilityTypeId = useEditor((s) => s.draftFacilityTypeId);
-  const setDraftFacilityType = useEditor((s) => s.setDraftFacilityType);
   const draftFacilityComplexMode = useEditor((s) => s.draftFacilityComplexMode);
-  const setDraftFacilityComplexMode = useEditor((s) => s.setDraftFacilityComplexMode);
+  const {
+    setTool,
+    setSelectVariant,
+    setDraftWayType,
+    setDraftMode,
+    setDraftPreset,
+    setDraftFacilityType,
+    setDraftFacilityComplexMode,
+  } = useEditorCommands().tools;
   const { viewMode } = useView();
   const { uiHidden } = useUi();
   const dockRef = useInertRef<HTMLDivElement>(uiHidden);
@@ -141,7 +143,7 @@ export function Toolbar() {
               // are the modes.
               <ToolButton
                 icon="line"
-                label={MODES[draftModeId]?.label ?? 'Line'}
+                label={MODES[draftModeId].label}
                 hotkey="L"
                 active={tool === 'way'}
                 disabled={locked}

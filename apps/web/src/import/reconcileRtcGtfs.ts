@@ -1,5 +1,5 @@
+import type { ReconcileImportedSystemResult } from '@transitmapper/core/model/corridor-edits';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import type { ReconcileImportedSystemResult } from '../editor/store';
 import type { GtfsReconcileEvent, GtfsReconcileRequest } from './gtfsReconcileProtocol';
 
 const RECONCILE_TIMEOUT_MS = 60_000;

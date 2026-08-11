@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MODES, MODE_ORDER } from '@transitmapper/core/model/catalog';
 import { serviceDisplayLabel, servicesForLine } from '@transitmapper/core/model/line-service';
-import { useEditor } from '../../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../../editor/EditorProvider';
 import { ColorField } from '../ColorField';
 import { Icon } from '../Icon';
 import { Panel } from '../Panel';
@@ -18,7 +18,7 @@ function NewServiceForm({
   initialModeId: string;
   onCancel: () => void;
 }) {
-  const startAddingServiceToLine = useEditor((state) => state.startAddingServiceToLine);
+  const { startAddingServiceToLine } = useEditorCommands().services;
   const [serviceName, setServiceName] = useState('');
   const [serviceModeId, setServiceModeId] = useState(initialModeId);
   return (
@@ -71,8 +71,7 @@ function NewServiceForm({
 
 function LineServiceActions({ lineId, services }: { lineId: string; services: Service[] }) {
   const addingServiceDraft = useEditor((state) => state.addingServiceDraft);
-  const cancelAddingService = useEditor((state) => state.cancelAddingService);
-  const deleteLine = useEditor((state) => state.deleteLine);
+  const { cancelAddingService, deleteLine } = useEditorCommands().services;
   const [configuringService, setConfiguringService] = useState(false);
 
   useEffect(() => setConfiguringService(false), [lineId]);
@@ -122,10 +121,10 @@ function LineServiceActions({ lineId, services }: { lineId: string; services: Se
 export function LineInspector({ id }: { id: string }) {
   const system = useEditor((state) => state.system);
   const readOnly = useEditor((state) => state.readOnly);
-  const setLineName = useEditor((state) => state.setLineName);
-  const setLineColor = useEditor((state) => state.setLineColor);
-  const addPaletteColor = useEditor((state) => state.addPaletteColor);
-  const selectAndFocus = useEditor((state) => state.selectAndFocus);
+  const commands = useEditorCommands();
+  const { setLineName, setLineColor } = commands.services;
+  const { addPaletteColor } = commands.tools;
+  const { selectAndFocus } = commands.selection;
   const line = system.lines.find((candidate) => candidate.id === id);
 
   if (!line) return <EmptyInspector />;

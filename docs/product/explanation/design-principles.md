@@ -94,13 +94,12 @@ junction between them — both are bugs in whatever produced them, not
 questions about the network being designed.
 
 In practice: every mutation that can shrink a way's point list refuses to
-take it below 2 (`deleteWayPoint`, `splitWay`, `straightenWay` in
-`apps/web/src/editor/store.ts`), and every path that can introduce a new
-same-type, same-grade crossing — drawing, dragging a point, inserting one,
-importing a batch of ways — runs the same junction-forming pass a hand-drawn
-crossing already gets (`formCrossingJunctions`, same file). A state neither
-guard can reach in practice (a hand-edited document with the same corridor
-type crossing itself twice) is still checked and repaired on load
+take it below 2. The editor's way and network command groups compose the same
+pure transforms for `deleteWayPoint`, splitting, straightening, and every path
+that can introduce a new same-type, same-grade crossing — drawing, dragging a
+point, inserting one, or importing a batch of ways. A state those guards cannot
+reach in practice (a hand-edited document with the same corridor type crossing
+itself twice) is still checked and repaired on load
 (`packages/core/src/model/serialize.ts`'s `repairedParts`), never surfaced
 as something to click through. `packages/core/src/model/validate.ts`'s
 `IssueAudience` split (`plan` vs `document`) is the seam: `document` issues
@@ -149,10 +148,10 @@ In practice: `apps/web/src/App.tsx` has no branch for "not loaded yet" and
 renders the map, workbench, and toolbars unconditionally; every wait and
 every failure is a banner over a working editor, decided by
 `resolveAppBanner` in `apps/web/src/ui/app-banner.ts`. What can't be
-allowed yet is refused at one seam rather than hidden — `documentStatus`
-in `apps/web/src/editor/store.ts` turns away changes to the document
-while the saved one is still arriving, and deliberately changes no chrome,
-so nothing moves when it clears. `attachInitialStyleFallback` in
+allowed yet is refused at one seam rather than hidden — the editor store's
+runtime uses `documentStatus` to turn away document-changing command results
+while the saved one is still arriving, and deliberately changes no chrome, so
+nothing moves when it clears. `attachInitialStyleFallback` in
 `apps/web/src/map/initialStyleFallback.ts` is the older instance of the
 same rule: a basemap that does not answer within 1.5 seconds is swapped
 for a bundled blank style and mentioned in a banner, rather than being

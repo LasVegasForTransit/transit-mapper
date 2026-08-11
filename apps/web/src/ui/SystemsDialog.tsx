@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useEditor } from '../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../editor/EditorProvider';
 import { createEmptySystem, forkSystem } from '@transitmapper/core/model/serialize';
 import {
   deleteFromLibrary,
@@ -53,8 +53,7 @@ export function SystemsDialog({
 }: SystemsDialogProps) {
   const currentId = useEditor((s) => s.system.id);
   const currentName = useEditor((s) => s.system.name);
-  const setName = useEditor((s) => s.setName);
-  const setSystem = useEditor((s) => s.setSystem);
+  const { setName, setSystem } = useEditorCommands().document;
   const { openNewSystemLocation } = useUi();
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
   const [loading, setLoading] = useState(true);

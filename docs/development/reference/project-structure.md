@@ -58,8 +58,10 @@ globals in both the browser and workerd.
 `packages/core/src/model` defines saved systems, catalogs, service paths,
 validation, serialization, imports, routing, schematic layout, costs, units,
 and identifiers. Its operations accept and return domain values without
-depending on application state. Store actions in the web application compose
-these operations into undoable edits.
+depending on application state. This includes reusable corridor transforms and
+import reconciliation: the short-lived GTFS reconciliation Worker imports the
+same pure code without pulling in Zustand or the editor. Commands in the web
+application compose these operations into undoable edits.
 
 `packages/core/src/model/line-service.ts` is the ownership boundary between
 public Lines and technical Services. It resolves Line membership, display
@@ -176,6 +178,27 @@ updater for activation state.
 
 `apps/web/src/editor` owns the Zustand store, undo history, editing actions,
 selection, keyboard routing, and gesture transactions.
+
+`apps/web/src/editor/store.ts` is the editor store's thin public entry. It
+creates one vanilla Zustand store and exposes a data-only `EditorState` snapshot
+plus one stable `commands` object grouped by document, history, tool, selection,
+way, network, import, routing, service, station, facility, and group concerns.
+React selectors therefore subscribe only to reactive data; reading a command
+never makes a component depend on unrelated state changes.
+
+`apps/web/src/editor/store` owns the state contract, command contracts, runtime,
+history controller, and command implementations. The runtime is the only place
+that writes the Zustand store. It applies the loading and read-only guards and
+records each atomic content commit with the per-store history controller in the
+same write. Commands receive that shared runtime instead of
+importing another command group, which keeps the groups independently testable
+and prevents a second mutation or history path from emerging.
+
+Domain calculations that need no application state live in core. Editor
+commands choose when to run them and how their result affects transient editor
+state; the GTFS reconciliation Worker calls the core transform directly and
+returns a document candidate for the active editor to accept or reject.
+
 `apps/web/src/editor/pointerIntent.ts` resolves a press into an operation from
 its target and modifier channels alone, without browser or map state, so
 presentation and dispatch reach the same decision.

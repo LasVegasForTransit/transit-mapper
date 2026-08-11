@@ -10,8 +10,8 @@ import {
 } from 'react';
 import { FACILITY_TYPES, MODES } from '@transitmapper/core/model/catalog';
 import type { Facility, Station } from '@transitmapper/core/model/system';
-import type { EditorState, Selection } from '../editor/store';
-import { useEditor } from '../editor/EditorProvider';
+import type { EditorCommands, EditorState, Selection } from '../editor/store';
+import { useEditor, useEditorCommands } from '../editor/EditorProvider';
 import { Icon } from './Icon';
 import {
   infrastructureOutlineProjection,
@@ -166,8 +166,7 @@ const OUTLINE_TITLE: Record<ViewMode, string> = {
 export function SidebarPanel() {
   const system = useEditor((state) => state.system);
   const selection = useEditor((state) => state.selection);
-  const selectAndFocus = useEditor((state) => state.selectAndFocus);
-  const setOutlineHover = useEditor((state) => state.setOutlineHover);
+  const { selectAndFocus, setOutlineHover } = useEditorCommands().selection;
   const { viewMode } = useView();
   const [presentationByView, setPresentationByView] = useState<
     Record<ViewMode, OutlinePresentationState>
@@ -245,8 +244,8 @@ export function SidebarPanel() {
 interface OutlineProps {
   system: EditorState['system'];
   selection: Selection;
-  selectAndFocus: EditorState['selectAndFocus'];
-  setOutlineHover: EditorState['setOutlineHover'];
+  selectAndFocus: EditorCommands['selection']['selectAndFocus'];
+  setOutlineHover: EditorCommands['selection']['setOutlineHover'];
   presentation: OutlinePresentationState;
   updatePresentation: (
     update: (current: OutlinePresentationState) => OutlinePresentationState,
@@ -420,8 +419,8 @@ interface NetworkTreeProps {
   normalized: string;
   expanded: Set<string>;
   selection: Selection;
-  selectAndFocus: EditorState['selectAndFocus'];
-  setOutlineHover: EditorState['setOutlineHover'];
+  selectAndFocus: EditorCommands['selection']['selectAndFocus'];
+  setOutlineHover: EditorCommands['selection']['setOutlineHover'];
   toggle: (key: string) => void;
   tabIndexFor: ReturnType<typeof sidebarTabIndexFor>;
 }
@@ -592,8 +591,8 @@ function StopRows({
   contextLabel: string;
   stops: ReturnType<typeof servicesForSidebarLine>[number]['stops'];
   selection: Selection;
-  selectAndFocus: EditorState['selectAndFocus'];
-  setOutlineHover: EditorState['setOutlineHover'];
+  selectAndFocus: EditorCommands['selection']['selectAndFocus'];
+  setOutlineHover: EditorCommands['selection']['setOutlineHover'];
   tabIndexFor: ReturnType<typeof sidebarTabIndexFor>;
 }) {
   return (
@@ -700,8 +699,8 @@ function infrastructureSelectionKeys(
 interface InfrastructureSectionProps {
   normalized: string;
   selection: Selection;
-  selectAndFocus: EditorState['selectAndFocus'];
-  setOutlineHover: EditorState['setOutlineHover'];
+  selectAndFocus: EditorCommands['selection']['selectAndFocus'];
+  setOutlineHover: EditorCommands['selection']['setOutlineHover'];
   expanded: Set<string>;
   toggle: (key: string) => void;
   showAll: (key: string) => void;

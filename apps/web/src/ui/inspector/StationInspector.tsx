@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useEditor } from '../../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../../editor/EditorProvider';
 import type { Service } from '@transitmapper/core/model/system';
 import {
   activeSchedule,
@@ -37,15 +37,17 @@ export function StationInspector({ id }: StationInspectorProps) {
   const services = useEditor((s) => s.system.services);
   const system = useEditor((s) => s.system);
   const readOnly = useEditor((s) => s.readOnly);
-  const setStationName = useEditor((s) => s.setStationName);
-  const suggestStationName = useEditor((s) => s.suggestStationName);
-  const setStationDwellSeconds = useEditor((s) => s.setStationDwellSeconds);
-  const setStationMajorStop = useEditor((s) => s.setStationMajorStop);
-  const deleteStation = useEditor((s) => s.deleteStation);
-  const selectAndFocus = useEditor((s) => s.selectAndFocus);
   const focusNameToken = useEditor((s) => s.focusNameToken);
   const focusNameStationId = useEditor((s) => s.focusNameStationId);
-  const consumeFocusName = useEditor((s) => s.consumeFocusName);
+  const {
+    setStationName,
+    suggestStationName,
+    setStationDwellSeconds,
+    setStationMajorStop,
+    deleteStation,
+    consumeFocusName,
+  } = useEditorCommands().stations;
+  const { selectAndFocus } = useEditorCommands().selection;
   const [tab, setTab] = useState<string>('stop');
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -219,10 +221,8 @@ interface StationFootprintProps {
 
 function StationFootprint({ stationId, readOnly }: StationFootprintProps) {
   const station = useEditor((s) => s.system.stations.find((st) => st.id === stationId));
-  const addStationFootprint = useEditor((s) => s.addStationFootprint);
-  const deleteStationFootprint = useEditor((s) => s.deleteStationFootprint);
-  const addPlatform = useEditor((s) => s.addPlatform);
-  const deletePlatform = useEditor((s) => s.deletePlatform);
+  const { addStationFootprint, deleteStationFootprint, addPlatform, deletePlatform } =
+    useEditorCommands().stations;
   const { setViewMode } = useView();
   if (!station) return null;
 
@@ -306,10 +306,8 @@ interface StationGroupingProps {
 function StationGrouping({ stationId, readOnly }: StationGroupingProps) {
   const groups = useEditor((s) => s.system.groups);
   const stations = useEditor((s) => s.system.stations);
-  const createGroup = useEditor((s) => s.createGroup);
-  const addGroupMember = useEditor((s) => s.addGroupMember);
-  const removeGroupMember = useEditor((s) => s.removeGroupMember);
-  const selectAndFocus = useEditor((s) => s.selectAndFocus);
+  const { createGroup, addGroupMember, removeGroupMember } = useEditorCommands().groups;
+  const { selectAndFocus } = useEditorCommands().selection;
   const [picked, setPicked] = useState('');
 
   const myGroup = groups.find((g) => g.memberIds.includes(stationId));

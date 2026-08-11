@@ -5,7 +5,7 @@
 // one-way ⇄ two-way). All edits go through the store's setWayProfile /
 // applyProfilePreset, so undo/redo and connector pruning come for free.
 import { useState } from 'react';
-import { useEditor } from '../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../editor/EditorProvider';
 import {
   LANE_KINDS,
   laneKind,
@@ -43,8 +43,7 @@ export interface CrossSectionEditorProps {
 
 export function CrossSectionEditor({ wayId, readOnly }: CrossSectionEditorProps) {
   const way = useEditor((s) => s.system.ways.find((w) => w.id === wayId));
-  const setWayProfile = useEditor((s) => s.setWayProfile);
-  const applyProfilePreset = useEditor((s) => s.applyProfilePreset);
+  const { setWayProfile, applyProfilePreset } = useEditorCommands().ways;
   const drivingSide = useEditor((s) => s.system.drivingSide);
   const turnRestrictions = useEditor((s) => s.system.turnRestrictions);
   const [selectedLaneId, setSelectedLaneId] = useState<string | null>(null);

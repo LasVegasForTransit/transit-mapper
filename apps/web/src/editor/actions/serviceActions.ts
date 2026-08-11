@@ -17,12 +17,12 @@ import {
   servicesForLine,
 } from '@transitmapper/core/model/line-service';
 import { servicesShareOrCross, terminiMeet } from '@transitmapper/core/model/selectionRelations';
-import type { EditorStore } from '../store';
+import type { SelectionActionStore } from './action-store';
 
 export const JOIN_THROUGH_SERVICE_LABEL = 'Join into a through-service';
 
 function lineActions(
-  store: EditorStore,
+  store: SelectionActionStore,
   { system, refs }: ActionContext,
   lineIds: string[],
 ): SelectionAction[] {
@@ -45,7 +45,7 @@ function lineActions(
       label: JOIN_THROUGH_SERVICE_LABEL,
       hint: `One continuous Service, keeping “${serviceDisplayLabel(system, target.id)}”`,
       group: 'merge',
-      run: () => store.getState().throughRouteInto(target.id, source.id),
+      run: () => store.commands.services.throughRouteInto(target.id, source.id),
     });
   }
   actions.push({
@@ -55,14 +55,14 @@ function lineActions(
     group: 'merge',
     run: () => {
       for (const service of sourceServices)
-        store.getState().moveServiceToLine(service.id, targetLineId);
+        store.commands.services.moveServiceToLine(service.id, targetLineId);
     },
   });
   return actions;
 }
 
 function singleServiceActions(
-  store: EditorStore,
+  store: SelectionActionStore,
   { system, serviceHit }: ActionContext,
   serviceId: string,
 ): SelectionAction[] {
@@ -77,7 +77,7 @@ function singleServiceActions(
         hint: 'Drag to where this line should turn back',
         group: 'direction',
         run: () =>
-          store.getState().armTerminus({
+          store.commands.selection.armTerminus({
             serviceId: serviceHit.serviceId,
             patternId: serviceHit.patternId,
             side: terminusSide,
@@ -94,14 +94,14 @@ function singleServiceActions(
           label: 'Make it run both ways on one street',
           hint: 'Its return trip rejoins the outward one',
           group: 'direction',
-          run: () => store.getState().makePatternTwoWay(service.id, pattern.id),
+          run: () => store.commands.services.makePatternTwoWay(service.id, pattern.id),
         },
       ]
     : [];
 }
 
 function pairedServiceActions(
-  store: EditorStore,
+  store: SelectionActionStore,
   { system }: ActionContext,
   [a, b]: string[],
 ): SelectionAction[] {
@@ -115,7 +115,7 @@ function pairedServiceActions(
       label: JOIN_THROUGH_SERVICE_LABEL,
       hint: `One continuous service, keeping “${serviceDisplayLabel(system, first.id)}”`,
       group: 'merge',
-      run: () => store.getState().throughRouteInto(a, b),
+      run: () => store.commands.services.throughRouteInto(a, b),
     });
   }
   const targetLine = servicesShareOrCross(system, a, b) ? lineForService(system, a) : undefined;
@@ -125,12 +125,12 @@ function pairedServiceActions(
       label: 'Group under one line',
       hint: `Move “${serviceDisplayLabel(system, second.id)}” under the same public line`,
       group: 'merge',
-      run: () => store.getState().moveServiceToLine(b, targetLine.id),
+      run: () => store.commands.services.moveServiceToLine(b, targetLine.id),
     });
   return actions;
 }
 
-export function serviceActionProvider(store: EditorStore): SelectionActionProvider {
+export function serviceActionProvider(store: SelectionActionStore): SelectionActionProvider {
   return (context) => {
     const lineIds = refIds(context.refs, 'line');
     if (lineIds.length > 0) return lineActions(store, context, lineIds);

@@ -7,10 +7,10 @@ describe('streaming GTFS import ownership', () => {
     const store = createEditorStore();
     const target = createEmptySystem();
     const other = createEmptySystem();
-    store.getState().setSystem(target);
-    store.getState().setSystem(other);
+    store.commands.document.setSystem(target);
+    store.commands.document.setSystem(other);
 
-    const applied = store.getState().applyGtfsImportBatch({
+    const applied = store.commands.imports.applyGtfsImportBatch({
       targetSystemId: target.id,
       pieces: {
         ways: [],

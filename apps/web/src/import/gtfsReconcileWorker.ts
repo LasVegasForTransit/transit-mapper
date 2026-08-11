@@ -1,4 +1,4 @@
-import { reconcileImportedSystem } from '../editor/store';
+import { reconcileImportedSystem } from '@transitmapper/core/model/corridor-edits';
 import type { GtfsReconcileEvent, GtfsReconcileRequest } from './gtfsReconcileProtocol';
 
 interface WorkerScope {

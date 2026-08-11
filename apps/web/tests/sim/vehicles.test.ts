@@ -236,7 +236,7 @@ describe('vehicle animation scheduling', () => {
   it('a paused simulator paints one frozen frame and remains unscheduled until invalidated', () => {
     const scheduled = installScheduler();
     const store = createEditorStore();
-    store.getState().setSystem(runningSystem());
+    store.commands.document.setSystem(runningSystem());
     const clock = createSimClock({ paused: true });
     const { map, network } = createMap();
     const gate = createGate();
@@ -271,7 +271,7 @@ describe('vehicle animation scheduling', () => {
   it('an empty running simulator stays unscheduled and catches up when data arrives', () => {
     const scheduled = installScheduler();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
+    store.commands.document.setSystem(createEmptySystem());
     const clock = createSimClock();
     const startedAt = clock.now();
     const { map, network, infrastructure } = createMap();
@@ -286,7 +286,7 @@ describe('vehicle animation scheduling', () => {
     expect(scheduled.timers.size).toBe(0);
 
     scheduled.setNow(5_000);
-    store.getState().setSystem(runningSystem());
+    store.commands.document.setSystem(runningSystem());
     expect(scheduled.raf.size).toBe(1);
     scheduled.pumpFrame(5_000);
     expect(network.updates).toHaveLength(1);
@@ -298,7 +298,7 @@ describe('vehicle animation scheduling', () => {
   it('an idle clock accounts for visible time before pausing but not paused time', () => {
     const scheduled = installScheduler();
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
+    store.commands.document.setSystem(createEmptySystem());
     const clock = createSimClock();
     const startedAt = clock.now();
     const { map } = createMap();
@@ -325,7 +325,7 @@ describe('vehicle animation scheduling', () => {
   it('diagram mode stays unscheduled and wakes when the view changes', () => {
     const scheduled = installScheduler();
     const store = createEditorStore();
-    store.getState().setSystem(runningSystem());
+    store.commands.document.setSystem(runningSystem());
     const clock = createSimClock();
     const startedAt = clock.now();
     const { map, network } = createMap();
@@ -350,7 +350,7 @@ describe('vehicle animation scheduling', () => {
   it('a filtered-out simulation stays unscheduled and wakes when filters change', () => {
     const scheduled = installScheduler();
     const store = createEditorStore();
-    store.getState().setSystem(runningSystem());
+    store.commands.document.setSystem(runningSystem());
     const { map, network } = createMap();
     const gate = createGate({ visible: false });
 
@@ -377,7 +377,7 @@ describe('vehicle animation scheduling', () => {
       spanStart: '05:00',
       spanEnd: '23:00',
     };
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const minuteMs = 60_000;
     const clock = createSimClock({
       startMs: (4 * 60 + 59) * minuteMs,
@@ -408,7 +408,7 @@ describe('vehicle animation scheduling', () => {
   it('network animation does not rewrite an already-empty infrastructure source', () => {
     const scheduled = installScheduler();
     const store = createEditorStore();
-    store.getState().setSystem(runningSystem());
+    store.commands.document.setSystem(runningSystem());
     const { map, network, infrastructure } = createMap();
     const gate = createGate();
 
@@ -425,7 +425,7 @@ describe('vehicle animation scheduling', () => {
   it('keeps vehicles moving on settled geometry until direct manipulation commits', () => {
     const scheduled = installScheduler();
     const store = createEditorStore();
-    store.getState().setSystem(runningSystem());
+    store.commands.document.setSystem(runningSystem());
     const clock = createSimClock({ speedId: 'realtime' });
     const startedAt = clock.now();
     const { map, network } = createMap();
@@ -446,7 +446,7 @@ describe('vehicle animation scheduling', () => {
 
     scheduled.setNow(240);
     const system = store.getState().system;
-    store.getState().setSystem({
+    store.commands.document.setSystem({
       ...system,
       ways: system.ways.map((candidate) =>
         candidate.id === 'used'
@@ -486,7 +486,7 @@ describe('vehicle geometry dependencies', () => {
   it('does not rebuild pattern dependency lists on geometry cache hits', () => {
     const scheduled = installScheduler();
     const store = createEditorStore();
-    store.getState().setSystem(runningSystem());
+    store.commands.document.setSystem(runningSystem());
     const { map } = createMap();
     const gate = createGate();
 
@@ -500,7 +500,7 @@ describe('vehicle geometry dependencies', () => {
     expect(patternDependenciesProbe.calls).toBe(1);
 
     const system = store.getState().system;
-    store.getState().setSystem({
+    store.commands.document.setSystem({
       ...system,
       ways: [system.ways[0], { ...system.ways[1] }],
     });
@@ -517,7 +517,7 @@ describe('vehicle geometry dependencies', () => {
   it('editing unrelated ways and stations preserves a pattern geometry cache entry', () => {
     const scheduled = installScheduler();
     const store = createEditorStore();
-    store.getState().setSystem(runningSystem());
+    store.commands.document.setSystem(runningSystem());
     const { map } = createMap();
     const gate = createGate();
 
@@ -526,7 +526,7 @@ describe('vehicle geometry dependencies', () => {
     expect(patternStatsProbe.calls).toBe(1);
 
     const first = store.getState().system;
-    store.getState().setSystem({
+    store.commands.document.setSystem({
       ...first,
       ways: [first.ways[0], { ...first.ways[1] }],
     });
@@ -534,7 +534,7 @@ describe('vehicle geometry dependencies', () => {
     expect(patternStatsProbe.calls).toBe(1);
 
     const second = store.getState().system;
-    store.getState().setSystem({
+    store.commands.document.setSystem({
       ...second,
       stations: [second.stations[0], { ...second.stations[1], name: 'Other stop' }],
     });
@@ -542,7 +542,7 @@ describe('vehicle geometry dependencies', () => {
     expect(patternStatsProbe.calls).toBe(1);
 
     const third = store.getState().system;
-    store.getState().setSystem({
+    store.commands.document.setSystem({
       ...third,
       stations: [{ ...third.stations[0], dwellSeconds: 45 }, third.stations[1]],
     });

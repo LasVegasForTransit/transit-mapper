@@ -72,7 +72,7 @@ stored.
 
 A `Node` is a coordinate shared by two or more ways' control points: real
 topology, not two paths that happen to cross visually. Every
-store mutation that inserts, deletes, or moves control points keeps `refs`
+editor command that inserts, deletes, or moves control points keeps `refs`
 (`{wayId, pointIndex}` pairs) in sync.
 
 - `control` is traffic control: `uncontrolled`, `signal`, `stop`,
@@ -84,9 +84,10 @@ store mutation that inserts, deletes, or moves control points keeps `refs`
   than stored.
 
 Nodes are built three ways, all producing the same record. Editing forms
-them as a side effect of drawing, splitting, and joining
-(`apps/web/src/editor/store.ts`). Loading a document that predates stored nodes
-derives them from coordinate coincidence (`deriveNodesFromWays` in
+them as a side effect of drawing, splitting, and joining. The editor's way and
+network command groups select the operation while pure data transforms perform
+the topology change. Loading a document that predates stored nodes derives them
+from coordinate coincidence (`deriveNodesFromWays` in
 `packages/core/src/model/serialize.ts`). OSM import derives them from OSM's node ids
 (`packages/core/src/model/import.ts`), which is exact — two imported ways join exactly
 when OSM says they share a node, so co-located but unconnected

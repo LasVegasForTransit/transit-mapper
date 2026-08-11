@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useEditor } from '../../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../../editor/EditorProvider';
 import { GRADES, LANE_KINDS, WAY_FAMILIES, wayType } from '@transitmapper/core/model/catalog';
 import { estimateWayCapitalCost, formatUsdCompact } from '@transitmapper/core/model/cost';
 import { bearingDegrees, formatBearing, wayLengthMeters } from '@transitmapper/core/model/geo';
@@ -28,7 +28,7 @@ interface MedianFieldProps {
  *  dragged, and preserved across separate/combine round-trips. */
 function MedianField({ namedWayId, readOnly }: MedianFieldProps) {
   const median = useEditor((s) => getComponent(s.system.medians, namedWayId));
-  const setMedianWidth = useEditor((s) => s.setMedianWidth);
+  const { setMedianWidth } = useEditorCommands().network;
   const widthM = median?.widthM ?? LANE_KINDS.median.defaultWidthM;
   return (
     <>
@@ -66,11 +66,6 @@ export function WayInspector({ id }: WayInspectorProps) {
   const unitSystem = useUnitPreference();
   const way = useEditor((s) => s.system.ways.find((w) => w.id === id));
   const readOnly = useEditor((s) => s.readOnly);
-  const setWayGeometry = useEditor((s) => s.setWayGeometry);
-  const setWayGrade = useEditor((s) => s.setWayGrade);
-  const setWayClassId = useEditor((s) => s.setWayClassId);
-  const deleteWay = useEditor((s) => s.deleteWay);
-  const nameWay = useEditor((s) => s.nameWay);
   const namedWay = useEditor((s) => s.system.namedWays.find((n) => n.wayIds.includes(id)));
   // A median is only ever captured by separating, so its presence is the
   // durable record that this street is a separated pair — unlike the member
@@ -98,13 +93,20 @@ export function WayInspector({ id }: WayInspectorProps) {
     : namedWay && namedWay.wayIds.length !== 2
       ? `This street is ${namedWay.wayIds.length} segments; combining works on a two-carriageway street. Merge the split segments first.`
       : 'Both halves must be one-way to combine into a two-way street.';
-  const separateCarriageways = useEditor((s) => s.separateCarriageways);
-  const combineCarriageways = useEditor((s) => s.combineCarriageways);
-  const mergeWaysAction = useEditor((s) => s.mergeWays);
-  const straightenWayAction = useEditor((s) => s.straightenWay);
   const nodes = useEditor((s) => s.system.nodes);
   const allWays = useEditor((s) => s.system.ways);
-  const select = useEditor((s) => s.select);
+  const {
+    ways: {
+      setWayGeometry,
+      setWayGrade,
+      setWayClassId,
+      deleteWay,
+      nameWay,
+      straightenWay: straightenWayAction,
+    },
+    network: { separateCarriageways, combineCarriageways, mergeWays: mergeWaysAction },
+    selection: { select },
+  } = useEditorCommands();
   const { viewMode } = useView();
   const [tab, setTab] = useState<string>(viewMode === 'infrastructure' ? 'lanes' : 'identity');
 
@@ -233,7 +235,7 @@ export function WayInspector({ id }: WayInspectorProps) {
             onBlur={(e) => nameWay(id, e.target.value)}
             onKeyDown={blurOnEnter}
           />
-          {!readOnly && namedWay && namedWay.name && namedWay.wayIds.length > 1 && (
+          {!readOnly && namedWay?.name && namedWay.wayIds.length > 1 && (
             <p className="insp-sub">
               Shared by {namedWay.wayIds.length} segments — renaming here renames the whole{' '}
               {identityNoun.toLowerCase()}

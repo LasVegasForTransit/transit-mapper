@@ -1,8 +1,14 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import type { SelectionActionRegistry } from '@transitmapper/core/model/selectionActions';
+import type { BackgroundImportStore } from '../import/background-import-store';
 import { createSelectionActions } from './actions';
-import { createEditorStore, type EditorState, type EditorStore } from './store';
+import {
+  createEditorStore,
+  type EditorCommands,
+  type EditorState,
+  type EditorStore,
+} from './store';
 
 // The editor store is created once and shared through context, so React
 // components consume it via hooks and the imperative map/keyboard layers
@@ -15,18 +21,19 @@ const SelectionActionsContext = createContext<SelectionActionRegistry | null>(nu
 
 interface EditorProviderProps {
   children: ReactNode;
+  /** A real editor store may be injected by tests and embedded editors. */
+  store?: EditorStore;
 }
 
-export function EditorProvider({ children }: EditorProviderProps) {
+export function EditorProvider({ children, store: providedStore }: EditorProviderProps) {
   const storeRef = useRef<EditorStore | null>(null);
   // `loading`, because the running editor always goes looking in storage (or
   // at a shared link) for the document it should be showing. The empty system
   // the store starts with is a placeholder for that, and the store refuses
   // content changes to it until the real one lands — see documentStatus.
-  if (storeRef.current === null)
-    storeRef.current = createEditorStore({ documentStatus: 'loading' });
+  storeRef.current ??= providedStore ?? createEditorStore({ documentStatus: 'loading' });
   const actionsRef = useRef<SelectionActionRegistry | null>(null);
-  if (actionsRef.current === null) actionsRef.current = createSelectionActions(storeRef.current);
+  actionsRef.current ??= createSelectionActions(storeRef.current);
 
   useEffect(() => {
     if (import.meta.env.DEV) {
@@ -50,11 +57,21 @@ export function useSelectionActionRegistry(): SelectionActionRegistry {
   return registry;
 }
 
-/** The store instance, for imperative access (getState / subscribe / actions). */
+/** The store instance, for imperative access (getState / subscribe / commands). */
 export function useEditorStore(): EditorStore {
   const store = useContext(EditorStoreContext);
   if (!store) throw new Error('useEditorStore must be used within <EditorProvider>');
   return store;
+}
+
+/** Stable command functions for the current editor store. */
+export function useEditorCommands(): EditorCommands {
+  return useEditorStore().commands;
+}
+
+/** Snapshot/subscription port for imports that outlive a React event. */
+export function useBackgroundImportStore(): BackgroundImportStore {
+  return useEditorStore();
 }
 
 /** Subscribe to a slice of editor state. */

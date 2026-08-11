@@ -13,8 +13,8 @@ vi.mock('../../src/editor/EditorProvider', () => ({
     selector({
       readOnly: state.readOnly,
       system: { name: 'Test system' },
-      setName: () => undefined,
     }),
+  useEditorCommands: () => ({ document: { setName: () => undefined } }),
   useEditorStore: () => ({ getState: () => ({ system: {} }) }),
 }));
 

@@ -31,9 +31,10 @@ describe('active service path focus', () => {
         path: { id: 'line', sections: oneSection([wholeLeg('trunk')]) },
       },
     ];
-    store.getState().setSystem(system);
+    system.lines = [{ id: 'public-line', name: 'Line', color: '#e4572e', serviceIds: ['line'] }];
+    store.commands.document.setSystem(system);
 
-    store.getState().select({ kind: 'service', id: 'line' });
+    store.commands.selection.select({ kind: 'service', id: 'line' });
 
     expect(
       (
@@ -69,11 +70,12 @@ describe('active service path focus', () => {
         path: { id: 'line', sections: oneSection([wholeLeg('trunk')]) },
       },
     ];
-    store.getState().setSystem(system);
-    store.getState().select({ kind: 'service', id: 'line' });
-    store.getState().setActivePattern('line');
+    system.lines = [{ id: 'public-line', name: 'Line', color: '#e4572e', serviceIds: ['line'] }];
+    store.commands.document.setSystem(system);
+    store.commands.selection.select({ kind: 'service', id: 'line' });
+    store.commands.selection.setActivePattern('line');
 
-    store.getState().deleteService('line');
+    store.commands.services.deleteService('line');
     expect(store.getState().activePatternId).toBeNull();
     expect(store.getState().selection).toBeNull();
   });
@@ -103,11 +105,13 @@ describe('active service path focus', () => {
         path: { id: 'line', sections: oneSection([wholeLeg('trunk')]) },
       },
     ];
-    store.getState().setSystem(system);
-    store.getState().select({ kind: 'service', id: 'line' });
+    system.lines = [{ id: 'public-line', name: 'Line', color: '#e4572e', serviceIds: ['line'] }];
+    store.commands.document.setSystem(system);
+    store.commands.selection.select({ kind: 'service', id: 'line' });
     const position = patternPositionAt(system.ways, system.services[0].path, 'outbound', 0, 0.5)!;
 
-    const spawned = store.getState().divideServiceAt('line', position)!;
+    const spawned = store.commands.services.divideServiceAt('line', position);
+    if (!spawned) throw new Error('Expected the fixture command to divide the service');
     const state = store.getState();
     expect(state.selection).toEqual({ kind: 'service', id: spawned });
     expect(state.system.services.find((service) => service.id === spawned)?.path.id).toBe(

@@ -1,4 +1,4 @@
-import { useEditor } from '../../editor/EditorProvider';
+import { useEditor, useEditorCommands } from '../../editor/EditorProvider';
 import { facilityType } from '@transitmapper/core/model/catalog';
 import { Panel } from '../Panel';
 import { blurOnEnter } from '../formUtils';
@@ -13,9 +13,8 @@ export function FacilityInspector({ id }: FacilityInspectorProps) {
   const facility = useEditor((s) => s.system.facilities.find((f) => f.id === id));
   const complex = useEditor((s) => s.system.groups.find((g) => g.memberIds.includes(id)));
   const readOnly = useEditor((s) => s.readOnly);
-  const setFacilityName = useEditor((s) => s.setFacilityName);
-  const deleteFacility = useEditor((s) => s.deleteFacility);
-  const selectAndFocus = useEditor((s) => s.selectAndFocus);
+  const { setFacilityName, deleteFacility } = useEditorCommands().facilities;
+  const { selectAndFocus } = useEditorCommands().selection;
 
   if (!facility) return <EmptyInspector />;
   const type = facilityType(facility.typeId);

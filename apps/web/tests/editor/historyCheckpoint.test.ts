@@ -20,12 +20,12 @@ describe('editor history checkpoints', () => {
         ],
       },
     ];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
     const stringify = vi.spyOn(JSON, 'stringify');
 
-    store.getState().beginHistoryCheckpoint();
-    store.getState().moveWayPoint('way', 1, [-115, 36.2]);
-    store.getState().commitHistoryCheckpoint();
+    store.commands.history.beginHistoryCheckpoint();
+    store.commands.ways.moveWayPoint('way', 1, [-115, 36.2]);
+    store.commands.history.commitHistoryCheckpoint();
 
     expect(stringify).not.toHaveBeenCalled();
     expect(store.getState().canUndo).toBe(true);
@@ -36,9 +36,9 @@ describe('editor history checkpoints', () => {
     const store = createEditorStore();
     const before = store.getState().system;
 
-    store.getState().beginHistoryCheckpoint();
-    store.getState().addStation([-115.2, 36.1]);
-    store.getState().cancelHistoryCheckpoint();
+    store.commands.history.beginHistoryCheckpoint();
+    store.commands.stations.addStation([-115.2, 36.1]);
+    store.commands.history.cancelHistoryCheckpoint();
 
     expect(store.getState().system).toBe(before);
     expect(store.getState().canUndo).toBe(false);

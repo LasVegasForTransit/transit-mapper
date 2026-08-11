@@ -9,6 +9,11 @@ import {
 import { createEditorStore } from '../../../src/editor/store';
 import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
 
+function required<Value>(value: Value | null): Value {
+  if (value === null) throw new Error('Expected the fixture command to return a value');
+  return value;
+}
+
 describe('service point actions', () => {
   it('requires the interaction-resolved occurrence position', () => {
     const store = createEditorStore();
@@ -75,7 +80,7 @@ describe('service point actions', () => {
         },
       },
     ];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
 
     const actions = servicePointActionProvider(store)({
       system,
@@ -129,7 +134,7 @@ describe('service point actions', () => {
         },
       },
     ];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
 
     const actions = servicePointActionProvider(store)({
       system,
@@ -186,7 +191,7 @@ describe('service point actions', () => {
         },
       },
     ];
-    store.getState().setSystem(system);
+    store.commands.document.setSystem(system);
 
     const actions = servicePointActionProvider(store)({
       system,
@@ -211,10 +216,10 @@ describe('service point actions', () => {
 describe('way point actions', () => {
   it('offers Separate carriageways on a two-way street clicked along its body', () => {
     const store = createEditorStore();
-    const wayId = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(wayId, [-115.2, 36.1]);
-    store.getState().addWayPoint(wayId, [-115.1, 36.1]);
-    store.getState().finishWay();
+    const wayId = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(wayId, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(wayId, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
 
     const actions = wayPointActionProvider(store)({
       system: store.getState().system,
@@ -227,11 +232,11 @@ describe('way point actions', () => {
 
   it('does not offer Separate carriageways once a street is already one-way', () => {
     const store = createEditorStore();
-    const wayId = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(wayId, [-115.2, 36.1]);
-    store.getState().addWayPoint(wayId, [-115.1, 36.1]);
-    store.getState().finishWay();
-    store.getState().separateCarriageways(wayId);
+    const wayId = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(wayId, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(wayId, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    store.commands.network.separateCarriageways(wayId);
 
     const actions = wayPointActionProvider(store)({
       system: store.getState().system,
@@ -244,10 +249,10 @@ describe('way point actions', () => {
 
   it('running Separate carriageways from the point action produces two independent ways', () => {
     const store = createEditorStore();
-    const wayId = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(wayId, [-115.2, 36.1]);
-    store.getState().addWayPoint(wayId, [-115.1, 36.1]);
-    store.getState().finishWay();
+    const wayId = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(wayId, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(wayId, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
 
     const actions = wayPointActionProvider(store)({
       system: store.getState().system,

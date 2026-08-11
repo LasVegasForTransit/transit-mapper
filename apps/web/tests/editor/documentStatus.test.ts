@@ -17,7 +17,7 @@ describe('a store still waiting for its document', () => {
   it('refuses to add a way', () => {
     const store = createEditorStore({ documentStatus: 'loading' });
 
-    store.getState().beginWay('road', 'straight');
+    store.commands.ways.beginWay('road', 'straight');
 
     expect(store.getState().system.ways).toHaveLength(0);
   });
@@ -28,7 +28,7 @@ describe('a store still waiting for its document', () => {
     // a worse state than the edit not happening.
     const store = createEditorStore({ documentStatus: 'loading' });
 
-    store.getState().beginWay('road', 'straight');
+    store.commands.ways.beginWay('road', 'straight');
 
     expect(store.getState().activeWayId).toBeNull();
   });
@@ -36,8 +36,8 @@ describe('a store still waiting for its document', () => {
   it('still changes everything that is not the document', () => {
     const store = createEditorStore({ documentStatus: 'loading' });
 
-    store.getState().setTool('way');
-    store.getState().setSelectVariant('erase');
+    store.commands.tools.setTool('way');
+    store.commands.tools.setSelectVariant('erase');
 
     expect(store.getState().tool).toBe('way');
     expect(store.getState().selectVariant).toBe('erase');
@@ -47,7 +47,7 @@ describe('a store still waiting for its document', () => {
   it('says so rather than dropping the edit in silence', () => {
     const store = createEditorStore({ documentStatus: 'loading' });
 
-    store.getState().beginWay('road', 'straight');
+    store.commands.ways.beginWay('road', 'straight');
 
     expect(console.warn).toHaveBeenCalled();
   });
@@ -58,10 +58,10 @@ describe('the document arriving', () => {
     const store = createEditorStore({ documentStatus: 'loading' });
     const saved = createEmptySystem();
 
-    store.getState().setSystem(saved);
+    store.commands.document.setSystem(saved);
     expect(store.getState().documentStatus).toBe('ready');
 
-    store.getState().beginWay('road', 'straight');
+    store.commands.ways.beginWay('road', 'straight');
     expect(store.getState().system.ways).toHaveLength(1);
   });
 
@@ -70,10 +70,10 @@ describe('the document arriving', () => {
     // document the user just asked for would be the guard eating its own tail.
     const store = createEditorStore({ documentStatus: 'loading' });
 
-    store.getState().newSystem();
+    store.commands.document.newSystem();
 
     expect(store.getState().documentStatus).toBe('ready');
-    store.getState().beginWay('road', 'straight');
+    store.commands.ways.beginWay('road', 'straight');
     expect(store.getState().system.ways).toHaveLength(1);
   });
 
@@ -82,7 +82,7 @@ describe('the document arriving', () => {
     // ahead of it", and to avoid replacing a document someone is already using.
     const store = createEditorStore({ documentStatus: 'loading' });
 
-    store.getState().newSystem();
+    store.commands.document.newSystem();
     const chosen = store.getState().system.id;
     expect(store.getState().documentStatus).toBe('ready');
     expect(store.getState().system.id).toBe(chosen);
@@ -96,7 +96,7 @@ describe('a store given its document directly', () => {
     const store = createEditorStore();
 
     expect(store.getState().documentStatus).toBe('ready');
-    store.getState().beginWay('road', 'straight');
+    store.commands.ways.beginWay('road', 'straight');
     expect(store.getState().system.ways).toHaveLength(1);
   });
 });
