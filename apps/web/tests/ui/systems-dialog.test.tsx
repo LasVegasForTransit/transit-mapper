@@ -201,7 +201,9 @@ describe('My systems dialog', () => {
   it('does not reopen the current system', async () => {
     await renderDialog();
 
-    expect(buttonNamed('Current system').disabled).toBe(true);
+    const current = buttonNamed('Current system');
+    expect(current.disabled).toBe(true);
+    expect(current.closest('li')?.getAttribute('aria-current')).toBe('true');
   });
 
   it('does not race a second request while a switch is pending', async () => {

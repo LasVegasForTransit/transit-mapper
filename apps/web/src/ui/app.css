@@ -2877,6 +2877,18 @@ input[type='range'] {
   }
 }
 
+@media (max-width: 360px) {
+  .systems-toolbar {
+    flex-direction: column;
+  }
+  .systems-view-toggle {
+    width: 100%;
+  }
+  .systems-view-btn {
+    flex: 1;
+  }
+}
+
 .badge {
   display: inline-block;
   font-size: var(--md-sys-typescale-body-small-size);
@@ -4182,7 +4194,9 @@ button.chip-removable-label:hover {
   .cf-trigger,
   .cs-trigger,
   .view-switch-btn,
-  .sim-speed-trigger {
+  .sim-speed-trigger,
+  .systems-view-btn,
+  .systems-open {
     min-height: 44px;
   }
   .btn.icon-only,

@@ -1001,11 +1001,6 @@
       "count": 2
     }
   },
-  "tests/ui/touch-targets.test.ts": {
-    "@typescript-eslint/prefer-includes": {
-      "count": 1
-    }
-  },
   "tests/verify.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 256
