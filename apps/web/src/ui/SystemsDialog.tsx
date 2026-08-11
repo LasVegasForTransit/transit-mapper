@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEditor, useEditorCommands } from '../editor/EditorProvider';
 import { createEmptySystem, forkSystem } from '@transitmapper/core/model/serialize';
+import { previewSvg } from '@transitmapper/core/render/preview';
 import {
   deleteFromLibrary,
   listLibrary,
@@ -17,6 +18,8 @@ import { blurOnEnter } from './formUtils';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Modal } from './Modal';
+import { loadSystemPreviews, type SystemPreview } from './system-previews';
+import { readSystemsView, writeSystemsView, type SystemsView } from './systems-view-preference';
 import { useUi } from './UiProvider';
 
 function relativeTime(ts: number): string {
@@ -32,7 +35,7 @@ function relativeTime(ts: number): string {
 
 interface SystemsDialogProps {
   onClose: () => void;
-  flushPendingSave: () => void | Promise<void>;
+  flushPendingSave: () => Promise<SaveOutcome>;
   recordSaveOutcome: (id: string, outcome: SaveOutcome) => void;
   discardPendingSave: (id: string) => void;
   /** Reports a stored system that exists but won't parse, so the app can say
@@ -59,6 +62,11 @@ export function SystemsDialog({
   const [loading, setLoading] = useState(true);
   const [libraryUnavailable, setLibraryUnavailable] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const openingIdRef = useRef<string | null>(null);
+  const [view, setView] = useState<SystemsView>(readSystemsView);
+  const [previews, setPreviews] = useState<Record<string, SystemPreview>>({});
+  const previewIdsRef = useRef(new Set<string>());
 
   const refresh = async (): Promise<LibraryEntry[] | null> => {
     const result = await listLibrary();
@@ -90,24 +98,79 @@ export function SystemsDialog({
     };
   }, []);
 
+  useEffect(() => {
+    if (view !== 'cards' || entries.length === 0) return;
+    const entryIds = new Set(entries.map((entry) => entry.id));
+    for (const id of previewIdsRef.current) {
+      if (!entryIds.has(id)) previewIdsRef.current.delete(id);
+    }
+    setPreviews((current) =>
+      Object.fromEntries(Object.entries(current).filter(([id]) => entryIds.has(id))),
+    );
+    const ids = entries
+      .filter((entry) => !previewIdsRef.current.has(entry.id))
+      .map((entry) => entry.id);
+    if (ids.length === 0) return;
+    for (const id of ids) previewIdsRef.current.add(id);
+
+    let cancelled = false;
+    const completed = new Set<string>();
+    void loadSystemPreviews({
+      ids,
+      load: loadSystemEntry,
+      render: (system) => previewSvg(system, { displayWidth: 280 }),
+      onPreview: (id, preview) => {
+        completed.add(id);
+        setPreviews((current) => ({ ...current, [id]: preview }));
+      },
+      isCancelled: () => cancelled,
+    });
+    return () => {
+      cancelled = true;
+      for (const id of ids) {
+        if (!completed.has(id)) previewIdsRef.current.delete(id);
+      }
+    };
+  }, [entries, view]);
+
   const open = async (id: string) => {
-    if (id === currentId) return;
-    // A row whose bytes won't parse is listed, clickable, and used to do
-    // absolutely nothing when clicked — forever, with no message.
-    const result = await loadSystemEntry(id);
-    if (result.status === 'unavailable') {
-      setLibraryUnavailable(true);
-      return;
+    if (id === currentId || openingIdRef.current !== null) return;
+    openingIdRef.current = id;
+    setOpeningId(id);
+    try {
+      // Replacing the editor before this settles can discard the only copy of
+      // the current document's last edits. A save failure already has a banner
+      // with the right remedy, so leave this dialog open and keep Delete usable.
+      if ((await flushPendingSave()) !== 'saved') return;
+
+      // A row whose bytes won't parse is listed, clickable, and used to do
+      // absolutely nothing when clicked — forever, with no message.
+      const result = await loadSystemEntry(id);
+      if (result.status === 'unavailable') {
+        setLibraryUnavailable(true);
+        return;
+      }
+      if (result.status === 'corrupt') {
+        onCorrupt();
+        return;
+      }
+      if (result.status === 'missing') {
+        await refresh();
+        return;
+      }
+      const system = result.system;
+      setActiveId(id);
+      setSystem(system, { readOnly: false });
+      onClose();
+    } finally {
+      openingIdRef.current = null;
+      setOpeningId(null);
     }
-    if (result.status === 'corrupt') {
-      onCorrupt();
-      return;
-    }
-    if (result.status !== 'ok') return;
-    const system = result.system;
-    setActiveId(id);
-    setSystem(system, { readOnly: false });
-    onClose();
+  };
+
+  const selectView = (next: SystemsView): void => {
+    setView(next);
+    writeSystemsView(next);
   };
 
   const rename = (entry: LibraryEntry, name: string) => {
@@ -201,12 +264,43 @@ export function SystemsDialog({
       title="My systems"
       description="Every system you've saved locally — switch, rename, duplicate, or delete."
       onClose={onClose}
+      className="systems-dialog"
     >
-      <p className="panel-hint">
+      <p className="panel-hint systems-hint">
         Saved on this device only — use Share to send a system to someone else.
       </p>
+      <div className="systems-toolbar">
+        <button
+          type="button"
+          className="btn btn-primary systems-new"
+          onClick={startNew}
+          disabled={libraryUnavailable || openingId !== null}
+        >
+          <Icon name="plus" size={17} /> New system
+        </button>
+        <div className="systems-view-toggle" role="group" aria-label="System view">
+          <button
+            type="button"
+            className="systems-view-btn"
+            aria-label="List view"
+            aria-pressed={view === 'list'}
+            onClick={() => selectView('list')}
+          >
+            <Icon name="platform" size={16} /> List
+          </button>
+          <button
+            type="button"
+            className="systems-view-btn"
+            aria-label="Cards view"
+            aria-pressed={view === 'cards'}
+            onClick={() => selectView('cards')}
+          >
+            <Icon name="square" size={16} /> Cards
+          </button>
+        </div>
+      </div>
 
-      <ul className="systems-list" aria-busy={loading}>
+      <ul className="systems-list" data-view={view} aria-busy={loading}>
         {loading && <li className="panel-hint">Loading saved systems…</li>}
         {libraryUnavailable && (
           <li className="panel-hint">
@@ -216,85 +310,130 @@ export function SystemsDialog({
             </button>
           </li>
         )}
+        {!loading && !libraryUnavailable && entries.length === 0 && (
+          <li className="systems-empty">
+            <Icon name="layers" size={24} />
+            <span>No saved systems yet.</span>
+            <span>Create one to start drawing your network.</span>
+          </li>
+        )}
         {entries.map((entry) => {
           const isActive = entry.id === currentId;
           const isConfirming = confirmingId === entry.id;
+          const displayName = (isActive ? currentName : entry.name) || 'Untitled system';
+          const preview = previews[entry.id];
           return (
             <li key={entry.id} className={`systems-row ${isActive ? 'active' : ''}`}>
-              <button
-                type="button"
-                className="systems-open"
-                onClick={() => void open(entry.id)}
-                disabled={isActive}
-                aria-label={isActive ? 'Current system' : `Open ${entry.name || 'Untitled system'}`}
-                title={isActive ? 'Current system' : 'Open'}
-              >
-                <span className={`dot ${isActive ? '' : 'ring'}`} />
-              </button>
-              <input
-                className="systems-name-input"
-                value={isActive ? currentName : entry.name}
-                aria-label="System name"
-                onChange={(e) => rename(entry, e.target.value)}
-                onKeyDown={blurOnEnter}
-              />
-              <span className="systems-meta">
-                {isActive ? 'Current' : relativeTime(entry.updatedAt)}
-              </span>
-              {getMyShare(entry.id) && (
-                <IconButton
-                  icon="share"
-                  size={16}
-                  active
-                  label="Shared — stop sharing"
-                  onClick={() => revokeShare(entry.id)}
-                />
+              {view === 'cards' && (
+                <div className="systems-preview">
+                  {preview?.status === 'ready' ? (
+                    isActive ? (
+                      <img
+                        className="systems-preview-image"
+                        src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(preview.svg)}`}
+                        alt={`Map preview of ${displayName}`}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="systems-preview-open"
+                        aria-label={`Open map preview of ${displayName}`}
+                        onClick={() => void open(entry.id)}
+                        disabled={openingId !== null}
+                      >
+                        <img
+                          className="systems-preview-image"
+                          src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(preview.svg)}`}
+                          alt={`Map preview of ${displayName}`}
+                        />
+                      </button>
+                    )
+                  ) : (
+                    <div
+                      className={`systems-preview-status ${preview ? 'unavailable' : 'loading'}`}
+                    >
+                      {preview ? 'Preview unavailable' : 'Loading preview…'}
+                    </div>
+                  )}
+                </div>
               )}
-              <IconButton
-                icon="copy"
-                size={16}
-                label="Duplicate"
-                onClick={() => void duplicate(entry)}
-              />
-              {isConfirming ? (
-                <span className="systems-confirm">
-                  <button
-                    type="button"
-                    className="danger-btn systems-confirm-btn"
-                    onClick={() => void confirmDelete(entry.id)}
-                  >
-                    Delete
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-btn systems-confirm-btn"
-                    onClick={() => setConfirmingId(null)}
-                  >
-                    Cancel
-                  </button>
+              <div className="systems-info">
+                <input
+                  className="systems-name-input"
+                  value={isActive ? currentName : entry.name}
+                  aria-label={`Name of ${displayName}`}
+                  onChange={(e) => rename(entry, e.target.value)}
+                  onKeyDown={blurOnEnter}
+                  disabled={openingId !== null}
+                />
+                <span className="systems-meta">
+                  {isActive ? 'Editing now' : `Edited ${relativeTime(entry.updatedAt)}`}
                 </span>
-              ) : (
-                <IconButton
-                  icon="trash"
-                  size={16}
-                  label="Delete"
-                  onClick={() => setConfirmingId(entry.id)}
-                />
-              )}
+              </div>
+              <div className="systems-actions">
+                <button
+                  type="button"
+                  className={`systems-open ${isActive ? 'current' : ''}`}
+                  onClick={() => void open(entry.id)}
+                  disabled={isActive || openingId !== null}
+                  aria-label={isActive ? 'Current system' : `Open ${displayName}`}
+                  title={isActive ? 'Current system' : 'Open'}
+                >
+                  <Icon name={isActive ? 'check' : 'door'} size={16} />
+                  {isActive ? 'Current' : openingId === entry.id ? 'Opening…' : 'Open'}
+                </button>
+                <span className="systems-secondary-actions">
+                  {getMyShare(entry.id) && (
+                    <IconButton
+                      icon="share"
+                      size={16}
+                      active
+                      label={`Shared — stop sharing ${displayName}`}
+                      onClick={() => revokeShare(entry.id)}
+                      disabled={openingId !== null}
+                    />
+                  )}
+                  <IconButton
+                    icon="copy"
+                    size={16}
+                    label={`Duplicate ${displayName}`}
+                    onClick={() => void duplicate(entry)}
+                    disabled={openingId !== null}
+                  />
+                  {isConfirming ? (
+                    <span className="systems-confirm">
+                      <button
+                        type="button"
+                        className="danger-btn systems-confirm-btn"
+                        onClick={() => void confirmDelete(entry.id)}
+                        disabled={openingId !== null}
+                      >
+                        Delete
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-btn systems-confirm-btn"
+                        onClick={() => setConfirmingId(null)}
+                        disabled={openingId !== null}
+                      >
+                        Cancel
+                      </button>
+                    </span>
+                  ) : (
+                    <IconButton
+                      icon="trash"
+                      size={16}
+                      label={`Delete ${displayName}`}
+                      onClick={() => setConfirmingId(entry.id)}
+                      disabled={openingId !== null}
+                    />
+                  )}
+                </span>
+              </div>
             </li>
           );
         })}
       </ul>
-
-      <button
-        type="button"
-        className="ghost-btn"
-        style={{ marginTop: 8 }}
-        onClick={startNew}
-        disabled={libraryUnavailable}
-      >
-        <Icon name="plus" size={17} /> New system
-      </button>
     </Modal>
   );
 }

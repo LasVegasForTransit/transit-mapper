@@ -295,7 +295,13 @@ export function App() {
     };
   }, [store, report, documentStatus]);
 
-  const flushPendingSave = useCallback(() => persistence.current?.flush(), []);
+  const flushPendingSave = useCallback(
+    async (): Promise<SaveOutcome> => (await persistence.current?.flush()) ?? 'saved',
+    [],
+  );
+  const flushBeforeReload = useCallback(async (): Promise<void> => {
+    await flushPendingSave();
+  }, [flushPendingSave]);
   const recordSaveOutcome = useCallback(
     (id: string, outcome: SaveOutcome) => {
       const coordinator = persistence.current;
@@ -315,7 +321,8 @@ export function App() {
 
   // Service worker registration + update lifecycle — never wired into
   // embed's own entry point (see vite.config.ts).
-  const { needRefresh, offlineReady, dismissOfflineReady, reload } = useAppUpdate(flushPendingSave);
+  const { needRefresh, offlineReady, dismissOfflineReady, reload } =
+    useAppUpdate(flushBeforeReload);
 
   // Dev-only: expose the map for debugging (the store is exposed by EditorProvider).
   useEffect(() => {

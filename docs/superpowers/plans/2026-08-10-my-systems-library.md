@@ -53,7 +53,7 @@ it('reports the effective saved outcome after a successful flush', async () => {
   await expect(harness.coordinator.flush()).resolves.toBe('saved');
 });
 
-it('reports a failed system as undurable until a later save succeeds', async () => {
+it('reports the current system as undurable until a later save succeeds', async () => {
   const save = vi
     .fn<(system: TransitSystem) => Promise<SaveOutcome>>()
     .mockResolvedValueOnce('full')
@@ -71,6 +71,14 @@ it('reports a failed system as undurable until a later save succeeds', async () 
   });
   await expect(harness.coordinator.flush()).resolves.toBe('saved');
 });
+
+it('does not apply another system failure to the current system flush', async () => {
+  const harness = setup();
+  harness.coordinator.recordOutcome('other-system', 'full');
+
+  await expect(harness.coordinator.flush()).resolves.toBe('saved');
+  expect(harness.report).toHaveBeenLastCalledWith('full');
+});
 ```
 
 - [ ] **Step 2: Run the targeted test and confirm RED**
@@ -85,8 +93,9 @@ Expected: the new assertions fail because `flush()` resolves to `undefined`.
 
 - [ ] **Step 3: Return the effective outcome from the coordinator**
 
-Change the reporting helper to return the same outcome it reports, and return
-that value after `waitForIdle()`:
+Keep the reporting helper global because the banner summarizes every undurable
+document. Add a separate current-document lookup for the switch boundary and
+return it after `waitForIdle()`:
 
 ```ts
 const effectiveOutcome = (): SaveOutcome =>
@@ -96,11 +105,13 @@ const effectiveOutcome = (): SaveOutcome =>
       ? 'unavailable'
       : 'saved';
 
-const reportEffectiveOutcome = (): SaveOutcome => {
+const reportEffectiveOutcome = (): void => {
   const outcome = effectiveOutcome();
   options.report(outcome);
-  return outcome;
 };
+
+const currentDocumentOutcome = (): SaveOutcome =>
+  failedOutcomes.get(options.store.getState().system.id) ?? 'saved';
 
 const flush = async (): Promise<SaveOutcome> => {
   cancelTimer();
@@ -108,7 +119,7 @@ const flush = async (): Promise<SaveOutcome> => {
   pendingSystem = null;
   if (system) enqueueSave(system);
   await waitForIdle();
-  return effectiveOutcome();
+  return currentDocumentOutcome();
 };
 ```
 
