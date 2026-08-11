@@ -11,7 +11,7 @@ export interface OnboardingSlideData {
   visualDescription: string;
 }
 
-/** The welcome screen establishes purpose before one Port Mason proposal
+/** The welcome screen establishes purpose before one central Las Vegas proposal
  * develops across four capability screens. The map supplies the evidence; the
  * copy names the action and consequence in public language. */
 export const ONBOARDING_SLIDES: OnboardingSlideData[] = [
@@ -22,7 +22,7 @@ export const ONBOARDING_SLIDES: OnboardingSlideData[] = [
     outcome: 'purpose',
     scene: 'welcome',
     visualDescription:
-      'A completed Port Mason transit system connects West Market, downtown, Eastgate, South Works, the university, and the airport with bus and light-rail services.',
+      'A completed central Las Vegas proposal connects the Medical District, Arts District, Downtown, and Huntridge with bus and light-rail services on the real street network.',
   },
   {
     title: 'Draw a line. TransitMapper finds the path.',
@@ -30,7 +30,7 @@ export const ONBOARDING_SLIDES: OnboardingSlideData[] = [
     outcome: 'service',
     scene: 'draw',
     visualDescription:
-      'In Port Mason, the orange Crosstown bus line grows from West Market, follows existing streets across the river bridge, and reaches downtown.',
+      'The orange Charleston Crosstown grows from the Medical District along Charleston Boulevard, then turns north on Las Vegas Boulevard to reach Downtown.',
   },
   {
     title: 'Shape the physical network.',
@@ -38,7 +38,7 @@ export const ONBOARDING_SLIDES: OnboardingSlideData[] = [
     outcome: 'infrastructure',
     scene: 'infrastructure',
     visualDescription:
-      'Port Mason in Infrastructure: Crosstown uses the street grid, while the blue Harbor Line combines an existing freight corridor with a short new downtown rail connection.',
+      'Central Las Vegas in Infrastructure: Charleston Crosstown uses existing streets, while the blue Downtown Connector reuses the existing rail corridor and adds one new connection to Downtown.',
   },
   {
     title: 'Decide how each service runs.',
@@ -46,7 +46,7 @@ export const ONBOARDING_SLIDES: OnboardingSlideData[] = [
     outcome: 'operations',
     scene: 'operations',
     visualDescription:
-      'The orange Crosstown service splits after Central Exchange into Eastgate and Airport branches beside the Service inspector Schedule tab, which shows a 10-minute peak headway, daytime service, and the vehicles required.',
+      'The orange Charleston Crosstown splits at Las Vegas Boulevard into Downtown and Huntridge patterns beside the real Service inspector Schedule tab, showing a 10-minute frequency, service hours, and required vehicles.',
   },
   {
     title: 'Press play and watch the system operate.',
@@ -54,6 +54,6 @@ export const ONBOARDING_SLIDES: OnboardingSlideData[] = [
     outcome: 'simulation',
     scene: 'simulate',
     visualDescription:
-      'Bus and light-rail vehicles move along the Port Mason routes, showing the schedules operating on the designed network.',
+      'Bus and light-rail vehicles move through central Las Vegas while the real simulation controls show the time of day and playback speed.',
   },
 ];

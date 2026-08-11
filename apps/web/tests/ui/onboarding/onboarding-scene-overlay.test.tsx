@@ -35,7 +35,7 @@ describe('OnboardingSceneOverlay', () => {
     );
 
     expect(container.querySelector<HTMLInputElement>('[aria-label="Service name"]')?.value).toBe(
-      'Crosstown',
+      'Charleston Crosstown',
     );
     const inspector = container.querySelector('.onboarding-service-inspector-preview');
     expect(inspector?.tagName).toBe('ASIDE');
@@ -48,12 +48,15 @@ describe('OnboardingSceneOverlay', () => {
       ),
     ).toBe(true);
     expect(container.textContent).toContain('Schedule');
-    expect(container.textContent).toContain('Peak headway');
+    expect(container.textContent).toContain('Frequency · peak headway');
     expect(container.textContent).toContain('10 min');
-    expect(container.textContent).toContain('Span of service');
+    expect(container.textContent).toContain('Service hours · span of service');
     expect(container.textContent).toContain('Daytime');
     expect(container.textContent).toContain('Round trip');
     expect(container.textContent).toContain('Vehicles');
+    expect(container.textContent).toContain('time at stops');
+    expect(container.textContent).toContain('running that often');
+    expect(container.textContent).not.toContain('dwell');
     expect(container.textContent).not.toContain('Service plan');
   });
 
@@ -63,7 +66,7 @@ describe('OnboardingSceneOverlay', () => {
         <OnboardingSceneOverlay
           scene="infrastructure"
           failed={false}
-          description="The proposal reuses Port Mason infrastructure."
+          description="The proposal reuses central Las Vegas infrastructure."
         />,
       ),
     );
@@ -74,20 +77,23 @@ describe('OnboardingSceneOverlay', () => {
     expect(container.textContent).not.toContain('New downtown rail link');
   });
 
-  it('leaves the simulation scene map-only', () => {
+  it('uses the production simulation presentation in the running 4× state', () => {
     act(() =>
       root.render(
         <OnboardingSceneOverlay
           scene="simulate"
           failed={false}
-          description="Vehicles move through Port Mason."
+          description="Vehicles move through central Las Vegas."
         />,
       ),
     );
 
-    expect(container.textContent).toBe('');
-    expect(container.textContent).not.toContain('System running');
-    expect(container.textContent).not.toContain('8:35 AM');
+    expect(container.querySelector('.sim-controls')?.getAttribute('aria-label')).toBe('Simulation');
+    expect(container.querySelector('[aria-label="Pause the simulation (K)"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label^="4×"]')?.getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(container.querySelector('.sim-clock')?.textContent).not.toBe('');
   });
 
   it('uses only the scene explanation when the map fails', () => {

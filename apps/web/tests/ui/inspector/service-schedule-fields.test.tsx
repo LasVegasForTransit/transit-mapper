@@ -38,8 +38,8 @@ describe('ServiceScheduleFields', () => {
       ),
     );
 
-    expect(container.textContent).toContain('Peak headway');
-    expect(container.textContent).toContain('Span of service');
+    expect(container.textContent).toContain('Frequency · peak headway');
+    expect(container.textContent).toContain('Service hours · span of service');
     expect(container.textContent).toContain('Daytime');
     expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toBe('10 min');
     expect(

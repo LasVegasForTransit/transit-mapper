@@ -8,12 +8,22 @@ const CSS = readFileSync(
 );
 
 describe('onboarding responsive layout', () => {
-  it('keeps the embedded Service panel scrollable without the compact workbench', () => {
+  it('bounds the desktop Service inspector to the scene and gives it its own scroller', () => {
     expect(CSS).toMatch(
-      /@media \(max-width: 767px\), \(max-height: 500px\) \{[\s\S]*?\.onboarding-service-inspector-preview \{[\s\S]*?max-height: 100%;[\s\S]*?overflow-y: auto;/,
+      /\.onboarding-service-inspector-preview \{[\s\S]*?height: 100%;[\s\S]*?max-height: 100%;[\s\S]*?overflow-y: auto;/,
     );
     expect(CSS).toMatch(
-      /@media \(max-width: 620px\) \{[\s\S]*?\.onboarding-service-inspector-preview \{[\s\S]*?max-height: none;[\s\S]*?overflow-y: visible;/,
+      /\.onboarding-scene-operations \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) 320px;/,
     );
+  });
+
+  it('keeps the phone sheet fixed while its body scrolls and its footer stays visible', () => {
+    expect(CSS).toMatch(
+      /@media \(max-width: 767px\), \(max-height: 500px\) \{[\s\S]*?\.modal\.onboarding-modal \{[\s\S]*?height: 92dvh;[\s\S]*?max-height: 92dvh;/,
+    );
+    expect(CSS).toMatch(
+      /\.modal\.onboarding-modal \.onboarding-body \{[\s\S]*?min-height: 0;[\s\S]*?overflow-y: auto;/,
+    );
+    expect(CSS).toMatch(/\.modal\.onboarding-modal \.onboarding-foot \{[\s\S]*?flex: 0 0 auto;/);
   });
 });

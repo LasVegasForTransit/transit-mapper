@@ -11,9 +11,9 @@ import { ONBOARDING_FIXTURE_SYSTEM, ONBOARDING_SERVICE_STATS } from './fixtureSy
 
 function requireCrosstownService() {
   const found = ONBOARDING_FIXTURE_SYSTEM.services.find(
-    (candidate) => candidate.id === 'port-mason-crosstown',
+    (candidate) => candidate.id === 'las-vegas-charleston-crosstown',
   );
-  if (!found) throw new Error('Port Mason onboarding requires the Crosstown service');
+  if (!found) throw new Error('Las Vegas onboarding requires the Charleston Crosstown service');
   return found;
 }
 
@@ -44,14 +44,14 @@ const dwellMinutes =
 
 /** A passive rendering of the editor's actual Service inspector Schedule tab.
  * It shares both child presentations with the live inspector and supplies only
- * values derived from the Port Mason fixture. */
+ * values derived from the central Las Vegas fixture. */
 export function OnboardingServiceInspectorPreview() {
   const unitSystem = useUnitPreference();
   return (
     <Panel
       slot="right"
       className="onboarding-service-inspector-preview"
-      aria-label="Crosstown service schedule"
+      aria-label="Charleston Crosstown service schedule"
       aria-hidden="true"
     >
       <ServiceInspectorHeading

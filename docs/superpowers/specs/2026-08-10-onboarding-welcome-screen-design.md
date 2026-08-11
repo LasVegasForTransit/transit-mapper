@@ -32,11 +32,12 @@ The primary action says **See how it works**. The existing final action remains
 
 ## Visual treatment
 
-The welcome screen shows the completed Port Mason system as a calm, static
+The welcome screen shows the completed central Las Vegas proposal as a calm, static
 network overview. It uses the same valid onboarding fixture and production map
-projection as the later screens. The overview includes the coherent routes,
-stations, geography, and place labels that a person will encounter in the rest
-of the sequence.
+projection as the later screens. A committed, attributed OpenStreetMap snapshot
+supplies the real street and rail context without a runtime request. The
+overview includes the coherent routes, stations, geography, and place labels
+that a person will encounter in the rest of the sequence.
 
 The overview does not animate vehicles, demonstrate a tool, enumerate features,
 or add onboarding-only chips, legends, statistics, or controls. Its purpose is
@@ -49,7 +50,7 @@ to make the product definition concrete without beginning the tutorial early.
 - Back, indicator-tab, arrow-key, Home, and End navigation continue to work over
   all five screens.
 - The completed-system visual has a concise accessible description that names it
-  as a finished Port Mason transit network.
+  as a central Las Vegas transit proposal.
 - Closing the dialog still does not complete onboarding. Only the final action
   marks onboarding complete and arms the first bus service on a genuine first
   run.

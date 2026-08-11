@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { formatSimClock, schedulePeriodLabels, SIM_SPEEDS } from '@transitmapper/core/sim/clock';
 import { useEditor } from '../editor/EditorProvider';
 import { IconButton } from './IconButton';
@@ -16,10 +16,49 @@ import { useSimTime } from './useSimTime';
  * something next to a clock you can watch move.
  */
 export function SimControls() {
-  const { speedId, setSpeedId, paused, togglePaused } = useSim();
+  const { speedId, setSpeedId, paused, togglePaused, pinnedPeriod } = useSim();
+  const simMs = useSimTime();
+  return (
+    <SimControlsPresentation
+      paused={paused}
+      speedId={speedId}
+      simMs={simMs}
+      onTogglePaused={togglePaused}
+      onSpeedChange={setSpeedId}
+      readOnly={false}
+      clockOverrideLabel={pinnedPeriod}
+      trailing={<ScenarioPicker />}
+    />
+  );
+}
+
+export interface SimControlsPresentationProps {
+  paused: boolean;
+  speedId: string;
+  simMs: number;
+  onTogglePaused: () => void;
+  onSpeedChange: (speedId: string) => void;
+  readOnly: boolean;
+  clockOverrideLabel?: string;
+  trailing?: ReactNode;
+}
+
+/** Pure rendering shared by the live workbench and passive onboarding. A
+ * read-only rendering removes actions from the tab order without changing the
+ * control's production appearance. */
+export function SimControlsPresentation({
+  paused,
+  speedId,
+  simMs,
+  onTogglePaused,
+  onSpeedChange,
+  readOnly,
+  clockOverrideLabel,
+  trailing,
+}: SimControlsPresentationProps) {
   return (
     <div className="sim-controls" role="group" aria-label="Simulation">
-      <SimPlayPause paused={paused} onToggle={togglePaused} />
+      <SimPlayPause paused={paused} onToggle={onTogglePaused} readOnly={readOnly} />
       <div className="segmented" role="group" aria-label="Simulation speed">
         {SIM_SPEEDS.map((s) => (
           <button
@@ -32,14 +71,25 @@ export function SimControls() {
             // label leads; the day length explains it.
             title={s.dayLabel}
             aria-label={`${s.label} — ${s.dayLabel}`}
-            onClick={() => setSpeedId(s.id)}
+            aria-disabled={readOnly || undefined}
+            tabIndex={readOnly ? -1 : undefined}
+            onClick={readOnly ? undefined : () => onSpeedChange(s.id)}
           >
             {s.label}
           </button>
         ))}
       </div>
-      <SimClockReadout />
-      <ScenarioPicker />
+      <span
+        className={`sim-clock ${clockOverrideLabel ? 'sim-clock-overridden' : ''}`}
+        title={
+          clockOverrideLabel
+            ? `Service pinned to “${clockOverrideLabel}” — the clock still runs, but isn't choosing headways`
+            : undefined
+        }
+      >
+        {formatSimClock(simMs)}
+      </span>
+      {trailing}
     </div>
   );
 }
@@ -190,15 +240,18 @@ function ScenarioPicker() {
 interface SimPlayPauseProps {
   paused: boolean;
   onToggle: () => void;
+  readOnly?: boolean;
 }
 
-function SimPlayPause({ paused, onToggle }: SimPlayPauseProps) {
+function SimPlayPause({ paused, onToggle, readOnly = false }: SimPlayPauseProps) {
   return (
     <IconButton
       icon={paused ? 'play' : 'pause'}
       size={17}
       label={paused ? 'Run the simulation (K)' : 'Pause the simulation (K)'}
-      onClick={onToggle}
+      aria-disabled={readOnly || undefined}
+      tabIndex={readOnly ? -1 : undefined}
+      onClick={readOnly ? undefined : onToggle}
     />
   );
 }

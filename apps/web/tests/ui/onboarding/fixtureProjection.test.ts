@@ -7,21 +7,29 @@ import {
   ONBOARDING_VEHICLE_RUNS,
 } from '../../../src/ui/onboarding/fixtureSystem';
 import {
-  ONBOARDING_CONTEXT_FEATURES,
+  ONBOARDING_CONTEXT_ATTRIBUTION,
+  ONBOARDING_CONTEXT_BOUNDS,
   ONBOARDING_STREET_FEATURES,
-} from '../../../src/ui/onboarding/port-mason-context';
+} from '../../../src/ui/onboarding/las-vegas-context';
+
+const LAS_VEGAS_BOUNDS = {
+  west: -115.17,
+  south: 36.15,
+  east: -115.124,
+  north: 36.177,
+};
 
 describe('onboarding fixture projection', () => {
-  it('models a valid early Port Mason proposal instead of generic demo geometry', () => {
+  it('models a valid early central Las Vegas proposal on recognizable corridors', () => {
     expect(validateSystem(ONBOARDING_FIXTURE_SYSTEM)).toEqual([]);
-    expect(ONBOARDING_FIXTURE_SYSTEM.name).toBe('Port Mason proposal');
+    expect(ONBOARDING_FIXTURE_SYSTEM.name).toBe('Central Las Vegas proposal');
     expect(ONBOARDING_FIXTURE_SYSTEM.services.map((service) => service.name)).toEqual([
-      'Crosstown',
-      'Harbor Line',
+      'Charleston Crosstown',
+      'Downtown Connector',
     ]);
 
     const crosstown = ONBOARDING_FIXTURE_SYSTEM.services[0];
-    expect(crosstown.patterns.map((pattern) => pattern.name)).toEqual(['Eastgate', 'Airport']);
+    expect(crosstown.patterns.map((pattern) => pattern.name)).toEqual(['Downtown', 'Huntridge']);
     expect(crosstown).toMatchObject({
       modeId: 'bus',
       frequencyMinutes: 10,
@@ -30,7 +38,7 @@ describe('onboarding fixture projection', () => {
     });
 
     const central = ONBOARDING_FIXTURE_SYSTEM.stations.find(
-      (station) => station.name === 'Central Exchange',
+      (station) => station.name === 'Downtown Transfer',
     );
     expect(central).toBeDefined();
     expect(
@@ -39,7 +47,7 @@ describe('onboarding fixture projection', () => {
         ONBOARDING_FIXTURE_SYSTEM.services,
         central!,
       ).map((service) => service.name),
-    ).toEqual(['Crosstown', 'Harbor Line']);
+    ).toEqual(['Charleston Crosstown', 'Downtown Connector']);
   });
 
   it('distinguishes imported reality from the missing rail link the proposal creates', () => {
@@ -50,25 +58,42 @@ describe('onboarding fixture projection', () => {
       (way) => way.typeId === 'lightRail' && way.source === 'osm',
     );
     const downtownLink = ONBOARDING_FIXTURE_SYSTEM.ways.find(
-      (way) => way.id === 'port-mason-rail-downtown-link',
+      (way) => way.id === 'las-vegas-downtown-connector',
     );
 
-    expect(importedRoads.length).toBeGreaterThan(20);
+    expect(importedRoads.length).toBeGreaterThanOrEqual(3);
     expect(importedFreightTrack).toHaveLength(2);
     expect(downtownLink?.typeId).toBe('lightRail');
     expect(downtownLink?.source).toBeUndefined();
+
+    for (const way of [...importedRoads, ...importedFreightTrack]) {
+      for (const [lng, lat] of way.points) {
+        expect(lng).toBeGreaterThanOrEqual(LAS_VEGAS_BOUNDS.west);
+        expect(lng).toBeLessThanOrEqual(LAS_VEGAS_BOUNDS.east);
+        expect(lat).toBeGreaterThanOrEqual(LAS_VEGAS_BOUNDS.south);
+        expect(lat).toBeLessThanOrEqual(LAS_VEGAS_BOUNDS.north);
+      }
+    }
   });
 
-  it('projects irregular streets and recognizable place context instead of an abstract grid', () => {
-    expect(ONBOARDING_STREET_FEATURES.features.length).toBeGreaterThan(20);
+  it('projects a committed attributed snapshot of central Las Vegas', () => {
+    expect(ONBOARDING_CONTEXT_ATTRIBUTION).toContain('OpenStreetMap contributors');
+    expect(ONBOARDING_CONTEXT_BOUNDS).toEqual(LAS_VEGAS_BOUNDS);
+    expect(ONBOARDING_STREET_FEATURES.features.length).toBeGreaterThan(60);
     expect(
       ONBOARDING_STREET_FEATURES.features.some(
         (feature) => feature.geometry.coordinates.length > 2,
       ),
     ).toBe(true);
     expect(
-      new Set(ONBOARDING_CONTEXT_FEATURES.features.map((feature) => feature.properties.kind)),
-    ).toEqual(new Set(['airport', 'district', 'park', 'river']));
+      ONBOARDING_STREET_FEATURES.features.some((feature) => feature.properties.kind === 'rail'),
+    ).toBe(true);
+    const names = new Set(
+      ONBOARDING_STREET_FEATURES.features.map((feature) => feature.properties.name),
+    );
+    expect(names).toContain('Charleston Boulevard');
+    expect(names).toContain('Las Vegas Boulevard');
+    expect(names).toContain('Fremont Street');
   });
 
   it('produces measurable runs and a nonzero operating requirement', () => {

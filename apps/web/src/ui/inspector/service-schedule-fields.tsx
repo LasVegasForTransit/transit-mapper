@@ -85,7 +85,7 @@ function FrequencyFields({ labelId, frequencyMinutes, readOnly, onChange }: Freq
   return (
     <>
       <label className="field-label" id={labelId}>
-        Peak headway
+        Frequency · peak headway
       </label>
       <div className="chip-row" role="group" aria-labelledby={labelId}>
         {FREQUENCY_PRESETS.map((minutes) => (
@@ -156,7 +156,7 @@ function SpanFields({ labelId, spanStart, spanEnd, readOnly, onChange }: SpanFie
   return (
     <>
       <label className="field-label" id={labelId}>
-        Span of service
+        Service hours · span of service
       </label>
       <div className="chip-row" role="group" aria-labelledby={labelId}>
         {SPAN_PRESETS.map((preset) => {

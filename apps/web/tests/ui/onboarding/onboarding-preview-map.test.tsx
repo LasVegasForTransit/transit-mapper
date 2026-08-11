@@ -44,7 +44,7 @@ afterEach(() => {
 
 describe('OnboardingPreviewMap', () => {
   it('replaces a failed map with the accessible proposal summary', () => {
-    const description = 'Crosstown follows existing streets across Port Mason.';
+    const description = 'Charleston Crosstown follows existing streets in central Las Vegas.';
 
     act(() => root.render(<OnboardingPreviewMap scene="draw" description={description} />));
 

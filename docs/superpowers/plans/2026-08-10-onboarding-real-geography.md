@@ -24,7 +24,7 @@
 - Modify: `apps/web/tests/verify.test.ts`
 - Modify: `apps/web/package.json`
 
-- [ ] **Step 1: Write failing real-geography fixture tests**
+- [x] **Step 1: Write failing real-geography fixture tests**
 
   Require a valid `Central Las Vegas proposal`, `Charleston Crosstown` and
   `Downtown Connector`, Downtown/Huntridge bus patterns, a shared Downtown
@@ -36,7 +36,7 @@
   Boulevard/Fremont features, rail geometry, and at least one line with more
   than two coordinates.
 
-- [ ] **Step 2: Run the focused fixture tests and verify RED**
+- [x] **Step 2: Run the focused fixture tests and verify RED**
 
   Run:
 
@@ -46,18 +46,18 @@
 
   Expected: FAIL because Port Mason and its synthetic context remain.
 
-- [ ] **Step 3: Add the reproducible OpenStreetMap context generator**
+- [x] **Step 3: Add the reproducible OpenStreetMap context generator**
 
   Query the fixed central Las Vegas bounding box, select the documented street
   hierarchy and named local grid, clip every LineString to the box, round
-  coordinates to seven decimals, retain `osmWayId`, `name`, and `kind`, sort
+  coordinates to six decimals, retain `osmWayId`, `name`, and `kind`, sort
   deterministically, and write metadata plus the FeatureCollection to
   `las-vegas-context-data.json`.
 
   Add `generate:onboarding-context` to `apps/web/package.json`; no runtime
   request may call the generator or Overpass.
 
-- [ ] **Step 4: Generate and adapt the local context snapshot**
+- [x] **Step 4: Generate and adapt the local context snapshot**
 
   Run:
 
@@ -69,7 +69,7 @@
   typed street features, real-place labels, attribution, and bounds without
   mutating the generated object.
 
-- [ ] **Step 5: Build the Las Vegas proposal from stable model records**
+- [x] **Step 5: Build the Las Vegas proposal from stable model records**
 
   Replace synthetic grids and polygons with the actual Charleston Boulevard,
   Las Vegas Boulevard, and rail-corridor paths in the approved design. Keep
@@ -80,7 +80,7 @@
   Update the five accessible scene descriptions without changing the approved
   welcome definition, invitation, or actions.
 
-- [ ] **Step 6: Run fixture tests and the sequential verifier GREEN**
+- [x] **Step 6: Run fixture tests and the sequential verifier GREEN**
 
   Run:
 
@@ -91,7 +91,7 @@
 
   Expected: PASS with one real-geography proposal and nonzero simulation plans.
 
-- [ ] **Step 7: Commit the fixture and snapshot**
+- [x] **Step 7: Commit the fixture and snapshot**
 
   Commit subject:
 
@@ -109,14 +109,14 @@
 - Modify: `apps/web/tests/ui/onboarding/scene-geometry.test.ts`
 - Modify: `apps/web/tests/ui/onboarding/onboarding-scene-overlay.test.tsx`
 
-- [ ] **Step 1: Write failing scene-presentation tests**
+- [x] **Step 1: Write failing scene-presentation tests**
 
   Add a pure scene-plan assertion that drawing targets the production
   `SRC_PREVIEW` source, Infrastructure selects only the authored connector,
   and every other scene has no highlighted way. Preserve the existing exact
   route-prefix and vehicle-motion assertions.
 
-- [ ] **Step 2: Run the scene tests and verify RED**
+- [x] **Step 2: Run the scene tests and verify RED**
 
   Run:
 
@@ -126,7 +126,7 @@
 
   Expected: FAIL because the controller still uses custom draw/new-link layers.
 
-- [ ] **Step 3: Replace demonstration paint with production state**
+- [x] **Step 3: Replace demonstration paint with production state**
 
   Feed the growing route to `SRC_PREVIEW` so it uses the editor's dashed route
   preview. Replace the circular cursor with a passive CSS crosshair matching
@@ -136,13 +136,13 @@
   Add source `promoteId` exactly as the production map does so feature state
   addresses stable IDs.
 
-- [ ] **Step 4: Render real context and attribution**
+- [x] **Step 4: Render real context and attribution**
 
   Replace synthetic polygon layers with the generated Las Vegas street/rail
   context, street-name symbol paint, real-place markers, and MapLibre's compact
   attribution control with the committed OpenStreetMap attribution.
 
-- [ ] **Step 5: Run the focused scene tests GREEN**
+- [x] **Step 5: Run the focused scene tests GREEN**
 
   Run:
 
@@ -150,7 +150,7 @@
   pnpm --filter @transitmapper/web exec vitest run tests/ui/onboarding/scene-geometry.test.ts tests/ui/onboarding/onboarding-preview-map.test.tsx tests/ui/onboarding/onboarding-scene-overlay.test.tsx
   ```
 
-- [ ] **Step 6: Commit production scene states**
+- [x] **Step 6: Commit production scene states**
 
   Commit subject:
 
@@ -173,7 +173,7 @@
 - Modify: `apps/web/tests/ui/inspector/service-schedule-fields.test.tsx`
 - Modify: `apps/web/tests/ui/onboarding/onboarding-scene-overlay.test.tsx`
 
-- [ ] **Step 1: Write failing shared-presentation tests**
+- [x] **Step 1: Write failing shared-presentation tests**
 
   Require the production Schedule fields to say
   `Frequency · peak headway` and `Service hours · span of service`. Require the
@@ -184,7 +184,7 @@
   Require the simulation onboarding overlay to use that presentation in a
   running `4×` state and omit it from every other scene.
 
-- [ ] **Step 2: Run the focused presentation tests and verify RED**
+- [x] **Step 2: Run the focused presentation tests and verify RED**
 
   Run:
 
@@ -192,24 +192,24 @@
   pnpm --filter @transitmapper/web exec vitest run tests/ui/sim-controls-presentation.test.tsx tests/ui/inspector/service-schedule-fields.test.tsx tests/ui/onboarding/onboarding-scene-overlay.test.tsx
   ```
 
-- [ ] **Step 3: Extract the production simulation presentation**
+- [x] **Step 3: Extract the production simulation presentation**
 
   Add an exported `SimControlsPresentation` receiving `paused`, `speedId`,
   `simMs`, handlers, and `readOnly`. Make `SimControls` supply live provider
   state to it. The onboarding adapter supplies its passive scene clock; it may
   throttle text updates but must derive time from `onboardingSceneFrame`.
 
-- [ ] **Step 4: Translate the production Schedule surface**
+- [x] **Step 4: Translate the production Schedule surface**
 
   Change only visible terminology and the explanatory chain; retain the same
   fields, presets, accessibility relationships, and editor handlers. Update
   the Las Vegas inspector adapter to select `Charleston Crosstown` by stable ID.
 
-- [ ] **Step 5: Run focused tests GREEN**
+- [x] **Step 5: Run focused tests GREEN**
 
   Run the Step 2 command and expect all tests to pass without warnings.
 
-- [ ] **Step 6: Commit the shared presentations**
+- [x] **Step 6: Commit the shared presentations**
 
   Commit subject:
 
@@ -224,13 +224,13 @@
 - Modify: `apps/web/src/ui/app.css`
 - Modify: `apps/web/tests/ui/onboarding/onboarding-responsive-style.test.ts`
 
-- [ ] **Step 1: Write failing responsive contracts**
+- [x] **Step 1: Write failing responsive contracts**
 
   Require the phone onboarding modal to have a fixed `92dvh` height with an
   internally scrollable body and non-shrinking footer. Require the desktop
   embedded Service panel to fill its scene height, cap at 100%, and scroll.
 
-- [ ] **Step 2: Run the responsive test and verify RED**
+- [x] **Step 2: Run the responsive test and verify RED**
 
   Run:
 
@@ -238,14 +238,14 @@
   pnpm --filter @transitmapper/web exec vitest run tests/ui/onboarding/onboarding-responsive-style.test.ts
   ```
 
-- [ ] **Step 3: Correct the desktop and phone layout boundaries**
+- [x] **Step 3: Correct the desktop and phone layout boundaries**
 
   Give the desktop inspector enough width to reduce chip wrapping, bound it to
   the scene, and retain its own scroller. At phone widths set the complete sheet
   to `92dvh`; keep the body as the only content scroller and the footer outside
   it so progress and actions never leave the viewport.
 
-- [ ] **Step 4: Run the responsive and dialog suites GREEN**
+- [x] **Step 4: Run the responsive and dialog suites GREEN**
 
   Run:
 
@@ -253,7 +253,7 @@
   pnpm --filter @transitmapper/web exec vitest run tests/ui/onboarding/onboarding-responsive-style.test.ts tests/ui/OnboardingDialog.test.tsx
   ```
 
-- [ ] **Step 5: Commit the responsive correction**
+- [x] **Step 5: Commit the responsive correction**
 
   Commit subject:
 
@@ -271,14 +271,14 @@
 - Modify: `docs/superpowers/plans/2026-08-10-onboarding-real-geography.md`
 - Capture: `/Users/williecubed/.codex/visualizations/2026/08/10/transit-mapper-onboarding-real-geography/`
 
-- [ ] **Step 1: Update active onboarding architecture documentation**
+- [x] **Step 1: Update active onboarding architecture documentation**
 
   Replace active Port Mason/local-synthetic descriptions with the committed
   central Las Vegas snapshot, production preview/selection states, shared
   Schedule/simulation presentations, attribution, and regeneration command.
   Preserve historical decision records only where clearly marked as superseded.
 
-- [ ] **Step 2: Run focused and package checks**
+- [x] **Step 2: Run focused and package checks**
 
   Run:
 
@@ -289,7 +289,7 @@
   pnpm --filter @transitmapper/web verify
   ```
 
-- [ ] **Step 3: Run the repository gate**
+- [x] **Step 3: Run the repository gate**
 
   Run:
 
@@ -297,7 +297,7 @@
   CI=1 pnpm check
   ```
 
-- [ ] **Step 4: Inspect and capture the live flow**
+- [x] **Step 4: Inspect and capture the live flow**
 
   Capture all five screens at desktop and 390 by 844. Also capture drawing at
   start, midpoint, and settled state, and simulation at two visibly different
@@ -306,7 +306,7 @@
   infrastructure, visible phone actions, no clipping, and no browser warnings
   or errors.
 
-- [ ] **Step 5: Commit documentation and verification record**
+- [x] **Step 5: Commit documentation and verification record**
 
   Commit subject:
 
@@ -314,7 +314,7 @@
   docs(web): explain real-geography onboarding
   ```
 
-- [ ] **Step 6: Check the final tree and commit state**
+- [x] **Step 6: Check the final tree and commit state**
 
   Run:
 

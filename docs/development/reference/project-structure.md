@@ -251,19 +251,25 @@ store and core projectors.
 `apps/web/src/ui` owns React presentation, workbench layout, inspector
 controls, dialogs, onboarding, and accessibility semantics.
 The onboarding slide data selects a purpose overview followed by four passive
-capability scenes. The overview projects the completed Port Mason system
-without animation or editor mutation, while `ui/onboarding/fixtureSystem.ts`
-owns that single valid local proposal and the simulation inputs derived from it;
-`ui/onboarding/port-mason-context.ts` adds its tile-free river, districts, and
-street context. Pure scene helpers derive drawing and vehicle frames;
+capability scenes. The overview projects a completed central Las Vegas proposal
+without editor mutation, while `ui/onboarding/fixtureSystem.ts` owns that single
+valid system and the simulation inputs derived from it.
+`scripts/generate-onboarding-las-vegas-context.ts` clips and normalizes a fixed
+OpenStreetMap query into the committed `las-vegas-context-data.json` snapshot;
+`ui/onboarding/las-vegas-context.ts` validates and exposes that attributed local
+context. Regenerate it explicitly with `pnpm --filter @transitmapper/web
+generate:onboarding-context`; no runtime path calls Overpass. Pure scene helpers
+derive drawing, selected-infrastructure, and vehicle frames;
 `OnboardingPreviewMap.tsx` and its map controller adapt those frames to the
-production feature projection without reading or mutating editor state. The
-operations scene supplies fixture values to the same
+production feature projection, dashed route-preview source, and feature-state
+selection without reading or mutating editor state. The operations scene
+supplies fixture values to the same
 `ui/inspector/service-inspector-heading.tsx`,
 `ui/inspector/service-schedule-fields.tsx` and
 `ui/inspector/service-load-presentation.tsx` components used by the live
-Service inspector, inside the same `Panel` shell; the other scenes add no
-product-looking overlay.
+Service inspector, inside the same `Panel` shell. The simulation scene shares
+the production simulation-control presentation with the workbench and supplies
+only its passive scene clock.
 `apps/web/src/ui/useKeyboardInset.ts` reports how much of the viewport an
 on-screen keyboard covers, which no layout-viewport measurement exposes.
 `apps/web/src/ui/app-banner.ts` decides which single application-level message

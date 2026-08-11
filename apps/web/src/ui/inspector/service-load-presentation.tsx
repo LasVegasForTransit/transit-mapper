@@ -32,11 +32,11 @@ function activeServiceDescription({
   const stopDetail =
     stops === 0
       ? 'With no stops'
-      : `${stops} stop${stops === 1 ? '' : 's'} and ${formatMinutes(dwellMinutes)} of dwell`;
+      : `${stops} stop${stops === 1 ? '' : 's'} and ${formatMinutes(dwellMinutes)} of time at stops`;
   const branches = branchCount > 1 ? ` across ${branchCount} branches` : '';
   return (
     `At ${when} it runs every ${active.headwayMinutes} min${period}. ` +
-    `${stopDetail}, a round trip takes ${roundTrip}, so holding that headway needs ` +
+    `${stopDetail}, a round trip takes ${roundTrip}, so running that often needs ` +
     `${fleet} vehicle${fleet === 1 ? '' : 's'}${branches}, each waiting ` +
     `${formatMinutes(layoverMinutes)} at either end.`
   );

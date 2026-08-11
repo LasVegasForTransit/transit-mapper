@@ -3319,21 +3319,15 @@ kbd {
 }
 .onboarding-scene-operations {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) 320px;
 }
 .onboarding-service-inspector-preview {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  overflow-y: auto;
   min-width: 0;
   min-height: 0;
-}
-/* The production compact workbench owns its panel's scroller, so the shared
-   Panel deliberately becomes overflow:visible at the compact layout fork.
-   This embedded copy has no workbench scroller while its scene is fixed-height
-   above 620px; restore that missing boundary only in those configurations. */
-@media (max-width: 767px), (max-height: 500px) {
-  .onboarding-service-inspector-preview {
-    max-height: 100%;
-    overflow-y: auto;
-  }
 }
 .onboarding-preview-fallback {
   position: absolute;
@@ -3356,15 +3350,16 @@ kbd {
 }
 .onboarding-place-label {
   display: block;
-  padding: 3px 6px;
-  border-radius: 5px;
   white-space: nowrap;
   color: var(--md-sys-color-on-surface);
-  background: color-mix(in srgb, var(--md-sys-color-surface) 78%, transparent);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--md-sys-color-shadow) 22%, transparent);
   font-size: 11px;
   font-weight: 650;
   line-height: 1;
+  text-shadow:
+    -1px -1px 0 var(--md-sys-color-surface),
+    1px -1px 0 var(--md-sys-color-surface),
+    -1px 1px 0 var(--md-sys-color-surface),
+    1px 1px 0 var(--md-sys-color-surface);
   pointer-events: none;
 }
 .onboarding-place-label-secondary {
@@ -3372,13 +3367,40 @@ kbd {
   font-size: 10px;
   font-weight: 550;
 }
-.onboarding-river-label {
-  color: #315f72;
-  background: transparent;
-  box-shadow: none;
-  font-style: italic;
-  font-weight: 550;
-  transform: rotate(-78deg);
+.onboarding-draw-crosshair {
+  width: 22px;
+  height: 22px;
+  position: absolute;
+  filter: drop-shadow(0 1px 1px var(--md-sys-color-surface));
+  pointer-events: none;
+}
+.onboarding-draw-crosshair::before,
+.onboarding-draw-crosshair::after {
+  content: '';
+  position: absolute;
+  background: var(--md-sys-color-on-surface);
+}
+.onboarding-draw-crosshair::before {
+  width: 1px;
+  height: 22px;
+  left: 10px;
+}
+.onboarding-draw-crosshair::after {
+  width: 22px;
+  height: 1px;
+  top: 10px;
+}
+.onboarding-sim-controls {
+  position: absolute;
+  z-index: 2;
+  right: 12px;
+  bottom: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--md-sys-color-surface-container-highest);
+  border-radius: 12px;
+  background: var(--md-sys-color-surface);
+  box-shadow: var(--md-sys-elevation-level2);
+  pointer-events: none;
 }
 .onboarding-foot {
   margin-top: 16px;
@@ -3431,8 +3453,15 @@ kbd {
     min-height: 0;
     flex: 0 0 auto;
   }
+  .onboarding-scene:not(.onboarding-scene-operations) {
+    min-height: 240px;
+    flex: 1 1 300px;
+  }
   .onboarding-map-frame {
     height: clamp(210px, 34vh, 275px);
+  }
+  .onboarding-scene:not(.onboarding-scene-operations) .onboarding-map-frame {
+    height: 100%;
   }
   .onboarding-place-label-secondary {
     display: none;
@@ -3441,6 +3470,7 @@ kbd {
     grid-template-columns: minmax(0, 1fr);
   }
   .onboarding-service-inspector-preview {
+    height: auto;
     max-height: none;
     overflow-y: visible;
   }
@@ -4159,6 +4189,20 @@ button.chip-removable-label:hover {
     max-width: none;
     height: auto;
     max-height: 92dvh;
+  }
+  /* Onboarding has a persistent navigation footer. Give the complete sheet a
+     definite height so only its body scrolls and Back/Next never disappear
+     below the viewport. */
+  .modal.onboarding-modal {
+    height: 92dvh;
+    max-height: 92dvh;
+  }
+  .modal.onboarding-modal .onboarding-body {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .modal.onboarding-modal .onboarding-foot {
+    flex: 0 0 auto;
   }
   .export-body,
   .shortcuts-grid {

@@ -146,8 +146,8 @@ none of it has to be taken on trust:
 
 > **Round trip** 22 min · **Vehicles** 3
 >
-> At Mon 08:00 AM it runs every 10 min (Peak). 2 stops and 10 min of dwell, a
-> round trip takes 22 min, so holding that headway needs 3 vehicles, each
+> At Mon 08:00 AM it runs every 10 min (Peak). 2 stops and 10 min of time at
+> stops make a 22 min round trip, so running that often needs 3 vehicles, each
 > waiting 4.1 min at either end.
 
 Change any input and the numbers move: add a Stop, raise its dwell, assign

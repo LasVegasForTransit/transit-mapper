@@ -112,23 +112,22 @@ production terms may appear beside those explanations, allowing an advocate or
 planner to recognize the capability without requiring a newcomer to know the
 vocabulary.
 
-## The Port Mason proposal
+## The central Las Vegas proposal
 
-Port Mason is a fixed fictional city. It is deliberately plausible rather than
-geographically neutral: constraints explain the proposal's shape and keep the
-visual from reading as a generic node diagram.
+The onboarding proposal is fixed, but its geography is not fictional. A
+committed OpenStreetMap snapshot supplies recognizable central Las Vegas
+streets and rail alignments without a runtime tile or Overpass request.
 
 The fixture contains:
 
-- a river dividing West Market from downtown, with one central bridge;
-- a connected street grid on both sides of the river;
-- a north-south former freight corridor;
-- a university north of downtown, South Works at the lower end of the freight
-  corridor, Eastgate beyond downtown, and an airport to the southeast;
-- an orange Crosstown bus service from West Market across the bridge and
-  through downtown, with Eastgate and Airport branches;
-- a blue light-rail service from the university through the downtown transfer
-  to South Works;
+- actual Charleston Boulevard and Las Vegas Boulevard geometry;
+- the existing north-south freight corridor through the Arts District and
+  Symphony Park;
+- the Medical District, Arts District, Downtown, Symphony Park, and Huntridge;
+- an orange Charleston Crosstown bus service with Downtown and Huntridge
+  patterns;
+- a blue Downtown Connector light-rail service that reuses the freight corridor
+  and adds one authored connection to Downtown;
 - varied stop spacing, one shared downtown transfer, mode-appropriate corridors,
   default vehicle kinds, and schedules that produce comprehensible fleet
   requirements.
@@ -138,7 +137,7 @@ two services and one operating complication, not a finished metropolitan
 network. The fixture remains a valid `TransitSystem`; no special rendering
 format substitutes for the domain model.
 
-## Four-slide story
+## Four capability screens
 
 ### 1. Draw a line. TransitMapper finds the path.
 
@@ -148,11 +147,10 @@ Copy:
 > already on the map. When new infrastructure is needed, TransitMapper creates
 > a basic alignment you can refine.
 
-The scene begins on Port Mason's street grid. A passive cursor places a small
-number of meaningful route points. The orange Crosstown service grows along
-the actual street geometry and turns across the bridge; it does not connect
-points with generic straight segments. Place labels establish why the service
-runs where it does.
+The scene begins on central Las Vegas streets. A passive CSS crosshair follows
+the route as the orange Charleston Crosstown grows along Charleston Boulevard
+and turns north on Las Vegas Boulevard. The growing line is the production
+dashed route-preview source, not onboarding-only paint.
 
 ### 2. Shape the physical network.
 
@@ -163,10 +161,10 @@ Copy:
 > Infrastructure.
 
 The scene shows the same bounds in Infrastructure. Existing streets form the
-substrate for Crosstown. The blue rail spine follows the former freight
-corridor and contains a short new connection into downtown. Roads and tracks
-look like their production Infrastructure projection, including physical
-width, rather than like recolored service lines.
+substrate for Charleston Crosstown. The blue rail spine follows the existing
+freight corridor and contains a short new connection into Downtown. The new
+connection uses the production selected-way feature state rather than a custom
+blue demonstration layer.
 
 ### 3. Decide how each service runs.
 
@@ -176,9 +174,10 @@ Copy:
 > service runs and when it starts and ends—TransitMapper shows what that
 > operating plan requires.
 
-The Network scene adds Crosstown's airport branch. Beside the map, a read-only
+The Network scene adds Charleston Crosstown's Huntridge pattern. Beside the map, a read-only
 rendering of the production Service inspector's Schedule tab shows the selected
-service, peak headway, span of service, and resulting vehicle requirement. The
+service, `Frequency · peak headway`, `Service hours · span of service`, and
+resulting vehicle requirement. The
 onboarding preview and editor share the same presentational components; the
 preview must not imitate the inspector with onboarding-only controls.
 
@@ -189,7 +188,9 @@ Copy:
 > Vehicles follow the routes, stops, and schedules you designed. Move through
 > the day or change the speed to see the system operating.
 
-Vehicles from the real simulation kernel move over both services. The normal
+Vehicles from the real simulation kernel move over both services. The shared
+production simulation presentation shows play/pause, the full speed ladder in
+its running `4×` state, and the advancing time. The normal
 slide body also explains that a future release will let people explore how
 transit and land use shape each other. This future capability does not receive
 its own badge, note card, or simulated product control.
@@ -206,14 +207,15 @@ service, way, station, facility, and vehicle features used by the editor. The
 preview may add only the DOM presentation needed to render actual geography or
 actual product UI:
 
-- MapLibre markers for fictional place labels, positioned from fixture
-  coordinates rather than percentages;
-- a passive pointer marker for the first slide;
+- clipped OpenStreetMap LineStrings, real place labels, and compact attribution;
+- a passive CSS crosshair for the drawing screen;
 - a read-only instance of the production Service inspector's Schedule
-  presentation for the operations slide.
+  presentation for the operations screen;
+- a read-only instance of the production simulation-control presentation for
+  the simulation screen.
 
 Onboarding does not add scene-name chips, mode badges, legends, hint pills,
-clocks, schedule cards, or other controls that are absent from the editor. The
+schedule cards, or other controls that are absent from the editor. The
 map itself communicates drawing, reused streets, new track, and simulation.
 Shared inspector components describe the real fixture without creating records,
 mutating the fixture, or entering serialization.
@@ -233,10 +235,15 @@ The complete relationship must remain visible without motion.
 slide declares a scene identifier, title, body, and accessible visual
 description. It does not contain fixture geometry or animation logic.
 
-`apps/web/src/ui/onboarding/fixtureSystem.ts` owns the Port Mason
-`TransitSystem`, stable IDs, place-label coordinates, service schedules, and
+`apps/web/src/ui/onboarding/fixtureSystem.ts` owns the central Las Vegas
+`TransitSystem`, stable IDs, service schedules, and
 precomputed simulation inputs. Module initialization continues to reject an
 invalid fixture or an impossible simulation plan.
+
+`apps/web/scripts/generate-onboarding-las-vegas-context.ts` owns the fixed OSM
+query, clipping, normalization, and deterministic ordering. Its committed JSON
+output is adapted by `las-vegas-context.ts`, which exposes typed LineStrings,
+real-place labels, bounds, and attribution without mutating the snapshot.
 
 `apps/web/src/ui/onboarding/OnboardingPreviewMap.tsx` owns MapLibre setup,
 production feature projection, framing, markers, and scene timing. Pure helpers
@@ -247,9 +254,9 @@ Shared kebab-case components under `apps/web/src/ui/inspector/` own the Schedule
 fields and service-load presentation used by both the live Service inspector and
 the onboarding preview. A small read-only onboarding adapter supplies fixture
 values and positions that real inspector presentation beside the operations
-map. `onboarding-scene-overlay.tsx` contains only that adapter and plain failure
-copy; it does not invent a separate onboarding control language or read editor
-state.
+map. `onboarding-scene-overlay.tsx` contains that adapter, the shared simulation
+presentation, and plain failure copy; it does not invent a separate onboarding
+control language or read editor state.
 
 `apps/web/src/ui/onboarding/OnboardingDialog.tsx` remains the carousel
 orchestrator. It chooses the current slide, supplies the scene to the preview,
@@ -312,16 +319,16 @@ surface, or ask the reader to retry a local deterministic preview.
 
 Automated verification covers:
 
-- the Port Mason fixture passes domain validation;
+- the central Las Vegas fixture passes domain validation;
 - both services resolve over compatible infrastructure;
-- Crosstown has two named branches and the shared downtown transfer belongs
+- Charleston Crosstown has two named patterns and the shared Downtown transfer belongs
   to the intended services;
 - the schedules produce stable, nonzero simulation plans and expected fleet
   values;
 - every slide declares one of the four required outcome categories and a
   nonempty accessible visual description;
-- onboarding contains no beta pill, scene-name chip, hint pill, legend, clock,
-  or onboarding-only imitation of an editor control;
+- onboarding contains no beta pill, scene-name chip, hint pill, legend, or
+  onboarding-only imitation of an editor control;
 - the operations scene renders the same Schedule fields and service-load
   presentation used by the live Service inspector;
 - pure scene timing reaches the correct partial and settled drawing states;

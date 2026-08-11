@@ -39,7 +39,7 @@ describe('onboarding scene timing', () => {
   it('advances the operating clock only for the simulation scene', () => {
     expect(onboardingSceneFrame('operations', 2_000, false).simMs).toBe(21_600_000);
     expect(onboardingSceneFrame('simulate', 2_000, false)).toMatchObject({
-      simMs: 22_200_000,
+      simMs: 22_080_000,
       animateVehicles: true,
     });
   });

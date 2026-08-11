@@ -1,10 +1,11 @@
+import { simSpeed } from '@transitmapper/core/sim/clock';
 import type { OnboardingSceneId } from './slides';
 
 const DRAW_DURATION_MS = 3_200;
 const SERVICE_START_MS = 6 * 60 * 60_000;
 const SERVICE_SPAN_MS = 17 * 60 * 60_000;
 const REDUCED_MOTION_TIME_MS = 8.5 * 60 * 60_000;
-const SIMULATED_MS_PER_REAL_MS = 300;
+const SIMULATED_MS_PER_REAL_MS = simSpeed('4x').simPerReal;
 
 export interface OnboardingSceneFrame {
   routeProgress: number;

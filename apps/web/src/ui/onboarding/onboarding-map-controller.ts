@@ -6,9 +6,11 @@ import { setExportFeatureData } from '../../map/export/exportLayerSetup';
 import {
   buildFeatures,
   registerMapIcons,
+  SRC_PREVIEW,
   SRC_SERVICES,
   SRC_STATIONS,
   SRC_VEHICLES,
+  SRC_WAYS,
 } from '../../map/layers';
 import { layerSpecsForScheme, localBlankStyleForScheme } from '../../map/mapTheme';
 import type { ColorScheme } from '../../theme/systemColorScheme';
@@ -16,20 +18,23 @@ import {
   ONBOARDING_DRAW_PATH,
   ONBOARDING_DRAW_SYSTEM,
   ONBOARDING_FIXTURE_SYSTEM,
-  ONBOARDING_NEW_RAIL_PATH,
-  ONBOARDING_PLACE_LABELS,
-  ONBOARDING_SERVICE_COLOR,
   onboardingViewOptions,
 } from './fixtureSystem';
-import { ONBOARDING_CONTEXT_FEATURES, ONBOARDING_STREET_FEATURES } from './port-mason-context';
-import { pathPrefix, vehicleFeaturesAt } from './scene-geometry';
+import {
+  ONBOARDING_CONTEXT_ATTRIBUTION,
+  ONBOARDING_CONTEXT_SOURCE_URL,
+  ONBOARDING_PLACE_LABELS,
+  ONBOARDING_STREET_FEATURES,
+} from './las-vegas-context';
+import {
+  onboardingDrawnServiceFeatures,
+  onboardingScenePresentation,
+  pathPrefix,
+  vehicleFeaturesAt,
+} from './scene-geometry';
 import { onboardingSceneFrame } from './scene-timing';
 import type { OnboardingSceneId } from './slides';
 
-const CONTEXT_SOURCE = 'onboarding-place-context';
-const DRAW_SOURCE = 'onboarding-draw-preview';
-const CURSOR_SOURCE = 'onboarding-draw-cursor';
-const NEW_LINK_SOURCE = 'onboarding-new-link';
 const STREET_SOURCE = 'onboarding-street-context';
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
@@ -74,22 +79,6 @@ function lineCollection(
   };
 }
 
-function pointCollection(
-  coordinates: GeoJSON.Position | undefined,
-): GeoJSON.FeatureCollection<GeoJSON.Point> {
-  if (!coordinates) return EMPTY_FC as GeoJSON.FeatureCollection<GeoJSON.Point>;
-  return {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        properties: {},
-        geometry: { type: 'Point', coordinates },
-      },
-    ],
-  };
-}
-
 function resolveSystems(scene: OnboardingSceneId): SceneSystems {
   const resolvedSystem = scene === 'draw' ? ONBOARDING_DRAW_SYSTEM : ONBOARDING_FIXTURE_SYSTEM;
   const completeSystem = scene === 'draw' ? ONBOARDING_DRAW_SYSTEM : resolvedSystem;
@@ -103,85 +92,65 @@ function resolveSystems(scene: OnboardingSceneId): SceneSystems {
 }
 
 function addOnboardingSources(map: MapLibreMap): void {
-  map.addSource(CONTEXT_SOURCE, { type: 'geojson', data: ONBOARDING_CONTEXT_FEATURES });
   map.addSource(STREET_SOURCE, { type: 'geojson', data: ONBOARDING_STREET_FEATURES });
-  map.addSource(DRAW_SOURCE, { type: 'geojson', data: EMPTY_FC });
-  map.addSource(CURSOR_SOURCE, { type: 'geojson', data: EMPTY_FC });
-  map.addSource(NEW_LINK_SOURCE, {
-    type: 'geojson',
-    data: lineCollection(ONBOARDING_NEW_RAIL_PATH),
-  });
 }
 
 function addContextLayers(map: MapLibreMap, dark: boolean): void {
   map.addLayer({
-    id: 'onboarding-downtown-district',
-    type: 'fill',
-    source: CONTEXT_SOURCE,
-    filter: ['==', ['get', 'kind'], 'district'],
-    paint: { 'fill-color': dark ? '#202522' : '#ece9df', 'fill-opacity': 0.9 },
-  });
-  map.addLayer({
-    id: 'onboarding-park',
-    type: 'fill',
-    source: CONTEXT_SOURCE,
-    filter: ['==', ['get', 'kind'], 'park'],
-    paint: { 'fill-color': dark ? '#173027' : '#dcebdc', 'fill-opacity': 0.92 },
-  });
-  map.addLayer({
-    id: 'onboarding-airport',
-    type: 'fill',
-    source: CONTEXT_SOURCE,
-    filter: ['==', ['get', 'kind'], 'airport'],
-    paint: { 'fill-color': dark ? '#24241f' : '#eeeade', 'fill-opacity': 0.94 },
-  });
-  map.addLayer({
-    id: 'onboarding-river',
-    type: 'fill',
-    source: CONTEXT_SOURCE,
-    filter: ['==', ['get', 'kind'], 'river'],
-    paint: { 'fill-color': dark ? '#17313e' : '#dceaf0', 'fill-opacity': 0.95 },
-  });
-  map.addLayer({
-    id: 'onboarding-river-edge',
-    type: 'line',
-    source: CONTEXT_SOURCE,
-    filter: ['==', ['get', 'kind'], 'river'],
-    paint: { 'line-color': dark ? '#285164' : '#b8d4df', 'line-width': 1.5 },
-  });
-  map.addLayer({
-    id: 'onboarding-airport-edge',
-    type: 'line',
-    source: CONTEXT_SOURCE,
-    filter: ['==', ['get', 'kind'], 'airport'],
-    paint: {
-      'line-color': dark ? '#605d4d' : '#aaa183',
-      'line-width': 1.3,
-      'line-dasharray': [2, 1.5],
-    },
-  });
-  map.addLayer({
     id: 'onboarding-street-casing',
     type: 'line',
     source: STREET_SOURCE,
+    filter: ['!=', ['get', 'kind'], 'rail'],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': dark ? '#080a09' : '#d0cec6',
-      'line-width': ['match', ['get', 'kind'], 'arterial', 5, 3.4],
-      'line-opacity': 0.95,
+      'line-color': dark ? '#111310' : '#d8d5cc',
+      'line-width': ['match', ['get', 'kind'], 'motorway', 5.8, 'major', 4.4, 2.6],
+      'line-opacity': 0.9,
     },
   });
   map.addLayer({
     id: 'onboarding-streets',
     type: 'line',
     source: STREET_SOURCE,
+    filter: ['!=', ['get', 'kind'], 'rail'],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': dark ? '#4b534f' : '#85847f',
-      'line-width': ['match', ['get', 'kind'], 'arterial', 3.2, 1.8],
+      'line-color': dark ? '#555b56' : '#9e9b93',
+      'line-width': ['match', ['get', 'kind'], 'motorway', 4, 'major', 2.8, 1.25],
+      'line-opacity': ['match', ['get', 'kind'], 'street', 0.7, 0.9],
+    },
+  });
+  map.addLayer({
+    id: 'onboarding-existing-rail-casing',
+    type: 'line',
+    source: STREET_SOURCE,
+    filter: ['==', ['get', 'kind'], 'rail'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': dark ? '#151614' : '#d8d5cc',
+      'line-width': 4,
       'line-opacity': 0.9,
     },
   });
+  map.addLayer({
+    id: 'onboarding-existing-rail',
+    type: 'line',
+    source: STREET_SOURCE,
+    filter: ['==', ['get', 'kind'], 'rail'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': dark ? '#8a8e88' : '#75766f',
+      'line-width': 2,
+      'line-dasharray': [2, 1.4],
+      'line-opacity': 0.9,
+    },
+  });
+}
+
+function productionPromoteId(sourceId: string): string | undefined {
+  if (sourceId === SRC_SERVICES) return 'serviceId';
+  if (sourceId === SRC_WAYS || sourceId === SRC_STATIONS) return 'id';
+  return undefined;
 }
 
 function addProductionLayers(map: MapLibreMap, colorScheme: ColorScheme): void {
@@ -190,50 +159,21 @@ function addProductionLayers(map: MapLibreMap, colorScheme: ColorScheme): void {
     specs.map((spec) => ('source' in spec ? spec.source : '')).filter(Boolean),
   );
   for (const sourceId of sourceIds) {
-    if (!map.getSource(sourceId)) map.addSource(sourceId, { type: 'geojson', data: EMPTY_FC });
+    if (!map.getSource(sourceId)) {
+      const promoteId = productionPromoteId(sourceId);
+      map.addSource(sourceId, {
+        type: 'geojson',
+        data: EMPTY_FC,
+        ...(promoteId ? { promoteId } : {}),
+      });
+    }
   }
   for (const spec of specs) {
     if (!map.getLayer(spec.id)) map.addLayer(spec);
   }
 }
 
-function addDemonstrationLayers(map: MapLibreMap): void {
-  map.addLayer({
-    id: 'onboarding-new-link-halo',
-    type: 'line',
-    source: NEW_LINK_SOURCE,
-    paint: { 'line-color': '#ffffff', 'line-width': 9, 'line-opacity': 0.88 },
-  });
-  map.addLayer({
-    id: 'onboarding-new-link',
-    type: 'line',
-    source: NEW_LINK_SOURCE,
-    paint: { 'line-color': '#3157d5', 'line-width': 5, 'line-dasharray': [1.4, 1.1] },
-  });
-  map.addLayer({
-    id: 'onboarding-draw-line',
-    type: 'line',
-    source: DRAW_SOURCE,
-    layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': ONBOARDING_SERVICE_COLOR, 'line-width': 6 },
-  });
-  map.addLayer({
-    id: 'onboarding-draw-cursor-ring',
-    type: 'circle',
-    source: CURSOR_SOURCE,
-    paint: {
-      'circle-radius': 9,
-      'circle-color': '#ffffff',
-      'circle-stroke-color': ONBOARDING_SERVICE_COLOR,
-      'circle-stroke-width': 3,
-    },
-  });
-  map.addLayer({
-    id: 'onboarding-draw-cursor',
-    type: 'circle',
-    source: CURSOR_SOURCE,
-    paint: { 'circle-radius': 3, 'circle-color': ONBOARDING_SERVICE_COLOR },
-  });
+function addVehicleEmphasisLayer(map: MapLibreMap): void {
   map.addLayer({
     id: 'onboarding-vehicle-emphasis',
     type: 'circle',
@@ -255,34 +195,50 @@ function addPlaceMarkers(map: MapLibreMap): maplibregl.Marker[] {
     element.setAttribute('aria-hidden', 'true');
     return new maplibregl.Marker({ element, anchor: 'center' }).setLngLat(place.coord).addTo(map);
   });
-  const river = document.createElement('span');
-  river.className = 'onboarding-place-label onboarding-river-label';
-  river.textContent = 'Mason River';
-  river.setAttribute('aria-hidden', 'true');
-  markers.push(
-    new maplibregl.Marker({ element: river, anchor: 'center' })
-      .setLngLat([-122.456, 37.751])
-      .addTo(map),
-  );
   return markers;
 }
 
-function renderDrawFrame(
-  map: MapLibreMap,
-  completeFeatures: SystemFeatures,
-  progress: number,
-  cursorVisible: boolean,
-): void {
+function addDrawCursor(map: MapLibreMap): maplibregl.Marker {
+  const element = document.createElement('span');
+  element.className = 'onboarding-draw-crosshair';
+  element.setAttribute('aria-hidden', 'true');
+  return new maplibregl.Marker({ element, anchor: 'center' })
+    .setLngLat(ONBOARDING_DRAW_PATH[0])
+    .addTo(map);
+}
+
+interface DrawFrameOptions {
+  map: MapLibreMap;
+  completeFeatures: SystemFeatures;
+  cursor: maplibregl.Marker;
+  progress: number;
+  cursorVisible: boolean;
+}
+
+function renderDrawFrame({
+  map,
+  completeFeatures,
+  cursor,
+  progress,
+  cursorVisible,
+}: DrawFrameOptions): void {
   const path = pathPrefix(ONBOARDING_DRAW_PATH, progress);
   if (progress >= 1) {
     sourceData(map, SRC_SERVICES, completeFeatures.services);
     sourceData(map, SRC_STATIONS, completeFeatures.stations);
-    sourceData(map, DRAW_SOURCE, EMPTY_FC);
-    sourceData(map, CURSOR_SOURCE, EMPTY_FC);
+    sourceData(map, SRC_PREVIEW, EMPTY_FC);
+    cursor.getElement().hidden = true;
     return;
   }
-  sourceData(map, DRAW_SOURCE, lineCollection(path));
-  sourceData(map, CURSOR_SOURCE, pointCollection(cursorVisible ? path.at(-1) : undefined));
+  // Real line drawing accumulates committed, colored stretches while the
+  // dashed route preview follows the pointer. Project the same two production
+  // sources so the demonstration reads as drawing, not as a generic cursor
+  // moving over an unchanged map.
+  sourceData(map, SRC_SERVICES, onboardingDrawnServiceFeatures(completeFeatures, path));
+  sourceData(map, SRC_PREVIEW, lineCollection(path));
+  cursor.getElement().hidden = !cursorVisible;
+  const cursorPosition = path.at(-1);
+  if (cursorPosition) cursor.setLngLat(cursorPosition);
 }
 
 interface SceneAnimationOptions {
@@ -290,6 +246,7 @@ interface SceneAnimationOptions {
   scene: OnboardingSceneId;
   completeFeatures: SystemFeatures;
   reducedMotion: boolean;
+  drawCursor?: maplibregl.Marker;
 }
 
 function startSceneAnimation({
@@ -297,13 +254,20 @@ function startSceneAnimation({
   scene,
   completeFeatures,
   reducedMotion,
+  drawCursor,
 }: SceneAnimationOptions): () => void {
   const startedAt = performance.now();
   let animationFrame: number | undefined;
   const drawFrame = (now: number) => {
     const frame = onboardingSceneFrame(scene, now - startedAt, reducedMotion);
-    if (scene === 'draw') {
-      renderDrawFrame(map, completeFeatures, frame.routeProgress, frame.cursorVisible);
+    if (scene === 'draw' && drawCursor) {
+      renderDrawFrame({
+        map,
+        completeFeatures,
+        cursor: drawCursor,
+        progress: frame.routeProgress,
+        cursorVisible: frame.cursorVisible,
+      });
     } else if (scene === 'simulate') {
       sourceData(map, SRC_VEHICLES, vehicleFeaturesAt(frame.simMs));
     }
@@ -322,6 +286,25 @@ function fitScene(map: MapLibreMap): void {
   if (bounds) map.fitBounds(bounds, { padding: 32, animate: false });
 }
 
+function addCompactAttribution(map: MapLibreMap, container: HTMLElement): void {
+  map.addControl(
+    new maplibregl.AttributionControl({
+      compact: true,
+      customAttribution: `<a href="${ONBOARDING_CONTEXT_SOURCE_URL}" target="_blank" rel="noreferrer">${ONBOARDING_CONTEXT_ATTRIBUTION}</a>`,
+    }),
+    'bottom-right',
+  );
+  // MapLibre briefly expands every newly mounted compact control. Onboarding
+  // remounts a map per screen, so that introductory state otherwise covers a
+  // route every time someone presses Next. Start in the same collapsed state
+  // as the long-lived editor map; attribution remains one click away.
+  const attribution = container.querySelector<HTMLDetailsElement>('.maplibregl-ctrl-attrib');
+  if (attribution) {
+    attribution.open = false;
+    attribution.classList.remove('maplibregl-compact-show');
+  }
+}
+
 function initializeScene(
   map: MapLibreMap,
   options: MountOnboardingMapOptions,
@@ -331,23 +314,25 @@ function initializeScene(
   addOnboardingSources(map);
   addContextLayers(map, options.colorScheme === 'dark');
   addProductionLayers(map, options.colorScheme);
-  addDemonstrationLayers(map);
+  addVehicleEmphasisLayer(map);
 
   const baseFeatures = buildFeatures(systems.baseSystem, null, [], systems.resolvedView);
   const completeFeatures = buildFeatures(systems.completeSystem, null, [], systems.resolvedView);
   setExportFeatureData(map, baseFeatures);
-  sourceData(
-    map,
-    NEW_LINK_SOURCE,
-    options.scene === 'infrastructure' ? lineCollection(ONBOARDING_NEW_RAIL_PATH) : EMPTY_FC,
-  );
+  const presentation = onboardingScenePresentation(options.scene);
+  if (presentation.selectedWayId) {
+    map.setFeatureState({ source: SRC_WAYS, id: presentation.selectedWayId }, { selected: true });
+  }
   const markers = addPlaceMarkers(map);
+  const drawCursor = options.scene === 'draw' ? addDrawCursor(map) : undefined;
+  if (drawCursor) markers.push(drawCursor);
   fitScene(map);
   const stopAnimation = startSceneAnimation({
     map,
     scene: options.scene,
     completeFeatures,
     reducedMotion: options.reducedMotion,
+    drawCursor,
   });
   const resizeObserver =
     typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(() => fitScene(map));
@@ -370,6 +355,7 @@ export function mountOnboardingMap(options: MountOnboardingMapOptions): () => vo
       interactive: false,
       attributionControl: false,
     });
+    addCompactAttribution(map, options.container);
   } catch (error) {
     options.onFailure(error);
     return () => undefined;
