@@ -58,6 +58,7 @@ function block(feature: string): string {
 
 const coarse = block('pointer: coarse');
 const hoverless = block('hover: none');
+const narrowSystems = block('max-width: 360px');
 
 /** Every selector that must carry a 44px floor when the pointer is a finger. */
 const TOUCH_TARGETS = [
@@ -70,6 +71,8 @@ const TOUCH_TARGETS = [
   '.mobile-more-btn',
   '.view-switch-btn',
   '.sim-speed-trigger',
+  '.systems-view-btn',
+  '.systems-open',
   '.dropdown-menu-item',
   '.lp-row',
   '.list-row',
@@ -88,7 +91,7 @@ describe('touch targets', () => {
   it.each(TOUCH_TARGETS)('gives %s a 44px floor under a finger', (selector) => {
     // The selector may sit in a grouped rule, so look for it and then for a
     // floor anywhere in the declaration block that follows it.
-    const at = coarse.indexOf(`${selector},`) >= 0 ? `${selector},` : `${selector} {`;
+    const at = coarse.includes(`${selector},`) ? `${selector},` : `${selector} {`;
     const index = coarse.indexOf(at);
     expect(index, `${selector} is not in the coarse-pointer block`).toBeGreaterThanOrEqual(0);
 
@@ -121,5 +124,11 @@ describe('touch targets', () => {
     // touchscreen laptop's mouse, which is exactly the conflation the
     // capability module was written to prevent.
     expect(hoverless).not.toContain('pointer:');
+  });
+
+  it('stacks the systems toolbar before its controls can overflow', () => {
+    expect(narrowSystems).toMatch(/\.systems-toolbar\s*\{[^}]*flex-direction:\s*column/);
+    expect(narrowSystems).toMatch(/\.systems-view-toggle\s*\{[^}]*width:\s*100%/);
+    expect(narrowSystems).toMatch(/\.systems-view-btn\s*\{[^}]*flex:\s*1/);
   });
 });

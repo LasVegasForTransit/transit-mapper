@@ -167,7 +167,7 @@ export function SystemLibraryEntry(props: SystemLibraryEntryProps) {
   const displayName = name.length > 0 ? name : 'Untitled system';
   const opening = openingId !== null;
   return (
-    <li className={`systems-row ${isActive ? 'active' : ''}`}>
+    <li className={`systems-row ${isActive ? 'active' : ''}`} aria-current={isActive || undefined}>
       {props.view === 'cards' && (
         <SystemPreviewPane
           displayName={displayName}
