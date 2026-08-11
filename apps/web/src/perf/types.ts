@@ -1,4 +1,5 @@
 import type { PerfNetworkByteReport } from './network-byte-types';
+import type { RendererStatsSnapshot } from './renderer-stats';
 
 export type PerfFixtureId = 'small' | 'dense' | 'published' | 'rtc';
 export type PerfScenarioId = 'small' | 'dense' | 'rtc' | 'share' | 'embed';
@@ -199,6 +200,10 @@ export interface PerfSample {
   warmNetwork: PerfNetworkSnapshot;
   memory: PerfMemorySnapshot;
   warmMemory: PerfMemorySnapshot;
+  /** Cumulative renderer work for the cold document load and measured journey. */
+  rendererStats: RendererStatsSnapshot | null;
+  /** The equivalent snapshot after the warm reload and paused journey. */
+  warmRendererStats: RendererStatsSnapshot | null;
   persistence: PerfPersistenceProbe;
   traceArtifact?: string;
 }

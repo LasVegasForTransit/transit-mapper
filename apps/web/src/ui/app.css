@@ -4158,6 +4158,15 @@ button.chip-removable-label:hover {
   .export-controls {
     width: auto;
   }
+  /* The desktop preview grows from .export-body's fixed 400px height. Once
+     the compact dialog changes that body to an auto-height column, its map
+     is absolutely positioned and contributes no intrinsic height; flex:1
+     therefore collapsed the wrapper to its 2px border. Give the canvas a
+     real responsive frame so export on a phone still shows what it exports. */
+  .export-preview-wrap {
+    flex: none;
+    min-height: min(52vw, 240px);
+  }
   /* Menus come from the bottom edge too, for the same reason: a 180px
      dropdown hanging off a 34px icon in the top-right corner is the furthest
      point on the screen from a thumb. */

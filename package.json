@@ -23,6 +23,7 @@
     "perf:record": "pnpm --filter @transitmapper/web perf:record",
     "perf:freeze-497a549": "pnpm --filter @transitmapper/web perf:freeze-497a549",
     "perf:soak": "pnpm --filter @transitmapper/web perf:soak",
+    "renderer:capture": "pnpm --filter @transitmapper/web renderer:capture",
     "worker:dev": "pnpm --filter @transitmapper/worker dev",
     "build": "tsx apps/web/scripts/run-build.ts",
     "typecheck": "turbo run typecheck",

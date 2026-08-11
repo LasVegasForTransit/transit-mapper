@@ -33,6 +33,7 @@ export function attachFrameMeter(map: MLMap): FrameMeter {
   map.on('render', onRender);
 
   const overlay = document.createElement('div');
+  overlay.dataset.rendererCaptureExclude = 'true';
   overlay.style.cssText =
     'position:fixed;left:8px;bottom:8px;z-index:99999;font:11px ui-monospace,SFMono-Regular,monospace;' +
     'background:var(--md-sys-color-inverse-surface);color:var(--md-sys-color-inverse-on-surface);' +

@@ -3,6 +3,7 @@ import {
   type DiagramLayoutOperationCounts,
 } from '@transitmapper/core/model/diagramLayout';
 import type { TransitSystem } from '@transitmapper/core/model/system';
+import { featureCollectionStats } from '@transitmapper/core/render/feature-stats';
 import {
   buildFeatures,
   type FeatureBuildOperationCounts,
@@ -32,7 +33,11 @@ import {
 import type { SystemFeatureSourceId } from './sourceUploadPlan';
 
 export interface SourceFeatureProjectionCounts
-  extends FeatureBuildOperationCounts, DiagramLayoutOperationCounts {}
+  extends FeatureBuildOperationCounts, DiagramLayoutOperationCounts {
+  rendererCandidateFeatureCount: number;
+  rendererGeneratedFeatureCount: number;
+  rendererGeneratedVertexCount: number;
+}
 
 export interface BuildFeaturesForSourcesOptions {
   system: TransitSystem;
@@ -83,6 +88,57 @@ const DIAGRAM_LAYOUT_SOURCES = new Set<SystemFeatureSourceId>([
   SRC_SERVICE_ARROWS,
 ]);
 
+const SERVICE_CANDIDATE_SOURCES = new Set<SystemFeatureSourceId>([
+  SRC_WAYS,
+  SRC_SERVICES,
+  SRC_STATIONS,
+  SRC_SERVICE_TERMINI,
+  SRC_LANES,
+  SRC_LANE_MARKINGS,
+  SRC_LANE_ARROWS,
+  SRC_SERVICE_ARROWS,
+]);
+
+function candidateVisitCount(counts: SourceFeatureProjectionCounts): number {
+  return (
+    counts.featureTopologyWayVisitCount +
+    counts.featureJunctionNodeVisitCount +
+    counts.featureStationVisitCount +
+    counts.featureHandleWayVisitCount +
+    counts.featurePhysicalStationVisitCount +
+    counts.featurePhysicalGroupVisitCount +
+    counts.featureFacilityVisitCount +
+    counts.featureNamedWayVisitCount
+  );
+}
+
+interface RecordProjectionDimensionsOptions {
+  counts: SourceFeatureProjectionCounts;
+  candidateVisitsBefore: number;
+  features: SystemFeatures;
+  sourceIds: readonly SystemFeatureSourceId[];
+  serviceCount: number;
+}
+
+function recordProjectionDimensions({
+  counts,
+  candidateVisitsBefore,
+  features,
+  sourceIds,
+  serviceCount,
+}: RecordProjectionDimensionsOptions): void {
+  const output = featureCollectionStats(
+    sourceIds.map((sourceId) => features[FEATURE_NAME_BY_SOURCE[sourceId]]),
+  );
+  const serviceCandidates = sourceIds.some((sourceId) => SERVICE_CANDIDATE_SOURCES.has(sourceId))
+    ? serviceCount
+    : 0;
+  counts.rendererCandidateFeatureCount +=
+    candidateVisitCount(counts) - candidateVisitsBefore + serviceCandidates;
+  counts.rendererGeneratedFeatureCount += output.featureCount;
+  counts.rendererGeneratedVertexCount += output.vertexCount;
+}
+
 export function buildFeaturesForSources({
   system,
   selection,
@@ -96,12 +152,13 @@ export function buildFeaturesForSources({
   armedTerminus = null,
   counts,
 }: BuildFeaturesForSourcesOptions): SystemFeatures {
+  const candidateVisitsBefore = counts ? candidateVisitCount(counts) : 0;
   const needsDiagramLayout =
     view.viewMode === 'diagram' &&
     sourceIds.some((sourceId) => DIAGRAM_LAYOUT_SOURCES.has(sourceId));
   const renderSystem = needsDiagramLayout ? computeDiagramSystem(system, counts) : system;
 
-  return buildFeatures(
+  const features = buildFeatures(
     renderSystem,
     selection,
     handleWayIds,
@@ -116,4 +173,14 @@ export function buildFeaturesForSources({
       armedTerminus,
     },
   );
+  if (counts) {
+    recordProjectionDimensions({
+      counts,
+      candidateVisitsBefore,
+      features,
+      sourceIds,
+      serviceCount: system.services.length,
+    });
+  }
+  return features;
 }

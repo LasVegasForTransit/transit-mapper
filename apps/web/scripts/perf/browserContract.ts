@@ -5,6 +5,7 @@ import {
   INDEXED_DB_INDEX_STORE,
 } from '../../src/storage/indexedDbLibrary';
 import type { PerfPhaseCounters, PerfProductionPersistenceProbe } from '../../src/perf/types';
+import type { RendererStatsSnapshot } from '../../src/perf/renderer-stats';
 
 /**
  * Stable storage identifiers used to seed and inspect the production path.
@@ -82,6 +83,7 @@ export interface PerfPageWindow extends Window {
   __mapProjectionCounts?: () => PerfPhaseCounters & {
     sourceUploadCount: number;
   };
+  __rendererStats?: () => RendererStatsSnapshot;
   __perfProductionPersistence?: BrowserProductionPersistenceState;
 }
 

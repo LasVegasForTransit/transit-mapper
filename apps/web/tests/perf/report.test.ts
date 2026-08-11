@@ -90,6 +90,8 @@ function sample(run: number, loadMs: number): PerfSample {
     warmNetwork: network,
     memory,
     warmMemory: memory,
+    rendererStats: null,
+    warmRendererStats: null,
     persistence: {
       serializedBytes: 0,
       parseMs: 0,
