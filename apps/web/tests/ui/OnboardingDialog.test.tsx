@@ -113,9 +113,10 @@ describe('OnboardingDialog', () => {
     expect(container.textContent).toContain(
       'TransitMapper is a tool for imagining, designing, and testing public transit systems on a real map.',
     );
-    expect(container.textContent).toContain(
-      'Start with a place and design the transit system you want to see there.',
+    expect(container.querySelector('.onboarding-copy')?.textContent).toBe(
+      'TransitMapper is a tool for imagining, designing, and testing public transit systems on a real map. Start with a place and design the transit system you want to see there.',
     );
+    expect(container.querySelector('.onboarding-invitation')).toBeNull();
     expect(container.querySelector('[data-scene="welcome"]')).not.toBeNull();
     expect(container.textContent).not.toContain('Open beta');
     expect(container.querySelector('.onboarding-note')).toBeNull();

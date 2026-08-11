@@ -4,7 +4,6 @@ type OnboardingOutcome = 'purpose' | 'service' | 'infrastructure' | 'operations'
 export interface OnboardingSlideData {
   title: string;
   body: string;
-  invitation?: string;
   outcome: OnboardingOutcome;
   scene: OnboardingSceneId;
   /** Names the relationship conveyed by the non-interactive scene. */
@@ -17,8 +16,7 @@ export interface OnboardingSlideData {
 export const ONBOARDING_SLIDES: OnboardingSlideData[] = [
   {
     title: 'Welcome to TransitMapper',
-    body: 'TransitMapper is a tool for imagining, designing, and testing public transit systems on a real map.',
-    invitation: 'Start with a place and design the transit system you want to see there.',
+    body: 'TransitMapper is a tool for imagining, designing, and testing public transit systems on a real map. Start with a place and design the transit system you want to see there.',
     outcome: 'purpose',
     scene: 'welcome',
     visualDescription:

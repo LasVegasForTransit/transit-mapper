@@ -3157,6 +3157,7 @@ kbd {
 }
 .onboarding-modal .modal-head {
   flex: 0 0 auto;
+  align-items: flex-start;
   margin-bottom: 12px;
 }
 .onboarding-modal .modal-head h2 {
@@ -3289,15 +3290,6 @@ kbd {
 .onboarding-copy {
   max-width: 72ch;
   line-height: 1.52;
-}
-.onboarding-invitation {
-  max-width: 46rem;
-  margin: 12px 0 0;
-  color: var(--md-sys-color-on-surface);
-  font-size: var(--md-sys-typescale-label-large-size);
-  font-weight: var(--md-sys-typescale-label-large-weight);
-  line-height: var(--md-sys-typescale-label-large-line-height);
-  letter-spacing: var(--md-sys-typescale-label-large-tracking);
 }
 .onboarding-scene {
   width: 100%;

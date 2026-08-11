@@ -34,7 +34,6 @@ export function OnboardingDialog({ onClose, onComplete }: OnboardingDialogProps)
       >
         <div className="onboarding-explanation">
           <p className="onboarding-copy">{slide.body}</p>
-          {slide.invitation ? <p className="onboarding-invitation">{slide.invitation}</p> : null}
         </div>
         <OnboardingPreviewMap
           key={slide.scene}

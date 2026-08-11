@@ -8,6 +8,10 @@ const CSS = readFileSync(
 );
 
 describe('onboarding responsive layout', () => {
+  it('keeps the close action at the top of the header when a title wraps', () => {
+    expect(CSS).toMatch(/\.onboarding-modal \.modal-head \{[^}]*align-items: flex-start;/);
+  });
+
   it('bounds the desktop Service inspector to the scene and gives it its own scroller', () => {
     expect(CSS).toMatch(
       /\.onboarding-service-inspector-preview \{[\s\S]*?height: 100%;[\s\S]*?max-height: 100%;[\s\S]*?overflow-y: auto;/,

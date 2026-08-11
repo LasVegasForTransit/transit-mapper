@@ -2,6 +2,10 @@ import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { SystemFeatures, ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap } from 'maplibre-gl';
+import {
+  attachInitialStyleFallback,
+  INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
+} from '../../map/initialStyleFallback';
 import { setExportFeatureData } from '../../map/export/exportLayerSetup';
 import {
   buildFeatures,
@@ -12,7 +16,7 @@ import {
   SRC_VEHICLES,
   SRC_WAYS,
 } from '../../map/layers';
-import { layerSpecsForScheme, localBlankStyleForScheme } from '../../map/mapTheme';
+import { basemapStyleForScheme, layerSpecsForScheme } from '../../map/mapTheme';
 import type { ColorScheme } from '../../theme/systemColorScheme';
 import {
   ONBOARDING_DRAW_PATH,
@@ -92,7 +96,11 @@ function resolveSystems(scene: OnboardingSceneId): SceneSystems {
 }
 
 function addOnboardingSources(map: MapLibreMap): void {
-  map.addSource(STREET_SOURCE, { type: 'geojson', data: ONBOARDING_STREET_FEATURES });
+  map.addSource(STREET_SOURCE, {
+    type: 'geojson',
+    data: ONBOARDING_STREET_FEATURES,
+    attribution: `<a href="${ONBOARDING_CONTEXT_SOURCE_URL}" target="_blank" rel="noreferrer">${ONBOARDING_CONTEXT_ATTRIBUTION}</a>`,
+  });
 }
 
 function addContextLayers(map: MapLibreMap, dark: boolean): void {
@@ -287,13 +295,7 @@ function fitScene(map: MapLibreMap): void {
 }
 
 function addCompactAttribution(map: MapLibreMap, container: HTMLElement): void {
-  map.addControl(
-    new maplibregl.AttributionControl({
-      compact: true,
-      customAttribution: `<a href="${ONBOARDING_CONTEXT_SOURCE_URL}" target="_blank" rel="noreferrer">${ONBOARDING_CONTEXT_ATTRIBUTION}</a>`,
-    }),
-    'bottom-right',
-  );
+  map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
   // MapLibre briefly expands every newly mounted compact control. Onboarding
   // remounts a map per screen, so that introductory state otherwise covers a
   // route every time someone presses Next. Start in the same collapsed state
@@ -309,10 +311,16 @@ function initializeScene(
   map: MapLibreMap,
   options: MountOnboardingMapOptions,
   systems: SceneSystems,
+  usingLocalContext: boolean,
 ): SceneResources {
   registerMapIcons(map, options.colorScheme);
-  addOnboardingSources(map);
-  addContextLayers(map, options.colorScheme === 'dark');
+  // The real editor basemap is the normal context. The committed OSM snapshot
+  // exists only so an unavailable tile host does not turn onboarding into a
+  // blank panel or prevent someone from learning the product offline.
+  if (usingLocalContext) {
+    addOnboardingSources(map);
+    addContextLayers(map, options.colorScheme === 'dark');
+  }
   addProductionLayers(map, options.colorScheme);
   addVehicleEmphasisLayer(map);
 
@@ -323,7 +331,7 @@ function initializeScene(
   if (presentation.selectedWayId) {
     map.setFeatureState({ source: SRC_WAYS, id: presentation.selectedWayId }, { selected: true });
   }
-  const markers = addPlaceMarkers(map);
+  const markers = usingLocalContext ? addPlaceMarkers(map) : [];
   const drawCursor = options.scene === 'draw' ? addDrawCursor(map) : undefined;
   if (drawCursor) markers.push(drawCursor);
   fitScene(map);
@@ -349,11 +357,13 @@ export function mountOnboardingMap(options: MountOnboardingMapOptions): () => vo
   try {
     map = new maplibregl.Map({
       container: options.container,
-      style: localBlankStyleForScheme(options.colorScheme),
+      style: basemapStyleForScheme(options.colorScheme),
       center: systems.resolvedSystem.viewport.center,
       zoom: systems.resolvedSystem.viewport.zoom,
       interactive: false,
       attributionControl: false,
+      fadeDuration: 0,
+      refreshExpiredTiles: false,
     });
     addCompactAttribution(map, options.container);
   } catch (error) {
@@ -361,22 +371,28 @@ export function mountOnboardingMap(options: MountOnboardingMapOptions): () => vo
     return () => undefined;
   }
 
-  let ready = false;
+  let usingLocalContext = false;
   let resources: SceneResources | undefined;
+  const detachInitialStyleFallback = attachInitialStyleFallback(map, {
+    scheme: options.colorScheme,
+    timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
+    onFallback: () => {
+      usingLocalContext = true;
+    },
+  });
   map.on('error', (event) => {
     console.error('[onboarding preview]', event.error ?? event);
-    if (!ready) options.onFailure(event.error ?? event);
   });
   map.on('load', () => {
     try {
-      resources = initializeScene(map, options, systems);
-      ready = true;
+      resources = initializeScene(map, options, systems, usingLocalContext);
     } catch (error) {
       options.onFailure(error);
     }
   });
 
   return () => {
+    detachInitialStyleFallback();
     resources?.stopAnimation();
     resources?.resizeObserver?.disconnect();
     for (const marker of resources?.markers ?? []) marker.remove();
