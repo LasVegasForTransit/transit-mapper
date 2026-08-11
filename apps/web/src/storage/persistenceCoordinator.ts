@@ -37,8 +37,9 @@ export interface PersistenceCoordinatorOptions {
 }
 
 export interface PersistenceCoordinator {
-  /** Force the one pending content/camera snapshot to disk now. */
-  readonly flush: () => Promise<void>;
+  /** Force the one pending content/camera snapshot to disk now and report
+   * whether the current document is durable. */
+  readonly flush: () => Promise<SaveOutcome>;
   /** Reconcile a library write performed outside the autosave lane. */
   readonly recordOutcome: (id: string, outcome: SaveOutcome) => void;
   /** Forget a successfully deleted document after its pending save is flushed. */
@@ -89,6 +90,8 @@ export function createPersistenceCoordinator(
         : 'saved';
     options.report(effectiveOutcome);
   };
+  const currentDocumentOutcome = (): SaveOutcome =>
+    failedOutcomes.get(options.store.getState().system.id) ?? 'saved';
   const recordOutcome = (id: string, outcome: SaveOutcome): void => {
     if (outcome === 'saved') {
       failedOutcomes.delete(id);
@@ -142,7 +145,7 @@ export function createPersistenceCoordinator(
     }
     ensureDrain();
   };
-  const flush = (): Promise<void> => {
+  const flush = async (): Promise<SaveOutcome> => {
     cancelTimer();
     const system = pendingSystem;
     pendingSystem = null;
@@ -152,7 +155,8 @@ export function createPersistenceCoordinator(
       // snapshots queued behind the write already in progress.
       enqueueSave(system);
     }
-    return waitForIdle();
+    await waitForIdle();
+    return currentDocumentOutcome();
   };
   const queue = (system: TransitSystem) => {
     // Capture the camera while this document is still current. A system
