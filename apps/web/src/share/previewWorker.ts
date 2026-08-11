@@ -10,6 +10,7 @@ interface PreviewWorker {
 }
 
 export interface RenderPreviewMarkupOptions {
+  displayWidth?: number;
   signal?: AbortSignal;
   timeoutMs?: number;
   workerFactory?: () => PreviewWorker;
@@ -35,7 +36,8 @@ export function renderPreviewMarkup(
   data: string,
   options: RenderPreviewMarkupOptions = {},
 ): Promise<string> {
-  if (options.signal?.aborted) return Promise.reject(abortError(options.signal));
+  const signal = options.signal;
+  if (signal?.aborted) return Promise.reject(abortError(signal));
   const worker = (options.workerFactory ?? defaultWorkerFactory)();
 
   return new Promise<string>((resolve, reject) => {
@@ -44,12 +46,14 @@ export function renderPreviewMarkup(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      options.signal?.removeEventListener('abort', onAbort);
+      signal?.removeEventListener('abort', onAbort);
       worker.terminate();
       if ('markup' in outcome) resolve(outcome.markup);
       else reject(outcome.error);
     };
-    const onAbort = () => finish({ error: abortError(options.signal!) });
+    const onAbort = () => {
+      if (signal) finish({ error: abortError(signal) });
+    };
     const timer = setTimeout(
       () => finish({ error: new Error('Preview rendering timed out.') }),
       options.timeoutMs ?? PREVIEW_WORKER_TIMEOUT_MS,
@@ -61,7 +65,7 @@ export function renderPreviewMarkup(
     };
     worker.onerror = (event) =>
       finish({ error: new Error(event.message || 'Preview Worker failed.') });
-    options.signal?.addEventListener('abort', onAbort, { once: true });
-    worker.postMessage({ data });
+    signal?.addEventListener('abort', onAbort, { once: true });
+    worker.postMessage({ data, displayWidth: options.displayWidth });
   });
 }

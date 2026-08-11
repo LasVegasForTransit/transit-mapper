@@ -12,7 +12,10 @@ const workerScope = globalThis as unknown as WorkerScope;
 workerScope.onmessage = (event) => {
   try {
     const system = parseSystem(JSON.parse(event.data.data));
-    workerScope.postMessage({ kind: 'done', markup: previewSvg(system) });
+    workerScope.postMessage({
+      kind: 'done',
+      markup: previewSvg(system, { displayWidth: event.data.displayWidth }),
+    });
   } catch (error) {
     workerScope.postMessage({
       kind: 'error',

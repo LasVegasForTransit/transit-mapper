@@ -441,11 +441,6 @@
       "count": 2
     }
   },
-  "src/share/previewWorker.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    }
-  },
   "src/share/svgExport.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1

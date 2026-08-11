@@ -6,7 +6,7 @@ export type SystemPreview = { status: 'ready'; svg: string } | { status: 'unavai
 interface LoadSystemPreviewsOptions {
   ids: string[];
   load: (id: string) => Promise<LibraryLoadResult>;
-  render: (system: TransitSystem) => string;
+  render: (system: TransitSystem) => string | Promise<string>;
   onPreview: (id: string, preview: SystemPreview) => void;
   concurrency?: number;
   isCancelled?: () => boolean;
@@ -33,7 +33,7 @@ export async function loadSystemPreviews({
         const result = await load(id);
         preview =
           result.status === 'ok'
-            ? { status: 'ready', svg: render(result.system) }
+            ? { status: 'ready', svg: await render(result.system) }
             : { status: 'unavailable' };
       } catch {
         preview = { status: 'unavailable' };

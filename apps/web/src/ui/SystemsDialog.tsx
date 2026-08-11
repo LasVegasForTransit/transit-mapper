@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEditor, useEditorCommands } from '../editor/EditorProvider';
 import { createEmptySystem, forkSystem } from '@transitmapper/core/model/serialize';
-import { previewSvg } from '@transitmapper/core/render/preview';
 import {
   deleteFromLibrary,
   listLibrary,
@@ -14,6 +13,7 @@ import { setActiveId } from '../storage/localStore';
 import { deleteAfterFlush } from '../storage/deleteAfterFlush';
 import { getMyShare } from '../share/myShares';
 import { stopSharing } from '../share/api';
+import { renderPreviewMarkup } from '../share/previewWorker';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
 import { SystemLibraryEntry } from './system-library-entry';
@@ -151,7 +151,13 @@ export function SystemsDialog({
     void loadSystemPreviews({
       ids,
       load: loadSystemEntry,
-      render: (system) => previewSvg(system, { displayWidth: 280 }),
+      // The editor already ships the share-preview Worker. Reusing it keeps
+      // geometry-heavy rendering off the input thread and out of the measured
+      // editor JavaScript graph while preserving card-sized detail choices.
+      render: (system) =>
+        renderPreviewMarkup(JSON.stringify(system), {
+          displayWidth: 280,
+        }),
       onPreview: (id, preview) => {
         completed.add(id);
         setPreviews((current) => ({ ...current, [id]: preview }));

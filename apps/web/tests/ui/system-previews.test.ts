@@ -92,6 +92,23 @@ describe('saved-system previews', () => {
     );
   });
 
+  it('waits for previews rendered away from the input thread', async () => {
+    const system = createEmptySystem();
+    const previews = new Map<string, SystemPreview>();
+
+    await loadSystemPreviews({
+      ids: ['saved-system'],
+      load: () => Promise.resolve({ status: 'ok', system }),
+      render: () => Promise.resolve('<svg>worker preview</svg>'),
+      onPreview: (id, preview) => previews.set(id, preview),
+    });
+
+    expect(previews.get('saved-system')).toEqual({
+      status: 'ready',
+      svg: '<svg>worker preview</svg>',
+    });
+  });
+
   it('stops publishing previews after cancellation', async () => {
     const system = createEmptySystem();
     const load = deferred<LibraryLoadResult>();
