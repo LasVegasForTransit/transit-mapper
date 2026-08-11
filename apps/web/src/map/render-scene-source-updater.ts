@@ -40,8 +40,9 @@ export interface ApplyRenderSceneOptions {
    * without inferring ownership from empty collections. */
   requestedSourceIds?: readonly SystemFeatureSourceId[];
   /** Precomputed exact patch for callers that retain source-local scene state.
-   * Its revision must match `scene`. Omitting it keeps the general full-scene
-   * diff path for consumers without incremental source knowledge. */
+   * Its revision must match `scene`. Incremental submissions after initial
+   * load require this exact patch: calculating a whole-scene diff here could
+   * turn one large feature into an unbounded MapLibre scheduling task. */
   patch?: RenderScenePatch;
   /** Adaptive batch bound for exact CPU collection materialization that must
    * finish before a full MapLibre source call. */

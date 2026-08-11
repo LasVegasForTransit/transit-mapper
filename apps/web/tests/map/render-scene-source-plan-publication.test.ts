@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderFeatureId, systemFeatureSourceId } from '@transitmapper/core/render/render-identity';
+import { diffRenderScenes } from '@transitmapper/core/render/render-scene-diff';
 import { createRenderSceneSourceUpdater } from '../../src/map/render-scene-source-updater';
 import {
   renderPointFeature,
@@ -20,7 +21,7 @@ describe('render scene source plan publication', () => {
         features: [renderPointFeature(renderFeatureId(ways, 'overview', ['a']), 1)],
       },
     ]);
-    const plan = updater.prepare(next);
+    const plan = updater.prepare(next, { patch: diffRenderScenes(first, next) });
 
     plan.units[0]?.run();
     const result = plan.stage();
@@ -43,7 +44,7 @@ describe('render scene source plan publication', () => {
         features: [renderPointFeature(renderFeatureId(ways, 'overview', ['a']), 1)],
       },
     ]);
-    const plan = updater.prepare(next);
+    const plan = updater.prepare(next, { patch: diffRenderScenes(first, next) });
 
     plan.units[0]?.run();
     plan.stage();
