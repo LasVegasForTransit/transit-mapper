@@ -58,10 +58,10 @@ export type SupplementalKind = 'none' | 'selection' | 'tool-draft';
 export type Detent = 'closed' | 'half' | 'full';
 
 const DETENTS: Detent[] = ['closed', 'half', 'full'];
-const OUTLINE_TITLE: Record<ViewMode, string> = {
-  network: 'Network outline',
-  infrastructure: 'Infrastructure outline',
-  diagram: 'Diagram outline',
+const VIEW_LABEL: Record<ViewMode, string> = {
+  network: 'Network',
+  infrastructure: 'Infrastructure',
+  diagram: 'Diagram',
 };
 
 /** The stop a newly-shown panel opens to. Arming a tool is something you did
@@ -208,9 +208,9 @@ export interface WorkbenchProps {
   /** Undo/redo/export/share/issues/layers/keyboard — the transient-action
    *  cluster, distinct from viewSwitcher (persistent canvas state). */
   primaryToolbar: ReactNode;
-  /** Network/Infrastructure/Diagram — a persistent view state, not a
-   *  transient action, so it's its own slot rather than folded into
-   *  primaryToolbar (desktop only has room to show this distinction). */
+  /** Network/Infrastructure/Diagram — persistent canvas state, so desktop
+   *  gives it its own top-row slot and compact layouts keep it with the
+   *  other persistent controls in the workbench rail. */
   viewSwitcher: ReactNode;
   /** The same switch as one labelled button, for rows too narrow for three
    *  labels side by side. Which of the two shows is this component's
@@ -339,7 +339,6 @@ export function Workbench({
         >
           <div className="compact-top-bar-row">
             {brand}
-            {viewSwitch}
             <div className="actions-collapsed">{primaryToolbar}</div>
           </div>
         </div>
@@ -478,10 +477,8 @@ export function Workbench({
       {/* ---- the compact layout's workbench: the bottom half of the same
           anchored frame the top bar starts.
 
-          ONE surface holding three things, in this order from its top edge
-          down: a drag handle naming what is showing, the contextual panel,
-          and — pinned to the bottom, outside the panel's scroll — the tool
-          rail and the simulation transport.
+          ONE surface: a drag handle, the contextual panel, and persistent
+          canvas controls pinned below the panel's scroll.
 
           The rail lives in here rather than floating over the map because
           that is what makes it impossible to cover. Nothing in this surface
@@ -510,7 +507,7 @@ export function Workbench({
           <SheetHandle
             detent={detent}
             setDetent={setDetent}
-            title={showingSupplemental ? 'Details' : OUTLINE_TITLE[viewMode]}
+            title={showingSupplemental ? 'Details' : VIEW_LABEL[viewMode]}
           />
           {showingSupplemental && (
             // Whichever put supplementalPanel here — a selection, an armed
@@ -526,7 +523,7 @@ export function Workbench({
               }}
             >
               <Icon name="chevronDown" size={15} style={{ transform: 'rotate(90deg)' }} />{' '}
-              {OUTLINE_TITLE[viewMode]}
+              {VIEW_LABEL[viewMode]}
             </button>
           )}
           <div className="workbench-panel">
@@ -537,7 +534,10 @@ export function Workbench({
               persistent controls, and they stay put while the panel above
               them scrolls. */}
           <div className="workbench-rail zen-cluster">
-            <div className="workbench-rail-sim">{simControlsCompact}</div>
+            <div className="workbench-rail-state">
+              {viewSwitch}
+              <div className="workbench-rail-sim">{simControlsCompact}</div>
+            </div>
             {modeToolbar}
           </div>
         </div>
@@ -653,18 +653,17 @@ function MenuCard({ brand, children }: MenuCardProps) {
   }, [uiHidden]);
 
   return (
-    <Panel ref={cardRef} slot="left" className="menu-card" aria-label={OUTLINE_TITLE[viewMode]}>
+    <Panel ref={cardRef} slot="left" className="menu-card" aria-label={VIEW_LABEL[viewMode]}>
       <div className="panel-brand">
-        <div className="panel-brand-row">{brand}</div>
-      </div>
-      <div className="panel-head">
-        <span className="panel-head-title">{OUTLINE_TITLE[viewMode]}</span>
-        <IconButton
-          icon={collapsed ? 'panelOpen' : 'sidebar'}
-          size={16}
-          label={collapsed ? 'Show outline' : 'Hide outline'}
-          onClick={() => setCollapsed((c) => !c)}
-        />
+        <div className="panel-brand-row">
+          {brand}
+          <IconButton
+            icon={collapsed ? 'panelOpen' : 'sidebar'}
+            size={16}
+            label={collapsed ? 'Show outline' : 'Hide outline'}
+            onClick={() => setCollapsed((current) => !current)}
+          />
+        </div>
       </div>
       <div className={`collapsible ${collapsed ? 'collapsed' : ''}`}>
         <div className="collapsible-inner">{children}</div>

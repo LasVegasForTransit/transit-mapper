@@ -23,8 +23,8 @@ const MOD_LABEL = IS_MAC ? '⌘' : 'Ctrl';
 
 /** Persistent state of the canvas, not a transient action — kept visually
  *  distinct from TopBarActions' button cluster. Desktop: Workbench's own
- *  viewSwitcher prop. Mobile: folded into TopBarActions instead (see that
- *  component) — no room for a third floating group at that width.
+ *  viewSwitcher prop. Compact: kept in the workbench rail beside the other
+ *  canvas-state controls so document identity retains the top bar.
  *
  *  Unlike sim controls (its neighbour in the top-center of the desktop
  *  row), this DOES collapse in zen mode — self-managed here via

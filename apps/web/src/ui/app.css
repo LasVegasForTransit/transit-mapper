@@ -259,8 +259,7 @@ input[type='range'] {
         component (not shown here — inert isn't expressible in CSS) so a
         hidden cluster can't trap keyboard focus either. ---- */
 .zen-label,
-.btn-label,
-.panel-head-title {
+.btn-label {
   overflow: hidden;
   white-space: nowrap;
   max-width: 220px;
@@ -271,8 +270,7 @@ input[type='range'] {
   transition-delay: 0ms, 140ms;
 }
 [data-zen] .zen-label,
-[data-zen] .btn-label,
-[data-zen] .panel-head-title {
+[data-zen] .btn-label {
   max-width: 0;
   opacity: 0;
 }
@@ -1127,8 +1125,8 @@ input[type='range'] {
    around this row in zen mode, the stretch becomes circular padding: the
    row measured ~90px wider than its three children's real combined
    width, confirmed live. align-self opts this one child out of the
-   parent's stretch, same as .panel-head/.collapsible above already do in
-   their own way, so the row (and the auto-width card measuring it)
+   parent's stretch, same as .collapsible does below in its own way, so the
+   row (and the auto-width card measuring it)
    actually hugs its content instead. */
 [data-zen] .panel-brand-row {
   align-self: flex-start;
@@ -1164,6 +1162,9 @@ input[type='range'] {
 .panel-brand .system-name {
   flex: 1 1 128px;
   max-width: 320px;
+}
+.panel-brand-row > .icon-btn {
+  flex: 0 0 auto;
 }
 
 /* ---- MenuCard ↔ zen mode's restore control, unified: this is the SAME
@@ -1203,46 +1204,6 @@ input[type='range'] {
 [data-zen] .menu-card-slot {
   align-self: flex-start;
 }
-.panel-head {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  /* Same reasoning as .panel-brand above — a real 8px margin of its own,
-     with the chevron GLYPH (not this padding value) meeting .panel-body's
-     text via its own centering inset inside the 34px button. */
-  padding: 8px;
-  flex: 0 0 auto;
-  max-height: 60px;
-  overflow: hidden;
-  transition:
-    max-height 200ms var(--motion-chrome-curve),
-    opacity 120ms var(--motion-chrome-curve),
-    padding 200ms var(--motion-chrome-curve);
-  transition-delay: 0ms, 140ms, 0ms;
-}
-.panel-head > .icon-btn {
-  margin-left: auto;
-}
-/* The workspace toggle itself is meaningless once zen mode has force-
-   collapsed the list below it — it fades along with the list rather than
-   staying as a dead control. max-width, not just max-height: the card's
-   own width is "auto" (shrink-to-fit) in zen mode, and a shrink-to-fit
-   box's preferred width still accounts for a max-height:0 descendant's
-   natural, UNwrapped content width unless that descendant is also
-   width-constrained — confirmed live, the chevron button alone was enough
-   to keep the "auto" card wide. */
-[data-zen] .panel-head {
-  max-height: 0;
-  max-width: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-.panel-head-title {
-  font-size: var(--md-sys-typescale-title-small-size);
-  font-weight: 600;
-}
 /* Animates the workspace section open/closed via max-height instead of an
    instant show/hide. flex:1 lets it fill whatever space remains in the
    (possibly viewport-clamped) card when expanded; max-height:0 when
@@ -1272,8 +1233,8 @@ input[type='range'] {
 .collapsible.collapsed {
   max-height: 0;
 }
-/* Same shrink-to-fit leak as .panel-head above: the workspace list's own
-   long hint text has to lose its natural width too, not just its height,
+/* The workspace list's own long hint text has to lose its natural width too,
+   not just its height,
    or the "auto"-width card stays exactly as wide as it was before. */
 [data-zen] .collapsible {
   max-height: 0;
@@ -1292,7 +1253,7 @@ input[type='range'] {
 }
 /* Left/right 16px (not 8) so this text lines up with the chevron/File-menu
    icon glyphs above it: those buttons keep a full 34px hit target inside
-   their own 8px-padded row (see .panel-head/.panel-brand), but centering a
+   their own 8px-padded row (see .panel-brand), but centering a
    ~16-17px icon inside that box insets the GLYPH itself another ~9px past
    the button's own edge — landing at ~16-17px from the panel's true edge.
    16px here meets it there, without ever pulling the button's own hit box
@@ -4364,15 +4325,6 @@ button.chip-removable-label:hover {
   gap: 4px;
   flex: none;
 }
-/* The view switch must be able to give up its label before the row runs out
-   of room; it is the only control here with text that can shorten. */
-.compact-top-bar .view-switch-btn {
-  min-width: 0;
-}
-.compact-top-bar .view-switch-label {
-  max-width: 110px;
-}
-
 /* ---- the workbench ---- */
 .compact-workbench {
   position: absolute;
@@ -4452,6 +4404,19 @@ button.chip-removable-label:hover {
   flex: none;
   padding: 6px 0 8px;
   border-top: 1px solid var(--md-sys-color-surface-container-highest);
+}
+.workbench-rail-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+.workbench-rail-state .view-switch-btn {
+  min-width: 0;
+}
+.workbench-rail-state .view-switch-label {
+  max-width: 140px;
 }
 /* Only there when there is something to simulate — SimControls renders
    nothing until a service has a schedule. */
