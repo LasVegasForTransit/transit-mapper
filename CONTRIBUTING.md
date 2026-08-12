@@ -36,6 +36,11 @@ observe; use `refactor`, `perf`, `test`, or `chore` for internal preparation.
 See [commit messages](docs/development/reference/commit-messages.md) for the
 reasoning and examples.
 
+Scope is optional. When a commit is confined to a durable boundary, use only
+`web`, `worker`, `core`, `pwa`, `dx`, `tooling`, or `ci`; omit it for
+cross-boundary work rather than inventing a scope from a feature, file, task,
+or contributor role.
+
 The organization template asks for a TL;DR, an overview, and optional
 follow-ups. Fill those sections with complete, direct prose: lead with the
 outcome for a person using TransitMapper, then explain the important constraint

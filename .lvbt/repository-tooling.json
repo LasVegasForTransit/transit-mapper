@@ -1,8 +1,8 @@
 {
   "repository": "LasVegasForTransit/repository-tooling",
-  "ref": "v0.1.0",
-  "commit": "1628e931f84d69b23ed08b7f3ba0125c8307bc06",
+  "ref": "v0.1.5",
+  "commit": "c1fa65977e3242bead00f4e3a46ddfb101a8c2af",
   "plugin": "lvbt-contributions",
-  "version": "0.1.0",
-  "sha256": "48b625ee17f55b24221fe376386bd694b8debca8aa3eadb548da7992f1063940"
+  "version": "0.1.5",
+  "sha256": "eeb74ce49d07eb299350284455b03b653fe0134798c81fc5e11df8e94821ed0a"
 }
