@@ -2,11 +2,10 @@
 
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { commitSubjectError } from './validate-commit-subject.mjs';
 
 const placeholderPattern =
   /\[(?:describe|optional|subheading|more subheadings|future issue title)[^\]]*\]/i;
-const conventionalTitle =
-  /^(?:build|chore|ci|docs|feat|fix|perf|refactor|revert|test)(?:\([a-z0-9][a-z0-9-]*\))?!?: [^\s].*$/;
 
 function fail(message, code = 1) {
   process.stderr.write(`${message}\n`);
@@ -114,8 +113,9 @@ if (options.kind === 'issue') {
     label = 'enhancement';
   } else fail('--type must be bug or feature.', 2);
 } else {
-  if (options.title.length > 72 || !conventionalTitle.test(options.title)) {
-    fail('Pull request titles must be conventional and at most 72 characters.');
+  const subjectError = commitSubjectError(options.title);
+  if (subjectError) {
+    fail(subjectError);
   }
   validateSections(body, ['TL;DR', 'Overview of Changes'], ['Follow-ups']);
   if (!headings(body).some(({ title }) => title === 'Follow-ups')) {

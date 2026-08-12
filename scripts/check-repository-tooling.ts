@@ -129,6 +129,11 @@ if (!agents.includes('github-contribution') || !agents.includes('github-create.m
   fail('AGENTS.md does not require the shared creation workflow');
 }
 
+const commitMessageHook = await readFile(resolve(ROOT, '.githooks/commit-msg'), 'utf8');
+if (!commitMessageHook.includes('validate-commit-subject.mjs')) {
+  fail('the commit-msg hook does not use the pinned subject validator');
+}
+
 const issueTemplates = await readdir(resolve(ROOT, '.github/ISSUE_TEMPLATE')).catch(
   (error: unknown) => {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
