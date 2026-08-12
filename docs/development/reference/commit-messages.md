@@ -18,7 +18,7 @@ not `fixed the label bug`.
 
 | Type       | Use for                                         |
 | ---------- | ----------------------------------------------- |
-| `feat`     | new capability someone can use                  |
+| `feat`     | a new capability a person can use or observe    |
 | `fix`      | corrected behaviour                             |
 | `docs`     | documentation only                              |
 | `style`    | formatting with no behaviour change             |
@@ -30,6 +30,12 @@ not `fixed the label bug`.
 
 Scope is optional and rarely needed in a repository this size. Use it when
 a change is confined to one clearly named area.
+
+`feat` is a promise about product behavior, not a label for groundwork. A
+helper, cache, test harness, measurement seam, internal rendering primitive,
+or model refactor that enables a later capability belongs under `refactor`,
+`perf`, `test`, or `chore` until it independently changes what someone can do
+or see. "Needed for a future feature" is not itself a feature.
 
 ## Body
 
