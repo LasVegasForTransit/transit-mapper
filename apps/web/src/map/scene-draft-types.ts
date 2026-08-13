@@ -5,16 +5,18 @@
  * base, but no MapLibre source or accepted controller state changes until the
  * separate publication step succeeds.
  */
-import type { SystemFeatureSourceId } from '@transitmapper/core/render/render-identity';
-import type { RenderScene } from '@transitmapper/core/render/render-scene';
-import type { RenderScenePatch } from '@transitmapper/core/render/render-scene-diff';
-import type { CooperativeRenderJobUnitSequence } from './cooperative-render-job-scheduler';
+import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
 import type {
-  BuildIncrementalLiveSceneInput,
-  IncrementalLiveSceneState,
-} from './synchronous-scene-draft';
-import type { IncrementalSourceState } from './scene-source-state';
+  RenderDomainIdentity,
+  SystemFeatureSourceId,
+} from '@transitmapper/core/render/render-identity';
+import type { RenderScene, RenderSceneStats } from '@transitmapper/core/render/render-scene';
+import type { RenderScenePatch } from '@transitmapper/core/render/render-scene-diff';
+import type { IncrementalLiveSceneState } from './accepted-scene-state';
+import type { CooperativeRenderJobUnitSequence } from './cooperative-render-job-scheduler';
 import type { RenderSceneUploadIntent } from './render-scene-source-updater';
+import type { IncrementalSceneOperationCounts, IncrementalSourceState } from './scene-source-state';
+import type { MapSystemFeatureSourceId } from './system-feature-sources';
 
 export interface SceneDraftWorkUnit {
   readonly id: string;
@@ -27,7 +29,17 @@ export interface SceneDraftOptions {
   readonly batchSize?: number;
 }
 
-export interface BuildSceneDraftInput extends BuildIncrementalLiveSceneInput {
+export interface BuildSceneDraftInput {
+  readonly previous: IncrementalLiveSceneState | null;
+  readonly revision: string;
+  readonly features: SystemFeatures;
+  readonly sourceIds: readonly MapSystemFeatureSourceId[];
+  readonly replacementDomainsBySource?: ReadonlyMap<
+    MapSystemFeatureSourceId,
+    readonly RenderDomainIdentity[]
+  >;
+  readonly stats?: RenderSceneStats;
+  readonly counts?: IncrementalSceneOperationCounts;
   readonly intent?: RenderSceneUploadIntent;
   /** Controller-local ownership prevents a prepared transaction from being
    * published through a different live source boundary. */

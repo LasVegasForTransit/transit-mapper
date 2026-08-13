@@ -399,7 +399,7 @@ flowchart LR
 | ------------ | -------------------------------------------------------------- | -------------------------------------------------------- |
 | Presentation | `render-presentation`, `camera-render-preload`                 | Describe display scale and reusable camera coverage.     |
 | Projection   | `document-projection`, `resumable-feature-projection*`         | Produce detached features from immutable document state. |
-| Scene        | `scene-draft*`, `accepted-scene-store`                         | Normalize IDs and retain the accepted CPU scene.         |
+| Scene        | `scene-draft*`, `accepted-scene-state`, `accepted-scene-store` | Normalize IDs and retain the accepted CPU scene.         |
 | Bank         | `source-bank*`, `accepted-scene-recovery`                      | Switch complete visual and hit revisions together.       |
 | Editor state | `editor-feature-state`, `editor-overlays`, `render-visibility` | Keep transient work out of committed projection.         |
 
