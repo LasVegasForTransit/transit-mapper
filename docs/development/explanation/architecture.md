@@ -426,9 +426,9 @@ termini, and junction guides; those may run a small editor-only projection.
 Mode/type visibility remains a layer filter.
 
 This pipeline changes presentation and delivery, not the underlying physical
-geometry model. It does not yet derive watertight metric corridor polygons or
-choose curve tessellation from final display error. Diagram remains on its
-existing layout path and outside the cooperative geographic projection
+geometry model. It chooses curve tessellation from final display error, but
+does not yet derive watertight metric corridor polygons. Diagram remains on
+its existing layout path and outside the cooperative geographic projection
 scheduler.
 
 ### Appearance and map styles

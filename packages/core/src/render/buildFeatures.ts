@@ -13,6 +13,7 @@ import {
   legRange,
   pathLengthMeters,
   resolveWayPath,
+  resolveWayPathAtError,
   serviceCoversWayAt,
   serviceHasPartialLeg,
   PATTERN_RUNS,
@@ -47,6 +48,7 @@ import type {
 import { HANDLE_ICON, widthPxAtZ14 } from './constants';
 import { renderFeatureId, systemFeatureSourceId } from './render-identity';
 import {
+  metricErrorForDisplayedPixels,
   renderTierBlend,
   selectRenderTier,
   type RenderPresentation,
@@ -102,6 +104,17 @@ const UNASSIGNED_FAMILIES = new Set(['guideway', 'aerial', 'water']);
 const BUNDLE_SPACING_PX = 5; // perpendicular gap between parallel services (Network schematic bundle)
 const WITHIN_LANE_SPACING_PX = 1.5; // gap between services sharing ONE lane in Infrastructure lane-detail
 const SERVICE_LANE_FRACTION = 0.6; // a service overlay fills ~60% of its lane's width (leaves the lane markings visible)
+const DISPLAYED_CURVE_ERROR_PX = 0.35;
+
+/** Rendering controls approximation density, while geometry owns the actual
+ * physical arc. This keeps display scale out of the domain model. */
+function renderedWayPath(way: Way, presentation: RenderPresentation): LngLat[] {
+  const latitude = way.points[0]?.[1] ?? 0;
+  return resolveWayPathAtError(
+    way,
+    metricErrorForDisplayedPixels(presentation, latitude, DISPLAYED_CURVE_ERROR_PX),
+  );
+}
 
 const allModeIdsCache = new WeakMap<Service[], Set<string>>();
 const allWayTypeIdsCache = new WeakMap<Way[], Set<string>>();
@@ -1542,6 +1555,7 @@ interface ProjectWayLabelsOptions {
   system: TransitSystem;
   indexes: SharedProjectionIndexes;
   network: boolean;
+  presentation: RenderPresentation;
   counts: FeatureBuildOperationCounts | undefined;
   candidateNamedWayIds?: readonly string[];
   candidateWayIds?: ReadonlySet<string>;
@@ -1551,6 +1565,7 @@ interface ProjectWayLabelsOptions {
 interface NamedWayProjectionOptions {
   namedWay: TransitSystem['namedWays'][number];
   indexes: SharedProjectionIndexes;
+  presentation: RenderPresentation;
   candidateWayIds?: ReadonlySet<string>;
   candidateLabelDependencyIds?: ReadonlySet<string>;
 }
@@ -1558,6 +1573,7 @@ interface NamedWayProjectionOptions {
 function projectNamedWayLabels({
   namedWay,
   indexes,
+  presentation,
   candidateWayIds,
   candidateLabelDependencyIds,
 }: NamedWayProjectionOptions): Feature<LineString>[] {
@@ -1571,7 +1587,7 @@ function projectNamedWayLabels({
     }
     const way = indexes.waysById.get(wayId);
     if (!way || !indexes.projectedWayTypeIds.has(way.typeId)) continue;
-    const path = resolveWayPath(way);
+    const path = renderedWayPath(way, presentation);
     if (path.length < 2) continue;
     labels.push({
       type: 'Feature',
@@ -1593,6 +1609,7 @@ function projectWayLabels({
   system,
   indexes,
   network,
+  presentation,
   counts,
   candidateNamedWayIds,
   candidateWayIds,
@@ -1613,6 +1630,7 @@ function projectWayLabels({
       ...projectNamedWayLabels({
         namedWay,
         indexes,
+        presentation,
         candidateWayIds,
         candidateLabelDependencyIds,
       }),
@@ -1880,7 +1898,16 @@ function projectTopologyFeatures({
     trimStartM: number,
     trimEndM: number,
   ) => {
-    const resolved = resolveWayLaneGeometry(way, trimStartM, trimEndM);
+    const resolved = resolveWayLaneGeometry(
+      way,
+      trimStartM,
+      trimEndM,
+      metricErrorForDisplayedPixels(
+        view.presentation,
+        way.points[0]?.[1] ?? 0,
+        DISPLAYED_CURVE_ERROR_PX,
+      ),
+    );
     if (counts) {
       if (resolved.cacheHit) counts.featureLaneGeometryCacheHitCount++;
       else counts.featureLaneGeometryBuildCount++;
@@ -2002,7 +2029,7 @@ function projectTopologyFeatures({
           tierOpacity: presentation.blend.weights.street,
           ...availability,
         },
-        geometry: { type: 'LineString', coordinates: resolveWayPath(way) },
+        geometry: { type: 'LineString', coordinates: renderedWayPath(way, view.presentation) },
       });
     }
   };
@@ -2045,7 +2072,11 @@ function projectTopologyFeatures({
         return !!w && wantsLaneDetail(w);
       });
       if (!relevant) continue;
-      const g = junctionGeometry(node, waysById);
+      const g = junctionGeometry(
+        node,
+        waysById,
+        metricErrorForDisplayedPixels(view.presentation, node.coord[1], DISPLAYED_CURVE_ERROR_PX),
+      );
       if (!g) continue;
       laneNodes.push({ node, g });
     }
@@ -2109,7 +2140,7 @@ function projectTopologyFeatures({
       }
       if (!indexes.projectedWayTypeIds.has(way.typeId)) continue;
       if (!projectPhysicalWay && !projectServiceWay) continue;
-      const path = resolveWayPath(way);
+      const path = renderedWayPath(way, view.presentation);
       if (path.length < 2) continue;
       const allBundle = byWay.get(way.id) ?? [];
       const bundle = affectedServiceIds
@@ -2758,6 +2789,7 @@ function independentWayLabels({
   viewport,
   projectionScope,
   buildOptions,
+  view,
 }: IndependentProjectionOptions): Feature<LineString>[] {
   if (!projection.wayLabels) return [];
   const unitScope = buildOptions.unitScope;
@@ -2772,6 +2804,7 @@ function independentWayLabels({
     system,
     indexes,
     network,
+    presentation: view.presentation,
     counts,
     candidateNamedWayIds: intersectOptionalOrderedIds(namedWayIds, unitScope?.namedWayIds),
     candidateLabelDependencyIds: optionalIdSet(labelDependencyIds, unitScope?.labelDependencyIds),

@@ -134,6 +134,8 @@ const STREET_BLEND: RenderTierBlend = {
 };
 
 const TIER_BOUNDARY_WIDTHS = [2, 3, 4, 9, 12] as const;
+const EQUATOR_CIRCUMFERENCE_M = 40075016.686;
+const WEB_MERCATOR_TILE_PX = 512;
 
 function normalizedProjectedWidth(displayedCorridorWidthPx: number): number {
   if (!Number.isFinite(displayedCorridorWidthPx) || displayedCorridorWidthPx < 0) {
@@ -158,6 +160,35 @@ export function displayedProjectedLengthPx(
   const displayedX = vector.xPx * (presentation.displayedWidthPx / presentation.viewportWidthPx);
   const displayedY = vector.yPx * (presentation.displayedHeightPx / presentation.viewportHeightPx);
   return Math.hypot(displayedX, displayedY);
+}
+
+/** Converts a final-display curve tolerance into local meters at `latitude`.
+ *
+ * Geometry deliberately receives this number instead of a camera. The smaller
+ * display axis wins when output is non-uniformly scaled, which makes the
+ * result conservative in every screen direction. Pixel ratio is absent for
+ * the same reason it is absent from LOD: extra backing pixels sharpen the
+ * raster but do not give a person more CSS-pixel detail.
+ */
+export function metricErrorForDisplayedPixels(
+  presentation: RenderPresentation,
+  latitude: number,
+  displayedErrorPx: number,
+): number {
+  if (!Number.isFinite(latitude) || latitude <= -90 || latitude >= 90) {
+    throw new RangeError('Curve tessellation latitude must be inside (-90, 90).');
+  }
+  if (!Number.isFinite(displayedErrorPx) || displayedErrorPx <= 0) {
+    throw new RangeError('Displayed curve error must be finite and positive.');
+  }
+  const worldSizePx = WEB_MERCATOR_TILE_PX * 2 ** presentation.zoom;
+  const metersPerViewportPx =
+    (EQUATOR_CIRCUMFERENCE_M * Math.cos((latitude * Math.PI) / 180)) / worldSizePx;
+  const viewportPixelsPerDisplayedPixel = Math.min(
+    presentation.viewportWidthPx / presentation.displayedWidthPx,
+    presentation.viewportHeightPx / presentation.displayedHeightPx,
+  );
+  return displayedErrorPx * metersPerViewportPx * viewportPixelsPerDisplayedPixel;
 }
 
 /** Selects retained logical detail for live rendering. With no previous tier,

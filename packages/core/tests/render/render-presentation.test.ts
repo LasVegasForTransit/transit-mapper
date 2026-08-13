@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createRenderTierStateResolver,
   displayedProjectedLengthPx,
+  metricErrorForDisplayedPixels,
   renderPresentationForViewport,
   renderTierBlend,
   selectRenderTier,
@@ -84,6 +85,20 @@ describe('render presentation', () => {
     };
 
     expect(displayedProjectedLengthPx({ xPx: 6, yPx: 8 }, stretched)).toBeCloseTo(Math.sqrt(13));
+  });
+
+  it('converts a displayed curve-error target into local physical meters', () => {
+    const halfSize = metricErrorForDisplayedPixels(presentation(1), 0, 0.35);
+    const fullSize = metricErrorForDisplayedPixels(
+      { ...presentation(1), displayedWidthPx: 1200, displayedHeightPx: 600 },
+      0,
+      0.35,
+    );
+    const highLatitude = metricErrorForDisplayedPixels(presentation(1), 60, 0.35);
+
+    expect(fullSize).toBeGreaterThan(0);
+    expect(halfSize).toBeCloseTo(fullSize * 2, 9);
+    expect(highLatitude).toBeCloseTo(halfSize / 2, 9);
   });
 
   it('selects deterministic static tiers at the exact entry thresholds', () => {
