@@ -298,7 +298,7 @@ describe('network gesture store transactions', () => {
     );
     const joined = store
       .getState()
-      .system.services[0].patterns.find((pattern) => pattern.id === 'desired-a');
+      .system.services.find((service) => service.id === 'desired-a')?.path;
     expect(joined).toBeDefined();
     if (!joined) throw new Error('expected the desired branch to remain after connection');
     expect(patternLegs(joined).map((leg) => leg.wayId)).toEqual([

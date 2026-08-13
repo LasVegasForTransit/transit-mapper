@@ -2,6 +2,8 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import { prunedToLiveLanes } from '@transitmapper/core/model/components';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type { TransitSystem, Viewport } from '@transitmapper/core/model/system';
+import { recordRenderPreparationPatch } from '@transitmapper/core/render/render-preparation-journal';
+import type { RenderPreparationPatch } from '@transitmapper/core/render/render-preparation';
 import type { CreateEditorStoreOptions } from './contracts';
 import type { SetSystemOptions } from './contracts/document-commands';
 import {
@@ -19,9 +21,22 @@ type TransientState = Omit<
 >;
 type TransientPatch = Partial<TransientState>;
 
+/**
+ * Describes the exact renderer-facing records changed by one editor command.
+ *
+ * Editor commands know this local mutation footprint while they are making the
+ * edit. Keeping it here means the renderer can update those records directly,
+ * instead of rediscovering a change by comparing the whole document later.
+ */
+export type EditorRenderMutation = (
+  previous: TransitSystem,
+  next: TransitSystem,
+) => RenderPreparationPatch;
+
 interface ContentChange<Result> {
   system: TransitSystem;
   transient?: TransientPatch;
+  renderMutation?: EditorRenderMutation;
   result: Result;
 }
 
@@ -121,6 +136,13 @@ function createContentCommitter(
           ? transientCandidate
           : undefined;
       if (system !== current.system || transient) {
+        if (system !== current.system && change.renderMutation) {
+          recordRenderPreparationPatch(
+            current.system,
+            system,
+            change.renderMutation(current.system, system),
+          );
+        }
         const availability = history.record(current.system, system);
         store.setState({ ...transient, system, ...availability });
       }
