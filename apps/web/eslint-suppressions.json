@@ -490,11 +490,6 @@
       "count": 1
     }
   },
-  "src/storage/browserLibrary.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 4
-    }
-  },
   "src/storage/indexedDbLibrary.ts": {
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 1
@@ -507,9 +502,6 @@
     }
   },
   "src/storage/libraryStore.ts": {
-    "@typescript-eslint/no-deprecated": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     }
@@ -567,11 +559,6 @@
       "count": 2
     },
     "sonarjs/cognitive-complexity": {
-      "count": 1
-    }
-  },
-  "src/ui/ImportDialog.tsx": {
-    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -767,11 +754,6 @@
       "count": 1
     },
     "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/ui/newSystem/LocationPickerMap.tsx": {
-    "@eslint-community/eslint-comments/require-description": {
       "count": 1
     }
   },

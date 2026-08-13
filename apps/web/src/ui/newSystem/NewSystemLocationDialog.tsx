@@ -107,7 +107,7 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
   };
 
   const finishLandingState = () => {
-    store.getState().setTool('select');
+    store.commands.tools.setTool('select');
     setViewMode('infrastructure');
   };
 
@@ -138,11 +138,11 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
       system.drivingSide = drivingSide;
       targetSystemId = system.id;
       setActiveId(system.id);
-      store.getState().setSystem(system, { readOnly: false });
+      store.commands.document.setSystem(system, { readOnly: false });
     } else {
       targetSystemId = store.getState().system.id;
-      store.getState().setViewport({ center: chosenCamera.center, zoom: chosenCamera.zoom });
-      if (picked.drivingSide) store.getState().setDrivingSide(picked.drivingSide);
+      store.commands.document.setViewport({ center: chosenCamera.center, zoom: chosenCamera.zoom });
+      if (picked.drivingSide) store.commands.network.setDrivingSide(picked.drivingSide);
     }
     finishLandingState();
     onClose();
@@ -165,7 +165,7 @@ export function NewSystemLocationDialog({ onClose, mode }: NewSystemLocationDial
       if (chosenCamera) system.viewport = { center: chosenCamera.center, zoom: chosenCamera.zoom };
       if (picked?.drivingSide) system.drivingSide = picked.drivingSide;
       setActiveId(system.id);
-      store.getState().setSystem(system, { readOnly: false });
+      store.commands.document.setSystem(system, { readOnly: false });
       finishLandingState();
     }
     onClose();
