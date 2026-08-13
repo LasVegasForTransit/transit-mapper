@@ -1598,7 +1598,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     ...filters,
     presentation: overviewPresentation,
   });
-  store.getState().setWayCapacity(road, 4);
+  store.commands.ways.setWayCapacity(road, 4);
 
   const fourLaneOverview = buildFeatures(store.getState().system, null, [], {
     viewMode: 'infrastructure',

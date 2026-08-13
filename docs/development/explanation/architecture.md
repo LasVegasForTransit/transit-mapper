@@ -321,6 +321,13 @@ history controller. Saved viewport
 persistence deliberately bypasses undo history and `updatedAt`; undo and redo
 preserve the current viewport instead of restoring an older camera.
 
+Commands that make a local physical edit also describe its affected Way, Node,
+and Station records to the runtime. The runtime records that exact immutable
+delta alongside the resulting system identity, so the live renderer can update
+the local closure without rediscovering a document-wide change. Imports,
+document replacement, and other bulk operations deliberately omit that
+description and use cooperative full preparation instead.
+
 Installing or creating a document resets state that belongs to the previous
 document: selection and hover, active Service-path and terminus focus,
 multi-selection, active Way drawing, route drafts, facility-group placement

@@ -107,15 +107,10 @@ describe('MapLibre source feature projection', () => {
         id: 'line',
         name: 'Line',
         modeId: 'bus',
-        color: '#e4572e',
-        patterns: [
-          {
-            id: 'pattern',
-            sections: [{ kind: 'shared', legs: [wholeLeg('way')] }],
-          },
-        ],
+        path: { id: 'line', sections: [{ kind: 'shared', legs: [wholeLeg('way')] }] },
       },
     ];
+    system.lines = [{ id: 'line', name: 'Line', color: '#e4572e', serviceIds: ['line'] }];
 
     buildFeaturesForSources({
       system,

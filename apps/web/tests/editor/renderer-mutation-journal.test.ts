@@ -11,9 +11,9 @@ describe('editor renderer mutation journal', () => {
     ]);
     const previous = aSystem({ ways: [way] });
     const store = createEditorStore();
-    store.getState().setSystem(previous);
+    store.commands.document.setSystem(previous);
 
-    store.getState().setWayGrade('way', 'elevated');
+    store.commands.ways.setWayGrade('way', 'elevated');
 
     const next = store.getState().system;
     expect(renderPreparationPatchBetween(previous, next)).toEqual({
@@ -28,9 +28,9 @@ describe('editor renderer mutation journal', () => {
     ]);
     const previous = aSystem({ ways: [way] });
     const store = createEditorStore();
-    store.getState().setSystem(previous);
+    store.commands.document.setSystem(previous);
 
-    store.getState().addWayPoint('way', [2, 0]);
+    store.commands.ways.addWayPoint('way', [2, 0]);
 
     const next = store.getState().system;
     expect(next.stations).toBe(previous.stations);
@@ -62,9 +62,9 @@ describe('editor renderer mutation journal', () => {
       ],
     });
     const store = createEditorStore();
-    store.getState().setSystem(previous);
+    store.commands.document.setSystem(previous);
 
-    store.getState().insertWayPoint('way', 0, [-1, 0]);
+    store.commands.ways.insertWayPoint('way', 0, [-1, 0]);
 
     const next = store.getState().system;
     expect(renderPreparationPatchBetween(previous, next)).toEqual({
@@ -97,9 +97,9 @@ describe('editor renderer mutation journal', () => {
       ],
     });
     const store = createEditorStore();
-    store.getState().setSystem(previous);
+    store.commands.document.setSystem(previous);
 
-    store.getState().deleteWayPoint('way', 0);
+    store.commands.ways.deleteWayPoint('way', 0);
 
     const next = store.getState().system;
     expect(renderPreparationPatchBetween(previous, next)).toEqual({
@@ -132,9 +132,9 @@ describe('editor renderer mutation journal', () => {
       ],
     });
     const store = createEditorStore();
-    store.getState().setSystem(previous);
+    store.commands.document.setSystem(previous);
 
-    store.getState().moveWayPoint('west', 1, [1.1, 0.1]);
+    store.commands.ways.moveWayPoint('west', 1, [1.1, 0.1]);
 
     const next = store.getState().system;
     expect(renderPreparationPatchBetween(previous, next)).toEqual({
@@ -154,10 +154,10 @@ describe('editor renderer mutation journal', () => {
       stations: [aStation('stop', [0.5, 0], { wayId: 'way', t: 0.5 })],
     });
     const store = createEditorStore();
-    store.getState().setSystem(previous);
-    store.getState().toggleMultiSelect({ kind: 'way', id: 'way' });
+    store.commands.document.setSystem(previous);
+    store.commands.selection.toggleMultiSelect({ kind: 'way', id: 'way' });
 
-    store.getState().nudgeMultiSelection(0.1, 0.1);
+    store.commands.selection.nudgeMultiSelection(0.1, 0.1);
 
     const next = store.getState().system;
     expect(renderPreparationPatchBetween(previous, next)).toEqual({
@@ -175,9 +175,9 @@ describe('editor renderer mutation journal', () => {
     ]);
     const previous = aSystem({ ways: [way] });
     const store = createEditorStore();
-    store.getState().setSystem(previous);
+    store.commands.document.setSystem(previous);
 
-    store.getState().straightenWay('way');
+    store.commands.ways.straightenWay('way');
 
     const next = store.getState().system;
     expect(renderPreparationPatchBetween(previous, next)).toEqual({
@@ -196,9 +196,9 @@ describe('editor renderer mutation journal', () => {
     ]);
     const previous = aSystem({ ways: [target, branch] });
     const store = createEditorStore();
-    store.getState().setSystem(previous);
+    store.commands.document.setSystem(previous);
 
-    store.getState().joinWayPointToWay('branch', 1, 'target', [0.5, 0]);
+    store.commands.ways.joinWayPointToWay('branch', 1, 'target', [0.5, 0]);
 
     const next = store.getState().system;
     expect(renderPreparationPatchBetween(previous, next)).toEqual({
