@@ -37,6 +37,13 @@ gh attestation verify transitmapper-v<VERSION>-deployment.tar.gz \
   --repo LasVegasForTransit/transit-mapper
 ```
 
+The archive contains Wrangler's complete dry-run output rather than a
+source-named entry file. Wrangler generates that filename, so the workflow
+requires exactly one top-level JavaScript entry in the bundle and discovers it
+again after extraction. This keeps the attested release asset and the
+`--no-bundle` Cloudflare deployment aligned even when the Worker source entry
+is renamed.
+
 The About dialog links the running build to its release, source revision, and
 repository attestations. The attestation proves the release archive's GitHub
 Actions origin; the workflow's production deployment record and entry-chunk
