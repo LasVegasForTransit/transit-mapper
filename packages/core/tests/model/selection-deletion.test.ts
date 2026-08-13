@@ -2,7 +2,7 @@ import { laneRefKey } from '../../src/model/components';
 import { patternLegs, patternWayIds, wholeLeg } from '../../src/model/geo';
 import { deleteSelection } from '../../src/model/selection-deletion';
 import { validateSystem } from '../../src/model/validate';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
 import { describe, expect, it } from 'vitest';
 
 describe('multi-selection deletion', () => {
@@ -28,10 +28,10 @@ describe('multi-selection deletion', () => {
     const system = aSystem({
       ways: [removed, kept],
       services: [service],
-      stations: [
-        aStation('removed-station', [0, 0], { wayId: 'removed', t: 0 }),
-        aStation(
-          'kept-station',
+      stops: [
+        aStop('removed-stop', [0, 0], { wayId: 'removed', t: 0 }),
+        aStop(
+          'kept-stop',
           [0.001, 0],
           { wayId: 'removed', t: 1 },
           {
@@ -42,9 +42,7 @@ describe('multi-selection deletion', () => {
           },
         ),
       ],
-      groups: [
-        { id: 'group', memberIds: ['removed', 'service', 'removed-station', 'named', 'kept'] },
-      ],
+      groups: [{ id: 'group', memberIds: ['removed', 'service', 'removed-stop', 'named', 'kept'] }],
       nodes: [
         {
           id: 'node',
@@ -75,9 +73,9 @@ describe('multi-selection deletion', () => {
     expect(next.ways).toEqual([kept]);
     expect(next.services).toEqual([]);
     expect(next.lines).toEqual([]);
-    expect(next.stations).toEqual([
+    expect(next.stops).toEqual([
       expect.objectContaining({
-        id: 'kept-station',
+        id: 'kept-stop',
         anchors: [{ wayId: 'kept', t: 0 }],
       }),
     ]);
@@ -94,14 +92,14 @@ describe('multi-selection deletion', () => {
 
   it('deleting records leaves unrelated collections structurally shared', () => {
     const facility = { id: 'facility', typeId: 'entrance', geometry: [0, 0] as [number, number] };
-    const station = aStation('station', [0, 0]);
-    const system = aSystem({ facilities: [facility], stations: [station] });
+    const stop = aStop('stop', [0, 0]);
+    const system = aSystem({ facilities: [facility], stops: [stop] });
 
     const next = deleteSelection(system, [{ kind: 'facility', id: 'facility' }]);
 
     expect(next).not.toBe(system);
     expect(next.facilities).toEqual([]);
-    expect(next.stations).toBe(system.stations);
+    expect(next.stops).toBe(system.stops);
     expect(next.ways).toBe(system.ways);
     expect(next.services).toBe(system.services);
     expect(next.lines).toBe(system.lines);
@@ -312,9 +310,9 @@ describe('multi-selection deletion', () => {
     expect(next.services[0].path.sections[0]).toBe(trunkSection);
   });
 
-  it('deleting a station removes its id from every skipped-stop direction', () => {
-    const removed = aStation('removed', [0, 0]);
-    const kept = aStation('kept', [0.001, 0]);
+  it('deleting a stop removes its id from every skipped-stop direction', () => {
+    const removed = aStop('removed', [0, 0]);
+    const kept = aStop('kept', [0.001, 0]);
     const service = aService('service', [], {
       path: {
         id: 'service',
@@ -325,9 +323,9 @@ describe('multi-selection deletion', () => {
         },
       },
     });
-    const system = aSystem({ stations: [removed, kept], services: [service] });
+    const system = aSystem({ stops: [removed, kept], services: [service] });
 
-    const next = deleteSelection(system, [{ kind: 'station', id: removed.id }]);
+    const next = deleteSelection(system, [{ kind: 'stop', id: removed.id }]);
 
     expect(next.services[0].path.skippedStops).toEqual({ outbound: [kept.id] });
     expect(next.updatedAt).toBe(system.updatedAt);

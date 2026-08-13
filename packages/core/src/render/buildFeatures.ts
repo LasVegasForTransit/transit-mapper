@@ -24,7 +24,7 @@ import {
   wayById,
   patternRunSegments,
 } from '../model/geo';
-import { nearWaysForStations, servicesByWay, visibleWaysFor } from './featureMemo';
+import { nearWaysForStops, servicesByWay, visibleWaysFor } from './featureMemo';
 import { nodesForWays, waysInBoundsFor } from './way-bounds-index';
 import {
   importedCenterlineFeature,
@@ -292,7 +292,7 @@ function oneDirectionalStretches(
 export interface SystemFeatures {
   ways: FeatureCollection<LineString>;
   services: FeatureCollection<LineString>;
-  stations: FeatureCollection<Point>;
+  stops: FeatureCollection<Point>;
   handles: FeatureCollection<Point>;
   /** Route-owned ends, intentionally distinct from physical corridor controls. */
   serviceTermini: FeatureCollection<Point>;
@@ -328,7 +328,7 @@ function closeRing(points: LngLat[]): LngLat[] {
  *  Split out of buildFeatures because it is the ONLY thing (with
  *  buildPhysicalHandles) that a selection change actually alters. Selecting an
  *  object used to run the entire fourteen-collection build — allocating a
- *  feature and a Set for all ~3,787 stations at RTC scale — and then throw
+ *  feature and a Set for all ~3,787 stops at RTC scale — and then throw
  *  twelve of the collections away. Its inputs are exactly its parameters, so a
  *  caller can drive it directly and pay only for what changed.
  *
@@ -354,33 +354,33 @@ export function buildHandles(
   return handles;
 }
 
-/** Footprint/platform vertices of the one station and/or group being edited.
+/** Footprint/platform vertices of the one stop and/or group being edited.
  *
  *  Takes the RESOLVED records rather than their ids on purpose: a footprint
  *  drag changes the geometry while the id stays put, so anything keyed on the
  *  id alone would serve a stale shape — the exact failure a memo layer must not
- *  have. Resolving also makes this O(1) in the number of stations, where the
- *  inline version scanned every station to find the one match. */
+ *  have. Resolving also makes this O(1) in the number of stops, where the
+ *  inline version scanned every stop to find the one match. */
 export function buildPhysicalHandles(
-  station: TransitSystem['stations'][number] | null | undefined,
+  stop: TransitSystem['stops'][number] | null | undefined,
   group: TransitSystem['groups'][number] | null | undefined,
 ): Feature<Point>[] {
   const physicalHandles: Feature<Point>[] = [];
-  if (station) {
-    station.footprint?.forEach((p, i) => {
+  if (stop) {
+    stop.footprint?.forEach((p, i) => {
       physicalHandles.push({
         type: 'Feature',
-        properties: { kind: 'footprint', stationId: station.id, index: i, icon: HANDLE_ICON },
+        properties: { kind: 'footprint', stopId: stop.id, index: i, icon: HANDLE_ICON },
         geometry: { type: 'Point', coordinates: p },
       });
     });
-    for (const pf of station.platforms ?? []) {
+    for (const pf of stop.platforms ?? []) {
       pf.points.forEach((p, i) => {
         physicalHandles.push({
           type: 'Feature',
           properties: {
             kind: 'platform',
-            stationId: station.id,
+            stopId: stop.id,
             platformId: pf.id,
             index: i,
             icon: HANDLE_ICON,
@@ -437,12 +437,12 @@ export interface FeatureBuildOperationCounts {
   featureTopologyWayVisitCount: number;
   featureJunctionPassCount: number;
   featureJunctionNodeVisitCount: number;
-  featureStationPassCount: number;
-  featureStationVisitCount: number;
+  featureStopPassCount: number;
+  featureStopVisitCount: number;
   featureHandlePassCount: number;
   featureHandleWayVisitCount: number;
   featurePhysicalPassCount: number;
-  featurePhysicalStationVisitCount: number;
+  featurePhysicalStopVisitCount: number;
   featurePhysicalGroupVisitCount: number;
   featureFacilityPassCount: number;
   featureFacilityVisitCount: number;
@@ -456,10 +456,10 @@ export interface BuildFeaturesOptions {
    * editor passes the exact collections whose MapLibre sources will upload,
    * so unrelated RTC-scale phases are never traversed just to discard them. */
   requestedFeatures?: readonly SystemFeatureName[];
-  /** Restrict station feature derivation to these stable ids. Live gesture
+  /** Restrict stop feature derivation to these stable ids. Live gesture
    * settlement uses this to avoid allocating and resolving service context
-   * for every unchanged station. */
-  stationIds?: readonly string[];
+   * for every unchanged stop. */
+  stopIds?: readonly string[];
   counts?: FeatureBuildOperationCounts;
   /** The branch that alone receives interaction at coincident termini. */
   activePatternId?: string | null;
@@ -480,12 +480,12 @@ export function createFeatureBuildOperationCounts(): FeatureBuildOperationCounts
     featureTopologyWayVisitCount: 0,
     featureJunctionPassCount: 0,
     featureJunctionNodeVisitCount: 0,
-    featureStationPassCount: 0,
-    featureStationVisitCount: 0,
+    featureStopPassCount: 0,
+    featureStopVisitCount: 0,
     featureHandlePassCount: 0,
     featureHandleWayVisitCount: 0,
     featurePhysicalPassCount: 0,
-    featurePhysicalStationVisitCount: 0,
+    featurePhysicalStopVisitCount: 0,
     featurePhysicalGroupVisitCount: 0,
     featureFacilityPassCount: 0,
     featureFacilityVisitCount: 0,
@@ -498,7 +498,7 @@ export function createFeatureBuildOperationCounts(): FeatureBuildOperationCounts
 const SYSTEM_FEATURE_NAMES: readonly SystemFeatureName[] = [
   'ways',
   'services',
-  'stations',
+  'stops',
   'handles',
   'serviceTermini',
   'footprints',
@@ -550,7 +550,7 @@ interface FeatureProjectionPlan {
   collectionCount: number;
   topology: TopologyProjection;
   junctions: JunctionProjection;
-  stations: boolean;
+  stops: boolean;
   selectionHandles: boolean;
   serviceTermini: boolean;
   physical: PhysicalProjection;
@@ -605,7 +605,7 @@ function createFeatureProjectionPlan(
     ...physicalOutputs,
     enabled: Object.values(physicalOutputs).some(Boolean),
   };
-  const stations = includes('stations');
+  const stops = includes('stops');
   const selectionHandles = includes('handles');
   const serviceTermini = includes('serviceTermini');
   const facilities = includes('facilities');
@@ -617,15 +617,15 @@ function createFeatureProjectionPlan(
     collectionCount: requested?.size ?? SYSTEM_FEATURE_NAMES.length,
     topology,
     junctions,
-    stations,
+    stops,
     selectionHandles,
     serviceTermini,
     physical,
     facilities,
     wayLabels,
     dependencies: {
-      wayIndex: topologyPassEnabled || stations || selectionHandles || serviceTermini || wayLabels,
-      serviceIndex: topology.enabled || stations,
+      wayIndex: topologyPassEnabled || stops || selectionHandles || serviceTermini || wayLabels,
+      serviceIndex: topology.enabled || stops,
     },
     topologyPassEnabled,
   };
@@ -656,19 +656,19 @@ function buildSharedProjectionIndexes(
   };
 }
 
-function projectStations(
+function projectStops(
   system: TransitSystem,
-  stations: TransitSystem['stations'],
+  stops: TransitSystem['stops'],
   view: ViewOptions,
   indexes: SharedProjectionIndexes,
   counts: FeatureBuildOperationCounts | undefined,
 ): Feature<Point>[] {
-  if (counts) counts.featureStationPassCount++;
+  if (counts) counts.featureStopPassCount++;
   const visibleWays = visibleWaysFor(system.ways, view.visibleWayTypes);
-  // The interchange scan (servedWayIds per station) is the single most expensive
-  // part of this function at RTC scale — memoized on (stations, visibleWays) so a
-  // selection/viewport rebuild reuses it instead of re-scanning ~3787 stations.
-  const nearWaysByStation = nearWaysForStations(stations, visibleWays);
+  // The interchange scan (servedWayIds per stop) is the single most expensive
+  // part of this function at RTC scale — memoized on (stops, visibleWays) so a
+  // selection/viewport rebuild reuses it instead of re-scanning ~3787 stops.
+  const nearWaysByStop = nearWaysForStops(stops, visibleWays);
   // `servicesByWay` reports every service that touches a way, which over-reports
   // once a service can cover only part of one. Only trimmed services need the
   // more expensive position check.
@@ -684,21 +684,21 @@ function projectStations(
   };
   const ownership = linesByServiceId(system.lines);
 
-  return stations.map((station, stationIndex) => {
-    if (counts) counts.featureStationVisitCount++;
+  return stops.map((stop, stopIndex) => {
+    if (counts) counts.featureStopVisitCount++;
     const servingServiceSet = new Set<Service>();
-    for (const wayId of nearWaysByStation[stationIndex]) {
+    for (const wayId of nearWaysByStop[stopIndex]) {
       for (const service of indexes.servicesByWay.get(wayId) ?? []) {
-        if (reaches(service, wayId, station.coord)) servingServiceSet.add(service);
+        if (reaches(service, wayId, stop.coord)) servingServiceSet.add(service);
       }
     }
     const servingServices = [...servingServiceSet];
     // Every anchored way contributes service, not just one. A platform shared
     // between the two halves of a couplet belongs to the lines on both.
-    const anchorServices = station.anchors.length
-      ? station.anchors.flatMap((anchor) =>
+    const anchorServices = stop.anchors.length
+      ? stop.anchors.flatMap((anchor) =>
           (indexes.servicesByWay.get(anchor.wayId) ?? []).filter((service) =>
-            reaches(service, anchor.wayId, station.coord),
+            reaches(service, anchor.wayId, stop.coord),
           ),
         )
       : [];
@@ -714,15 +714,15 @@ function projectStations(
     return {
       type: 'Feature',
       properties: {
-        id: station.id,
+        id: stop.id,
         color,
         interchange,
         // Major and interchange labels enter at a lower zoom than ordinary
         // stops, avoiding thousands of simultaneous collision candidates.
-        major: interchange || station.majorStop === true,
-        name: station.name ?? '',
+        major: interchange || stop.majorStop === true,
+        name: stop.name ?? '',
       },
-      geometry: { type: 'Point', coordinates: station.coord },
+      geometry: { type: 'Point', coordinates: stop.coord },
     };
   });
 }
@@ -810,7 +810,7 @@ interface ProjectPhysicalFeaturesOptions {
   system: TransitSystem;
   projection: PhysicalProjection;
   network: boolean;
-  physicalHandleStationId: string | null;
+  physicalHandleStopId: string | null;
   physicalHandleGroupId: string | null;
   counts: FeatureBuildOperationCounts | undefined;
 }
@@ -819,7 +819,7 @@ function projectPhysicalFeatures({
   system,
   projection,
   network,
-  physicalHandleStationId,
+  physicalHandleStopId,
   physicalHandleGroupId,
   counts,
 }: ProjectPhysicalFeaturesOptions): PhysicalProjectionResult {
@@ -829,20 +829,20 @@ function projectPhysicalFeatures({
   if (network) return { footprints, platforms, handles: [] };
 
   if (projection.footprints || projection.platforms) {
-    for (const station of system.stations) {
-      if (counts) counts.featurePhysicalStationVisitCount++;
-      if (projection.footprints && station.footprint) {
+    for (const stop of system.stops) {
+      if (counts) counts.featurePhysicalStopVisitCount++;
+      if (projection.footprints && stop.footprint) {
         footprints.push({
           type: 'Feature',
-          properties: { stationId: station.id },
-          geometry: { type: 'Polygon', coordinates: [closeRing(station.footprint)] },
+          properties: { stopId: stop.id },
+          geometry: { type: 'Polygon', coordinates: [closeRing(stop.footprint)] },
         });
       }
       if (projection.platforms) {
-        for (const platform of station.platforms ?? []) {
+        for (const platform of stop.platforms ?? []) {
           platforms.push({
             type: 'Feature',
-            properties: { stationId: station.id, platformId: platform.id },
+            properties: { stopId: stop.id, platformId: platform.id },
             geometry: { type: 'Polygon', coordinates: [closeRing(platform.points)] },
           });
         }
@@ -863,14 +863,14 @@ function projectPhysicalFeatures({
 
   if (!projection.handles) return { footprints, platforms, handles: [] };
 
-  let handleStation: TransitSystem['stations'][number] | null = null;
-  if (physicalHandleStationId) {
-    for (const station of system.stations) {
+  let handleStop: TransitSystem['stops'][number] | null = null;
+  if (physicalHandleStopId) {
+    for (const stop of system.stops) {
       if (counts && !projection.footprints && !projection.platforms) {
-        counts.featurePhysicalStationVisitCount++;
+        counts.featurePhysicalStopVisitCount++;
       }
-      if (station.id !== physicalHandleStationId) continue;
-      handleStation = station;
+      if (stop.id !== physicalHandleStopId) continue;
+      handleStop = stop;
       break;
     }
   }
@@ -887,7 +887,7 @@ function projectPhysicalFeatures({
   return {
     footprints,
     platforms,
-    handles: buildPhysicalHandles(handleStation, handleGroup),
+    handles: buildPhysicalHandles(handleStop, handleGroup),
   };
 }
 
@@ -1509,10 +1509,10 @@ export function buildFeatures(
   selection: Highlight,
   handleWayIds: string[],
   view: ViewOptions,
-  /** The station whose footprint/platform vertices should render as
+  /** The stop whose footprint/platform vertices should render as
    *  draggable handles right now (its own edit context, not tied to
    *  `selection` directly since a platform can be mid-edit independently). */
-  physicalHandleStationId: string | null = null,
+  physicalHandleStopId: string | null = null,
   /** Same, for a group's (facility-complex's) own footprint vertices. */
   physicalHandleGroupId: string | null = null,
   options: BuildFeaturesOptions = {},
@@ -1539,13 +1539,11 @@ export function buildFeatures(
         counts,
       })
     : emptyTopologyProjection();
-  const requestedStationIds = options.stationIds ? new Set(options.stationIds) : null;
-  const stationsToProject = requestedStationIds
-    ? system.stations.filter((station) => requestedStationIds.has(station.id))
-    : system.stations;
-  const stations = projection.stations
-    ? projectStations(system, stationsToProject, view, indexes, counts)
-    : [];
+  const requestedStopIds = options.stopIds ? new Set(options.stopIds) : null;
+  const stopsToProject = requestedStopIds
+    ? system.stops.filter((stop) => requestedStopIds.has(stop.id))
+    : system.stops;
+  const stops = projection.stops ? projectStops(system, stopsToProject, view, indexes, counts) : [];
   const handles =
     projection.selectionHandles && !(network && selection?.kind === 'service')
       ? projectSelectionHandles(indexes, handleWayIds, counts)
@@ -1565,7 +1563,7 @@ export function buildFeatures(
         system,
         projection: projection.physical,
         network,
-        physicalHandleStationId,
+        physicalHandleStopId,
         physicalHandleGroupId,
         counts,
       })
@@ -1578,7 +1576,7 @@ export function buildFeatures(
   return {
     ways: { type: 'FeatureCollection', features: topology.ways },
     services: { type: 'FeatureCollection', features: topology.services },
-    stations: { type: 'FeatureCollection', features: stations },
+    stops: { type: 'FeatureCollection', features: stops },
     footprints: { type: 'FeatureCollection', features: physical.footprints },
     platforms: { type: 'FeatureCollection', features: physical.platforms },
     facilities: { type: 'FeatureCollection', features: facilities },

@@ -5,7 +5,7 @@ import {
   withRoutedService,
 } from '../../src/model/routing-edits';
 import type { Line, TransitSystem } from '../../src/model/system';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
 import { describe, expect, it } from 'vitest';
 
 describe('routed Service edits', () => {
@@ -67,7 +67,7 @@ describe('routed Service edits', () => {
     );
     expect(next.lines).toBe(system.lines);
     expect(next.ways).toBe(system.ways);
-    expect(next.stations).toBe(system.stations);
+    expect(next.stops).toBe(system.stops);
     expect(service.path.sections).toHaveLength(1);
   });
 
@@ -104,11 +104,11 @@ describe('existing-infrastructure adoption', () => {
     return aSystem({
       ways: [built, sketch],
       services: [service],
-      stations: [aStation('station', [-115.25, 36.202], { wayId: sketch.id, t: 0.2 })],
+      stops: [aStop('stop', [-115.25, 36.202], { wayId: sketch.id, t: 0.2 })],
     });
   }
 
-  it('rebinds a sketch, moves its stations, and removes the unused sketch way', () => {
+  it('rebinds a sketch, moves its stops, and removes the unused sketch way', () => {
     const system = adoptionSystem();
 
     const result = adoptExistingInfrastructure(system, 'service');
@@ -117,9 +117,7 @@ describe('existing-infrastructure adoption', () => {
     expect(result.rebound).toBe(1);
     expect(result.system).not.toBe(system);
     expect(patternWayIds(adoptedService.path)).toEqual(['built']);
-    expect(result.system.stations[0]?.anchors).toEqual([
-      expect.objectContaining({ wayId: 'built' }),
-    ]);
+    expect(result.system.stops[0]?.anchors).toEqual([expect.objectContaining({ wayId: 'built' })]);
     expect(result.system.ways.map((way) => way.id)).toEqual(['built']);
     expect(system.ways.map((way) => way.id)).toEqual(['built', 'sketch']);
   });

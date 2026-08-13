@@ -120,14 +120,14 @@ export interface SvgRenderOptions {
 const DEFAULT_FONT_FAMILY = LVBT_FONT_STACK;
 
 // Below roughly this many displayed pixels, text stops being read and starts
-// being visual noise — the reader sees grey mush where a station name was.
+// being visual noise — the reader sees grey mush where a stop name was.
 // Anything that can't clear it is better left out than drawn illegibly.
 const MIN_LEGIBLE_PX = 10;
 
 // Label placement with collision avoidance.
 //
 // MapLibre resolves overlapping labels on the live map; this composition never
-// had an equivalent, so a dense system printed station names straight through
+// had an equivalent, so a dense system printed stop names straight through
 // each other — "North Las Vegas" crossing "South Strip" — which reads as a
 // rendering fault rather than a busy map. Cartographers solve this the same
 // way: try a label in a few positions around its anchor, and if none of them
@@ -306,7 +306,7 @@ function northArrowMarkup(bearing: number, width: number, fontFamily: string): s
 }
 
 /**
- * Vector rendering of the schematic: ways/services as paths, stations as
+ * Vector rendering of the schematic: ways/services as paths, stops as
  * circles, facilities as colored dots (a simplified stand-in for their on-map
  * pictograms — PNG export is what captures full icon fidelity), plus a title
  * and line-color legend so the output reads as a finished map on its own.
@@ -380,7 +380,7 @@ export function systemSvg(
   const markerObstacle = (x: number, y: number, r: number) =>
     obstacles.push({ left: x - r, right: x + r, top: y - r, bottom: y + r });
 
-  for (const f of fc.stations.features as Feature<Point>[]) {
+  for (const f of fc.stops.features as Feature<Point>[]) {
     const p = f.properties as { color: string; interchange?: boolean; name?: string };
     const { x, y } = project(f.geometry.coordinates as LngLat);
     const r = p.interchange ? 7 : 5;

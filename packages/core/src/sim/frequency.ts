@@ -14,23 +14,23 @@
 // Pure, like the rest of packages/core/src/sim.
 
 import { INTERCHANGE_METERS, serviceWayIds, servedWayIds } from '../model/geo';
-import type { Service, Station, Way } from '../model/system';
+import type { Service, Stop, Way } from '../model/system';
 
 /**
- * Every service that calls at this station.
+ * Every service that calls at this stop.
  *
  * Interchange is derived by proximity rather than stored (see the data model),
  * so this asks which ways pass within INTERCHANGE_METERS and then which
  * services run over them. It goes through `servedWayIds`, which is backed by
- * the segment spatial grid — a naive scan of every way for every station is
+ * the segment spatial grid — a naive scan of every way for every stop is
  * the exact O(n²) that froze the editor on RTC's real feed.
  *
  * Takes ways and services rather than the whole system so the inspector can
  * keep selecting narrowly: `system` is a fresh reference on every mutation,
  * including drag frames of an unrelated way.
  */
-export function servicesAtStation(ways: Way[], services: Service[], station: Station): Service[] {
-  const nearWays = new Set(servedWayIds(station.coord, ways, INTERCHANGE_METERS));
+export function servicesAtStop(ways: Way[], services: Service[], stop: Stop): Service[] {
+  const nearWays = new Set(servedWayIds(stop.coord, ways, INTERCHANGE_METERS));
   return services.filter((service) => serviceWayIds(service).some((wayId) => nearWays.has(wayId)));
 }
 

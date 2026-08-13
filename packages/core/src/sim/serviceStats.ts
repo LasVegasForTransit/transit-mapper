@@ -4,7 +4,7 @@
 // This is the middle of the model, and until now it was computed on every
 // animation frame and thrown away — the editor showed the inputs (a headway,
 // a stop, a dwell time) and the outputs (dots moving), with the chain between
-// them invisible. Add a station and the fleet silently grew; assign a faster
+// them invisible. Add a stop and the fleet silently grew; assign a faster
 // vehicle and it silently shrank.
 //
 // THE RULE: time and distance are measured on the route's centerline; geometry
@@ -33,7 +33,7 @@ import type {
   Pattern,
   RunDirection,
   Service,
-  Station,
+  Stop,
   VehicleKind,
   Way,
 } from '../model/system';
@@ -49,7 +49,7 @@ import {
 } from './timetable';
 
 /** Doors open, board/alight, doors close — a plausible light-rail/bus dwell
- *  when a station doesn't specify its own (Station.dwellSeconds). */
+ *  when a stop doesn't specify its own (Stop.dwellSeconds). */
 export const DEFAULT_DWELL_SECONDS = 20;
 
 export interface ResolvedVehicle {
@@ -87,23 +87,23 @@ export function effectiveVehicleKind(
   return { ...vehicleFootprint(service.modeId), profile: DEFAULT_MOTION_PROFILE };
 }
 
-// Stations grouped by their anchor way id, cached by the stations array's own
-// reference — safe because the store replaces `system.stations` immutably on
+// Stops grouped by their anchor way id, cached by the stops array's own
+// reference — safe because the store replaces `system.stops` immutably on
 // every mutation (same convention as geo.ts's wayPathCache), so a stale index
 // is simply never looked up again. Without this, dwellStopsForPattern did a
-// full linear scan of every station in the system for every pattern on every
-// animation frame — fine for a few dozen hand-drawn stations, but for a real
-// GTFS import (thousands of stations, hundreds of patterns) that's hundreds of
+// full linear scan of every stop in the system for every pattern on every
+// animation frame — fine for a few dozen hand-drawn stops, but for a real
+// GTFS import (thousands of stops, hundreds of patterns) that's hundreds of
 // thousands of comparisons *per frame*, continuously, for as long as the tab
 // stays open — confirmed live against RTC Southern Nevada's real feed as a
 // sustained freeze, not just a one-time slow render.
-const stationsByWayCache = new WeakMap<Station[], Map<string, Station[]>>();
+const stopsByWayCache = new WeakMap<Stop[], Map<string, Stop[]>>();
 
-function stationsByWay(stations: Station[]): Map<string, Station[]> {
-  let index = stationsByWayCache.get(stations);
+function stopsByWay(stops: Stop[]): Map<string, Stop[]> {
+  let index = stopsByWayCache.get(stops);
   if (index) return index;
   index = new Map();
-  for (const st of stations) {
+  for (const st of stops) {
     // Indexed under EVERY way it rides. A platform shared between two ways is
     // a stop on the lines using either — which is what the proximity rule
     // below used to approximate, and now does not have to.
@@ -113,24 +113,24 @@ function stationsByWay(stations: Station[]): Map<string, Station[]> {
       else index.set(anchor.wayId, [st]);
     }
   }
-  stationsByWayCache.set(stations, index);
+  stopsByWayCache.set(stops, index);
   return index;
 }
 
-/** A station this pattern calls at, and how far into the run it is reached. */
+/** A stop this pattern calls at, and how far into the run it is reached. */
 export interface PatternStop {
-  station: Station;
+  stop: Stop;
   distMeters: number;
   dwellMs: number;
 }
 
 /**
- * Every station this pattern calls at, in the order a rider reaches them.
+ * Every stop this pattern calls at, in the order a rider reaches them.
  *
  * The single derivation of a line's stop list: the Service inspector's
  * "calls at" sequence and the dwells the simulation holds for are the same
  * answer. They used to be two, and disagreed about extents — the inspector
- * filtered on way id alone, so a station past where a line terminates stayed
+ * filtered on way id alone, so a stop past where a line terminates stayed
  * in the panel's list while the vehicle correctly drove past it.
  *
  * Ordered by arc-length along the pattern's resolved path rather than by
@@ -138,24 +138,24 @@ export interface PatternStop {
  * descends as the ride progresses.
  *
  * Riding a way is not the same as reaching every point on it, hence the
- * extent test — without it a station beyond the terminus projects onto the
+ * extent test — without it a stop beyond the terminus projects onto the
  * nearest end of the trimmed path and stacks a phantom dwell there. That test
  * needs no geometry (`anchor.t` and a leg's range are both way-relative), so
  * the caller's already-resolved `path` stays the only projection here.
  */
 export function patternStops(
-  stations: Station[],
+  stops: Stop[],
   pattern: Pattern,
   path: LngLat[],
   totalMeters: number,
   run: RunDirection = 'outbound',
 ): PatternStop[] {
-  const byWay = stationsByWay(stations);
-  const stops: PatternStop[] = [];
+  const byWay = stopsByWay(stops);
+  const calls: PatternStop[] = [];
   // Only the ways THIS direction rides. A couplet's outward street and return
   // street are different ways, so asking the flat leg list would offer every
-  // station on both to be projected onto whichever path is in hand — and a
-  // station a block east would land on the outward line at whatever point sits
+  // stop on both to be projected onto whichever path is in hand — and a
+  // stop a block east would land on the outward line at whatever point sits
   // nearest it.
   const ridden = new Set(patternRunLegs(pattern, run).map((r) => r.leg.wayId));
   const called = new Set<string>();
@@ -170,26 +170,26 @@ export function patternStops(
       const near = nearestOnPath(path, st.coord);
       if (!near) continue;
       called.add(st.id);
-      stops.push({
-        station: st,
+      calls.push({
+        stop: st,
         distMeters: near.t * totalMeters,
         dwellMs: (st.dwellSeconds ?? DEFAULT_DWELL_SECONDS) * 1000,
       });
     }
   }
 
-  return stops.sort((a, b) => a.distMeters - b.distMeters);
+  return calls.sort((a, b) => a.distMeters - b.distMeters);
 }
 
 /** `patternStops` reduced to what the motion kernel needs. */
 export function dwellStopsForPattern(
-  stations: Station[],
+  stops: Stop[],
   pattern: Pattern,
   path: LngLat[],
   totalMeters: number,
   run: RunDirection = 'outbound',
 ): DwellStop[] {
-  return patternStops(stations, pattern, path, totalMeters, run).map(({ distMeters, dwellMs }) => ({
+  return patternStops(stops, pattern, path, totalMeters, run).map(({ distMeters, dwellMs }) => ({
     distMeters,
     dwellMs,
   }));
@@ -207,7 +207,7 @@ export interface PatternStats {
    *  A couplet whose return is longer under-reports here, which is the right
    *  trade against a number that describes neither direction. */
   meters: number;
-  /** The stations this pattern calls at outbound, in the order a rider reaches
+  /** The stops this pattern calls at outbound, in the order a rider reaches
    *  them. See `inboundStops` for the return trip, which on a couplet is a
    *  different set at different distances. */
   stops: PatternStop[];
@@ -237,7 +237,7 @@ export interface PatternStats {
  */
 export function patternStats(
   ways: Way[],
-  stations: Station[],
+  stops: Stop[],
   pattern: Pattern,
   profile: VehicleMotionProfile,
   headwayMinutes?: number,
@@ -247,10 +247,10 @@ export function patternStats(
   const cumLengths = cumulativeLengths(path);
   const meters = cumLengths[cumLengths.length - 1];
   if (meters === 0) return null;
-  const stops = patternStops(stations, pattern, path, meters, 'outbound');
+  const outboundStops = patternStops(stops, pattern, path, meters, 'outbound');
   const outbound = buildTimetable(
     meters,
-    stops.map(({ distMeters, dwellMs }) => ({ distMeters, dwellMs })),
+    outboundStops.map(({ distMeters, dwellMs }) => ({ distMeters, dwellMs })),
     profile,
   );
 
@@ -258,7 +258,7 @@ export function patternStats(
   const inboundCum = cumulativeLengths(inboundPath);
   const inboundMeters = inboundPath.length >= 2 ? inboundCum[inboundCum.length - 1] : 0;
   const inboundStops =
-    inboundMeters > 0 ? patternStops(stations, pattern, inboundPath, inboundMeters, 'inbound') : [];
+    inboundMeters > 0 ? patternStops(stops, pattern, inboundPath, inboundMeters, 'inbound') : [];
   // A line that goes out and never comes back is a real thing to have drawn
   // (validate.ts reports it), so measure the return as zero rather than
   // refusing to measure the line at all.
@@ -275,9 +275,9 @@ export function patternStats(
     path,
     cumLengths,
     meters,
-    stops,
+    stops: outboundStops,
     inboundStops,
-    dwellMs: stops.reduce((sum, s) => sum + s.dwellMs, 0),
+    dwellMs: outboundStops.reduce((sum, s) => sum + s.dwellMs, 0),
     oneWayMs: outbound.oneWayMs,
     roundTripMs: cycle,
     inboundPath,
@@ -301,13 +301,13 @@ export interface ServiceStats {
  */
 export function serviceStats(
   ways: Way[],
-  stations: Station[],
+  stops: Stop[],
   vehicleKinds: VehicleKind[],
   service: Service,
   headwayMinutes?: number,
 ): ServiceStats | null {
   const { profile } = effectiveVehicleKind(vehicleKinds, service);
-  const measured = patternStats(ways, stations, servicePattern(service), profile, headwayMinutes);
+  const measured = patternStats(ways, stops, servicePattern(service), profile, headwayMinutes);
   if (!measured) return null;
   return {
     path: measured,

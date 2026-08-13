@@ -6,7 +6,7 @@ import type { TransitSystem } from '../model/system';
 // But most of TransitSystem is not renderable: typing one character into the
 // name field mints a new `system`, and that used to run a full 14-collection
 // buildFeatures plus fourteen whole-collection setData uploads — at RTC scale
-// (~3.8k ways / ~121k waypoints / ~3.8k stations) that is hundreds of
+// (~3.8k ways / ~121k waypoints / ~3.8k stops) that is hundreds of
 // milliseconds of main-thread work to redraw a map that did not change.
 //
 // Splitting the fields into "render" and "meta" lets MapCanvas skip the rebuild
@@ -42,6 +42,7 @@ export const FEATURE_INPUT_ROLE: Record<keyof TransitSystem, 'render' | 'meta'> 
   ways: 'render',
   lines: 'render',
   services: 'render',
+  stops: 'render',
   stations: 'render',
   facilities: 'render',
   groups: 'render',

@@ -15,23 +15,23 @@
 // ever needs to run on a system too large to iterate 60 times synchronously
 // on the main thread.
 import { metersFromOrigin, offsetMeters, pointAtT, primaryAnchor, resolveWayPath } from './geo';
-import type { LngLat, Node, Station, TransitSystem, Way } from './system';
+import type { LngLat, Node, Stop, TransitSystem, Way } from './system';
 
 export interface DiagramLayoutOperationCounts {
   diagramTopologyBuildCount: number;
   diagramTopologyCacheHitCount: number;
-  diagramStationBuildCount: number;
-  diagramStationCacheHitCount: number;
+  diagramStopBuildCount: number;
+  diagramStopCacheHitCount: number;
 }
 
 const topologyCache = new WeakMap<Way[], WeakMap<Node[], Way[]>>();
-const stationCache = new WeakMap<Station[], WeakMap<Way[], Station[]>>();
+const stopCache = new WeakMap<Stop[], WeakMap<Way[], Stop[]>>();
 const systemCache = new WeakMap<TransitSystem, TransitSystem>();
 
 /** The schematic-layout projection of `system`, memoized by the immutable
  * collections each stage actually reads. A facility/service/meta edit creates
  * a new TransitSystem wrapper but keeps `ways` and `nodes`; it must not rerun
- * sixty relaxation passes. Station placement is cached separately so a stop
+ * sixty relaxation passes. Stop placement is cached separately so a stop
  * edit remaps stops onto the already-schematic ways without rebuilding the
  * topology. */
 export function computeDiagramSystem(
@@ -41,10 +41,9 @@ export function computeDiagramSystem(
   const cached = systemCache.get(system);
   if (cached) return cached;
   const ways = diagramWaysFor(system.ways, system.nodes, counts);
-  const stations =
-    ways === system.ways ? system.stations : diagramStationsFor(system.stations, ways, counts);
+  const stops = ways === system.ways ? system.stops : diagramStopsFor(system.stops, ways, counts);
   const projected =
-    ways === system.ways && stations === system.stations ? system : { ...system, ways, stations };
+    ways === system.ways && stops === system.stops ? system : { ...system, ways, stops };
   systemCache.set(system, projected);
   return projected;
 }
@@ -186,38 +185,38 @@ function buildDiagramWays(ways: Way[], nodes: Node[]): Way[] {
   });
 }
 
-function diagramStationsFor(
-  stations: Station[],
+function diagramStopsFor(
+  stops: Stop[],
   ways: Way[],
   counts?: DiagramLayoutOperationCounts,
-): Station[] {
-  let byWays = stationCache.get(stations);
+): Stop[] {
+  let byWays = stopCache.get(stops);
   if (!byWays) {
     byWays = new WeakMap();
-    stationCache.set(stations, byWays);
+    stopCache.set(stops, byWays);
   }
   const cached = byWays.get(ways);
   if (cached) {
-    if (counts) counts.diagramStationCacheHitCount++;
+    if (counts) counts.diagramStopCacheHitCount++;
     return cached;
   }
-  if (counts) counts.diagramStationBuildCount++;
+  if (counts) counts.diagramStopBuildCount++;
   const waysById = new Map(ways.map((way) => [way.id, way]));
-  const projected = stations.map((st) => {
-    // The FIRST anchor: a station on two ways is moved by the alignment it
+  const projected = stops.map((st) => {
+    // The FIRST anchor: a stop on two ways is moved by the alignment it
     // was primarily placed on, not by whichever happens to be iterated first.
     const anchor = primaryAnchor(st);
     if (!anchor) return st;
     const way = waysById.get(anchor.wayId);
     if (!way || way.points.length < 2) return st;
-    // A station's t is a fraction of the way's RESOLVED path — that is what
+    // A stop's t is a fraction of the way's RESOLVED path — that is what
     // anchoring measured it against — so that is the ruler to place it with.
     //
-    // No station moves today: the schematic ways this walks are rebuilt as
+    // No stop moves today: the schematic ways this walks are rebuilt as
     // `straight` above, and resolveWayPath returns the points unchanged for
     // those. It is written this way so it stays correct if the schematic ever
     // keeps a way's own geometry, where the resolved path is longer than the
-    // polyline through its vertices and every station would sit early.
+    // polyline through its vertices and every stop would sit early.
     return { ...st, coord: pointAtT(resolveWayPath(way), anchor.t) };
   });
   byWays.set(ways, projected);

@@ -19,9 +19,9 @@ function fixture(): TransitSystem {
         profile: { lanes: [] },
       },
     ],
-    stations: [
+    stops: [
       {
-        id: 'station',
+        id: 'stop',
         coord: [-115.16, 36.115],
         anchors: [{ wayId: 'way', t: 0.5 }],
       },
@@ -33,13 +33,13 @@ function operationCounts() {
   return {
     diagramTopologyBuildCount: 0,
     diagramTopologyCacheHitCount: 0,
-    diagramStationBuildCount: 0,
-    diagramStationCacheHitCount: 0,
+    diagramStopBuildCount: 0,
+    diagramStopCacheHitCount: 0,
   };
 }
 
 describe('diagram layout dependency cache', () => {
-  it('reuses schematic ways and stations when a non-layout field changes', () => {
+  it('reuses schematic ways and stops when a non-layout field changes', () => {
     const system = fixture();
     const counts = operationCounts();
     const first = computeDiagramSystem(system, counts);
@@ -53,35 +53,35 @@ describe('diagram layout dependency cache', () => {
     );
 
     expect(second.ways).toBe(first.ways);
-    expect(second.stations).toBe(first.stations);
+    expect(second.stops).toBe(first.stops);
     expect(second.facilities).toHaveLength(1);
     expect(counts).toEqual({
       diagramTopologyBuildCount: 1,
       diagramTopologyCacheHitCount: 1,
-      diagramStationBuildCount: 1,
-      diagramStationCacheHitCount: 1,
+      diagramStopBuildCount: 1,
+      diagramStopCacheHitCount: 1,
     });
   });
 
-  it('reuses schematic topology while rebuilding only changed station placement', () => {
+  it('reuses schematic topology while rebuilding only changed stop placement', () => {
     const system = fixture();
     const counts = operationCounts();
     const first = computeDiagramSystem(system, counts);
-    const changedStations = system.stations.map((station) => ({
-      ...station,
-      name: 'Renamed station',
+    const changedStops = system.stops.map((stop) => ({
+      ...stop,
+      name: 'Renamed stop',
     }));
 
-    const second = computeDiagramSystem({ ...system, stations: changedStations }, counts);
+    const second = computeDiagramSystem({ ...system, stops: changedStops }, counts);
 
     expect(second.ways).toBe(first.ways);
-    expect(second.stations).not.toBe(first.stations);
-    expect(second.stations[0]?.name).toBe('Renamed station');
+    expect(second.stops).not.toBe(first.stops);
+    expect(second.stops[0]?.name).toBe('Renamed stop');
     expect(counts).toEqual({
       diagramTopologyBuildCount: 1,
       diagramTopologyCacheHitCount: 1,
-      diagramStationBuildCount: 2,
-      diagramStationCacheHitCount: 0,
+      diagramStopBuildCount: 2,
+      diagramStopCacheHitCount: 0,
     });
   });
 });

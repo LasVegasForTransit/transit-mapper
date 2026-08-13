@@ -9,12 +9,12 @@ import {
   resolveWayPath,
   snap,
 } from './geo';
-import { resyncAutoNamedStations } from './geo/crossStreetNaming';
+import { resyncAutoNamedStops } from './geo/crossStreetNaming';
 import { servicePattern, withServicePattern } from './line-service';
 import { pruneSections, splitLegsAt } from './patternEdits';
 import { materializeRouteSpans } from './routeLegs';
 import { anchorOnWay, routeBetween, type RouteSpan } from './routeGraph';
-import { reanchorStationsToReplacementWays } from './station-reanchoring';
+import { reanchorStopsToReplacementWays } from './stop-reanchoring';
 import type { Line, LngLat, Pattern, PatternLeg, Service, TransitSystem } from './system';
 import { removeWayFromSystem } from './way-removal';
 
@@ -35,7 +35,7 @@ export function withRoutedService(
   service: Service,
 ): TransitSystem {
   const riddenWayIds = new Set(patternLegs(servicePattern(service)).map((leg) => leg.wayId));
-  return resyncAutoNamedStations(
+  return resyncAutoNamedStops(
     {
       ...system,
       lines: [...system.lines, line],
@@ -107,10 +107,7 @@ export function withReturnPath(
       ? candidate
       : withServicePattern(candidate, { ...pattern, sections }),
   );
-  return resyncAutoNamedStations(
-    { ...system, services },
-    new Set(returnLegs.map((leg) => leg.wayId)),
-  );
+  return resyncAutoNamedStops({ ...system, services }, new Set(returnLegs.map((leg) => leg.wayId)));
 }
 
 interface RoutedAdoption {
@@ -168,7 +165,7 @@ function withAdoptedPattern(
             sections: oneSection(adoption.adoptedLegs),
           }),
     ),
-    stations: reanchorStationsToReplacementWays(system, {
+    stops: reanchorStopsToReplacementWays(system, {
       replacedWayIds: excluded,
       replacementWayIds: adoptedWayIds,
       maxDistanceM: ADOPT_STATION_REANCHOR_M,

@@ -20,7 +20,7 @@ import { withServicePattern } from './line-service';
 import { defaultProfileFor, makeOneWay } from './profile';
 import { materializeRouteSpans } from './routeLegs';
 import { anchorOnWay, routeBetween } from './routeGraph';
-import { reanchorStationsOnWay, reanchorStationsToReplacementWays } from './station-reanchoring';
+import { reanchorStopsOnWay, reanchorStopsToReplacementWays } from './stop-reanchoring';
 import { deleteSelection } from './selection-deletion';
 import type { LngLat, Pattern, PatternLeg, TransitSystem, Way } from './system';
 
@@ -178,12 +178,12 @@ function removeUnusedOldWays(
   const removedWayIds = new Set(
     oldWayIds.filter((oldWayId) => !oldWayMustRemain(system, oldWayId, newWayIds)),
   );
-  const stations = reanchorStationsToReplacementWays(system, {
+  const stops = reanchorStopsToReplacementWays(system, {
     replacedWayIds: removedWayIds,
     replacementWayIds: newWayIds,
     maxDistanceM: CORRIDOR_STATION_REANCHOR_M,
   });
-  let next = stations === system.stations ? system : { ...system, stations };
+  let next = stops === system.stops ? system : { ...system, stops };
   for (const oldWayId of removedWayIds) next = removeOrphanWay(next, oldWayId);
   return next;
 }
@@ -349,8 +349,8 @@ function moveWayRunEnd(system: TransitSystem, target: WayRunEndMove): TransitSys
   const nextWay = { ...way, points };
   const ways = system.ways.map((candidate) => (candidate === way ? nextWay : candidate));
   const withWay = { ...system, ways };
-  const stations = reanchorStationsOnWay(withWay, target.wayId);
-  return { ...withWay, stations };
+  const stops = reanchorStopsOnWay(withWay, target.wayId);
+  return { ...withWay, stops };
 }
 
 function removeOrphanWay(system: TransitSystem, wayId: string): TransitSystem {

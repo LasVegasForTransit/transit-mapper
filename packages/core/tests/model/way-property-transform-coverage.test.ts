@@ -10,7 +10,7 @@ import {
   withWayGrade,
   withWayProfile,
 } from '../../src/model/way-property-edits';
-import { aRoad, aStation, aSystem } from '../support/fixtures.test';
+import { aRoad, aStop, aSystem } from '../support/fixtures.test';
 
 describe('way property transform identity', () => {
   it('preserves the input for missing ways and named-way identities', () => {
@@ -57,8 +57,8 @@ describe('way property transform identity', () => {
       [1, 1],
       [1.001, 1],
     ]);
-    const station = aStation('station', [0.0005, 0], { wayId: road.id, t: 0.5 });
-    const system = aSystem({ updatedAt: 321, ways: [road, untouched], stations: [station] });
+    const stop = aStop('stop', [0.0005, 0], { wayId: road.id, t: 0.5 });
+    const system = aSystem({ updatedAt: 321, ways: [road, untouched], stops: [stop] });
 
     const withGeometry = withWayGeometry(system, road.id, 'curved');
     expect(withGeometry.ways[0]).toEqual({ ...road, geometry: 'curved' });

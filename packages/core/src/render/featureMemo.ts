@@ -4,16 +4,16 @@ import {
   servedWaysByDistance,
   type ServedWayDistance,
 } from '../model/geo';
-import type { Service, Station, Way } from '../model/system';
+import type { Service, Stop, Way } from '../model/system';
 
 // Memoized sub-computations of buildFeatures, keyed on the IDENTITY of the
-// immutable arrays/sets they derive from. Station proximity also follows
+// immutable arrays/sets they derive from. Stop proximity also follows
 // retained immutable Way objects from one visible-way array to the next, so a
 // one-way edit can reuse the rest of the prior result without treating equal
 // ids as proof that a mutable object is unchanged.
 //
 // This is what makes a SELECTION-only or (residual) viewport-only rebuild cheap:
-// none of these inputs changed on such a rebuild, so the expensive per-station
+// none of these inputs changed on such a rebuild, so the expensive per-stop
 // interchange scan (servedWaysByDistance × ~3787 at RTC scale) and the derived
 // service-by-way / visible-way sets are reused instead of recomputed. It also
 // keeps the 121k-segment spatial grid warm for a full query; incremental queries
@@ -68,15 +68,15 @@ export function servicesByWay(
   return result;
 }
 
-const nearWaysCache = new WeakMap<Station[], WeakMap<Way[], string[][]>>();
+const nearWaysCache = new WeakMap<Stop[], WeakMap<Way[], string[][]>>();
 
-interface StationProximity {
+interface StopProximity {
   ids: string[];
   ranked: ServedWayDistance[];
 }
 
 interface IncrementalWays {
-  priorByStation: WeakMap<Station, StationProximity>;
+  priorByStop: WeakMap<Stop, StopProximity>;
   changedIds: Set<string>;
   changedWays: Way[];
 }
@@ -84,7 +84,7 @@ interface IncrementalWays {
 interface NearWaysState {
   visibleWays: Way[];
   waysById: Map<string, Way> | null;
-  byStation: WeakMap<Station, StationProximity>;
+  byStop: WeakMap<Stop, StopProximity>;
   incremental?: IncrementalWays;
 }
 
@@ -132,10 +132,10 @@ function stateFor(visibleWays: Way[]): NearWaysState {
       }
     }
     incremental = {
-      priorByStation: source.byStation,
+      priorByStop: source.byStop,
       changedIds,
-      // One stable array is shared by every station query, so the changed-way
-      // segment grid is built once rather than once per station.
+      // One stable array is shared by every stop query, so the changed-way
+      // segment grid is built once rather than once per stop.
       changedWays,
     };
   }
@@ -143,7 +143,7 @@ function stateFor(visibleWays: Way[]): NearWaysState {
   const state: NearWaysState = {
     visibleWays,
     waysById,
-    byStation: new WeakMap(),
+    byStop: new WeakMap(),
     ...(incremental ? { incremental } : {}),
   };
   nearWaysStateCache.set(visibleWays, state);
@@ -155,20 +155,16 @@ function sameIds(left: string[], right: ServedWayDistance[]): boolean {
   return left.length === right.length && left.every((id, index) => id === right[index]?.wayId);
 }
 
-function proximityFor(state: NearWaysState, station: Station): StationProximity {
-  const cached = state.byStation.get(station);
+function proximityFor(state: NearWaysState, stop: Stop): StopProximity {
+  const cached = state.byStop.get(stop);
   if (cached) return cached;
 
   const incremental = state.incremental;
-  const prior = incremental?.priorByStation.get(station);
-  let proximity: StationProximity;
+  const prior = incremental?.priorByStop.get(stop);
+  let proximity: StopProximity;
   if (prior && incremental) {
     const retained = prior.ranked.filter(({ wayId }) => !incremental.changedIds.has(wayId));
-    const changed = servedWaysByDistance(
-      station.coord,
-      incremental.changedWays,
-      INTERCHANGE_METERS,
-    );
+    const changed = servedWaysByDistance(stop.coord, incremental.changedWays, INTERCHANGE_METERS);
     const ranked = retained.concat(changed);
     ranked.sort(
       (left, right) =>
@@ -184,34 +180,34 @@ function proximityFor(state: NearWaysState, station: Station): StationProximity 
       ranked,
     };
   } else {
-    const ranked = servedWaysByDistance(station.coord, state.visibleWays, INTERCHANGE_METERS);
+    const ranked = servedWaysByDistance(stop.coord, state.visibleWays, INTERCHANGE_METERS);
     proximity = { ids: ranked.map(({ wayId }) => wayId), ranked };
   }
 
-  state.byStation.set(station, proximity);
+  state.byStop.set(stop, proximity);
   return proximity;
 }
 
-/** For each station (aligned to `stations` order), the ids of visible ways whose
+/** For each stop (aligned to `stops` order), the ids of visible ways whose
  *  path passes within INTERCHANGE_METERS — the interchange-detection scan. This
  *  is the single most expensive part of buildFeatures at RTC scale. The exact
  *  array pair remains the fast path for selection-only rebuilds; when an
- *  immutable edit replaces `stations`, unchanged station objects retain their
+ *  immutable edit replaces `stops`, unchanged stop objects retain their
  *  individual results. When a new visible-way array retains most immutable Way
  *  objects, only changed/new ways are spatially queried: removed/replaced ids
- *  are dropped from each prior station result, then the two exact distance-
+ *  are dropped from each prior stop result, then the two exact distance-
  *  ranked lists are merged. Unrelated arrays and ambiguous duplicate ids take
  *  the full-query path. */
-export function nearWaysForStations(stations: Station[], visibleWays: Way[]): string[][] {
-  let byWays = nearWaysCache.get(stations);
+export function nearWaysForStops(stops: Stop[], visibleWays: Way[]): string[][] {
+  let byWays = nearWaysCache.get(stops);
   if (!byWays) {
     byWays = new WeakMap();
-    nearWaysCache.set(stations, byWays);
+    nearWaysCache.set(stops, byWays);
   }
   let result = byWays.get(visibleWays);
   if (!result) {
     const state = stateFor(visibleWays);
-    result = stations.map((station) => proximityFor(state, station).ids);
+    result = stops.map((stop) => proximityFor(state, stop).ids);
     byWays.set(visibleWays, result);
   }
   return result;

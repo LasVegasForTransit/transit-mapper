@@ -116,7 +116,7 @@ export interface PreviewSvgOptions {
  * This is a preset, not a second renderer: it states two facts about how the
  * result will be presented — how wide it gets seen, and that the surface
  * showing it captions itself — and `systemSvg` decides everything else from
- * there. What's left is the network and nothing else: station labels, the
+ * there. What's left is the network and nothing else: stop labels, the
  * scale bar and the north arrow fall below legibility at unfurl size, and the
  * title and legend would only repeat the text Slack already puts beside the
  * image. Nothing here asks for a single element to be removed.

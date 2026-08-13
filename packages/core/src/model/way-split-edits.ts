@@ -11,8 +11,8 @@ import {
 import { shortId } from './ids';
 import { withServicePattern } from './line-service';
 import { mapSectionLegs, normalizeSections, splitLegs } from './patternEdits';
-import { replacedStationAnchors } from './station-reanchoring';
-import type { LngLat, Node, Station, TransitSystem, Way } from './system';
+import { replacedStopAnchors } from './stop-reanchoring';
+import type { LngLat, Node, Stop, TransitSystem, Way } from './system';
 import { remapWayEndpointMetadata, remapWaySplitTurnTargets } from './way-endpoint-metadata';
 import { insertWayPoint } from './way-point-edits';
 
@@ -53,25 +53,25 @@ function splitServices(
   });
 }
 
-interface SplitStationOptions {
+interface SplitStopOptions {
   wayId: string;
   newWayId: string;
   firstPath: LngLat[];
   secondPath: LngLat[];
 }
 
-function splitStations(stations: Station[], options: SplitStationOptions): Station[] {
+function splitStops(stops: Stop[], options: SplitStopOptions): Stop[] {
   const { wayId, newWayId, firstPath, secondPath } = options;
-  return mapPreservingReference(stations, (station) => {
-    if (!anchorOnWayId(station, wayId)) return station;
-    const onFirst = nearestOnPath(firstPath, station.coord);
-    const onSecond = nearestOnPath(secondPath, station.coord);
+  return mapPreservingReference(stops, (stop) => {
+    if (!anchorOnWayId(stop, wayId)) return stop;
+    const onFirst = nearestOnPath(firstPath, stop.coord);
+    const onSecond = nearestOnPath(secondPath, stop.coord);
     const useSecond = !!onSecond && (!onFirst || onSecond.distMeters < onFirst.distMeters);
     const nearest = useSecond ? onSecond : onFirst;
-    if (!nearest) return station;
+    if (!nearest) return stop;
     return {
-      ...station,
-      anchors: replacedStationAnchors(station, wayId, {
+      ...stop,
+      anchors: replacedStopAnchors(stop, wayId, {
         wayId: useSecond ? newWayId : wayId,
         t: nearest.t,
       }),
@@ -165,7 +165,7 @@ export function splitWayAtIndexResult(
     nearestOnPath(originalPath, way.points[index])?.t ??
     pathLengthMeters(firstPath) / Math.max(1e-9, pathLengthMeters(originalPath));
   const services = splitServices(system, wayId, newWayId, splitT);
-  const stations = splitStations(system.stations, {
+  const stops = splitStops(system.stops, {
     wayId,
     newWayId,
     firstPath,
@@ -196,7 +196,7 @@ export function splitWayAtIndexResult(
       ways,
       nodes,
       services,
-      stations,
+      stops,
       namedWays,
       ...endpointMetadata,
       turnRestrictions,

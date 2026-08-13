@@ -7,7 +7,7 @@ const CORNER_FRACTION = 0.25;
 
 // Core transforms preserve unchanged Way references, so this reference-keyed
 // cache needs no invalidation. This matters:
-// buildFeatures() calls resolveWayPath for every way (and, per station, for
+// buildFeatures() calls resolveWayPath for every way (and, per stop, for
 // every way again via servedWayIds) on every rebuild — during a drag that's
 // once per animation frame, and without this cache it was once per raw
 // mousemove event, recomputing curve geometry for the entire system each time.

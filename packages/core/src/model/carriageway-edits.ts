@@ -20,7 +20,7 @@ import {
   profileWidthM,
   separateProfiles,
 } from './profile';
-import { reanchorStationsOnWay, replacedStationAnchors } from './station-reanchoring';
+import { reanchorStopsOnWay, replacedStopAnchors } from './stop-reanchoring';
 import type { LaneConnector, LngLat, NamedWay, Node, TransitSystem, Way } from './system';
 import { remapWayEndpointMetadata, type WayEndpointRemap } from './way-endpoint-metadata';
 import { joinWayPointToWay } from './way-point-edits';
@@ -242,15 +242,15 @@ function collapsedJunctions(
 function reanchorMovedWays(
   system: TransitSystem,
   ways: Way[],
-  stations: TransitSystem['stations'],
+  stops: TransitSystem['stops'],
   wayIds: string[],
-): TransitSystem['stations'] {
-  let nextStations = stations;
+): TransitSystem['stops'] {
+  let nextStops = stops;
   for (const wayId of wayIds) {
-    const next = { ...system, ways, stations: nextStations };
-    nextStations = reanchorStationsOnWay(next, wayId);
+    const next = { ...system, ways, stops: nextStops };
+    nextStops = reanchorStopsOnWay(next, wayId);
   }
-  return nextStations;
+  return nextStops;
 }
 
 interface CarriagewayPair {
@@ -335,26 +335,21 @@ export function combineCarriageways(system: TransitSystem, namedWayId: string): 
     new Map([[other.id, keeper.id]]),
   );
   const keeperPath = resolveWayPath(keeper);
-  const stations = system.stations.map((station) => {
-    if (!anchorOnWayId(station, other.id)) return station;
-    const nearest = nearestOnPath(keeperPath, station.coord);
+  const stops = system.stops.map((stop) => {
+    if (!anchorOnWayId(stop, other.id)) return stop;
+    const nearest = nearestOnPath(keeperPath, stop.coord);
     return nearest
       ? {
-          ...station,
-          anchors: replacedStationAnchors(station, other.id, {
+          ...stop,
+          anchors: replacedStopAnchors(stop, other.id, {
             wayId: keeper.id,
             t: nearest.t,
           }),
         }
-      : station;
+      : stop;
   });
   const junctions = collapsedJunctions(system.ways, system.nodes, keeper, other);
-  const reanchoredStations = reanchorMovedWays(
-    system,
-    junctions.ways,
-    stations,
-    junctions.movedWayIds,
-  );
+  const reanchoredStops = reanchorMovedWays(system, junctions.ways, stops, junctions.movedWayIds);
   const otherPath = resolveWayPath(other);
   const services = system.services.map((service) => {
     if (!patternLegs(service.path).some((leg) => leg.wayId === other.id)) return service;
@@ -377,7 +372,7 @@ export function combineCarriageways(system: TransitSystem, namedWayId: string): 
     {
       ...system,
       ways: junctions.ways,
-      stations: reanchoredStations,
+      stops: reanchoredStops,
       nodes: junctions.nodes,
       services,
       approachControls: endpointMetadata.approachControls,

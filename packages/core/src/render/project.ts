@@ -65,7 +65,7 @@ export interface FitBoundsOptions {
   height: number;
   /** Pixels of breathing room kept between the content and every edge. */
   padding: number;
-  /** Ceiling on the derived zoom. A single-station system has zero extent and
+  /** Ceiling on the derived zoom. A single-stop system has zero extent and
    *  would otherwise fit at infinite zoom; this is what stops that. */
   maxZoom?: number;
 }

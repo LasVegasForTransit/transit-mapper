@@ -50,10 +50,10 @@ function fixture(): TransitSystem {
         },
       },
     ],
-    stations: [
+    stops: [
       {
-        id: 'station',
-        name: 'Station',
+        id: 'stop',
+        name: 'Stop',
         coord: [-115.15, 36.1],
         anchors: [{ wayId: 'road', t: 0.5 }],
         footprint: [
@@ -83,7 +83,7 @@ function fixture(): TransitSystem {
     groups: [
       {
         id: 'group',
-        memberIds: ['station', 'facility'],
+        memberIds: ['stop', 'facility'],
         footprint: [
           [-115.152, 36.098],
           [-115.148, 36.098],
@@ -102,12 +102,12 @@ function operationCounts() {
     featureTopologyWayVisitCount: 0,
     featureJunctionPassCount: 0,
     featureJunctionNodeVisitCount: 0,
-    featureStationPassCount: 0,
-    featureStationVisitCount: 0,
+    featureStopPassCount: 0,
+    featureStopVisitCount: 0,
     featureHandlePassCount: 0,
     featureHandleWayVisitCount: 0,
     featurePhysicalPassCount: 0,
-    featurePhysicalStationVisitCount: 0,
+    featurePhysicalStopVisitCount: 0,
     featurePhysicalGroupVisitCount: 0,
     featureFacilityPassCount: 0,
     featureFacilityVisitCount: 0,
@@ -132,7 +132,7 @@ function expectEmptyExcept(
 }
 
 describe('partial system feature projection', () => {
-  it('builds a facility source without visiting topology, stations, or labels', () => {
+  it('builds a facility source without visiting topology, stops, or labels', () => {
     const system = fixture();
     const full = buildFeatures(system, null, [], view);
     const counts = operationCounts();
@@ -148,8 +148,8 @@ describe('partial system feature projection', () => {
       featureCollectionBuildCount: 1,
       featureTopologyPassCount: 0,
       featureTopologyWayVisitCount: 0,
-      featureStationPassCount: 0,
-      featureStationVisitCount: 0,
+      featureStopPassCount: 0,
+      featureStopVisitCount: 0,
       featurePhysicalPassCount: 0,
       featureFacilityPassCount: 1,
       featureFacilityVisitCount: 1,
@@ -159,29 +159,29 @@ describe('partial system feature projection', () => {
     });
   });
 
-  it('builds station and physical sources without running unrelated topology builders', () => {
+  it('builds stop and physical sources without running unrelated topology builders', () => {
     const system = fixture();
-    const full = buildFeatures(system, null, [], view, 'station', 'group');
+    const full = buildFeatures(system, null, [], view, 'stop', 'group');
     const counts = operationCounts();
 
-    const projected = buildFeatures(system, null, [], view, 'station', 'group', {
-      requestedFeatures: ['stations', 'footprints', 'platforms', 'physicalHandles'],
+    const projected = buildFeatures(system, null, [], view, 'stop', 'group', {
+      requestedFeatures: ['stops', 'footprints', 'platforms', 'physicalHandles'],
       counts,
     });
 
-    expect(projected.stations).toEqual(full.stations);
+    expect(projected.stops).toEqual(full.stops);
     expect(projected.footprints).toEqual(full.footprints);
     expect(projected.platforms).toEqual(full.platforms);
     expect(projected.physicalHandles).toEqual(full.physicalHandles);
-    expectEmptyExcept(projected, ['stations', 'footprints', 'platforms', 'physicalHandles']);
+    expectEmptyExcept(projected, ['stops', 'footprints', 'platforms', 'physicalHandles']);
     expect(counts).toMatchObject({
       featureCollectionBuildCount: 4,
       featureTopologyPassCount: 0,
       featureTopologyWayVisitCount: 0,
-      featureStationPassCount: 1,
-      featureStationVisitCount: 1,
+      featureStopPassCount: 1,
+      featureStopVisitCount: 1,
       featurePhysicalPassCount: 1,
-      featurePhysicalStationVisitCount: 1,
+      featurePhysicalStopVisitCount: 1,
       featurePhysicalGroupVisitCount: 1,
       featureFacilityPassCount: 0,
       featureWayLabelPassCount: 0,
@@ -189,11 +189,11 @@ describe('partial system feature projection', () => {
     });
   });
 
-  it('projects selected stations exactly without deriving every station', () => {
+  it('projects selected stops exactly without deriving every stop', () => {
     const system = fixture();
-    system.stations.push({
-      id: 'other-station',
-      name: 'Other station',
+    system.stops.push({
+      id: 'other-stop',
+      name: 'Other stop',
       coord: [-114.9, 36.3],
       anchors: [],
     });
@@ -201,18 +201,18 @@ describe('partial system feature projection', () => {
     const counts = operationCounts();
 
     const projected = buildFeatures(system, null, [], view, null, null, {
-      requestedFeatures: ['stations'],
-      stationIds: ['station'],
+      requestedFeatures: ['stops'],
+      stopIds: ['stop'],
       counts,
     });
 
-    expect(projected.stations.features).toEqual([
-      full.stations.features.find((feature) => feature.properties?.id === 'station'),
+    expect(projected.stops.features).toEqual([
+      full.stops.features.find((feature) => feature.properties?.id === 'stop'),
     ]);
     expect(counts).toMatchObject({
       featureCollectionBuildCount: 1,
-      featureStationPassCount: 1,
-      featureStationVisitCount: 1,
+      featureStopPassCount: 1,
+      featureStopVisitCount: 1,
     });
   });
 
@@ -223,7 +223,7 @@ describe('partial system feature projection', () => {
     const requested: (keyof SystemFeatures)[] = [
       'ways',
       'services',
-      'stations',
+      'stops',
       'handles',
       'laneArrows',
       'serviceArrows',
@@ -235,13 +235,13 @@ describe('partial system feature projection', () => {
     });
 
     for (const name of requested) expect(projected[name]).toEqual(full[name]);
-    expectEmptyExcept(projected, ['ways', 'services', 'stations', 'handles']);
+    expectEmptyExcept(projected, ['ways', 'services', 'stops', 'handles']);
     expect(counts).toMatchObject({
       featureCollectionBuildCount: 6,
       featureTopologyPassCount: 1,
       featureTopologyWayVisitCount: 1,
-      featureStationPassCount: 1,
-      featureStationVisitCount: 1,
+      featureStopPassCount: 1,
+      featureStopVisitCount: 1,
       featureHandlePassCount: 1,
       featureHandleWayVisitCount: 1,
       featurePhysicalPassCount: 0,
@@ -255,13 +255,13 @@ describe('partial system feature projection', () => {
   it('builds all fifteen feature collections when no partial plan is supplied', () => {
     const counts = operationCounts();
 
-    buildFeatures(fixture(), null, ['road'], view, 'station', 'group', { counts });
+    buildFeatures(fixture(), null, ['road'], view, 'stop', 'group', { counts });
 
     expect(counts).toMatchObject({
       featureCollectionBuildCount: 16,
       featureTopologyPassCount: 1,
       featureTopologyWayVisitCount: 1,
-      featureStationPassCount: 1,
+      featureStopPassCount: 1,
       featureHandlePassCount: 1,
       featurePhysicalPassCount: 1,
       featureFacilityPassCount: 1,

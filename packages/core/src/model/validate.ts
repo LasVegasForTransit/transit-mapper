@@ -35,7 +35,7 @@ export const LEG_JOIN_TOLERANCE_M = 1;
 export type IssueTarget =
   | { kind: 'line'; id: string }
   | { kind: 'way'; id: string }
-  | { kind: 'station'; id: string }
+  | { kind: 'stop'; id: string }
   | { kind: 'service'; id: string }
   | { kind: 'node'; id: string };
 
@@ -209,8 +209,8 @@ function membershipIssue(issue: LineServiceMembershipIssue): Issue {
 
 /**
  * The cheap half of validateSystem: ghost/orphan record checks and
- * mismatched-type junctions, all a single O(n) pass (the orphan-station check
- * used to be O(stations × ways) via `.some()` per station — fixed to a Set
+ * mismatched-type junctions, all a single O(n) pass (the orphan-stop check
+ * used to be O(stops × ways) via `.some()` per stop — fixed to a Set
  * lookup). Safe to run reactively on every store change, unlike crossing
  * detection below — see validateSystem's own note on why that one is NOT in
  * this cheap tier.
@@ -287,13 +287,13 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
   }
 
   const wayIds = new Set(system.ways.map((w) => w.id));
-  for (const station of system.stations) {
-    if (station.anchors.some((a) => !wayIds.has(a.wayId))) {
+  for (const stop of system.stops) {
+    if (stop.anchors.some((a) => !wayIds.has(a.wayId))) {
       issues.push({
-        id: `orphan-station-${station.id}`,
-        message: `"${station.name ?? 'A station'}" is anchored to a way that no longer exists.`,
+        id: `orphan-stop-${stop.id}`,
+        message: `"${stop.name ?? 'A stop'}" is anchored to a way that no longer exists.`,
         audience: 'document',
-        target: { kind: 'station', id: station.id },
+        target: { kind: 'stop', id: stop.id },
       });
     }
   }
@@ -309,7 +309,7 @@ export function validateSystemQuick(system: TransitSystem): Issue[] {
  * A junction is a lane graph: it exists to say which arm's lanes feed which
  * other arm's. Ways in different junction groups share no lanes, so a node
  * spanning two of them describes a connection no vehicle can make — a road
- * and a rail line meeting at something that is not a station.
+ * and a rail line meeting at something that is not a stop.
  *
  * Nothing produces one any more: formCrossingJunctions and crossingBetween
  * require an exact typeId match, and the two paths that used to (a document

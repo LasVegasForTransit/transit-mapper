@@ -72,7 +72,7 @@ function headingDeltaDeg(a: number, b: number): number {
 /** The nearest point on `way`'s own path to `coord`, plus that nearest
  *  segment's own local heading (for direction-alignment checks). Built from
  *  already-exported primitives — does not touch `nearestOnPath`'s signature,
- *  which every existing caller (`snap`, station reanchoring) depends on. */
+ *  which every existing caller (`snap`, stop reanchoring) depends on. */
 function nearestWaySegment(
   way: Way,
   coord: LngLat,

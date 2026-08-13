@@ -1,6 +1,6 @@
 import { haversineMeters, nearestInsertionPoint } from './geo';
 import { shortId } from './ids';
-import { reanchorStationsOnWay } from './station-reanchoring';
+import { reanchorStopsOnWay } from './stop-reanchoring';
 import type { LngLat, Node, TransitSystem } from './system';
 
 export type CreateWayPointEditId = () => string;
@@ -22,8 +22,8 @@ function withWayPoints(system: TransitSystem, wayId: string, points: LngLat[]): 
   const ways = [...system.ways];
   ways[index] = { ...ways[index], points };
   const next = { ...system, ways };
-  const stations = reanchorStationsOnWay(next, wayId);
-  return { ...next, stations };
+  const stops = reanchorStopsOnWay(next, wayId);
+  return { ...next, stops };
 }
 
 function shiftRefsForInsert(nodes: Node[], wayId: string, index: number): Node[] {
@@ -52,7 +52,7 @@ function shiftRefsForDelete(nodes: Node[], wayId: string, index: number): Node[]
     .filter((node) => node.refs.length >= 2);
 }
 
-/** Appends one control point and remeasures stations riding the way. */
+/** Appends one control point and remeasures stops riding the way. */
 export function appendWayPoint(system: TransitSystem, wayId: string, coord: LngLat): TransitSystem {
   const way = system.ways.find((candidate) => candidate.id === wayId);
   return way ? withWayPoints(system, wayId, [...way.points, coord]) : system;
@@ -112,7 +112,7 @@ export function moveWayPoint(
   );
   let next: TransitSystem = { ...system, ways, nodes };
   for (const refWayId of new Set(node.refs.map((ref) => ref.wayId))) {
-    next = { ...next, stations: reanchorStationsOnWay(next, refWayId) };
+    next = { ...next, stops: reanchorStopsOnWay(next, refWayId) };
   }
   return next;
 }
@@ -208,8 +208,8 @@ export function joinWayPointToWay(
   }
   if (ways === system.ways && nodes === system.nodes) return system;
   let next: TransitSystem = { ...system, ways, nodes };
-  next = { ...next, stations: reanchorStationsOnWay(next, targetWayId) };
-  return { ...next, stations: reanchorStationsOnWay(next, wayId) };
+  next = { ...next, stops: reanchorStopsOnWay(next, targetWayId) };
+  return { ...next, stops: reanchorStopsOnWay(next, wayId) };
 }
 
 /** Records a coincident first/last point as a routable loop junction. */

@@ -1,6 +1,6 @@
 import { withLaneCount } from './profile';
 import { shortId } from './ids';
-import { reanchorStationsOnWay } from './station-reanchoring';
+import { reanchorStopsOnWay } from './stop-reanchoring';
 import type { CrossSection, DrivingSide, LineGeometry, NamedWay, TransitSystem } from './system';
 import type { Grade } from './catalog';
 
@@ -44,7 +44,7 @@ function sameProfile(left: CrossSection, right: CrossSection): boolean {
   });
 }
 
-/** Replaces geometry and remeasures stations anchored to the rendered path. */
+/** Replaces geometry and remeasures stops anchored to the rendered path. */
 export function withWayGeometry(
   system: TransitSystem,
   id: string,
@@ -53,7 +53,7 @@ export function withWayGeometry(
   const way = system.ways.find((candidate) => candidate.id === id);
   if (!way || way.geometry === geometry) return system;
   const next = replaceWay(system, id, (candidate) => ({ ...candidate, geometry }));
-  return { ...next, stations: reanchorStationsOnWay(next, id) };
+  return { ...next, stops: reanchorStopsOnWay(next, id) };
 }
 
 export function withWayGrade(system: TransitSystem, id: string, grade: Grade): TransitSystem {

@@ -1,6 +1,6 @@
 import type {
-  Station,
-  StationAnchor,
+  Stop,
+  StopAnchor,
   LegDirection,
   LngLat,
   Pattern,
@@ -133,15 +133,15 @@ export function wrongWayLegs(
   return out;
 }
 
-/** The way a bare "which way is this station on" question means: the first
- *  anchor, which is also the one whose alignment moves the station. */
-export function primaryAnchor(station: Station): StationAnchor | undefined {
-  return station.anchors[0];
+/** The way a bare "which way is this stop on" question means: the first
+ *  anchor, which is also the one whose alignment moves the stop. */
+export function primaryAnchor(stop: Stop): StopAnchor | undefined {
+  return stop.anchors[0];
 }
 
-/** This station's anchor on a specific way, if it rides that way at all. */
-export function anchorOnWayId(station: Station, wayId: string): StationAnchor | undefined {
-  return station.anchors.find((a) => a.wayId === wayId);
+/** This stop's anchor on a specific way, if it rides that way at all. */
+export function anchorOnWayId(stop: Stop, wayId: string): StopAnchor | undefined {
+  return stop.anchors.find((a) => a.wayId === wayId);
 }
 
 /** The ways a pattern runs over. Legs carry more than an id now, and most
@@ -153,8 +153,8 @@ export function patternWayIds(pattern: Pattern): string[] {
 // Cached by the Service object's own reference, same convention as wayById
 // (wayPath.ts) — every mutation in the store replaces a Service with a new
 // object rather than editing it in place, so identity is a safe cache key.
-// servicesAtStation calls this once per service on every invocation, and
-// resyncAutoNamedStations can invoke servicesAtStation many times in one
+// servicesAtStop calls this once per service on every invocation, and
+// resyncAutoNamedStops can invoke servicesAtStop many times in one
 // pass without any service actually changing in between.
 const serviceWayIdsCache = new WeakMap<Service, string[]>();
 
@@ -222,7 +222,7 @@ export function stretchLeg(leg: PatternLeg, fromT: number, toT: number): Pattern
 }
 
 /** Does this pattern actually reach position `t` on `wayId`? The extent-aware
- *  counterpart to a bare way-id membership test — a station anchored to a way a
+ *  counterpart to a bare way-id membership test — a stop anchored to a way a
  *  line only partly covers is not necessarily a stop on that line. */
 export function patternCoversWayAt(pattern: Pattern, wayId: string, t: number): boolean {
   return patternLegs(pattern).some((leg) => {

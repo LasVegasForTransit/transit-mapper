@@ -8,7 +8,7 @@ import {
 } from '../../src/model/way-point-edits';
 import { nameWay, withWayProfile } from '../../src/model/way-property-edits';
 import { splitWayAtIndex, splitWayAtPosition } from '../../src/model/way-split-edits';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
 
 describe('pure way edits', () => {
   it('forms a real junction and keeps refs aligned through later point edits', () => {
@@ -79,11 +79,11 @@ describe('pure way edits', () => {
       [-115.1, 36.1],
     ]);
     const service = aService('line', [aPattern('pattern', [trunk], [trunk.id])]);
-    const eastStop = aStation('east', [-115.15, 36.1], { wayId: trunk.id, t: 0.75 });
+    const eastStop = aStop('east', [-115.15, 36.1], { wayId: trunk.id, t: 0.75 });
     const system = aSystem({
       ways: [trunk],
       services: [service],
-      stations: [eastStop],
+      stops: [eastStop],
       namedWays: [{ id: 'street', name: 'Main Street', wayIds: [trunk.id] }],
     });
     const createId = vi
@@ -95,7 +95,7 @@ describe('pure way edits', () => {
 
     expect(result.ways.map((way) => way.id)).toEqual([trunk.id, 'east-half']);
     expect(patternWayIds(result.services[0].path)).toEqual([trunk.id, 'east-half']);
-    expect(result.stations[0].anchors[0].wayId).toBe('east-half');
+    expect(result.stops[0].anchors[0].wayId).toBe('east-half');
     expect(result.namedWays[0].wayIds).toEqual([trunk.id, 'east-half']);
     expect(result.nodes[0]).toMatchObject({ id: 'split-node' });
   });

@@ -9,7 +9,7 @@ import {
   setTurnRestriction,
 } from '../../src/model/network-node-edits';
 import type { LaneConnector } from '../../src/model/system';
-import { aRoad, aStation, aSystem } from '../support/fixtures.test';
+import { aRoad, aStop, aSystem } from '../support/fixtures.test';
 import { describe, expect, it } from 'vitest';
 
 describe('pure network node edits', () => {
@@ -149,8 +149,8 @@ describe('pure network node edits', () => {
       [0, 0],
       [-0.001, 0],
     ]);
-    const rider = aStation('rider', [0.0001, 0], { wayId: leaving.id, t: 0.1 });
-    const bystander = aStation('bystander', [0, 0.0001], { wayId: north.id, t: 0.1 });
+    const rider = aStop('rider', [0.0001, 0], { wayId: leaving.id, t: 0.1 });
+    const bystander = aStop('bystander', [0, 0.0001], { wayId: north.id, t: 0.1 });
     const connectors: LaneConnector[] = [
       {
         from: { wayId: leaving.id, laneId: leaving.profile.lanes[0].id },
@@ -168,7 +168,7 @@ describe('pure network node edits', () => {
     const system = aSystem({
       updatedAt: 321,
       ways: [leaving, north, west],
-      stations: [rider, bystander],
+      stops: [rider, bystander],
       nodes: [
         {
           id: 'junction',
@@ -196,9 +196,9 @@ describe('pure network node edits', () => {
       { wayId: west.id, pointIndex: 0 },
     ]);
     expect(next.nodes[0].connectors).toEqual([connectors[2]]);
-    expect(next.stations[0]).not.toBe(rider);
-    expect(next.stations[0].coord).not.toEqual(rider.coord);
-    expect(next.stations[1]).toBe(bystander);
+    expect(next.stops[0]).not.toBe(rider);
+    expect(next.stops[0].coord).not.toEqual(rider.coord);
+    expect(next.stops[1]).toBe(bystander);
     expect(next.updatedAt).toBe(321);
     expect(disconnectNodeWay(system, 'missing', leaving.id)).toBe(system);
     expect(disconnectNodeWay(system, 'junction', 'missing')).toBe(system);

@@ -11,6 +11,7 @@ export * from './system/way';
 export * from './system/node';
 export * from './system/namedWay';
 export * from './system/service';
+export * from './system/stop';
 export * from './system/station';
 export * from './system/facility';
 export * from './system/group';

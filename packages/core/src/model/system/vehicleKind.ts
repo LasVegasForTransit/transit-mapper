@@ -4,7 +4,7 @@ import type { Service } from './service';
  *  run — lets someone testing a transit system idea choose which vehicle a
  *  line actually uses (a short single-unit LRV vs. a long double-consist
  *  one, say), rather than every service of a mode sharing one fixed size
- *  and speed. Part of the transit system document, like stations/ways/
+ *  and speed. Part of the transit system document, like stops/ways/
  *  services — not a hardcoded catalog entry, since these are meant to be
  *  created and tuned by the person planning the system, not a developer. */
 export interface VehicleKind {

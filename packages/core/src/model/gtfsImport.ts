@@ -11,13 +11,13 @@ import { gtfsServiceName, lineFromGtfsRoute, serviceFromGtfsPattern } from './gt
 import { defaultProfileFor, makeOneWay } from './profile';
 import { wayType } from './catalog';
 import { haversineMeters, nearestOnPath, resolveWayPath, wholeLeg, oneSection } from './geo';
-import type { Line, LngLat, Pattern, Service, Station, Way } from './system';
+import type { Line, LngLat, Pattern, Service, Stop, Way } from './system';
 
 export interface GtfsImportResult {
   ways: Way[];
   lines: Line[];
   services: Service[];
-  stations: Station[];
+  stops: Stop[];
 }
 
 // GTFS routes.txt's route_type enum → this app's catalog
@@ -336,15 +336,15 @@ function buildGtfsIndex(files: GtfsFiles): GtfsIndex {
   };
 }
 
-/** Ways/Services for just the given routes, plus any Stations newly reached
- *  by them — `stationByStopId` is the whole import's shared dedup map (a
+/** Ways/Services for just the given routes, plus any Stops newly reached
+ *  by them — `stopByStopId` is the whole import's shared dedup map (a
  *  stop shared by a route in an earlier batch and one in this batch must
- *  still resolve to the same Station), so it's passed in and mutated rather
+ *  still resolve to the same Stop), so it's passed in and mutated rather
  *  than started fresh each call. */
 function piecesForRoutes(
   index: GtfsIndex,
   routeIds: string[],
-  stationByStopId: Map<string, Station>,
+  stopByStopId: Map<string, Stop>,
 ): GtfsImportResult {
   const ways: Way[] = [];
   const wayIdByShape = new Map<string, string>();
@@ -433,7 +433,7 @@ function piecesForRoutes(
     lines.push(lineFromGtfsRoute(route, routeId, serviceIds));
   }
 
-  const newStations: Station[] = [];
+  const newStops: Stop[] = [];
   for (const [shapeId, wayId] of wayIdByShape) {
     const tripId = index.shapeToTrip.get(shapeId);
     const stopSeq = tripId && index.stopTimesByTrip.get(tripId);
@@ -446,7 +446,7 @@ function piecesForRoutes(
       // into, or an island between two tracks. It gains an anchor on this way
       // rather than being skipped, which is what used to leave every line on
       // the second way driving past a stop it plainly calls at.
-      const existing = stationByStopId.get(stopId);
+      const existing = stopByStopId.get(stopId);
       if (existing) {
         if (!existing.anchors.some((a) => a.wayId === wayId)) {
           const on = nearestOnPath(path, existing.coord);
@@ -456,36 +456,36 @@ function piecesForRoutes(
         }
         continue;
       }
-      const stop = index.stopById.get(stopId);
-      if (!stop) continue;
-      const lat = Number(stop.stop_lat);
-      const lon = Number(stop.stop_lon);
+      const sourceStop = index.stopById.get(stopId);
+      if (!sourceStop) continue;
+      const lat = Number(sourceStop.stop_lat);
+      const lon = Number(sourceStop.stop_lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
       const coord: LngLat = [lon, lat];
       const nearest = nearestOnPath(path, coord);
-      const station: Station = {
+      const createdStop: Stop = {
         id: shortId(),
-        name: stop.stop_name || undefined,
+        name: sourceStop.stop_name || undefined,
         coord: nearest ? nearest.coord : coord,
         anchors: nearest ? [{ wayId, t: nearest.t }] : [],
       };
-      stationByStopId.set(stopId, station);
-      newStations.push(station);
+      stopByStopId.set(stopId, createdStop);
+      newStops.push(createdStop);
     }
   }
 
-  return { ways, lines, services, stations: newStations };
+  return { ways, lines, services, stops: newStops };
 }
 
 /**
  * Pure transform: parsed GTFS text files → catalog-typed Ways/Services/
- * Stations, all at once. One Way per distinct shape (not per trip, to avoid
+ * Stops, all at once. One Way per distinct shape (not per trip, to avoid
  * duplicating geometry across every scheduled run of the same route), one
  * Service per route with one Pattern per shape that route uses (a branch/
- * express variant becomes a second Pattern automatically), and one Station
+ * express variant becomes a second Pattern automatically), and one Stop
  * per stop actually served, anchored onto whichever shape's Way it sits
  * nearest — a stop shared by several routes still becomes exactly one
- * Station, matching how a hand-drawn interchange works. See
+ * Stop, matching how a hand-drawn interchange works. See
  * streamRtcGtfsBatches for the batched/live version of this same transform.
  */
 export function gtfsFilesToSystemPieces(files: GtfsFiles): GtfsImportResult {
@@ -496,14 +496,14 @@ export function gtfsFilesToSystemPieces(files: GtfsFiles): GtfsImportResult {
 /** Same transform as gtfsFilesToSystemPieces, split into route batches in
  *  the same order streamRtcGtfsBatches yields them — network-free (no fetch
  *  to mock), so fixture tests can check the batched path produces the exact
- *  same total ways/services/stations as the unbatched one. */
+ *  same total ways/services/stops as the unbatched one. */
 export function gtfsFilesToBatchedPieces(files: GtfsFiles, batchSize = 2): GtfsImportResult[] {
   const index = buildGtfsIndex(files);
   const routeIds = [...index.routeShapeIds.keys()];
-  const stationByStopId = new Map<string, Station>();
+  const stopByStopId = new Map<string, Stop>();
   const batches: GtfsImportResult[] = [];
   for (let i = 0; i < routeIds.length; i += batchSize) {
-    batches.push(piecesForRoutes(index, routeIds.slice(i, i + batchSize), stationByStopId));
+    batches.push(piecesForRoutes(index, routeIds.slice(i, i + batchSize), stopByStopId));
   }
   return batches;
 }
@@ -534,11 +534,11 @@ export function gtfsArchiveToBatches(
   const routeIds = [...index.routeShapeIds.keys()];
   const routesTotal = routeIds.length;
   const batchSize = Math.max(1, Math.floor(requestedBatchSize));
-  const stationByStopId = new Map<string, Station>();
+  const stopByStopId = new Map<string, Stop>();
   const batches: GtfsImportBatch[] = [];
   for (let i = 0; i < routesTotal; i += batchSize) {
     batches.push({
-      pieces: piecesForRoutes(index, routeIds.slice(i, i + batchSize), stationByStopId),
+      pieces: piecesForRoutes(index, routeIds.slice(i, i + batchSize), stopByStopId),
       routesDone: Math.min(i + batchSize, routesTotal),
       routesTotal,
     });
@@ -551,7 +551,7 @@ export function gtfsArchiveToBatches(
  * through the Worker's /api/gtfs/rtc proxy since the feed's own host
  * doesn't send CORS headers for cross-origin browser fetches — parsed, then
  * handed back a few routes at a time instead of all at once. A route's
- * worth of ways/stations is small (built in well under a frame), and
+ * worth of ways/stops is small (built in well under a frame), and
  * yielding between batches lets the caller merge each one into the map
  * immediately and hand control back to the browser before starting the
  * next — the system visibly builds up route by route instead of the tab
