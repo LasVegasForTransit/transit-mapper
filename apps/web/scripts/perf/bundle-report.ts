@@ -32,6 +32,20 @@ export interface BundleGraphReport {
   brotliBytes: number;
 }
 
+export interface ExpectedWorkerBoundary {
+  identity: string;
+  outputFilePrefix: string;
+}
+
+export interface WorkerBoundaryReport {
+  identity: string;
+  path: string;
+}
+
+export interface WorkerGraphReport extends BundleGraphReport {
+  boundaries: WorkerBoundaryReport[];
+}
+
 export interface BundleEntryReport extends BundleEntrySize {
   eager: BundleGraphReport;
   lazy: BundleGraphReport;
@@ -40,7 +54,7 @@ export interface BundleEntryReport extends BundleEntrySize {
 
 export interface DeliveryGraphs {
   entries: BundleEntryReport[];
-  workers: BundleGraphReport;
+  workers: WorkerGraphReport;
   serviceWorker: BundleGraphReport;
   installAssets: BundleGraphReport;
   precache: BundleGraphReport;
@@ -54,26 +68,25 @@ export interface BundleReport extends DeliveryGraphs {
   chunkViolations: PerformanceChunkViolation[];
 }
 
-export interface BundleFileChange {
-  path: string;
-  before: BundleFileReport;
-  after: BundleFileReport;
-}
-
-export interface BundleReportComparison {
-  added: BundleFileReport[];
-  removed: BundleFileReport[];
-  changed: BundleFileChange[];
-  rawBytes: number;
-  gzipBytes: number;
-  brotliBytes: number;
-}
-
 export interface CreateDeliveryGraphsOptions {
   manifest: ViteManifest;
   files: Readonly<Partial<Record<string, Uint8Array>>>;
   serviceWorkerPath?: string;
+  expectedWorkers?: readonly ExpectedWorkerBoundary[];
 }
+
+export const PRODUCTION_WORKER_BOUNDARIES = [
+  { identity: 'gtfsWorker', outputFilePrefix: 'gtfsWorker' },
+  { identity: 'gtfsReconcileWorker', outputFilePrefix: 'gtfsReconcileWorker' },
+  { identity: 'osm-import-worker', outputFilePrefix: 'osm-import-worker' },
+  { identity: 'previewWorkerEntry', outputFilePrefix: 'previewWorkerEntry' },
+  { identity: 'svgWorkerEntry', outputFilePrefix: 'svgWorkerEntry' },
+  { identity: 'storageSerializerWorker', outputFilePrefix: 'storageSerializerWorker' },
+  {
+    identity: 'storage-deserializer-worker',
+    outputFilePrefix: 'storage-deserializer-worker',
+  },
+] as const satisfies readonly ExpectedWorkerBoundary[];
 
 interface ManifestTraversal {
   manifest: ViteManifest;
@@ -190,19 +203,27 @@ function moduleReferences(source: string): string[] {
   return [...new Set(references)];
 }
 
-function workerFiles(
+interface WorkerOutput {
+  files: Set<string>;
+  entries: Set<string>;
+}
+
+function workerOutput(
   editorFiles: Set<string>,
   manifestFiles: Set<string>,
   files: Readonly<Partial<Record<string, Uint8Array>>>,
-): Set<string> {
+): WorkerOutput {
   const workers = new Set<string>();
-  const pending = [...editorFiles]
-    .filter((path) => /\.m?js$/.test(path))
-    .flatMap((path) =>
-      dedicatedWorkerReferences(emittedSource(path, files)).map((reference) =>
-        resolvedOutputReference(reference, path, files),
+  const entries = new Set(
+    [...editorFiles]
+      .filter((path) => /\.m?js$/.test(path))
+      .flatMap((path) =>
+        dedicatedWorkerReferences(emittedSource(path, files)).map((reference) =>
+          resolvedOutputReference(reference, path, files),
+        ),
       ),
-    );
+  );
+  const pending = [...entries];
 
   while (pending.length > 0) {
     const path = pending.pop();
@@ -217,7 +238,83 @@ function workerFiles(
     }
   }
 
-  return workers;
+  return { files: workers, entries };
+}
+
+function outputMatchesBoundary(path: string, boundary: ExpectedWorkerBoundary): boolean {
+  const name = basename(path);
+  return (
+    name === `${boundary.outputFilePrefix}.js` ||
+    (name.startsWith(`${boundary.outputFilePrefix}-`) && name.endsWith('.js'))
+  );
+}
+
+function assertUniqueExpectedWorkers(expected: readonly ExpectedWorkerBoundary[]): void {
+  if (expected.length === 0) throw new Error('Expected Worker roster must not be empty.');
+  const identities = new Set<string>();
+  const prefixes = new Set<string>();
+  for (const boundary of expected) {
+    if (identities.has(boundary.identity) || prefixes.has(boundary.outputFilePrefix)) {
+      throw new Error(`Expected Worker roster repeats ${boundary.identity}.`);
+    }
+    identities.add(boundary.identity);
+    prefixes.add(boundary.outputFilePrefix);
+  }
+}
+
+interface WorkerClassifications {
+  classified: Map<string, string[]>;
+  extras: string[];
+}
+
+function classifyWorkerBoundaries(
+  paths: Set<string>,
+  expected: readonly ExpectedWorkerBoundary[],
+): WorkerClassifications {
+  const classified = new Map<string, string[]>();
+  const extras: string[] = [];
+  for (const path of paths) {
+    const matches = expected.filter((boundary) => outputMatchesBoundary(path, boundary));
+    if (matches.length !== 1) {
+      extras.push(path);
+      continue;
+    }
+    const boundary = matches[0];
+    const claimed = classified.get(boundary.identity) ?? [];
+    claimed.push(path);
+    classified.set(boundary.identity, claimed);
+  }
+  return { classified, extras };
+}
+
+function validateWorkerBoundaries(
+  paths: Set<string>,
+  expected: readonly ExpectedWorkerBoundary[],
+): WorkerBoundaryReport[] {
+  assertUniqueExpectedWorkers(expected);
+  const { classified, extras } = classifyWorkerBoundaries(paths, expected);
+  const missing = expected
+    .filter((boundary) => !classified.has(boundary.identity))
+    .map((boundary) => boundary.identity);
+  const duplicates = [...classified]
+    .filter(([, claimed]) => claimed.length > 1)
+    .map(([identity, claimed]) => `${identity} (${claimed.sort(compareText).join(', ')})`)
+    .sort(compareText);
+  const failures = [
+    ...(missing.length > 0 ? [`missing ${missing.join(', ')}`] : []),
+    ...(extras.length > 0 ? [`extra ${extras.sort(compareText).join(', ')}`] : []),
+    ...(duplicates.length > 0 ? [`duplicate ${duplicates.join('; ')}`] : []),
+  ];
+  if (failures.length > 0) {
+    throw new Error(`Dedicated Worker roster mismatch: ${failures.join('; ')}.`);
+  }
+  const boundaries: WorkerBoundaryReport[] = [];
+  for (const boundary of expected) {
+    const claimed = classified.get(boundary.identity);
+    const path = claimed?.[0];
+    if (path) boundaries.push({ identity: boundary.identity, path });
+  }
+  return boundaries.sort((left, right) => compareText(left.identity, right.identity));
 }
 
 function serviceWorkerReferences(source: string): string[] {
@@ -290,88 +387,29 @@ export function createDeliveryGraphs(options: CreateDeliveryGraphsOptions): Deli
   const allManifestFiles = new Set(
     manifestEntries.flatMap(([key]) => [...manifestEntryFiles(key, options.manifest, true)]),
   );
-  const workers = workerFiles(editorCompleteFiles, allManifestFiles, options.files);
+  const worker = workerOutput(editorCompleteFiles, allManifestFiles, options.files);
+  const workerBoundaries = validateWorkerBoundaries(
+    worker.entries,
+    options.expectedWorkers ?? PRODUCTION_WORKER_BOUNDARIES,
+  );
   const serviceWorkerPath = options.serviceWorkerPath ?? 'sw.js';
   const serviceWorker = serviceWorkerFiles(serviceWorkerPath, options.files);
   const precache = precacheFiles(emittedSource(serviceWorkerPath, options.files));
-  const countedInstallFiles = new Set([...editorCompleteFiles, ...workers, ...serviceWorker]);
+  const countedInstallFiles = new Set([...editorCompleteFiles, ...worker.files, ...serviceWorker]);
   const installAssets = new Set([...precache].filter((path) => !countedInstallFiles.has(path)));
   return {
     entries,
-    workers: graphReport(workers, options.files),
+    workers: { ...graphReport(worker.files, options.files), boundaries: workerBoundaries },
     serviceWorker: graphReport(serviceWorker, options.files),
     installAssets: graphReport(installAssets, options.files),
     precache: graphReport(precache, options.files),
   };
 }
 
-function reportFiles(report: BundleReport): Map<string, BundleFileReport> {
-  const files = new Map<string, BundleFileReport>();
-  const graphs = [
-    ...report.entries.flatMap((entry) => [entry.eager, entry.lazy, entry.complete]),
-    report.workers,
-    report.serviceWorker,
-    report.installAssets,
-    report.precache,
-  ];
-  for (const graph of graphs) {
-    for (const file of graph.files) {
-      const existing = files.get(file.path);
-      if (
-        existing &&
-        (existing.rawBytes !== file.rawBytes ||
-          existing.gzipBytes !== file.gzipBytes ||
-          existing.brotliBytes !== file.brotliBytes ||
-          existing.digest !== file.digest)
-      ) {
-        throw new Error(`Bundle report contains conflicting metadata for "${file.path}".`);
-      }
-      files.set(file.path, file);
-    }
-  }
-  return files;
-}
-
-function totalFileSizes(files: Iterable<BundleFileReport>): Omit<BundleEntrySize, 'entry'> {
-  let rawBytes = 0;
-  let gzipBytes = 0;
-  let brotliBytes = 0;
-  for (const file of files) {
-    rawBytes += file.rawBytes;
-    gzipBytes += file.gzipBytes;
-    brotliBytes += file.brotliBytes;
-  }
-  return { rawBytes, gzipBytes, brotliBytes };
-}
-
-export function compareBundleReports(
-  before: BundleReport,
-  after: BundleReport,
-): BundleReportComparison {
-  const beforeFiles = reportFiles(before);
-  const afterFiles = reportFiles(after);
-  const added = [...afterFiles.values()]
-    .filter((file) => !beforeFiles.has(file.path))
-    .sort((left, right) => compareText(left.path, right.path));
-  const removed = [...beforeFiles.values()]
-    .filter((file) => !afterFiles.has(file.path))
-    .sort((left, right) => compareText(left.path, right.path));
-  const changed = [...afterFiles.values()]
-    .flatMap((file) => {
-      const previous = beforeFiles.get(file.path);
-      return previous && previous.digest !== file.digest
-        ? [{ path: file.path, before: previous, after: file }]
-        : [];
-    })
-    .sort((left, right) => compareText(left.path, right.path));
-  const beforeSizes = totalFileSizes(beforeFiles.values());
-  const afterSizes = totalFileSizes(afterFiles.values());
-  return {
-    added,
-    removed,
-    changed,
-    rawBytes: afterSizes.rawBytes - beforeSizes.rawBytes,
-    gzipBytes: afterSizes.gzipBytes - beforeSizes.gzipBytes,
-    brotliBytes: afterSizes.brotliBytes - beforeSizes.brotliBytes,
-  };
-}
+export { compareBundleReports } from './bundle-report-comparison';
+export type {
+  BundleFileChange,
+  BundleGraphComparison,
+  BundleMembershipTransition,
+  BundleReportComparison,
+} from './bundle-report-comparison';

@@ -34,10 +34,29 @@ const manifest: ViteManifest = {
   },
 };
 
+const fixtureWorkers = [
+  { identity: 'dialog-worker', outputFilePrefix: 'dialog-worker' },
+  { identity: 'storage-worker', outputFilePrefix: 'storage-worker' },
+] as const;
+
+const productionWorkerIdentities = [
+  'gtfsWorker',
+  'gtfsReconcileWorker',
+  'osm-import-worker',
+  'previewWorkerEntry',
+  'svgWorkerEntry',
+  'storageSerializerWorker',
+  'storage-deserializer-worker',
+] as const;
+
 function encodedFiles(contents: Record<string, string>): Record<string, Uint8Array> {
   return Object.fromEntries(
     Object.entries(contents).map(([path, source]) => [path, new TextEncoder().encode(source)]),
   );
+}
+
+function encoded(source: string): Uint8Array {
+  return new TextEncoder().encode(source);
 }
 
 function fixtureFiles(options: { changedMain?: boolean; extraIcon?: boolean } = {}) {
@@ -80,8 +99,15 @@ function fixtureFiles(options: { changedMain?: boolean; extraIcon?: boolean } = 
   });
 }
 
-function deliveryGraphs(files = fixtureFiles()): DeliveryGraphs {
-  return createDeliveryGraphs({ manifest, files });
+function deliveryGraphs(
+  files = fixtureFiles(),
+  buildManifest: ViteManifest = manifest,
+): DeliveryGraphs {
+  return createDeliveryGraphs({
+    manifest: buildManifest,
+    files,
+    expectedWorkers: fixtureWorkers,
+  });
 }
 
 function paths(graph: BundleGraphReport): string[] {
@@ -93,11 +119,15 @@ function required<T>(value: T | undefined, label: string): T {
   return value;
 }
 
-function report(files: Record<string, Uint8Array>, generatedAt: string): BundleReport {
+function report(
+  files: Record<string, Uint8Array>,
+  generatedAt: string,
+  buildManifest: ViteManifest = manifest,
+): BundleReport {
   return {
     schemaVersion: 3,
     generatedAt,
-    ...deliveryGraphs(files),
+    ...deliveryGraphs(files, buildManifest),
     chunks: [],
     violations: [],
     chunkViolations: [],
@@ -194,6 +224,103 @@ describe('bundle report delivery graphs', () => {
     expect(paths(graphs.precache)).toEqual([...paths(graphs.precache)].sort());
     expect(deliveryGraphs()).toEqual(graphs);
   });
+
+  it('requires the complete production Worker roster unless a fixture roster is explicit', () => {
+    expect(() => createDeliveryGraphs({ manifest, files: fixtureFiles() })).toThrow(
+      'missing gtfsWorker',
+    );
+  });
+
+  it('reports the seven production Worker boundaries by source-output identity', () => {
+    const workerReferences = productionWorkerIdentities.map(
+      (identity) =>
+        `new Worker(new URL("/assets/${identity}-abcdefgh.js",import.meta.url),` +
+        `{type:"module",name:"${identity}"});`,
+    );
+    const files = encodedFiles({
+      'index.html': '<main></main>',
+      'assets/main.js': workerReferences.join(''),
+      ...Object.fromEntries(
+        productionWorkerIdentities.map((identity) => [
+          `assets/${identity}-abcdefgh.js`,
+          'self.onmessage=()=>{};',
+        ]),
+      ),
+      'sw.js':
+        'define(["./workbox-runtime"],function(w){w.precacheAndRoute(' +
+        '[{url:"index.html",revision:null},{url:"assets/main.js",revision:null}])});',
+      'workbox-runtime.js': 'define([],function(){return{}});',
+    });
+    const graphs = createDeliveryGraphs({
+      manifest: {
+        'index.html': { file: 'assets/main.js', name: 'main', isEntry: true },
+      },
+      files,
+    });
+    const workers = graphs.workers as typeof graphs.workers & {
+      boundaries: { identity: string; path: string }[];
+    };
+
+    expect(graphs.workers).toHaveProperty('boundaries');
+    expect(workers.boundaries.map((boundary) => boundary.identity).sort()).toEqual(
+      [...productionWorkerIdentities].sort(),
+    );
+    expect(workers.boundaries).toHaveLength(7);
+  });
+
+  it('fails when equivalent Worker syntax escapes classification', () => {
+    const workerReferences = productionWorkerIdentities.map((identity) =>
+      identity === 'gtfsWorker'
+        ? 'const gtfsUrl=new URL("/assets/gtfsWorker-abcdefgh.js",import.meta.url);' +
+          'new Worker(gtfsUrl,{type:"module",name:"gtfsWorker"});'
+        : `new Worker(new URL("/assets/${identity}-abcdefgh.js",import.meta.url),` +
+          `{type:"module",name:"${identity}"});`,
+    );
+    const files = encodedFiles({
+      'index.html': '<main></main>',
+      'assets/main.js': workerReferences.join(''),
+      ...Object.fromEntries(
+        productionWorkerIdentities.map((identity) => [
+          `assets/${identity}-abcdefgh.js`,
+          'self.onmessage=()=>{};',
+        ]),
+      ),
+      'sw.js': 'define(["./workbox-runtime"],function(w){w.precacheAndRoute([])});',
+      'workbox-runtime.js': 'define([],function(){return{}});',
+    });
+
+    expect(() =>
+      createDeliveryGraphs({
+        manifest: {
+          'index.html': { file: 'assets/main.js', name: 'main', isEntry: true },
+        },
+        files,
+      }),
+    ).toThrow('missing gtfsWorker');
+  });
+
+  it('fails when a supported Worker reference is outside the expected roster', () => {
+    const files = fixtureFiles();
+    files['assets/main.js'] = encoded(
+      Buffer.from(files['assets/main.js']).toString('utf8') +
+        'new Worker(new URL("/assets/unexpected-worker.js",import.meta.url));',
+    );
+    files['assets/unexpected-worker.js'] = encoded('self.onmessage=()=>{};');
+
+    expect(() => deliveryGraphs(files)).toThrow('extra assets/unexpected-worker.js');
+  });
+
+  it('fails when two Worker outputs claim one expected boundary', () => {
+    const files = fixtureFiles();
+    files['assets/main.js'] = encoded(
+      'new Worker(new URL("/assets/storage-worker-aaaaaaaa.js",import.meta.url));' +
+        'new Worker(new URL("/assets/storage-worker-bbbbbbbb.js",import.meta.url));',
+    );
+    files['assets/storage-worker-aaaaaaaa.js'] = encoded('self.onmessage=()=>{};');
+    files['assets/storage-worker-bbbbbbbb.js'] = encoded('self.onmessage=()=>{};');
+
+    expect(() => deliveryGraphs(files)).toThrow('duplicate storage-worker');
+  });
 });
 
 describe('bundle report comparisons', () => {
@@ -207,7 +334,8 @@ describe('bundle report comparisons', () => {
     const comparison = compareBundleReports(before, after);
     const reverseComparison = compareBundleReports(after, before);
 
-    expect(compareBundleReports(before, generatedAtOnly)).toEqual({
+    const generatedAtComparison = compareBundleReports(before, generatedAtOnly);
+    expect(generatedAtComparison).toMatchObject({
       added: [],
       removed: [],
       changed: [],
@@ -215,6 +343,8 @@ describe('bundle report comparisons', () => {
       gzipBytes: 0,
       brotliBytes: 0,
     });
+    expect(generatedAtComparison.graphs.every((graph) => graph.rawBytes === 0)).toBe(true);
+    expect(generatedAtComparison.membershipTransitions).toEqual([]);
     expect(comparison.added.map((file) => file.path)).toEqual(['icons/app-icon-192.png']);
     expect(comparison.removed).toEqual([]);
     expect(comparison.changed.map((file) => file.path)).toEqual(['assets/main.js', 'sw.js']);
@@ -241,5 +371,52 @@ describe('bundle report comparisons', () => {
           0,
         ),
     );
+  });
+
+  it('reports unchanged files moving between eager and lazy entry graphs', () => {
+    const files = fixtureFiles();
+    const eagerDialogManifest: ViteManifest = {
+      ...manifest,
+      'index.html': {
+        ...required(manifest['index.html'], 'main manifest entry'),
+        imports: ['_shared.js', 'src/Dialog.tsx'],
+        dynamicImports: [],
+      },
+    };
+    const before = report(files, '2026-08-12T00:00:00.000Z');
+    const after = report(files, '2026-08-13T00:00:00.000Z', eagerDialogManifest);
+    const comparison = compareBundleReports(before, after);
+
+    expect(comparison).toHaveProperty('graphs');
+    expect(comparison.added).toEqual([]);
+    expect(comparison.removed).toEqual([]);
+    expect(comparison.changed).toEqual([]);
+    expect(comparison.rawBytes).toBe(0);
+    const dialog = required(
+      before.entries.find((entry) => entry.entry === 'main')?.lazy.files.at(0),
+      'lazy dialog file',
+    );
+    const eager = required(
+      comparison.graphs.find((graph) => graph.graph === 'entries.main.eager'),
+      'main eager comparison',
+    );
+    const lazy = required(
+      comparison.graphs.find((graph) => graph.graph === 'entries.main.lazy'),
+      'main lazy comparison',
+    );
+    const complete = required(
+      comparison.graphs.find((graph) => graph.graph === 'entries.main.complete'),
+      'main complete comparison',
+    );
+    expect(eager.added.map((file) => file.path)).toEqual(['assets/dialog.js']);
+    expect(eager.rawBytes).toBe(dialog.rawBytes);
+    expect(lazy.removed.map((file) => file.path)).toEqual(['assets/dialog.js']);
+    expect(lazy.rawBytes).toBe(-dialog.rawBytes);
+    expect(complete.rawBytes).toBe(0);
+    expect(comparison.membershipTransitions).toContainEqual({
+      path: 'assets/dialog.js',
+      addedTo: ['entries.main.eager'],
+      removedFrom: ['entries.main.lazy'],
+    });
   });
 });
