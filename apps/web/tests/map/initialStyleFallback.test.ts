@@ -6,7 +6,7 @@ import {
 } from '../../src/map/initialStyleFallback';
 import { localBlankStyleForScheme } from '../../src/map/mapTheme';
 
-type StyleEvent = 'error' | 'style.load';
+type StyleEvent = 'error' | 'load' | 'style.load';
 
 class FakeStyleMap {
   readonly listeners = new Map<StyleEvent, Set<() => void>>();
@@ -57,7 +57,23 @@ describe('initial map style fallback', () => {
     detach();
   });
 
-  it('falls back on timeout but cancels the timer after the initial style loads', () => {
+  it('falls back when the style loads but its first useful map frame does not', () => {
+    const map = new FakeStyleMap();
+    const fallback = vi.fn();
+    attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'light',
+      timeoutMs: 250,
+      onFallback: fallback,
+    });
+
+    map.emit('style.load');
+    map.emit('error');
+
+    expect(fallback).toHaveBeenCalledTimes(1);
+    expect(map.setStyle).toHaveBeenCalledWith(localBlankStyleForScheme('light'), { diff: false });
+  });
+
+  it('falls back on timeout but cancels the timer after the initial map loads', () => {
     vi.useFakeTimers();
     const timedOut = new FakeStyleMap();
     const fallback = vi.fn();
@@ -77,7 +93,7 @@ describe('initial map style fallback', () => {
       timeoutMs: 250,
       onFallback: shouldNotFallback,
     });
-    loaded.emit('style.load');
+    loaded.emit('load');
     vi.advanceTimersByTime(250);
 
     expect(shouldNotFallback).not.toHaveBeenCalled();

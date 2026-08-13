@@ -440,9 +440,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     //
     // OpenFreeMap is a third-party host with no SLA, so
     // "the basemap is down" is a real operating condition, not a hypothetical.
-    // Only a failure *before the style loads* is worth telling the user about:
-    // once it's up, later errors are individual tiles timing out, which
-    // MapLibre retries and which nobody needs a message about.
+    // Only a failure before the initial map frame loads is worth telling the
+    // user about: style JSON can load while its first tiles still fail. Once
+    // the map has produced a usable frame, later errors are individual tiles
+    // timing out, which MapLibre retries and which nobody needs a message about.
     let usingLocalBlankStyle = false;
     let activeMapScheme = initialColorScheme;
     const onMapError = (event: MapErrorLike) => {

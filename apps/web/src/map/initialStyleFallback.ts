@@ -35,19 +35,23 @@ export function attachInitialStyleFallback(
     options.onFallback();
     map.setStyle(localBlankStyleForScheme(options.scheme), { diff: false });
   };
-  const onStyleLoad = () => {
+  const onMapLoad = () => {
     settled = true;
     clearTimer();
   };
   const onInitialError = () => fallback();
 
-  map.on('style.load', onStyleLoad);
+  // A style.load event proves only that the style JSON parsed. The map's load
+  // event is the first point at which its initial sources and tiles have
+  // produced a usable frame; failures between the two still need the local
+  // fallback, while later individual tile errors remain MapLibre's to retry.
+  map.on('load', onMapLoad);
   map.on('error', onInitialError);
   timer = setTimeout(fallback, options.timeoutMs);
 
   return () => {
     clearTimer();
-    map.off('style.load', onStyleLoad);
+    map.off('load', onMapLoad);
     map.off('error', onInitialError);
   };
 }

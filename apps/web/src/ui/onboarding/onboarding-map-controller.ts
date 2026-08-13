@@ -83,14 +83,13 @@ function lineCollection(
   };
 }
 
-function resolveSystems(scene: OnboardingSceneId): SceneSystems {
+export function resolveOnboardingSceneSystems(scene: OnboardingSceneId): SceneSystems {
   const resolvedSystem = scene === 'draw' ? ONBOARDING_DRAW_SYSTEM : ONBOARDING_FIXTURE_SYSTEM;
   const completeSystem = scene === 'draw' ? ONBOARDING_DRAW_SYSTEM : resolvedSystem;
   return {
     resolvedSystem,
     completeSystem,
-    baseSystem:
-      scene === 'draw' ? { ...completeSystem, services: [], stations: [] } : resolvedSystem,
+    baseSystem: scene === 'draw' ? { ...completeSystem, services: [], stops: [] } : resolvedSystem,
     resolvedView: onboardingViewOptions(scene === 'infrastructure' ? 'infrastructure' : 'network'),
   };
 }
@@ -161,8 +160,12 @@ function productionPromoteId(sourceId: string): string | undefined {
   return undefined;
 }
 
+export function onboardingProductionLayerSpecs(colorScheme: ColorScheme) {
+  return layerSpecsForScheme(colorScheme).filter((spec) => spec.type !== 'symbol');
+}
+
 function addProductionLayers(map: MapLibreMap, colorScheme: ColorScheme): void {
-  const specs = layerSpecsForScheme(colorScheme).filter((spec) => spec.type !== 'symbol');
+  const specs = onboardingProductionLayerSpecs(colorScheme);
   const sourceIds = new Set(
     specs.map((spec) => ('source' in spec ? spec.source : '')).filter(Boolean),
   );
@@ -179,20 +182,6 @@ function addProductionLayers(map: MapLibreMap, colorScheme: ColorScheme): void {
   for (const spec of specs) {
     if (!map.getLayer(spec.id)) map.addLayer(spec);
   }
-}
-
-function addVehicleEmphasisLayer(map: MapLibreMap): void {
-  map.addLayer({
-    id: 'onboarding-vehicle-emphasis',
-    type: 'circle',
-    source: SRC_VEHICLES,
-    paint: {
-      'circle-radius': 7,
-      'circle-color': ['get', 'color'],
-      'circle-stroke-width': 3,
-      'circle-stroke-color': '#ffffff',
-    },
-  });
 }
 
 function addPlaceMarkers(map: MapLibreMap): maplibregl.Marker[] {
@@ -322,7 +311,6 @@ function initializeScene(
     addContextLayers(map, options.colorScheme === 'dark');
   }
   addProductionLayers(map, options.colorScheme);
-  addVehicleEmphasisLayer(map);
 
   const baseFeatures = buildFeatures(systems.baseSystem, null, [], systems.resolvedView);
   const completeFeatures = buildFeatures(systems.completeSystem, null, [], systems.resolvedView);
@@ -352,7 +340,7 @@ function initializeScene(
  * cleanup. React owns when scenes change; this controller owns MapLibre's
  * sources, markers, animation, and resize lifecycle. */
 export function mountOnboardingMap(options: MountOnboardingMapOptions): () => void {
-  const systems = resolveSystems(options.scene);
+  const systems = resolveOnboardingSceneSystems(options.scene);
   let map: MapLibreMap;
   try {
     map = new maplibregl.Map({
