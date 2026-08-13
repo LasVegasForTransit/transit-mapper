@@ -255,16 +255,16 @@ pointer interaction, and exports. `MapCanvas.tsx` translates browser/editor
 events into calls on one `LiveMapRenderer`; committed geometry still comes from
 the store and core projectors.
 
-| Modules                                                                                         | Responsibility                                                                                          |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `render-presentation.ts`, `camera-render-preload.ts`                                            | Describe display scale and reusable camera coverage.                                                    |
-| `live-map-renderer.ts`                                                                          | Own accepted projection, scene publication, physical banks, and recovery. Start lifecycle changes here. |
-| `document-projection.ts`, `committed-feature-projection.ts`, `resumable-feature-projection*.ts` | Build dependency-scoped detached features and cancel superseded generations.                            |
-| `scene-draft*.ts`, `scene-source-state.ts`, `persistent-render-source-state.ts`                 | Normalize stable IDs and compute source-local changes without publishing partial work.                  |
-| `scene-publication*.ts`, `accepted-scene-store.ts`, `render-scene-source-updater.ts`            | Advance the accepted CPU scene only after source publication succeeds.                                  |
-| `source-bank*.ts`, `accepted-scene-recovery.ts`                                                 | Prewarm two physical banks, switch visual/hit ownership, and roll back failures.                        |
-| `editor-feature-state.ts`                                                                       | Own paint-only selection, hover, halos, and route focus.                                                |
-| `editor-overlays.ts`, `render-visibility.ts`                                                    | Own small editor geometry and mode/type filters outside committed projection.                           |
+| Modules                                                                                                    | Responsibility                                                                                          |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `render-presentation.ts`, `camera-render-preload.ts`                                                       | Describe display scale and reusable camera coverage.                                                    |
+| `live-map-renderer.ts`                                                                                     | Own accepted projection, scene publication, physical banks, and recovery. Start lifecycle changes here. |
+| `document-projection.ts`, `committed-feature-projection.ts`, `resumable-feature-projection*.ts`            | Build dependency-scoped detached features and cancel superseded generations.                            |
+| `scene-draft*.ts`, `accepted-scene-state.ts`, `scene-source-state.ts`, `persistent-render-source-state.ts` | Normalize stable IDs and compute source-local changes without publishing partial work.                  |
+| `scene-publication*.ts`, `accepted-scene-store.ts`, `render-scene-source-updater.ts`                       | Advance the accepted CPU scene only after source publication succeeds.                                  |
+| `source-bank*.ts`, `accepted-scene-recovery.ts`                                                            | Prewarm two physical banks, switch visual/hit ownership, and roll back failures.                        |
+| `editor-feature-state.ts`                                                                                  | Own paint-only selection, hover, halos, and route focus.                                                |
+| `editor-overlays.ts`, `render-visibility.ts`                                                               | Own small editor geometry and mode/type filters outside committed projection.                           |
 
 Scoped scenes use a stable source base with persistent deltas, avoiding a full
 copy for one entity edit. Static map, embed, export, and SVG share the same

@@ -11,7 +11,7 @@ import {
   type RenderScene,
   type RenderSceneStats,
 } from '@transitmapper/core/render/render-scene';
-import type { IncrementalLiveSceneState } from './synchronous-scene-draft';
+import type { IncrementalLiveSceneState } from './accepted-scene-state';
 import {
   addDomainFeature,
   canonicalDomainMap,

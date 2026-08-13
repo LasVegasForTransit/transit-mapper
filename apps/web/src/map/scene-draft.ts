@@ -20,7 +20,7 @@ import type {
   RenderScenePatchStats,
 } from '@transitmapper/core/render/render-scene-diff';
 import type { CooperativeRenderJobUnitSequence } from './cooperative-render-job-scheduler';
-import type { IncrementalLiveSceneState } from './synchronous-scene-draft';
+import type { IncrementalLiveSceneState } from './accepted-scene-state';
 import type { IncrementalSourceState } from './scene-source-state';
 import {
   createRenderFeatureCollectionMaterialization,

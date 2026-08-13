@@ -23,7 +23,7 @@ import {
   requireRenderFeature,
   type IncrementalSourceState,
 } from './scene-source-state';
-import type { BuildIncrementalLiveSceneInput } from './synchronous-scene-draft';
+import type { IncrementalSceneOperationCounts } from './scene-source-state';
 import type { SceneDraftWorkUnit } from './scene-draft-types';
 import { SortedRunMerge } from './scene-draft-work';
 import { SceneFeatureStats, type SceneFeatureStatsResult } from './scene-feature-stats';
@@ -38,7 +38,7 @@ export interface SourceNormalizerOptions {
   readonly mapSourceId: MapSystemFeatureSourceId;
   readonly sourceId: SystemFeatureSourceId;
   readonly batchSize: number;
-  readonly counts?: BuildIncrementalLiveSceneInput['counts'];
+  readonly counts?: IncrementalSceneOperationCounts;
   validateFeatureId(featureId: RenderFeatureId, sourceId: SystemFeatureSourceId): void;
 }
 

@@ -13,11 +13,8 @@ import {
   type SystemFeatureSourceId,
 } from '@transitmapper/core/render/render-identity';
 import type { RenderScene, RenderSceneStats } from '@transitmapper/core/render/render-scene';
-import {
-  visualTargetsForDomain,
-  type IncrementalLiveSceneState,
-  type IncrementalSceneOperationCounts,
-} from './synchronous-scene-draft';
+import { visualTargetsForDomain, type IncrementalLiveSceneState } from './accepted-scene-state';
+import type { IncrementalSceneOperationCounts } from './scene-source-state';
 import {
   createRenderSceneSourceUpdater,
   type ApplyRenderSceneOptions,
