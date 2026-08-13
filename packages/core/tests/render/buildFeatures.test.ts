@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '../../src/model/catalog';
 import { wholeLeg, wholeLegs, oneSection } from '../../src/model/geo';
 import { wayById } from '../../src/model/geo/wayPath';
-import { aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
 import type { Pattern, Service } from '../../src/model/system';
 import { buildFeatures, type ViewOptions } from '../../src/render/buildFeatures';
 
@@ -38,8 +38,8 @@ describe('buildFeatures service lines', () => {
           serviceIds: services.map((service) => service.id),
         },
       ],
-      stations: [
-        aStation('shared-stop', [-115.18, 36.14], { wayId: way.id, t: 0.5 }, { name: 'Central' }),
+      stops: [
+        aStop('shared-stop', [-115.18, 36.14], { wayId: way.id, t: 0.5 }, { name: 'Central' }),
       ],
     });
 
@@ -52,7 +52,7 @@ describe('buildFeatures service lines', () => {
       });
 
     expect(new Set(offsets)).toEqual(new Set([0]));
-    expect(features.stations.features[0].properties?.interchange).toBe(false);
+    expect(features.stops.features[0].properties?.interchange).toBe(false);
   });
 
   it('draws a bundled service on a bent corridor as one line, not one per way', () => {

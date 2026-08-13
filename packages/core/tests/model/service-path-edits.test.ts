@@ -44,11 +44,11 @@ describe('service path record edits', () => {
   it('adds and removes skipped stops without retaining an empty record', () => {
     const pattern = { id: 'service', sections: oneSection([wholeLeg('road')]) };
 
-    expect(setPatternStopSkipped(pattern, 'outbound', 'station', false)).toBe(pattern);
-    const skipped = setPatternStopSkipped(pattern, 'outbound', 'station', true);
-    expect(skipped.skippedStops).toEqual({ outbound: ['station'] });
-    expect(setPatternStopSkipped(skipped, 'outbound', 'station', true)).toBe(skipped);
-    const restored = setPatternStopSkipped(skipped, 'outbound', 'station', false);
+    expect(setPatternStopSkipped(pattern, 'outbound', 'stop', false)).toBe(pattern);
+    const skipped = setPatternStopSkipped(pattern, 'outbound', 'stop', true);
+    expect(skipped.skippedStops).toEqual({ outbound: ['stop'] });
+    expect(setPatternStopSkipped(skipped, 'outbound', 'stop', true)).toBe(skipped);
+    const restored = setPatternStopSkipped(skipped, 'outbound', 'stop', false);
     expect(restored).toEqual(pattern);
     expect(restored.skippedStops).toBeUndefined();
   });

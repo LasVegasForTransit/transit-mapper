@@ -4,7 +4,7 @@ import { mergeLegs } from '../../src/model/patternEdits';
 import type { LaneDirection, Way } from '../../src/model/system';
 import { mergeWaysEndToEnd } from '../../src/model/way-merge-edits';
 import { splitWayAtIndex } from '../../src/model/way-split-edits';
-import { aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
 import { describe, expect, it, vi } from 'vitest';
 
 function laneId(way: Way, direction: LaneDirection): string {
@@ -104,11 +104,11 @@ describe('way split and merge regressions', () => {
     const service = aService('service', [
       { id: 'service', sections: oneSection([wholeLeg(untouched.id)]) },
     ]);
-    const station = aStation('station', [3.5, 0], { wayId: untouched.id, t: 0.5 });
+    const stop = aStop('stop', [3.5, 0], { wayId: untouched.id, t: 0.5 });
     const system = aSystem({
       ways: [road, untouched],
       services: [service],
-      stations: [station],
+      stops: [stop],
       namedWays: [{ id: 'name', name: 'Untouched', wayIds: [untouched.id] }],
     });
     const createId = vi
@@ -119,7 +119,7 @@ describe('way split and merge regressions', () => {
     const split = splitWayAtIndex(system, road.id, 1, createId);
 
     expect(split.services).toBe(system.services);
-    expect(split.stations).toBe(system.stations);
+    expect(split.stops).toBe(system.stops);
     expect(split.namedWays).toBe(system.namedWays);
   });
 

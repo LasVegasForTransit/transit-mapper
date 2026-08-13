@@ -63,11 +63,11 @@ describe('facility record transform identity', () => {
 
 describe('group record transform identity', () => {
   it('creates a group with stable member order and no duplicates', () => {
-    const group = createGroup(['station', 'way', 'station'], 'Complex');
+    const group = createGroup(['stop', 'way', 'stop'], 'Complex');
 
     expect(group.id).toEqual(expect.any(String));
     expect(group.name).toBe('Complex');
-    expect(group.memberIds).toEqual(['station', 'way']);
+    expect(group.memberIds).toEqual(['stop', 'way']);
   });
 
   it('preserves the input for missing groups and equal or absent edits', () => {
@@ -75,7 +75,7 @@ describe('group record transform identity', () => {
       id: 'group',
       name: 'Downtown',
       color: '#246bce',
-      memberIds: ['station'],
+      memberIds: ['stop'],
       footprint: [
         [0, 0],
         [0.001, 0],
@@ -85,7 +85,7 @@ describe('group record transform identity', () => {
     const system = aSystem({ groups: [group] });
 
     expect(addGroupMember(system, 'missing', 'way')).toBe(system);
-    expect(removeGroupMember(system, 'missing', 'station')).toBe(system);
+    expect(removeGroupMember(system, 'missing', 'stop')).toBe(system);
     expect(renameGroup(system, 'missing', 'Ghost')).toBe(system);
     expect(setGroupColor(system, 'missing', '#000000')).toBe(system);
     expect(deleteGroup(system, 'missing')).toBe(system);
@@ -96,34 +96,34 @@ describe('group record transform identity', () => {
     expect(moveGroupFootprintPoint(system, group.id, 10, [2, 2])).toBe(system);
     expect(renameGroup(system, group.id, 'Downtown')).toBe(system);
     expect(setGroupColor(system, group.id, '#246bce')).toBe(system);
-    expect(addGroupMember(system, group.id, 'station')).toBe(system);
+    expect(addGroupMember(system, group.id, 'stop')).toBe(system);
     expect(removeGroupMember(system, group.id, 'missing')).toBe(system);
   });
 
   it('adds and removes members while preserving untouched group records', () => {
-    const group: Group = { id: 'group', memberIds: ['station'] };
+    const group: Group = { id: 'group', memberIds: ['stop'] };
     const untouched: Group = { id: 'untouched', memberIds: ['facility'] };
     const system = aSystem({ updatedAt: 222, groups: [group, untouched] });
 
     const added = addGroupMember(system, group.id, 'way');
-    expect(added.groups[0].memberIds).toEqual(['station', 'way']);
+    expect(added.groups[0].memberIds).toEqual(['stop', 'way']);
     expect(added.groups[1]).toBe(untouched);
 
-    const removed = removeGroupMember(added, group.id, 'station');
+    const removed = removeGroupMember(added, group.id, 'stop');
     expect(removed.groups[0].memberIds).toEqual(['way']);
     expect(removed.groups[1]).toBe(untouched);
     expect(removed.updatedAt).toBe(222);
   });
 
   it('removes deleted records from every group and preserves untouched group references', () => {
-    const affected: Group = { id: 'affected', memberIds: ['station', 'way', 'facility'] };
+    const affected: Group = { id: 'affected', memberIds: ['stop', 'way', 'facility'] };
     const untouched: Group = { id: 'untouched', memberIds: ['other'] };
     const system = aSystem({ groups: [affected, untouched] });
 
     expect(removeGroupMembers(system, new Set())).toBe(system);
     expect(removeGroupMembers(system, new Set(['missing']))).toBe(system);
 
-    const next = removeGroupMembers(system, new Set(['station', 'facility']));
+    const next = removeGroupMembers(system, new Set(['stop', 'facility']));
     expect(next.groups[0]).toEqual({ ...affected, memberIds: ['way'] });
     expect(next.groups[1]).toBe(untouched);
   });

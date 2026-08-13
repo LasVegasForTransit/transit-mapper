@@ -25,7 +25,7 @@ const DEGENERATE_SPAN_T = 1e-9;
  * A pattern could only name whole ways, so a span that began or ended mid-way
  * had a control point spliced in and the way cut around it — and that cut
  * changed the way for everyone: it extended every other rider's pattern,
- * reanchored every station on it, reindexed every node ref, and left a
+ * reanchored every stop on it, reindexed every node ref, and left a
  * fragment that never went away. Drawing a line that terminated in the middle
  * of a boulevard permanently divided the boulevard.
  *
@@ -53,7 +53,7 @@ export function materializeRouteSpans(
     // A span reports its ends either as a raw control point or, where the
     // route started or finished mid-way, as a coordinate. Both become a
     // position along the resolved path, which is the ruler a leg's extent is
-    // measured against — and the same projection station anchoring uses, so a
+    // measured against — and the same projection stop anchoring uses, so a
     // curved way's fillets are handled identically in both places.
     const startCoord = s.fromCoord ?? way.points[s.fromPoint];
     const endCoord = s.toCoord ?? way.points[s.toPoint];

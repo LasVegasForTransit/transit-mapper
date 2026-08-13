@@ -11,7 +11,7 @@ import { defaultProfileFor, makeOneWay } from '../../src/model/profile';
 import { mergeWaysEndToEnd } from '../../src/model/way-merge-edits';
 import { removeWayFromSystem } from '../../src/model/way-removal';
 import { deleteWayStretch } from '../../src/model/way-stretch-edits';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
 
 describe('pure network edits', () => {
   it('merges end-to-end ways and reconciles every dependent entity', () => {
@@ -27,7 +27,7 @@ describe('pure network edits', () => {
     const system = aSystem({
       ways: [west, east],
       services: [aService('line', [pattern])],
-      stations: [aStation('stop', [-115.15, 36.1], { wayId: east.id, t: 0.5 })],
+      stops: [aStop('stop', [-115.15, 36.1], { wayId: east.id, t: 0.5 })],
       nodes: [
         {
           id: 'seam',
@@ -45,8 +45,8 @@ describe('pure network edits', () => {
 
     expect(merged.ways.map((way) => way.id)).toEqual([west.id]);
     expect(patternWayIds(merged.services[0].path)).toEqual([west.id]);
-    expect(merged.stations[0].anchors[0].wayId).toBe(west.id);
-    expect(merged.stations[0].anchors[0].t).toBeTypeOf('number');
+    expect(merged.stops[0].anchors[0].wayId).toBe(west.id);
+    expect(merged.stops[0].anchors[0].t).toBeTypeOf('number');
     expect(merged.nodes).toEqual([]);
     expect(merged.namedWays[0].wayIds).toEqual([west.id]);
     expect(merged.updatedAt).toBe(system.updatedAt);
@@ -158,7 +158,7 @@ describe('pure network edits', () => {
     const system = aSystem({
       ways: [keeper, other, branch],
       namedWays: [{ id: 'pair', name: 'Main Street', wayIds: [keeper.id, other.id] }],
-      stations: [aStation('branch-stop', [1.8, 0.1], { wayId: branch.id, t: 0 })],
+      stops: [aStop('branch-stop', [1.8, 0.1], { wayId: branch.id, t: 0 })],
       nodes: [
         {
           id: 'junction',
@@ -187,7 +187,7 @@ describe('pure network edits', () => {
       ],
     });
     expect(combined.ways.find((way) => way.id === branch.id)?.points[0]).toEqual([2, 0]);
-    expect(combined.stations[0].coord).toEqual([2, 0]);
+    expect(combined.stops[0].coord).toEqual([2, 0]);
     expect(combined.nodes[0].connectors).toEqual([
       {
         from: { wayId: keeper.id, laneId: otherLane.id },

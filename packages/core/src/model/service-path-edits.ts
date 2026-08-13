@@ -106,14 +106,14 @@ export function servicePathOperatingMeters(system: TransitSystem, pattern: Patte
 export function setPatternStopSkipped(
   pattern: Pattern,
   run: RunDirection,
-  stationId: string,
+  stopId: string,
   skipped: boolean,
 ): Pattern {
   const current = pattern.skippedStops?.[run] ?? [];
-  if (current.includes(stationId) === skipped) return pattern;
+  if (current.includes(stopId) === skipped) return pattern;
   const next = new Set(current);
-  if (skipped) next.add(stationId);
-  else next.delete(stationId);
+  if (skipped) next.add(stopId);
+  else next.delete(stopId);
   const outbound = run === 'outbound' ? [...next] : (pattern.skippedStops?.outbound ?? []);
   const inbound = run === 'inbound' ? [...next] : (pattern.skippedStops?.inbound ?? []);
   const { skippedStops: _removed, ...bare } = pattern;

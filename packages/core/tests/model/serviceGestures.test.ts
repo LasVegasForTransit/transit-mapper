@@ -4,7 +4,7 @@ import { defaultProfileFor } from '../../src/model/profile';
 import { patternPositionAt } from '../../src/model/serviceEdits';
 import { planTerminusGesture } from '../../src/model/serviceGestures';
 import { servicePattern } from '../../src/model/line-service';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
 import type { Way } from '../../src/model/system';
 
 const A: [number, number] = [-115.2, 36.1];
@@ -62,12 +62,12 @@ describe('service terminus gesture planning', () => {
       const extension = aRoad('extension', side === 'end' ? [B, C] : [C, A]);
       const pattern = aPattern('branch', [trunk], ['trunk']);
       const service = aService('bus', [pattern]);
-      const station = aStation('station', B, { wayId: 'trunk', t: 1 });
+      const stop = aStop('stop', B, { wayId: 'trunk', t: 1 });
       const joint = side === 'end' ? B : A;
       const system = aSystem({
         ways: [trunk, extension],
         services: [service],
-        stations: [station],
+        stops: [stop],
         nodes: [
           {
             id: 'joint',
@@ -89,7 +89,7 @@ describe('service terminus gesture planning', () => {
       expect(result.kind).toBe('extend');
       expect(result.system).toBe(system);
       expect(result.system.ways[0]).toBe(trunk);
-      expect(result.system.stations[0]).toBe(station);
+      expect(result.system.stops[0]).toBe(stop);
       expect(result.spans.some((span) => span.wayId === extension.id)).toBe(true);
     },
   );

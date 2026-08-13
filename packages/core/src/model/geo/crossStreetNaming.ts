@@ -5,8 +5,8 @@
 // Node), never from landmark/POI data — none exists in this model yet.
 import { modesForWayType } from '../catalog';
 import { laneCapacity } from '../profile';
-import { servicesAtStation } from '../../sim/frequency';
-import type { LngLat, NamedWay, Node, Station, StationAnchor, TransitSystem, Way } from '../system';
+import { servicesAtStop } from '../../sim/frequency';
+import type { LngLat, NamedWay, Node, Stop, StopAnchor, TransitSystem, Way } from '../system';
 import { haversineMeters } from './spherical';
 import { pathLengthMeters } from './measurement';
 import { nodesByWayId, resolveWayPath, wayById } from './wayPath';
@@ -56,20 +56,20 @@ const MAX_WALK_HOPS = 200;
 export interface SuggestedStopName {
   style: StopNamingStyle;
   /** null when nothing useful was found — the caller leaves the name field
-   *  as-is (the "Unnamed station" placeholder keeps showing). */
+   *  as-is (the "Unnamed stop" placeholder keeps showing). */
   name: string | null;
 }
 
 export interface CrossStreetQuery {
   system: TransitSystem;
   coord: LngLat;
-  anchors: StationAnchor[];
+  anchors: StopAnchor[];
 }
 
 // Cached by the namedWays array's own reference, same convention as
 // nodesByWayId below and wayById (wayPath.ts) — suggestStopName rebuilds
-// this on every call otherwise, and resyncAutoNamedStations calls it once
-// per autoNamed station against the same namedWays array each time.
+// this on every call otherwise, and resyncAutoNamedStops calls it once
+// per autoNamed stop against the same namedWays array each time.
 const namedWayByWayIdCache = new WeakMap<NamedWay[], Map<string, NamedWay>>();
 
 function namedWayByWayId(namedWays: NamedWay[]): Map<string, NamedWay> {
@@ -89,9 +89,9 @@ function namedWayByWayId(namedWays: NamedWay[]): Map<string, NamedWay> {
 function resolveNamingStyle(
   system: TransitSystem,
   coord: LngLat,
-  anchors: StationAnchor[],
+  anchors: StopAnchor[],
 ): StopNamingStyle {
-  const services = servicesAtStation(system.ways, system.services, {
+  const services = servicesAtStop(system.ways, system.services, {
     id: '',
     coord,
     anchors,
@@ -109,18 +109,18 @@ function resolveNamingStyle(
   // can street-run, but 'lightRail' is what it actually is; a plain
   // road-typed way should read as a bus stop by default, not a tram one.
   // This is still a best-effort guess, not a guarantee: the catalog
-  // deliberately allows a tram to run on a 'road'-typed way, so a station
+  // deliberately allows a tram to run on a 'road'-typed way, so a stop
   // placed there can still go stale in naming convention if a tram service
   // is drawn through it later. Kept deliberately, rather than defaulting to
   // 'intersection' until a service exists: each editor command or shared
-  // internal operation that can newly serve a station calls
-  // resyncAutoNamedStations (service metadata and gesture commands, routing,
+  // internal operation that can newly serve a stop calls
+  // resyncAutoNamedStops (service metadata and gesture commands, routing,
   // and Way finishing), so the tram-on-road case corrects itself the moment a
   // real service actually proves the guess wrong. That leaves this heuristic
   // giving correct, immediate UX for the common case, with resync as the
   // safety net for the rest — not two independent guesses that can drift.
   // The Inspector's "Suggest name" button remains the manual recourse for
-  // whatever's left (a moved station, a station named before this code
+  // whatever's left (a moved stop, a stop named before this code
   // existed, etc).
   const nativeModes = anchoredWays.flatMap((w) =>
     modesForWayType(w.typeId).filter((m) => m.wayTypeIds[0] === w.typeId),
@@ -130,7 +130,7 @@ function resolveNamingStyle(
 }
 
 /** Distinct NamedWay names carried by the stop's own anchored way(s). */
-function homeStreetNames(anchors: StationAnchor[], namedWayIndex: Map<string, NamedWay>): string[] {
+function homeStreetNames(anchors: StopAnchor[], namedWayIndex: Map<string, NamedWay>): string[] {
   const names = new Set<string>();
   for (const anchor of anchors) {
     const nw = namedWayIndex.get(anchor.wayId);
@@ -303,7 +303,7 @@ function formatName(
   return position === 'behind' ? `${home} after ${cross}` : `${home} before ${cross}`;
 }
 
-/** Suggests a name for a station or stop from the real street names already
+/** Suggests a name for a stop or stop from the real street names already
  *  in the document. Never throws, never guesses past what the data actually
  *  supports — a system with no named streets nearby returns `name: null`,
  *  which the caller leaves alone rather than showing a partial guess. */
@@ -370,31 +370,31 @@ export function suggestStopName(query: CrossStreetQuery): SuggestedStopName {
   return { style, name: formatName(style, home, winner.name, winner.direction) };
 }
 
-/** Whether `station` could plausibly be affected by a change touching
+/** Whether `stop` could plausibly be affected by a change touching
  *  `affectedWayIds` — anchored to one of them, or within the same search
  *  radius suggestStopName itself uses to find a free-floating stop's
- *  nearest streets. A station anywhere else in the document can't have its
+ *  nearest streets. A stop anywhere else in the document can't have its
  *  suggested name change as a result of that specific change. */
 function mayBeAffectedBy(
   system: TransitSystem,
-  station: Pick<Station, 'coord' | 'anchors'>,
+  stop: Pick<Stop, 'coord' | 'anchors'>,
   affectedWayIds: Set<string>,
 ): boolean {
-  if (station.anchors.some((a) => affectedWayIds.has(a.wayId))) return true;
-  const nearby = servedWaysByDistance(station.coord, system.ways, CROSS_STREET_SEARCH_RADIUS_M);
+  if (stop.anchors.some((a) => affectedWayIds.has(a.wayId))) return true;
+  const nearby = servedWaysByDistance(stop.coord, system.ways, CROSS_STREET_SEARCH_RADIUS_M);
   return nearby.some((n) => affectedWayIds.has(n.wayId));
 }
 
 /**
- * Re-suggests every still-`autoNamed` station's name against the current
+ * Re-suggests every still-`autoNamed` stop's name against the current
  * document. A name is only ever computed automatically at two moments: when
- * a station is first placed, and here — called after an action that could
+ * a stop is first placed, and here — called after an action that could
  * newly serve a previously-unserved stop (drawing a service through it,
  * attaching a return path), the case resolveNamingStyle's own fallback
  * can't get right in advance, since it has to guess a style before any
  * service exists.
  *
- * `affectedWayIds`, when given, narrows the pass to stations that could
+ * `affectedWayIds`, when given, narrows the pass to stops that could
  * plausibly be affected by whatever just changed (see mayBeAffectedBy) —
  * the normal case, since a new service or return path only ever changes
  * what serves the ways it actually rides. Omit it for a full document
@@ -402,16 +402,16 @@ function mayBeAffectedBy(
  * function honest about what it does when given no scope to narrow by.
  *
  * A user's own typed text is never touched: `autoNamed` clears the moment
- * anyone sets a station's name directly, and only stations where it's still
+ * anyone sets a stop's name directly, and only stops where it's still
  * set are eligible here. Returns `system` unchanged (same reference) when
  * nothing needed updating, so callers can cheaply skip a store update.
  */
-export function resyncAutoNamedStations(
+export function resyncAutoNamedStops(
   system: TransitSystem,
   affectedWayIds?: Set<string>,
 ): TransitSystem {
   let changed = false;
-  const stations = system.stations.map((st) => {
+  const stops = system.stops.map((st) => {
     if (!st.autoNamed) return st;
     if (affectedWayIds && !mayBeAffectedBy(system, st, affectedWayIds)) return st;
     const suggested = suggestStopName({ system, coord: st.coord, anchors: st.anchors });
@@ -419,5 +419,5 @@ export function resyncAutoNamedStations(
     changed = true;
     return { ...st, name: suggested.name };
   });
-  return changed ? { ...system, stations } : system;
+  return changed ? { ...system, stops } : system;
 }

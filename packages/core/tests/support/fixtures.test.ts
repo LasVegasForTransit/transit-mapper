@@ -10,7 +10,7 @@
 import { wayById, wholeLegs, oneSection } from '../../src/model/geo';
 import { defaultProfileFor } from '../../src/model/profile';
 import { createEmptySystem } from '../../src/model/serialize';
-import type { LngLat, Pattern, Service, Station, TransitSystem, Way } from '../../src/model/system';
+import type { LngLat, Pattern, Service, Stop, TransitSystem, Way } from '../../src/model/system';
 
 /** A road with the way type's default cross-section. */
 export function aRoad(id: string, points: LngLat[], overrides: Partial<Way> = {}): Way {
@@ -79,13 +79,13 @@ export function aSystem(parts: Partial<TransitSystem> = {}): TransitSystem {
   return system;
 }
 
-/** A station anchored partway along a way. `t` runs along the WAY's own point
+/** A stop anchored partway along a way. `t` runs along the WAY's own point
  *  order, which is not the direction of travel when a line runs it backwards. */
-export function aStation(
+export function aStop(
   id: string,
   coord: LngLat,
   anchor?: { wayId: string; t: number },
-  overrides: Partial<Station> = {},
-): Station {
+  overrides: Partial<Stop> = {},
+): Stop {
   return { id, coord, anchors: anchor ? [anchor] : [], ...overrides };
 }

@@ -12,7 +12,7 @@ import {
   patternLegs,
   wholeLeg,
 } from '../../src/model/geo';
-import { aPattern, aRoad, aStation } from '../support/fixtures.test';
+import { aPattern, aRoad, aStop } from '../support/fixtures.test';
 import {
   dwellStopsForPattern,
   effectiveVehicleKind,
@@ -31,19 +31,19 @@ const road = aRoad('w', [
 const ways = [road];
 const wholeStreet = aPattern('p', ways, ['w']);
 
-const stopsOf = (pattern = wholeStreet, stations = allStations) => {
+const stopsOf = (pattern = wholeStreet, stops = allStops) => {
   const path = patternPath(ways, pattern);
-  return patternStops(stations, pattern, path, pathLengthMeters(path));
+  return patternStops(stops, pattern, path, pathLengthMeters(path));
 };
 
-const allStations = [
-  aStation('east', [-115.12, 36.1], { wayId: 'w', t: 0.8 }),
-  aStation('west', [-115.18, 36.1], { wayId: 'w', t: 0.2 }),
-  aStation('middle', [-115.15, 36.1], { wayId: 'w', t: 0.5 }),
+const allStops = [
+  aStop('east', [-115.12, 36.1], { wayId: 'w', t: 0.8 }),
+  aStop('west', [-115.18, 36.1], { wayId: 'w', t: 0.2 }),
+  aStop('middle', [-115.15, 36.1], { wayId: 'w', t: 0.5 }),
 ];
 
-function requiredStats(pattern: Pattern, stations = allStations) {
-  const stats = patternStats(ways, stations, pattern, profile);
+function requiredStats(pattern: Pattern, stops = allStops) {
+  const stats = patternStats(ways, stops, pattern, profile);
   if (!stats) throw new Error('Expected the fixture pattern to resolve');
   return stats;
 }
@@ -69,8 +69,8 @@ describe('vehicle kind resolution', () => {
 });
 
 describe('a line running a whole street', () => {
-  it('calls at its stations in the order a rider reaches them', () => {
-    expect(stopsOf().map((s) => s.station.id)).toEqual(['west', 'middle', 'east']);
+  it('calls at its stops in the order a rider reaches them', () => {
+    expect(stopsOf().map((s) => s.stop.id)).toEqual(['west', 'middle', 'east']);
   });
 
   it('measures each stop by how far into the run it is', () => {
@@ -78,8 +78,8 @@ describe('a line running a whole street', () => {
     expect(distances).toEqual([...distances].sort((a, b) => a - b));
   });
 
-  it('gives a station its own dwell, falling back to the default', () => {
-    const held = aStation('held', [-115.15, 36.1], { wayId: 'w', t: 0.5 }, { dwellSeconds: 90 });
+  it('gives a stop its own dwell, falling back to the default', () => {
+    const held = aStop('held', [-115.15, 36.1], { wayId: 'w', t: 0.5 }, { dwellSeconds: 90 });
     expect(stopsOf(wholeStreet, [held])[0].dwellMs).toBe(90_000);
     expect(stopsOf()[0].dwellMs).toBe(20_000);
   });
@@ -92,15 +92,15 @@ describe('a line terminating mid-block', () => {
   const halfStreet = aPattern('p2', ways, ['w']);
   halfStreet.sections = oneSection([stretchLeg(patternLegs(halfStreet)[0], 0, 0.6)]);
 
-  it('does not call at a station past where it stops', () => {
-    expect(stopsOf(halfStreet).map((s) => s.station.id)).toEqual(['west', 'middle']);
+  it('does not call at a stop past where it stops', () => {
+    expect(stopsOf(halfStreet).map((s) => s.stop.id)).toEqual(['west', 'middle']);
   });
 
   it('reports a shorter round trip than the whole street', () => {
     const half = requiredStats(halfStreet);
     const whole = requiredStats(wholeStreet);
     expect(half.meters).toBeLessThan(whole.meters);
-    expect(half.stops.map((s) => s.station.id)).toEqual(['west', 'middle']);
+    expect(half.stops.map((s) => s.stop.id)).toEqual(['west', 'middle']);
   });
 });
 
@@ -127,13 +127,13 @@ describe('what a line amounts to', () => {
   });
 
   it('claims nothing about a line whose ways resolve to no path', () => {
-    expect(patternStats([], allStations, wholeStreet, profile)).toBeNull();
+    expect(patternStats([], allStops, wholeStreet, profile)).toBeNull();
   });
 });
 
 describe('a platform both directions of a couplet use', () => {
-  // A transit centre, or an island platform: ONE station record riding BOTH
-  // ways. That is what `Station.anchors` is for — a single anchor could only
+  // A transit centre, or an island platform: ONE stop record riding BOTH
+  // ways. That is what `Stop.anchors` is for — a single anchor could only
   // name one of them, and every line on the other drove past a stop it plainly
   // calls at.
   const A = aRoad('outward', [
@@ -148,7 +148,7 @@ describe('a platform both directions of a couplet use', () => {
     id: 'cp',
     sections: [{ kind: 'split', outbound: [wholeLeg('outward')], inbound: [wholeLeg('return')] }],
   };
-  const shared = aStation(
+  const shared = aStop(
     'centre',
     [-115.2, 36.11],
     { wayId: 'outward', t: 0.5 },
@@ -168,7 +168,7 @@ describe('a platform both directions of a couplet use', () => {
       patternRunPath(ways, couplet, run),
       pathLengthMeters(patternRunPath(ways, couplet, run)),
       run,
-    ).map((s) => s.station.id);
+    ).map((s) => s.stop.id);
 
   it('is called at by both directions', () => {
     expect(idsOn('outbound')).toEqual(['centre']);
@@ -182,7 +182,7 @@ describe('a platform both directions of a couplet use', () => {
 });
 
 describe('a stop anchored to only one half of a couplet', () => {
-  // No proximity guessing: a station records the ways it rides, and a
+  // No proximity guessing: a stop records the ways it rides, and a
   // direction that does not ride one of them drives past. This used to be
   // inferred from how close the two streets happened to be.
   const A = aRoad('outward', [
@@ -197,14 +197,14 @@ describe('a stop anchored to only one half of a couplet', () => {
     id: 'one-sided',
     sections: [{ kind: 'split', outbound: [wholeLeg('outward')], inbound: [wholeLeg('return')] }],
   };
-  const onReturnOnly = aStation('east', [-115.199, 36.11], { wayId: 'return', t: 0.5 });
+  const onReturnOnly = aStop('east', [-115.199, 36.11], { wayId: 'return', t: 0.5 });
   const ways = [A, B];
 
   it('is called at by the direction that rides its way', () => {
     const path = patternRunPath(ways, couplet, 'inbound');
     expect(
       patternStops([onReturnOnly], couplet, path, pathLengthMeters(path), 'inbound').map(
-        (s) => s.station.id,
+        (s) => s.stop.id,
       ),
     ).toEqual(['east']);
   });
@@ -213,7 +213,7 @@ describe('a stop anchored to only one half of a couplet', () => {
     const path = patternRunPath(ways, couplet, 'outbound');
     expect(
       patternStops([onReturnOnly], couplet, path, pathLengthMeters(path), 'outbound').map(
-        (s) => s.station.id,
+        (s) => s.stop.id,
       ),
     ).toEqual([]);
   });
@@ -228,8 +228,8 @@ describe('a stop served in one direction only', () => {
     [-115.2, 36.14],
   ]);
   const stops = [
-    aStation('south', [-115.2, 36.11], { wayId: 'street', t: 0.25 }),
-    aStation('north', [-115.2, 36.13], { wayId: 'street', t: 0.75 }),
+    aStop('south', [-115.2, 36.11], { wayId: 'street', t: 0.25 }),
+    aStop('north', [-115.2, 36.13], { wayId: 'street', t: 0.75 }),
   ];
   const base: Pattern = { id: 'p', sections: oneSection([wholeLeg('street')]) };
   const skippingNorthOnTheWayBack: Pattern = {
@@ -239,7 +239,7 @@ describe('a stop served in one direction only', () => {
 
   const idsOn = (pattern: Pattern, run: 'outbound' | 'inbound') => {
     const path = patternRunPath([street], pattern, run);
-    return patternStops(stops, pattern, path, pathLengthMeters(path), run).map((s) => s.station.id);
+    return patternStops(stops, pattern, path, pathLengthMeters(path), run).map((s) => s.stop.id);
   };
 
   it('calls at both stops in both directions when nothing is skipped', () => {

@@ -15,7 +15,7 @@ export interface Line {
  * A leg exists so a service can cover PART of a way. Before it, a pattern held
  * a bare list of way ids, so a service that started or stopped mid-block had
  * to be made to fit by splitting the way underneath it — which mutated that
- * way for every other service riding it, reanchored every station on it, and
+ * way for every other service riding it, reanchored every stop on it, and
  * left a permanent fragment behind. A corridor carrying many lines
  * accumulated one fragment per line that terminated on it. Extents are how a
  * service stops doing that.
@@ -39,7 +39,7 @@ export type LegDirection = 'withPoints' | 'againstPoints';
  * has never meant anything.
  *
  * `fromT`/`toT` are normalized arc-length along the way's OWN resolved path —
- * the same 0-at-the-first-point convention as StationAnchor.t, not travel
+ * the same 0-at-the-first-point convention as StopAnchor.t, not travel
  * order — so `direction` stays the only thing that says which way round.
  */
 export type LegExtent = { kind: 'whole' } | { kind: 'stretch'; fromT: number; toT: number };
@@ -110,7 +110,7 @@ export interface Pattern {
    *  touch. */
   sections: PatternSection[];
   /**
-   * Stations this pattern passes but does NOT call at, per direction.
+   * Stops this pattern passes but does NOT call at, per direction.
    *
    * The one exception to derived stops, and it exists for exactly one case: a
    * stop on a stretch BOTH directions ride, served in one direction only. That
@@ -120,11 +120,11 @@ export interface Pattern {
    * it right and this is not involved.
    *
    * A denylist rather than a list of the stops that ARE served, because stops
-   * are derived: adding a station to a corridor adds it to every line running
+   * are derived: adding a stop to a corridor adds it to every line running
    * past, which is the behaviour the whole model is built on. An explicit
-   * served-list would have to be maintained by every station edit anywhere,
+   * served-list would have to be maintained by every stop edit anywhere,
    * and a stale one silently LOSES stops. A denylist can only go stale by
-   * naming a station that no longer exists, which the parser drops.
+   * naming a stop that no longer exists, which the parser drops.
    *
    * Absent — the case for every pattern in every document before v13 — skips
    * nothing.

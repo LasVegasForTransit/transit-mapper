@@ -19,7 +19,7 @@ describe('Line and Service document boundary', () => {
   it('stores public lines separately from operating services', () => {
     const system = createEmptySystem(0);
 
-    expect(system.version).toBe(15);
+    expect(system.version).toBe(16);
     expect(Object.hasOwn(system, 'lines')).toBe(true);
     expect(system.services).toEqual([]);
   });
@@ -133,7 +133,7 @@ describe('Line and Service document boundary', () => {
       id: 'system',
       name: 'Legacy network',
       ways: [],
-      stations: [],
+      stops: [],
       services: [
         {
           id: 'red',
@@ -178,7 +178,7 @@ describe('Line and Service document boundary', () => {
       id: 'system',
       name: 'Current network',
       ways: [],
-      stations: [],
+      stops: [],
       lines: [{ id: 'blue', name: 'Blue Line', color: '#246bce', serviceIds: ['blue-local'] }],
       services: [
         {
@@ -209,7 +209,7 @@ describe('Line and Service document boundary', () => {
       parseSystem({
         version: 15,
         ways: [],
-        stations: [],
+        stops: [],
         lines: [
           { id: 'red', name: 'Red', color: '#ff0000', serviceIds: ['shared'] },
           { id: 'blue', name: 'Blue', color: '#0000ff', serviceIds: ['shared'] },
@@ -240,7 +240,7 @@ describe('Line and Service document boundary', () => {
       ],
     },
   ])('rejects duplicate $entity ids at the document boundary', ({ entity, lines, services }) => {
-    expect(() => parseSystem({ version: 15, ways: [], stations: [], lines, services })).toThrow(
+    expect(() => parseSystem({ version: 15, ways: [], stops: [], lines, services })).toThrow(
       `Invalid Line/Service membership: duplicate-${entity.toLocaleLowerCase()}-id`,
     );
   });

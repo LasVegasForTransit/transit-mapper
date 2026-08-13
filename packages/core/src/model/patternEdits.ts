@@ -260,7 +260,7 @@ function legIsDegenerate(leg: PatternLeg): boolean {
  * pattern that runs a way backward keeps the low end of that way, not the
  * high one.
  *
- * This is what "drag a line's terminus back past two stations" and "terminate
+ * This is what "drag a line's terminus back past two stops" and "terminate
  * here" both come down to.
  */
 export function truncateLegs(

@@ -7,7 +7,7 @@ import {
   moveWayPoint,
   straightenWay,
 } from '../../src/model/way-point-edits';
-import { aRoad, aStation, aSystem } from '../support/fixtures.test';
+import { aRoad, aStop, aSystem } from '../support/fixtures.test';
 
 describe('way point transform identity', () => {
   it('preserves the input for missing, invalid, equal, and protected point edits', () => {
@@ -35,8 +35,8 @@ describe('way point transform identity', () => {
       [1, 1],
       [1.001, 1],
     ]);
-    const station = aStation('station', [0.0005, 0], { wayId: road.id, t: 0.5 });
-    const system = aSystem({ updatedAt: 123, ways: [road, untouched], stations: [station] });
+    const stop = aStop('stop', [0.0005, 0], { wayId: road.id, t: 0.5 });
+    const system = aSystem({ updatedAt: 123, ways: [road, untouched], stops: [stop] });
 
     const next = appendWayPoint(system, road.id, [0.002, 0]);
 

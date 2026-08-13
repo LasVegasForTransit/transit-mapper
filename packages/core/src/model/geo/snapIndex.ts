@@ -39,19 +39,19 @@ export interface Snap {
 /**
  * The best snap target across a set of ways: the nearest way whose path comes
  * within maxMeters of coord. The generalized snap engine everything routes
- * through — track↔station, way↔way endpoints, and so on — so snapping is the
+ * through — track↔stop, way↔way endpoints, and so on — so snapping is the
  * default UX. An optional `exclude` set skips a way (e.g. the one being
  * drawn). An optional `typeId` restricts candidates to that exact way type —
  * used while drawing new geometry, since a shared node only makes physical
  * sense between ways of the same type (mirrors nearestOpenEndpoint's own
  * typeId filter below; a road has no business snapping onto a rail track a
- * screen's-width away). Left unset for station-anchoring snaps, where any
+ * screen's-width away). Left unset for stop-anchoring snaps, where any
  * way type is a valid stop.
  *
  * Candidates are narrowed via the same segment grid servedWayIds uses
  * (below) before the exact nearestOnPath check runs — a brute-force scan of
  * every way here was the same class of problem servedWayIds already had to
- * solve at real-GTFS scale (station drag, way-endpoint join-detection while
+ * solve at real-GTFS scale (stop drag, way-endpoint join-detection while
  * drawing, and "adopt existing infrastructure" all route through this).
  */
 export function snap(
@@ -92,12 +92,12 @@ export function snap(
 // index is simply never looked up again and falls out of the WeakMap.
 // Per-WAY bounding boxes turned out not to help here: a real bus route's
 // Way can span the whole city, so its bbox rejects almost nothing. Bucketing
-// by segment does — a station only ever needs the handful of segments in
+// by segment does — a stop only ever needs the handful of segments in
 // its own neighborhood, not the other ~120,000 points somewhere else on the
-// map. Without this, buildFeatures's per-station interchange check (every
-// station × every segment of every way) was O(stations × total way points):
-// fine for a few dozen hand-drawn stations, but a real GTFS import
-// (thousands of stations, hundreds of detailed street-following shapes,
+// map. Without this, buildFeatures's per-stop interchange check (every
+// stop × every segment of every way) was O(stops × total way points):
+// fine for a few dozen hand-drawn stops, but a real GTFS import
+// (thousands of stops, hundreds of detailed street-following shapes,
 // ~120,000 points total) turned that into ~460 million segment checks and
 // froze the tab. Confirmed live against RTC Southern Nevada's real feed.
 const CELL_DEG = 0.003; // ~300m at Vegas's latitude — a few INTERCHANGE_METERS-widths per cell keeps neighborhoods small without so many cells that a segment spanning a boundary gets missed.
@@ -168,14 +168,14 @@ export const MAX_GRID_CELLS = 2_000_000;
  * Ceiling on segments held aside.
  *
  * Every query scans this list in full, so its length is a per-query cost paid
- * once per station on the render path. Unbounded, it reintroduces exactly the
- * O(stations × segments) quadratic this grid exists to remove — measured at
+ * once per stop on the render path. Unbounded, it reintroduces exactly the
+ * O(stops × segments) quadratic this grid exists to remove — measured at
  * ~2 seconds of blocking work for a 0.29 MB document, on the embed path,
  * from a document a stranger supplied.
  *
  * Past this point segments stop being indexed at all. That is a real loss of
  * function — a way beyond the limit won't be found by snapping or counted as
- * serving a station — chosen deliberately over freezing the page. It takes a
+ * serving a stop — chosen deliberately over freezing the page. It takes a
  * document with hundreds of continent-spanning segments to reach, which no
  * amount of ordinary editing or importing produces.
  */
@@ -374,7 +374,7 @@ export function servedWaysByDistance(
   for (const seg of grid.oversize) consider(seg);
   // Nearest first, ties broken by id — NOT grid-scan order.
   //
-  // buildFeatures colors a station from the public Line of the first Service
+  // buildFeatures colors a stop from the public Line of the first Service
   // riding the nearest Way. Bucket-scan order made that color depend on the
   // index's internal layout and flicker after maintenance, so pin ties to IDs.
   const ranked: ServedWayDistance[] = [];
@@ -392,8 +392,8 @@ export function servedWayIds(coord: LngLat, ways: Way[], maxMeters: number): str
   return servedWaysByDistance(coord, ways, maxMeters).map(({ wayId }) => wayId);
 }
 
-// A station within this distance of a way's path counts as served by it, so a
-// station where services meet reads as a multimodal interchange.
+// A stop within this distance of a way's path counts as served by it, so a
+// stop where services meet reads as a multimodal interchange.
 export const INTERCHANGE_METERS = 90;
 
 export interface OpenEndpoint {

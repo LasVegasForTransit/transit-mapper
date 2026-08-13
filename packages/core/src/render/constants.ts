@@ -9,7 +9,7 @@ import { iconName } from './iconName';
 // Reshape/physical handles are always this one color+glyph (a solid square —
 // the standard vector-editor "this is a control point" shape) regardless of
 // what they're attached to, so they read as one consistent tool affordance
-// and never as a real object like a station or facility.
+// and never as a real object like a stop or facility.
 export const HANDLE_INK = '#191a17';
 export const HANDLE_ICON = iconName('square', HANDLE_INK);
 

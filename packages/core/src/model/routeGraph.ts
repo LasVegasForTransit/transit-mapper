@@ -727,7 +727,7 @@ function routeOverGraph(
  * names a stretch of a way, so two legs on one way are ordinary. What is still
  * wrong is two spans covering the same stretch the same way round, because
  * `serviceRangesOnWay` merges those into one drawn line and the stop
- * derivation counts the stations under them twice. Two spans on disjoint
+ * derivation counts the stops under them twice. Two spans on disjoint
  * stretches — a route out along a street and back along a later block of it —
  * are fine, and rejecting them was costing real routes.
  *

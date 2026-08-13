@@ -25,13 +25,14 @@ import {
   type LegDirection,
   type PatternSection,
   type RunDirection,
-  type StationAnchor,
+  type StopAnchor,
   type LegExtent,
   type LegLane,
   type PatternLeg,
   type ScheduleDayScope,
   type SchedulePeriod,
   type Service,
+  type Stop,
   type Station,
   type TransitSystem,
   type TurnRestriction,
@@ -42,7 +43,7 @@ import {
 
 export function createEmptySystem(now = Date.now()): TransitSystem {
   return {
-    version: 15,
+    version: 16,
     id: shortId(),
     name: 'Untitled system',
     viewport: { ...DEFAULT_VIEWPORT },
@@ -51,6 +52,7 @@ export function createEmptySystem(now = Date.now()): TransitSystem {
     ways: [],
     lines: [],
     services: [],
+    stops: [],
     stations: [],
     facilities: [],
     groups: [],
@@ -494,15 +496,15 @@ function parseLegLane(r: Record<string, unknown>): LegLane {
  *  dropped rather than kept empty, and a `split` needs BOTH sides — one side
  *  alone is a line that goes out and never comes back, which is a real thing
  *  to have drawn but not a thing to silently invent from a bad record. */
-/** Per-direction skipped stops (v13+). Station ids are validated against the
- *  document later — a skip naming a station that no longer exists is the one
+/** Per-direction skipped stops (v13+). Stop ids are validated against the
+ *  document later — a skip naming a stop that no longer exists is the one
  *  way this can go stale, and it is dropped in finish(). */
-/** v14 stores every way a station rides; v13 and earlier stored at most one.
- *  A lone `anchor` becomes a one-element list, which is what every station in
+/** v14 stores every way a stop rides; v13 and earlier stored at most one.
+ *  A lone `anchor` becomes a one-element list, which is what every stop in
  *  every older document was. */
-function parseAnchors(raw: unknown, legacy: StationAnchor | undefined): StationAnchor[] {
+function parseAnchors(raw: unknown, legacy: StopAnchor | undefined): StopAnchor[] {
   if (Array.isArray(raw)) {
-    const out: StationAnchor[] = [];
+    const out: StopAnchor[] = [];
     for (const entry of raw) {
       const r = entry as Record<string, unknown>;
       const t = normalizedT(r.t);
@@ -774,7 +776,10 @@ function parseSchedule(raw: unknown): SchedulePeriod[] | undefined {
 function parseV3(o: Record<string, unknown>): TransitSystem {
   const rawWays = Array.isArray(o.ways) ? o.ways : [];
   const rawServices = Array.isArray(o.services) ? o.services : [];
-  const rawStations = Array.isArray(o.stations) ? o.stations : [];
+  const version = typeof o.version === 'number' ? o.version : 3;
+  const rawStops = Array.isArray(version >= 16 ? o.stops : o.stations)
+    ? ((version >= 16 ? o.stops : o.stations) as unknown[])
+    : [];
   const rawFacilities = Array.isArray(o.facilities) ? o.facilities : [];
   const rawGroups = Array.isArray(o.groups) ? o.groups : [];
 
@@ -799,7 +804,7 @@ function parseV3(o: Record<string, unknown>): TransitSystem {
     };
   });
 
-  const currentVersion = typeof o.version === 'number' && o.version >= 15;
+  const currentVersion = version >= 15;
   const parsed = currentVersion
     ? {
         lines: (Array.isArray(o.lines) ? o.lines : [])
@@ -809,7 +814,15 @@ function parseV3(o: Record<string, unknown>): TransitSystem {
       }
     : parseLegacyLinesAndServices(rawServices);
 
-  const stations: Station[] = rawStations.map((s) => parseStation(s));
+  const passengerPlaces =
+    version >= 16
+      ? {
+          stops: rawStops.map(parseStop),
+          stations: (Array.isArray(o.stations) ? o.stations : []).map(parseStation),
+        }
+      : migrateLegacyPassengerPlaces(rawStops);
+  assertUniqueIds(passengerPlaces.stops, 'Stop');
+  assertUniqueIds(passengerPlaces.stations, 'Station');
 
   const facilities = rawFacilities.map((f) => {
     const r = f as Record<string, unknown>;
@@ -841,10 +854,10 @@ function parseV3(o: Record<string, unknown>): TransitSystem {
     : deriveNodesFromWays(ways);
   const namedWays = parseNamedWays(o.namedWays, ways);
 
-  return finish(o, { ways, ...parsed, stations, facilities, groups, nodes, namedWays });
+  return finish(o, { ways, ...parsed, ...passengerPlaces, facilities, groups, nodes, namedWays });
 }
 
-function legacyStationAnchor(raw: unknown): StationAnchor | undefined {
+function legacyStopAnchor(raw: unknown): StopAnchor | undefined {
   // wayId (v3), corridorId (v2), lineId (v1) all name the same anchor target.
   const a = raw as Record<string, unknown> | undefined;
   const anchorId =
@@ -858,31 +871,87 @@ function legacyStationAnchor(raw: unknown): StationAnchor | undefined {
   return anchorId && typeof a?.t === 'number' ? { wayId: anchorId, t: a.t } : undefined;
 }
 
-function parseStation(s: unknown): Station {
+function parseStop(s: unknown): Stop {
   const r = s as Record<string, unknown>;
-  const stationCoord = normalizedLngLat(r.coord);
-  if (typeof r.id !== 'string' || !stationCoord) throw new Error('Bad station');
-  const footprint = Array.isArray(r.footprint) ? coords(r.footprint) : undefined;
-  const platforms = Array.isArray(r.platforms)
-    ? (r.platforms as unknown[]).map((p) => {
-        const pr = p as Record<string, unknown>;
-        return {
-          id: typeof pr.id === 'string' ? pr.id : shortId(),
-          points: coords(pr.points),
-          edges: typeof pr.edges === 'number' ? pr.edges : undefined,
-        };
-      })
-    : undefined;
+  const stopCoord = normalizedLngLat(r.coord);
+  if (typeof r.id !== 'string' || !stopCoord) throw new Error('Bad stop');
   return {
     id: r.id,
     name: typeof r.name === 'string' ? r.name : undefined,
-    coord: stationCoord,
-    anchors: parseAnchors(r.anchors, legacyStationAnchor(r.anchor)),
-    ...(footprint ? { footprint } : {}),
-    ...(platforms ? { platforms } : {}),
+    ...(r.autoNamed === true ? { autoNamed: true } : {}),
+    coord: stopCoord,
+    anchors: parseAnchors(r.anchors, legacyStopAnchor(r.anchor)),
+    ...(typeof r.stationId === 'string' ? { stationId: r.stationId } : {}),
     ...(typeof r.dwellSeconds === 'number' ? { dwellSeconds: r.dwellSeconds } : {}),
     ...(r.majorStop === true ? { majorStop: true } : {}),
   };
+}
+
+function parsePlatforms(raw: unknown): Station['platforms'] {
+  if (!Array.isArray(raw)) return undefined;
+  return raw.map((platform) => {
+    const record = platform as Record<string, unknown>;
+    return {
+      id: typeof record.id === 'string' ? record.id : shortId(),
+      points: coords(record.points),
+      edges: typeof record.edges === 'number' ? record.edges : undefined,
+    };
+  });
+}
+
+function parseStation(raw: unknown): Station {
+  const record = raw as Record<string, unknown>;
+  const coord = normalizedLngLat(record.coord);
+  if (typeof record.id !== 'string' || !coord) throw new Error('Bad station');
+  const footprint = Array.isArray(record.footprint) ? coords(record.footprint) : undefined;
+  const platforms = parsePlatforms(record.platforms);
+  return {
+    id: record.id,
+    name: typeof record.name === 'string' ? record.name : undefined,
+    coord,
+    ...(footprint ? { footprint } : {}),
+    ...(platforms ? { platforms } : {}),
+  };
+}
+
+function uniqueStationId(stopId: string, used: Set<string>): string {
+  let id = `${stopId}-station`;
+  while (used.has(id)) id = `${id}-station`;
+  used.add(id);
+  return id;
+}
+
+function migrateLegacyPassengerPlaces(rawStops: unknown[]): {
+  stops: Stop[];
+  stations: Station[];
+} {
+  const usedStationIds = new Set<string>();
+  const stations: Station[] = [];
+  const stops = rawStops.map((raw) => {
+    const record = raw as Record<string, unknown>;
+    const stop = parseStop(raw);
+    const footprint = Array.isArray(record.footprint) ? coords(record.footprint) : undefined;
+    const platforms = parsePlatforms(record.platforms);
+    if (!footprint && !platforms) return stop;
+    const stationId = uniqueStationId(stop.id, usedStationIds);
+    stations.push({
+      id: stationId,
+      name: stop.name,
+      coord: stop.coord,
+      ...(footprint ? { footprint } : {}),
+      ...(platforms ? { platforms } : {}),
+    });
+    return { ...stop, stationId };
+  });
+  return { stops, stations };
+}
+
+function assertUniqueIds(records: { id: string }[], kind: 'Stop' | 'Station'): void {
+  const seen = new Set<string>();
+  for (const record of records) {
+    if (seen.has(record.id)) throw new Error(`Duplicate ${kind} id: ${record.id}`);
+    seen.add(record.id);
+  }
 }
 
 /** The way type a migrated v2 corridor gets, from the mode of a service riding it. */
@@ -905,7 +974,7 @@ function wayTypeForLegacyCorridor(corridorId: string, rawServices: unknown[]): s
 const ROAD_CLASS_IDS = new Set(['arterial', 'collector', 'local', 'transitway']);
 
 function migrateFromV2(o: Record<string, unknown>): TransitSystem {
-  const rawStations = Array.isArray(o.stations) ? o.stations : [];
+  const rawStops = Array.isArray(o.stations) ? o.stations : [];
   const rawCorridors = Array.isArray(o.corridors) ? o.corridors : [];
   const rawServices = Array.isArray(o.services) ? o.services : [];
   const rawLines = Array.isArray(o.lines) ? o.lines : []; // legacy v1
@@ -939,20 +1008,20 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
     services = migrated.services;
   } else {
     // Legacy v1: migrate each line to a rail way + a service.
-    const legacyStationCoord = new Map<string, LngLat>();
-    for (const s of rawStations) {
+    const legacyStopCoord = new Map<string, LngLat>();
+    for (const s of rawStops) {
       const r = s as Record<string, unknown>;
       const legacyCoord = normalizedLngLat(r.coord);
-      if (typeof r.id === 'string' && legacyCoord) legacyStationCoord.set(r.id, legacyCoord);
+      if (typeof r.id === 'string' && legacyCoord) legacyStopCoord.set(r.id, legacyCoord);
     }
     for (const l of rawLines) {
       const r = l as Record<string, unknown>;
       if (typeof r.id !== 'string') continue;
       let points = coords(r.points);
       if (points.length === 0 && Array.isArray(r.shape)) points = coords(r.shape);
-      if (points.length === 0 && Array.isArray(r.stationIds)) {
-        points = strings(r.stationIds)
-          .map((id) => legacyStationCoord.get(id))
+      if (points.length === 0 && Array.isArray(r.stopIds)) {
+        points = strings(r.stopIds)
+          .map((id) => legacyStopCoord.get(id))
           .filter((c): c is LngLat => !!c);
       }
       const typeId = (typeof r.mode === 'string' && LEGACY_MODE_WAY_TYPE[r.mode]) || 'lightRail';
@@ -996,14 +1065,14 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
     });
   }
 
-  // parseStation already resolves v2's corridorId / v1's lineId onto wayId.
-  const stations: Station[] = rawStations.map((s) => parseStation(s));
+  // parseStop already resolves v2's corridorId / v1's lineId onto wayId.
+  const passengerPlaces = migrateLegacyPassengerPlaces(rawStops);
 
   return finish(o, {
     ways,
     lines,
     services,
-    stations,
+    ...passengerPlaces,
     facilities: [],
     groups: [],
     nodes: deriveNodesFromWays(ways),
@@ -1015,14 +1084,14 @@ function migrateFromV2(o: Record<string, unknown>): TransitSystem {
  *  parse path produces before finish() resolves it against the ways. */
 type DraftService = Omit<Service, 'path'> & { path: DraftPattern };
 
-/** A pattern whose skipped-stop list names only stations that still exist,
+/** A pattern whose skipped-stop list names only stops that still exist,
  *  with the field dropped entirely once nothing survives — so the common case
  *  (no skips at all) round-trips as an absent field rather than an empty one. */
-function prunedSkippedStops(pattern: Pattern, liveStationIds: Set<string>): Pattern {
+function prunedSkippedStops(pattern: Pattern, liveStopIds: Set<string>): Pattern {
   if (!pattern.skippedStops) return pattern;
   const kept: Partial<Record<RunDirection, string[]>> = {};
   for (const run of ['outbound', 'inbound'] as const) {
-    const ids = (pattern.skippedStops[run] ?? []).filter((id) => liveStationIds.has(id));
+    const ids = (pattern.skippedStops[run] ?? []).filter((id) => liveStopIds.has(id));
     if (ids.length > 0) kept[run] = ids;
   }
   const { skippedStops: _dropped, ...rest } = pattern;
@@ -1036,6 +1105,7 @@ interface FinishParts {
   ways: Way[];
   lines: Line[];
   services: DraftService[];
+  stops: Stop[];
   stations: Station[];
   facilities: Facility[];
   groups: Group[];
@@ -1058,14 +1128,14 @@ function finish(o: Record<string, unknown>, parts: FinishParts): TransitSystem {
       ? (o.palette as string[])
       : [...LINE_COLORS];
 
-  // A skip names a station, and a station can be deleted after the skip was
-  // set — the one way this record goes stale. Rebuilt against the stations
+  // A skip names a stop, and a stop can be deleted after the skip was
+  // set — the one way this record goes stale. Rebuilt against the stops
   // that actually parsed, which is cheap and has no false positives.
-  const liveStationIds = new Set(repaired.stations.map((st) => st.id));
+  const liveStopIds = new Set(repaired.stops.map((st) => st.id));
 
   const now = Date.now();
   return {
-    version: 15,
+    version: 16,
     id: typeof o.id === 'string' ? o.id : shortId(),
     name: typeof o.name === 'string' ? o.name : 'Untitled system',
     description: typeof o.description === 'string' ? o.description : undefined,
@@ -1082,7 +1152,7 @@ function finish(o: Record<string, unknown>, parts: FinishParts): TransitSystem {
     services: repaired.services.map((sv) => {
       const { path, ...service } = sv;
       const resolved = resolveLegDirections([path], repaired.ways)[0];
-      const pruned = prunedSkippedStops(resolved, liveStationIds);
+      const pruned = prunedSkippedStops(resolved, liveStopIds);
       return {
         ...service,
         path: {
@@ -1105,7 +1175,7 @@ function finish(o: Record<string, unknown>, parts: FinishParts): TransitSystem {
  * A document brought back to what the model allows, before anything reads it.
  *
  * These are contradictions rather than choices: a way with one point cannot be
- * drawn, a station cannot ride a way that is not there, a junction cannot join
+ * drawn, a stop cannot ride a way that is not there, a junction cannot join
  * two different kinds of way (see junctions.ts). They arrive from documents
  * saved before a rule existed, from a hand-edited file, or from a migration
  * that had to guess — never from anything a person did in the editor.
@@ -1119,10 +1189,15 @@ function finish(o: Record<string, unknown>, parts: FinishParts): TransitSystem {
 function repairedParts(parts: FinishParts): FinishParts {
   const ways = parts.ways.filter((w) => w.points.length >= 2);
   const liveWayIds = new Set(ways.map((w) => w.id));
+  const liveStationIds = new Set(parts.stations.map((station) => station.id));
   return {
     ...parts,
     ways,
-    stations: prunedAnchors(parts.stations, ways),
+    stops: prunedAnchors(parts.stops, ways).map((stop) =>
+      stop.stationId && !liveStationIds.has(stop.stationId)
+        ? { ...stop, stationId: undefined }
+        : stop,
+    ),
     nodes: withSingleTypeArms(
       parts.nodes.map((n) => ({ ...n, refs: n.refs.filter((r) => liveWayIds.has(r.wayId)) })),
       wayTypeIndex(ways),
@@ -1133,12 +1208,12 @@ function repairedParts(parts: FinishParts): FinishParts {
   };
 }
 
-/** Stations keep every anchor onto a way that exists, and lose the rest. A
- *  station with no anchors left still stands: it is a stop someone placed,
+/** Stops keep every anchor onto a way that exists, and lose the rest. A
+ *  stop with no anchors left still stands: it is a stop someone placed,
  *  and where it sits is not in question — only what it rides. */
-function prunedAnchors(stations: Station[], ways: Way[]): Station[] {
+function prunedAnchors(stops: Stop[], ways: Way[]): Stop[] {
   const liveWayIds = new Set(ways.map((w) => w.id));
-  return stations.map((st) =>
+  return stops.map((st) =>
     st.anchors.every((a) => liveWayIds.has(a.wayId))
       ? st
       : { ...st, anchors: st.anchors.filter((a) => liveWayIds.has(a.wayId)) },

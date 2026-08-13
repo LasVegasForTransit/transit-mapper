@@ -1,5 +1,5 @@
 import { nudgeSelection } from '../../src/model/selection-nudge';
-import { aRoad, aStation, aSystem } from '../support/fixtures.test';
+import { aRoad, aStop, aSystem } from '../support/fixtures.test';
 import { describe, expect, it } from 'vitest';
 
 describe('multi-selection nudging', () => {
@@ -12,22 +12,22 @@ describe('multi-selection nudging', () => {
     expect(nudgeSelection(system, [{ kind: 'way', id: 'missing' }], 0, 0)).toBe(system);
   });
 
-  it('moves selected ways once and carries their anchored stations with them', () => {
+  it('moves selected ways once and carries their anchored stops with them', () => {
     const way = aRoad('way', [
       [0, 0],
       [1, 0],
     ]);
-    const anchored = aStation('anchored', [0.5, 0], { wayId: 'way', t: 0.5 });
-    const directlySelected = aStation('direct', [4, 5]);
-    const untouched = aStation('untouched', [8, 9]);
-    const system = aSystem({ ways: [way], stations: [anchored, directlySelected, untouched] });
+    const anchored = aStop('anchored', [0.5, 0], { wayId: 'way', t: 0.5 });
+    const directlySelected = aStop('direct', [4, 5]);
+    const untouched = aStop('untouched', [8, 9]);
+    const system = aSystem({ ways: [way], stops: [anchored, directlySelected, untouched] });
 
     const next = nudgeSelection(
       system,
       [
         { kind: 'way', id: 'way' },
-        { kind: 'station', id: 'anchored' },
-        { kind: 'station', id: 'direct' },
+        { kind: 'stop', id: 'anchored' },
+        { kind: 'stop', id: 'direct' },
       ],
       2,
       3,
@@ -37,10 +37,10 @@ describe('multi-selection nudging', () => {
       [2, 3],
       [3, 3],
     ]);
-    expect(next.stations[0].coord[0]).toBeCloseTo(2.5);
-    expect(next.stations[0].coord[1]).toBeCloseTo(3);
-    expect(next.stations[1].coord).toEqual([6, 8]);
-    expect(next.stations[2]).toBe(untouched);
+    expect(next.stops[0].coord[0]).toBeCloseTo(2.5);
+    expect(next.stops[0].coord[1]).toBeCloseTo(3);
+    expect(next.stops[1].coord).toEqual([6, 8]);
+    expect(next.stops[2]).toBe(untouched);
     expect(next.facilities).toBe(system.facilities);
     expect(next.updatedAt).toBe(system.updatedAt);
   });
@@ -77,7 +77,7 @@ describe('multi-selection nudging', () => {
         ],
       },
     ]);
-    expect(next.stations).toBe(system.stations);
+    expect(next.stops).toBe(system.stops);
   });
 
   it('follows the first moved anchor even when it is not the primary anchor', () => {
@@ -89,19 +89,19 @@ describe('multi-selection nudging', () => {
       [0, 0],
       [1, 0],
     ]);
-    const station = {
-      ...aStation('station', [0.25, 0]),
+    const stop = {
+      ...aStop('stop', [0.25, 0]),
       anchors: [
         { wayId: 'stationary', t: 0.25 },
         { wayId: 'moved', t: 0.25 },
       ],
     };
-    const system = aSystem({ ways: [stationary, moved], stations: [station] });
+    const system = aSystem({ ways: [stationary, moved], stops: [stop] });
 
     const next = nudgeSelection(system, [{ kind: 'way', id: 'moved' }], 2, 3);
 
-    expect(next.stations[0].coord[0]).toBeCloseTo(2.25);
-    expect(next.stations[0].coord[1]).toBeCloseTo(3);
+    expect(next.stops[0].coord[0]).toBeCloseTo(2.25);
+    expect(next.stops[0].coord[1]).toBeCloseTo(3);
   });
 
   it('moves a junction when every referenced point moves together', () => {

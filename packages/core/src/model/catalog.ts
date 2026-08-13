@@ -767,8 +767,8 @@ export const GRADES: Record<Grade, GradeInfo> = {
 export const GRADE_ORDER: Grade[] = ['underground', 'atGrade', 'elevated'];
 
 // ---- Facility types ---------------------------------------------------------
-// Catalog-typed point/area features that aren't ways or stations in their own
-// right: a bike dock, a station entrance, a depot/yard. `geometryKind` says
+// Catalog-typed point/area features that aren't ways or stops in their own
+// right: a bike dock, a stop entrance, a depot/yard. `geometryKind` says
 // whether a placed Facility is a single point or an area (polygon) — not to
 // be confused with `FacilityClass` above, which refines a WAY's right-of-way
 // (arterial vs. local), a different axis entirely.
@@ -800,14 +800,14 @@ export const FACILITY_TYPES: Record<string, FacilityType> = {
   entrance: { id: 'entrance', label: 'Entrance', geometryKind: 'point', defaultHalfExtentM: null },
   bikeDock: { id: 'bikeDock', label: 'Bike dock', geometryKind: 'point', defaultHalfExtentM: null },
   elevator: { id: 'elevator', label: 'Elevator', geometryKind: 'point', defaultHalfExtentM: null },
-  // A station building / terminal / headhouse — the general-purpose drawn
-  // structure that sits on station land alongside platforms and bus bays.
+  // A stop building / terminal / headhouse — the general-purpose drawn
+  // structure that sits on stop land alongside platforms and bus bays.
   building: { id: 'building', label: 'Building', geometryKind: 'area', defaultHalfExtentM: 15 },
   parkingLot: { id: 'parkingLot', label: 'Parking', geometryKind: 'area', defaultHalfExtentM: 15 },
   depot: { id: 'depot', label: 'Depot / yard', geometryKind: 'area', defaultHalfExtentM: 15 },
   // A bus's curbside stopping bay and a boarding platform (rail/tram/BRT
   // alike) both have a real footprint — placed inside a facility boundary
-  // the same way a station's platforms sit inside its own footprint.
+  // the same way a stop's platforms sit inside its own footprint.
   busBay: { id: 'busBay', label: 'Bus bay', geometryKind: 'area', defaultHalfExtentM: 15 },
   platform: { id: 'platform', label: 'Platform', geometryKind: 'area', defaultHalfExtentM: 15 },
 };

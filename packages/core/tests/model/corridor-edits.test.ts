@@ -5,7 +5,7 @@ import {
 } from '../../src/model/corridor-edits';
 import { offsetMeters, patternWayIds } from '../../src/model/geo';
 import type { LngLat } from '../../src/model/system';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
 
 describe('imported corridor reconciliation', () => {
   it('preserves the input system when a pattern has no compatible corridor to share', () => {
@@ -40,14 +40,14 @@ describe('imported corridor reconciliation', () => {
     const shuttleService = aService('shuttle-service', [
       aPattern('shuttle-pattern', [shuttle], [shuttle.id]),
     ]);
-    const shuttleStop = aStation('shuttle-stop', offsetMeters(origin, 200, 3), {
+    const shuttleStop = aStop('shuttle-stop', offsetMeters(origin, 200, 3), {
       wayId: shuttle.id,
       t: 0.5,
     });
     const system = aSystem({
       ways: [trunk, shuttle],
       services: [trunkService, shuttleService],
-      stations: [shuttleStop],
+      stops: [shuttleStop],
       groups: [{ id: 'group', memberIds: [shuttle.id, shuttleService.id] }],
       approachControls: { [`${shuttle.id}:start`]: { control: 'stop' } },
       turnRestrictions: {
@@ -66,13 +66,13 @@ describe('imported corridor reconciliation', () => {
     );
     if (!reconciledService) throw new Error('The reconciled shuttle service must remain.');
     expect(patternWayIds(reconciledService.path)).toEqual([trunk.id]);
-    expect(result.system.stations).toHaveLength(1);
-    expect(result.system.stations[0]).toMatchObject({
+    expect(result.system.stops).toHaveLength(1);
+    expect(result.system.stops[0]).toMatchObject({
       id: shuttleStop.id,
       coord: shuttleStop.coord,
       anchors: [{ wayId: trunk.id }],
     });
-    expect(result.system.stations[0].anchors[0].t).toBeCloseTo(0.5);
+    expect(result.system.stops[0].anchors[0].t).toBeCloseTo(0.5);
     expect(result.system.groups[0].memberIds).toEqual([shuttleService.id]);
     expect(result.system.approachControls).toEqual({});
     expect(result.system.turnRestrictions).toEqual({

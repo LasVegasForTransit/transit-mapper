@@ -167,7 +167,7 @@ export function facilityRender(typeId: string): FacilityRenderStyle {
 }
 
 // ---- Physical footprints / platforms -------------------------------------------
-// Station footprint & platform fill/stroke — infrastructure-view-only physical
+// Stop footprint & platform fill/stroke — infrastructure-view-only physical
 // planning detail, deliberately understated so route lines stay legible.
 export const FOOTPRINT_FILL = '#191a17';
 export const FOOTPRINT_FILL_OPACITY = 0.05;

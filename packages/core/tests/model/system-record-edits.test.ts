@@ -5,45 +5,45 @@ import {
   moveFacility,
   moveServiceToLine,
   moveServicesToLine,
-  moveStation,
+  moveStop,
   renameGroup,
   setFacilityName,
   setLineColor,
   setLineName,
   setServiceName,
   setServiceSpan,
-  setStationName,
+  setStopName,
 } from '../../src/model/system';
 import type { Facility, Group } from '../../src/model/system';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
 
-describe('station record edits', () => {
-  it('preserves the document when station metadata already matches', () => {
-    const station = aStation('station', [-115.2, 36.1], undefined, { name: 'Central' });
-    const system = aSystem({ stations: [station] });
+describe('stop record edits', () => {
+  it('preserves the document when stop metadata already matches', () => {
+    const stop = aStop('stop', [-115.2, 36.1], undefined, { name: 'Central' });
+    const system = aSystem({ stops: [stop] });
 
-    expect(setStationName(system, station.id, 'Central', false)).toBe(system);
+    expect(setStopName(system, stop.id, 'Central', false)).toBe(system);
   });
 
-  it('replaces only the moved station and the stations collection', () => {
-    const moved = aStation('moved', [-115.2, 36.1]);
-    const untouched = aStation('untouched', [-115.19, 36.1]);
-    const system = aSystem({ stations: [moved, untouched] });
+  it('replaces only the moved stop and the stops collection', () => {
+    const moved = aStop('moved', [-115.2, 36.1]);
+    const untouched = aStop('untouched', [-115.19, 36.1]);
+    const system = aSystem({ stops: [moved, untouched] });
 
-    const next = moveStation(system, moved.id, [-115.18, 36.1], {
+    const next = moveStop(system, moved.id, [-115.18, 36.1], {
       wayId: 'corridor',
       t: 0.25,
     });
 
     expect(next).not.toBe(system);
-    expect(next.stations).not.toBe(system.stations);
-    expect(next.stations[0]).toEqual({
+    expect(next.stops).not.toBe(system.stops);
+    expect(next.stops[0]).toEqual({
       ...moved,
       coord: [-115.18, 36.1],
       anchors: [{ wayId: 'corridor', t: 0.25 }],
     });
-    expect(next.stations[1]).toBe(untouched);
-    expect('anchor' in next.stations[0]).toBe(false);
+    expect(next.stops[1]).toBe(untouched);
+    expect('anchor' in next.stops[0]).toBe(false);
   });
 });
 
@@ -85,10 +85,10 @@ describe('facility record edits', () => {
 
 describe('group record edits', () => {
   it('preserves the document when adding an existing member', () => {
-    const group: Group = { id: 'group', memberIds: ['station'] };
+    const group: Group = { id: 'group', memberIds: ['stop'] };
     const system = aSystem({ groups: [group] });
 
-    expect(addGroupMember(system, group.id, 'station')).toBe(system);
+    expect(addGroupMember(system, group.id, 'stop')).toBe(system);
   });
 
   it('replaces only the renamed group', () => {
@@ -141,7 +141,7 @@ describe('service record edits', () => {
       ],
       groups: [
         { id: 'line-family', memberIds: ['source-line', 'target-line'] },
-        { id: 'unrelated', memberIds: ['station'] },
+        { id: 'unrelated', memberIds: ['stop'] },
       ],
     });
 

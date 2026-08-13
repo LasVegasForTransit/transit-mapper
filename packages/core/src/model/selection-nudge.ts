@@ -1,6 +1,6 @@
 import { pointAtT, resolveWayPath } from './geo';
 import type { SelectionRef } from './selectionActions';
-import type { Facility, LngLat, Node, Station, TransitSystem, Way, WayPointRef } from './system';
+import type { Facility, LngLat, Node, Stop, TransitSystem, Way, WayPointRef } from './system';
 
 function translate(coord: LngLat, dx: number, dy: number): LngLat {
   return [coord[0] + dx, coord[1] + dy];
@@ -63,35 +63,35 @@ function movedNodes(nodes: Node[], changedWays: Map<string, Way>, dx: number, dy
   return changed ? next : nodes;
 }
 
-interface MoveStationsOptions {
-  selectedStationIds: Set<string>;
+interface MoveStopsOptions {
+  selectedStopIds: Set<string>;
   selectedWayIds: Set<string>;
   changedWays: Map<string, Way>;
   dx: number;
   dy: number;
 }
 
-function movedStations(stations: Station[], options: MoveStationsOptions): Station[] {
-  const next = stations.map((station) => {
-    const movedAnchor = station.anchors.find((anchor) => options.changedWays.has(anchor.wayId));
+function movedStops(stops: Stop[], options: MoveStopsOptions): Stop[] {
+  const next = stops.map((stop) => {
+    const movedAnchor = stop.anchors.find((anchor) => options.changedWays.has(anchor.wayId));
     const way = movedAnchor && options.changedWays.get(movedAnchor.wayId);
     if (movedAnchor && way) {
       const path = resolveWayPath(way);
       if (path.length >= 2) {
         const coord = pointAtT(path, movedAnchor.t);
-        if (!sameCoordinate(coord, station.coord)) {
-          return { ...station, coord };
+        if (!sameCoordinate(coord, stop.coord)) {
+          return { ...stop, coord };
         }
       }
-      return station;
+      return stop;
     }
-    const followsSelectedWay = station.anchors.some((candidate) =>
+    const followsSelectedWay = stop.anchors.some((candidate) =>
       options.selectedWayIds.has(candidate.wayId),
     );
-    if (!options.selectedStationIds.has(station.id) || followsSelectedWay) return station;
-    return { ...station, coord: translate(station.coord, options.dx, options.dy) };
+    if (!options.selectedStopIds.has(stop.id) || followsSelectedWay) return stop;
+    return { ...stop, coord: translate(stop.coord, options.dx, options.dy) };
   });
-  return next.some((station, index) => station !== stations[index]) ? next : stations;
+  return next.some((stop, index) => stop !== stops[index]) ? next : stops;
 }
 
 function movedFacilities(
@@ -125,8 +125,8 @@ export function nudgeSelection(
   const wayIds = ids(items, 'way');
   const moved = movedWays(system.ways, wayIds, dx, dy);
   const nodes = movedNodes(system.nodes, moved.changed, dx, dy);
-  const stations = movedStations(system.stations, {
-    selectedStationIds: ids(items, 'station'),
+  const stops = movedStops(system.stops, {
+    selectedStopIds: ids(items, 'stop'),
     selectedWayIds: wayIds,
     changedWays: moved.changed,
     dx,
@@ -136,10 +136,10 @@ export function nudgeSelection(
   if (
     moved.ways === system.ways &&
     nodes === system.nodes &&
-    stations === system.stations &&
+    stops === system.stops &&
     facilities === system.facilities
   ) {
     return system;
   }
-  return { ...system, ways: moved.ways, nodes, stations, facilities };
+  return { ...system, ways: moved.ways, nodes, stops, facilities };
 }

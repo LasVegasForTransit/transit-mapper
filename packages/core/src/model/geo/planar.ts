@@ -2,7 +2,7 @@ import type { LngLat } from '../system';
 import { EARTH_RADIUS_M, toRad } from './spherical';
 
 /** A coordinate `dxMeters` east and `dyMeters` north of `center` (flat-earth
- *  approximation — good enough at station-footprint scale). */
+ *  approximation — good enough at stop-footprint scale). */
 export function offsetMeters(center: LngLat, dxMeters: number, dyMeters: number): LngLat {
   const latRad = toRad(center[1]);
   const dLng = ((dxMeters / (EARTH_RADIUS_M * Math.cos(latRad))) * 180) / Math.PI;
@@ -112,7 +112,7 @@ export function rotatedRectPolygon(
 }
 
 /** Ray-casting point-in-polygon (ring open or closed) — e.g. "does this
- *  structure sit on this station's land?". */
+ *  structure sit on this stop's land?". */
 export function pointInPolygon(point: LngLat, ring: LngLat[]): boolean {
   if (ring.length < 3) return false;
   let inside = false;
@@ -127,7 +127,7 @@ export function pointInPolygon(point: LngLat, ring: LngLat[]): boolean {
 }
 
 /** A default square polygon of the given half-size, centered on `center` —
- *  the starting point for a station footprint or platform before the user
+ *  the starting point for a stop footprint or platform before the user
  *  drags its corners to fit the real site. */
 export function squareFootprint(center: LngLat, halfSizeMeters: number): LngLat[] {
   return [

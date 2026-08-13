@@ -1,6 +1,6 @@
 import { armRefKey, getComponent, laneRefKey, withComponent, withoutComponent } from './components';
 import { metersFromOrigin, offsetMeters } from './geo';
-import { reanchorStationsOnWay } from './station-reanchoring';
+import { reanchorStopsOnWay } from './stop-reanchoring';
 import type {
   DrivingSide,
   LaneConnector,
@@ -104,7 +104,7 @@ export function disconnectNodeWay(
           candidate === node ? nodeWithoutWay(node, wayId, staying) : candidate,
         );
   const next = { ...system, ways, nodes };
-  return { ...next, stations: reanchorStationsOnWay(next, wayId) };
+  return { ...next, stops: reanchorStopsOnWay(next, wayId) };
 }
 
 export function setNodeControl(

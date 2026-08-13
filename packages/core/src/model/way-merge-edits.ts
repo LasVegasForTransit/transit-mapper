@@ -11,7 +11,7 @@ import { mapSectionLegs, mergeLegs, normalizeSections } from './patternEdits';
 import { flipProfile } from './profile';
 import { withServicePattern } from './line-service';
 import { removeGroupMembers } from './system/group';
-import { replacedStationAnchors } from './station-reanchoring';
+import { replacedStopAnchors } from './stop-reanchoring';
 import type {
   LaneConnector,
   LngLat,
@@ -300,15 +300,15 @@ export function mergeWaysEndToEnd(
     merge,
     secondLaneIds,
   });
-  const stations = system.stations.map((station) => {
-    if (!anchorOnWayId(station, keepId) && !anchorOnWayId(station, otherId)) return station;
-    const nearest = nearestOnPath(mergedPath, station.coord);
+  const stops = system.stops.map((stop) => {
+    if (!anchorOnWayId(stop, keepId) && !anchorOnWayId(stop, otherId)) return stop;
+    const nearest = nearestOnPath(mergedPath, stop.coord);
     return nearest
       ? {
-          ...station,
-          anchors: replacedStationAnchors(station, otherId, { wayId: keepId, t: nearest.t }),
+          ...stop,
+          anchors: replacedStopAnchors(stop, otherId, { wayId: keepId, t: nearest.t }),
         }
-      : station;
+      : stop;
   });
   const named = mergedNamedWays(system.namedWays, otherId);
   let medians = system.medians;
@@ -329,7 +329,7 @@ export function mergeWaysEndToEnd(
     ways,
     nodes,
     services,
-    stations,
+    stops,
     namedWays: named.namedWays,
     medians,
     approachControls: endpointMetadata.approachControls,

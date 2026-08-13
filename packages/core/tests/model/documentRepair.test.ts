@@ -11,7 +11,7 @@ import { findMismatchedTypeJunctions, validateSystem } from '../../src/model/val
 import type { Node } from '../../src/model/system';
 import { patternLegs } from '../../src/model/geo';
 import { servicePattern } from '../../src/model/line-service';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
 
 /** A road running east-west and a rail line running north-south, both with a
  *  control point at the same coordinate. */
@@ -100,7 +100,7 @@ describe('a document referring to a way that cannot be drawn', () => {
   function savedWithGhost() {
     return aSystem({
       ways: [...crossingPair(), ghost],
-      stations: [aStation('st', [-115.2, 36.1], { wayId: 'ghost', t: 0.5 })],
+      stops: [aStop('st', [-115.2, 36.1], { wayId: 'ghost', t: 0.5 })],
       nodes: [
         {
           id: 'g',
@@ -122,14 +122,14 @@ describe('a document referring to a way that cannot be drawn', () => {
 
   it('drops everything that pointed at it, leaving nothing dangling', () => {
     const loaded = parseSystem(JSON.parse(JSON.stringify(savedWithGhost())));
-    expect(loaded.stations[0].anchors).toEqual([]);
+    expect(loaded.stops[0].anchors).toEqual([]);
     expect(loaded.nodes).toEqual([]);
     expect(loaded.namedWays).toEqual([]);
   });
 
-  it('keeps the station itself — where it sits was never in question', () => {
+  it('keeps the stop itself — where it sits was never in question', () => {
     const loaded = parseSystem(JSON.parse(JSON.stringify(savedWithGhost())));
-    expect(loaded.stations.map((s) => s.id)).toEqual(['st']);
+    expect(loaded.stops.map((s) => s.id)).toEqual(['st']);
   });
 
   it('leaves the loaded system with nothing to report', () => {
@@ -172,10 +172,10 @@ describe('a stop anchored to a way that is not in the document', () => {
   it('keeps the stop and drops the anchor', () => {
     const saved = aSystem({
       ways: crossingPair(),
-      stations: [aStation('st', [-115.18, 36.1], { wayId: 'deleted-long-ago', t: 0.5 })],
+      stops: [aStop('st', [-115.18, 36.1], { wayId: 'deleted-long-ago', t: 0.5 })],
     });
     const loaded = parseSystem(JSON.parse(JSON.stringify(saved)));
-    expect(loaded.stations[0].anchors).toEqual([]);
+    expect(loaded.stops[0].anchors).toEqual([]);
     expect(validateSystem(loaded)).toEqual([]);
   });
 });
@@ -188,7 +188,7 @@ describe('a document that says nothing the model disallows', () => {
     const saved = aSystem({
       ways,
       nodes: [{ ...mixedJunction, refs: mixedJunction.refs.slice(0, 2) }],
-      stations: [aStation('st', [-115.18, 36.1], { wayId: 'road-west', t: 0.5 })],
+      stops: [aStop('st', [-115.18, 36.1], { wayId: 'road-west', t: 0.5 })],
       services: [aService('line', [aPattern('p', ways, ['road-west', 'road-east'])])],
       namedWays: [{ id: 'name', name: 'Russell Road', wayIds: ['road-west', 'road-east'] }],
     });
@@ -198,7 +198,7 @@ describe('a document that says nothing the model disallows', () => {
     // What the repair must never do is DROP any of it.
     expect(loaded.ways.map((w) => w.id)).toEqual(saved.ways.map((w) => w.id));
     expect(loaded.nodes.map((n) => n.refs)).toEqual(saved.nodes.map((n) => n.refs));
-    expect(loaded.stations.map((st) => st.anchors)).toEqual(saved.stations.map((st) => st.anchors));
+    expect(loaded.stops.map((st) => st.anchors)).toEqual(saved.stops.map((st) => st.anchors));
     expect(loaded.services[0].path.sections).toEqual(saved.services[0].path.sections);
     expect(loaded.namedWays).toEqual(saved.namedWays);
   });

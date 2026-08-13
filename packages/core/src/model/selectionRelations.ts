@@ -26,8 +26,8 @@ import type { LngLat, Node, Pattern, Service, TransitSystem, Way } from './syste
 import { polylineCrossings, type WayCrossing } from './validate';
 
 /** How close two lines' ends must be to read as meeting. Two lines ending on
- *  opposite platforms of one station are a through-route waiting to happen;
- *  two ending a block apart are not. 100 m clears the longest station
+ *  opposite platforms of one stop are a through-route waiting to happen;
+ *  two ending a block apart are not. 100 m clears the longest stop
  *  footprint the editor draws (a ~60 m default) with room for the walk
  *  between platforms, and falls well short of a city block. */
 export const TERMINI_MEET_M = 100;
@@ -72,7 +72,7 @@ export function sharedEndpointNode(system: TransitSystem, aId: string, bId: stri
  * Type is part of it for the same reason: a junction is a lane graph, and a
  * road meeting a rail line has no lanes to connect. Offering the join built
  * one anyway — a road and a rail service sharing a junction that is not a
- * station — so the predicate refuses the pair outright rather than leaving
+ * stop — so the predicate refuses the pair outright rather than leaving
  * the operation to catch it.
  *
  * By junction GROUP, not by exact typeId. This backs a menu entry somebody
