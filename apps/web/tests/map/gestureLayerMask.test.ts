@@ -18,7 +18,7 @@ import {
 interface StatefulMaskMapFixture {
   map: GestureLayerMaskMap;
   originalWayFilter: FilterSpecification;
-  originalStationFilter: FilterSpecification;
+  originalStopFilter: FilterSpecification;
   filters: Map<string, FilterSpecification>;
   visibility: Map<string, unknown>;
   filterCalls: Array<{ layerId: string; filter: FilterSpecification | null }>;
@@ -28,10 +28,10 @@ interface StatefulMaskMapFixture {
 function createStatefulMaskMap(): StatefulMaskMapFixture {
   const visibleLayers = new Set([LYR_WAYS_SOLID, LYR_WAY_LABELS, LYR_STATIONS]);
   const originalWayFilter = ['get', 'way-visible'] as FilterSpecification;
-  const originalStationFilter = ['get', 'station-visible'] as FilterSpecification;
+  const originalStopFilter = ['get', 'stop-visible'] as FilterSpecification;
   const filters = new Map<string, FilterSpecification>([
     [LYR_WAYS_SOLID, originalWayFilter],
-    [LYR_STATIONS, originalStationFilter],
+    [LYR_STATIONS, originalStopFilter],
   ]);
   const visibility = new Map<string, unknown>([[LYR_WAY_LABELS, 'visible']]);
   const filterCalls: Array<{ layerId: string; filter: FilterSpecification | null }> = [];
@@ -53,7 +53,7 @@ function createStatefulMaskMap(): StatefulMaskMapFixture {
   return {
     map,
     originalWayFilter,
-    originalStationFilter,
+    originalStopFilter,
     filters,
     visibility,
     filterCalls,
@@ -65,6 +65,7 @@ describe('gesture settled-layer mask', () => {
   it('excludes the moved way and its old service geometry while hiding unaddressable labels', () => {
     const plan = buildGestureLayerMaskPlan({
       wayIds: ['way-a'],
+      stopIds: [],
       stationIds: [],
       facilityIds: [],
       groupIds: [],
@@ -112,6 +113,7 @@ describe('gesture settled-layer mask', () => {
     const controller = createGestureLayerMaskController(map);
     const affected = {
       wayIds: ['way-a'],
+      stopIds: [],
       stationIds: [],
       facilityIds: [],
       groupIds: [],
@@ -141,12 +143,12 @@ describe('gesture settled-layer mask', () => {
     });
   });
 
-  it('retains only the station mask after an overlapping way gesture ends', () => {
+  it('retains only the stop mask after an overlapping way gesture ends', () => {
     const fixture = createStatefulMaskMap();
     const {
       map,
       originalWayFilter,
-      originalStationFilter,
+      originalStopFilter,
       filters,
       visibility,
       filterCalls,
@@ -156,14 +158,16 @@ describe('gesture settled-layer mask', () => {
 
     controller.apply({
       wayIds: ['way-a'],
-      stationIds: ['station-a'],
+      stopIds: ['stop-a'],
+      stationIds: [],
       facilityIds: [],
       groupIds: [],
       nodeIds: [],
     });
     controller.apply({
       wayIds: [],
-      stationIds: ['station-a'],
+      stopIds: ['stop-a'],
+      stationIds: [],
       facilityIds: [],
       groupIds: [],
       nodeIds: [],
@@ -173,36 +177,37 @@ describe('gesture settled-layer mask', () => {
     expect(visibility.get(LYR_WAY_LABELS)).toBe('visible');
     expect(filters.get(LYR_STATIONS)).toEqual([
       'all',
-      originalStationFilter,
-      ['!', ['in', ['get', 'id'], ['literal', ['station-a']]]],
+      originalStopFilter,
+      ['!', ['in', ['get', 'id'], ['literal', ['stop-a']]]],
     ]);
 
     filterCalls.length = 0;
     visibilityCalls.length = 0;
     controller.restore();
 
-    expect(filterCalls).toEqual([{ layerId: LYR_STATIONS, filter: originalStationFilter }]);
+    expect(filterCalls).toEqual([{ layerId: LYR_STATIONS, filter: originalStopFilter }]);
     expect(visibilityCalls).toEqual([]);
   });
 
-  it('leaves an active way mask untouched when station settlement ends', () => {
-    const { map, originalWayFilter, originalStationFilter, filterCalls, visibilityCalls } =
+  it('leaves an active way mask untouched when stop settlement ends', () => {
+    const { map, originalWayFilter, originalStopFilter, filterCalls, visibilityCalls } =
       createStatefulMaskMap();
     const controller = createGestureLayerMaskController(map);
-    const wayAndStation = {
+    const wayAndStop = {
       wayIds: ['way-a'],
-      stationIds: ['station-a'],
+      stopIds: ['stop-a'],
+      stationIds: [],
       facilityIds: [],
       groupIds: [],
       nodeIds: [],
     };
 
-    controller.apply(wayAndStation);
+    controller.apply(wayAndStop);
     filterCalls.length = 0;
     visibilityCalls.length = 0;
-    controller.apply({ ...wayAndStation, stationIds: [] });
+    controller.apply({ ...wayAndStop, stopIds: [] });
 
-    expect(filterCalls).toEqual([{ layerId: LYR_STATIONS, filter: originalStationFilter }]);
+    expect(filterCalls).toEqual([{ layerId: LYR_STATIONS, filter: originalStopFilter }]);
     expect(visibilityCalls).toEqual([]);
 
     filterCalls.length = 0;
@@ -216,7 +221,8 @@ describe('gesture settled-layer mask', () => {
     const controller = createGestureLayerMaskController(fixture.map);
     const affected = {
       wayIds: [],
-      stationIds: ['station-a'],
+      stopIds: ['stop-a'],
+      stationIds: [],
       facilityIds: [],
       groupIds: [],
       nodeIds: [],
@@ -224,7 +230,7 @@ describe('gesture settled-layer mask', () => {
 
     controller.apply(affected);
 
-    const replacementFilter = ['get', 'station-visible-dark'] as FilterSpecification;
+    const replacementFilter = ['get', 'stop-visible-dark'] as FilterSpecification;
     fixture.filters.set(LYR_STATIONS, replacementFilter);
     fixture.filterCalls.length = 0;
 
@@ -234,11 +240,7 @@ describe('gesture settled-layer mask', () => {
     expect(fixture.filterCalls).toEqual([
       {
         layerId: LYR_STATIONS,
-        filter: [
-          'all',
-          replacementFilter,
-          ['!', ['in', ['get', 'id'], ['literal', ['station-a']]]],
-        ],
+        filter: ['all', replacementFilter, ['!', ['in', ['get', 'id'], ['literal', ['stop-a']]]]],
       },
     ]);
 

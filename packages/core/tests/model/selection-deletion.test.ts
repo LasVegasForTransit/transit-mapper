@@ -2,10 +2,21 @@ import { laneRefKey } from '../../src/model/components';
 import { patternLegs, patternWayIds, wholeLeg } from '../../src/model/geo';
 import { deleteSelection } from '../../src/model/selection-deletion';
 import { validateSystem } from '../../src/model/validate';
-import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStation, aStop, aSystem } from '../support/fixtures.test';
 import { describe, expect, it } from 'vitest';
 
 describe('multi-selection deletion', () => {
+  it('deleting a Station preserves and unparents its Stops', () => {
+    const station = aStation('central', [0, 0], { name: 'Central' });
+    const stop = aStop('platform', [0, 0], undefined, { stationId: station.id });
+    const system = aSystem({ stations: [station], stops: [stop] });
+
+    const next = deleteSelection(system, [{ kind: 'station', id: station.id }]);
+
+    expect(next.stations).toEqual([]);
+    expect(next.stops).toEqual([{ ...stop, stationId: undefined }]);
+  });
+
   it('preserves the system reference when no selected record exists', () => {
     const system = aSystem();
 

@@ -7,7 +7,6 @@
 // Adding a new way type (monorail guideway, gondola span, ferry route) or a new
 // mode (funicular, trolleybus) is a catalog entry here, never a type or switch
 // change elsewhere. Records in system.ts reference these by string id.
-
 // ---- Facility classes ------------------------------------------------------
 // A per-way-type refinement of the physical right-of-way: a road's arterial vs.
 // local, a bike way's protected vs. painted.

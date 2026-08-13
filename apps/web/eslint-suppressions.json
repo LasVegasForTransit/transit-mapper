@@ -24,9 +24,6 @@
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 2
     },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1
     },
@@ -75,9 +72,6 @@
     }
   },
   "scripts/perf/offline.ts": {
-    "@typescript-eslint/no-unnecessary-boolean-literal-compare": {
-      "count": 2
-    },
     "@typescript-eslint/prefer-promise-reject-errors": {
       "count": 3
     },
@@ -147,11 +141,6 @@
       "count": 3
     }
   },
-  "src/editor/keymap.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    }
-  },
   "src/editor/pointerIntent.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
@@ -198,16 +187,16 @@
       "count": 1
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 5
+      "count": 3
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 10
+      "count": 2
     },
     "@typescript-eslint/prefer-nullish-coalescing": {
       "count": 1
     },
     "@typescript-eslint/prefer-optional-chain": {
-      "count": 3
+      "count": 1
     },
     "complexity": {
       "count": 3
@@ -250,9 +239,6 @@
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
     },
-    "@typescript-eslint/no-unnecessary-type-arguments": {
-      "count": 2
-    },
     "complexity": {
       "count": 2
     },
@@ -282,7 +268,7 @@
       "count": 7
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 6
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-argument": {
       "count": 2
@@ -323,25 +309,6 @@
   "src/map/sourceMutationSettlement.ts": {
     "@typescript-eslint/unbound-method": {
       "count": 3
-    }
-  },
-  "src/map/stationGesturePreview.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/unbound-method": {
-      "count": 1
-    },
-    "complexity": {
-      "count": 1
-    }
-  },
-  "src/map/stationGestureSettlement.ts": {
-    "@typescript-eslint/unbound-method": {
-      "count": 5
-    },
-    "max-lines-per-function": {
-      "count": 1
     }
   },
   "src/map/styleSwitchController.ts": {
@@ -411,9 +378,6 @@
     }
   },
   "src/services/userPreferences.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "@typescript-eslint/prefer-optional-chain": {
       "count": 1
     }
@@ -442,9 +406,6 @@
     }
   },
   "src/share/svgExport.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "max-params": {
       "count": 1
     }
@@ -515,9 +476,6 @@
     },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 7
-    },
-    "@typescript-eslint/prefer-optional-chain": {
-      "count": 1
     }
   },
   "src/storage/persistenceCoordinator.ts": {
@@ -543,11 +501,6 @@
       "count": 1
     },
     "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/ui/ExportPreviewMap.tsx": {
-    "@typescript-eslint/prefer-optional-chain": {
       "count": 1
     }
   },
@@ -620,9 +573,6 @@
     }
   },
   "src/ui/SidebarPanel.tsx": {
-    "@typescript-eslint/prefer-nullish-coalescing": {
-      "count": 3
-    },
     "complexity": {
       "count": 1
     },
@@ -634,9 +584,6 @@
     }
   },
   "src/ui/SimProvider.tsx": {
-    "@typescript-eslint/no-unnecessary-boolean-literal-compare": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
     }
@@ -647,9 +594,6 @@
     }
   },
   "src/ui/Toolbar.tsx": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    },
     "max-lines-per-function": {
       "count": 1
     }
@@ -725,9 +669,6 @@
     }
   },
   "src/ui/inspector/StationInspector.tsx": {
-    "complexity": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     }
@@ -747,9 +688,6 @@
     }
   },
   "src/ui/inspector/drafts.tsx": {
-    "@typescript-eslint/prefer-nullish-coalescing": {
-      "count": 1
-    },
     "complexity": {
       "count": 1
     },
@@ -772,14 +710,9 @@
       "count": 2
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
+      "count": 1
     },
     "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/ui/sidebarOutline.ts": {
-    "@typescript-eslint/prefer-nullish-coalescing": {
       "count": 1
     }
   },
@@ -812,11 +745,6 @@
       "count": 1
     }
   },
-  "tests/map/gestureProjection.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    }
-  },
   "tests/map/interactions.test.ts": {
     "@typescript-eslint/no-misused-spread": {
       "count": 1
@@ -844,15 +772,7 @@
       "count": 1
     }
   },
-  "tests/map/stationGesturePreview.test.ts": {
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    }
-  },
   "tests/map/styleSwitchController.test.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 1
     },
@@ -925,12 +845,6 @@
     }
   },
   "tests/storage/libraryStore.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "@typescript-eslint/require-await": {
       "count": 5
     },
@@ -942,23 +856,11 @@
     }
   },
   "tests/storage/localStoreMeasurement.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 1
     }
   },
   "tests/storage/persistenceCoordinator.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 9
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 9
-    },
     "@typescript-eslint/require-await": {
       "count": 4
     }
@@ -982,14 +884,8 @@
     "@typescript-eslint/no-non-null-assertion": {
       "count": 256
     },
-    "@typescript-eslint/no-unnecessary-boolean-literal-compare": {
-      "count": 19
-    },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 32
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
     },
     "@typescript-eslint/no-unsafe-argument": {
       "count": 1
@@ -1005,9 +901,6 @@
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 2
-    },
-    "@typescript-eslint/prefer-includes": {
-      "count": 3
     },
     "max-lines": {
       "count": 1

@@ -14,7 +14,6 @@ import {
 } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
 import worker from '../src/index';
-
 // The real bindings come from worker-configuration.d.ts, which
 // `wrangler types` generates from wrangler.toml — so DB, ASSETS, SITE_URL
 // and SHARE_CREATE_LIMITER are typed from the deployment config rather than
@@ -62,7 +61,10 @@ describe('POST /api/systems', () => {
 
   it('says why it rejected', async () => {
     const response = await call(post('not json'));
-    const payload = (await response.json()) as { error?: string };
+    const payload = await response.json();
+    if (typeof payload !== 'object' || payload === null || !('error' in payload)) {
+      throw new TypeError('Expected an error response object.');
+    }
     expect(payload.error).toMatch(/Invalid system/);
   });
 
@@ -77,7 +79,10 @@ describe('POST /api/systems', () => {
   it('accepts any object-shaped system, by design', async () => {
     const response = await call(post({ system: { nonsense: true } }));
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as { id?: string };
+    const payload = await response.json();
+    if (typeof payload !== 'object' || payload === null || !('id' in payload)) {
+      throw new TypeError('Expected a share response object.');
+    }
     expect(payload.id).toMatch(/^[A-Za-z0-9]{10}$/);
   });
 });

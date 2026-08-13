@@ -1,4 +1,4 @@
-import { resyncAutoNamedStations } from '@transitmapper/core/model/geo/crossStreetNaming';
+import { resyncAutoNamedStops } from '@transitmapper/core/model/geo/crossStreetNaming';
 import { materializeRouteSpans } from '@transitmapper/core/model/routeLegs';
 import {
   closePatternTerminus,
@@ -103,7 +103,7 @@ function gestureCommit(state: EditorState, request: GestureRequest): GestureComm
     nextPattern,
   );
   return acceptedGesture(
-    resyncAutoNamedStations(nextSystem, new Set(legs.map((leg) => leg.wayId))),
+    resyncAutoNamedStops(nextSystem, new Set(legs.map((leg) => leg.wayId))),
     source,
   );
 }

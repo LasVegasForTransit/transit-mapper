@@ -7,7 +7,7 @@ representation. The same document renders three ways:
   chevrons. This is the transit map as riders think of it, and the view
   where you draw and route _services_.
 - **Infrastructure** — the physical world. Roads with lanes, tracks,
-  junction footprints, station land, buildings. This is where you draw and
+  junction footprints, Station boundaries, platforms, buildings. This is where you draw and
   edit _infrastructure_.
 - **Diagram** — a read-only straightened diagram of the network, in the
   tradition of printed transit maps.
@@ -31,8 +31,9 @@ The rule exists because point placement in a physical view lies. A station
 dot on an infrastructure map defers every real question: where the
 platforms are, how big the site is, what it displaces. Those questions
 are the point of an infrastructure view. Abstraction to a point is the
-Network view's job. So the Station tool draws land in
-Infrastructure and places stops in Network, and genuinely point-like things
+Network view's job. So the shared passenger-place shortcut presents a
+**Station** tool that draws land in Infrastructure and a **Stop** tool that
+places boarding points in Network. Genuinely point-like things
 (an entrance, an elevator) are the only facilities placed as points.
 
 ## Why drawing infrastructure never creates a service

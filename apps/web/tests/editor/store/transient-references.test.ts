@@ -1,4 +1,4 @@
-import { aPattern, aRoad, aService, aStation, aSystem } from '@transitmapper/core/testing/fixtures';
+import { aPattern, aRoad, aService, aStop, aSystem } from '@transitmapper/core/testing/fixtures';
 import { describe, expect, it } from 'vitest';
 import { createInitialEditorState } from '../../../src/editor/store/state';
 import { pruneTransientReferences } from '../../../src/editor/store/transient-references';
@@ -10,17 +10,17 @@ describe('editor transient references', () => {
       [-115.1, 36.1],
     ]);
     const service = aService('service', [aPattern('service', [way], [way.id])]);
-    const station = aStation('station', [-115.15, 36.1], { wayId: way.id, t: 0.5 });
-    const group = { id: 'group', memberIds: [station.id] };
+    const stop = aStop('stop', [-115.15, 36.1], { wayId: way.id, t: 0.5 });
+    const group = { id: 'group', memberIds: [stop.id] };
     const system = aSystem({
       ways: [way],
       services: [service],
-      stations: [station],
+      stops: [stop],
       groups: [group],
     });
     const state = createInitialEditorState('ready');
     state.system = system;
-    state.selection = { kind: 'service', id: service.id, stopId: 'deleted-station' };
+    state.selection = { kind: 'service', id: service.id, stopId: 'deleted-stop' };
     state.outlineHover = { kind: 'way', id: way.id, relatedIds: [way.id, 'deleted-way'] };
     state.activePatternId = service.path.id;
     state.armedTerminus = {
@@ -54,7 +54,7 @@ describe('editor transient references', () => {
       name: 'Branch',
       modeId: service.modeId,
     };
-    state.focusNameStationId = 'deleted-station';
+    state.focusNameStopId = 'deleted-stop';
 
     const patch = pruneTransientReferences(state, system);
 
@@ -69,7 +69,7 @@ describe('editor transient references', () => {
       placingFacilityForGroupId: group.id,
       pickingMemberForGroupId: null,
       addingServiceDraft: state.addingServiceDraft,
-      focusNameStationId: null,
+      focusNameStopId: null,
     });
   });
 });

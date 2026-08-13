@@ -1,12 +1,6 @@
 import { cumulativeLengths, patternWayIds } from '@transitmapper/core/model/geo';
 import { patternLanePath } from '@transitmapper/core/geometry/vehicleLane';
-import type {
-  LngLat,
-  Pattern,
-  Station,
-  TransitSystem,
-  Way,
-} from '@transitmapper/core/model/system';
+import type { LngLat, Pattern, Stop, TransitSystem, Way } from '@transitmapper/core/model/system';
 import type { RunTimetables, VehicleMotionProfile } from '@transitmapper/core/sim/timetable';
 import { patternStats } from '@transitmapper/core/sim/serviceStats';
 
@@ -35,11 +29,11 @@ export interface PatternGeometry {
 interface CachedPatternGeometry extends PatternGeometry {
   // Top-level collection identities are the zero-allocation fast path.
   forWayArray: Way[];
-  forStationArray: Station[];
+  forStopArray: Stop[];
   // These references identify the smaller dependency set that can invalidate
   // this pattern when either top-level collection changes.
   forWays: Array<Way | undefined>;
-  forStations: Station[];
+  forStops: Stop[];
   // effectiveVehicleKind returns a fresh object, so compare profile fields.
   forSpeedMps: number;
   forAccelMps2: number;
@@ -50,13 +44,13 @@ interface CachedPatternGeometry extends PatternGeometry {
 
 interface PatternDependencies {
   ways: Array<Way | undefined>;
-  stations: Station[];
+  stops: Stop[];
 }
 
 const patternGeometryCache = new WeakMap<Pattern, CachedPatternGeometry>();
 const patternWayIdCache = new WeakMap<Pattern, string[]>();
 const wayIndexCache = new WeakMap<Way[], Map<string, Way>>();
-const stationIndexCache = new WeakMap<Station[], Map<string, Station[]>>();
+const stopIndexCache = new WeakMap<Stop[], Map<string, Stop[]>>();
 
 function legFrom(path: LngLat[]): LegGeometry {
   const cumLengths = cumulativeLengths(path);
@@ -83,18 +77,18 @@ function indexedWays(ways: Way[]): Map<string, Way> {
   return index;
 }
 
-function indexedStations(stations: Station[]): Map<string, Station[]> {
-  let index = stationIndexCache.get(stations);
+function indexedStops(stops: Stop[]): Map<string, Stop[]> {
+  let index = stopIndexCache.get(stops);
   if (index) return index;
   index = new Map();
-  for (const station of stations) {
-    for (const anchor of station.anchors) {
+  for (const stop of stops) {
+    for (const anchor of stop.anchors) {
       const onWay = index.get(anchor.wayId);
-      if (onWay) onWay.push(station);
-      else index.set(anchor.wayId, [station]);
+      if (onWay) onWay.push(stop);
+      else index.set(anchor.wayId, [stop]);
     }
   }
-  stationIndexCache.set(stations, index);
+  stopIndexCache.set(stops, index);
   return index;
 }
 
@@ -109,21 +103,21 @@ function dependencyWayIds(pattern: Pattern): string[] {
 function patternDependencies(system: TransitSystem, pattern: Pattern): PatternDependencies {
   const wayIds = dependencyWayIds(pattern);
   const waysById = indexedWays(system.ways);
-  const stationsByWay = indexedStations(system.stations);
-  const stations: Station[] = [];
-  const seenStations = new Set<Station>();
+  const stopsByWay = indexedStops(system.stops);
+  const stops: Stop[] = [];
+  const seenStops = new Set<Stop>();
 
   for (const wayId of wayIds) {
-    for (const station of stationsByWay.get(wayId) ?? []) {
-      if (seenStations.has(station)) continue;
-      seenStations.add(station);
-      stations.push(station);
+    for (const stop of stopsByWay.get(wayId) ?? []) {
+      if (seenStops.has(stop)) continue;
+      seenStops.add(stop);
+      stops.push(stop);
     }
   }
 
   return {
     ways: wayIds.map((id) => waysById.get(id)),
-    stations,
+    stops,
   };
 }
 
@@ -133,7 +127,7 @@ function sameReferences<T>(left: T[], right: T[]): boolean {
 
 /**
  * Resolve one pattern's measured paths, reusing a warm cache until one of the
- * ways, stations, profile fields, or view-mode lane choices it depends on
+ * ways, stops, profile fields, or view-mode lane choices it depends on
  * changes.
  */
 export function resolvePatternGeometry(
@@ -149,27 +143,27 @@ export function resolvePatternGeometry(
     cached.forDecelMps2 === profile.decelMps2 &&
     cached.forModeId === modeId;
   const collectionReferencesMatch =
-    cached?.forWayArray === system.ways && cached.forStationArray === system.stations;
+    cached?.forWayArray === system.ways && cached.forStopArray === system.stops;
   if (cached && profileMatches && collectionReferencesMatch) return cached;
 
   const dependencies =
     cached && collectionReferencesMatch
-      ? { ways: cached.forWays, stations: cached.forStations }
+      ? { ways: cached.forWays, stops: cached.forStops }
       : patternDependencies(system, pattern);
   if (
     cached &&
     sameReferences(cached.forWays, dependencies.ways) &&
-    sameReferences(cached.forStations, dependencies.stations) &&
+    sameReferences(cached.forStops, dependencies.stops) &&
     profileMatches
   ) {
     cached.forWayArray = system.ways;
-    cached.forStationArray = system.stations;
+    cached.forStopArray = system.stops;
     return cached;
   }
 
   // Measurement comes from the same call as the Service inspector. Lane
   // geometry below affects drawing only; it never changes timetable duration.
-  const stats = patternStats(system.ways, system.stations, pattern, profile);
+  const stats = patternStats(system.ways, system.stops, pattern, profile);
   if (!stats) return null;
 
   const centerline: LegGeometry = {
@@ -206,9 +200,9 @@ export function resolvePatternGeometry(
     timetables: stats.timetables,
     bbox: [minLng, minLat, maxLng, maxLat],
     forWayArray: system.ways,
-    forStationArray: system.stations,
+    forStopArray: system.stops,
     forWays: dependencies.ways,
-    forStations: dependencies.stations,
+    forStops: dependencies.stops,
     forSpeedMps: profile.speedMps,
     forAccelMps2: profile.accelMps2,
     forDecelMps2: profile.decelMps2,

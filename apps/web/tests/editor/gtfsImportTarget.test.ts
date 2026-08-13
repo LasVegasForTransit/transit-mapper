@@ -15,7 +15,7 @@ describe('streaming GTFS import ownership', () => {
       targetSystemId: target.id,
       pieces: {
         ways: [],
-        stations: [],
+        stops: [],
         lines: [],
         services: [
           {

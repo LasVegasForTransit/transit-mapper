@@ -11,7 +11,6 @@ import {
   PERF_STORAGE_CONTRACT,
 } from './browserContract';
 import { waitForLoadedDocument } from './journeys';
-
 const PWA_RUNTIME_REPORT_FILENAME = 'pwa-runtime-report.json';
 
 interface OfflineStationSnapshot {
@@ -213,8 +212,8 @@ export async function verifyCacheEvictedOfflineReload(
         const overlay = (window as PerfPageWindow).__perfOverlaySnapshot?.();
         return (
           overlay?.sourceExists === true &&
-          overlay.layerExists === true &&
-          overlay.sourceLoaded === true &&
+          overlay.layerExists &&
+          overlay.sourceLoaded &&
           overlay.featureCount > 0
         );
       },

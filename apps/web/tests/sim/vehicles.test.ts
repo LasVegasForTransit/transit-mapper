@@ -4,7 +4,7 @@ import type { Map as MLMap } from 'maplibre-gl';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { oneSection, wholeLeg } from '@transitmapper/core/model/geo';
-import type { Station, TransitSystem, Way } from '@transitmapper/core/model/system';
+import type { Stop, TransitSystem, Way } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
 import { SRC_VEHICLES, SRC_VEHICLES_INFRA } from '../../src/map/layers';
 import { createSimClock } from '../../src/sim/simClock';
@@ -192,7 +192,7 @@ function way(id: string, lat: number): Way {
   };
 }
 
-function station(id: string, wayId: string, lat: number): Station {
+function stop(id: string, wayId: string, lat: number): Stop {
   return {
     id,
     coord: [-115.15, lat],
@@ -205,10 +205,7 @@ function runningSystem(): TransitSystem {
   const used = way('used', 36.1);
   const unrelated = way('unrelated', 36.3);
   system.ways = [used, unrelated];
-  system.stations = [
-    station('used-stop', used.id, 36.1),
-    station('other-stop', unrelated.id, 36.3),
-  ];
+  system.stops = [stop('used-stop', used.id, 36.1), stop('other-stop', unrelated.id, 36.3)];
   system.services = [
     {
       id: 'service',
@@ -514,7 +511,7 @@ describe('vehicle geometry dependencies', () => {
     detach();
   });
 
-  it('editing unrelated ways and stations preserves a pattern geometry cache entry', () => {
+  it('editing unrelated ways and stops preserves a pattern geometry cache entry', () => {
     const scheduled = installScheduler();
     const store = createEditorStore();
     store.commands.document.setSystem(runningSystem());
@@ -536,7 +533,7 @@ describe('vehicle geometry dependencies', () => {
     const second = store.getState().system;
     store.commands.document.setSystem({
       ...second,
-      stations: [second.stations[0], { ...second.stations[1], name: 'Other stop' }],
+      stops: [second.stops[0], { ...second.stops[1], name: 'Other stop' }],
     });
     scheduled.pumpFrame(80);
     expect(patternStatsProbe.calls).toBe(1);
@@ -544,7 +541,7 @@ describe('vehicle geometry dependencies', () => {
     const third = store.getState().system;
     store.commands.document.setSystem({
       ...third,
-      stations: [{ ...third.stations[0], dwellSeconds: 45 }, third.stations[1]],
+      stops: [{ ...third.stops[0], dwellSeconds: 45 }, third.stops[1]],
     });
     scheduled.pumpFrame(120);
     expect(patternStatsProbe.calls).toBe(2);

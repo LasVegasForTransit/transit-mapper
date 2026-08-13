@@ -11,7 +11,6 @@ import { useInertRef } from './useInertRef';
 import { useUi } from './UiProvider';
 import { useView, type ViewMode } from './ViewProvider';
 import { Icon } from './Icon';
-
 const VIEW_MODES: { mode: ViewMode; label: string }[] = [
   { mode: 'network', label: 'Network' },
   { mode: 'infrastructure', label: 'Infrastructure' },

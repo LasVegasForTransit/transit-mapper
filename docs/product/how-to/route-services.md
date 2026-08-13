@@ -63,7 +63,7 @@ months ago, and have since imported or drawn the real street grid under it:
 
 The editor re-routes the service through the real network, using the sketch
 as a path bias so the adopted route follows the streets nearest your
-original drawing. Stations re-anchor onto the adopted Ways, and the now-orphaned
+original drawing. Stops re-anchor onto the adopted Ways, and the now-orphaned
 sketch geometry (unnamed, hand-drawn, serving nothing else) is cleaned up.
 
 Adoption only considers Way types the Service's mode can run on, and it
@@ -80,7 +80,7 @@ the Network view.
 
 Drag either terminus over compatible infrastructure to preview the routed extension.
 The original Line identity and the Service's mode, path, schedule, sibling Services, Ways,
-junctions, and stations stay unchanged. Drop to commit one undo step, or press
+junctions, Stops, and Stations stay unchanged. Drop to commit one undo step, or press
 `Escape` to cancel.
 
 Dragging a terminus onto the focused Service path's interior closes a directional
@@ -105,8 +105,8 @@ exact displayed point. Right-click its path and use:
 - **Divide Service here** keeps the longer half on the original Service. The shorter
   half becomes a second Service under the same public Line and is selected.
 
-The inspector's stop sequence also offers **Start here** and **End here** when
-a named station is the convenient cut point. These service-path operations do
+The inspector's Stop sequence also offers **Start here** and **End here** when
+a named boarding point is the convenient cut point. These service-path operations do
 not split or move the Way underneath.
 
 To divide the physical road or track instead, switch to Infrastructure view

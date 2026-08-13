@@ -20,7 +20,7 @@ import type { PatternPosition } from './serviceEdits';
  *  here because the registry takes a selection as input and core cannot
  *  import from the app. */
 export interface SelectionRef {
-  kind: 'way' | 'stop' | 'facility' | 'line' | 'service';
+  kind: 'way' | 'stop' | 'station' | 'facility' | 'line' | 'service';
   id: string;
 }
 

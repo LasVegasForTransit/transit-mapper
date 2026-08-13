@@ -175,29 +175,29 @@ function terminusFeature(
   } as unknown as MapGeoJSONFeature;
 }
 
-function stationFeature(
+function stopFeature(
   id: string,
   coordinates: [number, number] = [-115.2, 36.1],
 ): MapGeoJSONFeature {
   return {
     type: 'Feature',
-    id: `station-${id}`,
+    id: `stop-${id}`,
     properties: { id },
     geometry: { type: 'Point', coordinates },
-    source: 'tm-stations',
+    source: 'tm-stops',
     sourceLayer: '',
-    layer: { id: LYR_STATIONS, type: 'circle', source: 'tm-stations' },
+    layer: { id: LYR_STATIONS, type: 'circle', source: 'tm-stops' },
     state: {},
   } as unknown as MapGeoJSONFeature;
 }
 
-function settlingStationFeature(
+function settlingStopFeature(
   id: string,
   coordinates: [number, number] = [-115.2, 36.1],
 ): MapGeoJSONFeature {
   return {
-    ...stationFeature(id, coordinates),
-    properties: { kind: 'station', ownerId: id, id },
+    ...stopFeature(id, coordinates),
+    properties: { kind: 'stop', ownerId: id, id },
     source: 'tm-gesture',
     layer: { id: LYR_GESTURE_POINT, type: 'circle', source: 'tm-gesture' },
   } as unknown as MapGeoJSONFeature;
@@ -486,7 +486,7 @@ describe('pointer work coalescing', () => {
     installBrowserGlobals();
     const store = createEditorStore();
     store.commands.tools.setTool('select');
-    const map = createMap(stationFeature('station'));
+    const map = createMap(stopFeature('stop'));
     const detach = attach(map, store);
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
@@ -1196,15 +1196,15 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
-  it('starts an existing Network station drag instead of panning the map', () => {
+  it('starts an existing Network stop drag instead of panning the map', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
-    const map = createMap(stationFeature(stationId));
+    const stopId = required(store.commands.stops.addStop([-115.2, 36.1]));
+    const map = createMap(stopFeature(stopId));
     const lifecycle: string[] = [];
     const detach = attach(map, store, {
       gesture: {
-        onStart: (targets) => lifecycle.push(`edit:${targets.stationIds?.[0]}`),
+        onStart: (targets) => lifecycle.push(`edit:${targets.stopIds?.[0]}`),
         onEnd() {},
       },
       directManipulation: { onStart: () => lifecycle.push('direct'), onEnd() {} },
@@ -1214,20 +1214,20 @@ describe('pointer work coalescing', () => {
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 100 }));
     scheduler.pump();
 
-    expect(lifecycle).toEqual(['direct', `edit:${stationId}`]);
+    expect(lifecycle).toEqual(['direct', `edit:${stopId}`]);
     expect(map.panCalls).toEqual([]);
     detach();
   });
 
-  it('lets a settling station preview start the next drag immediately', () => {
+  it('lets a settling stop preview start the next drag immediately', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
-    const map = createMap(settlingStationFeature(stationId));
+    const stopId = required(store.commands.stops.addStop([-115.2, 36.1]));
+    const map = createMap(settlingStopFeature(stopId));
     const lifecycle: string[] = [];
     const detach = attach(map, store, {
       gesture: {
-        onStart: (targets) => lifecycle.push(`edit:${targets.stationIds?.[0]}`),
+        onStart: (targets) => lifecycle.push(`edit:${targets.stopIds?.[0]}`),
         onEnd() {},
       },
       directManipulation: { onStart: () => lifecycle.push('direct'), onEnd() {} },
@@ -1237,7 +1237,7 @@ describe('pointer work coalescing', () => {
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 100 }));
     scheduler.pump();
 
-    expect(lifecycle).toEqual(['direct', `edit:${stationId}`]);
+    expect(lifecycle).toEqual(['direct', `edit:${stopId}`]);
     expect(map.panCalls).toEqual([]);
     detach();
   });
@@ -1265,11 +1265,11 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
-  it('publishes erase and deletes an Alt-clicked Network station', () => {
+  it('publishes erase and deletes an Alt-clicked Network stop', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
-    const map = createMap(stationFeature(stationId));
+    const stopId = required(store.commands.stops.addStop([-115.2, 36.1]));
+    const map = createMap(stopFeature(stopId));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
       onPointerIntent: (intent) => shown.push(intent),
@@ -1278,14 +1278,14 @@ describe('pointer work coalescing', () => {
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }, { altKey: true }));
     scheduler.pump();
     expect(shown.at(-1)).toMatchObject({
-      primaryOperation: 'delete-station',
+      primaryOperation: 'delete-stop',
       cursor: 'grab',
       badge: 'erase',
       anchor: 'target',
     });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }, { altKey: true }));
-    expect(store.getState().system.stations).toHaveLength(0);
+    expect(store.getState().system.stops).toHaveLength(0);
     expect(map.panCalls).toEqual([]);
     detach();
   });
@@ -1297,9 +1297,9 @@ describe('pointer work coalescing', () => {
     // Alt-click above, which fires the same events WITHOUT altKey.
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
+    const stopId = required(store.commands.stops.addStop([-115.2, 36.1]));
     store.commands.tools.setSelectVariant('erase');
-    const map = createMap(stationFeature(stationId));
+    const map = createMap(stopFeature(stopId));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
       onPointerIntent: (intent) => shown.push(intent),
@@ -1308,14 +1308,14 @@ describe('pointer work coalescing', () => {
     map.fire('mousemove', mouseEvent(map, { x: 100, y: 100 }));
     scheduler.pump();
     expect(shown.at(-1)).toMatchObject({
-      primaryOperation: 'delete-station',
+      primaryOperation: 'delete-stop',
       cursor: 'grab',
       badge: 'erase',
       anchor: 'target',
     });
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
-    expect(store.getState().system.stations).toHaveLength(0);
+    expect(store.getState().system.stops).toHaveLength(0);
     expect(map.panCalls).toEqual([]);
     detach();
   });
@@ -1325,14 +1325,14 @@ describe('pointer work coalescing', () => {
     vi.useFakeTimers();
     installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
+    const stopId = required(store.commands.stops.addStop([-115.2, 36.1]));
     store.commands.tools.setSelectVariant('erase');
-    const map = createMap(stationFeature(stationId));
+    const map = createMap(stopFeature(stopId));
     const detach = attach(map, store);
 
     tap(map, { x: 100, y: 100 });
 
-    expect(store.getState().system.stations).toHaveLength(0);
+    expect(store.getState().system.stops).toHaveLength(0);
     detach();
     vi.useRealTimers();
   });
@@ -1362,33 +1362,33 @@ describe('pointer work coalescing', () => {
     detach();
   });
 
-  it('keeps Shift-click on a Network station as multi-selection instead of a drag', () => {
+  it('keeps Shift-click on a Network stop as multi-selection instead of a drag', () => {
     installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
-    const map = createMap(stationFeature(stationId));
+    const stopId = required(store.commands.stops.addStop([-115.2, 36.1]));
+    const map = createMap(stopFeature(stopId));
     const detach = attach(map, store);
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }, { shiftKey: true }));
 
-    expect(store.getState().multiSelection).toEqual([{ kind: 'station', id: stationId }]);
+    expect(store.getState().multiSelection).toEqual([{ kind: 'stop', id: stopId }]);
     expect(map.panCalls).toEqual([]);
     detach();
   });
 
-  it('drags all selected Network items when starting from a station', () => {
+  it('drags all selected Network items when starting from a stop', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
+    const stopId = required(store.commands.stops.addStop([-115.2, 36.1]));
     const facilityId = required(store.commands.facilities.addFacility('entrance', [-115.21, 36.1]));
     store.commands.selection.addMultiSelection([
-      { kind: 'station', id: stationId },
+      { kind: 'stop', id: stopId },
       { kind: 'facility', id: facilityId },
     ]);
     const originalFacility = structuredClone(
       store.getState().system.facilities.find((facility) => facility.id === facilityId)?.geometry,
     );
-    const map = createMap(stationFeature(stationId));
+    const map = createMap(stopFeature(stopId));
     const detach = attach(map, store);
 
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
@@ -1405,14 +1405,14 @@ describe('pointer work coalescing', () => {
   it('drags all selected Network items when starting from a facility', () => {
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = required(store.commands.stations.addStation([-115.21, 36.1]));
+    const stopId = required(store.commands.stops.addStop([-115.21, 36.1]));
     const facilityId = required(store.commands.facilities.addFacility('entrance', [-115.2, 36.1]));
     store.commands.selection.addMultiSelection([
-      { kind: 'station', id: stationId },
+      { kind: 'stop', id: stopId },
       { kind: 'facility', id: facilityId },
     ]);
-    const originalStation = structuredClone(
-      store.getState().system.stations.find((station) => station.id === stationId)?.coord,
+    const originalStop = structuredClone(
+      store.getState().system.stops.find((stop) => stop.id === stopId)?.coord,
     );
     const map = createMap(facilityFeature(facilityId));
     const detach = attach(map, store);
@@ -1421,9 +1421,9 @@ describe('pointer work coalescing', () => {
     map.fire('mousemove', mouseEvent(map, { x: 140, y: 100 }));
     scheduler.pump();
 
-    expect(
-      store.getState().system.stations.find((station) => station.id === stationId)?.coord,
-    ).not.toEqual(originalStation);
+    expect(store.getState().system.stops.find((stop) => stop.id === stopId)?.coord).not.toEqual(
+      originalStop,
+    );
     expect(map.panCalls).toEqual([]);
     detach();
   });
@@ -1608,16 +1608,13 @@ describe('pointer work coalescing', () => {
       },
     ];
     store.commands.document.setSystem(system);
-    const stationId = required(store.commands.stations.addStation([-115.23, 36.1008]));
-    const map = createMap([
-      serviceFeature('erasable'),
-      stationFeature(stationId, [-115.23, 36.1008]),
-    ]);
+    const stopId = required(store.commands.stops.addStop([-115.23, 36.1008]));
+    const map = createMap([serviceFeature('erasable'), stopFeature(stopId, [-115.23, 36.1008])]);
     const detach = attach(map, store);
 
     map.fire('click', mouseEvent(map, map.project([-115.23, 36.1])));
 
-    expect(store.getState().selection).toEqual({ kind: 'station', id: stationId });
+    expect(store.getState().selection).toEqual({ kind: 'stop', id: stopId });
     detach();
   });
 
@@ -2335,9 +2332,9 @@ describe('touch gestures', () => {
     vi.useFakeTimers();
     const scheduler = installBrowserGlobals();
     const store = createEditorStore();
-    const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
+    const stopId = required(store.commands.stops.addStop([-115.2, 36.1]));
     store.commands.tools.setSelectVariant('erase');
-    const map = createMap(stationFeature(stationId));
+    const map = createMap(stopFeature(stopId));
     const shown: Array<PointerIntent | null> = [];
     const detach = attach(map, store, {
       onPointerIntent: (intent) => shown.push(intent),
@@ -2346,7 +2343,7 @@ describe('touch gestures', () => {
     map.fire('touchstart', touchEvent(map, [{ x: 100, y: 100 }]));
     scheduler.pump();
 
-    expect(shown.at(-1)).toMatchObject({ primaryOperation: 'delete-station', badge: 'erase' });
+    expect(shown.at(-1)).toMatchObject({ primaryOperation: 'delete-stop', badge: 'erase' });
     detach();
     vi.useRealTimers();
   });

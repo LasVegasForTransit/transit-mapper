@@ -11,6 +11,7 @@ import { createServiceCompositionCommands } from './commands/service-composition
 import { createServiceGestureCommands } from './commands/service-gesture-commands';
 import { createServiceMetadataCommands } from './commands/service-metadata-commands';
 import { createServicePatternCommands } from './commands/service-pattern-commands';
+import { createStopCommands } from './commands/stop-commands';
 import { createStationCommands } from './commands/station-commands';
 import { createToolCommands } from './commands/tool-commands';
 import { createWayCommands } from './commands/way-commands';
@@ -43,6 +44,7 @@ export function createEditorStore(options: CreateEditorStoreOptions = {}): Edito
     imports: importCommands,
     routing: routingCommands,
     services: serviceCommands,
+    stops: createStopCommands(runtime),
     stations: createStationCommands(runtime),
     facilities: createFacilityCommands(runtime),
     groups: createGroupCommands(runtime, {

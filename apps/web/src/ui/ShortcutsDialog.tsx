@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { KEY_BINDINGS } from '../editor/keymap';
 import { Modal } from './Modal';
-
 const KEY_LABEL: Record<string, string> = {
   ArrowUp: '↑',
   ArrowDown: '↓',
@@ -110,8 +109,8 @@ export function ShortcutsDialog({ onClose }: ShortcutsDialogProps) {
       </section>
 
       <p className="shortcuts-foot">
-        Pan also works by right-drag or <kbd>Space</kbd>-drag · Alt-click deletes a point or station
-        · Shift constrains to 45°. Erase and Split are on the Select tool&rsquo;s own menu, which is
+        Pan also works by right-drag or <kbd>Space</kbd>-drag · Alt-click deletes a point or stop ·
+        Shift constrains to 45°. Erase and Split are on the Select tool&rsquo;s own menu, which is
         how a finger reaches them.
       </p>
     </Modal>

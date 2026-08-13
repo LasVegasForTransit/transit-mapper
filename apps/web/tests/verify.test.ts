@@ -193,7 +193,7 @@ import type {
   Node,
   PatternLeg,
   Service,
-  Station,
+  Stop,
   TransitSystem,
   VehicleKind,
   Way,
@@ -243,7 +243,7 @@ import {
 import { planService, runStateAt } from '@transitmapper/core/sim/fleet';
 import {
   combinedHeadwayMinutes,
-  servicesAtStation,
+  servicesAtStop,
   typicalWaitMinutes,
   vehiclesPerHour,
 } from '@transitmapper/core/sim/frequency';
@@ -522,7 +522,7 @@ check(
   store.commands.routing.startRouteDraft(from);
   const extended = store.commands.routing.extendRouteDraft(to);
   const newId = required(store.commands.routing.commitRouteDraft());
-  check('route-draft extends along the existing way', extended === true);
+  check('route-draft extends along the existing way', extended);
   check(
     'committing a routed draft adds a second service',
     !!newId && store.getState().system.services.length === 2,
@@ -598,26 +598,26 @@ check(
         pathLengthMeters(aFeats[0].geometry.coordinates as LngLat[]) * 0.95,
   );
 
-  // A station out at the end of the way is on the through-line only. Riding a
+  // A stop out at the end of the way is on the through-line only. Riding a
   // way is no longer the same as reaching every point on it, so "which lines
   // serve this stop" has to ask where the line actually goes — otherwise the
   // stop wrongly reads as an interchange.
-  store.commands.stations.addStation([-115.295, 36.1]);
+  store.commands.stops.addStop([-115.295, 36.1]);
   const withStop = buildFeatures(store.getState().system, null, [], {
     viewMode: 'network',
     ...filters,
   });
-  const endStop = withStop.stations.features[0];
+  const endStop = withStop.stops.features[0];
   check(
     'a stop past where a line terminates is not counted as served by it',
     endStop.properties?.interchange === false,
   );
   // …and one inside the shared stretch still is.
-  store.commands.stations.addStation([-115.2, 36.1]);
+  store.commands.stops.addStop([-115.2, 36.1]);
   const shared = buildFeatures(store.getState().system, null, [], {
     viewMode: 'network',
     ...filters,
-  }).stations.features.find((f) => f.properties?.id !== endStop.properties?.id)!;
+  }).stops.features.find((f) => f.properties?.id !== endStop.properties?.id)!;
   check(
     'a stop inside the shared stretch is served by both lines',
     shared.properties?.interchange === true,
@@ -684,7 +684,7 @@ check(
   ]);
   check(
     "deriveLegDirections: exit at the way's last point → forward",
-    deriveLegDirections(fwd, ['a', 'b'])[0] === true,
+    deriveLegDirections(fwd, ['a', 'b'])[0],
   );
   // wayA points [P1,P0] → it exits into wayB at wayA's FIRST point → backward.
   const bwd = new Map<string, Way>([
@@ -693,11 +693,11 @@ check(
   ]);
   check(
     "deriveLegDirections: exit at the way's first point → backward",
-    deriveLegDirections(bwd, ['a', 'b'])[0] === false,
+    !deriveLegDirections(bwd, ['a', 'b'])[0],
   );
   check(
     'deriveLegDirections: a single way has no continuity to read and stays forward',
-    deriveLegDirections(fwd, ['a'])[0] === true,
+    deriveLegDirections(fwd, ['a'])[0],
   );
 
   // The case that used to break: two ways meeting LAST-point-to-LAST-point.
@@ -741,7 +741,7 @@ check(
   ]);
   check(
     'deriveLegDirections: the first way is oriented by where the second one meets it',
-    deriveLegDirections(enterAtLast, ['a', 'b'])[0] === false,
+    !deriveLegDirections(enterAtLast, ['a', 'b'])[0],
   );
 }
 
@@ -1016,7 +1016,7 @@ check(
   );
 }
 
-// --- a station snaps onto a way and follows it when reshaped ---
+// --- a stop snaps onto a way and follows it when reshaped ---
 fresh();
 const h = required(store.commands.ways.beginWay('road', 'straight'));
 store.commands.ways.addWayPoint(h, [-115.24, 36.1]);
@@ -1024,12 +1024,12 @@ store.commands.ways.addWayPoint(h, [-115.1, 36.1]);
 store.commands.ways.finishWay();
 const s1 = snap(store.getState().system.ways, [-115.17, 36.104], 5000);
 check('snap finds the nearby way', !!s1 && s1.wayId === h);
-const stId = required(store.commands.stations.addStation(s1!.coord, { wayId: h, t: s1!.t }));
-const beforeLat = store.getState().system.stations.find((s) => s.id === stId)!.coord[1];
+const stId = required(store.commands.stops.addStop(s1!.coord, { wayId: h, t: s1!.t }));
+const beforeLat = store.getState().system.stops.find((s) => s.id === stId)!.coord[1];
 store.commands.ways.moveWayPoint(h, 0, [-115.24, 36.16]);
 store.commands.ways.moveWayPoint(h, 1, [-115.1, 36.16]);
-const afterLat = store.getState().system.stations.find((s) => s.id === stId)!.coord[1];
-check('station follows its way when reshaped', afterLat > beforeLat + 0.02);
+const afterLat = store.getState().system.stops.find((s) => s.id === stId)!.coord[1];
+check('stop follows its way when reshaped', afterLat > beforeLat + 0.02);
 
 // --- snap picks the NEAREST of several candidate ways ---
 {
@@ -1095,7 +1095,7 @@ check('station follows its way when reshaped', afterLat > beforeLat + 0.02);
   check('resuming a way never creates a second service', servicesOnWay(rw).length === 1);
 }
 
-// --- interchange emerges where a station sits on two ways' services ---
+// --- interchange emerges where a stop sits on two ways' services ---
 fresh();
 const la = required(store.commands.ways.beginWay('lightRail', 'straight'));
 store.commands.ways.addWayPoint(la, [-115.2, 36.1]);
@@ -1112,19 +1112,19 @@ store.commands.ways.finishWay();
   const services = store
     .getState()
     .system.services.filter((s) => serviceWayIds(s).some((w) => near.has(w)));
-  check('a station at a crossing is served by two services', services.length === 2);
+  check('a stop at a crossing is served by two services', services.length === 2);
 }
 
-// --- deleting a way removes its services and stations ---
+// --- deleting a way removes its services and stops ---
 fresh();
 const dc = required(store.commands.ways.beginWay('road', 'straight'));
 store.commands.ways.addWayPoint(dc, [-115.2, 36.1]);
 store.commands.ways.addWayPoint(dc, [-115.0, 36.1]);
 store.commands.ways.finishWay();
-store.commands.stations.addStation([-115.1, 36.1], { wayId: dc, t: 0.5 });
+store.commands.stops.addStop([-115.1, 36.1], { wayId: dc, t: 0.5 });
 store.commands.ways.deleteWay(dc);
 check('deleting a way removes its service', store.getState().system.services.length === 0);
-check('deleting a way removes its stations', store.getState().system.stations.length === 0);
+check('deleting a way removes its stops', store.getState().system.stops.length === 0);
 
 // --- deleting one service leaves the way and other services ---
 fresh();
@@ -1328,7 +1328,7 @@ sys = store.getState().system;
 const forked = forkSystem(sys);
 check('fork has new id + copy name', forked.id !== sys.id && forked.name.includes('(copy)'));
 
-// --- parse: v3 round-trips ways/services/station anchor ---
+// --- parse: v3 round-trips ways/services/stop anchor ---
 {
   fresh();
   const pc = required(store.commands.ways.beginWay('lightRail', 'curved'));
@@ -1336,12 +1336,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   store.commands.ways.addWayPoint(pc, [-115.1, 36.15]);
   store.commands.ways.finishWay();
   store.commands.services.addServiceToWay(pc);
-  store.commands.stations.addStation([-115.15, 36.12], { wayId: pc, t: 0.4 });
+  store.commands.stops.addStop([-115.15, 36.12], { wayId: pc, t: 0.4 });
   const before = store.getState().system;
   const round = parseSystem(JSON.parse(JSON.stringify(before)));
   check('parse round-trips ways', round.ways.length === before.ways.length);
   check('parse round-trips services', round.services.length === 2);
-  check('parse round-trips station anchor (wayId)', primaryAnchor(round.stations[0])?.wayId === pc);
+  check('parse round-trips stop anchor (wayId)', primaryAnchor(round.stops[0])?.wayId === pc);
 }
 
 // --- migration: v2 corridors infer heavyRail/lightRail/monorail/road from the service mode ---
@@ -1353,7 +1353,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     viewport: { center: [-115.17, 36.13], zoom: 10 },
     createdAt: 1,
     updatedAt: 1,
-    stations: [],
+    stops: [],
     corridors: [
       {
         id: 'c-subway',
@@ -1423,7 +1423,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     viewport: { center: [-115.17, 36.13], zoom: 10 },
     createdAt: 1,
     updatedAt: 1,
-    stations: [{ id: 's1', coord: [-115.15, 36.12], anchor: { lineId: 'l1', t: 0.5 } }],
+    stops: [{ id: 's1', coord: [-115.15, 36.12], anchor: { lineId: 'l1', t: 0.5 } }],
     lines: [
       {
         id: 'l1',
@@ -1450,10 +1450,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     'legacy service keeps color/name',
     m.lines[0].color === '#e4572e' && m.lines[0].name === 'Old Line',
   );
-  check(
-    'legacy station anchor migrated lineId → wayId',
-    primaryAnchor(m.stations[0])?.wayId === 'l1',
-  );
+  check('legacy stop anchor migrated lineId → wayId', primaryAnchor(m.stops[0])?.wayId === 'l1');
 }
 
 // --- modes + grade (infrastructure vertical alignment) ---
@@ -1493,7 +1490,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       },
     ],
     services: [],
-    stations: [],
+    stops: [],
     facilities: [],
     groups: [],
   });
@@ -1557,16 +1554,20 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 }
 
-// --- P3: station footprints & platforms ---
+// --- P3: Station footprints & platforms ---
 {
   fresh();
-  const stId = required(store.commands.stations.addStation([-115.15, 36.1]));
+  const stId = required(
+    store.commands.stations.addDrawnStation(squareFootprint([-115.15, 36.1], 30)),
+  );
+  store.commands.stations.deleteStationFootprint(stId);
   check(
-    'station starts with no footprint',
+    'Station can exist without a footprint',
     store.getState().system.stations[0].footprint === undefined,
   );
   store.commands.stations.addStationFootprint(stId);
-  const withFootprint = () => store.getState().system.stations.find((s) => s.id === stId)!;
+  const withFootprint = () =>
+    store.getState().system.stations.find((station) => station.id === stId)!;
   check(
     'addStationFootprint gives it a 4-corner default square',
     withFootprint().footprint?.length === 4,
@@ -1582,7 +1583,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   const platformId = required(store.commands.stations.addPlatform(stId));
   check(
-    'addPlatform adds a platform to the station',
+    'addPlatform adds a platform to the Station',
     withFootprint().platforms?.length === 1 && withFootprint().platforms![0].id === platformId,
   );
   store.commands.stations.movePlatformPoint(stId, platformId, 1, [-115.14, 36.09]);
@@ -1630,12 +1631,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 }
 
-// --- P3: grouping (station complexes / line families) ---
+// --- P3: grouping (stop complexes / line families) ---
 {
   fresh();
-  const a = required(store.commands.stations.addStation([-115.2, 36.1]));
-  const b = required(store.commands.stations.addStation([-115.2001, 36.1001]));
-  const c = required(store.commands.stations.addStation([-115.2002, 36.1002]));
+  const a = required(store.commands.stops.addStop([-115.2, 36.1]));
+  const b = required(store.commands.stops.addStop([-115.2001, 36.1001]));
+  const c = required(store.commands.stops.addStop([-115.2002, 36.1002]));
   const groupId = required(store.commands.groups.createGroup([a, b], 'Downtown complex'));
   check(
     'createGroup bundles the given members',
@@ -1723,14 +1724,14 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     store.getState().selection?.kind === 'group' && store.getState().selection?.id === groupId,
   );
 
-  const looseStation = required(store.commands.stations.addStation([-115.181, 36.131]));
+  const looseStop = required(store.commands.stops.addStop([-115.181, 36.131]));
   store.commands.groups.startPickingMember(groupId);
   check('startPickingMember arms picking', store.getState().pickingMemberForGroupId === groupId);
-  store.commands.groups.addGroupMember(groupId, looseStation);
+  store.commands.groups.addGroupMember(groupId, looseStop);
   store.commands.groups.cancelPickingMember();
   check(
-    'picking flow (addGroupMember + cancel) adds the existing station and disarms',
-    store.getState().system.groups[0].memberIds.includes(looseStation) &&
+    'picking flow (addGroupMember + cancel) adds the existing stop and disarms',
+    store.getState().system.groups[0].memberIds.includes(looseStop) &&
       store.getState().pickingMemberForGroupId === null,
   );
 
@@ -1752,8 +1753,8 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // opt-in specialization, not a required shape for every group ---
 {
   fresh();
-  const a = required(store.commands.stations.addStation([-115.2, 36.1]));
-  const b = required(store.commands.stations.addStation([-115.2001, 36.1001]));
+  const a = required(store.commands.stops.addStop([-115.2, 36.1]));
+  const b = required(store.commands.stops.addStop([-115.2001, 36.1001]));
   store.commands.groups.createGroup([a, b], 'Transfer complex');
   check(
     'a plain group has no footprint',
@@ -1761,12 +1762,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 }
 
-// --- On-map labels: name flows into station/facility feature properties ---
+// --- On-map labels: name flows into stop/facility feature properties ---
 {
   fresh();
-  const namedId = required(store.commands.stations.addStation([-115.16, 36.12]));
-  store.commands.stations.setStationName(namedId, 'Downtown');
-  const unnamedId = required(store.commands.stations.addStation([-115.17, 36.13]));
+  const namedId = required(store.commands.stops.addStop([-115.16, 36.12]));
+  store.commands.stops.setStopName(namedId, 'Downtown');
+  const unnamedId = required(store.commands.stops.addStop([-115.17, 36.13]));
   const facId = required(store.commands.facilities.addFacility('depot', [-115.18, 36.14]));
   store.commands.facilities.setFacilityName(facId, 'Maintenance Yard');
   const unnamedFacId = required(
@@ -1779,15 +1780,15 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     visibleWayTypes: new Set<string>(),
   };
   const net = buildFeatures(store.getState().system, null, [], view);
-  const namedStationFeature = net.stations.features.find((f) => f.properties?.id === namedId);
-  const unnamedStationFeature = net.stations.features.find((f) => f.properties?.id === unnamedId);
+  const namedStopFeature = net.stops.features.find((f) => f.properties?.id === namedId);
+  const unnamedStopFeature = net.stops.features.find((f) => f.properties?.id === unnamedId);
   check(
-    "a named station's feature carries its name (network view too)",
-    namedStationFeature?.properties?.name === 'Downtown',
+    "a named stop's feature carries its name (network view too)",
+    namedStopFeature?.properties?.name === 'Downtown',
   );
   check(
-    "an unnamed station's feature has an empty-string name, not undefined",
-    unnamedStationFeature?.properties?.name === '',
+    "an unnamed stop's feature has an empty-string name, not undefined",
+    unnamedStopFeature?.properties?.name === '',
   );
 
   const infra = buildFeatures(store.getState().system, null, [], {
@@ -1811,8 +1812,9 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 // --- P3: footprints/platforms/facilities render in Infrastructure view only ---
 {
   fresh();
-  const stId = required(store.commands.stations.addStation([-115.15, 36.1]));
-  store.commands.stations.addStationFootprint(stId);
+  const stId = required(
+    store.commands.stations.addDrawnStation(squareFootprint([-115.15, 36.1], 30)),
+  );
   store.commands.stations.addPlatform(stId);
   store.commands.facilities.addFacility('entrance', [-115.151, 36.101]);
   // Empty way-type filter on purpose — footprints/platforms/facilities render
@@ -1835,7 +1837,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check('infrastructure view renders the platform polygon', infra.platforms.features.length === 1);
   check('infrastructure view renders the facility point', infra.facilities.features.length === 1);
   check(
-    "physicalHandleStationId renders that station's footprint+platform vertices",
+    "physicalHandleStationId renders that Station's footprint+platform vertices",
     infra.physicalHandles.features.length === 4 + 4,
   );
 
@@ -1870,7 +1872,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check(
     "infrastructure view renders a group's footprint polygon too",
     infraWithGroup.footprints.features.length === 2,
-  ); // station's + group's
+  ); // stop's + group's
   check(
     "physicalHandleGroupId renders that group's footprint vertices",
     infraWithGroup.physicalHandles.features.length === 4,
@@ -1899,10 +1901,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   {
     const sysP = store.getState().system;
     check(
-      'buildPhysicalHandles alone emits exactly what the full build emits for a station',
+      'buildPhysicalHandles alone emits exactly what the full build emits for a Station',
       JSON.stringify(
         buildPhysicalHandles(
-          sysP.stations.find((s) => s.id === stId),
+          sysP.stations.find((station) => station.id === stId),
           null,
         ),
       ) === JSON.stringify(infra.physicalHandles.features),
@@ -1923,23 +1925,24 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   }
 }
 
-// --- P3: v3 serialize round-trips footprints, platforms, facilities, groups ---
+// --- P3: serialize round-trips Station footprints, platforms, facilities, groups ---
 {
   fresh();
-  const stId = required(store.commands.stations.addStation([-115.15, 36.1]));
-  store.commands.stations.addStationFootprint(stId);
+  const stId = required(
+    store.commands.stations.addDrawnStation(squareFootprint([-115.15, 36.1], 30)),
+  );
   store.commands.stations.addPlatform(stId);
   store.commands.facilities.addFacility('depot', [-115.16, 36.11]);
-  const other = required(store.commands.stations.addStation([-115.17, 36.12]));
+  const other = required(store.commands.stops.addStop([-115.17, 36.12]));
   store.commands.groups.createGroup([stId, other], 'Complex');
   const round = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
   check(
-    'parse round-trips a station footprint',
-    round.stations.find((s) => s.id === stId)?.footprint?.length === 4,
+    'parse round-trips a Station footprint',
+    round.stations.find((station) => station.id === stId)?.footprint?.length === 4,
   );
   check(
     'parse round-trips platforms',
-    round.stations.find((s) => s.id === stId)?.platforms?.length === 1,
+    round.stations.find((station) => station.id === stId)?.platforms?.length === 1,
   );
   check(
     'parse round-trips facilities',
@@ -2119,7 +2122,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       },
     ],
     services: [],
-    stations: [],
+    stops: [],
     facilities: [],
     groups: [],
   });
@@ -2342,20 +2345,20 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   store.commands.ways.addWayPoint(wayA, [-115.2, 36.1]);
   store.commands.ways.addWayPoint(wayA, [-115.1, 36.1]);
   store.commands.ways.finishWay();
-  const stId = required(store.commands.stations.addStation([-115.25, 36.05])); // free-floating, not anchored to wayA
+  const stId = required(store.commands.stops.addStop([-115.25, 36.05])); // free-floating, not anchored to wayA
   const facId = required(store.commands.facilities.addFacility('entrance', [-115.15, 36.2]));
 
   store.commands.selection.toggleMultiSelect({ kind: 'way', id: wayA });
-  store.commands.selection.toggleMultiSelect({ kind: 'station', id: stId });
+  store.commands.selection.toggleMultiSelect({ kind: 'stop', id: stId });
   check('toggleMultiSelect builds up the group', store.getState().multiSelection.length === 2);
   check('multi-select clears the single Inspector selection', store.getState().selection === null);
 
-  store.commands.selection.toggleMultiSelect({ kind: 'station', id: stId });
+  store.commands.selection.toggleMultiSelect({ kind: 'stop', id: stId });
   check(
     'toggling an already-selected item removes it',
     store.getState().multiSelection.length === 1,
   );
-  store.commands.selection.toggleMultiSelect({ kind: 'station', id: stId });
+  store.commands.selection.toggleMultiSelect({ kind: 'stop', id: stId });
   store.commands.selection.toggleMultiSelect({ kind: 'facility', id: facId });
   check('group now has all 3 kinds', store.getState().multiSelection.length === 3);
 
@@ -2368,9 +2371,9 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       before.ways.find((w) => w.id === wayA)!.points[0][0] + 0.01,
   );
   check(
-    'nudge moves a selected free-floating station',
-    s.stations.find((st) => st.id === stId)!.coord[0] ===
-      before.stations.find((st) => st.id === stId)!.coord[0] + 0.01,
+    'nudge moves a selected free-floating stop',
+    s.stops.find((st) => st.id === stId)!.coord[0] ===
+      before.stops.find((st) => st.id === stId)!.coord[0] + 0.01,
   );
   check(
     "nudge moves a selected facility's point geometry",
@@ -2378,19 +2381,19 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       (before.facilities.find((f) => f.id === facId)!.geometry as [number, number])[1] + 0.02,
   );
 
-  // A station anchored to a way that's ALSO in the group must not be
+  // A stop anchored to a way that's ALSO in the group must not be
   // double-moved — it already follows via the way's own reanchor.
   const anchoredSt = required(
-    store.commands.stations.addStation([-115.15, 36.1], { wayId: wayA, t: 0.5 }),
+    store.commands.stops.addStop([-115.15, 36.1], { wayId: wayA, t: 0.5 }),
   );
-  store.commands.selection.toggleMultiSelect({ kind: 'station', id: anchoredSt });
+  store.commands.selection.toggleMultiSelect({ kind: 'stop', id: anchoredSt });
   const wayPointBefore = store.getState().system.ways.find((w) => w.id === wayA)!.points[0];
   store.commands.selection.nudgeMultiSelection(0.005, 0.005);
   s = store.getState().system;
   const expectedCoord = pointAtT(resolveWayPath(s.ways.find((w) => w.id === wayA)!), 0.5);
-  const actualCoord = s.stations.find((st) => st.id === anchoredSt)!.coord;
+  const actualCoord = s.stops.find((st) => st.id === anchoredSt)!.coord;
   check(
-    "a station anchored to a co-selected way follows the way's own reanchor, not a second direct nudge",
+    "a stop anchored to a co-selected way follows the way's own reanchor, not a second direct nudge",
     Math.abs(actualCoord[0] - expectedCoord[0]) < 1e-9 &&
       Math.abs(actualCoord[1] - expectedCoord[1]) < 1e-9,
   );
@@ -2407,15 +2410,15 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   s = store.getState().system;
   check('bulk delete removes the way', !s.ways.some((w) => w.id === wayA));
   check(
-    'bulk delete removes both stations',
-    !s.stations.some((st) => st.id === stId || st.id === anchoredSt),
+    'bulk delete removes both stops',
+    !s.stops.some((st) => st.id === stId || st.id === anchoredSt),
   );
   check('bulk delete removes the facility', !s.facilities.some((f) => f.id === facId));
   check('bulk delete clears the group', store.getState().multiSelection.length === 0);
 }
 
 // --- multi-way group-drag: nudging 2+ selected ways in one batch reanchors
-// each station against its OWN anchor way, not another way in the same
+// each stop against its OWN anchor way, not another way in the same
 // batch (updateWayPointsBatch) ---
 {
   fresh();
@@ -2427,9 +2430,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   store.commands.ways.addWayPoint(wayB, [-115.3, 36.3]); // shape/orientation than wayA, so
   store.commands.ways.addWayPoint(wayB, [-115.3, 36.0]); // reanchoring against the wrong way
   store.commands.ways.finishWay(); // in the batch would be numerically obvious.
-  const stOnA = required(
-    store.commands.stations.addStation([-115.15, 36.1], { wayId: wayA, t: 0.5 }),
-  );
+  const stOnA = required(store.commands.stops.addStop([-115.15, 36.1], { wayId: wayA, t: 0.5 }));
 
   store.commands.selection.toggleMultiSelect({ kind: 'way', id: wayA });
   store.commands.selection.toggleMultiSelect({ kind: 'way', id: wayB });
@@ -2451,9 +2452,9 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   const expectedOnA = pointAtT(resolveWayPath(newWayA), 0.5);
   const wrongOnB = pointAtT(resolveWayPath(newWayB), 0.5);
-  const actual = s.stations.find((st) => st.id === stOnA)!.coord;
+  const actual = s.stops.find((st) => st.id === stOnA)!.coord;
   check(
-    "a station anchored to one way in a multi-way batch follows THAT way's new path",
+    "a stop anchored to one way in a multi-way batch follows THAT way's new path",
     Math.abs(actual[0] - expectedOnA[0]) < 1e-9 && Math.abs(actual[1] - expectedOnA[1]) < 1e-9,
   );
   check(
@@ -2462,42 +2463,40 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 }
 
-// --- extending a way's endpoint must not move stations anchored earlier on
+// --- extending a way's endpoint must not move stops anchored earlier on
 // it: t is a fraction of TOTAL length, so a naive replay against the new
-// (longer) total silently drags every station toward the new far end ---
+// (longer) total silently drags every stop toward the new far end ---
 {
   fresh();
   const w = required(store.commands.ways.beginWay('lightRail', 'straight'));
   store.commands.ways.addWayPoint(w, [-115.2, 36.1]);
   store.commands.ways.addWayPoint(w, [-115.1, 36.1]);
   store.commands.ways.finishWay();
-  const midStation = required(
-    store.commands.stations.addStation([-115.15, 36.1], { wayId: w, t: 0.5 }),
-  );
-  const before = store.getState().system.stations.find((s) => s.id === midStation)!.coord;
+  const midStop = required(store.commands.stops.addStop([-115.15, 36.1], { wayId: w, t: 0.5 }));
+  const before = store.getState().system.stops.find((s) => s.id === midStop)!.coord;
 
   store.commands.ways.addWayPoint(w, [-115.0, 36.1]); // extend the far endpoint
-  const afterFirst = store.getState().system.stations.find((s) => s.id === midStation)!;
+  const afterFirst = store.getState().system.stops.find((s) => s.id === midStop)!;
   check(
-    "extending a way's endpoint does not move a station anchored earlier on the way",
+    "extending a way's endpoint does not move a stop anchored earlier on the way",
     Math.abs(afterFirst.coord[0] - before[0]) < 1e-9 &&
       Math.abs(afterFirst.coord[1] - before[1]) < 1e-9,
   );
   check(
-    "extending a way's endpoint updates the station's stored t, not just its coord",
+    "extending a way's endpoint updates the stop's stored t, not just its coord",
     afterFirst.anchors.find((a) => a.wayId === w)!.t < 0.5,
   );
 
   store.commands.ways.addWayPoint(w, [-114.9, 36.1]); // extend again
-  const afterSecond = store.getState().system.stations.find((s) => s.id === midStation)!.coord;
+  const afterSecond = store.getState().system.stops.find((s) => s.id === midStop)!.coord;
   check(
-    "a second endpoint extension still preserves the station's absolute position",
+    "a second endpoint extension still preserves the stop's absolute position",
     Math.abs(afterSecond[0] - before[0]) < 1e-9 && Math.abs(afterSecond[1] - before[1]) < 1e-9,
   );
 }
 
 // --- cutting where you CLICKED: the point-anchored actions that make a
-// stretch of a line removable without a station at each end ---
+// stretch of a line removable without a stop at each end ---
 {
   fresh();
   const way = required(store.commands.ways.beginWay('lightRail', 'straight'));
@@ -2805,7 +2804,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 }
 
 // --- splitWayAt: splits infrastructure, keeps riding services whole,
-// re-snaps stations, and links the split point as a real junction ---
+// re-snaps stops, and links the split point as a real junction ---
 {
   fresh();
   const trunk = required(store.commands.ways.beginWay('lightRail', 'straight'));
@@ -2815,12 +2814,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   store.commands.ways.finishWay();
   store.commands.ways.setWayGrade(trunk, 'underground');
   const svc = store.getState().system.services.find((sv) => serviceWayIds(sv).includes(trunk))!.id;
-  // A station riding each half, so the re-snap can be checked on both sides.
+  // A stop riding each half, so the re-snap can be checked on both sides.
   const westStop = required(
-    store.commands.stations.addStation([-115.25, 36.1], { wayId: trunk, t: 0.25 }),
+    store.commands.stops.addStop([-115.25, 36.1], { wayId: trunk, t: 0.25 }),
   );
   const eastStop = required(
-    store.commands.stations.addStation([-115.15, 36.1], { wayId: trunk, t: 0.75 }),
+    store.commands.stops.addStop([-115.15, 36.1], { wayId: trunk, t: 0.75 }),
   );
 
   store.commands.ways.splitWayAt(trunk, 1); // split at the middle control point
@@ -2852,14 +2851,14 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     ),
   );
 
-  const west = s.stations.find((st) => st.id === westStop)!;
-  const east = s.stations.find((st) => st.id === eastStop)!;
+  const west = s.stops.find((st) => st.id === westStop)!;
+  const east = s.stops.find((st) => st.id === eastStop)!;
   check(
-    'a station west of the split re-snaps onto the first half',
+    'a stop west of the split re-snaps onto the first half',
     primaryAnchor(west)?.wayId === trunk,
   );
   check(
-    'a station east of the split re-snaps onto the second half',
+    'a stop east of the split re-snaps onto the second half',
     primaryAnchor(east)?.wayId === wayB.id,
   );
 
@@ -3023,7 +3022,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       },
     ],
     services: [{ id: 's1', name: 'Old', modeId: 'lightRail', color: '#e4572e', wayIds: ['w'] }],
-    stations: [],
+    stops: [],
     facilities: [],
     groups: [],
     nodes: [],
@@ -3081,18 +3080,18 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     issues.some((i) => i.id === `ghost-way-${ghostWay}`),
   );
 
-  // An orphaned station: anchor points at a way id that doesn't exist.
+  // An orphaned stop: anchor points at a way id that doesn't exist.
   fresh();
   const stId = required(
-    store.commands.stations.addStation([-115.15, 36.1], {
+    store.commands.stops.addStop([-115.15, 36.1], {
       wayId: 'nonexistent',
       t: 0.5,
     }),
   );
   issues = validateSystem(store.getState().system);
   check(
-    'flags a station anchored to a missing way',
-    issues.some((i) => i.id === `orphan-station-${stId}`),
+    'flags a stop anchored to a missing way',
+    issues.some((i) => i.id === `orphan-stop-${stId}`),
   );
 
   // Two ways of the SAME type crossing arrive already joined: importWays now
@@ -3255,8 +3254,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   store.commands.ways.addWayPoint(wayId, [-115.2, 36.1]);
   store.commands.ways.addWayPoint(wayId, [-115.1, 36.2]);
   store.commands.ways.finishWay();
-  const stId = required(store.commands.stations.addStation([-115.25, 36.05]));
-  store.commands.stations.addStationFootprint(stId); // extends the bbox further southwest
+  required(store.commands.stations.addDrawnStation(squareFootprint([-115.25, 36.05], 30))); // extends the bbox further southwest
   const facId = required(store.commands.facilities.addFacility('depot', [-115.05, 36.25])); // extends northeast
 
   const bounds = systemBounds(store.getState().system);
@@ -5248,17 +5246,17 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
   check('the route color round-trips as a line hex color', pieces.lines[0].color === '#E4572E');
   check(
-    "both stops become stations, anchored onto the shape's way",
-    pieces.stations.length === 2 &&
-      pieces.stations.every((s) => primaryAnchor(s)?.wayId === pieces.ways[0].id),
+    "both stops become stops, anchored onto the shape's way",
+    pieces.stops.length === 2 &&
+      pieces.stops.every((s) => primaryAnchor(s)?.wayId === pieces.ways[0].id),
   );
   check(
-    'stations keep their GTFS stop names',
-    pieces.stations.some((s) => s.name === 'Downtown') &&
-      pieces.stations.some((s) => s.name === 'Midtown'),
+    'stops keep their GTFS stop names',
+    pieces.stops.some((s) => s.name === 'Downtown') &&
+      pieces.stops.some((s) => s.name === 'Midtown'),
   );
 
-  // A stop shared by two routes/shapes stays exactly one station.
+  // A stop shared by two routes/shapes stays exactly one stop.
   const trips2 = 'route_id,trip_id,shape_id\nR1,T1,S1\nR1,T2,S2\n';
   const shapes2 = shapes + 'S2,36.11,-115.20,1\nS2,36.11,-115.17,2\n';
   const stopTimes2 = stopTimes + 'T2,ST1,1\n';
@@ -5270,8 +5268,8 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     stopTimes: stopTimes2,
   });
   check(
-    'a stop reachable from two shapes still becomes one station',
-    shared.stations.filter((s) => s.name === 'Downtown').length === 1,
+    'a stop reachable from two shapes still becomes one stop',
+    shared.stops.filter((s) => s.name === 'Downtown').length === 1,
   );
   check(
     'two shapes on the same route become two services under one line',
@@ -5330,7 +5328,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   const batchedTotal = {
     ways: batches.flatMap((b) => b.ways),
     services: batches.flatMap((b) => b.services),
-    stations: batches.flatMap((b) => b.stations),
+    stops: batches.flatMap((b) => b.stops),
   };
   const unbatched = gtfsFilesToSystemPieces(files);
   check(
@@ -5342,13 +5340,13 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     batchedTotal.services.length === unbatched.services.length,
   );
   check(
-    'a stop shared across two different batches still becomes exactly one station, not two',
-    batchedTotal.stations.filter((s) => s.name === 'Shared Stop').length === 1 &&
-      unbatched.stations.filter((s) => s.name === 'Shared Stop').length === 1,
+    'a stop shared across two different batches still becomes exactly one stop, not two',
+    batchedTotal.stops.filter((s) => s.name === 'Shared Stop').length === 1 &&
+      unbatched.stops.filter((s) => s.name === 'Shared Stop').length === 1,
   );
   check(
-    'batched stations total matches the unbatched pass',
-    batchedTotal.stations.length === unbatched.stations.length,
+    'batched stops total matches the unbatched pass',
+    batchedTotal.stops.length === unbatched.stops.length,
   );
 }
 
@@ -5393,13 +5391,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     !store.getState().canUndo && !store.getState().canRedo,
   );
 
-  const stationId = required(store.commands.stations.addStation([-115.2, 36.1]));
-  check('adding a station is undoable', store.getState().canUndo);
+  const stopId = required(store.commands.stops.addStop([-115.2, 36.1]));
+  check('adding a stop is undoable', store.getState().canUndo);
   store.commands.history.undo();
-  check(
-    'undo removes the station',
-    !store.getState().system.stations.some((s) => s.id === stationId),
-  );
+  check('undo removes the stop', !store.getState().system.stops.some((s) => s.id === stopId));
   check(
     'undo clears selection (avoids pointing at a gone/stale object)',
     store.getState().selection === null,
@@ -5409,13 +5404,13 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
 
   store.commands.history.redo();
   check(
-    'redo restores the station',
-    store.getState().system.stations.some((s) => s.id === stationId),
+    'redo restores the stop',
+    store.getState().system.stops.some((s) => s.id === stopId),
   );
   check('redoing the only step leaves nothing left to redo', !store.getState().canRedo);
 
   store.commands.history.undo();
-  store.commands.stations.addStation([-115.3, 36.2]); // a fresh action after undo invalidates redo
+  store.commands.stops.addStop([-115.3, 36.2]); // a fresh action after undo invalidates redo
   check('a new action after undo clears the redo stack', !store.getState().canRedo);
 
   check(
@@ -5428,7 +5423,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   );
 
   fresh();
-  store.commands.stations.addStation([-115.2, 36.1]);
+  store.commands.stops.addStop([-115.2, 36.1]);
   store.commands.document.setSystem(store.getState().system, { readOnly: true });
   check(
     'loading a system (even the same one) resets history',
@@ -5442,7 +5437,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   check('panning alone starts with nothing to undo', !store.getState().canUndo);
   store.commands.document.setViewport({ center: [-115.5, 36.5], zoom: 12 });
   check('setViewport does not create an undo step', !store.getState().canUndo);
-  store.commands.stations.addStation([-115.2, 36.1]);
+  store.commands.stops.addStop([-115.2, 36.1]);
   check('a real edit after panning is still undoable', store.getState().canUndo);
   store.commands.document.setViewport({ center: [-115.6, 36.6], zoom: 13 });
   check(
@@ -5586,7 +5581,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     'Undo binding is gated by canUndo',
     resolveBinding(KEY_BINDINGS, evt({ key: 'z', ctrlKey: true }), ctx) === null,
   );
-  store.commands.stations.addStation([-115.2, 36.1]);
+  store.commands.stops.addStop([-115.2, 36.1]);
   const undone = resolveBinding(KEY_BINDINGS, evt({ key: 'z', ctrlKey: true }), ctx);
   check(
     "Ctrl+Z resolves to the Undo binding once there's something to undo",
@@ -5595,7 +5590,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   undone?.run(ctx);
   check(
     'running the resolved Undo binding actually undoes',
-    store.getState().system.stations.length === 0,
+    store.getState().system.stops.length === 0,
   );
   const redone = resolveBinding(
     KEY_BINDINGS,
@@ -5606,7 +5601,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   redone?.run(ctx);
   check(
     'running the resolved Redo binding actually redoes',
-    store.getState().system.stations.length === 1,
+    store.getState().system.stops.length === 1,
   );
 }
 
@@ -5735,7 +5730,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   store.commands.ways.addWayPoint(fiCross, [-115.15, 36.15]);
   store.commands.ways.finishWay();
   store.commands.network.formCrossingJunctions(fiCross);
-  store.commands.stations.addStation([-115.15, 36.1]);
+  store.commands.stops.addStop([-115.15, 36.1]);
   store.commands.facilities.addFacility(FACILITY_TYPE_ORDER[0], [-115.14, 36.11]);
   store.commands.services.addServiceToWay(fiRoad);
   store.commands.ways.nameWay(fiRoad, 'Decatur Avenue');
@@ -5842,15 +5837,13 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   // Joins B onto A's midpoint — A gets a genuine interior node, not just an
   // endpoint junction, exercising the harder case (see joinWayPointToWay).
   store.commands.ways.joinWayPointToWay(dwB, 1, dwA, [-115.15, 36.1]);
-  const dwStationId = required(
-    store.commands.stations.addStation([-115.15, 36.15], { wayId: dwB, t: 0.5 }),
-  );
+  const dwStopId = required(store.commands.stops.addStop([-115.15, 36.15], { wayId: dwB, t: 0.5 }));
 
   const real = store.getState().system;
   const diagram = computeDiagramSystem(real);
 
   check('diagram preserves the way count', diagram.ways.length === real.ways.length);
-  check('diagram preserves the station count', diagram.stations.length === real.stations.length);
+  check('diagram preserves the stop count', diagram.stops.length === real.stops.length);
   check(
     'every diagram way is straight geometry',
     diagram.ways.every((w) => w.geometry === 'straight'),
@@ -5868,10 +5861,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     diagA.points.length === 3,
   );
 
-  const diagStation = diagram.stations.find((s) => s.id === dwStationId)!;
-  const onPath = nearestOnPath(diagB.points, diagStation.coord);
+  const diagStop = diagram.stops.find((s) => s.id === dwStopId)!;
+  const onPath = nearestOnPath(diagB.points, diagStop.coord);
   check(
-    "an anchored station still sits on its way's new schematic path",
+    "an anchored stop still sits on its way's new schematic path",
     onPath !== null && onPath.distMeters < 1,
   );
 
@@ -6225,7 +6218,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     const run = (presses: [number, number][]) => {
       const s = createEditorStore();
       s.commands.document.setSystem(createEmptySystem());
-      s.commands.tools.setTool('station');
+      s.commands.tools.setTool('stop');
       const map = createFakeMap();
       const detach = attachInteractions(map as never, s, {
         tuning: FINE_POINTER_TUNING,
@@ -6240,20 +6233,20 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       const added: number[] = [];
       let x = 400;
       for (const [dx, dy] of presses) {
-        const before = s.getState().system.stations.length;
+        const before = s.getState().system.stops.length;
         press(map, { x, y: 300 }, dx, dy);
-        added.push(s.getState().system.stations.length - before);
-        x += 40; // never place two stations on the same spot
+        added.push(s.getState().system.stops.length - before);
+        x += 40; // never place two stops on the same spot
       }
       detach();
       return added;
     };
 
-    // Baseline: still-hand clicks each place a station, which is what makes
+    // Baseline: still-hand clicks each place a stop, which is what makes
     // the failure below a regression in the moved-press case specifically and
-    // not the station tool being broken generally.
+    // not the stop tool being broken generally.
     check(
-      'consecutive still clicks each place a station',
+      'consecutive still clicks each place a stop',
       JSON.stringify(
         run([
           [0, 0],
@@ -6263,12 +6256,12 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       ) === '[1,1,1]',
     );
 
-    // The bug. A moved press still places its own station (its mousedown/
+    // The bug. A moved press still places its own stop (its mousedown/
     // mouseup gesture handles that itself) — what regressed is the press
     // AFTER it, which used to place nothing at all. Measured against the real
     // MapLibre build before the fix, this was [1, 0].
     check(
-      'a click right after a moved press still places a station',
+      'a click right after a moved press still places a stop',
       JSON.stringify(
         run([
           [8, 0],
@@ -6380,7 +6373,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
         const way = s.getState().system.ways[0];
         const committed = way.points[way.points.length - 1];
         if (!shown) return null;
-        return haversineMeters(shown as [number, number], committed);
+        return haversineMeters(shown, committed);
       };
 
       // A hair off the heading: continue-straight grabs, so the preview has to
@@ -6442,7 +6435,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       press(map, { x: 700, y: 560 });
       const rendered = resolveWayPath(s.getState().system.ways[0]);
       const offPath = band.map((p) => {
-        const near = nearestOnPath(rendered, p as [number, number]);
+        const near = nearestOnPath(rendered, p);
         return near ? near.distMeters : Infinity;
       });
       check(
@@ -6825,7 +6818,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       },
     ],
     services: [],
-    stations: [],
+    stops: [],
     facilities: [],
     groups: [],
   });
@@ -6906,7 +6899,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     updatedAt: 1,
     ways: [],
     services: [],
-    stations: [],
+    stops: [],
     facilities: [],
     groups: [],
     nodes: [],
@@ -6990,7 +6983,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
         patterns: [{ id: 'p1', wayIds: ['wA', 'wB'] }],
       },
     ],
-    stations: [],
+    stops: [],
     facilities: [],
     groups: [],
     nodes: [],
@@ -7344,7 +7337,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
       !isOneWay(w.profile) || directionalLanes(w.profile).every((l) => l.direction === 'backward'),
   )!;
   const stId = required(
-    store.commands.stations.addStation(discarded.points[0], {
+    store.commands.stops.addStop(discarded.points[0], {
       wayId: discarded.id,
       t: 0,
     }),
@@ -7357,13 +7350,10 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     'combining leaves one carriageway',
     after.ways.filter((w) => w.id !== cross.id).length === 1,
   );
-  check(
-    'combining keeps a station anchored to the discarded carriageway',
-    after.stations.length === 1,
-  );
+  check('combining keeps a stop anchored to the discarded carriageway', after.stops.length === 1);
   check(
     'and re-anchors it onto the surviving centerline',
-    primaryAnchor(after.stations.find((st) => st.id === stId)!)?.wayId === survivor.id,
+    primaryAnchor(after.stops.find((st) => st.id === stId)!)?.wayId === survivor.id,
   );
   check('combining keeps the junction the cross street made', after.nodes.length === nodesBefore);
   check(
@@ -7851,8 +7841,8 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   const twoWayIds = wayById([wayA, wayB]);
   const straightOn = { id: 'p1', sections: oneSection(wholeLegs(twoWayIds, ['va', 'vb'])) };
   const segs = patternSegments(twoWayIds, straightOn);
-  check('first way in a pattern defaults to forward', segs[0].forward === true);
-  check('a way continuing in its own stored order is forward', segs[1].forward === true);
+  check('first way in a pattern defaults to forward', segs[0].forward);
+  check('a way continuing in its own stored order is forward', segs[1].forward);
 
   // way C's own points run the OPPOSITE direction of travel (start where
   // way A ends up, at the far end) — traversing it means walking it backward.
@@ -7874,7 +7864,7 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   });
   check(
     'a way stored opposite the direction of travel is detected as backward',
-    reversedSegs[1].forward === false,
+    !reversedSegs[1].forward,
   );
 
   // The return run is the outbound one mirrored — same ways in reverse order,
@@ -8577,10 +8567,7 @@ check(
 
   // Picking a mode is an explicit "draw a line" — it re-enables services.
   store.commands.tools.setDraftMode('bus');
-  check(
-    'choosing a mode re-enables service creation',
-    store.getState().draftServiceEnabled === true,
-  );
+  check('choosing a mode re-enables service creation', store.getState().draftServiceEnabled);
   const r2 = required(store.commands.ways.beginWay());
   store.commands.ways.addWayPoint(r2, [-115.2, 36.2]);
   store.commands.ways.addWayPoint(r2, [-115.1, 36.2]);
@@ -8723,8 +8710,7 @@ function buildGrid() {
   check('startRouteDraft opens an empty draft', store.getState().routeDraft?.spans.length === 0);
   check(
     'extendRouteDraft appends routed spans',
-    store.commands.routing.extendRouteDraft(to) === true &&
-      store.getState().routeDraft!.spans.length === 3,
+    store.commands.routing.extendRouteDraft(to) && store.getState().routeDraft!.spans.length === 3,
   );
   const svcId = required(store.commands.routing.commitRouteDraft());
   check(
@@ -8776,7 +8762,7 @@ function buildGrid() {
   );
 
   store.commands.routing.startRouteDraft(from);
-  check('extend along the same way succeeds', store.commands.routing.extendRouteDraft(to) === true);
+  check('extend along the same way succeeds', store.commands.routing.extendRouteDraft(to));
   const svcId = required(store.commands.routing.commitRouteDraft());
   const sys = store.getState().system;
   check('committing a same-way route creates the service', !!svcId && sys.services.length === 1);
@@ -8805,9 +8791,9 @@ function buildGrid() {
   const before = store.getState().system;
   const svc = before.services[0];
   check('sketch created its own service + parallel geometry', !!svc && before.ways.length > 7);
-  // A station riding the sketch, to prove it follows the adoption.
+  // A stop riding the sketch, to prove it follows the adoption.
   const st1 = required(
-    store.commands.stations.addStation([-115.25, 36.202], {
+    store.commands.stops.addStop([-115.25, 36.202], {
       wayId: patternWayIds(svc.path)[0],
       t: 0.2,
     }),
@@ -8834,10 +8820,10 @@ function buildGrid() {
     'orphaned sketch geometry was removed',
     after.ways.every((w) => !sketchWayIds.has(w.id)),
   );
-  const station = after.stations.find((s2) => s2.id === st1)!;
+  const stop = after.stops.find((s2) => s2.id === st1)!;
   check(
-    'the station followed onto an adopted way',
-    !!primaryAnchor(station) && patternWayIds(adopted.path).includes(primaryAnchor(station)!.wayId),
+    'the stop followed onto an adopted way',
+    !!primaryAnchor(stop) && patternWayIds(adopted.path).includes(primaryAnchor(stop)!.wayId),
   );
 }
 
@@ -9008,15 +8994,12 @@ function buildGrid() {
   fresh();
   check(
     'facility tool starts in PLACE mode, not complex mode',
-    store.getState().draftFacilityComplexMode === false,
+    !store.getState().draftFacilityComplexMode,
   );
   store.commands.tools.setDraftFacilityComplexMode(true);
-  check('complex mode is opt-in', store.getState().draftFacilityComplexMode === true);
+  check('complex mode is opt-in', store.getState().draftFacilityComplexMode);
   store.commands.tools.setDraftFacilityType('depot');
-  check(
-    'picking a facility type leaves complex mode',
-    store.getState().draftFacilityComplexMode === false,
-  );
+  check('picking a facility type leaves complex mode', !store.getState().draftFacilityComplexMode);
   // Area facilities can be placed as polygons directly.
   const fid = required(
     store.commands.facilities.addFacility('depot', squareFootprint([-115.15, 36.1], 15)),
@@ -9076,7 +9059,7 @@ function buildGrid() {
   );
   check(
     'branch becomes the active draw with one-way armed',
-    store.getState().activeWayId === branchId && store.getState().draftOneWay === true,
+    store.getState().activeWayId === branchId && store.getState().draftOneWay,
   );
   store.commands.routing.cancelRouteDraft();
   store.commands.ways.finishWay();
@@ -9116,7 +9099,7 @@ function buildGrid() {
   check('two-way ways get no chevrons in network view', net3.laneArrows.features.length === 0);
 }
 
-// --- station DRAWING: a dragged footprint is a real station ---
+// --- station DRAWING: a dragged footprint is a real passenger place ---
 {
   fresh();
   store.commands.tools.setDraftServiceEnabled(false);
@@ -9126,41 +9109,37 @@ function buildGrid() {
   store.commands.ways.finishWay();
   store.commands.tools.setDraftServiceEnabled(true);
 
-  // A footprint straddling the road: station anchors onto it.
+  // A Station footprint is independent from its boarding Stops.
   const fp = squareFootprint([-115.15, 36.1], 25);
   const sid = required(store.commands.stations.addDrawnStation(fp));
   const st1 = store.getState().system.stations.find((x) => x.id === sid)!;
-  check('drawn station carries its footprint', st1.footprint === fp);
-  check('drawn station anchors onto the way it straddles', primaryAnchor(st1)?.wayId === r);
-  check("drawn station's coord sits on the way", Math.abs(st1.coord[1] - 36.1) < 1e-6);
+  check('drawn Station carries its footprint', st1.footprint === fp);
+  check('drawing a Station does not fabricate a Stop', store.getState().system.stops.length === 0);
   // Read the selection once: two separate getState() calls can't be narrowed
   // together, and the second was reading through a possibly-null value.
   const drawnSelection = store.getState().selection;
   check(
-    'drawn station is selected for immediate platform work',
+    'drawn Station is selected for immediate platform work',
     drawnSelection?.kind === 'station' && drawnSelection.id === sid,
   );
 
-  // A footprint in empty desert: still a station, just free-standing.
+  // A footprint in empty desert is still a Station.
   const fp2 = squareFootprint([-115.4, 36.3], 25);
   const sid2 = required(store.commands.stations.addDrawnStation(fp2));
   const st2 = store.getState().system.stations.find((x) => x.id === sid2)!;
-  check(
-    'a footprint away from any way makes a free station',
-    st2.anchors.length === 0 && st2.footprint === fp2,
-  );
+  check('a footprint away from any way makes a Station', st2.footprint === fp2);
 }
 
-// --- station land + structures: the border IS the station; structures on
+// --- station land + structures: structures on
 // its land belong to it and are real shapes ---
 {
   fresh();
-  // Define a station's land.
+  // Define a Station's land.
   const land = squareFootprint([-115.15, 36.1], 60);
   const sid = required(store.commands.stations.addDrawnStation(land));
   store.commands.stations.setStationName(sid, 'Bonneville Transit Center');
 
-  // A building drawn ON the land: real polygon, auto-joins the station.
+  // A building drawn ON the land: real polygon, auto-joins the stop.
   const bldg = required(
     store.commands.facilities.addFacility('building', squareFootprint([-115.1502, 36.1002], 12)),
   );
@@ -9169,11 +9148,11 @@ function buildGrid() {
   check('a building is a drawn shape, not a point', Array.isArray(bf.geometry[0]));
   const complex = sys.groups.find((g) => g.memberIds.includes(sid));
   check(
-    "a structure on station land joins the station's complex",
+    "a structure on stop land joins the stop's complex",
     !!complex && complex.memberIds.includes(bldg),
   );
   check(
-    'the complex is named after the station',
+    'the complex is named after the stop',
     complex!.name === 'Bonneville Transit Center complex',
   );
 
@@ -9191,7 +9170,7 @@ function buildGrid() {
   const door = required(store.commands.facilities.addFacility('entrance', [-115.1501, 36.1001]));
   const remote = required(store.commands.facilities.addFacility('entrance', [-115.4, 36.4]));
   sys = store.getState().system;
-  check('a point access on the land joins the station', sys.groups[0].memberIds.includes(door));
+  check('a point access on the land joins the stop', sys.groups[0].memberIds.includes(door));
   check(
     'a facility off the land stays independent',
     !sys.groups[0].memberIds.includes(remote) && sys.groups.length === 1,
@@ -9202,25 +9181,25 @@ function buildGrid() {
 }
 
 // --- paint-order invariants: the street surface is the GROUND ---
-// Station/complex footprints must paint ABOVE lane asphalt and junction
+// Stop/complex footprints must paint ABOVE lane asphalt and junction
 // fills, or a footprint straddling a lane-rendered street is invisible
-// (the "station boundaries only show while dragging corners" bug).
+// (the "stop boundaries only show while dragging corners" bug).
 {
   const order = LAYER_SPECS.map((l) => l.id);
   const above = (upper: string, lower: string) =>
-    order.indexOf(upper) > order.indexOf(lower) && order.indexOf(lower) >= 0;
+    order.indexOf(upper) > order.indexOf(lower) && order.includes(lower);
   check(
     'footprint fill paints above lane surfaces',
     above('tm-footprints-fill', 'tm-lane-surfaces'),
   );
   check('footprint fill paints above junction fills', above('tm-footprints-fill', 'tm-junctions'));
   check('platform fill paints above lane surfaces', above('tm-platforms-fill', 'tm-lane-surfaces'));
-  check('station markers paint above footprints', above('tm-stations', 'tm-footprints-fill'));
+  check('stop markers paint above footprints', above('tm-stops', 'tm-footprints-fill'));
 }
 
 // --- dwell-time and kinematic timetable math (vehicles.ts) — the vehicle
 // animation walks this instead of a plain distance/speed triangle wave, so a
-// vehicle actually pauses at each station instead of gliding through it, and
+// vehicle actually pauses at each stop instead of gliding through it, and
 // ramps up/down at the ends of each leg instead of snapping straight to top
 // speed. ---
 {
@@ -9393,15 +9372,15 @@ function buildGrid() {
 }
 
 {
-  // dwellStopsForPattern: only stations anchored to the pattern's OWN ways
+  // dwellStopsForPattern: only stops anchored to the pattern's OWN ways
   // count, ordered by arc-length along the resolved path (not by way index
-  // or station-array order).
+  // or stop-array order).
   const path: LngLat[] = [
     [-115.24, 36.1],
     [-115.17, 36.1],
   ];
   const sys = createEmptySystem();
-  sys.stations = [
+  sys.stops = [
     { id: 'near-end', coord: [-115.19, 36.1], anchors: [{ wayId: 'w1', t: 0.7 }] },
     { id: 'near-start', coord: [-115.22, 36.1], anchors: [{ wayId: 'w1', t: 0.2 }] },
     {
@@ -9415,13 +9394,13 @@ function buildGrid() {
   ];
   const pathMeters = haversineMeters(path[0], path[1]);
   const pattern = { id: 'p1', sections: oneSection(legsOf('w1')) };
-  const stops = dwellStopsForPattern(sys.stations, pattern, path, pathMeters);
-  check("only stations anchored to the pattern's ways become stops", stops.length === 3);
+  const stops = dwellStopsForPattern(sys.stops, pattern, path, pathMeters);
+  check("only stops anchored to the pattern's ways become stops", stops.length === 3);
   // A line covering only the first 60% of w1 does not call at the stop at
   // t=0.7. Left unfiltered that stop projects onto the nearest end of the
   // trimmed path and stacks a phantom dwell on the terminus.
   const trimmedStops = dwellStopsForPattern(
-    sys.stations,
+    sys.stops,
     { id: 'p2', sections: oneSection([stretchLeg(wholeLeg('w1'), 0, 0.6)]) },
     path,
     pathMeters,
@@ -9435,7 +9414,7 @@ function buildGrid() {
     'an unset dwell falls back to the default',
     stops[0].dwellMs === 20000 && stops[2].dwellMs === 20000,
   );
-  check("a station's own dwellSeconds overrides the default", stops[1].dwellMs === 5000);
+  check("a stop's own dwellSeconds overrides the default", stops[1].dwellMs === 5000);
 }
 
 // --- bearingDegrees / formatBearing ---
@@ -9476,7 +9455,7 @@ function buildGrid() {
 // --- servedWayIds: spatial-grid index stays correct across cell/segment boundaries ---
 {
   // A long way (many points, spanning several of the index's ~300m grid
-  // cells) — a station near its FAR end must still be found. A naive index
+  // cells) — a stop near its FAR end must still be found. A naive index
   // that only registered a segment in the cell of its first point would
   // miss this (the exact bug shape a per-way bounding box or a
   // single-cell-per-segment index could hide).
@@ -9501,7 +9480,7 @@ function buildGrid() {
   };
   const nearFarEnd: LngLat = [longWay.points[39][0], 36.1];
   const served = servedWayIds(nearFarEnd, [longWay, farWay], 50);
-  check("a station near a long way's far end is still found", served.includes('long'));
+  check("a stop near a long way's far end is still found", served.includes('long'));
   check('a way many degrees away is correctly excluded', !served.includes('far'));
   check(
     'a coordinate with nothing nearby returns no matches',
@@ -9512,7 +9491,7 @@ function buildGrid() {
 // --- determinism: index answers don't depend on bucket iteration order ---
 // Both of these read the segment grid by walking cell buckets, so their answers
 // used to depend on the order segments happened to be inserted. That is
-// observable today (servedWayIds' first entry colors the station in
+// observable today (servedWayIds' first entry colors the stop in
 // buildFeatures) and it becomes a hard blocker for maintaining the grid
 // INCREMENTALLY, since updating one way in place necessarily reorders buckets.
 // Passing the same ways in a different array order is the cheap stand-in for
@@ -9561,7 +9540,7 @@ function buildGrid() {
   ]); // ~44m north
   const ranked = servedWayIds(onLine, [farWay, nearWay], 90);
   check(
-    "servedWayIds lists the nearest way first, so it decides a station's color",
+    "servedWayIds lists the nearest way first, so it decides a stop's color",
     ranked.length === 2 && ranked[0] === 'z-near',
   );
 }
@@ -9608,9 +9587,9 @@ function buildGrid() {
   check('formatScaleMeters switches to km at 1000', formatScaleMeters(2000) === '2 km');
 }
 
-// --- render/svg: station labels must not print through each other ---
+// --- render/svg: stop labels must not print through each other ---
 {
-  // A deliberately cramped system: many named stations packed close enough
+  // A deliberately cramped system: many named stops packed close enough
   // that naive placement overlapped them (it used to print "North Las Vegas"
   // straight through "South Strip").
   fresh();
@@ -9620,15 +9599,13 @@ function buildGrid() {
     store.commands.ways.addWayPoint(way, [-115.2 + i * 0.004, 36.1]);
     store.commands.ways.addWayPoint(way, [-115.2 + i * 0.004, 36.13]);
     store.commands.ways.finishWay();
-    ids.push(
-      required(store.commands.stations.addStation([-115.2 + i * 0.004, 36.11 + (i % 3) * 0.002])),
-    );
+    ids.push(required(store.commands.stops.addStop([-115.2 + i * 0.004, 36.11 + (i % 3) * 0.002])));
   }
   const crowded = store.getState().system;
   crowded.name = 'Crowded';
   ids.forEach((id, i) => {
-    const st = crowded.stations.find((s) => s.id === id);
-    if (st) st.name = `Really Quite Long Station Name ${i}`;
+    const st = crowded.stops.find((s) => s.id === id);
+    if (st) st.name = `Really Quite Long Stop Name ${i}`;
   });
 
   const view = {
@@ -9670,10 +9647,10 @@ function buildGrid() {
   for (let i = 0; i < boxes.length; i++) {
     for (let j = i + 1; j < boxes.length; j++) if (intersects(boxes[i], boxes[j])) collisions++;
   }
-  check('a crowded map still draws some station labels', boxes.length > 0);
+  check('a crowded map still draws some stop labels', boxes.length > 0);
   check('no two drawn labels overlap', collisions === 0);
   // Dropping labels is the mechanism, so a crowded map is expected to show
-  // fewer than it has stations — but not to give up entirely.
+  // fewer than it has stops — but not to give up entirely.
   check(
     'crowding drops labels rather than all or nothing',
     boxes.length < ids.length && boxes.length >= 2,
@@ -9688,11 +9665,11 @@ function buildGrid() {
     store.commands.ways.addWayPoint(way, [-115.4 + i * 0.3, 36.0]);
     store.commands.ways.addWayPoint(way, [-115.4 + i * 0.3, 36.4]);
     store.commands.ways.finishWay();
-    sparse.push(required(store.commands.stations.addStation([-115.4 + i * 0.3, 36.2])));
+    sparse.push(required(store.commands.stops.addStop([-115.4 + i * 0.3, 36.2])));
   }
   const spaced = store.getState().system;
   sparse.forEach((id, i) => {
-    const st = spaced.stations.find((s) => s.id === id);
+    const st = spaced.stops.find((s) => s.id === id);
     if (st) st.name = `Stop ${i}`;
   });
   const vp2 = fitBounds(systemBounds(spaced)!, { width: 1200, height: 630, padding: 56 });
@@ -9703,14 +9680,14 @@ function buildGrid() {
     height: 630,
   });
   check(
-    'a sparse map keeps every station label',
+    'a sparse map keeps every stop label',
     sparse.every((_, i) => roomySvg.includes(`Stop ${i}`)),
   );
 
   // The brand font stack is interpolated into font-family="..."; if the family
   // name is double-quoted it closes the attribute early and the whole document
   // is malformed. Apostrophes are what keep it embeddable.
-  check('no attribute is broken by a quoted font name', !/font-family=""/.test(roomySvg));
+  check('no attribute is broken by a quoted font name', !roomySvg.includes('font-family=""'));
   check(
     'every text element is well formed',
     (roomySvg.match(/<text /g) ?? []).length === (roomySvg.match(/<\/text>/g) ?? []).length,
@@ -9800,12 +9777,12 @@ function buildGrid() {
   store.commands.ways.addWayPoint(line, [-115.14, 36.16]);
   store.commands.ways.addWayPoint(line, [-115.12, 36.24]);
   store.commands.ways.finishWay();
-  const stationId = required(store.commands.stations.addStation([-115.14, 36.16]));
+  const stopId = required(store.commands.stops.addStop([-115.14, 36.16]));
 
   const system = store.getState().system;
   system.name = 'Valley Rapid Transit';
-  const station = system.stations.find((s) => s.id === stationId);
-  if (station) station.name = 'Downtown';
+  const stop = system.stops.find((s) => s.id === stopId);
+  if (stop) stop.name = 'Downtown';
   for (const line of system.lines) line.name = 'Resort Corridor';
 
   const svg = previewSvg(system);
@@ -9818,17 +9795,17 @@ function buildGrid() {
     ),
   );
   check("preview draws the system's lines", svg.includes('<path'));
-  check('preview draws stations', svg.includes('<circle'));
+  check('preview draws stops', svg.includes('<circle'));
 
   // A social card is the network and nothing else. Two presentation facts
   // produce that, and neither one names an element to remove: the surface
   // captions itself (so the title and legend would just repeat the text Slack
   // already shows), and at ~460px the smaller type falls under the legibility
   // floor. There is no "card mode" anywhere in the renderer.
-  check('a social card carries no text at all', !/<text/.test(svg));
+  check('a social card carries no text at all', !svg.includes('<text'));
   check("a social card doesn't repeat the system name", !svg.includes('Valley Rapid Transit'));
   check("a social card doesn't repeat the line names", !svg.includes('Resort Corridor'));
-  check('a social card drops illegible station labels', !svg.includes('Downtown'));
+  check('a social card drops illegible stop labels', !svg.includes('Downtown'));
   check(
     'a social card drops the scale bar and north arrow',
     !/\d+ (km|m)<\/text>/.test(svg) && !svg.includes('>N</text>'),
@@ -9838,7 +9815,7 @@ function buildGrid() {
   // nothing else is captioning it: the detail comes back. This is what makes
   // it one renderer rather than two.
   const bigSvg = previewSvg(system, { displayWidth: 1200, captionedExternally: false });
-  check('a large uncaptioned preview keeps station labels', bigSvg.includes('Downtown'));
+  check('a large uncaptioned preview keeps stop labels', bigSvg.includes('Downtown'));
   check('a large uncaptioned preview keeps its title', bigSvg.includes('Valley Rapid Transit'));
   check('a large uncaptioned preview keeps its legend', bigSvg.includes('Resort Corridor'));
   check('a large uncaptioned preview keeps the scale bar', /\d+ (km|m)<\/text>/.test(bigSvg));
@@ -9922,7 +9899,7 @@ function buildGrid() {
     },
   );
   check(
-    'an export keeps station labels when no display size is given',
+    'an export keeps stop labels when no display size is given',
     exportSvg.includes('Downtown'),
   );
   check(
@@ -10042,7 +10019,7 @@ function buildGrid() {
   check('fitBounds centers the extent horizontally', near((sw.x + ne.x) / 2, 600, 0.5));
   check('fitBounds centers the extent vertically', near((sw.y + ne.y) / 2, 315, 0.5));
 
-  // A one-station system has zero extent, which would otherwise fit at
+  // A one-stop system has zero extent, which would otherwise fit at
   // infinite zoom — maxZoom is the only thing standing between that and a
   // divide-by-zero framing bug.
   const degenerate = fitBounds(
@@ -10316,7 +10293,7 @@ function buildGrid() {
     createdAt: 1,
     updatedAt: 1,
     services: [],
-    stations: [],
+    stops: [],
     facilities: [],
     groups: [],
   };
@@ -10714,18 +10691,18 @@ function buildGrid() {
   // The onboarding dialog's one-time flag — a plain boolean, but a bug here
   // means either "never shows" or "shows every launch forever."
   reset();
-  check('a fresh browser has not seen onboarding', hasSeenOnboarding() === false);
+  check('a fresh browser has not seen onboarding', !hasSeenOnboarding());
   markOnboardingSeen();
-  check('seen persists', hasSeenOnboarding() === true);
+  check('seen persists', hasSeenOnboarding());
   reset();
   storage.options.failWrites = 'denied';
-  check('unavailable storage reads as not-seen, not a throw', hasSeenOnboarding() === false);
+  check('unavailable storage reads as not-seen, not a throw', !hasSeenOnboarding());
   storage.options.failWrites = null;
 }
 
 // --- onboarding fixture (ui/onboarding/fixtureSystem.ts) ---
 // The one system every onboarding slide's live preview renders. A bad
-// fixture (a dangling leg, an orphaned station) would only ever surface as a
+// fixture (a dangling leg, an orphaned stop) would only ever surface as a
 // silent blank preview in the dialog — nothing else exercises this data.
 {
   check(
@@ -10738,8 +10715,7 @@ function buildGrid() {
   );
   check(
     'the onboarding fixture presents a small network rather than a single line',
-    ONBOARDING_FIXTURE_SYSTEM.services.length >= 2 &&
-      ONBOARDING_FIXTURE_SYSTEM.stations.length >= 4,
+    ONBOARDING_FIXTURE_SYSTEM.services.length >= 2 && ONBOARDING_FIXTURE_SYSTEM.stops.length >= 4,
   );
   check(
     'the onboarding fixture includes both streets and rail',
@@ -10885,7 +10861,7 @@ function buildGrid() {
   );
 
   // Dwelling at intermediate stops still counts toward the round trip, so the
-  // fleet grows when stations are added to a line — which is the real-world
+  // fleet grows when stops are added to a line — which is the real-world
   // behavior (more stops, slower trip, more vehicles to hold the headway).
   const withStops = buildTimetable(
     totalMeters,
@@ -10964,18 +10940,18 @@ function buildGrid() {
 
   // Stops lengthen the round trip. That is the coupling the dwell field
   // claims and the inspector now shows.
-  const stations: Station[] = [
+  const stops: Stop[] = [
     { id: 'ss-a', coord: [-115.27, 36.2], anchors: [{ wayId: 'ss-w', t: 0.1 }] },
     { id: 'ss-b', coord: [-115.25, 36.2], anchors: [{ wayId: 'ss-w', t: 0.5 }] },
   ];
-  const stopped = serviceStats(ways, stations, [], svc, 10)!;
-  check('stations on a line become stops', stopped.path.stops.length === 2);
+  const stopped = serviceStats(ways, stops, [], svc, 10)!;
+  check('stops on a line become stops', stopped.path.stops.length === 2);
   check('stops make the round trip longer', stopped.roundTripMs > bare.roundTripMs);
   check(
     'a longer dwell makes it longer still',
     serviceStats(
       ways,
-      stations.map((s) => ({ ...s, dwellSeconds: 300 })),
+      stops.map((s) => ({ ...s, dwellSeconds: 300 })),
       [],
       svc,
       10,
@@ -10997,19 +10973,19 @@ function buildGrid() {
       topSpeedKmh: 120,
     },
   ];
-  const fast = serviceStats(ways, stations, kinds, { ...svc, vehicleKindId: 'ss-fast' }, 10)!;
+  const fast = serviceStats(ways, stops, kinds, { ...svc, vehicleKindId: 'ss-fast' }, 10)!;
   check('a faster vehicle kind shortens the round trip', fast.roundTripMs < stopped.roundTripMs);
   check('a shorter round trip never needs more vehicles', fast.fleet <= stopped.fleet);
 
   // Headway is the other input to fleet size.
-  const frequent = serviceStats(ways, stations, [], svc, 5)!;
+  const frequent = serviceStats(ways, stops, [], svc, 5)!;
   check(
     'halving the headway at least doubles the fleet',
     frequent.fleet >= 2 * stopped.fleet - 1 && frequent.fleet > stopped.fleet,
   );
   check(
     'a service with no headway set runs one vehicle',
-    serviceStats(ways, stations, [], svc, undefined)!.fleet === 1,
+    serviceStats(ways, stops, [], svc, undefined)!.fleet === 1,
   );
 
   // Two Services under one public Line each run their own vehicles.
@@ -11020,8 +10996,7 @@ function buildGrid() {
   };
   check(
     'each service runs its own fleet',
-    stopped.fleet + serviceStats(ways, stations, [], siblingService, 10)!.fleet ===
-      2 * stopped.fleet,
+    stopped.fleet + serviceStats(ways, stops, [], siblingService, 10)!.fleet === 2 * stopped.fleet,
   );
 
   check(
@@ -11031,7 +11006,7 @@ function buildGrid() {
 
   // The map and the inspector must agree by construction: same stops, same
   // timetable, same plan.
-  const viaPattern = patternStats(ways, stations, svc.path, DEFAULT_MOTION_PROFILE, 10)!;
+  const viaPattern = patternStats(ways, stops, svc.path, DEFAULT_MOTION_PROFILE, 10)!;
   check(
     'per-pattern and per-service measurements agree',
     viaPattern.roundTripMs === stopped.roundTripMs && viaPattern.plan!.fleet === stopped.fleet,
@@ -11526,7 +11501,7 @@ function buildGrid() {
   check('vehicles per hour add across routes', vehiclesPerHour([10, 15]) === 10);
   check('turning up at random means waiting half the headway', typicalWaitMinutes(10) === 5);
 
-  // servicesAtStation: the same proximity rule the inspector's "Served by"
+  // servicesAtStop: the same proximity rule the inspector's "Served by"
   // list uses, moved into core so it's testable and stated once.
   {
     const sys = createEmptySystem();
@@ -11563,10 +11538,10 @@ function buildGrid() {
         path: { id: 'pb', sections: oneSection(legsOf(otherWay.id)) },
       },
     ];
-    const stop: Station = { id: 'st-here', coord: [-115.2, 36.1], anchors: [] };
-    const here = servicesAtStation(sys.ways, sys.services, stop);
+    const stop: Stop = { id: 'st-here', coord: [-115.2, 36.1], anchors: [] };
+    const here = servicesAtStop(sys.ways, sys.services, stop);
     check('a service running past a stop serves it', here.length === 1 && here[0].id === 'sv-on');
-    const nowhere = servicesAtStation(sys.ways, sys.services, {
+    const nowhere = servicesAtStop(sys.ways, sys.services, {
       id: 'st-far',
       coord: [-115.2, 36.3],
       anchors: [],
@@ -11784,7 +11759,7 @@ function buildGrid() {
           grade: 'atGrade',
         },
       ],
-      stations: [],
+      stops: [],
       services: [
         {
           id: 'main-line',
@@ -11845,7 +11820,7 @@ function buildGrid() {
         { id: 'out', typeId: 'road', points: [a, b], geometry: 'straight', grade: 'atGrade' },
         { id: 'return', typeId: 'road', points: [b, c], geometry: 'straight', grade: 'atGrade' },
       ],
-      stations: [],
+      stops: [],
       services: [
         {
           id: 'loop-line',
@@ -11894,7 +11869,7 @@ function buildGrid() {
         { id: 'a-b', typeId: 'road', points: [a, b], geometry: 'straight', grade: 'atGrade' },
         { id: 'b-c', typeId: 'road', points: [b, c], geometry: 'straight', grade: 'atGrade' },
       ],
-      stations: [{ id: 'at-b', coord: b, anchors: [{ wayId: 'a-b', t: 1 }] }],
+      stops: [{ id: 'at-b', coord: b, anchors: [{ wayId: 'a-b', t: 1 }] }],
       services: [
         {
           id: 'line',
@@ -11913,8 +11888,8 @@ function buildGrid() {
   const after = store.getState().system;
   check('extending a line commits a service-path edit', extended);
   check(
-    'extending a line leaves ways and stations as the same objects',
-    after.ways[0] === before.ways[0] && after.stations[0] === before.stations[0],
+    'extending a line leaves ways and stops as the same objects',
+    after.ways[0] === before.ways[0] && after.stops[0] === before.stops[0],
   );
   check(
     'extending a line adds only a shared path section',
@@ -11932,7 +11907,7 @@ function buildGrid() {
   check(
     'both terminus extensions leave physical objects untouched',
     store.getState().system.ways[0] === before.ways[0] &&
-      store.getState().system.stations[0] === before.stations[0],
+      store.getState().system.stops[0] === before.stops[0],
   );
 }
 
@@ -11965,7 +11940,7 @@ function buildGrid() {
         road('back', [SE, N]),
       ],
       services: [],
-      stations: [],
+      stops: [],
     }),
   );
   const tSvc = required(store.commands.services.addServiceToWay('spine'));
@@ -12006,7 +11981,7 @@ function buildGrid() {
 }
 
 // --- a platform on more than one way ---
-// A transit centre both halves of a couplet pull into is ONE station riding
+// A transit centre both halves of a couplet pull into is ONE stop riding
 // TWO ways. With a single anchor it bound to whichever was nearest when it was
 // placed, and every line on the other drove past a stop it plainly calls at.
 {
@@ -12038,11 +12013,11 @@ function buildGrid() {
         },
       ],
       services: [],
-      stations: [],
+      stops: [],
     }),
   );
   const centreId = required(
-    store.commands.stations.addStation([-115.2, 36.12], {
+    store.commands.stops.addStop([-115.2, 36.12], {
       wayId: 'northbound',
       t: 0.5,
     }),
@@ -12050,9 +12025,9 @@ function buildGrid() {
   // The same platform is reached from the other carriageway too.
   store.commands.document.setSystem({
     ...store.getState().system,
-    stations: store
+    stops: store
       .getState()
-      .system.stations.map((st) =>
+      .system.stops.map((st) =>
         st.id !== centreId
           ? st
           : { ...st, anchors: [...st.anchors, { wayId: 'southbound', t: 0.5 }] },
@@ -12065,8 +12040,8 @@ function buildGrid() {
     const sys = store.getState().system;
     const pt = sys.services.find((sv) => sv.id === svcId)!.path;
     const path = patternRunPath(sys.ways, pt, 'outbound');
-    return patternStops(sys.stations, pt, path, pathLengthMeters(path), 'outbound').some(
-      (x) => x.station.id === centreId,
+    return patternStops(sys.stops, pt, path, pathLengthMeters(path), 'outbound').some(
+      (x) => x.stop.id === centreId,
     );
   };
   check('a line on the first way calls at the shared platform', callsAt(northSvc));
@@ -12075,13 +12050,13 @@ function buildGrid() {
   const reloaded = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
   check(
     'both anchors survive a save and a reload',
-    reloaded.stations.find((st) => st.id === centreId)!.anchors.length === 2,
+    reloaded.stops.find((st) => st.id === centreId)!.anchors.length === 2,
   );
 
   // Deleting one carriageway must not delete a platform the other still serves.
   store.commands.ways.deleteWay('southbound');
-  const after = store.getState().system.stations.find((st) => st.id === centreId);
-  check('deleting one of its ways keeps the station', !!after);
+  const after = store.getState().system.stops.find((st) => st.id === centreId);
+  check('deleting one of its ways keeps the stop', !!after);
   check(
     'and drops only the anchor that named the deleted way',
     !!after && after.anchors.length === 1 && after.anchors[0].wayId === 'northbound',
@@ -12111,29 +12086,27 @@ function buildGrid() {
         },
       ],
       services: [],
-      stations: [],
+      stops: [],
     }),
   );
   const sSvc = required(store.commands.services.addServiceToWay('street'));
   const sPat = store.getState().system.services.find((sv) => sv.id === sSvc)!.path;
-  // Anchored explicitly: addStation places a station where it is told and does
-  // not go looking for a way to bind it to, and an unanchored station is not a
+  // Anchored explicitly: addStop places a stop where it is told and does
+  // not go looking for a way to bind it to, and an unanchored stop is not a
   // stop on anything.
   const northId = required(
-    store.commands.stations.addStation([-115.2, 36.13], {
+    store.commands.stops.addStop([-115.2, 36.13], {
       wayId: 'street',
       t: 0.75,
     }),
   );
-  store.commands.stations.addStation([-115.2, 36.11], { wayId: 'street', t: 0.25 });
+  store.commands.stops.addStop([-115.2, 36.11], { wayId: 'street', t: 0.25 });
 
   const idsOn = (run: 'outbound' | 'inbound') => {
     const sys = store.getState().system;
     const pt = sys.services.find((sv) => sv.id === sSvc)!.path;
     const path = patternRunPath(sys.ways, pt, run);
-    return patternStops(sys.stations, pt, path, pathLengthMeters(path), run).map(
-      (x) => x.station.id,
-    );
+    return patternStops(sys.stops, pt, path, pathLengthMeters(path), run).map((x) => x.stop.id);
   };
 
   check('both directions call at both stops to begin with', idsOn('inbound').length === 2);
@@ -12150,12 +12123,12 @@ function buildGrid() {
     (rp.skippedStops?.inbound ?? []).includes(northId),
   );
 
-  // A skip names a station, and a station can be deleted after the fact.
-  store.commands.stations.deleteStation(northId);
+  // A skip names a stop, and a stop can be deleted after the fact.
+  store.commands.stops.deleteStop(northId);
   const afterDelete = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
   const dp = afterDelete.services.find((sv) => sv.id === sSvc)!.path;
   check(
-    'a skip naming a station that no longer exists is dropped on load',
+    'a skip naming a stop that no longer exists is dropped on load',
     dp.skippedStops === undefined,
   );
 
@@ -12187,7 +12160,7 @@ function buildGrid() {
         },
       ],
       services: [],
-      stations: [],
+      stops: [],
     }),
   );
   const backId = required(store.commands.network.separateCarriageways('blvd'));
@@ -12257,7 +12230,7 @@ function buildGrid() {
         blockWay('south', [SEc, SWc]),
       ],
       services: [],
-      stations: [],
+      stops: [],
     }),
   );
   store.commands.tools.setDraftMode('bus');
@@ -12339,7 +12312,7 @@ function buildGrid() {
   // together, and this couplet's return is genuinely longer than its outward.
   const ps = serviceStats(
     store.getState().system.ways,
-    store.getState().system.stations,
+    store.getState().system.stops,
     [],
     coupled,
   )!.path;
@@ -12550,21 +12523,21 @@ function buildGrid() {
   // applies — 'alongStreet' style ('@'), not the rail-style '&'; see the
   // dedicated crossStreetNaming.test.ts suite for that rule on its own.
   const stId = required(
-    store.commands.stations.addStation([-115.15, 36.1], {
+    store.commands.stops.addStop([-115.15, 36.1], {
       wayId: ewAfterSplit.id,
       t: 1,
     }),
   );
-  const placed = store.getState().system.stations.find((s) => s.id === stId)!;
+  const placed = store.getState().system.stops.find((s) => s.id === stId)!;
   check(
-    'placing a station on a named way pre-fills its name from the nearest cross street',
+    'placing a stop on a named way pre-fills its name from the nearest cross street',
     placed.name === 'Home St @ Cross Ave',
   );
 
-  store.commands.stations.moveStation(stId, [-115.12, 36.1]);
-  const moved = store.getState().system.stations.find((s) => s.id === stId)!;
+  store.commands.stops.moveStop(stId, [-115.12, 36.1]);
+  const moved = store.getState().system.stops.find((s) => s.id === stId)!;
   check(
-    "moving a station leaves its auto-filled name untouched, even though it's no longer accurate",
+    "moving a stop leaves its auto-filled name untouched, even though it's no longer accurate",
     moved.name === 'Home St @ Cross Ave',
   );
 }
@@ -12588,18 +12561,18 @@ function buildGrid() {
     .getState()
     .system.ways.find((w) => w.points.some((p) => p[0] === -115.15 && p[1] === 36.1))!;
   const stId = required(
-    store.commands.stations.addStation([-115.15, 36.1], {
+    store.commands.stops.addStop([-115.15, 36.1], {
       wayId: ewAfterSplit.id,
       t: 1,
     }),
   );
-  const placed = store.getState().system.stations.find((s) => s.id === stId)!;
+  const placed = store.getState().system.stops.find((s) => s.id === stId)!;
   check(
-    'an unserved road-anchored station is auto-named along-street and marked autoNamed',
+    'an unserved road-anchored stop is auto-named along-street and marked autoNamed',
     placed.name === 'Home St @ Cross Ave' && placed.autoNamed === true,
   );
 
-  // Draw a tram line over the whole of the station's own way — tram is
+  // Draw a tram line over the whole of the stop's own way — tram is
   // street-running, so a 'road'-typed way is a legal alignment for it.
   const sys = store.getState().system;
   const homeWay = sys.ways.find((w) => w.id === ewAfterSplit.id)!;
@@ -12608,9 +12581,9 @@ function buildGrid() {
   const routed = routeBetween(sys, from, to, { allowedTypeIds: new Set(['road']) })!;
   store.commands.routing.createRoutedService(routed.spans, 'tram');
 
-  const resynced = store.getState().system.stations.find((s) => s.id === stId)!;
+  const resynced = store.getState().system.stops.find((s) => s.id === stId)!;
   check(
-    'the tram line resyncs the still-autoNamed station to intersection style',
+    'the tram line resyncs the still-autoNamed stop to intersection style',
     resynced.name === 'Home St & Cross Ave' && resynced.autoNamed === true,
   );
 }
@@ -12748,7 +12721,7 @@ function buildGrid() {
   );
   check(
     'and the next line drawn shares again, without having to be told',
-    store.getState().draftSeparate === false,
+    !store.getState().draftSeparate,
   );
 }
 

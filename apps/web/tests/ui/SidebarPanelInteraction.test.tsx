@@ -3,7 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { aPattern, aRoad, aService, aStation, aSystem } from '@transitmapper/core/testing/fixtures';
+import { aPattern, aRoad, aService, aStop, aSystem } from '@transitmapper/core/testing/fixtures';
 import { EditorProvider } from '../../src/editor/EditorProvider';
 import { createEditorStore, type EditorStore } from '../../src/editor/store';
 import { SidebarPanel } from '../../src/ui/SidebarPanel';
@@ -79,7 +79,7 @@ describe('SidebarPanel interactions', () => {
     expect(store.getState().outlineHover).toBeNull();
   });
 
-  it('keeps one roving tab stop when a selected station appears under a line and in Stations', () => {
+  it('keeps one roving tab stop when a selected stop appears under a line and in Stops', () => {
     const west = aRoad('west', [
       [-115.2, 36.15],
       [-115.15, 36.15],
@@ -89,7 +89,7 @@ describe('SidebarPanel interactions', () => {
       [-115.1, 36.15],
     ]);
     const hub = {
-      ...aStation('hub', [-115.15, 36.15], { wayId: west.id, t: 1 }, { name: 'Hub' }),
+      ...aStop('hub', [-115.15, 36.15], { wayId: west.id, t: 1 }, { name: 'Hub' }),
       anchors: [
         { wayId: west.id, t: 1 },
         { wayId: east.id, t: 0 },
@@ -102,11 +102,11 @@ describe('SidebarPanel interactions', () => {
         { id: 'east-corridor', name: 'East Corridor', wayIds: [east.id] },
       ],
       services: [aService('cross-town', [aPattern('main', [west, east], [west.id, east.id])])],
-      stations: [hub],
+      stops: [hub],
     });
     const store = createEditorStore();
     store.commands.document.setSystem(system);
-    store.commands.selection.selectAndFocus({ kind: 'station', id: hub.id });
+    store.commands.selection.selectAndFocus({ kind: 'stop', id: hub.id });
     renderSidebar(store);
     const collapsedRows = [
       ...container.querySelectorAll<HTMLButtonElement>('[data-sidebar-option]'),
@@ -115,12 +115,12 @@ describe('SidebarPanel interactions', () => {
 
     click(container.querySelector('button.sidebar-disclosure'));
 
-    const stationRows = [
+    const stopRows = [
       ...container.querySelectorAll<HTMLButtonElement>('[data-sidebar-option]'),
     ].filter((button) => button.textContent.includes('Hub'));
 
-    expect(stationRows.length).toBeGreaterThanOrEqual(2);
-    expect(stationRows.filter((button) => button.tabIndex === 0)).toHaveLength(1);
+    expect(stopRows.length).toBeGreaterThanOrEqual(2);
+    expect(stopRows.filter((button) => button.tabIndex === 0)).toHaveLength(1);
   });
 
   it('wires row navigation and show-more behavior through the mounted workspace', () => {
@@ -215,8 +215,8 @@ describe('SidebarPanel interactions', () => {
       [-115.2, 36.1],
       [-115.1, 36.1],
     ]);
-    const stations = Array.from({ length: 20 }, (_, index) =>
-      aStation(
+    const stops = Array.from({ length: 20 }, (_, index) =>
+      aStop(
         `stop-${index}`,
         [-115.2 + index * 0.005, 36.1],
         { wayId: road.id, t: index / 20 },
@@ -228,7 +228,7 @@ describe('SidebarPanel interactions', () => {
       aSystem({
         ways: [road],
         services: [aService('local', [aPattern('local', [road], [road.id])])],
-        stations,
+        stops,
       }),
     );
 
@@ -247,8 +247,8 @@ describe('SidebarPanel interactions', () => {
       [-115.2, 36.1],
       [-115.1, 36.1],
     ]);
-    const stations = Array.from({ length: 200 }, (_, index) =>
-      aStation(
+    const stops = Array.from({ length: 200 }, (_, index) =>
+      aStop(
         `stop-${index}`,
         [-115.2 + index * 0.0005, 36.1],
         { wayId: road.id, t: index / 200 },
@@ -260,7 +260,7 @@ describe('SidebarPanel interactions', () => {
       aSystem({
         ways: [road],
         services: [aService('local', [aPattern('local', [road], [road.id])])],
-        stations,
+        stops,
       }),
     );
 
@@ -286,12 +286,12 @@ describe('SidebarPanel interactions', () => {
           name: `Match Road ${index}`,
           wayIds: [way.id],
         })),
-        stations: [
-          aStation(
-            'match-station',
+        stops: [
+          aStop(
+            'match-stop',
             [-115.15, 36.1],
             { wayId: ways[0].id, t: 0.5 },
-            { name: 'Match Station' },
+            { name: 'Match Stop' },
           ),
         ],
       }),

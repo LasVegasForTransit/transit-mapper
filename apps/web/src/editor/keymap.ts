@@ -20,7 +20,6 @@ import {
 } from '@transitmapper/core/model/profile';
 import { exportFullSystemPng } from '../share/pngExport';
 import type { EditorStore } from './store';
-
 export interface KeyContext {
   map: MLMap;
   editor: EditorStore;
@@ -120,6 +119,7 @@ function deleteSelection(c: KeyContext): void {
   // A Stop row uses a Service selection plus stopId so the map and Inspector
   // retain operational context. It is not permission to delete the Service.
   else if (sel.kind === 'service' && !sel.stopId) c.editor.commands.services.deleteService(sel.id);
+  else if (sel.kind === 'stop') c.editor.commands.stops.deleteStop(sel.id);
   else if (sel.kind === 'station') c.editor.commands.stations.deleteStation(sel.id);
   else if (sel.kind === 'facility') c.editor.commands.facilities.deleteFacility(sel.id);
   else if (sel.kind === 'group') c.editor.commands.groups.deleteGroup(sel.id);
@@ -195,9 +195,9 @@ export const KEY_BINDINGS: KeyBinding[] = [
   {
     group: 'Tools',
     keys: ['s'],
-    description: 'Add station',
+    description: 'Add stop',
     when: editable,
-    run: (c) => c.editor.commands.tools.setTool('station'),
+    run: (c) => c.editor.commands.tools.setTool('stop'),
   },
   {
     group: 'Tools',
@@ -381,7 +381,6 @@ export const KEY_BINDINGS: KeyBinding[] = [
       const way = laneTargetWay(c);
       const typeId = way?.typeId ?? s.draftWayTypeId;
       const preset = profilePresetsForWayType(typeId)[i];
-      if (!preset) return;
       if (way) c.editor.commands.ways.applyProfilePreset(way.id, preset.id);
       else c.editor.commands.tools.setDraftPreset(preset.id);
     },

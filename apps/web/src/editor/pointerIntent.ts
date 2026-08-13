@@ -18,10 +18,9 @@ export type PointerTarget =
   | 'control-point'
   | 'interior-point'
   | 'endpoint'
-  | 'station'
+  | 'stop'
   | 'facility'
   | 'corridor';
-
 /**
  * The modal channels a press can be qualified by, named for what they are
  * rather than for how they are set.
@@ -80,9 +79,9 @@ export type PointerOperation =
   | 'open-terminus-actions'
   | 'move-point'
   | 'constrained-move'
-  | 'move-station'
+  | 'move-stop'
   | 'move-facility'
-  | 'delete-station'
+  | 'delete-stop'
   | 'delete-facility'
   | 'erase-points'
   | 'split-corridor'
@@ -105,7 +104,7 @@ export interface PointerIntent {
 
 export interface PointerIntentInput {
   view: 'network' | 'infrastructure' | 'diagram';
-  tool: 'select' | 'lines' | 'way' | 'station' | 'facility';
+  tool: 'select' | 'lines' | 'way' | 'stop' | 'facility';
   target?: PointerTarget;
   modifiers: ModifierState;
   readOnly: boolean;
@@ -209,12 +208,12 @@ export function resolvePointerIntent(input: PointerIntentInput): PointerIntent {
         return intent('resume-service-and-corridor', 'crosshair', 'extend', true, 'target');
       return intent('draw-service-and-corridor', 'crosshair', 'new', true, 'preview');
     }
-    if (input.tool === 'select' && modifiers.alternate && target === 'station')
-      return intent('delete-station', 'grab', 'erase', true, 'target');
+    if (input.tool === 'select' && modifiers.alternate && target === 'stop')
+      return intent('delete-stop', 'grab', 'erase', true, 'target');
     if (input.tool === 'select' && modifiers.alternate && target === 'facility')
       return intent('delete-facility', 'grab', 'erase', true, 'target');
-    if (input.tool === 'select' && target === 'station')
-      return intent('move-station', 'grab', 'move', true, 'target');
+    if (input.tool === 'select' && target === 'stop')
+      return intent('move-stop', 'grab', 'move', true, 'target');
     if (input.tool === 'select' && target === 'facility')
       return intent('move-facility', 'grab', 'move', true, 'target');
     if (input.tool === 'select' && target === 'service-terminus')

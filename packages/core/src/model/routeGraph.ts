@@ -14,7 +14,6 @@
 // data-in/data-out, while the editor runtime owns application mutation. The
 // Dijkstra can therefore move to a Worker or server without a rewrite: nothing
 // here touches the editor runtime, DOM, or another stateful context.
-
 import { getComponent, laneRefKey } from './components';
 import { haversineMeters, nearestInsertionPoint } from './geo';
 import { directionalLanes, type Traversal, wayTraversal } from './profile';

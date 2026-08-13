@@ -1,6 +1,6 @@
 import { modesForWayType } from '@transitmapper/core/model/catalog';
 import { oneSection, wholeLeg } from '@transitmapper/core/model/geo';
-import { resyncAutoNamedStations } from '@transitmapper/core/model/geo/crossStreetNaming';
+import { resyncAutoNamedStops } from '@transitmapper/core/model/geo/crossStreetNaming';
 import { shortId } from '@transitmapper/core/model/ids';
 import { deleteSelection } from '@transitmapper/core/model/selection-deletion';
 import {
@@ -92,7 +92,7 @@ function createServiceCreationCommands(runtime: EditorRuntime): ServiceCreationC
           services: [...state.system.services, service],
         };
         return {
-          system: resyncAutoNamedStations(withNewLine, new Set([wayId])),
+          system: resyncAutoNamedStops(withNewLine, new Set([wayId])),
           transient: { selection: { kind: 'line', id: lineId } },
           result: serviceId,
         };

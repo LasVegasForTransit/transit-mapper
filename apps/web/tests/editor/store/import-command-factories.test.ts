@@ -117,12 +117,12 @@ describe('import command factories', () => {
       added: 0,
       skipped: 0,
     });
-    commands.importGtfs({ ways: [], lines: [], services: [], stations: [] });
+    commands.importGtfs({ ways: [], lines: [], services: [], stops: [] });
     expect(commands.reconcileImportedServices([])).toBe(0);
     expect(
       commands.applyGtfsImportBatch({
         targetSystemId: system.id,
-        pieces: { ways: [], lines: [], services: [], stations: [] },
+        pieces: { ways: [], lines: [], services: [], stops: [] },
       }),
     ).toBe(false);
     expect(runtime.read().system).toBe(system);
@@ -143,11 +143,11 @@ describe('import command factories', () => {
 
     expect(commands.importWays(network)).toEqual({ added: 0, skipped: 0 });
     expect(commands.applyImportedNetwork({ targetSystemId: system.id, network })).toBeNull();
-    commands.importGtfs({ ways: [], lines: [], services: [], stations: [] });
+    commands.importGtfs({ ways: [], lines: [], services: [], stops: [] });
     expect(
       commands.applyGtfsImportBatch({
         targetSystemId: system.id,
-        pieces: { ways: [], lines: [], services: [], stations: [] },
+        pieces: { ways: [], lines: [], services: [], stops: [] },
       }),
     ).toBe(false);
     expect(commands.reconcileImportedServices([])).toBe(0);
@@ -168,7 +168,7 @@ describe('import command factories', () => {
     expect(
       commands.applyGtfsImportBatch({
         targetSystemId: system.id,
-        pieces: { ways: [], lines: [], services: [], stations: [] },
+        pieces: { ways: [], lines: [], services: [], stops: [] },
       }),
     ).toBe(true);
     expect(runtime.read().system).toBe(system);
@@ -222,7 +222,7 @@ describe('import command factories', () => {
           },
         },
       ],
-      stations: [],
+      stops: [],
       ways: [
         {
           id: 'way',

@@ -98,13 +98,14 @@ const SOURCE_DEPENDENCIES: Record<keyof TransitSystem, readonly SystemFeatureSou
     SRC_LANE_ARROWS,
     SRC_SERVICE_ARROWS,
   ],
-  stations: [SRC_STATIONS, SRC_FOOTPRINTS, SRC_PLATFORMS, SRC_PHYSICAL_HANDLES],
+  stations: [SRC_FOOTPRINTS, SRC_PLATFORMS, SRC_PHYSICAL_HANDLES],
+  stops: [SRC_STATIONS],
   facilities: [SRC_FACILITIES],
   groups: [SRC_FOOTPRINTS, SRC_PHYSICAL_HANDLES],
   nodes: [
     // Diagram layout consumes node membership when projecting every connected
     // way, so node edits can also move schematic ways, their handles,
-    // services, arrows, and anchored stations.
+    // services, arrows, and anchored stops.
     SRC_WAYS,
     SRC_SERVICES,
     SRC_STATIONS,

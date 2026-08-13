@@ -18,7 +18,7 @@ The single source of truth is `KEY_BINDINGS` in
 | `R` | Draw road                        |
 | `T` | Draw track                       |
 | `P` | Draw path                        |
-| `S` | Add station                      |
+| `S` | Add Stop / draw Station          |
 | `F` | Place facility                   |
 
 ## Camera

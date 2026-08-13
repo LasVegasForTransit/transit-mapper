@@ -56,23 +56,29 @@ globals in both the browser and workerd.
 #### Domain model
 
 `packages/core/src/model` defines saved systems, catalogs, service paths,
-validation, serialization, imports, routing, schematic layout, costs, units,
-and identifiers. Its operations accept and return domain values without
-depending on application state. This includes reusable corridor transforms and
-import reconciliation: the short-lived GTFS reconciliation Worker imports the
-same pure code without pulling in Zustand or the editor. Commands in the web
-application compose these operations into undoable edits.
+validation, serialization, imports, routing, schematic layout, costs, and
+units. Its pure Way and Service transforms also reconcile imports for the GTFS
+Worker without pulling in Zustand. Web commands compose them into undoable
+edits. `gtfs-archive.ts` decodes and batches ZIP feeds before that transform.
 
 Focused transformation modules name the invariant they maintain. For example,
 `routing-edits.ts` owns routed Service insertion, return-path application, and
 infrastructure adoption; `way-endpoint-metadata.ts` remaps controls and turn
-restrictions when Ways split or merge; and `station-reanchoring.ts` is the one
-anchor-replacement and reprojection implementation shared by those workflows.
+restrictions when Ways split or merge; and `stop-reanchoring.ts` is the one
+boarding-point anchor-replacement and reprojection implementation shared by
+those workflows.
 
 `packages/core/src/model/line-service.ts` is the ownership boundary between
 public Lines and technical Services. It resolves Line membership, display
 labels, and mode summaries, and validates the one-way Line-to-Service relation
 when a document enters the model.
+
+Passenger places use two saved records and one derived relationship.
+`system/stop.ts` defines boarding points and their Way anchors;
+`system/station.ts` defines optional named places with boundaries and platforms;
+`Stop.stationId` owns containment. Service calls are derived from paths reaching
+Stops. Schema v16 and the old Station-record migration live in `serialize.ts`;
+`gtfsImport.ts` maps the GTFS parent-station hierarchy into the same model.
 
 #### Geometry
 
@@ -207,7 +213,7 @@ selection. Commands use the runtime, never sibling groups; dependency-cruiser
 enforces that direction and their import allowlist.
 
 Installing a document resets its predecessor's selection, focus, drawing,
-routing, group, Service-addition, and Station-name workflows. Preferences for
+routing, group, Service-addition, and Stop-name workflows. Preferences for
 future Ways, Services, and Facilities remain with the editor instance.
 
 Application-independent domain calculations live in core. Pure transforms
@@ -223,6 +229,15 @@ presentation and dispatch reach the same decision.
 tolerances for each pointer precision. `apps/web/src/camera` holds the live map
 camera outside the saved system. Domain mutations pass through grouped editor
 commands; map and UI modules do not modify records directly.
+
+`apps/web/src/ui/sidebarOutline.ts` is the pure outline projection boundary.
+It derives public Line → technical Service → Service-call rows and separately
+projects saved Stops, Stations, grouped named infrastructure, and Facilities.
+`SidebarPanel.tsx` owns per-view search, expansion, bounded rendering, roving
+keyboard focus, and section-level failure recovery. Stop and Station editing
+are separate command and inspector surfaces: Stop commands manage boarding
+points and Station membership; Station commands manage passenger-place
+boundaries, platforms, and contained Stops.
 
 #### Map rendering
 

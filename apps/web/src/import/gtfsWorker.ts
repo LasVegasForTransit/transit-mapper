@@ -1,4 +1,4 @@
-import { gtfsArchiveToBatches } from '@transitmapper/core/model/gtfsImport';
+import { gtfsArchiveToBatches } from '@transitmapper/core/model/gtfs-archive';
 import type { GtfsWorkerEvent, GtfsWorkerRequest } from './gtfsWorkerProtocol';
 
 interface WorkerScope {

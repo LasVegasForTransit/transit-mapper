@@ -1,7 +1,6 @@
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import { shortId } from '@transitmapper/core/model/ids';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-
 // A real library of saved systems, replacing the old single-slot autosave
 // (one system ever, "New system" silently overwrote it). Each system gets
 // its own key so switching between them never touches the others; a small
@@ -45,7 +44,7 @@ function orphanedEntries(known: Set<string>): LibraryEntry[] {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       // LEGACY_KEY has no trailing colon, so it can't match this prefix.
-      if (!key || !key.startsWith(SYSTEM_KEY_PREFIX)) continue;
+      if (!key?.startsWith(SYSTEM_KEY_PREFIX)) continue;
       const id = key.slice(SYSTEM_KEY_PREFIX.length);
       if (known.has(id)) continue;
       // Only orphans are parsed — the normal path never pays for this.

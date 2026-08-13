@@ -2,7 +2,7 @@ import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { anchorOnWay, type RouteSpan } from '@transitmapper/core/model/routeGraph';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import { aPattern, aRoad, aService, aStation } from '@transitmapper/core/testing/fixtures';
+import { aPattern, aRoad, aService, aStop } from '@transitmapper/core/testing/fixtures';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRoutingCommands } from '../../../src/editor/store/commands/routing-commands';
 import { createEditorRuntime } from '../../../src/editor/store/runtime';
@@ -204,7 +204,7 @@ describe('routing commands', () => {
       ways: [built, sketch],
       lines: [{ id: 'line', name: 'Line 1', color: '#123456', serviceIds: [service.id] }],
       services: [service],
-      stations: [aStation('station', [-115.25, 36.202], { wayId: sketch.id, t: 0.2 })],
+      stops: [aStop('stop', [-115.25, 36.202], { wayId: sketch.id, t: 0.2 })],
     };
     const runtime = createEditorRuntime();
     runtime.installDocument(system, { tool: 'lines' });

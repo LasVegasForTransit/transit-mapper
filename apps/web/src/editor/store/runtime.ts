@@ -81,7 +81,7 @@ function documentWorkflowReset(tool: EditorState['tool']): Partial<EditorState> 
     placingFacilityForGroupId: null,
     pickingMemberForGroupId: null,
     addingServiceDraft: null,
-    focusNameStationId: null,
+    focusNameStopId: null,
     tool,
   };
 }

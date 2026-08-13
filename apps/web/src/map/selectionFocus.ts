@@ -39,7 +39,7 @@ function bboxOf(coords: LngLat[]): [LngLat, LngLat] | null {
 function memberCoords(system: TransitSystem, memberIds: string[]): LngLat[] {
   const coords: LngLat[] = [];
   for (const id of memberIds) {
-    const st = system.stations.find((s) => s.id === id);
+    const st = system.stops.find((s) => s.id === id);
     if (st) coords.push(st.coord);
     const f = system.facilities.find((f) => f.id === id);
     if (f)
@@ -79,8 +79,8 @@ function wayFocus(system: TransitSystem, id: string, relatedIds?: string[]): Sel
 }
 
 function serviceFocus(system: TransitSystem, id: string, stopId?: string): SelectionFocus | null {
-  const station = stopId ? system.stations.find((candidate) => candidate.id === stopId) : undefined;
-  if (station) return focusBounds([station.coord], false);
+  const stop = stopId ? system.stops.find((candidate) => candidate.id === stopId) : undefined;
+  if (stop) return focusBounds([stop.coord], false);
   const service = system.services.find((candidate) => candidate.id === id);
   if (!service) return null;
   const wayIds = new Set(serviceWayIds(service));
@@ -129,9 +129,15 @@ function nodeFocus(system: TransitSystem, id: string): SelectionFocus | null {
 export function selectionFocus(system: TransitSystem, selection: Selection): SelectionFocus | null {
   if (!selection) return null;
   switch (selection.kind) {
+    case 'stop': {
+      const stop = system.stops.find((candidate) => candidate.id === selection.id);
+      return stop ? focusBounds([stop.coord], false) : null;
+    }
     case 'station': {
       const station = system.stations.find((candidate) => candidate.id === selection.id);
-      return station ? focusBounds([station.coord, ...(station.footprint ?? [])], false) : null;
+      return station
+        ? focusBounds([station.coord, ...(station.footprint ?? [])], Boolean(station.footprint))
+        : null;
     }
     case 'facility': {
       const facility = system.facilities.find((candidate) => candidate.id === selection.id);

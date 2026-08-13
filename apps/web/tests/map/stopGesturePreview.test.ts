@@ -4,11 +4,11 @@ import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type { GestureProjection } from '../../src/map/gestureProjection';
 import {
   combineGestureSettlementPreview,
-  createStationGesturePreviewController,
-  createStationSettlementPreviewFeatures,
-} from '../../src/map/stationGesturePreview';
+  createStopGesturePreviewController,
+  createStopSettlementPreviewFeatures,
+} from '../../src/map/stopGesturePreview';
 
-function stationFeature(id: string, coordinates: [number, number]): Feature<Point> {
+function stopFeature(id: string, coordinates: [number, number]): Feature<Point> {
   return {
     type: 'Feature',
     properties: { id, name: id },
@@ -16,21 +16,22 @@ function stationFeature(id: string, coordinates: [number, number]): Feature<Poin
   };
 }
 
-function stationProjection(id: string, coordinates: [number, number]): GestureProjection {
+function stopProjection(id: string, coordinates: [number, number]): GestureProjection {
   return {
     data: {
       type: 'FeatureCollection',
       features: [
         {
           type: 'Feature',
-          properties: { id, kind: 'station', ownerId: id },
+          properties: { id, kind: 'stop', ownerId: id },
           geometry: { type: 'Point', coordinates },
         },
       ],
     },
     affected: {
       wayIds: [],
-      stationIds: [id],
+      stopIds: [id],
+      stationIds: [],
       facilityIds: [],
       groupIds: [],
       nodeIds: [],
@@ -38,32 +39,32 @@ function stationProjection(id: string, coordinates: [number, number]): GesturePr
   };
 }
 
-describe('station settlement preview composition', () => {
-  it('keeps station A visible and masked while station B becomes active', () => {
-    const settling = createStationSettlementPreviewFeatures([stationFeature('station-a', [1, 1])]);
+describe('stop settlement preview composition', () => {
+  it('keeps stop A visible and masked while stop B becomes active', () => {
+    const settling = createStopSettlementPreviewFeatures([stopFeature('stop-a', [1, 1])]);
     const combined = combineGestureSettlementPreview(
-      stationProjection('station-b', [2, 2]),
-      ['station-a'],
+      stopProjection('stop-b', [2, 2]),
+      ['stop-a'],
       settling,
     );
 
-    expect(combined?.affected.stationIds).toEqual(['station-a', 'station-b']);
+    expect(combined?.affected.stopIds).toEqual(['stop-a', 'stop-b']);
     expect(
-      combined?.data.features.map((feature) => [
-        feature.properties?.id,
-        feature.geometry.type === 'Point' ? feature.geometry.coordinates : null,
-      ]),
+      combined?.data.features.map((feature) => {
+        const id: unknown = feature.properties?.id;
+        return [id, feature.geometry.type === 'Point' ? feature.geometry.coordinates : null];
+      }),
     ).toEqual([
-      ['station-a', [1, 1]],
-      ['station-b', [2, 2]],
+      ['stop-a', [1, 1]],
+      ['stop-b', [2, 2]],
     ]);
   });
 
   it('lets an active repeat drag replace its older settling point', () => {
-    const settling = createStationSettlementPreviewFeatures([stationFeature('station-a', [1, 1])]);
+    const settling = createStopSettlementPreviewFeatures([stopFeature('stop-a', [1, 1])]);
     const combined = combineGestureSettlementPreview(
-      stationProjection('station-a', [3, 3]),
-      ['station-a'],
+      stopProjection('stop-a', [3, 3]),
+      ['stop-a'],
       settling,
     );
 
@@ -74,61 +75,59 @@ describe('station settlement preview composition', () => {
     });
   });
 
-  it('retains a mask owner when a pending station has been deleted', () => {
-    const combined = combineGestureSettlementPreview(null, ['station-a'], []);
+  it('retains a mask owner when a pending stop has been deleted', () => {
+    const combined = combineGestureSettlementPreview(null, ['stop-a'], []);
 
     expect(combined?.data.features).toEqual([]);
-    expect(combined?.affected.stationIds).toEqual(['station-a']);
+    expect(combined?.affected.stopIds).toEqual(['stop-a']);
   });
 
-  it('keeps retained stations truthful while another station gesture is active', () => {
+  it('keeps retained stops truthful while another stop gesture is active', () => {
     const renders: Array<GestureProjection | null> = [];
-    const preview = createStationGesturePreviewController({
+    const preview = createStopGesturePreviewController({
       render(projection) {
         renders.push(projection);
         return true;
       },
     });
 
-    preview.showActive(stationProjection('station-a', [1, 1]));
-    preview.retainActiveStations(['station-a']);
-    preview.showActive(stationProjection('station-b', [2, 2]));
-    preview.syncStations({
+    preview.showActive(stopProjection('stop-a', [1, 1]));
+    preview.retainActiveStops(['stop-a']);
+    preview.showActive(stopProjection('stop-b', [2, 2]));
+    preview.syncStops({
       ...createEmptySystem(),
-      stations: [{ id: 'station-a', coord: [3, 3], anchors: [] }],
+      stops: [{ id: 'stop-a', coord: [3, 3], anchors: [] }],
     });
 
     expect(
-      renders
-        .at(-1)
-        ?.data.features.map((feature) => [
-          feature.properties?.id,
-          feature.geometry.type === 'Point' ? feature.geometry.coordinates : null,
-        ]),
+      renders.at(-1)?.data.features.map((feature) => {
+        const id: unknown = feature.properties?.id;
+        return [id, feature.geometry.type === 'Point' ? feature.geometry.coordinates : null];
+      }),
     ).toEqual([
-      ['station-a', [3, 3]],
-      ['station-b', [2, 2]],
+      ['stop-a', [3, 3]],
+      ['stop-b', [2, 2]],
     ]);
 
-    preview.releaseStations();
-    expect(renders.at(-1)).toEqual(stationProjection('station-b', [2, 2]));
+    preview.releaseStops();
+    expect(renders.at(-1)).toEqual(stopProjection('stop-b', [2, 2]));
   });
 
-  it('replays a retained station after its map style is replaced', () => {
+  it('replays a retained stop after its map style is replaced', () => {
     const renders: Array<GestureProjection | null> = [];
-    const preview = createStationGesturePreviewController({
+    const preview = createStopGesturePreviewController({
       render(projection) {
         renders.push(projection);
         return true;
       },
     });
 
-    preview.retainCommitted(['station-a'], [stationFeature('station-a', [1, 1])]);
+    preview.retainCommitted(['stop-a'], [stopFeature('stop-a', [1, 1])]);
     const retainedProjection = renders.at(-1);
 
     expect(preview.refresh()).toBe(true);
     expect(renders).toEqual([retainedProjection, retainedProjection]);
-    expect(renders.at(-1)?.affected.stationIds).toEqual(['station-a']);
+    expect(renders.at(-1)?.affected.stopIds).toEqual(['stop-a']);
     expect(renders.at(-1)?.data.features[0]?.geometry).toEqual({
       type: 'Point',
       coordinates: [1, 1],

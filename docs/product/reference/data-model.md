@@ -9,20 +9,21 @@ Many Services can share one Way.
 
 All kind fields (`typeId`, `modeId`, `kindId`, and so on) are string ids
 into the catalogs; see [Catalogs](catalogs.md). The schema is versioned
-(currently v15) and migrated on load in `packages/core/src/model/serialize.ts`, so older
+(currently v16) and migrated on load in `packages/core/src/model/serialize.ts`, so older
 saves and shared snapshots keep working.
 
 ## TransitSystem
 
 | Field                       | Meaning                                                         |
 | --------------------------- | --------------------------------------------------------------- |
-| `version`                   | Schema version (15).                                            |
+| `version`                   | Schema version (16).                                            |
 | `id`, `name`, `description` | Identity.                                                       |
 | `viewport`                  | Saved camera (`center`, `zoom`).                                |
 | `ways`                      | Physical infrastructure.                                        |
 | `lines`                     | Public map identities grouping one or more Services.            |
 | `services`                  | Mode-specific operations, each with one path and schedule.      |
-| `stations`                  | Physical passenger places; Service calls are derived Stops.     |
+| `stops`                     | Physical boarding points where Services call.                   |
+| `stations`                  | Optional named passenger places containing Stops.               |
 | `facilities`                | Catalog-typed point and area features.                          |
 | `groups`                    | Bundles of members; a facility complex when it has a footprint. |
 | `nodes`                     | Junctions — coordinates shared by 2+ ways.                      |
@@ -213,7 +214,7 @@ path survives either spelling; a couplet in the middle does not.
 
 `extent` is where the leg joins and leaves its way, as normalized arc-length
 along that way's resolved path — the same convention as every
-`Station.anchors[].t`, measured along the way rather than along travel, so
+`Stop.anchors[].t`, measured along the way rather than along travel, so
 `direction` remains the only thing that says which way round. Extents are what
 let a Service cover part of a Way. Before v10 a path named whole Ways only, so
 a Service that started or stopped mid-block was made to fit by splitting the
@@ -238,26 +239,37 @@ what the simulation runs on — see [The simulation](../explanation/simulation.m
   (`label`, `days: "daily" | "weekday" | "weekend"`, span, headway). When
   present it supersedes the quick fields.
 
-## Station
+## Stop, Station, and Service call
 
-A Station is a physical passenger place. A Stop is not a separate saved
-object: it is the call a particular Service makes at a Station its path
-reaches. This keeps one shared station from becoming duplicate stop records
-when several Services call there.
+A **Stop** is the saved physical boarding point where a vehicle can pick up or
+drop off passengers. A **Station** is an optional named passenger place or
+complex that contains one or more Stops. A **Service call** is derived: a
+Service calls at a Stop when its path and stopping pattern include that Stop.
+It is not a third saved record.
 
-| Field          | Meaning                                                                                                                                   |
+This distinction keeps ordinary roadside Stops lightweight while allowing a
+large Station to contain separate platforms or bays. `Stop.stationId` is the
+authoritative containment link; deleting a Station preserves its Stops and
+clears that link.
+
+| Stop field     | Meaning                                                                                                                                   |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `coord`        | Map position; snapped onto an anchored Way when the Station is not free-floating.                                                         |
-| `anchors`      | `{wayId, t}` entries — normalized positions on the Ways this Station serves and follows when they are reshaped.                           |
-| `footprint`    | The station's land: a boundary polygon drawn in the Infrastructure view.                                                                  |
-| `platforms`    | Platform polygons inside the station (`edges: 1` side, `2` island).                                                                       |
+| `coord`        | Boarding-point position; snapped onto an anchored Way when the Stop is not free-floating.                                                 |
+| `anchors`      | `{wayId, t}` entries — normalized positions on Ways this Stop follows when they are reshaped.                                             |
+| `stationId`    | Optional containing Station.                                                                                                              |
 | `dwellSeconds` | How long a vehicle waits here. Counts toward the round trip, so it feeds fleet size — see [The simulation](../explanation/simulation.md). |
-| `majorStop`    | Label this stop from a lower zoom, like an interchange.                                                                                   |
+| `majorStop`    | Label this Stop from a lower zoom, like an interchange.                                                                                   |
 
-There is no singular `anchor` field. Direct station movement replaces the
+| Station field | Meaning                                                             |
+| ------------- | ------------------------------------------------------------------- |
+| `coord`       | Focus and label position for the passenger place.                   |
+| `footprint`   | Optional Station boundary drawn in Infrastructure.                  |
+| `platforms`   | Platform polygons inside the Station (`edges: 1` side, `2` island). |
+
+There is no singular `anchor` field. Direct Stop movement replaces the
 complete `anchors` collection with `[anchor]` when snapped to a Way or `[]`
-when free-floating; workflows that deliberately associate a Station with
-several Ways write the complete multi-anchor collection.
+when free-floating; workflows that associate a Stop with several Ways write
+the complete multi-anchor collection.
 
 ## Facility and Group
 

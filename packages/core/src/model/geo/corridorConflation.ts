@@ -7,7 +7,6 @@
 // This supplies the interior matching that routing-edits' endpoint-snapped,
 // corridor-biased Dijkstra cannot: routes may share a middle trunk while
 // diverging at both ends, so neither endpoint lands near the shared Way.
-
 import { bearingDegrees, haversineMeters } from './spherical';
 import { projectOnSegment } from './measurement';
 import { candidateWayIdsNear } from './snapIndex';

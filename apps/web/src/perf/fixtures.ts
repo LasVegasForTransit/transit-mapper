@@ -4,7 +4,7 @@ import type {
   LngLat,
   Pattern,
   Service,
-  Station,
+  Stop,
   TransitSystem,
   Way,
 } from '@transitmapper/core/model/system';
@@ -71,16 +71,16 @@ function makeWays(scenarioId: PerfFixtureId): Way[] {
   }));
 }
 
-function makeStations(scenarioId: PerfFixtureId, ways: Way[]): Station[] {
-  const stationCount = PERF_FIXTURES[scenarioId].counts.stations;
+function makeStops(scenarioId: PerfFixtureId, ways: Way[]): Stop[] {
+  const stopCount = PERF_FIXTURES[scenarioId].counts.stops;
 
-  return Array.from({ length: stationCount }, (_, stationIndex) => {
-    const way = ways[stationIndex % ways.length];
+  return Array.from({ length: stopCount }, (_, stopIndex) => {
+    const way = ways[stopIndex % ways.length];
     const pointIndex = Math.floor((way.points.length - 1) / 2);
     const coord = way.points[pointIndex];
     return {
-      id: `${scenarioId}-station-${stationIndex.toString().padStart(4, '0')}`,
-      name: `Station ${stationIndex + 1}`,
+      id: `${scenarioId}-stop-${stopIndex.toString().padStart(4, '0')}`,
+      name: `Stop ${stopIndex + 1}`,
       coord: [...coord],
       anchors: [
         {
@@ -164,7 +164,7 @@ export function generatePerfFixture(scenarioId: PerfFixtureId): TransitSystem {
       zoom: scenarioId === 'small' ? 12 : 10,
     },
     ways,
-    stations: makeStations(scenarioId, ways),
+    stops: makeStops(scenarioId, ways),
     ...network,
   };
 }
@@ -173,7 +173,7 @@ export function countPerfFixture(system: TransitSystem): PerfFixtureCounts {
   return {
     ways: system.ways.length,
     points: system.ways.reduce((sum, way) => sum + way.points.length, 0),
-    stations: system.stations.length,
+    stops: system.stops.length,
     patterns: system.services.length,
   };
 }

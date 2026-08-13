@@ -9,49 +9,47 @@ const NETWORK_STATION_SOURCES: readonly SystemFeatureSourceId[] = [
   SRC_PHYSICAL_HANDLES,
 ];
 
-export interface StationGestureSettlementOptions {
+export interface StopGestureSettlementOptions {
   viewMode: 'network' | 'infrastructure' | 'diagram';
   affected: GestureAffectedEntities;
   pendingSources: readonly SystemFeatureSourceId[];
-  /** True after the initial station collection loaded, or while a prior
-   * controller-owned station diff is already queued on that collection. */
-  stationSourceReady: boolean;
+  /** True after the initial stop collection loaded, or while a prior
+   * controller-owned stop diff is already queued on that collection. */
+  stopSourceReady: boolean;
   overlayHealthy: boolean;
   projectionAborted: boolean;
 }
 
-export type StationGestureSettlementPlan =
-  | { kind: 'diff'; stationIds: readonly string[] }
-  | { kind: 'full'; preserveStationPreview: boolean };
+export type StopGestureSettlementPlan =
+  { kind: 'diff'; stopIds: readonly string[] } | { kind: 'full'; preserveStopPreview: boolean };
 
 /**
- * Network hides every physical station collection, so an isolated station
+ * Network hides every physical stop collection, so an isolated stop
  * move can replace only its visible point feature. Every ambiguous state
  * falls back to the complete source plan; a missed diff would leave the map
  * stale, while a conservative rebuild costs only that exceptional gesture.
  */
-export function planStationGestureSettlement({
+export function planStopGestureSettlement({
   viewMode,
   affected,
   pendingSources,
-  stationSourceReady,
+  stopSourceReady,
   overlayHealthy,
   projectionAborted,
-}: StationGestureSettlementOptions): StationGestureSettlementPlan {
-  const stationSourcesOnly =
+}: StopGestureSettlementOptions): StopGestureSettlementPlan {
+  const stopSourcesOnly =
     pendingSources.length === NETWORK_STATION_SOURCES.length &&
     pendingSources.every((sourceId, index) => sourceId === NETWORK_STATION_SOURCES[index]);
-  const isolatedStationMove =
-    affected.stationIds.length > 0 &&
+  const isolatedStopMove =
+    affected.stopIds.length > 0 &&
     affected.wayIds.length === 0 &&
     affected.facilityIds.length === 0 &&
     affected.groupIds.length === 0 &&
     affected.nodeIds.length === 0;
 
-  const isolatedNetworkStation =
-    viewMode === 'network' && isolatedStationMove && !projectionAborted;
-  if (isolatedNetworkStation && stationSourcesOnly && stationSourceReady && overlayHealthy) {
-    return { kind: 'diff', stationIds: [...affected.stationIds] };
+  const isolatedNetworkStop = viewMode === 'network' && isolatedStopMove && !projectionAborted;
+  if (isolatedNetworkStop && stopSourcesOnly && stopSourceReady && overlayHealthy) {
+    return { kind: 'diff', stopIds: [...affected.stopIds] };
   }
-  return { kind: 'full', preserveStationPreview: isolatedNetworkStation };
+  return { kind: 'full', preserveStopPreview: isolatedNetworkStop };
 }

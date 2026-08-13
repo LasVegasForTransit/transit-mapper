@@ -2,7 +2,6 @@ import type {
   Feature,
   FeatureCollection,
   GeoJsonProperties,
-  Geometry,
   LineString,
   Point,
   Polygon,
@@ -14,10 +13,10 @@ import type {
   LngLat,
   Node,
   Station,
+  Stop,
   TransitSystem,
   Way,
 } from '@transitmapper/core/model/system';
-
 interface GestureWayPointTarget {
   wayId: string;
   pointIndex: number;
@@ -25,10 +24,11 @@ interface GestureWayPointTarget {
 
 /** Exact entities a pointer gesture is allowed to mutate. Interaction handlers
  * know these before their first store write, so projection never has to diff
- * every way/station at pointer-frame frequency. */
+ * every way/stop at pointer-frame frequency. */
 export interface EditGestureTargets {
   wayIds?: string[];
   wayPoints?: GestureWayPointTarget[];
+  stopIds?: string[];
   stationIds?: string[];
   facilityIds?: string[];
   groupIds?: string[];
@@ -41,6 +41,7 @@ export interface EditGestureTargets {
 
 export interface GestureAffectedEntities {
   wayIds: string[];
+  stopIds: string[];
   stationIds: string[];
   facilityIds: string[];
   groupIds: string[];
@@ -48,7 +49,7 @@ export interface GestureAffectedEntities {
 }
 
 export interface GestureProjection {
-  data: FeatureCollection<Geometry>;
+  data: FeatureCollection;
   affected: GestureAffectedEntities;
 }
 
@@ -82,6 +83,19 @@ declare global {
   }
 }
 
+type WayDiscovery = { kind: 'add'; id: string } | { kind: 'abort' } | null;
+
+function newlyDiscoveredWay(
+  system: TransitSystem,
+  baseline: TransitSystem,
+  baselineWayIds: Set<string>,
+  enabled: boolean,
+): WayDiscovery {
+  if (!enabled || system.ways === baseline.ways) return null;
+  const added = system.ways.filter((way) => !baselineWayIds.has(way.id));
+  return added.length === 1 ? { kind: 'add', id: added[0].id } : { kind: 'abort' };
+}
+
 export function createProjectionOperationCounts(): ProjectionOperationCounts {
   return {
     fullProjectionCount: 0,
@@ -95,7 +109,7 @@ export function createProjectionOperationCounts(): ProjectionOperationCounts {
 /**
  * Coordinates a single pointer gesture. It indexes only the explicit target
  * IDs at start, then resolves those stable array slots on each frame. A joined
- * control point expands once to its node's other ways; stations anchored to a
+ * control point expands once to its node's other ways; stops anchored to a
  * moved way expand once too. RTC-scale arrays are never scanned per frame.
  */
 export function createGestureProjectionController(
@@ -130,13 +144,18 @@ export function createGestureProjectionController(
       return { kind: 'abort' };
     }
 
-    if (allowNewWayDiscovery && affected.wayIds.length === 0 && system.ways !== baseline.ways) {
-      const added = system.ways.filter((way) => !baselineWayIds.has(way.id));
-      if (added.length !== 1) {
-        aborted = true;
-        return { kind: 'abort' };
-      }
-      addTargets(system, { wayIds: [added[0].id] });
+    const discoveredWay = newlyDiscoveredWay(
+      system,
+      baseline,
+      baselineWayIds,
+      allowNewWayDiscovery && affected.wayIds.length === 0,
+    );
+    if (discoveredWay?.kind === 'abort') {
+      aborted = true;
+      return { kind: 'abort' };
+    }
+    if (discoveredWay?.kind === 'add') {
+      addTargets(system, { wayIds: [discoveredWay.id] });
       allowNewWayDiscovery = false;
     }
 
@@ -155,16 +174,23 @@ export function createGestureProjectionController(
 
     counts.gestureProjectionCount++;
     if (system !== baseline) dirty = true;
-    const features: Feature<Geometry>[] = [];
+    const features: Feature[] = [];
     const ways = locators.ways.resolve(system.ways, counts);
+    const stops = locators.stops.resolve(system.stops, counts);
     const stations = locators.stations.resolve(system.stations, counts);
     const facilities = locators.facilities.resolve(system.facilities, counts);
     const groups = locators.groups.resolve(system.groups, counts);
     const nodes = locators.nodes.resolve(system.nodes, counts);
     counts.projectedEntityCount +=
-      ways.length + stations.length + facilities.length + groups.length + nodes.length;
+      ways.length +
+      stops.length +
+      stations.length +
+      facilities.length +
+      groups.length +
+      nodes.length;
 
     for (const way of ways) features.push(...projectWay(way));
+    for (const stop of stops) features.push(...projectStop(stop));
     for (const station of stations) features.push(...projectStation(station));
     for (const facility of facilities) features.push(...projectFacility(facility));
     for (const group of groups) features.push(...projectGroup(group));
@@ -214,6 +240,7 @@ interface EntityLocator<T extends Entity> {
 
 interface GestureLocators {
   ways: EntityLocator<Way>;
+  stops: EntityLocator<Stop>;
   stations: EntityLocator<Station>;
   facilities: EntityLocator<Facility>;
   groups: EntityLocator<Group>;
@@ -223,6 +250,7 @@ interface GestureLocators {
 interface RenderInputReferences {
   ways: TransitSystem['ways'];
   services: TransitSystem['services'];
+  stops: TransitSystem['stops'];
   stations: TransitSystem['stations'];
   facilities: TransitSystem['facilities'];
   groups: TransitSystem['groups'];
@@ -237,6 +265,7 @@ function renderInputs(system: TransitSystem): RenderInputReferences {
   return {
     ways: system.ways,
     services: system.services,
+    stops: system.stops,
     stations: system.stations,
     facilities: system.facilities,
     groups: system.groups,
@@ -273,33 +302,34 @@ function unexpectedInputChange(
   )
     return true;
   if (
-    after.stations !== before.stations &&
-    affected.stationIds.length === 0 &&
-    // updateWayPoints intentionally maps the station array even when the
+    after.stops !== before.stops &&
+    affected.stopIds.length === 0 &&
+    // updateWayPoints intentionally maps the stop array even when the
     // targeted way has no anchors. Expansion already found every anchored
-    // station once; an unchanged cardinality is therefore the expected
-    // reference-only result, while an import adding/removing stations aborts.
-    !(affected.wayIds.length > 0 && after.stations.length === before.stations.length)
+    // stop once; an unchanged cardinality is therefore the expected
+    // reference-only result, while an import adding/removing stops aborts.
+    !(affected.wayIds.length > 0 && after.stops.length === before.stops.length)
   )
     return true;
-  if (after.stations !== before.stations && after.stations.length !== before.stations.length)
+  if (after.stops !== before.stops && after.stops.length !== before.stops.length) return true;
+  if (unexpectedCollectionChange(after.stations, before.stations, affected.stationIds.length))
     return true;
-  if (after.facilities !== before.facilities && affected.facilityIds.length === 0) return true;
-  if (
-    after.facilities !== before.facilities &&
-    after.facilities.length !== before.facilities.length
-  )
+  if (unexpectedCollectionChange(after.facilities, before.facilities, affected.facilityIds.length))
     return true;
-  if (after.groups !== before.groups && affected.groupIds.length === 0) return true;
-  if (after.groups !== before.groups && after.groups.length !== before.groups.length) return true;
-  if (after.nodes !== before.nodes && affected.nodeIds.length === 0) return true;
-  if (after.nodes !== before.nodes && after.nodes.length !== before.nodes.length) return true;
+  if (unexpectedCollectionChange(after.groups, before.groups, affected.groupIds.length))
+    return true;
+  if (unexpectedCollectionChange(after.nodes, before.nodes, affected.nodeIds.length)) return true;
   return totalTargets(affected) > MAX_GESTURE_TARGETS;
+}
+
+function unexpectedCollectionChange<T>(after: T[], before: T[], affectedCount: number): boolean {
+  return after !== before && (affectedCount === 0 || after.length !== before.length);
 }
 
 function totalTargets(affected: GestureAffectedEntities): number {
   return (
     affected.wayIds.length +
+    affected.stopIds.length +
     affected.stationIds.length +
     affected.facilityIds.length +
     affected.groupIds.length +
@@ -325,16 +355,17 @@ function expandTargets(
     for (const ref of node.refs) wayIds.add(ref.wayId);
   }
 
-  const stationIds = orderedSet(targets.stationIds);
+  const stopIds = orderedSet(targets.stopIds);
   if (wayIds.size > 0) {
-    for (const station of system.stations) {
-      if (station.anchors.some((anchor) => wayIds.has(anchor.wayId))) stationIds.add(station.id);
+    for (const stop of system.stops) {
+      if (stop.anchors.some((anchor) => wayIds.has(anchor.wayId))) stopIds.add(stop.id);
     }
   }
 
   return {
     wayIds: [...wayIds],
-    stationIds: [...stationIds],
+    stopIds: [...stopIds],
+    stationIds: [...orderedSet(targets.stationIds)],
     facilityIds: [...orderedSet(targets.facilityIds)],
     groupIds: [...orderedSet(targets.groupIds)],
     nodeIds: [...nodeIds],
@@ -351,6 +382,7 @@ function mergeAffected(
 ): GestureAffectedEntities {
   return {
     wayIds: [...new Set([...before.wayIds, ...after.wayIds])],
+    stopIds: [...new Set([...before.stopIds, ...after.stopIds])],
     stationIds: [...new Set([...before.stationIds, ...after.stationIds])],
     facilityIds: [...new Set([...before.facilityIds, ...after.facilityIds])],
     groupIds: [...new Set([...before.groupIds, ...after.groupIds])],
@@ -361,6 +393,7 @@ function mergeAffected(
 function copyAffected(affected: GestureAffectedEntities): GestureAffectedEntities {
   return {
     wayIds: [...affected.wayIds],
+    stopIds: [...affected.stopIds],
     stationIds: [...affected.stationIds],
     facilityIds: [...affected.facilityIds],
     groupIds: [...affected.groupIds],
@@ -371,6 +404,7 @@ function copyAffected(affected: GestureAffectedEntities): GestureAffectedEntitie
 function createLocators(system: TransitSystem, affected: GestureAffectedEntities): GestureLocators {
   return {
     ways: createEntityLocator(system.ways, affected.wayIds),
+    stops: createEntityLocator(system.stops, affected.stopIds),
     stations: createEntityLocator(system.stations, affected.stationIds),
     facilities: createEntityLocator(system.facilities, affected.facilityIds),
     groups: createEntityLocator(system.groups, affected.groupIds),
@@ -425,17 +459,21 @@ function projectWay(way: Way): Array<Feature<LineString | Point>> {
   return features;
 }
 
-function projectStation(station: Station): Array<Feature<Point | Polygon>> {
-  const features: Array<Feature<Point | Polygon>> = [
+function projectStop(stop: Stop): Feature<Point>[] {
+  return [
     {
       type: 'Feature',
       // The settled preview stays interactive until MapLibre paints the
-      // committed station diff, so expose the same stable id its normal source
+      // committed stop diff, so expose the same stable id its normal source
       // uses in addition to the generic gesture owner id.
-      properties: { ...properties('station', station.id), id: station.id },
-      geometry: { type: 'Point', coordinates: station.coord },
+      properties: { ...properties('stop', stop.id), id: stop.id },
+      geometry: { type: 'Point', coordinates: stop.coord },
     },
   ];
+}
+
+function projectStation(station: Station): Array<Feature<Polygon | Point>> {
+  const features: Array<Feature<Polygon | Point>> = [];
   if (station.footprint) {
     features.push(polygonFeature('footprint', station.id, station.footprint));
     features.push(...controlPointFeatures(station.id, station.footprint));

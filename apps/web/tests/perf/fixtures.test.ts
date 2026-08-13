@@ -10,7 +10,7 @@ describe('performance fixtures', () => {
     expect(countPerfFixture(fixture)).toEqual({
       ways: 3_800,
       points: 121_000,
-      stations: 3_800,
+      stops: 3_800,
       patterns: 285,
     });
   });
@@ -23,7 +23,7 @@ describe('performance fixtures', () => {
       expect(second.id).toBe(first.id);
       expect(second.viewport).toEqual(first.viewport);
       expect(second.ways[137 % second.ways.length]).toEqual(first.ways[137 % first.ways.length]);
-      expect(second.stations.at(-1)).toEqual(first.stations.at(-1));
+      expect(second.stops.at(-1)).toEqual(first.stops.at(-1));
       expect(second.services.at(-1)).toEqual(first.services.at(-1));
     }
   });

@@ -17,9 +17,7 @@
 //
 // Pure and CSV-agnostic: apps/web/tests/verify.test.ts drives it directly with
 // already-parsed fixture rows.
-
 import type { SchedulePeriod } from './system/service';
-import type { ScheduleDayScope } from './system/valueTypes';
 import { shortId } from './ids';
 
 /** What one route was found to run, in the shape Service stores. */
@@ -251,7 +249,7 @@ function frequencyPeriodsByRoute(
       windows.map((w) => ({
         id: shortId(),
         label: periodLabel(w.start),
-        days: 'daily' as ScheduleDayScope,
+        days: 'daily',
         spanStart: formatGtfsTime(w.start),
         spanEnd: formatGtfsTime(w.end),
         frequencyMinutes: w.headwayMinutes,

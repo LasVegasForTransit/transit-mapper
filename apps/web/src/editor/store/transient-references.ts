@@ -13,7 +13,7 @@ type ReferentialTransientState = Pick<
   | 'placingFacilityForGroupId'
   | 'pickingMemberForGroupId'
   | 'addingServiceDraft'
-  | 'focusNameStationId'
+  | 'focusNameStopId'
 >;
 
 function includesId(records: readonly { id: string }[], id: string): boolean {
@@ -36,6 +36,8 @@ function referenceExists(
       return includesId(system.lines, id);
     case 'service':
       return includesId(system.services, id);
+    case 'stop':
+      return includesId(system.stops, id);
     case 'station':
       return includesId(system.stations, id);
     case 'facility':
@@ -50,7 +52,7 @@ function referenceExists(
 function pruneSelection(system: TransitSystem, selection: Selection): Selection {
   if (!selection || !referenceExists(system, selection.kind, selection.id)) return null;
   if (selection.kind === 'service' && selection.stopId) {
-    return includesId(system.stations, selection.stopId)
+    return includesId(system.stops, selection.stopId)
       ? selection
       : { kind: 'service', id: selection.id };
   }
@@ -126,6 +128,6 @@ export function pruneTransientReferences(
     placingFacilityForGroupId: retainedId(state.placingFacilityForGroupId, system.groups),
     pickingMemberForGroupId: retainedId(state.pickingMemberForGroupId, system.groups),
     addingServiceDraft: retainedAddingServiceDraft(state, system),
-    focusNameStationId: retainedId(state.focusNameStationId, system.stations),
+    focusNameStopId: retainedId(state.focusNameStopId, system.stops),
   };
 }

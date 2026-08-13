@@ -6,22 +6,23 @@ the TypeScript representation when that distinction helps a maintainer.
 
 ## Vocabulary reference
 
-| Term                    | Definition                                               | Current model representation       | Explicitly not                     |
-| ----------------------- | -------------------------------------------------------- | ---------------------------------- | ---------------------------------- |
-| Line                    | Name and color an agency designates on its public map    | `Line`                             | A mode, schedule, or physical path |
-| Service                 | One mode-specific operation beneath a Line               | `Service`                          | A cross-mode operation             |
-| Service path            | The one ordered path a Service operates                  | `ServicePath`                      | Physical infrastructure itself     |
-| Outbound / inbound path | One direction through a Service path                     | `RunDirection`                     | Way point order                    |
-| Terminus                | Operational start or end of one Service                  | Derived from its Service path      | Way endpoint                       |
-| Way                     | Physical road, track, trail, aerial span, or water route | `Way`                              | Line or Service                    |
-| Control point           | Authored point shaping a Way                             | `Way.points[index]`                | Junction, Station, or terminus     |
-| Way endpoint            | First or last control point of a Way                     | First/last `Way.points` entry      | Service terminus                   |
-| Junction                | Topological connection between Ways                      | `Node`                             | Visible crossing or control point  |
-| Station                 | Physical passenger place                                 | `Station`                          | A Service call                     |
-| Stop                    | A particular Service calling at a Station                | Derived from path and Station data | A duplicate physical Station       |
-| Handle                  | Temporary draggable editing grip                         | Derived UI feature                 | Saved network data                 |
-| Action anchor           | Temporary right-click location marker                    | Ephemeral overlay                  | Inserted network node              |
-| Connection              | Explicit joining operation                               | Editor operation                   | Generic name for every point       |
+| Term                    | Definition                                               | Current model representation    | Explicitly not                     |
+| ----------------------- | -------------------------------------------------------- | ------------------------------- | ---------------------------------- |
+| Line                    | Name and color an agency designates on its public map    | `Line`                          | A mode, schedule, or physical path |
+| Service                 | One mode-specific operation beneath a Line               | `Service`                       | A cross-mode operation             |
+| Service path            | The one ordered path a Service operates                  | `ServicePath`                   | Physical infrastructure itself     |
+| Outbound / inbound path | One direction through a Service path                     | `RunDirection`                  | Way point order                    |
+| Terminus                | Operational start or end of one Service                  | Derived from its Service path   | Way endpoint                       |
+| Way                     | Physical road, track, trail, aerial span, or water route | `Way`                           | Line or Service                    |
+| Control point           | Authored point shaping a Way                             | `Way.points[index]`             | Junction, Station, or terminus     |
+| Way endpoint            | First or last control point of a Way                     | First/last `Way.points` entry   | Service terminus                   |
+| Junction                | Topological connection between Ways                      | `Node`                          | Visible crossing or control point  |
+| Stop                    | Physical point where passengers board or alight          | `Stop`                          | A Service or Station               |
+| Station                 | Optional named place containing one or more Stops        | `Station`                       | Required for every roadside Stop   |
+| Service call            | One Service serving one Stop                             | Derived from path and Stop data | A separate saved place             |
+| Handle                  | Temporary draggable editing grip                         | Derived UI feature              | Saved network data                 |
+| Action anchor           | Temporary right-click location marker                    | Ephemeral overlay               | Inserted network node              |
+| Connection              | Explicit joining operation                               | Editor operation                | Generic name for every point       |
 
 Use **junction** in the interface and user guides. Use `Node` only when
 describing the saved representation or a code identifier. A visible crossing
@@ -65,7 +66,7 @@ geometry preview. A **target cue** marks the object the operation will use. An
 Dropping an extension on an invalid target, dismissing the connection chooser,
 or pressing `Escape` changes no saved network data. A successful gesture is
 one undo checkpoint. Service-path edits do not move or split Ways,
-Junctions, or Stations unless the user explicitly chooses an infrastructure operation.
+Junctions, Stops, or Stations unless the user explicitly chooses an infrastructure operation.
 
 ## Touch equivalents
 
@@ -119,11 +120,11 @@ it: chosen from its chevron in the dock, shown on its button, and exclusive of
 each other. This is how both operations are reached without a keyboard, since
 `Alt` and `Ctrl` cannot be held on a touchscreen.
 
-| Variant  | Sets        | A press then                                         |
-| -------- | ----------- | ---------------------------------------------------- |
-| `select` | nothing     | Selects, moves, or extends, per the table above      |
-| `erase`  | `alternate` | Removes the point, station, or facility pressed      |
-| `split`  | `secondary` | Splits a Way at an interior point, extends at an end |
+| Variant  | Sets        | A press then                                                 |
+| -------- | ----------- | ------------------------------------------------------------ |
+| `select` | nothing     | Selects, moves, or extends, per the table above              |
+| `erase`  | `alternate` | Removes the point, Stop, Station handle, or facility pressed |
+| `split`  | `secondary` | Splits a Way at an interior point, extends at an end         |
 
 A held `Alt` or `Ctrl` reaches the same operation without changing the variant,
 so a mouse is unaffected.

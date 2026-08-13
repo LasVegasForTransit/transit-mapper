@@ -1,7 +1,6 @@
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { saveToLibrary } from '../../src/storage/localStore';
-
 class FakeStorage {
   private values = new Map<string, string>();
   get length(): number {
@@ -55,6 +54,6 @@ describe('local persistence measurement', () => {
         outcome: 'saved',
       }),
     );
-    expect(onMeasure.mock.calls[0]![0].documentBytes).toBeGreaterThan(0);
+    expect(onMeasure.mock.calls[0][0].documentBytes).toBeGreaterThan(0);
   });
 });

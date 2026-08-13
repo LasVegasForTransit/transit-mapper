@@ -6,7 +6,7 @@ export { HANDLE_ICON, HANDLE_INK } from '@transitmapper/core/render/constants';
 
 export const SRC_WAYS = 'tm-ways';
 export const SRC_SERVICES = 'tm-services';
-export const SRC_STATIONS = 'tm-stations';
+export const SRC_STATIONS = 'tm-stops';
 export const SRC_HANDLES = 'tm-handles';
 export const SRC_SERVICE_TERMINI = 'tm-service-termini';
 export const SRC_ACTION_ANCHOR = 'tm-action-anchor';
@@ -51,13 +51,13 @@ export const LYR_SERVICES_SOLID_CASING = 'tm-services-solid-casing';
 export const LYR_SERVICES_UNDERGROUND_CASING = 'tm-services-underground-casing';
 /** Invisible per-occurrence geometry used only for exact service actions. */
 export const LYR_SERVICES_HIT = 'tm-services-hit';
-export const LYR_STATIONS = 'tm-stations';
-export const LYR_STATION_SELECTED = 'tm-station-selected';
+export const LYR_STATIONS = 'tm-stops';
+export const LYR_STATION_SELECTED = 'tm-stop-selected';
 export const LYR_VEHICLES = 'tm-vehicles';
 export const LYR_VEHICLES_INFRA_FILL = 'tm-vehicles-infra-fill';
 export const LYR_VEHICLES_INFRA_STROKE = 'tm-vehicles-infra-stroke';
-export const LYR_STATION_LABELS = 'tm-station-labels'; // ordinary stops (higher minzoom)
-export const LYR_STATION_LABELS_MAJOR = 'tm-station-labels-major'; // interchanges + major stops (lower minzoom)
+export const LYR_STATION_LABELS = 'tm-stop-labels'; // ordinary stops (higher minzoom)
+export const LYR_STATION_LABELS_MAJOR = 'tm-stop-labels-major'; // interchanges + major stops (lower minzoom)
 export const LYR_FACILITY_LABELS = 'tm-facility-labels';
 export const LYR_HANDLES = 'tm-handles';
 export const LYR_WAY_ENDPOINTS = 'tm-way-endpoints';

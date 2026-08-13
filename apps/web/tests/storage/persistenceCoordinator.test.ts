@@ -7,7 +7,6 @@ import {
   type PersistenceStore,
 } from '../../src/storage/persistenceCoordinator';
 import type { SaveOutcome } from '../../src/storage/localStore';
-
 class FakeStore implements PersistenceStore {
   private snapshot: PersistenceSnapshot;
   private listeners = new Set<(next: PersistenceSnapshot, previous: PersistenceSnapshot) => void>();
@@ -151,7 +150,7 @@ describe('persistence coordinator', () => {
     await harness.coordinator.flush();
 
     expect(harness.save).toHaveBeenCalledTimes(1);
-    expect(harness.save.mock.calls[0]![0].name).toBe('Last edit');
+    expect(harness.save.mock.calls[0][0].name).toBe('Last edit');
   });
 
   it('starts an IndexedDB save as soon as the page becomes hidden', async () => {
@@ -165,7 +164,7 @@ describe('persistence coordinator', () => {
     await Promise.resolve();
 
     expect(harness.save).toHaveBeenCalledOnce();
-    expect(harness.save.mock.calls[0]![0].name).toBe('Hidden-tab edit');
+    expect(harness.save.mock.calls[0][0].name).toBe('Hidden-tab edit');
     await harness.coordinator.flush();
   });
 
@@ -189,7 +188,7 @@ describe('persistence coordinator', () => {
     harness.pageHide();
 
     expect(harness.emergencySave).toHaveBeenCalledOnce();
-    expect(harness.emergencySave.mock.calls[0]![0].name).toBe('Immediate close');
+    expect(harness.emergencySave.mock.calls[0][0].name).toBe('Immediate close');
     expect(order[0]).toBe('emergency');
     await harness.coordinator.flush();
   });
@@ -212,7 +211,7 @@ describe('persistence coordinator', () => {
     harness.hidePage();
 
     expect(harness.emergencySave).toHaveBeenCalledOnce();
-    expect(harness.emergencySave.mock.calls[0]![0].name).toBe('In-flight close');
+    expect(harness.emergencySave.mock.calls[0][0].name).toBe('In-flight close');
     finishSave?.('saved');
     await harness.coordinator.flush();
     harness.hidePage();
@@ -261,11 +260,11 @@ describe('persistence coordinator', () => {
 
     await harness.coordinator.flush();
     expect(harness.save).toHaveBeenCalledTimes(2);
-    expect(harness.save.mock.calls[0]![0]).toMatchObject({
+    expect(harness.save.mock.calls[0][0]).toMatchObject({
       id: harness.system.id,
       name: 'Unsaved old document',
     });
-    expect(harness.save.mock.calls[1]![0].id).toBe(next.id);
+    expect(harness.save.mock.calls[1][0].id).toBe(next.id);
   });
 
   it('emergency-saves every undurable document after switching systems', async () => {
@@ -355,7 +354,7 @@ describe('persistence coordinator', () => {
     await harness.coordinator.flush();
 
     expect(harness.save).toHaveBeenCalledTimes(1);
-    expect(harness.save.mock.calls[0]![0].name).toBe('Pending at detach');
+    expect(harness.save.mock.calls[0][0].name).toBe('Pending at detach');
   });
 
   it('never saves a read-only shared system', async () => {
@@ -402,7 +401,7 @@ describe('persistence coordinator', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(harness.save).toHaveBeenCalledTimes(2);
-    expect(harness.save.mock.calls[1]![0].name).toBe('Third');
+    expect(harness.save.mock.calls[1][0].name).toBe('Third');
 
     releases.shift()?.('saved');
     await harness.coordinator.flush();
@@ -439,6 +438,6 @@ describe('persistence coordinator', () => {
     await boundaryFlush;
 
     expect(harness.save).toHaveBeenCalledTimes(2);
-    expect(harness.save.mock.calls[1]![0].name).toBe('Queued at boundary');
+    expect(harness.save.mock.calls[1][0].name).toBe('Queued at boundary');
   });
 });

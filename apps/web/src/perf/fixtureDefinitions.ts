@@ -17,7 +17,7 @@ export const PERF_FIXTURES: Record<PerfFixtureId, PerfFixtureDefinition> = {
     counts: {
       ways: 24,
       points: 240,
-      stations: 30,
+      stops: 30,
       patterns: 6,
     },
   },
@@ -26,7 +26,7 @@ export const PERF_FIXTURES: Record<PerfFixtureId, PerfFixtureDefinition> = {
     counts: {
       ways: 600,
       points: 18_000,
-      stations: 800,
+      stops: 800,
       patterns: 60,
     },
   },
@@ -35,7 +35,7 @@ export const PERF_FIXTURES: Record<PerfFixtureId, PerfFixtureDefinition> = {
     counts: {
       ways: 450,
       points: 13_500,
-      stations: 600,
+      stops: 600,
       patterns: 45,
     },
   },
@@ -44,7 +44,7 @@ export const PERF_FIXTURES: Record<PerfFixtureId, PerfFixtureDefinition> = {
     counts: {
       ways: 3_800,
       points: 121_000,
-      stations: 3_800,
+      stops: 3_800,
       patterns: 285,
     },
   },

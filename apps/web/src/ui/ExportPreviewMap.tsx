@@ -5,7 +5,6 @@ import { addExportSourcesAndLayers, setExportFeatureData } from '../map/export/e
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { basemapStyleForScheme } from '../map/mapTheme';
-
 /**
  * A second, read-only MapLibre instance for the export dialog — deliberately
  * separate from the app's main map (map/MapCanvas.tsx) so panning/zooming it
@@ -75,7 +74,7 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
 
   const pushData = () => {
     const map = mapRef.current;
-    if (!map || !map.getSource(SRC_STATIONS)) return;
+    if (!map?.getSource(SRC_STATIONS)) return;
     const fc = buildFeatures(system, null, [], view);
     setExportFeatureData(map, fc);
   };

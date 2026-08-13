@@ -16,7 +16,7 @@ import type {
   Pattern,
   ScheduleDayScope,
   Service,
-  Station,
+  Stop,
   Way,
 } from '@transitmapper/core/model/system';
 import {
@@ -42,7 +42,6 @@ import {
   ServicesOnWay,
   Stat,
 } from './shared';
-
 // Opened only via the "Edit full schedule" link, never on initial render —
 // same lazy-loading rationale as the app-level dialogs in App.tsx.
 const ScheduleDialog = lazy(() =>
@@ -88,7 +87,7 @@ export const ROUTE_INSPECTOR_COPY = {
     'Re-route this Service onto nearby infrastructure and remove its redundant sketch geometry',
   adoptRefusal:
     "No adoptable infrastructure was found near this Service's endpoints. Build or import its path first.",
-  adoptHelp: 'Fits this Service path to nearby infrastructure; anchored stations move with it.',
+  adoptHelp: 'Fits this Service path to nearby infrastructure; anchored stops move with it.',
   pathHelp:
     'Drag a control point or endpoint to reshape · click the path to add a control point · Ctrl/⌘-drag an endpoint to extend it · Alt/Option-drag to erase a section · Ctrl/⌘-click a control point to split the path there',
 } as const;
@@ -106,13 +105,13 @@ function formatSpan(start: string, end: string): string {
  *  service is ever inspected. */
 function stopsOnPattern(
   ways: Way[],
-  stations: Station[],
+  stops: Stop[],
   pattern: Pattern,
   run: RunDirection = 'outbound',
-): Station[] {
+): Stop[] {
   const path = patternRunPath(ways, pattern, run);
   if (path.length < 2) return [];
-  return patternStops(stations, pattern, path, pathLengthMeters(path), run).map((s) => s.station);
+  return patternStops(stops, pattern, path, pathLengthMeters(path), run).map((s) => s.stop);
 }
 
 export interface ServiceInspectorProps {
@@ -124,7 +123,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   const service = useEditor((s) => s.system.services.find((candidate) => candidate.id === id));
   const lines = useEditor((s) => s.system.lines);
   const ways = useEditor((s) => s.system.ways);
-  const stations = useEditor((s) => s.system.stations);
+  const stops = useEditor((s) => s.system.stops);
   const selectedStopId = useEditor((s) =>
     s.selection?.kind === 'service' && s.selection.id === id ? s.selection.stopId : undefined,
   );
@@ -171,7 +170,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   if (!service) return <EmptyInspector />;
   const singlePattern = servicePattern(service);
   const line = lines.find((candidate) => candidate.serviceIds.includes(service.id));
-  const selectedStop = stations.find((station) => station.id === selectedStopId);
+  const selectedStop = stops.find((stop) => stop.id === selectedStopId);
   const serviceLabel =
     service.name?.trim() ||
     (line?.serviceIds.length === 1
@@ -191,15 +190,15 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
     // dwells on, so the panel's "calls at" list and the stops a vehicle
     // actually makes cannot disagree. This used to be a second implementation
     // here, and it disagreed about extents: it filtered on way id alone, so a
-    // station past where the line terminates stayed in the list. A branch
+    // stop past where the line terminates stayed in the list. A branch
     // lists only stops on its own ways; reconstructing "which trunk stops feed
     // this branch" needs graph traversal through junctions, out of scope for
     // this display.
-    stops: stopsOnPattern(ways, stations, p, 'outbound'),
+    stops: stopsOnPattern(ways, stops, p, 'outbound'),
     // Only worth showing separately when the two directions are different
     // ground. A line that comes back the way it went would just list the same
-    // stations backwards, which tells a planner nothing they can act on.
-    returnStops: patternHasSplit(p) ? stopsOnPattern(ways, stations, p, 'inbound') : [],
+    // stops backwards, which tells a planner nothing they can act on.
+    returnStops: patternHasSplit(p) ? stopsOnPattern(ways, stops, p, 'inbound') : [],
     skippedInbound: new Set(p.skippedStops?.inbound ?? []),
   }));
   const totalStops = new Set(patternStops.flatMap(({ stops }) => stops.map((st) => st.id))).size;
@@ -235,7 +234,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
         {MODES[service.modeId]?.label ?? 'Service'} · {formatDistance(length, unitSystem)} ·{' '}
         {totalStops} stop
         {totalStops === 1 ? '' : 's'}
-        {selectedStop ? ` · Call at ${selectedStop.name || 'Unnamed station'}` : ''}
+        {selectedStop ? ` · Call at ${selectedStop.name || 'Unnamed stop'}` : ''}
       </div>
 
       <InspectorTabs tabs={tabs} active={tab} onChange={setTab} />
@@ -657,10 +656,10 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                     <button
                       type="button"
                       className="stop-item"
-                      onClick={() => selectAndFocus({ kind: 'station', id: st.id })}
+                      onClick={() => selectAndFocus({ kind: 'stop', id: st.id })}
                     >
                       <span className="stop-index">{j + 1}</span>
-                      <span className="stop-name">{st.name || 'Unnamed station'}</span>
+                      <span className="stop-name">{st.name || 'Unnamed stop'}</span>
                     </button>
                     {!readOnly && stops.length > 1 && (
                       <span className="stop-actions">
@@ -761,7 +760,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
                         <button
                           type="button"
                           className="stop-open"
-                          onClick={() => selectAndFocus({ kind: 'station', id: st.id })}
+                          onClick={() => selectAndFocus({ kind: 'stop', id: st.id })}
                         >
                           <span className="dot ring" />
                           <span className="stop-name">{st.name || 'Unnamed stop'}</span>
@@ -790,7 +789,7 @@ interface ServiceLoadProps {
  * what that amounts to — and, crucially, shows the chain between them. Stops
  * and dwell lengthen the round trip; the round trip and the headway decide how
  * many vehicles it takes. All three used to be computed on every animation
- * frame and thrown away, so adding a station silently added a train and
+ * frame and thrown away, so adding a stop silently added a train and
  * nothing in the editor said so.
  *
  * Everything here comes from core/sim, the same functions the map resolves
@@ -802,13 +801,13 @@ function ServiceLoad({ service }: ServiceLoadProps) {
   // Narrow selectors, matching the rest of this file — `system` is a fresh
   // reference on every mutation, including drag frames of an unrelated way.
   const ways = useEditor((s) => s.system.ways);
-  const stations = useEditor((s) => s.system.stations);
+  const stops = useEditor((s) => s.system.stops);
   const vehicleKinds = useEditor((s) => s.system.vehicleKinds);
 
   const active = activeSchedule(service, minutesOfDay(simMs), dayScopeAt(simMs), pinnedPeriod);
   const stats = useMemo(
-    () => serviceStats(ways, stations, vehicleKinds, service, active?.headwayMinutes),
-    [ways, stations, vehicleKinds, service, active?.headwayMinutes],
+    () => serviceStats(ways, stops, vehicleKinds, service, active?.headwayMinutes),
+    [ways, stops, vehicleKinds, service, active?.headwayMinutes],
   );
   const when = pinnedPeriod ? `“${pinnedPeriod}”` : formatSimClock(simMs);
 
@@ -820,7 +819,7 @@ function ServiceLoad({ service }: ServiceLoadProps) {
     );
 
   const roundTrip = formatMinutes(stats.roundTripMs / 60_000);
-  const stops = stats.path.stops.length;
+  const stopCount = stats.path.stops.length;
   const dwell = stats.path.dwellMs / 60_000;
 
   return (
@@ -839,7 +838,7 @@ function ServiceLoad({ service }: ServiceLoadProps) {
           : active.headwayMinutes === undefined
             ? `Running at ${when} with no frequency set, so it runs a single vehicle around a ${roundTrip} round trip.`
             : `At ${when} it runs every ${active.headwayMinutes} min${!pinnedPeriod && active.label ? ` (${active.label})` : ''}. ` +
-              `${stops === 0 ? 'With no stops' : `${stops} stop${stops === 1 ? '' : 's'} and ${formatMinutes(dwell)} of dwell`}, a round trip takes ` +
+              `${stopCount === 0 ? 'With no stops' : `${stopCount} stop${stopCount === 1 ? '' : 's'} and ${formatMinutes(dwell)} of dwell`}, a round trip takes ` +
               `${roundTrip}, so holding that headway needs ${stats.fleet} vehicle${stats.fleet === 1 ? '' : 's'}, ` +
               `each waiting ${formatMinutes(stats.layoverMs / 60_000)} at either end.`}
       </p>

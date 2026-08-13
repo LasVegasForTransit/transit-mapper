@@ -10,6 +10,7 @@ import { useView, type ViewMode } from './ViewProvider';
 import { ToolDraftInspector } from './inspector/drafts';
 import { ServiceInspector } from './inspector/ServiceInspector';
 import { WayInspector } from './inspector/WayInspector';
+import { StopInspector } from './inspector/StopInspector';
 import { StationInspector } from './inspector/StationInspector';
 import { FacilityInspector } from './inspector/FacilityInspector';
 import { GroupInspector } from './inspector/GroupInspector';
@@ -33,7 +34,8 @@ function renderInspectorContent(
   if (selection.kind === 'facility') return <FacilityInspector id={selection.id} />;
   if (selection.kind === 'group') return <GroupInspector id={selection.id} />;
   if (selection.kind === 'node') return <NodeInspector id={selection.id} />;
-  return <StationInspector id={selection.id} />;
+  if (selection.kind === 'station') return <StationInspector id={selection.id} />;
+  return <StopInspector id={selection.id} />;
 }
 
 // Slides in once there's something to say — either a selection, or (an
@@ -128,7 +130,7 @@ export function Inspector() {
 
   // A panel scrolled halfway down keeps that offset when a different object
   // is put into it, because the scroll lives on a container that never
-  // unmounts. Measured: selecting a line after scrolling a station's panel
+  // unmounts. Measured: selecting a line after scrolling a stop's panel
   // opened at scrollTop 134 — the first thing showing was "MODE", with the
   // line's own name and its tabs above the fold. You pick a line and get an
   // anonymous form.
@@ -164,6 +166,7 @@ export function Inspector() {
 
 const MULTI_KIND_LABEL: Record<MultiSelectItem['kind'], string> = {
   way: 'way',
+  stop: 'stop',
   station: 'station',
   facility: 'facility',
   line: 'line',
@@ -175,7 +178,7 @@ interface MultiInspectorProps {
 }
 
 // Bulk actions only — moving/deleting several objects at once as one group,
-// not editing shared properties across mixed kinds (a way and a station have
+// not editing shared properties across mixed kinds (a way and a stop have
 // nothing in common to show one merged form for).
 //
 // Which actions exist is not decided here: the registry answers that from the
@@ -203,8 +206,8 @@ function MultiInspector({ items }: MultiInspectorProps) {
 
       {!readOnly && (
         <p className="insp-sub">
-          Drag any selected way, station, or facility to move the whole group · Shift-click to add
-          or remove one
+          Drag any selected way, stop, or facility to move the whole group · Shift-click to add or
+          remove one
         </p>
       )}
 

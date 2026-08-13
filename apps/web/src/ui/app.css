@@ -723,7 +723,7 @@ input[type='range'] {
 }
 /* The dock is SEPARATE floating surfaces, not one bar with dividers —
    Figma-style clusters that keep tool KINDS mentally distinct:
-   [Select] · [Paths: linear drawing] · [Places: stations/facilities,
+   [Select] · [Paths: linear drawing] · [Places: stops/facilities,
    region- and building-like things]. */
 .tool-row {
   display: flex;

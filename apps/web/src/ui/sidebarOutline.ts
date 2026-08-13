@@ -6,12 +6,17 @@ import {
 } from '@transitmapper/core/model/catalog';
 import { pathLengthMeters, patternRunPath } from '@transitmapper/core/model/geo';
 import { linesById, servicePattern, servicesForLine } from '@transitmapper/core/model/line-service';
-import type { Facility, Line, Station, TransitSystem } from '@transitmapper/core/model/system';
+import type {
+  Facility,
+  Line,
+  Station,
+  Stop,
+  TransitSystem,
+} from '@transitmapper/core/model/system';
 import { patternStops } from '@transitmapper/core/sim/serviceStats';
 import type { ViewMode } from './ViewProvider';
-
 export interface SidebarStop {
-  stationId: string;
+  stopId: string;
   name: string;
 }
 
@@ -36,13 +41,14 @@ export interface SidebarLineRow {
 
 export interface InfrastructureOutlineProjection {
   sections: InfrastructureSection[];
+  stops: Stop[];
   stations: Station[];
   facilities: Facility[];
 }
 
 function nonBlank(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim();
-  return trimmed ? trimmed : fallback;
+  return trimmed?.length ? trimmed : fallback;
 }
 
 export interface InfrastructureSection {
@@ -89,11 +95,12 @@ export function sidebarSectionsForView(viewMode: ViewMode): string[] {
       'Trails',
       'Waterways',
       'Other infrastructure',
+      'Stops',
       'Stations',
       'Facilities',
     ];
   }
-  return ['Lines', 'Stations'];
+  return ['Lines', 'Stops', 'Stations'];
 }
 
 export function stopsForService(system: TransitSystem, serviceId: string): SidebarStop[] {
@@ -102,17 +109,17 @@ export function stopsForService(system: TransitSystem, serviceId: string): Sideb
   const pattern = servicePattern(service);
   const calls = (run: 'outbound' | 'inbound') => {
     const path = patternRunPath(system.ways, pattern, run);
-    return patternStops(system.stations, pattern, path, pathLengthMeters(path), run);
+    return patternStops(system.stops, pattern, path, pathLengthMeters(path), run);
   };
   const orderedCalls = [...calls('outbound'), ...calls('inbound')];
   const seen = new Set<string>();
-  return orderedCalls.flatMap(({ station }) => {
-    if (seen.has(station.id)) return [];
-    seen.add(station.id);
+  return orderedCalls.flatMap(({ stop }) => {
+    if (seen.has(stop.id)) return [];
+    seen.add(stop.id);
     return [
       {
-        stationId: station.id,
-        name: nonBlank(station.name, 'Unnamed station'),
+        stopId: stop.id,
+        name: nonBlank(stop.name, 'Unnamed stop'),
       },
     ];
   });
@@ -224,6 +231,9 @@ export function infrastructureOutlineProjection(
       ),
     }))
     .filter((section) => section.items.length > 0);
+  const stops = system.stops.filter(
+    (stop) => !normalized || (stop.name ?? 'Unnamed stop').toLocaleLowerCase().includes(normalized),
+  );
   const stations = system.stations.filter(
     (station) =>
       !normalized || (station.name ?? 'Unnamed station').toLocaleLowerCase().includes(normalized),
@@ -232,5 +242,5 @@ export function infrastructureOutlineProjection(
     const label = facility.name ?? FACILITY_TYPES[facility.typeId].label;
     return !normalized || label.toLocaleLowerCase().includes(normalized);
   });
-  return { sections, stations, facilities };
+  return { sections, stops, stations, facilities };
 }

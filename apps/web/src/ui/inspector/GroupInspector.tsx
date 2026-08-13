@@ -5,7 +5,7 @@ import {
   FACILITY_TYPES,
   facilityType,
 } from '@transitmapper/core/model/catalog';
-import type { Station, TransitSystem } from '@transitmapper/core/model/system';
+import type { Stop, TransitSystem } from '@transitmapper/core/model/system';
 import type { Selection } from '../../editor/store';
 import { ColorField } from '../ColorField';
 import { InspectorTabs, type InspectorTab } from '../InspectorTabs';
@@ -14,27 +14,26 @@ import { blurOnEnter } from '../formUtils';
 import { Icon } from '../Icon';
 import { useView } from '../ViewProvider';
 import { EmptyInspector, Stat } from './shared';
-
-// A group member can be a station, facility, public Line, or technical Service
+// A group member can be a stop, facility, public Line, or technical Service
 // — resolve both its display name AND its real
 // selection kind, so clicking a row selects the right kind of thing instead
-// of always assuming "station".
+// of always assuming "stop".
 interface MemberLookup {
-  stations: Station[];
+  stops: Stop[];
   facilities: TransitSystem['facilities'];
   lines: TransitSystem['lines'];
   services: TransitSystem['services'];
 }
 
 function memberInfo(
-  { stations, facilities, lines, services }: MemberLookup,
+  { stops, facilities, lines, services }: MemberLookup,
   memberId: string,
 ): { selection: Selection; label: string } | null {
-  const station = stations.find((s) => s.id === memberId);
-  if (station)
+  const stop = stops.find((s) => s.id === memberId);
+  if (stop)
     return {
-      selection: { kind: 'station', id: memberId },
-      label: station.name ?? 'Unnamed station',
+      selection: { kind: 'stop', id: memberId },
+      label: stop.name ?? 'Unnamed stop',
     };
   const facility = facilities.find((f) => f.id === memberId);
   if (facility)
@@ -60,7 +59,7 @@ export interface GroupInspectorProps {
 export function GroupInspector({ id }: GroupInspectorProps) {
   const group = useEditor((s) => s.system.groups.find((g) => g.id === id));
   // Narrow selectors, not the whole `system` — see ServiceInspector's note.
-  const stations = useEditor((s) => s.system.stations);
+  const stops = useEditor((s) => s.system.stops);
   const facilities = useEditor((s) => s.system.facilities);
   const lines = useEditor((s) => s.system.lines);
   const services = useEditor((s) => s.system.services);
@@ -113,7 +112,7 @@ export function GroupInspector({ id }: GroupInspectorProps) {
           <div className="svc-list">
             {group.memberIds.length === 0 && <span className="panel-hint">No members yet</span>}
             {group.memberIds.map((mid) => {
-              const info = memberInfo({ stations, facilities, lines, services }, mid);
+              const info = memberInfo({ stops, facilities, lines, services }, mid);
               return (
                 <div key={mid} className="svc-chip chip-removable">
                   {info ? (
@@ -172,7 +171,7 @@ export function GroupInspector({ id }: GroupInspectorProps) {
 }
 
 // A facility complex's physical site — same draw/reshape pattern as a
-// station's footprint (see StationFootprint above), just owned by the Group.
+// stop's footprint (see StopFootprint above), just owned by the Group.
 interface GroupFootprintProps {
   groupId: string;
   readOnly: boolean;
@@ -184,7 +183,7 @@ function GroupFootprint({ groupId, readOnly }: GroupFootprintProps) {
   const { setViewMode } = useView();
   if (!group) return null;
 
-  // Same reasoning as StationFootprint's drawFootprint — a group footprint
+  // Same reasoning as StopFootprint's drawFootprint — a group footprint
   // only ever renders in the Infrastructure view.
   const drawBoundary = () => {
     addGroupFootprint(groupId);
@@ -261,7 +260,7 @@ function GroupPlacement({ groupId, readOnly }: GroupPlacementProps) {
         </div>
       ) : picking ? (
         <div className="insp-row-actions">
-          <span className="panel-hint">Click a station or facility on the map to add it…</span>
+          <span className="panel-hint">Click a stop or facility on the map to add it…</span>
           <button className="ghost-btn" onClick={cancelPickingMember}>
             Cancel
           </button>

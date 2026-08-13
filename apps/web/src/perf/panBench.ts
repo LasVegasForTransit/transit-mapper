@@ -1,7 +1,6 @@
 import type { Map as MLMap } from 'maplibre-gl';
 import { formatFrameStats, summarizeFrames, type FrameStats } from './frameStats';
 import type { RawGestureMeasurements } from './gestureStats';
-
 export interface PanBenchOptions {
   /** Number of pan increments (one per frame). */
   steps?: number;
@@ -118,7 +117,7 @@ export interface ZoomBenchOptions {
  * Scripted zoom: ramp the zoom level in `steps` increments then back out, one
  * per frame, measuring painted-frame time under the zoom load — the zoom
  * counterpart to runPanBench. Zoom exercises symbol placement and fill-rate
- * (all on-screen station circles / route lines redrawn every frame), which pan
+ * (all on-screen stop circles / route lines redrawn every frame), which pan
  * does not, so this isolates zoom cost specifically.
  */
 export async function runZoomBench(map: MLMap, opts: ZoomBenchOptions = {}): Promise<FrameStats> {

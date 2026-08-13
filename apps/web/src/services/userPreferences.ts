@@ -43,8 +43,7 @@ function getPreferences(): UserPreferences {
     // A preference is cosmetic, so unavailable browser storage must not make
     // the settings surface or the rest of the editor unusable.
   }
-  const unitSystem =
-    stored === 'metric' || stored === 'imperial' ? (stored as UnitSystem) : getDefaultUnitSystem();
+  const unitSystem = stored === 'metric' || stored === 'imperial' ? stored : getDefaultUnitSystem();
   return { unitSystem };
 }
 

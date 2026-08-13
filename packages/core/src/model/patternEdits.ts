@@ -17,7 +17,6 @@
 // merged way, where the user clicked) and this decides what the legs become.
 // That keeps the arithmetic testable without building a system to test it
 // against.
-
 import { legRange, legRunsWithPoints } from './geo/servicePaths';
 import type { LegDirection, PatternLeg, PatternSection } from './system';
 

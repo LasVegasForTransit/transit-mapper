@@ -2,12 +2,11 @@
 // as one disconnected offset copy per way at a bend — see mergeServiceLines.ts
 // for the mechanism (line-offset is mitered per-feature, not across a way
 // boundary).
-
 import { describe, expect, it } from 'vitest';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '../../src/model/catalog';
 import { wholeLeg, wholeLegs, oneSection } from '../../src/model/geo';
 import { wayById } from '../../src/model/geo/wayPath';
-import { aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
+import { aRoad, aService, aStation, aStop, aSystem } from '../support/fixtures.test';
 import type { Pattern, Service } from '../../src/model/system';
 import { buildFeatures, type ViewOptions } from '../../src/render/buildFeatures';
 
@@ -16,6 +15,41 @@ const NETWORK_VIEW: ViewOptions = {
   visibleModes: new Set(MODE_ORDER),
   visibleWayTypes: new Set(WAY_TYPE_ORDER),
 };
+
+const INFRASTRUCTURE_VIEW: ViewOptions = {
+  ...NETWORK_VIEW,
+  viewMode: 'infrastructure',
+};
+
+describe('buildFeatures passenger places', () => {
+  it('renders Stop markers separately from Station infrastructure', () => {
+    const stop = aStop('platform', [-115.17, 36.12], undefined, { stationId: 'central' });
+    const station = aStation('central', [-115.17, 36.12], {
+      name: 'Central Station',
+      footprint: [
+        [-115.171, 36.119],
+        [-115.169, 36.119],
+        [-115.169, 36.121],
+      ],
+    });
+    const features = buildFeatures(
+      aSystem({ stops: [stop], stations: [station] }),
+      null,
+      [],
+      INFRASTRUCTURE_VIEW,
+    );
+
+    expect(
+      features.stops.features.map((feature) => {
+        const id: unknown = feature.properties?.id;
+        return typeof id === 'string' ? id : undefined;
+      }),
+    ).toEqual(['platform']);
+    expect(features.footprints.features).toEqual([
+      expect.objectContaining({ properties: { stationId: 'central' } }),
+    ]);
+  });
+});
 
 describe('buildFeatures service lines', () => {
   it('treats sibling Services as one public Line for offsets and interchanges', () => {
@@ -122,10 +156,10 @@ describe('buildFeatures service lines', () => {
 
     const features = buildFeatures(system, null, [], NETWORK_VIEW).services.features;
     const painted = features.filter(
-      (feature) => feature.properties?.serviceId === 'svc' && !feature.properties?.hitTarget,
+      (feature) => feature.properties?.serviceId === 'svc' && !feature.properties.hitTarget,
     );
     const hits = features.filter(
-      (feature) => feature.properties?.serviceId === 'svc' && feature.properties?.hitTarget,
+      (feature) => feature.properties?.serviceId === 'svc' && feature.properties.hitTarget,
     );
 
     expect(painted).toHaveLength(1);
@@ -227,7 +261,7 @@ describe('service editing affordances', () => {
       NETWORK_VIEW,
       null,
       null,
-      { activePatternId: 'north-service' } as never,
+      { activePatternId: 'north-service' },
     );
     const termini = (
       features as typeof features & {
@@ -247,7 +281,7 @@ describe('service editing affordances', () => {
     ).serviceTermini;
 
     expect(
-      termini?.features.map((feature) => ({
+      termini.features.map((feature) => ({
         ...feature.properties,
         at: feature.geometry.coordinates,
       })),

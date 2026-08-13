@@ -63,11 +63,9 @@ instead.
 ## 4. Give the rail a station
 
 1. Click the **Station** tool (or press `S`).
-2. Drag a rectangle over the track. The rectangle becomes the station's
-   land, anchored to the track it straddles, with corner handles to
-   reshape.
-3. With the station selected, use the inspector's **Physical** tab to add
-   platforms, or pick Building or Bus bay from the **Facility** tool's menu
+2. Drag a rectangle over the track. The rectangle becomes the Station's
+   boundary, with corner handles to reshape.
+3. With the Station selected, add platforms, or pick Building or Bus bay from the **Facility** tool's menu
    and drag structures directly onto the station's land. Anything drawn on
    the land belongs to the station automatically.
 
@@ -84,8 +82,8 @@ here: the colored lines people ride.
    junction graph instead of laying new geometry. Press `Enter` to finish.
 
 The line appears in the left panel with a color and a name you can edit.
-Stops you place with the Station tool in this view are schematic points
-that snap onto the line.
+Use the **Stop** tool in this view to place the physical boarding points that
+snap onto the Line. Attach those Stops to the Station from either inspector.
 
 ## 6. Run a bus down your street
 
@@ -96,9 +94,8 @@ Still in the Network view:
    junction. `Enter` to finish.
 
 You now have a system: streets and track in the Infrastructure view, a rail
-line and a bus route in the Network view, and a station that exists in both
-worlds: a dot on the schematic, a parcel of land with structures in the
-physical view.
+Line and a bus route in Network, plus a Station boundary and its attached
+boarding Stops.
 
 ## Where to go next
 

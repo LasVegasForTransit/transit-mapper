@@ -13,7 +13,6 @@ import { ColorField } from '../ColorField';
 import { Panel } from '../Panel';
 import { useView } from '../ViewProvider';
 import { GEOMETRY_OPTIONS, GradeChips } from './shared';
-
 /**
  * When a drawing tool is armed (anything but Select), the sidebar shows
  * THAT tool's draft options instead of a selected object's details — the
@@ -32,7 +31,7 @@ export interface ToolDraftInspectorProps {
 
 export function ToolDraftInspector({ tool }: ToolDraftInspectorProps) {
   if (tool === 'way') return <WayDraftInspector />;
-  if (tool === 'station') return <StationDraftInspector />;
+  if (tool === 'stop') return <StopDraftInspector />;
   if (tool === 'facility') return <FacilityDraftInspector />;
   // Select has no draft options: erasing and splitting are variants of it,
   // shown on the dock button and picked from its chevron (see Toolbar), which
@@ -233,27 +232,28 @@ function WayDraftInspector() {
   );
 }
 
-/** One honest sentence for the Station tool: drag DRAWS the station, click
- *  drops a quick stop. Network view is schematic, so stops only. */
-function StationDraftInspector() {
+/** One shortcut, two explicit place concepts: Network places a Stop;
+ * Infrastructure draws a Station boundary. */
+function StopDraftInspector() {
   const { viewMode } = useView();
   return (
     <Panel slot="right" aria-label="Drawing options">
       <div className="insp-head">
-        <span className="insp-name static">Station</span>
+        <span className="insp-name static">
+          {viewMode === 'infrastructure' ? 'Station' : 'Stop'}
+        </span>
       </div>
       <div className="insp-kind">Drawing tool</div>
       <div className="insp-section">
         {viewMode === 'infrastructure' ? (
           <p className="panel-hint">
-            Drag a rectangle — or click corner points, double-click to close — to define the
-            station's land. Its border IS the station; draw structures (buildings, platforms, bus
-            bays) on it.
+            Drag a rectangle — or click corner points, double-click to close — to define a Station
+            boundary. Add the physical Stops where passengers board in Network.
           </p>
         ) : (
           <p className="panel-hint">
-            Tap to place a stop — it snaps onto the line under it. Draw full station footprints in
-            the Infrastructure view.
+            Tap to place a Stop — the physical point where a Service picks up passengers. It snaps
+            onto the Line under it.
           </p>
         )}
       </div>
@@ -293,7 +293,8 @@ function FacilityDraftInspector() {
       <div className="insp-section">
         {placingGroup ? (
           <p className="panel-hint">
-            Click the map to place {article} {typeLabel} in {placingGroup.name || 'this complex'}.{' '}
+            Click the map to place {article} {typeLabel} in{' '}
+            {placingGroup.name?.trim() ? placingGroup.name : 'this complex'}.{' '}
             <button type="button" className="link-btn" onClick={cancelPlacingFacility}>
               Cancel
             </button>
@@ -305,13 +306,13 @@ function FacilityDraftInspector() {
           </p>
         ) : isArea ? (
           <p className="panel-hint">
-            Drag to draw the {typeLabel}'s shape · on station land it joins that station
+            Drag to draw the {typeLabel}'s shape · inside a Station boundary it joins that place
             automatically.
           </p>
         ) : (
           <p className="panel-hint">
-            Click the map to place {article} {typeLabel} · on station land it joins that station
-            automatically.
+            Click the map to place {article} {typeLabel} · inside a Station boundary it joins that
+            place automatically.
           </p>
         )}
       </div>

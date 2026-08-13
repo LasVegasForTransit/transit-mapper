@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { FACILITY_TYPES, MODES } from '@transitmapper/core/model/catalog';
-import type { Facility, Station } from '@transitmapper/core/model/system';
+import type { Facility, Station, Stop } from '@transitmapper/core/model/system';
 import type { EditorCommands, EditorState, Selection } from '../editor/store';
 import { useEditor, useEditorCommands } from '../editor/EditorProvider';
 import { Icon } from './Icon';
@@ -28,7 +28,6 @@ import {
 } from './sidebarOutline';
 import { useListboxKeyboardNav } from './useListboxKeyboardNav';
 import { useView, type ViewMode } from './ViewProvider';
-
 const LIST_CAP = 150;
 
 interface OutlinePresentationState {
@@ -144,8 +143,8 @@ function rowKey(kind: NonNullable<Selection>['kind'], id: string): string {
   return `${kind}:${id}`;
 }
 
-function stopRowKey(serviceId: string, stationId: string): string {
-  return rowKey('service', `stop:${serviceId}:${stationId}`);
+function stopRowKey(serviceId: string, stopId: string): string {
+  return rowKey('service', `stop:${serviceId}:${stopId}`);
 }
 
 function sidebarTabIndexFor(tabStopKey: string | null) {
@@ -260,23 +259,26 @@ function serviceKeysForLine(
   const lineOpen = normalized.length > 0 || expanded.has(`line:${row.line.id}`);
   if (!lineOpen) return [];
   if (!normalized && row.services.length === 1) {
-    return row.services[0].stops.map((stop) =>
-      stopRowKey(row.services[0].serviceId, stop.stationId),
-    );
+    return row.services[0].stops.map((stop) => stopRowKey(row.services[0].serviceId, stop.stopId));
   }
   return row.displayServices.flatMap((service) => {
     const serviceKey = rowKey('service', service.serviceId);
     const serviceOpen = normalized.length > 0 || expanded.has(`service:${service.serviceId}`);
     const stopKeys = serviceOpen
-      ? service.stops.map((stop) => stopRowKey(service.serviceId, stop.stationId))
+      ? service.stops.map((stop) => stopRowKey(service.serviceId, stop.stopId))
       : [];
     return [serviceKey, ...stopKeys];
   });
 }
 
+interface NetworkPlaces {
+  stops: Stop[];
+  stations: Station[];
+}
+
 function networkVisibleKeys(
   rows: (SidebarLineRow & { displayServices: SidebarService[] })[],
-  stations: Station[],
+  places: NetworkPlaces,
   normalized: string,
   expanded: Set<string>,
 ): Set<string> {
@@ -285,24 +287,17 @@ function networkVisibleKeys(
       rowKey('line', row.line.id),
       ...serviceKeysForLine(row, normalized, expanded),
     ]),
-    ...stations.map((station) => rowKey('station', station.id)),
+    ...places.stops.map((stop) => rowKey('stop', stop.id)),
+    ...places.stations.map((station) => rowKey('station', station.id)),
   ]);
 }
 
-function NetworkOutline({
-  system,
-  selection,
-  selectAndFocus,
-  setOutlineHover,
-  presentation,
-  updatePresentation,
-}: OutlineProps) {
-  const normalized = presentation.query.trim().toLocaleLowerCase();
-  const lineRows = useMemo(() => networkLineRows(system, normalized), [normalized, system]);
-  const stations = system.stations.filter(
-    (station) =>
-      !normalized || (station.name ?? 'Unnamed station').toLocaleLowerCase().includes(normalized),
-  );
+function visibleNetworkRows(
+  lineRows: SidebarLineRow[],
+  places: NetworkPlaces,
+  normalized: string,
+  presentation: OutlinePresentationState,
+) {
   let searchBudget = LIST_CAP;
   const boundedSearchRows = lineRows.flatMap((row) => {
     if (!normalized || searchBudget <= 0) return [];
@@ -316,24 +311,69 @@ function NetworkOutline({
     });
     return [{ ...row, displayServices }];
   });
+  const limitedLines = limitSidebarItems(
+    lineRows,
+    presentation.expandedLists.has('lines'),
+    LIST_CAP,
+  );
   const visibleLines = normalized
     ? { items: boundedSearchRows, hiddenCount: 0 }
     : {
-        ...limitSidebarItems(lineRows, presentation.expandedLists.has('lines'), LIST_CAP),
-        items: limitSidebarItems(
-          lineRows,
-          presentation.expandedLists.has('lines'),
-          LIST_CAP,
-        ).items.map((row) => ({ ...row, displayServices: row.services })),
+        ...limitedLines,
+        items: limitedLines.items.map((row) => ({ ...row, displayServices: row.services })),
       };
+  const visibleStops = normalized
+    ? { items: places.stops.slice(0, searchBudget), hiddenCount: 0 }
+    : limitSidebarItems(places.stops, presentation.expandedLists.has('stops'), LIST_CAP);
+  if (normalized) searchBudget -= visibleStops.items.length;
   const visibleStations = normalized
-    ? { items: stations.slice(0, searchBudget), hiddenCount: 0 }
-    : limitSidebarItems(stations, presentation.expandedLists.has('stations'), LIST_CAP);
+    ? { items: places.stations.slice(0, searchBudget), hiddenCount: 0 }
+    : limitSidebarItems(places.stations, presentation.expandedLists.has('stations'), LIST_CAP);
+  return { visibleLines, visibleStops, visibleStations };
+}
+
+function displayName(value: string | undefined, fallback: string): string {
+  return value?.trim() ? value : fallback;
+}
+
+function NetworkOutline({
+  system,
+  selection,
+  selectAndFocus,
+  setOutlineHover,
+  presentation,
+  updatePresentation,
+}: OutlineProps) {
+  const normalized = presentation.query.trim().toLocaleLowerCase();
+  const lineRows = useMemo(() => networkLineRows(system, normalized), [normalized, system]);
+  const stationById = useMemo(
+    () => new Map(system.stations.map((station) => [station.id, station])),
+    [system.stations],
+  );
+  const stops = system.stops.filter((stop) => {
+    if (!normalized) return true;
+    const stationName = stop.stationId ? stationById.get(stop.stationId)?.name : undefined;
+    return [stop.name ?? 'Unnamed stop', stationName].some((value) =>
+      value?.toLocaleLowerCase().includes(normalized),
+    );
+  });
+  const stations = system.stations.filter(
+    (station) =>
+      !normalized || (station.name ?? 'Unnamed station').toLocaleLowerCase().includes(normalized),
+  );
+  const { visibleLines, visibleStops, visibleStations } = visibleNetworkRows(
+    lineRows,
+    { stops, stations },
+    normalized,
+    presentation,
+  );
   const firstKey = visibleLines.items[0]
     ? rowKey('line', visibleLines.items[0].line.id)
-    : visibleStations.items[0]
-      ? rowKey('station', visibleStations.items[0].id)
-      : null;
+    : visibleStops.items[0]
+      ? rowKey('stop', visibleStops.items[0].id)
+      : visibleStations.items[0]
+        ? rowKey('station', visibleStations.items[0].id)
+        : null;
   const selectedKey =
     selection?.kind === 'service' && selection.stopId
       ? stopRowKey(selection.id, selection.stopId)
@@ -342,7 +382,7 @@ function NetworkOutline({
         : null;
   const visibleKeys = networkVisibleKeys(
     visibleLines.items,
-    visibleStations.items,
+    { stops: visibleStops.items, stations: visibleStations.items },
     normalized,
     presentation.expanded,
   );
@@ -381,6 +421,43 @@ function NetworkOutline({
       </SidebarSection>
 
       <SidebarSection
+        title="Stops"
+        count={stops.length}
+        open={normalized.length > 0 || !presentation.expanded.has('collapsed:stops')}
+        onToggle={() => toggle('collapsed:stops')}
+      >
+        {visibleStops.items.length === 0 && (
+          <SidebarEmpty>
+            {normalized ? 'No matching stops.' : 'Place a stop to mark a boarding point.'}
+          </SidebarEmpty>
+        )}
+        {visibleStops.items.map((stop) => (
+          <button
+            key={stop.id}
+            type="button"
+            data-sidebar-option
+            aria-pressed={selection?.kind === 'stop' && selection.id === stop.id}
+            tabIndex={tabIndexFor('stop', stop.id)}
+            className={`list-row ${selection?.kind === 'stop' && selection.id === stop.id ? 'active' : ''}`}
+            onClick={() => selectAndFocus({ kind: 'stop', id: stop.id })}
+            onMouseEnter={() => setOutlineHover({ kind: 'stop', id: stop.id })}
+            onMouseLeave={() => setOutlineHover(null)}
+          >
+            <span className="dot ring" />
+            <span className="list-name">{displayName(stop.name, 'Unnamed stop')}</span>
+            {stop.stationId && stationById.get(stop.stationId) && (
+              <span className="list-tag">
+                {displayName(stationById.get(stop.stationId)?.name, 'Unnamed station')}
+              </span>
+            )}
+          </button>
+        ))}
+        {!normalized && (
+          <ShowMore hiddenCount={visibleStops.hiddenCount} onClick={() => showAll('stops')} />
+        )}
+      </SidebarSection>
+
+      <SidebarSection
         title="Stations"
         count={stations.length}
         open={normalized.length > 0 || !presentation.expanded.has('collapsed:stations')}
@@ -388,7 +465,7 @@ function NetworkOutline({
       >
         {visibleStations.items.length === 0 && (
           <SidebarEmpty>
-            {normalized ? 'No matching stations.' : 'Add a station to mark a shared place.'}
+            {normalized ? 'No matching stations.' : 'Draw a station in Infrastructure.'}
           </SidebarEmpty>
         )}
         {visibleStations.items.map((station) => (
@@ -404,7 +481,7 @@ function NetworkOutline({
             onMouseLeave={() => setOutlineHover(null)}
           >
             <span className="dot ring" />
-            <span className="list-name">{station.name || 'Unnamed station'}</span>
+            <span className="list-name">{displayName(station.name, 'Unnamed station')}</span>
           </button>
         ))}
         {!normalized && (
@@ -527,7 +604,7 @@ function NetworkLineTreeItem({
   const selected = selection?.kind === 'line' && selection.id === line.id;
   const modes = [...new Set(services.map((service) => MODES[service.modeId].label))];
   const modeSummary = modes.length > 1 ? `${modes.length} modes` : (modes.at(0) ?? '');
-  const lineName = line.name || 'Unnamed line';
+  const lineName = displayName(line.name, 'Unnamed line');
   return (
     <div className="sidebar-tree-item">
       <div className="sidebar-tree-row">
@@ -599,26 +676,26 @@ function StopRows({
     <div className="sidebar-stop-list">
       {stops.map((stop, index) => (
         <button
-          key={`${stop.stationId}:${index}`}
+          key={`${stop.stopId}:${index}`}
           type="button"
           data-sidebar-option
           aria-label={`Stop ${index + 1}, ${stop.name}, ${contextLabel}`}
           aria-pressed={
             selection?.kind === 'service' &&
             selection.id === serviceId &&
-            selection.stopId === stop.stationId
+            selection.stopId === stop.stopId
           }
-          tabIndex={tabIndexFor('service', `stop:${serviceId}:${stop.stationId}`)}
+          tabIndex={tabIndexFor('service', `stop:${serviceId}:${stop.stopId}`)}
           className={`list-row sidebar-stop-row ${
             selection?.kind === 'service' &&
             selection.id === serviceId &&
-            selection.stopId === stop.stationId
+            selection.stopId === stop.stopId
               ? 'active'
               : ''
           }`}
-          onClick={() => selectAndFocus({ kind: 'service', id: serviceId, stopId: stop.stationId })}
+          onClick={() => selectAndFocus({ kind: 'service', id: serviceId, stopId: stop.stopId })}
           onMouseEnter={() =>
-            setOutlineHover({ kind: 'service', id: serviceId, stopId: stop.stationId })
+            setOutlineHover({ kind: 'service', id: serviceId, stopId: stop.stopId })
           }
           onMouseLeave={() => setOutlineHover(null)}
         >
@@ -640,7 +717,7 @@ function visibleInfrastructureRows(
   normalized: string,
   expandedLists: Set<string>,
 ) {
-  const { sections, stations, facilities } = projection;
+  const { sections, stops, stations, facilities } = projection;
   let searchBudget = LIST_CAP;
   const visibleSections = sections
     .map((section): VisibleInfrastructureSection => {
@@ -651,6 +728,10 @@ function visibleInfrastructureRows(
       return { ...section, limited };
     })
     .filter((section) => !normalized || section.limited.items.length > 0);
+  const visibleStops = normalized
+    ? { items: stops.slice(0, searchBudget), hiddenCount: 0 }
+    : limitSidebarItems(stops, expandedLists.has('stops'), LIST_CAP);
+  if (normalized) searchBudget -= visibleStops.items.length;
   const visibleStations = normalized
     ? { items: stations.slice(0, searchBudget), hiddenCount: 0 }
     : limitSidebarItems(stations, expandedLists.has('stations'), LIST_CAP);
@@ -658,23 +739,24 @@ function visibleInfrastructureRows(
   const visibleFacilities = normalized
     ? { items: facilities.slice(0, searchBudget), hiddenCount: 0 }
     : limitSidebarItems(facilities, expandedLists.has('facilities'), LIST_CAP);
-  return { visibleSections, visibleStations, visibleFacilities };
+  return { visibleSections, visibleStops, visibleStations, visibleFacilities };
 }
 
 function infrastructureSelectionKeys(
   sections: VisibleInfrastructureSection[],
-  stations: Station[],
-  facilities: Facility[],
+  places: { stops: Stop[]; stations: Station[]; facilities: Facility[] },
   selection: Selection,
 ) {
   const firstInfrastructure = sections.at(0)?.limited.items.at(0);
   const firstKey = firstInfrastructure
     ? rowKey('way', firstInfrastructure.primaryWayId)
-    : stations.at(0)
-      ? rowKey('station', stations[0].id)
-      : facilities.at(0)
-        ? rowKey('facility', facilities[0].id)
-        : null;
+    : places.stops.at(0)
+      ? rowKey('stop', places.stops[0].id)
+      : places.stations.at(0)
+        ? rowKey('station', places.stations[0].id)
+        : places.facilities.at(0)
+          ? rowKey('facility', places.facilities[0].id)
+          : null;
   const selectedInfrastructure =
     selection?.kind === 'way'
       ? sections
@@ -690,8 +772,9 @@ function infrastructureSelectionKeys(
     ...sections.flatMap((section) =>
       section.limited.items.map((item) => rowKey('way', item.primaryWayId)),
     ),
-    ...stations.map((station) => rowKey('station', station.id)),
-    ...facilities.map((facility) => rowKey('facility', facility.id)),
+    ...places.stops.map((stop) => rowKey('stop', stop.id)),
+    ...places.stations.map((station) => rowKey('station', station.id)),
+    ...places.facilities.map((facility) => rowKey('facility', facility.id)),
   ]);
   return { firstKey, selectedKey, visibleKeys };
 }
@@ -761,6 +844,53 @@ function InfrastructureWaySections({
   ));
 }
 
+function InfrastructureStopsSection({
+  stops,
+  allCount,
+  ...props
+}: InfrastructureSectionProps & {
+  stops: LimitedSidebarItems<Stop>;
+  allCount: number;
+}) {
+  const { normalized, selection, selectAndFocus, setOutlineHover, expanded, toggle, showAll } =
+    props;
+  return (
+    <SidebarSection
+      title="Stops"
+      count={allCount}
+      open={normalized.length > 0 || !expanded.has('collapsed:stops')}
+      onToggle={() => toggle('collapsed:stops')}
+    >
+      {stops.items.length === 0 && (
+        <SidebarEmpty>
+          {normalized && allCount > 0
+            ? 'Refine your search to see more matching stops.'
+            : normalized
+              ? 'No matching stops.'
+              : 'Place a stop to mark a boarding point.'}
+        </SidebarEmpty>
+      )}
+      {stops.items.map((stop) => (
+        <button
+          key={stop.id}
+          type="button"
+          data-sidebar-option
+          aria-pressed={selection?.kind === 'stop' && selection.id === stop.id}
+          tabIndex={props.tabIndexFor('stop', stop.id)}
+          className={`list-row ${selection?.kind === 'stop' && selection.id === stop.id ? 'active' : ''}`}
+          onClick={() => selectAndFocus({ kind: 'stop', id: stop.id })}
+          onMouseEnter={() => setOutlineHover({ kind: 'stop', id: stop.id })}
+          onMouseLeave={() => setOutlineHover(null)}
+        >
+          <span className="dot ring" />
+          <span className="list-name">{displayName(stop.name, 'Unnamed stop')}</span>
+        </button>
+      ))}
+      {!normalized && <ShowMore hiddenCount={stops.hiddenCount} onClick={() => showAll('stops')} />}
+    </SidebarSection>
+  );
+}
+
 function InfrastructureStationsSection({
   stations,
   allCount,
@@ -780,11 +910,7 @@ function InfrastructureStationsSection({
     >
       {stations.items.length === 0 && (
         <SidebarEmpty>
-          {normalized && allCount > 0
-            ? 'Refine your search to see more matching stations.'
-            : normalized
-              ? 'No matching stations.'
-              : 'Add a station to its physical site.'}
+          {normalized ? 'No matching stations.' : 'Draw a station boundary to group nearby stops.'}
         </SidebarEmpty>
       )}
       {stations.items.map((station) => (
@@ -800,7 +926,7 @@ function InfrastructureStationsSection({
           onMouseLeave={() => setOutlineHover(null)}
         >
           <span className="dot ring" />
-          <span className="list-name">{station.name || 'Unnamed station'}</span>
+          <span className="list-name">{displayName(station.name, 'Unnamed station')}</span>
           {station.platforms && station.platforms.length > 0 && (
             <span className="list-tag">{station.platforms.length} platforms</span>
           )}
@@ -853,7 +979,7 @@ function InfrastructureFacilitiesSection({
         >
           <span className="dot ring" />
           <span className="list-name">
-            {facility.name || FACILITY_TYPES[facility.typeId].label}
+            {displayName(facility.name, FACILITY_TYPES[facility.typeId].label)}
           </span>
         </button>
       ))}
@@ -877,17 +1003,17 @@ function InfrastructureOutline({
     () => infrastructureOutlineProjection(system, normalized),
     [normalized, system],
   );
-  const { stations, facilities } = projection;
-  const { visibleSections, visibleStations, visibleFacilities } = visibleInfrastructureRows(
-    projection,
-    normalized,
-    presentation.expandedLists,
-  );
+  const { stops, stations, facilities } = projection;
+  const { visibleSections, visibleStops, visibleStations, visibleFacilities } =
+    visibleInfrastructureRows(projection, normalized, presentation.expandedLists);
   const { toggle, showAll } = presentationActions(updatePresentation);
   const { firstKey, selectedKey, visibleKeys } = infrastructureSelectionKeys(
     visibleSections,
-    visibleStations.items,
-    visibleFacilities.items,
+    {
+      stops: visibleStops.items,
+      stations: visibleStations.items,
+      facilities: visibleFacilities.items,
+    },
     selection,
   );
   const tabIndexFor = sidebarTabIndexFor(
@@ -907,6 +1033,7 @@ function InfrastructureOutline({
   return (
     <>
       <InfrastructureWaySections sections={visibleSections} {...sectionProps} />
+      <InfrastructureStopsSection stops={visibleStops} allCount={stops.length} {...sectionProps} />
       <InfrastructureStationsSection
         stations={visibleStations}
         allCount={stations.length}

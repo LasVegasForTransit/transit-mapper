@@ -18,7 +18,6 @@ import {
   SRC_WAYS,
   SRC_WAY_LABELS,
 } from './layers';
-
 export interface GestureFilterExclusion {
   property: string;
   ids: string[];
@@ -64,11 +63,11 @@ export function buildGestureLayerMaskPlan(affected: GestureAffectedEntities): Ge
   add(SRC_LANE_ARROWS, 'id', affected.wayIds);
   add(SRC_SERVICE_ARROWS, 'id', affected.wayIds);
   add(SRC_HANDLES, 'wayId', affected.wayIds);
-  add(SRC_STATIONS, 'id', affected.stationIds);
-  add(SRC_FOOTPRINTS, 'stationId', affected.stationIds);
+  add(SRC_STATIONS, 'id', affected.stopIds);
+  add(SRC_FOOTPRINTS, 'stopId', affected.stopIds);
   add(SRC_FOOTPRINTS, 'groupId', affected.groupIds);
-  add(SRC_PLATFORMS, 'stationId', affected.stationIds);
-  add(SRC_PHYSICAL_HANDLES, 'stationId', affected.stationIds);
+  add(SRC_PLATFORMS, 'stopId', affected.stopIds);
+  add(SRC_PHYSICAL_HANDLES, 'stopId', affected.stopIds);
   add(SRC_PHYSICAL_HANDLES, 'groupId', affected.groupIds);
   add(SRC_FACILITIES, 'id', affected.facilityIds);
   add(SRC_JUNCTIONS, 'nodeId', affected.nodeIds);
@@ -113,7 +112,7 @@ export function createGestureLayerMaskController(
     apply(affected) {
       const key = JSON.stringify([
         affected.wayIds,
-        affected.stationIds,
+        affected.stopIds,
         affected.facilityIds,
         affected.groupIds,
         affected.nodeIds,

@@ -89,9 +89,7 @@ export function OnboardingPreviewMap({
         registerMapIcons(map, colorScheme);
 
         const sources = new Set(
-          previewLayerSpecs
-            .map((spec) => ('source' in spec ? (spec.source as string) : ''))
-            .filter(Boolean),
+          previewLayerSpecs.map((spec) => ('source' in spec ? spec.source : '')).filter(Boolean),
         );
         for (const src of sources) {
           if (!map.getSource(src)) map.addSource(src, { type: 'geojson', data: EMPTY_FC });
@@ -106,7 +104,7 @@ export function OnboardingPreviewMap({
         };
         setData(SRC_WAYS, fc.ways);
         setData(SRC_SERVICES, fc.services);
-        setData(SRC_STATIONS, fc.stations);
+        setData(SRC_STATIONS, fc.stops);
         setData(SRC_FOOTPRINTS, fc.footprints);
         setData(SRC_PLATFORMS, fc.platforms);
         setData(SRC_FACILITIES, fc.facilities);

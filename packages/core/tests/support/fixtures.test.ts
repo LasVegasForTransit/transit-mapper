@@ -10,7 +10,15 @@
 import { wayById, wholeLegs, oneSection } from '../../src/model/geo';
 import { defaultProfileFor } from '../../src/model/profile';
 import { createEmptySystem } from '../../src/model/serialize';
-import type { LngLat, Pattern, Service, Stop, TransitSystem, Way } from '../../src/model/system';
+import type {
+  LngLat,
+  Pattern,
+  Service,
+  Station,
+  Stop,
+  TransitSystem,
+  Way,
+} from '../../src/model/system';
 
 /** A road with the way type's default cross-section. */
 export function aRoad(id: string, points: LngLat[], overrides: Partial<Way> = {}): Way {
@@ -88,4 +96,9 @@ export function aStop(
   overrides: Partial<Stop> = {},
 ): Stop {
   return { id, coord, anchors: anchor ? [anchor] : [], ...overrides };
+}
+
+/** An optional passenger place containing physical Stops. */
+export function aStation(id: string, coord: LngLat, overrides: Partial<Station> = {}): Station {
+  return { id, coord, ...overrides };
 }

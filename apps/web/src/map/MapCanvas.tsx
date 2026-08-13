@@ -82,9 +82,9 @@ import {
 } from './gestureProjection';
 import { createGestureLayerMaskController } from './gestureLayerMask';
 import type { SourceMutationSettlementHost } from './sourceMutationSettlement';
-import { planStationGestureSettlement } from './stationGesturePlan';
-import { createStationGesturePreviewController } from './stationGesturePreview';
-import { createStationGestureSettlementController } from './stationGestureSettlement';
+import { planStopGestureSettlement } from './stopGesturePlan';
+import { createStopGesturePreviewController } from './stopGesturePreview';
+import { createStopGestureSettlementController } from './stopGestureSettlement';
 import {
   ALL_SYSTEM_FEATURE_SOURCES,
   createSourceUploadQueue,
@@ -138,7 +138,7 @@ function setBasemapVisible(map: MLMap, visible: boolean): void {
 
 export interface MapCanvasProps {
   /** Called once if the basemap never loads. The editor still works without
-   *  it — every way, station and service is ours and draws regardless — but
+   *  it — every way, stop and service is ours and draws regardless — but
    *  the backdrop is blank, and a user who isn't told assumes the app broke
    *  rather than that a third-party tile host is down. */
   onBasemapUnavailable?: () => void;
@@ -168,6 +168,10 @@ interface MapErrorLike {
 function clearActionAnchor(): void {
   const source = getMap()?.getSource(SRC_ACTION_ANCHOR) as GeoJSONSource | undefined;
   source?.setData({ type: 'FeatureCollection', features: [] });
+}
+
+function geoJsonSource(map: MLMap, sourceId: string): GeoJSONSource | undefined {
+  return map.getSource(sourceId) as GeoJSONSource | undefined;
 }
 
 function chromePadding(el: HTMLElement): PaddingOptions {
@@ -341,7 +345,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // Gating on it here made this a coin flip: it silently skipped the
     // basemap toggle whenever a transition happened to land mid-tile-load,
     // with no retry since nothing re-fires this effect on its own.
-    if (!map || !map.getStyle()) return;
+    if (!map?.getStyle()) return;
     if (viewMode === 'diagram' || prevMode === 'diagram')
       setBasemapVisible(map, viewMode !== 'diagram');
     // Entering Diagram reframes the camera to the schematic layout's own
@@ -369,7 +373,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   // byte-identical data for all fourteen sources.
   useEffect(() => {
     const map = getMap();
-    if (!map || !map.getStyle() || !map.getLayer(LYR_LANDMARKS)) return;
+    if (!map?.getStyle() || !map.getLayer(LYR_LANDMARKS)) return;
     // Landmarks are real-world reference points; Diagram's schematic
     // coordinates aren't real geography, so they'd land somewhere meaningless.
     const visibility = showLandmarks && viewMode !== 'diagram' ? 'visible' : 'none';
@@ -478,9 +482,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       return [];
     };
 
-    // The station whose footprint/platform vertices are editable right now —
-    // simply whichever station is selected (footprints/platforms are a
-    // station's own physical detail, not a separate selection target).
+    // The Station whose footprint/platform vertices are editable right now.
+    // Stops are boarding points; this physical boundary belongs to their
+    // optional containing passenger place.
     const physicalHandleStationId = (): string | null => {
       const s = store.getState();
       return s.selection?.kind === 'station' ? s.selection.id : null;
@@ -529,7 +533,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // Idempotent overlay setup. Sources/layers are normally added once on
     // "load", but an HMR pass or style hiccup landing mid-setup can leave
     // SOME layers silently missing until a hard reload (seen live: addLayer
-    // "source not found" errors, then footprint layers gone — "station
+    // "source not found" errors, then footprint layers gone — "stop
     // boundaries only visible while drawing", because only the drag preview
     // still rendered). This heals that: anything missing is re-added, with
     // beforeId anchoring so a healed layer returns to its correct place in
@@ -550,7 +554,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         // mid-zoom kinking shows.
         const heavy = HEAVY_FEATURE_SOURCES.has(src);
         // Stable feature ids for selection via setFeatureState (see
-        // applySelectionState): way/station/facility features key on `id`,
+        // applySelectionState): way/stop/facility features key on `id`,
         // service features on `serviceId` (a service's fan across its ways all
         // light together). Lets selection flip feature-state instead of
         // re-uploading these sources.
@@ -575,7 +579,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       return true;
     };
 
-    // Selection halos (way/service/station/facility) are driven by MapLibre
+    // Selection halos (way/service/stop/facility) are driven by MapLibre
     // feature-state, not a `selected` feature property — so selecting an object
     // flips a few setFeatureState calls instead of re-uploading the big static
     // sources. setData() clears all feature-state, so this is re-applied at the
@@ -594,7 +598,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     let hovered: { source: string; id: string } | null = null;
 
     // The halo layers are feature-state driven, so without a filter they'd
-    // redraw EVERY way/service/station at 0 opacity every frame (real fill-rate
+    // redraw EVERY way/service/stop at 0 opacity every frame (real fill-rate
     // on the 121k-waypoint services source during a zoom). Keep them hidden
     // unless something is actually selected OR hovered — the common idle case.
     const updateHaloVisibility = () => {
@@ -626,7 +630,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         const layerOpacity = active
           ? ['case', ['boolean', ['feature-state', 'selected'], false], baseOpacity, FOCUS_DIM]
           : baseOpacity;
-        map.setPaintProperty(layer, 'line-opacity', layerOpacity as never);
+        map.setPaintProperty(layer, 'line-opacity', layerOpacity);
       }
     };
 
@@ -674,7 +678,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
             markFeature(SRC_SERVICES, service.id);
             for (const wayId of serviceWayIds(service)) markFeature(SRC_WAYS, wayId);
           }
-        } else if (target?.kind === 'station') {
+        } else if (target?.kind === 'stop') {
           markFeature(SRC_STATIONS, target.id);
         } else if (target?.kind === 'facility') {
           markFeature(SRC_FACILITIES, target.id);
@@ -730,7 +734,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       if (!e) return;
       // Skip while a pan is in flight (isMoving) OR while any mouse button is
       // held — a held button means a DRAG is underway (dragging a handle/point,
-      // a station, a marquee…). The map isn't "moving" during a handle drag, so
+      // a stop, a marquee…). The map isn't "moving" during a handle drag, so
       // without the button check this ran a queryRenderedFeatures + feature-state
       // + triggerRepaint on every raw mousemove throughout a drag, storming the
       // main thread on top of the per-frame geometry rebuild (the "insane lag"
@@ -764,8 +768,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       ...createFeatureBuildOperationCounts(),
       diagramTopologyBuildCount: 0,
       diagramTopologyCacheHitCount: 0,
-      diagramStationBuildCount: 0,
-      diagramStationCacheHitCount: 0,
+      diagramStopBuildCount: 0,
+      diagramStopCacheHitCount: 0,
     };
     let gestureActive = false;
     let directManipulationActive = false;
@@ -855,7 +859,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       const sourceData: Record<SystemFeatureSourceId, GeoJSON.FeatureCollection> = {
         [SRC_WAYS]: fc.ways,
         [SRC_SERVICES]: fc.services,
-        [SRC_STATIONS]: fc.stations,
+        [SRC_STATIONS]: fc.stops,
         [SRC_HANDLES]: fc.handles,
         [SRC_SERVICE_TERMINI]: fc.serviceTermini,
         [SRC_FOOTPRINTS]: fc.footprints,
@@ -872,7 +876,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       };
       let sourceUploads = 0;
       for (const sourceId of sourceIds) {
-        const source = map.getSource(sourceId) as GeoJSONSource | undefined;
+        const source = geoJsonSource(map, sourceId);
         if (!source) continue;
         source.setData(sourceData[sourceId]);
         sourceUploads++;
@@ -907,7 +911,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
 
     const clearGesturePreview = () => {
       if (!gesturePreviewVisible) return;
-      const source = map.getSource(SRC_GESTURE) as GeoJSONSource | undefined;
+      const source = geoJsonSource(map, SRC_GESTURE);
       if (source) {
         source.setData(emptyFC);
         recordSourceUpload(projectionCounts);
@@ -915,14 +919,14 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       gesturePreviewVisible = false;
     };
 
-    const gesturePreview = createStationGesturePreviewController({
+    const gesturePreview = createStopGesturePreviewController({
       render(projection) {
         if (!projection) {
           clearGesturePreview();
           gestureMask.restore();
           return true;
         }
-        const source = map.getSource(SRC_GESTURE) as GeoJSONSource | undefined;
+        const source = geoJsonSource(map, SRC_GESTURE);
         if (!source) return false;
         if (projection.data.features.length > 0) {
           source.setData(projection.data);
@@ -936,15 +940,15 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       },
     });
 
-    const finishStationSettlementVisuals = () => {
+    const finishStopSettlementVisuals = () => {
       // updateData normally preserves feature-state, but reapplying here also
       // covers the full-setData fallback without exposing an unselected frame.
       applySelectionState();
-      gesturePreview.releaseStations();
+      gesturePreview.releaseStops();
       void styleSwitchControllerRef.current?.flush();
     };
 
-    const stationSettlementHost: SourceMutationSettlementHost = {
+    const stopSettlementHost: SourceMutationSettlementHost = {
       onSourceLoading(listener) {
         const onSourceLoading = (event: MapSourceDataEvent) => {
           // GeoJSON tile requests also emit sourcedataloading. Only the
@@ -971,18 +975,18 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       triggerRepaint: () => map.triggerRepaint(),
     };
 
-    const stationSettlement = createStationGestureSettlementController({
-      host: stationSettlementHost,
+    const stopSettlement = createStopGestureSettlementController({
+      host: stopSettlementHost,
       sourceId: SRC_STATIONS,
       isGestureActive: () => gestureActive,
-      onRelease: finishStationSettlementVisuals,
+      onRelease: finishStopSettlementVisuals,
     });
 
     // React view changes invalidate every derived collection and the visual
     // meaning of a pending Network-only diff. Store changes below still pass a
     // dependency-filtered source list.
     schedulePushDataRef.current = () => {
-      stationSettlement.invalidate();
+      stopSettlement.invalidate();
       gesturePreview.clear();
       schedulePushData('all');
     };
@@ -990,7 +994,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     const abortGestureProjection = () => {
       gestureProjectionAborted = true;
       fullAfterGesture = true;
-      stationSettlement.invalidate();
+      stopSettlement.invalidate();
       gesturePreview.clear();
     };
 
@@ -1028,6 +1032,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     const settleGestureProjection = () => {
       const affected = gestureProjection?.affected() ?? {
         wayIds: [],
+        stopIds: [],
         stationIds: [],
         facilityIds: [],
         groupIds: [],
@@ -1040,15 +1045,15 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       fullAfterGesture = false;
       if (needsFullProjection) {
         const pendingSources = sourceUploadQueue.take();
-        const stationPlan = planStationGestureSettlement({
+        const stopPlan = planStopGestureSettlement({
           viewMode: viewRef.current.viewMode,
           affected,
           pendingSources,
-          stationSourceReady: map.isSourceLoaded(SRC_STATIONS) || stationSettlement.ownsPreview(),
+          stopSourceReady: map.isSourceLoaded(SRC_STATIONS) || stopSettlement.ownsPreview(),
           overlayHealthy: !overlayNeedsHealing(),
           projectionAborted: gestureProjectionAborted,
         });
-        if (stationPlan.kind === 'diff') {
+        if (stopPlan.kind === 'diff') {
           const { system, selection, activePatternId, armedTerminus } = store.getState();
           const projected = buildFeaturesForSources({
             system,
@@ -1056,15 +1061,15 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
             handleWayIds: handleWayIds(),
             view: viewRef.current,
             sourceIds: [SRC_STATIONS],
-            stationIds: stationPlan.stationIds,
+            stopIds: stopPlan.stopIds,
             physicalHandleStationId: physicalHandleStationId(),
             physicalHandleGroupId: physicalHandleGroupId(),
             activePatternId,
             armedTerminus,
             counts: sourceProjectionCounts,
           });
-          const expectedIds = new Set(stationPlan.stationIds);
-          const features = projected.stations.features;
+          const expectedIds = new Set(stopPlan.stopIds);
+          const features = projected.stops.features;
           const complete =
             features.length === expectedIds.size &&
             features.every(
@@ -1072,10 +1077,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
                 typeof feature.properties?.id === 'string' &&
                 expectedIds.has(feature.properties.id),
             );
-          const source = map.getSource(SRC_STATIONS) as GeoJSONSource | undefined;
+          const source = geoJsonSource(map, SRC_STATIONS);
           if (source && complete) {
-            gesturePreview.retainCommitted(stationPlan.stationIds, features);
-            stationSettlement.beginDiff({
+            gesturePreview.retainCommitted(stopPlan.stopIds, features);
+            stopSettlement.beginDiff({
               mutate: () => {
                 source.updateData({ add: features });
                 recordSourceUpload(projectionCounts);
@@ -1090,28 +1095,26 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         // union. Fall back to all only for a canceled/aborted path that did not
         // expose a classifiable system change.
         const refreshRequest = pendingSources.length > 0 ? pendingSources : 'all';
-        const refreshesStations =
-          pendingSources.length === 0 || pendingSources.includes(SRC_STATIONS);
-        const preserveStationPreview =
-          stationPlan.kind === 'diff' || stationPlan.preserveStationPreview;
-        if (preserveStationPreview) gesturePreview.retainActiveStations(affected.stationIds);
+        const refreshesStops = pendingSources.length === 0 || pendingSources.includes(SRC_STATIONS);
+        const preserveStopPreview = stopPlan.kind === 'diff' || stopPlan.preserveStopPreview;
+        if (preserveStopPreview) gesturePreview.retainActiveStops(affected.stopIds);
         else gesturePreview.clearActive();
 
-        if (refreshesStations && (preserveStationPreview || stationSettlement.ownsPreview())) {
-          stationSettlement.beginFull({ mutate: () => schedulePushData(refreshRequest) });
+        if (refreshesStops && (preserveStopPreview || stopSettlement.ownsPreview())) {
+          stopSettlement.beginFull({ mutate: () => schedulePushData(refreshRequest) });
           return;
         }
-        if (!stationSettlement.ownsPreview()) {
-          stationSettlement.invalidate();
-          gesturePreview.releaseStations();
+        if (!stopSettlement.ownsPreview()) {
+          stopSettlement.invalidate();
+          gesturePreview.releaseStops();
         }
         schedulePushData(refreshRequest);
-      } else if (stationSettlement.ownsPreview()) {
+      } else if (stopSettlement.ownsPreview()) {
         // A click against a settling preview may have taken ownership while
         // its source completed. Release now if ready; otherwise its existing
         // paint barrier will release after this gesture.
         gesturePreview.clearActive();
-        stationSettlement.releaseIfReady();
+        stopSettlement.releaseIfReady();
         return;
       } else {
         gesturePreview.clearActive();
@@ -1131,7 +1134,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
 
     // Selection-only fast path (system unchanged): update halos via feature-state
     // and refresh only the small handle sources — never re-tessellating the big
-    // static sources (ways/services/stations) just to move a selection glow.
+    // static sources (ways/services/stops) just to move a selection glow.
     let selectionRaf: number | null = null;
     const scheduleSelectionUpdate = () => {
       if (selectionRaf !== null) return;
@@ -1147,7 +1150,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         // Only the two handle sources depend on the selection, so build just
         // those. This used to run the whole fourteen-collection buildFeatures
         // and throw twelve of its outputs away — which at RTC scale meant
-        // allocating a Set and a Feature for all ~3,787 stations, plus a full
+        // allocating a Set and a Feature for all ~3,787 stops, plus a full
         // pass over every way, every time the user clicked something.
         //
         // It also computed its own viewport bounds, narrower than the ones
@@ -1159,11 +1162,11 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         // Physical handles are Infrastructure-only, matching buildFeatures'
         // own `network` gate.
         const infrastructure = viewRef.current.viewMode === 'infrastructure';
-        (map.getSource(SRC_HANDLES) as GeoJSONSource | undefined)?.setData({
+        geoJsonSource(map, SRC_HANDLES)?.setData({
           type: 'FeatureCollection',
           features: buildHandles(wayById(renderSystem.ways), handleWayIds()),
         });
-        (map.getSource(SRC_PHYSICAL_HANDLES) as GeoJSONSource | undefined)?.setData({
+        geoJsonSource(map, SRC_PHYSICAL_HANDLES)?.setData({
           type: 'FeatureCollection',
           features: infrastructure
             ? buildPhysicalHandles(
@@ -1183,8 +1186,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       window.clearTimeout(laneRefreshTimer);
       laneRefreshTimer = window.setTimeout(() => {
         if (!map.getSource(SRC_LANES)) return;
-        if (stationSettlement.ownsPreview()) {
-          stationSettlement.beginFull({ mutate: () => schedulePushData('all') });
+        if (stopSettlement.ownsPreview()) {
+          stopSettlement.beginFull({ mutate: () => schedulePushData('all') });
         } else {
           schedulePushData('all');
         }
@@ -1249,7 +1252,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         return (
           gestureActive ||
           directManipulationActive ||
-          stationSettlement.ownsPreview() ||
+          stopSettlement.ownsPreview() ||
           state.activeWayId !== null ||
           state.routeDraft !== null
         );
@@ -1304,7 +1307,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         openContextMenu,
         closeContextMenu,
         setActionAnchor: (at) => {
-          const source = map.getSource(SRC_ACTION_ANCHOR) as GeoJSONSource | undefined;
+          const source = geoJsonSource(map, SRC_ACTION_ANCHOR);
           source?.setData(
             at
               ? {
@@ -1375,11 +1378,11 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       });
       if (PERF_HARNESS_BUILD) {
         detachPerf = attachPerfHarness(map, {
-          stationSnapshot: (stationId) => {
+          stopSnapshot: (stopId) => {
             const system = store.getState().system;
-            const station = system.stations.find((candidate) => candidate.id === stationId);
-            return station
-              ? { coord: station.coord, revision: system.updatedAt, wayCount: system.ways.length }
+            const stop = system.stops.find((candidate) => candidate.id === stopId);
+            return stop
+              ? { coord: stop.coord, revision: system.updatedAt, wayCount: system.ways.length }
               : null;
           },
           overlaySnapshot: () => {
@@ -1412,7 +1415,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       // derived collection they can influence.
       const documentChanged = prev.system.id !== s.system.id;
       if (documentChanged && !gestureActive) {
-        stationSettlement.invalidate();
+        stopSettlement.invalidate();
         gesturePreview.clear();
       }
       const changedSources = sourceUploadsForSystemChange(prev.system, s.system, {
@@ -1430,13 +1433,13 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           // Build and upload only dependencies whose GeoJSON may differ.
           // Unrequested feature phases never traverse or allocate their
           // RTC-scale collections.
-          if (changedSources.includes(SRC_STATIONS) && stationSettlement.ownsPreview()) {
+          if (changedSources.includes(SRC_STATIONS) && stopSettlement.ownsPreview()) {
             // Undo, delete, and Inspector edits can supersede an in-flight
-            // station diff. Keep the newest geometry truthful in the scratch
+            // stop diff. Keep the newest geometry truthful in the scratch
             // source and replace the old paint barrier before scheduling the
-            // complete station collection.
-            gesturePreview.syncStations(s.system);
-            stationSettlement.beginFull({ mutate: () => schedulePushData(changedSources) });
+            // complete stop collection.
+            gesturePreview.syncStops(s.system);
+            stopSettlement.beginFull({ mutate: () => schedulePushData(changedSources) });
           } else {
             schedulePushData(changedSources);
           }
@@ -1457,8 +1460,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           // junctions `selected` filter, so it still needs a rebuild; everything
           // else takes the feature-state fast path.
           const involvesNode = s.selection?.kind === 'node' || prev.selection?.kind === 'node';
-          if (involvesNode && stationSettlement.ownsPreview()) {
-            stationSettlement.beginFull({ mutate: () => schedulePushData('all') });
+          if (involvesNode && stopSettlement.ownsPreview()) {
+            stopSettlement.beginFull({ mutate: () => schedulePushData('all') });
           } else if (involvesNode) {
             schedulePushData('all');
           } else {
@@ -1483,7 +1486,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
             properties: { wrongWay: span.wrongWay === true },
             geometry: { type: 'LineString' as const, coordinates: path },
           }));
-        (map.getSource(SRC_PREVIEW) as GeoJSONSource | undefined)?.setData(
+        geoJsonSource(map, SRC_PREVIEW)?.setData(
           features.length > 0 ? { type: 'FeatureCollection', features } : emptyFC,
         );
       }
@@ -1541,7 +1544,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     map.on('moveend', onMoveEnd);
 
     return () => {
-      stationSettlement.dispose();
+      stopSettlement.dispose();
       ro.disconnect();
       unsub();
       pendingHover = null;

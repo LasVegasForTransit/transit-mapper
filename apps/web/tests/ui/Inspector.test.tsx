@@ -26,7 +26,7 @@ describe('what the supplemental panel shows', () => {
   it('gives a drawing tool priority over a stale selection', () => {
     // What you are doing right now outranks what you clicked before you picked
     // the tool up.
-    expect(content({ tool: 'station', hasSelection: true }).kind).toBe('tool-draft');
+    expect(content({ tool: 'stop', hasSelection: true }).kind).toBe('tool-draft');
   });
 
   it('shows a selection when Select is armed', () => {

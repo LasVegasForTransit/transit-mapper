@@ -92,7 +92,6 @@ import {
   SRC_WAYS,
   SRC_WAY_LABELS,
 } from './constants';
-
 const HOVERED_FEATURE: ExpressionSpecification = [
   'any',
   ['boolean', ['feature-state', 'hover'], false],
@@ -243,7 +242,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       type: 'fill',
       source: SRC_FOOTPRINTS,
       // A facility complex with its own color reads more clearly with a
-      // slightly stronger fill than the shared monochrome default — a station
+      // slightly stronger fill than the shared monochrome default — a Station
       // footprint (no color property) keeps the original subtle tint.
       paint: {
         'fill-color': ['coalesce', ['get', 'color'], theme.footprint],
@@ -610,7 +609,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       // Infrastructure-view vehicles: a real rotated-rectangle polygon per
       // vehicle, true-to-scale and riding its actual physical lane (see
       // sim/vehicles.ts + geometry/vehicleLane.ts) — the same class of
-      // feature as a station footprint/platform (LYR_FOOTPRINTS_FILL/
+      // feature as a Station footprint/platform (LYR_FOOTPRINTS_FILL/
       // LYR_PLATFORMS_FILL above), not a raster icon. Filled with the
       // vehicle's own route color, unlike the monochrome footprint fill,
       // since a vehicle belongs to one service.
@@ -626,8 +625,8 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       paint: { 'line-color': theme.vehicleStroke, 'line-width': 1 },
     },
     {
-      // MAJOR station labels — interchanges (derived) and hand-flagged major
-      // stops (Station.majorStop) — shown from a lower zoom than ordinary stops.
+      // MAJOR stop labels — interchanges (derived) and hand-flagged major
+      // stops (Stop.majorStop) — shown from a lower zoom than ordinary stops.
       // Placed BEFORE the ordinary-stop layer so its labels win MapLibre's
       // collision placement. minzoom skips its placement work entirely below the
       // threshold; at the post-import whole-valley framing that removes ~all of
@@ -662,10 +661,10 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       },
     },
     {
-      // Ordinary station labels — every OTHER named stop (empty-name ones stay
+      // Ordinary stop labels — every OTHER named stop (empty-name ones stay
       // unlabeled). Only from z14+, where a neighborhood's worth of stops is on
       // screen instead of the whole valley's worth colliding into unreadable
-      // soup. Anchor varies so collision can slide a label around its station.
+      // soup. Anchor varies so collision can slide a label around its stop.
       id: LYR_STATION_LABELS,
       type: 'symbol',
       source: SRC_STATIONS,
@@ -794,7 +793,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
     {
       // Interior control points: reshape only (drag repositions the point). A
       // solid square, not a circle — the standard vector-editor "control
-      // point" shape, so it can never be mistaken for a station or facility
+      // point" shape, so it can never be mistaken for a stop or facility
       // (both of which stay circular/pictogram markers).
       id: LYR_HANDLES,
       type: 'symbol',
@@ -810,7 +809,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
     {
       // A way's open ends: drag to EXTEND (adds a new point), not reshape —
       // deliberately inverted (ink fill / light ring) so it never reads as a
-      // regular handle or, worse, a station stop.
+      // regular handle or, worse, a stop stop.
       id: LYR_WAY_ENDPOINTS,
       type: 'circle',
       source: SRC_HANDLES,
@@ -887,7 +886,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       },
     },
     {
-      // Footprint/platform vertices of the station currently being edited —
+      // Footprint/platform vertices of the stop currently being edited —
       // same reshape affordance/style as way handles (same verb, same look).
       id: LYR_PHYSICAL_HANDLES,
       type: 'symbol',

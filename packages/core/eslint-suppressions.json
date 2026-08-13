@@ -110,13 +110,7 @@
   },
   "src/model/gtfsImport.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-type-conversion": {
-      "count": 1
+      "count": 4
     },
     "complexity": {
       "count": 3
@@ -137,9 +131,6 @@
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 3
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
     },
     "complexity": {
       "count": 1
@@ -182,9 +173,6 @@
   "src/model/profile.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
     },
     "max-params": {
       "count": 1
@@ -234,9 +222,6 @@
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 5
     },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 6
-    },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 1
     },
@@ -250,7 +235,7 @@
       "count": 1
     },
     "sonarjs/cognitive-complexity": {
-      "count": 2
+      "count": 1
     }
   },
   "src/model/serviceEdits.ts": {
@@ -315,7 +300,7 @@
       "count": 1
     },
     "max-lines-per-function": {
-      "count": 2
+      "count": 1
     },
     "max-params": {
       "count": 7
@@ -330,20 +315,11 @@
     }
   },
   "src/render/mergeServiceLines.ts": {
-    "@typescript-eslint/consistent-type-definitions": {
-      "count": 1
-    },
-    "@typescript-eslint/prefer-for-of": {
-      "count": 2
-    },
     "sonarjs/cognitive-complexity": {
       "count": 1
     }
   },
   "src/render/svg.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 4
-    },
     "complexity": {
       "count": 1
     },
@@ -377,9 +353,6 @@
   },
   "src/style/catalogStyle.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
     "@typescript-eslint/no-unnecessary-type-conversion": {
@@ -427,14 +400,6 @@
   "tests/model/validate.test.ts": {
     "@typescript-eslint/require-await": {
       "count": 2
-    }
-  },
-  "tests/render/buildFeatures.test.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
     }
   }
 }

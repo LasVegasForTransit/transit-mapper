@@ -13,7 +13,6 @@
 // reason it always was: rendering concerns never belong in model/.
 import type { Grade } from '../model/catalog';
 export { LINE_COLORS } from '../model/catalog';
-
 export interface RenderStyle {
   color: string;
   /** Base line width in px at the reference zoom. */
@@ -65,7 +64,7 @@ export const WAY_TYPE_SHOW_WHEN_SERVED: Record<string, boolean> = {
 export function wayRender(typeId: string, classId?: string): RenderStyle {
   const base = WAY_TYPE_RENDER[typeId] ?? WAY_TYPE_RENDER.heavyRail;
   const override = classId ? WAY_CLASS_RENDER[typeId]?.[classId] : undefined;
-  return override ? ({ ...base, ...override } as RenderStyle) : base;
+  return override ? { ...base, ...override } : base;
 }
 
 export function showWayWhenServed(typeId: string): boolean {
@@ -167,7 +166,7 @@ export function facilityRender(typeId: string): FacilityRenderStyle {
 }
 
 // ---- Physical footprints / platforms -------------------------------------------
-// Stop footprint & platform fill/stroke — infrastructure-view-only physical
+// Station footprint & platform fill/stroke — Infrastructure-only physical
 // planning detail, deliberately understated so route lines stay legible.
 export const FOOTPRINT_FILL = '#191a17';
 export const FOOTPRINT_FILL_OPACITY = 0.05;

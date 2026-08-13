@@ -10,7 +10,6 @@ import { legendEntriesFor, type LegendEntry } from './exportLegend';
 import { scaleBarSpec } from './exportScale';
 import { singleFlight } from './singleFlight';
 import { renderSvgInWorker } from './svgWorker';
-
 // The browser half of SVG export. The composition itself lives in core
 // (render/svg.ts) — this supplies the things only a live map knows: how big
 // the viewport is, how to project a coordinate, which way is north, and what
@@ -56,7 +55,7 @@ function svgMarkup(
   const container = map.getContainer();
   const width = container.clientWidth;
   const height = container.clientHeight;
-  return systemSvg(system, view, (lngLat: LngLat) => map.project(lngLat as [number, number]), {
+  return systemSvg(system, view, (lngLat: LngLat) => map.project(lngLat), {
     title: opts.title,
     legend: opts.legend,
     width,
