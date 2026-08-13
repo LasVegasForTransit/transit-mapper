@@ -272,7 +272,7 @@ function oneDirectionalStretches(
               { legs: section.outbound, run: 'outbound' },
               { legs: section.inbound, run: 'inbound' },
             ]
-          : [{ legs: section.legs, run: 'outbound' as RunDirection }];
+          : [{ legs: section.legs, run: 'outbound' }];
       for (const side of sides) {
         const wanted = new Set(side.legs.filter((l) => l.wayId === wayId));
         if (wanted.size === 0) continue;
@@ -1210,10 +1210,15 @@ function projectTopologyFeatures({
   if (projection.topology.enabled) {
     for (const way of topologyWays) {
       if (counts) counts.featureTopologyWayVisitCount++;
-      if (!showsTopologyWay(way, view, selectedWayId)) continue;
+      if (!view.visibleWayTypes.has(way.typeId)) continue;
       const path = resolveWayPath(way);
       if (path.length < 2) continue;
       const bundle = byWay.get(way.id) ?? [];
+      const showsWay = showsTopologyWay(way, view, selectedWayId);
+      // Semantic detail governs the imported infrastructure feature, not the
+      // transit service using it. A local street can disappear at metro zoom
+      // while its bus line remains part of the network the user is planning.
+      if (!showsWay && bundle.length === 0) continue;
       const base = wayRender(way.typeId, way.classId);
       const laneDetail = wantsLaneDetail(way);
 
@@ -1243,7 +1248,7 @@ function projectTopologyFeatures({
         continue;
       }
 
-      if (laneDetail) {
+      if (laneDetail && showsWay) {
         if (
           projection.topology.ways ||
           projection.topology.lanes ||
@@ -1252,7 +1257,12 @@ function projectTopologyFeatures({
         ) {
           emitLaneDetail(way);
         }
-      } else if (projection.topology.ways && !network && showWayWhenServed(way.typeId)) {
+      } else if (
+        showsWay &&
+        projection.topology.ways &&
+        !network &&
+        showWayWhenServed(way.typeId)
+      ) {
         emitImportedOrDetailedWay({
           way,
           path,

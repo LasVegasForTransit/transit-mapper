@@ -83,15 +83,16 @@ export function beginBackgroundOsmImport(options: BeginBackgroundOsmImportOption
     {
       onEvent: (event) => {
         if (event.type === 'batch') {
-          const result = options.store.getState().applyOsmImportBatch({
+          const result = options.store.commands.imports.applyImportedNetwork({
             targetSystemId: options.targetSystemId,
             network: event.network,
           });
-          committedWays += result.added;
-          if (!result.applied) {
+          if (result === null) {
             ownerChanged = true;
             cancelWorker();
+            return;
           }
+          committedWays += result.added;
           return;
         }
         if (event.type === 'progress') {

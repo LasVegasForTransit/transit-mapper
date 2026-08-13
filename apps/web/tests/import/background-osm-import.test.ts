@@ -29,7 +29,7 @@ describe('background OpenStreetMap import progress', () => {
     const store = createEditorStore();
     const target = createEmptySystem();
     const other = createEmptySystem();
-    store.getState().setSystem(target);
+    store.commands.document.setSystem(target);
     const progressUpdates: ImportProgress[] = [];
     let onEvent: ((event: OsmImportEvent) => void) | undefined;
     let resolveCompletion: ((event: OsmImportEvent) => void) | undefined;
@@ -55,7 +55,7 @@ describe('background OpenStreetMap import progress', () => {
       },
     });
 
-    store.getState().setSystem(other);
+    store.commands.document.setSystem(other);
     expect(cancel).toHaveBeenCalledOnce();
     const terminal: OsmImportEvent = {
       type: 'canceled',

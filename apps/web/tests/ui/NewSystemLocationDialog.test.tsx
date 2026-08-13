@@ -3,6 +3,7 @@
 import { act, useEffect, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PlaceResult } from '@transitmapper/core/model/geocode';
 import { NewSystemLocationDialog } from '../../src/ui/newSystem/NewSystemLocationDialog';
 
 interface MockModalProps {
@@ -55,20 +56,24 @@ const calls = {
 };
 let mockSystem: { id: string; drivingSide: 'right' | 'left'; viewport?: unknown };
 const store = {
-  getState: () => ({
-    system: mockSystem,
-    setSystem: (system: typeof mockSystem) => {
-      calls.setSystem.push(system);
-      mockSystem = system;
+  commands: {
+    document: {
+      setSystem: (system: typeof mockSystem) => {
+        calls.setSystem.push(system);
+        mockSystem = system;
+      },
+      setViewport: (viewport: unknown) => {
+        mockSystem = { ...mockSystem, viewport };
+      },
     },
-    setViewport: (viewport: unknown) => {
-      mockSystem = { ...mockSystem, viewport };
+    network: {
+      setDrivingSide: (drivingSide: 'right' | 'left') => {
+        mockSystem = { ...mockSystem, drivingSide };
+      },
     },
-    setDrivingSide: (drivingSide: 'right' | 'left') => {
-      mockSystem = { ...mockSystem, drivingSide };
-    },
-    setTool: (tool: string) => calls.setTool.push(tool),
-  }),
+    tools: { setTool: (tool: string) => calls.setTool.push(tool) },
+  },
+  getState: () => ({ system: mockSystem }),
 };
 
 vi.mock('../../src/editor/EditorProvider', () => ({ useEditorStore: () => store }));
@@ -83,9 +88,11 @@ vi.mock('../../src/import/background-osm-import', () => ({
   beginBackgroundOsmImport: (options: unknown) => calls.background.push(options),
 }));
 
-const searchPlacesMock = vi.fn();
+const searchPlacesMock =
+  vi.fn<(query: string, options?: { signal?: AbortSignal }) => Promise<PlaceResult[]>>();
 vi.mock('../../src/network/search-places', () => ({
-  searchPlaces: (...args: unknown[]) => searchPlacesMock(...args),
+  searchPlaces: (query: string, options?: { signal?: AbortSignal }) =>
+    searchPlacesMock(query, options),
 }));
 vi.mock('@transitmapper/core/model/serialize', () => ({
   createEmptySystem: () => ({ id: 'new-system', drivingSide: 'right', ways: [] }),
@@ -117,7 +124,7 @@ afterEach(() => {
 
 function button(label: string): HTMLButtonElement {
   const found = [...container.querySelectorAll('button')].find((candidate) =>
-    candidate.textContent?.includes(label),
+    candidate.textContent.includes(label),
   );
   if (!found) throw new Error(`Expected button ${label}`);
   return found;
@@ -127,10 +134,10 @@ function setSearchInput(value: string): void {
   const input = container.querySelector('input');
   if (!(input instanceof HTMLInputElement)) throw new Error('Expected the place search input.');
   const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-  if (!descriptor?.set) throw new Error('Expected the native input value setter.');
-  const setter = descriptor.set;
+  const setValue = descriptor?.set?.bind(input);
+  if (!setValue) throw new Error('Expected the native input value setter.');
   act(() => {
-    Reflect.apply(setter, input, [value]);
+    setValue(value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 }

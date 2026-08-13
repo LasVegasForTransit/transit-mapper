@@ -108,14 +108,6 @@
       "count": 1
     }
   },
-  "src/model/geocode.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "@typescript-eslint/prefer-optional-chain": {
-      "count": 1
-    }
-  },
   "src/model/gtfsImport.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6
@@ -310,9 +302,6 @@
     }
   },
   "src/render/buildFeatures.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 1
     },
@@ -407,14 +396,6 @@
       "count": 2
     },
     "max-lines": {
-      "count": 1
-    }
-  },
-  "tests/model/importNetwork.test.ts": {
-    "@typescript-eslint/prefer-promise-reject-errors": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
       "count": 1
     }
   },

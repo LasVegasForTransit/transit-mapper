@@ -40,7 +40,7 @@ describe('streaming OpenStreetMap import ownership', () => {
     const store = createEditorStore();
     const target = createEmptySystem();
     const other = createEmptySystem();
-    store.getState().setSystem(target);
+    store.commands.document.setSystem(target);
     const network = osmElementsToNetwork([
       {
         type: 'way',
@@ -54,19 +54,18 @@ describe('streaming OpenStreetMap import ownership', () => {
       },
     ]);
 
-    expect(store.getState().applyOsmImportBatch({ targetSystemId: target.id, network })).toEqual({
-      applied: true,
+    expect(
+      store.commands.imports.applyImportedNetwork({ targetSystemId: target.id, network }),
+    ).toEqual({
       added: 1,
       skipped: 0,
     });
     expect(store.getState().system.ways).toHaveLength(1);
 
-    store.getState().setSystem(other);
-    expect(store.getState().applyOsmImportBatch({ targetSystemId: target.id, network })).toEqual({
-      applied: false,
-      added: 0,
-      skipped: 0,
-    });
+    store.commands.document.setSystem(other);
+    expect(
+      store.commands.imports.applyImportedNetwork({ targetSystemId: target.id, network }),
+    ).toBeNull();
     expect(store.getState().system.ways).toHaveLength(0);
   });
 });
