@@ -263,14 +263,6 @@ function framePadding(el: HTMLElement, margin: number): PaddingOptions {
   };
 }
 
-const HEAVY_FEATURE_SOURCES = new Set([SRC_WAYS, SRC_SERVICES]);
-const ID_PROMOTED_SOURCES = new Set([SRC_WAYS, SRC_STATIONS, SRC_FACILITIES]);
-
-function promoteIdForSource(sourceId: string): string | undefined {
-  if (sourceId === SRC_SERVICES) return 'serviceId';
-  return ID_PROMOTED_SOURCES.has(sourceId) ? 'id' : undefined;
-}
-
 export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   const colorScheme = useSystemColorScheme();
   const initialColorSchemeRef = useRef(colorScheme);
