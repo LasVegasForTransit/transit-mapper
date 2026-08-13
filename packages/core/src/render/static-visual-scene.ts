@@ -267,6 +267,10 @@ function markingPaint(properties: GeoJsonProperties): {
   dashArray?: readonly number[];
 } {
   const kind = text(properties, 'kind', 'laneLine');
+  if (kind === 'rail')
+    return { color: text(properties, 'color', ROAD_SURFACE), width: 1.3, opacity: 1 };
+  if (kind === 'railTie')
+    return { color: text(properties, 'color', ROAD_SURFACE), width: 0.7, opacity: 0.78 };
   if (kind === 'thinLane') {
     return { color: text(properties, 'color', LANE_MARKING), width: 2.5, opacity: 1 };
   }
@@ -275,24 +279,38 @@ function markingPaint(properties: GeoJsonProperties): {
   return { color: LANE_MARKING, width: 1.2, opacity: 0.9, dashArray: [3, 3] };
 }
 
+function appendLaneMarkingPaths(
+  visuals: ResolvedStaticVisual[],
+  feature: SystemFeatures['laneMarkings']['features'][number],
+  marking: ReturnType<typeof markingPaint>,
+): void {
+  const paths =
+    feature.geometry.type === 'LineString'
+      ? [feature.geometry.coordinates]
+      : feature.geometry.coordinates;
+  for (const coordinates of paths) {
+    pushLine(
+      visuals,
+      line({
+        featureId: String(feature.id),
+        source: 'lane-markings',
+        coordinates: lngLatPath(coordinates),
+        properties: feature.properties,
+        color: marking.color,
+        widthPx: marking.width,
+        baseOpacity: marking.opacity,
+        ...(marking.dashArray ? { dashArray: marking.dashArray } : {}),
+      }),
+    );
+  }
+}
+
 function appendLaneMarkingVisuals(features: SystemFeatures, visuals: ResolvedStaticVisual[]): void {
-  for (const kind of ['thinLane', 'laneLine', 'edgeLine', 'centerLine']) {
+  for (const kind of ['railTie', 'rail', 'thinLane', 'laneLine', 'edgeLine', 'centerLine']) {
     for (const feature of features.laneMarkings.features) {
       if (text(feature.properties, 'kind', 'laneLine') !== kind) continue;
       const marking = markingPaint(feature.properties);
-      pushLine(
-        visuals,
-        line({
-          featureId: String(feature.id),
-          source: 'lane-markings',
-          coordinates: lngLatPath(feature.geometry.coordinates),
-          properties: feature.properties,
-          color: marking.color,
-          widthPx: marking.width,
-          baseOpacity: marking.opacity,
-          ...(marking.dashArray ? { dashArray: marking.dashArray } : {}),
-        }),
-      );
+      appendLaneMarkingPaths(visuals, feature, marking);
     }
   }
 }

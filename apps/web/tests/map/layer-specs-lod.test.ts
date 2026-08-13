@@ -10,6 +10,7 @@ import {
   LYR_LANE_LINES,
   LYR_LANE_SURFACES,
   LYR_LANE_TRACKS,
+  LYR_RAIL_TIES,
   LYR_SERVICES_ELEVATED,
   LYR_SERVICES_SOLID,
   LYR_SERVICES_SOLID_CASING,
@@ -118,6 +119,7 @@ describe('screen-space LOD layer specifications', () => {
   it('cross-fades Street surfaces, markings, arrows, connectors, and junctions', () => {
     expectCameraTierOpacity(LYR_LANE_SURFACES, 'fill-opacity', 0.9);
     expectCameraTierOpacity(LYR_LANE_TRACKS, 'line-opacity', 1);
+    expectCameraTierOpacity(LYR_RAIL_TIES, 'line-opacity', 0.78);
     expectCameraTierOpacity(LYR_LANE_LINES, 'line-opacity', 0.9);
     expectCameraTierOpacity(LYR_EDGE_LINES, 'line-opacity', 0.75);
     expectCameraTierOpacity(LYR_CENTER_LINES, 'line-opacity', 0.95);
@@ -148,6 +150,7 @@ describe('screen-space LOD layer specifications', () => {
       LYR_WAYS_DASHED,
       LYR_LANE_SURFACES,
       LYR_LANE_TRACKS,
+      LYR_RAIL_TIES,
       LYR_LANE_LINES,
       LYR_EDGE_LINES,
       LYR_CENTER_LINES,
