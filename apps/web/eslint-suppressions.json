@@ -95,11 +95,6 @@
       "count": 1
     }
   },
-  "scripts/perf/report-bundle.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    }
-  },
   "scripts/perf/scenarioRuns.ts": {
     "complexity": {
       "count": 1

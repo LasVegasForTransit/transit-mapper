@@ -117,9 +117,12 @@ It includes:
 - `report.json`, with every raw sample, min/median/p95/max, variance, standard
   deviation, coefficient of variation, cache hits/misses, source uploads, and
   full/gesture projection phase counters;
-- `bundle-report.json`, covering each entry's complete static and dynamic
-  import graph in raw, gzip, and Brotli bytes plus every emitted JavaScript
-  chunk's raw size and budget;
+- `bundle-report.json`, whose version 3 delivery graphs separate each entry's
+  eager document and static-import closure from files reached only through
+  dynamic imports. The `complete` entry graph is their union and remains the
+  bundle-budget authority. Separate graphs report dedicated Workers, the
+  service Worker and its Workbox runtime, install-only assets, and the complete
+  service-worker precache union;
 - `pwa-report.json`, the deterministic build-graph/precache comparison; and
 - `pwa-runtime-report.json`, proof that an installed editor reopened offline
   after Chrome's HTTP cache was cleared, populated a system overlay on its
@@ -178,6 +181,11 @@ again. MapLibre 4 is itself one prebundled module, so an output named
 810 kB raw limit. Every other JavaScript output, including service-worker and
 nested outputs, is limited to 500 kB. These are enforced in
 `bundle-report.json`; Vite's generic warning threshold is not the only guard.
+Every delivery graph contains sorted file records with raw, gzip, and Brotli
+sizes plus a SHA-256 content digest. These records make an N-1 comparison able
+to distinguish added, removed, and changed files without counting a file twice
+when, for example, it belongs to both the editor graph and the independent
+precache union.
 
 Missing Chrome produces an `unavailable` report and a non-zero exit. The
 harness never writes placeholder timings.
