@@ -10,6 +10,7 @@ import { prunedToLiveLanes, withoutComponent } from './components';
 import { mapSectionLegs, mergeLegs, normalizeSections } from './patternEdits';
 import { flipProfile } from './profile';
 import { withServicePattern } from './line-service';
+import { remapCurveControls } from './curve-controls';
 import { removeGroupMembers } from './system/group';
 import { replacedStopAnchors } from './stop-reanchoring';
 import type {
@@ -287,7 +288,15 @@ export function mergeWaysEndToEnd(
   if (!merge) return system;
   const secondLaneIds = compatibleSecondLaneIds(first, second, merge.reversedSecond);
   if (!secondLaneIds) return system;
-  const mergedWay: Way = { ...first, points: merge.points };
+  const curveControls = [
+    ...remapCurveControls(first.curveControls ?? [], (pointIndex) => merge.mapFirst(pointIndex)),
+    ...remapCurveControls(second.curveControls ?? [], (pointIndex) => merge.mapSecond(pointIndex)),
+  ].sort((left, right) => left.pointIndex - right.pointIndex);
+  const mergedWay: Way = {
+    ...first,
+    points: merge.points,
+    ...(curveControls.length > 0 ? { curveControls } : {}),
+  };
   const ways = system.ways
     .filter((way) => way.id !== otherId)
     .map((way) => (way.id === keepId ? mergedWay : way));

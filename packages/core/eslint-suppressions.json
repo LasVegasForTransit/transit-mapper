@@ -100,11 +100,6 @@
       "count": 2
     }
   },
-  "src/model/geo/wayPath.ts": {
-    "max-params": {
-      "count": 1
-    }
-  },
   "src/model/geocode.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1

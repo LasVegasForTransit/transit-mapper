@@ -26,6 +26,17 @@ export interface CrossSection {
   lanes: LaneSpec[];
 }
 
+/** One authored circular-radius override on an interior curved-way point.
+ *
+ * The point index is intentionally model data rather than renderer state:
+ * moving a curve between documents must preserve the physical radius. When
+ * absent, geometry derives the local automatic radius from adjacent segments.
+ */
+export interface CurveControl {
+  pointIndex: number;
+  radiusM: number;
+}
+
 /**
  * Physical infrastructure: one alignment on the ground (or above/below it).
  * Unified across modes — a rail track, a road, a bike path, an aerial span —
@@ -39,6 +50,8 @@ export interface Way {
   points: LngLat[];
   /** How the path is drawn between control points. */
   geometry: LineGeometry;
+  /** Optional physical-radius overrides for interior points of a curved way. */
+  curveControls?: CurveControl[];
   /** Vertical alignment: below ground, at grade, or elevated. */
   grade: Grade;
   /** The cross-section. Capacity (lanes/tracks) is DERIVED from it — see

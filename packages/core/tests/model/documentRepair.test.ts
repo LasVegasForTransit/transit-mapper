@@ -138,6 +138,29 @@ describe('a document referring to a way that cannot be drawn', () => {
   });
 });
 
+describe('metric curve controls in a saved document', () => {
+  it('keeps valid interior radii and drops controls that cannot name a curve', () => {
+    const way = {
+      ...aRoad('curve', [
+        [-115.3, 36.1],
+        [-115.2, 36.1],
+        [-115.1, 36.1],
+      ]),
+      geometry: 'curved' as const,
+      curveControls: [
+        { pointIndex: 1, radiusM: 45 },
+        { pointIndex: 0, radiusM: 30 },
+        { pointIndex: 2, radiusM: Number.POSITIVE_INFINITY },
+        { pointIndex: 1, radiusM: 90 },
+      ],
+    };
+
+    const loaded = parseSystem(JSON.parse(JSON.stringify(aSystem({ ways: [way] }))));
+
+    expect(loaded.ways[0].curveControls).toEqual([{ pointIndex: 1, radiusM: 45 }]);
+  });
+});
+
 describe('a line riding a way that cannot be drawn', () => {
   function savedWithLine() {
     const ways = [...crossingPair(), aRoad('ghost', [[-115.2, 36.1]])];

@@ -198,7 +198,11 @@ new transit mode is a catalog record. A new lane type is a catalog record.
 Neither requires understanding the editor.
 
 Ways store a centreline and a cross-section, and lanes, junctions, and turn
-geometry are computed from those on demand. The document stays small, the
+geometry are computed from those on demand. A curved Way may also store a
+radius for an interior control point; core resolves that radius in a local
+metric plane and derives tangent-continuous arcs rather than persisting a
+sampled polyline. Point insertion, deletion, splitting, and merging remap
+those controls with their physical point. The document stays small, the
 geometry tests as plain functions, and stored data can never disagree with
 what it was derived from.
 
@@ -423,8 +427,9 @@ Mode/type visibility remains a layer filter.
 
 This pipeline changes presentation and delivery, not the underlying physical
 geometry model. It does not yet derive watertight metric corridor polygons or
-adaptively tessellated curves. Diagram remains on its existing layout path and
-outside the cooperative geographic projection scheduler.
+choose curve tessellation from final display error. Diagram remains on its
+existing layout path and outside the cooperative geographic projection
+scheduler.
 
 ### Appearance and map styles
 

@@ -9,6 +9,7 @@ import {
   resolveWayPath,
 } from './geo';
 import { shortId } from './ids';
+import { splitCurveControls } from './curve-controls';
 import { withServicePattern } from './line-service';
 import { mapSectionLegs, normalizeSections, splitLegs } from './patternEdits';
 import { replacedStopAnchors } from './stop-reanchoring';
@@ -149,8 +150,20 @@ export function splitWayAtIndexResult(
   if (!way || index <= 0 || index >= way.points.length - 1) return null;
 
   const newWayId = createId();
-  const first: Way = { ...way, points: way.points.slice(0, index + 1) };
-  const second: Way = { ...way, id: newWayId, points: way.points.slice(index) };
+  const [firstCurveControls, secondCurveControls] = way.curveControls
+    ? splitCurveControls(way.curveControls, index)
+    : [undefined, undefined];
+  const first: Way = {
+    ...way,
+    points: way.points.slice(0, index + 1),
+    ...(firstCurveControls?.length ? { curveControls: firstCurveControls } : {}),
+  };
+  const second: Way = {
+    ...way,
+    id: newWayId,
+    points: way.points.slice(index),
+    ...(secondCurveControls?.length ? { curveControls: secondCurveControls } : {}),
+  };
   const ways = [
     ...system.ways.map((candidate) => (candidate.id === wayId ? first : candidate)),
     second,
