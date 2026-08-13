@@ -133,40 +133,39 @@ async function runBalancedPan(page: Page): Promise<void> {
   });
 }
 
-async function runEditCycle(page: Page, stationId: string, stationName: string): Promise<void> {
+async function runEditCycle(page: Page, stopId: string, stopName: string): Promise<void> {
   await page.keyboard.press('v');
   const before = await page.evaluate((targetId) => {
-    const station = (window as PerfPageWindow).__perfStationSnapshot?.(targetId);
+    const stop = (window as PerfPageWindow).__perfStopSnapshot?.(targetId);
     const project = (window as PerfPageWindow).__perfProjectLngLat;
-    if (!station || !project) throw new Error('The soak station target is unavailable.');
-    return { station, point: project(station.coord) };
-  }, stationId);
+    if (!stop || !project) throw new Error('The soak Stop target is unavailable.');
+    return { stop, point: project(stop.coord) };
+  }, stopId);
   await page.mouse.click(before.point.x, before.point.y);
-  const selectedStationName = page.getByLabel('Station name');
-  await selectedStationName.waitFor({ state: 'visible', timeout: 30_000 });
-  if ((await selectedStationName.inputValue()) !== stationName) {
-    throw new Error('The soak target did not resolve to the expected station.');
+  const selectedStopName = page.getByLabel('Stop name');
+  await selectedStopName.waitFor({ state: 'visible', timeout: 30_000 });
+  if ((await selectedStopName.inputValue()) !== stopName) {
+    throw new Error('The soak target did not resolve to the expected Stop.');
   }
   await page.mouse.move(before.point.x, before.point.y);
   await page.mouse.down();
   await page.mouse.move(before.point.x + 24, before.point.y + 12, { steps: 6 });
   await page.mouse.up();
   const moved = await page.evaluate(
-    (targetId) => (window as PerfPageWindow).__perfStationSnapshot?.(targetId) ?? null,
-    stationId,
+    (targetId) => (window as PerfPageWindow).__perfStopSnapshot?.(targetId) ?? null,
+    stopId,
   );
   if (
     !moved ||
-    moved.revision === before.station.revision ||
-    (moved.coord[0] === before.station.coord[0] && moved.coord[1] === before.station.coord[1])
+    moved.revision === before.stop.revision ||
+    (moved.coord[0] === before.stop.coord[0] && moved.coord[1] === before.stop.coord[1])
   ) {
-    throw new Error('The soak edit cycle did not commit a station move.');
+    throw new Error('The soak edit cycle did not commit a Stop move.');
   }
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
   // Let validation and persistence finish before restoring the fixed shape.
   await page.waitForTimeout(550);
 }
-
 async function runExportCycle(page: Page, format: 'PNG' | 'SVG'): Promise<number> {
   await page.locator('button[title="Export…"]').click();
   const dialog = page.getByRole('dialog');
@@ -271,11 +270,11 @@ export async function runSoak(
       { timeout: 30_000 },
     );
     for (let warmup = 0; warmup < 3; warmup += 1) await runBalancedPan(page);
-    const station = fixture.stations[Math.floor(fixture.stations.length / 2)];
-    if (!station) throw new Error('The RTC soak fixture has no station target.');
+    const stop = fixture.stops[Math.floor(fixture.stops.length / 2)];
+    if (!stop) throw new Error('The RTC soak fixture has no Stop target.');
 
     // Warm all one-time paths before the forced-GC baseline.
-    await runEditCycle(page, station.id, station.name ?? '');
+    await runEditCycle(page, stop.id, stop.name ?? '');
     await runExportCycle(page, 'PNG');
     await runExportCycle(page, 'SVG');
     await page.waitForTimeout(1_000);
@@ -293,7 +292,7 @@ export async function runSoak(
       await runBalancedPan(page);
       iterations += 1;
       if (iterations === 1 || iterations % 4 === 0) {
-        await runEditCycle(page, station.id, station.name ?? '');
+        await runEditCycle(page, stop.id, stop.name ?? '');
         editCycles += 1;
       }
       if (iterations === 1 || iterations % 8 === 0) {

@@ -214,14 +214,14 @@ async function performEntityDrag(
   await page.waitForFunction(
     () =>
       typeof (window as PerfPageWindow).__perfProjectLngLat === 'function' &&
-      typeof (window as PerfPageWindow).__perfStationSnapshot === 'function',
+      typeof (window as PerfPageWindow).__perfStopSnapshot === 'function',
     undefined,
     { timeout: 30_000 },
   );
-  const before = await page.evaluate((stationId) => {
-    const snapshot = (window as PerfPageWindow).__perfStationSnapshot?.(stationId);
+  const before = await page.evaluate((stopId) => {
+    const snapshot = (window as PerfPageWindow).__perfStopSnapshot?.(stopId);
     const project = (window as PerfPageWindow).__perfProjectLngLat;
-    if (!snapshot || !project) throw new Error('The live station target is unavailable.');
+    if (!snapshot || !project) throw new Error('The live Stop target is unavailable.');
     return { snapshot, point: project(snapshot.coord) };
   }, entity.id);
   if (
@@ -230,13 +230,13 @@ async function performEntityDrag(
     before.point.y < canvas.y ||
     before.point.y > canvas.y + canvas.height
   ) {
-    throw new Error('The deterministic station drag target is outside the map viewport.');
+    throw new Error('The deterministic Stop drag target is outside the map viewport.');
   }
 
   await page.mouse.click(before.point.x, before.point.y);
-  const selectedStationName = page.getByLabel('Station name');
-  await selectedStationName.waitFor({ state: 'visible', timeout: 30_000 });
-  const selectedName = await selectedStationName.inputValue();
+  const selectedStopName = page.getByLabel('Stop name');
+  await selectedStopName.waitFor({ state: 'visible', timeout: 30_000 });
+  const selectedName = await selectedStopName.inputValue();
   if (selectedName !== entity.name) {
     throw new Error(
       `The projected fixture target "${entity.name}" (${entity.id}) at ` +
@@ -248,7 +248,7 @@ async function performEntityDrag(
   // most of the map. Collapse that real UI before the measured drag, exactly
   // as a user must, then project again after the responsive layout settles.
   // Reusing the pre-selection point made the script drag the sheet instead of
-  // the station on phones, while desktop happened to keep the point stable.
+  // the Stop on phones, while desktop happened to keep the point stable.
   const collapsePanel = page.getByRole('button', { name: 'Collapse panel' });
   if (await collapsePanel.isVisible()) {
     await collapsePanel.click();
@@ -257,7 +257,7 @@ async function performEntityDrag(
   }
   const dragPoint = await page.evaluate((coord) => {
     const project = (window as PerfPageWindow).__perfProjectLngLat;
-    if (!project) throw new Error('The live station projection disappeared.');
+    if (!project) throw new Error('The live Stop projection disappeared.');
     return project(coord);
   }, before.snapshot.coord);
   const currentCanvas = await canvasGeometry(page);
@@ -267,7 +267,7 @@ async function performEntityDrag(
     dragPoint.y < currentCanvas.y ||
     dragPoint.y > currentCanvas.y + currentCanvas.height
   ) {
-    throw new Error('The selected station drag target is outside the current map viewport.');
+    throw new Error('The selected Stop drag target is outside the current map viewport.');
   }
 
   await resetGestureCapture(page);
@@ -280,14 +280,14 @@ async function performEntityDrag(
   await recorder.stopAction();
 
   const after = await page.evaluate(
-    (stationId) => (window as PerfPageWindow).__perfStationSnapshot?.(stationId) ?? null,
+    (stopId) => (window as PerfPageWindow).__perfStopSnapshot?.(stopId) ?? null,
     entity.id,
   );
   const coordinateChanged =
     after !== null &&
     (after.coord[0] !== before.snapshot.coord[0] || after.coord[1] !== before.snapshot.coord[1]);
   if (!after || !coordinateChanged || after.revision === before.snapshot.revision) {
-    throw new Error('The station drag did not change the live model coordinate and revision.');
+    throw new Error('The Stop drag did not change the live model coordinate and revision.');
   }
 }
 
@@ -301,10 +301,8 @@ async function performCameraDrag(
   const probeCoordinate =
     scenario.surface === 'embed'
       ? null
-      : await page.evaluate((stationId) => {
-          const snapshot = stationId
-            ? (window as PerfPageWindow).__perfStationSnapshot?.(stationId)
-            : null;
+      : await page.evaluate((stopId) => {
+          const snapshot = stopId ? (window as PerfPageWindow).__perfStopSnapshot?.(stopId) : null;
           if (!snapshot) throw new Error('The camera projection target is unavailable.');
           return snapshot.coord;
         }, entityId);
@@ -369,8 +367,8 @@ async function performDrawAndPersistenceProof(
   canvas: CanvasGeometry,
   entityId: string,
 ): Promise<DrawPersistenceResult> {
-  const before = await page.evaluate((stationId) => {
-    const snapshot = (window as PerfPageWindow).__perfStationSnapshot?.(stationId);
+  const before = await page.evaluate((stopId) => {
+    const snapshot = (window as PerfPageWindow).__perfStopSnapshot?.(stopId);
     if (!snapshot) throw new Error('The performance system seam is unavailable.');
     return snapshot;
   }, entityId);
@@ -388,8 +386,8 @@ async function performDrawAndPersistenceProof(
   }
   const commitRequestedAt = await page.evaluate(() => performance.now());
   await page.keyboard.press('Enter');
-  const after = await page.evaluate((stationId) => {
-    const snapshot = (window as PerfPageWindow).__perfStationSnapshot?.(stationId);
+  const after = await page.evaluate((stopId) => {
+    const snapshot = (window as PerfPageWindow).__perfStopSnapshot?.(stopId);
     if (!snapshot) throw new Error('The system seam disappeared after drawing.');
     return snapshot;
   }, entityId);
@@ -504,7 +502,7 @@ async function runDirectManipulation(
   const actions: DirectJourneyMeasurements['actions'] = [];
 
   if (scenario.surface === 'editor') {
-    if (!entity) throw new Error('The editor scenario has no station drag target.');
+    if (!entity) throw new Error('The editor scenario has no Stop drag target.');
     await performEntityDrag(page, canvas, recorder, entity);
     actions.push('entity-drag');
   }

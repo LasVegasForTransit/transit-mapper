@@ -85,9 +85,8 @@ async function runSample(options: RunSampleOptions): Promise<PerfSample | undefi
       });
     }
     const startup = await collectStartupMetrics(page);
-    // Source-order tie breaking makes the final edge station deterministic
-    // even when thousands of low-zoom hit circles overlap in the RTC fixture.
-    const target = fixture.stations.at(-1);
+    // Source order makes the edge Stop deterministic when low-zoom hit circles overlap.
+    const target = fixture.stops.at(-1);
     const entity = target?.name ? { id: target.id, name: target.name } : undefined;
     const gesture = await runMeasuredJourney(
       page,

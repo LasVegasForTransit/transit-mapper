@@ -71,8 +71,8 @@ export interface PerfPageWindow extends Window {
   }>;
   __perfSourceUploadCount?: () => number;
   __perfProjectLngLat?: (coord: LngLat) => { x: number; y: number };
-  __perfStationSnapshot?: (
-    stationId: string,
+  __perfStopSnapshot?: (
+    stopId: string,
   ) => { coord: LngLat; revision: number; wayCount: number } | null;
   __perfCameraSnapshot?: () => { center: LngLat; zoom: number };
   __perfOverlaySnapshot?: () => BrowserOverlaySnapshot;
