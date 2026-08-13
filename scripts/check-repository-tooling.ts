@@ -43,6 +43,10 @@ interface ClaudeSettings {
   enabledPlugins?: Record<string, boolean>;
 }
 
+interface CommitSubjectValidator {
+  commitSubjectError(subject: string): string | undefined;
+}
+
 async function jsonFile<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(resolve(ROOT, path), 'utf8')) as T;
 }
@@ -93,6 +97,14 @@ if (codex.name !== lock.plugin || claude.name !== lock.plugin) {
 }
 if (codex.version !== lock.version || claude.version !== lock.version) {
   fail('the harness manifests do not match the pinned version');
+}
+
+const { commitSubjectError } = (await import(
+  resolve(PLUGIN_ROOT, 'scripts/validate-commit-subject.mjs')
+)) as CommitSubjectValidator;
+const scopePolicyError = commitSubjectError('chore: validate repository tooling policy');
+if (scopePolicyError) {
+  fail(scopePolicyError);
 }
 
 const marketplace = await jsonFile<Marketplace>('.agents/plugins/marketplace.json');

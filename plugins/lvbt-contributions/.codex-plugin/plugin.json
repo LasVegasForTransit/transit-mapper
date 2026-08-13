@@ -1,6 +1,6 @@
 {
   "name": "lvbt-contributions",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Create readable LVBT GitHub issues and pull requests through the organization workflow.",
   "author": {
     "name": "Las Vegans for Better Transit",
