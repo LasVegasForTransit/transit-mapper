@@ -115,10 +115,17 @@ jobs:
           set -euo pipefail
           payload="$RUNNER_TEMP/transitmapper-release"
           archive="$RUNNER_TEMP/transitmapper-${RELEASE_TAG}-deployment.tar.gz"
+          worker_bundle="$RUNNER_TEMP/transitmapper-worker"
           rm -rf "$payload"
           mkdir -p "$payload/apps/web/dist" "$payload/apps/worker/dist" "$payload/apps/worker/src/migrations"
           cp -R apps/web/dist/. "$payload/apps/web/dist/"
-          cp "$RUNNER_TEMP/transitmapper-worker/index.js" "$payload/apps/worker/dist/index.js"
+          mapfile -t worker_entries < <(find "$worker_bundle" -maxdepth 1 -type f -name '*.js' ! -name '*.js.map' -print)
+          if [ "${#worker_entries[@]}" -ne 1 ]; then
+            echo "Expected exactly one top-level Worker JavaScript entry in $worker_bundle; found ${#worker_entries[@]}." >&2
+            printf 'Candidates:\n%s\n' "${worker_entries[*]:-<none>}" >&2
+            exit 1
+          fi
+          cp -R "$worker_bundle/." "$payload/apps/worker/dist/"
           cp apps/worker/wrangler.toml "$payload/apps/worker/wrangler.toml"
           cp -R apps/worker/src/migrations/. "$payload/apps/worker/src/migrations/"
           tar -C "$payload" -czf "$archive" .
@@ -173,8 +180,16 @@ jobs:
         env:
           DEPLOY_ROOT: ${{ steps.extract.outputs.root }}
         run: |
+          set -euo pipefail
+          worker_bundle="$DEPLOY_ROOT/apps/worker/dist"
+          mapfile -t worker_entries < <(find "$worker_bundle" -maxdepth 1 -type f -name '*.js' ! -name '*.js.map' -print)
+          if [ "${#worker_entries[@]}" -ne 1 ]; then
+            echo "Expected exactly one top-level Worker JavaScript entry in $worker_bundle; found ${#worker_entries[@]}." >&2
+            printf 'Candidates:\n%s\n' "${worker_entries[*]:-<none>}" >&2
+            exit 1
+          fi
           pnpm --filter @transitmapper/worker exec wrangler deploy \
-            "$DEPLOY_ROOT/apps/worker/dist/index.js" \
+            "${worker_entries[0]}" \
             --config "$DEPLOY_ROOT/apps/worker/wrangler.toml" \
             --no-bundle \
             --assets "$DEPLOY_ROOT/apps/web/dist"
