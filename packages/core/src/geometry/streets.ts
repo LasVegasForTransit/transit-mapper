@@ -16,6 +16,7 @@ import {
   offsetPolyline,
   patternSegments,
   resolveWayPath,
+  resolveWayPathAtError,
   serviceLaneOnWay,
   patternLegs,
   stitchPaths,
@@ -119,6 +120,17 @@ export interface ResolvedWayLaneGeometry {
   cacheHit: boolean;
 }
 
+function trimmedWayCenterline(
+  way: Way,
+  trimStartM: number,
+  trimEndM: number,
+  curveErrorM: number | undefined,
+): LngLat[] {
+  const path =
+    curveErrorM === undefined ? resolveWayPath(way) : resolveWayPathAtError(way, curveErrorM);
+  return trimPath(path, trimStartM, trimEndM);
+}
+
 /** Same geometry contract with truthful cache attribution for the renderer's
  * performance counters. Callers that do not instrument projection keep using
  * `wayLaneGeometry` below. */
@@ -126,13 +138,14 @@ export function resolveWayLaneGeometry(
   way: Way,
   trimStartM = 0,
   trimEndM = 0,
+  curveErrorM?: number,
 ): ResolvedWayLaneGeometry {
   let byTrim = cache.get(way);
   if (!byTrim) {
     byTrim = new Map();
     cache.set(way, byTrim);
   }
-  const key = `${trimStartM.toFixed(2)}:${trimEndM.toFixed(2)}`;
+  const key = `${trimStartM.toFixed(2)}:${trimEndM.toFixed(2)}:${curveErrorM?.toPrecision(6) ?? 'model'}`;
   const cached = byTrim.get(key);
   if (cached) return { geometry: cached, cacheHit: true };
   while (byTrim.size >= MAX_TRIMS_PER_WAY) {
@@ -141,7 +154,7 @@ export function resolveWayLaneGeometry(
     byTrim.delete(oldest.value);
   }
 
-  const center = trimPath(resolveWayPath(way), trimStartM, trimEndM);
+  const center = trimmedWayCenterline(way, trimStartM, trimEndM, curveErrorM);
   const lanes: LanePath[] = [];
   const dividers: DividerPath[] = [];
   const arrows: LanePath[] = [];
@@ -213,8 +226,13 @@ export function resolveWayLaneGeometry(
   return { geometry: result, cacheHit: false };
 }
 
-export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLaneGeometry {
-  return resolveWayLaneGeometry(way, trimStartM, trimEndM).geometry;
+export function wayLaneGeometry(
+  way: Way,
+  trimStartM = 0,
+  trimEndM = 0,
+  curveErrorM?: number,
+): WayLaneGeometry {
+  return resolveWayLaneGeometry(way, trimStartM, trimEndM, curveErrorM).geometry;
 }
 
 /**

@@ -302,9 +302,6 @@
     }
   },
   "src/render/buildFeatures.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
     "complexity": {
       "count": 1
     },

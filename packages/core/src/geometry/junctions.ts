@@ -12,7 +12,12 @@
 // render rather than caching across frames.
 
 import { laneKind } from '../model/catalog';
-import { metersFromOrigin, offsetMeters, resolveWayPath } from '../model/geo';
+import {
+  metersFromOrigin,
+  offsetMeters,
+  resolveWayPath,
+  resolveWayPathAtError,
+} from '../model/geo';
 import { profileWidthM } from '../model/profile';
 import { laneRefKey, type ComponentMap } from '../model/components';
 import type { LaneConnector, LaneSpec, LngLat, Node, TurnRestriction, Way } from '../model/system';
@@ -54,7 +59,11 @@ const TRIM_CAP_FRACTION = 0.45; // a trim never eats more than 45% of its way
 /** Derive one junction's arms, trim distances, and footprint polygon.
  *  Returns null when fewer than 2 way-ends actually meet the node (e.g. a
  *  node whose refs are all interior pass-throughs). */
-export function junctionGeometry(node: Node, waysById: Map<string, Way>): JunctionGeometry | null {
+export function junctionGeometry(
+  node: Node,
+  waysById: Map<string, Way>,
+  curveErrorM?: number,
+): JunctionGeometry | null {
   const arms: JunctionArm[] = [];
   const seen = new Set<string>();
   for (const ref of node.refs) {
@@ -105,7 +114,8 @@ export function junctionGeometry(node: Node, waysById: Map<string, Way>): Juncti
   // Cap trims so a short block between two junctions can't invert.
   for (const arm of arms) {
     const way = waysById.get(arm.wayId)!;
-    const path = resolveWayPath(way);
+    const path =
+      curveErrorM === undefined ? resolveWayPath(way) : resolveWayPathAtError(way, curveErrorM);
     let len = 0;
     for (let i = 1; i < path.length; i++) {
       const d = metersFromOrigin(path[i - 1], path[i]);
@@ -371,8 +381,8 @@ export function connectorCurves(
           a.wayId === c.to.wayId && outgoingLanes(toWay, a.end).some((l) => l.id === c.to.laneId),
       ) ?? g.arms.find((a) => a.wayId === c.to.wayId);
     if (!fromArm || !toArm) continue;
-    const fromLane = wayLaneGeometry(fromWay).lanes.find((l) => l.laneId === c.from.laneId);
-    const toLane = wayLaneGeometry(toWay).lanes.find((l) => l.laneId === c.to.laneId);
+    const fromLane = wayLaneGeometry(fromWay).lanes.find((lane) => lane.laneId === c.from.laneId);
+    const toLane = wayLaneGeometry(toWay).lanes.find((lane) => lane.laneId === c.to.laneId);
     if (!fromLane || !toLane) continue;
     const fromTrims = trims.get(fromWay.id) ?? { start: 0, end: 0 };
     const toTrims = trims.get(toWay.id) ?? { start: 0, end: 0 };

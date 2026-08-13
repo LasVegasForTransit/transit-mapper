@@ -199,6 +199,28 @@ describe('screen-space corridor detail', () => {
     ).toBe(true);
   });
 
+  it('tessellates physical curves more finely only when the display can resolve them', () => {
+    const road = aRoad(
+      'curve',
+      [
+        [-115.2, 36.14],
+        [-115.19, 36.14],
+        [-115.19, 36.15],
+      ],
+      {
+        geometry: 'curved',
+        curveControls: [{ pointIndex: 1, radiusM: 80 }],
+        profile: defaultProfileFor('road', 8),
+      },
+    );
+    const system = aSystem({ ways: [road] });
+    const far = buildFeatures(system, null, [], infrastructureView(8));
+    const near = buildFeatures(system, null, [], infrastructureView(20));
+    expect(near.lanes.features[0].geometry.coordinates.length).toBeGreaterThan(
+      far.ways.features[0].geometry.coordinates.length,
+    );
+  });
+
   it('stamps the z14 corridor width at the final displayed scale', () => {
     const road = aRoad(
       'scaled-road',
