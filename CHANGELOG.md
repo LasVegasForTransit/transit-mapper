@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.5.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.4.0...v0.5.0) (2026-08-13)
+
+
+### Features
+
+* **core:** separate stations from stops ([508a4b3](https://github.com/LasVegasForTransit/transit-mapper/commit/508a4b34865530cd32c25d4f52d26829f9819576))
+* **editor:** distinguish stations from stops ([bc11720](https://github.com/LasVegasForTransit/transit-mapper/commit/bc1172017838a50e5edd21b5956a89305991d93d))
+
+
+### Bug Fixes
+
+* **editor:** clarify responsive sidebar chrome ([64a478d](https://github.com/LasVegasForTransit/transit-mapper/commit/64a478d48523f72438c2a2560b4ba559b4a71793))
+* make OpenStreetMap imports metro-wide and resilient ([1191130](https://github.com/LasVegasForTransit/transit-mapper/commit/1191130dafbae30789c1771077d4956305f523bf))
+* **perf:** exercise Stops in editor journeys ([54e95b8](https://github.com/LasVegasForTransit/transit-mapper/commit/54e95b81b8357249ff57175b0325d1ce2abde410))
+* preserve metro import topology across tile seams ([5312bf7](https://github.com/LasVegasForTransit/transit-mapper/commit/5312bf77ed70c2757f0df3802569ccacf2b9bffb))
+* use editor commands for metro imports ([497a549](https://github.com/LasVegasForTransit/transit-mapper/commit/497a549978bed5d1e96f7cc2c2ad6b2af8a01cc5))
+* **web:** harden saved-system accessibility ([805cae9](https://github.com/LasVegasForTransit/transit-mapper/commit/805cae9695a23cd376476bd1a228af71b80ddf65))
+* **web:** make saved systems easy to open ([f768db9](https://github.com/LasVegasForTransit/transit-mapper/commit/f768db95206e8a4b6f2acfeaabf0c5923953f2c0))
+
+
+### Performance Improvements
+
+* **web:** keep passenger-place UI within bundle policy ([97cd027](https://github.com/LasVegasForTransit/transit-mapper/commit/97cd0274613b036662d115df0ba1a518b863a463))
+* **web:** move system previews off the input thread ([68d43af](https://github.com/LasVegasForTransit/transit-mapper/commit/68d43af342eb48e7885b0024d9ee41b041b520ca))
+
 ## [0.4.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.3.2...v0.4.0) (2026-08-11)
 
 
