@@ -336,6 +336,44 @@ function displayName(value: string | undefined, fallback: string): string {
   return value?.trim() ? value : fallback;
 }
 
+interface SidebarPlaceRowProps {
+  itemSelection: NonNullable<Selection>;
+  name: string;
+  tag?: string;
+  selection: Selection;
+  selectAndFocus: EditorCommands['selection']['selectAndFocus'];
+  setOutlineHover: EditorCommands['selection']['setOutlineHover'];
+  tabIndexFor: ReturnType<typeof sidebarTabIndexFor>;
+}
+
+function SidebarPlaceRow({
+  itemSelection,
+  name,
+  tag,
+  selection,
+  selectAndFocus,
+  setOutlineHover,
+  tabIndexFor,
+}: SidebarPlaceRowProps) {
+  const active = selection?.kind === itemSelection.kind && selection.id === itemSelection.id;
+  return (
+    <button
+      type="button"
+      data-sidebar-option
+      aria-pressed={active}
+      tabIndex={tabIndexFor(itemSelection.kind, itemSelection.id)}
+      className={`list-row ${active ? 'active' : ''}`}
+      onClick={() => selectAndFocus(itemSelection)}
+      onMouseEnter={() => setOutlineHover(itemSelection)}
+      onMouseLeave={() => setOutlineHover(null)}
+    >
+      <span className="dot ring" />
+      <span className="list-name">{name}</span>
+      {tag && <span className="list-tag">{tag}</span>}
+    </button>
+  );
+}
+
 function NetworkOutline({
   system,
   selection,
@@ -432,25 +470,17 @@ function NetworkOutline({
           </SidebarEmpty>
         )}
         {visibleStops.items.map((stop) => (
-          <button
+          <SidebarPlaceRow
             key={stop.id}
-            type="button"
-            data-sidebar-option
-            aria-pressed={selection?.kind === 'stop' && selection.id === stop.id}
-            tabIndex={tabIndexFor('stop', stop.id)}
-            className={`list-row ${selection?.kind === 'stop' && selection.id === stop.id ? 'active' : ''}`}
-            onClick={() => selectAndFocus({ kind: 'stop', id: stop.id })}
-            onMouseEnter={() => setOutlineHover({ kind: 'stop', id: stop.id })}
-            onMouseLeave={() => setOutlineHover(null)}
-          >
-            <span className="dot ring" />
-            <span className="list-name">{displayName(stop.name, 'Unnamed stop')}</span>
-            {stop.stationId && stationById.get(stop.stationId) && (
-              <span className="list-tag">
-                {displayName(stationById.get(stop.stationId)?.name, 'Unnamed station')}
-              </span>
-            )}
-          </button>
+            itemSelection={{ kind: 'stop', id: stop.id }}
+            name={displayName(stop.name, 'Unnamed stop')}
+            tag={
+              stop.stationId && stationById.has(stop.stationId)
+                ? displayName(stationById.get(stop.stationId)?.name, 'Unnamed station')
+                : undefined
+            }
+            {...{ selection, selectAndFocus, setOutlineHover, tabIndexFor }}
+          />
         ))}
         {!normalized && (
           <ShowMore hiddenCount={visibleStops.hiddenCount} onClick={() => showAll('stops')} />
@@ -469,20 +499,12 @@ function NetworkOutline({
           </SidebarEmpty>
         )}
         {visibleStations.items.map((station) => (
-          <button
+          <SidebarPlaceRow
             key={station.id}
-            type="button"
-            data-sidebar-option
-            aria-pressed={selection?.kind === 'station' && selection.id === station.id}
-            tabIndex={tabIndexFor('station', station.id)}
-            className={`list-row ${selection?.kind === 'station' && selection.id === station.id ? 'active' : ''}`}
-            onClick={() => selectAndFocus({ kind: 'station', id: station.id })}
-            onMouseEnter={() => setOutlineHover({ kind: 'station', id: station.id })}
-            onMouseLeave={() => setOutlineHover(null)}
-          >
-            <span className="dot ring" />
-            <span className="list-name">{displayName(station.name, 'Unnamed station')}</span>
-          </button>
+            itemSelection={{ kind: 'station', id: station.id }}
+            name={displayName(station.name, 'Unnamed station')}
+            {...{ selection, selectAndFocus, setOutlineHover, tabIndexFor }}
+          />
         ))}
         {!normalized && (
           <ShowMore hiddenCount={visibleStations.hiddenCount} onClick={() => showAll('stations')} />
@@ -871,20 +893,13 @@ function InfrastructureStopsSection({
         </SidebarEmpty>
       )}
       {stops.items.map((stop) => (
-        <button
+        <SidebarPlaceRow
           key={stop.id}
-          type="button"
-          data-sidebar-option
-          aria-pressed={selection?.kind === 'stop' && selection.id === stop.id}
-          tabIndex={props.tabIndexFor('stop', stop.id)}
-          className={`list-row ${selection?.kind === 'stop' && selection.id === stop.id ? 'active' : ''}`}
-          onClick={() => selectAndFocus({ kind: 'stop', id: stop.id })}
-          onMouseEnter={() => setOutlineHover({ kind: 'stop', id: stop.id })}
-          onMouseLeave={() => setOutlineHover(null)}
-        >
-          <span className="dot ring" />
-          <span className="list-name">{displayName(stop.name, 'Unnamed stop')}</span>
-        </button>
+          itemSelection={{ kind: 'stop', id: stop.id }}
+          name={displayName(stop.name, 'Unnamed stop')}
+          tabIndexFor={props.tabIndexFor}
+          {...{ selection, selectAndFocus, setOutlineHover }}
+        />
       ))}
       {!normalized && <ShowMore hiddenCount={stops.hiddenCount} onClick={() => showAll('stops')} />}
     </SidebarSection>
@@ -914,23 +929,14 @@ function InfrastructureStationsSection({
         </SidebarEmpty>
       )}
       {stations.items.map((station) => (
-        <button
+        <SidebarPlaceRow
           key={station.id}
-          type="button"
-          data-sidebar-option
-          aria-pressed={selection?.kind === 'station' && selection.id === station.id}
-          tabIndex={props.tabIndexFor('station', station.id)}
-          className={`list-row ${selection?.kind === 'station' && selection.id === station.id ? 'active' : ''}`}
-          onClick={() => selectAndFocus({ kind: 'station', id: station.id })}
-          onMouseEnter={() => setOutlineHover({ kind: 'station', id: station.id })}
-          onMouseLeave={() => setOutlineHover(null)}
-        >
-          <span className="dot ring" />
-          <span className="list-name">{displayName(station.name, 'Unnamed station')}</span>
-          {station.platforms && station.platforms.length > 0 && (
-            <span className="list-tag">{station.platforms.length} platforms</span>
-          )}
-        </button>
+          itemSelection={{ kind: 'station', id: station.id }}
+          name={displayName(station.name, 'Unnamed station')}
+          tag={station.platforms?.length ? `${station.platforms.length} platforms` : undefined}
+          tabIndexFor={props.tabIndexFor}
+          {...{ selection, selectAndFocus, setOutlineHover }}
+        />
       ))}
       {!normalized && (
         <ShowMore hiddenCount={stations.hiddenCount} onClick={() => showAll('stations')} />
@@ -966,22 +972,13 @@ function InfrastructureFacilitiesSection({
         </SidebarEmpty>
       )}
       {facilities.items.map((facility) => (
-        <button
+        <SidebarPlaceRow
           key={facility.id}
-          type="button"
-          data-sidebar-option
-          aria-pressed={selection?.kind === 'facility' && selection.id === facility.id}
-          tabIndex={props.tabIndexFor('facility', facility.id)}
-          className={`list-row ${selection?.kind === 'facility' && selection.id === facility.id ? 'active' : ''}`}
-          onClick={() => selectAndFocus({ kind: 'facility', id: facility.id })}
-          onMouseEnter={() => setOutlineHover({ kind: 'facility', id: facility.id })}
-          onMouseLeave={() => setOutlineHover(null)}
-        >
-          <span className="dot ring" />
-          <span className="list-name">
-            {displayName(facility.name, FACILITY_TYPES[facility.typeId].label)}
-          </span>
-        </button>
+          itemSelection={{ kind: 'facility', id: facility.id }}
+          name={displayName(facility.name, FACILITY_TYPES[facility.typeId].label)}
+          tabIndexFor={props.tabIndexFor}
+          {...{ selection, selectAndFocus, setOutlineHover }}
+        />
       ))}
       {!normalized && (
         <ShowMore hiddenCount={facilities.hiddenCount} onClick={() => showAll('facilities')} />
