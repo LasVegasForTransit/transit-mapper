@@ -14,6 +14,81 @@ function laneId(way: Way, direction: LaneDirection): string {
 }
 
 describe('way split and merge regressions', () => {
+  it('keeps curve controls on their physical half when splitting a way', () => {
+    const road = {
+      ...aRoad('road', [
+        [0, 0],
+        [1, 0],
+        [2, 0],
+        [3, 0],
+        [4, 0],
+      ]),
+      geometry: 'curved' as const,
+      curveControls: [
+        { pointIndex: 1, radiusM: 20 },
+        { pointIndex: 2, radiusM: 30 },
+        { pointIndex: 3, radiusM: 40 },
+      ],
+    };
+    const split = splitWayAtIndex(aSystem({ ways: [road] }), road.id, 2, () => 'east');
+
+    expect(split.ways.find((way) => way.id === road.id)?.curveControls).toEqual([
+      { pointIndex: 1, radiusM: 20 },
+    ]);
+    expect(split.ways.find((way) => way.id === 'east')?.curveControls).toEqual([
+      { pointIndex: 1, radiusM: 40 },
+    ]);
+  });
+
+  it('maps curves from both physical ways into a merged path', () => {
+    const keep = {
+      ...aRoad('keep', [
+        [0, 0],
+        [1, 0],
+        [2, 0],
+      ]),
+      geometry: 'curved' as const,
+      curveControls: [{ pointIndex: 1, radiusM: 20 }],
+    };
+    const other = {
+      ...aRoad('other', [
+        [2, 0],
+        [3, 0],
+        [4, 0],
+      ]),
+      geometry: 'curved' as const,
+      curveControls: [{ pointIndex: 1, radiusM: 40 }],
+    };
+
+    const merged = mergeWaysEndToEnd(aSystem({ ways: [keep, other] }), keep.id, other.id);
+
+    expect(merged.ways[0].curveControls).toEqual([
+      { pointIndex: 1, radiusM: 20 },
+      { pointIndex: 3, radiusM: 40 },
+    ]);
+  });
+
+  it('reindexes a reversed way’s curve control when merging it', () => {
+    const keep = aRoad('keep', [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+    ]);
+    const other = {
+      ...aRoad('other', [
+        [4, 0],
+        [3, 0],
+        [2, 0],
+      ]),
+      geometry: 'curved' as const,
+      curveControls: [{ pointIndex: 1, radiusM: 40 }],
+    };
+
+    const merged = mergeWaysEndToEnd(aSystem({ ways: [keep, other] }), keep.id, other.id);
+
+    expect(merged.ways[0].curveControls).toEqual([{ pointIndex: 3, radiusM: 40 }]);
+  });
+
   it('keeps touching remapped legs separate when they pin different lanes', () => {
     const keepLeg = {
       ...wholeLeg('keep'),

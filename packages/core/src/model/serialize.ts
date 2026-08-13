@@ -9,6 +9,7 @@ import type { ComponentMap } from './components';
 import {
   DEFAULT_VIEWPORT,
   type ApproachControl,
+  type CurveControl,
   type CrossSection,
   type DrivingSide,
   type LaneConnector,
@@ -203,6 +204,36 @@ function parseProfile(raw: unknown): CrossSection | null {
     });
   }
   return lanes.length > 0 ? { lanes } : null;
+}
+
+/** Controls are persisted authoring intent, so invalid entries are repaired at
+ * load time instead of forcing geometry code to handle impossible endpoints,
+ * negative radii, or competing instructions for one corner. */
+function parseCurveControls(raw: unknown, pointCount: number): CurveControl[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const controls: CurveControl[] = [];
+  const occupiedPointIndexes = new Set<number>();
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const control = item as Record<string, unknown>;
+    const pointIndex = control.pointIndex;
+    const radiusM = control.radiusM;
+    if (
+      typeof pointIndex !== 'number' ||
+      !Number.isInteger(pointIndex) ||
+      pointIndex <= 0 ||
+      pointIndex >= pointCount - 1 ||
+      typeof radiusM !== 'number' ||
+      !Number.isFinite(radiusM) ||
+      radiusM <= 0 ||
+      occupiedPointIndexes.has(pointIndex)
+    ) {
+      continue;
+    }
+    occupiedPointIndexes.add(pointIndex);
+    controls.push({ pointIndex, radiusM });
+  }
+  return controls.length > 0 ? controls : undefined;
 }
 
 // Coordinates are compared to this many decimal places (~0.11m at the
@@ -827,11 +858,14 @@ function parseV3(o: Record<string, unknown>): TransitSystem {
     const profile =
       parseProfile(r.profile) ??
       defaultProfileFor(typeId, typeof r.capacity === 'number' ? r.capacity : undefined);
+    const points = coords(r.points);
+    const curveControls = parseCurveControls(r.curveControls, points.length);
     return {
       id: r.id,
       typeId,
-      points: coords(r.points),
+      points,
       geometry: geometryOf(r.geometry),
+      ...(curveControls ? { curveControls } : {}),
       grade: gradeOf(r.grade),
       profile,
       classId: typeof r.classId === 'string' ? r.classId : undefined,

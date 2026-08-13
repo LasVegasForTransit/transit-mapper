@@ -80,8 +80,11 @@ Stops. Schema v16 and the old Station-record migration live in `serialize.ts`;
 #### Geometry
 
 `packages/core/src/geometry` derives lane centerlines, junction footprints,
-connector curves, and other street geometry from the domain model. These
-results are memoized but never persisted. See
+connector curves, and other street geometry from the domain model.
+`metric-plane.ts` and `metric-curves.ts` resolve a curved Way's local-meter
+centerline from optional per-point radius controls; the document stores the
+authored radius, never a sampled mesh. These results are memoized but never
+persisted. See
 [Geometry and routing](../../product/explanation/geometry-and-routing.md).
 
 #### Rendering
@@ -99,8 +102,9 @@ MapLibre expressions.
 without mixing presentation fields into the domain catalogs. The editor map,
 embed, exports, and social previews share this projection boundary so their
 representations remain consistent. The current screen-space scene contract
-does not include watertight metric corridor meshes, and Diagram still uses the
-existing core layout path outside the geographic projection scheduler.
+does not include watertight metric corridor meshes or presentation-adaptive
+curve tessellation, and Diagram still uses the existing core layout path
+outside the geographic projection scheduler.
 
 #### Simulation
 

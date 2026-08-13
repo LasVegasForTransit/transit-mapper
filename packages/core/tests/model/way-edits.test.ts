@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { patternWayIds } from '../../src/model/geo';
+import { haversineMeters, patternWayIds, resolveWayPath } from '../../src/model/geo';
 import {
   deleteWayPoint,
   insertWayPoint,
@@ -53,6 +53,79 @@ describe('pure way edits', () => {
     expect(inserted.nodes[0].refs.find((ref) => ref.wayId === trunk.id)?.pointIndex).toBe(2);
     const deleted = deleteWayPoint(inserted, trunk.id, 0);
     expect(deleted.nodes[0].refs.find((ref) => ref.wayId === trunk.id)?.pointIndex).toBe(1);
+  });
+
+  it('keeps curve controls attached to their original points through point edits', () => {
+    const road = {
+      ...aRoad('curve', [
+        [-115.3, 36.1],
+        [-115.2, 36.1],
+        [-115.1, 36.1],
+        [-115.0, 36.1],
+      ]),
+      geometry: 'curved' as const,
+      curveControls: [
+        { pointIndex: 1, radiusM: 40 },
+        { pointIndex: 2, radiusM: 60 },
+      ],
+    };
+    const system = aSystem({ ways: [road] });
+
+    const inserted = insertWayPoint(system, road.id, 1, [-115.25, 36.1]);
+    expect(inserted.ways[0].curveControls).toEqual([
+      { pointIndex: 2, radiusM: 40 },
+      { pointIndex: 3, radiusM: 60 },
+    ]);
+
+    const deleted = deleteWayPoint(inserted, road.id, 2);
+    expect(deleted.ways[0].curveControls).toEqual([{ pointIndex: 2, radiusM: 60 }]);
+  });
+
+  it('resolves a curved way from its metric radius control', () => {
+    const road = {
+      ...aRoad('curve', [
+        [0, 0],
+        [0.01, 0],
+        [0.01, 0.01],
+      ]),
+      geometry: 'curved' as const,
+      curveControls: [{ pointIndex: 1, radiusM: 30 }],
+    };
+
+    const path = resolveWayPath(road);
+    const arcStart = path[1];
+
+    expect(haversineMeters(arcStart, road.points[1])).toBeCloseTo(30, 1);
+  });
+
+  it('moves a target way’s curve controls when a junction inserts a point', () => {
+    const target = {
+      ...aRoad('target', [
+        [-115.3, 36.1],
+        [-115.2, 36.1],
+        [-115.1, 36.1],
+      ]),
+      geometry: 'curved' as const,
+      curveControls: [{ pointIndex: 1, radiusM: 40 }],
+    };
+    const branch = aRoad('branch', [
+      [-115.25, 36.2],
+      [-115.25, 36.1],
+    ]);
+    const joined = joinWayPointToWay(
+      aSystem({ ways: [target, branch] }),
+      {
+        wayId: branch.id,
+        index: 1,
+        targetWayId: target.id,
+        coord: [-115.25, 36.1],
+      },
+      () => 'junction',
+    );
+
+    expect(joined.ways.find((way) => way.id === target.id)?.curveControls).toEqual([
+      { pointIndex: 2, radiusM: 40 },
+    ]);
   });
 
   it('does not mint ids for invalid junction, split, or identity edits', () => {
