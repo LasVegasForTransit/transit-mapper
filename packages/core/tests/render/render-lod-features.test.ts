@@ -222,6 +222,34 @@ describe('screen-space corridor detail', () => {
     );
   });
 
+  it('emits twin rails and one compact tie collection for each visible track', () => {
+    const railway = aRoad(
+      'railway',
+      [
+        [-115.2, 36.14],
+        [-115.16, 36.14],
+      ],
+      { typeId: 'lightRail', profile: defaultProfileFor('lightRail') },
+    );
+    const features = buildFeatures(
+      aSystem({ ways: [railway] }),
+      null,
+      [],
+      infrastructureViewAtWidth(railway, 12),
+    );
+    const rails = features.laneMarkings.features.filter(
+      (feature) => feature.properties?.kind === 'rail',
+    );
+    const ties = features.laneMarkings.features.filter(
+      (feature) => feature.properties?.kind === 'railTie',
+    );
+
+    expect(rails).toHaveLength(2);
+    expect(rails.every((feature) => feature.geometry.type === 'LineString')).toBe(true);
+    expect(ties).toHaveLength(1);
+    expect(ties[0]?.geometry.type).toBe('MultiLineString');
+  });
+
   it('stamps the z14 corridor width at the final displayed scale', () => {
     const road = aRoad(
       'scaled-road',

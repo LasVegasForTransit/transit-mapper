@@ -16,6 +16,13 @@ guideway. Divider lines come from those same boundaries (dashed between
 same-direction lanes, yellow between opposing lanes, edge lines at the
 border).
 
+A rail track uses its lane centerline differently: it resolves to a standard
+gauge pair of running rails and a regular set of ties. The ties travel as one
+multi-line feature rather than thousands of unrelated map features; SVG
+expands that same geometry when it writes the drawing. At lower detail the
+corridor remains the clean guideway line, so rail hardware appears only when
+it can read as physical structure rather than texture.
+
 The lane-list convention follows osm2streets: left-to-right as seen facing
 the way's forward direction. Adopting an existing convention meant lane
 ordering, flipping, and one-way logic had prior art to check against.

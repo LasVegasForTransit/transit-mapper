@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '../../src/model/catalog';
-import { profileWidthM } from '../../src/model/profile';
+import { defaultProfileFor, profileWidthM } from '../../src/model/profile';
 import type { LngLat, TransitSystem, Way } from '../../src/model/system';
 import { widthPxAtZ14 } from '../../src/render/constants';
 import { buildFeatures, type RenderViewOptions } from '../../src/render/buildFeatures';
@@ -201,5 +201,26 @@ describe('SVG screen-space LOD parity', () => {
 
     expect(lanes.length).toBeGreaterThan(0);
     expect(lanes.every((visual) => visual.kind === 'polygon')).toBe(true);
+  });
+
+  it('serializes the compact rail tie collection as individual physical ties', () => {
+    const railway = aRoad(
+      'railway',
+      [
+        [-115.2, 36.14],
+        [-115.1995, 36.14],
+      ],
+      { typeId: 'lightRail', profile: defaultProfileFor('lightRail') },
+    );
+    const view = viewAtWidth(railway, 12);
+    const resolved = resolveStaticVisualScene({
+      revision: 'rail-detail',
+      features: buildFeatures(aSystem({ ways: [railway] }), null, [], view),
+      presentation: view.presentation,
+    });
+    const railVisuals = resolved.visuals.filter((visual) => visual.source === 'lane-markings');
+
+    expect(railVisuals.length).toBeGreaterThan(2);
+    expect(railVisuals.every((visual) => visual.kind === 'line')).toBe(true);
   });
 });

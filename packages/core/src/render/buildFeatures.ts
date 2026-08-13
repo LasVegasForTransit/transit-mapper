@@ -1,4 +1,11 @@
-import type { FeatureCollection, Feature, LineString, Point, Polygon } from 'geojson';
+import type {
+  FeatureCollection,
+  Feature,
+  LineString,
+  MultiLineString,
+  Point,
+  Polygon,
+} from 'geojson';
 import { wayType } from '@transitmapper/core/model/catalog';
 import {
   facilityRender,
@@ -28,7 +35,13 @@ import { linesByServiceId } from '../model/line-service';
 import { nearWaysForStations, servicesByWay, visibleWaysFor } from './featureMemo';
 import { mergeAdjacentServiceLines } from './mergeServiceLines';
 import { directionalLanes, isOneWay, profileWidthM } from '../model/profile';
-import { resolveWayLaneGeometry, type LanePath } from '../geometry/streets';
+import {
+  railTrackGeometry,
+  resolveWayLaneGeometry,
+  STANDARD_RAIL_TIE_SPACING_M,
+  type LanePath,
+  type WayLaneGeometry,
+} from '../geometry/streets';
 import {
   collectWayTrims,
   junctionGeometry,
@@ -105,6 +118,7 @@ const BUNDLE_SPACING_PX = 5; // perpendicular gap between parallel services (Net
 const WITHIN_LANE_SPACING_PX = 1.5; // gap between services sharing ONE lane in Infrastructure lane-detail
 const SERVICE_LANE_FRACTION = 0.6; // a service overlay fills ~60% of its lane's width (leaves the lane markings visible)
 const DISPLAYED_CURVE_ERROR_PX = 0.35;
+const DISPLAYED_RAIL_TIE_SPACING_PX = 3;
 
 /** Rendering controls approximation density, while geometry owns the actual
  * physical arc. This keeps display scale out of the domain model. */
@@ -560,7 +574,7 @@ export interface SystemFeatures {
    * direction arrows. Screen-space corridor width selects this tier; the
    * collections stay empty when that detail cannot contribute a pixel. */
   lanes: FeatureCollection<Polygon>;
-  laneMarkings: FeatureCollection<LineString>;
+  laneMarkings: FeatureCollection<LineString | MultiLineString>;
   laneArrows: FeatureCollection<LineString>;
   /** Travel arrows for stretches only ONE direction of a line rides. Carries
    *  the service colour, because these sit on top of the line rather than on
@@ -1682,7 +1696,7 @@ interface TopologyProjectionResult {
   ways: Feature<LineString>[];
   services: Feature<LineString>[];
   lanes: Feature<Polygon>[];
-  laneMarkings: Feature<LineString>[];
+  laneMarkings: Feature<LineString | MultiLineString>[];
   laneArrows: Feature<LineString>[];
   serviceArrows: Feature<LineString>[];
   junctions: Feature<Polygon>[];
@@ -1795,6 +1809,149 @@ function tierAvailabilityProperties(
   };
 }
 
+interface RailMarkingProjection {
+  laneMarkings: Feature<LineString | MultiLineString>[];
+  way: Pick<Way, 'id' | 'typeId'>;
+  lane: LanePath;
+  color: string;
+  corridorW14: number;
+  tierOpacity: number;
+  availability: TierAvailabilityProperties;
+  tieSpacingM: number;
+}
+
+/** Add rail hardware as three stable features: two rails and one compact tie
+ * collection. Keeping it out of the topology loop makes that loop responsible
+ * only for deciding *which* detail is visible, not for constructing it. */
+function appendRailMarkings({
+  laneMarkings,
+  way,
+  lane,
+  color,
+  corridorW14,
+  tierOpacity,
+  availability,
+  tieSpacingM,
+}: RailMarkingProjection): void {
+  const detail = railTrackGeometry(lane, tieSpacingM);
+  detail.rails.forEach((coordinates, railIndex) => {
+    laneMarkings.push({
+      type: 'Feature',
+      id: stableFeatureId('laneMarkings', 'rail', way.id, lane.laneId, railIndex),
+      properties: {
+        wayId: way.id,
+        typeId: way.typeId,
+        laneId: lane.laneId,
+        kind: 'rail',
+        color,
+        corridorW14,
+        renderTier: 'street',
+        tierOpacity,
+        ...availability,
+      },
+      geometry: { type: 'LineString', coordinates },
+    });
+  });
+  if (detail.ties.length === 0) return;
+  laneMarkings.push({
+    type: 'Feature',
+    id: stableFeatureId('laneMarkings', 'rail-ties', way.id, lane.laneId),
+    properties: {
+      wayId: way.id,
+      typeId: way.typeId,
+      laneId: lane.laneId,
+      kind: 'railTie',
+      color,
+      corridorW14,
+      renderTier: 'street',
+      tierOpacity,
+      ...availability,
+    },
+    geometry: { type: 'MultiLineString', coordinates: detail.ties },
+  });
+}
+
+interface StreetMarkingProjection {
+  laneMarkings: Feature<LineString | MultiLineString>[];
+  way: Pick<Way, 'id' | 'typeId'>;
+  geometry: WayLaneGeometry;
+  corridorW14: number;
+  tierOpacity: number;
+  availability: TierAvailabilityProperties;
+  tieSpacingM: number;
+}
+
+/** Emit all paint-on-top-of-the-surface detail for one cross-section. Lane
+ * polygons, service paths, and topology traversal deliberately stay with the
+ * caller; this owns only rails and painted lane boundaries. */
+function appendStreetMarkings({
+  laneMarkings,
+  way,
+  geometry,
+  corridorW14,
+  tierOpacity,
+  availability,
+  tieSpacingM,
+}: StreetMarkingProjection): void {
+  for (const lane of geometry.lanes) {
+    const render = laneRender(lane.kindId);
+    if (render.surface) continue;
+    if (lane.kindId === 'track' && way.typeId !== 'monorail') {
+      appendRailMarkings({
+        laneMarkings,
+        way,
+        lane,
+        color: render.color,
+        corridorW14,
+        tierOpacity,
+        availability,
+        tieSpacingM,
+      });
+      continue;
+    }
+    laneMarkings.push({
+      type: 'Feature',
+      id: stableFeatureId('laneMarkings', 'thin-lane', way.id, lane.laneId),
+      properties: {
+        wayId: way.id,
+        typeId: way.typeId,
+        laneId: lane.laneId,
+        kind: 'thinLane',
+        color: render.color,
+        corridorW14,
+        renderTier: 'street',
+        tierOpacity,
+        ...availability,
+      },
+      geometry: { type: 'LineString', coordinates: lane.path },
+    });
+  }
+  for (const divider of geometry.dividers) {
+    laneMarkings.push({
+      type: 'Feature',
+      id: stableFeatureId(
+        'laneMarkings',
+        'boundary',
+        way.id,
+        divider.beforeLaneId,
+        divider.afterLaneId,
+      ),
+      properties: {
+        wayId: way.id,
+        typeId: way.typeId,
+        beforeLaneId: divider.beforeLaneId,
+        afterLaneId: divider.afterLaneId,
+        kind: divider.kind,
+        corridorW14,
+        renderTier: 'street',
+        tierOpacity,
+        ...availability,
+      },
+      geometry: { type: 'LineString', coordinates: divider.path },
+    });
+  }
+}
+
 /** Build the collections derived from ways, services, lanes, and junctions.
  *
  * These collections deliberately share one pass: lane-detail services need
@@ -1889,7 +2046,7 @@ function projectTopologyFeatures({
   const services: Feature<LineString>[] = [];
   const serviceHits: Feature<LineString>[] = [];
   const lanes: Feature<Polygon>[] = [];
-  const laneMarkings: Feature<LineString>[] = [];
+  const laneMarkings: Feature<LineString | MultiLineString>[] = [];
   const laneArrows: Feature<LineString>[] = [];
   const serviceArrows: Feature<LineString>[] = [];
 
@@ -1949,46 +2106,19 @@ function projectTopologyFeatures({
         });
       }
     }
-    for (const lane of g.lanes) {
-      const r = laneRender(lane.kindId);
-      if (!r.surface && projection.topology.laneMarkings) {
-        laneMarkings.push({
-          type: 'Feature',
-          id: stableFeatureId('laneMarkings', 'thin-lane', way.id, lane.laneId),
-          properties: {
-            wayId: way.id,
-            typeId: way.typeId,
-            laneId: lane.laneId,
-            kind: 'thinLane',
-            color: r.color,
-            corridorW14,
-            renderTier: 'street',
-            tierOpacity: presentation.blend.weights.street,
-            ...availability,
-          },
-          geometry: { type: 'LineString', coordinates: lane.path },
-        });
-      }
-    }
     if (projection.topology.laneMarkings) {
-      for (const d of g.dividers) {
-        laneMarkings.push({
-          type: 'Feature',
-          id: stableFeatureId('laneMarkings', 'boundary', way.id, d.beforeLaneId, d.afterLaneId),
-          properties: {
-            wayId: way.id,
-            typeId: way.typeId,
-            beforeLaneId: d.beforeLaneId,
-            afterLaneId: d.afterLaneId,
-            kind: d.kind,
-            corridorW14,
-            renderTier: 'street',
-            tierOpacity: presentation.blend.weights.street,
-            ...availability,
-          },
-          geometry: { type: 'LineString', coordinates: d.path },
-        });
-      }
+      appendStreetMarkings({
+        laneMarkings,
+        way,
+        geometry: g,
+        corridorW14,
+        tierOpacity: presentation.blend.weights.street,
+        availability,
+        tieSpacingM: Math.max(
+          STANDARD_RAIL_TIE_SPACING_M,
+          metricErrorForDisplayedPixels(view.presentation, lat, DISPLAYED_RAIL_TIE_SPACING_PX),
+        ),
+      });
     }
     if (projection.topology.laneArrows) {
       for (const a of g.arrows) {

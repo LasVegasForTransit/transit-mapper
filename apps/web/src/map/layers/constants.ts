@@ -93,6 +93,7 @@ export const LYR_LANE_LINES = 'tm-lane-lines';
 export const LYR_CENTER_LINES = 'tm-center-lines';
 export const LYR_EDGE_LINES = 'tm-edge-lines';
 export const LYR_LANE_TRACKS = 'tm-lane-tracks';
+export const LYR_RAIL_TIES = 'tm-rail-ties';
 export const LYR_LANE_ARROWS = 'tm-lane-arrows';
 export const LYR_SERVICE_ARROWS = 'tm-service-arrows';
 export const LYR_JUNCTIONS = 'tm-junctions';

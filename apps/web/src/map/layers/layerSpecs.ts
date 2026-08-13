@@ -38,6 +38,7 @@ import {
   LYR_LANE_LINES,
   LYR_LANE_SURFACES,
   LYR_LANE_TRACKS,
+  LYR_RAIL_TIES,
   LYR_MARQUEE_FILL,
   LYR_MARQUEE_STROKE,
   LYR_PHYSICAL_HANDLES,
@@ -168,19 +169,34 @@ function streetDetailLayerSpecs(theme: MapTheme): LayerSpecification[] {
       },
     },
     {
+      // One feature carries a track's ties as a MultiLineString, below the
+      // two rails it joins. This is physical detail, not a repeated icon.
+      id: LYR_RAIL_TIES,
+      type: 'line',
+      source: SRC_LANE_MARKINGS,
+      filter: ['==', ['get', 'kind'], 'railTie'],
+      layout: { 'line-cap': 'butt', 'line-join': 'miter' },
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': 0.7,
+        'line-opacity': tierOpacityExpr(0.78) as never,
+      },
+    },
+    {
       // Thin-line lanes (rail tracks embedded in or beside a street) — a track
-      // is a pair of rails, not a slab, so it draws as a fixed thin line.
+      // is two physical rails, not a slab. Monorail/channel centerlines retain
+      // the legacy thinLane classification.
       id: LYR_LANE_TRACKS,
       type: 'line',
       source: SRC_LANE_MARKINGS,
-      filter: ['==', ['get', 'kind'], 'thinLane'],
+      filter: ['in', ['get', 'kind'], ['literal', ['thinLane', 'rail']]],
       layout: {
         'line-cap': 'round',
         'line-join': 'round',
       },
       paint: {
         'line-color': ['get', 'color'],
-        'line-width': 2.5,
+        'line-width': 1.3,
         'line-opacity': TIER_OPACITY_EXPR as never,
       },
     },

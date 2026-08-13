@@ -14,6 +14,7 @@ import { laneKind } from '../model/catalog';
 import {
   cumulativeLengths,
   offsetPolyline,
+  pointAtDistance,
   patternSegments,
   resolveWayPath,
   resolveWayPathAtError,
@@ -49,6 +50,41 @@ export interface LaneSurface {
   rightBoundary: LngLat[];
   /** Closed exterior ring, ordered from the left boundary to the right. */
   ring: LngLat[];
+}
+
+/** The standard-gauge separation between the two running rails. Track
+ * profiles describe their occupied corridor width; this is the physical
+ * detail inside that corridor. */
+export const STANDARD_RAIL_GAUGE_M = 1.435;
+export const STANDARD_RAIL_TIE_SPACING_M = 0.65;
+
+export interface RailTrackGeometry {
+  rails: [LngLat[], LngLat[]];
+  ties: LngLat[][];
+}
+
+/** Derive the visible rail hardware inside a track's centerline. The caller
+ * can increase `tieSpacingM` when the final display cannot resolve sleepers;
+ * it never changes the rail gauge. */
+export function railTrackGeometry(
+  track: LanePath,
+  tieSpacingM = STANDARD_RAIL_TIE_SPACING_M,
+): RailTrackGeometry {
+  if (track.path.length < 2 || tieSpacingM <= 0) return { rails: [[], []], ties: [] };
+  const rails: [LngLat[], LngLat[]] = [
+    offsetPolyline(track.path, -STANDARD_RAIL_GAUGE_M / 2),
+    offsetPolyline(track.path, STANDARD_RAIL_GAUGE_M / 2),
+  ];
+  const lengths = rails.map(cumulativeLengths) as [Float64Array, Float64Array];
+  const lengthM = Math.min(lengths[0][lengths[0].length - 1], lengths[1][lengths[1].length - 1]);
+  const ties: LngLat[][] = [];
+  for (let distanceM = tieSpacingM / 2; distanceM < lengthM; distanceM += tieSpacingM) {
+    ties.push([
+      pointAtDistance(rails[0], lengths[0], distanceM),
+      pointAtDistance(rails[1], lengths[1], distanceM),
+    ]);
+  }
+  return { rails, ties };
 }
 
 /** A painted line between/beside lanes. */
