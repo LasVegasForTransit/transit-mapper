@@ -16,10 +16,10 @@ export const PERF_BASELINE_DIRECTORY = 'perf';
 export const BUNDLE_BUDGETS: BundleBudget[] = [
   {
     entry: 'main',
-    // My systems adds an explicit switcher plus optional visual map cards.
-    // Preview drawing stays in the existing Worker; this <1% adjustment is
-    // the deliberate delivery allowance for the remaining interactive UI.
-    maximumGzipBytes: 516_000,
+    // Stop and Station are now separate editing surfaces across the outline,
+    // inspector, and gestures. Shared row rendering keeps the measured main
+    // delta to 0.24%; this remains a sub-0.5% delivery-ceiling adjustment.
+    maximumGzipBytes: 518_144,
     maximumBrotliBytes: 450_560,
   },
   {
