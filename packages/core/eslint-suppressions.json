@@ -11,9 +11,6 @@
     }
   },
   "src/geometry/streets.ts": {
-    "complexity": {
-      "count": 1
-    },
     "sonarjs/cognitive-complexity": {
       "count": 2
     }

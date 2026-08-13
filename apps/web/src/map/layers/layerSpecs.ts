@@ -9,7 +9,6 @@ import {
   CORRIDOR_CASING_WIDTH_EXPR,
   CORRIDOR_SELECT_HALO_WIDTH_EXPR,
   CORRIDOR_WIDTH_EXPR,
-  LANE_WIDTH_EXPR,
   SERVICE_CASING_WIDTH_EXPR,
   SERVICE_WIDTH_EXPR,
   SELECT_HALO_WIDTH_EXPR,
@@ -157,17 +156,15 @@ function contextLayerSpecs(theme: MapTheme): LayerSpecification[] {
 function streetDetailLayerSpecs(theme: MapTheme): LayerSpecification[] {
   return [
     {
-      // Lane surfaces: each lane's centerline drawn at its true metric width
-      // (w14 × exponential zoom scaling), so a 5-lane arterial reads as real
-      // asphalt at high zoom. Only populated at lane-detail zooms.
+      // Lane surfaces are true metric polygons, built from the same shared
+      // cross-section boundaries as static SVG. That keeps adjacent lanes
+      // flush at curves instead of relying on screen-space line inflation.
       id: LYR_LANE_SURFACES,
-      type: 'line',
+      type: 'fill',
       source: SRC_LANES,
-      layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
-        'line-color': ['get', 'color'],
-        'line-width': LANE_WIDTH_EXPR as never,
-        'line-opacity': tierOpacityExpr(0.9) as never,
+        'fill-color': ['get', 'color'],
+        'fill-opacity': tierOpacityExpr(0.9) as never,
       },
     },
     {

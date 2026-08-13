@@ -116,7 +116,7 @@ describe('screen-space LOD layer specifications', () => {
   });
 
   it('cross-fades Street surfaces, markings, arrows, connectors, and junctions', () => {
-    expectCameraTierOpacity(LYR_LANE_SURFACES, 'line-opacity', 0.9);
+    expectCameraTierOpacity(LYR_LANE_SURFACES, 'fill-opacity', 0.9);
     expectCameraTierOpacity(LYR_LANE_TRACKS, 'line-opacity', 1);
     expectCameraTierOpacity(LYR_LANE_LINES, 'line-opacity', 0.9);
     expectCameraTierOpacity(LYR_EDGE_LINES, 'line-opacity', 0.75);

@@ -243,25 +243,20 @@ function appendJunctionVisuals(features: SystemFeatures, visuals: ResolvedStatic
   }
 }
 
-function appendLaneVisuals(
-  features: SystemFeatures,
-  visuals: ResolvedStaticVisual[],
-  zoom: number,
-): void {
+function appendLaneVisuals(features: SystemFeatures, visuals: ResolvedStaticVisual[]): void {
   for (const feature of features.lanes.features) {
-    pushLine(
-      visuals,
-      line({
-        featureId: String(feature.id),
-        source: 'lanes',
-        coordinates: lngLatPath(feature.geometry.coordinates),
-        properties: feature.properties,
-        color: text(feature.properties, 'color', ROAD_SURFACE),
-        widthPx: scaledMetricWidth(numeric(feature.properties, 'w14', 1), zoom),
-        baseOpacity: 0.9,
-        lineCap: 'butt',
-      }),
-    );
+    const opacity = resolvedPaintOpacity(feature.properties, 0.9);
+    if (opacity <= 0) continue;
+    visuals.push({
+      kind: 'polygon',
+      featureId: String(feature.id),
+      source: 'lanes',
+      rings: feature.geometry.coordinates.map(lngLatPath),
+      color: text(feature.properties, 'color', ROAD_SURFACE),
+      renderTier: tier(feature.properties),
+      tierOpacity: tierOpacity(feature.properties),
+      opacity,
+    });
   }
 }
 
@@ -428,7 +423,7 @@ export function resolveStaticVisualScene(
 
   appendJunctionVisuals(features, visuals);
   appendWayVisuals(features, visuals, zoom, routeCasingColor);
-  appendLaneVisuals(features, visuals, zoom);
+  appendLaneVisuals(features, visuals);
   appendLaneMarkingVisuals(features, visuals);
   appendConnectorVisuals(features, visuals);
   appendServiceVisuals(features, visuals, zoom, routeCasingColor);
