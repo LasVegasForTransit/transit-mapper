@@ -7,12 +7,14 @@ derived at render or query time; none of it is saved.
 ## From centerline to lanes
 
 A way stores only a centerline and a cross-section (an ordered lane list
-with widths). `src/geometry/streets.ts` derives the rest: each lane's
-polyline is the centerline offset sideways by the running sum of lane widths
-(miter-joined, clamped at sharp angles), which yields lane surfaces,
-divider lines between them (dashed between same-direction lanes, the yellow
-center line between opposing ones, edge lines at the border), and direction
-arrows along travel lanes.
+with widths). `src/geometry/streets.ts` derives the rest in two forms: a
+lane centerline for routing, vehicles, and arrows, and a closed `LaneSurface`
+polygon for rendering. It resolves each cross-section boundary once, then
+shares that boundary with its two neighbouring surfaces. This avoids tiny
+gaps on curves and gives MapLibre and SVG the same physical asphalt or
+guideway. Divider lines come from those same boundaries (dashed between
+same-direction lanes, yellow between opposing lanes, edge lines at the
+border).
 
 The lane-list convention follows osm2streets: left-to-right as seen facing
 the way's forward direction. Adopting an existing convention meant lane

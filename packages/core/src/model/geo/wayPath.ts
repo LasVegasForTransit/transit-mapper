@@ -42,6 +42,53 @@ export function resolveWayPathAtError(way: Way, maxSagittaM: number): LngLat[] {
   return path;
 }
 
+/**
+ * Round an arbitrary coordinate polyline with local quadratic corners.
+ *
+ * This remains a small, coordinate-space helper for callers that do not have
+ * a physical Way. Way rendering deliberately does not use it: curved Ways
+ * resolve metric, tangent-continuous arcs above. Keeping the two names makes
+ * that distinction visible instead of silently applying a degree-space curve
+ * to real infrastructure.
+ */
+export function roundedCorners(
+  points: LngLat[],
+  cornerFraction: number,
+  samples: number,
+): LngLat[] {
+  if (points.length < 3) return points;
+  const path: LngLat[] = [points[0]];
+  for (let index = 1; index < points.length - 1; index++) {
+    const previous = points[index - 1];
+    const corner = points[index];
+    const next = points[index + 1];
+    const previousDistance = Math.hypot(corner[0] - previous[0], corner[1] - previous[1]);
+    const nextDistance = Math.hypot(next[0] - corner[0], next[1] - corner[1]);
+    const radius = Math.min(previousDistance, nextDistance) * cornerFraction;
+    if (radius < 1e-12) {
+      path.push(corner);
+      continue;
+    }
+    const entering = interpolate(corner, previous, radius / previousDistance);
+    const leaving = interpolate(corner, next, radius / nextDistance);
+    path.push(entering);
+    for (let step = 1; step <= samples; step++) {
+      const t = step / samples;
+      const inverse = 1 - t;
+      path.push([
+        inverse * inverse * entering[0] + 2 * inverse * t * corner[0] + t * t * leaving[0],
+        inverse * inverse * entering[1] + 2 * inverse * t * corner[1] + t * t * leaving[1],
+      ]);
+    }
+  }
+  path.push(points[points.length - 1]);
+  return path;
+}
+
+function interpolate(from: LngLat, to: LngLat, fraction: number): LngLat {
+  return [from[0] + (to[0] - from[0]) * fraction, from[1] + (to[1] - from[1]) * fraction];
+}
+
 // Cached by the ways array's own reference (immutable-replacement
 // convention, same as wayPathCache) — patternPath runs on every animation
 // frame for every pattern (see map/vehicles.ts), so a linear ways.find per

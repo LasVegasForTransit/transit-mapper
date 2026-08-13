@@ -216,7 +216,8 @@ describe('screen-space corridor detail', () => {
     const system = aSystem({ ways: [road] });
     const far = buildFeatures(system, null, [], infrastructureView(8));
     const near = buildFeatures(system, null, [], infrastructureView(20));
-    expect(near.lanes.features[0].geometry.coordinates.length).toBeGreaterThan(
+    expect(near.lanes.features[0].geometry.type).toBe('Polygon');
+    expect(near.lanes.features[0].geometry.coordinates[0].length).toBeGreaterThan(
       far.ways.features[0].geometry.coordinates.length,
     );
   });

@@ -36,6 +36,21 @@ export interface LanePath {
   path: LngLat[];
 }
 
+/** A physical strip of the cross-section. The two boundary arrays are shared
+ * with the neighbouring strip, so the renderer never invents a hairline gap
+ * between adjacent lanes by offsetting the same edge twice. `LanePath` stays
+ * separate because vehicles and route lines travel along a centerline; this
+ * describes the asphalt or guideway they occupy. */
+export interface LaneSurface {
+  laneId: string;
+  kindId: string;
+  widthM: number;
+  leftBoundary: LngLat[];
+  rightBoundary: LngLat[];
+  /** Closed exterior ring, ordered from the left boundary to the right. */
+  ring: LngLat[];
+}
+
 /** A painted line between/beside lanes. */
 export interface DividerPath {
   /** laneLine = dashed separator between same-direction lanes;
@@ -54,6 +69,7 @@ export interface WayLaneGeometry {
   wayId: string;
   totalWidthM: number;
   lanes: LanePath[];
+  laneSurfaces: LaneSurface[];
   dividers: DividerPath[];
   /** Directional lanes' paths oriented ALONG their travel direction —
    *  backward lanes come pre-reversed, so a symbol layer placing arrows
@@ -131,6 +147,83 @@ function trimmedWayCenterline(
   return trimPath(path, trimStartM, trimEndM);
 }
 
+/** Resolve the cross-section from an already-trimmed centerline. This is kept
+ * separate from the cache wrapper so geometry and cache lifecycles remain
+ * understandable on their own. */
+function deriveLaneCrossSection(center: LngLat[], way: Way): Omit<WayLaneGeometry, 'wayId'> {
+  const lanes: LanePath[] = [];
+  const laneSurfaces: LaneSurface[] = [];
+  const dividers: DividerPath[] = [];
+  const arrows: LanePath[] = [];
+  const totalWidthM = profileWidthM(way.profile);
+  if (center.length < 2 || way.profile.lanes.length === 0) {
+    return { totalWidthM, lanes, laneSurfaces, dividers, arrows };
+  }
+
+  // Resolve each physical boundary once. Neighbours retain the same array,
+  // which prevents a gap caused by separately offsetting their shared edge.
+  const boundaries: LngLat[][] = [offsetPolyline(center, -totalWidthM / 2)];
+  let cumulativeWidthM = 0;
+  for (const lane of way.profile.lanes) {
+    const leftBoundary = boundaries[boundaries.length - 1];
+    const offsetM = cumulativeWidthM + lane.widthM / 2 - totalWidthM / 2;
+    cumulativeWidthM += lane.widthM;
+    const rightBoundary = offsetPolyline(center, cumulativeWidthM - totalWidthM / 2);
+    boundaries.push(rightBoundary);
+    const path = offsetPolyline(center, offsetM);
+    const lanePath: LanePath = {
+      laneId: lane.id,
+      kindId: lane.kindId,
+      direction: lane.direction,
+      widthM: lane.widthM,
+      offsetM,
+      path,
+    };
+    lanes.push(lanePath);
+    laneSurfaces.push({
+      laneId: lane.id,
+      kindId: lane.kindId,
+      widthM: lane.widthM,
+      leftBoundary,
+      rightBoundary,
+      ring: [...leftBoundary, ...rightBoundary.slice().reverse(), leftBoundary[0]],
+    });
+  }
+
+  for (let index = 1; index < way.profile.lanes.length; index++) {
+    const before = way.profile.lanes[index - 1];
+    const after = way.profile.lanes[index];
+    const beforeDirectional = laneKind(before.kindId).directional;
+    const afterDirectional = laneKind(after.kindId).directional;
+    if (beforeDirectional !== afterDirectional) {
+      dividers.push({
+        kind: 'edgeLine',
+        beforeLaneId: before.id,
+        afterLaneId: after.id,
+        path: boundaries[index],
+      });
+    } else if (beforeDirectional) {
+      const opposing =
+        (before.direction === 'forward' && after.direction === 'backward') ||
+        (before.direction === 'backward' && after.direction === 'forward');
+      dividers.push({
+        kind: opposing ? 'centerLine' : 'laneLine',
+        beforeLaneId: before.id,
+        afterLaneId: after.id,
+        path: boundaries[index],
+      });
+    }
+  }
+
+  for (const lane of lanes) {
+    if (!laneKind(lane.kindId).directional) continue;
+    if (lane.direction === 'forward') arrows.push(lane);
+    else if (lane.direction === 'backward')
+      arrows.push({ ...lane, path: [...lane.path].reverse() });
+  }
+  return { totalWidthM, lanes, laneSurfaces, dividers, arrows };
+}
+
 /** Same geometry contract with truthful cache attribution for the renderer's
  * performance counters. Callers that do not instrument projection keep using
  * `wayLaneGeometry` below. */
@@ -155,73 +248,7 @@ export function resolveWayLaneGeometry(
   }
 
   const center = trimmedWayCenterline(way, trimStartM, trimEndM, curveErrorM);
-  const lanes: LanePath[] = [];
-  const dividers: DividerPath[] = [];
-  const arrows: LanePath[] = [];
-  const totalWidthM = profileWidthM(way.profile);
-
-  if (center.length >= 2 && way.profile.lanes.length > 0) {
-    // Lane centers: cumulative width from the left edge, re-centered on the
-    // way centerline.
-    let cum = 0;
-    for (const lane of way.profile.lanes) {
-      const offsetM = cum + lane.widthM / 2 - totalWidthM / 2;
-      const path = offsetPolyline(center, offsetM);
-      lanes.push({
-        laneId: lane.id,
-        kindId: lane.kindId,
-        direction: lane.direction,
-        widthM: lane.widthM,
-        offsetM,
-        path,
-      });
-      cum += lane.widthM;
-    }
-
-    // Painted lines at boundaries between adjacent DIRECTIONAL lanes (the
-    // markings that make a roadway read as lanes): dashed white between
-    // same-direction lanes, the "double yellow" where directions oppose.
-    // Solid edge lines bound the directional block on each side.
-    const specs = way.profile.lanes;
-    for (let i = 1; i < specs.length; i++) {
-      const prev = specs[i - 1];
-      const cur = specs[i];
-      {
-        const b = specs.slice(0, i).reduce((s, l) => s + l.widthM, 0) - totalWidthM / 2;
-        const prevDir = laneKind(prev.kindId).directional;
-        const curDir = laneKind(cur.kindId).directional;
-        if (prevDir && curDir) {
-          const opposing =
-            (prev.direction === 'forward' && cur.direction === 'backward') ||
-            (prev.direction === 'backward' && cur.direction === 'forward');
-          dividers.push({
-            kind: opposing ? 'centerLine' : 'laneLine',
-            beforeLaneId: prev.id,
-            afterLaneId: cur.id,
-            path: offsetPolyline(center, b),
-          });
-        } else if (prevDir !== curDir) {
-          dividers.push({
-            kind: 'edgeLine',
-            beforeLaneId: prev.id,
-            afterLaneId: cur.id,
-            path: offsetPolyline(center, b),
-          });
-        }
-      }
-    }
-
-    // Direction arrows: one path per one-directional lane, oriented along
-    // its travel so line-placed symbols point the right way.
-    for (const lane of lanes) {
-      if (!laneKind(lane.kindId).directional) continue;
-      if (lane.direction === 'forward') arrows.push(lane);
-      else if (lane.direction === 'backward')
-        arrows.push({ ...lane, path: [...lane.path].reverse() });
-    }
-  }
-
-  const result: WayLaneGeometry = { wayId: way.id, totalWidthM, lanes, dividers, arrows };
+  const result: WayLaneGeometry = { wayId: way.id, ...deriveLaneCrossSection(center, way) };
   byTrim.set(key, result);
   return { geometry: result, cacheHit: false };
 }

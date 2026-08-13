@@ -559,7 +559,7 @@ export interface SystemFeatures {
   /** Street-tier physical rendering: lane surfaces, painted markings, and
    * direction arrows. Screen-space corridor width selects this tier; the
    * collections stay empty when that detail cannot contribute a pixel. */
-  lanes: FeatureCollection<LineString>;
+  lanes: FeatureCollection<Polygon>;
   laneMarkings: FeatureCollection<LineString>;
   laneArrows: FeatureCollection<LineString>;
   /** Travel arrows for stretches only ONE direction of a line rides. Carries
@@ -1681,7 +1681,7 @@ function projectFacilities({
 interface TopologyProjectionResult {
   ways: Feature<LineString>[];
   services: Feature<LineString>[];
-  lanes: Feature<LineString>[];
+  lanes: Feature<Polygon>[];
   laneMarkings: Feature<LineString>[];
   laneArrows: Feature<LineString>[];
   serviceArrows: Feature<LineString>[];
@@ -1888,7 +1888,7 @@ function projectTopologyFeatures({
   const ways: Feature<LineString>[] = [];
   const services: Feature<LineString>[] = [];
   const serviceHits: Feature<LineString>[] = [];
-  const lanes: Feature<LineString>[] = [];
+  const lanes: Feature<Polygon>[] = [];
   const laneMarkings: Feature<LineString>[] = [];
   const laneArrows: Feature<LineString>[] = [];
   const serviceArrows: Feature<LineString>[] = [];
@@ -1927,28 +1927,31 @@ function projectTopologyFeatures({
     const corridorW14 = widthPxAtZ14(profileWidthM(way.profile), lat);
     const presentation = corridorPresentation(way);
     const availability = tierAvailabilityProperties(presentation, presentation.retainedTiers);
-    for (const lane of g.lanes) {
-      const r = laneRender(lane.kindId);
+    for (const surface of g.laneSurfaces) {
+      const r = laneRender(surface.kindId);
       if (r.surface && projection.topology.lanes) {
         lanes.push({
           type: 'Feature',
-          id: stableFeatureId('lanes', 'lane', way.id, lane.laneId),
+          id: stableFeatureId('lanes', 'lane', way.id, surface.laneId),
           properties: {
             id: way.id,
             wayId: way.id,
             typeId: way.typeId,
-            laneId: lane.laneId,
-            kindId: lane.kindId,
+            laneId: surface.laneId,
+            kindId: surface.kindId,
             color: r.color,
-            w14: widthPxAtZ14(lane.widthM, lat),
             corridorW14,
             renderTier: 'street',
             tierOpacity: presentation.blend.weights.street,
             ...availability,
           },
-          geometry: { type: 'LineString', coordinates: lane.path },
+          geometry: { type: 'Polygon', coordinates: [surface.ring] },
         });
-      } else if (!r.surface && projection.topology.laneMarkings) {
+      }
+    }
+    for (const lane of g.lanes) {
+      const r = laneRender(lane.kindId);
+      if (!r.surface && projection.topology.laneMarkings) {
         laneMarkings.push({
           type: 'Feature',
           id: stableFeatureId('laneMarkings', 'thin-lane', way.id, lane.laneId),

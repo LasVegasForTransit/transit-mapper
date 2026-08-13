@@ -188,4 +188,18 @@ describe('SVG screen-space LOD parity', () => {
     expect(svg).not.toContain('data-hit-target');
     expect(svg).not.toContain('stroke-width="10"');
   });
+
+  it('serializes Street lane surfaces as the same closed polygons MapLibre fills', () => {
+    const { system, referenceWay } = junctionFixture();
+    const view = viewAtWidth(referenceWay, 12);
+    const resolved = resolveStaticVisualScene({
+      revision: 'street-lane-polygons',
+      features: buildFeatures(system, null, [], view),
+      presentation: view.presentation,
+    });
+    const lanes = resolved.visuals.filter((visual) => visual.source === 'lanes');
+
+    expect(lanes.length).toBeGreaterThan(0);
+    expect(lanes.every((visual) => visual.kind === 'polygon')).toBe(true);
+  });
 });
