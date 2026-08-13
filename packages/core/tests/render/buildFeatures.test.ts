@@ -49,6 +49,9 @@ describe('buildFeatures service lines', () => {
     const svc1Features = fc.services.features.filter(
       (f) => f.properties?.serviceId === 'svc1' && !f.properties?.hitTarget,
     );
+    const svc2Features = fc.services.features.filter(
+      (f) => f.properties?.serviceId === 'svc2' && !f.properties?.hitTarget,
+    );
 
     expect(svc1Features).toHaveLength(2);
     expect(svc1Features.map((feature) => featureProperty(feature, 'wayId'))).toEqual([
@@ -58,6 +61,12 @@ describe('buildFeatures service lines', () => {
     expect(new Set(svc1Features.map((feature) => feature.id)).size).toBe(2);
     expect(svc1Features[0].geometry.coordinates).toEqual(wayA.points);
     expect(svc1Features[1].geometry.coordinates).toEqual(wayB.points);
+    // The fixture helper maps its test-only colour shorthand into public Lines.
+    // Rendering must read that public ownership, never stale Service metadata.
+    expect(svc2Features.map((feature) => featureProperty(feature, 'color'))).toEqual([
+      '#2e86e4',
+      '#2e86e4',
+    ]);
   });
 
   it('keeps repeated-way hit metadata with one paint fragment per corridor', () => {
@@ -101,7 +110,7 @@ describe('buildFeatures service lines', () => {
     expect(hits.map((feature) => featureProperty(feature, 'legIndex')).sort()).toEqual([
       0, 0, 1, 1, 2, 2,
     ]);
-    expect(hits.every((feature) => feature.properties?.patternId === 'repeat')).toBe(true);
+    expect(hits.every((feature) => feature.properties?.patternId === 'svc')).toBe(true);
     expect(
       hits.every((feature) => feature.properties?.offset === painted[0].properties?.offset),
     ).toBe(true);
@@ -150,12 +159,8 @@ describe('service editing affordances', () => {
   ]);
   const service = aService('line', [
     {
-      id: 'north-pattern',
+      id: 'line',
       sections: oneSection([wholeLeg('trunk'), wholeLeg('north')]),
-    },
-    {
-      id: 'south-pattern',
-      sections: oneSection([wholeLeg('trunk'), wholeLeg('south')]),
     },
   ]);
   const system = aSystem({ ways: [trunk, north, south], services: [service] });
@@ -171,7 +176,7 @@ describe('service editing affordances', () => {
     expect(features.handles.features).toEqual([]);
   });
 
-  it('service termini identify every branch side and focused interaction', () => {
+  it('service termini identify both ends of the selected path', () => {
     const features = buildFeatures(
       system,
       { kind: 'service', id: service.id },
@@ -179,7 +184,7 @@ describe('service editing affordances', () => {
       NETWORK_VIEW,
       null,
       null,
-      { activePatternId: 'south-pattern' } as never,
+      { activePatternId: 'line' } as never,
     );
     const termini = (
       features as typeof features & {
@@ -206,35 +211,19 @@ describe('service editing affordances', () => {
     ).toEqual([
       {
         serviceId: 'line',
-        patternId: 'north-pattern',
+        patternId: 'line',
         side: 'start',
         modeId: 'bus',
-        interactive: false,
+        interactive: true,
         at: [-115.2, 36.1],
       },
       {
         serviceId: 'line',
-        patternId: 'north-pattern',
+        patternId: 'line',
         side: 'end',
         modeId: 'bus',
         interactive: true,
         at: [-115.18, 36.11],
-      },
-      {
-        serviceId: 'line',
-        patternId: 'south-pattern',
-        side: 'start',
-        modeId: 'bus',
-        interactive: true,
-        at: [-115.2, 36.1],
-      },
-      {
-        serviceId: 'line',
-        patternId: 'south-pattern',
-        side: 'end',
-        modeId: 'bus',
-        interactive: true,
-        at: [-115.18, 36.09],
       },
     ]);
   });
@@ -248,10 +237,10 @@ describe('service editing affordances', () => {
       null,
       null,
       {
-        activePatternId: 'south-pattern',
+        activePatternId: 'line',
         armedTerminus: {
           serviceId: 'line',
-          patternId: 'south-pattern',
+          patternId: 'line',
           side: 'end',
         },
       },
@@ -264,7 +253,7 @@ describe('service editing affordances', () => {
     ).toMatchObject([
       {
         serviceId: 'line',
-        patternId: 'south-pattern',
+        patternId: 'line',
         side: 'end',
         armedReturn: true,
       },

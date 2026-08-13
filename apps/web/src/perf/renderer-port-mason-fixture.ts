@@ -1,7 +1,12 @@
 import { LINE_COLORS } from '@transitmapper/core/model/catalog';
 import { oneSection, wholeLeg } from '@transitmapper/core/model/geo';
-import type { Service, TransitSystem, Way } from '@transitmapper/core/model/system';
-import { rendererSystem, rendererWay, sharedEndpointNodes } from './renderer-fixture-builders';
+import type { Line, Service, TransitSystem, Way } from '@transitmapper/core/model/system';
+import {
+  rendererLine,
+  rendererSystem,
+  rendererWay,
+  sharedEndpointNodes,
+} from './renderer-fixture-builders';
 
 const WEST_X = [-122.49, -122.478, -122.466] as const;
 const EAST_X = [-122.446, -122.434, -122.422] as const;
@@ -55,7 +60,12 @@ interface PortMasonServiceOptions {
   railWays: readonly Way[];
 }
 
-function portMasonServices({ bridge, railWays }: PortMasonServiceOptions): Service[] {
+interface PortMasonNetwork {
+  lines: Line[];
+  services: Service[];
+}
+
+function portMasonNetwork({ bridge, railWays }: PortMasonServiceOptions): PortMasonNetwork {
   const crosstownWayIds = [
     'port-mason-west-horizontal-2-0',
     'port-mason-west-horizontal-2-1',
@@ -63,34 +73,32 @@ function portMasonServices({ bridge, railWays }: PortMasonServiceOptions): Servi
     'port-mason-east-horizontal-2-0',
     'port-mason-east-horizontal-2-1',
   ];
-  return [
+  const services: Service[] = [
     {
       id: 'port-mason-crosstown',
       name: 'Crosstown',
       modeId: 'bus',
-      color: LINE_COLORS[0],
       frequencyMinutes: 10,
-      patterns: [
-        {
-          id: 'port-mason-crosstown-pattern',
-          sections: oneSection(crosstownWayIds.map((wayId) => wholeLeg(wayId))),
-        },
-      ],
+      path: {
+        id: 'port-mason-crosstown',
+        sections: oneSection(crosstownWayIds.map((wayId) => wholeLeg(wayId))),
+      },
     },
     {
       id: 'port-mason-harbor-line',
       name: 'Harbor Line',
       modeId: 'lightRail',
-      color: LINE_COLORS[1],
       frequencyMinutes: 12,
-      patterns: [
-        {
-          id: 'port-mason-harbor-pattern',
-          sections: oneSection(railWays.map((way) => wholeLeg(way.id))),
-        },
-      ],
+      path: {
+        id: 'port-mason-harbor-line',
+        sections: oneSection(railWays.map((way) => wholeLeg(way.id))),
+      },
     },
   ];
+  return {
+    lines: services.map((service, index) => rendererLine(service, LINE_COLORS[index])),
+    services,
+  };
 }
 
 function portMasonRail(): Way[] {
@@ -130,12 +138,13 @@ export function createPortMason(): TransitSystem {
   ]);
   roads.push(bridge);
   const railWays = portMasonRail();
+  const network = portMasonNetwork({ bridge, railWays });
   return rendererSystem({
     id: 'renderer-port-mason',
     name: 'Port Mason renderer reference',
     viewport: { center: [...PORT_MASON_RENDERER_CENTER], zoom: 12.2 },
     ways: [...roads, ...railWays],
     nodes: sharedEndpointNodes('port-mason', roads),
-    services: portMasonServices({ bridge, railWays }),
+    ...network,
   });
 }

@@ -73,7 +73,7 @@ function patternSpans(serviceId: string, pattern: Pattern): ServiceSpanDependenc
 export function buildServiceSpanDependencies(services: Service[]): ServiceSpanDependency[] {
   const spans: ServiceSpanDependency[] = [];
   for (const service of services) {
-    for (const pattern of service.patterns) spans.push(...patternSpans(service.id, pattern));
+    spans.push(...patternSpans(service.id, service.path));
   }
   return spans;
 }

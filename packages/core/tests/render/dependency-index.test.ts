@@ -9,6 +9,10 @@ import {
 import { dependencyInvalidationBetween } from '../../src/render/dependency-invalidation';
 import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
 
+// A Service owns one path with the same durable identity. Lines carry public
+// naming and colour; they do not introduce a second path identifier.
+const MAIN_SERVICE_PATH_ID = 'main-service';
+
 function fixture() {
   const west = aRoad('west', [
     [0, 0],
@@ -69,14 +73,14 @@ describe('renderer dependency index', () => {
     expect(closure.serviceSpanIds).toEqual([
       serviceSpanDependencyId({
         serviceId: 'main-service',
-        patternId: 'main-pattern',
+        patternId: MAIN_SERVICE_PATH_ID,
         sectionIndex: 0,
         branch: 'shared',
         legIndex: 0,
       }),
       serviceSpanDependencyId({
         serviceId: 'main-service',
-        patternId: 'main-pattern',
+        patternId: MAIN_SERVICE_PATH_ID,
         sectionIndex: 0,
         branch: 'shared',
         legIndex: 1,
@@ -100,14 +104,14 @@ describe('renderer dependency index', () => {
     expect(closure.serviceSpanIds).toEqual([
       serviceSpanDependencyId({
         serviceId: 'main-service',
-        patternId: 'main-pattern',
+        patternId: MAIN_SERVICE_PATH_ID,
         sectionIndex: 0,
         branch: 'shared',
         legIndex: 0,
       }),
       serviceSpanDependencyId({
         serviceId: 'main-service',
-        patternId: 'main-pattern',
+        patternId: MAIN_SERVICE_PATH_ID,
         sectionIndex: 0,
         branch: 'shared',
         legIndex: 1,
@@ -126,14 +130,14 @@ describe('renderer dependency index', () => {
     expect(closure.serviceSpanIds).toEqual([
       serviceSpanDependencyId({
         serviceId: 'main-service',
-        patternId: 'main-pattern',
+        patternId: MAIN_SERVICE_PATH_ID,
         sectionIndex: 0,
         branch: 'shared',
         legIndex: 0,
       }),
       serviceSpanDependencyId({
         serviceId: 'main-service',
-        patternId: 'main-pattern',
+        patternId: MAIN_SERVICE_PATH_ID,
         sectionIndex: 0,
         branch: 'shared',
         legIndex: 1,
@@ -155,7 +159,7 @@ describe('renderer dependency index', () => {
     expect(closure.serviceSpanIds).toEqual([
       serviceSpanDependencyId({
         serviceId: 'main-service',
-        patternId: 'main-pattern',
+        patternId: MAIN_SERVICE_PATH_ID,
         sectionIndex: 0,
         branch: 'shared',
         legIndex: 0,
@@ -186,7 +190,7 @@ describe('renderer dependency index', () => {
     expect(invalidation.serviceSpanIds).toContain(
       serviceSpanDependencyId({
         serviceId: 'main-service',
-        patternId: 'main-pattern',
+        patternId: MAIN_SERVICE_PATH_ID,
         sectionIndex: 0,
         branch: 'shared',
         legIndex: 0,
