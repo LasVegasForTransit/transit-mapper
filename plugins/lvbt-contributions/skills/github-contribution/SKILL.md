@@ -21,9 +21,10 @@ or call a GitHub creation command directly.
    objectives, never chores such as rebasing, formatting, or running checks.
    Use `feat` in a pull-request title only for a capability someone can use or
    observe; groundwork belongs under a more precise conventional type.
-   Commit scopes are optional. When one names a durable boundary, use only
-   `web`, `worker`, `core`, `pwa`, `dx`, `tooling`, or `ci`; omit the scope
-   rather than inventing one for a feature, file, task, or role.
+   Commit scopes are optional. Read the current repository's
+   `.lvbt/commit-scopes.txt` before using one; the shared helper validates that
+   repository-owned list. Omit the scope rather than inventing one for a
+   feature, file, task, or role.
 5. For a pull request, confirm the branch is pushed and run the repository's
    required validation command.
 6. Run the helper with `--dry-run` and inspect the complete title and body.

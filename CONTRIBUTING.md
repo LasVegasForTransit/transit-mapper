@@ -36,8 +36,8 @@ observe; use `refactor`, `perf`, `test`, or `chore` for internal preparation.
 See [commit messages](docs/development/reference/commit-messages.md) for the
 reasoning and examples.
 
-Scope is optional. When a commit is confined to a durable boundary, use only
-`web`, `worker`, `core`, `pwa`, `dx`, `tooling`, or `ci`; omit it for
+Scope is optional. TransitMapper's durable boundaries are declared in
+[`.lvbt/commit-scopes.txt`](.lvbt/commit-scopes.txt); omit it for
 cross-boundary work rather than inventing a scope from a feature, file, task,
 or contributor role.
 

@@ -1,0 +1,8 @@
+# One scope per durable TransitMapper boundary.
+# Omit a scope when a change crosses boundaries.
+core
+web
+worker
+pwa
+dx
+ci

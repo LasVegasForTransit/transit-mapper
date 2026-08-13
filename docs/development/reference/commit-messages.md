@@ -32,7 +32,7 @@ not `fixed the label bug`.
 | `revert`   | a deliberate reversal of a prior change         |
 
 Scope is optional. Use one only when the change is confined to a durable
-boundary: `web`, `worker`, `core`, `pwa`, `dx`, `tooling`, or `ci`.
+boundary declared in [`.lvbt/commit-scopes.txt`](../../../.lvbt/commit-scopes.txt).
 Omit it for cross-boundary work. Never turn a feature, file, task, role, or
 temporary implementation detail into a scope.
 
