@@ -43,8 +43,8 @@ describe('onboarding scene geometry', () => {
 
     expect(drawn.features).toHaveLength(1);
     expect(drawn.features[0]?.properties).toMatchObject({
-      serviceId: 'las-vegas-charleston-crosstown',
-      color: ONBOARDING_DRAW_SYSTEM.services[0]?.color,
+      serviceId: 'las-vegas-charleston-downtown',
+      color: ONBOARDING_DRAW_SYSTEM.lines[0]?.color,
     });
     expect(drawn.features[0]?.geometry).toEqual({ type: 'LineString', coordinates: path });
   });

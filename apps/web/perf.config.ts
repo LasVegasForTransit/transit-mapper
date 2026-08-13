@@ -16,10 +16,11 @@ export const PERF_BASELINE_DIRECTORY = 'perf';
 export const BUNDLE_BUDGETS: BundleBudget[] = [
   {
     entry: 'main',
-    // Stop and Station are now separate editing surfaces across the outline,
-    // inspector, and gestures. Shared row rendering keeps the measured main
-    // delta to 0.24%; this remains a sub-0.5% delivery-ceiling adjustment.
-    maximumGzipBytes: 518_144,
+    // The real-geography onboarding and its five production-UI scenes remain
+    // in one lazy first-run chunk. Their committed map context raises the full
+    // gzip import graph by 10.7 KiB; 520 KiB is a 2.8% ceiling adjustment. The
+    // Brotli ceiling stays fixed because that delivery size remains below it.
+    maximumGzipBytes: 532_480,
     maximumBrotliBytes: 450_560,
   },
   {

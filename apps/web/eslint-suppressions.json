@@ -649,9 +649,6 @@
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6
     },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 4
-    },
     "@typescript-eslint/prefer-nullish-coalescing": {
       "count": 8
     },
@@ -694,14 +691,6 @@
   },
   "src/ui/newSystem/NewSystemLocationDialog.tsx": {
     "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/ui/sidebarOutline.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    },
-    "@typescript-eslint/prefer-nullish-coalescing": {
       "count": 1
     }
   },

@@ -35,7 +35,7 @@ describe('OnboardingSceneOverlay', () => {
     );
 
     expect(container.querySelector<HTMLInputElement>('[aria-label="Service name"]')?.value).toBe(
-      'Charleston Crosstown',
+      'Downtown',
     );
     const inspector = container.querySelector('.onboarding-service-inspector-preview');
     expect(inspector?.tagName).toBe('ASIDE');
@@ -48,6 +48,7 @@ describe('OnboardingSceneOverlay', () => {
       ),
     ).toBe(true);
     expect(container.textContent).toContain('Schedule');
+    expect(container.textContent).toContain('Charleston Crosstown · Bus');
     expect(container.textContent).toContain('Frequency · peak headway');
     expect(container.textContent).toContain('10 min');
     expect(container.textContent).toContain('Service hours · span of service');

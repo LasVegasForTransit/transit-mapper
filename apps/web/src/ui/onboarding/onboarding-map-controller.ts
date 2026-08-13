@@ -233,7 +233,7 @@ function renderDrawFrame({
   const path = pathPrefix(ONBOARDING_DRAW_PATH, progress);
   if (progress >= 1) {
     sourceData(map, SRC_SERVICES, completeFeatures.services);
-    sourceData(map, SRC_STATIONS, completeFeatures.stations);
+    sourceData(map, SRC_STATIONS, completeFeatures.stops);
     sourceData(map, SRC_PREVIEW, EMPTY_FC);
     cursor.getElement().hidden = true;
     return;

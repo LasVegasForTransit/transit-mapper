@@ -7,11 +7,16 @@ import { ServiceInspectorHeading } from '../inspector/service-inspector-heading'
 import { ServiceLoadPresentation } from '../inspector/service-load-presentation';
 import { ServiceScheduleFields } from '../inspector/service-schedule-fields';
 import { formatMinutes } from '../inspector/shared';
-import { ONBOARDING_FIXTURE_SYSTEM, ONBOARDING_SERVICE_STATS } from './fixtureSystem';
+import {
+  ONBOARDING_CROSSTOWN_LINE_ID,
+  ONBOARDING_DOWNTOWN_SERVICE_ID,
+  ONBOARDING_FIXTURE_SYSTEM,
+  ONBOARDING_SERVICE_STATS,
+} from './fixtureSystem';
 
 function requireCrosstownService() {
   const found = ONBOARDING_FIXTURE_SYSTEM.services.find(
-    (candidate) => candidate.id === 'las-vegas-charleston-crosstown',
+    (candidate) => candidate.id === ONBOARDING_DOWNTOWN_SERVICE_ID,
   );
   if (!found) throw new Error('Las Vegas onboarding requires the Charleston Crosstown service');
   return found;
@@ -19,28 +24,25 @@ function requireCrosstownService() {
 
 const service = requireCrosstownService();
 
+function requireCrosstownLine() {
+  const found = ONBOARDING_FIXTURE_SYSTEM.lines.find(
+    (candidate) => candidate.id === ONBOARDING_CROSSTOWN_LINE_ID,
+  );
+  if (!found) throw new Error('Las Vegas onboarding requires the Charleston Crosstown line');
+  return found;
+}
+
+const line = requireCrosstownLine();
+
 const tabs: InspectorTab[] = [
-  { id: 'line', label: 'Line' },
+  { id: 'line', label: 'Service' },
   { id: 'schedule', label: 'Schedule' },
-  { id: 'route', label: 'Route' },
+  { id: 'route', label: 'Path' },
 ];
 
-const lengthMeters = ONBOARDING_SERVICE_STATS.patterns.reduce(
-  (total, pattern) => total + pattern.meters,
-  0,
-);
-const totalStops = new Set(
-  ONBOARDING_SERVICE_STATS.patterns.flatMap((pattern) =>
-    pattern.stops.map((stop) => stop.station.id),
-  ),
-).size;
-const stops = ONBOARDING_SERVICE_STATS.patterns.reduce(
-  (most, pattern) => Math.max(most, pattern.stops.length),
-  0,
-);
-const dwellMinutes =
-  ONBOARDING_SERVICE_STATS.patterns.reduce((most, pattern) => Math.max(most, pattern.dwellMs), 0) /
-  60_000;
+const lengthMeters = ONBOARDING_SERVICE_STATS.path.meters;
+const totalStops = new Set(ONBOARDING_SERVICE_STATS.path.stops.map(({ stop }) => stop.id)).size;
+const dwellMinutes = ONBOARDING_SERVICE_STATS.path.dwellMs / 60_000;
 
 /** A passive rendering of the editor's actual Service inspector Schedule tab.
  * It shares both child presentations with the live inspector and supplies only
@@ -55,8 +57,9 @@ export function OnboardingServiceInspectorPreview() {
       aria-hidden="true"
     >
       <ServiceInspectorHeading
-        color={service.color}
+        color={line.color}
         name={service.name}
+        lineName={line.name}
         modeLabel={MODES[service.modeId].label}
         distanceLabel={formatDistance(lengthMeters, unitSystem)}
         totalStops={totalStops}
@@ -68,13 +71,12 @@ export function OnboardingServiceInspectorPreview() {
       <div className="insp-section" role="tabpanel">
         <ServiceLoadPresentation
           active={{ headwayMinutes: service.frequencyMinutes }}
-          roundTrip={formatMinutes(ONBOARDING_SERVICE_STATS.longestRoundTripMs / 60_000)}
+          roundTrip={formatMinutes(ONBOARDING_SERVICE_STATS.roundTripMs / 60_000)}
           fleet={ONBOARDING_SERVICE_STATS.fleet}
           when="8:30 AM"
           showPeriodLabel={false}
-          stops={stops}
+          stops={totalStops}
           dwellMinutes={dwellMinutes}
-          branchCount={ONBOARDING_SERVICE_STATS.patterns.length}
           layoverMinutes={ONBOARDING_SERVICE_STATS.layoverMs / 60_000}
         />
         <ServiceScheduleFields

@@ -3,10 +3,12 @@ import { cumulativeLengths, oneSection, pointAtT, wholeLeg } from '@transitmappe
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type {
+  Line,
   LngLat,
   Node,
   Pattern,
   Service,
+  Station,
   Stop,
   TransitSystem,
   Way,
@@ -139,17 +141,17 @@ const railJunction: Node = {
   ],
 };
 
-interface StationOnWayOptions {
+interface StopOnWayOptions {
   t: number;
   majorStop?: boolean;
 }
 
-function stationOnWay(
+function stopOnWay(
   id: string,
   name: string,
   way: Way,
-  { t, majorStop = false }: StationOnWayOptions,
-): Station {
+  { t, majorStop = false }: StopOnWayOptions,
+): Stop {
   return {
     id,
     name,
@@ -160,46 +162,70 @@ function stationOnWay(
 }
 
 const downtownPattern: Pattern = {
-  id: 'las-vegas-charleston-downtown-pattern',
-  name: 'Downtown',
+  id: 'las-vegas-charleston-downtown',
   sections: oneSection([wholeLeg(charlestonWest.id), wholeLeg(lasVegasBoulevard.id)]),
 };
 const huntridgePattern: Pattern = {
-  id: 'las-vegas-charleston-huntridge-pattern',
-  name: 'Huntridge',
+  id: 'las-vegas-charleston-huntridge',
   sections: oneSection([wholeLeg(charlestonWest.id), wholeLeg(charlestonEast.id)]),
 };
 
-const charlestonCrosstown: Service = {
-  id: 'las-vegas-charleston-crosstown',
-  name: 'Charleston Crosstown',
+export const ONBOARDING_DOWNTOWN_SERVICE_ID = downtownPattern.id;
+const charlestonDowntownService: Service = {
+  id: ONBOARDING_DOWNTOWN_SERVICE_ID,
+  name: 'Downtown',
   modeId: 'bus',
-  color: LINE_COLORS[0],
-  patterns: [downtownPattern, huntridgePattern],
+  path: downtownPattern,
   frequencyMinutes: 10,
   spanStart: '06:00',
   spanEnd: '23:00',
 };
+const charlestonHuntridgeService: Service = {
+  id: huntridgePattern.id,
+  name: 'Huntridge',
+  modeId: 'bus',
+  path: huntridgePattern,
+  frequencyMinutes: 10,
+  spanStart: '06:00',
+  spanEnd: '23:00',
+};
+export const ONBOARDING_CROSSTOWN_LINE_ID = 'las-vegas-charleston-crosstown';
+const charlestonCrosstownLine: Line = {
+  id: ONBOARDING_CROSSTOWN_LINE_ID,
+  name: 'Charleston Crosstown',
+  color: LINE_COLORS[0],
+  serviceIds: [charlestonDowntownService.id, charlestonHuntridgeService.id],
+};
 
 const connectorPattern: Pattern = {
-  id: 'las-vegas-downtown-connector-pattern',
-  name: 'Downtown',
+  id: 'las-vegas-downtown-connector-service',
   sections: oneSection([wholeLeg(railSouth.id), wholeLeg(downtownConnector.id)]),
 };
 const connectorService: Service = {
   id: 'las-vegas-downtown-connector-service',
   name: 'Downtown Connector',
   modeId: 'lightRail',
-  color: LINE_COLORS[1],
-  patterns: [connectorPattern],
+  path: connectorPattern,
   frequencyMinutes: 12,
   spanStart: '06:00',
   spanEnd: '23:00',
 };
+const downtownConnectorLine: Line = {
+  id: 'las-vegas-downtown-connector',
+  name: 'Downtown Connector',
+  color: LINE_COLORS[1],
+  serviceIds: [connectorService.id],
+};
 
-const downtownTransfer: Station = {
+const downtownStation: Station = {
+  id: 'las-vegas-downtown-station',
+  name: 'Downtown Transfer',
+  coord: DOWNTOWN_TRANSFER,
+};
+const downtownTransfer: Stop = {
   id: 'las-vegas-downtown-transfer',
   name: 'Downtown Transfer',
+  stationId: downtownStation.id,
   coord: DOWNTOWN_TRANSFER,
   majorStop: true,
   anchors: [
@@ -208,28 +234,28 @@ const downtownTransfer: Station = {
   ],
 };
 
-const stations: Station[] = [
-  stationOnWay('las-vegas-stop-medical-district', 'Medical District', charlestonWest, {
+const stops: Stop[] = [
+  stopOnWay('las-vegas-stop-medical-district', 'Medical District', charlestonWest, {
     t: 0,
     majorStop: true,
   }),
-  stationOnWay('las-vegas-stop-rancho', 'Rancho Drive', charlestonWest, { t: 0.28 }),
-  stationOnWay('las-vegas-stop-arts-district', 'Arts District', charlestonWest, { t: 0.58 }),
-  stationOnWay('las-vegas-stop-charleston-las-vegas', 'Charleston & Las Vegas', charlestonWest, {
+  stopOnWay('las-vegas-stop-rancho', 'Rancho Drive', charlestonWest, { t: 0.28 }),
+  stopOnWay('las-vegas-stop-arts-district', 'Arts District', charlestonWest, { t: 0.58 }),
+  stopOnWay('las-vegas-stop-charleston-las-vegas', 'Charleston & Las Vegas', charlestonWest, {
     t: 1,
   }),
-  stationOnWay('las-vegas-stop-fremont', 'Fremont Street', lasVegasBoulevard, { t: 0.72 }),
+  stopOnWay('las-vegas-stop-fremont', 'Fremont Street', lasVegasBoulevard, { t: 0.72 }),
   downtownTransfer,
-  stationOnWay('las-vegas-stop-maryland', 'Maryland Parkway', charlestonEast, { t: 0.55 }),
-  stationOnWay('las-vegas-stop-huntridge', 'Huntridge', charlestonEast, {
+  stopOnWay('las-vegas-stop-maryland', 'Maryland Parkway', charlestonEast, { t: 0.55 }),
+  stopOnWay('las-vegas-stop-huntridge', 'Huntridge', charlestonEast, {
     t: 1,
     majorStop: true,
   }),
-  stationOnWay('las-vegas-stop-rail-arts', 'Arts District Rail', railSouth, {
+  stopOnWay('las-vegas-stop-rail-arts', 'Arts District Rail', railSouth, {
     t: 0,
     majorStop: true,
   }),
-  stationOnWay('las-vegas-stop-symphony-park', 'Symphony Park', railSouth, { t: 0.86 }),
+  stopOnWay('las-vegas-stop-symphony-park', 'Symphony Park', railSouth, { t: 0.86 }),
 ];
 
 /** The one valid domain system every onboarding screen projects. */
@@ -239,19 +265,22 @@ export const ONBOARDING_FIXTURE_SYSTEM: TransitSystem = {
   name: 'Central Las Vegas proposal',
   viewport: { center: [-115.146, 36.164], zoom: 13 },
   ways: [...roadWays, ...railWays],
-  stations,
-  services: [charlestonCrosstown, connectorService],
+  lines: [charlestonCrosstownLine, downtownConnectorLine],
+  services: [charlestonDowntownService, charlestonHuntridgeService, connectorService],
+  stops,
+  stations: [downtownStation],
   nodes: [roadJunction, railJunction],
 };
 
-/** Drawing settles on the Downtown pattern before later screens introduce its
- * Huntridge branch and the rail proposal. */
+/** Drawing settles on the Downtown Service before later screens introduce its
+ * Huntridge sibling and the rail proposal. */
 export const ONBOARDING_DRAW_SYSTEM: TransitSystem = {
   ...ONBOARDING_FIXTURE_SYSTEM,
   ways: roadWays,
   nodes: [roadJunction],
-  services: [{ ...charlestonCrosstown, patterns: [downtownPattern] }],
-  stations: stations.filter((station) =>
+  lines: [{ ...charlestonCrosstownLine, serviceIds: [charlestonDowntownService.id] }],
+  services: [charlestonDowntownService],
+  stops: stops.filter((stop) =>
     [
       'las-vegas-stop-medical-district',
       'las-vegas-stop-rancho',
@@ -259,27 +288,29 @@ export const ONBOARDING_DRAW_SYSTEM: TransitSystem = {
       'las-vegas-stop-charleston-las-vegas',
       'las-vegas-stop-fremont',
       'las-vegas-downtown-transfer',
-    ].includes(station.id),
+    ].includes(stop.id),
   ),
+  stations: [downtownStation],
 };
 
 function requiredServiceStats(service: Service) {
   const stats = serviceStats(
     ONBOARDING_FIXTURE_SYSTEM.ways,
-    ONBOARDING_FIXTURE_SYSTEM.stations,
+    ONBOARDING_FIXTURE_SYSTEM.stops,
     ONBOARDING_FIXTURE_SYSTEM.vehicleKinds,
     service,
     service.frequencyMinutes,
   );
-  if (!stats || stats.patterns.some((pattern) => !pattern.plan)) {
+  if (!stats?.path.plan) {
     throw new Error(`Las Vegas ${service.name} failed to produce a simulation plan`);
   }
   return stats;
 }
 
-const crosstownStats = requiredServiceStats(charlestonCrosstown);
+const downtownStats = requiredServiceStats(charlestonDowntownService);
+const huntridgeStats = requiredServiceStats(charlestonHuntridgeService);
 const connectorStats = requiredServiceStats(connectorService);
-export const ONBOARDING_SERVICE_STATS = crosstownStats;
+export const ONBOARDING_SERVICE_STATS = downtownStats;
 
 export interface OnboardingVehicleRun {
   id: string;
@@ -289,23 +320,24 @@ export interface OnboardingVehicleRun {
   profile: VehicleMotionProfile;
 }
 
-function vehicleRunsFor(service: Service, patterns: PatternStats[]): OnboardingVehicleRun[] {
+function vehicleRunFor(service: Service, color: string, stats: PatternStats): OnboardingVehicleRun {
   const profile = effectiveVehicleKind(ONBOARDING_FIXTURE_SYSTEM.vehicleKinds, service).profile;
-  return patterns.map((stats) => ({
+  return {
     id: stats.pattern.id,
-    color: service.color,
+    color,
     stats,
     inboundCumLengths: cumulativeLengths(stats.inboundPath),
     profile,
-  }));
+  };
 }
 
 export const ONBOARDING_VEHICLE_RUNS = [
-  ...vehicleRunsFor(charlestonCrosstown, crosstownStats.patterns),
-  ...vehicleRunsFor(connectorService, connectorStats.patterns),
+  vehicleRunFor(charlestonDowntownService, charlestonCrosstownLine.color, downtownStats.path),
+  vehicleRunFor(charlestonHuntridgeService, charlestonCrosstownLine.color, huntridgeStats.path),
+  vehicleRunFor(connectorService, downtownConnectorLine.color, connectorStats.path),
 ];
 
-export const ONBOARDING_PATTERN_STATS = crosstownStats.patterns[0];
+export const ONBOARDING_PATTERN_STATS = downtownStats.path;
 export const ONBOARDING_DRAW_PATH = ONBOARDING_PATTERN_STATS.path;
 
 /** Infrastructure hides service overlays so the physical corridors carry the

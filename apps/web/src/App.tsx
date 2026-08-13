@@ -134,7 +134,7 @@ export function App() {
   const store = useEditorStore();
   const {
     document: { newSystem, setSystem },
-    tools: { setTool },
+    tools: { setDraftMode, setTool },
   } = useEditorCommands();
   const {
     shortcutsOpen,
@@ -514,7 +514,7 @@ export function App() {
         <LazyDialog onFailure={dialogFailed}>
           <FirstRunDialogs
             activeDialog={activeDialog}
-            actions={store.getState()}
+            actions={{ setDraftMode, setTool }}
             closeDialog={closeDialog}
             newSystemLocationMode={newSystemLocationMode}
             openDialog={openDialog}

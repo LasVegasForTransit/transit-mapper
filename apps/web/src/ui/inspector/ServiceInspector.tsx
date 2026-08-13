@@ -11,13 +11,7 @@ import {
   primaryAnchor,
 } from '@transitmapper/core/model/geo';
 import { formatDistance } from '@transitmapper/core/model/units';
-import type {
-  RunDirection,
-  Pattern,
-  Service,
-  Stop,
-  Way,
-} from '@transitmapper/core/model/system';
+import type { RunDirection, Pattern, Service, Stop, Way } from '@transitmapper/core/model/system';
 import {
   activeSchedule,
   dayScopeAt,
@@ -136,7 +130,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
       ? line.name
       : `Service ${Math.max(1, (line?.serviceIds.indexOf(service.id) ?? 0) + 1)}`);
   const singleWay =
-    singlePattern && patternLegs(singlePattern).length === 1
+    patternLegs(singlePattern).length === 1
       ? ways.find((w) => w.id === patternLegs(singlePattern)[0].wayId)
       : undefined;
   // Measured along what the line actually rides, not by summing whole way
@@ -161,7 +155,6 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
     skippedInbound: new Set(p.skippedStops?.inbound ?? []),
   }));
   const totalStops = new Set(patternStops.flatMap(({ stops }) => stops.map((st) => st.id))).size;
-  const isAddingBranch = addingPatternForServiceId === id;
   // A mode may span several way types (e.g. tram: dedicated track or street-running
   // road) — offer every mode compatible with the way this service currently rides.
   const modeOptions = singleWay
@@ -177,9 +170,12 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   return (
     <Panel slot="right" aria-label="Selection details">
       <ServiceInspectorHeading
-        color={service.color}
+        color={line?.color}
         name={service.name}
-        modeLabel={MODES[service.modeId]?.label ?? 'Service'}
+        lineName={line?.name}
+        namePlaceholder={line?.serviceIds.length === 1 ? line.name : 'Service name'}
+        selectedStopName={selectedStop ? selectedStop.name || 'Unnamed stop' : undefined}
+        modeLabel={MODES[service.modeId].label}
         distanceLabel={formatDistance(length, unitSystem)}
         totalStops={totalStops}
         readOnly={readOnly}
@@ -217,7 +213,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
             value={service.vehicleKindId ?? ''}
             onChange={(e) => setServiceVehicleKind(id, e.target.value || undefined)}
           >
-            <option value="">Default {MODES[service.modeId]?.label ?? 'vehicle'}</option>
+            <option value="">Default {MODES[service.modeId].label}</option>
             {vehicleKinds
               .filter((k) => k.modeId === service.modeId)
               .map((k) => (
@@ -398,23 +394,22 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
         </ul>
         {!readOnly && (
           <>
-            {singlePattern &&
-              (patternHasCouplet(singlePattern) ? (
-                <>
-                  <p className="insp-sub">
-                    This Service runs two one-way paths. Its outward and return trips use different
-                    streets.
-                  </p>
-                  <button
-                    type="button"
-                    className="ghost-btn"
-                    style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}
-                    onClick={() => makePatternTwoWay(id, singlePattern.id)}
-                  >
-                    Make it run both ways on one street
-                  </button>
-                </>
-              ) : null)}
+            {patternHasCouplet(singlePattern) ? (
+              <>
+                <p className="insp-sub">
+                  This Service runs two one-way paths. Its outward and return trips use different
+                  streets.
+                </p>
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}
+                  onClick={() => makePatternTwoWay(id, singlePattern.id)}
+                >
+                  Make it run both ways on one street
+                </button>
+              </>
+            ) : null}
             {moveTargets.length > 0 && (
               <>
                 <label className="field-label" htmlFor="move-to-line-select">
@@ -637,9 +632,8 @@ function ServiceLoad({ service }: ServiceLoadProps) {
       fleet={stats.fleet}
       when={when}
       showPeriodLabel={!pinnedPeriod}
-      stops={stops}
+      stops={stopCount}
       dwellMinutes={dwell}
-      branchCount={stats.patterns.length}
       layoverMinutes={stats.layoverMs / 60_000}
     />
   );

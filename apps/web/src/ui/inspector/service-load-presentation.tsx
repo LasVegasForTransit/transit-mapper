@@ -9,7 +9,6 @@ export interface ServiceLoadPresentationProps {
   showPeriodLabel: boolean;
   stops: number;
   dwellMinutes: number;
-  branchCount: number;
   layoverMinutes: number;
 }
 
@@ -21,7 +20,6 @@ function activeServiceDescription({
   showPeriodLabel,
   stops,
   dwellMinutes,
-  branchCount,
   layoverMinutes,
 }: ServiceLoadPresentationProps): string {
   if (!active) return `Not running at ${when}. A round trip takes ${roundTrip}.`;
@@ -33,11 +31,10 @@ function activeServiceDescription({
     stops === 0
       ? 'With no stops'
       : `${stops} stop${stops === 1 ? '' : 's'} and ${formatMinutes(dwellMinutes)} of time at stops`;
-  const branches = branchCount > 1 ? ` across ${branchCount} branches` : '';
   return (
     `At ${when} it runs every ${active.headwayMinutes} min${period}. ` +
     `${stopDetail}, a round trip takes ${roundTrip}, so running that often needs ` +
-    `${fleet} vehicle${fleet === 1 ? '' : 's'}${branches}, each waiting ` +
+    `${fleet} vehicle${fleet === 1 ? '' : 's'}, each waiting ` +
     `${formatMinutes(layoverMinutes)} at either end.`
   );
 }
@@ -53,7 +50,6 @@ export function ServiceLoadPresentation({
   showPeriodLabel,
   stops,
   dwellMinutes,
-  branchCount,
   layoverMinutes,
 }: ServiceLoadPresentationProps) {
   const description = activeServiceDescription({
@@ -64,7 +60,6 @@ export function ServiceLoadPresentation({
     showPeriodLabel,
     stops,
     dwellMinutes,
-    branchCount,
     layoverMinutes,
   });
   return (

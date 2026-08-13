@@ -250,6 +250,10 @@ store and core projectors.
 
 `apps/web/src/ui` owns React presentation, workbench layout, inspector
 controls, dialogs, onboarding, and accessibility semantics.
+`apps/web/src/ui/sidebarOutline.ts` derives view-specific outline rows from the
+domain model without React state. `SidebarPanel.tsx` owns the per-view query,
+expansion, list limits, scroll position, selection wiring, and local recovery
+boundaries that present that projection.
 The onboarding slide data selects a purpose overview followed by four passive
 capability scenes. The overview projects a completed central Las Vegas proposal
 without editor mutation, while `ui/onboarding/fixtureSystem.ts` owns that single

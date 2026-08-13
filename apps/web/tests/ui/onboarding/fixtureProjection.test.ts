@@ -1,5 +1,5 @@
 import { validateSystem } from '@transitmapper/core/model/validate';
-import { servicesAtStation } from '@transitmapper/core/sim/frequency';
+import { servicesAtStop } from '@transitmapper/core/sim/frequency';
 import { describe, expect, it } from 'vitest';
 import {
   ONBOARDING_FIXTURE_SYSTEM,
@@ -23,31 +23,40 @@ describe('onboarding fixture projection', () => {
   it('models a valid early central Las Vegas proposal on recognizable corridors', () => {
     expect(validateSystem(ONBOARDING_FIXTURE_SYSTEM)).toEqual([]);
     expect(ONBOARDING_FIXTURE_SYSTEM.name).toBe('Central Las Vegas proposal');
-    expect(ONBOARDING_FIXTURE_SYSTEM.services.map((service) => service.name)).toEqual([
+    expect(ONBOARDING_FIXTURE_SYSTEM.lines.map((line) => line.name)).toEqual([
       'Charleston Crosstown',
       'Downtown Connector',
     ]);
 
-    const crosstown = ONBOARDING_FIXTURE_SYSTEM.services[0];
-    expect(crosstown.patterns.map((pattern) => pattern.name)).toEqual(['Downtown', 'Huntridge']);
-    expect(crosstown).toMatchObject({
+    const crosstown = ONBOARDING_FIXTURE_SYSTEM.lines[0];
+    expect(crosstown.serviceIds).toHaveLength(2);
+    expect(
+      crosstown.serviceIds.map(
+        (serviceId) =>
+          ONBOARDING_FIXTURE_SYSTEM.services.find((service) => service.id === serviceId)?.name,
+      ),
+    ).toEqual(['Downtown', 'Huntridge']);
+    expect(ONBOARDING_FIXTURE_SYSTEM.services[0]).toMatchObject({
       modeId: 'bus',
       frequencyMinutes: 10,
       spanStart: '06:00',
       spanEnd: '23:00',
     });
 
-    const central = ONBOARDING_FIXTURE_SYSTEM.stations.find(
-      (station) => station.name === 'Downtown Transfer',
+    const central = ONBOARDING_FIXTURE_SYSTEM.stops.find(
+      (stop) => stop.name === 'Downtown Transfer',
     );
     expect(central).toBeDefined();
     expect(
-      servicesAtStation(
+      ONBOARDING_FIXTURE_SYSTEM.stations.find((station) => station.id === central?.stationId)?.name,
+    ).toBe('Downtown Transfer');
+    expect(
+      servicesAtStop(
         ONBOARDING_FIXTURE_SYSTEM.ways,
         ONBOARDING_FIXTURE_SYSTEM.services,
         central!,
       ).map((service) => service.name),
-    ).toEqual(['Charleston Crosstown', 'Downtown Connector']);
+    ).toEqual(['Downtown', 'Downtown Connector']);
   });
 
   it('distinguishes imported reality from the missing rail link the proposal creates', () => {

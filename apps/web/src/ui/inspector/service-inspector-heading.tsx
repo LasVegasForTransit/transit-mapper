@@ -1,8 +1,11 @@
 import type { KeyboardEventHandler } from 'react';
 
 export interface ServiceInspectorHeadingProps {
-  color: string;
-  name: string;
+  color?: string;
+  name?: string;
+  lineName?: string;
+  namePlaceholder?: string;
+  selectedStopName?: string;
   modeLabel: string;
   distanceLabel: string;
   totalStops: number;
@@ -17,6 +20,9 @@ export interface ServiceInspectorHeadingProps {
 export function ServiceInspectorHeading({
   color,
   name,
+  lineName,
+  namePlaceholder = 'Service name',
+  selectedStopName,
   modeLabel,
   distanceLabel,
   totalStops,
@@ -31,16 +37,18 @@ export function ServiceInspectorHeading({
         <input
           className="insp-name"
           aria-label="Service name"
-          value={name}
+          placeholder={namePlaceholder}
+          value={name ?? ''}
           disabled={readOnly}
-          readOnly={readOnly}
           onChange={(event) => onNameChange?.(event.target.value)}
           onKeyDown={onNameKeyDown}
         />
       </div>
       <div className="insp-kind">
+        {lineName ? `${lineName} · ` : ''}
         {modeLabel} · {distanceLabel} · {totalStops} stop
         {totalStops === 1 ? '' : 's'}
+        {selectedStopName ? ` · Call at ${selectedStopName}` : ''}
       </div>
     </>
   );
