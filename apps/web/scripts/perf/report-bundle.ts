@@ -18,7 +18,11 @@ import {
   type ViteManifest,
 } from './bundle-report';
 
-export { compareBundleReports, createDeliveryGraphs } from './bundle-report';
+export {
+  compareBundleReports,
+  createDeliveryGraphs,
+  PRODUCTION_WORKER_BOUNDARIES,
+} from './bundle-report';
 export type {
   BundleEntryReport,
   BundleFileChange,
@@ -28,8 +32,11 @@ export type {
   BundleReportComparison,
   CreateDeliveryGraphsOptions,
   DeliveryGraphs,
+  ExpectedWorkerBoundary,
   ViteManifest,
   ViteManifestEntry,
+  WorkerBoundaryReport,
+  WorkerGraphReport,
 } from './bundle-report';
 
 interface SourceMap {

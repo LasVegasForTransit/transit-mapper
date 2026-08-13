@@ -185,7 +185,12 @@ Every delivery graph contains sorted file records with raw, gzip, and Brotli
 sizes plus a SHA-256 content digest. These records make an N-1 comparison able
 to distinguish added, removed, and changed files without counting a file twice
 when, for example, it belongs to both the editor graph and the independent
-precache union.
+precache union. The comparison also reports every graph separately and records
+membership transitions, so an unchanged file moving from lazy to eager cannot
+disappear inside a zero-byte overall delta. Production reporting requires the
+seven known dedicated Worker entry identities; missing, additional, or
+multiply emitted boundaries fail the build instead of silently shrinking or
+expanding the Worker graph.
 
 Missing Chrome produces an `unavailable` report and a non-zero exit. The
 harness never writes placeholder timings.
