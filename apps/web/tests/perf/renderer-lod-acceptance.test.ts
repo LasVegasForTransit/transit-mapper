@@ -86,10 +86,8 @@ describe('renderer LOD acceptance plan', () => {
       const system = createServedJunctionFixture(id, angles);
       const coveredWayIds = new Set(
         system.services.flatMap((service) =>
-          service.patterns.flatMap((pattern) =>
-            pattern.sections.flatMap((section) =>
-              section.kind === 'shared' ? section.legs.map((leg) => leg.wayId) : [],
-            ),
+          service.path.sections.flatMap((section) =>
+            section.kind === 'shared' ? section.legs.map((leg) => leg.wayId) : [],
           ),
         ),
       );
@@ -100,9 +98,9 @@ describe('renderer LOD acceptance plan', () => {
       expect([...coveredWayIds].sort()).toEqual(system.ways.map((way) => way.id).sort());
       expect(
         system.services.every((service) => {
-          const section = service.patterns[0]?.sections[0];
+          const section = service.path.sections[0];
           return (
-            section?.kind === 'shared' &&
+            section.kind === 'shared' &&
             section.legs[0]?.direction === 'withPoints' &&
             section.legs[1]?.direction === 'againstPoints'
           );

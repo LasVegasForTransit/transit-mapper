@@ -68,29 +68,28 @@ export function groupFootprintPointRenderId(groupId: string, pointIndex: number)
  * projection from disagreeing about partial-leg endpoints. */
 export function serviceTerminusDescriptors(service: Service): ServiceTerminusDescriptor[] {
   const termini: ServiceTerminusDescriptor[] = [];
-  for (const pattern of service.patterns) {
-    const outbound = patternRunLegs(pattern, 'outbound');
-    const ends: readonly {
-      side: ServiceTerminusSide;
-      entry: (typeof outbound)[number] | undefined;
-    }[] = [
-      { side: 'start', entry: outbound[0] },
-      { side: 'end', entry: outbound[outbound.length - 1] },
-    ];
-    for (const { side, entry } of ends) {
-      if (!entry) continue;
-      const [lo, hi] = legRange(entry.leg);
-      const isStart = side === 'start';
-      const t = isStart === entry.forward ? lo : hi;
-      termini.push({
-        id: serviceTerminusRenderId(service.id, pattern.id, side),
-        serviceId: service.id,
-        patternId: pattern.id,
-        side,
-        wayId: entry.leg.wayId,
-        t,
-      });
-    }
+  const pattern = service.path;
+  const outbound = patternRunLegs(pattern, 'outbound');
+  const ends: readonly {
+    side: ServiceTerminusSide;
+    entry: (typeof outbound)[number] | undefined;
+  }[] = [
+    { side: 'start', entry: outbound[0] },
+    { side: 'end', entry: outbound[outbound.length - 1] },
+  ];
+  for (const { side, entry } of ends) {
+    if (!entry) continue;
+    const [lo, hi] = legRange(entry.leg);
+    const isStart = side === 'start';
+    const t = isStart === entry.forward ? lo : hi;
+    termini.push({
+      id: serviceTerminusRenderId(service.id, pattern.id, side),
+      serviceId: service.id,
+      patternId: pattern.id,
+      side,
+      wayId: entry.leg.wayId,
+      t,
+    });
   }
   return termini;
 }

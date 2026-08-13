@@ -23,6 +23,7 @@ import {
   wayById,
   patternRunSegments,
 } from '../model/geo';
+import { linesByServiceId } from '../model/line-service';
 import { nearWaysForStations, servicesByWay, visibleWaysFor } from './featureMemo';
 import { mergeAdjacentServiceLines } from './mergeServiceLines';
 import { directionalLanes, isOneWay, profileWidthM } from '../model/profile';
@@ -299,13 +300,12 @@ interface ServiceHitProjectionOptions {
 
 function serviceWayOccurrences(service: Service, wayId: string): ServiceWayOccurrence[] {
   const occurrences: ServiceWayOccurrence[] = [];
-  for (const pattern of service.patterns) {
-    for (const run of PATTERN_RUNS) {
-      patternRunLegs(pattern, run).forEach(({ leg }, legIndex) => {
-        if (leg.wayId !== wayId) return;
-        occurrences.push({ patternId: pattern.id, run, legIndex, range: legRange(leg), leg });
-      });
-    }
+  const pattern = service.path;
+  for (const run of PATTERN_RUNS) {
+    patternRunLegs(pattern, run).forEach(({ leg }, legIndex) => {
+      if (leg.wayId !== wayId) return;
+      occurrences.push({ patternId: pattern.id, run, legIndex, range: legRange(leg), leg });
+    });
   }
   return occurrences;
 }
@@ -319,28 +319,27 @@ function wayPatternIndex(byWay: Map<string, Service[]>): Map<string, WayPatternE
     for (const svc of svcs) {
       if (seen.has(svc.id)) continue;
       seen.add(svc.id);
-      for (const pattern of svc.patterns) {
-        // Walked per direction rather than over the flat leg list, so the
-        // entries say which lanes are ACTUALLY ridden. The list used to be
-        // walked once and each leg drawn on both curbs, which is right for a
-        // two-way street and wrong for a one-way couplet — it would paint the
-        // outward street's return curb with a line no vehicle ever runs on.
-        for (const run of PATTERN_RUNS) {
-          const ordered = patternRunLegs(pattern, run);
-          ordered.forEach(({ leg, index: wayIdx, forward }, i) => {
-            let arr = index.get(leg.wayId);
-            if (!arr) index.set(leg.wayId, (arr = []));
-            const next = ordered[i + 1]?.leg.wayId;
-            arr.push({
-              svc,
-              pattern,
-              run,
-              wayIdx,
-              forward,
-              ...(next ? { nextWayId: next } : {}),
-            });
+      const pattern = svc.path;
+      // Walked per direction rather than over the flat leg list, so the
+      // entries say which lanes are ACTUALLY ridden. The list used to be
+      // walked once and each leg drawn on both curbs, which is right for a
+      // two-way street and wrong for a one-way couplet — it would paint the
+      // outward street's return curb with a line no vehicle ever runs on.
+      for (const run of PATTERN_RUNS) {
+        const ordered = patternRunLegs(pattern, run);
+        ordered.forEach(({ leg, index: wayIdx, forward }, i) => {
+          let arr = index.get(leg.wayId);
+          if (!arr) index.set(leg.wayId, (arr = []));
+          const next = ordered[i + 1]?.leg.wayId;
+          arr.push({
+            svc,
+            pattern,
+            run,
+            wayIdx,
+            forward,
+            ...(next ? { nextWayId: next } : {}),
           });
-        }
+        });
       }
     }
   }
@@ -450,6 +449,7 @@ interface DirectionalSideProjectionOptions {
   pattern: Pattern;
   side: DirectionalSectionSide;
   service: Service;
+  color: string;
   wayId: string;
 }
 
@@ -458,6 +458,7 @@ function projectDirectionalSide({
   pattern,
   side,
   service,
+  color,
   wayId,
 }: DirectionalSideProjectionOptions): DirectionalStretch[] {
   const wanted = new Set(side.legs.filter((leg) => leg.wayId === wayId));
@@ -467,7 +468,7 @@ function projectDirectionalSide({
     if (!wanted.has(segment.leg) || segment.path.length < 2) continue;
     stretches.push({
       path: segment.path,
-      color: service.color,
+      color,
       serviceId: service.id,
       modeId: service.modeId,
       run: segment.run,
@@ -478,19 +479,28 @@ function projectDirectionalSide({
   return stretches;
 }
 
-function projectPatternDirectionalStretches(
-  waysById: Map<string, Way>,
-  service: Service,
-  pattern: Pattern,
-  wayId: string,
-): DirectionalStretch[] {
+interface PatternDirectionalStretchProjectionOptions {
+  waysById: Map<string, Way>;
+  service: Service;
+  pattern: Pattern;
+  wayId: string;
+  color: string;
+}
+
+function projectPatternDirectionalStretches({
+  waysById,
+  service,
+  pattern,
+  wayId,
+  color,
+}: PatternDirectionalStretchProjectionOptions): DirectionalStretch[] {
   // Which stretches this pattern rides BOTH ways, whatever sections they sit
   // in. An arrow means "one-way as far as this line is concerned", so a
   // stretch the line also comes back along must not get one.
   if (patternRiddenDirections(pattern).get(wayId) === 3) return [];
   return pattern.sections.flatMap((section) =>
     directionalSectionSides(section).flatMap((side) =>
-      projectDirectionalSide({ waysById, pattern, side, service, wayId }),
+      projectDirectionalSide({ waysById, pattern, side, service, wayId, color }),
     ),
   );
 }
@@ -499,17 +509,24 @@ function oneDirectionalStretches(
   waysById: Map<string, Way>,
   services: Service[],
   wayId: string,
+  lineByServiceId: ReadonlyMap<string, TransitSystem['lines'][number]>,
 ): DirectionalStretch[] {
   const out: DirectionalStretch[] = [];
   const seen = new Set<string>();
   for (const svc of services) {
-    for (const pattern of svc.patterns) {
-      for (const stretch of projectPatternDirectionalStretches(waysById, svc, pattern, wayId)) {
-        const key = [svc.id, wayId, stretch.run, stretch.forward, ...stretch.range].join(':');
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push(stretch);
-      }
+    const pattern = svc.path;
+    const color = serviceDisplayColor(svc, lineByServiceId);
+    for (const stretch of projectPatternDirectionalStretches({
+      waysById,
+      service: svc,
+      pattern,
+      wayId,
+      color,
+    })) {
+      const key = [svc.id, wayId, stretch.run, stretch.forward, ...stretch.range].join(':');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(stretch);
     }
   }
   return out;
@@ -927,11 +944,21 @@ interface SharedProjectionIndexes {
   facilitiesById: ReadonlyMap<string, TransitSystem['facilities'][number]>;
   groupsById: ReadonlyMap<string, TransitSystem['groups'][number]>;
   servicesById: ReadonlyMap<string, Service>;
+  linesByServiceId: ReadonlyMap<string, TransitSystem['lines'][number]>;
   servicesByWay: Map<string, Service[]>;
   allServicesByWay: Map<string, Service[]>;
   projectedWayTypeIds: Set<string>;
   serviceSlots: Map<string, number>;
   wayIdsByStation?: ReadonlyMap<string, readonly string[]>;
+}
+
+/** A Line owns the public color; an orphaned in-progress Service still needs
+ * a visible, mode-appropriate fallback while validation reports its missing membership. */
+function serviceDisplayColor(
+  service: Service,
+  lineByServiceId: ReadonlyMap<string, TransitSystem['lines'][number]>,
+): string {
+  return lineByServiceId.get(service.id)?.color ?? modeRender(service.modeId).color;
 }
 
 interface StationModeProjectionOptions {
@@ -1084,6 +1111,7 @@ function buildSharedProjectionIndexes(
     servicesById: projectionDomainIndex(projection.serviceTermini, prepared?.servicesById, () =>
       renderServicesById(system.services),
     ),
+    linesByServiceId: linesByServiceId(system.lines),
     servicesByWay: serviceIndexes.visible,
     allServicesByWay: serviceIndexes.all,
     projectedWayTypeIds,
@@ -1156,7 +1184,10 @@ function projectStations(
       servicesByWay: indexes.allServicesByWay,
       reaches,
     });
-    const color = anchorServices[0]?.color ?? servingServices[0]?.color ?? NEUTRAL_STATION;
+    const foregroundService = anchorServices.at(0) ?? servingServices.at(0);
+    const color = foregroundService
+      ? serviceDisplayColor(foregroundService, indexes.linesByServiceId)
+      : NEUTRAL_STATION;
     const interchange = servingServices.length > 1;
     return {
       type: 'Feature',
@@ -1260,9 +1291,8 @@ function projectServiceTermini({
   if (affectedServiceIds && !affectedServiceIds.has(selection.id)) return [];
   const service = indexes.servicesById.get(selection.id);
   if (!service) return [];
-  const interactivePatternId = service.patterns.some((pattern) => pattern.id === activePatternId)
-    ? activePatternId
-    : service.patterns[0]?.id;
+  const interactivePatternId =
+    service.path.id === activePatternId ? activePatternId : service.path.id;
   const pending: ProjectedServiceTerminusFeature[] = [];
   for (const descriptor of serviceTerminusDescriptors(service)) {
     const feature = projectServiceTerminusFeature({
@@ -2187,7 +2217,12 @@ function projectTopologyFeatures({
       // Skipped when the way itself is one-way, because the chevrons above
       // already say it and two sets of arrows on one line is noise.
       if (projectServiceWay && projection.topology.serviceArrows && network && !wayIsOneWay) {
-        for (const one of oneDirectionalStretches(waysById, bundle, way.id)) {
+        for (const one of oneDirectionalStretches(
+          waysById,
+          bundle,
+          way.id,
+          indexes.linesByServiceId,
+        )) {
           serviceArrows.push({
             type: 'Feature',
             id: stableFeatureId(
@@ -2262,7 +2297,7 @@ function projectTopologyFeatures({
           modeId: service.modeId,
           wayId: way.id,
           typeId: way.typeId,
-          color: service.color,
+          color: serviceDisplayColor(service, indexes.linesByServiceId),
           width: modeRender(service.modeId).width,
           underground,
           elevated,

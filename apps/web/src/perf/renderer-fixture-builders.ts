@@ -4,6 +4,7 @@ import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type {
   LngLat,
+  Line,
   LineGeometry,
   Node,
   Service,
@@ -48,6 +49,7 @@ interface RendererSystemOptions {
   viewport: Viewport;
   ways: Way[];
   nodes?: Node[];
+  lines?: Line[];
   services?: Service[];
 }
 
@@ -57,6 +59,7 @@ export function rendererSystem({
   viewport,
   ways,
   nodes = [],
+  lines = [],
   services = [],
 }: RendererSystemOptions): TransitSystem {
   return {
@@ -66,6 +69,7 @@ export function rendererSystem({
     viewport,
     ways,
     nodes,
+    lines,
     services,
   };
 }
@@ -94,18 +98,23 @@ export function sharedEndpointNodes(prefix: string, ways: readonly Way[]): Node[
     }));
 }
 
-export function singleWayService(id: string, name: string, color: string, wayId: string): Service {
+export function singleWayService(id: string, name: string, wayId: string): Service {
   return {
     id,
     name,
     modeId: 'bus',
-    color,
     frequencyMinutes: 10,
-    patterns: [
-      {
-        id: `${id}-pattern`,
-        sections: oneSection([wholeLeg(wayId)]),
-      },
-    ],
+    path: { id, sections: oneSection([wholeLeg(wayId)]) },
+  };
+}
+
+/** The renderer fixtures use real public Lines: Services carry operations,
+ * while colour and rider-facing naming belong to the Line that groups them. */
+export function rendererLine(service: Service, color: string): Line {
+  return {
+    id: `${service.id}-line`,
+    name: service.name ?? service.id,
+    color,
+    serviceIds: [service.id],
   };
 }

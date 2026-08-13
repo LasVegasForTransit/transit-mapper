@@ -4,6 +4,7 @@ import type { LngLat, Node, Service, TransitSystem, Way } from '@transitmapper/c
 import {
   rendererSystem,
   rendererWay,
+  rendererLine,
   sharedEndpointNodes,
   singleWayService,
 } from './renderer-fixture-builders';
@@ -34,27 +35,28 @@ export function createJunctionFixture(id: string, angles: readonly number[]): Tr
 export function createServedJunctionFixture(id: string, angles: readonly number[]): TransitSystem {
   const system = createJunctionFixture(id, angles);
   const trunk = system.ways[0];
-  if (!trunk || system.ways.length < 3) {
+  if (system.ways.length < 3) {
     throw new RangeError('A served junction fixture requires at least three arms.');
   }
+  const services: Service[] = system.ways.slice(1).map((branch, index) => ({
+    id: `${id}-service-${index + 1}`,
+    name: `Arm ${index + 1}`,
+    modeId: 'bus',
+    frequencyMinutes: 10,
+    path: {
+      id: `${id}-service-${index + 1}`,
+      sections: oneSection([
+        wholeLeg(trunk.id, 'withPoints'),
+        wholeLeg(branch.id, 'againstPoints'),
+      ]),
+    },
+  }));
   return {
     ...system,
-    services: system.ways.slice(1).map((branch, index) => ({
-      id: `${id}-service-${index + 1}`,
-      name: `Arm ${index + 1}`,
-      modeId: 'bus',
-      color: LINE_COLORS[index % LINE_COLORS.length],
-      frequencyMinutes: 10,
-      patterns: [
-        {
-          id: `${id}-pattern-${index + 1}`,
-          sections: oneSection([
-            wholeLeg(trunk.id, 'withPoints'),
-            wholeLeg(branch.id, 'againstPoints'),
-          ]),
-        },
-      ],
-    })),
+    services,
+    lines: services.map((service, index) =>
+      rendererLine(service, LINE_COLORS[index % LINE_COLORS.length]),
+    ),
   };
 }
 
@@ -154,21 +156,12 @@ export function createRailGuideway(): TransitSystem {
   });
 }
 
-function branchService(
-  trunk: Way,
-  branch: Way,
-  identity: Pick<Service, 'id' | 'name' | 'color'>,
-): Service {
+function branchService(trunk: Way, branch: Way, identity: Pick<Service, 'id' | 'name'>): Service {
   return {
     ...identity,
     modeId: 'bus',
     frequencyMinutes: 8,
-    patterns: [
-      {
-        id: `${identity.id}-pattern`,
-        sections: oneSection([wholeLeg(trunk.id), wholeLeg(branch.id)]),
-      },
-    ],
+    path: { id: identity.id, sections: oneSection([wholeLeg(trunk.id), wholeLeg(branch.id)]) },
   };
 }
 
@@ -187,39 +180,37 @@ export function createSharedServiceTrunk(): TransitSystem {
     [-115.1715, 36.127],
   ]);
   const ways = [trunk, north, south];
+  const services = [
+    branchService(trunk, north, { id: 'shared-red', name: 'Red' }),
+    branchService(trunk, south, { id: 'shared-blue', name: 'Blue' }),
+    singleWayService('shared-green', 'Green', trunk.id),
+  ];
   return rendererSystem({
     id: 'shared-service-trunk',
     name: 'Shared service trunk',
     viewport: { center, zoom: 16 },
     ways,
     nodes: sharedEndpointNodes('shared-service-trunk', ways),
-    services: [
-      branchService(trunk, north, {
-        id: 'shared-red',
-        name: 'Red',
-        color: LINE_COLORS[0],
-      }),
-      branchService(trunk, south, {
-        id: 'shared-blue',
-        name: 'Blue',
-        color: LINE_COLORS[1],
-      }),
-      singleWayService('shared-green', 'Green', LINE_COLORS[2], trunk.id),
-    ],
+    services,
+    lines: services.map((service, index) => rendererLine(service, LINE_COLORS[index])),
   });
 }
 
 export function createComplexDiagram(): TransitSystem {
   const system = createPortMason();
   const extraWays = system.ways.filter((way) => way.typeId === 'road').slice(5, 7);
+  const addedServices = [
+    singleWayService('diagram-green', 'Green', extraWays[0].id),
+    singleWayService('diagram-purple', 'Purple', extraWays[1].id),
+  ];
   return {
     ...system,
     id: 'complex-diagram',
     name: 'Complex diagram',
-    services: [
-      ...system.services,
-      singleWayService('diagram-green', 'Green', LINE_COLORS[2], extraWays[0].id),
-      singleWayService('diagram-purple', 'Purple', LINE_COLORS[3], extraWays[1].id),
+    services: [...system.services, ...addedServices],
+    lines: [
+      ...system.lines,
+      ...addedServices.map((service, index) => rendererLine(service, LINE_COLORS[index + 2])),
     ],
   };
 }
