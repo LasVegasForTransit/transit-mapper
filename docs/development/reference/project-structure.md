@@ -254,26 +254,7 @@ controls, dialogs, onboarding, and accessibility semantics.
 domain model without React state. `SidebarPanel.tsx` owns the per-view query,
 expansion, list limits, scroll position, selection wiring, and local recovery
 boundaries that present that projection.
-The onboarding slide data selects a purpose overview followed by four passive
-capability scenes. The overview projects a completed central Las Vegas proposal
-without editor mutation, while `ui/onboarding/fixtureSystem.ts` owns that single
-valid system and the simulation inputs derived from it.
-`scripts/generate-onboarding-las-vegas-context.ts` clips and normalizes a fixed
-OpenStreetMap query into the committed `las-vegas-context-data.json` snapshot;
-`ui/onboarding/las-vegas-context.ts` validates and exposes that attributed local
-context. Regenerate it explicitly with `pnpm --filter @transitmapper/web
-generate:onboarding-context`; no runtime path calls Overpass. Pure scene helpers
-derive drawing, selected-infrastructure, and vehicle frames;
-`OnboardingPreviewMap.tsx` and its map controller adapt those frames to the
-production feature projection, dashed route-preview source, and feature-state
-selection without reading or mutating editor state. The operations scene
-supplies fixture values to the same
-`ui/inspector/service-inspector-heading.tsx`,
-`ui/inspector/service-schedule-fields.tsx` and
-`ui/inspector/service-load-presentation.tsx` components used by the live
-Service inspector, inside the same `Panel` shell. The simulation scene shares
-the production simulation-control presentation with the workbench and supplies
-only its passive scene clock.
+Onboarding projects one valid Las Vegas system through shared production UI.
 `apps/web/src/ui/useKeyboardInset.ts` reports how much of the viewport an
 on-screen keyboard covers, which no layout-viewport measurement exposes.
 `apps/web/src/ui/app-banner.ts` decides which single application-level message
