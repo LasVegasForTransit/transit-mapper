@@ -10,7 +10,6 @@ import {
 import type { FrameStats } from './frameStats';
 import type { RawGestureMeasurements } from './gestureStats';
 import { attachPaintedFrameCapture } from './paintedFrameCapture';
-
 /** Runtime A/B toggles, flipped from the devtools console to attribute cost —
  *  e.g. `__perf.vehicles = false` then re-run `await __panBench()` to see the
  *  vehicle loop's share of the pan frame budget. */
@@ -18,7 +17,7 @@ interface DevPerfFlags {
   vehicles: boolean;
 }
 
-interface PerfStationSnapshot {
+interface PerfStopSnapshot {
   coord: [number, number];
   revision: number;
   wayCount: number;
@@ -32,7 +31,7 @@ interface PerfOverlaySnapshot {
 }
 
 export interface PerfHarnessOptions {
-  stationSnapshot?: (stationId: string) => PerfStationSnapshot | null;
+  stopSnapshot?: (stopId: string) => PerfStopSnapshot | null;
   overlaySnapshot?: () => PerfOverlaySnapshot;
 }
 
@@ -45,7 +44,7 @@ declare global {
     __zoomBench?: (opts?: ZoomBenchOptions) => Promise<FrameStats>;
     __perfSourceUploadCount?: () => number;
     __perfProjectLngLat?: (coord: [number, number]) => { x: number; y: number };
-    __perfStationSnapshot?: (stationId: string) => PerfStationSnapshot | null;
+    __perfStopSnapshot?: (stopId: string) => PerfStopSnapshot | null;
     __perfCameraSnapshot?: () => { center: [number, number]; zoom: number };
     __perfOverlaySnapshot?: () => PerfOverlaySnapshot;
     __perfStartPaintedFrameCapture?: () => void;
@@ -149,7 +148,7 @@ export function attachPerfHarness(map: MLMap, options: PerfHarnessOptions = {}):
     const center = map.getCenter();
     return { center: [center.lng, center.lat], zoom: map.getZoom() };
   };
-  if (options.stationSnapshot) window.__perfStationSnapshot = options.stationSnapshot;
+  if (options.stopSnapshot) window.__perfStopSnapshot = options.stopSnapshot;
   if (options.overlaySnapshot) window.__perfOverlaySnapshot = options.overlaySnapshot;
   window.__perfStartPaintedFrameCapture = paintedFrames.start;
   window.__perfStopPaintedFrameCapture = paintedFrames.stop;
@@ -168,7 +167,7 @@ export function attachPerfHarness(map: MLMap, options: PerfHarnessOptions = {}):
     delete window.__perfSourceUploadCount;
     delete window.__perfProjectLngLat;
     delete window.__perfCameraSnapshot;
-    delete window.__perfStationSnapshot;
+    delete window.__perfStopSnapshot;
     delete window.__perfOverlaySnapshot;
     delete window.__perfStartPaintedFrameCapture;
     delete window.__perfStopPaintedFrameCapture;

@@ -9,7 +9,6 @@ import {
   type StoredSystemRecord,
 } from '../../src/storage/libraryStore';
 import type { LibraryEntry, LoadResult, SaveOutcome } from '../../src/storage/localStore';
-
 class MemoryDatabase implements LibraryDatabase {
   readonly systems = new Map<string, StoredSystemRecord>();
   fail: SaveOutcome | null = null;
@@ -567,7 +566,7 @@ describe('IndexedDB library store', () => {
     await first;
     await Promise.resolve();
     expect(serialize).toHaveBeenCalledTimes(2);
-    expect(serialize.mock.calls[1]![0].name).toBe('Third');
+    expect(serialize.mock.calls[1][0].name).toBe('Third');
     releases.shift()?.();
     await expect(Promise.all([second, third])).resolves.toEqual(['saved', 'saved']);
 

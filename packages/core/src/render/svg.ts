@@ -1,11 +1,9 @@
-import type { Feature, LineString, Point } from 'geojson';
 import type { LngLat, TransitSystem } from '../model/system';
 import { buildFeatures, type ViewOptions } from './buildFeatures';
 import type { LegendEntry } from './legend';
 import type { ScaleBarSpec } from './scaleBar';
 import type { ScreenPoint } from './project';
 import { LVBT, LVBT_FONT_STACK } from '../style/lvbtBrand';
-
 // The vector composition of a finished map: system geometry, plus the
 // furniture (title, legend, north arrow, scale bar) that makes an exported
 // image read as a map on its own rather than an extracted line drawing.
@@ -342,13 +340,13 @@ export function systemSvg(
       })
       .join(' ');
 
-  for (const f of fc.ways.features as Feature<LineString>[]) {
+  for (const f of fc.ways.features) {
     const p = f.properties as { color: string; width: number; dashed?: boolean };
     parts.push(
       `<path d="${pathD(f.geometry.coordinates as LngLat[])}" fill="none" stroke="${p.color}" stroke-width="${p.width}" stroke-linecap="round" stroke-linejoin="round"${p.dashed ? ' stroke-dasharray="4,4"' : ''} opacity="0.85"/>`,
     );
   }
-  for (const f of fc.services.features as Feature<LineString>[]) {
+  for (const f of fc.services.features) {
     const p = f.properties as {
       color: string;
       width: number;
@@ -380,7 +378,7 @@ export function systemSvg(
   const markerObstacle = (x: number, y: number, r: number) =>
     obstacles.push({ left: x - r, right: x + r, top: y - r, bottom: y + r });
 
-  for (const f of fc.stops.features as Feature<Point>[]) {
+  for (const f of fc.stops.features) {
     const p = f.properties as { color: string; interchange?: boolean; name?: string };
     const { x, y } = project(f.geometry.coordinates as LngLat);
     const r = p.interchange ? 7 : 5;
@@ -400,7 +398,7 @@ export function systemSvg(
       });
     }
   }
-  for (const f of fc.facilities.features as Feature<Point>[]) {
+  for (const f of fc.facilities.features) {
     const p = f.properties as { color: string; radius: number; name?: string };
     const { x, y } = project(f.geometry.coordinates as LngLat);
     parts.push(

@@ -2,22 +2,27 @@
 // run today, next to what I'm proposing." Same two-layer split as OSM import
 // (model/import.ts): pure, network-free transforms (parseGtfsCsv,
 // classifyGtfsRouteType, buildGtfsIndex, piecesForRoutes, gtfsFilesToSystemPieces)
-// that fixture data can exercise directly, plus streamRtcGtfsBatches, the one
-// function that touches the network.
-import { unzipSync, strFromU8 } from 'fflate';
+// that fixture data can exercise directly. Archive decoding and the optional
+// network wrapper live in gtfs-archive.ts.
 import { shortId } from './ids';
 import { deriveServiceLevels, type DerivedServiceLevel } from './gtfsSchedule';
 import { gtfsServiceName, lineFromGtfsRoute, serviceFromGtfsPattern } from './gtfsService';
 import { defaultProfileFor, makeOneWay } from './profile';
 import { wayType } from './catalog';
 import { haversineMeters, nearestOnPath, resolveWayPath, wholeLeg, oneSection } from './geo';
-import type { Line, LngLat, Pattern, Service, Stop, Way } from './system';
-
+import type { Line, LngLat, Pattern, Service, Station, Stop, Way } from './system';
 export interface GtfsImportResult {
   ways: Way[];
   lines: Line[];
   services: Service[];
   stops: Stop[];
+  stations: Station[];
+}
+
+export interface GtfsImportBatch {
+  pieces: GtfsImportResult;
+  routesDone: number;
+  routesTotal: number;
 }
 
 // GTFS routes.txt's route_type enum → this app's catalog
@@ -177,11 +182,14 @@ export function pairRouteShapes(
   const dirs = [...buckets.keys()];
   // One bucket means the feed never said which direction anything runs.
   if (dirs.length !== 2) return { couplets: [], singles: [...shapeIds] };
+  const leftBucket = buckets.get(dirs[0]);
+  const rightBucket = buckets.get(dirs[1]);
+  if (!leftBucket || !rightBucket) return { couplets: [], singles: [...shapeIds] };
 
   const byTrips = (a: string, b: string) =>
     (shapeTripCount.get(b) ?? 0) - (shapeTripCount.get(a) ?? 0);
-  const left = [...buckets.get(dirs[0])!].sort(byTrips);
-  const right = [...buckets.get(dirs[1])!].sort(byTrips);
+  const left = [...leftBucket].sort(byTrips);
+  const right = [...rightBucket].sort(byTrips);
 
   const lengthOf = (id: string) => {
     const path = shapePaths.get(id) ?? [];
@@ -298,7 +306,7 @@ function buildGtfsIndex(files: GtfsFiles): GtfsIndex {
     shapeToRoute.set(t.shape_id, t.route_id);
     shapeToTrip.set(t.shape_id, t.trip_id);
     if (t.trip_headsign) headsignByShape.set(t.shape_id, t.trip_headsign);
-    shapeDirection.set(t.shape_id, String(t.direction_id ?? ''));
+    shapeDirection.set(t.shape_id, Object.hasOwn(t, 'direction_id') ? t.direction_id : '');
   }
 
   const stopTimesByTrip = new Map<string, { seq: number; stopId: string }[]>();
@@ -345,6 +353,7 @@ function piecesForRoutes(
   index: GtfsIndex,
   routeIds: string[],
   stopByStopId: Map<string, Stop>,
+  stationByStopId: Map<string, Station>,
 ): GtfsImportResult {
   const ways: Way[] = [];
   const wayIdByShape = new Map<string, string>();
@@ -434,6 +443,7 @@ function piecesForRoutes(
   }
 
   const newStops: Stop[] = [];
+  const newStations: Station[] = [];
   for (const [shapeId, wayId] of wayIdByShape) {
     const tripId = index.shapeToTrip.get(shapeId);
     const stopSeq = tripId && index.stopTimesByTrip.get(tripId);
@@ -463,18 +473,43 @@ function piecesForRoutes(
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
       const coord: LngLat = [lon, lat];
       const nearest = nearestOnPath(path, coord);
+      const parentId = sourceStop.parent_station;
+      let stationId: string | undefined;
+      if (parentId) {
+        let station = stationByStopId.get(parentId);
+        if (!station) {
+          const sourceStation = index.stopById.get(parentId);
+          const stationLat = Number(sourceStation?.stop_lat);
+          const stationLon = Number(sourceStation?.stop_lon);
+          const stationCoord: LngLat =
+            Number.isFinite(stationLat) && Number.isFinite(stationLon)
+              ? [stationLon, stationLat]
+              : coord;
+          const stationName = sourceStation ? sourceStation.stop_name.trim() : undefined;
+          station = {
+            id: shortId(),
+            name: stationName?.length ? stationName : undefined,
+            coord: stationCoord,
+          };
+          stationByStopId.set(parentId, station);
+          newStations.push(station);
+        }
+        stationId = station.id;
+      }
+      const stopName = sourceStop.stop_name.trim();
       const createdStop: Stop = {
         id: shortId(),
-        name: sourceStop.stop_name || undefined,
+        name: stopName.length ? stopName : undefined,
         coord: nearest ? nearest.coord : coord,
         anchors: nearest ? [{ wayId, t: nearest.t }] : [],
+        ...(stationId ? { stationId } : {}),
       };
       stopByStopId.set(stopId, createdStop);
       newStops.push(createdStop);
     }
   }
 
-  return { ways, lines, services, stops: newStops };
+  return { ways, lines, services, stops: newStops, stations: newStations };
 }
 
 /**
@@ -490,7 +525,7 @@ function piecesForRoutes(
  */
 export function gtfsFilesToSystemPieces(files: GtfsFiles): GtfsImportResult {
   const index = buildGtfsIndex(files);
-  return piecesForRoutes(index, [...index.routeShapeIds.keys()], new Map());
+  return piecesForRoutes(index, [...index.routeShapeIds.keys()], new Map(), new Map());
 }
 
 /** Same transform as gtfsFilesToSystemPieces, split into route batches in
@@ -501,77 +536,12 @@ export function gtfsFilesToBatchedPieces(files: GtfsFiles, batchSize = 2): GtfsI
   const index = buildGtfsIndex(files);
   const routeIds = [...index.routeShapeIds.keys()];
   const stopByStopId = new Map<string, Stop>();
+  const stationByStopId = new Map<string, Station>();
   const batches: GtfsImportResult[] = [];
   for (let i = 0; i < routeIds.length; i += batchSize) {
-    batches.push(piecesForRoutes(index, routeIds.slice(i, i + batchSize), stopByStopId));
+    batches.push(
+      piecesForRoutes(index, routeIds.slice(i, i + batchSize), stopByStopId, stationByStopId),
+    );
   }
   return batches;
-}
-
-export interface GtfsImportBatch {
-  pieces: GtfsImportResult;
-  routesDone: number;
-  routesTotal: number;
-}
-
-/** Inflate, decode, index, and batch a GTFS ZIP without touching the network.
- * The browser runs this entry point inside a dedicated Worker, while the pure
- * signature keeps archive behavior fixture-testable in Node and workerd. */
-export function gtfsArchiveToBatches(
-  archive: Uint8Array,
-  requestedBatchSize = 2,
-): GtfsImportBatch[] {
-  const zip = unzipSync(archive);
-  const read = (name: string) => (zip[name] ? strFromU8(zip[name]) : '');
-  const index = buildGtfsIndex({
-    routes: read('routes.txt'),
-    trips: read('trips.txt'),
-    stops: read('stops.txt'),
-    stopTimes: read('stop_times.txt'),
-    frequencies: read('frequencies.txt'),
-    shapes: read('shapes.txt'),
-  });
-  const routeIds = [...index.routeShapeIds.keys()];
-  const routesTotal = routeIds.length;
-  const batchSize = Math.max(1, Math.floor(requestedBatchSize));
-  const stopByStopId = new Map<string, Stop>();
-  const batches: GtfsImportBatch[] = [];
-  for (let i = 0; i < routesTotal; i += batchSize) {
-    batches.push({
-      pieces: piecesForRoutes(index, routeIds.slice(i, i + batchSize), stopByStopId),
-      routesDone: Math.min(i + batchSize, routesTotal),
-      routesTotal,
-    });
-  }
-  return batches;
-}
-
-/**
- * RTC Southern Nevada's real, actively-maintained GTFS feed — fetched
- * through the Worker's /api/gtfs/rtc proxy since the feed's own host
- * doesn't send CORS headers for cross-origin browser fetches — parsed, then
- * handed back a few routes at a time instead of all at once. A route's
- * worth of ways/stops is small (built in well under a frame), and
- * yielding between batches lets the caller merge each one into the map
- * immediately and hand control back to the browser before starting the
- * next — the system visibly builds up route by route instead of the tab
- * going unresponsive for the whole import and then snapping to "done" (the
- * ~40 MB of GTFS text this feed unpacks to made that the norm, not an edge
- * case). The only function here that touches the network.
- */
-export async function* streamRtcGtfsBatches(batchSize = 2): AsyncGenerator<GtfsImportBatch> {
-  const res = await fetch('/api/gtfs/rtc');
-  if (!res.ok) throw new Error(`GTFS import failed (${res.status}).`);
-  const batches = gtfsArchiveToBatches(new Uint8Array(await res.arrayBuffer()), batchSize);
-  for (const batch of batches) {
-    yield batch;
-    // Hand control back to the browser between batches — setTimeout, not
-    // requestAnimationFrame: rAF callbacks are paused indefinitely by most
-    // browsers once the tab isn't visible/focused, which would silently
-    // stall an in-progress import the moment someone switched tabs (a real,
-    // reproduced failure mode, not a hypothetical one — confirmed live: an
-    // rAF-based yield here hung mid-import once the tab lost focus).
-    // setTimeout keeps firing (throttled, never paused) regardless.
-    await new Promise((r) => setTimeout(r, 0));
-  }
 }

@@ -6,7 +6,6 @@ import { backgroundImportBlockMessage } from '../import/background-import-store'
 import { Icon } from './Icon';
 import { Modal } from './Modal';
 import { useImportProgress } from './UiProvider';
-
 interface GtfsImportDialogProps {
   onClose: () => void;
 }
@@ -203,9 +202,9 @@ export function GtfsImportDialog({ onClose }: GtfsImportDialogProps) {
     >
       <p className="panel-hint">
         Pulls RTC Southern Nevada&rsquo;s published GTFS feed — every current bus route, its stops,
-        and its alignment — in as real routes and stations. It streams in live on the map, a few
-        routes at a time, so you can keep working while it comes in — watch for the progress pill
-        above the tool dock.
+        and its alignment — in as real routes and stops. It streams in live on the map, a few routes
+        at a time, so you can keep working while it comes in — watch for the progress pill above the
+        tool dock.
       </p>
     </Modal>
   );

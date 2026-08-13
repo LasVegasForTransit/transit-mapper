@@ -125,7 +125,7 @@ Every Service gets at least two minutes of it, and longer Services get more.
 
 Some consequences worth expecting:
 
-- **Adding stations grows the fleet.** More stops means a longer round trip,
+- **Adding Stops grows the fleet.** More calls means a longer round trip,
   which means more vehicles to hold the same headway.
 - **A headway longer than the round trip is fine.** One vehicle, waiting a
   long time at the terminal — an hourly service on a 25-minute loop.
@@ -150,9 +150,9 @@ none of it has to be taken on trust:
 > round trip takes 22 min, so holding that headway needs 3 vehicles, each
 > waiting 4.1 min at either end.
 
-Change any input and the numbers move: add a station, raise its dwell, assign
+Change any input and the numbers move: add a Stop, raise its dwell, assign
 a faster vehicle kind, or edit the headway. That's the point — before this,
-adding a station silently added a train.
+adding a Stop silently added a train.
 
 The inspector and the map resolve through the same functions in
 `packages/core/src/sim/serviceStats.ts`, so the figure a planner reads and the
@@ -247,7 +247,7 @@ service to anyone standing between them. Frequencies add; headways don't.
 
 That's computed as analysis over the same schedule data the animation resolves
 against (`packages/core/src/sim/frequency.ts`), not measured off the animation
-— so it's exact, instant, and readable in the Station inspector without
+— so it's exact, instant, and readable in the Stop inspector without
 watching the map. The two are independent routes to the same number, which
 makes each a check on the other.
 

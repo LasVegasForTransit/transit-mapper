@@ -203,11 +203,11 @@ type PatternStopCommands = Pick<ServiceCommands, 'setStopSkipped' | 'makePattern
 
 function createPatternStopCommands(runtime: EditorRuntime): PatternStopCommands {
   return {
-    setStopSkipped: (...[serviceId, patternId, run, stationId, skipped]) => {
+    setStopSkipped: (...[serviceId, patternId, run, stopId, skipped]) => {
       runtime.commitContent(undefined, (state) => {
         const service = state.system.services.find((candidate) => candidate.id === serviceId);
         const pattern = service?.path.id === patternId ? service.path : undefined;
-        const updated = pattern ? setPatternStopSkipped(pattern, run, stationId, skipped) : null;
+        const updated = pattern ? setPatternStopSkipped(pattern, run, stopId, skipped) : null;
         return {
           system: updated
             ? replaceServicePath(state.system, serviceId, patternId, updated)

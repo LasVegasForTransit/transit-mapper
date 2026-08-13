@@ -207,11 +207,20 @@ function removedRecordIds(before: TransitSystem, after: TransitSystem): Set<stri
     ...after.lines.map((record) => record.id),
     ...after.services.map((record) => record.id),
     ...after.stops.map((record) => record.id),
+    ...after.stations.map((record) => record.id),
     ...after.facilities.map((record) => record.id),
     ...after.namedWays.map((record) => record.id),
   ]);
   return new Set(
-    [before.ways, before.lines, before.services, before.stops, before.facilities, before.namedWays]
+    [
+      before.ways,
+      before.lines,
+      before.services,
+      before.stops,
+      before.stations,
+      before.facilities,
+      before.namedWays,
+    ]
       .flat()
       .map((record) => record.id)
       .filter((id) => !live.has(id)),
@@ -228,21 +237,33 @@ export function deleteSelection(system: TransitSystem, items: SelectionRef[]): T
     for (const serviceId of line.serviceIds) serviceIds.add(serviceId);
   }
   const stopIds = selectedIds(items, 'stop');
+  const stationIds = selectedIds(items, 'station');
   const facilityIds = selectedIds(items, 'facility');
   const services = withoutSelected(system.services, serviceIds);
   const selectedLines = withoutSelected(system.lines, lineIds);
   const lines = pruneLineMembership(selectedLines, services);
+  const selectedStops = withoutSelected(system.stops, stopIds);
+  const stops =
+    stationIds.size === 0
+      ? selectedStops
+      : selectedStops.map((stop) =>
+          stop.stationId && stationIds.has(stop.stationId)
+            ? { ...stop, stationId: undefined }
+            : stop,
+        );
   let next: TransitSystem = {
     ...system,
     lines,
     services,
-    stops: withoutSelected(system.stops, stopIds),
+    stops,
+    stations: withoutSelected(system.stations, stationIds),
     facilities: withoutSelected(system.facilities, facilityIds),
   };
   if (
     next.lines === system.lines &&
     next.services === system.services &&
     next.stops === system.stops &&
+    next.stations === system.stations &&
     next.facilities === system.facilities
   ) {
     next = system;

@@ -59,8 +59,9 @@ place a placeholder that needs a second step to become one. Variants and
 settings belong near the control they modify, not buried somewhere
 unrelated.
 
-In practice: the bottom dock's buttons are modes (Road draws a road,
-Station draws a station); variants live in that tool's flyout menu, and
+In practice: the bottom dock's buttons are modes (Road draws a road, Stop
+places a Stop in Network, and Station draws a Station in Infrastructure);
+variants live in that tool's flyout menu, and
 contextual settings live in the options row above the dock.
 
 ## Something people name in real life should be one thing in the model

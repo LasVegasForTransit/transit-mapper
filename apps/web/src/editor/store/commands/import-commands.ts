@@ -82,7 +82,8 @@ function withGtfsPieces(system: TransitSystem, pieces: GtfsPieces): TransitSyste
     ways: [...system.ways, ...pieces.ways],
     lines: [...system.lines, ...pieces.lines],
     services: [...system.services, ...pieces.services],
-    stations: [...system.stations, ...pieces.stations],
+    stops: [...system.stops, ...pieces.stops],
+    stations: [...system.stations, ...(pieces.stations ?? [])],
   };
   return withCrossings(
     imported,
@@ -95,7 +96,8 @@ function hasGtfsPieces(pieces: GtfsPieces): boolean {
     pieces.ways.length > 0 ||
     pieces.lines.length > 0 ||
     pieces.services.length > 0 ||
-    pieces.stations.length > 0
+    pieces.stops.length > 0 ||
+    (pieces.stations?.length ?? 0) > 0
   );
 }
 

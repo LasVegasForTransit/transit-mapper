@@ -36,7 +36,7 @@ export const ICON_NODES: Record<IconName, IconNode> = {
     ['path', { d: 'M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15', key: '1d8sl' }],
     ['circle', { cx: '18', cy: '5', r: '3', key: 'gq8acd' }],
   ],
-  station: [['circle', { cx: '12', cy: '12', r: '10', key: '1mglay' }]],
+  stop: [['circle', { cx: '12', cy: '12', r: '10', key: '1mglay' }]],
   road: [
     ['path', { d: 'M12 17v4', key: '1riwvh' }],
     ['path', { d: 'M12 5V3', key: 'vd5es' }],

@@ -12,7 +12,7 @@ interface PanelProps extends HTMLAttributes<HTMLElement> {
 /**
  * The one card shell every floating side panel renders through — SidePanel
  * (left) and every Inspector variant (right: Empty/Multi/Service/Way/
- * Station/Facility/Group each used to hand-roll this exact
+ * Stop/Facility/Group each used to hand-roll this exact
  * `<aside className="panel panel-right">` themselves, seven identical
  * copies of the same wrapper).
  *

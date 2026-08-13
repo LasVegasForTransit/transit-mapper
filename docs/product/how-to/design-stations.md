@@ -1,55 +1,44 @@
-# Design stations
+# Design Stops and Stations
 
-A station means different things in different views. In the Network view it's
-a stop: a point on a line. In the Infrastructure view it's a place: land with
-a boundary, and structures on that land. Both are the same station record.
+TransitMapper keeps two related passenger-place concepts separate:
 
-## Draw station land (Infrastructure view)
+- A **Stop** is the physical point where passengers board or alight.
+- A **Station** is an optional named place or complex containing one or more Stops.
 
-With the **Station** tool (`S`):
+A roadside bus Stop does not need a Station. A rail terminal can have one
+Station with several platform Stops. A Service calling at a Stop is derived
+from its path and stopping pattern; it is not another place to maintain.
 
-- **Drag** a rectangle where the station goes, or
-- **click** corner points one at a time and finish with `Enter` or
-  double-click (`Esc` cancels).
+## Place Stops in Network
 
-The boundary you draw _is_ the station, its primary identity in the physical
-world. The station anchors itself to the nearest way inside or near the
-boundary, so its Network-view stop lands on the line it serves. Reshape the
-land later by selecting the station and dragging its corner handles.
+Choose the **Stop** tool (`S`) in Network, then click on or near a Line. The
+Stop snaps to the underlying Way and follows it when the alignment changes.
+Select the Stop to name it, set dwell time, mark it as major, or attach it to
+a Station.
 
-There is no click-to-place-a-point in this view: the Infrastructure view
-is 2D, and everything drawn there has physical extent.
+## Draw a Station in Infrastructure
 
-## Add structures on the land
+Choose the **Station** tool (`S`) in Infrastructure, then:
 
-The **Facility** tool's (`F`) menu is organized by what the thing physically
-is:
+- drag a rectangle around the passenger place, or
+- click its corners and double-click to close (`Esc` cancels).
 
-- **Access points (placed):** entrance, elevator, bike dock. These are
-  points in the real world too; click to place.
-- **Structures (drawn to shape):** building, bus bay, platform, parking,
-  depot. Drag to draw their footprint.
-- **Site boundary:** draw the outline of a standalone facility complex
-  (a transit center that isn't a rail station, say).
+The boundary belongs to the Station, not to any one Stop. Select it to rename
+the Station, add platform geometry, attach existing Stops, or reshape the
+boundary by dragging its handles.
 
-Anything you draw inside a station's land joins that station automatically:
-a building becomes the station's building, a bus bay its bus bay. The
-inspector's **Complex** tab lists everything the station owns.
+Deleting a Station does not delete its Stops. They become standalone boarding
+points so removing a place label or boundary cannot silently remove service.
 
-Platforms can also be added from the station inspector's **Physical** tab,
-which places them along the anchored way.
+## Add facilities and larger complexes
 
-## Stops in the Network view
+Facilities such as entrances, elevators, buildings, and bus bays remain
+separate physical features. Drawing one inside a Station boundary associates
+it with that passenger place through a group. Use a separate facility-complex
+boundary when several Stations or unrelated facilities form one larger site.
 
-In the Network view the Station tool places schematic stops: click on or near
-a line and the stop snaps to it. Stops placed here have no land until you
-switch to the Infrastructure view and draw some; the two representations stay
-linked through the one station record.
+## Import behavior
 
-## Station complexes
-
-Draw a **Site boundary** (Facility tool) around several related things (a
-terminal building, bus bays, an adjacent station) and they group into one
-complex with its own name and color. Use this for transfer centers and
-intermodal terminals where several stations and structures form one real
-place.
+GTFS platform or boarding records become Stops. A `parent_station` record
+becomes a Station, and child Stops link to it. Feeds without parent-station
+hierarchy import Stops only; TransitMapper does not invent Station complexes.

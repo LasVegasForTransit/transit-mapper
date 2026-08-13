@@ -6,10 +6,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createFacilityCommands } from '../../../src/editor/store/commands/facility-commands';
 import { createGroupCommands } from '../../../src/editor/store/commands/group-commands';
 import { createStationCommands } from '../../../src/editor/store/commands/station-commands';
+import { createStopCommands } from '../../../src/editor/store/commands/stop-commands';
 import { createEditorRuntime, type EditorRuntime } from '../../../src/editor/store/runtime';
 
 interface PlaceHarness {
   runtime: EditorRuntime;
+  stops: ReturnType<typeof createStopCommands>;
   stations: ReturnType<typeof createStationCommands>;
   facilities: ReturnType<typeof createFacilityCommands>;
   groups: ReturnType<typeof createGroupCommands>;
@@ -25,6 +27,7 @@ function createHarness(options: { system?: TransitSystem; readOnly?: boolean } =
   const readCameraCenter = vi.fn(() => [-115.18, 36.13] as [number, number]);
   return {
     runtime,
+    stops: createStopCommands(runtime),
     stations: createStationCommands(runtime),
     facilities: createFacilityCommands(runtime),
     groups: createGroupCommands(runtime, { readCameraCenter }),
@@ -40,19 +43,56 @@ describe('place command factories', () => {
   it('blocks every id-producing place command before it can create content', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const runtime = createEditorRuntime({ documentStatus: 'loading' });
+    const stops = createStopCommands(runtime);
     const stations = createStationCommands(runtime);
     const facilities = createFacilityCommands(runtime);
     const groups = createGroupCommands(runtime, { readCameraCenter: () => [-115.18, 36.13] });
     const before = runtime.read().system;
 
-    expect(stations.addStation([-115.2, 36.1])).toBeNull();
+    expect(stops.addStop([-115.2, 36.1])).toBeNull();
     expect(stations.addDrawnStation(squareFootprint([-115.2, 36.1], 20))).toBeNull();
     expect(stations.addPlatform('station')).toBeNull();
     expect(facilities.addFacility('entrance', [-115.2, 36.1])).toBeNull();
-    expect(groups.createGroup(['station'])).toBeNull();
+    expect(groups.createGroup(['stop'])).toBeNull();
     expect(groups.createFacilityComplex(squareFootprint([-115.2, 36.1], 20))).toBeNull();
     expect(groups.placeFacilityInGroup('group', 'entrance', [-115.2, 36.1])).toBeNull();
     expect(runtime.read().system).toBe(before);
+  });
+
+  it('creates a Station independently from boarding Stops', () => {
+    const harness = createHarness();
+    const footprint = squareFootprint([-115.2, 36.1], 20);
+
+    const stationId = harness.stations.addDrawnStation(footprint);
+    const next = harness.runtime.read();
+
+    expect(stationId).not.toBeNull();
+    expect(next.system.stations).toEqual([expect.objectContaining({ id: stationId, footprint })]);
+    expect(next.system.stops).toEqual([]);
+    expect(next.selection).toEqual({ kind: 'station', id: stationId });
+  });
+
+  it('deleting a Station preserves and detaches its Stops', () => {
+    const system: TransitSystem = {
+      ...createEmptySystem(1),
+      stations: [{ id: 'central', name: 'Central', coord: [-115.2, 36.1] }],
+      stops: [
+        {
+          id: 'platform',
+          coord: [-115.2, 36.1],
+          anchors: [],
+          stationId: 'central',
+        },
+      ],
+    };
+    const harness = createHarness({ system });
+
+    harness.stations.deleteStation('central');
+
+    expect(harness.runtime.read().system.stations).toEqual([]);
+    expect(harness.runtime.read().system.stops).toEqual([
+      expect.objectContaining({ id: 'platform', stationId: undefined }),
+    ]);
   });
 
   it('blocks place content in read-only documents but allows workflow state', () => {
@@ -60,7 +100,7 @@ describe('place command factories', () => {
     const harness = createHarness({ readOnly: true });
     const before = harness.runtime.read().system;
 
-    expect(harness.stations.addStation([-115.2, 36.1])).toBeNull();
+    expect(harness.stops.addStop([-115.2, 36.1])).toBeNull();
     expect(harness.facilities.addFacility('entrance', [-115.2, 36.1])).toBeNull();
     expect(harness.groups.createGroup([])).toBeNull();
     harness.groups.startPlacingFacility('group');
@@ -73,17 +113,17 @@ describe('place command factories', () => {
   it('preserves the system reference for missing and idempotent edits', () => {
     const system: TransitSystem = {
       ...createEmptySystem(1),
-      stations: [{ id: 'station', coord: [-115.2, 36.1], anchors: [] }],
+      stops: [{ id: 'stop', coord: [-115.2, 36.1], anchors: [] }],
       facilities: [{ id: 'facility', typeId: 'entrance', geometry: [-115.19, 36.11] }],
-      groups: [{ id: 'group', memberIds: ['station'], name: 'Complex' }],
+      groups: [{ id: 'group', memberIds: ['stop'], name: 'Complex' }],
     };
     const harness = createHarness({ system });
 
-    harness.stations.moveStation('station', [-115.2, 36.1]);
+    harness.stops.moveStop('stop', [-115.2, 36.1]);
     harness.facilities.moveFacility('facility', [-115.19, 36.11]);
-    harness.groups.addGroupMember('group', 'station');
+    harness.groups.addGroupMember('group', 'stop');
     harness.groups.renameGroup('group', 'Complex');
-    harness.stations.deleteStation('missing');
+    harness.stops.deleteStop('missing');
     harness.facilities.deleteFacility('missing');
     harness.groups.deleteGroup('missing');
 
@@ -91,12 +131,12 @@ describe('place command factories', () => {
     expect(harness.runtime.read().canUndo).toBe(false);
   });
 
-  it('replaces every station anchor during direct movement', () => {
+  it('replaces every stop anchor during direct movement', () => {
     const system: TransitSystem = {
       ...createEmptySystem(1),
-      stations: [
+      stops: [
         {
-          id: 'station',
+          id: 'stop',
           coord: [-115.2, 36.1],
           anchors: [
             { wayId: 'outbound', t: 0.5 },
@@ -107,13 +147,13 @@ describe('place command factories', () => {
     };
     const harness = createHarness({ system });
 
-    harness.stations.moveStation('station', [-115.19, 36.11], { wayId: 'new-way', t: 0.25 });
-    const station = harness.runtime.read().system.stations[0];
-    expect(station.anchors).toEqual([{ wayId: 'new-way', t: 0.25 }]);
-    expect(station).not.toHaveProperty('anchor');
+    harness.stops.moveStop('stop', [-115.19, 36.11], { wayId: 'new-way', t: 0.25 });
+    const stop = harness.runtime.read().system.stops[0];
+    expect(stop.anchors).toEqual([{ wayId: 'new-way', t: 0.25 }]);
+    expect(stop).not.toHaveProperty('anchor');
 
-    harness.stations.moveStation('station', [-115.18, 36.12]);
-    expect(harness.runtime.read().system.stations[0].anchors).toEqual([]);
+    harness.stops.moveStop('stop', [-115.18, 36.12]);
+    expect(harness.runtime.read().system.stops[0].anchors).toEqual([]);
   });
 
   it('returns null instead of a phantom platform or grouped facility id', () => {
@@ -128,19 +168,19 @@ describe('place command factories', () => {
   it('removes deleted places from every group membership', () => {
     const system: TransitSystem = {
       ...createEmptySystem(1),
-      stations: [{ id: 'station', coord: [-115.2, 36.1], anchors: [] }],
+      stops: [{ id: 'stop', coord: [-115.2, 36.1], anchors: [] }],
       facilities: [{ id: 'facility', typeId: 'entrance', geometry: [-115.19, 36.11] }],
-      groups: [{ id: 'group', memberIds: ['station', 'facility'] }],
+      groups: [{ id: 'group', memberIds: ['stop', 'facility'] }],
     };
     const harness = createHarness({ system });
 
-    harness.stations.deleteStation('station');
+    harness.stops.deleteStop('stop');
     expect(harness.runtime.read().system.groups[0].memberIds).toEqual(['facility']);
     harness.facilities.deleteFacility('facility');
     expect(harness.runtime.read().system.groups[0].memberIds).toEqual([]);
   });
 
-  it('installs a facility on station land and its complex in one content write', () => {
+  it('installs a facility on Station land and its complex in one content write', () => {
     const system: TransitSystem = {
       ...createEmptySystem(1),
       stations: [
@@ -148,7 +188,6 @@ describe('place command factories', () => {
           id: 'station',
           name: 'Bonneville Transit Center',
           coord: [-115.15, 36.1],
-          anchors: [],
           footprint: squareFootprint([-115.15, 36.1], 30),
         },
       ],
@@ -185,7 +224,7 @@ describe('place command factories', () => {
     expect(harness.runtime.read().system.groups[0].footprint).toHaveLength(4);
   });
 
-  it('applies a station-name suggestion in one undoable content write', () => {
+  it('applies a stop-name suggestion in one undoable content write', () => {
     const system: TransitSystem = {
       ...createEmptySystem(1),
       ways: [
@@ -228,9 +267,9 @@ describe('place command factories', () => {
           ],
         },
       ],
-      stations: [
+      stops: [
         {
-          id: 'station',
+          id: 'stop',
           name: 'Wrong',
           coord: [-115.15, 36.1],
           anchors: [{ wayId: 'home', t: 0.5 }],
@@ -243,9 +282,9 @@ describe('place command factories', () => {
       if (next.system !== previous.system) systemWrites++;
     });
 
-    harness.stations.suggestStationName('station');
+    harness.stops.suggestStopName('stop');
 
-    expect(harness.runtime.read().system.stations[0].name).toBe('Home St @ Cross Ave');
+    expect(harness.runtime.read().system.stops[0].name).toBe('Home St @ Cross Ave');
     expect(systemWrites).toBe(1);
     harness.runtime.history.undo();
     expect(harness.runtime.read().system).toBe(system);

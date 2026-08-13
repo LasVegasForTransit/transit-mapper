@@ -8,7 +8,6 @@
 // This lived in the editor store until through-routing two lines needed the
 // same conversion to bridge the gap between their termini. It was already
 // pure, so moving it here cost nothing and stopped a second copy existing.
-
 import { nearestOnPath, resolveWayPath, wholeLeg, stretchLeg } from './geo';
 import type { RouteSpan } from './routeGraph';
 import type { PatternLeg, TransitSystem } from './system';

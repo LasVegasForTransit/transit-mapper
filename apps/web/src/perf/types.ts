@@ -24,7 +24,7 @@ export type PerfMetricName =
 export interface PerfFixtureCounts {
   ways: number;
   points: number;
-  stations: number;
+  stops: number;
   patterns: number;
 }
 

@@ -1,30 +1,37 @@
-import type { LngLat, StationAnchor } from '@transitmapper/core/model/system';
+import type { LngLat, StopAnchor } from '@transitmapper/core/model/system';
 
-interface SetStationNameOptions {
+interface SetStopNameOptions {
   auto?: boolean;
 }
 
-export interface StationCommands {
-  readonly addStation: (coord: LngLat, anchor?: StationAnchor) => string | null;
-  readonly addDrawnStation: (footprint: LngLat[]) => string | null;
+export interface StopCommands {
+  readonly addStop: (coord: LngLat, anchor?: StopAnchor) => string | null;
   readonly consumeFocusName: (id: string) => void;
-  readonly moveStation: (id: string, coord: LngLat, anchor?: StationAnchor) => void;
-  readonly setStationName: (id: string, name: string, options?: SetStationNameOptions) => void;
-  readonly suggestStationName: (id: string) => void;
-  readonly setStationDwellSeconds: (id: string, seconds: number | undefined) => void;
-  readonly setStationMajorStop: (id: string, major: boolean) => void;
+  readonly moveStop: (id: string, coord: LngLat, anchor?: StopAnchor) => void;
+  readonly setStopName: (id: string, name: string, options?: SetStopNameOptions) => void;
+  readonly suggestStopName: (id: string) => void;
+  readonly setStopDwellSeconds: (id: string, seconds: number | undefined) => void;
+  readonly setStopMajorStop: (id: string, major: boolean) => void;
+  readonly deleteStop: (id: string) => void;
+}
+
+export interface StationCommands {
+  readonly addDrawnStation: (footprint: LngLat[]) => string | null;
+  readonly setStationName: (id: string, name: string) => void;
   readonly deleteStation: (id: string) => void;
-  readonly addStationFootprint: (stationId: string) => void;
-  readonly moveFootprintPoint: (stationId: string, index: number, coord: LngLat) => void;
-  readonly deleteStationFootprint: (stationId: string) => void;
-  readonly addPlatform: (stationId: string) => string | null;
+  readonly addStationFootprint: (id: string) => void;
+  readonly moveFootprintPoint: (id: string, index: number, coord: LngLat) => void;
+  readonly deleteStationFootprint: (id: string) => void;
+  readonly addPlatform: (id: string) => string | null;
   readonly movePlatformPoint: (
-    stationId: string,
+    id: string,
     platformId: string,
     index: number,
     coord: LngLat,
   ) => void;
-  readonly deletePlatform: (stationId: string, platformId: string) => void;
+  readonly deletePlatform: (id: string, platformId: string) => void;
+  readonly attachStop: (stationId: string, stopId: string) => void;
+  readonly detachStop: (stopId: string) => void;
 }
 
 export interface FacilityCommands {

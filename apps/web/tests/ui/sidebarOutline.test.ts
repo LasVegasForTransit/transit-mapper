@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aPattern, aRoad, aService, aStation, aSystem } from '@transitmapper/core/testing/fixtures';
+import { aPattern, aRoad, aService, aStop, aSystem } from '@transitmapper/core/testing/fixtures';
 import {
   infrastructureSections,
   limitSidebarItems,
@@ -21,14 +21,15 @@ describe('sidebar outline information architecture', () => {
   });
 
   it('uses concrete nouns for each top-level view and does not expose corridors', () => {
-    expect(sidebarSectionsForView('network')).toEqual(['Lines', 'Stations']);
-    expect(sidebarSectionsForView('diagram')).toEqual(['Lines', 'Stations']);
+    expect(sidebarSectionsForView('network')).toEqual(['Lines', 'Stops', 'Stations']);
+    expect(sidebarSectionsForView('diagram')).toEqual(['Lines', 'Stops', 'Stations']);
     expect(sidebarSectionsForView('infrastructure')).toEqual([
       'Roads',
       'Railways and guideways',
       'Trails',
       'Waterways',
       'Other infrastructure',
+      'Stops',
       'Stations',
       'Facilities',
     ]);
@@ -36,10 +37,10 @@ describe('sidebar outline information architecture', () => {
 
   it('resumes keyboard entry at a visible selection and falls back when hidden', () => {
     expect(sidebarTabStopKey('line:first', 'service:selected', true)).toBe('service:selected');
-    expect(sidebarTabStopKey('line:first', 'station:hidden', false)).toBe('line:first');
+    expect(sidebarTabStopKey('line:first', 'stop:hidden', false)).toBe('line:first');
   });
 
-  it('orders a service’s stops by outbound travel rather than station storage order', () => {
+  it('orders a service’s stops by outbound travel rather than stop storage order', () => {
     const road = aRoad('charleston', [
       [-115.2, 36.15],
       [-115.1, 36.15],
@@ -55,15 +56,15 @@ describe('sidebar outline information architecture', () => {
           serviceIds: ['red-service'],
         },
       ],
-      stations: [
-        aStation('west', [-115.18, 36.15], { wayId: road.id, t: 0.2 }, { name: 'West' }),
-        aStation('east', [-115.12, 36.15], { wayId: road.id, t: 0.8 }, { name: 'East' }),
+      stops: [
+        aStop('west', [-115.18, 36.15], { wayId: road.id, t: 0.2 }, { name: 'West' }),
+        aStop('east', [-115.12, 36.15], { wayId: road.id, t: 0.8 }, { name: 'East' }),
       ].reverse(),
     });
 
     expect(stopsForService(system, 'red-service')).toEqual([
-      { stationId: 'west', name: 'West' },
-      { stationId: 'east', name: 'East' },
+      { stopId: 'west', name: 'West' },
+      { stopId: 'east', name: 'East' },
     ]);
     expect(servicesForSidebarLine(system, 'red')).toEqual([
       {
@@ -72,8 +73,8 @@ describe('sidebar outline information architecture', () => {
         explicitName: 'red-service',
         modeId: 'bus',
         stops: [
-          { stationId: 'west', name: 'West' },
-          { stationId: 'east', name: 'East' },
+          { stopId: 'west', name: 'West' },
+          { stopId: 'east', name: 'East' },
         ],
       },
     ]);
@@ -119,14 +120,9 @@ describe('sidebar outline information architecture', () => {
         ]),
       ],
       lines: [{ id: 'red', name: 'Red', color: '#e5252a', serviceIds: ['red-service'] }],
-      stations: [
-        aStation('out-stop', [-115.18, 36.15], { wayId: outward.id, t: 0.2 }, { name: 'Out' }),
-        aStation(
-          'return-stop',
-          [-115.18, 36.151],
-          { wayId: inbound.id, t: 0.8 },
-          { name: 'Return' },
-        ),
+      stops: [
+        aStop('out-stop', [-115.18, 36.15], { wayId: outward.id, t: 0.2 }, { name: 'Out' }),
+        aStop('return-stop', [-115.18, 36.151], { wayId: inbound.id, t: 0.8 }, { name: 'Return' }),
       ],
     });
 
@@ -147,14 +143,10 @@ describe('sidebar outline information architecture', () => {
       ways: [road],
       services: [service],
       lines: [{ id: 'red', name: 'Red', color: '#e5252a', serviceIds: ['red-service'] }],
-      stations: [
-        aStation('middle', [-115.15, 36.15], { wayId: road.id, t: 0.5 }, { name: 'Middle' }),
-      ],
+      stops: [aStop('middle', [-115.15, 36.15], { wayId: road.id, t: 0.5 }, { name: 'Middle' })],
     });
 
-    expect(stopsForService(system, 'red-service')).toEqual([
-      { stationId: 'middle', name: 'Middle' },
-    ]);
+    expect(stopsForService(system, 'red-service')).toEqual([{ stopId: 'middle', name: 'Middle' }]);
   });
 
   it('groups physical ways into infrastructure families without inventing corridors', () => {

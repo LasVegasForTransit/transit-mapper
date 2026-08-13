@@ -39,12 +39,18 @@ describe('map source upload planning', () => {
     expect(ALL_SYSTEM_FEATURE_SOURCES).toHaveLength(16);
   });
 
-  it('uploads only the four station-derived sources for a station-only change', () => {
+  it('uploads only the Stop marker source for a Stop-only change', () => {
+    const before = createEmptySystem();
+    const after = { ...before, stops: [...before.stops] };
+
+    expect(sourceUploadsForSystemChange(before, after)).toEqual([SRC_STATIONS]);
+  });
+
+  it('uploads only physical sources for a Station-only change', () => {
     const before = createEmptySystem();
     const after = { ...before, stations: [...before.stations] };
 
     expect(sourceUploadsForSystemChange(before, after)).toEqual([
-      SRC_STATIONS,
       SRC_FOOTPRINTS,
       SRC_PLATFORMS,
       SRC_PHYSICAL_HANDLES,
@@ -99,18 +105,12 @@ describe('map source upload planning', () => {
     const before = createEmptySystem();
     const after = {
       ...before,
-      stations: [...before.stations],
+      stops: [...before.stops],
       facilities: [...before.facilities],
     };
 
     const sources = sourceUploadsForSystemChange(before, after);
-    expect(sources).toEqual([
-      SRC_STATIONS,
-      SRC_FOOTPRINTS,
-      SRC_PLATFORMS,
-      SRC_FACILITIES,
-      SRC_PHYSICAL_HANDLES,
-    ]);
+    expect(sources).toEqual([SRC_STATIONS, SRC_FACILITIES]);
     expect(new Set(sources).size).toBe(sources.length);
   });
 
@@ -197,7 +197,7 @@ describe('map source upload planning', () => {
     queue.add(
       sourceUploadsForSystemChange(before, {
         ...before,
-        stations: [...before.stations],
+        stops: [...before.stops],
       }),
     );
     queue.add(
@@ -208,13 +208,7 @@ describe('map source upload planning', () => {
     );
 
     expect(queue.hasPending()).toBe(true);
-    expect(queue.take()).toEqual([
-      SRC_STATIONS,
-      SRC_FOOTPRINTS,
-      SRC_PLATFORMS,
-      SRC_FACILITIES,
-      SRC_PHYSICAL_HANDLES,
-    ]);
+    expect(queue.take()).toEqual([SRC_STATIONS, SRC_FACILITIES]);
     expect(queue.hasPending()).toBe(false);
     expect(queue.take()).toEqual([]);
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aPattern, aRoad, aService, aStation, aSystem } from '@transitmapper/core/testing/fixtures';
+import { aPattern, aRoad, aService, aStop, aSystem } from '@transitmapper/core/testing/fixtures';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
 import { patternLegs, patternRunLegs } from '@transitmapper/core/model/geo';
 import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
@@ -7,21 +7,20 @@ import { planTerminusGesture } from '@transitmapper/core/model/serviceGestures';
 import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { createEditorStore } from '../../src/editor/store';
-
 const A: [number, number] = [-115.2, 36.1];
 const B: [number, number] = [-115.19, 36.1];
 const C: [number, number] = [-115.18, 36.1];
 const D: [number, number] = [-115.19, 36.11];
 
 describe('network gesture store transactions', () => {
-  it('commits a terminus extension as one undo step without moving infrastructure or stations', () => {
+  it('commits a terminus extension as one undo step without moving infrastructure or stops', () => {
     const trunk = aRoad('trunk', [A, B]);
     const extension = aRoad('extension', [B, C]);
     const pattern = aPattern('branch', [trunk], ['trunk']);
     const sibling = aPattern('sibling', [trunk], ['trunk']);
     const service = aService('bus', [pattern]);
     const siblingService = aService('bus-sibling', [sibling]);
-    const station = aStation('station', B, { wayId: 'trunk', t: 1 });
+    const stop = aStop('stop', B, { wayId: 'trunk', t: 1 });
     const original = aSystem({
       ways: [trunk, extension],
       services: [service, siblingService],
@@ -33,7 +32,7 @@ describe('network gesture store transactions', () => {
           serviceIds: [service.id, siblingService.id],
         },
       ],
-      stations: [station],
+      stops: [stop],
       nodes: [
         {
           id: 'joint',
@@ -61,7 +60,7 @@ describe('network gesture store transactions', () => {
     const committed = store.getState().system;
     expect(committed.ways).toBe(original.ways);
     expect(committed.nodes).toBe(original.nodes);
-    expect(committed.stations).toBe(original.stations);
+    expect(committed.stops).toBe(original.stops);
     expect(committed.services[0].id).toBe(service.id);
     expect(committed.services[0].path.sections).toHaveLength(2);
     expect(committed.services.find((candidate) => candidate.id === siblingService.id)?.path).toBe(

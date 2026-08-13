@@ -191,7 +191,7 @@ function restoreEmbedOverlay(
   const dataBySource: Record<string, GeoJSON.FeatureCollection> = {
     [SRC_WAYS]: features.ways,
     [SRC_SERVICES]: features.services,
-    [SRC_STATIONS]: features.stations,
+    [SRC_STATIONS]: features.stops,
     [SRC_FOOTPRINTS]: features.footprints,
     [SRC_PLATFORMS]: features.platforms,
     [SRC_FACILITIES]: features.facilities,

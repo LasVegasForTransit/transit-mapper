@@ -48,7 +48,7 @@ describe('service pattern command factories', () => {
     const composition = createServiceCompositionCommands(runtime);
 
     expect(patterns.trimPatternTo('service', 'missing', 'road', 0.5, 'end')).toBe(false);
-    patterns.setStopSkipped('service', 'service', 'outbound', 'station', false);
+    patterns.setStopSkipped('service', 'service', 'outbound', 'stop', false);
     patterns.makePatternTwoWay('service', 'service');
     expect(composition.throughRouteInto('service', 'missing')).toBe(false);
 
@@ -118,14 +118,14 @@ describe('service pattern command factories', () => {
     const road = aRoad('road', [A, B]);
     const pattern = {
       ...aPattern('pattern', [road], ['road']),
-      skippedStops: { outbound: ['station'] },
+      skippedStops: { outbound: ['stop'] },
     };
     const system = aSystem({ ways: [road], services: [aService('service', [pattern])] });
     const runtime = createEditorRuntime();
     runtime.installDocument(system, { tool: 'select' });
     const commands = createServicePatternCommands(runtime);
 
-    commands.setStopSkipped('service', 'service', 'outbound', 'station', true);
+    commands.setStopSkipped('service', 'service', 'outbound', 'stop', true);
 
     expect(runtime.read().system).toBe(system);
     expect(runtime.read().canUndo).toBe(false);

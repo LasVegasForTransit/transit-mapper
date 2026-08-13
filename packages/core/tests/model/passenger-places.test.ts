@@ -16,6 +16,34 @@ function savedV15(stations: Record<string, unknown>[]) {
 }
 
 describe('schema v15 passenger-place migration', () => {
+  it('keeps v1 Stops and migrates their line anchors', () => {
+    const loaded = parseSystem({
+      version: 1,
+      id: 'legacy-v1',
+      name: 'Legacy',
+      viewport: { center: [0, 0], zoom: 10 },
+      createdAt: 1,
+      updatedAt: 1,
+      stops: [{ id: 'stop', coord: [0.5, 0], anchor: { lineId: 'line', t: 0.5 } }],
+      lines: [
+        {
+          id: 'line',
+          name: 'Line',
+          mode: 'lightRail',
+          color: '#e4572e',
+          points: [
+            [0, 0],
+            [1, 0],
+          ],
+          geometry: 'straight',
+        },
+      ],
+      roads: [],
+    });
+
+    expect(loaded.stops).toMatchObject([{ id: 'stop', anchors: [{ wayId: 'line', t: 0.5 }] }]);
+  });
+
   it('migrates a plain boarding point to a Stop without inventing a Station', () => {
     const loaded = parseSystem(savedV15([savedV15Station()]));
 

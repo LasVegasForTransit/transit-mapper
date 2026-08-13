@@ -9,14 +9,6 @@ export interface StopAnchor {
   t: number;
 }
 
-/** A platform's physical geometry inside a stop (infrastructure view). */
-export interface Platform {
-  id: string;
-  points: LngLat[];
-  /** Number of platform edges that board (1 = side, 2 = island). */
-  edges?: number;
-}
-
 export interface Stop {
   id: string;
   name?: string;
@@ -53,10 +45,6 @@ export interface Stop {
    * Reshaping any anchored way reprojects the shared stop coordinate.
    */
   anchors: StopAnchor[];
-  /** Physical boundary polygon, drawn in the infrastructure view. */
-  footprint?: LngLat[];
-  /** Platform geometry inside the stop (infrastructure view). */
-  platforms?: Platform[];
   /** How long a vehicle sits here before departing, in seconds — boarding/
    *  alighting time for the ambient vehicle animation (map/vehicles.ts).
    *  Undefined uses that module's own default. */
@@ -167,96 +155,5 @@ export function setStopMajorStop<System extends StopDocument>(
   return replaceStop(system, id, (stop) => {
     const majorStop = major || undefined;
     return stop.majorStop === majorStop ? stop : { ...stop, majorStop };
-  });
-}
-
-export function addStopFootprint<System extends StopDocument>(
-  system: System,
-  id: string,
-  footprint: LngLat[],
-): System {
-  return replaceStop(system, id, (stop) => (stop.footprint ? stop : { ...stop, footprint }));
-}
-
-export function moveStopFootprintPoint<System extends StopDocument>(
-  system: System,
-  id: string,
-  index: number,
-  coord: LngLat,
-): System {
-  return replaceStop(system, id, (stop) => {
-    const point = stop.footprint?.[index];
-    if (!stop.footprint || !point || sameCoord(point, coord)) return stop;
-    return {
-      ...stop,
-      footprint: stop.footprint.map((candidate, candidateIndex) =>
-        candidateIndex === index ? coord : candidate,
-      ),
-    };
-  });
-}
-
-/** Removing a stop footprint also removes its footprint-owned platforms. */
-export function deleteStopFootprint<System extends StopDocument>(
-  system: System,
-  id: string,
-): System {
-  return replaceStop(system, id, (stop) =>
-    stop.footprint || stop.platforms
-      ? { ...stop, footprint: undefined, platforms: undefined }
-      : stop,
-  );
-}
-
-export function addStopPlatform<System extends StopDocument>(
-  system: System,
-  id: string,
-  platform: Platform,
-): System {
-  return replaceStop(system, id, (stop) => ({
-    ...stop,
-    platforms: [...(stop.platforms ?? []), platform],
-  }));
-}
-
-export interface StopPlatformPointMove {
-  stopId: string;
-  platformId: string;
-  index: number;
-  coord: LngLat;
-}
-
-export function moveStopPlatformPoint<System extends StopDocument>(
-  system: System,
-  move: StopPlatformPointMove,
-): System {
-  return replaceStop(system, move.stopId, (stop) => {
-    const platform = stop.platforms?.find((candidate) => candidate.id === move.platformId);
-    const point = platform?.points[move.index];
-    if (!platform || !point || sameCoord(point, move.coord)) return stop;
-    return {
-      ...stop,
-      platforms: stop.platforms?.map((candidate) =>
-        candidate.id === move.platformId
-          ? {
-              ...candidate,
-              points: candidate.points.map((candidatePoint, candidateIndex) =>
-                candidateIndex === move.index ? move.coord : candidatePoint,
-              ),
-            }
-          : candidate,
-      ),
-    };
-  });
-}
-
-export function deleteStopPlatform<System extends StopDocument>(
-  system: System,
-  stopId: string,
-  platformId: string,
-): System {
-  return replaceStop(system, stopId, (stop) => {
-    const platforms = stop.platforms?.filter((platform) => platform.id !== platformId);
-    return platforms?.length === stop.platforms?.length ? stop : { ...stop, platforms };
   });
 }

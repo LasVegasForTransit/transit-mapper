@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { EditorProvider } from '../../src/editor/EditorProvider';
+import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { SidebarPanel } from '../../src/ui/SidebarPanel';
-import { sidebarSectionsForView } from '../../src/ui/sidebarOutline';
+import {
+  infrastructureOutlineProjection,
+  sidebarSectionsForView,
+} from '../../src/ui/sidebarOutline';
 import { ViewProvider, type ViewMode } from '../../src/ui/ViewProvider';
 
 function renderSidebar(viewMode: ViewMode = 'network'): string {
@@ -21,7 +25,7 @@ describe('SidebarPanel', () => {
 
     expect(markup).toContain('aria-label="Network outline"');
     expect(markup).toContain('Lines');
-    expect(markup).toContain('Stations');
+    expect(markup).toContain('Stops');
     expect(markup).not.toContain('Workspace');
     expect(markup).not.toContain('Corridors');
   });
@@ -30,7 +34,7 @@ describe('SidebarPanel', () => {
     const markup = renderSidebar('infrastructure');
 
     expect(markup).toContain('aria-label="Infrastructure outline"');
-    expect(markup).toContain('Stations');
+    expect(markup).toContain('Stops');
     expect(markup).toContain('Facilities');
     expect(markup).not.toContain('Corridors');
     expect(markup).not.toContain('Workspace');
@@ -57,16 +61,40 @@ describe('SidebarPanel', () => {
   });
 
   it('assigns each view its expected workspace sections', () => {
-    expect(sidebarSectionsForView('network')).toEqual(['Lines', 'Stations']);
+    expect(sidebarSectionsForView('network')).toEqual(['Lines', 'Stops', 'Stations']);
     expect(sidebarSectionsForView('infrastructure')).toEqual([
       'Roads',
       'Railways and guideways',
       'Trails',
       'Waterways',
       'Other infrastructure',
+      'Stops',
       'Stations',
       'Facilities',
     ]);
-    expect(sidebarSectionsForView('diagram')).toEqual(['Lines', 'Stations']);
+    expect(sidebarSectionsForView('diagram')).toEqual(['Lines', 'Stops', 'Stations']);
+  });
+
+  it('projects Stations separately from their contained Stops', () => {
+    const system = {
+      ...createEmptySystem(1),
+      stops: [
+        {
+          id: 'platform',
+          name: 'Platform 1',
+          coord: [-115.17, 36.12] as [number, number],
+          anchors: [],
+          stationId: 'central',
+        },
+      ],
+      stations: [
+        { id: 'central', name: 'Central Station', coord: [-115.17, 36.12] as [number, number] },
+      ],
+    };
+
+    const projection = infrastructureOutlineProjection(system, '');
+
+    expect(projection.stops.map((stop) => stop.id)).toEqual(['platform']);
+    expect(projection.stations.map((station) => station.id)).toEqual(['central']);
   });
 });

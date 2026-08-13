@@ -5,7 +5,6 @@ import { basemapStyleForScheme } from '../mapTheme';
 import { armVisibilityAwareTimeout } from './visibilityAwareTimeout';
 import { buildFeatures, LYR_STATIONS, registerMapIcons, type ViewOptions } from '../layers';
 import { addExportSourcesAndLayers, setExportFeatureData } from './exportLayerSetup';
-
 const DEFAULT_SIZE = { width: 1600, height: 1000 };
 const RENDER_TIMEOUT_MS = 20000;
 
@@ -99,7 +98,7 @@ export function renderSystemForExport(
         addExportSourcesAndLayers(map);
 
         // Export-only: a full-system export frames thousands of stops at once, so
-        // shrink station circles here (on the export map, NOT the live map) to
+        // shrink stop circles here (on the export map, NOT the live map) to
         // keep dense networks legible instead of a mass of full-size rings. Still
         // zoom-interpolated, so a small/sparse system (framed at a higher zoom)
         // keeps readable dots. Live-map dots keep their reasonable floor.

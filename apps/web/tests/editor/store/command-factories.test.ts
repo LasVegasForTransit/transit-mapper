@@ -71,36 +71,36 @@ describe('editor command factories', () => {
     const selection = createSelectionCommands(runtime);
     const system = {
       ...createEmptySystem(),
-      stations: [{ id: 'station', coord: [0, 0] as [number, number], anchors: [] }],
+      stops: [{ id: 'stop', coord: [0, 0] as [number, number], anchors: [] }],
     };
     runtime.installDocument(system, { tool: 'select', readOnly: true });
 
-    selection.select({ kind: 'station', id: 'station' });
-    selection.addMultiSelection([{ kind: 'station', id: 'station' }]);
+    selection.select({ kind: 'stop', id: 'stop' });
+    selection.addMultiSelection([{ kind: 'stop', id: 'stop' }]);
     selection.deleteMultiSelection();
 
     expect(runtime.read().selection).toBeNull();
-    expect(runtime.read().multiSelection).toEqual([{ kind: 'station', id: 'station' }]);
+    expect(runtime.read().multiSelection).toEqual([{ kind: 'stop', id: 'stop' }]);
     expect(runtime.read().system).toBe(system);
   });
 
   it('allows transient tool and selection changes while loading but blocks their content edits', () => {
     const system = {
       ...createEmptySystem(),
-      stations: [{ id: 'station', coord: [0, 0] as [number, number], anchors: [] }],
+      stops: [{ id: 'stop', coord: [0, 0] as [number, number], anchors: [] }],
     };
     const runtime = createEditorRuntime({ documentStatus: 'loading', initialSystem: system });
     const tools = createToolCommands(runtime, finishingOperations);
     const selection = createSelectionCommands(runtime);
 
-    tools.setTool('station');
-    selection.select({ kind: 'station', id: 'station' });
-    selection.addMultiSelection([{ kind: 'station', id: 'station' }]);
+    tools.setTool('stop');
+    selection.select({ kind: 'stop', id: 'stop' });
+    selection.addMultiSelection([{ kind: 'stop', id: 'stop' }]);
     tools.addPaletteColor('#123456');
     selection.deleteMultiSelection();
 
-    expect(runtime.read().tool).toBe('station');
-    expect(runtime.read().multiSelection).toEqual([{ kind: 'station', id: 'station' }]);
+    expect(runtime.read().tool).toBe('stop');
+    expect(runtime.read().multiSelection).toEqual([{ kind: 'stop', id: 'stop' }]);
     expect(runtime.read().system).toBe(system);
   });
 });

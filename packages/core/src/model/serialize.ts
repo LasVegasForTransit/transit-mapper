@@ -40,7 +40,6 @@ import {
   type Way,
   type WayPointRef,
 } from './system';
-
 export function createEmptySystem(now = Date.now()): TransitSystem {
   return {
     version: 16,
@@ -300,12 +299,12 @@ function parseConnectors(
     if (validEnd(r.from) && validEnd(r.to)) {
       connectors.push({
         from: {
-          wayId: (r.from as { wayId: string; laneId: string }).wayId,
-          laneId: (r.from as { wayId: string; laneId: string }).laneId,
+          wayId: r.from.wayId,
+          laneId: r.from.laneId,
         },
         to: {
-          wayId: (r.to as { wayId: string; laneId: string }).wayId,
-          laneId: (r.to as { wayId: string; laneId: string }).laneId,
+          wayId: r.to.wayId,
+          laneId: r.to.laneId,
         },
       });
     }
@@ -663,6 +662,44 @@ function uniqueMigratedServiceId(preferred: string, lineId: string, usedIds: Set
   return candidate;
 }
 
+function parseLegacyLineAndServices(
+  raw: unknown,
+  usedServiceIds: Set<string>,
+): { line: Line; services: DraftService[] } {
+  const record = raw as Record<string, unknown>;
+  if (!record || typeof record.id !== 'string') throw new Error('Bad service');
+  const lineId = record.id;
+  const patterns = parsePatterns(record.patterns, record.wayIds);
+  const migratedPatterns =
+    patterns.length > 0
+      ? patterns
+      : [{ id: lineId, legs: [], sections: [] } satisfies DraftPattern];
+  const services = migratedPatterns.map((pattern): DraftService => {
+    const id = uniqueMigratedServiceId(pattern.id, lineId, usedServiceIds);
+    return {
+      id,
+      name: pattern.name,
+      modeId: typeof record.modeId === 'string' ? record.modeId : 'bus',
+      path: { ...pattern, id },
+      vehicleKindId: typeof record.vehicleKindId === 'string' ? record.vehicleKindId : undefined,
+      frequencyMinutes:
+        typeof record.frequencyMinutes === 'number' ? record.frequencyMinutes : undefined,
+      spanStart: typeof record.spanStart === 'string' ? record.spanStart : undefined,
+      spanEnd: typeof record.spanEnd === 'string' ? record.spanEnd : undefined,
+      schedule: parseSchedule(record.schedule),
+    };
+  });
+  return {
+    line: {
+      id: lineId,
+      name: typeof record.name === 'string' ? record.name : 'Line',
+      color: typeof record.color === 'string' ? record.color : '#2ea44f',
+      serviceIds: services.map((service) => service.id),
+    },
+    services,
+  };
+}
+
 function parseLegacyLinesAndServices(rawServices: unknown[]): {
   lines: Line[];
   services: DraftService[];
@@ -672,40 +709,38 @@ function parseLegacyLinesAndServices(rawServices: unknown[]): {
   const usedServiceIds = new Set<string>();
 
   for (const raw of rawServices) {
-    const r = raw as Record<string, unknown>;
-    if (!r || typeof r.id !== 'string') throw new Error('Bad service');
-    const patterns = parsePatterns(r.patterns, r.wayIds);
-    const migratedPatterns =
-      patterns.length > 0
-        ? patterns
-        : [{ id: r.id, legs: [], sections: [] } satisfies DraftPattern];
-    const serviceIds: string[] = [];
-
-    for (const pattern of migratedPatterns) {
-      const id = uniqueMigratedServiceId(pattern.id, r.id, usedServiceIds);
-      serviceIds.push(id);
-      services.push({
-        id,
-        name: pattern.name,
-        modeId: typeof r.modeId === 'string' ? r.modeId : 'bus',
-        path: { ...pattern, id },
-        vehicleKindId: typeof r.vehicleKindId === 'string' ? r.vehicleKindId : undefined,
-        frequencyMinutes: typeof r.frequencyMinutes === 'number' ? r.frequencyMinutes : undefined,
-        spanStart: typeof r.spanStart === 'string' ? r.spanStart : undefined,
-        spanEnd: typeof r.spanEnd === 'string' ? r.spanEnd : undefined,
-        schedule: parseSchedule(r.schedule),
-      });
-    }
-
-    lines.push({
-      id: r.id,
-      name: typeof r.name === 'string' ? r.name : 'Line',
-      color: typeof r.color === 'string' ? r.color : '#2ea44f',
-      serviceIds,
-    });
+    const parsed = parseLegacyLineAndServices(raw, usedServiceIds);
+    lines.push(parsed.line);
+    services.push(...parsed.services);
   }
 
   return { lines, services };
+}
+
+function parseLinesAndServices(
+  document: Record<string, unknown>,
+  rawServices: unknown[],
+  version: number,
+): { lines: Line[]; services: DraftService[] } {
+  if (version < 15) return parseLegacyLinesAndServices(rawServices);
+  return {
+    lines: (Array.isArray(document.lines) ? document.lines : [])
+      .map(parseLine)
+      .filter((line): line is Line => line !== null),
+    services: rawServices.map(parseCurrentService),
+  };
+}
+
+function parsePassengerPlaces(
+  document: Record<string, unknown>,
+  rawStops: unknown[],
+  version: number,
+): { stops: Stop[]; stations: Station[] } {
+  if (version < 16) return migrateLegacyPassengerPlaces(rawStops);
+  return {
+    stops: rawStops.map(parseStop),
+    stations: (Array.isArray(document.stations) ? document.stations : []).map(parseStation),
+  };
 }
 
 /** Fill in the direction of every leg a pre-v10 document couldn't record,
@@ -735,7 +770,7 @@ function resolveLegDirections(patterns: DraftPattern[], ways: Way[]): Pattern[] 
         legs.map((l, i) => ({
           ...l,
           direction: l.direction ?? (derived[i] ? 'withPoints' : 'againstPoints'),
-        })) as PatternLeg[],
+        })),
       ),
     };
   });
@@ -804,23 +839,8 @@ function parseV3(o: Record<string, unknown>): TransitSystem {
     };
   });
 
-  const currentVersion = version >= 15;
-  const parsed = currentVersion
-    ? {
-        lines: (Array.isArray(o.lines) ? o.lines : [])
-          .map(parseLine)
-          .filter((line): line is Line => line !== null),
-        services: rawServices.map(parseCurrentService),
-      }
-    : parseLegacyLinesAndServices(rawServices);
-
-  const passengerPlaces =
-    version >= 16
-      ? {
-          stops: rawStops.map(parseStop),
-          stations: (Array.isArray(o.stations) ? o.stations : []).map(parseStation),
-        }
-      : migrateLegacyPassengerPlaces(rawStops);
+  const parsed = parseLinesAndServices(o, rawServices, version);
+  const passengerPlaces = parsePassengerPlaces(o, rawStops, version);
   assertUniqueIds(passengerPlaces.stops, 'Stop');
   assertUniqueIds(passengerPlaces.stations, 'Station');
 
@@ -974,7 +994,10 @@ function wayTypeForLegacyCorridor(corridorId: string, rawServices: unknown[]): s
 const ROAD_CLASS_IDS = new Set(['arterial', 'collector', 'local', 'transitway']);
 
 function migrateFromV2(o: Record<string, unknown>): TransitSystem {
-  const rawStops = Array.isArray(o.stations) ? o.stations : [];
+  // v1 called these records `stops`; v2-v15 called the same boarding-point
+  // records `stations`. Prefer the explicit v1 field when present so its
+  // anchors survive the vocabulary migration.
+  const rawStops = Array.isArray(o.stops) ? o.stops : Array.isArray(o.stations) ? o.stations : [];
   const rawCorridors = Array.isArray(o.corridors) ? o.corridors : [];
   const rawServices = Array.isArray(o.services) ? o.services : [];
   const rawLines = Array.isArray(o.lines) ? o.lines : []; // legacy v1
@@ -1125,7 +1148,7 @@ function finish(o: Record<string, unknown>, parts: FinishParts): TransitSystem {
 
   const palette =
     Array.isArray(o.palette) && o.palette.every((c) => typeof c === 'string')
-      ? (o.palette as string[])
+      ? o.palette
       : [...LINE_COLORS];
 
   // A skip names a stop, and a stop can be deleted after the skip was

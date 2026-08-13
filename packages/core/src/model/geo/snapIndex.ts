@@ -2,7 +2,6 @@ import type { LngLat, Way } from '../system';
 import { haversineMeters } from './spherical';
 import { nearestOnPath, projectOnSegment } from './measurement';
 import { resolveWayPath, wayById } from './wayPath';
-
 export interface InsertionPoint {
   /** Index in the RAW `points` array to splice the new control point into. */
   index: number;

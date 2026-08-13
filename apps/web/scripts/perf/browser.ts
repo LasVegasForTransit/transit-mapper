@@ -22,7 +22,6 @@ import {
 } from './browserContract';
 import { createEncodedJsonResponses, selectEncodedJsonResponse } from './compressedJsonResponse';
 import { APP_ROOT } from './process';
-
 const DISPLAY_CADENCE_SAMPLE_COUNT = 60;
 
 interface LayoutShiftEntry extends PerformanceEntry {
@@ -38,15 +37,6 @@ interface TraceReadResult {
   data: string;
   base64Encoded?: boolean;
   eof?: boolean;
-}
-
-interface CdpPerformanceMetric {
-  name: string;
-  value: number;
-}
-
-interface CdpPerformanceResult {
-  metrics: CdpPerformanceMetric[];
 }
 
 export interface BrowserStartupSnapshot {
@@ -440,7 +430,7 @@ export async function collectStartupMetrics(page: Page): Promise<BrowserStartupS
 export async function collectMemory(
   session: CDPSession,
 ): Promise<{ memory: PerfMemorySnapshot; domNodeCount: number }> {
-  const result = (await session.send('Performance.getMetrics')) as CdpPerformanceResult;
+  const result = await session.send('Performance.getMetrics');
   const metrics = new Map(result.metrics.map((metric) => [metric.name, metric.value]));
   const jsHeapUsedBytes = metrics.get('JSHeapUsedSize');
   const jsHeapTotalBytes = metrics.get('JSHeapTotalSize');

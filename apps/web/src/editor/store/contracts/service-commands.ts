@@ -64,7 +64,7 @@ export interface ServiceCommands {
       serviceId: string,
       patternId: string,
       run: RunDirection,
-      stationId: string,
+      stopId: string,
       skipped: boolean,
     ]
   ) => void;

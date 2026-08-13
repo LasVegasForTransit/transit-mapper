@@ -8,7 +8,7 @@ import type {
   Node,
   Pattern,
   Service,
-  Station,
+  Stop,
   TransitSystem,
   Way,
 } from '@transitmapper/core/model/system';
@@ -76,7 +76,7 @@ function crossingT(way: Way): number {
   return lengths[1] / lengths[lengths.length - 1];
 }
 
-function stationOnWay(id: string, name: string, way: Way, t: number): Station {
+function stopOnWay(id: string, name: string, way: Way, t: number): Stop {
   return {
     id,
     name,
@@ -88,8 +88,8 @@ function stationOnWay(id: string, name: string, way: Way, t: number): Station {
 // Every stop is anchored to its corridor so Diagram carries it onto the
 // schematic geometry instead of leaving geographic stop dots floating beside
 // the straightened lines.
-const stations: Station[] = [
-  stationOnWay('onboarding-station-west', 'Westside', roadA, 0.18),
+const stops: Stop[] = [
+  stopOnWay('onboarding-stop-west', 'Westside', roadA, 0.18),
   // Central sits where the train crosses the bus route, but it rides the BUS
   // corridor only. Diagram keeps a stop on each corridor it is anchored to by
   // straightening that corridor around it, and it can only hold two corridors
@@ -97,14 +97,14 @@ const stations: Station[] = [
   // line never do. Anchoring Central to both would leave the schematic
   // drawing the train some 200 m away from its own stop.
   {
-    id: 'onboarding-station-transfer',
+    id: 'onboarding-stop-transfer',
     name: 'Central',
     coord: CROSSING,
     anchors: [{ wayId: roadA.id, t: crossingT(roadA) }],
   },
-  stationOnWay('onboarding-station-east', 'Eastside', roadA, 0.82),
-  stationOnWay('onboarding-station-north', 'North', railSpine, 0.82),
-  stationOnWay('onboarding-station-south', 'South', railSpine, 0.18),
+  stopOnWay('onboarding-stop-east', 'Eastside', roadA, 0.82),
+  stopOnWay('onboarding-stop-north', 'North', railSpine, 0.82),
+  stopOnWay('onboarding-stop-south', 'South', railSpine, 0.18),
 ];
 
 const busPattern: Pattern = {
@@ -138,7 +138,7 @@ export const ONBOARDING_FIXTURE_SYSTEM: TransitSystem = {
   id: 'onboarding-fixture',
   name: 'Community network',
   ways: [roadA, roadB, railSpine],
-  stations,
+  stops,
   lines: [
     {
       id: 'onboarding-bus-line',
@@ -162,7 +162,7 @@ export const ONBOARDING_FIXTURE_SYSTEM: TransitSystem = {
 // services, and adding another should never silently change which one moves.
 const stats = serviceStats(
   [roadA, roadB, railSpine],
-  stations,
+  stops,
   [],
   busService,
   busService.frequencyMinutes,

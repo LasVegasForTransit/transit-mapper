@@ -35,14 +35,14 @@ describe('editor history checkpoints', () => {
   it('cancels a gesture by restoring the exact starting snapshot', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
-    system.stations = [{ id: 'selected-before-drag', coord: [-115.3, 36.2], anchors: [] }];
+    system.stops = [{ id: 'selected-before-drag', coord: [-115.3, 36.2], anchors: [] }];
     store.commands.document.setSystem(system);
     const before = store.getState().system;
-    const selection = { kind: 'station' as const, id: 'selected-before-drag' };
+    const selection = { kind: 'stop' as const, id: 'selected-before-drag' };
     store.commands.selection.select(selection);
 
     store.commands.history.beginHistoryCheckpoint();
-    store.commands.stations.addStation([-115.2, 36.1]);
+    store.commands.stops.addStop([-115.2, 36.1]);
     store.commands.history.cancelHistoryCheckpoint();
 
     expect(store.getState().system).toBe(before);
@@ -72,14 +72,14 @@ describe('editor history checkpoints', () => {
 
   it('prunes transient references that an undo removes from the document', () => {
     const store = createEditorStore();
-    const stationId = store.commands.stations.addStation([-115.2, 36.1]);
-    if (!stationId) throw new Error('Expected the station command to create a record');
-    store.commands.selection.setOutlineHover({ kind: 'station', id: stationId });
+    const stopId = store.commands.stops.addStop([-115.2, 36.1]);
+    if (!stopId) throw new Error('Expected the stop command to create a record');
+    store.commands.selection.setOutlineHover({ kind: 'stop', id: stopId });
 
     store.commands.history.undo();
 
-    expect(store.getState().system.stations).toHaveLength(0);
-    expect(store.getState().focusNameStationId).toBeNull();
+    expect(store.getState().system.stops).toHaveLength(0);
+    expect(store.getState().focusNameStopId).toBeNull();
     expect(store.getState().outlineHover).toBeNull();
   });
 });

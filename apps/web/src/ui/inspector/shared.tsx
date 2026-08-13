@@ -12,7 +12,7 @@ import { Icon } from '../Icon';
 import { Panel } from '../Panel';
 
 // Building blocks shared by 2+ of the per-selection-kind inspector files —
-// each is used across ServiceInspector/WayInspector/StationInspector/
+// each is used across ServiceInspector/WayInspector/StopInspector/
 // FacilityInspector/GroupInspector in some combination, so none of them owns
 // it more than the others.
 
@@ -54,7 +54,7 @@ export function GradeChips({ value, disabled, onChange }: GradeChipsProps) {
 export function EmptyInspector() {
   return (
     <Panel slot="right" aria-label="Selection details">
-      <p className="panel-hint">Select a service, way, or station to edit it.</p>
+      <p className="panel-hint">Select a service, way, or stop to edit it.</p>
     </Panel>
   );
 }

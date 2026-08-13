@@ -22,7 +22,7 @@ export interface OnboardingSlideData {
 export const ONBOARDING_SLIDES: OnboardingSlideData[] = [
   {
     title: 'Welcome to TransitMapper',
-    body: 'TransitMapper helps you turn an idea for better transit into a map you can explore and refine. Sketch the routes your community needs, then add streets, tracks, stops, and stations as the plan takes shape.',
+    body: 'TransitMapper helps you turn an idea for better transit into a map you can explore and refine. Sketch the routes your community needs, then add streets, tracks, stops, and stops as the plan takes shape.',
     note: 'Open beta: features and workflows may change frequently before a stable release.',
     visual: { kind: 'singlePreview', viewMode: 'network' },
   },
@@ -43,7 +43,7 @@ export const ONBOARDING_SLIDES: OnboardingSlideData[] = [
   },
   {
     title: 'See the same system three ways',
-    body: 'Use Network for routes and stops, Infrastructure for streets, tracks, and stations, and Diagram for a clean overview. Everything stays connected. Share a link or export an image when you are ready to bring other people into the conversation.',
+    body: 'Use Network for routes and stops, Infrastructure for streets, tracks, and stops, and Diagram for a clean overview. Everything stays connected. Share a link or export an image when you are ready to bring other people into the conversation.',
     visual: { kind: 'triPreview' },
   },
 ];

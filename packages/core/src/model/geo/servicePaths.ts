@@ -14,7 +14,6 @@ import { servicePattern } from '../line-service';
 // Re-exported from where it used to be declared: RunDirection is a model
 // concept now (system/service.ts), but every caller reaches it through geo.
 export type { RunDirection } from '../system';
-
 import { wayTraversal } from '../profile';
 import { slicePathByT } from './measurement';
 import { haversineMeters } from './spherical';

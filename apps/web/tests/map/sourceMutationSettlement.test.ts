@@ -4,7 +4,6 @@ import {
   type SourceMutationSettlementHost,
   type SettledSourceDataEvent,
 } from '../../src/map/sourceMutationSettlement';
-
 function createHost() {
   const loadingListeners = new Set<(sourceId: string) => void>();
   const sourceListeners = new Set<(event: SettledSourceDataEvent) => void>();
@@ -48,21 +47,21 @@ describe('source mutation settlement', () => {
 
     settleSourceMutationAfterRender({
       host: map.host,
-      sourceId: 'stations',
+      sourceId: 'stops',
       mutate,
       onSettled: settled,
       onFallback: fallback,
     });
 
     expect(mutate).toHaveBeenCalledOnce();
-    map.fireLoading('stations');
+    map.fireLoading('stops');
     map.fireSource({
-      sourceId: 'stations',
+      sourceId: 'stops',
       sourceDataType: 'content',
       isSourceLoaded: false,
     });
     map.fireSource({
-      sourceId: 'stations',
+      sourceId: 'stops',
       sourceDataType: 'content',
       isSourceLoaded: true,
     });
@@ -83,23 +82,23 @@ describe('source mutation settlement', () => {
 
     settleSourceMutationAfterRender({
       host: map.host,
-      sourceId: 'stations',
+      sourceId: 'stops',
       mutate: () => {},
       onSettled: settled,
       onFallback: vi.fn(),
     });
 
     map.fireSource({
-      sourceId: 'stations',
+      sourceId: 'stops',
       sourceDataType: 'content',
       isSourceLoaded: true,
     });
     map.fireRender();
     expect(settled).not.toHaveBeenCalled();
 
-    map.fireLoading('stations');
+    map.fireLoading('stops');
     map.fireSource({
-      sourceId: 'stations',
+      sourceId: 'stops',
       sourceDataType: 'content',
       isSourceLoaded: true,
     });
@@ -115,24 +114,24 @@ describe('source mutation settlement', () => {
 
     settleSourceMutationAfterRender({
       host: map.host,
-      sourceId: 'stations',
+      sourceId: 'stops',
       mutate: () => {},
       onSettled: settled,
       onFallback: vi.fn(),
     });
 
-    map.fireLoading('stations');
+    map.fireLoading('stops');
     map.fireSource({
-      sourceId: 'stations',
+      sourceId: 'stops',
       sourceDataType: 'content',
       isSourceLoaded: true,
     });
-    map.fireLoading('stations');
+    map.fireLoading('stops');
     map.fireRender();
     expect(settled).not.toHaveBeenCalled();
 
     map.fireSource({
-      sourceId: 'stations',
+      sourceId: 'stops',
       sourceDataType: 'content',
       isSourceLoaded: true,
     });
@@ -148,7 +147,7 @@ describe('source mutation settlement', () => {
 
     settleSourceMutationAfterRender({
       host: map.host,
-      sourceId: 'stations',
+      sourceId: 'stops',
       mutate: () => {},
       onSettled: vi.fn(),
       onFallback: fallback,
@@ -168,14 +167,14 @@ describe('source mutation settlement', () => {
 
     const cancel = settleSourceMutationAfterRender({
       host: map.host,
-      sourceId: 'stations',
+      sourceId: 'stops',
       mutate: () => {},
       onSettled: settled,
       onFallback: fallback,
     });
     cancel();
     map.fireSource({
-      sourceId: 'stations',
+      sourceId: 'stops',
       sourceDataType: 'content',
       isSourceLoaded: true,
     });

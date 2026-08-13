@@ -2,68 +2,88 @@ import type { Feature, Point } from 'geojson';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { GestureProjection } from './gestureProjection';
 
-export interface StationGesturePreviewControllerOptions {
-  render(projection: GestureProjection | null): boolean;
+export interface StopGesturePreviewControllerOptions {
+  render: (projection: GestureProjection | null) => boolean;
 }
 
-export interface StationGesturePreviewController {
-  showActive(projection: GestureProjection | null): boolean;
-  clearActive(): boolean;
-  retainCommitted(stationIds: readonly string[], features: readonly Feature<Point>[]): boolean;
-  retainActiveStations(stationIds: readonly string[]): boolean;
-  syncStations(system: TransitSystem): boolean;
-  refresh(): boolean;
-  releaseStations(): boolean;
-  clear(): boolean;
+export interface StopGesturePreviewController {
+  showActive: (projection: GestureProjection | null) => boolean;
+  clearActive: () => boolean;
+  retainCommitted: (stopIds: readonly string[], features: readonly Feature<Point>[]) => boolean;
+  retainActiveStops: (stopIds: readonly string[]) => boolean;
+  syncStops: (system: TransitSystem) => boolean;
+  refresh: () => boolean;
+  releaseStops: () => boolean;
+  clear: () => boolean;
 }
 
-/** Convert exact committed station features into the lightweight, interactive
+function stringProperty(feature: Feature, key: string): string | null {
+  const value: unknown = feature.properties?.[key];
+  return typeof value === 'string' ? value : null;
+}
+
+/** Convert exact committed stop features into the lightweight, interactive
  * points retained by the gesture source while MapLibre applies their diff. */
-export function createStationSettlementPreviewFeatures(
+export function createStopSettlementPreviewFeatures(
   features: readonly Feature<Point>[],
 ): Feature<Point>[] {
   return features.flatMap((feature) => {
-    const id = feature.properties?.id;
-    if (typeof id !== 'string') return [];
+    const id = stringProperty(feature, 'id');
+    if (!id) return [];
     return [
       {
         type: 'Feature',
-        properties: { kind: 'station', ownerId: id, id },
+        properties: { kind: 'stop', ownerId: id, id },
         geometry: feature.geometry,
       },
     ];
   });
 }
 
+function retainedSettlementFeatures(
+  activeStopIds: Set<string>,
+  settlingStopFeatures: readonly Feature<Point>[],
+): Feature<Point>[] {
+  return settlingStopFeatures.filter((feature) => {
+    const id = stringProperty(feature, 'id');
+    return id !== null && !activeStopIds.has(id);
+  });
+}
+
+function combinedAffected(
+  active: GestureProjection | null,
+  settlingStopIds: readonly string[],
+): GestureProjection['affected'] {
+  return {
+    wayIds: active?.affected.wayIds ?? [],
+    stopIds: [...new Set([...settlingStopIds, ...(active?.affected.stopIds ?? [])])],
+    stationIds: active?.affected.stationIds ?? [],
+    facilityIds: active?.affected.facilityIds ?? [],
+    groupIds: active?.affected.groupIds ?? [],
+    nodeIds: active?.affected.nodeIds ?? [],
+  };
+}
+
 /**
- * Compose the active gesture with older station points whose committed source
+ * Compose the active gesture with older stop points whose committed source
  * mutations are still pending. An active repeat drag replaces the older point
- * for that ID; a deleted station may retain only its mask owner and no point.
+ * for that ID; a deleted stop may retain only its mask owner and no point.
  */
 export function combineGestureSettlementPreview(
   active: GestureProjection | null,
-  settlingStationIds: readonly string[],
-  settlingStationFeatures: readonly Feature<Point>[],
+  settlingStopIds: readonly string[],
+  settlingStopFeatures: readonly Feature<Point>[],
 ): GestureProjection | null {
-  if (!active && settlingStationIds.length === 0) return null;
-  const activeStationIds = new Set(active?.affected.stationIds ?? []);
-  const retainedSettlingFeatures = settlingStationFeatures.filter((feature) => {
-    const id = feature.properties?.id;
-    return typeof id === 'string' && !activeStationIds.has(id);
-  });
+  if (!active && settlingStopIds.length === 0) return null;
+  const activeStopIds = new Set(active?.affected.stopIds ?? []);
+  const retainedSettlingFeatures = retainedSettlementFeatures(activeStopIds, settlingStopFeatures);
 
   return {
     data: {
       type: 'FeatureCollection',
       features: [...retainedSettlingFeatures, ...(active?.data.features ?? [])],
     },
-    affected: {
-      wayIds: active?.affected.wayIds ?? [],
-      stationIds: [...new Set([...settlingStationIds, ...(active?.affected.stationIds ?? [])])],
-      facilityIds: active?.affected.facilityIds ?? [],
-      groupIds: active?.affected.groupIds ?? [],
-      nodeIds: active?.affected.nodeIds ?? [],
-    },
+    affected: combinedAffected(active, settlingStopIds),
   };
 }
 
@@ -72,9 +92,9 @@ export function combineGestureSettlementPreview(
  * integration owns only when to transition; this controller owns the exact
  * feature and mask composition across overlapping gestures and store updates.
  */
-export function createStationGesturePreviewController({
+export function createStopGesturePreviewController({
   render,
-}: StationGesturePreviewControllerOptions): StationGesturePreviewController {
+}: StopGesturePreviewControllerOptions): StopGesturePreviewController {
   let active: GestureProjection | null = null;
   const settlingIds = new Set<string>();
   const settlingFeatures = new Map<string, Feature<Point>>();
@@ -93,47 +113,43 @@ export function createStationGesturePreviewController({
       active = null;
       return renderCurrent();
     },
-    retainCommitted(stationIds, features) {
-      for (const stationId of stationIds) settlingIds.add(stationId);
-      for (const feature of createStationSettlementPreviewFeatures(features)) {
-        const id = feature.properties?.id;
-        if (typeof id === 'string') settlingFeatures.set(id, feature);
+    retainCommitted(stopIds, features) {
+      for (const stopId of stopIds) settlingIds.add(stopId);
+      for (const feature of createStopSettlementPreviewFeatures(features)) {
+        const id = stringProperty(feature, 'id');
+        if (id) settlingFeatures.set(id, feature);
       }
       active = null;
       return renderCurrent();
     },
-    retainActiveStations(stationIds) {
-      for (const stationId of stationIds) settlingIds.add(stationId);
+    retainActiveStops(stopIds) {
+      for (const stopId of stopIds) settlingIds.add(stopId);
       for (const feature of active?.data.features ?? []) {
-        const id = feature.properties?.id;
-        if (
-          feature.geometry.type === 'Point' &&
-          feature.properties?.kind === 'station' &&
-          typeof id === 'string'
-        ) {
+        const id = stringProperty(feature, 'id');
+        if (feature.geometry.type === 'Point' && feature.properties?.kind === 'stop' && id) {
           settlingFeatures.set(id, feature as Feature<Point>);
         }
       }
       active = null;
       return renderCurrent();
     },
-    syncStations(system) {
-      for (const stationId of settlingIds) {
-        const station = system.stations.find((candidate) => candidate.id === stationId);
-        if (!station) {
-          settlingFeatures.delete(stationId);
+    syncStops(system) {
+      for (const stopId of settlingIds) {
+        const stop = system.stops.find((candidate) => candidate.id === stopId);
+        if (!stop) {
+          settlingFeatures.delete(stopId);
           continue;
         }
-        settlingFeatures.set(stationId, {
+        settlingFeatures.set(stopId, {
           type: 'Feature',
-          properties: { kind: 'station', ownerId: stationId, id: stationId },
-          geometry: { type: 'Point', coordinates: station.coord },
+          properties: { kind: 'stop', ownerId: stopId, id: stopId },
+          geometry: { type: 'Point', coordinates: stop.coord },
         });
       }
       return renderCurrent();
     },
     refresh: renderCurrent,
-    releaseStations() {
+    releaseStops() {
       settlingIds.clear();
       settlingFeatures.clear();
       return renderCurrent();

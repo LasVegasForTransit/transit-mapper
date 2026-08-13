@@ -250,9 +250,7 @@ export function makeTwoWay(
   if (travel.length === 1) {
     const only = travel[0];
     return {
-      lanes: profile.lanes.map((l) =>
-        l.id === only.id ? { ...l, direction: 'both' as LaneDirection } : l,
-      ),
+      lanes: profile.lanes.map((l) => (l.id === only.id ? { ...l, direction: 'both' } : l)),
     };
   }
   const half = Math.floor(travel.length / 2);
@@ -309,9 +307,7 @@ export function withLaneCount(
         : 'backward';
     // A bidirectional single lane becoming multi-lane splits into directions.
     if (current.length === 1 && current[0].direction === 'both') {
-      lanes = lanes.map((l) =>
-        l.id === current[0].id ? { ...l, direction: 'backward' as LaneDirection } : l,
-      );
+      lanes = lanes.map((l) => (l.id === current[0].id ? { ...l, direction: 'backward' } : l));
     }
     const insertAtFront = direction === 'backward' ? backwardAtFront : !backwardAtFront;
     const anchor = insertAtFront

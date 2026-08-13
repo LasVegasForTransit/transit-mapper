@@ -20,7 +20,6 @@ import {
   SRC_WAY_LABELS,
   SRC_WAYS,
 } from '../layers';
-
 const EMPTY_FEATURE_COLLECTION: GeoJSON.FeatureCollection = {
   type: 'FeatureCollection',
   features: [],
@@ -55,7 +54,7 @@ export function setExportFeatureData(map: MLMap, features: SystemFeatures): void
   const sourceData: Readonly<Record<string, GeoJSON.FeatureCollection>> = {
     [SRC_WAYS]: features.ways,
     [SRC_SERVICES]: features.services,
-    [SRC_STATIONS]: features.stations,
+    [SRC_STATIONS]: features.stops,
     [SRC_HANDLES]: features.handles,
     [SRC_FOOTPRINTS]: features.footprints,
     [SRC_PLATFORMS]: features.platforms,

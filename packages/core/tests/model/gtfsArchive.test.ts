@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { gtfsArchiveToBatches } from '../../src/model/gtfsImport';
+import { gtfsArchiveToBatches } from '../../src/model/gtfs-archive';
 
 function rtcLikeArchive(): Uint8Array {
   return zipSync({
@@ -42,6 +42,22 @@ function multiServiceArchive(): Uint8Array {
   });
 }
 
+function parentStationArchive(): Uint8Array {
+  return zipSync({
+    'routes.txt': strToU8('route_id,route_short_name,route_long_name,route_type\nR1,1,North,3\n'),
+    'trips.txt': strToU8('route_id,service_id,trip_id,direction_id,shape_id\nR1,WK,T1,0,S1\n'),
+    'stops.txt': strToU8(
+      'stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station\nCENTRAL,Central Station,36.10,-115.20,1,\nA,Bay A,36.10,-115.20,0,CENTRAL\nB,Bay B,36.11,-115.19,0,CENTRAL\n',
+    ),
+    'stop_times.txt': strToU8(
+      'trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT1,08:00:00,08:00:00,A,1\nT1,08:10:00,08:10:00,B,2\n',
+    ),
+    'shapes.txt': strToU8(
+      'shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence\nS1,36.10,-115.20,1\nS1,36.11,-115.19,2\n',
+    ),
+  });
+}
+
 describe('GTFS archive batching', () => {
   it('inflates, decodes, indexes, and batches an archive without network access', () => {
     const batches = gtfsArchiveToBatches(rtcLikeArchive(), 1);
@@ -57,5 +73,22 @@ describe('GTFS archive batching', () => {
 
     expect(batch.pieces.lines).toHaveLength(1);
     expect(batch.pieces.services.map((service) => service.name)).toEqual(['Downtown', 'Airport']);
+  });
+
+  it('preserves declared Stations and connects their boarding Stops', () => {
+    const [batch] = gtfsArchiveToBatches(parentStationArchive(), 10);
+
+    expect(batch.pieces.stations).toEqual([expect.objectContaining({ name: 'Central Station' })]);
+    expect(batch.pieces.stops).toHaveLength(2);
+    expect(batch.pieces.stops.map((stop) => stop.stationId)).toEqual([
+      batch.pieces.stations[0].id,
+      batch.pieces.stations[0].id,
+    ]);
+  });
+
+  it('does not invent Stations when the feed declares only Stops', () => {
+    const [batch] = gtfsArchiveToBatches(rtcLikeArchive(), 10);
+
+    expect(batch.pieces.stations).toEqual([]);
   });
 });

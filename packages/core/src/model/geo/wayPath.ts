@@ -4,7 +4,6 @@ const CORNER_SAMPLES = 10; // interpolated points per rounded corner.
 // Each corner is cut back this fraction of its shorter adjacent segment before
 // rounding — keeps a corner's cut point from ever reaching its neighbor's.
 const CORNER_FRACTION = 0.25;
-
 // Core transforms preserve unchanged Way references, so this reference-keyed
 // cache needs no invalidation. This matters:
 // buildFeatures() calls resolveWayPath for every way (and, per stop, for

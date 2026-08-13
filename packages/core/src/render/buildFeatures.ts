@@ -354,33 +354,33 @@ export function buildHandles(
   return handles;
 }
 
-/** Footprint/platform vertices of the one stop and/or group being edited.
+/** Footprint/platform vertices of the one Station and/or group being edited.
  *
  *  Takes the RESOLVED records rather than their ids on purpose: a footprint
  *  drag changes the geometry while the id stays put, so anything keyed on the
  *  id alone would serve a stale shape — the exact failure a memo layer must not
- *  have. Resolving also makes this O(1) in the number of stops, where the
- *  inline version scanned every stop to find the one match. */
+ *  have. Resolving also makes this O(1) in the number of Stations, where the
+ *  inline version scanned every Station to find the one match. */
 export function buildPhysicalHandles(
-  stop: TransitSystem['stops'][number] | null | undefined,
+  station: TransitSystem['stations'][number] | null | undefined,
   group: TransitSystem['groups'][number] | null | undefined,
 ): Feature<Point>[] {
   const physicalHandles: Feature<Point>[] = [];
-  if (stop) {
-    stop.footprint?.forEach((p, i) => {
+  if (station) {
+    station.footprint?.forEach((p, i) => {
       physicalHandles.push({
         type: 'Feature',
-        properties: { kind: 'footprint', stopId: stop.id, index: i, icon: HANDLE_ICON },
+        properties: { kind: 'footprint', stationId: station.id, index: i, icon: HANDLE_ICON },
         geometry: { type: 'Point', coordinates: p },
       });
     });
-    for (const pf of stop.platforms ?? []) {
+    for (const pf of station.platforms ?? []) {
       pf.points.forEach((p, i) => {
         physicalHandles.push({
           type: 'Feature',
           properties: {
             kind: 'platform',
-            stopId: stop.id,
+            stationId: station.id,
             platformId: pf.id,
             index: i,
             icon: HANDLE_ICON,
@@ -810,7 +810,7 @@ interface ProjectPhysicalFeaturesOptions {
   system: TransitSystem;
   projection: PhysicalProjection;
   network: boolean;
-  physicalHandleStopId: string | null;
+  physicalHandleStationId: string | null;
   physicalHandleGroupId: string | null;
   counts: FeatureBuildOperationCounts | undefined;
 }
@@ -819,7 +819,7 @@ function projectPhysicalFeatures({
   system,
   projection,
   network,
-  physicalHandleStopId,
+  physicalHandleStationId,
   physicalHandleGroupId,
   counts,
 }: ProjectPhysicalFeaturesOptions): PhysicalProjectionResult {
@@ -829,20 +829,20 @@ function projectPhysicalFeatures({
   if (network) return { footprints, platforms, handles: [] };
 
   if (projection.footprints || projection.platforms) {
-    for (const stop of system.stops) {
+    for (const station of system.stations) {
       if (counts) counts.featurePhysicalStopVisitCount++;
-      if (projection.footprints && stop.footprint) {
+      if (projection.footprints && station.footprint) {
         footprints.push({
           type: 'Feature',
-          properties: { stopId: stop.id },
-          geometry: { type: 'Polygon', coordinates: [closeRing(stop.footprint)] },
+          properties: { stationId: station.id },
+          geometry: { type: 'Polygon', coordinates: [closeRing(station.footprint)] },
         });
       }
       if (projection.platforms) {
-        for (const platform of stop.platforms ?? []) {
+        for (const platform of station.platforms ?? []) {
           platforms.push({
             type: 'Feature',
-            properties: { stopId: stop.id, platformId: platform.id },
+            properties: { stationId: station.id, platformId: platform.id },
             geometry: { type: 'Polygon', coordinates: [closeRing(platform.points)] },
           });
         }
@@ -863,14 +863,14 @@ function projectPhysicalFeatures({
 
   if (!projection.handles) return { footprints, platforms, handles: [] };
 
-  let handleStop: TransitSystem['stops'][number] | null = null;
-  if (physicalHandleStopId) {
-    for (const stop of system.stops) {
+  let handleStation: TransitSystem['stations'][number] | null = null;
+  if (physicalHandleStationId) {
+    for (const station of system.stations) {
       if (counts && !projection.footprints && !projection.platforms) {
         counts.featurePhysicalStopVisitCount++;
       }
-      if (stop.id !== physicalHandleStopId) continue;
-      handleStop = stop;
+      if (station.id !== physicalHandleStationId) continue;
+      handleStation = station;
       break;
     }
   }
@@ -887,7 +887,7 @@ function projectPhysicalFeatures({
   return {
     footprints,
     platforms,
-    handles: buildPhysicalHandles(handleStop, handleGroup),
+    handles: buildPhysicalHandles(handleStation, handleGroup),
   };
 }
 
@@ -1509,10 +1509,10 @@ export function buildFeatures(
   selection: Highlight,
   handleWayIds: string[],
   view: ViewOptions,
-  /** The stop whose footprint/platform vertices should render as
+  /** The Station whose footprint/platform vertices should render as
    *  draggable handles right now (its own edit context, not tied to
    *  `selection` directly since a platform can be mid-edit independently). */
-  physicalHandleStopId: string | null = null,
+  physicalHandleStationId: string | null = null,
   /** Same, for a group's (facility-complex's) own footprint vertices. */
   physicalHandleGroupId: string | null = null,
   options: BuildFeaturesOptions = {},
@@ -1563,7 +1563,7 @@ export function buildFeatures(
         system,
         projection: projection.physical,
         network,
-        physicalHandleStopId,
+        physicalHandleStationId,
         physicalHandleGroupId,
         counts,
       })

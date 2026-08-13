@@ -1,6 +1,5 @@
 import type { Feature, LineString } from 'geojson';
 import type { LngLat } from '../model/system';
-
 // buildFeatures emits one service-line feature per WAY a service rides (it has
 // to, in order to dedupe several riders sharing one way into a single offset
 // slot per way). But `line-offset` is a per-feature paint property: MapLibre
@@ -62,7 +61,10 @@ function mergeGroup(frags: Feature<LineString>[]): Feature<LineString>[] {
 
   // Only a degree-2 joint is unambiguous: this fragment's end plus exactly
   // one other fragment's end, nothing more.
-  type End = { frag: Feature<LineString>; end: 'start' | 'end' };
+  interface End {
+    frag: Feature<LineString>;
+    end: 'start' | 'end';
+  }
   const byEndpoint = new Map<string, End[]>();
   const addEnd = (key: string, e: End) => {
     if (degree.get(key) !== 2) return;
@@ -86,7 +88,7 @@ function mergeGroup(frags: Feature<LineString>[]): Feature<LineString>[] {
     // Extend toward the end, then toward the start. Bounded by the group
     // size — a closed loop (a terminus loop) would otherwise spin forever
     // once every fragment is already used.
-    for (let guard = 0; guard < frags.length; guard++) {
+    for (const _fragment of frags) {
       const candidates = (byEndpoint.get(pointKey(coords[coords.length - 1])) ?? []).filter(
         (c) => !used.has(c.frag),
       );
@@ -96,7 +98,7 @@ function mergeGroup(frags: Feature<LineString>[]): Feature<LineString>[] {
       const next = frag.geometry.coordinates as LngLat[];
       coords.push(...(end === 'start' ? next : [...next].reverse()).slice(1));
     }
-    for (let guard = 0; guard < frags.length; guard++) {
+    for (const _fragment of frags) {
       const candidates = (byEndpoint.get(pointKey(coords[0])) ?? []).filter(
         (c) => !used.has(c.frag),
       );

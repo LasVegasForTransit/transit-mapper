@@ -22,6 +22,21 @@ import { Icon, type IconName } from './Icon';
 import { useInertRef } from './useInertRef';
 import { useUi } from './UiProvider';
 import { useView } from './ViewProvider';
+interface PassengerPlaceToolPresentation {
+  label: 'Stop' | 'Station';
+  icon: IconName;
+}
+
+/** The shared S shortcut has a view-specific, user-facing meaning: Network
+ * places the boarding point services call at; Infrastructure draws the
+ * optional passenger place that can contain several of those points. */
+export function passengerPlaceTool(
+  viewMode: 'network' | 'infrastructure',
+): PassengerPlaceToolPresentation {
+  return viewMode === 'network'
+    ? { label: 'Stop', icon: 'stop' }
+    : { label: 'Station', icon: 'boundary' };
+}
 
 // One dock icon per way family; unknown families fall back to the plain line.
 const FAMILY_TOOL_ICON: Record<WayFamily, IconName> = {
@@ -44,8 +59,8 @@ const lastTypeByFamily: Partial<Record<WayFamily, string>> = {};
  * click, and a new catalog family gets a tool with no UI code.
  *
  * Context-dependent by view: Infrastructure shows the physical tools
- * (Road, Track, Path, … + Station, Facility); Network shows the Line tool
- * (mode-first service drawing) + Station. Diagram is read-only.
+ * (Road, Track, Path, … + Stop, Facility); Network shows the Line tool
+ * (mode-first service drawing) + Stop. Diagram is read-only.
  */
 export function Toolbar() {
   const tool = useEditor((s) => s.tool);
@@ -74,6 +89,7 @@ export function Toolbar() {
   const diagram = viewMode === 'diagram';
   const locked = readOnly || diagram;
   const network = viewMode === 'network';
+  const placeTool = passengerPlaceTool(network ? 'network' : 'infrastructure');
   const activeFamily = tool === 'way' ? wayType(draftWayTypeId).family : null;
 
   const activateFamily = (family: WayFamily, typeId?: string) => {
@@ -212,7 +228,7 @@ export function Toolbar() {
                 return (
                   <ToolButton
                     key={family}
-                    icon={FAMILY_TOOL_ICON[family] ?? 'line'}
+                    icon={FAMILY_TOOL_ICON[family]}
                     label={info.toolLabel}
                     active={isActive}
                     disabled={locked}
@@ -225,15 +241,12 @@ export function Toolbar() {
           </div>
         )}
 
-        {/* Cluster 3: PLACES — region/building-like things with real
-            footprints (stations, facilities), a different mental verb from
-            drawing paths. In Infrastructure view the Station tool draws the
-            station's LAND (a click-points or drag-rectangle boundary, same
+        {/* Cluster 3: PLACES. Infrastructure draws a Station's physical
+            boundary (a click-points or drag-rectangle boundary, same
             grammar as a facility complex — see interactions.ts's
-            startStationLandDraw), not a schematic pin, so it wears the same
+            startStationBoundaryDraw), not a schematic pin, so it wears the same
             "boundary" glyph as Facility's site-boundary mode; Network view
-            keeps the plain stop icon, since there the tool really is a
-            quick click-to-place stop. The invisible spacer balances the
+            places a Stop, so it keeps the plain stop icon. The invisible spacer balances the
             cluster's card when Facility's menu caret is present (Infra view
             only) — same width as .tool-btn-caret's own footprint — so the
             pair reads as centered rather than lopsided toward the caret.
@@ -243,12 +256,12 @@ export function Toolbar() {
           <div className="tool-cluster" role="toolbar" aria-label="Places">
             {!network && <span className="tool-caret-spacer" aria-hidden="true" />}
             <ToolButton
-              icon={network ? 'station' : 'boundary'}
-              label="Station"
+              icon={placeTool.icon}
+              label={placeTool.label}
               hotkey="S"
-              active={tool === 'station'}
+              active={tool === 'stop'}
               disabled={locked}
-              onClick={() => setTool('station')}
+              onClick={() => setTool('stop')}
             />
             {!network && (
               // The Facility tool wears its current variant and places it on
@@ -263,7 +276,7 @@ export function Toolbar() {
                       // plain string by necessity. The cast is the one place that
                       // boundary is crossed; every value it can actually return
                       // (see catalogStyle.ts's facilityRender) is a real IconName.
-                      ((facilityRender(draftFacilityTypeId).icon as IconName) ?? 'plus')
+                      (facilityRender(draftFacilityTypeId).icon as IconName)
                 }
                 label="Facility"
                 hotkey="F"

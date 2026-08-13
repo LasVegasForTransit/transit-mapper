@@ -1,18 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addStopFootprint,
-  addStopPlatform,
   createStop,
-  deleteStopFootprint,
-  deleteStopPlatform,
-  moveStopFootprintPoint,
-  moveStopPlatformPoint,
   setStopDwellSeconds,
   setStopMajorStop,
   setStopName,
   withSuggestedStopName,
 } from '../../src/model/system';
-import type { Platform } from '../../src/model/system';
 import { aStop, aSystem } from '../support/fixtures.test';
 
 describe('stop record transform identity', () => {
@@ -86,96 +79,5 @@ describe('stop record transform identity', () => {
 
     const cleared = setStopMajorStop(major, stop.id, false);
     expect(cleared.stops[0]).toHaveProperty('majorStop', undefined);
-  });
-
-  it('adds and moves a footprint without replacing equal or existing geometry', () => {
-    const stop = aStop('stop', [0, 0]);
-    const footprint: [number, number][] = [
-      [0, 0],
-      [0.001, 0],
-      [0.001, 0.001],
-    ];
-    const system = aSystem({ stops: [stop] });
-
-    const added = addStopFootprint(system, stop.id, footprint);
-    expect(added.stops[0].footprint).toBe(footprint);
-    expect(addStopFootprint(added, stop.id, [[2, 2]])).toBe(added);
-    expect(moveStopFootprintPoint(added, stop.id, 0, footprint[0])).toBe(added);
-    expect(moveStopFootprintPoint(added, stop.id, 10, [2, 2])).toBe(added);
-
-    const moved = moveStopFootprintPoint(added, stop.id, 1, [0.002, 0]);
-    expect(moved.stops[0].footprint).toEqual([footprint[0], [0.002, 0], footprint[2]]);
-    expect(moved.stops[0].footprint?.[0]).toBe(footprint[0]);
-  });
-
-  it('deleting a footprint also cleans its footprint-owned platforms', () => {
-    const platform: Platform = {
-      id: 'platform',
-      points: [
-        [0, 0],
-        [0.001, 0],
-      ],
-    };
-    const stop = aStop('stop', [0, 0], undefined, {
-      footprint: [
-        [0, 0],
-        [0.001, 0],
-        [0.001, 0.001],
-      ],
-      platforms: [platform],
-    });
-    const system = aSystem({ stops: [stop] });
-
-    const next = deleteStopFootprint(system, stop.id);
-
-    expect(next.stops[0]).toEqual({
-      ...stop,
-      footprint: undefined,
-      platforms: undefined,
-    });
-    expect(deleteStopFootprint(next, stop.id)).toBe(next);
-  });
-
-  it('adds, moves, and deletes one platform with structural sharing', () => {
-    const first: Platform = {
-      id: 'first',
-      points: [
-        [0, 0],
-        [0.001, 0],
-      ],
-    };
-    const second: Platform = {
-      id: 'second',
-      points: [
-        [0, 0.001],
-        [0.001, 0.001],
-      ],
-    };
-    const stop = aStop('stop', [0, 0], undefined, { platforms: [first] });
-    const system = aSystem({ stops: [stop] });
-
-    const added = addStopPlatform(system, stop.id, second);
-    expect(added.stops[0].platforms).toEqual([first, second]);
-    expect(
-      moveStopPlatformPoint(added, {
-        stopId: stop.id,
-        platformId: first.id,
-        index: 0,
-        coord: first.points[0],
-      }),
-    ).toBe(added);
-
-    const moved = moveStopPlatformPoint(added, {
-      stopId: stop.id,
-      platformId: first.id,
-      index: 1,
-      coord: [0.002, 0],
-    });
-    expect(moved.stops[0].platforms?.[0].points).toEqual([first.points[0], [0.002, 0]]);
-    expect(moved.stops[0].platforms?.[1]).toBe(second);
-
-    const deleted = deleteStopPlatform(moved, stop.id, first.id);
-    expect(deleted.stops[0].platforms).toEqual([second]);
-    expect(deleteStopPlatform(deleted, stop.id, 'missing')).toBe(deleted);
   });
 });

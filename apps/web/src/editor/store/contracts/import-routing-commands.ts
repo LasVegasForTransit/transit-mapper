@@ -1,13 +1,14 @@
 import type { ReconcileImportedSystemResult } from '@transitmapper/core/model/corridor-edits';
 import type { ImportedNetwork } from '@transitmapper/core/model/import';
 import type { RouteAnchor, RouteSpan } from '@transitmapper/core/model/routeGraph';
-import type { Service, Station, TransitSystem, Way } from '@transitmapper/core/model/system';
+import type { Service, Station, Stop, TransitSystem, Way } from '@transitmapper/core/model/system';
 
 interface GtfsImportPieces {
   ways: Way[];
   lines: TransitSystem['lines'];
   services: Service[];
-  stations: Station[];
+  stops: Stop[];
+  stations?: Station[];
 }
 
 interface ApplyGtfsImportBatch {

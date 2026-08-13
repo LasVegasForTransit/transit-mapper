@@ -18,7 +18,6 @@
 // widening a road from changing a line's round trip.
 //
 // Pure, like the rest of packages/core/src/sim.
-
 import {
   cumulativeLengths,
   nearestOnPath,

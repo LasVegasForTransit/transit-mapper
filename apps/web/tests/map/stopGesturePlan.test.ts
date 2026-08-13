@@ -8,77 +8,78 @@ import {
 } from '../../src/map/layers';
 import type { SystemFeatureSourceId } from '../../src/map/sourceUploadPlan';
 import {
-  planStationGestureSettlement,
-  type StationGestureSettlementOptions,
-} from '../../src/map/stationGesturePlan';
+  planStopGestureSettlement,
+  type StopGestureSettlementOptions,
+} from '../../src/map/stopGesturePlan';
 
-const stationSources = [
+const stopSources = [
   SRC_STATIONS,
   SRC_FOOTPRINTS,
   SRC_PLATFORMS,
   SRC_PHYSICAL_HANDLES,
 ] satisfies readonly SystemFeatureSourceId[];
-const stationOnly = {
+const stopOnly = {
   wayIds: [],
-  stationIds: ['station-a'],
+  stopIds: ['stop-a'],
+  stationIds: [],
   facilityIds: [],
   groupIds: [],
   nodeIds: [],
 };
 
-describe('station gesture settlement planning', () => {
-  it('uses one station diff for an isolated Network station move', () => {
+describe('stop gesture settlement planning', () => {
+  it('uses one stop diff for an isolated Network stop move', () => {
     expect(
-      planStationGestureSettlement({
+      planStopGestureSettlement({
         viewMode: 'network',
-        affected: stationOnly,
-        pendingSources: stationSources,
-        stationSourceReady: true,
+        affected: stopOnly,
+        pendingSources: stopSources,
+        stopSourceReady: true,
         overlayHealthy: true,
         projectionAborted: false,
       }),
-    ).toEqual({ kind: 'diff', stationIds: ['station-a'] });
+    ).toEqual({ kind: 'diff', stopIds: ['stop-a'] });
   });
 
   it('falls back when settled physical detail or another mutation may differ', () => {
-    const unsafeCases: Array<Partial<StationGestureSettlementOptions>> = [
+    const unsafeCases: Array<Partial<StopGestureSettlementOptions>> = [
       { viewMode: 'infrastructure' as const },
-      { affected: { ...stationOnly, wayIds: ['way-a'] } },
+      { affected: { ...stopOnly, wayIds: ['way-a'] } },
       { projectionAborted: true },
     ];
 
     for (const unsafe of unsafeCases) {
       expect(
-        planStationGestureSettlement({
+        planStopGestureSettlement({
           viewMode: 'network',
-          affected: stationOnly,
-          pendingSources: stationSources,
-          stationSourceReady: true,
+          affected: stopOnly,
+          pendingSources: stopSources,
+          stopSourceReady: true,
           overlayHealthy: true,
           projectionAborted: false,
           ...unsafe,
         }),
-      ).toEqual({ kind: 'full', preserveStationPreview: false });
+      ).toEqual({ kind: 'full', preserveStopPreview: false });
     }
   });
 
-  it('preserves the station preview whenever an isolated Network move needs a full refresh', () => {
+  it('preserves the stop preview whenever an isolated Network move needs a full refresh', () => {
     for (const unavailable of [
-      { stationSourceReady: false },
+      { stopSourceReady: false },
       { overlayHealthy: false },
-      { pendingSources: [...stationSources, SRC_WAYS] },
-    ] satisfies Array<Partial<StationGestureSettlementOptions>>) {
+      { pendingSources: [...stopSources, SRC_WAYS] },
+    ] satisfies Array<Partial<StopGestureSettlementOptions>>) {
       expect(
-        planStationGestureSettlement({
+        planStopGestureSettlement({
           viewMode: 'network',
-          affected: stationOnly,
-          pendingSources: stationSources,
-          stationSourceReady: true,
+          affected: stopOnly,
+          pendingSources: stopSources,
+          stopSourceReady: true,
           overlayHealthy: true,
           projectionAborted: false,
           ...unavailable,
         }),
-      ).toEqual({ kind: 'full', preserveStationPreview: true });
+      ).toEqual({ kind: 'full', preserveStopPreview: true });
     }
   });
 });

@@ -6,7 +6,6 @@ import {
   createStyleSwitchController,
   type StyleSwitchMap,
 } from '../../src/map/styleSwitchController';
-
 const style = (id: string): StyleSpecification => ({
   version: 8,
   sources: {},
@@ -28,7 +27,7 @@ function createMap(): StyleSwitchMap & { setStyle: ReturnType<typeof vi.fn> } {
   return {
     getStyle: () => style('current'),
     setStyle,
-  } as StyleSwitchMap & { setStyle: typeof setStyle };
+  };
 }
 
 describe('style switch controller', () => {

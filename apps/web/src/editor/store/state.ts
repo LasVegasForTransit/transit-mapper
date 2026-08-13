@@ -6,12 +6,13 @@ import type { SelectionRef } from '@transitmapper/core/model/selectionActions';
 import type { RouteAnchor, RouteSpan } from '@transitmapper/core/model/routeGraph';
 import { modeRender } from '@transitmapper/core/style/catalogStyle';
 
-export type Tool = 'select' | 'way' | 'station' | 'facility' | 'lines' | 'demolish';
+export type Tool = 'select' | 'way' | 'stop' | 'facility' | 'lines' | 'demolish';
 
 export type Selection =
   | { kind: 'way'; id: string; relatedIds?: string[] }
   | { kind: 'line'; id: string }
   | { kind: 'service'; id: string; stopId?: string }
+  | { kind: 'stop'; id: string }
   | { kind: 'station'; id: string }
   | { kind: 'facility'; id: string }
   | { kind: 'group'; id: string }
@@ -56,7 +57,7 @@ export interface EditorState {
   armedTerminus: ArmedTerminus | null;
   cameraFocusToken: number;
   focusNameToken: number;
-  focusNameStationId: string | null;
+  focusNameStopId: string | null;
   multiSelection: MultiSelectItem[];
   activeWayId: string | null;
   draftSeparate: boolean;
@@ -93,7 +94,7 @@ export function createInitialEditorState(documentStatus: DocumentStatus): Editor
     armedTerminus: null,
     cameraFocusToken: 0,
     focusNameToken: 0,
-    focusNameStationId: null,
+    focusNameStopId: null,
     multiSelection: [],
     activeWayId: null,
     draftSeparate: false,

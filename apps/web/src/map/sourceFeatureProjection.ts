@@ -40,7 +40,7 @@ export interface BuildFeaturesForSourcesOptions {
   handleWayIds: string[];
   view: ViewOptions;
   sourceIds: readonly SystemFeatureSourceId[];
-  stationIds?: readonly string[];
+  stopIds?: readonly string[];
   physicalHandleStationId?: string | null;
   physicalHandleGroupId?: string | null;
   activePatternId?: string | null;
@@ -55,7 +55,7 @@ export interface BuildFeaturesForSourcesOptions {
 const FEATURE_NAME_BY_SOURCE: Record<SystemFeatureSourceId, SystemFeatureName> = {
   [SRC_WAYS]: 'ways',
   [SRC_SERVICES]: 'services',
-  [SRC_STATIONS]: 'stations',
+  [SRC_STATIONS]: 'stops',
   [SRC_HANDLES]: 'handles',
   [SRC_SERVICE_TERMINI]: 'serviceTermini',
   [SRC_FOOTPRINTS]: 'footprints',
@@ -89,7 +89,7 @@ export function buildFeaturesForSources({
   handleWayIds,
   view,
   sourceIds,
-  stationIds,
+  stopIds,
   physicalHandleStationId = null,
   physicalHandleGroupId = null,
   activePatternId = null,
@@ -110,7 +110,7 @@ export function buildFeaturesForSources({
     physicalHandleGroupId,
     {
       requestedFeatures: sourceIds.map((sourceId) => FEATURE_NAME_BY_SOURCE[sourceId]),
-      stationIds,
+      stopIds,
       counts,
       activePatternId,
       armedTerminus,

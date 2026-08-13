@@ -127,7 +127,7 @@ export function pointInPolygon(point: LngLat, ring: LngLat[]): boolean {
 }
 
 /** A default square polygon of the given half-size, centered on `center` —
- *  the starting point for a stop footprint or platform before the user
+ *  the starting point for a Station footprint or platform before the user
  *  drags its corners to fit the real site. */
 export function squareFootprint(center: LngLat, halfSizeMeters: number): LngLat[] {
   return [

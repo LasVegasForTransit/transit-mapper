@@ -82,7 +82,7 @@ export function wayActionProvider(store: SelectionActionStore): SelectionActionP
       ];
     }
 
-    // Mixed selections offer nothing here: a way and a station have no
+    // Mixed selections offer nothing here: a way and a stop have no
     // relationship these operations act on.
     if (wayIds.length < 2) return [];
 

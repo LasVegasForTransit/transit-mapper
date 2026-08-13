@@ -226,7 +226,7 @@ export interface WorkbenchProps {
    *  decision — the caller hands over both and never learns which was
    *  used. */
   simControlsCompact: ReactNode;
-  /** Select/Way/Station/Facility — the drawing-tool palette. */
+  /** Select/Way/Stop/Facility — the drawing-tool palette. */
   modeToolbar: ReactNode;
   /** A background import's live status (ImportProgressPill) — stacked
    *  directly above modeToolbar in the same centered column, sharing its

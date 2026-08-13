@@ -56,6 +56,13 @@ function fixture(): TransitSystem {
         name: 'Stop',
         coord: [-115.15, 36.1],
         anchors: [{ wayId: 'road', t: 0.5 }],
+      },
+    ],
+    stations: [
+      {
+        id: 'station',
+        name: 'Station',
+        coord: [-115.15, 36.1],
         footprint: [
           [-115.151, 36.099],
           [-115.149, 36.099],

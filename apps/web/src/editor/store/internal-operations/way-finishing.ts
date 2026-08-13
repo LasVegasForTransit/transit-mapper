@@ -2,7 +2,7 @@ import { conflatePatternOntoExisting } from '@transitmapper/core/model/corridor-
 import { formCrossingJunctions } from '@transitmapper/core/model/crossing-edits';
 import { patternLegs, oneSection, wholeLeg } from '@transitmapper/core/model/geo';
 import { servicePattern } from '@transitmapper/core/model/line-service';
-import { resyncAutoNamedStations } from '@transitmapper/core/model/geo/crossStreetNaming';
+import { resyncAutoNamedStops } from '@transitmapper/core/model/geo/crossStreetNaming';
 import { deleteSelection } from '@transitmapper/core/model/selection-deletion';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { EditorState } from '../state';
@@ -44,7 +44,7 @@ function withAddedService(
       : candidate,
   );
   return {
-    system: resyncAutoNamedStations(
+    system: resyncAutoNamedStops(
       { ...system, lines, services: [...system.services, service] },
       new Set([wayId]),
     ),

@@ -61,12 +61,13 @@ comments, imports, and tests:
 - **Branch**, **express**, **short turn**, and **substitute shuttle** describe
   the role of a service within a line; they are not parallel structural types.
 - **Trip** or **run** is one scheduled vehicle journey providing a service.
-- **Stop** is the relationship between a service and a boarding or alighting
-  location. Stops are derived from the service path and station anchors except
-  where a service explicitly skips a location.
-- **Station** is a durable physical passenger place. One station can host stops
-  for several services; a simple roadside stop need not imply a substantial
-  station building or complex.
+- **Stop** is a durable physical boarding or alighting point. A simple roadside
+  Stop stands alone; a platform Stop can belong to a Station.
+- **Station** is an optional named passenger place containing one or more Stops.
+  It can own a boundary and platform geometry, but is not required for every Stop.
+- **Service call** is the relationship between one Service and one Stop. It is
+  derived from the Service path and stopping pattern except where the Service
+  explicitly skips that Stop.
 - **Infrastructure** is the physical roads, tracks, guideways, paths, stations,
   and facilities that services use.
 - **Pattern**, **way**, **leg**, and similar geometry terms remain internal
@@ -93,11 +94,11 @@ system. The view switcher changes the canvas and the outline together. The
 sidebar does not repeat the active view as `Workspace -> Network` or add another
 set of tabs that competes with the global switcher.
 
-| View               | Question it answers                            | Outline contents                                                                                 |
-| ------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| **Network**        | What can people ride, and how does it connect? | Lines, services when needed, stops, and a separate Stations section                              |
-| **Infrastructure** | What physically exists and supports movement?  | Named roads, railways or guideways, trails and other catalog nouns, then Stations and Facilities |
-| **Diagram**        | How is the network communicated to riders?     | Lines, services when needed, stops, and Stations as represented in the schematic                 |
+| View               | Question it answers                            | Outline contents                                                                                         |
+| ------------------ | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Network**        | What can people ride, and how does it connect? | Lines, services when needed, stops, and a separate Stations section                                      |
+| **Infrastructure** | What physically exists and supports movement?  | Named roads, railways or guideways, trails and other catalog nouns, then Stops, Stations, and Facilities |
+| **Diagram**        | How is the network communicated to riders?     | Lines, services when needed, stops, and Stations as represented in the schematic                         |
 
 Network and Diagram share concepts but retain independent expansion, search,
 scroll, and presentation state. Diagram stays read-only. Infrastructure lists
@@ -131,10 +132,10 @@ collapses only the left panel. The global Hide UI action moves into the menu and
 keeps its keyboard shortcut; a local panel control must not unexpectedly hide
 the inspector, toolbar, and other chrome.
 
-On compact layouts, the bottom sheet title is **Network outline**,
-**Infrastructure outline**, or **Diagram outline**. It never says Workspace.
-The same outline component and semantics are used across desktop and compact
-layouts.
+On compact layouts, the outline begins directly with search and content; it
+does not spend vertical space repeating “Network outline,” “Infrastructure
+outline,” or “Diagram outline.” The same semantics are used across desktop and
+compact layouts.
 
 ## Outline hierarchy
 
@@ -144,16 +145,16 @@ Lines are the primary rows. Selecting a Line selects its public identity;
 renaming or recoloring it happens in the right inspector.
 
 A Line containing one ordinary Service compresses that redundant level. Its
-disclosure reveals Stops directly, while the inspector exposes the underlying
+disclosure reveals Service calls, labeled by Stop, while the inspector exposes the underlying
 Service's mode, vehicle, path, and schedule. Accessible names for the Line and
-its Stop rows include the Service context needed to understand them; they do
+its call rows include the Service context needed to understand them; they do
 not claim that a visually omitted Service row is present. Compression is
 presentation, not data loss.
 
 A Line containing multiple Services reveals them as children. Service rows use
 specific labels such as “Downtown local,” “Airport express,” or “Construction
 shuttle,” and carry mode or role metadata needed to distinguish them. Expanding
-a Service reveals its Stops. A Line whose Services share a mode can show that
+a Service reveals its calls at Stops. A Line whose Services share a mode can show that
 mode on the Line row; a mixed-mode Line shows a summary such as “2 modes”
 instead of claiming that the Line itself has one mode.
 
@@ -164,10 +165,11 @@ migration prefer a supplied branch name or headsign, then derive a label from
 distinct termini, and use a stable ordinal such as “Service 2” only when the
 source contains no meaningful distinction.
 
-Stations also appear in a separate top-level section because a Station is a
-shared place, not the property of whichever Line happens to be expanded. A Stop
-row selects the relevant service call and focuses its location; a Station row
-selects the physical place and exposes all calling Services in the inspector.
+Stops and Stations also appear in separate top-level sections because both are
+saved physical places, not properties of whichever Line happens to be expanded.
+A call row beneath a Service selects that Service-at-Stop context. A top-level
+Stop row selects the boarding point itself; a Station row selects its containing
+passenger place and exposes the attached Stops and calling Services.
 
 ### Infrastructure
 

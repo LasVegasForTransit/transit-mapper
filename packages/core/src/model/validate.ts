@@ -15,7 +15,6 @@ import {
 } from './geo';
 import { splitSectionEndpointsAreCompatible } from './pattern-continuity';
 import type { LngLat, Pattern, RunDirection, TransitSystem, Way } from './system';
-
 /** How a direction of service reads in a sentence a planner will see. */
 const RUN_NOUN: Record<RunDirection, string> = {
   outbound: 'outward',

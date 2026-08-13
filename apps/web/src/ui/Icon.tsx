@@ -51,7 +51,7 @@ import {
 const ICONS = {
   cursor: MousePointer2,
   line: Route,
-  station: Circle,
+  stop: Circle,
   road: Road,
   pan: Hand,
   share: Share2,

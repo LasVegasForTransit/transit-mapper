@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GeoJSONSource, Map as MLMap } from 'maplibre-gl';
 import { attachSourceUploadMeter } from '../../src/perf';
-
 interface MeterFixture {
   map: MLMap;
   source: GeoJSONSource;
@@ -21,7 +20,7 @@ function createMeterFixture(): MeterFixture {
     updateData: originalUpdateData,
   } as GeoJSONSource;
   const map = {
-    getStyle: () => ({ sources: { stations: { type: 'geojson' } } }),
+    getStyle: () => ({ sources: { stops: { type: 'geojson' } } }),
     getSource: () => source,
   } as unknown as MLMap;
   return { map, source, originalSetData, originalUpdateData };

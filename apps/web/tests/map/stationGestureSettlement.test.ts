@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SRC_STATIONS } from '../../src/map/layers';
-import { createStationGestureSettlementController } from '../../src/map/stationGestureSettlement';
+import { createStopGestureSettlementController } from '../../src/map/stopGestureSettlement';
 import type {
   SettledSourceDataEvent,
   SourceMutationSettlementHost,
@@ -44,11 +44,11 @@ function createSettlementHost() {
   };
 }
 
-describe('station gesture settlement ownership', () => {
+describe('stop gesture settlement ownership', () => {
   it('releases a painted diff immediately when no gesture has taken over', () => {
     const map = createSettlementHost();
     const released = vi.fn();
-    const controller = createStationGestureSettlementController({
+    const controller = createStopGestureSettlementController({
       host: map.host,
       sourceId: SRC_STATIONS,
       isGestureActive: () => false,
@@ -68,7 +68,7 @@ describe('station gesture settlement ownership', () => {
     const map = createSettlementHost();
     let gestureActive = true;
     const released = vi.fn();
-    const controller = createStationGestureSettlementController({
+    const controller = createStopGestureSettlementController({
       host: map.host,
       sourceId: SRC_STATIONS,
       isGestureActive: () => gestureActive,
@@ -90,7 +90,7 @@ describe('station gesture settlement ownership', () => {
     const map = createSettlementHost();
     const fallback = vi.fn();
     const released = vi.fn();
-    const controller = createStationGestureSettlementController({
+    const controller = createStopGestureSettlementController({
       host: map.host,
       sourceId: SRC_STATIONS,
       isGestureActive: () => false,
@@ -116,7 +116,7 @@ describe('station gesture settlement ownership', () => {
     const map = createSettlementHost();
     const released = vi.fn();
     const refresh = vi.fn();
-    const controller = createStationGestureSettlementController({
+    const controller = createStopGestureSettlementController({
       host: map.host,
       sourceId: SRC_STATIONS,
       isGestureActive: () => false,

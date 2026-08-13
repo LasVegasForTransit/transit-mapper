@@ -1,10 +1,10 @@
 // Actions that act on the POINT you clicked, not on the whole object.
 //
 // Cutting a line used to be possible only at a stop: the inspector walks the
-// stop sequence and hands trimPatternTo/splitServiceAt that station's anchor.
+// stop sequence and hands trimPatternTo/splitServiceAt that stop's anchor.
 // Both store actions have always taken an arbitrary position along a way, and
 // nothing ever passed one — so removing a stretch of a line that had no
-// station at each end could not be asked for at all.
+// stop at each end could not be asked for at all.
 //
 // The interaction layer resolves the hit once, while it still has the exact
 // rendered occurrence. These providers deliberately consume that result

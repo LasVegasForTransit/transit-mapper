@@ -11,7 +11,6 @@ import { haversineMeters } from './spherical';
 import { pathLengthMeters } from './measurement';
 import { nodesByWayId, resolveWayPath, wayById } from './wayPath';
 import { servedWaysByDistance } from './snapIndex';
-
 /** Which cross-street naming convention a stop reads as. 'intersection'
  *  ("14th St & Broadway") reads as a fixed-platform rail stop; 'alongStreet'
  *  ("Main St @ 5th Ave" / "Main St before 5th Ave") reads as a curb stop

@@ -22,7 +22,7 @@
 export interface InputTuning {
   /** Pixel tolerance for hit-testing features under the pointer. */
   hitPx: number;
-  /** Stations and way endpoints within this screen distance snap. */
+  /** Stops and way endpoints within this screen distance snap. */
   snapPx: number;
   /** Movement beyond this counts as a drag, not a click. */
   dragPx: number;

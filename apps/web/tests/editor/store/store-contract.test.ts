@@ -49,13 +49,13 @@ describe('the editor store contract', () => {
     expect(store.getState()).toBe(initial);
     expect(listener).not.toHaveBeenCalled();
 
-    store.commands.selection.select({ kind: 'station', id: 'station' });
+    store.commands.selection.select({ kind: 'stop', id: 'stop' });
     expect(listener).toHaveBeenCalledOnce();
     const [next, previous] = listener.mock.calls[0];
     expect(previous).toBe(initial);
     expect(next).toBe(store.getState());
     expect(previous.selection).toBeNull();
-    expect(next.selection).toEqual({ kind: 'station', id: 'station' });
+    expect(next.selection).toEqual({ kind: 'stop', id: 'stop' });
     expect(next.system).toBe(previous.system);
     unsubscribe();
   });
@@ -109,9 +109,9 @@ describe('the editor store contract', () => {
         ],
       },
     ];
-    system.stations = [{ id: 'station', coord: [-115.15, 36.1], anchors: [] }];
+    system.stops = [{ id: 'stop', coord: [-115.15, 36.1], anchors: [] }];
     store.commands.document.setSystem(system, { readOnly: true });
-    store.commands.selection.addMultiSelection([{ kind: 'station', id: 'station' }]);
+    store.commands.selection.addMultiSelection([{ kind: 'stop', id: 'stop' }]);
 
     store.commands.document.setName('Blocked');
     store.commands.tools.addPaletteColor('#123456');
@@ -121,7 +121,7 @@ describe('the editor store contract', () => {
     store.commands.imports.importGtfs({
       ways: [],
       lines: [],
-      stations: [],
+      stops: [],
       services: [
         {
           id: 'imported',
@@ -134,23 +134,23 @@ describe('the editor store contract', () => {
       store.commands.routing.createRoutedService([{ wayId: 'way', fromPoint: 0, toPoint: 1 }]),
     ).toBeNull();
     expect(store.commands.services.addServiceToWay('way')).toBeNull();
-    expect(store.commands.stations.addStation([-115.14, 36.1])).toBeNull();
+    expect(store.commands.stops.addStop([-115.14, 36.1])).toBeNull();
     expect(store.commands.facilities.addFacility('entrance', [-115.14, 36.1])).toBeNull();
-    expect(store.commands.groups.createGroup(['station'])).toBeNull();
+    expect(store.commands.groups.createGroup(['stop'])).toBeNull();
 
     expect(store.getState().system).toBe(system);
-    expect(store.getState().multiSelection).toEqual([{ kind: 'station', id: 'station' }]);
+    expect(store.getState().multiSelection).toEqual([{ kind: 'stop', id: 'stop' }]);
   });
 
   it('clears every document-owned workflow when another document is installed', () => {
     const store = createEditorStore();
-    const stationId = store.commands.stations.addStation([-115.2, 36.1]);
+    const stopId = store.commands.stops.addStop([-115.2, 36.1]);
     const wayId = store.commands.ways.beginWay('road', 'straight');
-    expect(stationId).not.toBeNull();
+    expect(stopId).not.toBeNull();
     expect(wayId).not.toBeNull();
-    if (!stationId || !wayId) throw new Error('Expected document workflow fixtures');
+    if (!stopId || !wayId) throw new Error('Expected document workflow fixtures');
 
-    store.commands.selection.setOutlineHover({ kind: 'station', id: stationId });
+    store.commands.selection.setOutlineHover({ kind: 'stop', id: stopId });
     store.commands.selection.addMultiSelection([{ kind: 'way', id: wayId }]);
 
     store.commands.routing.startRouteDraft({
@@ -193,18 +193,18 @@ describe('the editor store contract', () => {
       placingFacilityForGroupId: null,
       pickingMemberForGroupId: null,
       addingServiceDraft: null,
-      focusNameStationId: null,
+      focusNameStopId: null,
       canUndo: false,
       canRedo: false,
     });
   });
 
-  it('replaces direct-move station anchors instead of writing a dead anchor field', () => {
+  it('replaces direct-move stop anchors instead of writing a dead anchor field', () => {
     const store = createEditorStore();
     const system = createEmptySystem();
-    system.stations = [
+    system.stops = [
       {
-        id: 'station',
+        id: 'stop',
         coord: [-115.2, 36.1],
         anchors: [
           { wayId: 'old-a', t: 0.2 },
@@ -214,16 +214,16 @@ describe('the editor store contract', () => {
     ];
     store.commands.document.setSystem(system);
 
-    store.commands.stations.moveStation('station', [-115.1, 36.2], {
+    store.commands.stops.moveStop('stop', [-115.1, 36.2], {
       wayId: 'new',
       t: 0.5,
     });
-    const anchored = store.getState().system.stations[0];
+    const anchored = store.getState().system.stops[0];
     expect(anchored.anchors).toEqual([{ wayId: 'new', t: 0.5 }]);
     expect('anchor' in anchored).toBe(false);
 
-    store.commands.stations.moveStation('station', [-115, 36.3]);
-    expect(store.getState().system.stations[0].anchors).toEqual([]);
+    store.commands.stops.moveStop('stop', [-115, 36.3]);
+    expect(store.getState().system.stops[0].anchors).toEqual([]);
   });
 
   it('derives the first unused default line name from the active document', () => {
@@ -342,21 +342,21 @@ describe('the editor store contract', () => {
     store.commands.document.setName('Blocked');
     store.commands.document.setViewport({ center: [-115, 36], zoom: 12 });
     store.commands.tools.addPaletteColor('#123456');
-    store.commands.selection.addMultiSelection([{ kind: 'station', id: 'station' }]);
+    store.commands.selection.addMultiSelection([{ kind: 'stop', id: 'stop' }]);
     store.commands.selection.deleteMultiSelection();
 
     expect(store.commands.ways.beginWay('road', 'straight')).toBeNull();
     store.commands.network.setDrivingSide('left');
-    store.commands.imports.importGtfs({ ways: [], lines: [], services: [], stations: [] });
+    store.commands.imports.importGtfs({ ways: [], lines: [], services: [], stops: [] });
     expect(store.commands.routing.createRoutedService([])).toBeNull();
     expect(store.commands.services.addServiceToWay('way')).toBeNull();
-    expect(store.commands.stations.addStation([-115.14, 36.1])).toBeNull();
+    expect(store.commands.stops.addStop([-115.14, 36.1])).toBeNull();
     expect(store.commands.facilities.addFacility('entrance', [-115.14, 36.1])).toBeNull();
     expect(store.commands.groups.createGroup([])).toBeNull();
 
-    store.commands.tools.setTool('station');
-    expect(store.getState().tool).toBe('station');
-    expect(store.getState().multiSelection).toEqual([{ kind: 'station', id: 'station' }]);
+    store.commands.tools.setTool('stop');
+    expect(store.getState().tool).toBe('stop');
+    expect(store.getState().multiSelection).toEqual([{ kind: 'stop', id: 'stop' }]);
     expect(store.getState().activeWayId).toBeNull();
     expect(store.getState().system).toBe(system);
   });

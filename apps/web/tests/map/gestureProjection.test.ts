@@ -6,6 +6,7 @@ import type {
   Group,
   Node,
   Station,
+  Stop,
   TransitSystem,
   Way,
 } from '@transitmapper/core/model/system';
@@ -23,7 +24,6 @@ import {
   LYR_GESTURE_STROKE,
   SRC_GESTURE,
 } from '../../src/map/layers';
-
 const fixedWay: Way = {
   id: 'fixed-way',
   typeId: 'road',
@@ -46,16 +46,21 @@ const movedWay: Way = {
   ],
 };
 
-const fixedStation: Station = {
-  id: 'fixed-station',
+const fixedStop: Stop = {
+  id: 'fixed-stop',
   coord: [-115.3, 36.1],
   anchors: [],
+};
+
+const movedStop: Stop = {
+  id: 'moved-stop',
+  coord: [-115.2, 36.12],
+  anchors: [{ wayId: movedWay.id, t: 0.5 }],
 };
 
 const movedStation: Station = {
   id: 'moved-station',
   coord: [-115.2, 36.12],
-  anchors: [{ wayId: movedWay.id, t: 0.5 }],
   footprint: [
     [-115.205, 36.115],
     [-115.195, 36.115],
@@ -86,7 +91,8 @@ function baselineSystem(): TransitSystem {
   return {
     ...createEmptySystem(),
     ways: [movedWay, fixedWay],
-    stations: [movedStation, fixedStation],
+    stops: [movedStop, fixedStop],
+    stations: [movedStation],
     facilities: [movedFacility],
     groups: [movedGroup],
   };
@@ -112,7 +118,8 @@ describe('active-gesture map projection', () => {
 
     expect(controller.affected()).toEqual({
       wayIds: ['moved-way', 'fixed-way'],
-      stationIds: ['moved-station'],
+      stopIds: ['moved-stop'],
+      stationIds: [],
       facilityIds: [],
       groupIds: [],
       nodeIds: ['joined-node'],
@@ -175,12 +182,18 @@ describe('active-gesture map projection', () => {
         },
         fixedWay,
       ],
+      stops: [
+        {
+          ...movedStop,
+          coord: [-115.19, 36.13],
+        },
+        fixedStop,
+      ],
       stations: [
         {
           ...movedStation,
-          coord: [-115.19, 36.13],
+          footprint: movedStation.footprint?.map(([lng, lat]) => [lng + 0.01, lat + 0.01]),
         },
-        fixedStation,
       ],
       facilities: [
         {
@@ -201,6 +214,7 @@ describe('active-gesture map projection', () => {
       before,
       {
         wayIds: ['moved-way'],
+        stopIds: ['moved-stop'],
         stationIds: ['moved-station'],
         facilityIds: ['moved-facility'],
         groupIds: ['moved-group'],
@@ -214,23 +228,24 @@ describe('active-gesture map projection', () => {
 
     expect(projection.affected).toEqual({
       wayIds: ['moved-way'],
+      stopIds: ['moved-stop'],
       stationIds: ['moved-station'],
       facilityIds: ['moved-facility'],
       groupIds: ['moved-group'],
       nodeIds: [],
     });
     expect(
-      projection.data.features.map((feature) => ({
-        kind: feature.properties?.kind,
-        ownerId: feature.properties?.ownerId,
-        geometry: feature.geometry.type,
-      })),
+      projection.data.features.map((feature) => {
+        const kind: unknown = feature.properties?.kind;
+        const ownerId: unknown = feature.properties?.ownerId;
+        return { kind, ownerId, geometry: feature.geometry.type };
+      }),
     ).toEqual([
       { kind: 'way', ownerId: 'moved-way', geometry: 'LineString' },
       { kind: 'control', ownerId: 'moved-way', geometry: 'Point' },
       { kind: 'control', ownerId: 'moved-way', geometry: 'Point' },
       { kind: 'control', ownerId: 'moved-way', geometry: 'Point' },
-      { kind: 'station', ownerId: 'moved-station', geometry: 'Point' },
+      { kind: 'stop', ownerId: 'moved-stop', geometry: 'Point' },
       { kind: 'footprint', ownerId: 'moved-station', geometry: 'Polygon' },
       { kind: 'control', ownerId: 'moved-station', geometry: 'Point' },
       { kind: 'control', ownerId: 'moved-station', geometry: 'Point' },
@@ -247,14 +262,14 @@ describe('active-gesture map projection', () => {
       projection.data.features.some((feature) => feature.properties?.ownerId === 'fixed-way'),
     ).toBe(false);
     expect(
-      projection.data.features.some((feature) => feature.properties?.ownerId === 'fixed-station'),
+      projection.data.features.some((feature) => feature.properties?.ownerId === 'fixed-stop'),
     ).toBe(false);
     expect(counts).toEqual({
       fullProjectionCount: 0,
       gestureProjectionCount: 1,
       sourceUploadCount: 0,
-      entityComparisonCount: 4,
-      projectedEntityCount: 4,
+      entityComparisonCount: 5,
+      projectedEntityCount: 5,
     });
   });
 

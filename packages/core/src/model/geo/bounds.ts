@@ -4,8 +4,8 @@ export function formatKm(meters: number): string {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
-/** The bounding box of every point in the system — ways, stops (+
- *  footprints), facilities (+ polygon geometry), group footprints. Used to
+/** The bounding box of every point in the system — ways, Stops, Station
+ *  footprints/platforms, facilities, and group footprints. Used to
  *  frame a "whole system" export/preview instead of whatever's currently on
  *  screen. Null for an empty system, so callers can fall back to the current
  *  viewport instead of fitting to nothing. */
@@ -21,10 +21,11 @@ export function systemBounds(system: TransitSystem): [LngLat, LngLat] | null {
     if (c[1] > maxLat) maxLat = c[1];
   };
   for (const w of system.ways) w.points.forEach(grow);
-  for (const st of system.stops) {
-    grow(st.coord);
-    st.footprint?.forEach(grow);
-    st.platforms?.forEach((p) => p.points.forEach(grow));
+  for (const stop of system.stops) grow(stop.coord);
+  for (const station of system.stations) {
+    grow(station.coord);
+    station.footprint?.forEach(grow);
+    station.platforms?.forEach((platform) => platform.points.forEach(grow));
   }
   for (const f of system.facilities) {
     if (Array.isArray(f.geometry[0])) (f.geometry as LngLat[]).forEach(grow);

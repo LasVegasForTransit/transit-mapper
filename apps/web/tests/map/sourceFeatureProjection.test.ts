@@ -44,11 +44,23 @@ function fixture(): TransitSystem {
         profile: { lanes: [] },
       },
     ],
+    stops: [
+      {
+        id: 'stop',
+        coord: [-115.16, 36.115],
+        anchors: [{ wayId: 'way', t: 0.5 }],
+      },
+    ],
     stations: [
       {
         id: 'station',
         coord: [-115.16, 36.115],
-        anchors: [{ wayId: 'way', t: 0.5 }],
+        footprint: [
+          [-115.161, 36.114],
+          [-115.159, 36.114],
+          [-115.159, 36.116],
+          [-115.161, 36.116],
+        ],
       },
     ],
     facilities: [
@@ -66,8 +78,8 @@ function operationCounts() {
     ...createFeatureBuildOperationCounts(),
     diagramTopologyBuildCount: 0,
     diagramTopologyCacheHitCount: 0,
-    diagramStationBuildCount: 0,
-    diagramStationCacheHitCount: 0,
+    diagramStopBuildCount: 0,
+    diagramStopCacheHitCount: 0,
   };
 }
 
@@ -90,8 +102,8 @@ describe('MapLibre source feature projection', () => {
       featureFacilityPassCount: 1,
       diagramTopologyBuildCount: 0,
       diagramTopologyCacheHitCount: 0,
-      diagramStationBuildCount: 0,
-      diagramStationCacheHitCount: 0,
+      diagramStopBuildCount: 0,
+      diagramStopCacheHitCount: 0,
     });
   });
 
@@ -124,7 +136,7 @@ describe('MapLibre source feature projection', () => {
     expect(counts.diagramTopologyBuildCount).toBe(0);
   });
 
-  it('reuses Diagram topology while remapping a changed station collection', () => {
+  it('reuses Diagram topology while remapping a changed stop collection', () => {
     const system = fixture();
     const warmCounts = operationCounts();
     buildFeaturesForSources({
@@ -138,7 +150,7 @@ describe('MapLibre source feature projection', () => {
     const counts = operationCounts();
     const changed = {
       ...system,
-      stations: system.stations.map((station) => ({ ...station, name: 'Renamed' })),
+      stops: system.stops.map((stop) => ({ ...stop, name: 'Renamed' })),
     };
 
     const features = buildFeaturesForSources({
@@ -150,22 +162,22 @@ describe('MapLibre source feature projection', () => {
       counts,
     });
 
-    expect(features.stations.features[0]?.properties?.name).toBe('Renamed');
+    expect(features.stops.features[0]?.properties?.name).toBe('Renamed');
     expect(counts).toMatchObject({
       featureCollectionBuildCount: 4,
       featureTopologyPassCount: 0,
-      featureStationPassCount: 1,
+      featureStopPassCount: 1,
       diagramTopologyBuildCount: 0,
       diagramTopologyCacheHitCount: 1,
-      diagramStationBuildCount: 1,
-      diagramStationCacheHitCount: 0,
+      diagramStopBuildCount: 1,
+      diagramStopCacheHitCount: 0,
     });
   });
 
-  it('forwards a targeted station projection without changing its settled feature', () => {
+  it('forwards a targeted stop projection without changing its settled feature', () => {
     const system = fixture();
-    system.stations.push({
-      id: 'other-station',
+    system.stops.push({
+      id: 'other-stop',
       coord: [-114.9, 36.3],
       anchors: [],
     });
@@ -183,12 +195,29 @@ describe('MapLibre source feature projection', () => {
       handleWayIds: [],
       view: networkView,
       sourceIds: [SRC_STATIONS],
-      stationIds: ['station'],
+      stopIds: ['stop'],
     });
 
-    expect(targeted.stations.features).toEqual([
-      full.stations.features.find((feature) => feature.properties?.id === 'station'),
+    expect(targeted.stops.features).toEqual([
+      full.stops.features.find((feature) => feature.properties?.id === 'stop'),
     ]);
+  });
+
+  it('builds physical edit handles for a selected Station rather than a Stop', () => {
+    const features = buildFeaturesForSources({
+      system: fixture(),
+      selection: { kind: 'station', id: 'station' },
+      handleWayIds: [],
+      view: { ...networkView, viewMode: 'infrastructure' },
+      sourceIds: [SRC_PHYSICAL_HANDLES],
+      physicalHandleStationId: 'station',
+    });
+
+    expect(features.physicalHandles.features).toHaveLength(4);
+    expect(features.physicalHandles.features[0]?.properties).toMatchObject({
+      kind: 'footprint',
+      stationId: 'station',
+    });
   });
 
   it('builds every collection for initial, view, and repaired-style source plans', () => {
@@ -205,7 +234,7 @@ describe('MapLibre source feature projection', () => {
 
     expect(counts.featureCollectionBuildCount).toBe(16);
     expect(counts.featureTopologyPassCount).toBe(1);
-    expect(counts.featureStationPassCount).toBe(1);
+    expect(counts.featureStopPassCount).toBe(1);
     expect(counts.featureHandlePassCount).toBe(1);
     expect(counts.featurePhysicalPassCount).toBe(1);
     expect(counts.featureFacilityPassCount).toBe(1);
