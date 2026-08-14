@@ -1,8 +1,5 @@
 import type { FeatureCollection } from 'geojson';
-import type {
-  RenderFeatureId,
-  SystemFeatureSourceId,
-} from '@transitmapper/core/render/render-identity';
+import type { RenderFeatureId } from '@transitmapper/core/render/render-identity';
 import {
   compareRenderPaintOrder,
   type RenderFeature,
@@ -37,9 +34,7 @@ const lazyFeatureCollections = new WeakMap<
   LazyRenderFeatureCollectionState
 >();
 
-export function lazyRenderFeatureCollection(
-  materialize: () => RenderFeature[],
-): RenderFeatureCollection {
+function lazyRenderFeatureCollection(materialize: () => RenderFeature[]): RenderFeatureCollection {
   const state: LazyRenderFeatureCollectionState = { features: null, materialize };
   const collection: RenderFeatureCollection = {
     type: 'FeatureCollection',
@@ -258,14 +253,6 @@ export class RenderFeatureCollectionOverlayBuilder {
     featureCollectionOverlays.set(collection, { stableBase, stableFeatureIds, changes });
     return collection;
   }
-}
-
-export function combinedHitFeatureCollection(
-  states: ReadonlyMap<SystemFeatureSourceId, { readonly hits: RenderFeatureCollection }>,
-): RenderFeatureCollection {
-  return lazyRenderFeatureCollection(() =>
-    [...states.values()].flatMap((state) => state.hits.features).sort(compareRenderPaintOrder),
-  );
 }
 
 export interface PersistentRenderOverlayDiagnostics {

@@ -28,10 +28,7 @@ import {
 } from './scene-publication-attempt';
 
 export type {
-  SceneFeatureStateTarget,
-  SceneDraftController,
   ScenePublicationSubmission,
-  PreparedScenePublication,
   ScenePublicationContext,
   PublishSceneDraftOptions,
 } from './scene-publication-types';

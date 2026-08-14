@@ -74,7 +74,7 @@ export interface AcceptedSceneStore {
   targetsForDomainIdentity(domainIdentity: RenderDomainIdentity): readonly SceneFeatureTarget[];
 }
 
-export interface ScenePublication {
+interface ScenePublication {
   readonly sourceIds: readonly string[];
   readonly preparationUnits?: RenderSceneSourceUpdatePlan['preparationUnits'];
   readonly units: readonly RenderSceneSourceMutationUnit[];
@@ -97,7 +97,7 @@ export interface AcceptedSceneStoreOptions extends RenderSceneSourceUpdaterOptio
   sourceUpdater?: SceneSourceStore;
 }
 
-export interface SceneSourceStore {
+interface SceneSourceStore {
   prepare(scene: RenderScene, options?: ApplyRenderSceneOptions): RenderSceneSourceUpdatePlan;
   invalidateSourceState(sourceId?: string): void;
   prepareCurrentSceneHeal(): RenderSceneSourceUpdatePlan | null;

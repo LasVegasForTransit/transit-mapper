@@ -311,38 +311,3 @@ export class SortedRunMerge<Value> {
     };
   }
 }
-
-export interface MapCopyWorkOptions<Key, Value> {
-  readonly id: string;
-  readonly source: ReadonlyMap<Key, Value>;
-  readonly target: Map<Key, Value>;
-  readonly batchSize: number;
-}
-
-export class MapCopyWork<Key, Value> {
-  private readonly iterator: MapIterator<[Key, Value]>;
-  private complete = false;
-  private copiedCount = 0;
-
-  constructor(private readonly options: MapCopyWorkOptions<Key, Value>) {
-    this.iterator = options.source.entries();
-  }
-
-  nextWork(): SceneDraftWorkUnit | undefined {
-    if (this.complete) return undefined;
-    return {
-      id: `${this.options.id}:${this.copiedCount}`,
-      run: () => {
-        for (let count = 0; count < this.options.batchSize; count += 1) {
-          const entry = this.iterator.next();
-          if (entry.done) {
-            this.complete = true;
-            return;
-          }
-          this.options.target.set(entry.value[0], entry.value[1]);
-          this.copiedCount += 1;
-        }
-      },
-    };
-  }
-}

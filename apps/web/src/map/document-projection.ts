@@ -50,7 +50,7 @@ export interface DocumentProjectionRequest {
   onAccepted?(result: AcceptedDocumentProjection): void | Promise<void>;
 }
 
-export interface AcceptedDocumentProjection {
+interface AcceptedDocumentProjection {
   readonly update: AcceptedSceneUpdate;
   readonly preparedSnapshot: RenderPreparedSnapshot;
   readonly sourceIds: readonly MapSystemFeatureSourceId[];
