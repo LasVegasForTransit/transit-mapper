@@ -31,12 +31,7 @@ import {
   type RenderSceneSourceUpdateResult,
   type RenderSceneSourceUpdater,
 } from './render-scene-source-updater';
-export type {
-  SourceBankDataStore,
-  SourceBankDataStoreOptions,
-  SourceBankUpdatePlan,
-  SourceBankUpdateMode,
-} from './source-bank-updates';
+export type { SourceBankDataStore, SourceBankDataStoreOptions } from './source-bank-updates';
 
 /** Keeps one immutable CPU scene per physical MapLibre bank. A small
  * single-source patch may update the visible bank directly; every wider

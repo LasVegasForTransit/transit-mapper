@@ -14,7 +14,7 @@ export interface MapStyleRecoverySteps {
   repaint: () => void;
 }
 
-export type MapStyleFeatureDataRecoveryResult =
+type MapStyleFeatureDataRecoveryResult =
   | 'retained-scene-healed'
   | 'retained-scene-heal-scheduled'
   | 'full-projection-scheduled'

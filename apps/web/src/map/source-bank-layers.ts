@@ -43,7 +43,7 @@ function stripBankSuffix(id: string): string {
   return bank === 'a' || bank === 'b' ? id.slice(0, suffixIndex) : id;
 }
 
-export function isBankedRenderSourceId(sourceId: string): boolean {
+function isBankedRenderSourceId(sourceId: string): boolean {
   return BANKED_RENDER_SOURCE_IDS.has(sourceId);
 }
 
@@ -150,7 +150,7 @@ export function sourceBankLayerSpecs(
 
 export type RenderLayerVisibility = 'visible' | 'none';
 
-export interface SourceBankLayerHost {
+interface SourceBankLayerHost {
   hasLayer(layerId: string): boolean;
   setVisibility(layerId: string, visibility: RenderLayerVisibility): void;
   setPaintProperty(layerId: string, property: string, value: unknown): void;
@@ -163,7 +163,7 @@ export interface SourceBankLayerControllerOptions {
   now(): number;
 }
 
-export interface SourceBankFlipMetrics {
+interface SourceBankFlipMetrics {
   readonly durationMs: number;
   readonly operationCount: number;
 }

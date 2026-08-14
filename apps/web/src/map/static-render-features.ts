@@ -8,12 +8,7 @@ import {
   type StaticDisplaySize,
 } from './fitted-map-presentation';
 
-export {
-  renderPresentationForFittedMap,
-  type CssSizeLike,
-  type FittedMapLike,
-  type StaticDisplaySize,
-} from './fitted-map-presentation';
+export { renderPresentationForFittedMap, type FittedMapLike } from './fitted-map-presentation';
 
 /**
  * Static maps use the same feature worker as the editor. The camera is still

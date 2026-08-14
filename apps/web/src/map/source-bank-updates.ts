@@ -27,7 +27,7 @@ import {
   type SourceBankId,
 } from './source-bank';
 
-export type SourceBankUpdateMode = 'active' | 'hidden' | 'seed' | 'unbanked';
+type SourceBankUpdateMode = 'active' | 'hidden' | 'seed' | 'unbanked';
 
 export interface SourceBankUpdatePlan extends RenderSceneSourceUpdatePlan {
   readonly mode: SourceBankUpdateMode;
@@ -76,7 +76,7 @@ export interface WrapPlanOptions {
   readonly transaction?: ReturnType<SourceBankController['begin']>;
 }
 
-export const MAX_ACTIVE_PATCH_ENTRIES = 64;
+const MAX_ACTIVE_PATCH_ENTRIES = 64;
 
 export function hasBankSceneChanges(patch: RenderScenePatch | null): patch is RenderScenePatch {
   return patch !== null && renderScenePatchEntryCount(patch) > 0;
@@ -123,7 +123,7 @@ export function bankScene(
   };
 }
 
-export function residentFeatureCount(scene: RenderScene): number {
+function residentFeatureCount(scene: RenderScene): number {
   return scene.stats.generatedVisualFeatureCount + scene.stats.generatedHitFeatureCount;
 }
 

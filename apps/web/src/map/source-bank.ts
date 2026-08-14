@@ -22,11 +22,11 @@ export interface SourceBankRevision {
   readonly residentFeatureCount: number;
 }
 
-export interface BeginSourceBankTransaction {
+interface BeginSourceBankTransaction {
   readonly logicalSourceIds: readonly string[];
 }
 
-export interface SourceBankTransaction {
+interface SourceBankTransaction {
   readonly bank: SourceBankId;
   readonly sourceIds: readonly string[];
   recordLoaded(physicalSourceId: string): void;
