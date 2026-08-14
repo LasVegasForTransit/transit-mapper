@@ -12,17 +12,17 @@ export interface CameraRenderPreloadOptions {
   readonly initialSettlementMs?: number;
 }
 
-export interface CameraRenderPreloadToken {
+interface CameraRenderPreloadToken {
   readonly owner: object;
   readonly center: readonly [number, number];
 }
 
-export interface CameraPixelVector {
+interface CameraPixelVector {
   readonly x: number;
   readonly y: number;
 }
 
-export interface PreparedCameraRenderPreload {
+interface PreparedCameraRenderPreload {
   readonly candidateEnvelope: RenderCandidateEnvelope;
   readonly token: CameraRenderPreloadToken;
   readonly outstandingDisplacementPx: CameraPixelVector;

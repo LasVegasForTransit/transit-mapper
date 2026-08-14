@@ -16,7 +16,7 @@ export interface ProjectionAggregationWorkUnit extends CooperativeRenderJobUnit<
   readonly featureCount: number;
 }
 
-export interface ProjectionAggregationUnitSequence extends CooperativeRenderJobUnitSequence<void> {
+interface ProjectionAggregationUnitSequence extends CooperativeRenderJobUnitSequence<void> {
   unitAt(index: number): ProjectionAggregationWorkUnit | undefined;
 }
 

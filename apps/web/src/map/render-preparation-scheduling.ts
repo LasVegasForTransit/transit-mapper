@@ -15,7 +15,7 @@ import {
 } from './cooperative-render-job-scheduler';
 import type { GeographicFeatureProjectionPreparationStats } from './resumable-feature-projection';
 
-export interface RenderPipelineContinuation {
+interface RenderPipelineContinuation {
   readonly generation: number | null;
   readonly settled: Promise<void>;
   cancel(): boolean;

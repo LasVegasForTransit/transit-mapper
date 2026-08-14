@@ -1,7 +1,7 @@
 import type { RenderPresentation } from '@transitmapper/core/render/render-presentation';
 import { renderPresentationFromMap, type MapBoundsLike } from './render-presentation';
 
-export interface CssSizeLike {
+interface CssSizeLike {
   readonly clientWidth: number;
   readonly clientHeight: number;
 }

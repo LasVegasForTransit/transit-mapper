@@ -8,7 +8,7 @@ export interface RenderSourceErrorEvent {
   error?: unknown;
 }
 
-export interface RenderSourceRecoveryController {
+interface RenderSourceRecoveryController {
   invalidateSourceState(sourceId?: string): void;
   prepareCurrentSceneHeal?(): RenderSceneSourceUpdatePlan | null;
   healCurrentScene(): RenderSceneSourceUpdateResult;

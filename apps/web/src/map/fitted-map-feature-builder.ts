@@ -14,7 +14,7 @@ import {
 } from './fitted-map-presentation';
 import { SYSTEM_FEATURE_SOURCE_BY_NAME } from './system-feature-sources';
 
-export type StaticFeatureBuilder = (
+type StaticFeatureBuilder = (
   system: TransitSystem,
   selection: Highlight,
   handleWayIds: string[],
