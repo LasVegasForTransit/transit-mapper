@@ -99,10 +99,12 @@ if (codex.version !== lock.version || claude.version !== lock.version) {
   fail('the harness manifests do not match the pinned version');
 }
 
-const { commitSubjectError } = (await import(
+const commitSubjectValidator = (await import(
   resolve(PLUGIN_ROOT, 'scripts/validate-commit-subject.mjs')
 )) as CommitSubjectValidator;
-const scopePolicyError = commitSubjectError('chore: validate repository tooling policy');
+const scopePolicyError = commitSubjectValidator.commitSubjectError(
+  'chore: validate repository tooling policy',
+);
 if (scopePolicyError) {
   fail(scopePolicyError);
 }
