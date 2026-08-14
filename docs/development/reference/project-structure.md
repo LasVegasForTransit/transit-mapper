@@ -103,8 +103,10 @@ MapLibre expressions.
 without mixing presentation fields into the domain catalogs. The editor map,
 embed, exports, and social previews share this projection boundary so their
 representations remain consistent. The current screen-space scene contract
-does not include watertight metric corridor meshes, and Diagram still uses the
-existing core layout path outside the geographic projection scheduler.
+resolves metric District carriageway footprints and Street lane surfaces from
+the same display-resolved centerline. Junction-attached corridor meshes remain
+future work, and Diagram still uses the existing core layout path outside the
+geographic projection scheduler.
 
 #### Simulation
 

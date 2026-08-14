@@ -1,10 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { railTrackGeometry, wayLaneGeometry } from '../../src/geometry/streets';
+import {
+  corridorSurfaceRing,
+  railTrackGeometry,
+  wayLaneGeometry,
+} from '../../src/geometry/streets';
 import { defaultProfileFor } from '../../src/model/profile';
 import { haversineMeters } from '../../src/model/geo';
 import { aRoad } from '../support/fixtures.test';
 
 describe('physical lane surfaces', () => {
+  it('builds a closed corridor footprint from one metric centerline', () => {
+    const ring = corridorSurfaceRing(
+      [
+        [-115.207, 36.14],
+        [-115.207, 36.16],
+      ],
+      20,
+    );
+
+    expect(ring.length).toBeGreaterThan(4);
+    expect(ring[0]).toEqual(ring.at(-1));
+    const oppositeEdge = ring.at(-2);
+    if (!oppositeEdge) throw new Error('A corridor footprint must have an opposite edge.');
+    expect(haversineMeters(ring[0], oppositeEdge)).toBeCloseTo(20, 0);
+  });
+
   it('builds closed lane polygons from shared cross-section boundaries', () => {
     const road = aRoad('surface-road', [
       [-115.207, 36.14],

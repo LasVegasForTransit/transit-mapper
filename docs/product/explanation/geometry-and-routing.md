@@ -33,6 +33,11 @@ intersecting the viewport, and it's memoized per way, so a drag invalidates
 one way rather than the world. Below the threshold, ways render as the cheap
 lines the Network view always uses.
 
+At the intermediate District detail, the renderer uses the same offsetting
+rule to fill one closed carriageway footprint. That is deliberately separate
+from both the Overview centerline and Street's individual lane surfaces: each
+view reveals the amount of physical structure it can actually support.
+
 ## Junction footprints
 
 Where ways meet at a node, drawing every way at full width would overlap

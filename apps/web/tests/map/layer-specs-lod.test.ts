@@ -2,6 +2,7 @@ import type { LayerSpecification } from 'maplibre-gl';
 import { describe, expect, it } from 'vitest';
 import {
   LYR_CENTER_LINES,
+  LYR_CARRIAGEWAYS,
   LYR_CONNECTORS,
   LYR_EDGE_LINES,
   LYR_JUNCTIONS,
@@ -114,6 +115,12 @@ describe('screen-space LOD layer specifications', () => {
     expectCameraTierOpacity(LYR_WAYS_DASHED, 'line-opacity', 0.9);
     expectCameraTierOpacity(LYR_WAYS_SOLID_CASING, 'line-opacity', 0.62);
     expectCameraTierOpacity(LYR_WAYS_DASHED_CASING, 'line-opacity', 0.62);
+  });
+
+  it('fills the physical District carriageway instead of inflating a line', () => {
+    expect(layer(LYR_CARRIAGEWAYS).type).toBe('fill');
+    expectCameraTierOpacity(LYR_CARRIAGEWAYS, 'fill-opacity', 0.9);
+    expect(paint(LYR_CARRIAGEWAYS, 'fill-outline-color')).toBe(MAP_THEMES.light.routeCasing);
   });
 
   it('cross-fades Street surfaces, markings, arrows, connectors, and junctions', () => {

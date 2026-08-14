@@ -79,7 +79,8 @@ function polygonMarkup(
           .join(' ') + ' Z',
     )
     .join(' ');
-  return `<path${metadata(visual)} d="${d}" fill="${visual.color}" opacity="${visual.opacity.toFixed(4)}"/>`;
+  const outline = visual.outlineColor ? ` stroke="${visual.outlineColor}" stroke-width="1"` : '';
+  return `<path${metadata(visual)} d="${d}" fill="${visual.color}"${outline} opacity="${visual.opacity.toFixed(4)}"/>`;
 }
 
 export function staticVisualSvgMarkup(

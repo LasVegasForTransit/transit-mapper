@@ -193,6 +193,7 @@ describe('screen-space corridor detail', () => {
       district.ways.features.some((feature) => feature.properties?.renderTier === 'district'),
     ).toBe(true);
     expect(district.lanes.features).toEqual([]);
+    expect(district.ways.features[0]?.geometry.type).toBe('Polygon');
     expect(street.lanes.features.length).toBeGreaterThan(0);
     expect(
       street.lanes.features.every((feature) => feature.properties?.renderTier === 'street'),

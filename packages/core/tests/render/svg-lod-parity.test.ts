@@ -4,7 +4,10 @@ import { defaultProfileFor, profileWidthM } from '../../src/model/profile';
 import type { LngLat, TransitSystem, Way } from '../../src/model/system';
 import { widthPxAtZ14 } from '../../src/render/constants';
 import { buildFeatures, type RenderViewOptions } from '../../src/render/buildFeatures';
-import { resolveStaticVisualScene } from '../../src/render/static-visual-scene';
+import {
+  resolveStaticVisualScene,
+  type ResolvedStaticPolygon,
+} from '../../src/render/static-visual-scene';
 import { systemSvg } from '../../src/render/svg';
 import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
 
@@ -120,10 +123,31 @@ describe('SVG screen-space LOD parity', () => {
     expect(svg).toContain('data-resolved-width="3.000"');
     expect(svg).toMatch(/data-render-tier="overview"[^>]+opacity="0\.8182"/);
     expect(svg).toMatch(/data-render-tier="district"[^>]+opacity="0\.4500"/);
+    expect(svg).toMatch(/data-render-tier="district"[^>]+stroke="#191a17"/);
     expect(svg.indexOf('render:ways:overview:west')).toBeLessThan(
       svg.indexOf('render:ways:district:west'),
     );
     expect(svg).not.toContain('data-render-tier="street"');
+  });
+
+  it('resolves District corridors as closed physical carriageway footprints', () => {
+    const { system, referenceWay } = junctionFixture();
+    const resolved = resolveStaticVisualScene({
+      revision: 'district-carriageway',
+      features: buildFeatures(system, null, [], viewAtWidth(referenceWay, 3)),
+      presentation: viewAtWidth(referenceWay, 3).presentation,
+    });
+    const districtWays = resolved.visuals.filter(
+      (visual) => visual.source === 'ways' && visual.renderTier === 'district',
+    );
+
+    expect(districtWays.length).toBeGreaterThan(0);
+    expect(districtWays.every((visual) => visual.kind === 'polygon')).toBe(true);
+    const footprint = districtWays.find(
+      (visual): visual is ResolvedStaticPolygon => visual.kind === 'polygon',
+    );
+    expect(footprint?.rings[0]?.[0]).toEqual(footprint?.rings[0]?.at(-1));
+    expect(footprint?.outlineColor).toBe('#191a17');
   });
 
   it('renders District and physical Street sources at the upper midpoint in paint order', () => {
