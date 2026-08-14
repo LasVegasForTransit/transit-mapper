@@ -4,8 +4,10 @@ import {
   LYR_CENTER_LINES,
   LYR_CARRIAGEWAYS,
   LYR_CONNECTORS,
+  LYR_CROSSWALKS,
   LYR_EDGE_LINES,
   LYR_JUNCTIONS,
+  LYR_JUNCTION_CONTROLS,
   LYR_JUNCTION_SELECTED,
   LYR_LANE_ARROWS,
   LYR_LANE_LINES,
@@ -17,6 +19,7 @@ import {
   LYR_SERVICES_SOLID_CASING,
   LYR_SERVICES_UNDERGROUND,
   LYR_SERVICES_UNDERGROUND_CASING,
+  LYR_STOP_BARS,
   LYR_WAYS_DASHED,
   LYR_WAYS_DASHED_CASING,
   LYR_WAYS_SOLID,
@@ -133,6 +136,18 @@ describe('screen-space LOD layer specifications', () => {
     expectCameraTierOpacity(LYR_CONNECTORS, 'line-opacity', 0.55);
     expectCameraTierOpacity(LYR_LANE_ARROWS, 'text-opacity', 0.9);
     expectCameraTierOpacity(LYR_JUNCTIONS, 'fill-opacity', 0.9);
+    expectCameraTierOpacity(LYR_JUNCTION_CONTROLS, 'circle-opacity', 1);
+    expect(layer(LYR_JUNCTION_CONTROLS).type).toBe('circle');
+    expect(filter(LYR_JUNCTION_CONTROLS)).toEqual(['has', 'control']);
+    expect(paint(LYR_JUNCTION_CONTROLS, 'circle-radius')).toEqual(
+      expect.arrayContaining(['yield', 3.5]),
+    );
+    expectCameraTierOpacity(LYR_CROSSWALKS, 'line-opacity', 0.9);
+    expect(layer(LYR_CROSSWALKS).type).toBe('line');
+    expect(filter(LYR_CROSSWALKS)).toEqual(['==', ['get', 'kind'], 'crosswalk']);
+    expectCameraTierOpacity(LYR_STOP_BARS, 'line-opacity', 0.95);
+    expect(layer(LYR_STOP_BARS).type).toBe('line');
+    expect(filter(LYR_STOP_BARS)).toEqual(['==', ['get', 'kind'], 'stopBar']);
   });
 
   it('cross-fades service centerlines and lane paths through the same tier bands', () => {

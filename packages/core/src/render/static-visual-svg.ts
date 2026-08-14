@@ -1,6 +1,7 @@
 import type { LngLat } from '../model/system';
 import type { ScreenPoint } from './project';
 import type {
+  ResolvedStaticCircle,
   ResolvedStaticLine,
   ResolvedStaticPolygon,
   ResolvedStaticVisual,
@@ -83,9 +84,23 @@ function polygonMarkup(
   return `<path${metadata(visual)} d="${d}" fill="${visual.color}"${outline} opacity="${visual.opacity.toFixed(4)}"/>`;
 }
 
+function circleMarkup(
+  visual: ResolvedStaticCircle,
+  project: (lngLat: LngLat) => ScreenPoint,
+): string {
+  const point = project(visual.coordinate);
+  return (
+    `<circle${metadata(visual)} cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}"` +
+    ` r="${visual.radiusPx.toFixed(3)}" fill="${visual.color}"` +
+    ` stroke="${visual.outlineColor}" stroke-width="1" opacity="${visual.opacity.toFixed(4)}"/>`
+  );
+}
+
 export function staticVisualSvgMarkup(
   visual: ResolvedStaticVisual,
   project: (lngLat: LngLat) => ScreenPoint,
 ): string {
-  return visual.kind === 'line' ? lineMarkup(visual, project) : polygonMarkup(visual, project);
+  if (visual.kind === 'line') return lineMarkup(visual, project);
+  if (visual.kind === 'circle') return circleMarkup(visual, project);
+  return polygonMarkup(visual, project);
 }

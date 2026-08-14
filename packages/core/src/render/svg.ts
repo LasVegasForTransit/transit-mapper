@@ -310,7 +310,7 @@ function northArrowMarkup(bearing: number, width: number, fontFamily: string): s
 }
 
 /**
- * Vector rendering of the schematic: ways/services as paths, stations as
+ * Vector rendering of the schematic: ways/services as paths, stops as
  * circles, facilities as colored dots (a simplified stand-in for their on-map
  * pictograms — PNG export is what captures full icon fidelity), plus a title
  * and line-color legend so the output reads as a finished map on its own.
@@ -367,7 +367,7 @@ export function systemSvg(
   const markerObstacle = (x: number, y: number, r: number) =>
     obstacles.push({ left: x - r, right: x + r, top: y - r, bottom: y + r });
 
-  for (const f of fc.stations.features) {
+  for (const f of fc.stops.features) {
     const p = f.properties as { color: string; interchange?: boolean; name?: string };
     const { x, y } = project(f.geometry.coordinates as LngLat);
     const r = p.interchange ? 7 : 5;

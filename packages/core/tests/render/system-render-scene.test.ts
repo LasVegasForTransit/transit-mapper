@@ -43,7 +43,7 @@ const NAMED_WAY_VIEW: RenderViewOptions = {
 const FEATURE_NAMES: readonly SystemFeatureName[] = [
   'ways',
   'services',
-  'stations',
+  'stops',
   'handles',
   'serviceTermini',
   'footprints',

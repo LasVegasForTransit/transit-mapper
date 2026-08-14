@@ -76,17 +76,14 @@ import {
   isDoubleClickFinish,
 } from '../src/map/interactions';
 import { KEY_BINDINGS, matchesKey, resolveBinding, type KeyContext } from '../src/editor/keymap';
+import { HANDLE_ICON, LAYER_SPECS, SRC_ENDPOINT_HINT, SRC_PREVIEW } from '../src/map/layers';
 import {
   buildFeatures as buildFeaturesWithPresentation,
   buildHandles,
   buildPhysicalHandles,
-  HANDLE_ICON,
-  LAYER_SPECS,
-  SRC_ENDPOINT_HINT,
-  SRC_PREVIEW,
   type RenderViewOptions,
   type ViewOptions,
-} from '../src/map/layers';
+} from '@transitmapper/core/render/buildFeatures';
 import { LANDMARKS, landmarksFeatureCollection } from '../src/map/landmarks';
 import { armVisibilityAwareTimeout } from '../src/map/export/visibilityAwareTimeout';
 import {
@@ -8182,9 +8179,9 @@ check(
   check('Street emits markings', infraNear.laneMarkings.features.length > 0);
   check('Street emits direction arrows', infraNear.laneArrows.features.length > 0);
   check(
-    'lane features carry a metric z14 pixel width',
+    'lane features carry their corridor metric z14 pixel width for LOD',
     infraNear.lanes.features.every(
-      (f) => typeof f.properties?.w14 === 'number' && f.properties.w14 > 0,
+      (f) => typeof f.properties?.corridorW14 === 'number' && f.properties.corridorW14 > 0,
     ),
   );
 
@@ -9302,7 +9299,7 @@ function buildGrid() {
   );
   check('footprint fill paints above junction fills', above('tm-footprints-fill', 'tm-junctions'));
   check('platform fill paints above lane surfaces', above('tm-platforms-fill', 'tm-lane-surfaces'));
-  check('stop markers paint above footprints', above('tm-stops', 'tm-footprints-fill'));
+  check('station markers paint above footprints', above('tm-stations', 'tm-footprints-fill'));
 }
 
 // --- dwell-time and kinematic timetable math (vehicles.ts) — the vehicle

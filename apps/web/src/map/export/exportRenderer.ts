@@ -1,11 +1,13 @@
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
+import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import { basemapStyleForScheme } from '../mapTheme';
 import { armVisibilityAwareTimeout } from './visibilityAwareTimeout';
-import { LYR_STATIONS, registerMapIcons, type ViewOptions } from '../layers';
+import { LYR_STATIONS, registerMapIcons } from '../layers';
 import { addExportSourcesAndLayers, setExportFeatureData } from './exportLayerSetup';
-import { buildFeaturesForFittedMap } from '../static-render-features';
+import { projectFeaturesForFittedMap } from '../static-render-features';
+import { createFeatureProjectionWorker } from '../feature-projection-worker';
 
 const DEFAULT_SIZE = { width: 1600, height: 1000 };
 const RENDER_TIMEOUT_MS = 20000;
@@ -84,10 +86,12 @@ export function renderSystemForExport(
       fadeDuration: 0,
       interactive: false,
     });
+    const featureProjection = createFeatureProjectionWorker();
 
     let settled = false;
     const dispose = () => {
       timeout.cancel();
+      featureProjection.dispose();
       try {
         map.remove();
       } catch {
@@ -117,35 +121,42 @@ export function renderSystemForExport(
 
     map.on('error', (e) => fail(e.error ?? new Error('Export map error.')));
     map.on('load', () => {
-      try {
-        registerMapIcons(map, 'light');
-        addExportSourcesAndLayers(map);
+      void (async () => {
+        try {
+          registerMapIcons(map, 'light');
+          addExportSourcesAndLayers(map);
 
-        // Export-only: a full-system export frames thousands of stops at once, so
-        // shrink station circles here (on the export map, NOT the live map) to
-        // keep dense networks legible instead of a mass of full-size rings. Still
-        // zoom-interpolated, so a small/sparse system (framed at a higher zoom)
-        // keeps readable dots. Live-map dots keep their reasonable floor.
-        configureExportStationPaint(map);
+          // Export-only: a full-system export frames thousands of stops at once, so
+          // shrink station circles here (on the export map, NOT the live map) to
+          // keep dense networks legible instead of a mass of full-size rings. Still
+          // zoom-interpolated, so a small/sparse system (framed at a higher zoom)
+          // keeps readable dots. Live-map dots keep their reasonable floor.
+          configureExportStationPaint(map);
 
-        // Resize BEFORE fitBounds — fitBounds reads the current container size.
-        map.resize();
-        const bounds = systemBounds(system);
-        if (bounds) map.fitBounds(bounds, { padding, animate: false });
+          // Resize BEFORE fitBounds — fitBounds reads the current container size.
+          map.resize();
+          const bounds = systemBounds(system);
+          if (bounds) map.fitBounds(bounds, { padding, animate: false });
 
-        const fc = buildFeaturesForFittedMap(system, view, map);
-        setExportFeatureData(map, fc);
+          const fc = await projectFeaturesForFittedMap({
+            worker: featureProjection,
+            system,
+            view,
+            map,
+          });
+          setExportFeatureData(map, fc);
 
-        map.once('idle', () => {
-          if (settled) return;
-          settled = true;
-          timeout.cancel();
-          resolve({ map, canvas: map.getCanvas(), dispose });
-        });
-        map.triggerRepaint();
-      } catch (e) {
-        fail(e);
-      }
+          map.once('idle', () => {
+            if (settled) return;
+            settled = true;
+            timeout.cancel();
+            resolve({ map, canvas: map.getCanvas(), dispose });
+          });
+          map.triggerRepaint();
+        } catch (e) {
+          fail(e);
+        }
+      })();
     });
   });
 }

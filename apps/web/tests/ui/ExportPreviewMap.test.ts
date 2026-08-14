@@ -22,14 +22,20 @@ const previewHarness = vi.hoisted(() => ({
   refCalls: 0,
 }));
 
-vi.mock('@transitmapper/core/render/buildFeatures', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@transitmapper/core/render/buildFeatures')>();
+interface ProjectionRequest {
+  readonly view: ViewOptions;
+}
+
+vi.mock('../../src/map/feature-projection-worker', async () => {
+  const { emptySystemFeatures } = await import('../../src/map/system-feature-sources');
   return {
-    ...actual,
-    buildFeatures: (...args: Parameters<typeof actual.buildFeatures>) => {
-      previewHarness.featureViews.push(args[3]);
-      return actual.buildFeatures(...args);
-    },
+    createFeatureProjectionWorker: () => ({
+      project: ({ view }: ProjectionRequest) => {
+        previewHarness.featureViews.push(view);
+        return Promise.resolve({ features: emptySystemFeatures(), counts: null });
+      },
+      dispose: vi.fn(),
+    }),
   };
 });
 
@@ -156,6 +162,7 @@ beforeEach(() => {
   previewHarness.maps.length = 0;
   previewHarness.featureViews.length = 0;
   previewHarness.refCalls = 0;
+  delete previewHarness.container.dataset.renderSettled;
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -167,6 +174,31 @@ beforeEach(() => {
 });
 
 describe('export preview map', () => {
+  it('settles only after worker-projected source data reaches MapLibre', async () => {
+    ExportPreviewMap({
+      system: createEmptySystem(),
+      view: {
+        viewMode: 'network',
+        visibleModes: new Set(),
+        visibleWayTypes: new Set(),
+      },
+      onReady: vi.fn(),
+    });
+
+    const cleanup = previewHarness.effects[0]?.();
+    previewHarness.maps[0]?.emitLoad();
+
+    // The first map idle belongs to the blank basemap. The feature worker has
+    // not yielded its detached collection yet, so it cannot qualify as a
+    // settled export preview.
+    expect(previewHarness.container.dataset.renderSettled).toBeUndefined();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(previewHarness.container.dataset.renderSettled).toBe('true');
+
+    cleanup?.();
+  });
+
   it('registers every layer source before adding the export layers', () => {
     ExportPreviewMap({
       system: createEmptySystem(),
