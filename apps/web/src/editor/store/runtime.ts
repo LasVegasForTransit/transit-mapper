@@ -3,9 +3,9 @@ import { prunedToLiveLanes } from '@transitmapper/core/model/components';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type { TransitSystem, Viewport } from '@transitmapper/core/model/system';
 import { recordRenderPreparationPatch } from '@transitmapper/core/render/render-preparation-journal';
-import type { RenderPreparationPatch } from '@transitmapper/core/render/render-preparation';
 import type { CreateEditorStoreOptions } from './contracts';
 import type { SetSystemOptions } from './contracts/document-commands';
+import type { EditorRenderMutation } from './contracts/render-mutation';
 import {
   createHistoryController,
   type HistoryCommandsPort,
@@ -21,17 +21,7 @@ type TransientState = Omit<
 >;
 type TransientPatch = Partial<TransientState>;
 
-/**
- * Describes the exact renderer-facing records changed by one editor command.
- *
- * Editor commands know this local mutation footprint while they are making the
- * edit. Keeping it here means the renderer can update those records directly,
- * instead of rediscovering a change by comparing the whole document later.
- */
-export type EditorRenderMutation = (
-  previous: TransitSystem,
-  next: TransitSystem,
-) => RenderPreparationPatch;
+export type { EditorRenderMutation } from './contracts/render-mutation';
 
 interface ContentChange<Result> {
   system: TransitSystem;

@@ -1,10 +1,19 @@
+/**
+ * Renderer invalidation operations shared by editor commands.
+ *
+ * Commands use these after a core transform has produced the next system. The
+ * result describes the smallest physical records that must be prepared again;
+ * it does not read the store, choose a tool, or publish a scene. Keeping that
+ * work here lets independent command groups share one invalidation rule
+ * without coupling their command APIs.
+ */
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type {
   RenderPreparationEntityPatch,
   RenderPreparationPatch,
 } from '@transitmapper/core/render/render-preparation';
 import type { MultiSelectItem } from '../contracts';
-import type { EditorRenderMutation } from '../runtime';
+import type { EditorRenderMutation } from '../contracts/render-mutation';
 
 interface RenderEntity {
   readonly id: string;

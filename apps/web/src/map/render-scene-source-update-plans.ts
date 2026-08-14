@@ -6,9 +6,9 @@ import type {
   RenderSceneSourceMutationUnit,
   RenderSceneSourceUpdatePlan,
   RenderSceneSourceUpdateResult,
-} from './render-scene-source-updater';
+} from './render-scene-source-contract';
 import type { RenderFeatureCollectionMaterialization } from './persistent-render-source-state';
-import type { SceneDraftWorkUnit } from './scene-draft-types';
+import type { SceneDraftWorkUnit } from './scene-draft-work';
 
 export interface ResolvedFullUpload {
   id: string;
