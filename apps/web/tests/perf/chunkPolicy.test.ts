@@ -32,7 +32,9 @@ describe('performance chunk policy', () => {
 
   it('keeps the cooperative renderer in a normal budgeted cache chunk', () => {
     expect(performanceChunkName('/repo/apps/web/src/map/scene-draft.ts')).toBe('renderer-runtime');
-    expect(performanceChunkName('/repo/apps/web/src/map/scene-publication.ts')).toBeUndefined();
+    expect(performanceChunkName('/repo/apps/web/src/map/scene-publication.ts')).toBe(
+      'renderer-runtime',
+    );
     expect(
       performanceChunkName('/repo/apps/web/src/map/cooperative-render-job-scheduler.ts'),
     ).toBeUndefined();
@@ -40,6 +42,9 @@ describe('performance chunk policy', () => {
       performanceChunkName('/repo/packages/core/src/render/render-preparation-update-plan.ts'),
     ).toBe('renderer-runtime');
     expect(performanceChunkName('/repo/apps/web/src/map/MapCanvas.tsx')).toBeUndefined();
+    expect(performanceChunkName('/repo/apps/web/src/map/interactions.ts')).toBe(
+      'editor-interactions',
+    );
     expect(
       performanceChunkName('/repo/apps/web/src/map/system-feature-sources.ts'),
     ).toBeUndefined();

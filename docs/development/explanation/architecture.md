@@ -42,33 +42,12 @@ Ordered. Where two conflict, the higher-numbered goal yields.
 | 5        | Operating cost near zero                       | A volunteer nonprofit funds this                                |
 | 6        | Contributor onboarding                         | The contributor pool is small and intermittent                  |
 
-The order settles arguments. Direct manipulation therefore uses progressive
-detail rather than making the pointer wait for a complete derived map.
-Progressive detail may postpone expensive recomputation, but it cannot freeze
-animation, hide feedback, or disable an editing capability to make a metric
-pass. Usability beats correctness, so the editor accepts a half-drawn network
-and shows what is wrong instead of refusing input until it validates.
-Availability beats cost, so documents live in the browser even though a server
-would be easier to build. Cost beats onboarding, so the Worker stays small
-enough to be awkward to read, and we document the awkwardness rather than
-spend money removing it.
+The order settles trade-offs. Progressive detail may postpone derived work,
+but never freezes input, hides feedback, or disables editing to improve a
+metric. Documents remain local even though a server would be easier to build.
 
-### Stakeholders
-
-| Stakeholder      | Expectation                                              |
-| ---------------- | -------------------------------------------------------- |
-| Transit advocate | Sketch a credible network without learning GIS           |
-| Planner          | Lane-level detail that survives scrutiny                 |
-| Viewer           | Open a shared link and understand the proposal           |
-| Contributor      | Find where a change belongs; know what it must not break |
-| The organization | Run indefinitely on a volunteer budget                   |
-
-The advocate and the planner want opposite things, and that shapes most of
-the interface. The advocate wants a line between two neighbourhoods in under
-a minute. The planner wants to know how many lanes that line consumes and
-what it does to the cross-street. TransitMapper derives the detail instead
-of demanding it: you draw a centreline, the cross-section starts from a
-preset, and you open the preset when you care.
+The interface starts with a centreline and a preset, then derives detail when
+it matters. It must remain approachable to advocates and credible to planners.
 
 ## 2. Architecture Constraints
 
@@ -81,15 +60,9 @@ ceiling. Nothing that needs sustained server-side computation can run here.
 Image rendering is the visible case: it happens in the browser because it
 cannot happen in the Worker.
 
-The domain package runs in two runtimes: the browser for editing, workerd
-for publishing. It can therefore use nothing that only one of them provides.
-The compiler cannot catch a violation, because the package needs typings
-both runtimes share and those ship alongside browser-only ones. A lint rule
-catches it.
-
-TypeScript is pinned to version 6. Version 7 is released and faster, but
-`typescript-eslint` refuses to load against it, so upgrading would turn
-linting off.
+The domain package runs in browser and workerd, so a lint rule rejects globals
+available in only one. TypeScript remains pinned where its lint integration is
+supported.
 
 There are no accounts. Every published link is public, and nothing in the
 system can depend on knowing who is asking.
@@ -151,10 +124,8 @@ flowchart LR
   tm --> gtfs[(Agency GTFS)]
 ```
 
-The link unfurler is not a viewer. It is a crawler, it does not run
-JavaScript, and it needs the title and preview in the first HTML response.
-That one requirement is why a Worker serves share pages at all. Without it,
-the single-page application could handle every route.
+A link unfurler is a crawler: it needs title and preview in the first HTML
+response, which is why a Worker serves share pages.
 
 ### Technical context
 
@@ -174,37 +145,14 @@ documents are on the roadmap and absent today.
 
 ## 4. Solution Strategy
 
-The first two quality goals decide most of the architecture.
+Documents live in the browser; the server stores published copies. Both use
+the same core package, so local editing and published previews share model and
+geometry rules. Static assets bypass the Worker, while the browser renders and
+uploads preview images. Extensible modes and lane types are catalog data.
 
-The editor has to work without a server, so the document lives in the
-browser and the server holds only published copies. Nothing on the editing
-path touches the network, so nothing on the editing path can fail. That
-forces the next decision: with no server in the loop there is nowhere
-central to validate a system, so the rules about what a transit system is
-have to run in the browser. Those rules are the domain package.
-
-The server applies the same rules when it stores a snapshot, so both
-applications import that one package. Two implementations of the same
-geometry would drift apart, and the first symptom would be a published
-preview that does not match what the author drew.
-
-Cost has to stay near zero, so the Worker runs as rarely as possible. Static
-assets skip it entirely. The browser renders the preview image and uploads
-it. That leaves the Worker two jobs, storing a snapshot and serving one, and
-both are cheap.
-
-Contributors come and go, so the parts people extend most often are data. A
-new transit mode is a catalog record. A new lane type is a catalog record.
-Neither requires understanding the editor.
-
-Ways store a centreline and a cross-section, and lanes, junctions, and turn
-geometry are computed from those on demand. A curved Way may also store a
-radius for an interior control point; core resolves that radius in a local
-metric plane and derives tangent-continuous arcs rather than persisting a
-sampled polyline. Point insertion, deletion, splitting, and merging remap
-those controls with their physical point. The document stays small, the
-geometry tests as plain functions, and stored data can never disagree with
-what it was derived from.
+Ways store a centreline and cross-section, never derived meshes. Core resolves
+curves in a local metric plane and remaps their controls through edits. The
+document stays small and cannot disagree with its derived geometry.
 
 ## 5. Building Block View
 
@@ -306,31 +254,17 @@ and constructs the `document`, `history`, `tools`, `selection`, `ways`,
 `EditorStore` exposes read-only observation plus that stable `commands` object,
 not raw `setState`.
 
-Commands decide when an edit happens and which transient editor data changes
-with it. Pure `TransitSystem` transformations belong in `packages/core`; they
-preserve the input reference when nothing changes and know nothing about
-timestamps or history. Shared web-only workflows needed by more than one
-command group, such as finishing a drawn Way, live in internal operations
-rather than one command group calling another. Orchestration used by only one
-group stays with that group; routing commands, for example, materialize and
-commit route drafts.
+Commands decide when an edit happens; pure `TransitSystem` transforms in core
+decide the new domain value. Shared browser workflows live in internal
+operations, never in one command group calling another. The runtime is the
+only raw Zustand mutation seam: one content commit validates state, finalizes
+the system, prunes invalid transient references, stamps once, and records one
+history entry. Viewport persistence deliberately bypasses history.
 
-The runtime is the only raw Zustand mutation seam. An atomic content commit
-checks loading and read-only state, finalizes one resulting system, prunes
-lane-keyed data and transient pointers to removed records, stamps `updatedAt`
-once, records one history entry, and writes associated transient changes in the
-same store update. Transient selection and tool changes remain available in
-read-only documents. Nested gesture checkpoints still use that one per-store
-history controller. Saved viewport
-persistence deliberately bypasses undo history and `updatedAt`; undo and redo
-preserve the current viewport instead of restoring an older camera.
-
-Commands that make a local physical edit also describe its affected Way, Node,
-and Station records to the runtime. The runtime records that exact immutable
-delta alongside the resulting system identity, so the live renderer can update
-the local closure without rediscovering a document-wide change. Imports,
-document replacement, and other bulk operations deliberately omit that
-description and use cooperative full preparation instead.
+Local physical edits carry their affected Way, Node, and Station identities.
+The renderer uses that immutable delta to update a closure instead of
+rediscovering a document-wide change. Imports and replacements deliberately
+omit it and use cooperative full preparation.
 
 Installing or creating a document resets state that belongs to the previous
 document: selection and hover, active Service-path and terminus focus,
@@ -399,13 +333,13 @@ flowchart LR
   Editor["Editor state"] --> Accepted
 ```
 
-| Concept      | Owning modules                                                 | Rule                                                     |
-| ------------ | -------------------------------------------------------------- | -------------------------------------------------------- |
-| Presentation | `render-presentation`, `camera-render-preload`                 | Describe display scale and reusable camera coverage.     |
-| Projection   | `document-projection`, `resumable-feature-projection*`         | Produce detached features from immutable document state. |
-| Scene        | `scene-draft*`, `accepted-scene-state`, `accepted-scene-store` | Normalize IDs and retain the accepted CPU scene.         |
-| Bank         | `source-bank*`, `accepted-scene-recovery`                      | Switch complete visual and hit revisions together.       |
-| Editor state | `editor-feature-state`, `editor-overlays`, `render-visibility` | Keep transient work out of committed projection.         |
+| Concept      | Owning modules                                                 | Rule                                                               |
+| ------------ | -------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Presentation | `render-presentation`, `camera-render-preload`                 | Describe display scale and reusable camera coverage.               |
+| Projection   | `document-projection`, `feature-projection-worker*`            | Send immutable inputs to the CPU worker; return detached features. |
+| Scene        | `scene-draft*`, `accepted-scene-state`, `accepted-scene-store` | Normalize IDs and retain the accepted CPU scene.                   |
+| Bank         | `source-bank*`, `accepted-scene-recovery`                      | Switch complete visual and hit revisions together.                 |
+| Editor state | `editor-feature-state`, `editor-overlays`, `render-visibility` | Keep transient work out of committed projection.                   |
 
 `LiveMapRenderer` owns one `DocumentProjector`, one accepted scene store, and
 the two physical banks. It alone advances the accepted revision. Dependency
@@ -413,11 +347,18 @@ and viewport indexes restrict work to the affected visible closure; a camera
 still inside the accepted envelope performs no projection. Work stays private
 and side-effect free until publication and yields between bounded units.
 
+`FeatureProjectionWorkerClient` accepts only a snapshot, source request, and
+resolved presentation, then returns detached GeoJSON. `MapCanvas` retains
+camera movement, source banks, feature state, and visible-pixel acceptance.
+The same client serves fitted read-only maps. This moves geometry off the
+interaction thread without giving a Worker authority to publish stale pixels.
+
 The inactive bank is prepared offscreen, loaded, and painted before one switch
-makes its visual and hit layers authoritative. Failure rolls back to the old
-bank. Small stable-ID changes use `updateData`; resets and recovery use
-`setData`, and recovery replays the complete accepted scene without projecting
-the document again.
+makes its visual and hit layers authoritative; failure keeps the old bank.
+Small stable-ID changes use `updateData`; reset and recovery use `setData` and
+replay the accepted scene without projecting again. A GeoJSON call cannot be
+interrupted after it starts, so an overrun is diagnosed without discarding
+completed map state.
 
 `EditorFeatureState` owns selection, hover, halo visibility, and selected-route
 focus. It follows the active bank using feature state and never uploads
@@ -425,12 +366,10 @@ geometry. `editor-overlays` owns the separate unbanked handles, service
 termini, and junction guides; those may run a small editor-only projection.
 Mode/type visibility remains a layer filter.
 
-This pipeline changes presentation and delivery, not the authored network.
-It resolves curve tessellation from final display error, then derives a
-metric District carriageway footprint and Street lane polygons from that
-centerline. Junction-attached cross-section meshes remain a later physical
-geometry step. Diagram remains on its existing layout path outside the
-cooperative geographic projection scheduler.
+The pipeline changes presentation and delivery, never the authored network.
+It resolves curves from final display error, then derives District footprints
+and Street lanes from that centreline. Diagram layout is separate, revision
+cached, and remains on its previous accepted result while a Worker solves.
 
 ### Appearance and map styles
 
@@ -509,13 +448,14 @@ their neighbours. Dependency revisions select only the MapLibre sources whose
 data can have changed; unrequested feature-building phases do not traverse
 their collections.
 
-An isolated station move in Network view is narrower still: core derives the
-exact changed station feature and MapLibre replaces it by its promoted stable
-ID. The scratch point stays visible and participates in ordinary station
-hit-testing until the committed source has loaded and painted, so immediate
-repeat drags remain available. A missing ID, overlapping dependency, view or
-document change, source error, or timeout returns to the complete source
-refresh path.
+An isolated Stop move in Network view is narrower still: core derives the
+exact changed Stop marker and MapLibre replaces it by its promoted stable ID.
+The scratch point stays visible and participates in ordinary Stop hit-testing
+until the committed source has loaded and painted, so immediate repeat drags
+remain available. A physical Station edit instead updates its footprint,
+platform, and physical-handle sources. A missing ID, overlapping dependency,
+view or document change, source error, or timeout returns to the complete
+source refresh path.
 
 Neighbours are the part people miss. Editing one way moves the junctions at
 both its ends, and that retrims every other way meeting those junctions. An

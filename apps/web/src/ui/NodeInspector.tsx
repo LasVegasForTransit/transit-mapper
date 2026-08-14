@@ -34,8 +34,17 @@ const CONTROL_OPTIONS: [NodeControl, string][] = [
   ['uncontrolled', 'None'],
   ['signal', 'Signal'],
   ['stop', 'Stop'],
+  ['yield', 'Yield'],
   ['roundabout', 'Roundabout'],
+  ['levelCrossing', 'Level crossing'],
 ];
+
+// A whole-node control describes the junction itself. An approach override
+// describes only what a driver encounters, so roundabouts and rail crossings
+// remain node-level concepts instead of becoming nonsensical per-arm choices.
+const APPROACH_CONTROL_OPTIONS = CONTROL_OPTIONS.filter(
+  ([value]) => value !== 'roundabout' && value !== 'levelCrossing',
+);
 
 const TURN_GLYPH: Record<Exclude<TurnClass, 'uturn'>, string> = {
   left: '←',
@@ -391,7 +400,7 @@ export function NodeInspector({ id }: NodeInspectorProps) {
                       role="group"
                       aria-label={`${wayLabel(way)} traffic control`}
                     >
-                      {CONTROL_OPTIONS.map(([value, label]) => (
+                      {APPROACH_CONTROL_OPTIONS.map(([value, label]) => (
                         <button
                           key={value}
                           className={`chip ${effective === value ? 'active' : ''}`}

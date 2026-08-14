@@ -1,4 +1,5 @@
 import type { Page } from 'playwright-core';
+import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import {
   captureBareRenderer,
@@ -20,6 +21,33 @@ function fakeCaptureElement(): FakeCaptureElement {
     removeAttribute: (name) => attributes.delete(name),
     setAttribute: (name) => attributes.add(name),
   };
+}
+
+async function renderedCapturePng(): Promise<Buffer> {
+  return sharp({
+    create: {
+      width: 160,
+      height: 80,
+      channels: 4,
+      background: { r: 247, g: 244, b: 236, alpha: 1 },
+    },
+  })
+    .composite([
+      {
+        input: {
+          create: {
+            width: 160,
+            height: 2,
+            channels: 4,
+            background: { r: 25, g: 26, b: 23, alpha: 1 },
+          },
+        },
+        top: 40,
+        left: 0,
+      },
+    ])
+    .png()
+    .toBuffer();
 }
 
 describe('renderer capture browser lifecycle', () => {
@@ -56,9 +84,9 @@ describe('renderer capture browser lifecycle', () => {
         }
         if (selector === '.maplibregl-map') {
           return {
-            screenshot: () => {
+            screenshot: async () => {
               screenshotAttributes.push([...app.attributes]);
-              return Promise.resolve(Buffer.from('captured'));
+              return renderedCapturePng();
             },
           };
         }
@@ -72,6 +100,7 @@ describe('renderer capture browser lifecycle', () => {
     expect(injectedStyles.join('\n')).toContain(
       '.app[data-renderer-capture-bare] > :not(.maplibregl-map)',
     );
+    expect(injectedStyles.join('\n')).toContain('background-image:none!important');
     expect(app.attributes).not.toContain('data-renderer-capture-bare');
   });
 

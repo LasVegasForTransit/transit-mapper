@@ -63,34 +63,63 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-function hasCompleteManifestHeader(candidate: Record<string, unknown>, phase: string): boolean {
-  if (candidate.schemaVersion !== 1) return false;
-  if (candidate.phase !== phase) return false;
-  if (candidate.complete !== true) return false;
-  if (!candidate.selection || typeof candidate.selection !== 'object') return false;
-  const selection = candidate.selection as Record<string, unknown>;
-  if (selection.profile !== 'all' || selection.theme !== 'all') return false;
-  if (!candidate.source || typeof candidate.source !== 'object') return false;
-  const source = candidate.source as Record<string, unknown>;
+interface CaptureManifestSourceHeader {
+  revision: string;
+  dirty: boolean;
+  contentSha256?: string;
+}
+
+function hasAllProfileSelection(selection: unknown): boolean {
+  if (!selection || typeof selection !== 'object') return false;
+  const values = selection as Record<string, unknown>;
+  return values.profile === 'all' && values.theme === 'all';
+}
+
+function sourceHeader(source: unknown): CaptureManifestSourceHeader | undefined {
+  if (!source || typeof source !== 'object') return undefined;
+  const values = source as Record<string, unknown>;
   if (
-    typeof source.revision !== 'string' ||
-    !GIT_REVISION.test(source.revision) ||
-    typeof source.dirty !== 'boolean'
+    typeof values.revision !== 'string' ||
+    !GIT_REVISION.test(values.revision) ||
+    typeof values.dirty !== 'boolean'
   ) {
-    return false;
+    return undefined;
   }
+  return {
+    revision: values.revision,
+    dirty: values.dirty,
+    ...(typeof values.contentSha256 === 'string' ? { contentSha256: values.contentSha256 } : {}),
+  };
+}
+
+function hasContentDigest(
+  source: CaptureManifestSourceHeader,
+): source is Required<CaptureManifestSourceHeader> {
+  return source.contentSha256 !== undefined && SHA_256.test(source.contentSha256);
+}
+
+function validBasemapHeader(
+  basemap: unknown,
+  phase: string,
+  source: CaptureManifestSourceHeader,
+): boolean {
   if (phase === '00-baseline') {
     return (
-      candidate.basemap === 'local-blank-v1' ||
-      (candidate.basemap === 'local-blank-v2' &&
-        typeof source.contentSha256 === 'string' &&
-        SHA_256.test(source.contentSha256))
+      basemap === 'local-blank-v1' || (basemap === 'local-blank-v2' && hasContentDigest(source))
     );
   }
+  return basemap === 'local-blank-v2' && hasContentDigest(source);
+}
+
+function hasCompleteManifestHeader(candidate: Record<string, unknown>, phase: string): boolean {
+  const source = sourceHeader(candidate.source);
   return (
-    candidate.basemap === 'local-blank-v2' &&
-    typeof source.contentSha256 === 'string' &&
-    SHA_256.test(source.contentSha256)
+    candidate.schemaVersion === 1 &&
+    candidate.phase === phase &&
+    candidate.complete === true &&
+    hasAllProfileSelection(candidate.selection) &&
+    source !== undefined &&
+    validBasemapHeader(candidate.basemap, phase, source)
   );
 }
 
@@ -138,12 +167,12 @@ function completeManifestFiles(
     files.push(file);
   }
   if (expected.size !== 0) return undefined;
-  const rawSource = candidate.source as Record<string, unknown>;
+  const rawSource = sourceHeader(candidate.source);
   const source =
-    typeof rawSource.contentSha256 === 'string'
+    rawSource && hasContentDigest(rawSource)
       ? {
-          revision: rawSource.revision as string,
-          dirty: rawSource.dirty as boolean,
+          revision: rawSource.revision,
+          dirty: rawSource.dirty,
           contentSha256: rawSource.contentSha256,
         }
       : undefined;

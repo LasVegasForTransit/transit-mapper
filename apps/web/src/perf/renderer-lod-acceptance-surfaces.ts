@@ -3,11 +3,12 @@ import type { TransitSystem } from '@transitmapper/core/model/system';
 import { projector, type Viewport } from '@transitmapper/core/render/project';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import { systemSvg } from '@transitmapper/core/render/svg';
+import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { Map as MLMap } from 'maplibre-gl';
 import { addExportSourcesAndLayers, setExportFeatureData } from '../map/export/exportLayerSetup';
-import { registerMapIcons, type RenderViewOptions } from '../map/layers';
+import { registerMapIcons } from '../map/layers';
 import { localBlankStyleForScheme } from '../map/mapTheme';
-import { buildFeaturesForFittedMap } from '../map/static-render-features';
+import { buildFeaturesForFittedMap } from '../map/fitted-map-feature-builder';
 import type { RendererLodAcceptanceCamera } from './renderer-lod-acceptance';
 
 export interface RendererLodAcceptanceSurfaceRequest {
@@ -73,7 +74,11 @@ function nextAnimationFrame(host: Window): Promise<void> {
 }
 
 function waitForMapEvent(map: MLMap, event: 'load' | 'idle'): Promise<void> {
-  return new Promise((resolve) => map.once(event, () => resolve()));
+  return new Promise((resolve) => {
+    map.once(event, () => {
+      resolve();
+    });
+  });
 }
 
 function acceptanceSurface(
