@@ -1,5 +1,5 @@
-import type { NamedWay, Node, Service, Station, Way } from '../model/system';
-import { nearWaysForStations } from './featureMemo';
+import type { NamedWay, Node, Service, Stop, Way } from '../model/system';
+import { nearWaysForStops } from './featureMemo';
 import { buildServiceSpanDependencies, namedWayLabelDependencyId } from './dependency-identities';
 import type { RenderDependencyClosure } from './dependency-index';
 
@@ -9,8 +9,8 @@ export interface MutablePreparedDependencyState {
   readonly spansByWay: Map<string, string[]>;
   readonly spansByService: Map<string, string[]>;
   readonly serviceIdsByWay: Map<string, string[]>;
-  readonly stationsByWay: Map<string, string[]>;
-  readonly wayIdsByStation: Map<string, string[]>;
+  readonly stopsByWay: Map<string, string[]>;
+  readonly wayIdsByStop: Map<string, string[]>;
   readonly labelsByWay: Map<string, string[]>;
   readonly namedWayIdsByWay: Map<string, string[]>;
   readonly spanRank: Map<string, number>;
@@ -25,8 +25,8 @@ export interface PreparedDependencyState {
   readonly spansByWay: ReadonlyMap<string, readonly string[]>;
   readonly spansByService: ReadonlyMap<string, readonly string[]>;
   readonly serviceIdsByWay: ReadonlyMap<string, readonly string[]>;
-  readonly stationsByWay: ReadonlyMap<string, readonly string[]>;
-  readonly wayIdsByStation: ReadonlyMap<string, readonly string[]>;
+  readonly stopsByWay: ReadonlyMap<string, readonly string[]>;
+  readonly wayIdsByStop: ReadonlyMap<string, readonly string[]>;
   readonly labelsByWay: ReadonlyMap<string, readonly string[]>;
   readonly namedWayIdsByWay: ReadonlyMap<string, readonly string[]>;
   readonly spanRank: ReadonlyMap<string, number>;
@@ -46,8 +46,8 @@ export function createMutablePreparedDependencyState(): MutablePreparedDependenc
     spansByWay: new Map(),
     spansByService: new Map(),
     serviceIdsByWay: new Map(),
-    stationsByWay: new Map(),
-    wayIdsByStation: new Map(),
+    stopsByWay: new Map(),
+    wayIdsByStop: new Map(),
     labelsByWay: new Map(),
     namedWayIdsByWay: new Map(),
     spanRank: new Map(),
@@ -84,33 +84,33 @@ export function addPreparedServices(
   }
 }
 
-export function addPreparedStations(
+export function addPreparedStops(
   state: MutablePreparedDependencyState,
-  stations: Station[],
+  stops: Stop[],
   ways: Way[],
 ): void {
-  const nearby = nearWaysForStations(stations, ways);
-  for (let index = 0; index < stations.length; index++) {
-    const station = stations[index];
-    const wayIds = new Set([...nearby[index], ...station.anchors.map(({ wayId }) => wayId)]);
+  const nearby = nearWaysForStops(stops, ways);
+  for (let index = 0; index < stops.length; index++) {
+    const stop = stops[index];
+    const wayIds = new Set([...nearby[index], ...stop.anchors.map(({ wayId }) => wayId)]);
     for (const wayId of wayIds) {
-      addUnique(state.stationsByWay, wayId, station.id);
-      addUnique(state.wayIdsByStation, station.id, wayId);
+      addUnique(state.stopsByWay, wayId, stop.id);
+      addUnique(state.wayIdsByStop, stop.id, wayId);
     }
   }
 }
 
-/** Adds station relationships after the preparation-owned spatial grid has
+/** Adds stop relationships after the preparation-owned spatial grid has
  * resolved nearby ways in a separately measured unit. */
-export function addPreparedStationWayIds(
+export function addPreparedStopWayIds(
   state: MutablePreparedDependencyState,
-  station: Station,
+  stop: Stop,
   nearbyWayIds: readonly string[],
 ): void {
-  const wayIds = new Set([...nearbyWayIds, ...station.anchors.map(({ wayId }) => wayId)]);
+  const wayIds = new Set([...nearbyWayIds, ...stop.anchors.map(({ wayId }) => wayId)]);
   for (const wayId of wayIds) {
-    addUnique(state.stationsByWay, wayId, station.id);
-    addUnique(state.wayIdsByStation, station.id, wayId);
+    addUnique(state.stopsByWay, wayId, stop.id);
+    addUnique(state.wayIdsByStop, stop.id, wayId);
   }
 }
 
@@ -143,6 +143,7 @@ function addAll(target: Set<string>, values: readonly string[] | undefined): voi
 export interface PreparedClosureOrder {
   readonly wayRank: ReadonlyMap<string, number>;
   readonly nodeRank: ReadonlyMap<string, number>;
+  readonly stopRank: ReadonlyMap<string, number>;
   readonly stationRank: ReadonlyMap<string, number>;
 }
 
@@ -154,14 +155,14 @@ export function preparedWayClosure(
   const corridors = new Set<string>();
   const junctions = new Set<string>();
   const spans = new Set<string>();
-  const stations = new Set<string>();
+  const stops = new Set<string>();
   const labels = new Set<string>();
   for (const wayId of changedWayIds) {
     corridors.add(wayId);
     const nodeIds = state.nodeIdsByWay.get(wayId) ?? [];
     addAll(junctions, nodeIds);
     addAll(spans, state.spansByWay.get(wayId));
-    addAll(stations, state.stationsByWay.get(wayId));
+    addAll(stops, state.stopsByWay.get(wayId));
     addAll(labels, state.labelsByWay.get(wayId));
     for (const nodeId of nodeIds) {
       for (const armWayId of state.wayIdsByNode.get(nodeId) ?? []) {
@@ -175,7 +176,8 @@ export function preparedWayClosure(
     junctionIds: ordered(junctions, order.nodeRank),
     connectorJunctionIds: ordered(junctions, order.nodeRank),
     serviceSpanIds: ordered(spans, state.spanRank),
-    stationIds: ordered(stations, order.stationRank),
+    stopIds: ordered(stops, order.stopRank),
+    stationIds: [],
     labelIds: ordered(labels, state.labelRank),
   };
 }
@@ -186,6 +188,7 @@ export function emptyPreparedClosure(): RenderDependencyClosure {
     junctionIds: [],
     connectorJunctionIds: [],
     serviceSpanIds: [],
+    stopIds: [],
     stationIds: [],
     labelIds: [],
   };
@@ -203,6 +206,7 @@ export function mergePreparedClosures(
     junctionIds: merge(previous.junctionIds, next.junctionIds),
     connectorJunctionIds: merge(previous.connectorJunctionIds, next.connectorJunctionIds),
     serviceSpanIds: merge(previous.serviceSpanIds, next.serviceSpanIds),
+    stopIds: merge(previous.stopIds, next.stopIds),
     stationIds: merge(previous.stationIds, next.stationIds),
     labelIds: merge(previous.labelIds, next.labelIds),
   };

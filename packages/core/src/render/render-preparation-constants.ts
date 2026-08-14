@@ -8,6 +8,7 @@ export const MAX_PREPARED_VIEWPORT_SEGMENTS_PER_CATEGORY = 64;
 export const ALL_RENDER_PREPARATION_CATEGORIES: readonly RenderViewportCategory[] = [
   'corridor',
   'junction',
+  'stop',
   'station',
   'label',
   'facility',

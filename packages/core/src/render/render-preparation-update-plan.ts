@@ -1,7 +1,7 @@
 import { resolveWayPath } from '../model/geo';
-import type { NamedWay, Station, Way } from '../model/system';
+import type { NamedWay, Stop, Way } from '../model/system';
 import type { RenderDependencyClosure } from './dependency-index';
-import { nearWaysForStations } from './featureMemo';
+import { nearWaysForStops } from './featureMemo';
 import {
   emptyPreparedClosure,
   mergePreparedClosures,
@@ -116,20 +116,20 @@ function addDomainAndClosure(context: IncrementalContext): void {
   });
 }
 
-interface StationUpdateDraft {
-  readonly stationIdsByWay: Map<string, Set<string>>;
-  readonly stationWayUpdates: Map<string, readonly string[]>;
+interface StopUpdateDraft {
+  readonly stopIdsByWay: Map<string, Set<string>>;
+  readonly stopWayUpdates: Map<string, readonly string[]>;
 }
 
-function affectedStations(context: IncrementalContext): readonly Station[] {
+function affectedStops(context: IncrementalContext): readonly Stop[] {
   const priorIds = new Set(
-    context.changedIds.flatMap((id) => context.internals.dependency.stationsByWay.get(id) ?? []),
+    context.changedIds.flatMap((id) => context.internals.dependency.stopsByWay.get(id) ?? []),
   );
   const search = nearWaySearchBounds([...context.wayUpserts.values()]);
   if (search) {
     for (const id of queryPreparedViewportState(
       context.internals.viewport,
-      'station',
+      'stop',
       search.bounds,
       search.marginDegrees,
     )) {
@@ -137,58 +137,58 @@ function affectedStations(context: IncrementalContext): readonly Station[] {
     }
   }
   return [...priorIds].flatMap((id) => {
-    const station = context.current.stationsById.get(id);
-    return station ? [station] : [];
+    const stop = context.current.stopsById.get(id);
+    return stop ? [stop] : [];
   });
 }
 
-function updateStationMembership(context: IncrementalContext, draft: StationUpdateDraft): void {
-  const stations = affectedStations(context);
-  context.builder.runtime.operations.dependencyEntityVisits += stations.length;
+function updateStopMembership(context: IncrementalContext, draft: StopUpdateDraft): void {
+  const stops = affectedStops(context);
+  context.builder.runtime.operations.dependencyEntityVisits += stops.length;
   const changedWays = [...context.wayUpserts.values()];
   const nearby = changedWays.length
-    ? nearWaysForStations(stations as Station[], changedWays)
-    : stations.map(() => [] as string[]);
-  for (let index = 0; index < stations.length; index++) {
-    const station = stations[index];
-    const oldIds = context.internals.dependency.wayIdsByStation.get(station.id) ?? [];
-    const retained = oldIds.filter((id) => !draft.stationIdsByWay.has(id));
+    ? nearWaysForStops(stops as Stop[], changedWays)
+    : stops.map(() => [] as string[]);
+  for (let index = 0; index < stops.length; index++) {
+    const stop = stops[index];
+    const oldIds = context.internals.dependency.wayIdsByStop.get(stop.id) ?? [];
+    const retained = oldIds.filter((id) => !draft.stopIdsByWay.has(id));
     const changed = context.changedIds.filter(
-      (id) => nearby[index].includes(id) || station.anchors.some(({ wayId }) => wayId === id),
+      (id) => nearby[index].includes(id) || stop.anchors.some(({ wayId }) => wayId === id),
     );
-    for (const id of changed) draft.stationIdsByWay.get(id)?.add(station.id);
+    for (const id of changed) draft.stopIdsByWay.get(id)?.add(stop.id);
     const nextIds = [...retained, ...changed];
     if (
       nextIds.length !== oldIds.length ||
       nextIds.some((id, position) => id !== oldIds[position])
     ) {
-      draft.stationWayUpdates.set(station.id, nextIds);
+      draft.stopWayUpdates.set(stop.id, nextIds);
     }
   }
 }
 
-function addStationUpdates(context: IncrementalContext): void {
-  const draft: StationUpdateDraft = {
-    stationIdsByWay: new Map(context.changedIds.map((id) => [id, new Set<string>()])),
-    stationWayUpdates: new Map(),
+function addStopUpdates(context: IncrementalContext): void {
+  const draft: StopUpdateDraft = {
+    stopIdsByWay: new Map(context.changedIds.map((id) => [id, new Set<string>()])),
+    stopWayUpdates: new Map(),
   };
   context.builder.addUnit(
     'dependency',
     context.changedIds.length,
-    () => updateStationMembership(context, draft),
-    'incremental-station-proximity',
+    () => updateStopMembership(context, draft),
+    'incremental-stop-proximity',
   );
   context.builder.addUnit('dependency', context.changedIds.length, () => {
     context.nextDependency = {
       ...context.internals.dependency,
-      stationsByWay: updateRenderPreparationMap(
-        context.internals.dependency.stationsByWay,
-        new Map([...draft.stationIdsByWay].map(([id, stationIds]) => [id, [...stationIds]])),
+      stopsByWay: updateRenderPreparationMap(
+        context.internals.dependency.stopsByWay,
+        new Map([...draft.stopIdsByWay].map(([id, stopIds]) => [id, [...stopIds]])),
         new Set(),
       ),
-      wayIdsByStation: updateRenderPreparationMap(
-        context.internals.dependency.wayIdsByStation,
-        draft.stationWayUpdates,
+      wayIdsByStop: updateRenderPreparationMap(
+        context.internals.dependency.wayIdsByStop,
+        draft.stopWayUpdates,
         new Set(),
       ),
     };
@@ -316,13 +316,14 @@ function addIncrementalFinalization(context: IncrementalContext): void {
       waysById: context.waysById,
       nodesById: context.current.nodesById,
       servicesById: context.current.servicesById,
+      stopsById: context.current.stopsById,
       stationsById: context.current.stationsById,
       namedWaysById: context.current.namedWaysById,
       facilitiesById: context.current.facilitiesById,
       groupsById: context.current.groupsById,
       servicesByWay: context.current.servicesByWay,
       serviceBundleSlots: context.current.serviceBundleSlots,
-      wayIdsByStation: context.nextDependency.wayIdsByStation,
+      wayIdsByStop: context.nextDependency.wayIdsByStop,
       modeIds: context.current.modeIds,
       wayTypeIds: context.current.wayTypeIds,
       internals: {
@@ -338,7 +339,7 @@ function addIncrementalFinalization(context: IncrementalContext): void {
 export function addIncrementalPreparationPlan(input: AddPreparedTransitionPlanOptions): void {
   const context = createIncrementalContext(input);
   addDomainAndClosure(context);
-  addStationUpdates(context);
+  addStopUpdates(context);
   addViewportUpdates(context);
   addViewportCandidateRefresh(context);
   addIncrementalFinalization(context);
@@ -371,13 +372,14 @@ export function addCameraPreparationPlan(input: AddPreparedTransitionPlanOptions
       waysById: input.current.waysById,
       nodesById: input.current.nodesById,
       servicesById: input.current.servicesById,
+      stopsById: input.current.stopsById,
       stationsById: input.current.stationsById,
       namedWaysById: input.current.namedWaysById,
       facilitiesById: input.current.facilitiesById,
       groupsById: input.current.groupsById,
       servicesByWay: input.current.servicesByWay,
       serviceBundleSlots: input.current.serviceBundleSlots,
-      wayIdsByStation: input.current.wayIdsByStation,
+      wayIdsByStop: input.current.wayIdsByStop,
       modeIds: input.current.modeIds,
       wayTypeIds: input.current.wayTypeIds,
       internals,

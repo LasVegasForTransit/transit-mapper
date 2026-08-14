@@ -1,4 +1,4 @@
-import type { Facility, Group, NamedWay, Node, Service, Station, Way } from '../model/system';
+import type { Facility, Group, NamedWay, Node, Service, Station, Stop, Way } from '../model/system';
 import type { PreparedServiceBundleDraft } from './render-preparation-bundles';
 import type { MutablePreparedDependencyState } from './render-preparation-dependencies';
 import type { RenderPreparationPlanBuilder } from './render-preparation-plan-builder';
@@ -14,12 +14,14 @@ export interface ColdDomainDraft {
   readonly waysById: Map<string, Way>;
   readonly nodesById: Map<string, Node>;
   readonly servicesById: Map<string, Service>;
+  readonly stopsById: Map<string, Stop>;
   readonly stationsById: Map<string, Station>;
   readonly namedWaysById: Map<string, NamedWay>;
   readonly facilitiesById: Map<string, Facility>;
   readonly groupsById: Map<string, Group>;
   readonly wayRank: Map<string, number>;
   readonly nodeRank: Map<string, number>;
+  readonly stopRank: Map<string, number>;
   readonly stationRank: Map<string, number>;
   readonly modeIds: Set<string>;
   readonly wayTypeIds: Set<string>;

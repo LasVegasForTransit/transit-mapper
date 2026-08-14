@@ -32,6 +32,7 @@ export function mergePreparedRenderInvalidations(
       ...closures.map(({ connectorJunctionIds }) => connectorJunctionIds),
     ),
     serviceSpanIds: orderedUnion(...closures.map(({ serviceSpanIds }) => serviceSpanIds)),
+    stopIds: orderedUnion(...closures.map(({ stopIds }) => stopIds)),
     stationIds: orderedUnion(...closures.map(({ stationIds }) => stationIds)),
     labelIds: orderedUnion(...closures.map(({ labelIds }) => labelIds)),
   };
@@ -89,6 +90,7 @@ export function planPreparedRenderProjectionScope(
   const serviceWayIds = existing(nextOwners.serviceWayIds, next.waysById);
   const junctionNodeIds = existing(closure.junctionIds, next.nodesById);
   const connectorNodeIds = existing(closure.connectorJunctionIds, next.nodesById);
+  const stopIds = existing(closure.stopIds, next.stopsById);
   const stationIds = existing(closure.stationIds, next.stationsById);
   const labelWayIds = existing(nextOwners.labelWayIds, next.waysById);
   const namedWayIds = existing(nextOwners.namedWayIds, next.namedWaysById);
@@ -103,6 +105,7 @@ export function planPreparedRenderProjectionScope(
       junctionNodeIds,
       connectorNodeIds,
       geometryNodeIds: orderedUnion(junctionNodeIds, connectorNodeIds),
+      stopIds,
       stationIds,
       labelDependencyIds: closure.labelIds,
       labelWayIds,
@@ -115,6 +118,7 @@ export function planPreparedRenderProjectionScope(
       serviceIds: affectedServiceIds,
       junctionNodeIds: closure.junctionIds,
       connectorNodeIds: closure.connectorJunctionIds,
+      stopIds: closure.stopIds,
       stationIds: closure.stationIds,
       labelDependencyIds: closure.labelIds,
       labelWayIds: orderedUnion(previousOwners.labelWayIds, nextOwners.labelWayIds),

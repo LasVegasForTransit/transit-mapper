@@ -42,6 +42,7 @@ function mergePatches(
     ways: mergeEntityPatch(earlier.ways, later.ways),
     nodes: mergeEntityPatch(earlier.nodes, later.nodes),
     services: mergeEntityPatch(earlier.services, later.services),
+    stops: mergeEntityPatch(earlier.stops, later.stops),
     stations: mergeEntityPatch(earlier.stations, later.stations),
     namedWays: mergeEntityPatch(earlier.namedWays, later.namedWays),
     facilities: mergeEntityPatch(earlier.facilities, later.facilities),

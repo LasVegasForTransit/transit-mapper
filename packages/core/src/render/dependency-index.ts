@@ -1,10 +1,8 @@
-import type { NamedWay, Node, Service, Station, TransitSystem, Way } from '../model/system';
-import { nearWaysForStations } from './featureMemo';
+import type { NamedWay, Node, Service, Station, Stop, TransitSystem, Way } from '../model/system';
 import {
-  buildServiceSpanDependencies,
-  namedWayLabelDependencyId,
-  type ServiceSpanDependency,
-} from './dependency-identities';
+  createDependencyIndexData,
+  type DependencyIndexData,
+} from './render-dependency-index-data';
 import {
   createRenderIndexCacheDiagnosticCounter,
   type RenderIndexCacheDiagnostics,
@@ -21,6 +19,7 @@ export interface RenderDependencyChanges {
   wayIds?: readonly string[];
   nodeIds?: readonly string[];
   serviceIds?: readonly string[];
+  stopIds?: readonly string[];
   stationIds?: readonly string[];
   namedWayIds?: readonly string[];
   turnRestrictionKeys?: readonly string[];
@@ -34,6 +33,7 @@ export interface RenderDependencyClosure {
   junctionIds: readonly string[];
   connectorJunctionIds: readonly string[];
   serviceSpanIds: readonly string[];
+  stopIds: readonly string[];
   stationIds: readonly string[];
   labelIds: readonly string[];
 }
@@ -47,12 +47,6 @@ export interface RenderDependencyIndex {
  * counters does not clear cached dependency indexes. */
 export type DependencyIndexCacheDiagnostics = RenderIndexCacheDiagnostics;
 
-interface LabelDependency {
-  id: string;
-  namedWayId: string;
-  wayId: string;
-}
-
 export interface RenderDependencyProjectionCandidates {
   serviceWayIds: readonly string[];
   serviceIds: readonly string[];
@@ -61,26 +55,10 @@ export interface RenderDependencyProjectionCandidates {
   namedWayIds: readonly string[];
 }
 
-interface DependencyIndexData {
-  ways: readonly Way[];
-  nodes: readonly Node[];
-  stations: readonly Station[];
-  spans: readonly ServiceSpanDependency[];
-  labels: readonly LabelDependency[];
-  nodesByWay: ReadonlyMap<string, readonly string[]>;
-  spansByWay: ReadonlyMap<string, readonly string[]>;
-  spansByService: ReadonlyMap<string, readonly string[]>;
-  wayIdsByService: ReadonlyMap<string, readonly string[]>;
-  stationsByWay: ReadonlyMap<string, readonly string[]>;
-  labelsByWay: ReadonlyMap<string, readonly string[]>;
-  labelsByNamedWay: ReadonlyMap<string, readonly string[]>;
-  waysByNode: ReadonlyMap<string, readonly string[]>;
-  waysByNamedWay: ReadonlyMap<string, readonly string[]>;
-}
-
 type NamedWayDependencyCache = WeakMap<NamedWay[], RenderDependencyIndex>;
 type StationDependencyCache = WeakMap<Station[], NamedWayDependencyCache>;
-type NodeDependencyCache = WeakMap<Node[], StationDependencyCache>;
+type StopDependencyCache = WeakMap<Stop[], StationDependencyCache>;
+type NodeDependencyCache = WeakMap<Node[], StopDependencyCache>;
 type ServiceDependencyCache = WeakMap<Service[], NodeDependencyCache>;
 
 const dependencyData = new WeakMap<RenderDependencyIndex, DependencyIndexData>();
@@ -91,106 +69,9 @@ export const snapshotDependencyIndexCacheDiagnostics = dependencyIndexDiagnostic
 /** Resets observation only so a warmed immutable snapshot stays cached. */
 export const resetDependencyIndexCacheDiagnostics = dependencyIndexDiagnostics.reset;
 
-function addToListMap(map: Map<string, string[]>, key: string, value: string): void {
-  const values = map.get(key);
-  if (values) {
-    if (!values.includes(value)) values.push(value);
-  } else map.set(key, [value]);
-}
-
-interface NodeDependencies {
-  nodesByWay: Map<string, string[]>;
-  waysByNode: Map<string, string[]>;
-}
-
-function nodeDependencies(nodes: Node[]): NodeDependencies {
-  const nodesByWay = new Map<string, string[]>();
-  const waysByNode = new Map<string, string[]>();
-  for (const node of nodes) {
-    for (const { wayId } of node.refs) {
-      addToListMap(nodesByWay, wayId, node.id);
-      addToListMap(waysByNode, node.id, wayId);
-    }
-  }
-  return { nodesByWay, waysByNode };
-}
-
-interface SpanDependencies {
-  spans: ServiceSpanDependency[];
-  spansByWay: Map<string, string[]>;
-  spansByService: Map<string, string[]>;
-  wayIdsByService: Map<string, string[]>;
-}
-
-function spanDependencies(services: Service[]): SpanDependencies {
-  const spans = buildServiceSpanDependencies(services);
-  const spansByWay = new Map<string, string[]>();
-  const spansByService = new Map<string, string[]>();
-  const wayIdsByService = new Map<string, string[]>();
-  for (const span of spans) {
-    addToListMap(spansByWay, span.wayId, span.id);
-    addToListMap(spansByService, span.serviceId, span.id);
-    addToListMap(wayIdsByService, span.serviceId, span.wayId);
-  }
-  return { spans, spansByWay, spansByService, wayIdsByService };
-}
-
-function stationDependencies(stations: Station[], ways: Way[]): Map<string, string[]> {
-  const stationsByWay = new Map<string, string[]>();
-  const nearbyWays = nearWaysForStations(stations, ways);
-  for (let stationIndex = 0; stationIndex < stations.length; stationIndex++) {
-    const station = stations[stationIndex];
-    const dependencies = new Set([
-      ...nearbyWays[stationIndex],
-      ...station.anchors.map(({ wayId }) => wayId),
-    ]);
-    for (const wayId of dependencies) addToListMap(stationsByWay, wayId, station.id);
-  }
-  return stationsByWay;
-}
-
-interface LabelDependencies {
-  labels: LabelDependency[];
-  labelsByWay: Map<string, string[]>;
-  labelsByNamedWay: Map<string, string[]>;
-  waysByNamedWay: Map<string, string[]>;
-}
-
-function labelDependencies(namedWays: NamedWay[]): LabelDependencies {
-  const labels: LabelDependency[] = [];
-  const labelsByWay = new Map<string, string[]>();
-  const labelsByNamedWay = new Map<string, string[]>();
-  const waysByNamedWay = new Map<string, string[]>();
-  for (const namedWay of namedWays) {
-    for (const wayId of namedWay.wayIds) {
-      const id = namedWayLabelDependencyId(namedWay.id, wayId);
-      labels.push({ id, namedWayId: namedWay.id, wayId });
-      addToListMap(labelsByWay, wayId, id);
-      addToListMap(labelsByNamedWay, namedWay.id, id);
-      addToListMap(waysByNamedWay, namedWay.id, wayId);
-    }
-  }
-  return { labels, labelsByWay, labelsByNamedWay, waysByNamedWay };
-}
-
-function createDependencyData(system: TransitSystem): DependencyIndexData {
-  const node = nodeDependencies(system.nodes);
-  const span = spanDependencies(system.services);
-  const label = labelDependencies(system.namedWays);
-  return {
-    ways: system.ways,
-    nodes: system.nodes,
-    stations: system.stations,
-    ...node,
-    ...span,
-    ...label,
-    stationsByWay: stationDependencies(system.stations, system.ways),
-  };
-}
-
 function createDependencyIndex(system: TransitSystem): RenderDependencyIndex {
   const index = Object.freeze({ kind: 'render-dependency-index' as const });
-  dependencyData.set(index, createDependencyData(system));
+  dependencyData.set(index, createDependencyIndexData(system));
   dependencyIndexDiagnostics.recordBuild();
   return index;
 }
@@ -201,8 +82,10 @@ export function renderDependencyIndexFor(system: TransitSystem): RenderDependenc
   if (!byService) dependencyCache.set(system.ways, (byService = new WeakMap()));
   let byNode = byService.get(system.services);
   if (!byNode) byService.set(system.services, (byNode = new WeakMap()));
-  let byStation = byNode.get(system.nodes);
-  if (!byStation) byNode.set(system.nodes, (byStation = new WeakMap()));
+  let byStop = byNode.get(system.nodes);
+  if (!byStop) byNode.set(system.nodes, (byStop = new WeakMap()));
+  let byStation = byStop.get(system.stops);
+  if (!byStation) byStop.set(system.stops, (byStation = new WeakMap()));
   let byNamedWay = byStation.get(system.stations);
   if (!byNamedWay) byStation.set(system.stations, (byNamedWay = new WeakMap()));
   const cached = byNamedWay.get(system.namedWays);
@@ -240,6 +123,7 @@ interface MutableDependencyClosure {
   junctions: Set<string>;
   connectorJunctions: Set<string>;
   spans: Set<string>;
+  stops: Set<string>;
   stations: Set<string>;
   labels: Set<string>;
 }
@@ -250,6 +134,7 @@ function mutableClosure(): MutableDependencyClosure {
     junctions: new Set(),
     connectorJunctions: new Set(),
     spans: new Set(),
+    stops: new Set(),
     stations: new Set(),
     labels: new Set(),
   };
@@ -266,7 +151,7 @@ function includeWay(
   addAll(closure.junctions, nodes);
   addAll(closure.connectorJunctions, nodes);
   addAll(closure.spans, data.spansByWay.get(wayId));
-  addAll(closure.stations, data.stationsByWay.get(wayId));
+  addAll(closure.stops, data.stopsByWay.get(wayId));
   addAll(closure.labels, data.labelsByWay.get(wayId));
   if (!physical) return;
 
@@ -274,7 +159,7 @@ function includeWay(
   // changed arm therefore changes every other arm at its adjacent junctions,
   // but nothing beyond those junctions. Deliberately add one hop without
   // recursing through the network or inheriting the neighbouring arm's labels
-  // and stations.
+  // and stops.
   for (const nodeId of nodes) {
     for (const armWayId of data.waysByNode.get(nodeId) ?? []) {
       closure.corridors.add(armWayId);
@@ -303,7 +188,7 @@ function includeService(
 ): void {
   addAll(closure.spans, data.spansByService.get(serviceId));
   for (const wayId of data.wayIdsByService.get(serviceId) ?? []) {
-    addAll(closure.stations, data.stationsByWay.get(wayId));
+    addAll(closure.stops, data.stopsByWay.get(wayId));
   }
 }
 
@@ -339,6 +224,10 @@ function finalizedClosure(
     serviceSpanIds: orderedMembers(
       data.spans.map(({ id }) => id),
       closure.spans,
+    ),
+    stopIds: orderedMembers(
+      data.stops.map(({ id }) => id),
+      closure.stops,
     ),
     stationIds: orderedMembers(
       data.stations.map(({ id }) => id),
@@ -412,6 +301,7 @@ export function dependencyClosure(
   includeChangedWays(data, closure, changes.wayIds);
   includeChangedNodes(data, closure, changes.nodeIds);
   includeChangedServices(data, closure, changes.serviceIds);
+  addAll(closure.stops, changes.stopIds);
   addAll(closure.stations, changes.stationIds);
   includeChangedNamedWays(data, closure, changes.namedWayIds);
   includeChangedMedians(data, closure, changes.medianKeys);

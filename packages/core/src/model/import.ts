@@ -777,6 +777,7 @@ const CONTROL_RANK: Record<NodeControl, number> = {
   levelCrossing: 4,
   signal: 3,
   stop: 2,
+  yield: 1.5,
   roundabout: 1,
   uncontrolled: 0,
 };

@@ -13,7 +13,7 @@ import {
 } from '../support/render-projection-scope-fixture.test';
 
 describe('render projection scope planning', () => {
-  it('maps a corridor edit to exact physical, service, junction, station, and label candidates', () => {
+  it('maps a corridor edit to exact physical, service, junction, stop, and label candidates', () => {
     const previous = projectionFixture();
     const next = {
       ...previous,
@@ -32,7 +32,8 @@ describe('render projection scope planning', () => {
     expect(scope.candidates.junctionNodeIds).toEqual(['main-junction']);
     expect(scope.candidates.connectorNodeIds).toEqual(['main-junction']);
     expect(scope.candidates.geometryNodeIds).toEqual(['main-junction']);
-    expect(scope.candidates.stationIds).toEqual(['main-station']);
+    expect(scope.candidates.stopIds).toEqual(['main-stop']);
+    expect(scope.candidates.stationIds).toEqual([]);
     expect(scope.candidates.labelDependencyIds).toEqual([
       namedWayLabelDependencyId('main-name', 'west'),
     ]);
@@ -46,7 +47,8 @@ describe('render projection scope planning', () => {
       serviceIds: ['main-service'],
       junctionNodeIds: ['main-junction'],
       connectorNodeIds: ['main-junction'],
-      stationIds: ['main-station'],
+      stopIds: ['main-stop'],
+      stationIds: [],
       labelDependencyIds: [namedWayLabelDependencyId('main-name', 'west')],
       labelWayIds: ['west'],
       namedWayIds: ['main-name'],
@@ -70,7 +72,8 @@ describe('render projection scope planning', () => {
     expect(scope.candidates.junctionNodeIds).toEqual([]);
     expect(scope.candidates.connectorNodeIds).toEqual([]);
     expect(scope.candidates.geometryNodeIds).toEqual(['main-junction']);
-    expect(scope.candidates.stationIds).toEqual(['main-station']);
+    expect(scope.candidates.stopIds).toEqual(['main-stop']);
+    expect(scope.candidates.stationIds).toEqual([]);
     expect(scope.candidates.labelDependencyIds).toEqual([]);
     expect(scope.candidates.labelWayIds).toEqual([]);
     expect(scope.candidates.namedWayIds).toEqual([]);
@@ -82,7 +85,8 @@ describe('render projection scope planning', () => {
       serviceIds: ['main-service'],
       junctionNodeIds: [],
       connectorNodeIds: [],
-      stationIds: ['main-station'],
+      stopIds: ['main-stop'],
+      stationIds: [],
       labelDependencyIds: [],
       labelWayIds: [],
       namedWayIds: [],
@@ -95,6 +99,7 @@ describe('render projection scope planning', () => {
       ...previous,
       ways: previous.ways.filter((way) => !['west', 'east'].includes(way.id)),
       nodes: previous.nodes.filter((node) => node.id !== 'main-junction'),
+      stops: previous.stops.filter((stop) => stop.id !== 'main-stop'),
       stations: previous.stations.filter((station) => station.id !== 'main-station'),
       namedWays: previous.namedWays.filter((namedWay) => namedWay.id !== 'main-name'),
     };
@@ -106,6 +111,7 @@ describe('render projection scope planning', () => {
     expect(scope.candidates.topologyWayIds).toEqual([]);
     expect(scope.candidates.junctionNodeIds).toEqual([]);
     expect(scope.candidates.geometryNodeIds).toEqual([]);
+    expect(scope.candidates.stopIds).toEqual([]);
     expect(scope.candidates.stationIds).toEqual([]);
     expect(scope.candidates.labelWayIds).toEqual([]);
     expect(scope.candidates.namedWayIds).toEqual([]);
@@ -117,6 +123,7 @@ describe('render projection scope planning', () => {
       serviceIds: ['main-service'],
       junctionNodeIds: ['main-junction'],
       connectorNodeIds: ['main-junction'],
+      stopIds: ['main-stop'],
       stationIds: ['main-station'],
       labelWayIds: ['west', 'east'],
       namedWayIds: ['main-name'],
@@ -191,8 +198,11 @@ describe('render projection scope planning', () => {
       featureTopologyWayVisitCount: 2,
       featureServiceWayVisitCount: 2,
       featureJunctionNodeVisitCount: 1,
-      featureStationVisitCount: 1,
-      featurePhysicalStationVisitCount: 1,
+      featureStopVisitCount: 1,
+      // An anchored Stop shares the corridor dependency closure. The physical
+      // Station is an independent footprint/platform and must not be rebuilt
+      // for a corridor geometry edit.
+      featurePhysicalStationVisitCount: 0,
       featureNamedWayVisitCount: 1,
     });
     expect(
@@ -201,15 +211,11 @@ describe('render projection scope planning', () => {
     expect(
       new Set(features.services.features.map((feature) => featureProperty(feature, 'wayId'))),
     ).toEqual(new Set(['west', 'east']));
-    expect(features.stations.features.map((feature) => featureProperty(feature, 'id'))).toEqual([
-      'main-station',
+    expect(features.stops.features.map((feature) => featureProperty(feature, 'id'))).toEqual([
+      'main-stop',
     ]);
-    expect(
-      features.footprints.features.map((feature) => featureProperty(feature, 'stationId')),
-    ).toEqual(['main-station']);
-    expect(
-      features.platforms.features.map((feature) => featureProperty(feature, 'stationId')),
-    ).toEqual(['main-station']);
+    expect(features.footprints.features).toEqual([]);
+    expect(features.platforms.features).toEqual([]);
     expect(
       new Set(features.lanes.features.map((feature) => featureProperty(feature, 'wayId'))),
     ).toEqual(new Set(['west', 'east']));
@@ -248,8 +254,7 @@ describe('render projection scope planning', () => {
       featureTopologyWayVisitCount: 2,
       featureServiceWayVisitCount: 2,
       featureJunctionNodeVisitCount: 0,
-      featureStationVisitCount: 1,
-      featurePhysicalStationVisitCount: 1,
+      featurePhysicalStationVisitCount: 0,
       featureNamedWayVisitCount: 0,
     });
     expect(features.ways.features).toEqual([]);

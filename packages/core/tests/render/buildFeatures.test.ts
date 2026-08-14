@@ -19,7 +19,9 @@ const NETWORK_VIEW: RenderViewOptions = {
 };
 
 function featureProperty(feature: Feature, name: string): unknown {
-  return feature.properties?.[name];
+  if (!feature.properties)
+    throw new Error(`Expected rendered feature ${feature.id} to have properties.`);
+  return feature.properties[name];
 }
 
 describe('buildFeatures service lines', () => {
@@ -47,10 +49,14 @@ describe('buildFeatures service lines', () => {
 
     const fc = buildFeatures(system, null, [], NETWORK_VIEW);
     const svc1Features = fc.services.features.filter(
-      (f) => f.properties?.serviceId === 'svc1' && !f.properties?.hitTarget,
+      (feature) =>
+        featureProperty(feature, 'serviceId') === 'svc1' &&
+        featureProperty(feature, 'hitTarget') !== true,
     );
     const svc2Features = fc.services.features.filter(
-      (f) => f.properties?.serviceId === 'svc2' && !f.properties?.hitTarget,
+      (feature) =>
+        featureProperty(feature, 'serviceId') === 'svc2' &&
+        featureProperty(feature, 'hitTarget') !== true,
     );
 
     expect(svc1Features).toHaveLength(2);
@@ -98,21 +104,27 @@ describe('buildFeatures service lines', () => {
 
     const features = buildFeatures(system, null, [], NETWORK_VIEW).services.features;
     const painted = features.filter(
-      (feature) => feature.properties?.serviceId === 'svc' && !feature.properties?.hitTarget,
+      (feature) =>
+        featureProperty(feature, 'serviceId') === 'svc' &&
+        featureProperty(feature, 'hitTarget') !== true,
     );
     const hits = features.filter(
-      (feature) => feature.properties?.serviceId === 'svc' && feature.properties?.hitTarget,
+      (feature) =>
+        featureProperty(feature, 'serviceId') === 'svc' &&
+        featureProperty(feature, 'hitTarget') === true,
     );
 
     expect(painted).toHaveLength(2);
     expect(painted.map((feature) => featureProperty(feature, 'wayId'))).toEqual(['loop', 'bend']);
-    expect(painted.every((feature) => feature.properties?.offset !== 0)).toBe(true);
+    expect(painted.every((feature) => featureProperty(feature, 'offset') !== 0)).toBe(true);
     expect(hits.map((feature) => featureProperty(feature, 'legIndex')).sort()).toEqual([
       0, 0, 1, 1, 2, 2,
     ]);
-    expect(hits.every((feature) => feature.properties?.patternId === 'svc')).toBe(true);
+    expect(hits.every((feature) => featureProperty(feature, 'patternId') === 'svc')).toBe(true);
     expect(
-      hits.every((feature) => feature.properties?.offset === painted[0].properties?.offset),
+      hits.every(
+        (feature) => featureProperty(feature, 'offset') === featureProperty(painted[0], 'offset'),
+      ),
     ).toBe(true);
   });
 
@@ -204,7 +216,7 @@ describe('service editing affordances', () => {
     ).serviceTermini;
 
     expect(
-      termini?.features.map((feature) => ({
+      termini.features.map((feature) => ({
         ...feature.properties,
         at: feature.geometry.coordinates,
       })),

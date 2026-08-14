@@ -25,15 +25,20 @@ import {
   serviceHasPartialLeg,
   PATTERN_RUNS,
   patternRunLegs,
-  serviceLaneOnWay,
   serviceRangesOnWay,
   slicePathByT,
   wayById,
   patternRunSegments,
 } from '../model/geo';
 import { linesByServiceId } from '../model/line-service';
-import { nearWaysForStations, servicesByWay, visibleWaysFor } from './featureMemo';
+import { nearWaysForStops, servicesByWay, visibleWaysFor } from './featureMemo';
 import { mergeAdjacentServiceLines } from './mergeServiceLines';
+import { serviceJunctionConnectors } from './service-junction-connectors';
+import {
+  assignServicesToLanes,
+  indexServicePatternsByWay,
+  laneServiceAssignmentKey,
+} from './service-lane-assignments';
 import { directionalLanes, isOneWay, profileWidthM } from '../model/profile';
 import {
   corridorSurfaceRing,
@@ -49,6 +54,11 @@ import {
   type JunctionGeometry,
   type WayTrims,
 } from '../geometry/junctions';
+import {
+  junctionControlledApproaches,
+  junctionCrosswalks,
+  junctionStopBars,
+} from '../geometry/junction-markings';
 import { iconName } from './iconName';
 import type {
   PatternLeg,
@@ -57,6 +67,7 @@ import type {
   LngLat,
   Pattern,
   Service,
+  Stop,
   TransitSystem,
 } from '../model/system';
 import { HANDLE_ICON, widthPxAtZ14 } from './constants';
@@ -84,8 +95,15 @@ import {
   renderNodesById,
   renderServicesById,
   renderStationsById,
+  renderStopsById,
 } from './render-domain-indexes';
 import type { RenderProjectionScope } from './render-projection-scope';
+import {
+  createFeatureBuildOperationCounts,
+  type FeatureBuildOperationCounts,
+} from './feature-build-operation-counts';
+
+export { createFeatureBuildOperationCounts, type FeatureBuildOperationCounts };
 import type { RenderPreparedSnapshot } from './render-preparation';
 import { namedWayLabelDependencyId } from './dependency-identities';
 import {
@@ -162,7 +180,10 @@ function cachedServiceHasPartialLeg(service: Service): boolean {
 const RENDER_SOURCE_IDS = {
   ways: systemFeatureSourceId('ways'),
   services: systemFeatureSourceId('services'),
-  stations: systemFeatureSourceId('stations'),
+  // The MapLibre source retains its historical `stations` name. Internally
+  // this collection is `stops`: these are boarding points, not passenger
+  // places with physical footprints and platforms.
+  stops: systemFeatureSourceId('stations'),
   handles: systemFeatureSourceId('handles'),
   serviceTermini: systemFeatureSourceId('service-termini'),
   footprints: systemFeatureSourceId('footprints'),
@@ -265,28 +286,6 @@ function bundleSlots(byWay: Map<string, Service[]>): Map<string, number> {
   return slots;
 }
 
-/** One service's one pattern touching a way, at that pattern's wayIds index —
- *  everything serviceLaneOnWay needs to resolve the lane, pre-indexed by way
- *  so the lane-detail render (below) is O(1) per way instead of re-scanning
- *  every rider service's full pattern list for every way it's ever on. Built
- *  once per system.services (memoized on byWay's identity, same contract as
- *  bundleSlots) — O(total pattern-way entries) regardless of how many ways
- *  are actually in view. */
-interface WayPatternEntry {
-  svc: Service;
-  pattern: Pattern;
-  run: RunDirection;
-  wayIdx: number;
-  /** The way this leg leads on to in ride order, if any — what the turn out
-   *  of this junction is, and so which lanes may legally be in. */
-  nextWayId?: string;
-  /** RIDE direction for the one direction of service this entry stands for.
-   *  One entry per (leg × direction that rides it): a leg both directions
-   *  share yields two, with opposite `forward`, which is how a two-way service
-   *  claims both curbs. A leg only one direction rides yields one. */
-  forward: boolean;
-}
-
 /** One rendered pass through a way. A transparent hit feature keeps this
  * identity for editing while the painted line can still merge through bends. */
 interface ServiceWayOccurrence {
@@ -337,91 +336,6 @@ function serviceWayOccurrences(service: Service, wayId: string): ServiceWayOccur
   }
   return occurrences;
 }
-const wayPatternIndexCache = new WeakMap<Map<string, Service[]>, Map<string, WayPatternEntry[]>>();
-function wayPatternIndex(byWay: Map<string, Service[]>): Map<string, WayPatternEntry[]> {
-  const cached = wayPatternIndexCache.get(byWay);
-  if (cached) return cached;
-  const seen = new Set<string>();
-  const index = new Map<string, WayPatternEntry[]>();
-  for (const svcs of byWay.values()) {
-    for (const svc of svcs) {
-      if (seen.has(svc.id)) continue;
-      seen.add(svc.id);
-      const pattern = svc.path;
-      // Walked per direction rather than over the flat leg list, so the
-      // entries say which lanes are ACTUALLY ridden. The list used to be
-      // walked once and each leg drawn on both curbs, which is right for a
-      // two-way street and wrong for a one-way couplet — it would paint the
-      // outward street's return curb with a line no vehicle ever runs on.
-      for (const run of PATTERN_RUNS) {
-        const ordered = patternRunLegs(pattern, run);
-        ordered.forEach(({ leg, index: wayIdx, forward }, i) => {
-          let arr = index.get(leg.wayId);
-          if (!arr) index.set(leg.wayId, (arr = []));
-          const next = ordered[i + 1]?.leg.wayId;
-          arr.push({
-            svc,
-            pattern,
-            run,
-            wayIdx,
-            forward,
-            ...(next ? { nextWayId: next } : {}),
-          });
-        });
-      }
-    }
-  }
-  wayPatternIndexCache.set(byWay, index);
-  return index;
-}
-
-interface LaneServiceAssignmentOptions {
-  entries: readonly WayPatternEntry[];
-  laneById: ReadonlyMap<string, LanePath>;
-  waysById: Map<string, Way>;
-  turnRestrictions: TransitSystem['turnRestrictions'];
-}
-
-interface LaneServiceAssignments {
-  servicesByLane: Map<string, Service[]>;
-  runsByLaneAndService: Map<string, Set<RunDirection>>;
-  resolvedServiceIds: Set<string>;
-}
-
-function laneServiceAssignments({
-  entries,
-  laneById,
-  waysById,
-  turnRestrictions,
-}: LaneServiceAssignmentOptions): LaneServiceAssignments {
-  const servicesByLane = new Map<string, Service[]>();
-  const runsByLaneAndService = new Map<string, Set<RunDirection>>();
-  const resolvedServiceIds = new Set<string>();
-  for (const { svc, pattern, run, wayIdx, forward, nextWayId } of entries) {
-    const laneId = serviceLaneOnWay(
-      pattern,
-      wayIdx,
-      waysById,
-      svc.modeId,
-      forward,
-      nextWayId ? { nextWayId, turnRestrictions } : undefined,
-    );
-    if (!laneId || !laneById.has(laneId)) continue;
-    resolvedServiceIds.add(svc.id);
-    let services = servicesByLane.get(laneId);
-    if (!services) servicesByLane.set(laneId, (services = []));
-    const laneServiceKey = `${laneId}\u001f${svc.id}`;
-    let runs = runsByLaneAndService.get(laneServiceKey);
-    if (!runs) runsByLaneAndService.set(laneServiceKey, (runs = new Set()));
-    runs.add(run);
-    // A service can land on the SAME lane twice — via two of its own
-    // patterns, or because a single track (or a pinned leg) carries both
-    // its directions. Don't double-emit it there.
-    if (!services.some((service) => service.id === svc.id)) services.push(svc);
-  }
-  return { servicesByLane, runsByLaneAndService, resolvedServiceIds };
-}
-
 /**
  * The stretches of `wayId` that some service rides in one direction only, each
  * already oriented the way that service travels it.
@@ -563,7 +477,7 @@ function oneDirectionalStretches(
 export interface SystemFeatures {
   ways: FeatureCollection<LineString | Polygon>;
   services: FeatureCollection<LineString>;
-  stations: FeatureCollection<Point>;
+  stops: FeatureCollection<Point>;
   handles: FeatureCollection<Point>;
   /** Route-owned ends, intentionally distinct from physical corridor controls. */
   serviceTermini: FeatureCollection<Point>;
@@ -581,7 +495,9 @@ export interface SystemFeatures {
    *  the service colour, because these sit on top of the line rather than on
    *  the asphalt beneath it. */
   serviceArrows: FeatureCollection<LineString>;
-  junctions: FeatureCollection<Polygon>;
+  /** Junction surface polygons plus Street-tier control markers. Keeping both
+   * in one source gives source patches one owner for a junction revision. */
+  junctions: FeatureCollection<Polygon | Point>;
   connectors: FeatureCollection<LineString>;
   /** Shared-identity (NamedWay) name labels along their member ways. */
   wayLabels: FeatureCollection<LineString>;
@@ -719,44 +635,16 @@ export interface RenderViewOptions extends ViewOptions {
 
 export type SystemFeatureName = keyof SystemFeatures;
 
-/** Deterministic attribution for the live map's projection work.
- *
- * These counters deliberately measure visits and phase entry rather than wall
- * time. They stay stable across machines, make partial-build regressions
- * testable, and can be sampled by the performance harness without adding a
- * second instrumented renderer. */
-export interface FeatureBuildOperationCounts {
-  featureCollectionBuildCount: number;
-  featureTopologyPassCount: number;
-  featureTopologyWayVisitCount: number;
-  /** Service-bearing way candidates visited by service paint/arrow projection. */
-  featureServiceWayVisitCount: number;
-  featureJunctionPassCount: number;
-  featureJunctionNodeVisitCount: number;
-  featureStationPassCount: number;
-  featureStationVisitCount: number;
-  featureHandlePassCount: number;
-  featureHandleWayVisitCount: number;
-  featurePhysicalPassCount: number;
-  featurePhysicalStationVisitCount: number;
-  featurePhysicalGroupVisitCount: number;
-  featureFacilityPassCount: number;
-  featureFacilityVisitCount: number;
-  featureWayLabelPassCount: number;
-  featureNamedWayVisitCount: number;
-  featureLaneGeometryBuildCount: number;
-  featureLaneGeometryCacheHitCount: number;
-  featureTierTransitionCount: number;
-}
-
 export interface BuildFeaturesOptions {
   /** Omitted for exports, previews, and initial/style/view builds. The live
    * editor passes the exact collections whose MapLibre sources will upload,
    * so unrelated RTC-scale phases are never traversed just to discard them. */
   requestedFeatures?: readonly SystemFeatureName[];
-  /** Restrict station feature derivation to these stable ids. Live gesture
+  /** Restrict stop feature derivation to these stable ids. Live gesture
    * settlement uses this to avoid allocating and resolving service context
-   * for every unchanged station. */
+   * for every unchanged boarding point. */
+  stopIds?: readonly string[];
+  /** Restrict physical passenger-place derivation to these stable ids. */
   stationIds?: readonly string[];
   /** Exact prior+next dependency scope for incremental committed projection.
    * Static, export, and viewport-only callers omit it and retain authoritative
@@ -789,35 +677,10 @@ export interface BuildFeaturesOptions {
   } | null;
 }
 
-export function createFeatureBuildOperationCounts(): FeatureBuildOperationCounts {
-  return {
-    featureCollectionBuildCount: 0,
-    featureTopologyPassCount: 0,
-    featureTopologyWayVisitCount: 0,
-    featureServiceWayVisitCount: 0,
-    featureJunctionPassCount: 0,
-    featureJunctionNodeVisitCount: 0,
-    featureStationPassCount: 0,
-    featureStationVisitCount: 0,
-    featureHandlePassCount: 0,
-    featureHandleWayVisitCount: 0,
-    featurePhysicalPassCount: 0,
-    featurePhysicalStationVisitCount: 0,
-    featurePhysicalGroupVisitCount: 0,
-    featureFacilityPassCount: 0,
-    featureFacilityVisitCount: 0,
-    featureWayLabelPassCount: 0,
-    featureNamedWayVisitCount: 0,
-    featureLaneGeometryBuildCount: 0,
-    featureLaneGeometryCacheHitCount: 0,
-    featureTierTransitionCount: 0,
-  };
-}
-
 const SYSTEM_FEATURE_NAMES: readonly SystemFeatureName[] = [
   'ways',
   'services',
-  'stations',
+  'stops',
   'handles',
   'serviceTermini',
   'footprints',
@@ -869,7 +732,7 @@ interface FeatureProjectionPlan {
   collectionCount: number;
   topology: TopologyProjection;
   junctions: JunctionProjection;
-  stations: boolean;
+  stops: boolean;
   selectionHandles: boolean;
   serviceTermini: boolean;
   physical: PhysicalProjection;
@@ -939,7 +802,7 @@ function createFeatureProjectionPlan(
   const topology = topologyProjection(requested);
   const junctions = junctionProjection(requested, topology);
   const physical = physicalProjection(requested);
-  const stations = featureIsRequested(requested, 'stations');
+  const stops = featureIsRequested(requested, 'stops');
   const selectionHandles = featureIsRequested(requested, 'handles');
   const serviceTermini = featureIsRequested(requested, 'serviceTermini');
   const facilities = featureIsRequested(requested, 'facilities');
@@ -950,15 +813,15 @@ function createFeatureProjectionPlan(
     collectionCount: requested?.size ?? SYSTEM_FEATURE_NAMES.length,
     topology,
     junctions,
-    stations,
+    stops,
     selectionHandles,
     serviceTermini,
     physical,
     facilities,
     wayLabels,
     dependencies: {
-      wayIndex: topologyPassEnabled || stations || selectionHandles || serviceTermini || wayLabels,
-      serviceIndex: topology.enabled || stations,
+      wayIndex: topologyPassEnabled || stops || selectionHandles || serviceTermini || wayLabels,
+      serviceIndex: topology.enabled || stops,
     },
     topologyPassEnabled,
   };
@@ -967,6 +830,7 @@ function createFeatureProjectionPlan(
 interface SharedProjectionIndexes {
   waysById: Map<string, Way>;
   nodesById: ReadonlyMap<string, TransitSystem['nodes'][number]>;
+  stopsById: ReadonlyMap<string, Stop>;
   stationsById: ReadonlyMap<string, TransitSystem['stations'][number]>;
   namedWaysById: ReadonlyMap<string, TransitSystem['namedWays'][number]>;
   facilitiesById: ReadonlyMap<string, TransitSystem['facilities'][number]>;
@@ -977,7 +841,7 @@ interface SharedProjectionIndexes {
   allServicesByWay: Map<string, Service[]>;
   projectedWayTypeIds: Set<string>;
   serviceSlots: Map<string, number>;
-  wayIdsByStation?: ReadonlyMap<string, readonly string[]>;
+  wayIdsByStop?: ReadonlyMap<string, readonly string[]>;
 }
 
 /** A Line owns the public color; an orphaned in-progress Service still needs
@@ -989,28 +853,28 @@ function serviceDisplayColor(
   return lineByServiceId.get(service.id)?.color ?? modeRender(service.modeId).color;
 }
 
-interface StationModeProjectionOptions {
-  station: TransitSystem['stations'][number];
+interface StopModeProjectionOptions {
+  stop: Stop;
   nearbyWayIds: readonly string[];
   servicesByWay: ReadonlyMap<string, Service[]>;
   reaches: (service: Service, wayId: string, coord: LngLat) => boolean;
 }
 
-function servedModeIdsForStation({
-  station,
+function servedModeIdsForStop({
+  stop,
   nearbyWayIds,
   servicesByWay: allServicesByWay,
   reaches,
-}: StationModeProjectionOptions): string[] {
+}: StopModeProjectionOptions): string[] {
   const servingServices = new Set<Service>();
   for (const wayId of nearbyWayIds) {
     for (const service of allServicesByWay.get(wayId) ?? []) {
-      if (reaches(service, wayId, station.coord)) servingServices.add(service);
+      if (reaches(service, wayId, stop.coord)) servingServices.add(service);
     }
   }
-  for (const anchor of station.anchors) {
+  for (const anchor of stop.anchors) {
     for (const service of allServicesByWay.get(anchor.wayId) ?? []) {
-      if (reaches(service, anchor.wayId, station.coord)) servingServices.add(service);
+      if (reaches(service, anchor.wayId, stop.coord)) servingServices.add(service);
     }
   }
   return [...new Set([...servingServices].map((service) => service.modeId))].sort();
@@ -1122,10 +986,11 @@ function buildSharedProjectionIndexes(
     nodesById: projectionDomainIndex(projection.junctions.needsGeometry, prepared?.nodesById, () =>
       renderNodesById(system.nodes),
     ),
-    stationsById: projectionDomainIndex(
-      projection.stations || projection.physical.enabled,
-      prepared?.stationsById,
-      () => renderStationsById(system.stations),
+    stopsById: projectionDomainIndex(projection.stops, prepared?.stopsById, () =>
+      renderStopsById(system.stops),
+    ),
+    stationsById: projectionDomainIndex(projection.physical.enabled, prepared?.stationsById, () =>
+      renderStationsById(system.stations),
     ),
     namedWaysById: projectionDomainIndex(projection.wayLabels, prepared?.namedWaysById, () =>
       renderNamedWaysById(system.namedWays),
@@ -1144,37 +1009,37 @@ function buildSharedProjectionIndexes(
     allServicesByWay: serviceIndexes.all,
     projectedWayTypeIds,
     serviceSlots: projectionServiceSlots(projection, prepared, serviceIndexes.visible),
-    wayIdsByStation: prepared?.wayIdsByStation,
+    wayIdsByStop: prepared?.wayIdsByStop,
   };
 }
 
-function projectStations(
+function projectStops(
   system: TransitSystem,
-  stations: TransitSystem['stations'],
+  stops: TransitSystem['stops'],
   indexes: SharedProjectionIndexes,
   counts: FeatureBuildOperationCounts | undefined,
 ): Feature<Point>[] {
-  if (counts) counts.featureStationPassCount++;
-  // The interchange scan (servedWayIds per station) is the single most expensive
-  // part of this function at RTC scale — memoized on (stations, visibleWays) so a
-  // selection/viewport rebuild reuses it instead of re-scanning ~3787 stations.
-  const preparedWayIds = indexes.wayIdsByStation;
-  let nearWaysByStation: string[][];
-  let allNearWaysByStation: string[][];
+  if (counts) counts.featureStopPassCount++;
+  // The interchange scan (servedWayIds per stop) is the single most expensive
+  // part of this function at RTC scale — memoized on (stops, visibleWays) so a
+  // selection/viewport rebuild reuses it instead of re-scanning every boarding point.
+  const preparedWayIds = indexes.wayIdsByStop;
+  let nearWaysByStop: string[][];
+  let allNearWaysByStop: string[][];
   if (preparedWayIds) {
-    nearWaysByStation = stations.map((station) =>
-      (preparedWayIds.get(station.id) ?? []).filter((wayId) => {
+    nearWaysByStop = stops.map((stop) =>
+      (preparedWayIds.get(stop.id) ?? []).filter((wayId) => {
         const way = indexes.waysById.get(wayId);
         return way ? indexes.projectedWayTypeIds.has(way.typeId) : false;
       }),
     );
-    allNearWaysByStation = stations.map((station) => [...(preparedWayIds.get(station.id) ?? [])]);
+    allNearWaysByStop = stops.map((stop) => [...(preparedWayIds.get(stop.id) ?? [])]);
   } else {
     const visibleWays = visibleWaysFor(system.ways, indexes.projectedWayTypeIds);
-    nearWaysByStation = nearWaysForStations(stations, visibleWays);
+    nearWaysByStop = nearWaysForStops(stops, visibleWays);
     const everyWay = visibleWaysFor(system.ways, allWayTypeIds(system.ways));
-    allNearWaysByStation =
-      everyWay === visibleWays ? nearWaysByStation : nearWaysForStations(stations, everyWay);
+    allNearWaysByStop =
+      everyWay === visibleWays ? nearWaysByStop : nearWaysForStops(stops, everyWay);
   }
   // `servicesByWay` reports every service that touches a way, which over-reports
   // once a service can cover only part of one. Test only services encountered
@@ -1188,27 +1053,27 @@ function projectStations(
     return near ? serviceCoversWayAt(service, wayId, near.t) : true;
   };
 
-  return stations.map((station, stationIndex) => {
-    if (counts) counts.featureStationVisitCount++;
+  return stops.map((stop, stopIndex) => {
+    if (counts) counts.featureStopVisitCount++;
     const servingServiceSet = new Set<Service>();
-    for (const wayId of nearWaysByStation[stationIndex]) {
+    for (const wayId of nearWaysByStop[stopIndex]) {
       for (const service of indexes.servicesByWay.get(wayId) ?? []) {
-        if (reaches(service, wayId, station.coord)) servingServiceSet.add(service);
+        if (reaches(service, wayId, stop.coord)) servingServiceSet.add(service);
       }
     }
     const servingServices = [...servingServiceSet];
     // Every anchored way contributes service, not just one. A platform shared
     // between the two halves of a couplet belongs to the lines on both.
-    const anchorServices = station.anchors.length
-      ? station.anchors.flatMap((anchor) =>
+    const anchorServices = stop.anchors.length
+      ? stop.anchors.flatMap((anchor) =>
           (indexes.servicesByWay.get(anchor.wayId) ?? []).filter((service) =>
-            reaches(service, anchor.wayId, station.coord),
+            reaches(service, anchor.wayId, stop.coord),
           ),
         )
       : [];
-    const servedModeIds = servedModeIdsForStation({
-      station,
-      nearbyWayIds: allNearWaysByStation[stationIndex],
+    const servedModeIds = servedModeIdsForStop({
+      stop,
+      nearbyWayIds: allNearWaysByStop[stopIndex],
       servicesByWay: indexes.allServicesByWay,
       reaches,
     });
@@ -1219,18 +1084,18 @@ function projectStations(
     const interchange = servingServices.length > 1;
     return {
       type: 'Feature',
-      id: stableFeatureId('stations', 'station', station.id),
+      id: stableFeatureId('stops', 'stop', stop.id),
       properties: {
-        id: station.id,
+        id: stop.id,
         color,
         interchange,
         // Major and interchange labels enter at a lower zoom than ordinary
         // stops, avoiding thousands of simultaneous collision candidates.
-        major: interchange || station.majorStop === true,
+        major: interchange || stop.majorStop === true,
         servedModeIds,
-        name: station.name ?? '',
+        name: stop.name ?? '',
       },
-      geometry: { type: 'Point', coordinates: station.coord },
+      geometry: { type: 'Point', coordinates: stop.coord },
     };
   });
 }
@@ -1700,8 +1565,165 @@ interface TopologyProjectionResult {
   laneMarkings: Feature<LineString | MultiLineString>[];
   laneArrows: Feature<LineString>[];
   serviceArrows: Feature<LineString>[];
-  junctions: Feature<Polygon>[];
+  junctions: Feature<Polygon | Point>[];
   connectors: Feature<LineString>[];
+}
+
+/** Properties shared by a physical junction surface, its control marker, and
+ * approach markings. They must enter and leave Street detail together. */
+interface JunctionPaintMetadata {
+  typeIds: string[];
+  corridorW14: number;
+  tierOpacity: number;
+}
+
+/**
+ * The presentation chosen for one service run at one lane endpoint.
+ *
+ * A junction connector is a separate path, but it must inherit the same
+ * Street-tier width and within-lane separation as the trimmed path it joins.
+ * Keeping this small record while lanes are emitted avoids a second pattern
+ * traversal solely to restyle the connector afterwards.
+ */
+interface StreetServiceEndpointPaint {
+  service: Service;
+  way: Way;
+  corridor: CorridorRenderPresentation;
+  laneW14: number;
+  offset: number;
+}
+
+/** A service run may use different lanes on the two sides of a junction.
+ * This is the stable lookup identity for the already-emitted lane endpoint. */
+function streetServiceEndpointPaintKey(
+  serviceId: string,
+  run: RunDirection,
+  wayId: string,
+  laneId: string,
+): string {
+  return `${serviceId}\u001f${run}\u001f${wayId}\u001f${laneId}`;
+}
+
+interface AppendStreetServiceJunctionConnectorsOptions {
+  services: Feature<LineString>[];
+  serviceHits: Feature<LineString>[];
+  indexes: SharedProjectionIndexes;
+  waysById: Map<string, Way>;
+  wayTrims: WayTrims;
+  nodes: readonly TransitSystem['nodes'][number][];
+  endpointPaint: ReadonlyMap<string, StreetServiceEndpointPaint>;
+  turnRestrictions: TransitSystem['turnRestrictions'];
+}
+
+/**
+ * Adds the committed service path inside each visible Street junction.
+ *
+ * The lane pass owns the long trimmed stretches and leaves a compact record
+ * of their resolved visual treatment. This step owns only the connection
+ * between those endpoints. Keeping the two phases separate makes it explicit
+ * that editor movement guides are not a second source of settled geometry.
+ */
+function appendStreetServiceJunctionConnectors({
+  services,
+  serviceHits,
+  indexes,
+  waysById,
+  wayTrims,
+  nodes,
+  endpointPaint,
+  turnRestrictions,
+}: AppendStreetServiceJunctionConnectorsOptions): void {
+  // The preceding lane pass is already scope and viewport aware. Reusing its
+  // endpoint records means this phase never scans a hidden or unaffected
+  // service merely to discover that no drawable connector can use it.
+  const visibleServices = [
+    ...new Map(
+      [...endpointPaint.values()].map(({ service }) => [service.id, service] as const),
+    ).values(),
+  ];
+  for (const connector of serviceJunctionConnectors({
+    services: visibleServices,
+    nodes,
+    waysById,
+    trims: wayTrims,
+    turnRestrictions,
+  })) {
+    const from = endpointPaint.get(
+      streetServiceEndpointPaintKey(
+        connector.serviceId,
+        connector.run,
+        connector.from.wayId,
+        connector.from.laneId,
+      ),
+    );
+    const to = endpointPaint.get(
+      streetServiceEndpointPaintKey(
+        connector.serviceId,
+        connector.run,
+        connector.to.wayId,
+        connector.to.laneId,
+      ),
+    );
+    if (!from || !to || !from.corridor.retainedTiers.includes('street')) continue;
+    const properties = {
+      serviceId: connector.serviceId,
+      nodeId: connector.nodeId,
+      modeId: from.service.modeId,
+      wayId: from.way.id,
+      typeId: from.way.typeId,
+      color: serviceDisplayColor(from.service, indexes.linesByServiceId),
+      width: modeRender(from.service.modeId).width,
+      ...gradeFlags(from.way.grade),
+      // A line-offset follows the turn's normal. The incoming separation is
+      // therefore the stable choice until connector geometry carries a
+      // per-vertex offset for multiple services sharing one lane.
+      offset: from.offset,
+      w14: Math.max(from.laneW14, to.laneW14),
+      corridorW14: widthPxAtZ14(profileWidthM(from.way.profile), from.way.points[0]?.[1] ?? 0),
+      renderTier: 'street',
+      tierOpacity: from.corridor.blend.weights.street,
+      ...tierAvailabilityProperties(from.corridor, from.corridor.retainedTiers),
+      pathRole: `junction:${connector.nodeId}`,
+    };
+    const geometry = { type: 'LineString' as const, coordinates: [...connector.path] };
+    services.push({
+      type: 'Feature',
+      id: stableFeatureId(
+        'services',
+        'junction-connector',
+        connector.serviceId,
+        connector.run,
+        connector.nodeId,
+        connector.from.wayId,
+        connector.from.laneId,
+        connector.to.wayId,
+        connector.to.laneId,
+      ),
+      properties: { ...properties, hitTarget: false },
+      geometry,
+    });
+    serviceHits.push({
+      type: 'Feature',
+      id: stableFeatureId(
+        'services',
+        'hit-junction-connector',
+        connector.serviceId,
+        connector.run,
+        connector.nodeId,
+        connector.from.wayId,
+        connector.from.laneId,
+        connector.to.wayId,
+        connector.to.laneId,
+      ),
+      properties: {
+        ...properties,
+        patternId: from.service.path.id,
+        run: connector.run,
+        hitTarget: true,
+      },
+      geometry,
+    });
+  }
 }
 
 interface ProjectTopologyFeaturesOptions {
@@ -2057,6 +2079,7 @@ function projectTopologyFeatures({
   const laneMarkings: Feature<LineString | MultiLineString>[] = [];
   const laneArrows: Feature<LineString>[] = [];
   const serviceArrows: Feature<LineString>[] = [];
+  const streetServiceEndpointPaint = new Map<string, StreetServiceEndpointPaint>();
 
   const attributedLaneGeometry = (
     way: TransitSystem['ways'][number],
@@ -2080,10 +2103,11 @@ function projectTopologyFeatures({
     return resolved.geometry;
   };
 
-  // True-scale per-lane rendering for one way: lane surfaces at their real
-  // metric widths (w14 + the exponential zoom expression in LANE_WIDTH_EXPR),
-  // painted dividers, thin-line lanes (tracks), and direction arrows. Replaces
-  // the emitCrossSection fan for that way at lane-detail zooms.
+  // True-scale per-lane rendering for one way: lane surfaces carry their real
+  // metric geometry, while corridorW14 keeps their LOD fade aligned with the
+  // corridor they replace. It also emits dividers, thin-line lanes (tracks),
+  // and direction arrows. This replaces the emitCrossSection fan at Street
+  // detail without reintroducing a screen-space lane-width approximation.
   const emitLaneDetail = (way: TransitSystem['ways'][number]) => {
     // wayTrims is populated by the junction pass below before any call here.
     const trims = wayTrims.get(way.id) ?? { start: 0, end: 0 };
@@ -2185,13 +2209,81 @@ function projectTopologyFeatures({
     way.grade !== 'underground' &&
     way.profile.lanes.length > 0;
 
+  // Surface and control markers are two views of one junction. Keeping their
+  // shared metadata here prevents either one from drifting into a different
+  // Street LOD or filtering decision as the cartography evolves.
+  const junctionPaintMetadata = (node: TransitSystem['nodes'][number]): JunctionPaintMetadata => {
+    const incidentWays = node.refs.flatMap((ref) => {
+      const way = waysById.get(ref.wayId);
+      return way ? [way] : [];
+    });
+    return {
+      typeIds: [...new Set(incidentWays.map((way) => way.typeId))].sort(),
+      corridorW14: Math.max(
+        0,
+        ...incidentWays.map((way) =>
+          widthPxAtZ14(profileWidthM(way.profile), way.points[0]?.[1] ?? node.coord[1]),
+        ),
+      ),
+      tierOpacity: Math.max(
+        0,
+        ...incidentWays.map((way) => corridorPresentation(way).blend.weights.street),
+      ),
+    };
+  };
+
+  const appendControlledApproachMarkings = (
+    node: TransitSystem['nodes'][number],
+    geometry: JunctionGeometry,
+    metadata: JunctionPaintMetadata,
+  ) => {
+    if (!projection.topology.laneMarkings) return;
+    for (const crosswalk of junctionCrosswalks(node, geometry, system.approachControls)) {
+      laneMarkings.push({
+        type: 'Feature',
+        id: stableFeatureId(
+          'laneMarkings',
+          'crosswalk',
+          crosswalk.nodeId,
+          crosswalk.wayId,
+          crosswalk.end,
+        ),
+        properties: {
+          kind: 'crosswalk',
+          nodeId: crosswalk.nodeId,
+          wayId: crosswalk.wayId,
+          corridorW14: metadata.corridorW14,
+          renderTier: 'street',
+          tierOpacity: metadata.tierOpacity,
+        },
+        geometry: { type: 'MultiLineString', coordinates: crosswalk.stripes },
+      });
+    }
+    for (const stopBar of junctionStopBars(node, geometry, system.approachControls)) {
+      laneMarkings.push({
+        type: 'Feature',
+        id: stableFeatureId('laneMarkings', 'stop-bar', stopBar.nodeId, stopBar.wayId, stopBar.end),
+        properties: {
+          kind: 'stopBar',
+          nodeId: stopBar.nodeId,
+          wayId: stopBar.wayId,
+          corridorW14: metadata.corridorW14,
+          renderTier: 'street',
+          tierOpacity: metadata.tierOpacity,
+        },
+        geometry: { type: 'LineString', coordinates: stopBar.path },
+      });
+    }
+  };
+
   // Junctions among lane-detailed ways: real footprint polygons whose trim
   // distances pull every arm's lane geometry back so carriageways stop at
   // the junction edge instead of overlapping through it (stage 2 feeding
   // stage 1 — see geometry/junctions.ts). Connector curves are the per-lane
   // turn guides through each footprint.
-  const junctionFeatures: Feature<Polygon>[] = [];
+  const junctionFeatures: Feature<Polygon | Point>[] = [];
   const connectorFeatures: Feature<LineString>[] = [];
+  const laneNodes: { node: TransitSystem['nodes'][number]; g: JunctionGeometry }[] = [];
   let wayTrims: WayTrims = new Map();
   const candidateWays = orderedIndexedValues(system.ways, waysById, candidateWayIds);
   const needsJunctionGeometry =
@@ -2200,7 +2292,6 @@ function projectTopologyFeatures({
     candidateWays.some((way) => wantsLaneDetail(way));
   if (needsJunctionGeometry) {
     if (counts) counts.featureJunctionPassCount++;
-    const laneNodes: { node: TransitSystem['nodes'][number]; g: JunctionGeometry }[] = [];
     const candidateNodes = orderedIndexedValues(
       system.nodes,
       indexes.nodesById,
@@ -2223,44 +2314,78 @@ function projectTopologyFeatures({
     }
     wayTrims = collectWayTrims(laneNodes.map((x) => x.g));
     for (const { node, g } of laneNodes) {
-      const incidentWays = node.refs.flatMap((ref) => {
-        const way = waysById.get(ref.wayId);
-        return way ? [way] : [];
-      });
-      const incidentTypeIds = [...new Set(incidentWays.map((way) => way.typeId))].sort();
+      const metadata = junctionPaintMetadata(node);
+      appendControlledApproachMarkings(node, g, metadata);
       if (
         projection.junctions.polygons &&
         (!junctionOutputNodeIds || junctionOutputNodeIds.has(node.id)) &&
         g.polygon.length >= 3
       ) {
-        const incidentCorridorW14 = Math.max(
-          0,
-          ...node.refs.map((ref) => {
-            const way = waysById.get(ref.wayId);
-            return way
-              ? widthPxAtZ14(profileWidthM(way.profile), way.points[0]?.[1] ?? node.coord[1])
-              : 0;
-          }),
-        );
         junctionFeatures.push({
           type: 'Feature',
           id: stableFeatureId('junctions', 'surface', node.id),
           properties: {
             nodeId: node.id,
-            typeIds: incidentTypeIds,
+            typeIds: metadata.typeIds,
             selected: selection?.kind === 'node' && selId === node.id,
             renderTier: 'street',
-            corridorW14: incidentCorridorW14,
-            tierOpacity: Math.max(
-              0,
-              ...node.refs.map((ref) => {
-                const way = waysById.get(ref.wayId);
-                return way ? corridorPresentation(way).blend.weights.street : 0;
-              }),
-            ),
+            corridorW14: metadata.corridorW14,
+            tierOpacity: metadata.tierOpacity,
           },
           geometry: { type: 'Polygon', coordinates: [closeRing(g.polygon)] },
         });
+      }
+      if (
+        projection.junctions.polygons &&
+        (!junctionOutputNodeIds || junctionOutputNodeIds.has(node.id)) &&
+        node.control &&
+        node.control !== 'uncontrolled'
+      ) {
+        junctionFeatures.push({
+          type: 'Feature',
+          id: stableFeatureId('junctions', 'control', node.id),
+          properties: {
+            nodeId: node.id,
+            control: node.control,
+            typeIds: metadata.typeIds,
+            renderTier: 'street',
+            corridorW14: metadata.corridorW14,
+            tierOpacity: metadata.tierOpacity,
+          },
+          geometry: { type: 'Point', coordinates: node.coord },
+        });
+      }
+      if (
+        projection.junctions.polygons &&
+        (!junctionOutputNodeIds || junctionOutputNodeIds.has(node.id))
+      ) {
+        for (const approach of junctionControlledApproaches(node, g, system.approachControls)) {
+          // A whole-node control already has one central marker. A per-arm
+          // override is a separate authored instruction and must remain
+          // visible at its approach instead of looking like a global signal.
+          if (!approach.explicit) continue;
+          junctionFeatures.push({
+            type: 'Feature',
+            id: stableFeatureId(
+              'junctions',
+              'approach-control',
+              node.id,
+              approach.arm.wayId,
+              approach.arm.end,
+            ),
+            properties: {
+              nodeId: node.id,
+              wayId: approach.arm.wayId,
+              end: approach.arm.end,
+              control: approach.control,
+              typeIds: metadata.typeIds,
+              renderTier: 'street',
+              corridorW14: metadata.corridorW14,
+              tierOpacity: metadata.tierOpacity,
+            },
+            geometry: { type: 'Point', coordinates: approach.coord },
+          });
+        }
       }
       // Selection-owned lane movement guides live exclusively in the web
       // editor's transient junction-guide source. Settled scenes remain
@@ -2604,17 +2729,15 @@ function projectTopologyFeatures({
         // Which lane(s) each service rides here — both directions of every
         // pattern that traverses this way, so a two-way service claims both
         // curbs. Group services by lane so services sharing a lane can fan
-        // slightly instead of overprinting. wayPatternIndex is pre-built once
+        // slightly instead of overprinting. The directional pattern index is pre-built once
         // for the whole system — O(1) here, not a re-scan of every rider's full
         // pattern list per way.
-        const { servicesByLane, runsByLaneAndService, resolvedServiceIds } = laneServiceAssignments(
-          {
-            entries: wayPatternIndex(byWay).get(way.id) ?? [],
-            laneById,
-            waysById,
-            turnRestrictions: system.turnRestrictions,
-          },
-        );
+        const { servicesByLane, runsByLaneAndService, resolvedServiceIds } = assignServicesToLanes({
+          entries: indexServicePatternsByWay(byWay).get(way.id) ?? [],
+          laneById,
+          waysById,
+          turnRestrictions: system.turnRestrictions,
+        });
         // A bundle rider with no lane resolved anywhere on this way (a lane-less
         // profile) falls back to the centerline.
         bundle.forEach((svc) => {
@@ -2646,35 +2769,34 @@ function projectTopologyFeatures({
           // the band), but it carries the metric so a per-lane width can use it later.
           const w14 = widthPxAtZ14(lane.widthM * SERVICE_LANE_FRACTION, lat);
           const n = laneServices.length; // lone service sits dead-centre on its lane
-          const extendThroughJunction = (
-            coordinates: LngLat[],
-            range: readonly [number, number],
-          ): LngLat[] => {
-            const extended = [...coordinates];
-            if (range[0] <= 0 && trims.start > 0) extended.unshift(path[0]);
-            if (range[1] >= 1 && trims.end > 0) extended.push(path[path.length - 1]);
-            return extended;
-          };
-          const junctionConnectedLanePath = extendThroughJunction(lane.path, [0, 1]);
           laneServices.forEach((svc, i) => {
             const offset = (i - (n - 1) / 2) * WITHIN_LANE_SPACING_PX;
+            const assignmentRuns = runsByLaneAndService.get(
+              laneServiceAssignmentKey(laneId, svc.id),
+            );
+            for (const run of assignmentRuns ?? []) {
+              streetServiceEndpointPaint.set(
+                streetServiceEndpointPaintKey(svc.id, run, way.id, laneId),
+                { service: svc, way, corridor, laneW14: w14, offset },
+              );
+            }
             addServiceHitFeatures({
               service: svc,
-              path: junctionConnectedLanePath,
+              path: lane.path,
               offset,
               renderTier: 'street',
               tierOpacity: corridor.blend.weights.street,
               availableTiers: corridor.retainedTiers,
               w14,
               pathRole: laneId,
-              runs: runsByLaneAndService.get(`${laneId}\u001f${svc.id}`),
+              runs: assignmentRuns,
             });
             const ranges = serviceRangesOnWay(svc, way.id);
             if (ranges.length === 1 && ranges[0][0] <= 0 && ranges[0][1] >= 1) {
               services.push(
                 serviceFeature({
                   service: svc,
-                  coordinates: extendThroughJunction(lane.path, [0, 1]),
+                  coordinates: lane.path,
                   offset,
                   renderTier: 'street',
                   tierOpacity: corridor.blend.weights.street,
@@ -2691,7 +2813,7 @@ function projectTopologyFeatures({
                 services.push(
                   serviceFeature({
                     service: svc,
-                    coordinates: extendThroughJunction(piece, [lo, hi]),
+                    coordinates: piece,
                     offset,
                     renderTier: 'street',
                     tierOpacity: corridor.blend.weights.street,
@@ -2718,6 +2840,24 @@ function projectTopologyFeatures({
         }
       }
     }
+  }
+
+  // Street-tier lane paths stop at each junction footprint. These small
+  // connector features carry a service continuously from its incoming lane
+  // to the outgoing lane without turning the selected-junction editor guides
+  // into committed geometry. `laneNodes` is already viewport/scoped filtered,
+  // so this only considers junctions whose surrounding topology was projected.
+  if (!network && projection.topology.services && streetServiceEndpointPaint.size > 0) {
+    appendStreetServiceJunctionConnectors({
+      services,
+      serviceHits,
+      indexes,
+      waysById,
+      wayTrims,
+      nodes: laneNodes.map(({ node }) => node),
+      endpointPaint: streetServiceEndpointPaint,
+      turnRestrictions: system.turnRestrictions,
+    });
   }
 
   return {
@@ -2764,7 +2904,7 @@ interface IndependentProjectionOptions {
 }
 
 interface IndependentProjectionResult {
-  stations: Feature<Point>[];
+  stops: Feature<Point>[];
   handles: Feature<Point>[];
   serviceTermini: Feature<Point>[];
   physical: PhysicalProjectionResult;
@@ -2778,7 +2918,8 @@ function viewportCategoriesFor(projection: FeatureProjectionPlan): RenderViewpor
   // so a labels-only source request still needs corridor candidates.
   if (projection.topologyPassEnabled || projection.wayLabels) categories.push('corridor');
   if (projection.junctions.needsGeometry) categories.push('junction');
-  if (projection.stations || projection.physical.enabled) categories.push('station');
+  if (projection.stops) categories.push('stop');
+  if (projection.physical.enabled) categories.push('station');
   if (projection.wayLabels) categories.push('label');
   if (projection.selectionHandles) categories.push('way-handle');
   if (projection.serviceTermini) categories.push('service-terminus');
@@ -2786,6 +2927,15 @@ function viewportCategoriesFor(projection: FeatureProjectionPlan): RenderViewpor
   if (projection.physical.footprints || projection.physical.handles) categories.push('group');
   if (projection.physical.handles) categories.push('physical-handle');
   return categories;
+}
+
+function stopsForProjection(
+  system: TransitSystem,
+  indexes: SharedProjectionIndexes,
+  requestedStopIds: readonly string[] | undefined,
+  viewportStopIds: readonly string[] | undefined,
+): TransitSystem['stops'] {
+  return orderedIndexedValues(system.stops, indexes.stopsById, requestedStopIds ?? viewportStopIds);
 }
 
 function stationsForProjection(
@@ -2826,6 +2976,26 @@ function optionalIdSet(
   return intersection ? new Set(intersection) : undefined;
 }
 
+function independentCandidateStops({
+  system,
+  projection,
+  indexes,
+  buildOptions,
+  viewport,
+  projectionScope,
+}: IndependentProjectionOptions): TransitSystem['stops'] {
+  if (!projection.stops) return [];
+  const viewportStopIds = intersectOptionalOrderedIds(viewport.stopIds ?? [], buildOptions.stopIds);
+  const stopIds = projectionScope
+    ? intersectOrderedIds(projectionScope.candidates.stopIds, viewportStopIds ?? [])
+    : viewportStopIds;
+  const candidates = stopsForProjection(system, indexes, stopIds, undefined);
+  const unitStopIds = buildOptions.unitScope?.stopIds;
+  if (!unitStopIds) return candidates;
+  const allowed = new Set(unitStopIds);
+  return candidates.filter((stop) => allowed.has(stop.id));
+}
+
 function independentCandidateStations({
   system,
   projection,
@@ -2834,7 +3004,7 @@ function independentCandidateStations({
   viewport,
   projectionScope,
 }: IndependentProjectionOptions): TransitSystem['stations'] {
-  if (!projection.stations && !projection.physical.enabled) return [];
+  if (!projection.physical.enabled) return [];
   const viewportStationIds = intersectOptionalOrderedIds(
     viewport.stationIds ?? [],
     buildOptions.stationIds,
@@ -2957,10 +3127,9 @@ function projectIndependentFeatures(
   options: IndependentProjectionOptions,
 ): IndependentProjectionResult {
   const { system, selection, handleWayIds, projection, indexes, network, counts } = options;
+  const candidateStops = independentCandidateStops(options);
   const candidateStations = independentCandidateStations(options);
-  const stations = projection.stations
-    ? projectStations(system, candidateStations, indexes, counts)
-    : [];
+  const stops = projection.stops ? projectStops(system, candidateStops, indexes, counts) : [];
   const handles =
     projection.selectionHandles && !(network && selection?.kind === 'service')
       ? projectSelectionHandles(
@@ -2988,7 +3157,7 @@ function projectIndependentFeatures(
         ),
       })
     : [];
-  return { stations, handles, serviceTermini, physical, wayLabels, facilities };
+  return { stops, handles, serviceTermini, physical, wayLabels, facilities };
 }
 
 function assembleSystemFeatures(
@@ -2998,7 +3167,7 @@ function assembleSystemFeatures(
   return {
     ways: { type: 'FeatureCollection', features: topology.ways },
     services: { type: 'FeatureCollection', features: topology.services },
-    stations: { type: 'FeatureCollection', features: independent.stations },
+    stops: { type: 'FeatureCollection', features: independent.stops },
     footprints: { type: 'FeatureCollection', features: independent.physical.footprints },
     platforms: { type: 'FeatureCollection', features: independent.physical.platforms },
     facilities: { type: 'FeatureCollection', features: independent.facilities },

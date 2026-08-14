@@ -28,8 +28,9 @@ import type { TransitSystem } from '../model/system';
 //   - `drivingSide` and `medians` are consumed at IMPORT time
 //     (model/import.ts) and baked into each Way's profile; the renderer reads
 //     the profile, never these.
-//   - `approachControls` is not reached by junction rendering —
-//     junctionGeometry(node, waysById) takes no controls argument.
+//   - `approachControls` are rendered as arm-level control markers and the
+//     associated crosswalk/stop-bar markings. They are separate from
+//     Node.control because a signal can govern only one incoming approach.
 //   - `vehicleKinds` drives the vehicle sources, which apps/web/src/sim/
 //     vehicles.ts fills from its own store.getState() inside its animation
 //     tick with no subscription, so it self-heals within one frame.
@@ -63,7 +64,7 @@ export const FEATURE_INPUT_ROLE: Record<keyof TransitSystem, 'render' | 'meta'> 
   palette: 'meta',
   drivingSide: 'meta',
   medians: 'meta',
-  approachControls: 'meta',
+  approachControls: 'render',
 };
 
 // Derived from the table above rather than written out a second time, so the
@@ -76,7 +77,7 @@ const RENDER_INPUT_KEYS = (Object.keys(FEATURE_INPUT_ROLE) as (keyof TransitSyst
  *
  *  Compares by REFERENCE, not by value: the store mutates with surgical spreads,
  *  so an untouched sub-array keeps its identity and a touched one is always a
- *  fresh object. That makes this an O(8) pointer check rather than a deep walk,
+ *  fresh object. That makes this a fixed-size pointer check rather than a deep walk,
  *  and it cannot report a real change as clean — a mutation that kept the same
  *  array identity would already be invisible to every memo in render/. */
 export function featureInputsChanged(before: TransitSystem, after: TransitSystem): boolean {

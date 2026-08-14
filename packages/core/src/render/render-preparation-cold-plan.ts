@@ -4,7 +4,7 @@ import {
   addPreparedNamedWays,
   addPreparedNodes,
   addPreparedServices,
-  addPreparedStationWayIds,
+  addPreparedStopWayIds,
   createMutablePreparedDependencyState,
   emptyPreparedClosure,
   type PreparedDependencyState,
@@ -41,6 +41,7 @@ import {
   groupViewportEntry,
   junctionViewportEntry,
   stationViewportEntry,
+  stopViewportEntry,
   type ViewportSpatialEntry,
 } from './viewport-index-entries';
 import type { RenderViewportCategory } from './viewport-index';
@@ -50,12 +51,14 @@ function createColdDomainDraft(): ColdDomainDraft {
     waysById: new Map(),
     nodesById: new Map(),
     servicesById: new Map(),
+    stopsById: new Map(),
     stationsById: new Map(),
     namedWaysById: new Map(),
     facilitiesById: new Map(),
     groupsById: new Map(),
     wayRank: new Map(),
     nodeRank: new Map(),
+    stopRank: new Map(),
     stationRank: new Map(),
     modeIds: new Set(),
     wayTypeIds: new Set(),
@@ -182,57 +185,63 @@ function addServices(context: ColdPlanContext): void {
   );
 }
 
-function addStations(context: ColdPlanContext): void {
-  const { stations } = context.options.system;
-  const stationViewport = context.categorySet.has('station')
-    ? context.coldViewport.get('station')
+function addStops(context: ColdPlanContext): void {
+  const { stops } = context.options.system;
+  const stopViewport = context.categorySet.has('stop')
+    ? context.coldViewport.get('stop')
     : undefined;
-  if (stationViewport) {
-    reserveColdPreparedViewportEntries(stationViewport, stations.length);
-    reservePreparedViewportCandidates(context.viewport, 'station', stations.length);
-    context.builder.runtime.operations.viewportEntityBuilds += stations.length;
-    context.builder.runtime.operations.viewportSegmentQueries += stations.length * 2;
+  if (stopViewport) {
+    reserveColdPreparedViewportEntries(stopViewport, stops.length);
+    reservePreparedViewportCandidates(context.viewport, 'stop', stops.length);
+    context.builder.runtime.operations.viewportEntityBuilds += stops.length;
+    context.builder.runtime.operations.viewportSegmentQueries += stops.length * 2;
   }
   let candidateIds: readonly string[] = [];
-  context.builder.runtime.operations.domainEntityVisits += stations.length;
-  context.builder.runtime.operations.dependencyEntityVisits += stations.length;
+  context.builder.runtime.operations.domainEntityVisits += stops.length;
+  context.builder.runtime.operations.dependencyEntityVisits += stops.length;
   context.builder.addUnitRange(
-    stations.length * 2,
+    stops.length * 2,
     'dependency',
-    'station-proximity',
+    'stop-proximity',
     () => 1,
     (index) => {
-      const stationIndex = Math.floor(index / 2);
-      const station = stations[stationIndex];
+      const stopIndex = Math.floor(index / 2);
+      const stop = stops[stopIndex];
       if (index % 2 === 0) {
-        candidateIds = nearWayCandidateIds(context, station);
+        candidateIds = nearWayCandidateIds(context, stop);
         return;
       }
-      const wayIds = exactNearWayIds(context, station, candidateIds);
-      addDomainBatch(
-        context.domain.stationsById,
-        context.domain.stationRank,
-        [station],
-        stationIndex,
-      );
-      addPreparedStationWayIds(context.dependency, station, wayIds);
-      if (stationViewport) {
-        const entry = stationViewportEntry(station);
-        appendColdViewportGeometry(stationViewport, entry);
+      const wayIds = exactNearWayIds(context, stop, candidateIds);
+      addDomainBatch(context.domain.stopsById, context.domain.stopRank, [stop], stopIndex);
+      addPreparedStopWayIds(context.dependency, stop, wayIds);
+      if (stopViewport) {
+        const entry = stopViewportEntry(stop);
+        appendColdViewportGeometry(stopViewport, entry);
         recordColdViewportEntryMetadata({
           draft: context.viewport,
-          category: 'station',
-          ownerId: station.id,
+          category: 'stop',
+          ownerId: stop.id,
           entry,
           generation: context.generation,
           presentation: context.options.presentation,
           candidateEnvelope: context.options.candidateEnvelope,
-          cold: stationViewport,
+          cold: stopViewport,
         });
-        indexColdPreparedViewportEntry(stationViewport, stationIndex);
+        indexColdPreparedViewportEntry(stopViewport, stopIndex);
       }
     },
   );
+}
+
+function addStations(context: ColdPlanContext): void {
+  const { stations } = context.options.system;
+  addDomainCollection({
+    context,
+    values: stations,
+    target: context.domain.stationsById,
+    label: 'stations',
+  });
+  addViewport(context, 'station', stations, stationViewportEntry);
 }
 
 function labelEntry(context: ColdPlanContext, namedWay: NamedWay): ViewportSpatialEntry {
@@ -349,13 +358,14 @@ function addFinalization(context: ColdPlanContext): void {
         waysById: context.domain.waysById,
         nodesById: context.domain.nodesById,
         servicesById: context.domain.servicesById,
+        stopsById: context.domain.stopsById,
         stationsById: context.domain.stationsById,
         namedWaysById: context.domain.namedWaysById,
         facilitiesById: context.domain.facilitiesById,
         groupsById: context.domain.groupsById,
         servicesByWay: context.bundles.servicesByWay,
         serviceBundleSlots: context.bundles.slots,
-        wayIdsByStation: dependency.wayIdsByStation,
+        wayIdsByStop: dependency.wayIdsByStop,
         modeIds: context.domain.modeIds,
         wayTypeIds: context.domain.wayTypeIds,
         internals: {
@@ -363,6 +373,7 @@ function addFinalization(context: ColdPlanContext): void {
           viewport: viewportState,
           wayRank: context.domain.wayRank,
           nodeRank: context.domain.nodeRank,
+          stopRank: context.domain.stopRank,
           stationRank: context.domain.stationRank,
         },
       };
@@ -376,6 +387,7 @@ export function addColdPreparationPlan(input: AddColdPreparationPlanOptions): vo
   addWays(context);
   addNodes(context);
   addServices(context);
+  addStops(context);
   addStations(context);
   addNamedWays(context);
   addFacilitiesAndGroups(context);

@@ -10,7 +10,7 @@ import {
   type PlanRenderProjectionScopeOptions,
   type RenderProjectionScope,
 } from '../../src/render/render-projection-scope';
-import { aPattern, aRoad, aService, aStation, aSystem } from './fixtures.test';
+import { aPattern, aRoad, aService, aStation, aStop, aSystem } from './fixtures.test';
 
 export function projectionFixture(): TransitSystem {
   const west = aRoad('west', [
@@ -49,32 +49,30 @@ export function projectionFixture(): TransitSystem {
         refs: [{ wayId: unrelated.id, pointIndex: 0 }],
       },
     ],
-    stations: [
-      aStation(
-        'main-station',
-        [-115.19, 36.14005],
-        { wayId: west.id, t: 0.5 },
-        {
-          footprint: [
-            [-115.1902, 36.1399],
-            [-115.1898, 36.1399],
-            [-115.1898, 36.1401],
-          ],
-          platforms: [
-            {
-              id: 'main-platform',
-              points: [
-                [-115.1901, 36.13995],
-                [-115.1899, 36.13995],
-                [-115.1899, 36.14005],
-              ],
-            },
-          ],
-        },
-      ),
-      aStation('unrelated-station', [-115.18, 36.18], {
+    stops: [
+      aStop('main-stop', [-115.19, 36.14005], { wayId: west.id, t: 0.5 }),
+      aStop('unrelated-stop', [-115.18, 36.18], {
         wayId: unrelated.id,
         t: 0.5,
+      }),
+    ],
+    stations: [
+      aStation('main-station', [-115.19, 36.14005], {
+        footprint: [
+          [-115.1902, 36.1399],
+          [-115.1898, 36.1399],
+          [-115.1898, 36.1401],
+        ],
+        platforms: [
+          {
+            id: 'main-platform',
+            points: [
+              [-115.1901, 36.13995],
+              [-115.1899, 36.13995],
+              [-115.1899, 36.14005],
+            ],
+          },
+        ],
       }),
     ],
     namedWays: [
@@ -127,7 +125,7 @@ export function scopedProjection(
 export const SCOPED_FEATURES: readonly SystemFeatureName[] = [
   'ways',
   'services',
-  'stations',
+  'stops',
   'serviceTermini',
   'footprints',
   'platforms',

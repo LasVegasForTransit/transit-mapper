@@ -7,6 +7,7 @@ import type {
   Node,
   Service,
   Station,
+  Stop,
   Way,
 } from '../model/system';
 import {
@@ -56,6 +57,17 @@ export function junctionViewportEntry(node: Node): ViewportSpatialEntry {
 
 export function junctionViewportEntries(nodes: Node[]): ViewportSpatialEntry[] {
   return nodes.map(junctionViewportEntry);
+}
+
+/** Boarding points are point geometry. Physical Stations below carry their
+ * own footprint and platform geometry, so the two collections must never
+ * share a culling category. */
+export function stopViewportEntry(stop: Stop): ViewportSpatialEntry {
+  return { id: stop.id, paths: pointPath(stop.coord) };
+}
+
+export function stopViewportEntries(stops: Stop[]): ViewportSpatialEntry[] {
+  return stops.map(stopViewportEntry);
 }
 
 export function stationViewportEntry(station: Station): ViewportSpatialEntry {

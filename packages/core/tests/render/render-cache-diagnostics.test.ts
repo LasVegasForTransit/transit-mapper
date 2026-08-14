@@ -26,7 +26,7 @@ import {
 
 const DIAGNOSTIC_FEATURES: readonly SystemFeatureName[] = [
   'ways',
-  'stations',
+  'stops',
   'footprints',
   'platforms',
   'lanes',
@@ -85,6 +85,7 @@ describe('renderer cache diagnostics', () => {
     });
     expect(snapshotRenderDomainIndexCacheDiagnostics()).toEqual({
       nodes: { buildCount: 0, cacheHitCount: 2 },
+      stops: { buildCount: 0, cacheHitCount: 2 },
       stations: { buildCount: 0, cacheHitCount: 2 },
       namedWays: { buildCount: 0, cacheHitCount: 2 },
       facilities: { buildCount: 0, cacheHitCount: 0 },
@@ -92,8 +93,11 @@ describe('renderer cache diagnostics', () => {
       services: { buildCount: 0, cacheHitCount: 0 },
     });
     expect(counts).toMatchObject({
-      featureLaneGeometryBuildCount: 0,
-      featureLaneGeometryCacheHitCount: 6,
+      // The spatial/domain indexes stay warm. Lane geometry legitimately
+      // re-resolves when camera scale changes because its curve tolerance is
+      // expressed in displayed pixels.
+      featureLaneGeometryBuildCount: 6,
+      featureLaneGeometryCacheHitCount: 0,
     });
   });
 
@@ -128,8 +132,8 @@ describe('renderer cache diagnostics', () => {
       featureLaneGeometryBuildCount: 1,
       featureLaneGeometryCacheHitCount: 1,
       featureJunctionNodeVisitCount: 1,
-      featureStationVisitCount: 1,
-      featurePhysicalStationVisitCount: 1,
+      featureStopVisitCount: 1,
+      featurePhysicalStationVisitCount: 0,
       featureNamedWayVisitCount: 1,
     });
     const renderedWayIds = features.lanes.features.flatMap((feature) => {
@@ -147,6 +151,7 @@ describe('renderer cache diagnostics', () => {
     });
     expect(snapshotRenderDomainIndexCacheDiagnostics()).toEqual({
       nodes: { buildCount: 0, cacheHitCount: 1 },
+      stops: { buildCount: 0, cacheHitCount: 1 },
       stations: { buildCount: 0, cacheHitCount: 1 },
       namedWays: { buildCount: 0, cacheHitCount: 1 },
       facilities: { buildCount: 0, cacheHitCount: 0 },

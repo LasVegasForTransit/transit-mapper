@@ -5,6 +5,7 @@ import type {
   Node,
   Service,
   Station,
+  Stop,
   TransitSystem,
   Way,
 } from '../model/system';
@@ -27,6 +28,7 @@ export interface RenderPreparationPatch {
   readonly ways?: RenderPreparationEntityPatch<Way>;
   readonly nodes?: RenderPreparationEntityPatch<Node>;
   readonly services?: RenderPreparationEntityPatch<Service>;
+  readonly stops?: RenderPreparationEntityPatch<Stop>;
   readonly stations?: RenderPreparationEntityPatch<Station>;
   readonly namedWays?: RenderPreparationEntityPatch<NamedWay>;
   readonly facilities?: RenderPreparationEntityPatch<Facility>;
@@ -78,13 +80,14 @@ export interface RenderPreparedSnapshot {
   readonly waysById: ReadonlyMap<string, Way>;
   readonly nodesById: ReadonlyMap<string, Node>;
   readonly servicesById: ReadonlyMap<string, Service>;
+  readonly stopsById: ReadonlyMap<string, Stop>;
   readonly stationsById: ReadonlyMap<string, Station>;
   readonly namedWaysById: ReadonlyMap<string, NamedWay>;
   readonly facilitiesById: ReadonlyMap<string, Facility>;
   readonly groupsById: ReadonlyMap<string, Group>;
   readonly servicesByWay: ReadonlyMap<string, readonly Service[]>;
   readonly serviceBundleSlots: ReadonlyMap<string, number>;
-  readonly wayIdsByStation: ReadonlyMap<string, readonly string[]>;
+  readonly wayIdsByStop: ReadonlyMap<string, readonly string[]>;
   readonly modeIds: ReadonlySet<string>;
   readonly wayTypeIds: ReadonlySet<string>;
   readonly diagnostics: RenderPreparationDiagnostics;
