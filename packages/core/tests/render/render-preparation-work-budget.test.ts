@@ -26,9 +26,9 @@ function detailedSystem(wayCount: number, pointsPerWay: number) {
   );
   return aSystem({
     ways,
-    stations: ways.map((way, index) => ({
-      id: `station-${index}`,
-      name: `Station ${index}`,
+    stops: ways.map((way, index) => ({
+      id: `stop-${index}`,
+      name: `Stop ${index}`,
       coord: way.points[Math.floor(way.points.length / 2)],
       anchors: [{ wayId: way.id, t: 0.5 }],
     })),
@@ -36,7 +36,7 @@ function detailedSystem(wayCount: number, pointsPerWay: number) {
 }
 
 describe('renderer preparation work budgeting', () => {
-  it('plans station proximity without committed editor-handle work', () => {
+  it('plans stop proximity without committed editor-handle work', () => {
     const coordinator = createRenderPreparationCoordinator();
     const plan = coordinator.plan({
       revision: 'bounded-cold',
@@ -48,11 +48,11 @@ describe('renderer preparation work budgeting', () => {
 
     expect(plan.units.rangeCount).toBeLessThan(32);
     expect(plan.units.materializedCount?.()).toBe(0);
-    // Station membership reuses the corridor viewport grid. A second
+    // Stop membership reuses the corridor viewport grid. A second
     // city-wide segment index would duplicate cold work and can introduce a
     // large-map growth pause inside an otherwise one-entity unit.
     expect(plan.units.some(({ id }) => id.includes('proximity-grid'))).toBe(false);
-    expect(plan.units.some(({ label }) => label === 'station-proximity')).toBe(true);
+    expect(plan.units.some(({ label }) => label === 'stop-proximity')).toBe(true);
     expect(plan.units.some(({ id }) => id.includes('geometry:corridor'))).toBe(true);
     expect(plan.units.some(({ id }) => id.includes('metadata:corridor'))).toBe(true);
     expect(plan.units.some(({ id }) => id.includes('spatial:corridor'))).toBe(true);
@@ -62,7 +62,7 @@ describe('renderer preparation work budgeting', () => {
     expect(plan.units.some(({ id }) => id.includes('service-terminus'))).toBe(false);
     expect(
       plan.units.some(
-        ({ id, operationCount }) => id.includes('station-proximity') && operationCount > 4,
+        ({ id, operationCount }) => id.includes('stop-proximity') && operationCount > 4,
       ),
     ).toBe(false);
     expect(
@@ -81,6 +81,7 @@ describe('renderer preparation work budgeting', () => {
     expect(result.snapshot.categories).toEqual([
       'corridor',
       'junction',
+      'stop',
       'station',
       'label',
       'facility',
@@ -91,7 +92,7 @@ describe('renderer preparation work budgeting', () => {
       serviceTerminusIds: undefined,
       physicalHandleIds: undefined,
     });
-    expect(result.snapshot.wayIdsByStation.get('station-0')).toContain('way-0');
+    expect(result.snapshot.wayIdsByStop.get('stop-0')).toContain('way-0');
   });
 
   it('refines one long imported corridor by point work below the unit ceiling', () => {

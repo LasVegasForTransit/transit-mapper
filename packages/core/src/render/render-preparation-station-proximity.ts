@@ -1,5 +1,5 @@
 import { INTERCHANGE_METERS, nearestOnPath, resolveWayPath } from '../model/geo';
-import type { Station, Way } from '../model/system';
+import type { Stop, Way } from '../model/system';
 import type { ColdPlanContext } from './render-preparation-cold-types';
 import { queryColdPreparedViewportCategory } from './render-preparation-viewport';
 
@@ -8,7 +8,7 @@ export interface NearWaySearchBounds {
   readonly marginDegrees: number;
 }
 
-/** Bounds a changed corridor set for incremental station dependency repair. */
+/** Bounds a changed corridor set for incremental stop dependency repair. */
 export function nearWaySearchBounds(ways: readonly Way[]): NearWaySearchBounds | null {
   let west = Number.POSITIVE_INFINITY;
   let south = Number.POSITIVE_INFINITY;
@@ -36,15 +36,15 @@ export function nearWaySearchBounds(ways: readonly Way[]): NearWaySearchBounds |
   };
 }
 
-export function nearWayCandidateIds(context: ColdPlanContext, station: Station): readonly string[] {
+export function nearWayCandidateIds(context: ColdPlanContext, stop: Stop): readonly string[] {
   const latitudeDegrees = INTERCHANGE_METERS / 111_320;
   const longitudeDegrees =
-    INTERCHANGE_METERS / (111_320 * Math.max(Math.cos((station.coord[1] * Math.PI) / 180), 0.01));
+    INTERCHANGE_METERS / (111_320 * Math.max(Math.cos((stop.coord[1] * Math.PI) / 180), 0.01));
   const corridor = context.coldViewport.get('corridor');
   return corridor
     ? queryColdPreparedViewportCategory(
         corridor,
-        [station.coord, station.coord],
+        [stop.coord, stop.coord],
         Math.max(latitudeDegrees, longitudeDegrees),
       )
     : [];
@@ -52,13 +52,13 @@ export function nearWayCandidateIds(context: ColdPlanContext, station: Station):
 
 export function exactNearWayIds(
   context: ColdPlanContext,
-  station: Station,
+  stop: Stop,
   candidateIds: readonly string[],
 ): readonly string[] {
   const ranked = candidateIds.flatMap((id) => {
     const way = context.domain.waysById.get(id);
     if (!way) return [];
-    const nearest = nearestOnPath(resolveWayPath(way), station.coord);
+    const nearest = nearestOnPath(resolveWayPath(way), stop.coord);
     return nearest && nearest.distMeters <= INTERCHANGE_METERS
       ? [{ id, distance: nearest.distMeters }]
       : [];

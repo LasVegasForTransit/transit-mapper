@@ -73,7 +73,7 @@ function hitServiceIds(features: SystemFeatures): string[] {
 const SYSTEM_FEATURE_NAMES: readonly (keyof SystemFeatures)[] = [
   'ways',
   'services',
-  'stations',
+  'stops',
   'handles',
   'serviceTermini',
   'footprints',

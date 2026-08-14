@@ -16,6 +16,7 @@ export interface RenderProjectionCandidates {
   readonly connectorNodeIds: readonly string[];
   /** Nodes projection may inspect for trims even when their source features are not emitted. */
   readonly geometryNodeIds: readonly string[];
+  readonly stopIds: readonly string[];
   readonly stationIds: readonly string[];
   readonly labelDependencyIds: readonly string[];
   readonly labelWayIds: readonly string[];
@@ -33,6 +34,7 @@ export interface RenderProjectionReplacementScope {
   readonly serviceIds: readonly string[];
   readonly junctionNodeIds: readonly string[];
   readonly connectorNodeIds: readonly string[];
+  readonly stopIds: readonly string[];
   readonly stationIds: readonly string[];
   readonly labelDependencyIds: readonly string[];
   readonly labelWayIds: readonly string[];
@@ -82,6 +84,7 @@ function mergeClosures(
     junctionIds: orderedUnion(previous.junctionIds, next.junctionIds),
     connectorJunctionIds: orderedUnion(previous.connectorJunctionIds, next.connectorJunctionIds),
     serviceSpanIds: orderedUnion(previous.serviceSpanIds, next.serviceSpanIds),
+    stopIds: orderedUnion(previous.stopIds, next.stopIds),
     stationIds: orderedUnion(previous.stationIds, next.stationIds),
     labelIds: orderedUnion(previous.labelIds, next.labelIds),
   };
@@ -158,6 +161,7 @@ export function planRenderProjectionScope(
             nextOwners.serviceNodeIds,
           ),
         ),
+        stopIds: nextClosure.stopIds,
         stationIds: nextClosure.stationIds,
         labelDependencyIds: nextClosure.labelIds,
         labelWayIds: orderedExisting(next.ways, nextOwners.labelWayIds),
@@ -170,6 +174,7 @@ export function planRenderProjectionScope(
         serviceIds: affectedServiceIds,
         junctionNodeIds: closure.junctionIds,
         connectorNodeIds: closure.connectorJunctionIds,
+        stopIds: closure.stopIds,
         stationIds: closure.stationIds,
         labelDependencyIds: closure.labelIds,
         labelWayIds: orderedUnion(previousOwners.labelWayIds, nextOwners.labelWayIds),

@@ -1,10 +1,11 @@
-import type { Facility, Group, NamedWay, Node, Service, Station } from '../model/system';
+import type { Facility, Group, NamedWay, Node, Service, Station, Stop } from '../model/system';
 import {
   createRenderIndexCacheDiagnosticCounter,
   type RenderIndexCacheDiagnostics,
 } from './render-cache-diagnostics';
 
 const nodesByIdCache = new WeakMap<Node[], ReadonlyMap<string, Node>>();
+const stopsByIdCache = new WeakMap<Stop[], ReadonlyMap<string, Stop>>();
 const stationsByIdCache = new WeakMap<Station[], ReadonlyMap<string, Station>>();
 const namedWaysByIdCache = new WeakMap<NamedWay[], ReadonlyMap<string, NamedWay>>();
 const facilitiesByIdCache = new WeakMap<Facility[], ReadonlyMap<string, Facility>>();
@@ -17,6 +18,7 @@ export type RenderDomainIndexKindDiagnostics = RenderIndexCacheDiagnostics;
  * replace `ways` while retaining node, station, and label identities. */
 export interface RenderDomainIndexCacheDiagnostics {
   readonly nodes: RenderDomainIndexKindDiagnostics;
+  readonly stops: RenderDomainIndexKindDiagnostics;
   readonly stations: RenderDomainIndexKindDiagnostics;
   readonly namedWays: RenderDomainIndexKindDiagnostics;
   readonly facilities: RenderDomainIndexKindDiagnostics;
@@ -26,6 +28,7 @@ export interface RenderDomainIndexCacheDiagnostics {
 
 const domainIndexDiagnostics = {
   nodes: createRenderIndexCacheDiagnosticCounter(),
+  stops: createRenderIndexCacheDiagnosticCounter(),
   stations: createRenderIndexCacheDiagnosticCounter(),
   namedWays: createRenderIndexCacheDiagnosticCounter(),
   facilities: createRenderIndexCacheDiagnosticCounter(),
@@ -36,6 +39,7 @@ const domainIndexDiagnostics = {
 export function snapshotRenderDomainIndexCacheDiagnostics(): RenderDomainIndexCacheDiagnostics {
   return {
     nodes: domainIndexDiagnostics.nodes.snapshot(),
+    stops: domainIndexDiagnostics.stops.snapshot(),
     stations: domainIndexDiagnostics.stations.snapshot(),
     namedWays: domainIndexDiagnostics.namedWays.snapshot(),
     facilities: domainIndexDiagnostics.facilities.snapshot(),
@@ -61,6 +65,18 @@ export function renderNodesById(nodes: Node[]): ReadonlyMap<string, Node> {
   const index = new Map(nodes.map((node) => [node.id, node] as const));
   nodesByIdCache.set(nodes, index);
   domainIndexDiagnostics.nodes.recordBuild();
+  return index;
+}
+
+export function renderStopsById(stops: Stop[]): ReadonlyMap<string, Stop> {
+  const cached = stopsByIdCache.get(stops);
+  if (cached) {
+    domainIndexDiagnostics.stops.recordCacheHit();
+    return cached;
+  }
+  const index = new Map(stops.map((stop) => [stop.id, stop] as const));
+  stopsByIdCache.set(stops, index);
+  domainIndexDiagnostics.stops.recordBuild();
   return index;
 }
 

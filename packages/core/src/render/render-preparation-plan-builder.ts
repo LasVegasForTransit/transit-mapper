@@ -5,6 +5,7 @@ import type {
   Node,
   Service,
   Station,
+  Stop,
   TransitSystem,
   Way,
 } from '../model/system';
@@ -26,6 +27,7 @@ export interface PreparedSnapshotInternals {
   readonly viewport: PreparedViewportState;
   readonly wayRank: ReadonlyMap<string, number>;
   readonly nodeRank: ReadonlyMap<string, number>;
+  readonly stopRank: ReadonlyMap<string, number>;
   readonly stationRank: ReadonlyMap<string, number>;
 }
 
@@ -42,13 +44,14 @@ export interface RenderPreparationSnapshotDraft {
   readonly waysById: ReadonlyMap<string, Way>;
   readonly nodesById: ReadonlyMap<string, Node>;
   readonly servicesById: ReadonlyMap<string, Service>;
+  readonly stopsById: ReadonlyMap<string, Stop>;
   readonly stationsById: ReadonlyMap<string, Station>;
   readonly namedWaysById: ReadonlyMap<string, NamedWay>;
   readonly facilitiesById: ReadonlyMap<string, Facility>;
   readonly groupsById: ReadonlyMap<string, Group>;
   readonly servicesByWay: ReadonlyMap<string, readonly Service[]>;
   readonly serviceBundleSlots: ReadonlyMap<string, number>;
-  readonly wayIdsByStation: ReadonlyMap<string, readonly string[]>;
+  readonly wayIdsByStop: ReadonlyMap<string, readonly string[]>;
   readonly modeIds: ReadonlySet<string>;
   readonly wayTypeIds: ReadonlySet<string>;
   readonly internals: PreparedSnapshotInternals;

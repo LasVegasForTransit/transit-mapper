@@ -65,6 +65,7 @@ export interface PreparedViewportDraft {
 export const ALL_PREPARED_VIEWPORT_CATEGORIES: readonly RenderViewportCategory[] = [
   'corridor',
   'junction',
+  'stop',
   'station',
   'label',
   'way-handle',

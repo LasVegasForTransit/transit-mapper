@@ -15,6 +15,7 @@ export interface RenderViewportCandidateSets {
   wayIds?: readonly string[];
   wayIdSet?: ReadonlySet<string>;
   junctionIds?: readonly string[];
+  stopIds?: readonly string[];
   stationIds?: readonly string[];
   labelIds?: readonly string[];
   wayHandleIds?: readonly string[];
@@ -44,6 +45,7 @@ export function renderViewportCandidateSets(
     wayIds: candidates.corridorIds,
     wayIdSet: new Set(candidates.corridorIds),
     junctionIds: candidates.junctionIds,
+    stopIds: candidates.stopIds,
     stationIds: candidates.stationIds,
     labelIds: candidates.labelIds,
     wayHandleIds: candidates.wayHandleIds,

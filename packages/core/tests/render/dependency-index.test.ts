@@ -7,7 +7,7 @@ import {
   serviceSpanDependencyId,
 } from '../../src/render/dependency-index';
 import { dependencyInvalidationBetween } from '../../src/render/dependency-invalidation';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
 
 // A Service owns one path with the same durable identity. Lines carry public
 // naming and colour; they do not introduce a second path identifier.
@@ -50,9 +50,9 @@ function fixture() {
         refs: [{ wayId: 'unrelated', pointIndex: 0 }],
       },
     ],
-    stations: [
-      aStation('nearby-station', [0.5, 0.0001]),
-      aStation('unrelated-station', [10.5, 0], { wayId: 'unrelated', t: 0.5 }),
+    stops: [
+      aStop('nearby-stop', [0.5, 0.0001]),
+      aStop('unrelated-stop', [10.5, 0], { wayId: 'unrelated', t: 0.5 }),
     ],
     namedWays: [
       { id: 'main-name', name: 'Main Street', wayIds: ['west', 'east'] },
@@ -86,11 +86,11 @@ describe('renderer dependency index', () => {
         legIndex: 1,
       }),
     ]);
-    expect(closure.stationIds).toEqual(['nearby-station']);
+    expect(closure.stopIds).toEqual(['nearby-stop']);
     expect(closure.labelIds).toEqual([namedWayLabelDependencyId('main-name', 'west')]);
     expect(closure.corridorIds).not.toContain('unrelated');
     expect(closure.junctionIds).not.toContain('unrelated-junction');
-    expect(closure.stationIds).not.toContain('unrelated-station');
+    expect(closure.stopIds).not.toContain('unrelated-stop');
   });
 
   it('keeps a service-only edit out of physical corridor geometry', () => {
@@ -178,7 +178,7 @@ describe('renderer dependency index', () => {
       ways: [...previous.ways.filter(({ id }) => id !== 'west'), replacement],
       services: previous.services.filter(({ id }) => id !== 'main-service'),
       nodes: previous.nodes.filter(({ id }) => id !== 'main-junction'),
-      stations: previous.stations.filter(({ id }) => id !== 'nearby-station'),
+      stops: previous.stops.filter(({ id }) => id !== 'nearby-stop'),
       namedWays: previous.namedWays.filter(({ id }) => id !== 'main-name'),
     };
 

@@ -30,6 +30,7 @@ export function preparedViewportCandidates(
     wayIds,
     ...(wayIds ? { wayIdSet: draft.candidateIds.get('corridor') } : {}),
     junctionIds: ids('junction'),
+    stopIds: ids('stop'),
     stationIds: ids('station'),
     labelIds: ids('label'),
     wayHandleIds: ids('way-handle'),

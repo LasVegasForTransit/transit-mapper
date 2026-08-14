@@ -74,6 +74,7 @@ function retainedCollections(previous: TransitSystem, next: TransitSystem): bool
   return (
     previous.nodes === next.nodes &&
     previous.services === next.services &&
+    previous.stops === next.stops &&
     previous.stations === next.stations &&
     previous.namedWays === next.namedWays &&
     previous.facilities === next.facilities &&

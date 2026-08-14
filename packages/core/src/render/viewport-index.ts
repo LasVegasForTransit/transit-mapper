@@ -6,6 +6,7 @@ import type {
   Node,
   Service,
   Station,
+  Stop,
   TransitSystem,
   Way,
 } from '../model/system';
@@ -22,6 +23,7 @@ import {
   physicalHandleViewportEntries,
   serviceTerminusViewportEntries,
   stationViewportEntries,
+  stopViewportEntries,
   wayHandleViewportEntries,
 } from './viewport-index-entries';
 import {
@@ -43,6 +45,7 @@ export { MAX_VIEWPORT_GRID_ENTRIES } from './viewport-spatial-grid';
 export type RenderViewportCategory =
   | 'corridor'
   | 'junction'
+  | 'stop'
   | 'station'
   | 'label'
   | 'way-handle'
@@ -65,6 +68,7 @@ export interface ViewportCandidateQuery {
 export interface ViewportCategoryCounts {
   corridor: number;
   junction: number;
+  stop: number;
   station: number;
   label: number;
   wayHandle: number;
@@ -86,6 +90,7 @@ export interface ViewportCandidateCounts {
 export interface ViewportCandidates {
   corridorIds: readonly string[];
   junctionIds: readonly string[];
+  stopIds: readonly string[];
   stationIds: readonly string[];
   labelIds: readonly string[];
   wayHandleIds: readonly string[];
@@ -99,6 +104,7 @@ export interface ViewportCandidates {
 export interface ViewportIndexStats {
   corridors: number;
   junctions: number;
+  stops: number;
   stations: number;
   labels: number;
   wayHandles: number;
@@ -124,6 +130,7 @@ export interface RenderViewportIndex {
 interface ViewportIndexData {
   corridor: ViewportSpatialGrid;
   junction: ViewportSpatialGrid;
+  stop: ViewportSpatialGrid;
   station: ViewportSpatialGrid;
   label: ViewportSpatialGrid;
   wayHandle: ViewportSpatialGrid;
@@ -138,7 +145,8 @@ type GroupIndexCache = WeakMap<Group[], ServiceIndexCache>;
 type FacilityIndexCache = WeakMap<Facility[], GroupIndexCache>;
 type NamedWayIndexCache = WeakMap<NamedWay[], FacilityIndexCache>;
 type StationIndexCache = WeakMap<Station[], NamedWayIndexCache>;
-type NodeIndexCache = WeakMap<Node[], StationIndexCache>;
+type StopIndexCache = WeakMap<Stop[], StationIndexCache>;
+type NodeIndexCache = WeakMap<Node[], StopIndexCache>;
 
 const indexData = new WeakMap<RenderViewportIndex, ViewportIndexData>();
 const indexCache = new WeakMap<Way[], NodeIndexCache>();
@@ -155,6 +163,7 @@ function createIndex(system: TransitSystem): RenderViewportIndex {
   indexData.set(index, {
     corridor: buildViewportSpatialGrid(corridorViewportEntries(system.ways), budget),
     junction: buildViewportSpatialGrid(junctionViewportEntries(system.nodes), budget),
+    stop: buildViewportSpatialGrid(stopViewportEntries(system.stops), budget),
     station: buildViewportSpatialGrid(stationViewportEntries(system.stations), budget),
     wayHandle: buildViewportSpatialGrid(wayHandleViewportEntries(system.ways), budget),
     serviceTerminus: buildViewportSpatialGrid(
@@ -180,8 +189,10 @@ function createIndex(system: TransitSystem): RenderViewportIndex {
 export function viewportIndexFor(system: TransitSystem): RenderViewportIndex {
   let byNode = indexCache.get(system.ways);
   if (!byNode) indexCache.set(system.ways, (byNode = new WeakMap()));
-  let byStation = byNode.get(system.nodes);
-  if (!byStation) byNode.set(system.nodes, (byStation = new WeakMap()));
+  let byStop = byNode.get(system.nodes);
+  if (!byStop) byNode.set(system.nodes, (byStop = new WeakMap()));
+  let byStation = byStop.get(system.stops);
+  if (!byStation) byStop.set(system.stops, (byStation = new WeakMap()));
   let byNamedWay = byStation.get(system.stations);
   if (!byNamedWay) byStation.set(system.stations, (byNamedWay = new WeakMap()));
   let byFacility = byNamedWay.get(system.namedWays);
@@ -204,6 +215,7 @@ function emptyCategoryCounts(): ViewportCategoryCounts {
   return {
     corridor: 0,
     junction: 0,
+    stop: 0,
     station: 0,
     label: 0,
     wayHandle: 0,
@@ -224,6 +236,7 @@ const VIEWPORT_CATEGORY_BINDINGS: Readonly<
 > = {
   corridor: { dataKey: 'corridor', countKey: 'corridor' },
   junction: { dataKey: 'junction', countKey: 'junction' },
+  stop: { dataKey: 'stop', countKey: 'stop' },
   station: { dataKey: 'station', countKey: 'station' },
   label: { dataKey: 'label', countKey: 'label' },
   'way-handle': { dataKey: 'wayHandle', countKey: 'wayHandle' },
@@ -246,6 +259,7 @@ export function queryViewportCandidates(
     query.categories ?? [
       'corridor',
       'junction',
+      'stop',
       'station',
       'label',
       'way-handle',
@@ -276,6 +290,7 @@ export function queryViewportCandidates(
   return {
     corridorIds: run('corridor'),
     junctionIds: run('junction'),
+    stopIds: run('stop'),
     stationIds: run('station'),
     labelIds: run('label'),
     wayHandleIds: run('way-handle'),
@@ -293,6 +308,7 @@ export function viewportIndexStats(index: RenderViewportIndex): ViewportIndexSta
   const grids = [
     data.corridor,
     data.junction,
+    data.stop,
     data.station,
     data.label,
     data.wayHandle,
@@ -304,6 +320,7 @@ export function viewportIndexStats(index: RenderViewportIndex): ViewportIndexSta
   return {
     corridors: data.corridor.entries.length,
     junctions: data.junction.entries.length,
+    stops: data.stop.entries.length,
     stations: data.station.entries.length,
     labels: data.label.entries.length,
     wayHandles: data.wayHandle.entries.length,

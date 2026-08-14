@@ -50,7 +50,7 @@ function cullingFixture(): CullingFixture {
   const remoteService = aService('remote-service', [
     aPattern('remote-pattern', [remoteWay], [remoteWay.id]),
   ]);
-  const visibleStation = aStation('visible-station', [...VISIBLE_CENTER], undefined, {
+  const visibleStation = aStation('visible-station', [...VISIBLE_CENTER], {
     footprint: [
       [VISIBLE_CENTER[0] - 0.0002, VISIBLE_CENTER[1] - 0.0002],
       [VISIBLE_CENTER[0] + 0.0002, VISIBLE_CENTER[1] - 0.0002],
@@ -67,7 +67,7 @@ function cullingFixture(): CullingFixture {
       },
     ],
   });
-  const remoteStation = aStation('remote-station', [...REMOTE_CENTER], undefined, {
+  const remoteStation = aStation('remote-station', [...REMOTE_CENTER], {
     footprint: [
       [REMOTE_CENTER[0] - 0.0002, REMOTE_CENTER[1] - 0.0002],
       [REMOTE_CENTER[0] + 0.0002, REMOTE_CENTER[1] - 0.0002],

@@ -44,6 +44,7 @@ export function changedRenderDependencies(
     wayIds: changedEntityIds(previous.ways, next.ways, ({ id }) => id),
     nodeIds: changedEntityIds(previous.nodes, next.nodes, ({ id }) => id),
     serviceIds: changedEntityIds(previous.services, next.services, ({ id }) => id),
+    stopIds: changedEntityIds(previous.stops, next.stops, ({ id }) => id),
     stationIds: changedEntityIds(previous.stations, next.stations, ({ id }) => id),
     namedWayIds: changedEntityIds(previous.namedWays, next.namedWays, ({ id }) => id),
     turnRestrictionKeys: changedComponentKeys(previous.turnRestrictions, next.turnRestrictions),
@@ -64,6 +65,7 @@ function mergeClosures(
     junctionIds: merge(previous.junctionIds, next.junctionIds),
     connectorJunctionIds: merge(previous.connectorJunctionIds, next.connectorJunctionIds),
     serviceSpanIds: merge(previous.serviceSpanIds, next.serviceSpanIds),
+    stopIds: merge(previous.stopIds, next.stopIds),
     stationIds: merge(previous.stationIds, next.stationIds),
     labelIds: merge(previous.labelIds, next.labelIds),
   };

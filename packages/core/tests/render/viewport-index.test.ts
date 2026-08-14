@@ -84,7 +84,7 @@ describe('renderer viewport index', () => {
   it('retains a station whose physical footprint crosses the viewport', () => {
     const system = aSystem({
       stations: [
-        aStation('crossing-station', [2, 0], undefined, {
+        aStation('crossing-station', [2, 0], {
           footprint: [
             [0.5, -0.5],
             [2, -0.5],
@@ -115,7 +115,7 @@ describe('renderer viewport index', () => {
     ] as const;
     const system = aSystem({
       stations: [
-        aStation('surrounding-station', [3, 3], undefined, {
+        aStation('surrounding-station', [3, 3], {
           footprint: surrounding.map((point) => [...point]),
         }),
       ],
@@ -172,6 +172,7 @@ describe('renderer viewport index', () => {
     expect(result.counts.exactChecks).toEqual({
       corridor: 2,
       junction: 0,
+      stop: 0,
       station: 0,
       label: 0,
       wayHandle: 0,
@@ -198,14 +199,14 @@ describe('renderer viewport index', () => {
         aService('remote-service', [aPattern('remote-pattern', [remoteWay], [remoteWay.id])]),
       ],
       stations: [
-        aStation('visible-station', [0, 0], undefined, {
+        aStation('visible-station', [0, 0], {
           footprint: [
             [-0.25, -0.25],
             [0.25, -0.25],
             [0.25, 0.25],
           ],
         }),
-        aStation('remote-station', [4, 4], undefined, {
+        aStation('remote-station', [4, 4], {
           footprint: [
             [3.9, 3.9],
             [4.1, 3.9],

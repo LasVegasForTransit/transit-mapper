@@ -12,6 +12,9 @@ export interface RenderFeatureProjectionUnitScope {
   readonly geometryNodeIds?: readonly string[];
   readonly junctionOutputNodeIds?: readonly string[];
   readonly connectorOutputNodeIds?: readonly string[];
+  /** Boarding-point marker owners, distinct from physical stations. */
+  readonly stopIds?: readonly string[];
+  /** Physical passenger-place owners for footprints, platforms, and handles. */
   readonly stationIds?: readonly string[];
   readonly serviceIds?: readonly string[];
   readonly wayHandleIds?: readonly string[];

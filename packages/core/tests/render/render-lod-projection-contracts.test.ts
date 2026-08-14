@@ -12,7 +12,7 @@ import {
 import { widthPxAtZ14 } from '../../src/render/constants';
 import type { RenderPresentation } from '../../src/render/render-presentation';
 import { renderViewportTransitionMarginDegrees } from '../../src/render/render-viewport-margin';
-import { aPattern, aRoad, aService, aStation, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStation, aStop, aSystem } from '../support/fixtures.test';
 
 const BOUNDS = {
   southwest: [-115.3, 36] as LngLat,
@@ -65,7 +65,7 @@ function paintedServiceFeatures(features: SystemFeatures): Feature[] {
 const SYSTEM_FEATURE_NAMES: readonly (keyof SystemFeatures)[] = [
   'ways',
   'services',
-  'stations',
+  'stops',
   'handles',
   'serviceTermini',
   'footprints',
@@ -181,7 +181,7 @@ describe('screen-space corridor projection contracts', () => {
       [-115.18, 36.16],
     ]);
     const service = aService('service', [aPattern('pattern', [west], [west.id])]);
-    const station = aStation('station', [-115.19, 36.14], { wayId: west.id, t: 0.5 });
+    const stop = aStop('stop', [-115.19, 36.14], { wayId: west.id, t: 0.5 });
     const node = {
       id: 'junction',
       coord: west.points[1],
@@ -194,7 +194,7 @@ describe('screen-space corridor projection contracts', () => {
     const system = aSystem({
       ways: [west, east, north],
       services: [service],
-      stations: [station],
+      stops: [stop],
       nodes: [node],
     });
     const deferred = (visible: boolean): RenderViewOptions =>
@@ -209,7 +209,7 @@ describe('screen-space corridor projection contracts', () => {
     expect(hiddenByStyle).toEqual(shownByStyle);
     expect(featureProperty(hiddenByStyle.ways.features[0], 'typeId')).toBe('road');
     expect(featureProperty(paintedServiceFeatures(hiddenByStyle)[0], 'modeId')).toBe('bus');
-    expect(featureProperty(hiddenByStyle.stations.features[0], 'servedModeIds')).toEqual(['bus']);
+    expect(featureProperty(hiddenByStyle.stops.features[0], 'servedModeIds')).toEqual(['bus']);
     expect(featureProperty(hiddenByStyle.junctions.features[0], 'typeIds')).toEqual(['road']);
     expect(
       hiddenByStyle.connectors.features.every((feature) =>
@@ -291,7 +291,6 @@ describe('screen-space corridor projection contracts', () => {
     expect(counts).toMatchObject({
       featureTopologyWayVisitCount: 1,
       featureJunctionNodeVisitCount: 1,
-      featureStationVisitCount: 1,
       featurePhysicalStationVisitCount: 1,
     });
   });

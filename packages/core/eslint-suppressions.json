@@ -384,14 +384,6 @@
       "count": 1
     }
   },
-  "tests/model/importNetwork.test.ts": {
-    "@typescript-eslint/prefer-promise-reject-errors": {
-      "count": 1
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
   "tests/model/majorRoad.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 8
@@ -423,9 +415,6 @@
     }
   },
   "tests/render/buildFeatures.test.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 3
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }

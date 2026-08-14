@@ -36,7 +36,7 @@ export interface OrderedSystemRenderVisuals {
 const FEATURE_NAMES: readonly SystemFeatureName[] = [
   'ways',
   'services',
-  'stations',
+  'stops',
   'handles',
   'serviceTermini',
   'footprints',
@@ -62,8 +62,13 @@ const DOMAIN_BINDINGS: Record<SystemFeatureName, readonly DomainPropertyBinding[
   services: [
     { kind: 'service', propertyKeys: ['serviceId'] },
     { kind: 'way', propertyKeys: ['wayId'] },
+    // A Street-tier service connector changes when its junction moves even
+    // when neither service record nor way shape changed. Ordinary service
+    // fragments carry no nodeId, so this expands ownership only for that
+    // explicitly junction-owned geometry.
+    { kind: 'node', propertyKeys: ['nodeId'] },
   ],
-  stations: [{ kind: 'station', propertyKeys: ['id'] }],
+  stops: [{ kind: 'stop', propertyKeys: ['id'] }],
   handles: [{ kind: 'way', propertyKeys: ['wayId'] }],
   serviceTermini: [{ kind: 'service', propertyKeys: ['serviceId'] }],
   footprints: [
@@ -209,7 +214,7 @@ export function orderedSystemFeaturesFromScene(
   return {
     ways: visualCollection(scene, sourceIds, 'ways'),
     services: visualCollection(scene, sourceIds, 'services'),
-    stations: visualCollection(scene, sourceIds, 'stations'),
+    stops: visualCollection(scene, sourceIds, 'stops'),
     handles: visualCollection(scene, sourceIds, 'handles'),
     serviceTermini: visualCollection(scene, sourceIds, 'serviceTermini'),
     footprints: visualCollection(scene, sourceIds, 'footprints'),
