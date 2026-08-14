@@ -125,19 +125,6 @@ export const RENDER_TIER_SORT_KEY_EXPR = [
   0,
 ];
 
-// Lane widths are stored in meters and carried on each feature as a z14 pixel
-// width (see widthPxAtZ14, re-exported above); this expression scales that
-// exponentially (base 2 — exact for mercator) with zoom.
-export const LANE_WIDTH_EXPR = [
-  'interpolate',
-  ['exponential', 2],
-  ['zoom'],
-  14,
-  ['get', 'w14'],
-  22,
-  ['*', 256, ['get', 'w14']],
-];
-
 const MIN_LOD_ZOOM = 8;
 const MAX_LOD_ZOOM = 24;
 const LOD_ZOOM_STEP = 0.25;

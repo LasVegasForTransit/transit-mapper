@@ -4,8 +4,8 @@ import type { PerfProfileId } from './types';
 import { PORT_MASON_RENDERER_CENTER } from './renderer-port-mason-fixture';
 import { rendererCaptureZoomForCorridorWidth } from './renderer-capture';
 
-export const RENDERER_LOD_ACCEPTANCE_SUITE_ID = 'phase-2-lod' as const;
-export const RENDERER_LOD_ACCEPTANCE_PHASE = '01-lod' as const;
+const RENDERER_LOD_ACCEPTANCE_SUITE_ID = 'phase-2-lod' as const;
+const RENDERER_LOD_ACCEPTANCE_PHASE = '01-lod' as const;
 
 export const RENDERER_LOD_ACCEPTANCE_STATS_ASSERTION_IDS = [
   'hover-zero-committed-work',
@@ -27,7 +27,7 @@ export type RendererLodAcceptanceSurface = 'live-maplibre' | 'static-maplibre' |
 export type RendererLodAcceptanceFixtureId =
   'port-mason' | 'grade-stack' | 'served-three-arm' | 'served-four-arm' | 'served-five-arm';
 
-export interface RendererLodAcceptanceViewport {
+interface RendererLodAcceptanceViewport {
   readonly width: number;
   readonly height: number;
   readonly pixelRatio: number;
