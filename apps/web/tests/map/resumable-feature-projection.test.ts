@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { FeatureCollection } from 'geojson';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import { aPattern, aRoad, aService, aStation, aSystem } from '@transitmapper/core/testing/fixtures';
+import {
+  aPattern,
+  aRoad,
+  aService,
+  aStation,
+  aStop,
+  aSystem,
+} from '@transitmapper/core/testing/fixtures';
 import type { RenderViewOptions, SystemFeatures } from '@transitmapper/core/render/buildFeatures';
 import { planRenderProjectionScope } from '@transitmapper/core/render/render-projection-scope';
 import { ALL_SYSTEM_FEATURE_SOURCES } from '../../src/map/system-feature-sources';
@@ -49,29 +56,25 @@ function portMasonLikeFixture(): TransitSystem {
     [aPattern('branch-pattern', [west, east, north], [west.id, north.id])],
     { color: '#315de8' },
   );
-  const station = aStation(
-    'downtown-station',
-    [-115.1808, 36.14],
-    { wayId: west.id, t: 0.6 },
-    {
-      name: 'Downtown',
-      footprint: [
-        [-115.181, 36.13985],
-        [-115.1806, 36.13985],
-        [-115.1806, 36.14015],
-      ],
-      platforms: [
-        {
-          id: 'downtown-platform',
-          points: [
-            [-115.18095, 36.1399],
-            [-115.18065, 36.1399],
-            [-115.18065, 36.1401],
-          ],
-        },
-      ],
-    },
-  );
+  const stop = aStop('downtown-stop', [-115.1808, 36.14], { wayId: west.id, t: 0.6 });
+  const station = aStation('downtown-station', [-115.1808, 36.14], {
+    name: 'Downtown',
+    footprint: [
+      [-115.181, 36.13985],
+      [-115.1806, 36.13985],
+      [-115.1806, 36.14015],
+    ],
+    platforms: [
+      {
+        id: 'downtown-platform',
+        points: [
+          [-115.18095, 36.1399],
+          [-115.18065, 36.1399],
+          [-115.18065, 36.1401],
+        ],
+      },
+    ],
+  });
   return aSystem({
     id: 'port-mason',
     ways: [west, east, north],
@@ -87,6 +90,7 @@ function portMasonLikeFixture(): TransitSystem {
         ],
       },
     ],
+    stops: [stop],
     stations: [station],
     namedWays: [
       { id: 'mason-river', name: 'Mason River', wayIds: [west.id, east.id] },
@@ -130,7 +134,7 @@ function featureIdsAreUnique(features: SystemFeatures): boolean {
   const collections: readonly FeatureCollection[] = [
     features.ways,
     features.services,
-    features.stations,
+    features.stops,
     features.handles,
     features.serviceTermini,
     features.footprints,
@@ -165,7 +169,7 @@ describe('resumable geographic feature projection', () => {
     const plan = readyPlan(
       planResumableGeographicFeatureProjection({
         ...options,
-        batchSizes: { corridors: 1, junctions: 1, stations: 1, labels: 1, services: 1 },
+        batchSizes: { corridors: 1, junctions: 1, stops: 1, stations: 1, labels: 1, services: 1 },
       }),
     );
 
@@ -174,7 +178,7 @@ describe('resumable geographic feature projection', () => {
     expect(chunked).toEqual(full);
     expect(featureIdsAreUnique(chunked)).toBe(true);
     expect(chunked.services.features.length).toBeGreaterThan(0);
-    expect(chunked.stations.features.length).toBe(1);
+    expect(chunked.stops.features.length).toBe(1);
     expect(chunked.junctions.features.length).toBe(1);
     expect(chunked.serviceTermini.features.length).toBe(2);
     expect(chunked.wayLabels.features.length).toBe(3);

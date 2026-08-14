@@ -63,6 +63,23 @@ describe('render source bank background seed', () => {
     expect(events).toEqual(['ways', 'stations', 'stage', 'loaded', 'publish']);
   });
 
+  it('opens source readiness observation before the first hidden mutation', async () => {
+    const events: string[] = [];
+    const frames: Array<() => void> = [];
+    const handle = scheduleSourceBankSeed({
+      plan: seedPlan(events),
+      scheduleFrame: (callback) => frames.push(callback),
+      cancelFrame: vi.fn(),
+      onSourceMutationStart: () => events.push('observe'),
+      beforePublish: vi.fn(),
+    });
+
+    frames.shift()?.();
+    expect(events).toEqual(['observe', 'ways']);
+    handle.cancel();
+    await handle.settled;
+  });
+
   it('aborts a partial hidden seed without publishing it', async () => {
     const events: string[] = [];
     const frames: Array<() => void> = [];

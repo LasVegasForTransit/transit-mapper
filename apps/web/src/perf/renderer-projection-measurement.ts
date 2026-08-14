@@ -39,11 +39,11 @@ function projectionCountBaseline(counts: SourceFeatureProjectionCounts): Project
     cacheHitCount:
       counts.featureLaneGeometryCacheHitCount +
       counts.diagramTopologyCacheHitCount +
-      counts.diagramStationCacheHitCount,
+      counts.diagramStopCacheHitCount,
     cacheMissCount:
       counts.featureLaneGeometryBuildCount +
       counts.diagramTopologyBuildCount +
-      counts.diagramStationBuildCount,
+      counts.diagramStopBuildCount,
     candidateFeatureCount: counts.rendererCandidateFeatureCount,
     visibleFeatureCount: counts.rendererGeneratedFeatureCount,
     generatedVertexCount: counts.rendererGeneratedVertexCount,

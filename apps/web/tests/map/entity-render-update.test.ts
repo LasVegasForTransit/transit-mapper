@@ -21,7 +21,6 @@ import {
   SRC_SERVICE_ARROWS,
   SRC_SERVICE_TERMINI,
   SRC_SERVICES,
-  SRC_STATIONS,
   SRC_WAY_LABELS,
   SRC_WAYS,
 } from '../../src/map/layers';
@@ -52,7 +51,7 @@ function corridorFixture() {
         ],
       },
     ],
-    stations: [aStation('main-station', [-115.19, 36.14005], { wayId: west.id, t: 0.5 })],
+    stations: [aStation('main-station', [-115.19, 36.14005])],
     namedWays: [{ id: 'main-name', name: 'Main Street', wayIds: [west.id, east.id] }],
   });
 }
@@ -146,7 +145,6 @@ describe('entity-scoped live render update planning', () => {
     expect(plan.sourceIds).toEqual([
       SRC_WAYS,
       SRC_SERVICES,
-      SRC_STATIONS,
       SRC_HANDLES,
       SRC_SERVICE_TERMINI,
       SRC_LANES,
@@ -159,9 +157,6 @@ describe('entity-scoped live render update planning', () => {
     ]);
     expect(plan.replacementDomainsBySource.get(SRC_WAYS)).toEqual(wayDomains);
     expect(plan.replacementDomainsBySource.get(SRC_SERVICES)).toEqual(wayDomains);
-    expect(plan.replacementDomainsBySource.get(SRC_STATIONS)).toEqual([
-      renderDomainIdentity('station', 'main-station'),
-    ]);
     expect(plan.replacementDomainsBySource.get(SRC_SERVICE_TERMINI)).toEqual([
       renderDomainIdentity('service', 'main-service'),
     ]);
@@ -184,12 +179,7 @@ describe('entity-scoped live render update planning', () => {
     };
     const plan = scopedPlan(previous, next);
 
-    expect(plan.sourceIds).toEqual([
-      SRC_SERVICES,
-      SRC_STATIONS,
-      SRC_SERVICE_TERMINI,
-      SRC_SERVICE_ARROWS,
-    ]);
+    expect(plan.sourceIds).toEqual([SRC_SERVICES, SRC_SERVICE_TERMINI, SRC_SERVICE_ARROWS]);
     expect(plan.replacementDomainsBySource.get(SRC_SERVICES)).toEqual([
       renderDomainIdentity('service', 'main-service'),
     ]);
@@ -207,12 +197,7 @@ describe('entity-scoped live render update planning', () => {
     const plan = scopedPlan(previous, next);
     const stationDomain = [renderDomainIdentity('station', 'main-station')];
 
-    expect(plan.sourceIds).toEqual([
-      SRC_STATIONS,
-      SRC_FOOTPRINTS,
-      SRC_PLATFORMS,
-      SRC_PHYSICAL_HANDLES,
-    ]);
+    expect(plan.sourceIds).toEqual([SRC_FOOTPRINTS, SRC_PLATFORMS, SRC_PHYSICAL_HANDLES]);
     for (const sourceId of plan.sourceIds) {
       expect(plan.replacementDomainsBySource.get(sourceId)).toEqual(stationDomain);
     }

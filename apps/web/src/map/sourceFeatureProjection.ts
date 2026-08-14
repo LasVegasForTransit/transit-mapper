@@ -1,13 +1,8 @@
-import {
-  computeDiagramSystem,
-  type DiagramLayoutOperationCounts,
-} from '@transitmapper/core/model/diagramLayout';
+import { computeDiagramSystem } from '@transitmapper/core/model/diagramLayout';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { featureCollectionStats } from '@transitmapper/core/render/feature-stats';
 import {
   buildFeatures,
-  createFeatureBuildOperationCounts,
-  type FeatureBuildOperationCounts,
   type Highlight,
   type RenderViewOptions,
   type SystemFeatures,
@@ -26,55 +21,19 @@ import {
 } from './layers';
 import type { SystemFeatureSourceId } from './sourceUploadPlan';
 import { SYSTEM_FEATURE_NAME_BY_SOURCE } from './system-feature-sources';
+import type { SourceFeatureProjectionCounts } from './feature-projection-counts';
 
-export interface SourceFeatureProjectionCounts
-  extends FeatureBuildOperationCounts, DiagramLayoutOperationCounts {
-  rendererCandidateFeatureCount: number;
-  rendererGeneratedFeatureCount: number;
-  rendererGeneratedVertexCount: number;
-}
-
-/** Creates one isolated projection counter set. Cooperative generations and
- * synchronous editor refreshes must never mutate the same object because
- * their lifetimes can overlap across yielded frames. */
-export function createSourceFeatureProjectionCounts(): SourceFeatureProjectionCounts {
-  return {
-    ...createFeatureBuildOperationCounts(),
-    diagramTopologyBuildCount: 0,
-    diagramTopologyCacheHitCount: 0,
-    diagramStationBuildCount: 0,
-    diagramStationCacheHitCount: 0,
-    rendererCandidateFeatureCount: 0,
-    rendererGeneratedFeatureCount: 0,
-    rendererGeneratedVertexCount: 0,
-  };
-}
-
-const SOURCE_FEATURE_PROJECTION_COUNT_KEYS = Object.keys(
-  createSourceFeatureProjectionCounts(),
-) as Array<keyof SourceFeatureProjectionCounts>;
-
-function addProjectionCount(
-  target: SourceFeatureProjectionCounts,
-  source: SourceFeatureProjectionCounts,
-  key: keyof SourceFeatureProjectionCounts,
-): void {
-  target[key] += source[key];
-}
-
-/** Adds one privately completed physical attempt to its logical generation.
- * Failed and canceled attempts never call this helper. */
-export function mergeSourceFeatureProjectionCounts(
-  target: SourceFeatureProjectionCounts,
-  source: SourceFeatureProjectionCounts,
-): void {
-  for (const key of SOURCE_FEATURE_PROJECTION_COUNT_KEYS) {
-    addProjectionCount(target, source, key);
-  }
-}
+export {
+  createSourceFeatureProjectionCounts,
+  mergeSourceFeatureProjectionCounts,
+  type SourceFeatureProjectionCounts,
+} from './feature-projection-counts';
 
 export interface BuildFeaturesForSourcesOptions {
   system: TransitSystem;
+  /** A worker-produced schematic snapshot. Diagram projection receives this
+   * instead of solving layout again on the MapLibre/main-thread boundary. */
+  diagramSystem?: TransitSystem;
   selection: Highlight;
   handleWayIds: string[];
   view: RenderViewOptions;
@@ -84,6 +43,8 @@ export interface BuildFeaturesForSourcesOptions {
   precomputedViewportCandidates?: RenderViewportCandidateSets;
   preparedSnapshot?: RenderPreparedSnapshot;
   selectionOwnedConnectors?: boolean;
+  stopIds?: readonly string[];
+  /** Physical passenger places are separate from boarding-point stops. */
   stationIds?: readonly string[];
   physicalHandleStationId?: string | null;
   physicalHandleGroupId?: string | null;
@@ -113,7 +74,7 @@ function candidateVisitCount(counts: SourceFeatureProjectionCounts): number {
     counts.featureTopologyWayVisitCount +
     counts.featureServiceWayVisitCount +
     counts.featureJunctionNodeVisitCount +
-    counts.featureStationVisitCount +
+    counts.featureStopVisitCount +
     counts.featureHandleWayVisitCount +
     counts.featurePhysicalStationVisitCount +
     counts.featurePhysicalGroupVisitCount +
@@ -145,6 +106,7 @@ function recordProjectionDimensions({
 
 export function buildFeaturesForSources({
   system,
+  diagramSystem,
   selection,
   handleWayIds,
   view,
@@ -154,6 +116,7 @@ export function buildFeaturesForSources({
   precomputedViewportCandidates,
   preparedSnapshot,
   selectionOwnedConnectors,
+  stopIds,
   stationIds,
   physicalHandleStationId = null,
   physicalHandleGroupId = null,
@@ -165,7 +128,8 @@ export function buildFeaturesForSources({
   const needsDiagramLayout =
     view.viewMode === 'diagram' &&
     sourceIds.some((sourceId) => DIAGRAM_LAYOUT_SOURCES.has(sourceId));
-  const renderSystem = needsDiagramLayout ? computeDiagramSystem(system, counts) : system;
+  const renderSystem =
+    diagramSystem ?? (needsDiagramLayout ? computeDiagramSystem(system, counts) : system);
 
   const features = buildFeatures(
     renderSystem,
@@ -176,6 +140,7 @@ export function buildFeaturesForSources({
     physicalHandleGroupId,
     {
       requestedFeatures: sourceIds.map((sourceId) => SYSTEM_FEATURE_NAME_BY_SOURCE[sourceId]),
+      stopIds,
       stationIds,
       projectionScope,
       unitScope,

@@ -168,6 +168,11 @@ class SourceBankDataStoreImplementation implements SourceBankDataStore {
     return {
       ...bankScene(scene, this.unbankedSourceIds),
       hitFeatures: { type: 'FeatureCollection', features: [] },
+      // `generatedHitFeatureCount` is the source updater's cheap signal that
+      // a transaction owns hit geometry. Editor sources never do: retaining
+      // the committed scene's count here would make an editor-only update try
+      // to upload hits through an unbanked source target.
+      stats: { ...scene.stats, generatedHitFeatureCount: 0 },
     };
   }
 

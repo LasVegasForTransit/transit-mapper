@@ -1,52 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { SceneDraft } from '../../src/map/scene-draft';
 import { createCooperativeRenderJobScheduler } from '../../src/map/cooperative-render-job-scheduler';
 import { publishSceneDraft } from '../../src/map/scene-publication';
-import { emptySystemFeatures } from '../../src/map/system-feature-sources';
-
-class FrameClock {
-  nowMs = 0;
-  private nextHandle = 1;
-  readonly frames = new Map<number, () => void>();
-  now = () => this.nowMs;
-  scheduleFrame = (callback: () => void) => {
-    const handle = this.nextHandle++;
-    this.frames.set(handle, callback);
-    return handle;
-  };
-  cancelFrame = (handle: number) => {
-    this.frames.delete(handle);
-  };
-  flush(): void {
-    const entry = this.frames.entries().next();
-    if (entry.done) throw new Error('No frame is scheduled.');
-    const [handle, callback] = entry.value;
-    this.frames.delete(handle);
-    callback();
-  }
-}
-
-const input = { revision: 'scene', features: emptySystemFeatures(), sourceIds: [] };
-const prepared = {} as SceneDraft;
-
-async function flushUntilSettled(clock: FrameClock, settled: Promise<void>): Promise<void> {
-  const state = { done: false };
-  void settled.then(
-    () => {
-      state.done = true;
-    },
-    () => {
-      state.done = true;
-    },
-  );
-  for (let index = 0; index < 32; index += 1) {
-    await Promise.resolve();
-    await Promise.resolve();
-    if (state.done) return;
-    if (clock.frames.size > 0) clock.flush();
-  }
-  throw new Error('Scene publication did not settle within 32 frames.');
-}
+import {
+  flushScenePublication as flushUntilSettled,
+  preparedSceneDraft as prepared,
+  scenePublicationInput as input,
+  ScenePublicationFrameClock as FrameClock,
+} from '../support/scene-publication.test';
 
 describe('scene publication', () => {
   it('keeps planning, lazy work, and source commit behind one settlement barrier', async () => {
@@ -151,7 +111,7 @@ describe('scene publication', () => {
     expect(controller.publishDraftSynchronously).not.toHaveBeenCalled();
   });
 
-  it('aborts an over-budget source mutation without tolerance or publication', async () => {
+  it('publishes after an over-budget MapLibre mutation instead of rejecting completed work', async () => {
     const clock = new FrameClock();
     const scheduler = createCooperativeRenderJobScheduler({
       now: clock.now,
@@ -193,11 +153,11 @@ describe('scene publication', () => {
 
     await flushUntilSettled(clock, handle.settled);
 
-    await expect(handle.settled).rejects.toThrow('exceeding the 4.00 ms cooperative budget');
+    await expect(handle.settled).resolves.toBeUndefined();
     expect(batchSizes).toEqual([4]);
-    expect(sourceCommit.abort).toHaveBeenCalledOnce();
-    expect(sourceCommit.stage).not.toHaveBeenCalled();
-    expect(sourceCommit.publish).not.toHaveBeenCalled();
+    expect(sourceCommit.abort).not.toHaveBeenCalled();
+    expect(sourceCommit.stage).toHaveBeenCalledOnce();
+    expect(sourceCommit.publish).toHaveBeenCalledOnce();
   });
 
   it('requests recovery synchronously before rejecting a source commit failure', async () => {
@@ -369,59 +329,6 @@ describe('scene publication', () => {
     await expect(handle.settled).resolves.toBeUndefined();
     expect(batchSizes).toEqual([1, 1]);
     expect(recordScheduling).toHaveBeenCalledTimes(2);
-    expect(publishDraftSynchronously).toHaveBeenCalledOnce();
-  });
-
-  it('refines each batch once and preserves continuity after a minimal singleton overrun', async () => {
-    const clock = new FrameClock();
-    const scheduler = createCooperativeRenderJobScheduler({
-      now: clock.now,
-      scheduleFrame: clock.scheduleFrame,
-      cancelFrame: clock.cancelFrame,
-    });
-    const publishDraftSynchronously = vi.fn();
-    const recordScheduling = vi.fn();
-    const batchSizes: number[] = [];
-    const controller = {
-      draft: (_input: typeof input, options?: { batchSize?: number }) => {
-        batchSizes.push(options?.batchSize ?? 0);
-        return {
-          units: {
-            unitAt: (index: number) =>
-              index === 0
-                ? {
-                    id: 'persistent-singleton',
-                    run: () => {
-                      clock.nowMs += 3;
-                    },
-                  }
-                : undefined,
-          },
-          result: () => prepared,
-        };
-      },
-      publishDraftSynchronously,
-    };
-    const handle = publishSceneDraft({
-      scheduler,
-      controller,
-      input,
-      batchSize: 8,
-      recordScheduling,
-    });
-
-    await flushUntilSettled(clock, handle.settled);
-
-    await expect(handle.settled).resolves.toBeUndefined();
-    expect(batchSizes).toEqual([8, 8, 4, 4, 2, 2, 1, 1, 1]);
-    expect(recordScheduling).toHaveBeenCalledTimes(9);
-    expect(recordScheduling).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        committedJobCount: 1,
-        failedJobCount: 0,
-        maxUnitDurationMs: 3,
-      }),
-    );
     expect(publishDraftSynchronously).toHaveBeenCalledOnce();
   });
 });

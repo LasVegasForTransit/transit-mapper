@@ -79,12 +79,13 @@ class ScenePublicationPipeline<Update> {
     const attempt = createScenePublicationAttempt<Update>(batchSize, tolerateBudgetOverrun);
     const scheduled = this.options.scheduler.submit({
       units: scenePublicationUnits(this.options, attempt),
-      ...(attempt.tolerateBudgetOverrun
-        ? {
-            overBudgetUnitPolicy: 'yield' as const,
-            overBudgetYieldUnitIds: attempt.overBudgetYieldUnitIds,
-          }
-        : {}),
+      // MapLibre source calls have already changed renderer-owned state by
+      // the time their elapsed duration is known. Treat them as an explicit
+      // external boundary: record and yield after an overrun, but never turn
+      // a completed user action into a failed transaction. Private planning
+      // remains strict until the final, structurally-minimal retry.
+      overBudgetUnitPolicy: 'yield' as const,
+      overBudgetYieldUnitIds: attempt.overBudgetYieldUnitIds,
       commit: () => this.commitAttempt(attempt),
     });
     this.currentJob = scheduled;

@@ -65,6 +65,7 @@ export function createAcceptedSceneRecovery(
   options: AcceptedSceneRecoveryOptions,
 ): RenderSourceErrorRecoveryCoordinator {
   let mutatedSourceIds: readonly string[] = [];
+  let sourceLoad: Promise<void> | null = null;
   let mode: 'active' | 'hidden' | 'seed' | 'unbanked' | undefined;
   let bank: SourceBankId | null | undefined;
   const abort = new AbortController();
@@ -86,16 +87,26 @@ export function createAcceptedSceneRecovery(
       mutatedSourceIds = sourceIds;
       mode = plan.mode;
       bank = plan.bank;
+      if (sourceIds.length === 0) {
+        sourceLoad = null;
+        return;
+      }
+      sourceLoad = waitForSourceBankLoad({ host: options.host, sourceIds, signal: abort.signal });
+      // Recovery may fail before its publish stage awaits this same barrier.
+      // Keep that rejection available to the recovery flow without leaking an
+      // unhandled browser error after cancellation.
+      void sourceLoad.catch(() => {});
     },
     beforePublish: async (plan) => {
       mode = plan.mode;
       bank = plan.bank;
       if (plan.sourceIds.length === 0) return;
-      await waitForSourceBankLoad({
-        host: options.host,
-        sourceIds: plan.sourceIds,
-        signal: abort.signal,
-      });
+      await (sourceLoad ??
+        waitForSourceBankLoad({
+          host: options.host,
+          sourceIds: plan.sourceIds,
+          signal: abort.signal,
+        }));
       if ((plan.mode === 'hidden' || plan.mode === 'seed') && plan.bank) await paint();
     },
     beforeScenePublish: async (plan) => {
@@ -113,6 +124,7 @@ export function createAcceptedSceneRecovery(
         await options.onRecovered(update);
       } finally {
         mutatedSourceIds = [];
+        sourceLoad = null;
         mode = undefined;
         bank = undefined;
       }
@@ -122,6 +134,7 @@ export function createAcceptedSceneRecovery(
       options.synchronizeInteractionState();
       options.refreshInteractionPreviews();
       mutatedSourceIds = [];
+      sourceLoad = null;
       mode = undefined;
       bank = undefined;
       options.onError(error);

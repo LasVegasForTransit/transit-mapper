@@ -25,11 +25,11 @@ describe('source feature projection accounting', () => {
   it('settles each transaction once so a terminal callback cannot double count', () => {
     const accounting = createSourceFeatureProjectionAccounting();
     const transaction = accounting.begin();
-    transaction.counts.featureStationVisitCount = 2;
+    transaction.counts.featureStopVisitCount = 2;
 
     expect(transaction.accept()).toBe(true);
     expect(transaction.accept()).toBe(false);
     expect(transaction.discard()).toBe(false);
-    expect(accounting.snapshot().featureStationVisitCount).toBe(2);
+    expect(accounting.snapshot().featureStopVisitCount).toBe(2);
   });
 });

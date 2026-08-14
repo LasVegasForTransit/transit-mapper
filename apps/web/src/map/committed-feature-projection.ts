@@ -20,23 +20,22 @@ import {
   type EntityRenderUpdate,
   type PreparedLiveInvalidationTracker,
 } from './entity-render-update';
-import {
-  prepareResumableGeographicFeatureProjection,
-  type GeographicFeatureProjectionPreparationStats,
-  type PlanResumableGeographicFeatureProjectionOptions,
+import type {
+  GeographicFeatureProjectionPreparationStats,
+  PlanResumableGeographicFeatureProjectionOptions,
 } from './resumable-feature-projection';
 import {
   submitRenderPreparationPipeline,
   type RenderPreparationPipelineHandle,
 } from './render-preparation-scheduling';
-import { submitResumableGeographicFeatureProjection } from './resumable-feature-projection-scheduling';
 import type { ResumableGeographicFeatureProjectionContinuation } from './resumable-feature-projection-scheduling';
 import {
-  buildFeaturesForSources,
   createSourceFeatureProjectionCounts,
   mergeSourceFeatureProjectionCounts,
   type SourceFeatureProjectionCounts,
-} from './sourceFeatureProjection';
+} from './feature-projection-counts';
+import type { FeatureProjectionWorkerClient } from './feature-projection-worker';
+import { submitWorkerFeatureProjection } from './worker-feature-projection-submission';
 import type { SourceUploadTransition } from './sourceUploadPlan';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
 
@@ -53,80 +52,11 @@ export interface SourceFeatureProjectionAccounting {
   snapshot(): SourceFeatureProjectionCounts;
 }
 
-export interface SubmitCommittedFeatureProjectionOptions {
-  readonly scheduler: CooperativeRenderJobScheduler;
-  readonly projection: PlanResumableGeographicFeatureProjectionOptions;
-  readonly preparationStartedAtMs: number;
-  readonly projectionCounts?: SourceFeatureProjectionCounts;
-  now(): number;
-  commit(
-    features: ReturnType<typeof buildFeaturesForSources>,
-  ): ResumableGeographicFeatureProjectionContinuation | null;
-  recordPreparation(stats: GeographicFeatureProjectionPreparationStats): void;
-  recordScheduling(stats: CooperativeRenderJobSchedulerStats): void;
-}
-
 export interface CommittedFeatureProjectionSubmission {
   /** Null only for Diagram's explicit synchronous Phase 6 fallback. */
   readonly generation: number | null;
   readonly settled: Promise<void>;
   cancel(): boolean;
-}
-
-export class GeographicFeatureProjectionPreparationBudgetError extends Error {
-  readonly stats: GeographicFeatureProjectionPreparationStats;
-
-  constructor(stats: GeographicFeatureProjectionPreparationStats) {
-    super(
-      `Renderer preparation took ${stats.maxPreparationDurationMs.toFixed(2)} ms and exceeded the 4.00 ms cooperative budget.`,
-    );
-    this.name = 'GeographicFeatureProjectionPreparationBudgetError';
-    this.stats = stats;
-  }
-}
-
-/** Runs the exact settled fallback for Diagram or submits one atomic,
- * generation-cancelable geographic projection. Preparation is deliberately
- * measured before either path so cold index work cannot hide in unit stats. */
-export function submitCommittedFeatureProjection(
-  options: SubmitCommittedFeatureProjectionOptions,
-): CommittedFeatureProjectionSubmission {
-  const prepared = prepareResumableGeographicFeatureProjection(options.projection, {
-    budgetMs: 4,
-    startedAtMs: options.preparationStartedAtMs,
-    now: () => options.now(),
-  });
-  options.recordPreparation(prepared.stats);
-  if (prepared.plan.kind === 'deferred') {
-    const continuation = options.commit(
-      buildFeaturesForSources({
-        ...options.projection,
-        ...(options.projectionCounts ? { counts: options.projectionCounts } : {}),
-      }),
-    );
-    return continuation
-      ? { generation: null, settled: continuation.settled, cancel: () => continuation.cancel() }
-      : { generation: null, settled: Promise.resolve(), cancel: () => false };
-  }
-
-  const handle = submitResumableGeographicFeatureProjection({
-    scheduler: options.scheduler,
-    plan: prepared.plan,
-    commit: (features) => options.commit(features),
-    recordScheduling: (stats) => options.recordScheduling(stats),
-    recordAcceptedCounts: (counts) => {
-      if (options.projectionCounts) {
-        mergeSourceFeatureProjectionCounts(options.projectionCounts, counts);
-      }
-    },
-  });
-  return {
-    generation: handle.generation,
-    settled: handle.settled.then((settlement) => {
-      if (settlement.status === 'failed') throw settlement.error;
-    }),
-    cancel: () => handle.cancel(),
-  };
 }
 
 /** Owns durable accepted totals while every in-flight renderer generation
@@ -178,12 +108,25 @@ export interface SubmitPreparedCommittedFeatureProjectionOptions {
   readonly transition: PreparedFeatureProjectionTransition | null;
   readonly requestedSourceIds: readonly MapSystemFeatureSourceId[];
   readonly intent: 'incremental' | 'reset' | 'style-heal';
+  readonly diagramRevision: string;
   readonly candidateEnvelope?: RenderCandidateEnvelope;
   readonly projection: Omit<
     PlanResumableGeographicFeatureProjectionOptions,
     'sourceIds' | 'preparedSnapshot' | 'projectionScope'
   >;
   readonly projectionCounts?: SourceFeatureProjectionCounts;
+  /** Geographic feature construction is pure CPU work and the live renderer
+   * always delegates it to this persistent worker. Browser-free scheduler
+   * coverage lives under `tests/support`, outside the production graph. */
+  readonly featureProjectionWorker: FeatureProjectionWorkerClient;
+  /** The Diagram solver is independent from geographic preparation. When it
+   * is supplied, its immutable schematic snapshot is fed to the same feature
+   * worker rather than reconstructing render geometry on the editor thread. */
+  layoutDiagram?(
+    system: TransitSystem,
+    revision: string,
+    signal: AbortSignal,
+  ): Promise<TransitSystem>;
   now(): number;
   commit(
     input: PreparedFeatureProjectionCommit,
@@ -251,9 +194,6 @@ export function submitPreparedCommittedFeatureProjection(
         entityChunkSize,
       }),
     continueWith: (preparedSnapshot) => {
-      // Scope planning is projection-preparation CPU. Measuring it here keeps
-      // it out of the otherwise invisible promise continuation between stages.
-      const projectionPreparationStartedAtMs = options.now();
       const pending = options.liveInvalidation.record(preparedSnapshot);
       const entityUpdate = planPreparedLiveEntityRenderUpdate({
         intent: options.intent,
@@ -268,23 +208,34 @@ export function submitPreparedCommittedFeatureProjection(
       const sourceIds =
         entityUpdate?.kind === 'scoped' ? entityUpdate.sourceIds : options.requestedSourceIds;
       if (sourceIds.length === 0) return null;
-      return submitCommittedFeatureProjection({
-        scheduler: options.scheduler,
-        projection: {
-          ...options.projection,
-          sourceIds,
-          ...(entityUpdate?.kind === 'scoped'
-            ? { projectionScope: entityUpdate.projectionScope }
-            : {}),
-          preparedSnapshot,
+      const workerInput = {
+        ...options.projection,
+        sourceIds,
+        ...(entityUpdate?.kind === 'scoped'
+          ? { projectionScope: entityUpdate.projectionScope }
+          : {}),
+        preparedSnapshot,
+      };
+      return submitWorkerFeatureProjection({
+        worker: options.featureProjectionWorker,
+        input: async (signal) => {
+          if (workerInput.view.viewMode !== 'diagram' || !options.layoutDiagram) {
+            return workerInput;
+          }
+          const diagramSystem = await options.layoutDiagram(
+            workerInput.system,
+            options.diagramRevision,
+            signal,
+          );
+          return { ...workerInput, diagramSystem };
         },
-        preparationStartedAtMs: projectionPreparationStartedAtMs,
-        ...(options.projectionCounts ? { projectionCounts: options.projectionCounts } : {}),
-        now: () => options.now(),
+        onProjected: ({ counts }) => {
+          if (counts && options.projectionCounts) {
+            mergeSourceFeatureProjectionCounts(options.projectionCounts, counts);
+          }
+        },
         commit: (features) =>
           options.commit({ features, preparedSnapshot, sourceIds, entityUpdate }),
-        recordPreparation: (stats) => options.recordPreparation(stats),
-        recordScheduling: (stats) => options.recordScheduling(stats),
       });
     },
     now: () => options.now(),

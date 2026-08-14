@@ -90,6 +90,8 @@ export const LYR_MARQUEE_FILL = 'tm-marquee-fill';
 export const LYR_MARQUEE_STROKE = 'tm-marquee-stroke';
 export const LYR_LANE_SURFACES = 'tm-lane-surfaces';
 export const LYR_CARRIAGEWAYS = 'tm-carriageways';
+export const LYR_CROSSWALKS = 'tm-crosswalks';
+export const LYR_STOP_BARS = 'tm-stop-bars';
 export const LYR_LANE_LINES = 'tm-lane-lines';
 export const LYR_CENTER_LINES = 'tm-center-lines';
 export const LYR_EDGE_LINES = 'tm-edge-lines';
@@ -98,6 +100,9 @@ export const LYR_RAIL_TIES = 'tm-rail-ties';
 export const LYR_LANE_ARROWS = 'tm-lane-arrows';
 export const LYR_SERVICE_ARROWS = 'tm-service-arrows';
 export const LYR_JUNCTIONS = 'tm-junctions';
+/** Street-tier control markers share the junction source and its stable node
+ * identity; they are not editor handles. */
+export const LYR_JUNCTION_CONTROLS = 'tm-junction-controls';
 export const LYR_JUNCTION_SELECTED = 'tm-junction-selected';
 export const LYR_CONNECTORS = 'tm-connectors';
 export const LYR_JUNCTION_GUIDES = 'tm-junction-guides';

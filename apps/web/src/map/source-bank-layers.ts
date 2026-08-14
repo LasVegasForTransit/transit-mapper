@@ -1,8 +1,10 @@
 /**
  * MapLibre source/layer identity and visibility for committed renderer banks.
- * Inactive layers stay layout-visible but translated offscreen while loading,
- * which builds their buckets without letting hidden labels enter collision
- * placement. Activation restores one bank's original translations at once.
+ * A cold inactive bank starts layout-hidden to avoid duplicate work. Before
+ * data changes, `prepare()` makes it layout-visible and translates it
+ * offscreen for one render: that builds its buckets without letting incoming
+ * labels enter collision placement. Activation restores one bank's original
+ * translations at once.
  */
 import type { LayerSpecification } from 'maplibre-gl';
 import { SRC_HIT_FEATURES } from './layers/constants';

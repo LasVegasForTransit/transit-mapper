@@ -355,16 +355,24 @@ describe('banked render scene source updater', () => {
       resolveHitSource: () => new MaterializedSource(),
       resolveUnbankedSource: () => editor,
     });
-    const first = renderScene('one', [
-      { sourceId: ways, features: [] },
-      { sourceId: handles, features: [] },
-    ]);
+    const first = renderScene(
+      'one',
+      [
+        { sourceId: ways, features: [] },
+        { sourceId: handles, features: [] },
+      ],
+      [renderPointFeature(renderFeatureId(ways, 'hit', ['one']), 1)],
+    );
     applyPlan(updater.prepare(first, { requestedSourceIds: [ways] }));
     const handle = renderPointFeature(renderFeatureId(handles, 'point', ['one']), 1);
-    const second = renderScene('two', [
-      { sourceId: ways, features: [] },
-      { sourceId: handles, features: [handle] },
-    ]);
+    const second = renderScene(
+      'two',
+      [
+        { sourceId: ways, features: [] },
+        { sourceId: handles, features: [handle] },
+      ],
+      [renderPointFeature(renderFeatureId(ways, 'hit', ['one']), 1)],
+    );
     const plan = updater.prepare(second, {
       requestedSourceIds: [handles],
       patch: diffRenderScenes(first, second),

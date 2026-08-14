@@ -152,11 +152,9 @@ describe('render scene source transactions', () => {
     expect(fixture.source(ways).calls).toEqual([]);
     expect(hitSource.calls).toEqual([]);
 
-    const stationUnit = staged.units[0];
-    if (!stationUnit) throw new Error('Expected a station source unit.');
-    stationUnit.run();
+    staged.units[0].run();
     const stationCall = fixture.source(stations).calls[0];
-    if (!stationCall || stationCall.method !== 'setData') {
+    if (stationCall.method !== 'setData') {
       throw new Error('Expected a complete source upload.');
     }
     expect(stationCall.data.features).toHaveLength(3_800);
@@ -164,13 +162,10 @@ describe('render scene source transactions', () => {
       stationFeatures.map((feature) => feature.id).sort(),
     );
     expect(updater.currentScene()).toBeNull();
-    const wayUnit = staged.units[1];
-    const hitUnit = staged.units[2];
-    if (!wayUnit || !hitUnit) throw new Error('Expected remaining source units.');
-    wayUnit.run();
-    hitUnit.run();
+    staged.units[1].run();
+    staged.units[2].run();
     const hitCall = hitSource.calls[0];
-    if (!hitCall || hitCall.method !== 'setData') {
+    if (hitCall.method !== 'setData') {
       throw new Error('Expected a complete hit upload.');
     }
     expect(hitCall.data.features).toHaveLength(570);
@@ -209,9 +204,9 @@ describe('render scene source transactions', () => {
       hitFeatures,
     );
 
-    const staged = updater.prepare(next, {
-      patch: diffRenderScenes(updater.currentScene()!, next),
-    });
+    const previous = updater.currentScene();
+    if (!previous) throw new Error('Expected the initial scene to be retained.');
+    const staged = updater.prepare(next, { patch: diffRenderScenes(previous, next) });
     expect(staged.strategy).toBe('full');
     expect(staged.units.map((unit) => unit.id)).toEqual([
       `render-source:promoted-full:${stations}`,
@@ -287,10 +282,15 @@ describe('render scene source transactions', () => {
     const healed = updater.healCurrentScene();
     expect(healed.strategy).toBe('full');
     expect(updater.currentScene()).toBe(previous);
-    expect(fixture.source(ways).calls.at(-1)).toMatchObject({
-      method: 'setData',
-      data: { features: [expect.objectContaining({ id: expect.stringContaining('way-a') })] },
-    });
+    const recoveredWayCall = fixture.source(ways).calls.at(-1);
+    if (recoveredWayCall?.method !== 'setData') {
+      throw new Error('Expected recovery to replace the retained way source.');
+    }
+    expect(
+      recoveredWayCall.data.features.some(
+        (feature) => typeof feature.id === 'string' && feature.id.includes('way-a'),
+      ),
+    ).toBe(true);
   });
 
   it('rejects a stale source transaction until it is explicitly abandoned', () => {

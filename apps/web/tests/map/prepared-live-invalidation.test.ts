@@ -8,6 +8,7 @@ const EMPTY: RenderDependencyClosure = {
   junctionIds: [],
   connectorJunctionIds: [],
   serviceSpanIds: [],
+  stopIds: [],
   stationIds: [],
   labelIds: [],
 };

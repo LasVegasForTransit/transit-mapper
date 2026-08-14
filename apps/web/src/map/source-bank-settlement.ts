@@ -25,6 +25,9 @@ export interface SourceBankSeedOptions {
   scheduleFrame(callback: () => void): number;
   cancelFrame(handle: number): void;
   beforeSourceMutation?(plan: RenderSceneSourceUpdatePlan): void | Promise<void>;
+  /** Opens source-load observation immediately before the first GeoJSON
+   * mutation. MapLibre may fire `sourcedata` during that mutation. */
+  onSourceMutationStart?(plan: RenderSceneSourceUpdatePlan): void;
   beforePublish(plan: RenderSceneSourceUpdatePlan): void | Promise<void>;
 }
 
@@ -115,6 +118,7 @@ class SourceBankSeed implements SourceBankSeedHandle {
   private preparationUnitIndex = 0;
   private unitIndex = 0;
   private sourcePreparationStarted = false;
+  private sourceMutationStarted = false;
   private finished = false;
   private resolve: () => void = () => {};
   private reject: (error: unknown) => void = () => {};
@@ -168,6 +172,10 @@ class SourceBankSeed implements SourceBankSeedHandle {
       return true;
     }
     try {
+      if (!this.sourceMutationStarted) {
+        this.sourceMutationStarted = true;
+        this.options.onSourceMutationStart?.(this.options.plan);
+      }
       unit.run();
       this.unitIndex += 1;
       this.schedule();
@@ -258,18 +266,30 @@ class BackgroundBankPreparation implements SourceBankBackgroundPreparation {
     this.bank = plan.bank;
     const abort = new AbortController();
     this.abort = abort;
+    let sourceLoad: Promise<void> | null = null;
     const handle = scheduleSourceBankSeed({
       plan,
       scheduleFrame: (callback) => this.options.scheduleFrame(callback),
       cancelFrame: (frame) => this.options.cancelFrame(frame),
       beforeSourceMutation: () =>
         waitForSourceBankPaint({ host: this.options.host, signal: abort.signal }),
-      beforePublish: async (prepared) => {
-        await waitForSourceBankLoad({
+      onSourceMutationStart: (prepared) => {
+        sourceLoad = waitForSourceBankLoad({
           host: this.options.host,
           sourceIds: prepared.sourceIds,
           signal: abort.signal,
         });
+        // Cancellation can happen while the background seed is still between
+        // source units, before `beforePublish` awaits this promise.
+        void sourceLoad.catch(() => {});
+      },
+      beforePublish: async (prepared) => {
+        await (sourceLoad ??
+          waitForSourceBankLoad({
+            host: this.options.host,
+            sourceIds: prepared.sourceIds,
+            signal: abort.signal,
+          }));
         await waitForSourceBankPaint({ host: this.options.host, signal: abort.signal });
       },
     });

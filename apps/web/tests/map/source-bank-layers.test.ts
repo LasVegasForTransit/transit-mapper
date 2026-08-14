@@ -8,6 +8,10 @@ import {
 } from '../../src/map/source-bank-layers';
 import { bankedLayerId, createSourceBankController } from '../../src/map/source-bank';
 
+function paintProperties(spec: (typeof LAYER_SPECS)[number]): Record<string, unknown> {
+  return spec.paint ?? {};
+}
+
 describe('render source bank layer controller', () => {
   it('flips the complete real layer set in one measured synchronous operation', () => {
     const bankController = createSourceBankController();
@@ -46,7 +50,7 @@ describe('render source bank layer controller', () => {
       expect(operations).toContainEqual([bankedLayerId(spec.id, 'a'), expected]);
       expect(operations).toContainEqual([bankedLayerId(spec.id, 'b'), expected]);
       for (const property of renderLayerTranslateProperties(spec)) {
-        const paint = spec.paint as Record<string, unknown> | undefined;
+        const paint = paintProperties(spec);
         expect(paintOperations).toContainEqual([bankedLayerId(spec.id, 'a'), property, [0, 0]]);
         expect(paintOperations).toContainEqual([
           bankedLayerId(spec.id, 'b'),
@@ -56,7 +60,7 @@ describe('render source bank layer controller', () => {
         expect(paintOperations).toContainEqual([
           bankedLayerId(spec.id, 'a'),
           `${property}-anchor`,
-          paint?.[`${property}-anchor`] ?? 'map',
+          paint[`${property}-anchor`] ?? 'map',
         ]);
         expect(paintOperations).toContainEqual([
           bankedLayerId(spec.id, 'b'),

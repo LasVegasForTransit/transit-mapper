@@ -9,6 +9,7 @@ import {
 function affected(overrides: Partial<GestureAffectedEntities>): GestureAffectedEntities {
   return {
     wayIds: [],
+    stopIds: [],
     stationIds: [],
     facilityIds: [],
     groupIds: [],

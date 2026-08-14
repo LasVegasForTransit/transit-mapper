@@ -168,6 +168,17 @@ describe('naming the network as the reason', () => {
     }
   });
 
+  it('describes the usable drafting surface instead of a broken-looking blank map', () => {
+    const message = resolveAppBanner({
+      ...calm,
+      notice: 'basemap-unavailable',
+      online: true,
+    })?.message;
+
+    expect(message).toContain('drafting grid');
+    expect(message).not.toContain('blank');
+  });
+
   // The message is derived from the cause each render rather than frozen when
   // the failure happened, so losing the network afterwards rewords it. That is
   // the entire reason `notice` holds a cause instead of a sentence.

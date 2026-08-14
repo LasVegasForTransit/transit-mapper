@@ -139,9 +139,7 @@ describe('live render scene controller domain scoping', () => {
     const retainedService = first.scene.featuresBySource
       .get(servicesSource)
       ?.features.find((feature) => feature.id === serviceBId);
-    const retainedStations = first.scene.featuresBySource.get(
-      SYSTEM_FEATURE_SOURCE_BY_NAME.stations,
-    );
+    const retainedStations = first.scene.featuresBySource.get(SYSTEM_FEATURE_SOURCE_BY_NAME.stops);
     const retainedServiceIdentity = first.scene.identityIndex.renderFeatureIdsByDomain.get(
       renderDomainIdentity('service', 'service-b'),
     );
@@ -187,7 +185,7 @@ describe('live render scene controller domain scoping', () => {
         .get(servicesSource)
         ?.features.find(({ id }) => id === serviceBId),
     ).toBe(retainedService);
-    expect(result.scene.featuresBySource.get(SYSTEM_FEATURE_SOURCE_BY_NAME.stations)).toBe(
+    expect(result.scene.featuresBySource.get(SYSTEM_FEATURE_SOURCE_BY_NAME.stops)).toBe(
       retainedStations,
     );
     expect(
@@ -323,7 +321,7 @@ describe('live render scene controller domain scoping', () => {
     const fixture = controllerFixture();
     const waysSource = SYSTEM_FEATURE_SOURCE_BY_NAME.ways;
     const servicesSource = SYSTEM_FEATURE_SOURCE_BY_NAME.services;
-    const stationSource = SYSTEM_FEATURE_SOURCE_BY_NAME.stations;
+    const stopSource = SYSTEM_FEATURE_SOURCE_BY_NAME.stops;
     const wayAId = renderFeatureId(waysSource, 'overview', ['way-a']);
     const serviceBId = renderFeatureId(servicesSource, 'overview', ['service-b', 'way-b']);
     const initial = emptySystemFeatures();
@@ -356,7 +354,7 @@ describe('live render scene controller domain scoping', () => {
         features: emptySystemFeatures(),
         sourceIds: [SRC_WAYS],
         replacementDomainsBySource: new Map([
-          [SRC_STATIONS, [renderDomainIdentity('station', 'station-a')]],
+          [SRC_STATIONS, [renderDomainIdentity('stop', 'stop-a')]],
         ]),
       }),
     ).toThrow('must match the requested renderer sources');
@@ -373,7 +371,7 @@ describe('live render scene controller domain scoping', () => {
     ).toThrow('Duplicate render feature ID across scene');
     expect(fixture.source(waysSource).calls).toEqual([]);
     expect(fixture.source(servicesSource).calls).toEqual([]);
-    expect(fixture.source(stationSource).calls).toEqual([]);
+    expect(fixture.source(stopSource).calls).toEqual([]);
     expect(fixture.controller.acceptedScene()?.revision).toBe('revision-1');
     expect(fixture.controller.acceptedScene()?.featuresBySource.get(waysSource)).toBe(retainedWays);
   });

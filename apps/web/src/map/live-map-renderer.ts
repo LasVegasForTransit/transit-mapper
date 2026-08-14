@@ -38,7 +38,13 @@ import {
   type RenderSourceErrorRecoveryCoordinator,
 } from './render-source-error-recovery';
 import { createAcceptedSceneRecovery } from './accepted-scene-recovery';
-import { DocumentProjector, type DocumentProjectionRequest } from './document-projection';
+import { RendererSourcePublication } from './renderer-source-publication';
+import {
+  DocumentProjector,
+  type DiagramLayoutResolver,
+  type DocumentProjectionRequest,
+} from './document-projection';
+import type { FeatureProjectionWorkerClient } from './feature-projection-worker';
 import {
   createSourceFeatureProjectionAccounting,
   type SourceFeatureProjectionAccounting,
@@ -63,8 +69,6 @@ import {
 } from './source-bank';
 import {
   createSourceBankBackgroundPreparation,
-  waitForSourceBankLoad,
-  waitForSourceBankPaint,
   type SourceBankBackgroundPreparation,
   type SourceBankSettlementHost,
 } from './source-bank-settlement';
@@ -97,20 +101,24 @@ export interface LiveMapRendererOptions {
   readonly projectionAccounting?: SourceFeatureProjectionAccounting;
   readonly rendererStats?: RendererStatsCollector;
   readonly instrumentationEnabled?: boolean;
-  requeueProjection?(
+  /** Geographic feature construction is worker-owned. The renderer still
+   * owns MapLibre source and bank publication on this thread. */
+  readonly featureProjectionWorker: FeatureProjectionWorkerClient;
+  readonly layoutDiagram?: DiagramLayoutResolver;
+  readonly requeueProjection?: (
     sourceIds: readonly MapSystemFeatureSourceId[],
     transition: SourceUploadTransition | null,
-  ): void;
-  synchronizeInteractionState?(targets?: SceneTargetResolver): void;
-  refreshInteractionPreviews?(): void;
-  onInactiveBankReady?(): void;
-  onRecoveryUpdate?(update: RenderSceneSourceUpdateResult): void | Promise<void>;
-  onError?(error: unknown): void;
+  ) => void;
+  readonly synchronizeInteractionState?: (targets?: SceneTargetResolver) => void;
+  readonly refreshInteractionPreviews?: () => void;
+  readonly onInactiveBankReady?: () => void;
+  readonly onRecoveryUpdate?: (update: RenderSceneSourceUpdateResult) => void | Promise<void>;
+  readonly onError?: (error: unknown) => void;
 }
 
 export interface PublishLiveSceneInput extends SceneUpdate {
-  onAccepted?(update: AcceptedSceneUpdate): void | Promise<void>;
-  recordScheduling?(stats: CooperativeRenderJobSchedulerStats): void;
+  readonly onAccepted?: (update: AcceptedSceneUpdate) => void | Promise<void>;
+  readonly recordScheduling?: (stats: CooperativeRenderJobSchedulerStats) => void;
 }
 
 export interface LiveMapRendererSnapshot {
@@ -136,12 +144,10 @@ export class LiveMapRenderer {
   private readonly projector: DocumentProjector;
   private readonly bankedLayerIds: ReadonlySet<string>;
   private readonly backgroundPreparation: SourceBankBackgroundPreparation;
-  private sourceSubmissionAbort: AbortController | null = null;
-  private sourceSubmissionMode: 'active' | 'hidden' | 'seed' | 'unbanked' | null = null;
-  private sourceSubmissionBank: SourceBankId | null = null;
+  private readonly sourcePublication: RendererSourcePublication;
   private disposed = false;
 
-  constructor(private readonly options: LiveMapRendererOptions) {
+  constructor(options: LiveMapRendererOptions) {
     this.scheduler =
       options.scheduler ??
       createCooperativeRenderJobScheduler({
@@ -190,6 +196,15 @@ export class LiveMapRenderer {
       onRecovered: (update) => options.onRecoveryUpdate?.(update),
       onError: (error) => options.onError?.(error),
     });
+    this.sourcePublication = new RendererSourcePublication({
+      host: options.host,
+      banks: this.banks,
+      layers: this.layers,
+      recovery: this.recovery,
+      synchronizeInteractionState: (targets) => options.synchronizeInteractionState?.(targets),
+      refreshInteractionPreviews: () => options.refreshInteractionPreviews?.(),
+      onError: (error) => options.onError?.(error),
+    });
     this.backgroundPreparation = createSourceBankBackgroundPreparation({
       scenes: this.scenes,
       layers: this.layers,
@@ -199,12 +214,21 @@ export class LiveMapRenderer {
       onReady: () => options.onInactiveBankReady?.(),
       onError: (error) => options.onError?.(error),
     });
-    this.projector = new DocumentProjector({
+    this.projector = this.createProjector(options);
+  }
+
+  /** Projection is the only producer of committed scene drafts. It delegates
+   * the irreversible MapLibre boundary back to this renderer's publication
+   * lifecycle, so callers cannot accidentally publish a partial draft. */
+  private createProjector(options: LiveMapRendererOptions): DocumentProjector {
+    return new DocumentProjector({
       scheduler: this.scheduler,
       accounting: options.projectionAccounting ?? createSourceFeatureProjectionAccounting(),
       stats: options.rendererStats ?? createRendererStatsCollector(),
       instrumentationEnabled: options.instrumentationEnabled ?? false,
+      featureProjectionWorker: options.featureProjectionWorker,
       now: () => options.host.now(),
+      ...(options.layoutDiagram ? { layoutDiagram: options.layoutDiagram } : {}),
       requeue: (sourceIds, transition) => options.requeueProjection?.(sourceIds, transition),
       publish: (prepared, request, measurement, onAccepted) =>
         this.publishScene({
@@ -242,62 +266,14 @@ export class LiveMapRenderer {
   publishScene(input: PublishLiveSceneInput): ScenePublicationSubmission {
     this.assertActive();
     this.cancelBackgroundPreparation();
-    let mutatedSourceIds: readonly string[] = [];
     return publishSceneDraft({
       scheduler: this.scheduler,
       controller: this.scenes,
       input,
-      beforeSourceMutation: async (context) => {
-        if ((context.mode === 'hidden' || context.mode === 'seed') && context.bank) {
-          this.layers.prepare(context.bank);
-          await this.waitForPaint(this.sourceSubmissionAbort?.signal);
-        }
-      },
-      onSourceMutationStart: (sourceIds, context) => {
-        this.sourceSubmissionAbort?.abort();
-        this.sourceSubmissionAbort = new AbortController();
-        this.sourceSubmissionMode = context.mode ?? null;
-        this.sourceSubmissionBank = context.bank ?? null;
-        mutatedSourceIds = sourceIds;
-      },
-      beforePublish: async (context) => {
-        if (context.sourceIds.length === 0) return;
-        await this.waitForLoad(context.sourceIds, this.sourceSubmissionAbort?.signal);
-        if ((context.mode === 'hidden' || context.mode === 'seed') && context.bank) {
-          await this.waitForPaint(this.sourceSubmissionAbort?.signal);
-        }
-      },
-      beforeScenePublish: async (context) => {
-        if (context.mode !== 'hidden' || !context.bank) return;
-        this.options.synchronizeInteractionState?.(context.targetsForDomainIdentity);
-        this.layers.activate(context.bank);
-        this.options.refreshInteractionPreviews?.();
-        await this.waitForPaint(this.sourceSubmissionAbort?.signal);
-      },
-      onCommitError: (error, context) => {
-        this.rollbackPublication(context?.bank ?? null);
-        if (context?.mode !== 'hidden' && context?.mode !== 'seed') {
-          this.recovery.requestRecovery();
-        }
-        this.options.onError?.(error);
-      },
-      onCommitted: async (update, context) => {
-        try {
-          this.options.synchronizeInteractionState?.();
-          this.options.refreshInteractionPreviews?.();
-          if (mutatedSourceIds.length > 0 && context?.mode !== 'hidden') {
-            await this.waitForPaint(this.sourceSubmissionAbort?.signal);
-            await this.recovery.whenSettled();
-          }
-          if (context?.mode === 'hidden' && context.bank) {
-            this.layers.finishActivation(context.bank);
-          }
-          await input.onAccepted?.(update);
-          this.backgroundPreparation.start();
-        } finally {
-          this.clearSourceSubmission();
-        }
-      },
+      ...this.sourcePublication.hooks({
+        onAccepted: input.onAccepted,
+        afterAccepted: () => this.backgroundPreparation.start(),
+      }),
       recordScheduling: (stats) => input.recordScheduling?.(stats),
     });
   }
@@ -320,7 +296,7 @@ export class LiveMapRenderer {
   }
 
   publicationInProgress(): boolean {
-    return this.scenes.publicationInProgress() || this.sourceSubmissionAbort !== null;
+    return this.scenes.publicationInProgress() || this.sourcePublication.inProgress();
   }
 
   targetsForDomainIdentity(domainIdentity: RenderDomainIdentity): readonly SceneFeatureTarget[] {
@@ -353,20 +329,7 @@ export class LiveMapRenderer {
   }
 
   handleSourceError(event: RenderSourceErrorEvent): boolean {
-    const bank = event.sourceId?.endsWith('--bank-a')
-      ? 'a'
-      : event.sourceId?.endsWith('--bank-b')
-        ? 'b'
-        : null;
-    if (
-      bank !== null &&
-      bank === this.sourceSubmissionBank &&
-      (this.sourceSubmissionMode === 'hidden' || this.sourceSubmissionMode === 'seed')
-    ) {
-      this.sourceSubmissionAbort?.abort();
-      return true;
-    }
-    return this.recovery.handleSourceError(event);
+    return this.sourcePublication.handleSourceError(event);
   }
 
   requestRecovery(sourceId?: string): void {
@@ -409,46 +372,10 @@ export class LiveMapRenderer {
     if (this.disposed) return;
     this.disposed = true;
     this.cancelBackgroundPreparation();
-    this.sourceSubmissionAbort?.abort();
-    this.sourceSubmissionAbort = null;
+    this.sourcePublication.dispose();
     this.projector.dispose();
     this.recovery.dispose();
     if (this.ownsScheduler) this.scheduler.dispose();
-  }
-
-  private rollbackPublication(bank: SourceBankId | null): void {
-    this.sourceSubmissionAbort?.abort();
-    if (bank) this.restoreAfterFailedBank(bank);
-    this.options.synchronizeInteractionState?.();
-    this.options.refreshInteractionPreviews?.();
-    this.clearSourceSubmission();
-  }
-
-  private restoreAfterFailedBank(failedBank: SourceBankId): void {
-    const activeBank = this.banks.activeBank();
-    if (activeBank && activeBank !== failedBank) this.layers.restore(activeBank);
-    else this.layers.finishStaging(failedBank);
-  }
-
-  private clearSourceSubmission(): void {
-    this.sourceSubmissionAbort = null;
-    this.sourceSubmissionMode = null;
-    this.sourceSubmissionBank = null;
-  }
-
-  private waitForLoad(sourceIds: readonly string[], signal?: AbortSignal): Promise<void> {
-    return waitForSourceBankLoad({
-      host: this.options.host,
-      sourceIds,
-      ...(signal ? { signal } : {}),
-    });
-  }
-
-  private waitForPaint(signal?: AbortSignal): Promise<void> {
-    return waitForSourceBankPaint({
-      host: this.options.host,
-      ...(signal ? { signal } : {}),
-    });
   }
 
   private assertActive(): void {

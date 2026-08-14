@@ -17,7 +17,6 @@ import { PointerBadge } from './PointerBadge';
 import { useCoarsePointer } from '../device/capabilities';
 import { inputTuningFor } from '../editor/input-tuning';
 import type { PointerIntent } from '../editor/pointerIntent';
-import { computeDiagramSystem } from '@transitmapper/core/model/diagramLayout';
 import { serviceWayIds, systemBounds } from '@transitmapper/core/model/geo';
 import { routePath } from '@transitmapper/core/model/routeGraph';
 import type { TransitSystem } from '@transitmapper/core/model/system';
@@ -66,9 +65,8 @@ import {
   SRC_WAYS,
   SRC_WAY_LABELS,
   SRC_STATIONS,
-  type RenderViewOptions,
-  type ViewOptions,
 } from './layers';
+import type { RenderViewOptions, ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import {
   createGestureProjectionController,
   createProjectionOperationCounts,
@@ -88,9 +86,9 @@ import {
 } from './render-settlement';
 import { createGestureLayerMaskController } from './gestureLayerMask';
 import type { SourceMutationSettlementHost } from './sourceMutationSettlement';
-import { planStationGestureSettlement } from './stationGesturePlan';
-import { createStationGesturePreviewController } from './stationGesturePreview';
-import { createStationGestureSettlementController } from './stationGestureSettlement';
+import { planStopGestureSettlement } from './stopGesturePlan';
+import { createStopGesturePreviewController } from './stopGesturePreview';
+import { createStopGestureSettlementController } from './stopGestureSettlement';
 import {
   ALL_SYSTEM_FEATURE_SOURCES,
   createSourceUploadQueue,
@@ -100,7 +98,7 @@ import {
   type SourceUploadTransition,
   type SystemFeatureSourceId,
 } from './sourceUploadPlan';
-import { buildFeaturesForSources } from './sourceFeatureProjection';
+import { mergeSourceFeatureProjectionCounts } from './feature-projection-counts';
 import type { AcceptedSceneUpdate } from './accepted-scene-store';
 import type { RenderSceneSourceUpdateResult } from './render-scene-source-updater';
 import { renderPresentationFromMap } from './render-presentation';
@@ -114,7 +112,6 @@ import { initLiveCamera, setLiveCamera } from '../camera/liveCamera';
 import { attachPerfHarness } from '../perf';
 import { markFirstSystemMapPaint, systemPaintReady } from '../perf/mapPaintMark';
 import { createRendererStatsCollector } from '../perf/renderer-stats';
-import { createRendererProjectionMeasurement } from '../perf/renderer-projection-measurement';
 import { attachSimDevHandle } from '../sim/devHandle';
 import { attachVehicleAnimation } from '../sim/vehicles';
 import { clearArmedTerminusForViewChange } from './viewEditorState';
@@ -123,6 +120,7 @@ import { createStyleSwitchController, type StyleSwitchController } from './style
 import { createMapStyleFeatureDataRecovery, recoverMapStyleState } from './styleRecovery';
 import {
   canApplyEditorSourceUpdate,
+  editorOverlayWorkerInput,
   editorSourcesNeedSystemRefresh,
   planSelectionRenderUpdate,
   selectedJunctionConnectorFeatures,
@@ -136,7 +134,6 @@ import {
 } from './system-feature-sources';
 import {
   createSourceFeatureProjectionAccounting,
-  GeographicFeatureProjectionPreparationBudgetError,
   scheduleRenderProjectionFailureRetry,
 } from './committed-feature-projection';
 import {
@@ -157,6 +154,8 @@ import {
 } from './source-bank-layers';
 import type { SourceBankSettlementHost } from './source-bank-settlement';
 import { createLiveMapRenderer, type LiveMapRenderer } from './live-map-renderer';
+import { createDiagramLayoutWorker } from './diagram-layout-worker';
+import { createFeatureProjectionWorker } from './feature-projection-worker';
 import {
   createEditorFeatureState,
   type EditorFeatureState,
@@ -189,11 +188,18 @@ interface ViewModeMapUpdate {
 }
 
 function applyViewModeToMap(map: MLMap, update: ViewModeMapUpdate): void {
-  if (update.nextMode === 'diagram' || update.previousMode === 'diagram') {
-    setBasemapVisible(map, update.nextMode !== 'diagram');
+  // Keep the last accepted geography on screen while the first Diagram
+  // result is in the Worker. Hiding the basemap here would turn a failed or
+  // superseded request into a blank map. The accepted Diagram callback hides
+  // it only once the corresponding schematic scene has painted.
+  if (update.previousMode === 'diagram' && update.nextMode !== 'diagram') {
+    setBasemapVisible(map, true);
   }
   if (update.nextMode !== 'diagram' || update.previousMode === 'diagram') return;
-  const bounds = systemBounds(computeDiagramSystem(update.system));
+  // Enter Diagram immediately from the saved geographic bounds. The Worker
+  // resolves its schematic snapshot separately; solving it here would freeze
+  // the very transition that is meant to reveal the alternate view.
+  const bounds = systemBounds(update.system);
   if (bounds && update.container) {
     map.fitBounds(bounds, { padding: framePadding(update.container, 60), duration: 500 });
   }
@@ -603,7 +609,6 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // beforeId anchoring so a healed layer returns to its correct place in
     // the paint order instead of landing on top.
     const ensureOverlay = (): boolean => {
-      if (!map.getStyle()) return false;
       const layerSpecs = activePhysicalLayerSpecs();
       for (const src of ALL_SOURCES) {
         if (map.getSource(src)) continue;
@@ -745,18 +750,33 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     let gestureProjectionAborted = false;
     let gesturePreviewVisible = false;
     let fullAfterGesture = false;
+    let stopProjectionAbort: AbortController | null = null;
     let pushDataRaf: number | null = null;
     let scheduledPushLease: RendererWorkLease | null = null;
-    let preparationRetryCount = 0;
     let sourceFailureRetryCount = 0;
     const sourceUploadQueue = createSourceUploadQueue();
     let refreshCommittedInteractionPreviews = () => {};
     let handleInactiveBankReady = () => {};
     let handleRecoveredScene = (_update: RenderSceneSourceUpdateResult) => {};
+    const diagramLayout = createDiagramLayoutWorker();
+    const featureProjection = createFeatureProjectionWorker();
     const renderer = createLiveMapRenderer({
       projectionAccounting: sourceProjectionAccounting,
       rendererStats,
       instrumentationEnabled: PERF_HARNESS_BUILD,
+      featureProjectionWorker: featureProjection,
+      layoutDiagram: async (system, revision, signal) => {
+        try {
+          return (await diagramLayout.layout(system, revision, signal)).system;
+        } catch (error) {
+          if (signal.aborted) throw error;
+          // The last accepted scene stays on screen. Running the compatibility
+          // solver here would make a Worker failure freeze exactly the map
+          // interaction this boundary exists to protect.
+          console.error('[transitmapper] Diagram Worker failed.', error);
+          throw error;
+        }
+      },
       requeueProjection: (sourceIds, transition) =>
         sourceUploadQueue.add(sourceIds, transition ?? undefined),
       layerSpecs: LAYER_SPECS,
@@ -876,6 +896,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           };
           pendingStyleHeal = false;
           lastRenderedSystemId = system.id;
+          if (viewRef.current.viewMode === 'diagram') setBasemapVisible(map, false);
           if (sourceIds.includes(SRC_STATIONS)) initialSystemDataUploaded = true;
           recordFullProjection(projectionCounts, update.sourceUploadCount);
           recordSceneUpdate(update);
@@ -894,11 +915,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     const schedulePushData = (
       request: SourceUploadRequest = 'all',
       transition?: SourceUploadTransition,
-      preparationRetry = false,
       deferUntilCurrentSettles = false,
     ) => {
       liveRenderer?.cancelBackgroundPreparation();
-      if (!preparationRetry) preparationRetryCount = 0;
       sourceUploadQueue.add(request, transition);
       scheduledPushLease ??= renderWorkSettlement.begin();
       // A prepared source transaction owns one complete MapLibre mutation
@@ -909,7 +928,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       if (renderer.publicationInProgress()) {
         if (renderer.hasActiveProjection()) {
           renderer.afterCurrentProjectionSettles(() => {
-            schedulePushData([], undefined, true, true);
+            schedulePushData([], undefined, true);
           });
         }
         return;
@@ -924,7 +943,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       }
       if (deferUntilCurrentSettles && renderer.hasActiveProjection()) {
         renderer.afterCurrentProjectionSettles(() => {
-          schedulePushData([], undefined, true, true);
+          schedulePushData([], undefined, true);
         });
         return;
       }
@@ -936,21 +955,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         const batch = sourceUploadQueue.takeBatch();
         void pushData(batch.sourceIds, batch.transition).then(
           () => {
-            preparationRetryCount = 0;
             sourceFailureRetryCount = 0;
             lease?.complete();
           },
           (error: unknown) => {
-            if (
-              error instanceof GeographicFeatureProjectionPreparationBudgetError &&
-              preparationRetryCount < 3
-            ) {
-              preparationRetryCount += 1;
-              schedulePushData(batch.sourceIds, batch.transition ?? undefined, true);
-              lease?.complete();
-              return;
-            }
-            preparationRetryCount = 0;
             if (sourceFailureRetryCount < 2) {
               sourceFailureRetryCount += 1;
               retryFailedSourceBatch(batch, lease);
@@ -973,7 +981,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         requeue: (current) =>
           sourceUploadQueue.add(current.sourceIds, current.transition ?? undefined),
         whenRecovered: () => liveRenderer?.whenRecoverySettled() ?? Promise.resolve(),
-        schedule: () => schedulePushData([], undefined, true),
+        schedule: () => schedulePushData(),
         completePreviousLease: () => lease?.complete(),
         failPreviousLease: (error) => lease?.fail(error),
       });
@@ -992,7 +1000,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       gesturePreviewVisible = false;
     };
 
-    const gesturePreview = createStationGesturePreviewController({
+    const gesturePreview = createStopGesturePreviewController({
       render(projection) {
         if (!projection) {
           clearGesturePreview();
@@ -1017,11 +1025,11 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       gesturePreview.refresh();
     };
 
-    const finishStationSettlementVisuals = () => {
+    const finishStopSettlementVisuals = () => {
       // updateData normally preserves feature-state, but reapplying here also
       // covers the full-setData fallback without exposing an unselected frame.
       applySelectionState();
-      gesturePreview.releaseStations();
+      gesturePreview.releaseStops();
       void styleSwitchControllerRef.current?.flush();
     };
 
@@ -1061,11 +1069,11 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       triggerRepaint: () => map.triggerRepaint(),
     };
 
-    const stationSettlement = createStationGestureSettlementController({
+    const stopSettlement = createStopGestureSettlementController({
       host: sourceSettlementHost,
       sourceId: () => activeRenderSourceId(SRC_STATIONS),
       isGestureActive: () => gestureActive,
-      onRelease: finishStationSettlementVisuals,
+      onRelease: finishStopSettlementVisuals,
     });
     let gestureSettlementRetryCount = 0;
     const gestureSettlement = createGesturePaintSettlementController({
@@ -1102,7 +1110,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // meaning of any pending gesture handoff. Store changes below still pass a
     // dependency-filtered source list.
     schedulePushDataRef.current = () => {
-      stationSettlement.invalidate();
+      stopSettlement.invalidate();
       gestureSettlement.invalidate();
       gesturePreview.clear();
       schedulePushData('all');
@@ -1110,9 +1118,11 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     };
 
     const abortGestureProjection = () => {
+      stopProjectionAbort?.abort();
+      stopProjectionAbort = null;
       gestureProjectionAborted = true;
       fullAfterGesture = true;
-      stationSettlement.invalidate();
+      stopSettlement.invalidate();
       gestureSettlement.invalidate();
       gesturePreview.clear();
     };
@@ -1129,6 +1139,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
 
     const beginGestureProjection = (targets: EditGestureTargets) => {
       if (gestureActive) return;
+      stopProjectionAbort?.abort();
+      stopProjectionAbort = null;
       gestureActive = true;
       gestureProjectionAborted = false;
       fullAfterGesture = false;
@@ -1153,6 +1165,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     const settleGestureProjection = () => {
       const affected = gestureProjection?.affected() ?? {
         wayIds: [],
+        stopIds: [],
         stationIds: [],
         facilityIds: [],
         groupIds: [],
@@ -1166,82 +1179,106 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       if (needsFullProjection) {
         const pendingBatch = sourceUploadQueue.takeBatch();
         const pendingSources = pendingBatch.sourceIds;
-        const stationPlan = planStationGestureSettlement({
+        const stationSourceId = activeRenderSourceId(SRC_STATIONS);
+        const stopPlan = planStopGestureSettlement({
           viewMode: viewRef.current.viewMode,
           affected,
           pendingSources,
-          stationSourceReady: map.isSourceLoaded(SRC_STATIONS) || stationSettlement.ownsPreview(),
+          // Committed sources belong to the active physical bank. During the
+          // first bank publication there is no active source yet, so absence
+          // means the stop preview must remain in control rather than asking
+          // MapLibre to load the retired logical source ID.
+          stopSourceReady:
+            (Boolean(map.getSource(stationSourceId)) && map.isSourceLoaded(stationSourceId)) ||
+            stopSettlement.ownsPreview(),
           overlayHealthy: !overlayNeedsHealing(),
           projectionAborted: gestureProjectionAborted,
         });
-        if (stationPlan.kind === 'diff') {
+        if (stopPlan.kind === 'diff') {
           const { system, selection, activePatternId, armedTerminus } = store.getState();
           const countTransaction = sourceProjectionAccounting.begin();
-          const measurement = createRendererProjectionMeasurement({
-            counts: countTransaction.counts,
-            collector: rendererStats,
-            enabled: PERF_HARNESS_BUILD,
-            now: () => performance.now(),
-          });
-          const projected = buildFeaturesForSources({
-            system,
-            selection,
-            handleWayIds: handleWayIds(),
-            view: liveRenderView(),
-            sourceIds: [SRC_STATIONS],
-            stationIds: stationPlan.stationIds,
-            physicalHandleStationId: physicalHandleStationId(),
-            physicalHandleGroupId: physicalHandleGroupId(),
-            activePatternId,
-            armedTerminus,
-            counts: countTransaction.counts,
-          });
-          const expectedIds = new Set(stationPlan.stationIds);
-          const features = projected.stations.features;
-          const complete =
-            features.length === expectedIds.size &&
-            features.every(
-              (feature) =>
-                typeof feature.properties?.id === 'string' &&
-                expectedIds.has(feature.properties.id),
-            );
-          const source = map.getSource<GeoJSONSource>(activeRenderSourceId(SRC_STATIONS));
-          if (source && complete) {
-            gesturePreview.retainCommitted(stationPlan.stationIds, features);
-            gestureSettlement.releaseIfReady();
-            stationSettlement.beginDiff({
-              mutate: () => {
-                try {
-                  const update = renderer.updateEditorScene({
-                    revision: `${system.id}:${++renderSceneRevision}`,
-                    features: projected,
-                    sourceIds: [SRC_STATIONS],
-                    replacementDomainsBySource: new Map([
-                      [
-                        SRC_STATIONS,
-                        stationPlan.stationIds.map((stationId) =>
-                          renderDomainIdentity('station', stationId),
-                        ),
-                      ],
-                    ]),
-                  });
-                  recordSourceUploads(projectionCounts, update.sourceUploadCount);
-                  recordSceneUpdate(update);
-                  countTransaction.accept();
-                  measurement.recordSynchronousEditor();
-                } catch (error) {
-                  countTransaction.discard();
-                  throw error;
-                }
+          stopProjectionAbort?.abort();
+          const abort = new AbortController();
+          stopProjectionAbort = abort;
+          gesturePreview.retainActiveStops(affected.stopIds);
+          gestureSettlement.releaseIfReady();
+          void featureProjection
+            .project(
+              {
+                system,
+                selection,
+                handleWayIds: handleWayIds(),
+                view: liveRenderView(),
+                sourceIds: [SRC_STATIONS],
+                stopIds: stopPlan.stopIds,
+                physicalHandleStationId: physicalHandleStationId(),
+                physicalHandleGroupId: physicalHandleGroupId(),
+                activePatternId,
+                armedTerminus,
+                selectionOwnedConnectors: false,
               },
-              fallback: () => {
+              abort.signal,
+            )
+            .then(({ features: projected, counts }) => {
+              if (abort.signal.aborted || stopProjectionAbort !== abort) return;
+              if (counts) mergeSourceFeatureProjectionCounts(countTransaction.counts, counts);
+              const expectedIds = new Set(stopPlan.stopIds);
+              const features = projected.stops.features;
+              const complete =
+                features.length === expectedIds.size &&
+                features.every(
+                  (feature) =>
+                    typeof feature.properties?.id === 'string' &&
+                    expectedIds.has(feature.properties.id),
+                );
+              const source = map.getSource<GeoJSONSource>(activeRenderSourceId(SRC_STATIONS));
+              if (!source || !complete) {
                 countTransaction.discard();
-                schedulePushData(pendingSources, pendingBatch.transition ?? undefined);
-              },
+                stopSettlement.beginFull({
+                  mutate: () =>
+                    schedulePushData(pendingSources, pendingBatch.transition ?? undefined),
+                });
+                return;
+              }
+              gesturePreview.retainCommitted(stopPlan.stopIds, features);
+              stopSettlement.beginDiff({
+                mutate: () => {
+                  try {
+                    const update = renderer.updateEditorScene({
+                      revision: `${system.id}:${++renderSceneRevision}`,
+                      features: projected,
+                      sourceIds: [SRC_STATIONS],
+                      replacementDomainsBySource: new Map([
+                        [
+                          SRC_STATIONS,
+                          stopPlan.stopIds.map((stopId) => renderDomainIdentity('stop', stopId)),
+                        ],
+                      ]),
+                    });
+                    recordSourceUploads(projectionCounts, update.sourceUploadCount);
+                    recordSceneUpdate(update);
+                    countTransaction.accept();
+                  } catch (error) {
+                    countTransaction.discard();
+                    throw error;
+                  }
+                },
+                fallback: () => {
+                  countTransaction.discard();
+                  schedulePushData(pendingSources, pendingBatch.transition ?? undefined);
+                },
+              });
+            })
+            .catch((error: unknown) => {
+              countTransaction.discard();
+              if (abort.signal.aborted) return;
+              console.error('[transitmapper] stop feature projection failed.', error);
+              stopSettlement.beginFull({
+                mutate: () =>
+                  schedulePushData(pendingSources, pendingBatch.transition ?? undefined),
+              });
             });
-            return;
-          }
-          countTransaction.discard();
+          return;
         }
 
         // Gesture store commits already contributed their exact dependency
@@ -1261,16 +1298,14 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           });
           return;
         }
-        const refreshesStations =
-          pendingSources.length === 0 || pendingSources.includes(SRC_STATIONS);
-        const preserveStationPreview =
-          stationPlan.kind === 'diff' || stationPlan.preserveStationPreview;
-        if (preserveStationPreview) gesturePreview.retainActiveStations(affected.stationIds);
+        const refreshesStops = pendingSources.length === 0 || pendingSources.includes(SRC_STATIONS);
+        const preserveStopPreview = stopPlan.preserveStopPreview;
+        if (preserveStopPreview) gesturePreview.retainActiveStops(affected.stopIds);
         else gesturePreview.clearActive();
         gestureSettlement.releaseIfReady();
 
-        if (refreshesStations && (preserveStationPreview || stationSettlement.ownsPreview())) {
-          stationSettlement.beginFull({
+        if (refreshesStops && (preserveStopPreview || stopSettlement.ownsPreview())) {
+          stopSettlement.beginFull({
             mutate: () =>
               schedulePushData(
                 refreshRequest,
@@ -1279,9 +1314,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           });
           return;
         }
-        if (!stationSettlement.ownsPreview()) {
-          stationSettlement.invalidate();
-          gesturePreview.releaseStations();
+        if (!stopSettlement.ownsPreview()) {
+          stopSettlement.invalidate();
+          gesturePreview.releaseStops();
         }
         schedulePushData(
           refreshRequest,
@@ -1291,15 +1326,15 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         // The older barrier may have completed during this gesture. Do not
         // clear the newer active projection unless that generation is ready;
         // a later non-station commit will supersede it through begin().
-        stationSettlement.releaseIfReady();
+        stopSettlement.releaseIfReady();
         gestureSettlement.releaseIfReady();
         return;
-      } else if (stationSettlement.ownsPreview()) {
+      } else if (stopSettlement.ownsPreview()) {
         // A click against a settling preview may have taken ownership while
         // its source completed. Release now if ready; otherwise its existing
         // paint barrier will release after this gesture.
         gesturePreview.clearActive();
-        stationSettlement.releaseIfReady();
+        stopSettlement.releaseIfReady();
         return;
       } else {
         gesturePreview.clearActive();
@@ -1321,6 +1356,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // the small editor-owned sources. Junction guides are derived for one node
     // here rather than rebuilding the settled city-scale junction scene.
     let selectionRaf: number | null = null;
+    let editorProjectionAbort: AbortController | null = null;
     const updateSelectionEditorSources = () => {
       if (overlayNeedsHealing()) return;
       if (
@@ -1330,6 +1366,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       }
       const { system, selection } = store.getState();
       if (viewRef.current.viewMode === 'diagram') {
+        editorProjectionAbort?.abort();
+        editorProjectionAbort = null;
         // Diagram layout is Worker-owned in Phase 6. Selection only restores
         // stable feature-state; its editor sources are already empty from the
         // committed view projection, so never synchronously rerun the solver.
@@ -1350,52 +1388,57 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         return;
       }
       const countTransaction = sourceProjectionAccounting.begin();
-      const measurement = createRendererProjectionMeasurement({
-        counts: countTransaction.counts,
-        collector: rendererStats,
-        enabled: PERF_HARNESS_BUILD,
-        now: () => performance.now(),
-      });
       const infrastructure = viewRef.current.viewMode === 'infrastructure';
-      try {
-        const features = buildFeaturesForSources({
-          system,
-          selection,
-          handleWayIds: handleWayIds(),
-          view: liveRenderView(),
-          sourceIds: EDITOR_SYSTEM_FEATURE_SOURCES,
-          physicalHandleStationId: infrastructure ? physicalHandleStationId() : null,
-          physicalHandleGroupId: infrastructure ? physicalHandleGroupId() : null,
-          activePatternId: store.getState().activePatternId,
-          armedTerminus: store.getState().armedTerminus,
-          selectionOwnedConnectors: false,
-          counts: countTransaction.counts,
+      editorProjectionAbort?.abort();
+      const abort = new AbortController();
+      editorProjectionAbort = abort;
+      const { activePatternId, armedTerminus } = store.getState();
+      const input = editorOverlayWorkerInput({
+        system,
+        selection,
+        handleWayIds: handleWayIds(),
+        view: liveRenderView(),
+        physicalHandleStationId: infrastructure ? physicalHandleStationId() : null,
+        physicalHandleGroupId: infrastructure ? physicalHandleGroupId() : null,
+        activePatternId,
+        armedTerminus,
+      });
+      void featureProjection
+        .project(input, abort.signal)
+        .then(({ features, counts }) => {
+          if (abort.signal.aborted || editorProjectionAbort !== abort) return;
+          if (counts) mergeSourceFeatureProjectionCounts(countTransaction.counts, counts);
+          try {
+            const update = renderer.updateEditorScene({
+              revision: `${system.id}:${++renderSceneRevision}`,
+              features,
+              sourceIds: EDITOR_SYSTEM_FEATURE_SOURCES,
+            });
+            recordSourceUploads(projectionCounts, update.sourceUploadCount);
+            recordSceneUpdate(update);
+            applySelectionState();
+            const guideSource = map.getSource<GeoJSONSource>(SRC_JUNCTION_GUIDES);
+            if (guideSource) {
+              guideSource.setData(
+                infrastructure
+                  ? selectedJunctionConnectorFeatures(
+                      system,
+                      selection?.kind === 'node' ? selection.id : null,
+                    )
+                  : emptyFC,
+              );
+              recordSourceUpload(projectionCounts);
+            }
+            countTransaction.accept();
+          } finally {
+            countTransaction.discard();
+          }
+        })
+        .catch((error: unknown) => {
+          countTransaction.discard();
+          if (abort.signal.aborted) return;
+          console.error('[transitmapper] editor feature projection failed.', error);
         });
-        const update = renderer.updateEditorScene({
-          revision: `${system.id}:${++renderSceneRevision}`,
-          features,
-          sourceIds: EDITOR_SYSTEM_FEATURE_SOURCES,
-        });
-        recordSourceUploads(projectionCounts, update.sourceUploadCount);
-        recordSceneUpdate(update);
-        applySelectionState();
-        const guideSource = map.getSource<GeoJSONSource>(SRC_JUNCTION_GUIDES);
-        if (guideSource) {
-          guideSource.setData(
-            infrastructure
-              ? selectedJunctionConnectorFeatures(
-                  system,
-                  selection?.kind === 'node' ? selection.id : null,
-                )
-              : emptyFC,
-          );
-          recordSourceUpload(projectionCounts);
-        }
-        countTransaction.accept();
-        measurement.recordSynchronousEditor();
-      } finally {
-        countTransaction.discard();
-      }
     };
     const scheduleSelectionUpdate = () => {
       if (selectionRaf !== null) return;
@@ -1462,12 +1505,12 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         ) {
           return;
         }
-        if (stationSettlement.ownsPreview()) {
-          stationSettlement.beginFull({
-            mutate: () => schedulePushData(presentationSources, undefined, false, true),
+        if (stopSettlement.ownsPreview()) {
+          stopSettlement.beginFull({
+            mutate: () => schedulePushData(presentationSources, undefined, true),
           });
         } else {
-          schedulePushData(presentationSources, undefined, false, true);
+          schedulePushData(presentationSources, undefined, true);
         }
         scheduleSelectionUpdate();
         return renderWorkSettlement.whenSettled();
@@ -1541,7 +1584,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           directManipulationActive ||
           (liveRenderer?.publicationInProgress() ?? false) ||
           gestureSettlement.blocksStyleSwitch() ||
-          stationSettlement.ownsPreview() ||
+          stopSettlement.ownsPreview() ||
           state.activeWayId !== null ||
           state.routeDraft !== null
         );
@@ -1568,13 +1611,14 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       ensureOverlay();
       if (PERF_HARNESS_BUILD) {
         initialPaintListener = () => {
+          const stationSourceId = activeRenderSourceId(SRC_STATIONS);
+          const representativeSourceExists = Boolean(map.getSource(stationSourceId));
           if (
             !systemPaintReady({
               systemDataUploaded: initialSystemDataUploaded,
-              representativeSourceExists: Boolean(
-                map.getSource(activeRenderSourceId(SRC_STATIONS)),
-              ),
-              representativeSourceLoaded: map.isSourceLoaded(activeRenderSourceId(SRC_STATIONS)),
+              representativeSourceExists,
+              representativeSourceLoaded:
+                representativeSourceExists && map.isSourceLoaded(stationSourceId),
             })
           ) {
             return;
@@ -1676,11 +1720,11 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       });
       if (PERF_HARNESS_BUILD) {
         detachPerf = attachPerfHarness(map, {
-          stationSnapshot: (stationId) => {
+          stopSnapshot: (stopId) => {
             const system = store.getState().system;
-            const station = system.stations.find((candidate) => candidate.id === stationId);
-            return station
-              ? { coord: station.coord, revision: system.updatedAt, wayCount: system.ways.length }
+            const stop = system.stops.find((candidate) => candidate.id === stopId);
+            return stop
+              ? { coord: stop.coord, revision: system.updatedAt, wayCount: system.ways.length }
               : null;
           },
           overlaySnapshot: () => {
@@ -1766,7 +1810,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       const documentChanged = prev.system.id !== s.system.id;
       const selectionUpdate = planSelectionRenderUpdate(prev, s);
       if (documentChanged && !gestureActive) {
-        stationSettlement.invalidate();
+        stopSettlement.invalidate();
         gestureSettlement.invalidate();
         gesturePreview.clear();
       }
@@ -1787,13 +1831,13 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           // Build and upload only dependencies whose GeoJSON may differ.
           // Unrequested feature phases never traverse or allocate their
           // RTC-scale collections.
-          if (changedSources.includes(SRC_STATIONS) && stationSettlement.ownsPreview()) {
+          if (changedSources.includes(SRC_STATIONS) && stopSettlement.ownsPreview()) {
             // Undo, delete, and Inspector edits can supersede an in-flight
             // station diff. Keep the newest geometry truthful in the scratch
             // source and replace the old paint barrier before scheduling the
             // complete station collection.
-            gesturePreview.syncStations(s.system);
-            stationSettlement.beginFull({
+            gesturePreview.syncStops(s.system);
+            stopSettlement.beginFull({
               mutate: () => schedulePushData(changedSources, systemTransition),
             });
           } else {
@@ -1887,7 +1931,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     map.on('moveend', onMoveEnd);
 
     return () => {
-      stationSettlement.dispose();
+      stopSettlement.dispose();
       gestureSettlement.dispose();
       ro.disconnect();
       unsub();
@@ -1897,9 +1941,13 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       map.off('mouseout', onHoverOut);
       if (pushDataRaf !== null) cancelAnimationFrame(pushDataRaf);
       if (selectionRaf !== null) cancelAnimationFrame(selectionRaf);
+      editorProjectionAbort?.abort();
+      stopProjectionAbort?.abort();
       if (initialPaintListener) map.off('render', initialPaintListener);
       presentationRefresh.dispose();
       liveRenderer?.dispose();
+      diagramLayout.dispose();
+      featureProjection.dispose();
       liveRenderer = null;
       renderWorkSettlement.dispose();
       map.off('zoom', onZoom);
@@ -1953,7 +2001,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'var(--tm-map-background)',
+          // app.css owns this backdrop so the same drafting surface remains
+          // visible whenever MapLibre has no opaque basemap tile to paint.
           // The map owns every gesture inside its own box, so the browser gets
           // none of them. Without this a downward swipe on the canvas is
           // pull-to-refresh and a horizontal one is back-navigation on some
