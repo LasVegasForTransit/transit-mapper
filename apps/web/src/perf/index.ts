@@ -90,7 +90,7 @@ export interface SourceUploadMeter {
   detach: () => void;
 }
 
-export interface SourceUploadTiming {
+interface SourceUploadTiming {
   sourceId: string;
   method: 'setData' | 'updateData';
   callCount: number;

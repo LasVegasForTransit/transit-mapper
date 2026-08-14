@@ -25,7 +25,6 @@ import type { SourceFeatureProjectionCounts } from './feature-projection-counts'
 
 export {
   createSourceFeatureProjectionCounts,
-  mergeSourceFeatureProjectionCounts,
   type SourceFeatureProjectionCounts,
 } from './feature-projection-counts';
 
