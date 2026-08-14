@@ -8,6 +8,7 @@
  */
 import type { RenderCandidateEnvelope } from '@transitmapper/core/render/render-candidate-envelope';
 import type { RenderPreparedSnapshot } from '@transitmapper/core/render/render-preparation';
+import type { TransitSystem } from '@transitmapper/core/model/system';
 import { createRenderPreparationCoordinator } from '@transitmapper/core/render/render-preparation-update';
 import type { AcceptedSceneUpdate } from './accepted-scene-store';
 import {
@@ -23,6 +24,13 @@ import type { PlanResumableGeographicFeatureProjectionOptions } from './resumabl
 import type { ScenePublicationSubmission } from './scene-publication';
 import type { SourceUploadTransition } from './sourceUploadPlan';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
+import type { FeatureProjectionWorkerClient } from './feature-projection-worker';
+
+export type DiagramLayoutResolver = (
+  system: TransitSystem,
+  revision: string,
+  signal: AbortSignal,
+) => Promise<TransitSystem>;
 import {
   createRendererProjectionMeasurement,
   type RendererProjectionMeasurement,
@@ -54,6 +62,10 @@ export interface DocumentProjectorOptions {
   readonly accounting: SourceFeatureProjectionAccounting;
   readonly stats: RendererStatsCollector;
   readonly instrumentationEnabled: boolean;
+  /** Persistent CPU owner for geographic feature construction. Browser-free
+   * tests supply a fake; production never falls back to synchronous drawing. */
+  readonly featureProjectionWorker: FeatureProjectionWorkerClient;
+  layoutDiagram?: DiagramLayoutResolver;
   now(): number;
   publish(
     prepared: PreparedFeatureProjectionCommit,
@@ -99,10 +111,14 @@ export class DocumentProjector {
       transition: request.transition,
       requestedSourceIds: request.requestedSourceIds,
       intent: request.intent,
+      diagramRevision: request.revision,
       ...(request.candidateEnvelope ? { candidateEnvelope: request.candidateEnvelope } : {}),
       projection: request.projection,
       projectionCounts: countTransaction.counts,
       now: () => this.options.now(),
+      ...(this.options.layoutDiagram ? { layoutDiagram: this.options.layoutDiagram } : {}),
+      featureProjectionWorker: this.options.featureProjectionWorker,
+      ...(this.options.layoutDiagram ? { layoutDiagram: this.options.layoutDiagram } : {}),
       commit: (prepared) => {
         return this.options.publish(prepared, request, measurement, async (update) => {
           this.accept(prepared.preparedSnapshot);

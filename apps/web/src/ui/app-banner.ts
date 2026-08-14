@@ -126,8 +126,8 @@ function noticeMessage(cause: NoticeCause, online: boolean): string {
     // tiles failed, going offline afterwards rewords it.
     case 'basemap-unavailable':
       return online
-        ? 'The background map couldn’t be loaded, so the map behind your system is blank. Your system is unaffected and still saved.'
-        : 'You’re offline, so the background map is blank. Everything you’ve drawn is here and still saved — the map fills in when you reconnect.';
+        ? 'The background map couldn’t be loaded. Your system is still shown on the drafting grid and is still saved.'
+        : 'You’re offline, so the background map isn’t available. Everything you’ve drawn is still here on the drafting grid and still saved — the map fills in when you reconnect.';
     // Deliberately says the damaged copy still exists. "Your work is gone" and
     // "your work is here but unreadable" call for very different reactions,
     // and only one of them is true.

@@ -17,6 +17,7 @@ import {
   LYR_CENTER_LINES,
   LYR_CARRIAGEWAYS,
   LYR_CONNECTORS,
+  LYR_CROSSWALKS,
   LYR_EDGE_LINES,
   LYR_ENDPOINT_HINT,
   LYR_FACILITIES,
@@ -30,6 +31,7 @@ import {
   LYR_GESTURE_STROKE,
   LYR_HANDLES,
   LYR_JUNCTIONS,
+  LYR_JUNCTION_CONTROLS,
   LYR_JUNCTION_GUIDES,
   LYR_JUNCTION_SELECTED,
   LYR_LANDMARKS,
@@ -59,6 +61,7 @@ import {
   LYR_STATION_LABELS,
   LYR_STATION_LABELS_MAJOR,
   LYR_STATION_SELECTED,
+  LYR_STOP_BARS,
   LYR_VEHICLES,
   LYR_VEHICLES_INFRA_FILL,
   LYR_VEHICLES_INFRA_STROKE,
@@ -152,6 +155,49 @@ function contextLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'fill-opacity': tierOpacityExpr(0.9) as never,
       },
     },
+    {
+      // Controls live at the semantic Node, above the shared asphalt but below
+      // lane guidance. The same source keeps a node edit one scene update.
+      id: LYR_JUNCTION_CONTROLS,
+      type: 'circle',
+      source: SRC_JUNCTIONS,
+      filter: ['has', 'control'],
+      paint: {
+        'circle-radius': [
+          'match',
+          ['get', 'control'],
+          'roundabout',
+          5.5,
+          'signal',
+          4.5,
+          'stop',
+          4.5,
+          'yield',
+          3.5,
+          'levelCrossing',
+          4,
+          4,
+        ],
+        'circle-color': [
+          'match',
+          ['get', 'control'],
+          'signal',
+          theme.danger,
+          'stop',
+          theme.paper,
+          'yield',
+          theme.centerLine,
+          'roundabout',
+          theme.centerLine,
+          'levelCrossing',
+          theme.ink,
+          theme.ink,
+        ],
+        'circle-stroke-color': theme.ink,
+        'circle-stroke-width': 1.2,
+        'circle-opacity': tierOpacityExpr(1) as never,
+      },
+    },
   ];
 }
 
@@ -235,6 +281,37 @@ function streetDetailLayerSpecs(theme: MapTheme): LayerSpecification[] {
       paint: {
         'line-color': theme.centerLine,
         'line-width': 1.8,
+        'line-opacity': tierOpacityExpr(0.95) as never,
+      },
+    },
+    {
+      // Approach crosswalks derive from the same resolved junction arms as
+      // the carriageway trim, so stripes stay perpendicular through a curve
+      // or cross-section edit. They paint over lane boundaries but below turn
+      // guidance, which keeps both pedestrian and movement information legible.
+      id: LYR_CROSSWALKS,
+      type: 'line',
+      source: SRC_LANE_MARKINGS,
+      filter: ['==', ['get', 'kind'], 'crosswalk'],
+      layout: { 'line-cap': 'butt' },
+      paint: {
+        'line-color': theme.laneMarking,
+        'line-width': 1.8,
+        'line-opacity': tierOpacityExpr(0.9) as never,
+      },
+    },
+    {
+      // The solid bar is intentionally beyond the zebra stripes in the
+      // approach direction. It reads as the driver boundary without obscuring
+      // the pedestrian crossing or the turn guidance above it.
+      id: LYR_STOP_BARS,
+      type: 'line',
+      source: SRC_LANE_MARKINGS,
+      filter: ['==', ['get', 'kind'], 'stopBar'],
+      layout: { 'line-cap': 'butt' },
+      paint: {
+        'line-color': theme.laneMarking,
+        'line-width': 2.5,
         'line-opacity': tierOpacityExpr(0.95) as never,
       },
     },

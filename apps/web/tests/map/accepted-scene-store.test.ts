@@ -63,11 +63,11 @@ function isLineFeature(feature: Feature): feature is Feature<LineString> {
   return feature.geometry.type === 'LineString';
 }
 
-function stationFeature(id: string, stationId: string, x: number): Feature<Point> {
+function stopFeature(id: string, stopId: string, x: number): Feature<Point> {
   return {
     type: 'Feature',
     id,
-    properties: { id: stationId },
+    properties: { id: stopId },
     geometry: { type: 'Point', coordinates: [x, 0] },
   };
 }
@@ -113,7 +113,7 @@ describe('live render scene controller', () => {
     expect(ALL_SYSTEM_FEATURE_SOURCES).toHaveLength(16);
     expect(new Set(ALL_SYSTEM_FEATURE_SOURCES).size).toBe(16);
     expect(SYSTEM_FEATURE_SOURCE_BY_NAME.ways).toBe(systemFeatureSourceId(SRC_WAYS));
-    expect(SYSTEM_FEATURE_SOURCE_BY_NAME.stations).toBe(systemFeatureSourceId(SRC_STATIONS));
+    expect(SYSTEM_FEATURE_SOURCE_BY_NAME.stops).toBe(systemFeatureSourceId(SRC_STATIONS));
   });
 
   it('builds a complete scene from a partial projection and excludes hit-only IDs from state targets', () => {
@@ -150,7 +150,7 @@ describe('live render scene controller', () => {
   it('retains unrequested collections and patches only the replaced source', () => {
     const fixture = controllerFixture();
     const waysSource = systemFeatureSourceId('ways');
-    const stationsSource = systemFeatureSourceId('stations');
+    const stopsSource = systemFeatureSourceId('stops');
     const wayId = renderFeatureId(waysSource, 'overview', ['way-a']);
     const initial = emptySystemFeatures();
     initial.ways.features.push(lineFeature(wayId, 'way-a', 0));
@@ -161,9 +161,9 @@ describe('live render scene controller', () => {
     });
     fixture.clearCalls();
 
-    const stationId = renderFeatureId(stationsSource, 'marker', ['station-a']);
+    const stopId = renderFeatureId(stopsSource, 'marker', ['stop-a']);
     const partial = emptySystemFeatures();
-    partial.stations.features.push(stationFeature(stationId, 'station-a', 2));
+    partial.stops.features.push(stopFeature(stopId, 'stop-a', 2));
     const result = fixture.controller.applySynchronously({
       revision: 'revision-2',
       features: partial,
@@ -175,10 +175,10 @@ describe('live render scene controller', () => {
     expect(result.addedFeatureCount).toBe(1);
     expect(result.removedFeatureCount).toBe(0);
     expect(fixture.source(SYSTEM_FEATURE_SOURCE_BY_NAME.ways).calls).toEqual([]);
-    expect(fixture.source(SYSTEM_FEATURE_SOURCE_BY_NAME.stations).calls).toEqual([
+    expect(fixture.source(SYSTEM_FEATURE_SOURCE_BY_NAME.stops).calls).toEqual([
       {
         method: 'updateData',
-        data: { add: [expect.objectContaining({ id: stationId })] },
+        data: { add: [expect.objectContaining({ id: stopId })] },
       },
     ]);
     expect(result.scene.featuresBySource.get(SYSTEM_FEATURE_SOURCE_BY_NAME.ways)?.features).toEqual(
@@ -188,19 +188,19 @@ describe('live render scene controller', () => {
       fixture.controller.targetsForDomainIdentity(renderDomainIdentity('way', 'way-a')),
     ).toEqual([{ sourceId: SYSTEM_FEATURE_SOURCE_BY_NAME.ways, featureId: wayId }]);
     expect(
-      fixture.controller.targetsForDomainIdentity(renderDomainIdentity('station', 'station-a')),
-    ).toEqual([{ sourceId: SYSTEM_FEATURE_SOURCE_BY_NAME.stations, featureId: stationId }]);
+      fixture.controller.targetsForDomainIdentity(renderDomainIdentity('stop', 'stop-a')),
+    ).toEqual([{ sourceId: SYSTEM_FEATURE_SOURCE_BY_NAME.stops, featureId: stopId }]);
   });
 
   it('treats an empty requested collection as a removal without clearing retained sources', () => {
     const fixture = controllerFixture();
     const waysSource = systemFeatureSourceId('ways');
-    const stationsSource = systemFeatureSourceId('stations');
+    const stopsSource = systemFeatureSourceId('stops');
     const wayId = renderFeatureId(waysSource, 'overview', ['way-a']);
-    const stationId = renderFeatureId(stationsSource, 'marker', ['station-a']);
+    const stopId = renderFeatureId(stopsSource, 'marker', ['stop-a']);
     const initial = emptySystemFeatures();
     initial.ways.features.push(lineFeature(wayId, 'way-a', 0));
-    initial.stations.features.push(stationFeature(stationId, 'station-a', 2));
+    initial.stops.features.push(stopFeature(stopId, 'stop-a', 2));
     fixture.controller.applySynchronously({
       revision: 'revision-1',
       features: initial,
@@ -216,11 +216,11 @@ describe('live render scene controller', () => {
 
     expect(result.removedFeatureCount).toBe(1);
     expect(fixture.source(SYSTEM_FEATURE_SOURCE_BY_NAME.ways).calls).toEqual([]);
-    expect(fixture.source(SYSTEM_FEATURE_SOURCE_BY_NAME.stations).calls).toEqual([
-      { method: 'updateData', data: { remove: [stationId] } },
+    expect(fixture.source(SYSTEM_FEATURE_SOURCE_BY_NAME.stops).calls).toEqual([
+      { method: 'updateData', data: { remove: [stopId] } },
     ]);
     expect(
-      fixture.controller.targetsForDomainIdentity(renderDomainIdentity('station', 'station-a')),
+      fixture.controller.targetsForDomainIdentity(renderDomainIdentity('stop', 'stop-a')),
     ).toEqual([]);
   });
 
@@ -282,10 +282,10 @@ describe('live render scene controller', () => {
       });
       const before = { ...counts };
 
-      const stationsSource = systemFeatureSourceId('stations');
+      const stopsSource = systemFeatureSourceId('stops');
       const partial = emptySystemFeatures();
-      partial.stations.features.push(
-        stationFeature(renderFeatureId(stationsSource, 'marker', ['station-a']), 'station-a', 2),
+      partial.stops.features.push(
+        stopFeature(renderFeatureId(stopsSource, 'marker', ['stop-a']), 'stop-a', 2),
       );
       const result = fixture.controller.applySynchronously({
         revision: 'revision-2',

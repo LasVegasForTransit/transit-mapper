@@ -13,6 +13,7 @@ interface RenderEntity {
 interface RenderMutationIds {
   readonly ways?: readonly string[];
   readonly nodes?: readonly string[];
+  readonly stops?: readonly string[];
   readonly stations?: readonly string[];
   readonly facilities?: readonly string[];
 }
@@ -84,12 +85,14 @@ function patchForIds(
   const forceIds = {
     ways: new Set(force.ways),
     nodes: new Set(force.nodes),
+    stops: new Set(force.stops),
     stations: new Set(force.stations),
     facilities: new Set(force.facilities),
   };
   return {
     ways: changedRecords(previous.ways, next.ways, ids.ways, forceIds.ways),
     nodes: changedRecords(previous.nodes, next.nodes, ids.nodes, forceIds.nodes),
+    stops: changedRecords(previous.stops, next.stops, ids.stops, forceIds.stops),
     stations: changedRecords(previous.stations, next.stations, ids.stations, forceIds.stations),
     facilities: changedRecords(
       previous.facilities,
@@ -115,10 +118,10 @@ function wayGeometryIds(
   const nodeIds = nodes
     .filter((node) => node.refs.some((ref) => affectedWayIds.has(ref.wayId)))
     .map((node) => node.id);
-  const stationIds = [...previous.stations, ...next.stations]
-    .filter((station) => station.anchors.some((anchor) => affectedWayIds.has(anchor.wayId)))
-    .map((station) => station.id);
-  return { ways: [...affectedWayIds], nodes: nodeIds, stations: stationIds };
+  const stopIds = [...previous.stops, ...next.stops]
+    .filter((stop) => stop.anchors.some((anchor) => affectedWayIds.has(anchor.wayId)))
+    .map((stop) => stop.id);
+  return { ways: [...affectedWayIds], nodes: nodeIds, stops: stopIds };
 }
 
 /** Journals a physical way edit together with its junction and station effects. */
@@ -148,6 +151,10 @@ export function renderMutationForSelection(
     const geometryIds = wayGeometryIds(previous, next, wayIds);
     return patchForIds(previous, next, {
       ...geometryIds,
+      stops: [
+        ...(geometryIds.stops ?? []),
+        ...items.filter((item) => item.kind === 'stop').map((item) => item.id),
+      ],
       stations: [
         ...(geometryIds.stations ?? []),
         ...items.filter((item) => item.kind === 'station').map((item) => item.id),

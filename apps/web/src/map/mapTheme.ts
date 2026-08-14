@@ -33,7 +33,13 @@ export function localBlankStyleForScheme(scheme: ColorScheme): StyleSpecificatio
       {
         id: 'transitmapper-local-background',
         type: 'background',
-        paint: { 'background-color': MAP_THEMES[scheme].background },
+        // Keep the MapLibre canvas transparent here. The editor container
+        // supplies the local drafting surface beneath it, which gives an
+        // offline or capture map orientation without masking a real basemap.
+        paint: {
+          'background-color': MAP_THEMES[scheme].background,
+          'background-opacity': 0,
+        },
       },
     ],
   };

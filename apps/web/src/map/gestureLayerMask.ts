@@ -68,7 +68,9 @@ export function buildGestureLayerMaskPlan(affected: GestureAffectedEntities): Ge
   add(SRC_LANE_ARROWS, 'id', affected.wayIds);
   add(SRC_SERVICE_ARROWS, 'id', affected.wayIds);
   add(SRC_HANDLES, 'wayId', affected.wayIds);
-  add(SRC_STATIONS, 'id', affected.stationIds);
+  // `tm-stations` is the legacy external source name for anchored Stops.
+  // Physical Stations own footprint/platform sources below.
+  add(SRC_STATIONS, 'id', affected.stopIds);
   add(SRC_FOOTPRINTS, 'stationId', affected.stationIds);
   add(SRC_FOOTPRINTS, 'groupId', affected.groupIds);
   add(SRC_PLATFORMS, 'stationId', affected.stationIds);
@@ -101,6 +103,7 @@ export function buildGestureLayerMaskPlan(affected: GestureAffectedEntities): Ge
 function gestureMaskIdentity(affected: GestureAffectedEntities): string {
   return JSON.stringify([
     affected.wayIds,
+    affected.stopIds,
     affected.stationIds,
     affected.facilityIds,
     affected.groupIds,

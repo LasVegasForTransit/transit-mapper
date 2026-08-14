@@ -1,11 +1,28 @@
 import { describe, expect, it } from 'vitest';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
+import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
+import { aRoad, aSystem } from '@transitmapper/core/testing/fixtures';
 import type { Selection } from '../../src/editor/store';
 import {
   canApplyEditorSourceUpdate,
+  editorOverlayWorkerInput,
   editorSourcesNeedSystemRefresh,
   planSelectionRenderUpdate,
+  projectEditorOverlays,
   type SelectionRenderState,
 } from '../../src/map/editor-overlays';
+
+const editorView: RenderViewOptions = {
+  viewMode: 'network',
+  visibleModes: new Set(['bus']),
+  visibleWayTypes: new Set(['road']),
+  presentation: renderPresentationForViewport({
+    center: [-115.16, 36.14],
+    zoom: 14,
+    width: 1_440,
+    height: 900,
+  }),
+};
 
 function state(
   selection: Selection,
@@ -21,6 +38,46 @@ function state(
 }
 
 describe('selection render updates', () => {
+  it('describes editor geometry as an isolated worker request', () => {
+    const system = aSystem();
+
+    expect(
+      editorOverlayWorkerInput({
+        system,
+        selection: { kind: 'way', id: 'way-a' },
+        handleWayIds: ['way-a'],
+        view: editorView,
+      }),
+    ).toMatchObject({
+      system,
+      sourceIds: ['tm-handles', 'tm-service-termini', 'tm-physical-handles'],
+      selectionOwnedConnectors: false,
+    });
+  });
+
+  it('projects only editor-owned collections for a selected corridor', () => {
+    const system = aSystem({
+      ways: [
+        aRoad('way-a', [
+          [-115.18, 36.14],
+          [-115.14, 36.14],
+        ]),
+      ],
+    });
+
+    const features = projectEditorOverlays({
+      system,
+      selection: { kind: 'way', id: 'way-a' },
+      handleWayIds: ['way-a'],
+      view: editorView,
+    });
+
+    expect(features.handles.features).toHaveLength(2);
+    expect(features.ways.features).toEqual([]);
+    expect(features.services.features).toEqual([]);
+    expect(features.stops.features).toEqual([]);
+  });
+
   it('never lets an editor-only shell become the first retained live scene', () => {
     expect(canApplyEditorSourceUpdate(false, false)).toBe(false);
     expect(canApplyEditorSourceUpdate(true, true)).toBe(false);

@@ -64,11 +64,11 @@ describe('stop gesture settlement ownership', () => {
     expect(map.listenerCount()).toBe(0);
   });
 
-  it('settles against the physical station bank active when the mutation begins', () => {
+  it('settles against the stop bank active when the mutation begins', () => {
     const map = createSettlementHost();
     let sourceId = `${SRC_STATIONS}--bank-a`;
     const released = vi.fn();
-    const controller = createStationGestureSettlementController({
+    const controller = createStopGestureSettlementController({
       host: map.host,
       sourceId: () => sourceId,
       isGestureActive: () => false,

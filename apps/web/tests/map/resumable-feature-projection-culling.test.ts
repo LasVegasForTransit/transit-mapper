@@ -4,7 +4,14 @@ import {
   resetViewportIndexCacheDiagnostics,
   snapshotViewportIndexCacheDiagnostics,
 } from '@transitmapper/core/render/viewport-index';
-import { aPattern, aRoad, aService, aStation, aSystem } from '@transitmapper/core/testing/fixtures';
+import {
+  aPattern,
+  aRoad,
+  aService,
+  aStation,
+  aStop,
+  aSystem,
+} from '@transitmapper/core/testing/fixtures';
 import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
 import {
   SRC_FACILITIES,
@@ -65,10 +72,10 @@ describe('resumable geographic feature projection culling', () => {
           refs: [{ wayId: way.id, pointIndex: 0 }],
         })),
       ],
-      stations: [
-        aStation('visible-station', [-115.181, 36.14], { wayId: visibleWest.id, t: 0.5 }),
+      stops: [
+        aStop('visible-stop', [-115.181, 36.14], { wayId: visibleWest.id, t: 0.5 }),
         ...offscreenWays.map((way, index) =>
-          aStation(`offscreen-station-${index}`, way.points[0], { wayId: way.id, t: 0 }),
+          aStop(`offscreen-stop-${index}`, way.points[0], { wayId: way.id, t: 0 }),
         ),
       ],
       namedWays: [
@@ -87,7 +94,7 @@ describe('resumable geographic feature projection culling', () => {
       handleWayIds: [],
       view,
       sourceIds: [SRC_WAYS, SRC_JUNCTIONS, SRC_STATIONS, SRC_WAY_LABELS],
-      batchSizes: { corridors: 1, junctions: 1, stations: 1, labels: 1 },
+      batchSizes: { corridors: 1, junctions: 1, stops: 1, labels: 1 },
     });
 
     expect(plan.kind).toBe('ready');
@@ -96,7 +103,7 @@ describe('resumable geographic feature projection culling', () => {
       { kind: 'corridor', ids: ['visible-west'] },
       { kind: 'corridor', ids: ['visible-east'] },
       { kind: 'junction', ids: ['visible-junction'] },
-      { kind: 'station', ids: ['visible-station'] },
+      { kind: 'stop', ids: ['visible-stop'] },
       { kind: 'label', ids: ['visible-label'] },
     ]);
     expect(plan.units.every((unit) => unit.primary.ids.length <= 1)).toBe(true);
@@ -125,14 +132,14 @@ describe('resumable geographic feature projection culling', () => {
       aPattern('visible-pattern', [visibleWay], [visibleWay.id]),
       aPattern('remote-pattern', [remoteWay], [remoteWay.id]),
     ]);
-    const visibleStation = aStation('visible-physical', [-115.18, 36.14], undefined, {
+    const visibleStation = aStation('visible-physical', [-115.18, 36.14], {
       footprint: [
         [-115.1802, 36.1398],
         [-115.1798, 36.1398],
         [-115.1798, 36.1402],
       ],
     });
-    const remoteStation = aStation('remote-physical', [-114, 37], undefined, {
+    const remoteStation = aStation('remote-physical', [-114, 37], {
       footprint: [
         [-114.0002, 36.9998],
         [-113.9998, 36.9998],

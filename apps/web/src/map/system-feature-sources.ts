@@ -19,7 +19,7 @@ import {
   SRC_STATIONS,
   SRC_WAY_LABELS,
   SRC_WAYS,
-} from './layers';
+} from './layers/constants';
 
 /** Stable upload order for every system-derived MapLibre source. Transient
  * gesture, draft, vehicle, and marquee sources deliberately stay outside this
@@ -78,7 +78,7 @@ export function emptySystemFeatures(): SystemFeatures {
   return {
     ways: emptyCollection(),
     services: emptyCollection(),
-    stations: emptyCollection(),
+    stops: emptyCollection(),
     handles: emptyCollection(),
     serviceTermini: emptyCollection(),
     footprints: emptyCollection(),
@@ -102,7 +102,7 @@ export const SYSTEM_FEATURE_NAME_BY_SOURCE: Readonly<
 > = {
   [SRC_WAYS]: 'ways',
   [SRC_SERVICES]: 'services',
-  [SRC_STATIONS]: 'stations',
+  [SRC_STATIONS]: 'stops',
   [SRC_HANDLES]: 'handles',
   [SRC_SERVICE_TERMINI]: 'serviceTermini',
   [SRC_FOOTPRINTS]: 'footprints',
@@ -121,7 +121,7 @@ export const SYSTEM_FEATURE_NAME_BY_SOURCE: Readonly<
 export const SYSTEM_FEATURE_SOURCE_BY_NAME: SystemFeatureSourceMap = {
   ways: systemFeatureSourceId(SRC_WAYS),
   services: systemFeatureSourceId(SRC_SERVICES),
-  stations: systemFeatureSourceId(SRC_STATIONS),
+  stops: systemFeatureSourceId(SRC_STATIONS),
   handles: systemFeatureSourceId(SRC_HANDLES),
   serviceTermini: systemFeatureSourceId(SRC_SERVICE_TERMINI),
   footprints: systemFeatureSourceId(SRC_FOOTPRINTS),

@@ -16,10 +16,16 @@ import { profileWidthM } from '@transitmapper/core/model/profile';
 import type { TransitSystem, Way } from '@transitmapper/core/model/system';
 import { widthPxAtZ14 } from '@transitmapper/core/render/constants';
 import { renderFeatureId, systemFeatureSourceId } from '@transitmapper/core/render/render-identity';
+import type { RenderViewOptions, SystemFeatures } from '@transitmapper/core/render/buildFeatures';
 import type { EditorState, Selection } from '../editor/store';
 import { SRC_CONNECTORS } from './layers/constants';
+import {
+  buildFeaturesForSources,
+  type SourceFeatureProjectionCounts,
+} from './sourceFeatureProjection';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
 import { EDITOR_SYSTEM_FEATURE_SOURCES } from './system-feature-sources';
+import type { FeatureProjectionClientInput } from './feature-projection-worker';
 
 const CONNECTOR_SOURCE_ID = systemFeatureSourceId(SRC_CONNECTORS);
 
@@ -40,7 +46,85 @@ export interface SelectionRenderUpdatePlan {
   updateServiceTermini: boolean;
 }
 
+/** Everything needed to derive the editor's small, selection-owned sources.
+ *
+ * This deliberately omits committed source IDs and render-scene scope. A
+ * caller selecting a feature may update handles or a terminus, but cannot
+ * accidentally use this convenience path to rebuild streets or services.
+ */
+export interface EditorOverlayProjection {
+  readonly system: TransitSystem;
+  readonly selection: Selection;
+  readonly handleWayIds: readonly string[];
+  readonly view: RenderViewOptions;
+  readonly physicalHandleStationId?: string | null;
+  readonly physicalHandleGroupId?: string | null;
+  readonly activePatternId?: string | null;
+  readonly armedTerminus?: RenderedArmedTerminus | null;
+  readonly counts?: SourceFeatureProjectionCounts;
+}
+
 const EDITOR_SOURCE_SET = new Set<MapSystemFeatureSourceId>(EDITOR_SYSTEM_FEATURE_SOURCES);
+
+/**
+ * The selection layer names exactly the geometry it owns before any CPU work
+ * starts. Both the browser worker and the legacy pure helper below consume
+ * this one description, so a selection update cannot accidentally request a
+ * settled street, service, or hit collection.
+ */
+export function editorOverlayWorkerInput({
+  system,
+  selection,
+  handleWayIds,
+  view,
+  physicalHandleStationId = null,
+  physicalHandleGroupId = null,
+  activePatternId = null,
+  armedTerminus = null,
+}: EditorOverlayProjection): FeatureProjectionClientInput {
+  return {
+    system,
+    selection,
+    handleWayIds: [...handleWayIds],
+    view,
+    sourceIds: EDITOR_SYSTEM_FEATURE_SOURCES,
+    physicalHandleStationId,
+    physicalHandleGroupId,
+    activePatternId,
+    armedTerminus,
+    selectionOwnedConnectors: false,
+  };
+}
+
+/** Projects only the short-lived geometry that makes the current edit
+ * understandable. The accepted renderer scene owns every committed network
+ * collection; keeping that boundary here prevents a future selection path
+ * from silently expanding into a city-wide rebuild. */
+export function projectEditorOverlays({
+  system,
+  selection,
+  handleWayIds,
+  view,
+  physicalHandleStationId = null,
+  physicalHandleGroupId = null,
+  activePatternId = null,
+  armedTerminus = null,
+  counts,
+}: EditorOverlayProjection): SystemFeatures {
+  return buildFeaturesForSources({
+    ...editorOverlayWorkerInput({
+      system,
+      selection,
+      handleWayIds,
+      view,
+      physicalHandleStationId,
+      physicalHandleGroupId,
+      activePatternId,
+      armedTerminus,
+    }),
+    ...(counts ? { counts } : {}),
+  });
+}
 
 /** Editor-owned handles and guides may refine an accepted scene, but they
  * cannot seed it or interleave with a multi-frame source transaction. */

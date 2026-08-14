@@ -37,6 +37,16 @@ describe('map themes', () => {
     });
   });
 
+  it('leaves the local canvas transparent so the editor drafting surface remains visible', () => {
+    for (const scheme of ['light', 'dark'] as const) {
+      const background = localBlankStyleForScheme(scheme).layers[0];
+      expect(background).toMatchObject({
+        id: 'transitmapper-local-background',
+        paint: { 'background-opacity': 0 },
+      });
+    }
+  });
+
   it('gives the deterministic local canvas a same-origin glyph endpoint for text layers', () => {
     const style = localBlankStyleForScheme('light');
 

@@ -27,8 +27,9 @@ import {
   CORRIDOR_SOURCES,
   JUNCTION_SOURCES,
   PHYSICAL_CORRIDOR_SOURCES,
+  PHYSICAL_STATION_SOURCES,
   SERVICE_CORRIDOR_SOURCES,
-  STATION_SOURCES,
+  STOP_SOURCES,
   addProjectionUnit,
   chunks,
   intersectIds,
@@ -148,8 +149,26 @@ function planJunctionUnits(context: ProjectionPlanningContext): void {
   }
 }
 
-function planStationUnits(context: ProjectionPlanningContext): void {
-  const stationSources = sourceSubset(context.sourceIds, STATION_SOURCES);
+function planStopUnits(context: ProjectionPlanningContext): void {
+  const stopSources = sourceSubset(context.sourceIds, STOP_SOURCES);
+  if (stopSources.length === 0) return;
+  const requestedStopIds = intersectIds(context.visibleStopIds, context.options.stopIds);
+  const stopIds = context.scope
+    ? intersectIds(context.scope.candidates.stopIds, requestedStopIds)
+    : requestedStopIds;
+  for (const stopBatch of chunks(stopIds, context.batchSizes.stops)) {
+    addProjectionUnit(context, {
+      kind: 'stop',
+      primaryIds: stopBatch,
+      sourceIds: stopSources,
+      unitScope: { stopIds: stopBatch },
+      viewportCandidates: { stopIds: stopBatch },
+    });
+  }
+}
+
+function planPhysicalStationUnits(context: ProjectionPlanningContext): void {
+  const stationSources = sourceSubset(context.sourceIds, PHYSICAL_STATION_SOURCES);
   if (stationSources.length === 0) return;
   const requestedStationIds = intersectIds(context.visibleStationIds, context.options.stationIds);
   const stationIds = context.scope
@@ -380,7 +399,8 @@ function planSingletonUnits(context: ProjectionPlanningContext): void {
 export function appendProjectionUnits(context: ProjectionPlanningContext): void {
   planCorridorUnits(context);
   planJunctionUnits(context);
-  planStationUnits(context);
+  planStopUnits(context);
+  planPhysicalStationUnits(context);
   planPhysicalHandleUnits(context);
   planLabelUnits(context);
   planServiceTerminusUnits(context);

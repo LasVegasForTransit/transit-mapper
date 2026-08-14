@@ -14,7 +14,9 @@ interface StopGestureSettlementRefresh {
 
 export interface StopGestureSettlementControllerOptions {
   host: SourceMutationSettlementHost;
-  sourceId: string;
+  /** Resolve at mutation start: a bank flip after that point must not make an
+   * already-issued mutation wait on a different physical source. */
+  sourceId: string | (() => string);
   isGestureActive: () => boolean;
   onRelease: () => void;
   timeoutMs?: number;
@@ -61,7 +63,7 @@ function beginFullRefresh(context: SettlementContext, mutate: () => void): void 
   state.ready = false;
   state.cancelPending = settleSourceMutationAfterRender({
     host: options.host,
-    sourceId: options.sourceId,
+    sourceId: resolvedSourceId(options),
     mutate,
     onSettled: () => markReady(context, expectedGeneration),
     // A bounded release prevents a failed MapLibre source from leaving the
@@ -83,7 +85,7 @@ function beginDiffMutation(
   state.ready = false;
   state.cancelPending = settleSourceMutationAfterRender({
     host: options.host,
-    sourceId: options.sourceId,
+    sourceId: resolvedSourceId(options),
     mutate,
     onSettled: () => markReady(context, expectedGeneration),
     onFallback: () => {
@@ -99,6 +101,10 @@ function beginDiffMutation(
     },
     timeoutMs: options.timeoutMs,
   });
+}
+
+function resolvedSourceId(options: StopGestureSettlementControllerOptions): string {
+  return typeof options.sourceId === 'function' ? options.sourceId() : options.sourceId;
 }
 
 /**

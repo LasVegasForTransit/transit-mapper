@@ -12,7 +12,9 @@ class SettlementHost implements SourceBankSettlementHost {
   private readonly renderListeners = new Set<() => void>();
 
   isSourceLoaded = (sourceId: string) => this.loaded.has(sourceId);
-  triggerRepaint = () => this.repaint();
+  triggerRepaint = () => {
+    this.repaint();
+  };
   onSourceData = (listener: (sourceId: string) => void) => {
     this.sourceListeners.add(listener);
     return () => {

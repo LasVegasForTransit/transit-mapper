@@ -5,7 +5,10 @@
  * attempt owns isolated draft and source-preparation state. This module keeps
  * that mechanical scheduling state out of the accepted-scene lifecycle.
  */
-import type { CooperativeRenderJobUnitSequence } from './cooperative-render-job-scheduler';
+import type {
+  CooperativeRenderJobUnit,
+  CooperativeRenderJobUnitSequence,
+} from './cooperative-render-job-scheduler';
 import type { RenderSceneSourceMutationUnit } from './render-scene-source-updater';
 import type { SceneDraftPlan } from './scene-draft';
 import type {
@@ -142,62 +145,104 @@ function sourcePreparationUnit<Update>(
   };
 }
 
+/** Private draft work is only allowed to yield on the final minimal retry. */
+function toleratePrivateUnit(
+  attempt: ScenePublicationAttempt<unknown>,
+  unit: CooperativeRenderJobUnit<void>,
+): CooperativeRenderJobUnit<void> {
+  if (attempt.tolerateBudgetOverrun) attempt.overBudgetYieldUnitIds.add(unit.id);
+  return unit;
+}
+
+function createDraftPlanUnit<Update>(
+  options: PublishSceneDraftOptions<Update>,
+  attempt: ScenePublicationAttempt<Update>,
+): CooperativeRenderJobUnit<void> {
+  const id = `scene-publication:plan:${attempt.batchSize}`;
+  return toleratePrivateUnit(attempt, {
+    id,
+    run: () => {
+      attempt.plan = options.controller.draft(options.input, {
+        batchSize: attempt.batchSize,
+      });
+    },
+  });
+}
+
+function nextDraftWorkUnit<Update>(
+  attempt: ScenePublicationAttempt<Update>,
+): CooperativeRenderJobUnit<void> | null {
+  const plan = attempt.plan;
+  if (!plan) return null;
+  const unit = plan.units.unitAt(attempt.planUnitIndex);
+  if (!unit) return null;
+  attempt.planUnitIndex += 1;
+  return toleratePrivateUnit(attempt, unit);
+}
+
+function sourceCommitFor<Update>(
+  options: PublishSceneDraftOptions<Update>,
+  attempt: ScenePublicationAttempt<Update>,
+): PreparedScenePublication<Update> | null {
+  if (attempt.sourceCommit) return attempt.sourceCommit;
+  const plan = attempt.plan;
+  if (!plan || !options.controller.preparePublication) return null;
+  attempt.sourceCommit = options.controller.preparePublication(plan.result());
+  return attempt.sourceCommit;
+}
+
+function nextSourcePreparationUnit<Update>(
+  attempt: ScenePublicationAttempt<Update>,
+  sourceCommit: PreparedScenePublication<Update>,
+): CooperativeRenderJobUnit<void> | null {
+  const unit = sourceCommit.preparationUnits?.unitAt(attempt.sourceCpuPreparationIndex);
+  if (!unit) return null;
+  attempt.sourceCpuPreparationIndex += 1;
+  return toleratePrivateUnit(attempt, unit);
+}
+
+/** GeoJSON mutations are side-effecting MapLibre boundaries. They cannot be
+ * preempted or rolled back after return, so an overrun yields and remains in
+ * the transaction's recorded performance facts instead of rejecting it. */
+function nextSourceMutationUnit<Update>(
+  options: PublishSceneDraftOptions<Update>,
+  attempt: ScenePublicationAttempt<Update>,
+  sourceCommit: PreparedScenePublication<Update>,
+): CooperativeRenderJobUnit<void> | null {
+  const unit = sourceCommit.units.at(attempt.sourceUnitIndex);
+  if (!unit) return null;
+  const startsMutation = attempt.sourceUnitIndex === 0;
+  attempt.sourceUnitIndex += 1;
+  attempt.overBudgetYieldUnitIds.add(unit.id);
+  if (!startsMutation) return unit;
+  return {
+    ...unit,
+    run: () => {
+      options.onSourceMutationStart?.(
+        sourceCommit.sourceIds,
+        sourcePublicationContext(sourceCommit),
+      );
+      unit.run();
+    },
+  };
+}
+
 export function scenePublicationUnits<Update>(
   options: PublishSceneDraftOptions<Update>,
   attempt: ScenePublicationAttempt<Update>,
 ): CooperativeRenderJobUnitSequence<void> {
   return {
     unitAt(index) {
-      if (index === 0) {
-        const unitId = `scene-publication:plan:${attempt.batchSize}`;
-        attempt.overBudgetYieldUnitIds.add(unitId);
-        return {
-          id: unitId,
-          run: () => {
-            attempt.plan = options.controller.draft(options.input, {
-              batchSize: attempt.batchSize,
-            });
-          },
-        };
-      }
-      const plan = attempt.plan;
-      if (!plan) return undefined;
-      if (!attempt.sourceCommit) {
-        const planUnit = plan.units.unitAt(attempt.planUnitIndex);
-        if (planUnit) {
-          attempt.planUnitIndex += 1;
-          attempt.overBudgetYieldUnitIds.add(planUnit.id);
-          return planUnit;
-        }
-        if (!options.controller.preparePublication) return undefined;
-        attempt.sourceCommit = options.controller.preparePublication(plan.result());
-      }
-      const sourceCommit = attempt.sourceCommit;
-      const cpuPreparationUnit = sourceCommit.preparationUnits?.unitAt(
-        attempt.sourceCpuPreparationIndex,
-      );
-      if (cpuPreparationUnit) {
-        attempt.sourceCpuPreparationIndex += 1;
-        attempt.overBudgetYieldUnitIds.add(cpuPreparationUnit.id);
-        return cpuPreparationUnit;
-      }
+      if (index === 0) return createDraftPlanUnit(options, attempt);
+      if (!attempt.plan) return undefined;
+      const draftUnit = nextDraftWorkUnit(attempt);
+      if (draftUnit) return draftUnit;
+      const sourceCommit = sourceCommitFor(options, attempt);
+      if (!sourceCommit) return undefined;
+      const sourceCpuUnit = nextSourcePreparationUnit(attempt, sourceCommit);
+      if (sourceCpuUnit) return sourceCpuUnit;
       const preparationUnit = sourcePreparationUnit(options, attempt);
-      if (preparationUnit) return preparationUnit;
-      const sourceUnit = sourceCommit.units.at(attempt.sourceUnitIndex);
-      if (!sourceUnit) return undefined;
-      const sourceUnitIndex = attempt.sourceUnitIndex;
-      attempt.sourceUnitIndex += 1;
-      if (sourceUnitIndex !== 0) return sourceUnit;
-      return {
-        ...sourceUnit,
-        run: () => {
-          options.onSourceMutationStart?.(
-            sourceCommit.sourceIds,
-            sourcePublicationContext(sourceCommit),
-          );
-          sourceUnit.run();
-        },
-      };
+      return preparationUnit ?? nextSourceMutationUnit(options, attempt, sourceCommit) ?? undefined;
     },
   };
 }

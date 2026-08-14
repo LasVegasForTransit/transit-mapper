@@ -1,4 +1,11 @@
-import type { Feature, LineString, Polygon } from 'geojson';
+import type {
+  Feature,
+  Geometry,
+  GeometryCollection,
+  LineString,
+  MultiPolygon,
+  Polygon,
+} from 'geojson';
 import { describe, expect, it } from 'vitest';
 import { renderDomainIdentity, renderFeatureId } from '@transitmapper/core/render/render-identity';
 import {
@@ -8,42 +15,12 @@ import {
 import { SRC_FOOTPRINTS, SRC_WAYS } from '../../src/map/layers';
 import { publishSceneDraft } from '../../src/map/scene-publication';
 import { SYSTEM_FEATURE_SOURCE_BY_NAME } from '../../src/map/system-feature-sources';
-import { controllerFixture, emptySystemFeatures } from '../support/scene-draft.test';
-
-class RealTimeFrameQueue {
-  private nextHandle = 1;
-  private readonly frames = new Map<number, () => void>();
-
-  schedule = (callback: () => void): number => {
-    const handle = this.nextHandle++;
-    this.frames.set(handle, callback);
-    return handle;
-  };
-
-  cancel = (handle: number): void => {
-    this.frames.delete(handle);
-  };
-
-  flushOne(): void {
-    const entry = this.frames.entries().next();
-    if (entry.done) return;
-    this.frames.delete(entry.value[0]);
-    entry.value[1]();
-  }
-}
-
-async function flushUntilSettled(queue: RealTimeFrameQueue, settled: Promise<void>): Promise<void> {
-  const state = { complete: false };
-  const observed = settled.finally(() => {
-    state.complete = true;
-  });
-  for (let frame = 0; !state.complete && frame < 10_000; frame += 1) {
-    queue.flushOne();
-    await Promise.resolve();
-  }
-  if (!state.complete) throw new Error('The staged large-feature renderer did not settle.');
-  await observed;
-}
+import {
+  controllerFixture,
+  emptySystemFeatures,
+  flushFrameQueueUntilSettled,
+  ManualFrameQueue,
+} from '../support/scene-draft.test';
 
 function hugeCoordinates(): [number, number][] {
   return Array.from(
@@ -213,7 +190,7 @@ describe('scene draft large features', () => {
     const initial = emptySystemFeatures();
     initial.ways.features.push(hugeLine);
     initial.footprints.features.push(hugePolygon);
-    const frames = new RealTimeFrameQueue();
+    const frames = new ManualFrameQueue();
     const scheduler = createCooperativeRenderJobScheduler({
       now: () => performance.now(),
       scheduleFrame: frames.schedule,
@@ -227,7 +204,7 @@ describe('scene draft large features', () => {
       batchSize: 1,
       recordScheduling: (stats) => initialAttempts.push(stats),
     });
-    await flushUntilSettled(frames, initialSubmission.settled);
+    await flushFrameQueueUntilSettled(frames, initialSubmission.settled);
 
     const changed = emptySystemFeatures();
     changed.ways.features.push({
@@ -254,7 +231,7 @@ describe('scene draft large features', () => {
       batchSize: 1,
       recordScheduling: (stats) => scopedAttempts.push(stats),
     });
-    await flushUntilSettled(frames, scopedSubmission.settled);
+    await flushFrameQueueUntilSettled(frames, scopedSubmission.settled);
 
     for (const attempt of [initialAttempts.at(-1), scopedAttempts.at(-1)]) {
       expect(attempt?.committedJobCount).toBe(1);
@@ -262,4 +239,141 @@ describe('scene draft large features', () => {
       expect(attempt?.maxUnitDurationMs).toBeGreaterThanOrEqual(0);
     }
   }, 30_000);
+
+  it.each([
+    {
+      geometryType: 'MultiPolygon',
+      createGeometry: (recordRead: () => void): Geometry => {
+        const coordinates: MultiPolygon['coordinates'] = Array.from({ length: 2_000 }, () => [
+          [
+            [0, 0],
+            [1, 0],
+            [0, 0],
+          ],
+        ]);
+        return {
+          type: 'MultiPolygon',
+          coordinates: new Proxy(coordinates, {
+            get(target, property, receiver) {
+              if (typeof property === 'string' && /^\d+$/.test(property)) recordRead();
+              return Reflect.get(target, property, receiver) as unknown;
+            },
+          }),
+        };
+      },
+    },
+    {
+      geometryType: 'GeometryCollection',
+      createGeometry: (recordRead: () => void): Geometry => {
+        const geometries: GeometryCollection['geometries'] = Array.from(
+          { length: 2_000 },
+          (_, index): Geometry => ({
+            type: 'LineString',
+            coordinates: [
+              [index, 0],
+              [index + 1, 0],
+            ],
+          }),
+        );
+        return {
+          type: 'GeometryCollection',
+          geometries: new Proxy(geometries, {
+            get(target, property, receiver) {
+              if (typeof property === 'string' && /^\d+$/.test(property)) recordRead();
+              return Reflect.get(target, property, receiver) as unknown;
+            },
+          }),
+        };
+      },
+    },
+  ])('counts one $geometryType across bounded normalization units', ({ createGeometry }) => {
+    const fixture = controllerFixture();
+    const waysSource = SYSTEM_FEATURE_SOURCE_BY_NAME.ways;
+    let aggregateReads = 0;
+    const features = emptySystemFeatures();
+    features.ways.features.push({
+      type: 'Feature',
+      id: renderFeatureId(waysSource, 'overview', ['aggregate']),
+      properties: { id: 'aggregate', renderTier: 'overview' },
+      geometry: createGeometry(() => {
+        aggregateReads += 1;
+      }),
+    } as Feature<LineString>);
+    const plan = fixture.controller.draft(
+      { revision: 'aggregate-normalization', features, sourceIds: [SRC_WAYS] },
+      { batchSize: 1 },
+    );
+    let descriptorReads = 0;
+    let maxUnitReads = 0;
+    const ids: string[] = [];
+    for (let index = 0; ; index += 1) {
+      aggregateReads = 0;
+      const unit = plan.units.unitAt(index);
+      descriptorReads += aggregateReads;
+      if (!unit) break;
+      aggregateReads = 0;
+      unit.run();
+      maxUnitReads = Math.max(maxUnitReads, aggregateReads);
+      ids.push(unit.id);
+    }
+
+    expect(descriptorReads).toBe(0);
+    expect(maxUnitReads).toBeLessThanOrEqual(512);
+    expect(ids.filter((id) => id.includes(':stats:')).length).toBeGreaterThan(1);
+  });
+
+  it('removes aggregate geometry from cached stats without revisiting its parts', () => {
+    const fixture = controllerFixture();
+    const waysSource = SYSTEM_FEATURE_SOURCE_BY_NAME.ways;
+    let polygonReads = 0;
+    const polygons = new Proxy(
+      Array.from({ length: 2_000 }, () => [
+        [
+          [0, 0],
+          [1, 0],
+          [0, 0],
+        ],
+      ]),
+      {
+        get(target, property, receiver) {
+          if (typeof property === 'string' && /^\d+$/.test(property)) polygonReads += 1;
+          return Reflect.get(target, property, receiver) as unknown;
+        },
+      },
+    );
+    const initial = emptySystemFeatures();
+    initial.ways.features.push({
+      type: 'Feature',
+      id: renderFeatureId(waysSource, 'overview', ['removed-aggregate']),
+      properties: { id: 'removed-aggregate', renderTier: 'overview' },
+      geometry: { type: 'MultiPolygon', coordinates: polygons },
+    } as unknown as Feature<LineString>);
+    fixture.controller.applySynchronously({
+      revision: 'aggregate-before-removal',
+      features: initial,
+      sourceIds: [SRC_WAYS],
+    });
+    polygonReads = 0;
+    const plan = fixture.controller.draft(
+      {
+        revision: 'aggregate-after-removal',
+        features: emptySystemFeatures(),
+        sourceIds: [SRC_WAYS],
+        replacementDomainsBySource: new Map([
+          [SRC_WAYS, [renderDomainIdentity('way', 'removed-aggregate')]],
+        ]),
+      },
+      { batchSize: 1 },
+    );
+    let maxUnitReads = 0;
+    for (let index = 0; ; index += 1) {
+      const unit = plan.units.unitAt(index);
+      if (!unit) break;
+      polygonReads = 0;
+      unit.run();
+      maxUnitReads = Math.max(maxUnitReads, polygonReads);
+    }
+
+    expect(maxUnitReads).toBe(0);
+  });
 });

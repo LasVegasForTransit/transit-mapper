@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderFeatureId, systemFeatureSourceId } from '@transitmapper/core/render/render-identity';
 import { diffRenderScenes } from '@transitmapper/core/render/render-scene-diff';
+import type { RenderScene } from '@transitmapper/core/render/render-scene';
 import { createRenderSceneSourceUpdater } from '../../src/map/render-scene-source-updater';
 import {
   RecordingRenderSource as RecordingSource,
@@ -8,6 +9,12 @@ import {
   renderScene as scene,
   renderSourceFixture as sourceFixture,
 } from '../support/render-scene-source-updater.test';
+
+function acceptedScene(updater: { currentScene(): RenderScene | null }): RenderScene {
+  const current = updater.currentScene();
+  if (!current) throw new Error('Expected a submitted render scene.');
+  return current;
+}
 
 describe('render scene source updater', () => {
   it('uploads the initial scene in full', () => {
@@ -74,7 +81,7 @@ describe('render scene source updater', () => {
       { sourceId: stations, features: [pointFeature(stationA, 5)] },
     ]);
 
-    const result = updater.apply(next, { patch: diffRenderScenes(updater.currentScene()!, next) });
+    const result = updater.apply(next, { patch: diffRenderScenes(acceptedScene(updater), next) });
 
     expect(fixture.source(ways).calls).toEqual([
       { method: 'updateData', data: { add: [changedWay, addedWay], remove: [wayC] } },
@@ -103,7 +110,7 @@ describe('render scene source updater', () => {
     fixture.source(ways).calls.length = 0;
     const next = scene('revision-2', [{ sourceId: ways, features: [pointFeature(wayA, 1)] }]);
 
-    const result = updater.apply(next, { patch: diffRenderScenes(updater.currentScene()!, next) });
+    const result = updater.apply(next, { patch: diffRenderScenes(acceptedScene(updater), next) });
 
     expect(fixture.source(ways).calls).toEqual([]);
     expect(result).toEqual({
@@ -200,7 +207,7 @@ describe('render scene source updater', () => {
     const next = scene('revision-2', [{ sourceId: ways, features: [changedWay] }]);
 
     expect(() =>
-      updater.apply(next, { patch: diffRenderScenes(updater.currentScene()!, next) }),
+      updater.apply(next, { patch: diffRenderScenes(acceptedScene(updater), next) }),
     ).toThrow('MapLibre rejected the patch');
     expect(fixture.source(ways).calls).toEqual([
       { method: 'updateData', data: { add: [changedWay] } },
@@ -224,7 +231,7 @@ describe('render scene source updater', () => {
     fixture.source(ways).calls.length = 0;
     const latest = scene('revision-2', [{ sourceId: ways, features: [pointFeature(wayA, 2)] }]);
 
-    updater.apply(latest, { patch: diffRenderScenes(updater.currentScene()!, latest) });
+    updater.apply(latest, { patch: diffRenderScenes(acceptedScene(updater), latest) });
     // Real MapLibre worker rejection is reported later through an error event;
     // updateData itself does not throw. The map adapter invalidates explicitly.
     updater.invalidateSourceState();
@@ -283,7 +290,7 @@ describe('render scene source updater', () => {
 
     const next = scene('revision-2', [{ sourceId: ways, features: [visual] }], [changedHit]);
     const result = updater.apply(next, {
-      patch: diffRenderScenes(updater.currentScene()!, next),
+      patch: diffRenderScenes(acceptedScene(updater), next),
     });
 
     expect(fixture.source(ways).calls).toEqual([]);

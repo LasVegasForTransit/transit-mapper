@@ -139,25 +139,35 @@ const EMPTY_PREPARATION_UNITS: NonNullable<RenderSceneSourceUpdatePlan['preparat
   unitAt: () => undefined,
 };
 
-export function createFullUpdatePlan({
+interface FullMutationSequenceOptions {
+  readonly state: MutableSourceUpdaterState;
+  readonly token: object;
+  readonly uploads: readonly ResolvedFullUpload[];
+  readonly preparation: ReturnType<typeof fullUploadPreparation>;
+  readonly counts: MutableUpdateCounts;
+  readonly promotedFromPatch: boolean;
+  readonly fail: () => void;
+}
+
+interface MutationSequence {
+  readonly units: readonly RenderSceneSourceMutationUnit[];
+  readonly complete: () => boolean;
+  readonly mutationStarted: () => boolean;
+}
+
+/** Full uploads are deliberately one source per unit: callers can stage a hidden
+ * renderer bank between frames, but publication still waits for every source. */
+function createFullMutationSequence({
   state,
   token,
-  epoch,
-  next,
   uploads,
-  promotedFromPatch = false,
-}: FullUpdatePlanOptions): RenderSceneSourceUpdatePlan {
-  const counts = emptyCounts();
+  preparation,
+  counts,
+  promotedFromPatch,
+  fail,
+}: FullMutationSequenceOptions): MutationSequence {
   let completedUnits = 0;
-  let mutationStarted = false;
-  let failed = false;
-  let staged = false;
-  const preparation = fullUploadPreparation(uploads);
-  const fail = () => {
-    failed = true;
-    state.requiresFullUpload = true;
-    state.activeToken = null;
-  };
+  let started = false;
   const units: readonly RenderSceneSourceMutationUnit[] = uploads.map((upload, index) => ({
     id: `render-source:${promotedFromPatch ? 'promoted-full' : 'full'}:${upload.id}`,
     sliceExclusive: true,
@@ -169,7 +179,7 @@ export function createFullUpdatePlan({
       if (index !== completedUnits) {
         throw new Error('Render source transaction units must run in order.');
       }
-      mutationStarted = true;
+      started = true;
       try {
         counts.sourceUploadCount += 1;
         counts.fullSourceUploadCount += 1;
@@ -182,6 +192,89 @@ export function createFullUpdatePlan({
       }
     },
   }));
+  return {
+    units,
+    complete: () => completedUnits === uploads.length,
+    mutationStarted: () => started,
+  };
+}
+
+interface PatchMutationSequenceOptions {
+  readonly state: MutableSourceUpdaterState;
+  readonly token: object;
+  readonly uploads: readonly ResolvedPatchUpload[];
+  readonly counts: MutableUpdateCounts;
+  readonly fail: () => void;
+}
+
+/** A small patch stays one unit so visible sources never receive only part of
+ * the same logical change before the updater has either completed or failed. */
+function createPatchMutationSequence({
+  state,
+  token,
+  uploads,
+  counts,
+  fail,
+}: PatchMutationSequenceOptions): MutationSequence {
+  let completed = uploads.length === 0;
+  let started = false;
+  const units: readonly RenderSceneSourceMutationUnit[] =
+    uploads.length === 0
+      ? []
+      : [
+          {
+            id: 'render-source:atomic:patch',
+            sliceExclusive: true,
+            run() {
+              requireActiveTransaction(state, token);
+              if (completed) throw new Error('Render source transaction unit already ran.');
+              started = true;
+              try {
+                for (const upload of uploads) {
+                  counts.sourceUploadCount += 1;
+                  counts.patchSourceUploadCount += 1;
+                  counts.uploadedFeatureCount +=
+                    (upload.patch.add?.length ?? 0) + (upload.patch.remove?.length ?? 0);
+                  upload.source.updateData(upload.patch);
+                }
+                completed = true;
+              } catch (error) {
+                fail();
+                throw error;
+              }
+            },
+          },
+        ];
+  return { units, complete: () => completed, mutationStarted: () => started };
+}
+
+export function createFullUpdatePlan({
+  state,
+  token,
+  epoch,
+  next,
+  uploads,
+  promotedFromPatch = false,
+}: FullUpdatePlanOptions): RenderSceneSourceUpdatePlan {
+  const counts = emptyCounts();
+  let failed = false;
+  let staged = false;
+  const preparation = fullUploadPreparation(uploads);
+  const fail = () => {
+    failed = true;
+    state.requiresFullUpload = true;
+    state.activeToken = null;
+  };
+  const mutations = createFullMutationSequence({
+    state,
+    token,
+    uploads,
+    preparation,
+    counts,
+    promotedFromPatch,
+    fail,
+  });
+  const { units } = mutations;
   if (promotedFromPatch) counts.fallbackSourceUploadCount = uploads.length;
   return {
     strategy: 'full',
@@ -198,7 +291,7 @@ export function createFullUpdatePlan({
         fail();
         throw new Error('Render source transaction was invalidated before publication.');
       }
-      if (completedUnits !== units.length) {
+      if (!mutations.complete()) {
         throw new Error('Render source transaction is incomplete and cannot be published.');
       }
       staged = true;
@@ -222,11 +315,34 @@ export function createFullUpdatePlan({
     },
     abort() {
       if (state.activeToken !== token) return;
-      if (mutationStarted) state.requiresFullUpload = true;
+      if (mutations.mutationStarted()) state.requiresFullUpload = true;
       state.activeToken = null;
     },
-    mutationStarted: () => mutationStarted,
+    mutationStarted: () => mutations.mutationStarted(),
   };
+}
+
+function promotePatchToFull({
+  state,
+  token,
+  epoch,
+  next,
+  resolved,
+  maxPatchEntries,
+}: PatchUpdatePlanOptions): RenderSceneSourceUpdatePlan | null {
+  const patchEntryCount = resolved.uploads.reduce(
+    (count, upload) => count + (upload.patch.add?.length ?? 0) + (upload.patch.remove?.length ?? 0),
+    0,
+  );
+  if (patchEntryCount <= maxPatchEntries) return null;
+  return createFullUpdatePlan({
+    state,
+    token,
+    epoch,
+    next,
+    uploads: resolved.uploads,
+    promotedFromPatch: true,
+  });
 }
 
 export function createPatchUpdatePlan({
@@ -237,23 +353,9 @@ export function createPatchUpdatePlan({
   resolved,
   maxPatchEntries,
 }: PatchUpdatePlanOptions): RenderSceneSourceUpdatePlan {
-  const patchEntryCount = resolved.uploads.reduce(
-    (count, upload) => count + (upload.patch.add?.length ?? 0) + (upload.patch.remove?.length ?? 0),
-    0,
-  );
-  if (patchEntryCount > maxPatchEntries) {
-    return createFullUpdatePlan({
-      state,
-      token,
-      epoch,
-      next,
-      uploads: resolved.uploads,
-      promotedFromPatch: true,
-    });
-  }
+  const promoted = promotePatchToFull({ state, token, epoch, next, resolved, maxPatchEntries });
+  if (promoted) return promoted;
   const counts = emptyCounts();
-  let mutationStarted = false;
-  let completed = resolved.uploads.length === 0;
   let failed = false;
   let staged = false;
   const fail = () => {
@@ -261,33 +363,14 @@ export function createPatchUpdatePlan({
     state.activeToken = null;
     state.requiresFullUpload = true;
   };
-  const units: readonly RenderSceneSourceMutationUnit[] =
-    resolved.uploads.length === 0
-      ? []
-      : [
-          {
-            id: 'render-source:atomic:patch',
-            sliceExclusive: true,
-            run() {
-              requireActiveTransaction(state, token);
-              if (completed) throw new Error('Render source transaction unit already ran.');
-              mutationStarted = true;
-              try {
-                for (const upload of resolved.uploads) {
-                  counts.sourceUploadCount += 1;
-                  counts.patchSourceUploadCount += 1;
-                  counts.uploadedFeatureCount +=
-                    (upload.patch.add?.length ?? 0) + (upload.patch.remove?.length ?? 0);
-                  upload.source.updateData(upload.patch);
-                }
-                completed = true;
-              } catch (error) {
-                fail();
-                throw error;
-              }
-            },
-          },
-        ];
+  const mutations = createPatchMutationSequence({
+    state,
+    token,
+    uploads: resolved.uploads,
+    counts,
+    fail,
+  });
+  const { units } = mutations;
   return {
     strategy: resolved.uploads.length === 0 ? 'none' : 'patch',
     sourceIds: resolved.uploads.map((upload) => upload.id),
@@ -300,7 +383,7 @@ export function createPatchUpdatePlan({
         fail();
         throw new Error('Render source transaction was invalidated before publication.');
       }
-      if (!completed) {
+      if (!mutations.complete()) {
         throw new Error('Render source transaction is incomplete and cannot be published.');
       }
       staged = true;
@@ -328,9 +411,9 @@ export function createPatchUpdatePlan({
     },
     abort() {
       if (state.activeToken !== token) return;
-      if (mutationStarted) state.requiresFullUpload = true;
+      if (mutations.mutationStarted()) state.requiresFullUpload = true;
       state.activeToken = null;
     },
-    mutationStarted: () => mutationStarted,
+    mutationStarted: () => mutations.mutationStarted(),
   };
 }

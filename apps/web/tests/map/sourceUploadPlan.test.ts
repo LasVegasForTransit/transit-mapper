@@ -72,16 +72,22 @@ describe('map source upload planning', () => {
     );
   });
 
-  it('uploads only the four station-derived sources for a station-only change', () => {
+  it('uploads only physical passenger-place sources for a Station-only change', () => {
     const before = createEmptySystem();
     const after = { ...before, stations: [...before.stations] };
 
     expect(sourceUploadsForSystemChange(before, after)).toEqual([
-      SRC_STATIONS,
       SRC_FOOTPRINTS,
       SRC_PLATFORMS,
       SRC_PHYSICAL_HANDLES,
     ]);
+  });
+
+  it('uploads the historical station source only for an anchored Stop change', () => {
+    const before = createEmptySystem();
+    const after = { ...before, stops: [...before.stops] };
+
+    expect(sourceUploadsForSystemChange(before, after)).toEqual([SRC_STATIONS]);
   });
 
   it('refreshes route handles when a selected service pattern changes', () => {
@@ -137,13 +143,7 @@ describe('map source upload planning', () => {
     };
 
     const sources = sourceUploadsForSystemChange(before, after);
-    expect(sources).toEqual([
-      SRC_STATIONS,
-      SRC_FOOTPRINTS,
-      SRC_PLATFORMS,
-      SRC_FACILITIES,
-      SRC_PHYSICAL_HANDLES,
-    ]);
+    expect(sources).toEqual([SRC_FOOTPRINTS, SRC_PLATFORMS, SRC_FACILITIES, SRC_PHYSICAL_HANDLES]);
     expect(new Set(sources).size).toBe(sources.length);
   });
 
@@ -242,7 +242,6 @@ describe('map source upload planning', () => {
 
     expect(queue.hasPending()).toBe(true);
     expect(queue.take()).toEqual([
-      SRC_STATIONS,
       SRC_FOOTPRINTS,
       SRC_PLATFORMS,
       SRC_FACILITIES,
@@ -262,13 +261,7 @@ describe('map source upload planning', () => {
     queue.add(sourceUploadsForSystemChange(second, third), { previous: second, next: third });
 
     expect(queue.takeBatch()).toEqual({
-      sourceIds: [
-        SRC_STATIONS,
-        SRC_FOOTPRINTS,
-        SRC_PLATFORMS,
-        SRC_FACILITIES,
-        SRC_PHYSICAL_HANDLES,
-      ],
+      sourceIds: [SRC_FOOTPRINTS, SRC_PLATFORMS, SRC_FACILITIES, SRC_PHYSICAL_HANDLES],
       transition: { previous: first, next: third },
     });
   });
@@ -282,7 +275,7 @@ describe('map source upload planning', () => {
     queue.add([SRC_WAYS]);
 
     expect(queue.takeBatch()).toEqual({
-      sourceIds: [SRC_WAYS, SRC_STATIONS, SRC_FOOTPRINTS, SRC_PLATFORMS, SRC_PHYSICAL_HANDLES],
+      sourceIds: [SRC_WAYS, SRC_FOOTPRINTS, SRC_PLATFORMS, SRC_PHYSICAL_HANDLES],
       transition: null,
     });
   });

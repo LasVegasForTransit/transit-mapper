@@ -1,12 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  Feature,
-  Geometry,
-  GeometryCollection,
-  LineString,
-  MultiPolygon,
-  Polygon,
-} from 'geojson';
 import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
 import {
   renderDomainIdentity,
@@ -18,7 +10,7 @@ import {
   createCooperativeRenderJobScheduler,
   type CooperativeRenderJobSchedulerStats,
 } from '../../src/map/cooperative-render-job-scheduler';
-import { SRC_FOOTPRINTS, SRC_STATIONS, SRC_WAYS } from '../../src/map/layers';
+import { SRC_STATIONS, SRC_WAYS } from '../../src/map/layers';
 import { persistentRenderOverlayDiagnostics } from '../../src/map/persistent-render-source-state';
 import { buildFeaturesForSources } from '../../src/map/sourceFeatureProjection';
 import { publishSceneDraft } from '../../src/map/scene-publication';
@@ -31,416 +23,15 @@ import { generatePerfFixture } from '../../src/perf/fixtures';
 import {
   controllerFixture,
   emptySystemFeatures,
+  flushFrameQueueUntilSettled,
   lineFeature,
+  ManualFrameQueue,
   runUnits,
 } from '../support/scene-draft.test';
 
-class RealTimeFrameQueue {
-  private nextHandle = 1;
-  private readonly frames = new Map<number, () => void>();
-
-  schedule = (callback: () => void): number => {
-    const handle = this.nextHandle;
-    this.nextHandle += 1;
-    this.frames.set(handle, callback);
-    return handle;
-  };
-
-  cancel = (handle: number): void => {
-    this.frames.delete(handle);
-  };
-
-  flushOne(): void {
-    const entry = this.frames.entries().next();
-    if (entry.done) return;
-    this.frames.delete(entry.value[0]);
-    entry.value[1]();
-  }
-}
-
-async function flushUntilSettled(queue: RealTimeFrameQueue, settled: Promise<void>): Promise<void> {
-  const state = { complete: false };
-  const observed = settled.finally(() => {
-    state.complete = true;
-  });
-  for (let frame = 0; !state.complete && frame < 10_000; frame += 1) {
-    queue.flushOne();
-    await Promise.resolve();
-  }
-  if (!state.complete) throw new Error('The staged RTC renderer did not settle.');
-  await observed;
-}
-
-// Vitest files share CPU with package/Turbo workers, so performance.now()
-// includes unrelated preemption and cannot be a deterministic correctness
-// assertion here. Fake-clock scheduler tests enforce the 2/4 ms policy; the
-// isolated browser perf protocol owns real wall-clock acceptance. These cases
-// instead constrain work and allocation shape on production-sized inputs.
-describe('scene draft performance', () => {
-  it.each(['incremental', 'reset'] as const)(
-    'compares a freshly cloned 200,000-point same-ID replacement in bounded units for %s',
-    (intent) => {
-      const fixture = controllerFixture();
-      const waysSource = SYSTEM_FEATURE_SOURCE_BY_NAME.ways;
-      const featureId = renderFeatureId(waysSource, 'overview', ['huge-replacement']);
-      const originalCoordinates = Array.from(
-        { length: 200_000 },
-        (_, index) => [index / 10_000, index % 2] as [number, number],
-      );
-      const initial = emptySystemFeatures();
-      initial.ways.features.push({
-        type: 'Feature',
-        id: featureId,
-        properties: { id: 'huge-replacement', renderTier: 'overview' },
-        geometry: { type: 'LineString', coordinates: originalCoordinates },
-      });
-      fixture.controller.applySynchronously({
-        revision: 'huge-before',
-        features: initial,
-        sourceIds: [SRC_WAYS],
-      });
-      fixture.source(waysSource).calls.length = 0;
-
-      let coordinateReads = 0;
-      const clonedCoordinates = new Proxy(
-        originalCoordinates.map(([x, y], index) =>
-          index === originalCoordinates.length - 1 ? ([x + 1, y] as [number, number]) : [x, y],
-        ),
-        {
-          get(target, property, receiver) {
-            if (typeof property === 'string' && /^\d+$/.test(property)) coordinateReads += 1;
-            return Reflect.get(target, property, receiver) as unknown;
-          },
-        },
-      );
-      const changed = emptySystemFeatures();
-      changed.ways.features.push({
-        type: 'Feature',
-        id: featureId,
-        properties: { id: 'huge-replacement', renderTier: 'overview' },
-        geometry: { type: 'LineString', coordinates: clonedCoordinates },
-      });
-      const plan = fixture.controller.draft(
-        {
-          revision: `huge-${intent}`,
-          features: changed,
-          sourceIds: [SRC_WAYS],
-          intent,
-        },
-        { batchSize: 1 },
-      );
-      const unitIds: string[] = [];
-      let maxCoordinateReadsPerUnit = 0;
-      for (let index = 0; ; index += 1) {
-        const unit = plan.units.unitAt(index);
-        if (!unit) break;
-        coordinateReads = 0;
-        unit.run();
-        unitIds.push(unit.id);
-        maxCoordinateReadsPerUnit = Math.max(maxCoordinateReadsPerUnit, coordinateReads);
-      }
-
-      const update = fixture.controller.publishDraftSynchronously(plan.result());
-
-      expect(maxCoordinateReadsPerUnit).toBeLessThanOrEqual(4_096);
-      if (intent === 'incremental') {
-        expect(unitIds.filter((id) => id.includes(':compare:')).length).toBeGreaterThan(1);
-        expect(update.changedFeatureCount).toBe(1);
-        expect(fixture.source(waysSource).calls.at(-1)).toMatchObject({
-          method: 'updateData',
-          data: { add: [expect.objectContaining({ id: featureId })] },
-        });
-      } else {
-        expect(unitIds.some((id) => id.includes(':compare:'))).toBe(false);
-        expect(fixture.source(waysSource).calls.at(-1)).toMatchObject({
-          method: 'setData',
-          data: { features: [expect.objectContaining({ id: featureId })] },
-        });
-      }
-      expect(
-        fixture.controller.acceptedScene()?.featuresBySource.get(waysSource)?.features[0]?.geometry,
-      ).toEqual({ type: 'LineString', coordinates: clonedCoordinates });
-    },
-    30_000,
-  );
-
-  it('leaves an equal freshly cloned 200,000-point same-ID source untouched', () => {
-    const fixture = controllerFixture();
-    const waysSource = SYSTEM_FEATURE_SOURCE_BY_NAME.ways;
-    const featureId = renderFeatureId(waysSource, 'overview', ['huge-equal']);
-    const coordinates = Array.from(
-      { length: 200_000 },
-      (_, index) => [index / 10_000, index % 2] as [number, number],
-    );
-    const initial = emptySystemFeatures();
-    initial.ways.features.push({
-      type: 'Feature',
-      id: featureId,
-      properties: { id: 'huge-equal', renderTier: 'overview' },
-      geometry: { type: 'LineString', coordinates },
-    });
-    fixture.controller.applySynchronously({
-      revision: 'equal-before',
-      features: initial,
-      sourceIds: [SRC_WAYS],
-    });
-    fixture.source(waysSource).calls.length = 0;
-    let coordinateReads = 0;
-    const clonedCoordinates = new Proxy(
-      coordinates.map(([x, y]) => [x, y] as [number, number]),
-      {
-        get(target, property, receiver) {
-          if (typeof property === 'string' && /^\d+$/.test(property)) coordinateReads += 1;
-          return Reflect.get(target, property, receiver) as unknown;
-        },
-      },
-    );
-    const cloned = emptySystemFeatures();
-    cloned.ways.features.push({
-      type: 'Feature',
-      id: featureId,
-      properties: { id: 'huge-equal', renderTier: 'overview' },
-      geometry: { type: 'LineString', coordinates: clonedCoordinates },
-    });
-    const plan = fixture.controller.draft(
-      { revision: 'equal-after', features: cloned, sourceIds: [SRC_WAYS] },
-      { batchSize: 1 },
-    );
-    let maxCoordinateReadsPerUnit = 0;
-    let comparisonUnitCount = 0;
-    for (let index = 0; ; index += 1) {
-      const unit = plan.units.unitAt(index);
-      if (!unit) break;
-      coordinateReads = 0;
-      unit.run();
-      maxCoordinateReadsPerUnit = Math.max(maxCoordinateReadsPerUnit, coordinateReads);
-      if (unit.id.includes(':compare:')) comparisonUnitCount += 1;
-    }
-
-    const update = fixture.controller.publishDraftSynchronously(plan.result());
-
-    expect(maxCoordinateReadsPerUnit).toBeLessThanOrEqual(4_096);
-    expect(comparisonUnitCount).toBeGreaterThan(1);
-    expect(update.strategy).toBe('none');
-    expect(fixture.source(waysSource).calls).toEqual([]);
-  }, 30_000);
-
-  it('stages single huge paths without coordinate-proportional work units', async () => {
-    const fixture = controllerFixture();
-    const waysSource = SYSTEM_FEATURE_SOURCE_BY_NAME.ways;
-    const footprintsSource = SYSTEM_FEATURE_SOURCE_BY_NAME.footprints;
-    const lineId = renderFeatureId(waysSource, 'overview', ['huge-line']);
-    const polygonId = renderFeatureId(footprintsSource, 'overview', ['huge-polygon']);
-    const coordinates = Array.from(
-      { length: 200_000 },
-      (_, index) => [index / 10_000, index % 2] as [number, number],
-    );
-    const hugeLine: Feature<LineString> = {
-      type: 'Feature',
-      id: lineId,
-      properties: { id: 'huge-line', renderTier: 'overview' },
-      geometry: { type: 'LineString', coordinates },
-    };
-    const hugePolygon: Feature<Polygon> = {
-      type: 'Feature',
-      id: polygonId,
-      properties: { stationId: 'huge-polygon', renderTier: 'overview' },
-      geometry: { type: 'Polygon', coordinates: [coordinates] },
-    };
-    const initial = emptySystemFeatures();
-    initial.ways.features.push(hugeLine);
-    initial.footprints.features.push(hugePolygon);
-    const frames = new RealTimeFrameQueue();
-    const scheduler = createCooperativeRenderJobScheduler({
-      now: () => performance.now(),
-      scheduleFrame: frames.schedule,
-      cancelFrame: frames.cancel,
-    });
-    const initialAttempts: CooperativeRenderJobSchedulerStats[] = [];
-    const initialSubmission = publishSceneDraft({
-      scheduler,
-      controller: fixture.controller,
-      input: {
-        revision: 'huge-initial',
-        features: initial,
-        sourceIds: [SRC_WAYS, SRC_FOOTPRINTS],
-      },
-      batchSize: 1,
-      recordScheduling: (stats) => initialAttempts.push(stats),
-    });
-    await flushUntilSettled(frames, initialSubmission.settled);
-
-    const changed = emptySystemFeatures();
-    changed.ways.features.push({
-      ...hugeLine,
-      properties: { ...hugeLine.properties, changed: true },
-    });
-    changed.footprints.features.push({
-      ...hugePolygon,
-      properties: { ...hugePolygon.properties, changed: true },
-    });
-    const scopedAttempts: CooperativeRenderJobSchedulerStats[] = [];
-    const scopedSubmission = publishSceneDraft({
-      scheduler,
-      controller: fixture.controller,
-      input: {
-        revision: 'huge-scoped',
-        features: changed,
-        sourceIds: [SRC_WAYS, SRC_FOOTPRINTS],
-        replacementDomainsBySource: new Map([
-          [SRC_WAYS, [renderDomainIdentity('way', 'huge-line')]],
-          [SRC_FOOTPRINTS, [renderDomainIdentity('station', 'huge-polygon')]],
-        ]),
-      },
-      batchSize: 1,
-      recordScheduling: (stats) => scopedAttempts.push(stats),
-    });
-    await flushUntilSettled(frames, scopedSubmission.settled);
-
-    for (const attempt of [initialAttempts.at(-1), scopedAttempts.at(-1)]) {
-      expect(attempt?.committedJobCount).toBe(1);
-      expect(attempt?.unitRunCount).toBeLessThan(100);
-      expect(attempt?.maxUnitDurationMs).toBeGreaterThanOrEqual(0);
-    }
-  }, 30_000);
-
-  it.each([
-    {
-      geometryType: 'MultiPolygon',
-      createGeometry: (recordRead: () => void): Geometry => {
-        const coordinates: MultiPolygon['coordinates'] = Array.from({ length: 2_000 }, () => [
-          [
-            [0, 0],
-            [1, 0],
-            [0, 0],
-          ],
-        ]);
-        return {
-          type: 'MultiPolygon',
-          coordinates: new Proxy(coordinates, {
-            get(target, property, receiver) {
-              if (typeof property === 'string' && /^\d+$/.test(property)) recordRead();
-              return Reflect.get(target, property, receiver) as unknown;
-            },
-          }),
-        };
-      },
-    },
-    {
-      geometryType: 'GeometryCollection',
-      createGeometry: (recordRead: () => void): Geometry => {
-        const geometries: GeometryCollection['geometries'] = Array.from(
-          { length: 2_000 },
-          (_, index): Geometry => ({
-            type: 'LineString',
-            coordinates: [
-              [index, 0],
-              [index + 1, 0],
-            ],
-          }),
-        );
-        return {
-          type: 'GeometryCollection',
-          geometries: new Proxy(geometries, {
-            get(target, property, receiver) {
-              if (typeof property === 'string' && /^\d+$/.test(property)) recordRead();
-              return Reflect.get(target, property, receiver) as unknown;
-            },
-          }),
-        };
-      },
-    },
-  ])('counts one $geometryType across bounded normalization units', ({ createGeometry }) => {
-    const fixture = controllerFixture();
-    const waysSource = SYSTEM_FEATURE_SOURCE_BY_NAME.ways;
-    let aggregateReads = 0;
-    const features = emptySystemFeatures();
-    features.ways.features.push({
-      type: 'Feature',
-      id: renderFeatureId(waysSource, 'overview', ['aggregate']),
-      properties: { id: 'aggregate', renderTier: 'overview' },
-      geometry: createGeometry(() => {
-        aggregateReads += 1;
-      }),
-    } as Feature<LineString>);
-    const plan = fixture.controller.draft(
-      { revision: 'aggregate-normalization', features, sourceIds: [SRC_WAYS] },
-      { batchSize: 1 },
-    );
-    let descriptorReads = 0;
-    let maxUnitReads = 0;
-    const ids: string[] = [];
-    for (let index = 0; ; index += 1) {
-      aggregateReads = 0;
-      const unit = plan.units.unitAt(index);
-      descriptorReads += aggregateReads;
-      if (!unit) break;
-      aggregateReads = 0;
-      unit.run();
-      maxUnitReads = Math.max(maxUnitReads, aggregateReads);
-      ids.push(unit.id);
-    }
-
-    expect(descriptorReads).toBe(0);
-    expect(maxUnitReads).toBeLessThanOrEqual(512);
-    expect(ids.filter((id) => id.includes(':stats:')).length).toBeGreaterThan(1);
-  });
-
-  it('removes aggregate geometry from cached stats without revisiting its parts', () => {
-    const fixture = controllerFixture();
-    const waysSource = SYSTEM_FEATURE_SOURCE_BY_NAME.ways;
-    let polygonReads = 0;
-    const polygons = new Proxy(
-      Array.from({ length: 2_000 }, () => [
-        [
-          [0, 0],
-          [1, 0],
-          [0, 0],
-        ],
-      ]),
-      {
-        get(target, property, receiver) {
-          if (typeof property === 'string' && /^\d+$/.test(property)) polygonReads += 1;
-          return Reflect.get(target, property, receiver) as unknown;
-        },
-      },
-    );
-    const initial = emptySystemFeatures();
-    initial.ways.features.push({
-      type: 'Feature',
-      id: renderFeatureId(waysSource, 'overview', ['removed-aggregate']),
-      properties: { id: 'removed-aggregate', renderTier: 'overview' },
-      geometry: { type: 'MultiPolygon', coordinates: polygons },
-    } as unknown as Feature<LineString>);
-    fixture.controller.applySynchronously({
-      revision: 'aggregate-before-removal',
-      features: initial,
-      sourceIds: [SRC_WAYS],
-    });
-    polygonReads = 0;
-    const plan = fixture.controller.draft(
-      {
-        revision: 'aggregate-after-removal',
-        features: emptySystemFeatures(),
-        sourceIds: [SRC_WAYS],
-        replacementDomainsBySource: new Map([
-          [SRC_WAYS, [renderDomainIdentity('way', 'removed-aggregate')]],
-        ]),
-      },
-      { batchSize: 1 },
-    );
-    let maxUnitReads = 0;
-    for (let index = 0; ; index += 1) {
-      const unit = plan.units.unitAt(index);
-      if (!unit) break;
-      polygonReads = 0;
-      unit.run();
-      maxUnitReads = Math.max(maxUnitReads, polygonReads);
-    }
-
-    expect(maxUnitReads).toBe(0);
-  });
-
+// Scheduler timing is covered with a fake clock. These production-sized cases
+// instead constrain bounded work shape independently of machine contention.
+describe('scene draft scoped performance', () => {
   it('stages a scoped edit in work proportional to the replacement closure', () => {
     const fixture = controllerFixture();
     const waysSource = SYSTEM_FEATURE_SOURCE_BY_NAME.ways;
@@ -690,7 +281,7 @@ describe('scene draft performance', () => {
       sourceIds: [firstSource],
     });
 
-    const frames = new RealTimeFrameQueue();
+    const frames = new ManualFrameQueue();
     const attempts: CooperativeRenderJobSchedulerStats[] = [];
     const scheduler = createCooperativeRenderJobScheduler({
       now: () => performance.now(),
@@ -708,7 +299,7 @@ describe('scene draft performance', () => {
       batchSize: 8,
       recordScheduling: (stats) => attempts.push(stats),
     });
-    await flushUntilSettled(frames, submission.settled);
+    await flushFrameQueueUntilSettled(frames, submission.settled);
 
     const committedAttempt = attempts.at(-1);
     const committedFeatureCount = COMMITTED_SYSTEM_FEATURE_SOURCES.reduce(
@@ -717,27 +308,31 @@ describe('scene draft performance', () => {
       0,
     );
     expect(committedAttempt?.committedJobCount).toBe(1);
-    expect(committedAttempt?.unitRunCount).toBeLessThan(committedFeatureCount * 10 + 1_000);
+    // A full scene passes each feature through a fixed set of bounded stages:
+    // normalization, source-local state, visual/hit assembly, and the banked
+    // upload plan. The exact stage count may change, but it must stay linear
+    // in submitted features rather than scale with retained scene history.
+    expect(committedAttempt?.unitRunCount).toBeLessThan(committedFeatureCount * 12 + 1_000);
     expect(attempts.length).toBeLessThanOrEqual(9);
     const committedScene = fixture.controller.acceptedScene();
     expect(committedScene?.revision).toBe('rtc-staged');
 
-    const stationIds = new Set<RenderFeatureId>(
-      features.stations.features.map((feature) => {
+    const stopIds = new Set<RenderFeatureId>(
+      features.stops.features.map((feature) => {
         if (typeof feature.id !== 'string') {
-          throw new Error('RTC station projection has no stable string ID.');
+          throw new Error('RTC stop projection has no stable string ID.');
         }
         return feature.id as RenderFeatureId;
       }),
     );
-    const stationDomain = [...(committedScene?.identityIndex.renderFeatureIdsByDomain ?? [])].find(
-      ([, featureIds]) => featureIds.some((featureId) => stationIds.has(featureId)),
+    const stopDomain = [...(committedScene?.identityIndex.renderFeatureIdsByDomain ?? [])].find(
+      ([, featureIds]) => featureIds.some((featureId) => stopIds.has(featureId)),
     );
-    if (!stationDomain) throw new Error('RTC fixture retained no station identity domain.');
-    const scopedIds = new Set(stationDomain[1].filter((featureId) => stationIds.has(featureId)));
+    if (!stopDomain) throw new Error('RTC fixture retained no stop identity domain.');
+    const scopedIds = new Set(stopDomain[1].filter((featureId) => stopIds.has(featureId)));
     const partial = emptySystemFeatures();
-    partial.stations.features.push(
-      ...features.stations.features
+    partial.stops.features.push(
+      ...features.stops.features
         .filter(
           (feature) =>
             typeof feature.id === 'string' && scopedIds.has(feature.id as RenderFeatureId),
@@ -756,12 +351,12 @@ describe('scene draft performance', () => {
         revision: 'rtc-one-station',
         features: partial,
         sourceIds: [SRC_STATIONS],
-        replacementDomainsBySource: new Map([[SRC_STATIONS, [stationDomain[0]]]]),
+        replacementDomainsBySource: new Map([[SRC_STATIONS, [stopDomain[0]]]]),
       },
       batchSize: 1,
       recordScheduling: (stats) => scopedAttempts.push(stats),
     });
-    await flushUntilSettled(frames, scopedSubmission.settled);
+    await flushFrameQueueUntilSettled(frames, scopedSubmission.settled);
     const scopedAttempt = scopedAttempts.at(-1);
     expect(scopedAttempt?.committedJobCount).toBe(1);
     expect(scopedAttempt?.unitRunCount).toBeLessThan(250);

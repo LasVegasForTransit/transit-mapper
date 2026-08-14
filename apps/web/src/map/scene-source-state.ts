@@ -102,7 +102,7 @@ function requestedFeatures(
   return {
     ways: pick('ways'),
     services: pick('services'),
-    stations: pick('stations'),
+    stops: pick('stops'),
     handles: pick('handles'),
     serviceTermini: pick('serviceTermini'),
     footprints: pick('footprints'),

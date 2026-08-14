@@ -2,15 +2,28 @@ import type { FeatureCollection } from 'geojson';
 import { describe, expect, it } from 'vitest';
 import { SRC_WAYS } from '../../src/map/layers';
 import { createLiveMapRenderer, type LiveMapRendererHost } from '../../src/map/live-map-renderer';
+import type { FeatureProjectionWorkerClient } from '../../src/map/feature-projection-worker';
 import { emptySystemFeatures } from '../../src/map/system-feature-sources';
 import type {
   GeoJsonSourceTarget,
   GeoJsonSourceUpdate,
 } from '../../src/map/render-scene-source-updater';
 
+const unusedProjectionWorker: FeatureProjectionWorkerClient = {
+  project: () => Promise.reject(new Error('This publication test does not project features.')),
+  dispose: () => {},
+};
+
 class TestSource implements GeoJsonSourceTarget {
-  setData(_collection: FeatureCollection): void {}
-  updateData(_update: GeoJsonSourceUpdate): void {}
+  constructor(private readonly onMutation: () => void) {}
+
+  setData(_collection: FeatureCollection): void {
+    this.onMutation();
+  }
+
+  updateData(_update: GeoJsonSourceUpdate): void {
+    this.onMutation();
+  }
 }
 
 class TestRendererHost implements LiveMapRendererHost {
@@ -20,6 +33,7 @@ class TestRendererHost implements LiveMapRendererHost {
   private readonly sourceListeners = new Set<(sourceId: string) => void>();
   private readonly renderListeners = new Set<() => void>();
   private readonly sources = new Map<string, TestSource>();
+  emitSourceDataOnMutation = false;
 
   now = (): number => 0;
 
@@ -36,7 +50,10 @@ class TestRendererHost implements LiveMapRendererHost {
   resolveSource = (sourceId: string): TestSource => {
     let source = this.sources.get(sourceId);
     if (!source) {
-      source = new TestSource();
+      source = new TestSource(() => {
+        if (!this.emitSourceDataOnMutation) return;
+        this.complete(sourceId);
+      });
       this.sources.set(sourceId, source);
     }
     return source;
@@ -70,18 +87,22 @@ class TestRendererHost implements LiveMapRendererHost {
 
   loadKnownSources(): void {
     for (const sourceId of this.sources.keys()) {
-      this.loadedSources.add(sourceId);
-      for (const listener of this.sourceListeners) listener(sourceId);
+      this.complete(sourceId);
     }
+  }
+
+  private complete(sourceId: string): void {
+    this.loadedSources.add(sourceId);
+    for (const listener of this.sourceListeners) listener(sourceId);
   }
 
   paint(): void {
     for (const listener of [...this.renderListeners]) listener();
   }
 
-  async advance(): Promise<void> {
+  async advance(loadKnownSources = true): Promise<void> {
     this.flushFrame();
-    this.loadKnownSources();
+    if (loadKnownSources) this.loadKnownSources();
     this.paint();
     await Promise.resolve();
   }
@@ -91,15 +112,20 @@ async function advanceUntil(
   host: TestRendererHost,
   predicate: () => boolean,
   limit = 200,
+  loadKnownSources = true,
 ): Promise<void> {
-  for (let step = 0; step < limit && !predicate(); step += 1) await host.advance();
+  for (let step = 0; step < limit && !predicate(); step += 1) await host.advance(loadKnownSources);
   if (!predicate()) throw new Error('Renderer did not reach the expected lifecycle state.');
 }
 
 describe('live map renderer', () => {
   it('keeps the accepted revision authoritative until the replacement paints', async () => {
     const host = new TestRendererHost();
-    const renderer = createLiveMapRenderer({ host, layerSpecs: [] });
+    const renderer = createLiveMapRenderer({
+      host,
+      layerSpecs: [],
+      featureProjectionWorker: unusedProjectionWorker,
+    });
 
     const first = renderer.publishScene({
       revision: 'first',
@@ -122,6 +148,26 @@ describe('live map renderer', () => {
     host.paint();
     await second.settled;
     expect(renderer.snapshot().acceptedRevision).toBe('second');
+    renderer.dispose();
+  });
+
+  it('subscribes before a hidden-bank source can report its synchronous load', async () => {
+    const host = new TestRendererHost();
+    host.emitSourceDataOnMutation = true;
+    const renderer = createLiveMapRenderer({
+      host,
+      layerSpecs: [],
+      featureProjectionWorker: unusedProjectionWorker,
+    });
+
+    const submission = renderer.publishScene({
+      revision: 'first',
+      features: emptySystemFeatures(),
+      sourceIds: [SRC_WAYS],
+    });
+
+    await advanceUntil(host, () => renderer.snapshot().acceptedRevision === 'first', 200, false);
+    await expect(submission.settled).resolves.toBeUndefined();
     renderer.dispose();
   });
 });

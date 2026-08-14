@@ -37,6 +37,9 @@ import {
 export interface GeographicFeatureProjectionBatchSizes {
   readonly corridors?: number;
   readonly junctions?: number;
+  /** Anchored boarding points shown by the historical `tm-stations` source. */
+  readonly stops?: number;
+  /** Physical passenger places: footprints and platforms. */
   readonly stations?: number;
   readonly labels?: number;
   readonly services?: number;
@@ -52,6 +55,7 @@ export interface PlanResumableGeographicFeatureProjectionOptions extends Omit<
 export type GeographicFeatureProjectionPrimaryKind =
   | 'corridor'
   | 'junction'
+  | 'stop'
   | 'station'
   | 'label'
   | 'service'
@@ -106,8 +110,8 @@ export const SERVICE_CORRIDOR_SOURCES = new Set<MapSystemFeatureSourceId>([
   SRC_SERVICE_ARROWS,
 ]);
 export const JUNCTION_SOURCES = new Set<MapSystemFeatureSourceId>([SRC_JUNCTIONS, SRC_CONNECTORS]);
-export const STATION_SOURCES = new Set<MapSystemFeatureSourceId>([
-  SRC_STATIONS,
+export const STOP_SOURCES = new Set<MapSystemFeatureSourceId>([SRC_STATIONS]);
+export const PHYSICAL_STATION_SOURCES = new Set<MapSystemFeatureSourceId>([
   SRC_FOOTPRINTS,
   SRC_PLATFORMS,
 ]);
@@ -115,6 +119,7 @@ export const STATION_SOURCES = new Set<MapSystemFeatureSourceId>([
 export interface ResolvedBatchSizes {
   corridors: number;
   junctions: number;
+  stops: number;
   stations: number;
   labels: number;
   services: number;
@@ -127,6 +132,7 @@ export interface ProjectionPlanningContext {
   scope: RenderProjectionScope | undefined;
   visibleWayIds: readonly string[];
   visibleJunctionIds: readonly string[];
+  visibleStopIds: readonly string[];
   visibleStationIds: readonly string[];
   visibleLabelIds: readonly string[];
   visibleWayHandleIds: readonly string[];
@@ -162,6 +168,7 @@ function resolveBatchSizes(sizes: GeographicFeatureProjectionBatchSizes = {}): R
   return {
     corridors: positiveBatchSize(sizes.corridors, 8, 'Corridor'),
     junctions: positiveBatchSize(sizes.junctions, 8, 'Junction'),
+    stops: positiveBatchSize(sizes.stops, 16, 'Stop'),
     stations: positiveBatchSize(sizes.stations, 16, 'Station'),
     labels: positiveBatchSize(sizes.labels, 8, 'Label'),
     services: positiveBatchSize(sizes.services, 8, 'Service'),
@@ -293,8 +300,11 @@ function viewportCategories(sourceIds: readonly MapSystemFeatureSourceId[]) {
   );
   if (needsTopology) categories.push('corridor', 'junction');
   else if (sourceIds.includes(SRC_WAY_LABELS)) categories.push('corridor');
-  const needsStations = sourceIds.some((sourceId) => STATION_SOURCES.has(sourceId));
-  if (needsStations || sourceIds.includes(SRC_PHYSICAL_HANDLES)) categories.push('station');
+  if (sourceIds.some((sourceId) => STOP_SOURCES.has(sourceId))) categories.push('stop');
+  const needsPhysicalStations = sourceIds.some((sourceId) =>
+    PHYSICAL_STATION_SOURCES.has(sourceId),
+  );
+  if (needsPhysicalStations || sourceIds.includes(SRC_PHYSICAL_HANDLES)) categories.push('station');
   if (sourceIds.includes(SRC_WAY_LABELS)) categories.push('label');
   if (sourceIds.includes(SRC_HANDLES)) categories.push('way-handle');
   if (sourceIds.includes(SRC_SERVICE_TERMINI)) categories.push('service-terminus');
@@ -328,6 +338,7 @@ export function createProjectionPlanningContext(
     scope: options.projectionScope,
     visibleWayIds,
     visibleJunctionIds,
+    visibleStopIds: viewport.stopIds ?? [],
     visibleStationIds: viewport.stationIds ?? [],
     visibleLabelIds: viewport.labelIds ?? [],
     visibleWayHandleIds: viewport.wayHandleIds ?? [],

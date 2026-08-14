@@ -1,92 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createRenderSourceErrorRecoveryCoordinator } from '../../src/map/render-source-error-recovery';
 import {
-  createRenderSourceErrorRecoveryCoordinator,
-  type RenderSourceErrorRecoveryCoordinator,
-  type RenderSourceErrorRecoveryOptions,
-} from '../../src/map/render-source-error-recovery';
-import type { RenderSceneSourceUpdateResult } from '../../src/map/render-scene-source-updater';
-
-const WAYS_SOURCE = 'tm-ways';
-const HIT_SOURCE = 'tm-hit-features';
-const HEAL_RESULT: RenderSceneSourceUpdateResult = {
-  strategy: 'full',
-  sourceUploadCount: 2,
-  fullSourceUploadCount: 2,
-  patchSourceUploadCount: 0,
-  fallbackSourceUploadCount: 0,
-  uploadedFeatureCount: 3,
-  addedFeatureCount: 0,
-  changedFeatureCount: 0,
-  removedFeatureCount: 0,
-};
-
-class FrameHarness {
-  private nextHandle = 1;
-  private readonly callbacks = new Map<number, () => void>();
-
-  readonly schedule = vi.fn((callback: () => void): number => {
-    const handle = this.nextHandle;
-    this.nextHandle += 1;
-    this.callbacks.set(handle, callback);
-    return handle;
-  });
-
-  readonly cancel = vi.fn((handle: number): void => {
-    this.callbacks.delete(handle);
-  });
-
-  flushNext(): void {
-    const next = this.callbacks.entries().next();
-    if (next.done) throw new Error('No scheduled frame to flush.');
-    const [handle, callback] = next.value;
-    this.callbacks.delete(handle);
-    callback();
-  }
-
-  pendingCount(): number {
-    return this.callbacks.size;
-  }
-}
-
-interface RecoveryHarness {
-  coordinator: RenderSourceErrorRecoveryCoordinator;
-  frames: FrameHarness;
-  ensureSources: ReturnType<typeof vi.fn<() => boolean>>;
-  invalidateSourceState: ReturnType<typeof vi.fn<() => void>>;
-  healCurrentScene: ReturnType<typeof vi.fn<() => RenderSceneSourceUpdateResult>>;
-  onSuccess: ReturnType<typeof vi.fn<(result: RenderSceneSourceUpdateResult) => void>>;
-  onError: ReturnType<typeof vi.fn<(error: unknown) => void>>;
-}
-
-function recoveryHarness(
-  overrides: Partial<RenderSourceErrorRecoveryOptions> = {},
-): RecoveryHarness {
-  const frames = new FrameHarness();
-  const ensureSources = vi.fn<() => boolean>(() => true);
-  const invalidateSourceState = vi.fn<() => void>();
-  const healCurrentScene = vi.fn<() => RenderSceneSourceUpdateResult>(() => HEAL_RESULT);
-  const onSuccess = vi.fn<(result: RenderSceneSourceUpdateResult) => void>();
-  const onError = vi.fn<(error: unknown) => void>();
-  const coordinator = createRenderSourceErrorRecoveryCoordinator({
-    rendererSourceIds: [WAYS_SOURCE, HIT_SOURCE],
-    scheduleFrame: frames.schedule,
-    cancelFrame: frames.cancel,
-    ensureSources,
-    controller: { invalidateSourceState, healCurrentScene },
-    onSuccess,
-    onError,
-    ...overrides,
-  });
-  return {
-    coordinator,
-    frames,
-    ensureSources,
-    invalidateSourceState,
-    healCurrentScene,
-    onSuccess,
-    onError,
-  };
-}
+  RecoveryFrameHarness as FrameHarness,
+  RECOVERY_HEAL_RESULT as HEAL_RESULT,
+  RECOVERY_HIT_SOURCE as HIT_SOURCE,
+  RECOVERY_WAYS_SOURCE as WAYS_SOURCE,
+  recoveryHarness,
+} from '../support/render-source-error-recovery.test';
 
 describe('render source error recovery coordinator', () => {
   it('settles only after a scheduled renderer-source heal completes', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aRoad, aStation, aSystem } from '@transitmapper/core/testing/fixtures';
+import { aRoad, aStop, aSystem } from '@transitmapper/core/testing/fixtures';
 import { renderPreparationPatchBetween } from '@transitmapper/core/render/render-preparation-journal';
 import { createEditorStore } from '../../src/editor/store';
 
@@ -119,7 +119,7 @@ describe('editor renderer mutation journal', () => {
     ]);
     const previous = aSystem({
       ways: [west, north],
-      stations: [aStation('west-stop', [0.5, 0], { wayId: 'west', t: 0.5 })],
+      stops: [aStop('west-stop', [0.5, 0], { wayId: 'west', t: 0.5 })],
       nodes: [
         {
           id: 'junction',
@@ -140,18 +140,18 @@ describe('editor renderer mutation journal', () => {
     expect(renderPreparationPatchBetween(previous, next)).toEqual({
       ways: { upsert: next.ways },
       nodes: { upsert: next.nodes },
-      stations: { upsert: next.stations },
+      stops: { upsert: next.stops },
     });
   });
 
-  it('journals an anchored station replacement when its selected way is nudged', () => {
+  it('journals an anchored Stop replacement when its selected way is nudged', () => {
     const way = aRoad('way', [
       [0, 0],
       [1, 0],
     ]);
     const previous = aSystem({
       ways: [way],
-      stations: [aStation('stop', [0.5, 0], { wayId: 'way', t: 0.5 })],
+      stops: [aStop('stop', [0.5, 0], { wayId: 'way', t: 0.5 })],
     });
     const store = createEditorStore();
     store.commands.document.setSystem(previous);
@@ -162,7 +162,7 @@ describe('editor renderer mutation journal', () => {
     const next = store.getState().system;
     expect(renderPreparationPatchBetween(previous, next)).toEqual({
       ways: { upsert: [next.ways[0]] },
-      stations: { upsert: next.stations },
+      stops: { upsert: next.stops },
     });
   });
 

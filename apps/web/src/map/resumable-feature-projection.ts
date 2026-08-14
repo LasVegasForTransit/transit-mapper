@@ -33,6 +33,8 @@ function batchSizeForPrimaryKind(
       return 'corridors';
     case 'junction':
       return 'junctions';
+    case 'stop':
+      return 'stops';
     case 'station':
       return 'stations';
     case 'label':
