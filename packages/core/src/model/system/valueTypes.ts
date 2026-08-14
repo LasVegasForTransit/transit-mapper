@@ -33,7 +33,8 @@ export type LaneDirection = 'forward' | 'backward' | 'both' | 'none';
  *  formCrossingJunctions in model/crossing-edits.ts) — a real at-grade
  *  crossing between two physically incompatible way types, gates and all,
  *  as opposed to an ordinary same-type intersection. */
-export type NodeControl = 'uncontrolled' | 'signal' | 'stop' | 'roundabout' | 'levelCrossing';
+export type NodeControl =
+  'uncontrolled' | 'signal' | 'stop' | 'yield' | 'roundabout' | 'levelCrossing';
 
 /** Which days a SchedulePeriod runs. Deliberately coarse (not a specific
  *  weekday set or calendar) — this is a fantasy-system planning tool, not a
