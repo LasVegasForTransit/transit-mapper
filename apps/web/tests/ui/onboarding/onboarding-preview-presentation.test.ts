@@ -25,14 +25,20 @@ vi.mock('react', async (importOriginal) => {
   };
 });
 
-vi.mock('@transitmapper/core/render/buildFeatures', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@transitmapper/core/render/buildFeatures')>();
+interface ProjectionRequest {
+  readonly view: ViewOptions;
+}
+
+vi.mock('../../../src/map/feature-projection-worker', async () => {
+  const { emptySystemFeatures } = await import('../../../src/map/system-feature-sources');
   return {
-    ...actual,
-    buildFeatures: (...args: Parameters<typeof actual.buildFeatures>) => {
-      onboardingHarness.featureViews.push(args[3]);
-      return actual.buildFeatures(...args);
-    },
+    createFeatureProjectionWorker: () => ({
+      project: ({ view }: ProjectionRequest) => {
+        onboardingHarness.featureViews.push(view);
+        return Promise.resolve({ features: emptySystemFeatures(), counts: null });
+      },
+      dispose: vi.fn(),
+    }),
   };
 });
 

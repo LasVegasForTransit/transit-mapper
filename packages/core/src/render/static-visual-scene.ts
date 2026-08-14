@@ -58,7 +58,17 @@ export interface ResolvedStaticPolygon extends ResolvedStaticVisualBase {
   outlineColor?: string;
 }
 
-export type ResolvedStaticVisual = ResolvedStaticLine | ResolvedStaticPolygon;
+/** A control is an explicit point in the same junction source as its surface. */
+export interface ResolvedStaticCircle extends ResolvedStaticVisualBase {
+  kind: 'circle';
+  coordinate: LngLat;
+  radiusPx: number;
+  color: string;
+  outlineColor: string;
+}
+
+export type ResolvedStaticVisual =
+  ResolvedStaticLine | ResolvedStaticPolygon | ResolvedStaticCircle;
 
 export interface ResolvedStaticVisualScene {
   scene: RenderScene;
@@ -80,7 +90,7 @@ export interface ResolveStaticVisualSceneInput {
 const STATIC_SOURCE_IDS: SystemFeatureSourceMap = {
   ways: systemFeatureSourceId('ways'),
   services: systemFeatureSourceId('services'),
-  stations: systemFeatureSourceId('stations'),
+  stops: systemFeatureSourceId('stations'),
   handles: systemFeatureSourceId('handles'),
   serviceTermini: systemFeatureSourceId('service-termini'),
   footprints: systemFeatureSourceId('footprints'),
@@ -153,8 +163,31 @@ function pushLine(visuals: ResolvedStaticVisual[], value: ResolvedStaticLine | n
 function appendJunctionVisuals(features: SystemFeatures, visuals: ResolvedStaticVisual[]): void {
   for (const feature of features.junctions.features) {
     const resolvedTierOpacity = tierOpacity(feature.properties);
-    const opacity = resolvedPaintOpacity(feature.properties, 0.9);
+    // Junction asphalt is intentionally translucent so lane detail reads over
+    // it. A control is a separate, legible traffic instruction at that same
+    // node, matching the opaque MapLibre circle layer.
+    const opacity = resolvedPaintOpacity(
+      feature.properties,
+      feature.geometry.type === 'Point' ? 1 : 0.9,
+    );
     if (opacity <= 0) continue;
+    if (feature.geometry.type === 'Point') {
+      const control = junctionControlPaint(text(feature.properties, 'control', ''));
+      if (!control) continue;
+      visuals.push({
+        kind: 'circle',
+        featureId: String(feature.id),
+        source: 'junctions',
+        coordinate: lngLatPath([feature.geometry.coordinates])[0],
+        radiusPx: control.radiusPx,
+        color: control.color,
+        outlineColor: control.outlineColor,
+        renderTier: tier(feature.properties),
+        tierOpacity: resolvedTierOpacity,
+        opacity,
+      });
+      continue;
+    }
     visuals.push({
       kind: 'polygon',
       featureId: String(feature.id),
@@ -166,6 +199,18 @@ function appendJunctionVisuals(features: SystemFeatures, visuals: ResolvedStatic
       opacity,
     });
   }
+}
+
+function junctionControlPaint(
+  control: string,
+): { color: string; outlineColor: string; radiusPx: number } | null {
+  if (control === 'signal') return { color: '#b23b2e', outlineColor: '#191a17', radiusPx: 4.5 };
+  if (control === 'stop') return { color: '#f4f2ec', outlineColor: '#191a17', radiusPx: 4.5 };
+  if (control === 'yield') return { color: '#d9a62e', outlineColor: '#191a17', radiusPx: 3.5 };
+  if (control === 'roundabout') return { color: '#d9a62e', outlineColor: '#191a17', radiusPx: 5.5 };
+  if (control === 'levelCrossing')
+    return { color: '#191a17', outlineColor: '#f4f2ec', radiusPx: 4 };
+  return null;
 }
 
 function appendLaneVisuals(features: SystemFeatures, visuals: ResolvedStaticVisual[]): void {
@@ -201,6 +246,8 @@ function markingPaint(properties: GeoJsonProperties): {
   }
   if (kind === 'centerLine') return { color: CENTER_LINE, width: 1.8, opacity: 0.95 };
   if (kind === 'edgeLine') return { color: LANE_MARKING, width: 1.2, opacity: 0.75 };
+  if (kind === 'crosswalk') return { color: LANE_MARKING, width: 1.8, opacity: 0.9 };
+  if (kind === 'stopBar') return { color: LANE_MARKING, width: 2.5, opacity: 0.95 };
   return { color: LANE_MARKING, width: 1.2, opacity: 0.9, dashArray: [3, 3] };
 }
 
@@ -231,7 +278,16 @@ function appendLaneMarkingPaths(
 }
 
 function appendLaneMarkingVisuals(features: SystemFeatures, visuals: ResolvedStaticVisual[]): void {
-  for (const kind of ['railTie', 'rail', 'thinLane', 'laneLine', 'edgeLine', 'centerLine']) {
+  for (const kind of [
+    'railTie',
+    'rail',
+    'thinLane',
+    'laneLine',
+    'edgeLine',
+    'centerLine',
+    'crosswalk',
+    'stopBar',
+  ]) {
     for (const feature of features.laneMarkings.features) {
       if (text(feature.properties, 'kind', 'laneLine') !== kind) continue;
       const marking = markingPaint(feature.properties);

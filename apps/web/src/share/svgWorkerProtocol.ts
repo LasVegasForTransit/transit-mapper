@@ -1,7 +1,7 @@
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import type { Viewport } from '@transitmapper/core/render/project';
 import type { SvgRenderOptions } from '@transitmapper/core/render/svg';
-import type { RenderViewOptions } from '../map/layers';
+import type { RenderViewOptions } from '@transitmapper/core/render/buildFeatures';
 import type { GroundPlaneProjection } from './svg-worker-projector';
 
 interface SvgWorkerRequestBase {

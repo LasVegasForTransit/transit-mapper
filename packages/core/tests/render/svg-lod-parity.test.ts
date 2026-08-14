@@ -57,6 +57,7 @@ function junctionFixture(): { system: TransitSystem; referenceWay: Way } {
         {
           id: 'junction',
           coord: west.points[1],
+          control: 'signal',
           refs: [
             { wayId: west.id, pointIndex: 1 },
             { wayId: east.id, pointIndex: 0 },
@@ -211,6 +212,28 @@ describe('SVG screen-space LOD parity', () => {
     expect(svg).not.toContain('data-halo-only');
     expect(svg).not.toContain('data-hit-target');
     expect(svg).not.toContain('stroke-width="10"');
+  });
+
+  it('serializes an explicit signal as the opaque junction control painted by the live map', () => {
+    const svg = svgAtWidth(12);
+
+    expect(svg).toMatch(
+      /<circle data-render-source="junctions"[^>]+data-feature-id="render:junctions:control:junction"[^>]+fill="#b23b2e"[^>]+opacity="1\.0000"\/>/,
+    );
+  });
+
+  it('serializes signal-controlled crosswalk stripes from the settled lane-marking source', () => {
+    const svg = svgAtWidth(12);
+
+    expect(svg).toContain('data-feature-id="render:lane-markings:crosswalk:junction:west:end"');
+    expect(svg).toContain('data-render-source="lane-markings"');
+  });
+
+  it('serializes signal-controlled stop bars from the settled lane-marking source', () => {
+    const svg = svgAtWidth(12);
+
+    expect(svg).toContain('data-feature-id="render:lane-markings:stop-bar:junction:west:end"');
+    expect(svg).toContain('data-resolved-width="2.500"');
   });
 
   it('serializes Street lane surfaces as the same closed polygons MapLibre fills', () => {

@@ -1,11 +1,11 @@
 import type { Viewport } from '@transitmapper/core/render/project';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
-import type { RenderViewOptions, ViewOptions } from '../map/layers';
+import type { RenderViewOptions, ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import {
   renderPresentationForFittedMap,
   type FittedMapLike,
   type StaticDisplaySize,
-} from '../map/static-render-features';
+} from '../map/fitted-map-presentation';
 
 /** Resolves vector LOD from the same final MapLibre camera a PNG export uses.
  * SVG has no backing-store density, so DPR is always one even on a Retina

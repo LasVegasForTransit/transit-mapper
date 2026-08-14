@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import {
   buildFeatures,
@@ -7,11 +7,13 @@ import {
 } from '@transitmapper/core/render/buildFeatures';
 import { renderFeatureId, systemFeatureSourceId } from '@transitmapper/core/render/render-identity';
 import { createSystemRenderScene } from '@transitmapper/core/render/system-render-scene';
+import { buildFeaturesForFittedMap } from '../../src/map/fitted-map-feature-builder';
 import {
-  buildFeaturesForFittedMap,
+  projectFeaturesForFittedMap,
   renderPresentationForFittedMap,
   type FittedMapLike,
 } from '../../src/map/static-render-features';
+import type { FeatureProjectionWorkerClient } from '../../src/map/feature-projection-worker';
 import { SYSTEM_FEATURE_SOURCE_BY_NAME } from '../../src/map/system-feature-sources';
 
 function fittedMap(): FittedMapLike {
@@ -36,6 +38,27 @@ function networkView(): ViewOptions {
 }
 
 describe('static map render presentation', () => {
+  it('projects a fitted static view through the feature worker', async () => {
+    const features = buildFeaturesForFittedMap(createEmptySystem(), networkView(), fittedMap());
+    const project = vi.fn(() => Promise.resolve({ features, counts: null }));
+    const worker: Pick<FeatureProjectionWorkerClient, 'project'> = { project };
+
+    await expect(
+      projectFeaturesForFittedMap({
+        worker,
+        system: createEmptySystem(),
+        view: networkView(),
+        map: fittedMap(),
+      }),
+    ).resolves.toBe(features);
+    expect(project).toHaveBeenCalledWith(
+      expect.objectContaining({
+        normalizeVisualScene: true,
+      }),
+      undefined,
+    );
+  });
+
   it('copies the final camera and CSS dimensions into buildFeatures', () => {
     const system = createEmptySystem();
     let receivedView: ViewOptions | undefined;

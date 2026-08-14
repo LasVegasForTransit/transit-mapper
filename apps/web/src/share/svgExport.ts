@@ -1,7 +1,7 @@
 import type { Map as MLMap } from 'maplibre-gl';
 import { fitBounds, metersPerPixel } from '@transitmapper/core/render/project';
 import { scaleBarFor } from '@transitmapper/core/render/scaleBar';
-import type { ViewOptions } from '../map/layers';
+import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import { getMap } from '../map/mapRef';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';

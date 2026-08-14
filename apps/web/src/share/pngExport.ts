@@ -1,6 +1,6 @@
 import type { Map as MLMap } from 'maplibre-gl';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import type { ViewOptions } from '../map/layers';
+import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import { getMap } from '../map/mapRef';
 import { renderSystemForExport } from '../map/export/exportRenderer';
 import { waitForExportFrame } from './exportOperation';
