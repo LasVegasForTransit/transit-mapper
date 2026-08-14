@@ -77,13 +77,21 @@ function camera(
   };
 }
 
-function visual(
-  id: string,
-  fixtureId: RendererLodAcceptanceFixtureId,
-  surface: RendererLodAcceptanceSurface,
-  visualCamera: RendererLodAcceptanceCamera,
-  state: RendererLodAcceptanceVisualCase['state'] = 'settled',
-): RendererLodAcceptanceVisualCase {
+interface RendererLodAcceptanceVisualDefinition {
+  readonly id: string;
+  readonly fixtureId: RendererLodAcceptanceFixtureId;
+  readonly surface: RendererLodAcceptanceSurface;
+  readonly camera: RendererLodAcceptanceCamera;
+  readonly state?: RendererLodAcceptanceVisualCase['state'];
+}
+
+function visual({
+  id,
+  fixtureId,
+  surface,
+  camera: visualCamera,
+  state = 'settled',
+}: RendererLodAcceptanceVisualDefinition): RendererLodAcceptanceVisualCase {
   return { id, file: `images/${id}.png`, fixtureId, surface, camera: visualCamera, state };
 }
 
@@ -109,28 +117,93 @@ function parityVisuals(
     targetCorridorWidthPx,
   );
   return (['live-maplibre', 'static-maplibre', 'svg'] as const).map((surface) =>
-    visual(
-      `parity-${tier}-${surface === 'live-maplibre' ? 'live' : surface === 'static-maplibre' ? 'static' : 'svg'}`,
-      'port-mason',
+    visual({
+      id: `parity-${tier}-${surface === 'live-maplibre' ? 'live' : surface === 'static-maplibre' ? 'static' : 'svg'}`,
+      fixtureId: 'port-mason',
       surface,
-      visualCamera,
-    ),
+      camera: visualCamera,
+    }),
   );
 }
 
 export const RENDERER_LOD_ACCEPTANCE_VISUAL_CASES: readonly RendererLodAcceptanceVisualCase[] = [
-  visual('selected-wide-corridor-10-5', 'port-mason', 'live-maplibre', SELECTED_CAMERA, 'selected'),
-  visual('tunnel-below-12', 'grade-stack', 'live-maplibre', TUNNEL_BELOW_CAMERA),
-  visual('tunnel-at-12', 'grade-stack', 'live-maplibre', TUNNEL_AT_CAMERA),
-  visual('served-junction-3-arm', 'served-three-arm', 'live-maplibre', JUNCTION_CAMERA),
-  visual('served-junction-4-arm', 'served-four-arm', 'live-maplibre', JUNCTION_CAMERA),
-  visual('served-junction-5-arm', 'served-five-arm', 'live-maplibre', JUNCTION_CAMERA),
-  visual('fast-pan-accepted', 'port-mason', 'live-maplibre', PAN_CAMERA),
-  visual('fast-pan-edge-preload', 'port-mason', 'live-maplibre', PAN_EDGE_CAMERA, 'moving'),
-  visual('fast-pan-settled', 'port-mason', 'live-maplibre', PAN_SETTLED_CAMERA),
-  visual('bank-old-accepted', 'port-mason', 'live-maplibre', PAN_CAMERA, 'bank-old'),
-  visual('bank-hidden-preparation', 'port-mason', 'live-maplibre', PAN_CAMERA, 'bank-preparing'),
-  visual('bank-new-promoted', 'port-mason', 'live-maplibre', PAN_CAMERA, 'bank-new'),
+  visual({
+    id: 'selected-wide-corridor-10-5',
+    fixtureId: 'port-mason',
+    surface: 'live-maplibre',
+    camera: SELECTED_CAMERA,
+    state: 'selected',
+  }),
+  visual({
+    id: 'tunnel-below-12',
+    fixtureId: 'grade-stack',
+    surface: 'live-maplibre',
+    camera: TUNNEL_BELOW_CAMERA,
+  }),
+  visual({
+    id: 'tunnel-at-12',
+    fixtureId: 'grade-stack',
+    surface: 'live-maplibre',
+    camera: TUNNEL_AT_CAMERA,
+  }),
+  visual({
+    id: 'served-junction-3-arm',
+    fixtureId: 'served-three-arm',
+    surface: 'live-maplibre',
+    camera: JUNCTION_CAMERA,
+  }),
+  visual({
+    id: 'served-junction-4-arm',
+    fixtureId: 'served-four-arm',
+    surface: 'live-maplibre',
+    camera: JUNCTION_CAMERA,
+  }),
+  visual({
+    id: 'served-junction-5-arm',
+    fixtureId: 'served-five-arm',
+    surface: 'live-maplibre',
+    camera: JUNCTION_CAMERA,
+  }),
+  visual({
+    id: 'fast-pan-accepted',
+    fixtureId: 'port-mason',
+    surface: 'live-maplibre',
+    camera: PAN_CAMERA,
+  }),
+  visual({
+    id: 'fast-pan-edge-preload',
+    fixtureId: 'port-mason',
+    surface: 'live-maplibre',
+    camera: PAN_EDGE_CAMERA,
+    state: 'moving',
+  }),
+  visual({
+    id: 'fast-pan-settled',
+    fixtureId: 'port-mason',
+    surface: 'live-maplibre',
+    camera: PAN_SETTLED_CAMERA,
+  }),
+  visual({
+    id: 'bank-old-accepted',
+    fixtureId: 'port-mason',
+    surface: 'live-maplibre',
+    camera: PAN_CAMERA,
+    state: 'bank-old',
+  }),
+  visual({
+    id: 'bank-hidden-preparation',
+    fixtureId: 'port-mason',
+    surface: 'live-maplibre',
+    camera: PAN_CAMERA,
+    state: 'bank-preparing',
+  }),
+  visual({
+    id: 'bank-new-promoted',
+    fixtureId: 'port-mason',
+    surface: 'live-maplibre',
+    camera: PAN_CAMERA,
+    state: 'bank-new',
+  }),
   ...parityVisuals('overview', 1),
   ...parityVisuals('district', 6),
   ...parityVisuals('street', 13),

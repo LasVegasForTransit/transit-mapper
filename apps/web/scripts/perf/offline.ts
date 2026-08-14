@@ -11,19 +11,19 @@ import {
   PERF_STORAGE_CONTRACT,
 } from './browserContract';
 import { waitForLoadedDocument } from './journeys';
-import { networkEditStationId } from './offline-edit-target';
+import { networkEditStopId } from './offline-edit-target';
 
 const PWA_RUNTIME_REPORT_FILENAME = 'pwa-runtime-report.json';
 
-interface OfflineStationSnapshot {
+interface OfflineStopSnapshot {
   coord: LngLat;
   revision: number;
 }
 
 interface OfflineEditProof {
-  stationId: string;
-  before: OfflineStationSnapshot;
-  after: OfflineStationSnapshot;
+  stopId: string;
+  before: OfflineStopSnapshot;
+  after: OfflineStopSnapshot;
 }
 
 interface OfflineRuntimeReport {
@@ -85,17 +85,17 @@ async function verifyLegacyMigration(page: import('playwright-core').Page, id: s
   );
 }
 
-async function verifyOfflineStationEdit(
+async function verifyOfflineStopEdit(
   page: import('playwright-core').Page,
-  stationId: string,
+  stopId: string,
 ): Promise<OfflineEditProof> {
   await page.keyboard.press('v');
   const before = await page.evaluate((targetId) => {
-    const snapshot = (window as PerfPageWindow).__perfStationSnapshot?.(targetId);
+    const snapshot = (window as PerfPageWindow).__perfStopSnapshot?.(targetId);
     const project = (window as PerfPageWindow).__perfProjectLngLat;
     if (!snapshot || !project) throw new Error('The offline editor seams are unavailable.');
     return { snapshot, point: project(snapshot.coord) };
-  }, stationId);
+  }, stopId);
   const canvas = await page.locator('.maplibregl-canvas').first().boundingBox();
   if (
     !canvas ||
@@ -104,7 +104,7 @@ async function verifyOfflineStationEdit(
     before.point.y < canvas.y ||
     before.point.y > canvas.y + canvas.height
   ) {
-    throw new Error('The offline station edit target is outside the map viewport.');
+    throw new Error('The offline Stop edit target is outside the map viewport.');
   }
   await page.mouse.move(before.point.x, before.point.y);
   await page.mouse.down();
@@ -117,18 +117,18 @@ async function verifyOfflineStationEdit(
       }),
   );
   const after = await page.evaluate(
-    (targetId) => (window as PerfPageWindow).__perfStationSnapshot?.(targetId) ?? null,
-    stationId,
+    (targetId) => (window as PerfPageWindow).__perfStopSnapshot?.(targetId) ?? null,
+    stopId,
   );
   if (
     !after ||
     after.revision === before.snapshot.revision ||
     (after.coord[0] === before.snapshot.coord[0] && after.coord[1] === before.snapshot.coord[1])
   ) {
-    throw new Error('The cache-evicted offline editor did not commit the station edit.');
+    throw new Error('The cache-evicted offline editor did not commit the Stop edit.');
   }
   return {
-    stationId,
+    stopId,
     before: before.snapshot,
     after,
   };
@@ -230,9 +230,9 @@ export async function verifyCacheEvictedOfflineReload(
       if (!snapshot) throw new Error('The offline overlay proof seam is unavailable.');
       return snapshot;
     });
-    const stationId = networkEditStationId(fixture);
-    if (!stationId) throw new Error('The offline fixture has no visible station edit target.');
-    const edit = await verifyOfflineStationEdit(page, stationId);
+    const stopId = networkEditStopId(fixture);
+    if (!stopId) throw new Error('The offline fixture has no visible Stop edit target.');
+    const edit = await verifyOfflineStopEdit(page, stopId);
 
     const report: OfflineRuntimeReport = {
       schemaVersion: 3,

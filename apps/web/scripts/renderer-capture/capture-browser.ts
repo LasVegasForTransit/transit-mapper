@@ -6,6 +6,7 @@ import type { RendererStatsSnapshot } from '../../src/perf/renderer-stats';
 import { seedIndexedDbFixture } from '../perf/browser';
 import { waitForLoadedDocument } from '../perf/journeys';
 import { PREVIEW_URL } from '../perf/process';
+import { assertRendererCaptureHasSceneContent } from './capture-image-validation';
 import { rendererBasemapStyleForUrl, rendererSeedPageUrl } from './lifecycle';
 
 const EXTERNAL_URL = /^https?:\/\/(?!127\.0\.0\.1(?::\d+)?(?:\/|$)|localhost(?::\d+)?(?:\/|$))/;
@@ -44,7 +45,8 @@ export async function settleCapturePixels(page: Page): Promise<void> {
   await page.addStyleTag({
     content:
       '[data-renderer-capture-exclude="true"],.app-banner-slot,.zen-restore,.maplibregl-ctrl{visibility:hidden!important}' +
-      '.app[data-renderer-capture-bare] > :not(.maplibregl-map){visibility:hidden!important}',
+      '.app[data-renderer-capture-bare] > :not(.maplibregl-map){visibility:hidden!important}' +
+      '.app[data-renderer-capture-bare] .maplibregl-map{background-image:none!important}',
   });
   await page.evaluate(async () => {
     await document.fonts.ready;
@@ -67,7 +69,10 @@ export async function captureBareRenderer(page: Page, path: string): Promise<voi
   await app.evaluate((element) => element.setAttribute('data-renderer-capture-bare', 'true'));
   try {
     await settleCapturePixels(page);
-    await page.locator('.maplibregl-map').screenshot({ path, animations: 'disabled' });
+    const image = await page
+      .locator('.maplibregl-map')
+      .screenshot({ path, animations: 'disabled' });
+    await assertRendererCaptureHasSceneContent(image);
   } finally {
     await app.evaluate((element) => element.removeAttribute('data-renderer-capture-bare'));
   }

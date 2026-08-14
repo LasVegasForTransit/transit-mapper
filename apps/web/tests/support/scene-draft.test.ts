@@ -142,3 +142,46 @@ export function runUnits(units: CooperativeRenderJobUnitSequence<void>): Execute
   }
   return { ids, maxDurationMs, maxUnitId, maxDescriptorDurationMs };
 }
+
+/**
+ * Drives cooperative work deterministically without a browser animation frame.
+ * Tests advance it themselves so a failing submission cannot hide behind wall-clock timing.
+ */
+export class ManualFrameQueue {
+  private nextHandle = 1;
+  private readonly callbacks = new Map<number, () => void>();
+
+  schedule = (callback: () => void): number => {
+    const handle = this.nextHandle;
+    this.nextHandle += 1;
+    this.callbacks.set(handle, callback);
+    return handle;
+  };
+
+  cancel = (handle: number): void => {
+    this.callbacks.delete(handle);
+  };
+
+  flushOne(): void {
+    const entry = this.callbacks.entries().next();
+    if (entry.done) return;
+    this.callbacks.delete(entry.value[0]);
+    entry.value[1]();
+  }
+}
+
+export async function flushFrameQueueUntilSettled(
+  queue: ManualFrameQueue,
+  settled: Promise<unknown>,
+): Promise<void> {
+  const state = { complete: false };
+  const observed = settled.finally(() => {
+    state.complete = true;
+  });
+  for (let frame = 0; !state.complete && frame < 10_000; frame += 1) {
+    queue.flushOne();
+    await Promise.resolve();
+  }
+  if (!state.complete) throw new Error('The staged renderer did not settle.');
+  await observed;
+}

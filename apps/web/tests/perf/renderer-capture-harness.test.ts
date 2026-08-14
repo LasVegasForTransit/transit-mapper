@@ -79,7 +79,6 @@ describe('renderer capture map harness', () => {
     expect(afterFinalIdle).toHaveBeenCalledOnce();
     expect(resolved).toBe(true);
 
-    releaseRenderer = () => {};
     afterRendererSettled.mockImplementation(() => Promise.resolve());
     await whenSettled();
     expect(triggerRepaint).toHaveBeenCalledTimes(2);

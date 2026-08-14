@@ -70,6 +70,11 @@ and then waits two animation frames. This order matters: camera idle can occur
 before a newly projected GeoJSON patch has reached MapLibre's Worker. A plain
 canvas screenshot after `jumpTo` is not valid renderer evidence.
 
+The bare evidence frame suppresses editor chrome and the local drafting grid,
+then rejects an image containing only the deterministic backdrop. A capture
+with counters but no painted corridor, service, station, or other scene content
+is a failed capture, not a visual result.
+
 Use `--skip-build` only when `apps/web/dist` is still the current instrumented
 build from a successful capture or performance run. `--profile desktop|mobile`
 and `--theme light|dark` produce a faster diagnostic subset; they intentionally
