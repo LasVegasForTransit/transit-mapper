@@ -425,11 +425,12 @@ geometry. `editor-overlays` owns the separate unbanked handles, service
 termini, and junction guides; those may run a small editor-only projection.
 Mode/type visibility remains a layer filter.
 
-This pipeline changes presentation and delivery, not the underlying physical
-geometry model. It chooses curve tessellation from final display error, but
-does not yet derive watertight metric corridor polygons. Diagram remains on
-its existing layout path and outside the cooperative geographic projection
-scheduler.
+This pipeline changes presentation and delivery, not the authored network.
+It resolves curve tessellation from final display error, then derives a
+metric District carriageway footprint and Street lane polygons from that
+centerline. Junction-attached cross-section meshes remain a later physical
+geometry step. Diagram remains on its existing layout path outside the
+cooperative geographic projection scheduler.
 
 ### Appearance and map styles
 

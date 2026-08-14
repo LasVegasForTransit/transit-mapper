@@ -52,6 +52,15 @@ export interface LaneSurface {
   ring: LngLat[];
 }
 
+/** The closed physical area occupied by a centered corridor. District uses
+ * this before Street has enough pixels to reveal its individual lanes. */
+export function corridorSurfaceRing(centerline: LngLat[], widthM: number): LngLat[] {
+  if (centerline.length < 2 || widthM <= 0) return [];
+  const leftBoundary = offsetPolyline(centerline, -widthM / 2);
+  const rightBoundary = offsetPolyline(centerline, widthM / 2);
+  return [...leftBoundary, ...rightBoundary.slice().reverse(), leftBoundary[0]];
+}
+
 /** The standard-gauge separation between the two running rails. Track
  * profiles describe their occupied corridor width; this is the physical
  * detail inside that corridor. */

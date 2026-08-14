@@ -15,6 +15,7 @@ import {
   RENDER_TIER_SORT_KEY_EXPR,
   SERVICE_ELEVATED_WIDTH_EXPR,
   LYR_CENTER_LINES,
+  LYR_CARRIAGEWAYS,
   LYR_CONNECTORS,
   LYR_EDGE_LINES,
   LYR_ENDPOINT_HINT,
@@ -404,50 +405,27 @@ function corridorLayerSpecs(theme: MapTheme): LayerSpecification[] {
   ];
 }
 
-function corridorPaintLayerSpecs(theme: MapTheme): LayerSpecification[] {
+function districtCarriagewayLayerSpec(theme: MapTheme): LayerSpecification {
+  // District is a real metric corridor footprint. Overview stays a line; the
+  // selection line layer reads this polygon as its perimeter halo.
+  return {
+    id: LYR_CARRIAGEWAYS,
+    type: 'fill',
+    source: SRC_WAYS,
+    filter: ['==', ['get', 'renderTier'], 'district'],
+    paint: {
+      'fill-color': ['get', 'color'],
+      // A footprint still needs a readable edge before individual Street lanes
+      // take over. This is MapLibre's one-pixel fill outline, not an
+      // artificially widened centerline casing.
+      'fill-outline-color': theme.routeCasing,
+      'fill-opacity': tierOpacityExpr(0.9) as never,
+    },
+  };
+}
+
+function dashedCorridorLayerSpecs(theme: MapTheme): LayerSpecification[] {
   return [
-    {
-      // Overview and District are one centered corridor silhouette. Street
-      // replaces this source with physical lane surfaces; `line-offset`
-      // remains for schematic service/corridor compatibility only.
-      id: LYR_WAYS_SOLID_CASING,
-      type: 'line',
-      source: SRC_WAYS,
-      filter: ['all', ['!', ['get', 'dashed']], ['!', ['to-boolean', ['get', 'haloOnly']]]],
-      layout: {
-        'line-cap': 'round',
-        'line-join': 'round',
-        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
-      },
-      paint: {
-        'line-color': theme.routeCasing,
-        'line-width': CORRIDOR_CASING_WIDTH_EXPR as never,
-        'line-opacity': tierOpacityExpr(0.62) as never,
-        'line-offset': ['get', 'offset'],
-      },
-    },
-    {
-      id: LYR_WAYS_SOLID,
-      type: 'line',
-      source: SRC_WAYS,
-      // haloOnly features exist purely for LYR_WAY_SELECTED (a lane-rendered
-      // way's selection glow) — they must never paint as a solid line.
-      filter: ['all', ['!', ['get', 'dashed']], ['!', ['to-boolean', ['get', 'haloOnly']]]],
-      layout: {
-        'line-cap': 'round',
-        'line-join': 'round',
-        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
-      },
-      paint: {
-        'line-color': ['get', 'color'],
-        'line-width': CORRIDOR_WIDTH_EXPR as never,
-        // Match the Street lane-surface alpha so the order-aware tier
-        // expression preserves one constant corridor silhouette through the
-        // District/Street blend.
-        'line-opacity': tierOpacityExpr(0.9) as never,
-        'line-offset': ['get', 'offset'],
-      },
-    },
     {
       id: LYR_WAYS_DASHED_CASING,
       type: 'line',
@@ -484,6 +462,65 @@ function corridorPaintLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'line-offset': ['get', 'offset'],
       },
     },
+  ];
+}
+
+function corridorPaintLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
+    districtCarriagewayLayerSpec(theme),
+    {
+      // Overview and District are one centered corridor silhouette. Street
+      // replaces this source with physical lane surfaces; `line-offset`
+      // remains for schematic service/corridor compatibility only.
+      id: LYR_WAYS_SOLID_CASING,
+      type: 'line',
+      source: SRC_WAYS,
+      filter: [
+        'all',
+        ['==', ['geometry-type'], 'LineString'],
+        ['!', ['get', 'dashed']],
+        ['!', ['to-boolean', ['get', 'haloOnly']]],
+      ],
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
+      paint: {
+        'line-color': theme.routeCasing,
+        'line-width': CORRIDOR_CASING_WIDTH_EXPR as never,
+        'line-opacity': tierOpacityExpr(0.62) as never,
+        'line-offset': ['get', 'offset'],
+      },
+    },
+    {
+      id: LYR_WAYS_SOLID,
+      type: 'line',
+      source: SRC_WAYS,
+      // haloOnly features exist purely for LYR_WAY_SELECTED (a lane-rendered
+      // way's selection glow) — they must never paint as a solid line.
+      filter: [
+        'all',
+        ['==', ['geometry-type'], 'LineString'],
+        ['!', ['get', 'dashed']],
+        ['!', ['to-boolean', ['get', 'haloOnly']]],
+      ],
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': CORRIDOR_WIDTH_EXPR as never,
+        // Match the Street lane-surface alpha so the order-aware tier
+        // expression preserves one constant corridor silhouette through the
+        // District/Street blend.
+        'line-opacity': tierOpacityExpr(0.9) as never,
+        'line-offset': ['get', 'offset'],
+      },
+    },
+    ...dashedCorridorLayerSpecs(theme),
   ];
 }
 

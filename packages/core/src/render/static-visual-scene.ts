@@ -1,4 +1,4 @@
-import type { GeoJsonProperties, Position } from 'geojson';
+import type { GeoJsonProperties } from 'geojson';
 import type { LngLat } from '../model/system';
 import type { SystemFeatures } from './buildFeatures';
 import type { RenderPresentation } from './render-presentation';
@@ -13,11 +13,22 @@ import {
   createOrderedSystemRenderVisuals,
   type SystemFeatureSourceMap,
 } from './system-render-scene';
+import {
+  boolean,
+  lngLatPath,
+  numeric,
+  resolvedPaintOpacity,
+  text,
+  tier,
+  tierOpacity,
+  type StaticVisualTier,
+} from './static-visual-paint';
+import { appendStaticWayVisuals } from './static-way-visuals';
+
+export type { StaticVisualTier } from './static-visual-paint';
 
 export type StaticVisualSource =
   'junctions' | 'lanes' | 'lane-markings' | 'connectors' | 'ways' | 'services';
-
-export type StaticVisualTier = 'overview' | 'district' | 'street';
 
 interface ResolvedStaticVisualBase {
   featureId: string;
@@ -42,6 +53,9 @@ export interface ResolvedStaticPolygon extends ResolvedStaticVisualBase {
   kind: 'polygon';
   rings: LngLat[][];
   color: string;
+  /** A one-pixel perimeter is resolved only where the geographic fill paints
+   * one too; normal lane and junction surfaces remain unoutlined. */
+  outlineColor?: string;
 }
 
 export type ResolvedStaticVisual = ResolvedStaticLine | ResolvedStaticPolygon;
@@ -89,85 +103,6 @@ const ROAD_SURFACE = '#7d8188';
 const LANE_MARKING = '#f4f2ec';
 const CENTER_LINE = '#d9a62e';
 
-function numeric(properties: GeoJsonProperties, key: string, fallback: number): number {
-  const value: unknown = properties ? (properties as Record<string, unknown>)[key] : undefined;
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-function boolean(properties: GeoJsonProperties, key: string): boolean {
-  return properties ? (properties as Record<string, unknown>)[key] === true : false;
-}
-
-function text(properties: GeoJsonProperties, key: string, fallback: string): string {
-  const value: unknown = properties ? (properties as Record<string, unknown>)[key] : undefined;
-  return typeof value === 'string' ? value : fallback;
-}
-
-function tier(properties: GeoJsonProperties): StaticVisualTier | undefined {
-  const value: unknown = properties
-    ? (properties as Record<string, unknown>).renderTier
-    : undefined;
-  return value === 'overview' || value === 'district' || value === 'street' ? value : undefined;
-}
-
-function tierOpacity(properties: GeoJsonProperties): number {
-  return Math.max(0, Math.min(1, numeric(properties, 'tierOpacity', 1)));
-}
-
-function hasProperty(properties: GeoJsonProperties, key: string): boolean {
-  return properties !== null && Object.hasOwn(properties, key);
-}
-
-function lowerTierOpacity(baseOpacity: number, upperWeight: number): number {
-  if (upperWeight <= 0) return baseOpacity;
-  if (upperWeight >= 1) return 0;
-  return (baseOpacity * (1 - upperWeight)) / (1 - baseOpacity * upperWeight);
-}
-
-function interpolatedWeight(value: number, lower: number, upper: number): number {
-  return Math.max(0, Math.min(1, (value - lower) / (upper - lower)));
-}
-
-function hasTierAvailabilityContract(properties: GeoJsonProperties): boolean {
-  return ['projectedWidthPx', 'hasOverviewTier', 'hasDistrictTier', 'hasStreetTier'].every((key) =>
-    hasProperty(properties, key),
-  );
-}
-
-function resolvedPaintOpacity(properties: GeoJsonProperties, baseOpacity: number): number {
-  const resolvedTier = tier(properties);
-  if (!resolvedTier || !hasProperty(properties, 'corridorW14')) {
-    return baseOpacity * tierOpacity(properties);
-  }
-  const projectedWidth = numeric(properties, 'projectedWidthPx', 0);
-  if (!hasTierAvailabilityContract(properties)) return baseOpacity * tierOpacity(properties);
-  const hasOverview = boolean(properties, 'hasOverviewTier');
-  const hasDistrict = boolean(properties, 'hasDistrictTier');
-  const hasStreet = boolean(properties, 'hasStreetTier');
-
-  if (resolvedTier === 'overview') {
-    if (!hasDistrict) return baseOpacity;
-    return lowerTierOpacity(baseOpacity, interpolatedWeight(projectedWidth, 2, 4));
-  }
-  if (resolvedTier === 'street') {
-    if (!hasDistrict) return baseOpacity;
-    return baseOpacity * interpolatedWeight(projectedWidth, 9, 12);
-  }
-  if (!hasOverview && projectedWidth < 4) return baseOpacity;
-  if (!hasStreet && projectedWidth > 9) return baseOpacity;
-  if (projectedWidth < 4) {
-    return baseOpacity * interpolatedWeight(projectedWidth, 2, 4);
-  }
-  if (projectedWidth > 9) {
-    return lowerTierOpacity(baseOpacity, interpolatedWeight(projectedWidth, 9, 12));
-  }
-  return baseOpacity;
-}
-
-function scaledMetricWidth(w14: number, zoom: number): number {
-  return w14 * 2 ** (zoom - 14);
-}
-
 function serviceWidth(properties: GeoJsonProperties, zoom: number): number {
   const w14: unknown = properties ? (properties as Record<string, unknown>).w14 : undefined;
   if (typeof w14 !== 'number') return numeric(properties, 'width', 3);
@@ -213,16 +148,6 @@ function line(input: LineInput): ResolvedStaticLine | null {
 
 function pushLine(visuals: ResolvedStaticVisual[], value: ResolvedStaticLine | null): void {
   if (value) visuals.push(value);
-}
-
-function lngLatPath(coordinates: Position[]): LngLat[] {
-  return coordinates.map((coordinate) => {
-    if (coordinate.length < 2) {
-      throw new Error('Static visual geometry requires two-dimensional coordinates.');
-    }
-    const [lng, lat] = coordinate;
-    return [lng, lat];
-  });
 }
 
 function appendJunctionVisuals(features: SystemFeatures, visuals: ResolvedStaticVisual[]): void {
@@ -333,55 +258,12 @@ function appendConnectorVisuals(features: SystemFeatures, visuals: ResolvedStati
   }
 }
 
-function resolvedWayWidth(properties: GeoJsonProperties, zoom: number): number {
-  return tier(properties) === 'district'
-    ? scaledMetricWidth(numeric(properties, 'corridorW14', 1), zoom)
-    : numeric(properties, 'width', 3);
-}
-
-interface WayPaintPass {
-  dashed: boolean;
-  casing: boolean;
-  routeCasingColor: string;
-}
-
-function appendWayPass(
-  features: SystemFeatures['ways']['features'],
-  visuals: ResolvedStaticVisual[],
-  zoom: number,
-  pass: WayPaintPass,
-): void {
-  for (const feature of features) {
-    const dashed = boolean(feature.properties, 'dashed');
-    if (dashed !== pass.dashed) continue;
-    pushLine(
-      visuals,
-      line({
-        featureId: String(feature.id),
-        source: 'ways',
-        coordinates: lngLatPath(feature.geometry.coordinates),
-        properties: feature.properties,
-        color: pass.casing
-          ? pass.routeCasingColor
-          : text(feature.properties, 'color', pass.routeCasingColor),
-        widthPx: resolvedWayWidth(feature.properties, zoom),
-        ...(pass.casing ? { marginPx: 2 } : {}),
-        baseOpacity: pass.casing ? 0.62 : 0.9,
-        ...(dashed ? { dashArray: [2, 2] } : {}),
-      }),
-    );
-  }
-}
-
 function appendWayVisuals(
   features: SystemFeatures,
   visuals: ResolvedStaticVisual[],
   zoom: number,
   routeCasingColor: string,
 ): void {
-  const visibleWays = features.ways.features.filter(
-    (feature) => !boolean(feature.properties, 'haloOnly'),
-  );
   const passes = [
     { dashed: false, casing: true },
     { dashed: false, casing: false },
@@ -389,7 +271,13 @@ function appendWayVisuals(
     { dashed: true, casing: false },
   ];
   for (const pass of passes) {
-    appendWayPass(visibleWays, visuals, zoom, { ...pass, routeCasingColor });
+    appendStaticWayVisuals({
+      features: features.ways.features,
+      visuals,
+      zoom,
+      routeCasingColor,
+      ...pass,
+    });
   }
 }
 

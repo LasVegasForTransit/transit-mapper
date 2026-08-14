@@ -89,6 +89,7 @@ export const LYR_ENDPOINT_HINT = 'tm-endpoint-hint';
 export const LYR_MARQUEE_FILL = 'tm-marquee-fill';
 export const LYR_MARQUEE_STROKE = 'tm-marquee-stroke';
 export const LYR_LANE_SURFACES = 'tm-lane-surfaces';
+export const LYR_CARRIAGEWAYS = 'tm-carriageways';
 export const LYR_LANE_LINES = 'tm-lane-lines';
 export const LYR_CENTER_LINES = 'tm-center-lines';
 export const LYR_EDGE_LINES = 'tm-edge-lines';

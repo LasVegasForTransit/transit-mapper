@@ -36,6 +36,7 @@ import { nearWaysForStations, servicesByWay, visibleWaysFor } from './featureMem
 import { mergeAdjacentServiceLines } from './mergeServiceLines';
 import { directionalLanes, isOneWay, profileWidthM } from '../model/profile';
 import {
+  corridorSurfaceRing,
   railTrackGeometry,
   resolveWayLaneGeometry,
   STANDARD_RAIL_TIE_SPACING_M,
@@ -560,7 +561,7 @@ function oneDirectionalStretches(
 }
 
 export interface SystemFeatures {
-  ways: FeatureCollection<LineString>;
+  ways: FeatureCollection<LineString | Polygon>;
   services: FeatureCollection<LineString>;
   stations: FeatureCollection<Point>;
   handles: FeatureCollection<Point>;
@@ -1693,7 +1694,7 @@ function projectFacilities({
 }
 
 interface TopologyProjectionResult {
-  ways: Feature<LineString>[];
+  ways: Feature<LineString | Polygon>[];
   services: Feature<LineString>[];
   lanes: Feature<Polygon>[];
   laneMarkings: Feature<LineString | MultiLineString>[];
@@ -2021,6 +2022,13 @@ function projectTopologyFeatures({
     const grade = network ? { underground: false, elevated: false } : gradeFlags(way.grade);
     for (const renderTier of availableTiers) {
       if (renderTier === 'street') continue;
+      const geometry =
+        renderTier === 'district' && !grade.underground && !dashed
+          ? {
+              type: 'Polygon' as const,
+              coordinates: [corridorSurfaceRing(path, profileWidthM(way.profile))],
+            }
+          : { type: 'LineString' as const, coordinates: path };
       ways.push({
         type: 'Feature',
         id: stableFeatureId('ways', renderTier, way.id),
@@ -2037,12 +2045,12 @@ function projectTopologyFeatures({
           tierOpacity: presentation.blend.weights[renderTier],
           ...availability,
         },
-        geometry: { type: 'LineString', coordinates: path },
+        geometry,
       });
     }
   };
 
-  const ways: Feature<LineString>[] = [];
+  const ways: Feature<LineString | Polygon>[] = [];
   const services: Feature<LineString>[] = [];
   const serviceHits: Feature<LineString>[] = [];
   const lanes: Feature<Polygon>[] = [];
