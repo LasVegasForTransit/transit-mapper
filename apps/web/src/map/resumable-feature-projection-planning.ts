@@ -77,7 +77,7 @@ export interface GeographicFeatureProjectionUnit {
   run(counts?: SourceFeatureProjectionCounts): SystemFeatures;
 }
 
-export interface ReadyResumableGeographicFeatureProjectionPlan {
+interface ReadyResumableGeographicFeatureProjectionPlan {
   readonly kind: 'ready';
   readonly sourceIds: readonly MapSystemFeatureSourceId[];
   readonly units: readonly GeographicFeatureProjectionUnit[];
@@ -116,7 +116,7 @@ export const PHYSICAL_STATION_SOURCES = new Set<MapSystemFeatureSourceId>([
   SRC_PLATFORMS,
 ]);
 
-export interface ResolvedBatchSizes {
+interface ResolvedBatchSizes {
   corridors: number;
   junctions: number;
   stops: number;

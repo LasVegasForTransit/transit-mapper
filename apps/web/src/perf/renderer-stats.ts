@@ -21,7 +21,7 @@ interface RendererPatchSample {
 /** Per-job cooperative scheduling deltas. The MapLibre adapter records a
  * completed, canceled, or failed generation once; this collector never reads
  * scheduler internals or asks projection geometry to be traversed again. */
-export interface RendererSchedulingSample {
+interface RendererSchedulingSample {
   sliceCount: number;
   yieldCount: number;
   canceledJobCount: number;
@@ -32,7 +32,7 @@ export interface RendererSchedulingSample {
   maxCommitDurationMs: number;
 }
 
-export interface RendererPreparationSample {
+interface RendererPreparationSample {
   preparationCount: number;
   preparationDurationMs: number;
   maxPreparationDurationMs: number;

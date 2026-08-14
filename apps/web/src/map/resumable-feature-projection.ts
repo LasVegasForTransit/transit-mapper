@@ -15,11 +15,8 @@ import {
 } from './system-feature-sources';
 
 export type {
-  GeographicFeatureProjectionBatchSizes,
-  GeographicFeatureProjectionPrimaryKind,
   GeographicFeatureProjectionUnit,
   PlanResumableGeographicFeatureProjectionOptions,
-  ReadyResumableGeographicFeatureProjectionPlan,
   ResumableGeographicFeatureProjectionPlan,
 } from './resumable-feature-projection-planning';
 

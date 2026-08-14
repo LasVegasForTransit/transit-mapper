@@ -38,15 +38,15 @@ import {
 } from './layers';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
 
-export type EntityRenderFullReason = RenderProjectionFullReason | 'unsupported-domain';
+type EntityRenderFullReason = RenderProjectionFullReason | 'unsupported-domain';
 
-export interface FullEntityRenderUpdate {
+interface FullEntityRenderUpdate {
   readonly kind: 'full';
   readonly reason: EntityRenderFullReason;
   readonly sourceIds: readonly MapSystemFeatureSourceId[];
 }
 
-export interface ScopedEntityRenderUpdate {
+interface ScopedEntityRenderUpdate {
   readonly kind: 'scoped';
   readonly sourceIds: readonly MapSystemFeatureSourceId[];
   readonly projectionScope: RenderProjectionScope;
@@ -58,7 +58,7 @@ export interface ScopedEntityRenderUpdate {
 
 export type EntityRenderUpdate = FullEntityRenderUpdate | ScopedEntityRenderUpdate;
 
-export interface PendingPreparedLiveInvalidation {
+interface PendingPreparedLiveInvalidation {
   readonly invalidation?: RenderDependencyClosure;
   readonly fullProjectionReason?: RenderProjectionFullReason;
 }

@@ -8,7 +8,7 @@ import {
 } from '@transitmapper/core/render/render-presentation';
 
 /** Structural subset of MapLibre's LngLat used at the web/core boundary. */
-export interface MapLngLatLike {
+interface MapLngLatLike {
   readonly lng: number;
   readonly lat: number;
 }

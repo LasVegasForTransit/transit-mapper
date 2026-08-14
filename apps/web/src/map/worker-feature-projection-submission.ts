@@ -17,12 +17,12 @@ export interface WorkerFeatureProjectionClient {
   ): Promise<FeatureProjectionResult>;
 }
 
-export interface WorkerFeatureProjectionCommitContinuation {
+interface WorkerFeatureProjectionCommitContinuation {
   readonly settled: Promise<void>;
   cancel(): boolean;
 }
 
-export interface WorkerFeatureProjectionContinuation extends WorkerFeatureProjectionCommitContinuation {
+interface WorkerFeatureProjectionContinuation extends WorkerFeatureProjectionCommitContinuation {
   /** Worker replies are not scheduler frames. Source publication receives its
    * own physical generation after this detached result is ready. */
   readonly generation: null;

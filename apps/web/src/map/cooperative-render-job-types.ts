@@ -41,17 +41,17 @@ export interface CooperativeRenderJob<Result> {
   commit(results: readonly Result[], context: CooperativeRenderCommitContext): void;
 }
 
-export interface CooperativeRenderCommittedSettlement {
+interface CooperativeRenderCommittedSettlement {
   readonly generation: number;
   readonly status: 'committed';
 }
 
-export interface CooperativeRenderCanceledSettlement {
+interface CooperativeRenderCanceledSettlement {
   readonly generation: number;
   readonly status: 'canceled';
 }
 
-export interface CooperativeRenderFailedSettlement {
+interface CooperativeRenderFailedSettlement {
   readonly generation: number;
   readonly status: 'failed';
   readonly error: Error;

@@ -39,7 +39,7 @@ import { submitWorkerFeatureProjection } from './worker-feature-projection-submi
 import type { SourceUploadTransition } from './sourceUploadPlan';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
 
-export interface SourceFeatureProjectionCountTransaction {
+interface SourceFeatureProjectionCountTransaction {
   readonly counts: SourceFeatureProjectionCounts;
   /** Publishes this generation's private counters exactly once. */
   accept(): boolean;
@@ -144,7 +144,7 @@ export interface ScheduleRenderProjectionFailureRetryOptions<Batch> {
   failPreviousLease(error: unknown): void;
 }
 
-export interface OwnedCommittedProjectionRequest {
+interface OwnedCommittedProjectionRequest {
   readonly sourceIds: readonly MapSystemFeatureSourceId[];
   readonly transition: SourceUploadTransition | null;
 }
