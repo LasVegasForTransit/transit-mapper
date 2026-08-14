@@ -22,7 +22,7 @@ import {
 import type { SceneDraft } from './scene-draft-types';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
 
-export interface AssembleRenderSceneInput {
+interface AssembleRenderSceneInput {
   readonly revision: string;
   readonly states: ReadonlyMap<SystemFeatureSourceId, IncrementalSourceState>;
   readonly hitFeatures: RenderFeatureCollection;
@@ -122,7 +122,7 @@ class SourceDomainFeatureMap implements ReadonlyMap<
   }
 }
 
-export function assembleRenderScene(input: AssembleRenderSceneInput): RenderScene {
+function assembleRenderScene(input: AssembleRenderSceneInput): RenderScene {
   const featuresBySource = new Map<SystemFeatureSourceId, RenderFeatureCollection>();
   for (const sourceId of [...input.states.keys()].sort()) {
     featuresBySource.set(sourceId, input.states.get(sourceId)?.visual ?? EMPTY_RENDER_COLLECTION);

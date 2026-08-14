@@ -19,7 +19,7 @@ import type {
 import type { RenderSceneSourceMutationUnit } from './render-scene-source-updater';
 import type { SceneDraft, SceneDraftOptions, SceneDraftPlan } from './scene-draft';
 
-export interface SceneDraftController<Update> {
+interface SceneDraftController<Update> {
   draft(input: SceneUpdate, options?: SceneDraftOptions): SceneDraftPlan;
   preparePublication?(draft: SceneDraft): PreparedScenePublication<Update>;
   publishDraftSynchronously(draft: SceneDraft): Update;
@@ -66,7 +66,7 @@ export interface ScenePublicationContext {
   ) => readonly SceneFeatureStateTarget[];
 }
 
-export interface SceneFeatureStateTarget {
+interface SceneFeatureStateTarget {
   readonly sourceId: SystemFeatureSourceId;
   readonly featureId: RenderFeatureId;
 }

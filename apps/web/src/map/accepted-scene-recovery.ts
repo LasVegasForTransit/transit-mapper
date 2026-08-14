@@ -22,7 +22,7 @@ import {
   EDITOR_SYSTEM_FEATURE_SOURCES,
 } from './system-feature-sources';
 
-export interface AcceptedSceneRecoveryHost extends SourceBankSettlementHost {
+interface AcceptedSceneRecoveryHost extends SourceBankSettlementHost {
   ensureOverlay(): boolean;
   scheduleFrame(callback: () => void): number;
   cancelFrame(handle: number): void;

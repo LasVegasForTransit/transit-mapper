@@ -21,8 +21,6 @@ type TransientState = Omit<
 >;
 type TransientPatch = Partial<TransientState>;
 
-export type { EditorRenderMutation } from './contracts/render-mutation';
-
 interface ContentChange<Result> {
   system: TransitSystem;
   transient?: TransientPatch;

@@ -255,7 +255,7 @@ function partitionHits(
   );
 }
 
-export function sourceFeatureStats(
+function sourceFeatureStats(
   visual: RenderFeatureCollection,
   hits: RenderFeatureCollection,
 ): SourceFeatureStats {
@@ -373,24 +373,4 @@ export function initialSourceStates(): ReadonlyMap<SystemFeatureSourceId, Increm
       return [sourceId, emptySourceState(sourceId)];
     }),
   );
-}
-
-export function validateUnrequestedFeatureOwnership(
-  previousStates: ReadonlyMap<SystemFeatureSourceId, IncrementalSourceState>,
-  requestedStates: ReadonlyMap<SystemFeatureSourceId, IncrementalSourceState>,
-): void {
-  const requestedSourceIds = new Set(requestedStates.keys());
-  for (const [sourceId, state] of requestedStates) {
-    for (const featureId of state.featureIds) {
-      for (const previousState of previousStates.values()) {
-        if (
-          previousState.sourceId !== sourceId &&
-          !requestedSourceIds.has(previousState.sourceId) &&
-          previousState.featureIdSet.has(featureId)
-        ) {
-          throw new Error(`Duplicate render feature ID across scene: ${featureId}`);
-        }
-      }
-    }
-  }
 }
