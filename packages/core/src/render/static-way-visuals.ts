@@ -1,5 +1,5 @@
 import type { SystemFeatures } from './buildFeatures';
-import type { ResolvedStaticVisual } from './static-visual-scene';
+import type { ResolvedStaticVisual } from './static-visual-records';
 import {
   boolean,
   lngLatPath,

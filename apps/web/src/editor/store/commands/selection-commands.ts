@@ -3,7 +3,7 @@ import { nudgeSelection } from '@transitmapper/core/model/selection-nudge';
 import type { MultiSelectItem, Selection } from '../contracts';
 import type { SelectionCommands } from '../contracts/tool-selection-commands';
 import type { EditorRuntime } from '../runtime';
-import { renderMutationForSelection } from './render-mutations';
+import { renderMutationForSelection } from '../internal-operations/render-mutations';
 
 function sameSelection(a: Selection, b: Selection): boolean {
   if (a === b) return true;

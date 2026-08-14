@@ -29,7 +29,7 @@ import {
   renderMutationForWay,
   renderMutationForWayGeometry,
   renderMutationForWayJoin,
-} from './render-mutations';
+} from '../internal-operations/render-mutations';
 
 interface WayCommandOptions {
   readonly createId?: () => string;

@@ -6,7 +6,18 @@
  * pieces that the renderer scheduler can yield between.
  */
 import type { Geometry } from 'geojson';
-import type { SceneDraftWorkUnit } from './scene-draft-types';
+
+/**
+ * A side-effect-free piece of draft construction.
+ *
+ * The scheduler runs these between frames. Keeping the work vocabulary here
+ * lets geometry statistics, merge cursors, and source preparation share it
+ * without importing the higher-level draft result or publication contracts.
+ */
+export interface SceneDraftWorkUnit {
+  readonly id: string;
+  run(): void;
+}
 
 interface GeometryFrame {
   readonly kind: 'geometry';

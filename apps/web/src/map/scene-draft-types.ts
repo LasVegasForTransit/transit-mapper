@@ -14,14 +14,11 @@ import type { RenderScene, RenderSceneStats } from '@transitmapper/core/render/r
 import type { RenderScenePatch } from '@transitmapper/core/render/render-scene-diff';
 import type { IncrementalLiveSceneState } from './accepted-scene-state';
 import type { CooperativeRenderJobUnitSequence } from './cooperative-render-job-scheduler';
-import type { RenderSceneUploadIntent } from './render-scene-source-updater';
+import type { RenderSceneUploadIntent } from './render-scene-source-contract';
 import type { IncrementalSceneOperationCounts, IncrementalSourceState } from './scene-source-state';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
 
-export interface SceneDraftWorkUnit {
-  readonly id: string;
-  run(): void;
-}
+export type { SceneDraftWorkUnit } from './scene-draft-work';
 
 export interface SceneDraftOptions {
   /** Maximum raw features visited by an ordinary unit. Merge and index units
