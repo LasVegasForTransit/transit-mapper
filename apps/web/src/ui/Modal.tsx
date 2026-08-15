@@ -1,21 +1,18 @@
-import * as Dialog from '@radix-ui/react-dialog';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { IconButton } from './IconButton';
 
-/**
- * The one modal-dialog shell every dialog in this app renders through —
- * Export/Import/Share/Shortcuts. Built on Radix's Dialog primitive instead
- * of hand-rolled focus-trap/Escape/portal logic: real focus management,
- * scroll locking, and a portal (so a dialog opened from deep in the tree
- * never gets clipped by an ancestor's overflow:hidden) come for free and
- * are battle-tested, instead of this app maintaining its own version of the
- * same ~40 lines forever. Visual styling is untouched — Radix is headless,
- * so .modal-backdrop/.modal keep doing exactly what they did before.
- */
 interface ModalProps {
   title: string;
-  /** Screen-reader-only context for what this dialog is/does — Radix warns
-   *  without one, and it's genuinely useful info non-visually. */
   description: string;
   onClose: () => void;
   className?: string;
@@ -23,6 +20,73 @@ interface ModalProps {
   footer?: ReactNode;
 }
 
+interface DialogLifecycle {
+  closing: boolean;
+  dialogRef: RefObject<HTMLDialogElement>;
+  finishClose: () => void;
+  requestClose: () => void;
+}
+
+function closeDialog(dialog: HTMLDialogElement): void {
+  if (typeof dialog.close === 'function') dialog.close();
+  else dialog.removeAttribute('open');
+}
+
+function openDialog(dialog: HTMLDialogElement): void {
+  if (typeof dialog.showModal === 'function') dialog.showModal();
+  else dialog.setAttribute('open', '');
+}
+
+/** Native modal state stays local long enough to play the existing exit motion. */
+function useDialogLifecycle(onClose: () => void): DialogLifecycle {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
+  const finished = useRef(false);
+  const [closing, setClosing] = useState(false);
+  const requestClose = useCallback(() => setClosing(true), []);
+  const finishClose = useCallback(() => {
+    if (finished.current) return;
+    finished.current = true;
+    if (dialogRef.current?.open) closeDialog(dialogRef.current);
+    if (previouslyFocused.current?.isConnected) previouslyFocused.current.focus();
+    onClose();
+  }, [onClose]);
+
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+    if (dialog) openDialog(dialog);
+    return () => {
+      if (dialog?.open) closeDialog(dialog);
+    };
+  }, []);
+  useLayoutEffect(() => {
+    if (dialogRef.current) dialogRef.current.inert = closing;
+  }, [closing]);
+  useEffect(() => {
+    if (!closing) return;
+    const fallback = window.setTimeout(finishClose, 200);
+    return () => window.clearTimeout(fallback);
+  }, [closing, finishClose]);
+  return { closing, dialogRef, finishClose, requestClose };
+}
+
+function pressLandedOnBackdrop(event: PointerEvent<HTMLDialogElement>): boolean {
+  if (event.target !== event.currentTarget) return false;
+  const bounds = event.currentTarget.getBoundingClientRect();
+  return (
+    event.clientX < bounds.left ||
+    event.clientX > bounds.right ||
+    event.clientY < bounds.top ||
+    event.clientY > bounds.bottom
+  );
+}
+
+/**
+ * The shared modal shell uses the platform's top layer and focus trap. Current
+ * supported browsers provide showModal(), Escape cancellation, scroll locking,
+ * and modal accessibility without shipping a parallel dialog implementation.
+ */
 export function Modal({
   title,
   description,
@@ -31,61 +95,41 @@ export function Modal({
   children,
   footer,
 }: ModalProps) {
-  // Every dialog here is opened by a trigger that lives outside this
-  // component (a button in TopBar/FileMenu/GroupInspector/…), not a
-  // <Dialog.Trigger> Radix can track itself — so its own default
-  // "return focus to whatever opened me" doesn't reliably have anything to
-  // return to. Capture it ourselves and hand it back explicitly on close.
-  const previouslyFocused = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    previouslyFocused.current = document.activeElement as HTMLElement | null;
-  }, []);
-
-  // The parent mounts/unmounts this component instantly based on its own
-  // activeDialog state, which would skip Radix's exit-animation window
-  // entirely (Presence never sees `open` go false — the DOM node is just
-  // yanked out). So this component owns a short-lived local `open` instead:
-  // requestClose() flips it to false (plays the CSS exit animation via
-  // data-state="closed"), and only once that animation actually finishes
-  // do we call the real onClose that tells the parent to unmount us.
-  const [open, setOpen] = useState(true);
-  const requestClose = () => setOpen(false);
+  const titleId = useId();
+  const descriptionId = useId();
+  const lifecycle = useDialogLifecycle(onClose);
+  const state = lifecycle.closing ? 'closed' : 'open';
 
   return (
-    <Dialog.Root
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) requestClose();
+    <dialog
+      ref={lifecycle.dialogRef}
+      className={`modal ${className}`.trim()}
+      data-state={state}
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      onCancel={(event) => {
+        event.preventDefault();
+        lifecycle.requestClose();
+      }}
+      onClose={lifecycle.finishClose}
+      onPointerDown={(event) => {
+        if (pressLandedOnBackdrop(event)) lifecycle.requestClose();
+      }}
+      onAnimationEnd={(event) => {
+        if (event.target === event.currentTarget && lifecycle.closing) {
+          lifecycle.finishClose();
+        }
       }}
     >
-      <Dialog.Portal>
-        <Dialog.Overlay className="modal-backdrop" />
-        <Dialog.Content
-          className={`modal ${className}`.trim()}
-          onCloseAutoFocus={(e) => {
-            e.preventDefault();
-            previouslyFocused.current?.focus?.();
-          }}
-          onAnimationEnd={(e) => {
-            // Ignore bubbled animationend from descendants (e.g. a color
-            // popover opening/closing inside the dialog) — only this
-            // element's own open/close transition should trigger unmount.
-            if (e.target === e.currentTarget && !open) onClose();
-          }}
-        >
-          <div className="modal-head">
-            <Dialog.Title asChild>
-              <h2>{title}</h2>
-            </Dialog.Title>
-            <Dialog.Close asChild>
-              <IconButton icon="x" size={20} label="Close" />
-            </Dialog.Close>
-          </div>
-          <Dialog.Description className="sr-only">{description}</Dialog.Description>
-          {children}
-          {footer}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+      <div className="modal-head">
+        <h2 id={titleId}>{title}</h2>
+        <IconButton icon="x" size={20} label="Close" onClick={lifecycle.requestClose} />
+      </div>
+      <p id={descriptionId} className="sr-only">
+        {description}
+      </p>
+      {children}
+      {footer}
+    </dialog>
   );
 }

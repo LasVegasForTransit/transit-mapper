@@ -18,6 +18,12 @@ const releaseBuild: BuildInfo = {
   releaseTag: 'v1.4.0',
   releaseUrl: 'https://github.com/LasVegasForTransit/transit-mapper/releases/tag/v1.4.0',
   attestationsUrl: 'https://github.com/LasVegasForTransit/transit-mapper/attestations',
+  performanceSampling: {
+    enabled: true,
+    ordinaryBasisPoints: 100,
+    releaseBasisPoints: 500,
+    boostUntil: '2026-08-02T19:20:21.000Z',
+  },
 };
 
 let container: HTMLDivElement;
@@ -68,6 +74,7 @@ describe('About dialog', () => {
     expect(link('MIT License').href).toBe(
       'https://github.com/LasVegasForTransit/transit-mapper/blob/0123456789abcdef0123456789abcdef01234567/LICENSE',
     );
+    expect(link('Privacy').href).toBe('http://localhost:3000/privacy');
 
     for (const label of [
       'Las Vegans for Better Transit',
@@ -107,9 +114,7 @@ describe('About dialog', () => {
     expect(document.body.textContent).toContain('Local changes included');
     expect(document.body.textContent).not.toContain('Build attestations');
     expect(
-      [...document.querySelectorAll('a')].some((anchor) =>
-        anchor.textContent?.endsWith(' release'),
-      ),
+      [...document.querySelectorAll('a')].some((anchor) => anchor.textContent.endsWith(' release')),
     ).toBe(false);
   });
 });

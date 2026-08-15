@@ -1,6 +1,5 @@
 import { useEditorStore } from '../editor/EditorProvider';
-import { exportFullSystemPng } from '../share/pngExport';
-import { exportFullSystemSvg } from '../share/svgExport';
+import { exportQuickSystem, preloadQuickExport } from '../share/quick-export';
 import { DropdownMenu, DropdownMenuItem } from './DropdownMenu';
 import { Icon } from './Icon';
 import { useUi } from './UiProvider';
@@ -24,10 +23,9 @@ export function ExportSplitButton() {
     const filename = `${system.name || 'transit-system'}.${format}`;
     const view = { viewMode, visibleModes, visibleWayTypes };
     // Quick export still shows the whole system (fits bounds, titles, and
-    // legends itself) rather than just whatever's currently on screen — see
-    // share/pngExport.ts's exportFullSystemPng for why.
-    if (format === 'png') exportFullSystemPng(system, view, filename);
-    else exportFullSystemSvg(system, view, filename);
+    // legends itself) rather than just whatever's currently on screen. The
+    // runtime was preloaded on a deliberate menu intent where possible.
+    void exportQuickSystem(format, system, view, filename);
   };
 
   return (
@@ -53,6 +51,8 @@ export function ExportSplitButton() {
               className="split-btn-caret"
               title="Quick export"
               aria-label="Quick export options"
+              onPointerDown={preloadQuickExport}
+              onFocus={preloadQuickExport}
             >
               <Icon name="chevronDown" size={15} />
             </button>

@@ -19,12 +19,9 @@ type ButtonVariant = 'plain' | 'tonal' | 'bordered' | 'primary';
  * to action nearby; reach for a louder variant only when a button genuinely
  * needs to stand apart from its neighbors.
  *
- * forwardRef is required, not optional: Radix's <Popover.Trigger asChild>
- * and <DropdownMenu.Trigger asChild> clone this element and attach their
- * own ref to it to measure its position — without forwardRef, React drops
- * that ref silently (only a console warning), and Radix's Popper never gets
- * a real element to anchor to, so the menu/popover renders off-screen at
- * its unmeasured placeholder position instead of next to the button.
+ * forwardRef is required: the shared native popover clones its trigger and
+ * attaches a ref for collision-aware fallback placement when CSS anchor
+ * positioning is unavailable.
  */
 type IconButtonProps = {
   icon: IconName;
