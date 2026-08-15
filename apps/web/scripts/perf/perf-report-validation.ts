@@ -157,6 +157,23 @@ function validateBundles(value: unknown, reportPath: string): void {
   }
 }
 
+function validateProvenance(value: unknown, reportPath: string): void {
+  if (value === undefined) return;
+  const provenance = record(value, reportPath, 'provenance');
+  const artifactRevision = stringValue(
+    provenance.artifactRevision,
+    reportPath,
+    'provenance.artifactRevision',
+  );
+  const milestoneMarkSource = provenance.milestoneMarkSource;
+  if (milestoneMarkSource !== 'shipping' && milestoneMarkSource !== 'legacy-497a549-observer-v1') {
+    invalid(reportPath, 'provenance.milestoneMarkSource is unsupported');
+  }
+  if (milestoneMarkSource === 'legacy-497a549-observer-v1' && artifactRevision !== '497a549') {
+    invalid(reportPath, 'legacy observer provenance requires 497a549');
+  }
+}
+
 function validateByteTotals(value: unknown, reportPath: string, context: string): UnknownRecord {
   const totals = record(value, reportPath, context);
   byteCount(totals.encodedBytes, reportPath, `${context}.encodedBytes`);
@@ -371,6 +388,7 @@ export function validateFrozenPerfReport(value: unknown, reportPath: string): Pe
     stringValue(report.unavailableReason, reportPath, 'unavailableReason');
   }
   validateFixedPerfProtocol(report.protocol, reportPath);
+  validateProvenance(report.provenance, reportPath);
   validateBundles(report.bundles, reportPath);
   validateFirstSessions(report.firstSessions, reportPath);
   validateJsonMetrics(array(report.samples, reportPath, 'samples'), reportPath, 'samples');

@@ -37,8 +37,10 @@ export async function readBaseline(path: string | undefined): Promise<PerfReport
   return validateFrozenPerfReport(JSON.parse(contents), path);
 }
 
-export async function readBundleEntries(): Promise<PerfBundleEntry[]> {
-  const report = JSON.parse(await readFile(BUNDLE_REPORT_PATH, 'utf8')) as BundleReportFile;
+export async function readBundleEntries(
+  path: string = BUNDLE_REPORT_PATH,
+): Promise<PerfBundleEntry[]> {
+  const report = JSON.parse(await readFile(path, 'utf8')) as BundleReportFile;
   if (!Array.isArray(report.entries)) {
     throw new Error('The generated bundle report has no entries.');
   }
@@ -96,10 +98,19 @@ export async function writeReport(outputDirectory: string, report: PerfReport): 
   return path;
 }
 
-export async function copyBuildReports(outputDirectory: string): Promise<void> {
+export async function copyBuildReports(
+  outputDirectory: string,
+  sourceDirectory: string = dirname(BUNDLE_REPORT_PATH),
+): Promise<void> {
   await mkdir(outputDirectory, { recursive: true });
-  await copyFile(BUNDLE_REPORT_PATH, resolve(outputDirectory, basename(BUNDLE_REPORT_PATH)));
-  await copyFile(PWA_REPORT_PATH, resolve(outputDirectory, basename(PWA_REPORT_PATH)));
+  await copyFile(
+    resolve(sourceDirectory, basename(BUNDLE_REPORT_PATH)),
+    resolve(outputDirectory, basename(BUNDLE_REPORT_PATH)),
+  );
+  await copyFile(
+    resolve(sourceDirectory, basename(PWA_REPORT_PATH)),
+    resolve(outputDirectory, basename(PWA_REPORT_PATH)),
+  );
 }
 
 export function reportEvaluation(evaluation: PerfBudgetEvaluation): void {

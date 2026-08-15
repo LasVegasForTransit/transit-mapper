@@ -208,6 +208,7 @@ export function createPerfReport(options: CreatePerfReportOptions): PerfReport {
     status: 'ok',
     protocol: options.protocol,
     calibration: options.calibration,
+    provenance: options.provenance,
     bundles: options.bundles ?? [],
     firstSessions: options.firstSessions ?? [],
     samples,

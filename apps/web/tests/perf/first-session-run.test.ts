@@ -198,6 +198,17 @@ describe('the automatic first-session capture', () => {
       }),
     ).rejects.toThrow('public share registered 1 service worker');
     expect(timelineReads).toBe(2);
+
+    await expect(
+      captureFirstSession({
+        driver,
+        recorder,
+        journey: 'public-share',
+        surface: 'share',
+        cacheState: 'cold',
+        serviceWorkerPolicy: 'legacy-497a549',
+      }),
+    ).resolves.toMatchObject({ journey: 'public-share', surface: 'share' });
   });
 
   it('rejects a transient service-worker attempt on a public surface', async () => {

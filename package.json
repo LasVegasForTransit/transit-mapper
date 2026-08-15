@@ -21,6 +21,7 @@
     "preview": "pnpm --filter @transitmapper/web preview",
     "perf": "pnpm --filter @transitmapper/web perf",
     "perf:record": "pnpm --filter @transitmapper/web perf:record",
+    "perf:freeze-497a549": "pnpm --filter @transitmapper/web perf:freeze-497a549",
     "perf:soak": "pnpm --filter @transitmapper/web perf:soak",
     "worker:dev": "pnpm --filter @transitmapper/worker dev",
     "build": "tsx apps/web/scripts/run-build.ts",

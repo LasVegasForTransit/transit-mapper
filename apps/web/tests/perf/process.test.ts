@@ -19,4 +19,14 @@ describe('performance artifact delivery', () => {
     expect(performancePreviewArguments('instrumented', 5_182)).toContain('5182');
     expect(previewUrl(5_181)).toBe('http://127.0.0.1:5181');
   });
+
+  it('can serve a frozen historical public artifact without substituting the current dist', () => {
+    const legacyOutputDirectory = '/tmp/transitmapper-497a549/apps/web/dist';
+
+    expect(
+      performancePreviewArguments('public', 5_183, {
+        outputDirectory: legacyOutputDirectory,
+      }),
+    ).toContain(legacyOutputDirectory);
+  });
 });

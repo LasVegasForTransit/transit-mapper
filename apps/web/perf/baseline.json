@@ -1,0 +1,3601 @@
+{
+  "schemaVersion": 3,
+  "generatedAt": "2026-08-15T21:59:39.695Z",
+  "status": "ok",
+  "protocol": {
+    "profile": "desktop",
+    "browser": "Google Chrome",
+    "browserChannel": "chrome",
+    "headed": true,
+    "cpuThrottlingRate": 4,
+    "cache": "cleared-before-cold-load-then-enabled",
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "deviceScaleFactor": 1
+    },
+    "network": {
+      "name": "Fast 4G",
+      "downloadThroughputBytesPerSecond": 524288,
+      "uploadThroughputBytesPerSecond": 393216,
+      "latencyMs": 20
+    },
+    "warmupRuns": 1,
+    "measuredRuns": 5,
+    "warmReloadsPerMeasuredRun": 1
+  },
+  "provenance": {
+    "artifactRevision": "497a549",
+    "milestoneMarkSource": "legacy-497a549-observer-v1"
+  },
+  "bundles": [
+    {
+      "entry": "embed",
+      "rawBytes": 1145280,
+      "gzipBytes": 327475,
+      "brotliBytes": 278251
+    },
+    {
+      "entry": "main",
+      "rawBytes": 1779812,
+      "gzipBytes": 515671,
+      "brotliBytes": 437234
+    }
+  ],
+  "firstSessions": [
+    {
+      "journey": "new-user-editor",
+      "surface": "editor",
+      "cacheState": "cold",
+      "milestones": {
+        "documentResponseEndMs": 96,
+        "bootstrapStartMs": 104.19999980926514,
+        "shellMountedMs": 1463.0999999046326,
+        "storageReadStartMs": null,
+        "storageReadEndMs": null,
+        "deserializeStartMs": null,
+        "deserializeEndMs": null,
+        "systemCommittedMs": 3348.399999856949,
+        "mapStyleReadyMs": null,
+        "firstSystemPaintMs": 3389.5,
+        "interactiveMs": 3389.5,
+        "networkIdleMs": 6064.738037109375,
+        "serviceWorkerReadyMs": 2628.0999999046326
+      },
+      "network": {
+        "authority": "cdp-network-encoded-data-length",
+        "automaticBoundaryMs": 60000,
+        "settled": true,
+        "unsettledNonMapRequestCount": 0,
+        "requests": [
+          {
+            "url": "http://127.0.0.1:55314/",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "navigation",
+            "contentType": "text/html",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1130,
+            "decodedBytes": 3032,
+            "startedAtMs": 0.818115234375,
+            "completedAtMs": 96.126953125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/main-B9y50OnY.js",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 146475,
+            "decodedBytes": 482385,
+            "startedAtMs": 101.06591796875,
+            "completedAtMs": 971.94189453125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/map-engine-w6GjjIfb.js",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "other",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 210931,
+            "decodedBytes": 796235,
+            "startedAtMs": 101.176025390625,
+            "completedAtMs": 1108.801025390625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/react-runtime-DQuBW2lN.js",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "other",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 45757,
+            "decodedBytes": 140299,
+            "startedAtMs": 101.2138671875,
+            "completedAtMs": 614.19384765625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/transit-rendering-DPc9CM6X.js",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "other",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 32280,
+            "decodedBytes": 107757,
+            "startedAtMs": 101.239013671875,
+            "completedAtMs": 588.33203125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/map-engine-PhPnDjd-.css",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "link",
+            "contentType": "text/css",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 9585,
+            "decodedBytes": 65465,
+            "startedAtMs": 101.262939453125,
+            "completedAtMs": 319.625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/styleSwitchController-Cl1HxUFb.css",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "link",
+            "contentType": "text/css",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 655,
+            "decodedBytes": 340,
+            "startedAtMs": 101.29296875,
+            "completedAtMs": 194.550048828125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/main-Bvs7CIrG.css",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "link",
+            "contentType": "text/css",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 14647,
+            "decodedBytes": 82228,
+            "startedAtMs": 101.326904296875,
+            "completedAtMs": 433.950927734375
+          },
+          {
+            "url": "data:image/webp;base64,UklGRh4AAABXRUJQVlA4TBEAAAAvAQAAAAfQ//73v/+BiOh/AAA=",
+            "category": "other",
+            "target": "page",
+            "initiator": "parser",
+            "contentType": "image/webp",
+            "cacheSource": "memory-or-disk",
+            "protocol": "data",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 0,
+            "decodedBytes": 38,
+            "startedAtMs": 1178.0439453125,
+            "completedAtMs": 1178.107177734375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/public-sans-latin-DdeTHZLK.woff2",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "css",
+            "contentType": "font/woff2",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 27153,
+            "decodedBytes": 26832,
+            "startedAtMs": 1330.698974609375,
+            "completedAtMs": 1549.39306640625
+          },
+          {
+            "url": "https://tiles.openfreemap.org/styles/positron",
+            "category": "external-map",
+            "target": "page",
+            "initiator": "fetch",
+            "contentType": "application/json",
+            "cacheSource": "network",
+            "protocol": "h2",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 4155,
+            "decodedBytes": 25153,
+            "startedAtMs": 1437.5908203125,
+            "completedAtMs": 1675.8720703125
+          },
+          {
+            "url": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M14.5 8.5c-.75 0-1.5.75-1.5 1.5v3h-3c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h3v3c0 .75.75 1.5 1.5 1.5S16 19.75 16 19v-3h3c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13h-3v-3c0-.75-.75-1.5-1.5-1.5'/%3E%3C/svg%3E",
+            "category": "other",
+            "target": "page",
+            "initiator": "parser",
+            "contentType": "image/svg+xml",
+            "cacheSource": "memory-or-disk",
+            "protocol": "data",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 0,
+            "decodedBytes": 295,
+            "startedAtMs": 1445.846923828125,
+            "completedAtMs": 1446.341064453125
+          },
+          {
+            "url": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M10 13c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h9c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13z'/%3E%3C/svg%3E",
+            "category": "other",
+            "target": "page",
+            "initiator": "parser",
+            "contentType": "image/svg+xml",
+            "cacheSource": "memory-or-disk",
+            "protocol": "data",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 0,
+            "decodedBytes": 195,
+            "startedAtMs": 1447.635986328125,
+            "completedAtMs": 1447.69091796875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/workbox-window.prod.es5-DVrcyT5d.js",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 2690,
+            "decodedBytes": 5727,
+            "startedAtMs": 1463.05908203125,
+            "completedAtMs": 1499.0791015625
+          },
+          {
+            "url": "http://127.0.0.1:55314/favicon.svg",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "other",
+            "contentType": "image/svg+xml",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 1110,
+            "startedAtMs": 1614.760009765625,
+            "completedAtMs": 1638.10498046875
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet",
+            "category": "external-map",
+            "target": "page",
+            "initiator": "fetch",
+            "contentType": "application/json",
+            "cacheSource": "network",
+            "protocol": "h2",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 2145,
+            "decodedBytes": 19254,
+            "startedAtMs": 1695.240966796875,
+            "completedAtMs": 1882.18994140625
+          },
+          {
+            "url": "https://tiles.openfreemap.org/sprites/ofm_f384/ofm.json",
+            "category": "external-map",
+            "target": "page",
+            "initiator": "fetch",
+            "contentType": "application/json",
+            "cacheSource": "network",
+            "protocol": "h2",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 3669,
+            "decodedBytes": 27737,
+            "startedAtMs": 1695.513916015625,
+            "completedAtMs": 2219.407958984375
+          },
+          {
+            "url": "https://tiles.openfreemap.org/sprites/ofm_f384/ofm.png",
+            "category": "external-map",
+            "target": "page",
+            "initiator": "fetch",
+            "contentType": "image/png",
+            "cacheSource": "network",
+            "protocol": "h2",
+            "compression": "identity",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 49911,
+            "decodedBytes": 49454,
+            "startedAtMs": 1695.77294921875,
+            "completedAtMs": 2564.910888671875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/svgWorkerEntry-Qqhq4SAB.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 14938,
+            "decodedBytes": 44987,
+            "startedAtMs": 1798.610107421875,
+            "completedAtMs": 1857.421875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/styleSwitchController-Cl1HxUFb.css",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/css",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 340,
+            "startedAtMs": 1872.291748046875,
+            "completedAtMs": 1877.336181640625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/storageSerializerWorker-Pu174ZDs.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 310,
+            "startedAtMs": 1878.740966796875,
+            "completedAtMs": 1882.06298828125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/storage-deserializer-worker-UXNOXt-z.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 7789,
+            "decodedBytes": 25257,
+            "startedAtMs": 1884.203857421875,
+            "completedAtMs": 1899.093017578125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/react-runtime-DQuBW2lN.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 140299,
+            "startedAtMs": 1903.2578125,
+            "completedAtMs": 1907.64306640625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/public-sans-latin-DdeTHZLK.woff2",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "font/woff2",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 26832,
+            "startedAtMs": 1910.615966796875,
+            "completedAtMs": 1912.10888671875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/previewWorkerEntry-CjOy1dcr.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 16116,
+            "decodedBytes": 50299,
+            "startedAtMs": 1917.742919921875,
+            "completedAtMs": 1997.387939453125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/osm-import-worker-BOiw50kM.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 8769,
+            "decodedBytes": 25289,
+            "startedAtMs": 2005.16796875,
+            "completedAtMs": 2048.93896484375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/messages-CAsKfNIa.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 686,
+            "decodedBytes": 417,
+            "startedAtMs": 2056.3779296875,
+            "completedAtMs": 2065.01806640625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/map-engine-w6GjjIfb.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 796235,
+            "startedAtMs": 2075.91796875,
+            "completedAtMs": 2088.39111328125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/map-engine-PhPnDjd-.css",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/css",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 65465,
+            "startedAtMs": 2121.642822265625,
+            "completedAtMs": 2123.431884765625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/main-Bvs7CIrG.css",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/css",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 82228,
+            "startedAtMs": 2125.026123046875,
+            "completedAtMs": 2127.162109375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/main-B9y50OnY.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 482385,
+            "startedAtMs": 2129.279052734375,
+            "completedAtMs": 2139.166015625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/gtfsWorker-joDwqtHg.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 8853,
+            "decodedBytes": 21641,
+            "startedAtMs": 2143.926025390625,
+            "completedAtMs": 2171.556884765625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/gtfsReconcileWorker-D9mA78bK.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 11634,
+            "decodedBytes": 34832,
+            "startedAtMs": 2174.81689453125,
+            "completedAtMs": 2228.56298828125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/background-osm-import-C9UXMcw2.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1964,
+            "decodedBytes": 3599,
+            "startedAtMs": 2233.971923828125,
+            "completedAtMs": 2257.719970703125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/about-dialog-C42_Fb4T.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1719,
+            "decodedBytes": 3639,
+            "startedAtMs": 2262.535888671875,
+            "completedAtMs": 2340.0859375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/VehicleKindsDialog-DxpiPSrl.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1889,
+            "decodedBytes": 4592,
+            "startedAtMs": 2342.039794921875,
+            "completedAtMs": 2356.322021484375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/SystemsDialog-DNXNDt3F.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 3577,
+            "decodedBytes": 8688,
+            "startedAtMs": 2357.65478515625,
+            "completedAtMs": 2369.075927734375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/ShortcutsDialog-BFY2SyAf.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1423,
+            "decodedBytes": 2903,
+            "startedAtMs": 2370.119873046875,
+            "completedAtMs": 2389.091064453125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/ShareDialog-B2hSAAiH.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1472,
+            "decodedBytes": 2231,
+            "startedAtMs": 2390.221923828125,
+            "completedAtMs": 2396.35302734375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/SettingsDialog-CDoqhQfq.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1394,
+            "decodedBytes": 2710,
+            "startedAtMs": 2397.783935546875,
+            "completedAtMs": 2400.691162109375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/ScheduleDialog-BtscEKYN.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1791,
+            "decodedBytes": 3357,
+            "startedAtMs": 2402.077880859375,
+            "completedAtMs": 2406.06103515625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/OnboardingDialog-r4UnQwWr.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 3733,
+            "decodedBytes": 8189,
+            "startedAtMs": 2407.56201171875,
+            "completedAtMs": 2414.630859375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/NewSystemLocationDialog-CObDxLyS.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 3708,
+            "decodedBytes": 7769,
+            "startedAtMs": 2418.86279296875,
+            "completedAtMs": 2455.60498046875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/Modal-BbQ8aVK4.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 2237,
+            "decodedBytes": 5181,
+            "startedAtMs": 2457.384765625,
+            "completedAtMs": 2469.462890625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/ImportDialog-CYghiPAN.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1652,
+            "decodedBytes": 2514,
+            "startedAtMs": 2470.848876953125,
+            "completedAtMs": 2532.6298828125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/GtfsImportDialog-B7TgY27T.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 3275,
+            "decodedBytes": 7544,
+            "startedAtMs": 2534.126953125,
+            "completedAtMs": 2580.217041015625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/ExportDialog-B_7RzEVd.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 2583,
+            "decodedBytes": 6179,
+            "startedAtMs": 2581.23193359375,
+            "completedAtMs": 2622.416015625
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/10/184/401.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 91811,
+            "decodedBytes": 126227,
+            "startedAtMs": 2684.218994140625,
+            "completedAtMs": 3692.614013671875
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/10/184/402.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 33083,
+            "decodedBytes": 44804,
+            "startedAtMs": 2684.832763671875,
+            "completedAtMs": 3252.319091796875
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/10/183/401.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 28962,
+            "decodedBytes": 38089,
+            "startedAtMs": 2685.281982421875,
+            "completedAtMs": 3240.675048828125
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/10/185/401.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 23690,
+            "decodedBytes": 31776,
+            "startedAtMs": 2685.5869140625,
+            "completedAtMs": 3223.074951171875
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/10/183/402.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 14307,
+            "decodedBytes": 19906,
+            "startedAtMs": 2686.044921875,
+            "completedAtMs": 3414.864990234375
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/10/185/402.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 20389,
+            "decodedBytes": 28165,
+            "startedAtMs": 2686.246826171875,
+            "completedAtMs": 3192.08203125
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/3/1/3.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 204519,
+            "decodedBytes": 391369,
+            "startedAtMs": 3633.53173828125,
+            "completedAtMs": 5463.388916015625
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/3/1/2.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 154880,
+            "decodedBytes": 279000,
+            "startedAtMs": 3633.979736328125,
+            "completedAtMs": 5184.1171875
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/3/2/3.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 252499,
+            "decodedBytes": 474733,
+            "startedAtMs": 3634.512939453125,
+            "completedAtMs": 5564.738037109375
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/3/2/2.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 190939,
+            "decodedBytes": 346254,
+            "startedAtMs": 3634.929931640625,
+            "completedAtMs": 5409.275146484375
+          }
+        ],
+        "phases": {
+          "document": {
+            "atMs": 96,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 1130,
+                "decodedBytes": 0,
+                "requestCount": 1
+              },
+              "externalMap": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "documentData": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "serviceWorker": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "total": {
+                "encodedBytes": 1130,
+                "decodedBytes": 0,
+                "requestCount": 1
+              }
+            }
+          },
+          "automaticBoundary": {
+            "atMs": 60000,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 491430,
+                "decodedBytes": 1711410,
+                "requestCount": 11
+              },
+              "externalMap": {
+                "encodedBytes": 1074959,
+                "decodedBytes": 1901921,
+                "requestCount": 14
+              },
+              "documentData": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "serviceWorker": {
+                "encodedBytes": 102218,
+                "decodedBytes": 1865911,
+                "requestCount": 29
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 528,
+                "requestCount": 3
+              },
+              "total": {
+                "encodedBytes": 1668607,
+                "decodedBytes": 5479770,
+                "requestCount": 57
+              }
+            }
+          },
+          "shell": {
+            "atMs": 1463.0999999046326,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 461460,
+                "decodedBytes": 1677741,
+                "requestCount": 10
+              },
+              "externalMap": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 1
+              },
+              "documentData": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "serviceWorker": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 528,
+                "requestCount": 3
+              },
+              "total": {
+                "encodedBytes": 461460,
+                "decodedBytes": 1678269,
+                "requestCount": 14
+              }
+            }
+          },
+          "documentReady": {
+            "atMs": 3348.399999856949,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 491430,
+                "decodedBytes": 1711410,
+                "requestCount": 11
+              },
+              "externalMap": {
+                "encodedBytes": 166004,
+                "decodedBytes": 264432,
+                "requestCount": 10
+              },
+              "documentData": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "serviceWorker": {
+                "encodedBytes": 102218,
+                "decodedBytes": 1865911,
+                "requestCount": 29
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 528,
+                "requestCount": 3
+              },
+              "total": {
+                "encodedBytes": 759652,
+                "decodedBytes": 3842281,
+                "requestCount": 53
+              }
+            }
+          },
+          "firstSystemPaint": {
+            "atMs": 3389.5,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 491430,
+                "decodedBytes": 1711410,
+                "requestCount": 11
+              },
+              "externalMap": {
+                "encodedBytes": 176297,
+                "decodedBytes": 276552,
+                "requestCount": 10
+              },
+              "documentData": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "serviceWorker": {
+                "encodedBytes": 102218,
+                "decodedBytes": 1865911,
+                "requestCount": 29
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 528,
+                "requestCount": 3
+              },
+              "total": {
+                "encodedBytes": 769945,
+                "decodedBytes": 3854401,
+                "requestCount": 53
+              }
+            }
+          },
+          "interactionReady": {
+            "atMs": 3389.5,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 491430,
+                "decodedBytes": 1711410,
+                "requestCount": 11
+              },
+              "externalMap": {
+                "encodedBytes": 176297,
+                "decodedBytes": 276552,
+                "requestCount": 10
+              },
+              "documentData": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "serviceWorker": {
+                "encodedBytes": 102218,
+                "decodedBytes": 1865911,
+                "requestCount": 29
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 528,
+                "requestCount": 3
+              },
+              "total": {
+                "encodedBytes": 769945,
+                "decodedBytes": 3854401,
+                "requestCount": 53
+              }
+            }
+          },
+          "networkIdle": {
+            "atMs": 6064.738037109375,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 491430,
+                "decodedBytes": 1711410,
+                "requestCount": 11
+              },
+              "externalMap": {
+                "encodedBytes": 1074959,
+                "decodedBytes": 1901921,
+                "requestCount": 14
+              },
+              "documentData": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "serviceWorker": {
+                "encodedBytes": 102218,
+                "decodedBytes": 1865911,
+                "requestCount": 29
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 528,
+                "requestCount": 3
+              },
+              "total": {
+                "encodedBytes": 1668607,
+                "decodedBytes": 5479770,
+                "requestCount": 57
+              }
+            }
+          },
+          "serviceWorkerReady": {
+            "atMs": 2628.0999999046326,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 491430,
+                "decodedBytes": 1711410,
+                "requestCount": 11
+              },
+              "externalMap": {
+                "encodedBytes": 59880,
+                "decodedBytes": 121598,
+                "requestCount": 4
+              },
+              "documentData": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "serviceWorker": {
+                "encodedBytes": 102218,
+                "decodedBytes": 1865911,
+                "requestCount": 29
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 528,
+                "requestCount": 3
+              },
+              "total": {
+                "encodedBytes": 653528,
+                "decodedBytes": 3699447,
+                "requestCount": 47
+              }
+            }
+          }
+        },
+        "total": {
+          "firstPartyApplication": {
+            "encodedBytes": 491430,
+            "decodedBytes": 1711410,
+            "requestCount": 11
+          },
+          "externalMap": {
+            "encodedBytes": 1074959,
+            "decodedBytes": 1901921,
+            "requestCount": 14
+          },
+          "documentData": {
+            "encodedBytes": 0,
+            "decodedBytes": 0,
+            "requestCount": 0
+          },
+          "serviceWorker": {
+            "encodedBytes": 102218,
+            "decodedBytes": 1865911,
+            "requestCount": 29
+          },
+          "telemetry": {
+            "encodedBytes": 0,
+            "decodedBytes": 0,
+            "requestCount": 0
+          },
+          "other": {
+            "encodedBytes": 0,
+            "decodedBytes": 528,
+            "requestCount": 3
+          },
+          "total": {
+            "encodedBytes": 1668607,
+            "decodedBytes": 5479770,
+            "requestCount": 57
+          }
+        }
+      }
+    },
+    {
+      "journey": "public-share",
+      "surface": "share",
+      "cacheState": "cold",
+      "milestones": {
+        "documentResponseEndMs": 298,
+        "bootstrapStartMs": 334.90000009536743,
+        "shellMountedMs": 2055.7999999523163,
+        "storageReadStartMs": null,
+        "storageReadEndMs": null,
+        "deserializeStartMs": null,
+        "deserializeEndMs": null,
+        "systemCommittedMs": 2551.5999999046326,
+        "mapStyleReadyMs": null,
+        "firstSystemPaintMs": 2633.7000000476837,
+        "interactiveMs": 2633.7000000476837,
+        "networkIdleMs": 4472.37890625,
+        "serviceWorkerReadyMs": 2924.2000000476837
+      },
+      "network": {
+        "authority": "cdp-network-encoded-data-length",
+        "automaticBoundaryMs": 60000,
+        "settled": true,
+        "unsettledNonMapRequestCount": 0,
+        "requests": [
+          {
+            "url": "http://127.0.0.1:55314/s/perfshare",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "navigation",
+            "contentType": "text/html",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1130,
+            "decodedBytes": 3032,
+            "startedAtMs": 4.4228515625,
+            "completedAtMs": 302.138671875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/main-B9y50OnY.js",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 146475,
+            "decodedBytes": 482385,
+            "startedAtMs": 321.1669921875,
+            "completedAtMs": 1223.83984375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/map-engine-w6GjjIfb.js",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "other",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 210931,
+            "decodedBytes": 796235,
+            "startedAtMs": 322.44482421875,
+            "completedAtMs": 1349.793701171875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/react-runtime-DQuBW2lN.js",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "other",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 45757,
+            "decodedBytes": 140299,
+            "startedAtMs": 322.8349609375,
+            "completedAtMs": 842.561767578125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/transit-rendering-DPc9CM6X.js",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "other",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 32280,
+            "decodedBytes": 107757,
+            "startedAtMs": 322.86181640625,
+            "completedAtMs": 759.931640625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/map-engine-PhPnDjd-.css",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "link",
+            "contentType": "text/css",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 9585,
+            "decodedBytes": 65465,
+            "startedAtMs": 323.73095703125,
+            "completedAtMs": 579.107666015625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/styleSwitchController-Cl1HxUFb.css",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "link",
+            "contentType": "text/css",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 655,
+            "decodedBytes": 340,
+            "startedAtMs": 323.784912109375,
+            "completedAtMs": 472.856689453125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/main-Bvs7CIrG.css",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "link",
+            "contentType": "text/css",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 14647,
+            "decodedBytes": 82228,
+            "startedAtMs": 323.820068359375,
+            "completedAtMs": 651.004638671875
+          },
+          {
+            "url": "data:image/webp;base64,UklGRh4AAABXRUJQVlA4TBEAAAAvAQAAAAfQ//73v/+BiOh/AAA=",
+            "category": "other",
+            "target": "page",
+            "initiator": "parser",
+            "contentType": "image/webp",
+            "cacheSource": "memory-or-disk",
+            "protocol": "data",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 0,
+            "decodedBytes": 38,
+            "startedAtMs": 1434.77294921875,
+            "completedAtMs": 1438.8857421875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/public-sans-latin-DdeTHZLK.woff2",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "css",
+            "contentType": "font/woff2",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 27153,
+            "decodedBytes": 26832,
+            "startedAtMs": 1694.409912109375,
+            "completedAtMs": 2158.19287109375
+          },
+          {
+            "url": "https://tiles.openfreemap.org/styles/positron",
+            "category": "external-map",
+            "target": "page",
+            "initiator": "fetch",
+            "contentType": "application/json",
+            "cacheSource": "network",
+            "protocol": "h2",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 4167,
+            "decodedBytes": 25153,
+            "startedAtMs": 2013.008056640625,
+            "completedAtMs": 2152.872802734375
+          },
+          {
+            "url": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M14.5 8.5c-.75 0-1.5.75-1.5 1.5v3h-3c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h3v3c0 .75.75 1.5 1.5 1.5S16 19.75 16 19v-3h3c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13h-3v-3c0-.75-.75-1.5-1.5-1.5'/%3E%3C/svg%3E",
+            "category": "other",
+            "target": "page",
+            "initiator": "parser",
+            "contentType": "image/svg+xml",
+            "cacheSource": "memory-or-disk",
+            "protocol": "data",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 0,
+            "decodedBytes": 295,
+            "startedAtMs": 2026.748779296875,
+            "completedAtMs": 2030.854736328125
+          },
+          {
+            "url": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M10 13c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h9c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13z'/%3E%3C/svg%3E",
+            "category": "other",
+            "target": "page",
+            "initiator": "parser",
+            "contentType": "image/svg+xml",
+            "cacheSource": "memory-or-disk",
+            "protocol": "data",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 0,
+            "decodedBytes": 195,
+            "startedAtMs": 2030.055908203125,
+            "completedAtMs": 2034.162841796875
+          },
+          {
+            "url": "http://127.0.0.1:55314/api/systems/perfshare",
+            "category": "document-data",
+            "target": "page",
+            "initiator": "fetch",
+            "contentType": "application/json",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 717757,
+            "decodedBytes": 717644,
+            "startedAtMs": 2038.31787109375,
+            "completedAtMs": 2153.39990234375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/workbox-window.prod.es5-DVrcyT5d.js",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 2690,
+            "decodedBytes": 5727,
+            "startedAtMs": 2055.805908203125,
+            "completedAtMs": 2104.184814453125
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet",
+            "category": "external-map",
+            "target": "page",
+            "initiator": "fetch",
+            "contentType": "application/json",
+            "cacheSource": "network",
+            "protocol": "h2",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 2149,
+            "decodedBytes": 19254,
+            "startedAtMs": 2231.163818359375,
+            "completedAtMs": 2315.359619140625
+          },
+          {
+            "url": "https://tiles.openfreemap.org/sprites/ofm_f384/ofm.json",
+            "category": "external-map",
+            "target": "page",
+            "initiator": "fetch",
+            "contentType": "application/json",
+            "cacheSource": "network",
+            "protocol": "h2",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 3666,
+            "decodedBytes": 27737,
+            "startedAtMs": 2233.5859375,
+            "completedAtMs": 2327.61962890625
+          },
+          {
+            "url": "https://tiles.openfreemap.org/sprites/ofm_f384/ofm.png",
+            "category": "external-map",
+            "target": "page",
+            "initiator": "fetch",
+            "contentType": "image/png",
+            "cacheSource": "network",
+            "protocol": "h2",
+            "compression": "identity",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 49894,
+            "decodedBytes": 49454,
+            "startedAtMs": 2235.196044921875,
+            "completedAtMs": 2415.7216796875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/styleSwitchController-Cl1HxUFb.css",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/css",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 340,
+            "startedAtMs": 2459.271728515625,
+            "completedAtMs": 2465.14794921875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/storageSerializerWorker-Pu174ZDs.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 579,
+            "decodedBytes": 310,
+            "startedAtMs": 2462.490966796875,
+            "completedAtMs": 2470.5556640625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/storage-deserializer-worker-UXNOXt-z.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 7789,
+            "decodedBytes": 25257,
+            "startedAtMs": 2468.1318359375,
+            "completedAtMs": 2480.598876953125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/react-runtime-DQuBW2lN.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 140299,
+            "startedAtMs": 2479.71875,
+            "completedAtMs": 2486.689697265625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/public-sans-latin-DdeTHZLK.woff2",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "font/woff2",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 26832,
+            "startedAtMs": 2484.90673828125,
+            "completedAtMs": 2492.021728515625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/previewWorkerEntry-CjOy1dcr.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 16116,
+            "decodedBytes": 50299,
+            "startedAtMs": 2489.30908203125,
+            "completedAtMs": 2504.2119140625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/osm-import-worker-BOiw50kM.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 8769,
+            "decodedBytes": 25289,
+            "startedAtMs": 2507.7578125,
+            "completedAtMs": 2520.3408203125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/messages-CAsKfNIa.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 686,
+            "decodedBytes": 417,
+            "startedAtMs": 2520.739990234375,
+            "completedAtMs": 2536.14990234375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/map-engine-w6GjjIfb.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 796235,
+            "startedAtMs": 2533.48291015625,
+            "completedAtMs": 2542.40576171875
+          },
+          {
+            "url": "http://127.0.0.1:55314/favicon.svg",
+            "category": "first-party-application",
+            "target": "page",
+            "initiator": "other",
+            "contentType": "image/svg+xml",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 871,
+            "decodedBytes": 1110,
+            "startedAtMs": 2552.7119140625,
+            "completedAtMs": 2587.594970703125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/map-engine-PhPnDjd-.css",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/css",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 65465,
+            "startedAtMs": 2561.4638671875,
+            "completedAtMs": 2572.5966796875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/main-Bvs7CIrG.css",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/css",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 82228,
+            "startedAtMs": 2570.23681640625,
+            "completedAtMs": 2577.44091796875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/main-B9y50OnY.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 127,
+            "decodedBytes": 482385,
+            "startedAtMs": 2575.447998046875,
+            "completedAtMs": 2585.770751953125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/gtfsWorker-joDwqtHg.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 8853,
+            "decodedBytes": 21641,
+            "startedAtMs": 2585.69775390625,
+            "completedAtMs": 2603.568603515625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/gtfsReconcileWorker-D9mA78bK.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 11634,
+            "decodedBytes": 34832,
+            "startedAtMs": 2604.927978515625,
+            "completedAtMs": 2618.880859375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/background-osm-import-C9UXMcw2.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1964,
+            "decodedBytes": 3599,
+            "startedAtMs": 2620.63671875,
+            "completedAtMs": 2629.44775390625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/about-dialog-C42_Fb4T.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1719,
+            "decodedBytes": 3639,
+            "startedAtMs": 2626.19091796875,
+            "completedAtMs": 2712.328857421875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/VehicleKindsDialog-DxpiPSrl.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1889,
+            "decodedBytes": 4592,
+            "startedAtMs": 2709.7880859375,
+            "completedAtMs": 2721.852783203125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/SystemsDialog-DNXNDt3F.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 3577,
+            "decodedBytes": 8688,
+            "startedAtMs": 2718.89892578125,
+            "completedAtMs": 2731.61474609375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/ShortcutsDialog-BFY2SyAf.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1423,
+            "decodedBytes": 2903,
+            "startedAtMs": 2730.4296875,
+            "completedAtMs": 2741.64794921875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/ShareDialog-B2hSAAiH.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1472,
+            "decodedBytes": 2231,
+            "startedAtMs": 2739.101806640625,
+            "completedAtMs": 2818.71484375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/SettingsDialog-CDoqhQfq.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1394,
+            "decodedBytes": 2710,
+            "startedAtMs": 2815.639892578125,
+            "completedAtMs": 2826.6416015625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/ScheduleDialog-BtscEKYN.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1791,
+            "decodedBytes": 3357,
+            "startedAtMs": 2823.497802734375,
+            "completedAtMs": 2837.117919921875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/OnboardingDialog-r4UnQwWr.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 3733,
+            "decodedBytes": 8189,
+            "startedAtMs": 2833.956787109375,
+            "completedAtMs": 2845.873779296875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/NewSystemLocationDialog-CObDxLyS.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 3708,
+            "decodedBytes": 7769,
+            "startedAtMs": 2843.14697265625,
+            "completedAtMs": 2865.32666015625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/Modal-BbQ8aVK4.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 2237,
+            "decodedBytes": 5181,
+            "startedAtMs": 2862.29296875,
+            "completedAtMs": 2875.148681640625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/ImportDialog-CYghiPAN.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 1652,
+            "decodedBytes": 2514,
+            "startedAtMs": 2872.2177734375,
+            "completedAtMs": 2885.53076171875
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/GtfsImportDialog-B7TgY27T.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 3275,
+            "decodedBytes": 7544,
+            "startedAtMs": 2883.271728515625,
+            "completedAtMs": 2893.0517578125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/ExportDialog-B_7RzEVd.js",
+            "category": "service-worker",
+            "target": "service-worker",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 2583,
+            "decodedBytes": 6179,
+            "startedAtMs": 2890.35009765625,
+            "completedAtMs": 2919.48291015625
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/10/184/401.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 91813,
+            "decodedBytes": 126227,
+            "startedAtMs": 3284.9208984375,
+            "completedAtMs": 3972.37890625
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/10/184/402.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 33090,
+            "decodedBytes": 44804,
+            "startedAtMs": 3286.31884765625,
+            "completedAtMs": 3723.085693359375
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/10/183/401.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 28960,
+            "decodedBytes": 38089,
+            "startedAtMs": 3286.721923828125,
+            "completedAtMs": 3663.459716796875
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/10/183/402.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 14308,
+            "decodedBytes": 19906,
+            "startedAtMs": 3287.309814453125,
+            "completedAtMs": 3531.73388671875
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/10/185/401.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 23688,
+            "decodedBytes": 31776,
+            "startedAtMs": 3287.949951171875,
+            "completedAtMs": 3626.0537109375
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/10/185/402.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 20397,
+            "decodedBytes": 28165,
+            "startedAtMs": 3288.436767578125,
+            "completedAtMs": 3620.538818359375
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/10/182/401.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 11077,
+            "decodedBytes": 14941,
+            "startedAtMs": 3289.372802734375,
+            "completedAtMs": 3666.65869140625
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/10/182/402.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 6887,
+            "decodedBytes": 9143,
+            "startedAtMs": 3289.748779296875,
+            "completedAtMs": 3614.810791015625
+          }
+        ],
+        "phases": {
+          "document": {
+            "atMs": 298,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 1
+              },
+              "externalMap": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "documentData": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "serviceWorker": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "total": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 1
+              }
+            }
+          },
+          "automaticBoundary": {
+            "atMs": 60000,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 492174,
+                "decodedBytes": 1711410,
+                "requestCount": 11
+              },
+              "externalMap": {
+                "encodedBytes": 290096,
+                "decodedBytes": 434649,
+                "requestCount": 12
+              },
+              "documentData": {
+                "encodedBytes": 717757,
+                "decodedBytes": 717644,
+                "requestCount": 1
+              },
+              "serviceWorker": {
+                "encodedBytes": 87732,
+                "decodedBytes": 1820924,
+                "requestCount": 28
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 528,
+                "requestCount": 3
+              },
+              "total": {
+                "encodedBytes": 1587759,
+                "decodedBytes": 4685155,
+                "requestCount": 55
+              }
+            }
+          },
+          "shell": {
+            "atMs": 2055.7999999523163,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 461460,
+                "decodedBytes": 1677741,
+                "requestCount": 9
+              },
+              "externalMap": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 1
+              },
+              "documentData": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 1
+              },
+              "serviceWorker": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 528,
+                "requestCount": 3
+              },
+              "total": {
+                "encodedBytes": 461460,
+                "decodedBytes": 1678269,
+                "requestCount": 14
+              }
+            }
+          },
+          "documentReady": {
+            "atMs": 2551.5999999046326,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 491303,
+                "decodedBytes": 1710300,
+                "requestCount": 10
+              },
+              "externalMap": {
+                "encodedBytes": 59876,
+                "decodedBytes": 25153,
+                "requestCount": 4
+              },
+              "documentData": {
+                "encodedBytes": 717757,
+                "decodedBytes": 717644,
+                "requestCount": 1
+              },
+              "serviceWorker": {
+                "encodedBytes": 34447,
+                "decodedBytes": 1065278,
+                "requestCount": 9
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 528,
+                "requestCount": 3
+              },
+              "total": {
+                "encodedBytes": 1303383,
+                "decodedBytes": 3518903,
+                "requestCount": 27
+              }
+            }
+          },
+          "firstSystemPaint": {
+            "atMs": 2633.7000000476837,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 492174,
+                "decodedBytes": 1711410,
+                "requestCount": 11
+              },
+              "externalMap": {
+                "encodedBytes": 59876,
+                "decodedBytes": 121598,
+                "requestCount": 4
+              },
+              "documentData": {
+                "encodedBytes": 717757,
+                "decodedBytes": 717644,
+                "requestCount": 1
+              },
+              "serviceWorker": {
+                "encodedBytes": 57279,
+                "decodedBytes": 1755428,
+                "requestCount": 16
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 528,
+                "requestCount": 3
+              },
+              "total": {
+                "encodedBytes": 1327086,
+                "decodedBytes": 4306608,
+                "requestCount": 35
+              }
+            }
+          },
+          "interactionReady": {
+            "atMs": 2633.7000000476837,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 492174,
+                "decodedBytes": 1711410,
+                "requestCount": 11
+              },
+              "externalMap": {
+                "encodedBytes": 59876,
+                "decodedBytes": 121598,
+                "requestCount": 4
+              },
+              "documentData": {
+                "encodedBytes": 717757,
+                "decodedBytes": 717644,
+                "requestCount": 1
+              },
+              "serviceWorker": {
+                "encodedBytes": 57279,
+                "decodedBytes": 1755428,
+                "requestCount": 16
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 528,
+                "requestCount": 3
+              },
+              "total": {
+                "encodedBytes": 1327086,
+                "decodedBytes": 4306608,
+                "requestCount": 35
+              }
+            }
+          },
+          "networkIdle": {
+            "atMs": 4472.37890625,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 492174,
+                "decodedBytes": 1711410,
+                "requestCount": 11
+              },
+              "externalMap": {
+                "encodedBytes": 290096,
+                "decodedBytes": 434649,
+                "requestCount": 12
+              },
+              "documentData": {
+                "encodedBytes": 717757,
+                "decodedBytes": 717644,
+                "requestCount": 1
+              },
+              "serviceWorker": {
+                "encodedBytes": 87732,
+                "decodedBytes": 1820924,
+                "requestCount": 28
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 528,
+                "requestCount": 3
+              },
+              "total": {
+                "encodedBytes": 1587759,
+                "decodedBytes": 4685155,
+                "requestCount": 55
+              }
+            }
+          },
+          "serviceWorkerReady": {
+            "atMs": 2924.2000000476837,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 492174,
+                "decodedBytes": 1711410,
+                "requestCount": 11
+              },
+              "externalMap": {
+                "encodedBytes": 59876,
+                "decodedBytes": 121598,
+                "requestCount": 4
+              },
+              "documentData": {
+                "encodedBytes": 717757,
+                "decodedBytes": 717644,
+                "requestCount": 1
+              },
+              "serviceWorker": {
+                "encodedBytes": 87732,
+                "decodedBytes": 1820924,
+                "requestCount": 28
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 0,
+                "decodedBytes": 528,
+                "requestCount": 3
+              },
+              "total": {
+                "encodedBytes": 1357539,
+                "decodedBytes": 4372104,
+                "requestCount": 47
+              }
+            }
+          }
+        },
+        "total": {
+          "firstPartyApplication": {
+            "encodedBytes": 492174,
+            "decodedBytes": 1711410,
+            "requestCount": 11
+          },
+          "externalMap": {
+            "encodedBytes": 290096,
+            "decodedBytes": 434649,
+            "requestCount": 12
+          },
+          "documentData": {
+            "encodedBytes": 717757,
+            "decodedBytes": 717644,
+            "requestCount": 1
+          },
+          "serviceWorker": {
+            "encodedBytes": 87732,
+            "decodedBytes": 1820924,
+            "requestCount": 28
+          },
+          "telemetry": {
+            "encodedBytes": 0,
+            "decodedBytes": 0,
+            "requestCount": 0
+          },
+          "other": {
+            "encodedBytes": 0,
+            "decodedBytes": 528,
+            "requestCount": 3
+          },
+          "total": {
+            "encodedBytes": 1587759,
+            "decodedBytes": 4685155,
+            "requestCount": 55
+          }
+        }
+      }
+    },
+    {
+      "journey": "cross-site-embed",
+      "surface": "embed",
+      "cacheState": "cold",
+      "milestones": {
+        "documentResponseEndMs": 53.89999985694885,
+        "bootstrapStartMs": 65.09999990463257,
+        "shellMountedMs": 68.39999985694885,
+        "storageReadStartMs": null,
+        "storageReadEndMs": null,
+        "deserializeStartMs": null,
+        "deserializeEndMs": null,
+        "systemCommittedMs": 2302.199999809265,
+        "mapStyleReadyMs": null,
+        "firstSystemPaintMs": 2319.5,
+        "interactiveMs": 2319.5,
+        "networkIdleMs": 3621.35400390625,
+        "serviceWorkerReadyMs": null
+      },
+      "network": {
+        "authority": "cdp-network-encoded-data-length",
+        "automaticBoundaryMs": 60000,
+        "settled": true,
+        "unsettledNonMapRequestCount": 0,
+        "requests": [
+          {
+            "url": "https://transitmapper-perf-host.invalid/first-session",
+            "category": "other",
+            "target": "page",
+            "initiator": "other",
+            "contentType": "text/html",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 491,
+            "decodedBytes": 409,
+            "startedAtMs": -76.5830078125,
+            "completedAtMs": -25.89697265625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/embed-CqvHxQX_.js",
+            "category": "first-party-application",
+            "target": "iframe",
+            "initiator": "script",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 2341,
+            "decodedBytes": 3972,
+            "startedAtMs": 65.700927734375,
+            "completedAtMs": 147.845947265625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/map-engine-w6GjjIfb.js",
+            "category": "first-party-application",
+            "target": "iframe",
+            "initiator": "other",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 210931,
+            "decodedBytes": 796235,
+            "startedAtMs": 65.81494140625,
+            "completedAtMs": 210.382080078125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/react-runtime-DQuBW2lN.js",
+            "category": "first-party-application",
+            "target": "iframe",
+            "initiator": "other",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 45757,
+            "decodedBytes": 140299,
+            "startedAtMs": 65.85107421875,
+            "completedAtMs": 165.06005859375
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/transit-rendering-DPc9CM6X.js",
+            "category": "first-party-application",
+            "target": "iframe",
+            "initiator": "other",
+            "contentType": "text/javascript",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 32280,
+            "decodedBytes": 107757,
+            "startedAtMs": 65.87109375,
+            "completedAtMs": 170.627197265625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/map-engine-PhPnDjd-.css",
+            "category": "first-party-application",
+            "target": "iframe",
+            "initiator": "link",
+            "contentType": "text/css",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "gzip",
+            "renderBlockingStatus": "blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 9585,
+            "decodedBytes": 65465,
+            "startedAtMs": 65.89501953125,
+            "completedAtMs": 155.384033203125
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/styleSwitchController-Cl1HxUFb.css",
+            "category": "first-party-application",
+            "target": "iframe",
+            "initiator": "link",
+            "contentType": "text/css",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 655,
+            "decodedBytes": 340,
+            "startedAtMs": 65.920166015625,
+            "completedAtMs": 153.640869140625
+          },
+          {
+            "url": "http://127.0.0.1:55314/assets/public-sans-latin-DdeTHZLK.woff2",
+            "category": "first-party-application",
+            "target": "iframe",
+            "initiator": "css",
+            "contentType": "font/woff2",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 27153,
+            "decodedBytes": 26832,
+            "startedAtMs": 164.77197265625,
+            "completedAtMs": 180.805908203125
+          },
+          {
+            "url": "https://tiles.openfreemap.org/styles/positron",
+            "category": "external-map",
+            "target": "iframe",
+            "initiator": "fetch",
+            "contentType": "application/json",
+            "cacheSource": "network",
+            "protocol": "h2",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 4164,
+            "decodedBytes": 25153,
+            "startedAtMs": 243.906005859375,
+            "completedAtMs": 317.5419921875
+          },
+          {
+            "url": "http://127.0.0.1:55314/api/systems/perfembed",
+            "category": "document-data",
+            "target": "iframe",
+            "initiator": "fetch",
+            "contentType": "application/json",
+            "cacheSource": "network",
+            "protocol": "http/1.1",
+            "compression": "identity",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 717757,
+            "decodedBytes": 717644,
+            "startedAtMs": 246.696044921875,
+            "completedAtMs": 287.779052734375
+          },
+          {
+            "url": "data:image/webp;base64,UklGRh4AAABXRUJQVlA4TBEAAAAvAQAAAAfQ//73v/+BiOh/AAA=",
+            "category": "other",
+            "target": "iframe",
+            "initiator": "parser",
+            "contentType": "image/webp",
+            "cacheSource": "memory-or-disk",
+            "protocol": "data",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 0,
+            "decodedBytes": 38,
+            "startedAtMs": 247.02490234375,
+            "completedAtMs": 247.069091796875
+          },
+          {
+            "url": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M14.5 8.5c-.75 0-1.5.75-1.5 1.5v3h-3c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h3v3c0 .75.75 1.5 1.5 1.5S16 19.75 16 19v-3h3c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13h-3v-3c0-.75-.75-1.5-1.5-1.5'/%3E%3C/svg%3E",
+            "category": "other",
+            "target": "iframe",
+            "initiator": "parser",
+            "contentType": "image/svg+xml",
+            "cacheSource": "memory-or-disk",
+            "protocol": "data",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 0,
+            "decodedBytes": 295,
+            "startedAtMs": 247.916015625,
+            "completedAtMs": 247.95703125
+          },
+          {
+            "url": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M10 13c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h9c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13z'/%3E%3C/svg%3E",
+            "category": "other",
+            "target": "iframe",
+            "initiator": "parser",
+            "contentType": "image/svg+xml",
+            "cacheSource": "memory-or-disk",
+            "protocol": "data",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 0,
+            "decodedBytes": 195,
+            "startedAtMs": 248.18994140625,
+            "completedAtMs": 248.22705078125
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet",
+            "category": "external-map",
+            "target": "iframe",
+            "initiator": "fetch",
+            "contentType": "application/json",
+            "cacheSource": "network",
+            "protocol": "h2",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 2174,
+            "decodedBytes": 19254,
+            "startedAtMs": 368.076171875,
+            "completedAtMs": 406.10302734375
+          },
+          {
+            "url": "https://tiles.openfreemap.org/sprites/ofm_f384/ofm.json",
+            "category": "external-map",
+            "target": "iframe",
+            "initiator": "fetch",
+            "contentType": "application/json",
+            "cacheSource": "network",
+            "protocol": "h2",
+            "compression": "gzip",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 3672,
+            "decodedBytes": 27737,
+            "startedAtMs": 368.325927734375,
+            "completedAtMs": 408.357177734375
+          },
+          {
+            "url": "https://tiles.openfreemap.org/sprites/ofm_f384/ofm.png",
+            "category": "external-map",
+            "target": "iframe",
+            "initiator": "fetch",
+            "contentType": "image/png",
+            "cacheSource": "network",
+            "protocol": "h2",
+            "compression": "identity",
+            "renderBlockingStatus": "non-blocking",
+            "attributionSource": "resource-timing",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 49898,
+            "decodedBytes": 49454,
+            "startedAtMs": 368.572998046875,
+            "completedAtMs": 407.689208984375
+          },
+          {
+            "url": "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill-rule='evenodd' viewBox='0 0 20 20'%3E%3Cpath d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E",
+            "category": "other",
+            "target": "iframe",
+            "initiator": "parser",
+            "contentType": "image/svg+xml",
+            "cacheSource": "memory-or-disk",
+            "protocol": "data",
+            "compression": "identity",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 0,
+            "decodedBytes": 222,
+            "startedAtMs": 424.049072265625,
+            "completedAtMs": 424.093017578125
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/1/1/1.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 105851,
+            "decodedBytes": 193659,
+            "startedAtMs": 432.60009765625,
+            "completedAtMs": 1442.903076171875
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/1/0/1.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 103806,
+            "decodedBytes": 191386,
+            "startedAtMs": 433.43310546875,
+            "completedAtMs": 1441.371826171875
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/1/1/0.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 126382,
+            "decodedBytes": 221414,
+            "startedAtMs": 433.97216796875,
+            "completedAtMs": 1444.64697265625
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/1/0/0.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 109321,
+            "decodedBytes": 197490,
+            "startedAtMs": 434.531982421875,
+            "completedAtMs": 1112.301025390625
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/1/0/1.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 103806,
+            "decodedBytes": 191386,
+            "startedAtMs": 434.967041015625,
+            "completedAtMs": 1442.552978515625
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/1/0/0.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 109290,
+            "decodedBytes": 197490,
+            "startedAtMs": 435.162109375,
+            "completedAtMs": 1112.003173828125
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/1/1/1.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 105844,
+            "decodedBytes": 193659,
+            "startedAtMs": 435.979248046875,
+            "completedAtMs": 1443.299072265625
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/1/1/0.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 126381,
+            "decodedBytes": 221414,
+            "startedAtMs": 436.402099609375,
+            "completedAtMs": 1445.6611328125
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/12/736/1607.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 64805,
+            "decodedBytes": 109172,
+            "startedAtMs": 2240.85302734375,
+            "completedAtMs": 3121.35400390625
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/12/736/1608.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 29461,
+            "decodedBytes": 45187,
+            "startedAtMs": 2241.6279296875,
+            "completedAtMs": 2465.44189453125
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/12/735/1607.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 13459,
+            "decodedBytes": 18256,
+            "startedAtMs": 2242.02099609375,
+            "completedAtMs": 2954.906005859375
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/12/737/1607.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 72665,
+            "decodedBytes": 132304,
+            "startedAtMs": 2242.299072265625,
+            "completedAtMs": 2791.912109375
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/12/735/1608.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 3710,
+            "decodedBytes": 4168,
+            "startedAtMs": 2242.6201171875,
+            "completedAtMs": 2465.362060546875
+          },
+          {
+            "url": "https://tiles.openfreemap.org/planet/20260802_080001_pt/12/737/1608.pbf",
+            "category": "external-map",
+            "target": "dedicated-worker",
+            "initiator": "script",
+            "contentType": "application/vnd.mapbox-vector-tile",
+            "cacheSource": "network",
+            "protocol": "h3",
+            "compression": "gzip",
+            "renderBlockingStatus": "unknown",
+            "attributionSource": "cdp",
+            "byteAuthority": "loading-finished",
+            "encodedBytes": 54512,
+            "decodedBytes": 89539,
+            "startedAtMs": 2242.9560546875,
+            "completedAtMs": 2790.708984375
+          }
+        ],
+        "phases": {
+          "document": {
+            "atMs": 53.89999985694885,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "externalMap": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "documentData": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "serviceWorker": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 491,
+                "decodedBytes": 409,
+                "requestCount": 1
+              },
+              "total": {
+                "encodedBytes": 491,
+                "decodedBytes": 409,
+                "requestCount": 1
+              }
+            }
+          },
+          "automaticBoundary": {
+            "atMs": 60000,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 328702,
+                "decodedBytes": 1140900,
+                "requestCount": 7
+              },
+              "externalMap": {
+                "encodedBytes": 1189201,
+                "decodedBytes": 2128122,
+                "requestCount": 18
+              },
+              "documentData": {
+                "encodedBytes": 717757,
+                "decodedBytes": 717644,
+                "requestCount": 1
+              },
+              "serviceWorker": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 491,
+                "decodedBytes": 1159,
+                "requestCount": 5
+              },
+              "total": {
+                "encodedBytes": 2236151,
+                "decodedBytes": 3987825,
+                "requestCount": 31
+              }
+            }
+          },
+          "shell": {
+            "atMs": 68.39999985694885,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 6
+              },
+              "externalMap": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "documentData": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "serviceWorker": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 491,
+                "decodedBytes": 409,
+                "requestCount": 1
+              },
+              "total": {
+                "encodedBytes": 491,
+                "decodedBytes": 409,
+                "requestCount": 7
+              }
+            }
+          },
+          "documentReady": {
+            "atMs": 2302.199999809265,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 328702,
+                "decodedBytes": 1140900,
+                "requestCount": 7
+              },
+              "externalMap": {
+                "encodedBytes": 950589,
+                "decodedBytes": 1729496,
+                "requestCount": 18
+              },
+              "documentData": {
+                "encodedBytes": 717757,
+                "decodedBytes": 717644,
+                "requestCount": 1
+              },
+              "serviceWorker": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 491,
+                "decodedBytes": 1159,
+                "requestCount": 5
+              },
+              "total": {
+                "encodedBytes": 1997539,
+                "decodedBytes": 3589199,
+                "requestCount": 31
+              }
+            }
+          },
+          "firstSystemPaint": {
+            "atMs": 2319.5,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 328702,
+                "decodedBytes": 1140900,
+                "requestCount": 7
+              },
+              "externalMap": {
+                "encodedBytes": 950589,
+                "decodedBytes": 1729496,
+                "requestCount": 18
+              },
+              "documentData": {
+                "encodedBytes": 717757,
+                "decodedBytes": 717644,
+                "requestCount": 1
+              },
+              "serviceWorker": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 491,
+                "decodedBytes": 1159,
+                "requestCount": 5
+              },
+              "total": {
+                "encodedBytes": 1997539,
+                "decodedBytes": 3589199,
+                "requestCount": 31
+              }
+            }
+          },
+          "interactionReady": {
+            "atMs": 2319.5,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 328702,
+                "decodedBytes": 1140900,
+                "requestCount": 7
+              },
+              "externalMap": {
+                "encodedBytes": 950589,
+                "decodedBytes": 1729496,
+                "requestCount": 18
+              },
+              "documentData": {
+                "encodedBytes": 717757,
+                "decodedBytes": 717644,
+                "requestCount": 1
+              },
+              "serviceWorker": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 491,
+                "decodedBytes": 1159,
+                "requestCount": 5
+              },
+              "total": {
+                "encodedBytes": 1997539,
+                "decodedBytes": 3589199,
+                "requestCount": 31
+              }
+            }
+          },
+          "networkIdle": {
+            "atMs": 3621.35400390625,
+            "bytes": {
+              "firstPartyApplication": {
+                "encodedBytes": 328702,
+                "decodedBytes": 1140900,
+                "requestCount": 7
+              },
+              "externalMap": {
+                "encodedBytes": 1189201,
+                "decodedBytes": 2128122,
+                "requestCount": 18
+              },
+              "documentData": {
+                "encodedBytes": 717757,
+                "decodedBytes": 717644,
+                "requestCount": 1
+              },
+              "serviceWorker": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "telemetry": {
+                "encodedBytes": 0,
+                "decodedBytes": 0,
+                "requestCount": 0
+              },
+              "other": {
+                "encodedBytes": 491,
+                "decodedBytes": 1159,
+                "requestCount": 5
+              },
+              "total": {
+                "encodedBytes": 2236151,
+                "decodedBytes": 3987825,
+                "requestCount": 31
+              }
+            }
+          }
+        },
+        "total": {
+          "firstPartyApplication": {
+            "encodedBytes": 328702,
+            "decodedBytes": 1140900,
+            "requestCount": 7
+          },
+          "externalMap": {
+            "encodedBytes": 1189201,
+            "decodedBytes": 2128122,
+            "requestCount": 18
+          },
+          "documentData": {
+            "encodedBytes": 717757,
+            "decodedBytes": 717644,
+            "requestCount": 1
+          },
+          "serviceWorker": {
+            "encodedBytes": 0,
+            "decodedBytes": 0,
+            "requestCount": 0
+          },
+          "telemetry": {
+            "encodedBytes": 0,
+            "decodedBytes": 0,
+            "requestCount": 0
+          },
+          "other": {
+            "encodedBytes": 491,
+            "decodedBytes": 1159,
+            "requestCount": 5
+          },
+          "total": {
+            "encodedBytes": 2236151,
+            "decodedBytes": 3987825,
+            "requestCount": 31
+          }
+        }
+      }
+    }
+  ],
+  "samples": [],
+  "scenarios": []
+}

@@ -150,12 +150,12 @@ async function runPublicFirstSessions(
 ): Promise<PerfFirstSessionSample[]> {
   console.log('perf first sessions: public editor, share, and cross-site embed');
   return runFirstSessionMatrix(
-    createPlaywrightFirstSessionSurfaceRunner(
-      options.browser,
-      options.protocol,
-      options.preview.url,
-      options.debuggingPort,
-    ),
+    createPlaywrightFirstSessionSurfaceRunner({
+      browser: options.browser,
+      protocol: options.protocol,
+      previewUrl: options.preview.url,
+      debuggingPort: options.debuggingPort,
+    }),
   );
 }
 
