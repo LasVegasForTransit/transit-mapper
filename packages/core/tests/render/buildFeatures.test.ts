@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '../../src/model/catalog';
 import { wholeLeg, wholeLegs, oneSection } from '../../src/model/geo';
 import { wayById } from '../../src/model/geo/wayPath';
-import { aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
 import type { Pattern, Service } from '../../src/model/system';
 import { buildFeatures, type RenderViewOptions } from '../../src/render/buildFeatures';
 import { OVERVIEW_TEST_PRESENTATION } from '../support/render-presentation.test';
@@ -25,6 +25,126 @@ function featureProperty(feature: Feature, name: string): unknown {
 }
 
 describe('buildFeatures service lines', () => {
+  it('centers a Network bundle without letting input order swap its services', () => {
+    const road = aRoad('trunk', [
+      [-115.2, 36.14],
+      [-115.16, 36.14],
+    ]);
+    const red = aService('red', [aPattern('red-pattern', [road], [road.id])]);
+    const blue = aService('blue', [aPattern('blue-pattern', [road], [road.id])], {
+      color: '#2e86e4',
+    });
+    const features = buildFeatures(
+      aSystem({ ways: [road], services: [red, blue] }),
+      null,
+      [],
+      NETWORK_VIEW,
+    );
+    const offsets = new Map(
+      features.services.features
+        .filter((feature) => featureProperty(feature, 'hitTarget') !== true)
+        .map((feature) => [
+          String(featureProperty(feature, 'serviceId')),
+          featureProperty(feature, 'offset'),
+        ]),
+    );
+
+    expect(offsets).toEqual(
+      new Map([
+        ['red', -2.5],
+        ['blue', 2.5],
+      ]),
+    );
+  });
+
+  it('contracts a shared Network bundle into centered branch services', () => {
+    const trunk = aRoad('trunk', [
+      [-115.2, 36.14],
+      [-115.16, 36.14],
+    ]);
+    const redBranch = aRoad('red-branch', [
+      [-115.16, 36.14],
+      [-115.14, 36.16],
+    ]);
+    const blueBranch = aRoad('blue-branch', [
+      [-115.16, 36.14],
+      [-115.14, 36.12],
+    ]);
+    const ways = [trunk, redBranch, blueBranch];
+    const red = aService('red', [aPattern('red-pattern', ways, [trunk.id, redBranch.id])]);
+    const blue = aService('blue', [aPattern('blue-pattern', ways, [trunk.id, blueBranch.id])], {
+      color: '#2e86e4',
+    });
+    const features = buildFeatures(
+      aSystem({ ways, services: [red, blue] }),
+      null,
+      [],
+      NETWORK_VIEW,
+    );
+    const offsetsFor = (serviceId: string, wayId: string): unknown[] =>
+      features.services.features
+        .filter(
+          (candidate) =>
+            featureProperty(candidate, 'hitTarget') !== true &&
+            featureProperty(candidate, 'serviceId') === serviceId &&
+            featureProperty(candidate, 'wayId') === wayId,
+        )
+        .map((feature) => featureProperty(feature, 'offset'));
+
+    expect(offsetsFor('red', trunk.id)).toContain(-2.5);
+    expect(offsetsFor('blue', trunk.id)).toContain(2.5);
+    expect(offsetsFor('red', redBranch.id)).toContain(0);
+    expect(offsetsFor('blue', blueBranch.id)).toContain(0);
+  });
+
+  it('meets a branch at one shared bundle offset before it contracts', () => {
+    const trunk = aRoad('trunk', [
+      [-115.2, 36.14],
+      [-115.16, 36.14],
+    ]);
+    const branch = aRoad('branch', [
+      [-115.16, 36.14],
+      [-115.14, 36.16],
+    ]);
+    const ways = [trunk, branch];
+    const red = aService('red', [aPattern('red-pattern', ways, [trunk.id, branch.id])]);
+    const blue = aService('blue', [aPattern('blue-pattern', ways, [trunk.id])], {
+      color: '#2e86e4',
+    });
+    const features = buildFeatures(
+      aSystem({ ways, services: [red, blue] }),
+      null,
+      [],
+      NETWORK_VIEW,
+    );
+    const branchPoint = trunk.points[trunk.points.length - 1];
+    const atBranchPoint = (wayId: string) =>
+      features.services.features.filter((feature) => {
+        if (
+          featureProperty(feature, 'hitTarget') === true ||
+          featureProperty(feature, 'serviceId') !== 'red' ||
+          featureProperty(feature, 'wayId') !== wayId
+        ) {
+          return false;
+        }
+        const coordinates = feature.geometry.coordinates;
+        return (
+          JSON.stringify(coordinates[0]) === JSON.stringify(branchPoint) ||
+          JSON.stringify(coordinates[coordinates.length - 1]) === JSON.stringify(branchPoint)
+        );
+      });
+
+    const trunkOffsets = atBranchPoint(trunk.id).map((feature) =>
+      featureProperty(feature, 'offset'),
+    );
+    const branchOffsets = atBranchPoint(branch.id).map((feature) =>
+      featureProperty(feature, 'offset'),
+    );
+
+    expect(trunkOffsets).toEqual([-1.25]);
+    expect(branchOffsets).toEqual([-1.25]);
+  });
+
   it('keeps a bundled service split into stable corridor-owned paint fragments', () => {
     // A right-angle bend — a north-south way meeting an east-west one — with
     // TWO services riding both, so the bundle offset is non-zero (a lone
