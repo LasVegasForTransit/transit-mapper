@@ -409,25 +409,12 @@ or standalone launch suppresses the invitation permanently. `Workbench`
 owns the invitation's slot directly below top chrome, so responsive toolbar
 height pushes the card down rather than letting it overlap editor controls.
 
-The manifest carries content-versioned adaptive SVG and raster fallback icons
-in regular and maskable forms. Every mark is generated from the same Lucide
-Route nodes as the editor's Line tool, rotated for the app identity rather
-than maintained as another drawing. SVG icons and browser theme metadata
-select the LVBT light or dark palette from the device preference; a platform
-may capture that state at installation instead of changing an installed icon
-when the preference later changes. Static raster fallbacks use the light
-brand pair.
-
-The Apple touch icon is the deliberate platform-specific boundary. Apple's
-Icon Composer applies Liquid Glass to one unioned Route silhouette, while the
-repository records enough provenance to reject a stale manual export. The
-[application icon how-to](../how-to/update-application-icons.md) owns the
-generation, native export, installed-update, and verification procedures.
-The production PWA verifier derives install assets from the manifest and
-proves that first install does not precache this optional artwork. A browser
-caches an icon when installation actually needs it. Settings also offers an
-explicit request for persistent browser storage; that is a best-effort
-eviction-resistance request, not a claim that storage can never be cleared.
+The manifest carries versioned adaptive SVG and raster fallback icons in
+regular and maskable forms. The icons use the same Route geometry as the Line
+tool. Apple Icon Composer is the one platform-specific export boundary. The
+[application icon how-to](../how-to/update-application-icons.md) owns its
+generation and verification. Settings can request persistent storage, but
+the browser may still clear it.
 
 First install caches only the static editor closure. Lazy tools, Workers,
 telemetry, and install artwork enter a bounded CacheFirst store after use. A
