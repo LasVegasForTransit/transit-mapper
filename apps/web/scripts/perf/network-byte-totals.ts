@@ -64,8 +64,9 @@ export function requestBytesAt(request: MutableNetworkRequest, timestamp: number
 
 export function completedBytes(request: MutableNetworkRequest): PerfByteTotals {
   if (request.encodedBytes === null) {
+    const failure = request.failureReason ? ` CDP failure: ${request.failureReason}.` : '';
     throw new Error(
-      `Automatic request ${request.url} has no authoritative encodedDataLength from CDP.`,
+      `Automatic request ${request.url} has no authoritative encodedDataLength from CDP.${failure}`,
     );
   }
   return {

@@ -161,6 +161,7 @@ class CdpNetworkByteLedger implements NetworkByteLedger {
       servedFromCache: false,
       encodedBytes: null,
       byteAuthority: null,
+      failureReason: null,
       chunks: [],
     });
     this.activeRequestKeys.set(baseKey, key);
@@ -197,7 +198,10 @@ class CdpNetworkByteLedger implements NetworkByteLedger {
   private recordFailed(targetId: string, raw: LoadingFailed): void {
     const request = this.currentRequest(targetId, raw.requestId);
     const timestamp = finiteNumber(raw.timestamp);
-    if (request && timestamp !== null) request.completedAt = timestamp;
+    if (!request || timestamp === null) return;
+    request.completedAt = timestamp;
+    const error = stringValue(raw.errorText) || 'CDP did not provide a failure reason';
+    request.failureReason = raw.canceled === true ? `${error} (canceled)` : error;
   }
 
   private cdpTimestampFor(timeOriginMs: number, relativeMs: number): number {
@@ -217,7 +221,8 @@ class CdpNetworkByteLedger implements NetworkByteLedger {
     const bytes = completedBytes(request);
     const byteAuthority = request.byteAuthority;
     if (!byteAuthority) {
-      throw new Error(`Automatic request ${request.url} has no CDP byte authority.`);
+      const failure = request.failureReason ? ` CDP failure: ${request.failureReason}.` : '';
+      throw new Error(`Automatic request ${request.url} has no CDP byte authority.${failure}`);
     }
     const startedAtMs = request.startedWallTime * 1_000 - navigationTimeOriginMs;
     const attribution = matcher.match(request.url, startedAtMs, request.target);

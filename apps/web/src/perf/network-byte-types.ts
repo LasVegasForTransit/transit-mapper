@@ -135,6 +135,8 @@ export interface MutableNetworkRequest {
   servedFromCache: boolean;
   encodedBytes: number | null;
   byteAuthority: PerfRequestByteAuthority | null;
+  /** Kept only until a fail-closed harness error can name the CDP cause. */
+  failureReason: string | null;
   chunks: ByteChunk[];
 }
 
@@ -185,6 +187,8 @@ export interface LoadingFinished {
 export interface LoadingFailed {
   requestId?: unknown;
   timestamp?: unknown;
+  canceled?: unknown;
+  errorText?: unknown;
 }
 
 export interface NetworkByteLedger {

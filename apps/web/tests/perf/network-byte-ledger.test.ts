@@ -228,6 +228,27 @@ describe('the CDP network byte ledger', () => {
     ).toThrow(initialUrl);
   });
 
+  it('names the CDP cancellation reason when a failed automatic request has no byte authority', () => {
+    const ledger = createNetworkByteLedger({ applicationOrigin: 'https://app.test' });
+    const url = 'https://tiles.openfreemap.org/planet/10/184/401.pbf';
+    ledger.registerTarget('map-worker', 'dedicated-worker');
+    ledger.record('map-worker', 'Network.requestWillBeSent', request(url, 10));
+    ledger.record('map-worker', 'Network.loadingFailed', {
+      requestId: url,
+      timestamp: 10.1,
+      canceled: true,
+      errorText: 'net::ERR_ABORTED',
+    });
+
+    expect(() =>
+      ledger.createReport({
+        navigationTimeOriginMs: NAVIGATION_TIME_ORIGIN_MS,
+        automaticBoundaryMs: 60_000,
+        phases: {},
+      }),
+    ).toThrow('net::ERR_ABORTED');
+  });
+
   it('separates map, document, service-worker, and telemetry targets', () => {
     const ledger = createNetworkByteLedger({ applicationOrigin: 'https://app.test' });
     const cases = [
