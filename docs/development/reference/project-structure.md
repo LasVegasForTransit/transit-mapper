@@ -1,8 +1,6 @@
 # Project structure
 
-TransitMapper is a pnpm workspace with a domain package, browser editor, and
-optional Cloudflare Worker. This reference follows ownership boundaries, not
-paths.
+TransitMapper has a domain package, browser editor, and Cloudflare Worker.
 
 ## Workspace
 
