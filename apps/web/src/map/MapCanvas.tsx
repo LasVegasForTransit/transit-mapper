@@ -1620,7 +1620,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           const representativeSourceExists = Boolean(map.getSource(stationSourceId));
           if (
             !systemPaintReady({
+              documentReady: store.getState().documentStatus === 'ready',
               systemDataUploaded: initialSystemDataUploaded,
+              systemDataMatchesDocument: lastRenderedSystemId === store.getState().system.id,
               representativeSourceExists,
               representativeSourceLoaded:
                 representativeSourceExists && map.isSourceLoaded(stationSourceId),

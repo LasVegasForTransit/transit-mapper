@@ -10,6 +10,7 @@ import {
   type RunningPreview,
 } from '../perf/process';
 import { RENDERER_CAPTURE_ARTIFACT_ROOT, type RendererCaptureCliOptions } from './cli';
+import { configureRendererCaptureBaseUrl } from './capture-browser';
 import { captureContextEvidence } from './capture-contexts';
 import { buildRendererContactSheet } from './capture-contact-sheet';
 import {
@@ -111,7 +112,8 @@ export async function runRendererCapture(options: RendererCaptureCliOptions): Pr
   await prepareRendererCaptureOutput(options.outputDirectory, RENDERER_CAPTURE_ARTIFACT_ROOT);
   try {
     if (!options.skipBuild) await buildPerformanceApp();
-    preview = await startPreview();
+    preview = await startPreview('instrumented');
+    configureRendererCaptureBaseUrl(preview.url);
     browser = await chromium.launch({ channel: 'chrome', headless: true });
     const entries = await hashCaptureFiles(
       options.outputDirectory,
@@ -144,5 +146,6 @@ export async function runRendererCapture(options: RendererCaptureCliOptions): Pr
   } finally {
     await browser?.close();
     await stopPreview(preview);
+    configureRendererCaptureBaseUrl(null);
   }
 }

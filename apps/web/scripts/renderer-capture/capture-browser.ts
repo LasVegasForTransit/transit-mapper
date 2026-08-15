@@ -5,11 +5,23 @@ import type { RendererCaptureCase } from '../../src/perf/renderer-capture';
 import type { RendererStatsSnapshot } from '../../src/perf/renderer-stats';
 import { seedIndexedDbFixture } from '../perf/browser';
 import { waitForLoadedDocument } from '../perf/journeys';
-import { PREVIEW_URL } from '../perf/process';
 import { assertRendererCaptureHasSceneContent } from './capture-image-validation';
 import { rendererBasemapStyleForUrl, rendererSeedPageUrl } from './lifecycle';
 
 const EXTERNAL_URL = /^https?:\/\/(?!127\.0\.0\.1(?::\d+)?(?:\/|$)|localhost(?::\d+)?(?:\/|$))/;
+
+let captureBaseUrl: string | null = null;
+
+/** The capture CLI owns one isolated preview server. Keeping its dynamically
+ * assigned URL here prevents browser helpers from reviving a fixed port. */
+export function configureRendererCaptureBaseUrl(url: string | null): void {
+  captureBaseUrl = url;
+}
+
+export function rendererCaptureBaseUrl(): string {
+  if (!captureBaseUrl) throw new Error('Renderer capture preview has not started.');
+  return captureBaseUrl;
+}
 
 export function fixtureCenter(system: TransitSystem): [number, number] {
   return [system.viewport.center[0], system.viewport.center[1]];
@@ -79,16 +91,17 @@ export async function captureBareRenderer(page: Page, path: string): Promise<voi
 }
 
 export async function seedEditor(page: Page, system: TransitSystem): Promise<void> {
+  const baseUrl = rendererCaptureBaseUrl();
   const pageErrors: string[] = [];
   const recordPageError = (error: Error) => pageErrors.push(error.stack ?? error.message);
   page.on('pageerror', recordPageError);
-  await page.goto(rendererSeedPageUrl(PREVIEW_URL), { waitUntil: 'load' });
+  await page.goto(rendererSeedPageUrl(baseUrl), { waitUntil: 'load' });
   await seedIndexedDbFixture(page, JSON.stringify(system), {
     id: system.id,
     name: system.name,
     updatedAt: system.updatedAt,
   });
-  await page.goto(PREVIEW_URL, { waitUntil: 'domcontentloaded' });
+  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
   await waitForLoadedDocument(page);
   try {
     await page.waitForFunction(

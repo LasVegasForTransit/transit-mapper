@@ -21,6 +21,7 @@ import {
   type ColorScheme,
 } from '../theme/color-scheme';
 import { basemapStyleForScheme } from '../map/mapTheme';
+import { renderPresentationForFittedMap } from '../map/static-render-features';
 import { createStyleSwitchController } from '../map/styleSwitchController';
 import type { EmbedMapRuntimeOptions } from './embed-bootstrap';
 
@@ -170,29 +171,25 @@ function restoreEmbedOverlay(
 
 interface DrawSystemOptions {
   map: MLMap;
-  system: TransitSystem;
   features: ReturnType<typeof buildFeatures>;
   scheme: ColorScheme;
   runtime: EmbedMapRuntimeOptions;
 }
 
-async function drawSystem({
-  map,
-  system,
-  features,
-  scheme,
-  runtime,
-}: DrawSystemOptions): Promise<void> {
+async function drawSystem({ map, features, scheme, runtime }: DrawSystemOptions): Promise<void> {
   restoreEmbedOverlay(map, features, scheme);
   runtime.milestones.systemCommitted();
+  await waitForSystemPaint(map);
+  markFirstSystemMapPaint();
+}
 
-  // Resize before framing, never after: fitBounds solves for the viewport
-  // it's told about, so fitting against a stale size frames the wrong extent.
+function fitSystem(map: MLMap, system: TransitSystem): void {
+  // The projection must see the settled fitted camera. Building before this
+  // call stamps a tier for the temporary world view, then leaves that tier on
+  // screen after MapLibre fits the real system.
   map.resize();
   const bounds = systemBounds(system);
   if (bounds) map.fitBounds(bounds, { padding: 40, animate: false });
-  await waitForSystemPaint(map);
-  markFirstSystemMapPaint();
 }
 
 function updateEmbedLabels(id: string, system: TransitSystem): void {
@@ -214,13 +211,14 @@ export async function startEmbedMap(options: EmbedMapRuntimeOptions): Promise<vo
   const map = createMap(options.container, initialScheme, options);
   let detachScheme = () => {};
   try {
-    const systemAndFeatures = options.system.then((system) => ({
-      system,
-      features: buildFeatures(system, null, [], EMBED_VIEW),
-    }));
-    const [{ system, features }] = await Promise.all([systemAndFeatures, waitForMapLoad(map)]);
+    const [system] = await Promise.all([options.system, waitForMapLoad(map)]);
+    fitSystem(map, system);
+    const features = buildFeatures(system, null, [], {
+      ...EMBED_VIEW,
+      presentation: renderPresentationForFittedMap(map),
+    });
     updateEmbedLabels(options.id, system);
-    await drawSystem({ map, system, features, scheme: initialScheme, runtime: options });
+    await drawSystem({ map, features, scheme: initialScheme, runtime: options });
     let activeScheme = initialScheme;
     const styleSwitcher = createStyleSwitchController({
       map,

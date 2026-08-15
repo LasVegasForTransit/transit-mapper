@@ -8,10 +8,10 @@ import { createRendererFixture, type RendererFixtureId } from '../../src/perf/re
 import { createPerfProtocol, PERF_SCENARIOS } from '../../src/perf/scenarios';
 import type { PerfProfileId } from '../../src/perf/types';
 import { configureSurfaceRoutes } from '../perf/browser';
-import { PREVIEW_URL } from '../perf/process';
 import {
   openExportDialog,
   preventRemoteBasemap,
+  rendererCaptureBaseUrl,
   rendererStatsForPage,
   seedEditor,
   setSettledCamera,
@@ -147,7 +147,7 @@ async function captureEmbedSurface(group: ContextGroup): Promise<RendererCapture
       PERF_SCENARIOS.embed,
       JSON.stringify(createRendererFixture('port-mason')),
     );
-    await page.goto(`${PREVIEW_URL}${PERF_SCENARIOS.embed.path}`, {
+    await page.goto(`${rendererCaptureBaseUrl()}${PERF_SCENARIOS.embed.path}`, {
       waitUntil: 'domcontentloaded',
     });
     await waitForSettledRenderer(page, '.maplibregl-map');
