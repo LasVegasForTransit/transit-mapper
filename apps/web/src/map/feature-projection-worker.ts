@@ -42,6 +42,17 @@ export type FeatureProjectionClientInput = Omit<FeatureProjectionWorkerInput, 'v
   readonly view: RenderViewOptions;
 };
 
+/** The only capability the live renderer needs from the projection Worker.
+ * Keeping this interface separate from the concrete Worker client lets the
+ * publication boundary be tested without fabricating Worker internals. */
+export interface FeatureProjectionClient {
+  project(
+    input: FeatureProjectionClientInput,
+    signal?: AbortSignal,
+  ): Promise<FeatureProjectionResult>;
+  dispose(): void;
+}
+
 type PendingProjection = PendingWorkerRequest<FeatureProjectionResult>;
 
 function defaultWorkerFactory(): FeatureProjectionWorker {
@@ -70,7 +81,7 @@ function workerInput(input: FeatureProjectionClientInput): FeatureProjectionWork
  * camera movement, layer visibility, and hit ownership all stay in the live
  * MapLibre renderer where they can be transacted together.
  */
-export class FeatureProjectionWorkerClient {
+export class FeatureProjectionWorkerClient implements FeatureProjectionClient {
   private readonly worker: FeatureProjectionWorker;
   private readonly pending = new Map<number, PendingProjection>();
   private nextRequestId = 1;

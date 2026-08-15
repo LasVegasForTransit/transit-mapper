@@ -11,7 +11,7 @@ import { SRC_WAYS } from '../../src/map/layers';
 import { createRendererStatsCollector } from '../../src/perf/renderer-stats';
 import type {
   FeatureProjectionResult,
-  FeatureProjectionWorkerClient,
+  FeatureProjectionClient,
 } from '../../src/map/feature-projection-worker';
 import { emptySystemFeatures } from '../../src/map/system-feature-sources';
 import { renderScene } from '../support/render-scene-source-updater.test';
@@ -49,19 +49,21 @@ describe('document projection', () => {
       scheduleFrame: clock.scheduleFrame,
       cancelFrame: clock.cancelFrame,
     });
-    let resolveWorker: ((result: FeatureProjectionResult) => void) | null = null;
+    let resolveWorker = (_result: FeatureProjectionResult): void => {
+      throw new Error('Worker projection did not start.');
+    };
     const project = vi.fn(
       () =>
         new Promise<FeatureProjectionResult>((resolve) => {
           resolveWorker = resolve;
         }),
     );
-    const worker: FeatureProjectionWorkerClient = {
+    const worker: FeatureProjectionClient = {
       project,
       dispose: () => {},
     };
     const publish = vi.fn(() => ({
-      generation: null,
+      generation: 1,
       settled: Promise.resolve(),
       cancel: () => false,
     }));

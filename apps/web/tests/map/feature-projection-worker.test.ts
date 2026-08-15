@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { aSystem } from '@transitmapper/core/testing/fixtures';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import {
   createFeatureProjectionWorker,
+  type FeatureProjectionClientInput,
   type FeatureProjectionWorker,
 } from '../../src/map/feature-projection-worker';
 import type {
   FeatureProjectionWorkerEvent,
   FeatureProjectionWorkerRequest,
 } from '../../src/map/feature-projection-worker-protocol';
-import { emptySystemFeatures, SRC_WAYS } from '../../src/map/system-feature-sources';
+import { emptySystemFeatures } from '../../src/map/system-feature-sources';
+import { SRC_WAYS } from '../../src/map/layers';
 
 class RecordingFeatureProjectionWorker implements FeatureProjectionWorker {
   onmessage: ((event: MessageEvent<FeatureProjectionWorkerEvent>) => void) | null = null;
@@ -29,7 +32,7 @@ class RecordingFeatureProjectionWorker implements FeatureProjectionWorker {
   }
 }
 
-function requestInput() {
+function requestInput(): FeatureProjectionClientInput {
   return {
     system: aSystem({ id: 'worker-system' }),
     selection: null,
@@ -39,16 +42,12 @@ function requestInput() {
       viewMode: 'infrastructure' as const,
       visibleModes: new Set<string>(),
       visibleWayTypes: new Set<string>(),
-      presentation: {
-        bounds: { west: -115.2, south: 36.1, east: -115.1, north: 36.2 },
+      presentation: renderPresentationForViewport({
+        center: [-115.15, 36.15],
         zoom: 14,
-        viewportWidthPx: 800,
-        viewportHeightPx: 600,
-        displayedWidthPx: 800,
-        displayedHeightPx: 600,
-        pixelRatio: 1,
-      },
-      tierStateResolver: { resolve: () => ({ tier: 'district' as const, transitionCount: 0 }) },
+        width: 800,
+        height: 600,
+      }),
     },
   };
 }

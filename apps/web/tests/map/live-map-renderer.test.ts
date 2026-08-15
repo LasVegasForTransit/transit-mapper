@@ -2,14 +2,14 @@ import type { FeatureCollection } from 'geojson';
 import { describe, expect, it } from 'vitest';
 import { SRC_WAYS } from '../../src/map/layers';
 import { createLiveMapRenderer, type LiveMapRendererHost } from '../../src/map/live-map-renderer';
-import type { FeatureProjectionWorkerClient } from '../../src/map/feature-projection-worker';
+import type { FeatureProjectionClient } from '../../src/map/feature-projection-worker';
 import { emptySystemFeatures } from '../../src/map/system-feature-sources';
 import type {
   GeoJsonSourceTarget,
   GeoJsonSourceUpdate,
 } from '../../src/map/render-scene-source-updater';
 
-const unusedProjectionWorker: FeatureProjectionWorkerClient = {
+const unusedProjectionWorker: FeatureProjectionClient = {
   project: () => Promise.reject(new Error('This publication test does not project features.')),
   dispose: () => {},
 };

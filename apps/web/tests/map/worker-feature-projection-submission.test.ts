@@ -1,14 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { aSystem } from '@transitmapper/core/testing/fixtures';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
-import { emptySystemFeatures, SRC_WAYS } from '../../src/map/system-feature-sources';
+import { emptySystemFeatures } from '../../src/map/system-feature-sources';
+import { SRC_WAYS } from '../../src/map/layers';
 import {
   submitWorkerFeatureProjection,
   type WorkerFeatureProjectionClient,
 } from '../../src/map/worker-feature-projection-submission';
-import type { FeatureProjectionResult } from '../../src/map/feature-projection-worker';
+import type {
+  FeatureProjectionClientInput,
+  FeatureProjectionResult,
+} from '../../src/map/feature-projection-worker';
 
-function projectionInput() {
+function projectionInput(): FeatureProjectionClientInput {
   return {
     system: aSystem({ id: 'worker-submission' }),
     selection: null,
@@ -30,11 +34,13 @@ function projectionInput() {
 
 describe('worker feature projection submission', () => {
   it('publishes detached worker features only after the matching worker result arrives', async () => {
-    let resolveProjection: ((result: FeatureProjectionResult) => void) | null = null;
+    let resolveProjection = (_result: FeatureProjectionResult): void => {
+      throw new Error('Worker projection did not start.');
+    };
     const worker: WorkerFeatureProjectionClient = {
       project: vi.fn(
         () =>
-          new Promise((resolve) => {
+          new Promise<FeatureProjectionResult>((resolve) => {
             resolveProjection = resolve;
           }),
       ),
@@ -51,9 +57,8 @@ describe('worker feature projection submission', () => {
 
     await Promise.resolve();
     expect(commit).not.toHaveBeenCalled();
-    const resolve = resolveProjection;
     const features = emptySystemFeatures();
-    resolve({ features, counts: null });
+    resolveProjection({ features, counts: null });
 
     await expect(submission.settled).resolves.toBeUndefined();
     expect(projected).toHaveBeenCalledWith({ features, counts: null });
@@ -61,11 +66,13 @@ describe('worker feature projection submission', () => {
   });
 
   it('does not publish a worker result after its generation is canceled', async () => {
-    let resolveProjection: ((result: FeatureProjectionResult) => void) | null = null;
+    let resolveProjection = (_result: FeatureProjectionResult): void => {
+      throw new Error('Worker projection did not start.');
+    };
     const worker: WorkerFeatureProjectionClient = {
       project: vi.fn(
         () =>
-          new Promise((resolve) => {
+          new Promise<FeatureProjectionResult>((resolve) => {
             resolveProjection = resolve;
           }),
       ),
@@ -79,8 +86,7 @@ describe('worker feature projection submission', () => {
 
     await Promise.resolve();
     expect(submission.cancel()).toBe(true);
-    const resolve = resolveProjection;
-    resolve({ features: emptySystemFeatures(), counts: null });
+    resolveProjection({ features: emptySystemFeatures(), counts: null });
 
     await expect(submission.settled).rejects.toMatchObject({ name: 'AbortError' });
     expect(commit).not.toHaveBeenCalled();
