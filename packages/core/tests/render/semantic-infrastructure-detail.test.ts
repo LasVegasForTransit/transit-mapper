@@ -177,6 +177,9 @@ describe('semantic infrastructure detail', () => {
     ).toBe(true);
   });
 
+  // This creates an import-scale document on purpose. The assertions below
+  // measure bounded candidate traversal; the test timeout only gives a
+  // parallel CI machine enough room to allocate that fixture.
   it('creates regional GeoJSON only for ways inside padded bounds at Las Vegas import scale', () => {
     const system = createEmptySystem();
     const [template] = osmElementsToWays([
@@ -229,5 +232,5 @@ describe('semantic infrastructure detail', () => {
     const detailCounts = createFeatureBuildOperationCounts();
     buildFeatures(system, null, [], view(15), null, null, { counts: detailCounts });
     expect(detailCounts.featureJunctionNodeVisitCount).toBeLessThan(300);
-  });
+  }, 15_000);
 });
