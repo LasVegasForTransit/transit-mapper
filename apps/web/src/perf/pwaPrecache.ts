@@ -40,7 +40,20 @@ export function referencedBuildAssetFiles(source: string): string[] {
   ].map((match) => match[1]);
 }
 
-const EDITOR_ESSENTIAL_PUBLIC_ASSETS = ['favicon.svg', 'manifest.json'] as const;
+/** These three ranges cover the editor's Latin labels and the box-drawing
+ * glyphs used by the transit map. All other glyph files stay lazy so first
+ * install does not download a font archive for scripts the system never uses. */
+export const OFFLINE_GLYPH_RANGE_FILES = [
+  'glyphs/noto-sans-v1/Noto Sans Bold/0-255.pbf',
+  'glyphs/noto-sans-v1/Noto Sans Regular/0-255.pbf',
+  'glyphs/noto-sans-v1/Noto Sans Regular/9472-9727.pbf',
+] as const;
+
+const EDITOR_ESSENTIAL_PUBLIC_ASSETS = [
+  'favicon.svg',
+  'manifest.json',
+  ...OFFLINE_GLYPH_RANGE_FILES,
+] as const;
 
 const EDITOR_ADAPTIVE_PUBLIC_ASSETS = [
   'apple-touch-icon.png',

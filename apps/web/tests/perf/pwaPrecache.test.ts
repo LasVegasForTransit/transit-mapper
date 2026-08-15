@@ -4,6 +4,7 @@ import {
   editorPrecacheFiles,
   embedOnlyFiles,
   manifestInstallIconFiles,
+  OFFLINE_GLYPH_RANGE_FILES,
   referencedBuildAssetFiles,
   verifyPrecacheOutput,
   type BuildManifest,
@@ -77,16 +78,24 @@ describe('PWA precache output', () => {
     ]);
   });
 
-  it('precaches only the static editor shell on first install', () => {
-    expect(editorPrecacheFiles(manifest, installIcons)).toEqual([
-      'assets/main.css',
-      'assets/main.js',
-      'assets/shared.css',
-      'assets/shared.js',
-      'favicon.svg',
-      'index.html',
-      'manifest.json',
+  it('precaches the editor shell and the three text ranges that render transit labels', () => {
+    expect(OFFLINE_GLYPH_RANGE_FILES).toEqual([
+      'glyphs/noto-sans-v1/Noto Sans Bold/0-255.pbf',
+      'glyphs/noto-sans-v1/Noto Sans Regular/0-255.pbf',
+      'glyphs/noto-sans-v1/Noto Sans Regular/9472-9727.pbf',
     ]);
+    expect(editorPrecacheFiles(manifest, installIcons)).toEqual(
+      [
+        'assets/main.css',
+        'assets/main.js',
+        'assets/shared.css',
+        'assets/shared.js',
+        'favicon.svg',
+        'index.html',
+        'manifest.json',
+        ...OFFLINE_GLYPH_RANGE_FILES,
+      ].sort(),
+    );
   });
 
   it('classifies lazy features and install artwork as adaptive assets', () => {

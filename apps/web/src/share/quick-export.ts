@@ -1,6 +1,6 @@
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
-import type { ViewOptions } from '../map/layers';
+import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 
 export type QuickExportFormat = 'png' | 'svg';
 
