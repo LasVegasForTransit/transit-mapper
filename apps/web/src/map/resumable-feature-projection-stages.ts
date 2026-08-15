@@ -37,6 +37,7 @@ import {
   sourceSubset,
   type ProjectionPlanningContext,
 } from './resumable-feature-projection-planning';
+import { appendStreetServiceJunctionConnectorUnits } from './resumable-street-service-connectors';
 
 function orderedAdjacencyUnion(
   primaryIds: readonly string[],
@@ -399,6 +400,7 @@ function planSingletonUnits(context: ProjectionPlanningContext): void {
 export function appendProjectionUnits(context: ProjectionPlanningContext): void {
   planCorridorUnits(context);
   planJunctionUnits(context);
+  appendStreetServiceJunctionConnectorUnits(context);
   planStopUnits(context);
   planPhysicalStationUnits(context);
   planPhysicalHandleUnits(context);

@@ -152,8 +152,40 @@ function featureIdsAreUnique(features: SystemFeatures): boolean {
   return collections.every(unique);
 }
 
+/** Source collections are assembled in bounded unit order. The published
+ * RenderScene applies its own paint ordering, so this projection contract is
+ * about the stable feature each source contains rather than incidental array
+ * ordering from the scheduler. */
+function featureEntriesByStableId(
+  features: SystemFeatures,
+): readonly (readonly [string, unknown])[] {
+  const collections: readonly [string, FeatureCollection][] = [
+    ['ways', features.ways],
+    ['services', features.services],
+    ['stops', features.stops],
+    ['handles', features.handles],
+    ['serviceTermini', features.serviceTermini],
+    ['footprints', features.footprints],
+    ['platforms', features.platforms],
+    ['facilities', features.facilities],
+    ['physicalHandles', features.physicalHandles],
+    ['lanes', features.lanes],
+    ['laneMarkings', features.laneMarkings],
+    ['laneArrows', features.laneArrows],
+    ['serviceArrows', features.serviceArrows],
+    ['junctions', features.junctions],
+    ['connectors', features.connectors],
+    ['wayLabels', features.wayLabels],
+  ];
+  return collections
+    .flatMap(([name, collection]) =>
+      collection.features.map((feature) => [`${name}:${String(feature.id)}`, feature] as const),
+    )
+    .sort(([left], [right]) => left.localeCompare(right));
+}
+
 describe('resumable geographic feature projection', () => {
-  it('reproduces the settled synchronous source projection exactly', () => {
+  it('reproduces the settled synchronous source projection by stable feature identity', () => {
     const system = portMasonLikeFixture();
     const options = {
       system,
@@ -175,12 +207,17 @@ describe('resumable geographic feature projection', () => {
 
     const chunked = plan.aggregate(plan.units.map((unit) => unit.run()));
 
-    expect(chunked).toEqual(full);
+    expect(featureEntriesByStableId(chunked)).toEqual(featureEntriesByStableId(full));
     expect(featureIdsAreUnique(chunked)).toBe(true);
     expect(chunked.services.features.length).toBeGreaterThan(0);
     expect(chunked.stops.features.length).toBe(1);
     expect(chunked.junctions.features.length).toBe(1);
     expect(chunked.serviceTermini.features.length).toBe(2);
+    expect(
+      chunked.services.features.some(
+        (feature) => feature.properties?.pathRole === 'junction:downtown-junction',
+      ),
+    ).toBe(true);
     expect(chunked.wayLabels.features.length).toBe(3);
     expect(chunked.facilities.features.length).toBe(1);
   });
