@@ -18,6 +18,10 @@ interface SourceBankSettlementOptions {
 
 export interface WaitForSourceBankLoadOptions extends SourceBankSettlementOptions {
   readonly sourceIds: readonly string[];
+  /** Resolves once the caller has run every source mutation in this logical
+   * revision. Source acknowledgements collected before this point must not
+   * publish the old bank early. */
+  readonly mutationsComplete?: Promise<void>;
 }
 
 export interface SourceBankSeedOptions {
@@ -83,23 +87,60 @@ export function waitForSourceBankLoad({
   sourceIds,
   signal,
   timeoutMs,
+  mutationsComplete,
 }: WaitForSourceBankLoadOptions): Promise<void> {
   const exactSourceIds = [...new Set(sourceIds)];
   const expected = new Set(exactSourceIds);
-  const observedLoaded = new Set<string>();
-  const loaded = () => exactSourceIds.every((sourceId) => observedLoaded.has(sourceId));
+  const observedData = new Set<string>();
+  let mutationsFinished = mutationsComplete === undefined;
+  const loaded = () =>
+    mutationsFinished &&
+    exactSourceIds.every((sourceId) => observedData.has(sourceId) || host.isSourceLoaded(sourceId));
   if (exactSourceIds.length === 0) return Promise.resolve();
   return settlementPromise(
     (settle) => {
-      const stop = host.onSourceData((sourceId) => {
-        if (expected.has(sourceId) && host.isSourceLoaded(sourceId)) observedLoaded.add(sourceId);
+      const stopSourceData = host.onSourceData((sourceId) => {
+        if (expected.has(sourceId)) observedData.add(sourceId);
         if (loaded()) settle();
       });
-      return stop;
+      // A worker acknowledgement is enough for a hidden source. Its source
+      // cache can remain "not loaded" while offscreen, but the data event is
+      // still the exact revision MapLibre will use when the bank becomes
+      // visible. A later render remains a fallback for sources already ready.
+      const stopRender = host.onRender(() => {
+        if (loaded()) settle();
+      });
+      if (mutationsComplete) {
+        void mutationsComplete.then(
+          () => {
+            mutationsFinished = true;
+            if (loaded()) settle();
+          },
+          () => {},
+        );
+      }
+      if (loaded()) {
+        // Defer until `settlementPromise` has installed both unsubscriptions.
+        // A synchronous settle here would leave the source/render listeners
+        // registered forever.
+        queueMicrotask(() => {
+          if (loaded()) settle();
+        });
+      }
+      // MapLibre normally schedules this after setData/updateData, but an
+      // explicit request gives a just-finished bank one render to advance its
+      // source caches without freezing the active map or its animation.
+      host.triggerRepaint();
+      return () => {
+        stopSourceData();
+        stopRender();
+      };
     },
     { host, ...(signal ? { signal } : {}), ...(timeoutMs ? { timeoutMs } : {}) },
     () => {
-      const missing = exactSourceIds.filter((sourceId) => !observedLoaded.has(sourceId));
+      const missing = exactSourceIds.filter(
+        (sourceId) => !observedData.has(sourceId) && !host.isSourceLoaded(sourceId),
+      );
       return `Hidden renderer sources did not load in time: ${missing.join(', ')}.`;
     },
   );

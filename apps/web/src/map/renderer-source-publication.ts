@@ -46,6 +46,7 @@ export class RendererSourcePublication {
   /** A GeoJSON source can report loaded during its own synchronous mutation,
    * so this subscription deliberately begins before the first source unit. */
   private sourceLoad: Promise<void> | null = null;
+  private finishSourceMutations: (() => void) | null = null;
   private mode: ScenePublicationContext['mode'] | null = null;
   private bank: SourceBankId | null = null;
 
@@ -76,6 +77,8 @@ export class RendererSourcePublication {
       },
       beforePublish: async (context) => {
         if (context.sourceIds.length === 0) return;
+        this.finishSourceMutations?.();
+        this.finishSourceMutations = null;
         await (this.sourceLoad ?? this.waitForLoad(context.sourceIds));
         if (this.isInactiveBank(context)) await this.waitForPaint();
       },
@@ -146,11 +149,24 @@ export class RendererSourcePublication {
     this.bank = context.bank ?? null;
     if (sourceIds.length === 0) {
       this.sourceLoad = null;
+      this.finishSourceMutations = null;
       return;
     }
-    const sourceLoad = this.waitForLoad(sourceIds);
-    // A source mutation can throw after beginning this barrier. Keep its
-    // rejection for publication, but do not leak an unhandled abort first.
+    let finishMutations = () => {};
+    const mutationsComplete = new Promise<void>((resolve) => {
+      finishMutations = resolve;
+    });
+    this.finishSourceMutations = finishMutations;
+    // Observe acknowledgements from the first mutation, but do not let them
+    // release the revision until `beforePublish` confirms that every source
+    // unit has run. That keeps a quick first source from exposing a partial
+    // bank while accommodating MapLibre's offscreen source-cache semantics.
+    const sourceLoad = waitForSourceBankLoad({
+      host: this.options.host,
+      sourceIds,
+      mutationsComplete,
+      signal: this.abortController.signal,
+    });
     void sourceLoad.catch(() => {});
     this.sourceLoad = sourceLoad;
   }
@@ -171,6 +187,7 @@ export class RendererSourcePublication {
 
   private clear(): void {
     this.sourceLoad = null;
+    this.finishSourceMutations = null;
     this.abortController = null;
     this.mode = null;
     this.bank = null;

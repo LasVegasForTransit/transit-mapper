@@ -123,6 +123,8 @@ export async function seedEditor(page: Page, system: TransitSystem): Promise<voi
 interface RendererViewSelection {
   profile: PerfProfileId;
   viewMode: RendererCaptureCase['viewMode'];
+  /** A calibrated desktop viewport can still use compact editor controls. */
+  controls?: 'desktop' | 'compact';
 }
 
 export async function selectView(page: Page, capture: RendererViewSelection): Promise<void> {
@@ -132,7 +134,8 @@ export async function selectView(page: Page, capture: RendererViewSelection): Pr
       : capture.viewMode === 'network'
         ? 'Network'
         : 'Diagram';
-  if (capture.profile === 'desktop') {
+  const controls = capture.controls ?? (capture.profile === 'desktop' ? 'desktop' : 'compact');
+  if (controls === 'desktop') {
     await page.getByRole('group', { name: 'View' }).getByRole('button', { name: label }).click();
     return;
   }

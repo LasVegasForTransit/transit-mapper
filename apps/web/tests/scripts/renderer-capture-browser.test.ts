@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   captureBareRenderer,
   fixtureCenter,
+  selectView,
   waitForSettledRenderer,
 } from '../../scripts/renderer-capture/capture-browser';
 import { createRendererFixture } from '../../src/perf/renderer-fixtures';
@@ -125,5 +126,44 @@ describe('renderer capture browser lifecycle', () => {
         options: { state: 'visible', timeout: 60_000 },
       },
     ]);
+  });
+
+  it('uses the compact view menu when a desktop capture viewport has collapsed it', async () => {
+    const clicked: string[] = [];
+    const page = {
+      getByRole: (role: string, options: { name?: string | RegExp }) => {
+        if (role === 'group') {
+          return {
+            getByRole: () => ({ count: () => Promise.resolve(0) }),
+          };
+        }
+        if (role === 'button') {
+          return {
+            getAttribute: () => Promise.resolve('View: Infrastructure'),
+            click: () => {
+              clicked.push('trigger');
+              return Promise.resolve();
+            },
+          };
+        }
+        if (role === 'menuitem') {
+          return {
+            click: () => {
+              clicked.push(String(options.name));
+              return Promise.resolve();
+            },
+          };
+        }
+        throw new Error(`Unexpected role: ${role}`);
+      },
+    } as unknown as Page;
+
+    await selectView(page, {
+      profile: 'desktop',
+      controls: 'compact',
+      viewMode: 'infrastructure',
+    });
+
+    expect(clicked).toEqual([]);
   });
 });

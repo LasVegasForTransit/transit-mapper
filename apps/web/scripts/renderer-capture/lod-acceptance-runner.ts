@@ -76,7 +76,11 @@ async function captureStatsAssertions(page: Page): Promise<RendererLodAcceptance
   if (!camera) throw new Error('Camera acceptance case is missing.');
   const reset = async () => {
     await seedEditor(page, fixture);
-    await selectView(page, { profile: 'desktop', viewMode: 'infrastructure' });
+    await selectView(page, {
+      profile: 'desktop',
+      controls: 'compact',
+      viewMode: 'infrastructure',
+    });
     await setSettledCamera(page, fixture, camera.zoom, [...camera.center]);
   };
   const assertions: RendererLodAcceptanceStatsAssertion[] = [];
@@ -101,7 +105,7 @@ async function captureStatsAssertions(page: Page): Promise<RendererLodAcceptance
     () => selectAcceptanceWay(page, 'port-mason-harbor-bridge'),
   );
   await record('filter-zero-committed-work', 'change the visible view filter', () =>
-    selectView(page, { profile: 'desktop', viewMode: 'network' }),
+    selectView(page, { profile: 'desktop', controls: 'compact', viewMode: 'network' }),
   );
   await record(
     'retained-theme-zero-committed-work',
