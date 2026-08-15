@@ -116,7 +116,7 @@ describe('live render scene controller', () => {
     expect(SYSTEM_FEATURE_SOURCE_BY_NAME.stops).toBe(systemFeatureSourceId(SRC_STATIONS));
   });
 
-  it('builds a complete scene from a partial projection and excludes hit-only IDs from state targets', () => {
+  it('uploads only nonempty sources for an initial partial projection and excludes hit-only IDs from state targets', () => {
     const fixture = controllerFixture();
     const partial = emptySystemFeatures();
     const waysSource = systemFeatureSourceId('ways');
@@ -134,7 +134,8 @@ describe('live render scene controller', () => {
     });
 
     expect(result.strategy).toBe('full');
-    expect(result.fullSourceUploadCount).toBe(17);
+    expect(result.fullSourceUploadCount).toBe(2);
+    expect(fixture.source(SYSTEM_FEATURE_SOURCE_BY_NAME.stops).calls).toEqual([]);
     expect(result.scene.featuresBySource).toHaveLength(16);
     expect(result.scene.featuresBySource.get(SYSTEM_FEATURE_SOURCE_BY_NAME.ways)?.features).toEqual(
       [expect.objectContaining({ id: visualId })],
@@ -225,7 +226,7 @@ describe('live render scene controller', () => {
   });
 
   it.each(['reset', 'style-heal'] as const)(
-    'forces a complete settled upload for the %s intent without losing retained collections',
+    'reuploads every nonempty retained source for the %s intent without losing retained collections',
     (intent) => {
       const fixture = controllerFixture();
       const waysSource = systemFeatureSourceId('ways');
@@ -247,7 +248,8 @@ describe('live render scene controller', () => {
       });
 
       expect(result.strategy).toBe('full');
-      expect(result.fullSourceUploadCount).toBe(17);
+      expect(result.fullSourceUploadCount).toBe(1);
+      expect(fixture.source(SYSTEM_FEATURE_SOURCE_BY_NAME.stops).calls).toEqual([]);
       expect(fixture.source(SYSTEM_FEATURE_SOURCE_BY_NAME.ways).calls).toEqual([
         {
           method: 'setData',
