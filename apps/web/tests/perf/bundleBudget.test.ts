@@ -17,12 +17,12 @@ const budgets: BundleBudget[] = [
 ];
 
 describe('bundle budgets', () => {
-  it('keeps the Phase 2 editor foundation inside its one-time round delivery ceiling', () => {
+  it('keeps the editor inside its established delivery ceiling', () => {
     const main = BUNDLE_BUDGETS.find((budget) => budget.entry === 'main');
     expect(main).toEqual({
       entry: 'main',
-      maximumGzipBytes: 550 * 1_024,
-      maximumBrotliBytes: 470 * 1_024,
+      maximumGzipBytes: 518_144,
+      maximumBrotliBytes: 450_560,
     });
     expect(
       evaluateBundleBudgets(
@@ -30,8 +30,8 @@ describe('bundle budgets', () => {
           {
             entry: 'main',
             rawBytes: 1_000_000,
-            gzipBytes: 550 * 1_024 + 1,
-            brotliBytes: 470 * 1_024,
+            gzipBytes: 518_145,
+            brotliBytes: 450_560,
           },
         ],
         main ? [main] : [],

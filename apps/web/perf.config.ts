@@ -34,12 +34,11 @@ export const PERF_BASELINE_DIRECTORY = 'perf';
 export const BUNDLE_BUDGETS: BundleBudget[] = [
   {
     entry: 'main',
-    // One intentional recalibration for the screen-space renderer foundation:
-    // cooperative preparation, stable scene diffs, and source recovery now
-    // ship in the editor. Major metric-mesh and Diagram work remains Worker-
-    // owned and must not consume this round delivery ceiling.
-    maximumGzipBytes: 550 * 1_024,
-    maximumBrotliBytes: 470 * 1_024,
+    // Renderer work must displace obsolete editor work or move behind an
+    // already-loaded worker boundary. Increasing this limit would hide a
+    // delivery regression from people opening the editor on real networks.
+    maximumGzipBytes: 518_144,
+    maximumBrotliBytes: 450_560,
   },
   {
     entry: 'embed',
