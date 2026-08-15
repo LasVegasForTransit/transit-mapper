@@ -201,7 +201,9 @@ function contextLayerSpecs(theme: MapTheme): LayerSpecification[] {
   ];
 }
 
-function streetDetailLayerSpecs(theme: MapTheme): LayerSpecification[] {
+/** Metric lane surfaces are the Street-tier base. Markings deliberately live
+ * in the following pass so their visual order is obvious at the call site. */
+function laneSurfaceLayerSpecs(): LayerSpecification[] {
   return [
     {
       // Lane surfaces are true metric polygons, built from the same shared
@@ -215,6 +217,13 @@ function streetDetailLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'fill-opacity': tierOpacityExpr(0.9) as never,
       },
     },
+  ];
+}
+
+/** Track ties paint below the rails they join. Keeping them as their own
+ * pass makes the paired rail order explicit below. */
+function railTieLayerSpecs(): LayerSpecification[] {
+  return [
     {
       // One feature carries a track's ties as a MultiLineString, below the
       // two rails it joins. This is physical detail, not a repeated icon.
@@ -229,6 +238,13 @@ function streetDetailLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'line-opacity': tierOpacityExpr(0.78) as never,
       },
     },
+  ];
+}
+
+/** Rail centerlines follow the ties immediately. A rail is two physical lines,
+ * not a generic widened lane surface. */
+function railTrackLayerSpecs(): LayerSpecification[] {
+  return [
     {
       // Thin-line lanes (rail tracks embedded in or beside a street) — a track
       // is two physical rails, not a slab. Monorail/channel centerlines retain
@@ -247,6 +263,13 @@ function streetDetailLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'line-opacity': TIER_OPACITY_EXPR as never,
       },
     },
+  ];
+}
+
+/** Directional roadway boundaries, crosswalks, and stop bars are the surface
+ * markings that sit above lanes and below junction movement guidance. */
+function surfaceMarkingLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
       // Dashed white separator between same-direction lanes.
       id: LYR_LANE_LINES,
@@ -316,6 +339,16 @@ function streetDetailLayerSpecs(theme: MapTheme): LayerSpecification[] {
       },
     },
   ];
+}
+
+/** Road markings sit over the metric lane polygons. The order reflects the
+ * physical drawing order rather than forcing a reader through one long list. */
+function laneMarkingLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [...railTieLayerSpecs(), ...railTrackLayerSpecs(), ...surfaceMarkingLayerSpecs(theme)];
+}
+
+function streetDetailLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [...laneSurfaceLayerSpecs(), ...laneMarkingLayerSpecs(theme)];
 }
 
 function streetGuidanceLayerSpecs(theme: MapTheme): LayerSpecification[] {
