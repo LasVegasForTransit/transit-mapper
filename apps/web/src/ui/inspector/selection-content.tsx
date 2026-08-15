@@ -9,6 +9,7 @@ import { GroupInspector } from './GroupInspector';
 import { LineInspector } from './LineInspector';
 import { ServiceInspector } from './ServiceInspector';
 import { StationInspector } from './StationInspector';
+import { StopInspector } from './StopInspector';
 import { WayInspector } from './WayInspector';
 
 export interface SelectionInspectorContentProps {
@@ -32,11 +33,13 @@ export default function SelectionInspectorContent({
   if (selection.kind === 'facility') return <FacilityInspector id={selection.id} />;
   if (selection.kind === 'group') return <GroupInspector id={selection.id} />;
   if (selection.kind === 'node') return <NodeInspector id={selection.id} />;
-  return <StationInspector id={selection.id} />;
+  if (selection.kind === 'station') return <StationInspector id={selection.id} />;
+  return <StopInspector id={selection.id} />;
 }
 
 const MULTI_KIND_LABEL: Record<MultiSelectItem['kind'], string> = {
   way: 'way',
+  stop: 'stop',
   station: 'station',
   facility: 'facility',
   line: 'line',
