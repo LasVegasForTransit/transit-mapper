@@ -148,6 +148,18 @@ if (!commitMessageHook.includes('validate-commit-subject.mjs')) {
   fail('the commit-msg hook does not use the pinned subject validator');
 }
 
+const prepareCommitMessageHook = await readFile(
+  resolve(ROOT, '.githooks/prepare-commit-msg'),
+  'utf8',
+);
+if (
+  !prepareCommitMessageHook.includes('CODEX_SESSION_ID') ||
+  !prepareCommitMessageHook.includes('Codex <noreply@openai.com>') ||
+  !commitMessageHook.includes('CODEX_SESSION_ID')
+) {
+  fail('the commit hooks do not require Codex attribution');
+}
+
 const issueTemplates = await readdir(resolve(ROOT, '.github/ISSUE_TEMPLATE')).catch(
   (error: unknown) => {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
