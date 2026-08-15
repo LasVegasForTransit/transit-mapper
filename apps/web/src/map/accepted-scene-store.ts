@@ -76,6 +76,7 @@ export interface AcceptedSceneStore {
 
 interface ScenePublication {
   readonly sourceIds: readonly string[];
+  readonly clearedSourceIds: readonly string[];
   readonly preparationUnits?: RenderSceneSourceUpdatePlan['preparationUnits'];
   readonly units: readonly RenderSceneSourceMutationUnit[];
   readonly mode?: RenderSceneSourceUpdatePlan['mode'];
@@ -185,6 +186,7 @@ class AcceptedSceneStoreImplementation implements AcceptedSceneStore {
     };
     return {
       sourceIds: sourcePlan.sourceIds,
+      clearedSourceIds: sourcePlan.clearedSourceIds ?? [],
       preparationUnits: sourcePlan.preparationUnits,
       units: sourcePlan.units,
       ...(sourcePlan.mode ? { mode: sourcePlan.mode } : {}),

@@ -11,7 +11,7 @@ import {
 import type { AcceptedSceneStore } from './accepted-scene-store';
 import { SRC_HIT_FEATURES } from './layers/constants';
 import type { SourceBankController, SourceBankId } from './source-bank';
-import type { SourceBankLayerController } from './source-bank-layers';
+import { logicalRenderSourceId, type SourceBankLayerController } from './source-bank-layers';
 import {
   waitForSourceBankLoad,
   waitForSourceBankPaint,
@@ -61,6 +61,32 @@ function restoreAcceptedBank(
   else layers.finishStaging(failedBank);
 }
 
+function sourceIdsRequiringLoad(plan: {
+  sourceIds: readonly string[];
+  clearedSourceIds?: readonly string[];
+  mode?: 'active' | 'hidden' | 'seed' | 'unbanked';
+}): string[] {
+  if (plan.mode !== 'hidden' && plan.mode !== 'seed') return [...plan.sourceIds];
+  const cleared = new Set(plan.clearedSourceIds);
+  return plan.sourceIds.filter(
+    (sourceId) => !cleared.has(sourceId) || logicalRenderSourceId(sourceId) === SRC_HIT_FEATURES,
+  );
+}
+
+function clearedLogicalSourceIds(plan: {
+  clearedSourceIds?: readonly string[];
+}): ReadonlySet<string> {
+  return new Set((plan.clearedSourceIds ?? []).map(logicalRenderSourceId));
+}
+
+function waitForPlannedSourceLoad(
+  host: SourceBankSettlementHost,
+  sourceIds: readonly string[],
+  signal: AbortSignal,
+): Promise<void> {
+  return waitForSourceBankLoad({ host, sourceIds, signal });
+}
+
 export function createAcceptedSceneRecovery(
   options: AcceptedSceneRecoveryOptions,
 ): RenderSourceErrorRecoveryCoordinator {
@@ -79,7 +105,7 @@ export function createAcceptedSceneRecovery(
     controller: options.scenes,
     beforeSourceMutation: async (plan) => {
       if ((plan.mode === 'hidden' || plan.mode === 'seed') && plan.bank) {
-        options.layers.prepare(plan.bank);
+        options.layers.prepare(plan.bank, clearedLogicalSourceIds(plan));
         await paint();
       }
     },
@@ -87,11 +113,12 @@ export function createAcceptedSceneRecovery(
       mutatedSourceIds = sourceIds;
       mode = plan.mode;
       bank = plan.bank;
-      if (sourceIds.length === 0) {
+      const awaitedSourceIds = sourceIdsRequiringLoad(plan);
+      if (awaitedSourceIds.length === 0) {
         sourceLoad = null;
         return;
       }
-      sourceLoad = waitForSourceBankLoad({ host: options.host, sourceIds, signal: abort.signal });
+      sourceLoad = waitForPlannedSourceLoad(options.host, awaitedSourceIds, abort.signal);
       // Recovery may fail before its publish stage awaits this same barrier.
       // Keep that rejection available to the recovery flow without leaking an
       // unhandled browser error after cancellation.
@@ -101,12 +128,11 @@ export function createAcceptedSceneRecovery(
       mode = plan.mode;
       bank = plan.bank;
       if (plan.sourceIds.length === 0) return;
-      await (sourceLoad ??
-        waitForSourceBankLoad({
-          host: options.host,
-          sourceIds: plan.sourceIds,
-          signal: abort.signal,
-        }));
+      const awaitedSourceIds = sourceIdsRequiringLoad(plan);
+      if (sourceLoad) await sourceLoad;
+      else if (awaitedSourceIds.length > 0) {
+        await waitForPlannedSourceLoad(options.host, awaitedSourceIds, abort.signal);
+      }
       if ((plan.mode === 'hidden' || plan.mode === 'seed') && plan.bank) await paint();
     },
     beforeScenePublish: async (plan) => {

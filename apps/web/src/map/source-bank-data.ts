@@ -216,6 +216,7 @@ class SourceBankDataStoreImplementation implements SourceBankDataStore {
     return {
       strategy: delegate.strategy,
       sourceIds: delegate.sourceIds,
+      clearedSourceIds: delegate.clearedSourceIds,
       preparationUnits: delegate.preparationUnits,
       units: delegate.units,
       mode: 'unbanked',
@@ -285,9 +286,8 @@ class SourceBankDataStoreImplementation implements SourceBankDataStore {
     let activated = false;
     const activation = () => sourceBankRevision(this.filteredScene(pending.next));
     const requireActive = () => {
-      if (this.activePlan !== token) {
+      if (this.activePlan !== token)
         throw new Error('Banked render source plan is no longer active.');
-      }
     };
     const stage = () => {
       requireActive();
@@ -315,6 +315,7 @@ class SourceBankDataStoreImplementation implements SourceBankDataStore {
     return {
       strategy: delegate.strategy,
       sourceIds: delegate.sourceIds,
+      clearedSourceIds: delegate.clearedSourceIds,
       preparationUnits: delegate.preparationUnits,
       units: delegate.units,
       mode,

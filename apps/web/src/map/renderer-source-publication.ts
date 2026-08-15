@@ -16,7 +16,8 @@ import type {
 } from './render-source-error-recovery';
 import type { ScenePublicationContext, PublishSceneDraftOptions } from './scene-publication';
 import type { SourceBankController, SourceBankId } from './source-bank';
-import type { SourceBankLayerController } from './source-bank-layers';
+import { SRC_HIT_FEATURES } from './layers/constants';
+import { logicalRenderSourceId, type SourceBankLayerController } from './source-bank-layers';
 import {
   waitForSourceBankLoad,
   waitForSourceBankPaint,
@@ -68,18 +69,18 @@ export class RendererSourcePublication {
     return {
       beforeSourceMutation: async (context) => {
         if (!this.isInactiveBank(context)) return;
-        this.options.layers.prepare(context.bank);
+        this.options.layers.prepare(context.bank, this.clearedLogicalSourceIds(context));
         await this.waitForPaint();
       },
       onSourceMutationStart: (sourceIds, context) => {
         mutatedSourceIds = sourceIds;
-        this.beginSourceMutation(sourceIds, context);
+        this.beginSourceMutation(this.sourceIdsAwaitingReadiness(sourceIds, context), context);
       },
       beforePublish: async (context) => {
         if (context.sourceIds.length === 0) return;
         this.finishSourceMutations?.();
         this.finishSourceMutations = null;
-        await (this.sourceLoad ?? this.waitForLoad(context.sourceIds));
+        if (this.sourceLoad) await this.sourceLoad;
         if (this.isInactiveBank(context)) await this.waitForPaint();
       },
       beforeScenePublish: async (context) => {
@@ -199,12 +200,19 @@ export class RendererSourcePublication {
     return (context.mode === 'hidden' || context.mode === 'seed') && context.bank !== undefined;
   }
 
-  private waitForLoad(sourceIds: readonly string[]): Promise<void> {
-    return waitForSourceBankLoad({
-      host: this.options.host,
-      sourceIds,
-      ...(this.abortController ? { signal: this.abortController.signal } : {}),
-    });
+  private sourceIdsAwaitingReadiness(
+    sourceIds: readonly string[],
+    context: ScenePublicationContext,
+  ): string[] {
+    if (!this.isInactiveBank(context)) return [...sourceIds];
+    const cleared = new Set(context.clearedSourceIds);
+    return sourceIds.filter(
+      (sourceId) => !cleared.has(sourceId) || logicalRenderSourceId(sourceId) === SRC_HIT_FEATURES,
+    );
+  }
+
+  private clearedLogicalSourceIds(context: ScenePublicationContext): ReadonlySet<string> {
+    return new Set(context.clearedSourceIds.map(logicalRenderSourceId));
   }
 
   private waitForPaint(): Promise<void> {

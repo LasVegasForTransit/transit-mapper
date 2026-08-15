@@ -27,6 +27,7 @@ interface SceneDraftController<Update> {
 
 export interface PreparedScenePublication<Update> {
   readonly sourceIds: readonly string[];
+  readonly clearedSourceIds?: readonly string[];
   readonly preparationUnits?: CooperativeRenderJobUnitSequence<void>;
   readonly units: readonly RenderSceneSourceMutationUnit[];
   readonly mode?: 'active' | 'hidden' | 'seed' | 'unbanked';
@@ -59,6 +60,7 @@ export interface PublishSceneDraftOptions<Update> {
 
 export interface ScenePublicationContext {
   readonly sourceIds: readonly string[];
+  readonly clearedSourceIds: readonly string[];
   readonly mode?: 'active' | 'hidden' | 'seed' | 'unbanked';
   readonly bank?: 'a' | 'b' | null;
   readonly targetsForDomainIdentity?: (

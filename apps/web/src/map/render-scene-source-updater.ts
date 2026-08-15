@@ -121,6 +121,7 @@ function resolveFullUploads(
         collection,
         batchSize,
       }),
+      clearsTarget: isKnownEmptyRenderFeatureCollection(collection),
     });
   }
   // Scene statistics are carried beside hit geometry specifically so this
@@ -139,6 +140,7 @@ function resolveFullUploads(
         collection: next.hitFeatures,
         batchSize,
       }),
+      clearsTarget: next.stats.generatedHitFeatureCount === 0,
     });
   }
   return uploads;
@@ -177,6 +179,7 @@ function resolvePatchUploads(
         collection,
         batchSize,
       }),
+      clearsTarget: isKnownEmptyRenderFeatureCollection(collection),
       patch: patchPayload(diff.add.get(sourceId) ?? [], diff.remove.get(sourceId) ?? []),
     };
   });
@@ -191,6 +194,7 @@ function resolvePatchUploads(
         collection: next.hitFeatures,
         batchSize,
       }),
+      clearsTarget: next.stats.generatedHitFeatureCount === 0,
       patch: hitPatch,
     });
   }

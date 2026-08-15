@@ -141,6 +141,29 @@ describe('render source bank layer controller', () => {
     expect(layers.stagingBankId()).toBeNull();
   });
 
+  it('keeps layers for a cleared incoming source hidden through activation', () => {
+    const bankController = createSourceBankController();
+    const way = LAYER_SPECS.find((spec) => spec.id === 'tm-ways-solid');
+    if (!way) throw new Error('Expected the solid way layer.');
+    const visible = new Map<string, string>();
+    const layers = createSourceBankLayerController({
+      bankController,
+      logicalSpecs: [way],
+      host: {
+        hasLayer: () => true,
+        setVisibility: (layerId, visibility) => visible.set(layerId, visibility),
+        setPaintProperty() {},
+      },
+      now: () => 0,
+    });
+
+    layers.prepare('b', new Set(['tm-ways']));
+    layers.activate('b');
+
+    expect(visible.get(bankedLayerId(way.id, 'b'))).toBe('none');
+    expect(visible.get(bankedLayerId(way.id, 'a'))).toBe('visible');
+  });
+
   it('restores outgoing translations after an activated bank render is rejected', () => {
     const bankController = createSourceBankController();
     const first = bankController.begin({ logicalSourceIds: ['tm-ways'] });
