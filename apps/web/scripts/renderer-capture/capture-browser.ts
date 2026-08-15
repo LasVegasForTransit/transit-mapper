@@ -152,14 +152,28 @@ export async function setSettledCamera(
   zoom: number,
   center: [number, number] = fixtureCenter(system),
 ): Promise<void> {
-  await page.evaluate(
-    async ({ center: requestedCenter, requestedZoom }) => {
-      const setCamera = window.__rendererCaptureSetCamera;
-      if (!setCamera) throw new Error('Renderer capture camera seam is unavailable.');
-      await setCamera({ center: requestedCenter, zoom: requestedZoom });
-    },
-    { center, requestedZoom: zoom },
-  );
+  try {
+    await page.evaluate(
+      async ({ center: requestedCenter, requestedZoom }) => {
+        const setCamera = window.__rendererCaptureSetCamera;
+        if (!setCamera) throw new Error('Renderer capture camera seam is unavailable.');
+        await setCamera({ center: requestedCenter, zoom: requestedZoom });
+      },
+      { center, requestedZoom: zoom },
+    );
+  } catch (error) {
+    const diagnostics = await page
+      .evaluate(() => ({
+        renderer: window.__rendererStats?.() ?? null,
+        sourceUploads: window.__perfSourceUploadTimings?.() ?? null,
+        sourceBanks: window.__perfRenderSourceBankSnapshot?.() ?? null,
+      }))
+      .catch(() => null);
+    throw new Error(
+      `Renderer camera settlement failed. Diagnostics: ${JSON.stringify(diagnostics)}`,
+      { cause: error },
+    );
+  }
   await settleCapturePixels(page);
 }
 

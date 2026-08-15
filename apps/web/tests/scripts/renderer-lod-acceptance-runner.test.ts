@@ -1,10 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import type { Page } from 'playwright-core';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   rendererLodAcceptanceBankIdentity,
   rendererLodAcceptanceStatsAssertion,
   rendererLodAcceptanceStatsSnapshot,
   requiredRendererBankAcceptanceSnapshot,
 } from '../../scripts/renderer-capture/lod-acceptance-runner';
+import { selectAcceptanceWay } from '../../scripts/renderer-capture/lod-acceptance-visual-capture';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('renderer LOD acceptance runner', () => {
   it('separates committed bank uploads from editor-owned and transient sources', () => {
@@ -121,5 +127,26 @@ describe('renderer LOD acceptance runner', () => {
         after: { ...before, projectionCount: 5 },
       }).passed,
     ).toBe(true);
+  });
+
+  it('selects an acceptance corridor through the editor command boundary', async () => {
+    const select = vi.fn();
+    const settled = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('window', {
+      __editor: {
+        getState: () => ({}),
+        commands: { selection: { select } },
+      },
+      __rendererCaptureWhenSettled: settled,
+    });
+    const page = {
+      evaluate: <Argument>(callback: (argument: Argument) => unknown, argument: Argument) =>
+        Promise.resolve(callback(argument)),
+    } as unknown as Page;
+
+    await selectAcceptanceWay(page, 'port-mason-harbor-bridge');
+
+    expect(select).toHaveBeenCalledWith({ kind: 'way', id: 'port-mason-harbor-bridge' });
+    expect(settled).toHaveBeenCalledOnce();
   });
 });
