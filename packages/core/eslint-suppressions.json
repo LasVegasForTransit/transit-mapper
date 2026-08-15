@@ -25,17 +25,6 @@
       "count": 1
     }
   },
-  "src/model/diagramLayout.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
-    },
-    "complexity": {
-      "count": 1
-    },
-    "sonarjs/cognitive-complexity": {
-      "count": 1
-    }
-  },
   "src/model/geo/corridorConflation.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
@@ -97,23 +86,9 @@
       "count": 2
     }
   },
-  "src/model/geocode.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "@typescript-eslint/prefer-optional-chain": {
-      "count": 1
-    }
-  },
   "src/model/gtfsImport.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-type-conversion": {
-      "count": 1
+      "count": 4
     },
     "complexity": {
       "count": 3
@@ -134,9 +109,6 @@
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 3
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
     },
     "complexity": {
       "count": 1
@@ -179,9 +151,6 @@
   "src/model/profile.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
     },
     "max-params": {
       "count": 1
@@ -231,9 +200,6 @@
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 5
     },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 6
-    },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 1
     },
@@ -247,7 +213,7 @@
       "count": 1
     },
     "sonarjs/cognitive-complexity": {
-      "count": 2
+      "count": 1
     }
   },
   "src/model/serviceEdits.ts": {
@@ -364,9 +330,6 @@
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
     },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-conversion": {
       "count": 1
     }
@@ -417,11 +380,6 @@
   "tests/render/buildFeatures.test.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
-    }
-  },
-  "tests/sim/serviceStats.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 6
     }
   }
 }
