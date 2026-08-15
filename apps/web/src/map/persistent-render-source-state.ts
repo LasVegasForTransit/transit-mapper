@@ -58,6 +58,18 @@ export interface RenderFeatureCollectionMaterialization {
   result(): FeatureCollection;
 }
 
+/**
+ * Answers only when emptiness is already available without forcing a retained
+ * overlay to enumerate its complete stable base. Source publication uses this
+ * to avoid resubmitting a MapLibre source that was created empty and remains
+ * empty; an unknown lazy collection stays conservative and is uploaded.
+ */
+export function isKnownEmptyRenderFeatureCollection(collection: FeatureCollection): boolean {
+  const lazy = lazyFeatureCollections.get(collection as RenderFeatureCollection);
+  if (lazy?.features === null) return false;
+  return collection.features.length === 0;
+}
+
 type MaterializationPhase = 'base' | 'changes' | 'merge' | 'complete';
 
 const MATERIALIZATION_SORT_RUN_SIZE = 64;

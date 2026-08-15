@@ -105,10 +105,15 @@ export class RendererSourcePublication {
             this.options.layers.finishActivation(context.bank);
           }
           await onAccepted?.(update);
-          afterAccepted?.();
         } finally {
           this.clear();
         }
+        // `afterAccepted` may prepare an editor-only scene. Release this
+        // publication's source barrier first: the accepted CPU scene and the
+        // physical bank are authoritative now, so the editor can safely use
+        // that exact revision without being mistaken for a competing bank
+        // transaction.
+        afterAccepted?.();
       },
     };
   }

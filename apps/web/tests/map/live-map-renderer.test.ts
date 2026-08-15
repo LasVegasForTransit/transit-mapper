@@ -1,6 +1,7 @@
 import type { FeatureCollection } from 'geojson';
 import { describe, expect, it } from 'vitest';
-import { SRC_WAYS } from '../../src/map/layers';
+import { renderFeatureId, systemFeatureSourceId } from '@transitmapper/core/render/render-identity';
+import { SRC_HANDLES, SRC_WAYS } from '../../src/map/layers';
 import { createLiveMapRenderer, type LiveMapRendererHost } from '../../src/map/live-map-renderer';
 import type { FeatureProjectionClient } from '../../src/map/feature-projection-worker';
 import { emptySystemFeatures } from '../../src/map/system-feature-sources';
@@ -13,6 +14,28 @@ const unusedProjectionWorker: FeatureProjectionClient = {
   project: () => Promise.reject(new Error('This publication test does not project features.')),
   dispose: () => {},
 };
+
+function systemFeaturesWithWay() {
+  const features = emptySystemFeatures();
+  features.ways = {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        id: renderFeatureId(systemFeatureSourceId('ways'), 'overview', ['test-way']),
+        properties: {},
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [0, 0],
+            [1, 1],
+          ],
+        },
+      },
+    ],
+  };
+  return features;
+}
 
 class TestSource implements GeoJsonSourceTarget {
   constructor(private readonly onMutation: () => void) {}
@@ -168,6 +191,45 @@ describe('live map renderer', () => {
 
     await advanceUntil(host, () => renderer.snapshot().acceptedRevision === 'first', 200, false);
     await expect(submission.settled).resolves.toBeUndefined();
+    renderer.dispose();
+  });
+
+  it('defers an editor-only source update until the committed bank publication settles', async () => {
+    const host = new TestRendererHost();
+    host.emitSourceDataOnMutation = true;
+    const renderer = createLiveMapRenderer({
+      host,
+      layerSpecs: [],
+      featureProjectionWorker: unusedProjectionWorker,
+    });
+    const first = renderer.publishScene({
+      revision: 'first',
+      features: emptySystemFeatures(),
+      sourceIds: [SRC_WAYS],
+    });
+    await advanceUntil(host, () => renderer.snapshot().acceptedRevision === 'first', 200, false);
+    await first.settled;
+
+    const second = renderer.publishScene({
+      revision: 'second',
+      features: systemFeaturesWithWay(),
+      sourceIds: [SRC_WAYS],
+      intent: 'reset',
+    });
+    await advanceUntil(host, () => renderer.snapshot().activeRevision === 'second');
+    expect(renderer.publicationInProgress()).toBe(true);
+
+    expect(
+      renderer.updateEditorScene({
+        revision: 'editor-after-second',
+        features: emptySystemFeatures(),
+        sourceIds: [SRC_HANDLES],
+      }),
+    ).toBeNull();
+
+    host.paint();
+    await second.settled;
+    expect(renderer.snapshot().acceptedRevision).toBe('editor-after-second');
     renderer.dispose();
   });
 });

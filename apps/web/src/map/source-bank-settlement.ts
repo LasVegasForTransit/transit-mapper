@@ -41,13 +41,14 @@ const DEFAULT_SETTLEMENT_TIMEOUT_MS = 2_000;
 function settlementPromise(
   subscribe: (settle: () => void) => () => void,
   options: SourceBankSettlementOptions,
-  timeoutMessage: string,
+  timeoutMessage: string | (() => string),
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     let finished = false;
     let unsubscribe = () => {};
     const timeout = globalThis.setTimeout(
-      () => fail(new Error(timeoutMessage)),
+      () =>
+        fail(new Error(typeof timeoutMessage === 'function' ? timeoutMessage() : timeoutMessage)),
       options.timeoutMs ?? DEFAULT_SETTLEMENT_TIMEOUT_MS,
     );
     const cleanup = () => {
@@ -97,7 +98,10 @@ export function waitForSourceBankLoad({
       return stop;
     },
     { host, ...(signal ? { signal } : {}), ...(timeoutMs ? { timeoutMs } : {}) },
-    'Hidden renderer sources did not load in time.',
+    () => {
+      const missing = exactSourceIds.filter((sourceId) => !observedLoaded.has(sourceId));
+      return `Hidden renderer sources did not load in time: ${missing.join(', ')}.`;
+    },
   );
 }
 

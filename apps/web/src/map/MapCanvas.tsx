@@ -658,6 +658,14 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         });
       }
     };
+    // Editor work may wait behind a bank publication. Only count the update
+    // when it actually reached its unbanked source; a deferred refresh will
+    // be applied against the accepted revision by LiveMapRenderer instead.
+    const recordAcceptedSceneUpdate = (update: AcceptedSceneUpdate | null) => {
+      if (!update) return;
+      recordSourceUploads(projectionCounts, update.sourceUploadCount);
+      recordSceneUpdate(update);
+    };
 
     // Renderer construction and interaction-state construction reference each
     // other during a bank handoff. The callback is installed synchronously
@@ -1255,8 +1263,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
                         ],
                       ]),
                     });
-                    recordSourceUploads(projectionCounts, update.sourceUploadCount);
-                    recordSceneUpdate(update);
+                    recordAcceptedSceneUpdate(update);
                     countTransaction.accept();
                   } catch (error) {
                     countTransaction.discard();
@@ -1377,8 +1384,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           features,
           sourceIds: EDITOR_SYSTEM_FEATURE_SOURCES,
         });
-        recordSourceUploads(projectionCounts, update.sourceUploadCount);
-        recordSceneUpdate(update);
+        recordAcceptedSceneUpdate(update);
         applySelectionState();
         const guideSource = map.getSource<GeoJSONSource>(SRC_JUNCTION_GUIDES);
         if (guideSource) {
@@ -1414,8 +1420,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
               features,
               sourceIds: EDITOR_SYSTEM_FEATURE_SOURCES,
             });
-            recordSourceUploads(projectionCounts, update.sourceUploadCount);
-            recordSceneUpdate(update);
+            recordAcceptedSceneUpdate(update);
             applySelectionState();
             const guideSource = map.getSource<GeoJSONSource>(SRC_JUNCTION_GUIDES);
             if (guideSource) {
