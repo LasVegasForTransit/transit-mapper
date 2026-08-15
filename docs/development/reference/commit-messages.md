@@ -103,8 +103,9 @@ model touched this" years later.
 helped; silence says one did not, and that is the common case for a human at a
 keyboard. Nothing asks a person for a footer.
 
-**An agent cannot skip it.** Both hooks read the same signal — `AI_AGENT` or
-`CLAUDECODE` in the environment, neither of which a person has set:
+**An agent cannot skip it.** Both hooks read the same signal —
+`CODEX_SESSION_ID`, `AI_AGENT`, or `CLAUDECODE` in the environment, none of
+which a person has set:
 
 - `prepare-commit-msg` writes a footer, so nobody has to remember.
 - `commit-msg` refuses the commit if there is none, so removing it fails
@@ -141,11 +142,11 @@ else. A body that restates the diff, a `feat` with no body, and a wrong type
 all pass and get caught in review.
 
 Attribution is split across both hooks, and the gap that remains is the
-environment itself. Both halves read `AI_AGENT` and `CLAUDECODE`, so an agent
-committing somewhere those are unset — a container that does not forward them,
-or a tool that does not set them — is indistinguishable from a person and
-passes. Widening the signal is how that gap closes; there is no way to see it
-in the diff afterwards.
+environment itself. Both halves read `CODEX_SESSION_ID`, `AI_AGENT`, and
+`CLAUDECODE`, so an agent committing somewhere none of those are forwarded —
+a container that drops them, or a tool that does not set one — is
+indistinguishable from a person and passes. Widening the signal is how that
+gap closes; there is no way to see it in the diff afterwards.
 
 The hooks exist to stop the mechanical mistakes, not to replace reading the
 message.
