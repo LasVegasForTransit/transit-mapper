@@ -17,9 +17,6 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@radix-ui/react-dialog": "catalog:",
-    "@radix-ui/react-dropdown-menu": "catalog:",
-    "@radix-ui/react-popover": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@transitmapper/core": "workspace:*",
     "@transitmapper/pwa-updater": "workspace:*",
@@ -43,7 +40,6 @@
     "tsx": "catalog:",
     "vite": "catalog:",
     "vite-plugin-pwa": "catalog:",
-    "vitest": "catalog:",
-    "workbox-window": "catalog:"
+    "vitest": "catalog:"
   }
 }

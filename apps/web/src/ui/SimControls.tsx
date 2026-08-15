@@ -142,9 +142,8 @@ function ScenarioPicker() {
   const labels = useMemo(() => schedulePeriodLabels(services), [services]);
   if (labels.length === 0) return null;
   return (
-    // The class goes on Popover (its Radix Content), not on an inner div:
-    // Content is what carries `data-state`, so that's the only element the
-    // open/close animation can key off.
+    // The class goes on Popover's top-layer surface, not on an inner div:
+    // that surface carries `data-state`, which the entrance motion keys off.
     <Popover
       className="sim-scenario-popover"
       trigger={

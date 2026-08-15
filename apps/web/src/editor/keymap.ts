@@ -5,8 +5,6 @@
 // by the controller rather than as a discrete command.
 import type { Map as MLMap } from 'maplibre-gl';
 import {
-  MODE_ORDER,
-  WAY_TYPE_ORDER,
   profilePresetsForWayType,
   wayTypesByFamily,
   type WayFamily,
@@ -18,7 +16,7 @@ import {
   makeTwoWay,
   wayCapacity,
 } from '@transitmapper/core/model/profile';
-import { exportFullSystemPng } from '../share/pngExport';
+import { exportNetworkPng } from '../share/quick-export';
 import type { EditorStore } from './store';
 export interface KeyContext {
   map: MLMap;
@@ -69,7 +67,6 @@ export interface KeyBinding {
 
 const PAN_STEP_PX = 120;
 const ZOOM_STEP = 0.6;
-
 const editable = (c: KeyContext) => !c.editor.getState().readOnly;
 
 const panBy = (c: KeyContext, dx: number, dy: number) => c.map.panBy([dx, dy], { duration: 0 });
@@ -308,12 +305,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
     // React's ViewProvider) — a quick keyboard capture shows the whole system
     // with everything visible, network view, same "show something of
     // substance" default as the quick-export menu.
-    run: (c) =>
-      exportFullSystemPng(c.editor.getState().system, {
-        viewMode: 'network',
-        visibleModes: new Set(MODE_ORDER),
-        visibleWayTypes: new Set(WAY_TYPE_ORDER),
-      }),
+    run: (c) => void exportNetworkPng(c.editor.getState().system),
   },
 
   {

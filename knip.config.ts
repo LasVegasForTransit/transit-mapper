@@ -52,13 +52,6 @@ const config: KnipConfig = {
     // the reason attached.
     duplicates: 'off',
   },
-  ignore: [
-    // A triple-slash reference and nothing else, so it has no imports and no
-    // exports and reads as an unused file. Deleting it breaks
-    // `virtual:pwa-register/react` two packages away — knip's `--fix` did
-    // exactly that, which is the case its own documentation warns about.
-    'apps/web/src/pwaEnv.ts',
-  ],
   ignoreDependencies: [
     // `cloudflare:test` is a virtual module @cloudflare/vitest-pool-workers
     // provides inside workerd. knip reads the scheme as a package name.
