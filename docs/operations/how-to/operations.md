@@ -7,7 +7,8 @@ any of this.
 Production is one Cloudflare Worker (`transitmapper`) on
 `map.lasvegasfortransit.org`, serving the built SPA as static assets and
 handling `/api/*`, `/s/*` and `/e/*` itself, with one D1 database (also
-`transitmapper`) holding shared systems.
+`transitmapper`) holding shared systems and short-lived anonymous performance
+samples.
 
 ## Deploy
 
@@ -26,6 +27,15 @@ in the generated release pull request until that pull request is merged. Do
 not edit the version, changelog, release tag, or build revision by hand; the
 root manifest, conventional commits, and GitHub event are their canonical
 sources.
+
+Release builds embed the field-sampling policy alongside their public build
+identity. Defaults are enabled, 100 ordinary basis points (1%), and 500 release
+basis points (5%) until 24 hours after the build. A deployment can set
+`TRANSITMAPPER_PERFORMANCE_SAMPLING_ENABLED=0` as a build-time kill switch or
+set `TRANSITMAPPER_PERFORMANCE_ORDINARY_BASIS_POINTS` and
+`TRANSITMAPPER_PERFORMANCE_RELEASE_BASIS_POINTS` to integers from 0 through 10000. These are build inputs, not live Worker switches: changing one requires
+a new web build and deployment. The client still refuses local, untagged, or
+wrong-origin builds and honors GPC/DNT regardless of these values.
 
 [`deploy-production.yml`](../../../.github/workflows/deploy-production.yml)
 attaches the deployment archive and its Sigstore bundle to every GitHub
@@ -165,6 +175,57 @@ Worker logs are on at 100% sampling:
 ```bash
 pnpm --filter @transitmapper/worker exec wrangler tail
 ```
+
+### Performance sample maintenance
+
+The midnight UTC cron has independent concerns: it removes expired shares,
+rolls up every complete UTC performance-sample day that is not marked
+complete, and applies retention. Each build/surface/cache/service-worker/
+device/network/capability cohort becomes one row in
+`performance_daily_aggregates`; `metrics_json` contains only server-generated
+fixed metric keys with count, minimum, nearest-rank p50/p75/p95, maximum, and
+mean. Raw `performance_samples` rows are kept for seven days and deleted only
+after their day has a completion marker. Aggregate rows and completion markers
+are kept for 90 days.
+
+Each rollup transaction gives its marker an ephemeral owner token and gates
+every delete/insert in that batch on the same token. If two cron invocations
+overlap, one owns the day and the other commits a no-op; correctness does not
+depend on D1's formatted constraint-error text. A token is operational
+coordination only, is never derived from a browser sample, and is deleted with
+the 90-day marker.
+
+D1 Time Travel can restore rows that ordinary retention already removed. After
+any database restore, let the midnight maintenance run or invoke the same
+scheduled Worker path, then repeat the volume queries below and confirm that
+restored raw rows older than seven days and aggregates older than 90 days were
+removed again. A restore is not complete until that cleanup is verified.
+
+Inspect volume and aggregation progress without selecting individual raw
+measurements:
+
+```sql
+SELECT date(received_at / 1000, 'unixepoch') AS day, COUNT(*) AS samples
+FROM performance_samples
+GROUP BY day
+ORDER BY day DESC;
+```
+
+```sql
+SELECT datetime(day_start / 1000, 'unixepoch') AS day,
+       COUNT(*) AS cohorts,
+       SUM(sample_count) AS samples
+FROM performance_daily_aggregates
+GROUP BY day_start
+ORDER BY day_start DESC;
+```
+
+Run them with `wrangler d1 execute transitmapper --remote --command '<SQL>'`.
+If an old raw day remains, first look for a missing row in
+`performance_sample_aggregation_days` and an aggregation error in Worker logs.
+Do not delete the raw day until aggregation succeeds; the cron retries partial
+rollups deterministically. A telemetry aggregation failure must not stop
+expired-share cleanup, and vice versa.
 
 **There is no alerting.** Nothing pages anyone, emails anyone, or opens a
 ticket when the Worker throws — the logs above are a place to look, not a

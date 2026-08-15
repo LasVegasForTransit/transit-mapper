@@ -135,16 +135,16 @@ is still outstanding, roughly in order of how badly it misleads people.
   15m half-extent they inherited. A platform and a depot should not be the same size; that's a design
   pass, not a refactor.
 
-## Engineering: opt-in performance evidence
+## Engineering: privacy-preserving performance evidence
 
-- **Anonymous performance telemetry, only after explicit opt-in.** The local and CI harness can show
-  which operations are slow on its known machines, but not which devices people actually use.
-  A future setting may send an allowlisted set of timings, coarse device/browser capability buckets,
-  counters, and the app version. It starts off, explains the payload before consent, and can be
-  turned off again. It never sends document contents, system or route names, coordinates or
-  geometry, share ids, URLs, search/import terms, account identifiers, or a persistent
-  device/fingerprint id. Adding any field outside that allowlist requires a new privacy review and
-  updated consent copy; “anonymous” is not permission to quietly widen the payload.
+- **Transparent anonymous sampling with browser privacy controls.** Released builds sample 1% of
+  ordinary visits and 5% during their first 24 hours. The public privacy page explains the exact
+  allowlist, purpose, processor, and retention; GPC or DNT opts out before observers or sampling.
+  The build-and-tab decision stores only `0` or `1` and no persistent visitor or fingerprint id.
+  Reports never send document content, system/route/station names, coordinates or geometry, share
+  ids, URLs, search/import terms, account identifiers, input, raw IP addresses, or raw user agents.
+  Any new field or wider use requires a new privacy review and updated public policy; “anonymous” is
+  not permission to quietly widen the payload.
 
 ## How to help
 

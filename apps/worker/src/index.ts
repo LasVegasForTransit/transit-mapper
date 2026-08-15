@@ -10,30 +10,21 @@ import {
 import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from '@transitmapper/core/render/preview';
 import { checkPreviewPng, MAX_PREVIEW_BYTES } from '@transitmapper/core/render/pngBytes';
 import { handleOpenStreetMapWays, handlePlaceSearch } from './osm-gateway';
-import type { PlaceSearchGate } from './place-search-gate';
+import { handlePerformanceSample } from './performance-samples';
+import { runScheduledMaintenance } from './performance-maintenance';
 
-interface RateLimiter {
-  limit(options: { key: string }): Promise<{ success: boolean }>;
-}
+type OptionalLocalBinding =
+  | 'SHARE_CREATE_LIMITER'
+  | 'PLACE_SEARCH_LIMITER'
+  | 'PLACE_UPSTREAM_LIMITER'
+  | 'OSM_TILE_LIMITER'
+  | 'PERFORMANCE_SAMPLE_LIMITER'
+  | 'PLACE_SEARCH_GATE';
 
-interface Env {
-  DB: D1Database;
-  ASSETS: Fetcher;
-  SITE_URL: string;
-  /** Provider endpoint is configuration so production can move away from the
-   * public Nominatim service without rebuilding the application. */
-  NOMINATIM_URL: string;
-  /** Ceiling on share creation — see the `[[ratelimits]]` block in
-   *  wrangler.toml for why this endpoint in particular has one. Optional
-   *  because `wrangler dev` doesn't provide it locally. */
-  SHARE_CREATE_LIMITER?: RateLimiter;
-  /** Protect the public geocoding and Overpass commons independently. */
-  PLACE_SEARCH_LIMITER?: RateLimiter;
-  PLACE_UPSTREAM_LIMITER?: RateLimiter;
-  OSM_TILE_LIMITER?: RateLimiter;
-  /** Global public-Nominatim reservation coordinator. */
-  PLACE_SEARCH_GATE?: DurableObjectNamespace<PlaceSearchGate>;
-}
+/** Wrangler's generated Env is authoritative. Platform-only bindings remain
+ * optional at the local/test boundary because requests without Cloudflare's
+ * corresponding client metadata deliberately skip them. */
+type WorkerEnv = Omit<Env, OptionalLocalBinding> & Partial<Pick<Env, OptionalLocalBinding>>;
 
 const ANONYMOUS_SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days.
 
@@ -136,7 +127,7 @@ function withHtmlSecurityHeaders(response: Response, frameAncestors: string): Re
   return out;
 }
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: WorkerEnv }>();
 
 // Unhandled failures must not leak internals, and an /api client should get
 // JSON rather than a wall of text it can't parse.
@@ -257,7 +248,7 @@ function randomEditToken(): string {
 // keep being served for up to a day after the content underneath it changes.
 // Cache keys are full requests, so this has to reconstruct the same URL the
 // preview route itself is fetched at.
-function purgePreviewCache(c: Context<{ Bindings: Env }>, id: string): Promise<unknown> {
+function purgePreviewCache(c: Context<{ Bindings: WorkerEnv }>, id: string): Promise<unknown> {
   return caches.default
     .delete(new Request(`${c.env.SITE_URL}/s/${id}/preview.png`))
     .catch(() => undefined);
@@ -589,6 +580,8 @@ app.get('/api/oembed', async (c) => {
   );
 });
 
+app.post('/api/performance-samples', (c) => handlePerformanceSample(c.req.raw, c.env));
+
 app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 
 // Headers for serving a stored preview. The bytes passed validation at upload
@@ -664,7 +657,7 @@ app.get('/s/:id/preview.png', async (c) => {
  * answers with a 307 — which, passed through, is what a browser follows
  * instead of rendering the page.
  */
-function fetchAppShell(c: Context<{ Bindings: Env }>): Promise<Response> {
+function fetchAppShell(c: Context<{ Bindings: WorkerEnv }>): Promise<Response> {
   return c.env.ASSETS.fetch(new Request(new URL('/', c.req.raw.url), c.req.raw));
 }
 
@@ -672,7 +665,7 @@ function fetchAppShell(c: Context<{ Bindings: Env }>): Promise<Response> {
 // /s/:id, so pasting a share link into Slack/Discord/iMessage shows the
 // system's actual name instead of the generic site-wide card, and the
 // system's actual map instead of the generic site-wide image.
-async function handleSharePage(c: Context<{ Bindings: Env }>) {
+async function handleSharePage(c: Context<{ Bindings: WorkerEnv }>) {
   const id = c.req.param('id');
 
   // Fetch unconditionally so a missing/expired share falls through to
@@ -777,7 +770,7 @@ app.get('/s/:id/', handleSharePage);
 // rather than the SPA shell, so an iframe in someone's article downloads the
 // map and not the editor. The path doesn't reach the assets binding on its
 // own — SPA fallback would hand back index.html — so it's rewritten here.
-async function handleEmbedPage(c: Context<{ Bindings: Env }>) {
+async function handleEmbedPage(c: Context<{ Bindings: WorkerEnv }>) {
   // "/embed", not "/embed.html": the assets binding's default html_handling
   // redirects the extension form, and a 307 is not what an iframe should get.
   const embedRequest = new Request(new URL('/embed', c.req.raw.url), c.req.raw);
@@ -809,9 +802,7 @@ app.all('*', async (c) => {
 });
 
 async function scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
-  await env.DB.prepare('DELETE FROM systems WHERE expires_at IS NOT NULL AND expires_at < ?')
-    .bind(Date.now())
-    .run();
+  await runScheduledMaintenance(env.DB);
 }
 
 export default {
