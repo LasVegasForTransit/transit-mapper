@@ -60,9 +60,13 @@ Where ways meet at a node, drawing every way at full width would overlap
 messily. `src/geometry/junctions.ts` computes, per arm, how far to trim the
 way back: sort the arms around the junction, intersect each arm's edge line
 with its neighbor's, and trim to the farthest intersection (capped so a
-tiny side street can't consume a long block). The trimmed arm ends are then
-connected into the junction's surface polygon. Two collinear arms (a
-segment boundary, not a real junction) get no polygon at all.
+tiny side street can't consume a long block). Each corner then pulls both
+edge ends back and samples a tangential curve through that intersection. The
+result is a rounded curb return instead of a diagonal cut across the corner.
+If another corner needs a longer trim on the same arm, the renderer keeps the
+join straight rather than folding the road surface back over itself. Two
+collinear arms (a segment boundary, not a real junction) get no polygon at
+all.
 
 Trim distances feed back into lane derivation, so lanes visibly stop at the
 junction edge. This trim-back approach follows the intersection algorithm

@@ -25,6 +25,14 @@ import { trimPath, wayLaneGeometry, type LanePath } from './streets';
 
 type Vec = [number, number];
 
+interface JunctionCorner {
+  /** The point where the two unrounded approach edges would meet. */
+  readonly control: Vec;
+  /** Distances to that intersection before the curb return pulls back. */
+  readonly firstDistanceM: number;
+  readonly secondDistanceM: number;
+}
+
 const rot90ccw = (v: Vec): Vec => [-v[1], v[0]];
 const rot90cw = (v: Vec): Vec => [v[1], -v[0]];
 
@@ -55,6 +63,138 @@ export type WayTrims = Map<string, { start: number; end: number }>;
 
 const MIN_ANGLE_SIN = 0.15; // arms within ~9° of collinear don't trim each other
 const TRIM_CAP_FRACTION = 0.45; // a trim never eats more than 45% of its way
+const CURB_RETURN_SEGMENTS = 4;
+
+function add(left: Vec, right: Vec): Vec {
+  return [left[0] + right[0], left[1] + right[1]];
+}
+
+function scaled(vector: Vec, scale: number): Vec {
+  return [vector[0] * scale, vector[1] * scale];
+}
+
+function approachEdge(arm: JunctionArm, side: 'left' | 'right', trimM = arm.trimM): Vec {
+  const normal = side === 'left' ? rot90ccw(arm.dir) : rot90cw(arm.dir);
+  return add(scaled(normal, arm.halfWidthM), scaled(arm.dir, Math.max(trimM, 0.5)));
+}
+
+function quadraticPoint(start: Vec, control: Vec, end: Vec, progress: number): Vec {
+  const remaining = 1 - progress;
+  return [
+    remaining * remaining * start[0] +
+      2 * remaining * progress * control[0] +
+      progress * progress * end[0],
+    remaining * remaining * start[1] +
+      2 * remaining * progress * control[1] +
+      progress * progress * end[1],
+  ];
+}
+
+function curbReturnInset(a: JunctionArm, b: JunctionArm, t: number, s: number): number {
+  return Math.min(a.halfWidthM, b.halfWidthM, t * 0.35, s * 0.35);
+}
+
+function junctionArms(node: Node, waysById: Map<string, Way>): JunctionArm[] {
+  const arms: JunctionArm[] = [];
+  const seen = new Set<string>();
+  for (const ref of node.refs) {
+    const way = waysById.get(ref.wayId);
+    if (!way || way.points.length < 2) continue;
+    const isStart = ref.pointIndex === 0;
+    const isEnd = ref.pointIndex === way.points.length - 1;
+    if (!isStart && !isEnd) continue;
+    const key = `${way.id}:${isStart ? 'start' : 'end'}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const neighbor = way.points[isStart ? 1 : way.points.length - 2];
+    const direction = metersFromOrigin(node.coord, neighbor);
+    const length = Math.hypot(direction[0], direction[1]);
+    if (length < 0.01) continue;
+    arms.push({
+      wayId: way.id,
+      end: isStart ? 'start' : 'end',
+      dir: [direction[0] / length, direction[1] / length],
+      halfWidthM: profileWidthM(way.profile) / 2,
+      trimM: 0,
+    });
+  }
+  return arms.sort((a, b) => Math.atan2(a.dir[1], a.dir[0]) - Math.atan2(b.dir[1], b.dir[0]));
+}
+
+function resolveCurbReturnCorners(arms: JunctionArm[]): Array<JunctionCorner | null> {
+  const corners: Array<JunctionCorner | null> = Array.from({ length: arms.length }, () => null);
+  for (let index = 0; index < arms.length; index += 1) {
+    const nextIndex = (index + 1) % arms.length;
+    const first = arms[index];
+    const second = arms[nextIndex];
+    const cross = first.dir[0] * second.dir[1] - first.dir[1] * second.dir[0];
+    if (Math.abs(cross) < MIN_ANGLE_SIN) continue;
+    const firstEdge = scaled(rot90ccw(first.dir), first.halfWidthM);
+    const secondEdge = scaled(rot90cw(second.dir), second.halfWidthM);
+    const delta = add(secondEdge, scaled(firstEdge, -1));
+    const firstDistance = (delta[0] * second.dir[1] - delta[1] * second.dir[0]) / cross;
+    const secondDistance = (delta[0] * first.dir[1] - delta[1] * first.dir[0]) / cross;
+    if (firstDistance <= 0 || secondDistance <= 0) {
+      if (firstDistance > 0) first.trimM = Math.max(first.trimM, firstDistance);
+      if (secondDistance > 0) second.trimM = Math.max(second.trimM, secondDistance);
+      continue;
+    }
+    const inset = curbReturnInset(first, second, firstDistance, secondDistance);
+    first.trimM = Math.max(first.trimM, firstDistance - inset);
+    second.trimM = Math.max(second.trimM, secondDistance - inset);
+    corners[index] = {
+      control: add(firstEdge, scaled(first.dir, firstDistance)),
+      firstDistanceM: firstDistance,
+      secondDistanceM: secondDistance,
+    };
+  }
+  return corners;
+}
+
+function capJunctionTrims(
+  arms: JunctionArm[],
+  waysById: Map<string, Way>,
+  curveErrorM: number | undefined,
+): void {
+  for (const arm of arms) {
+    const way = waysById.get(arm.wayId);
+    if (!way) continue;
+    const path =
+      curveErrorM === undefined ? resolveWayPath(way) : resolveWayPathAtError(way, curveErrorM);
+    let lengthM = 0;
+    for (let index = 1; index < path.length; index += 1) {
+      const segment = metersFromOrigin(path[index - 1], path[index]);
+      lengthM += Math.hypot(segment[0], segment[1]);
+    }
+    arm.trimM = Math.min(arm.trimM, lengthM * TRIM_CAP_FRACTION);
+  }
+}
+
+function junctionPolygon(
+  node: Node,
+  arms: readonly JunctionArm[],
+  corners: readonly (JunctionCorner | null)[],
+): LngLat[] {
+  const polygon: LngLat[] = [];
+  for (let index = 0; index < arms.length; index += 1) {
+    const arm = arms[index];
+    const next = arms[(index + 1) % arms.length];
+    const right = approachEdge(arm, 'right');
+    const left = approachEdge(arm, 'left');
+    polygon.push(offsetMeters(node.coord, right[0], right[1]));
+    polygon.push(offsetMeters(node.coord, left[0], left[1]));
+    const corner = corners[index];
+    if (!corner || arm.trimM >= corner.firstDistanceM || next.trimM >= corner.secondDistanceM) {
+      continue;
+    }
+    const nextRight = approachEdge(next, 'right');
+    for (let segment = 1; segment < CURB_RETURN_SEGMENTS; segment += 1) {
+      const point = quadraticPoint(left, corner.control, nextRight, segment / CURB_RETURN_SEGMENTS);
+      polygon.push(offsetMeters(node.coord, point[0], point[1]));
+    }
+  }
+  return polygon;
+}
 
 /** Derive one junction's arms, trim distances, and footprint polygon.
  *  Returns null when fewer than 2 way-ends actually meet the node (e.g. a
@@ -64,65 +204,10 @@ export function junctionGeometry(
   waysById: Map<string, Way>,
   curveErrorM?: number,
 ): JunctionGeometry | null {
-  const arms: JunctionArm[] = [];
-  const seen = new Set<string>();
-  for (const ref of node.refs) {
-    const way = waysById.get(ref.wayId);
-    if (!way || way.points.length < 2) continue;
-    const isStart = ref.pointIndex === 0;
-    const isEnd = ref.pointIndex === way.points.length - 1;
-    if (!isStart && !isEnd) continue; // pass-through: the way just runs across the junction
-    const key = `${way.id}:${isStart ? 'start' : 'end'}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const neighbor = way.points[isStart ? 1 : way.points.length - 2];
-    const d = metersFromOrigin(node.coord, neighbor);
-    const len = Math.hypot(d[0], d[1]);
-    if (len < 0.01) continue;
-    arms.push({
-      wayId: way.id,
-      end: isStart ? 'start' : 'end',
-      dir: [d[0] / len, d[1] / len],
-      halfWidthM: profileWidthM(way.profile) / 2,
-      trimM: 0,
-    });
-  }
+  const arms = junctionArms(node, waysById);
   if (arms.length < 2) return null;
-
-  arms.sort((a, b) => Math.atan2(a.dir[1], a.dir[0]) - Math.atan2(b.dir[1], b.dir[0]));
-
-  // Adjacent arms (CCW order): intersect arm i's CCW-side edge with arm j's
-  // CW-side edge; the intersection parameters are how far each carriageway
-  // must pull back so their corners meet instead of overlapping.
-  for (let i = 0; i < arms.length; i++) {
-    const j = (i + 1) % arms.length;
-    const a = arms[i];
-    const b = arms[j];
-    const cross = a.dir[0] * b.dir[1] - a.dir[1] * b.dir[0];
-    if (Math.abs(cross) < MIN_ANGLE_SIN) continue; // near-collinear pair
-    const ca = rot90ccw(a.dir).map((v) => v * a.halfWidthM) as Vec;
-    const cb = rot90cw(b.dir).map((v) => v * b.halfWidthM) as Vec;
-    // Solve ca + t·a.dir = cb + s·b.dir.
-    const rx = cb[0] - ca[0];
-    const ry = cb[1] - ca[1];
-    const t = (rx * b.dir[1] - ry * b.dir[0]) / cross;
-    const s = (rx * a.dir[1] - ry * a.dir[0]) / cross;
-    if (t > 0) a.trimM = Math.max(a.trimM, t);
-    if (s > 0) b.trimM = Math.max(b.trimM, s);
-  }
-
-  // Cap trims so a short block between two junctions can't invert.
-  for (const arm of arms) {
-    const way = waysById.get(arm.wayId)!;
-    const path =
-      curveErrorM === undefined ? resolveWayPath(way) : resolveWayPathAtError(way, curveErrorM);
-    let len = 0;
-    for (let i = 1; i < path.length; i++) {
-      const d = metersFromOrigin(path[i - 1], path[i]);
-      len += Math.hypot(d[0], d[1]);
-    }
-    arm.trimM = Math.min(arm.trimM, len * TRIM_CAP_FRACTION);
-  }
+  const corners = resolveCurbReturnCorners(arms);
+  capJunctionTrims(arms, waysById, curveErrorM);
 
   // A plain 2-arm straight-through joint (a way resumed/merged mid-street)
   // needs no visible junction.
@@ -131,29 +216,12 @@ export function junctionGeometry(
     if (dot < -0.98) return { nodeId: node.id, coord: node.coord, arms, polygon: [] };
   }
 
-  // Footprint: each arm contributes its two trimmed edge corners; walking
-  // arms in CCW order yields a chamfered polygon (the degenerate corner
-  // fillet — real arcs can refine this later without changing the contract).
-  const polygon: LngLat[] = [];
-  for (const arm of arms) {
-    const left = rot90ccw(arm.dir);
-    const right = rot90cw(arm.dir);
-    const t = Math.max(arm.trimM, 0.5); // give even untrimmed arms a sliver of footprint
-    polygon.push(
-      offsetMeters(
-        node.coord,
-        right[0] * arm.halfWidthM + arm.dir[0] * t,
-        right[1] * arm.halfWidthM + arm.dir[1] * t,
-      ),
-      offsetMeters(
-        node.coord,
-        left[0] * arm.halfWidthM + arm.dir[0] * t,
-        left[1] * arm.halfWidthM + arm.dir[1] * t,
-      ),
-    );
-  }
-
-  return { nodeId: node.id, coord: node.coord, arms, polygon };
+  return {
+    nodeId: node.id,
+    coord: node.coord,
+    arms,
+    polygon: junctionPolygon(node, arms, corners),
+  };
 }
 
 /** Aggregate junction trims into per-way-end trim distances for stage 1. */

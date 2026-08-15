@@ -1,10 +1,10 @@
 {
   "src/geometry/junctions.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 3
+      "count": 2
     },
     "complexity": {
-      "count": 2
+      "count": 1
     },
     "sonarjs/cognitive-complexity": {
       "count": 3
