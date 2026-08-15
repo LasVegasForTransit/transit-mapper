@@ -488,13 +488,13 @@ describe('pointer work coalescing', () => {
   it('preloads selection details on a Select-tool press, not an unrelated drawing press', () => {
     installBrowserGlobals();
     const store = createEditorStore();
-    const map = createMap(stationFeature('station'));
+    const map = createMap(stopFeature('stop'));
     const onSelectionIntent = vi.fn();
     const detach = attach(map, store, { onSelectionIntent });
 
     store.commands.tools.setTool('select');
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
-    store.commands.tools.setTool('station');
+    store.commands.tools.setTool('stop');
     map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
 
     expect(onSelectionIntent).toHaveBeenCalledOnce();

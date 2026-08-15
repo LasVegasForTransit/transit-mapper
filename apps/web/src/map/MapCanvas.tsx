@@ -218,6 +218,7 @@ function promoteIdForSource(sourceId: string): string | undefined {
 function emptyGestureAffectedEntities(): GestureAffectedEntities {
   return {
     wayIds: [],
+    stopIds: [],
     stationIds: [],
     facilityIds: [],
     groupIds: [],
