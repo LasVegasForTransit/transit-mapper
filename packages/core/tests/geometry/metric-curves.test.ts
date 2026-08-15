@@ -4,6 +4,7 @@ import {
   resolveMetricCenterline,
   tessellateMetricCenterline,
   type MetricArc,
+  type MetricLine,
 } from '../../src/geometry/metric-curves';
 
 function rightAngleAt(latitude: number) {
@@ -19,8 +20,10 @@ function rightAngleAt(latitude: number) {
 }
 
 function arcOf(centerline: ReturnType<typeof resolveMetricCenterline>): MetricArc {
-  const arc = centerline.primitives.find((primitive) => primitive.kind === 'arc');
-  if (!arc || arc.kind !== 'arc') throw new Error('Expected a rounded corner.');
+  const arc = centerline.primitives.find(
+    (primitive): primitive is MetricArc => primitive.kind === 'arc',
+  );
+  if (!arc) throw new Error('Expected a rounded corner.');
   return arc;
 }
 
@@ -40,10 +43,16 @@ describe('metric corner curves', () => {
   it('joins straight approach and departure with a tangent circular arc', () => {
     const { points } = rightAngleAt(36);
     const centerline = resolveMetricCenterline(points);
-    const [approach, arc, departure] = centerline.primitives;
-    if (!approach || approach.kind !== 'line') throw new Error('Expected an approach line.');
-    if (!arc || arc.kind !== 'arc') throw new Error('Expected a circular corner.');
-    if (!departure || departure.kind !== 'line') throw new Error('Expected a departure line.');
+    expect(centerline.primitives.map((primitive) => primitive.kind)).toEqual([
+      'line',
+      'arc',
+      'line',
+    ]);
+    const [approach, arc, departure] = centerline.primitives as readonly [
+      MetricLine,
+      MetricArc,
+      MetricLine,
+    ];
 
     expect(arc.effectiveRadiusM).toBeCloseTo(250, 6);
     expect(arc.sweepRad).toBeCloseTo(Math.PI / 2, 6);
