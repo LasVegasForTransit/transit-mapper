@@ -90,11 +90,11 @@ function operationCounts() {
     ...createFeatureBuildOperationCounts(),
     diagramTopologyBuildCount: 0,
     diagramTopologyCacheHitCount: 0,
-      diagramStopBuildCount: 0,
-      diagramStopCacheHitCount: 0,
-      rendererCandidateFeatureCount: 0,
-      rendererGeneratedFeatureCount: 0,
-      rendererGeneratedVertexCount: 0,
+    diagramStopBuildCount: 0,
+    diagramStopCacheHitCount: 0,
+    rendererCandidateFeatureCount: 0,
+    rendererGeneratedFeatureCount: 0,
+    rendererGeneratedVertexCount: 0,
   };
 }
 
