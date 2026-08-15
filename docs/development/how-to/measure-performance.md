@@ -296,13 +296,14 @@ named `map-engine` whose source map contains only MapLibre modules has a narrow
 810 kB raw limit. Every other JavaScript output, including `renderer-runtime`,
 service-worker, and nested outputs, is limited to 500 kB.
 
-Phase 2 made one intentional absolute-delivery recalibration to 550 KiB gzip
-and 470 KiB Brotli for the main editor graph. That ceiling pays for cooperative
-preparation, stable scene diffs, and retained-source recovery; it is not future
-Diagram or metric-mesh headroom. Heavy later phases remain lazy Worker-owned,
-and the full protocol still rejects a checked or base-revision compressed
-median regression above 10%. These rules are enforced in `bundle-report.json`;
-Vite's generic warning threshold is not the only guard.
+The absolute main-editor ceiling in `apps/web/perf.config.ts` protects the
+complete install and offline-update payload. It is deliberately independent of
+one renderer phase: a renderer change does not earn more delivery budget merely
+because it moves work off the main thread. Any change to that ceiling needs a
+reviewed delivery study alongside current cold and warm browser measurements.
+The full protocol also rejects a checked or base-revision compressed median
+regression above 10%. These rules are enforced in `bundle-report.json`; Vite's
+generic warning threshold is not the only guard.
 
 Missing Chrome produces an `unavailable` report and a non-zero exit. The
 harness never writes placeholder timings.
