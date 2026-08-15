@@ -148,7 +148,11 @@ async function seedCase(
 ): Promise<TransitSystem> {
   const system = fixtureForAcceptance(planned.fixtureId);
   await seedEditor(page, system);
-  await selectView(page, { profile: 'desktop', viewMode: 'infrastructure' });
+  await selectView(page, {
+    profile: 'desktop',
+    controls: 'compact',
+    viewMode: 'infrastructure',
+  });
   return system;
 }
 
@@ -324,7 +328,11 @@ export async function captureParityVisuals(
   const output: RendererLodAcceptanceVisualEntry[] = [];
   const system = fixtureForAcceptance('port-mason');
   await seedEditor(page, system);
-  await selectView(page, { profile: 'desktop', viewMode: 'infrastructure' });
+  await selectView(page, {
+    profile: 'desktop',
+    controls: 'compact',
+    viewMode: 'infrastructure',
+  });
   for (let index = 0; index < cases.length; index += 3) {
     const [live, staticMap, svg] = [cases[index], cases[index + 1], cases[index + 2]];
     await setSettledCamera(page, system, live.camera.zoom, [...live.camera.center]);
