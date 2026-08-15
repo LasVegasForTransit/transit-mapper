@@ -41,7 +41,7 @@ export function publishRenderPreparedSnapshot(
     facilitiesById: draft.facilitiesById,
     groupsById: draft.groupsById,
     servicesByWay: draft.servicesByWay,
-    serviceBundleSlots: draft.serviceBundleSlots,
+    serviceBundleOrdering: draft.serviceBundleOrdering,
     wayIdsByStop: draft.wayIdsByStop,
     modeIds: draft.modeIds,
     wayTypeIds: draft.wayTypeIds,

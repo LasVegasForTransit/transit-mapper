@@ -42,6 +42,7 @@ import {
   indexServicePatternsByWay,
   laneServiceAssignmentKey,
 } from './service-lane-assignments';
+import { orderServiceBundleMembers, type ServiceBundleOrdering } from './service-bundle-ordering';
 import { directionalLanes, isOneWay, profileWidthM } from '../model/profile';
 import {
   corridorSurfaceRing,
@@ -212,81 +213,17 @@ function stableFeatureId(
   return renderFeatureId(RENDER_SOURCE_IDS[source], role, identity);
 }
 
-// Continuity-aware bundle offsets. Each service gets ONE constant offset slot
-// for its entire path — chosen greedily as the smallest-magnitude slot free on
-// EVERY way it rides — so a through-line keeps a single offset end to end (no
-// sideways "jog" where a shared stretch begins or ends, which is what made two
-// connected lines read as not intersecting) while services sharing a segment
-// still fan apart. Slot order 0, +1, -1, +2, -2… keeps a bundle roughly
-// centered; a lone service stays at 0 (centered), unchanged from before.
-// Deterministic (services processed in byWay's stable creation order) and
-// memoized on the byWay Map identity (itself memoized on system.services), so
-// selection/viewport rebuilds reuse it.
-const bundleSlotCache = new WeakMap<Map<string, Service[]>, Map<string, number>>();
+const bundleOrderingCache = new WeakMap<Map<string, Service[]>, ServiceBundleOrdering>();
 
-interface ServiceWayMembership {
-  serviceWays: Map<string, string[]>;
-  order: string[];
-}
-
-function serviceWayMembership(byWay: Map<string, Service[]>): ServiceWayMembership {
-  const serviceWays = new Map<string, string[]>();
-  const order: string[] = [];
-  for (const [wayId, services] of byWay) {
-    for (const service of services) {
-      const existing = serviceWays.get(service.id);
-      if (existing) {
-        existing.push(wayId);
-        continue;
-      }
-      serviceWays.set(service.id, [wayId]);
-      order.push(service.id);
-    }
-  }
-  return { serviceWays, order };
-}
-
-function nthBundleSlot(index: number): number {
-  if (index === 0) return 0;
-  return index % 2 === 1 ? (index + 1) / 2 : -index / 2;
-}
-
-function firstAvailableBundleSlot(
-  wayIds: readonly string[],
-  occupied: ReadonlyMap<string, ReadonlySet<number>>,
-): number {
-  for (let index = 0; ; index++) {
-    const candidate = nthBundleSlot(index);
-    if (wayIds.every((wayId) => !occupied.get(wayId)?.has(candidate))) return candidate;
-  }
-}
-
-function occupyBundleSlot(
-  wayIds: readonly string[],
-  slot: number,
-  occupied: Map<string, Set<number>>,
-): void {
-  for (const wayId of wayIds) {
-    const slots = occupied.get(wayId) ?? new Set<number>();
-    slots.add(slot);
-    occupied.set(wayId, slots);
-  }
-}
-
-function bundleSlots(byWay: Map<string, Service[]>): Map<string, number> {
-  const cached = bundleSlotCache.get(byWay);
+function bundleOrdering(
+  servicesByWay: Map<string, Service[]>,
+  serviceOrder: readonly string[],
+): ServiceBundleOrdering {
+  const cached = bundleOrderingCache.get(servicesByWay);
   if (cached) return cached;
-  const { serviceWays, order } = serviceWayMembership(byWay);
-  const occupied = new Map<string, Set<number>>();
-  const slots = new Map<string, number>();
-  for (const serviceId of order) {
-    const wayIds = serviceWays.get(serviceId) ?? [];
-    const slot = firstAvailableBundleSlot(wayIds, occupied);
-    slots.set(serviceId, slot);
-    occupyBundleSlot(wayIds, slot, occupied);
-  }
-  bundleSlotCache.set(byWay, slots);
-  return slots;
+  const ordering = orderServiceBundleMembers(servicesByWay, serviceOrder);
+  bundleOrderingCache.set(servicesByWay, ordering);
+  return ordering;
 }
 
 /** One rendered pass through a way. A transparent hit feature keeps this
@@ -313,6 +250,7 @@ interface ServiceFeatureProjectionOptions {
   hitTarget?: boolean;
   pathRole?: string;
   semanticRange?: [number, number];
+  offsetRange?: [number, number];
 }
 
 interface ServiceHitProjectionOptions {
@@ -338,6 +276,153 @@ function serviceWayOccurrences(service: Service, wayId: string): ServiceWayOccur
     });
   }
   return occurrences;
+}
+
+interface BundleOffsetPiece {
+  readonly range: [number, number];
+  readonly offset: number;
+}
+
+interface BundleBoundarySlots {
+  readonly start: number[];
+  readonly end: number[];
+}
+
+interface BundleBoundaryOffsetOptions {
+  readonly serviceId: string;
+  readonly wayId: string;
+  readonly local: number;
+  readonly slots: readonly number[];
+  readonly ordering: ServiceBundleOrdering;
+}
+
+interface RunBoundarySlotsOptions {
+  readonly slots: BundleBoundarySlots;
+  readonly serviceId: string;
+  readonly wayId: string;
+  readonly legs: readonly ReturnType<typeof patternRunLegs>[number][];
+  readonly ordering: ServiceBundleOrdering;
+}
+
+const BUNDLE_TRANSITION_FRACTION = 0.18;
+
+/**
+ * MapLibre accepts one line offset per feature. A branch therefore uses a few
+ * short features near its junction rather than a false global service slot.
+ * Both sides of the node choose the same midpoint, so the visible lines meet
+ * before each corridor expands or contracts toward its local bundle position.
+ */
+function bundleOffsetPieces(
+  service: Service,
+  wayId: string,
+  ordering: ServiceBundleOrdering,
+): readonly BundleOffsetPiece[] {
+  const local = ordering.slotFor(service.id, wayId) * BUNDLE_SPACING_PX;
+  const boundarySlots = neighboringBundleSlots(service, wayId, ordering);
+  const start = bundleBoundaryOffset({
+    serviceId: service.id,
+    wayId,
+    local,
+    slots: boundarySlots.start,
+    ordering,
+  });
+  const end = bundleBoundaryOffset({
+    serviceId: service.id,
+    wayId,
+    local,
+    slots: boundarySlots.end,
+    ordering,
+  });
+  return transitionOffsetPieces(local, start, end);
+}
+
+function neighboringBundleSlots(
+  service: Service,
+  wayId: string,
+  ordering: ServiceBundleOrdering,
+): BundleBoundarySlots {
+  const boundarySlots = { start: [] as number[], end: [] as number[] };
+  for (const run of PATTERN_RUNS) {
+    appendRunBoundarySlots({
+      slots: boundarySlots,
+      serviceId: service.id,
+      wayId,
+      legs: patternRunLegs(service.path, run),
+      ordering,
+    });
+  }
+  return boundarySlots;
+}
+
+function appendRunBoundarySlots({
+  slots,
+  serviceId,
+  wayId,
+  legs,
+  ordering,
+}: RunBoundarySlotsOptions): void {
+  for (const [index, current] of legs.entries()) {
+    if (current.leg.wayId !== wayId) continue;
+    const before = legs.at(current.forward ? index - 1 : index + 1);
+    const after = legs.at(current.forward ? index + 1 : index - 1);
+    appendNeighborSlot(slots.start, serviceId, before, ordering);
+    appendNeighborSlot(slots.end, serviceId, after, ordering);
+  }
+}
+
+function appendNeighborSlot(
+  slots: number[],
+  serviceId: string,
+  neighbor: ReturnType<typeof patternRunLegs>[number] | undefined,
+  ordering: ServiceBundleOrdering,
+): void {
+  if (neighbor) slots.push(ordering.slotFor(serviceId, neighbor.leg.wayId));
+}
+
+function bundleBoundaryOffset({
+  serviceId,
+  wayId,
+  local,
+  slots,
+  ordering,
+}: BundleBoundaryOffsetOptions): number {
+  if (slots.length === 0) return local;
+  const average = slots.reduce((sum, slot) => sum + slot, 0) / slots.length;
+  return (ordering.slotFor(serviceId, wayId) + average) * (BUNDLE_SPACING_PX / 2);
+}
+
+function transitionOffsetPieces(
+  local: number,
+  start: number,
+  end: number,
+): readonly BundleOffsetPiece[] {
+  if (start === local && end === local) return [{ range: [0, 1], offset: local }];
+
+  const pieces: BundleOffsetPiece[] = [];
+  let middleStart = 0;
+  if (start !== local) {
+    const half = BUNDLE_TRANSITION_FRACTION / 2;
+    pieces.push({ range: [0, half], offset: start });
+    pieces.push({ range: [half, BUNDLE_TRANSITION_FRACTION], offset: (start + local) / 2 });
+    middleStart = BUNDLE_TRANSITION_FRACTION;
+  }
+  const middleEnd = end === local ? 1 : 1 - BUNDLE_TRANSITION_FRACTION;
+  if (middleStart < middleEnd) pieces.push({ range: [middleStart, middleEnd], offset: local });
+  if (end !== local) {
+    const half = 1 - BUNDLE_TRANSITION_FRACTION / 2;
+    pieces.push({ range: [1 - BUNDLE_TRANSITION_FRACTION, half], offset: (local + end) / 2 });
+    pieces.push({ range: [half, 1], offset: end });
+  }
+  return pieces;
+}
+
+function intersectRanges(
+  left: readonly [number, number],
+  right: readonly [number, number],
+): [number, number] | null {
+  const start = Math.max(left[0], right[0]);
+  const end = Math.min(left[1], right[1]);
+  return start < end ? [start, end] : null;
 }
 /**
  * The stretches of `wayId` that some service rides in one direction only, each
@@ -843,7 +928,7 @@ interface SharedProjectionIndexes {
   servicesByWay: Map<string, Service[]>;
   allServicesByWay: Map<string, Service[]>;
   projectedWayTypeIds: Set<string>;
-  serviceSlots: Map<string, number>;
+  serviceSlots: ServiceBundleOrdering;
   wayIdsByStop?: ReadonlyMap<string, readonly string[]>;
 }
 
@@ -956,11 +1041,12 @@ function projectionServiceSlots(
   projection: FeatureProjectionPlan,
   prepared: RenderPreparedSnapshot | undefined,
   servicesByWayIndex: Map<string, Service[]>,
-): Map<string, number> {
-  if (!projection.topology.services) return new Map<string, number>();
+  serviceOrder: readonly string[],
+): ServiceBundleOrdering {
+  if (!projection.topology.services) return orderServiceBundleMembers(new Map(), []);
   return prepared
-    ? (prepared.serviceBundleSlots as Map<string, number>)
-    : bundleSlots(servicesByWayIndex);
+    ? prepared.serviceBundleOrdering
+    : bundleOrdering(servicesByWayIndex, serviceOrder);
 }
 
 function buildSharedProjectionIndexes(
@@ -1011,7 +1097,12 @@ function buildSharedProjectionIndexes(
     servicesByWay: serviceIndexes.visible,
     allServicesByWay: serviceIndexes.all,
     projectedWayTypeIds,
-    serviceSlots: projectionServiceSlots(projection, prepared, serviceIndexes.visible),
+    serviceSlots: projectionServiceSlots(
+      projection,
+      prepared,
+      serviceIndexes.visible,
+      system.services.map((service) => service.id),
+    ),
     wayIdsByStop: prepared?.wayIdsByStop,
   };
 }
@@ -2625,6 +2716,7 @@ function projectTopologyFeatures({
         hitTarget,
         pathRole = 'centerline',
         semanticRange = [0, 1],
+        offsetRange,
       }: ServiceFeatureProjectionOptions): Feature<LineString> => ({
         type: 'Feature',
         id: occurrence
@@ -2646,6 +2738,7 @@ function projectTopologyFeatures({
               pathRole,
               semanticRange[0],
               semanticRange[1],
+              ...(offsetRange && (offsetRange[0] !== 0 || offsetRange[1] !== 1) ? offsetRange : []),
             ),
         properties: {
           serviceId: service.id,
@@ -2715,50 +2808,47 @@ function projectTopologyFeatures({
           serviceHits.push(feature);
         }
       };
-      // Constant per-service offset on the CENTERLINE — no jog at shared-segment
-      // boundaries (see bundleSlots). This is the Network schematic and the
-      // lane-detail fallback when a lane can't be resolved.
+      // A Network service reads its offset from the corridor it is drawing.
+      // `service-bundle-ordering.ts` keeps every shared pair in the same order
+      // while a branch can contract back to its own centered centerline. This
+      // is the Network schematic and the lane-detail fallback when a lane
+      // cannot be resolved.
       //
       // One feature per stretch of this way the service actually runs over, not
       // one per way it merely touches: a line that terminates mid-block has to
       // stop being drawn there. A service covering the whole way — still the
       // common case — takes the untouched path and emits exactly one feature, so
       // a system nobody has trimmed produces byte-identical output.
+      const offsetsByServiceId = new Map<string, readonly BundleOffsetPiece[]>();
       const centerlineFeatures = (
         service: Service,
         renderTier: RenderTier,
         on: LngLat[] = path,
       ): Feature<LineString>[] => {
-        const offset = (slots.get(service.id) ?? 0) * BUNDLE_SPACING_PX;
         const ranges = serviceRangesOnWay(service, way.id);
-        if (ranges.length === 1 && ranges[0][0] <= 0 && ranges[0][1] >= 1)
-          return [
-            serviceFeature({
-              service,
-              coordinates: on,
-              offset,
-              renderTier,
-              tierOpacity: corridor.blend.weights[renderTier],
-              availableTiers: corridor.retainedTiers,
-            }),
-          ];
-        return ranges
-          .map(([lo, hi]) => ({
-            range: [lo, hi] as [number, number],
-            path: slicePathByT(on, lo, hi),
-          }))
-          .filter((entry) => entry.path.length >= 2)
-          .map((entry) =>
-            serviceFeature({
-              service,
-              coordinates: entry.path,
-              offset,
-              renderTier,
-              tierOpacity: corridor.blend.weights[renderTier],
-              availableTiers: corridor.retainedTiers,
-              semanticRange: entry.range,
-            }),
-          );
+        const offsets =
+          offsetsByServiceId.get(service.id) ?? bundleOffsetPieces(service, way.id, slots);
+        offsetsByServiceId.set(service.id, offsets);
+        return ranges.flatMap((range) =>
+          offsets.flatMap((offset) => {
+            const intersection = intersectRanges(range, offset.range);
+            if (!intersection) return [];
+            const coordinates = slicePathByT(on, intersection[0], intersection[1]);
+            if (coordinates.length < 2) return [];
+            return [
+              serviceFeature({
+                service,
+                coordinates,
+                offset: offset.offset,
+                renderTier,
+                tierOpacity: corridor.blend.weights[renderTier],
+                availableTiers: corridor.retainedTiers,
+                semanticRange: intersection,
+                offsetRange: offset.range,
+              }),
+            ];
+          }),
+        );
       };
 
       const centerlineTiers = corridor.retainedTiers.filter((tier) => tier !== 'street');
@@ -2804,7 +2894,7 @@ function projectTopologyFeatures({
           addServiceHitFeatures({
             service: svc,
             path,
-            offset: (slots.get(svc.id) ?? 0) * BUNDLE_SPACING_PX,
+            offset: slots.slotFor(svc.id, way.id) * BUNDLE_SPACING_PX,
             renderTier: corridor.logicalTier,
             tierOpacity: corridor.blend.weights[corridor.logicalTier],
             availableTiers: corridor.retainedTiers,
@@ -2890,7 +2980,7 @@ function projectTopologyFeatures({
           addServiceHitFeatures({
             service,
             path,
-            offset: (slots.get(service.id) ?? 0) * BUNDLE_SPACING_PX,
+            offset: slots.slotFor(service.id, way.id) * BUNDLE_SPACING_PX,
             renderTier: corridor.logicalTier,
             tierOpacity: corridor.blend.weights[corridor.logicalTier],
             availableTiers: corridor.retainedTiers,

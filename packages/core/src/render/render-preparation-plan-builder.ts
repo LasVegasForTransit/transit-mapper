@@ -20,6 +20,7 @@ import type {
 } from './render-preparation-types';
 import type { PreparedViewportState } from './render-preparation-viewport';
 import type { RenderProjectionFullReason } from './render-projection-scope';
+import type { ServiceBundleOrdering } from './service-bundle-ordering';
 import type { RenderViewportCategory } from './viewport-index';
 
 export interface PreparedSnapshotInternals {
@@ -50,7 +51,7 @@ export interface RenderPreparationSnapshotDraft {
   readonly facilitiesById: ReadonlyMap<string, Facility>;
   readonly groupsById: ReadonlyMap<string, Group>;
   readonly servicesByWay: ReadonlyMap<string, readonly Service[]>;
-  readonly serviceBundleSlots: ReadonlyMap<string, number>;
+  readonly serviceBundleOrdering: ServiceBundleOrdering;
   readonly wayIdsByStop: ReadonlyMap<string, readonly string[]>;
   readonly modeIds: ReadonlySet<string>;
   readonly wayTypeIds: ReadonlySet<string>;

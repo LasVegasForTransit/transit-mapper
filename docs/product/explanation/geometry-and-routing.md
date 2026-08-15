@@ -38,6 +38,22 @@ rule to fill one closed carriageway footprint. That is deliberately separate
 from both the Overview centerline and Street's individual lane surfaces: each
 view reveals the amount of physical structure it can actually support.
 
+## Network service bundles
+
+The Network view groups Services that share a corridor. The ordering policy
+does not draw geometry. It receives each corridor's Service ids and the
+document's Service order, then returns a centered slot for each local member.
+`buildFeatures.ts`, prepared live snapshots, and static rendering use that
+same result. A Service can therefore move from a two-line trunk at `-2.5px`
+or `+2.5px` to the `0px` center of its own branch without letting the two
+colours trade places on the shared corridor.
+
+The boundary matters because service ordering is cartography, while line
+offsetting is a rendering detail. `service-bundle-ordering.ts` owns the first
+decision. MapLibre and SVG consume the resulting numeric offset. A future
+smooth join transition belongs at a junction, where one corridor ends and the
+next begins; the ordering module must not grow geometry code to fake it.
+
 ## Junction footprints
 
 Where ways meet at a node, drawing every way at full width would overlap

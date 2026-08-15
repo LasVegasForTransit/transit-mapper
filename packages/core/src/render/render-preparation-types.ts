@@ -15,6 +15,7 @@ import type { RenderPresentation } from './render-presentation';
 import type { RenderProjectionFullReason } from './render-projection-scope';
 import type { RenderViewportCandidateSets } from './render-viewport-candidates';
 import type { RenderViewportCategory } from './viewport-index';
+import type { ServiceBundleOrdering } from './service-bundle-ordering';
 
 export interface RenderPreparationEntityPatch<T> {
   readonly upsert?: readonly T[];
@@ -86,7 +87,7 @@ export interface RenderPreparedSnapshot {
   readonly facilitiesById: ReadonlyMap<string, Facility>;
   readonly groupsById: ReadonlyMap<string, Group>;
   readonly servicesByWay: ReadonlyMap<string, readonly Service[]>;
-  readonly serviceBundleSlots: ReadonlyMap<string, number>;
+  readonly serviceBundleOrdering: ServiceBundleOrdering;
   readonly wayIdsByStop: ReadonlyMap<string, readonly string[]>;
   readonly modeIds: ReadonlySet<string>;
   readonly wayTypeIds: ReadonlySet<string>;

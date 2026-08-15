@@ -12,6 +12,7 @@ import {
 import {
   addPreparedServiceBundle,
   createPreparedServiceBundleDraft,
+  preparedServiceBundleOrdering,
 } from './render-preparation-bundles';
 import type {
   AddColdPreparationPlanOptions,
@@ -364,7 +365,7 @@ function addFinalization(context: ColdPlanContext): void {
         facilitiesById: context.domain.facilitiesById,
         groupsById: context.domain.groupsById,
         servicesByWay: context.bundles.servicesByWay,
-        serviceBundleSlots: context.bundles.slots,
+        serviceBundleOrdering: preparedServiceBundleOrdering(context.bundles),
         wayIdsByStop: dependency.wayIdsByStop,
         modeIds: context.domain.modeIds,
         wayTypeIds: context.domain.wayTypeIds,
