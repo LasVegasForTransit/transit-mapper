@@ -7,7 +7,10 @@ import type { Feature, FeatureCollection } from 'geojson';
 import type { SystemFeatureSourceId } from '@transitmapper/core/render/render-identity';
 import type { RenderScenePatch } from '@transitmapper/core/render/render-scene-diff';
 import type { RenderScene } from '@transitmapper/core/render/render-scene';
-import { createRenderFeatureCollectionMaterialization } from './persistent-render-source-state';
+import {
+  createRenderFeatureCollectionMaterialization,
+  isKnownEmptyRenderFeatureCollection,
+} from './persistent-render-source-state';
 import type {
   ApplyRenderSceneOptions,
   GeoJsonSourceTarget,
@@ -82,16 +85,34 @@ function allSourceIds(previous: RenderScene | null, next: RenderScene): SystemFe
   ].sort();
 }
 
+/** A newly created GeoJSON source already contains the empty collection. Do
+ * not ask MapLibre to process that same empty state again: it has no visible
+ * effect and some empty GeoJSON updates produce no source-load event to which
+ * a hidden-bank transaction could truthfully wait. Existing nonempty source
+ * state is always retained in the upload set so reset/style-heal can clear it. */
+function needsFullUpload(
+  previous: FeatureCollection | undefined,
+  next: FeatureCollection,
+): boolean {
+  return (
+    !isKnownEmptyRenderFeatureCollection(next) ||
+    !isKnownEmptyRenderFeatureCollection(previous ?? EMPTY_COLLECTION)
+  );
+}
+
 function resolveFullUploads(
   updaterOptions: RenderSceneSourceUpdaterOptions,
   previous: RenderScene | null,
   next: RenderScene,
   batchSize: number,
 ): ResolvedFullUpload[] {
-  const uploads: ResolvedFullUpload[] = allSourceIds(previous, next).map((sourceId) => {
+  const uploads: ResolvedFullUpload[] = [];
+  for (const sourceId of allSourceIds(previous, next)) {
     const id = updaterOptions.resolveSourceId?.(sourceId) ?? String(sourceId);
     const collection = next.featuresBySource.get(sourceId) ?? EMPTY_COLLECTION;
-    return {
+    const previousCollection = previous?.featuresBySource.get(sourceId);
+    if (!needsFullUpload(previousCollection, collection)) continue;
+    uploads.push({
       id,
       source: sourceOrThrow(updaterOptions.resolveSource, sourceId),
       collection,
@@ -100,17 +121,18 @@ function resolveFullUploads(
         collection,
         batchSize,
       }),
-    };
-  });
-  const needsHitSource =
+    });
+  }
+  // Scene statistics are carried beside hit geometry specifically so this
+  // planning boundary never has to materialize a lazy aggregate collection
+  // merely to decide whether its dedicated MapLibre source is needed.
+  const needsHitUpload =
     (previous?.stats.generatedHitFeatureCount ?? 0) > 0 || next.stats.generatedHitFeatureCount > 0;
-  const hitSource = needsHitSource
-    ? hitSourceOrThrow(updaterOptions.resolveHitSource)
-    : updaterOptions.resolveHitSource?.();
-  if (hitSource) {
+  if (needsHitUpload) {
+    const source = hitSourceOrThrow(updaterOptions.resolveHitSource);
     uploads.push({
       id: hitSourceIdOrThrow(updaterOptions.hitSourceId),
-      source: hitSource,
+      source,
       collection: next.hitFeatures,
       materialization: createRenderFeatureCollectionMaterialization({
         id: `render-source:prepare:${hitSourceIdOrThrow(updaterOptions.hitSourceId)}`,

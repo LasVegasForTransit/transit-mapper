@@ -115,7 +115,7 @@ describe('render scene source transactions', () => {
     expect(fixture.source(ways).calls).toHaveLength(1);
   });
 
-  it('stages each full source separately and publishes only after every source', () => {
+  it('stages each nonempty full source separately and publishes after every mutation', () => {
     const stations = systemFeatureSourceId('stations');
     const ways = systemFeatureSourceId('ways');
     const fixture = renderSourceFixture([stations, ways]);
@@ -142,10 +142,9 @@ describe('render scene source transactions', () => {
 
     const staged = updater.prepare(next);
     expect(staged.strategy).toBe('full');
-    expect(staged.sourceIds).toEqual([stations, ways, 'tm-hit-features']);
+    expect(staged.sourceIds).toEqual([stations, 'tm-hit-features']);
     expect(staged.units.map((unit) => unit.id)).toEqual([
       `render-source:full:${stations}`,
-      `render-source:full:${ways}`,
       'render-source:full:tm-hit-features',
     ]);
     expect(fixture.source(stations).calls).toEqual([]);
@@ -163,7 +162,6 @@ describe('render scene source transactions', () => {
     );
     expect(updater.currentScene()).toBeNull();
     staged.units[1].run();
-    staged.units[2].run();
     const hitCall = hitSource.calls[0];
     if (hitCall.method !== 'setData') {
       throw new Error('Expected a complete hit upload.');
@@ -174,7 +172,7 @@ describe('render scene source transactions', () => {
     const result = staged.commit();
     expect(result).toMatchObject({
       strategy: 'full',
-      sourceUploadCount: 3,
+      sourceUploadCount: 2,
       uploadedFeatureCount: 4_370,
     });
     expect(updater.currentScene()).toBe(next);

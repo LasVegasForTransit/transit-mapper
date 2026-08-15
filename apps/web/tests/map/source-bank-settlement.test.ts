@@ -102,4 +102,17 @@ describe('render source bank settlement', () => {
 
     await expect(loaded).rejects.toThrow('aborted');
   });
+
+  it('names the hidden sources that did not settle', async () => {
+    const host = new SettlementHost();
+    const loaded = waitForSourceBankLoad({
+      host,
+      sourceIds: ['ways--bank-b', 'stations--bank-b'],
+      timeoutMs: 10,
+    });
+
+    host.complete('ways--bank-b');
+
+    await expect(loaded).rejects.toThrow('stations--bank-b');
+  });
 });

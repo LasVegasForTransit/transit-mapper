@@ -145,9 +145,12 @@ export class LiveMapRenderer {
   private readonly bankedLayerIds: ReadonlySet<string>;
   private readonly backgroundPreparation: SourceBankBackgroundPreparation;
   private readonly sourcePublication: RendererSourcePublication;
+  private readonly reportError: (error: unknown) => void;
+  private pendingEditorScene: SceneUpdate | null = null;
   private disposed = false;
 
   constructor(options: LiveMapRendererOptions) {
+    this.reportError = (error) => options.onError?.(error);
     this.scheduler =
       options.scheduler ??
       createCooperativeRenderJobScheduler({
@@ -211,8 +214,14 @@ export class LiveMapRenderer {
       host: options.host,
       scheduleFrame: (callback) => options.host.scheduleFrame(callback),
       cancelFrame: (handle) => options.host.cancelFrame(handle),
-      onReady: () => options.onInactiveBankReady?.(),
-      onError: (error) => options.onError?.(error),
+      onReady: () => {
+        this.flushPendingEditorScene();
+        options.onInactiveBankReady?.();
+      },
+      onError: (error) => {
+        this.flushPendingEditorScene();
+        options.onError?.(error);
+      },
     });
     this.projector = this.createProjector(options);
   }
@@ -272,22 +281,52 @@ export class LiveMapRenderer {
       input,
       ...this.sourcePublication.hooks({
         onAccepted: input.onAccepted,
-        afterAccepted: () => this.backgroundPreparation.start(),
+        afterAccepted: () => {
+          this.flushPendingEditorScene();
+          this.backgroundPreparation.start();
+        },
       }),
       recordScheduling: (stats) => input.recordScheduling?.(stats),
     });
   }
 
-  /** Editor handles and guides use the retained scene index but remain on
-   * unbanked sources. This is intentionally synchronous and never enters the
-   * committed projection queue. */
-  updateEditorScene(input: SceneUpdate): AcceptedSceneUpdate {
+  /** Editor handles and guides stay on unbanked sources. They still derive
+   * from the accepted scene, so an editor update waits for an in-flight bank
+   * publication instead of preparing from a provisional revision. */
+  updateEditorScene(input: SceneUpdate): AcceptedSceneUpdate | null {
     this.assertActive();
+    // Committed banks and editor overlays own distinct MapLibre sources, but
+    // their scene drafts share the accepted identity snapshot. Do not let an
+    // editor refresh prepare against that snapshot while a bank publication is
+    // still provisional: the latest editor intent is retained and applied as
+    // soon as the committed revision becomes authoritative.
+    if (this.publicationInProgress()) {
+      this.pendingEditorScene = input;
+      return null;
+    }
+    return this.applyEditorScene(input);
+  }
+
+  private applyEditorScene(input: SceneUpdate): AcceptedSceneUpdate {
     try {
       return this.scenes.applySynchronously(input);
     } catch (error) {
       this.recovery.requestRecovery();
       throw error;
+    }
+  }
+
+  private flushPendingEditorScene(): void {
+    const pending = this.pendingEditorScene;
+    if (!pending || this.scenes.publicationInProgress() || this.disposed) return;
+    this.pendingEditorScene = null;
+    try {
+      this.applyEditorScene(pending);
+    } catch (error) {
+      // The accepted bank remains valid. Report this separately so the
+      // caller can schedule recovery without making a delayed editor update
+      // an uncaught rendering failure.
+      this.reportError(error);
     }
   }
 
@@ -371,6 +410,7 @@ export class LiveMapRenderer {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.pendingEditorScene = null;
     this.cancelBackgroundPreparation();
     this.sourcePublication.dispose();
     this.projector.dispose();
