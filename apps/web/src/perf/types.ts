@@ -280,6 +280,16 @@ export interface PerfFirstSessionSample {
   network: PerfNetworkByteReport;
 }
 
+/**
+ * Records how a report's User Timing milestones were obtained. Network bytes
+ * always come from CDP; this only makes a historic mark-compatibility shim
+ * auditable instead of making it look like a shipping instrumentation run.
+ */
+export interface PerfReportProvenance {
+  artifactRevision: string;
+  milestoneMarkSource: 'shipping' | 'legacy-497a549-observer-v1';
+}
+
 export interface PerfReport {
   schemaVersion: 3;
   generatedAt: string;
@@ -287,6 +297,7 @@ export interface PerfReport {
   unavailableReason?: string;
   protocol: PerfProtocol;
   calibration?: PerfCalibration;
+  provenance?: PerfReportProvenance;
   bundles: PerfBundleEntry[];
   firstSessions: PerfFirstSessionSample[];
   samples: PerfSample[];
@@ -302,6 +313,7 @@ export interface CreatePerfReportOptions {
   samples: PerfSample[];
   bundles?: PerfBundleEntry[];
   calibration?: PerfCalibration;
+  provenance?: PerfReportProvenance;
   firstSessions?: PerfFirstSessionSample[];
 }
 

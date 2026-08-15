@@ -77,6 +77,7 @@ import {
   recordFullProjection,
   recordSourceUpload,
   type EditGestureTargets,
+  type GestureAffectedEntities,
   type GestureProjectionController,
   type GestureProjectionResult,
 } from './gestureProjection';
@@ -98,10 +99,6 @@ import {
 } from './sourceFeatureProjection';
 import { landmarksFeatureCollection } from './landmarks';
 import { getMap, setMap } from './mapRef';
-import {
-  attachInitialStyleFallback,
-  INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
-} from './initialStyleFallback';
 import { initLiveCamera, setLiveCamera } from '../camera/liveCamera';
 import { attachPerfHarness } from '../perf';
 import {
@@ -114,7 +111,8 @@ import { servicesByWay } from '@transitmapper/core/render/featureMemo';
 import { attachSimDevHandle } from '../sim/devHandle';
 import { attachVehicleAnimation } from '../sim/vehicles';
 import { clearArmedTerminusForViewChange } from './viewEditorState';
-import { basemapStyleForScheme, layerSpecsForScheme } from './mapTheme';
+import { layerSpecsForScheme, localBlankStyleForScheme } from './mapTheme';
+import { shouldRequestRemoteBasemap } from './basemapLoading';
 import { createStyleSwitchController, type StyleSwitchController } from './styleSwitchController';
 import { recoverMapStyleState } from './styleRecovery';
 import { preloadSelectionInspectorContent } from '../ui/inspector/selection-content-loader';
@@ -217,9 +215,22 @@ function promoteIdForSource(sourceId: string): string | undefined {
   return ID_PROMOTED_SOURCES.has(sourceId) ? 'id' : undefined;
 }
 
+function emptyGestureAffectedEntities(): GestureAffectedEntities {
+  return {
+    wayIds: [],
+    stationIds: [],
+    facilityIds: [],
+    groupIds: [],
+    nodeIds: [],
+  };
+}
+
 export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   const colorScheme = useSystemColorScheme();
   const initialColorSchemeRef = useRef(colorScheme);
+  const currentColorSchemeRef = useRef(colorScheme);
+  currentColorSchemeRef.current = colorScheme;
+  const remoteBasemapRequestedRef = useRef(false);
   const styleSwitchControllerRef = useRef<StyleSwitchController | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [pointerBadge, setPointerBadge] = useState<{
@@ -407,7 +418,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: basemapStyleForScheme(initialColorScheme),
+      style: localBlankStyleForScheme(initialColorScheme),
       center: initial.viewport.center,
       zoom: initial.viewport.zoom,
       // No preserveDrawingBuffer: PNG export renders on a dedicated offscreen
@@ -456,21 +467,12 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // Only a failure *before the style loads* is worth telling the user about:
     // once it's up, later errors are individual tiles timing out, which
     // MapLibre retries and which nobody needs a message about.
-    let usingLocalBlankStyle = false;
+    let usingLocalBlankStyle = true;
     let activeMapScheme = initialColorScheme;
     const onMapError = (event: MapErrorLike) => {
       console.error('[transitmapper]', event.error ?? event);
     };
     map.on('error', onMapError);
-    const detachInitialStyleFallback = attachInitialStyleFallback(map, {
-      scheme: initialColorScheme,
-      timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
-      onFallback: () => {
-        usingLocalBlankStyle = true;
-        basemapFailureRef.current?.();
-      },
-    });
-
     let detachInteractions: (() => void) | null = null;
     let detachVehicles: (() => void) | null = null;
     let detachPerf: (() => void) | null = null;
@@ -1043,14 +1045,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     };
 
     const settleGestureProjection = () => {
-      const affected = gestureProjection?.affected() ?? {
-        wayIds: [],
-        stopIds: [],
-        stationIds: [],
-        facilityIds: [],
-        groupIds: [],
-        nodeIds: [],
-      };
+      const affected = gestureProjection?.affected() ?? emptyGestureAffectedEntities();
       const finish = gestureProjection?.finish() ?? { rebuild: false, hadPreview: false };
       gestureActive = false;
       gestureProjection = null;
@@ -1260,7 +1255,6 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     map.on('resize', onResize);
     styleSwitchControllerRef.current = createStyleSwitchController({
       map,
-      initialScheme: initialColorScheme,
       isInteractionActive: () => {
         const state = store.getState();
         return (
@@ -1278,6 +1272,20 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       },
       onUnavailable: () => basemapFailureRef.current?.(),
     });
+
+    const requestRemoteBasemap = () => {
+      if (!initialMapLoaded) return;
+      if (
+        !shouldRequestRemoteBasemap({
+          documentReady: store.getState().documentStatus === 'ready',
+          remoteBasemapRequested: remoteBasemapRequestedRef.current,
+        })
+      ) {
+        return;
+      }
+      remoteBasemapRequestedRef.current = true;
+      void styleSwitchControllerRef.current?.request(currentColorSchemeRef.current);
+    };
 
     map.on('load', () => {
       // MapLibre's compact attribution starts expanded once (its own default
@@ -1417,6 +1425,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       detachSimDev = attachSimDevHandle(simClock); // DEV-only __sim.setTime()/__sim.step() clock driver
       map.resize();
     });
+    map.once('load', requestRemoteBasemap);
 
     const ro = new ResizeObserver(() => map.resize());
     ro.observe(containerRef.current);
@@ -1507,11 +1516,13 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           features.length > 0 ? { type: 'FeatureCollection', features } : emptyFC,
         );
       }
-      if (s.system.id !== lastSystemId) {
+      const documentBecameReady = prev.documentStatus !== 'ready' && s.documentStatus === 'ready';
+      if (s.system.id !== lastSystemId || documentBecameReady) {
         lastSystemId = s.system.id;
         map.jumpTo({ center: s.system.viewport.center, zoom: s.system.viewport.zoom });
         // The newly-loaded system's saved camera becomes the live camera.
         initLiveCamera(s.system.viewport);
+        requestRemoteBasemap();
       }
       // Chrome-driven selection (Objects list, keyboard nav, Inspector jump
       // links, Issues) asks for this via selectAndFocus bumping the token —
@@ -1578,9 +1589,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       detachVehicles?.();
       detachPerf?.();
       detachSimDev?.();
-      detachInitialStyleFallback();
       styleSwitchControllerRef.current?.dispose();
       styleSwitchControllerRef.current = null;
+      remoteBasemapRequestedRef.current = false;
       map.off('style.load', onStyleLoad);
       map.off('error', onMapError);
       clearGesturePreview();
@@ -1611,6 +1622,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   ]);
 
   useEffect(() => {
+    if (!remoteBasemapRequestedRef.current) return;
     void styleSwitchControllerRef.current?.request(colorScheme);
   }, [colorScheme]);
 

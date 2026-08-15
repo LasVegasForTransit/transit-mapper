@@ -176,6 +176,38 @@ describe('the checked performance baseline', () => {
     await expect(readBaseline(path)).rejects.toThrow('must use schema version 3');
   });
 
+  it('records the exact revision when a frozen report needs the legacy mark adapter', async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), 'tm-perf-baseline-provenance-'));
+    const path = resolve(directory, 'baseline.json');
+    const frozen = {
+      ...report('2026-08-13T00:00:00.000Z'),
+      provenance: {
+        artifactRevision: '497a549',
+        milestoneMarkSource: 'legacy-497a549-observer-v1',
+      },
+    };
+    await writeFrozenFixture(path, frozen);
+
+    await expect(readBaseline(path)).resolves.toMatchObject({
+      provenance: frozen.provenance,
+    });
+  });
+
+  it('rejects a legacy observer claim for any artifact other than its audited revision', async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), 'tm-perf-baseline-provenance-invalid-'));
+    const path = resolve(directory, 'baseline.json');
+    const frozen = {
+      ...report('2026-08-13T00:00:00.000Z'),
+      provenance: {
+        artifactRevision: 'not-497a549',
+        milestoneMarkSource: 'legacy-497a549-observer-v1',
+      },
+    };
+    await writeFrozenFixture(path, frozen);
+
+    await expect(readBaseline(path)).rejects.toThrow('legacy observer provenance requires 497a549');
+  });
+
   it('rejects malformed gate inputs instead of silently weakening a budget', async () => {
     const directory = await mkdtemp(resolve(tmpdir(), 'tm-perf-baseline-shape-'));
     const path = resolve(directory, 'baseline.json');

@@ -10,6 +10,16 @@ export const PERFORMANCE_HARNESS_OUTPUT_DIRECTORY = resolveBuildOutputDirectory(
 
 export type PerformancePreviewArtifact = 'public' | 'instrumented';
 
+/**
+ * The normal runner always uses this checkout's artifact. A frozen historic
+ * baseline supplies both values explicitly so Vite never falls back to the
+ * candidate's `dist/` while we are attributing old-app bytes.
+ */
+export interface PerformancePreviewOptions {
+  cwd?: string;
+  outputDirectory?: string;
+}
+
 export interface RunningPreview {
   child: ChildProcess;
   url: string;
@@ -59,11 +69,13 @@ export function previewUrl(port: number): string {
 export function performancePreviewArguments(
   artifact: PerformancePreviewArtifact,
   port: number,
+  options: PerformancePreviewOptions = {},
 ): string[] {
   const outputDirectory =
-    artifact === 'public'
+    options.outputDirectory ??
+    (artifact === 'public'
       ? PERFORMANCE_PUBLIC_OUTPUT_DIRECTORY
-      : PERFORMANCE_HARNESS_OUTPUT_DIRECTORY;
+      : PERFORMANCE_HARNESS_OUTPUT_DIRECTORY);
   return [
     'exec',
     'vite',
@@ -145,10 +157,13 @@ async function waitForPreview(preview: RunningPreview): Promise<void> {
   throw new Error(`vite preview did not answer at ${preview.url} within 15 seconds.`);
 }
 
-export async function startPreview(artifact: PerformancePreviewArtifact): Promise<RunningPreview> {
+export async function startPreview(
+  artifact: PerformancePreviewArtifact,
+  options: PerformancePreviewOptions = {},
+): Promise<RunningPreview> {
   const port = await allocatePreviewPort();
-  const child = spawn('pnpm', performancePreviewArguments(artifact, port), {
-    cwd: APP_ROOT,
+  const child = spawn('pnpm', performancePreviewArguments(artifact, port, options), {
+    cwd: options.cwd ?? APP_ROOT,
     env: process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });

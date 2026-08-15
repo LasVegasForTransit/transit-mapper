@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import type { Browser, BrowserContext, CDPSession, Frame, Page } from 'playwright-core';
 import { generatePerfFixture } from '../../src/perf/fixtures';
 import {
@@ -23,8 +24,13 @@ import type {
 } from '../../src/perf/network-byte-types';
 import { createCdpNetworkRecorder, type CdpNetworkRecorder } from './cdp-network-recorder';
 import { connectChromeFlatCdp } from './flat-cdp-connection';
+import { LEGACY_497A549_FIRST_SESSION_INIT_SCRIPT } from './legacy-first-session-marks';
 import { closeContext, configureProtocol, configureSurfaceRoutes } from './browser';
-import { captureFirstSession, type FirstSessionPageDriver } from './first-session';
+import {
+  captureFirstSession,
+  type FirstSessionPageDriver,
+  type FirstSessionServiceWorkerPolicy,
+} from './first-session';
 import type { FirstSessionSurfaceRunner } from './first-session-matrix';
 
 interface BrowserTimelineSnapshot {
@@ -218,6 +224,9 @@ interface RunSurfaceFirstSessionOptions {
   journey: PerfFirstSessionJourney;
   crossSite: boolean;
   debuggingPort: number;
+  embedHtmlPath?: string;
+  historicalMilestoneInitScript?: string;
+  serviceWorkerPolicy?: FirstSessionServiceWorkerPolicy;
 }
 
 async function runSurfaceFirstSession(
@@ -235,9 +244,18 @@ async function runSurfaceFirstSession(
   const page = await context.newPage();
   let recorder: CdpNetworkRecorder | undefined;
   try {
+    if (options.historicalMilestoneInitScript) {
+      await page.addInitScript({ content: options.historicalMilestoneInitScript });
+    }
     if (options.scenario.surface !== 'editor') {
       const serialized = JSON.stringify(generatePerfFixture(options.scenario.fixtureId));
       await configureSurfaceRoutes(page, options.scenario, serialized);
+    }
+    if (options.scenario.surface === 'embed' && options.embedHtmlPath) {
+      const embedHtml = await readFile(options.embedHtmlPath, 'utf8');
+      await page.route(`**${options.scenario.path}`, async (route) => {
+        await route.fulfill({ status: 200, contentType: 'text/html', body: embedHtml });
+      });
     }
     const created = await createRecorder(context, page, options.previewUrl, options.debuggingPort);
     recorder = created.recorder;
@@ -253,6 +271,7 @@ async function runSurfaceFirstSession(
       journey: options.journey,
       surface: options.scenario.surface,
       cacheState: 'cold',
+      serviceWorkerPolicy: options.serviceWorkerPolicy,
     });
   } finally {
     await recorder?.stop();
@@ -311,16 +330,77 @@ export async function runCrossSiteEmbedFirstSession(
   });
 }
 
+export interface PlaywrightFirstSessionSurfaceRunnerOptions {
+  browser: Browser;
+  protocol: PerfProtocol;
+  previewUrl: string;
+  debuggingPort: number;
+  /** Only populated by the historic baseline recorder. */
+  embedHtmlPath?: string;
+  /** A pre-navigation observer which must not alter application traffic. */
+  historicalMilestoneInitScript?: string;
+  serviceWorkerPolicy?: FirstSessionServiceWorkerPolicy;
+}
+
 export function createPlaywrightFirstSessionSurfaceRunner(
-  browser: Browser,
-  protocol: PerfProtocol,
-  previewUrl: string,
-  debuggingPort: number,
+  options: PlaywrightFirstSessionSurfaceRunnerOptions,
 ): FirstSessionSurfaceRunner {
+  const { browser, protocol, previewUrl, debuggingPort, ...runOptions } = options;
   return {
-    runNewUserEditor: () => runNewUserFirstSession(browser, protocol, previewUrl, debuggingPort),
-    runPublicShare: () => runPublicShareFirstSession(browser, protocol, previewUrl, debuggingPort),
+    runNewUserEditor: () =>
+      runSurfaceFirstSession({
+        browser,
+        protocol,
+        previewUrl,
+        scenario: PERF_SCENARIOS.small,
+        journey: 'new-user-editor',
+        crossSite: false,
+        debuggingPort,
+        ...runOptions,
+      }),
+    runPublicShare: () =>
+      runSurfaceFirstSession({
+        browser,
+        protocol,
+        previewUrl,
+        scenario: PERF_SCENARIOS.share,
+        journey: 'public-share',
+        crossSite: false,
+        debuggingPort,
+        ...runOptions,
+      }),
     runCrossSiteEmbed: () =>
-      runCrossSiteEmbedFirstSession(browser, protocol, previewUrl, debuggingPort),
+      runSurfaceFirstSession({
+        browser,
+        protocol,
+        previewUrl,
+        scenario: PERF_SCENARIOS.embed,
+        journey: 'cross-site-embed',
+        crossSite: true,
+        debuggingPort,
+        ...runOptions,
+      }),
   };
+}
+
+/**
+ * Use only while recording the immutable 497a549 baseline. Current artifacts
+ * carry their own `tm:*` marks and must never receive this observer shim.
+ */
+export function createLegacy497a549FirstSessionSurfaceRunner(
+  options: Legacy497a549FirstSessionSurfaceRunnerOptions,
+): FirstSessionSurfaceRunner {
+  return createPlaywrightFirstSessionSurfaceRunner({
+    ...options,
+    historicalMilestoneInitScript: LEGACY_497A549_FIRST_SESSION_INIT_SCRIPT,
+    serviceWorkerPolicy: 'legacy-497a549',
+  });
+}
+
+export interface Legacy497a549FirstSessionSurfaceRunnerOptions {
+  browser: Browser;
+  protocol: PerfProtocol;
+  previewUrl: string;
+  debuggingPort: number;
+  embedHtmlPath: string;
 }
