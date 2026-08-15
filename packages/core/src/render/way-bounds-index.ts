@@ -1,5 +1,4 @@
 import type { LngLat, Node, Way } from '../model/system';
-import { isOsmImportedWay } from './infrastructure-detail';
 
 const CELL_DEGREES = 0.1;
 interface WayBoundsIndex {
@@ -11,6 +10,10 @@ const cache = new WeakMap<Way[], WayBoundsIndex>();
 const nodesByWayCache = new WeakMap<Node[], Map<string, Node[]>>();
 const cellKey = (x: number, y: number): string => `${x}:${y}`;
 const cell = (coordinate: number): number => Math.floor(coordinate / CELL_DEGREES);
+
+function isOsmImportedWay(way: Way): boolean {
+  return way.source?.startsWith('osm:') ?? false;
+}
 
 function buildIndex(ways: Way[]): WayBoundsIndex {
   const cached = cache.get(ways);
