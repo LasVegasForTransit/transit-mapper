@@ -1,9 +1,8 @@
 # Project structure
 
-TransitMapper is a pnpm workspace with a shared domain package, a browser
-editor, and an optional Cloudflare Worker. The project map follows those
-ownership boundaries. Paths are locators within a module, not the organizing
-principle of this reference.
+TransitMapper is a pnpm workspace with a domain package, browser editor, and
+optional Cloudflare Worker. This reference follows ownership boundaries, not
+paths.
 
 ## Workspace
 
@@ -111,8 +110,7 @@ HTTP requests or database writes. See
 
 #### Performance sample contract
 
-`packages/core/src/performance/contract.ts` owns the allowlist, bounds, and
-eight capability bits. It rejects unknown fields and browser identity.
+`packages/core/src/performance/contract.ts` validates the sampled browser-to-Worker payload.
 
 #### Account groundwork
 
@@ -354,16 +352,13 @@ dialog reports that its revision is unavailable instead of inventing one.
 precache validation that can run without browser automation. Browser traces
 and production-output checks consume, but do not redefine, it.
 
-`apps/web/src/pwa/adaptive-cache-contract.ts` owns the optional-asset manifest
-and offline-readiness vocabulary. The lazy client applies network, quota, and
-64 KiB limits while filling the service worker's CacheFirst store. The build
-emits hashed URLs and sizes; verification keeps its graphs disjoint.
+`apps/web/src/pwa/adaptive-cache-contract.ts` owns optional assets and offline
+readiness. The client obeys network, quota, and 64 KiB limits.
 
-`field-sampling.ts` gates privacy, release, origin, and sampling before loading
-the URL-free observation client.
+`field-sampling.ts` checks privacy, release, origin, and sampling before
+loading the URL-free client.
 
-Vite builds editor, embed, and no-script privacy. It appears in the sitemap,
-not editor precache or JavaScript.
+Vite builds the editor, embed, and no-script privacy page.
 
 ### Worker
 
@@ -373,28 +368,21 @@ and validation but never imports browser or editor modules.
 
 #### HTTP delivery
 
-The Worker routes resource-oriented API requests, share pages, embeds,
-oEmbed responses, static assets, anonymous performance samples, and scheduled
-maintenance. Stored text enters HTML through `HTMLRewriter`; routing code does
-not concatenate untrusted values into markup.
+The Worker routes API requests, shares, embeds, static assets, sampled reports,
+and maintenance. Stored text enters HTML through `HTMLRewriter`.
 
-`POST /api/performance-samples` accepts at most 8 KiB of same-origin JSON,
-honors GPC/DNT, validates the contract, and stores allowlisted columns.
-Cloudflare rate-limits addresses without storing them; production fails closed
-without that binding.
+`POST /api/performance-samples` accepts 8 KiB of same-origin JSON, honors
+GPC/DNT, validates it, and stores allowlisted columns.
 
 #### Persistence
 
-D1 stores shared systems, preview metadata, and short-lived performance
-measurements. Migrations in `apps/worker/src/migrations` are append-only and
-applied by Wrangler in filename order. Anonymous shares expire; null expiry is
-reserved for future account ownership. See
+D1 stores shared systems, preview metadata, and short-lived sampled data.
+Migrations are append-only and Wrangler applies them in filename order. See
 [Operations](../../operations/how-to/operations.md).
 
 `performance-samples.ts` owns ingestion; `performance-maintenance.ts` owns
-daily summaries and retention. Markers and ephemeral owners make overlapping
-retries safe. Raw rows expire after seven days, aggregates after 90;
-performance and share maintenance fail independently.
+daily summaries and retention. Raw rows expire after seven days and aggregates
+after 90.
 
 ## Repository support
 
