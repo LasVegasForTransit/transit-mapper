@@ -33,7 +33,10 @@ import {
 import { linesByServiceId } from '../model/line-service';
 import { nearWaysForStops, servicesByWay, visibleWaysFor } from './featureMemo';
 import { mergeAdjacentServiceLines } from './mergeServiceLines';
-import { serviceJunctionConnectors } from './service-junction-connectors';
+import {
+  serviceJunctionConnectors,
+  type ServiceJunctionConnector,
+} from './service-junction-connectors';
 import {
   assignServicesToLanes,
   indexServicePatternsByWay,
@@ -1615,6 +1618,79 @@ interface AppendStreetServiceJunctionConnectorsOptions {
   turnRestrictions: TransitSystem['turnRestrictions'];
 }
 
+interface AppendStreetServiceJunctionConnectorOptions {
+  services: Feature<LineString>[];
+  serviceHits: Feature<LineString>[];
+  indexes: SharedProjectionIndexes;
+  connector: ServiceJunctionConnector;
+  from: StreetServiceEndpointPaint;
+  to: StreetServiceEndpointPaint;
+}
+
+/** Write the matching visible and hit records for one physical lane turn.
+ *
+ * The pair intentionally shares one geometry object: its stable identity and
+ * exact endpoint coordinates must agree for paint, hit testing, and source
+ * updates. The collector above decides whether the turn is visible; this
+ * helper only serializes that accepted turn into the two renderer surfaces.
+ */
+function appendStreetServiceJunctionConnector({
+  services,
+  serviceHits,
+  indexes,
+  connector,
+  from,
+  to,
+}: AppendStreetServiceJunctionConnectorOptions): void {
+  const properties = {
+    serviceId: connector.serviceId,
+    nodeId: connector.nodeId,
+    modeId: from.service.modeId,
+    wayId: from.way.id,
+    typeId: from.way.typeId,
+    color: serviceDisplayColor(from.service, indexes.linesByServiceId),
+    width: modeRender(from.service.modeId).width,
+    ...gradeFlags(from.way.grade),
+    // A line-offset follows the turn's normal. The incoming separation is
+    // therefore the stable choice until connector geometry carries a
+    // per-vertex offset for multiple services sharing one lane.
+    offset: from.offset,
+    w14: Math.max(from.laneW14, to.laneW14),
+    corridorW14: widthPxAtZ14(profileWidthM(from.way.profile), from.way.points[0]?.[1] ?? 0),
+    renderTier: 'street',
+    tierOpacity: from.corridor.blend.weights.street,
+    ...tierAvailabilityProperties(from.corridor, from.corridor.retainedTiers),
+    pathRole: `junction:${connector.nodeId}`,
+  };
+  const geometry = { type: 'LineString' as const, coordinates: [...connector.path] };
+  const paintIdentity = [
+    connector.serviceId,
+    connector.run,
+    connector.nodeId,
+    connector.from.wayId,
+    connector.from.laneId,
+    connector.to.wayId,
+    connector.to.laneId,
+  ] as const;
+  services.push({
+    type: 'Feature',
+    id: stableFeatureId('services', 'junction-connector', ...paintIdentity),
+    properties: { ...properties, hitTarget: false },
+    geometry,
+  });
+  serviceHits.push({
+    type: 'Feature',
+    id: stableFeatureId('services', 'hit-junction-connector', ...paintIdentity),
+    properties: {
+      ...properties,
+      patternId: from.service.path.id,
+      run: connector.run,
+      hitTarget: true,
+    },
+    geometry,
+  });
+}
+
 /**
  * Adds the committed service path inside each visible Street junction.
  *
@@ -1665,63 +1741,13 @@ function appendStreetServiceJunctionConnectors({
       ),
     );
     if (!from || !to || !from.corridor.retainedTiers.includes('street')) continue;
-    const properties = {
-      serviceId: connector.serviceId,
-      nodeId: connector.nodeId,
-      modeId: from.service.modeId,
-      wayId: from.way.id,
-      typeId: from.way.typeId,
-      color: serviceDisplayColor(from.service, indexes.linesByServiceId),
-      width: modeRender(from.service.modeId).width,
-      ...gradeFlags(from.way.grade),
-      // A line-offset follows the turn's normal. The incoming separation is
-      // therefore the stable choice until connector geometry carries a
-      // per-vertex offset for multiple services sharing one lane.
-      offset: from.offset,
-      w14: Math.max(from.laneW14, to.laneW14),
-      corridorW14: widthPxAtZ14(profileWidthM(from.way.profile), from.way.points[0]?.[1] ?? 0),
-      renderTier: 'street',
-      tierOpacity: from.corridor.blend.weights.street,
-      ...tierAvailabilityProperties(from.corridor, from.corridor.retainedTiers),
-      pathRole: `junction:${connector.nodeId}`,
-    };
-    const geometry = { type: 'LineString' as const, coordinates: [...connector.path] };
-    services.push({
-      type: 'Feature',
-      id: stableFeatureId(
-        'services',
-        'junction-connector',
-        connector.serviceId,
-        connector.run,
-        connector.nodeId,
-        connector.from.wayId,
-        connector.from.laneId,
-        connector.to.wayId,
-        connector.to.laneId,
-      ),
-      properties: { ...properties, hitTarget: false },
-      geometry,
-    });
-    serviceHits.push({
-      type: 'Feature',
-      id: stableFeatureId(
-        'services',
-        'hit-junction-connector',
-        connector.serviceId,
-        connector.run,
-        connector.nodeId,
-        connector.from.wayId,
-        connector.from.laneId,
-        connector.to.wayId,
-        connector.to.laneId,
-      ),
-      properties: {
-        ...properties,
-        patternId: from.service.path.id,
-        run: connector.run,
-        hitTarget: true,
-      },
-      geometry,
+    appendStreetServiceJunctionConnector({
+      services,
+      serviceHits,
+      indexes,
+      connector,
+      from,
+      to,
     });
   }
 }
