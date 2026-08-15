@@ -169,7 +169,10 @@ interface SourceBankFlipMetrics {
 }
 
 export interface SourceBankLayerController {
-  prepare(bank: SourceBankId): SourceBankFlipMetrics;
+  /** Prepares an inactive bank for one candidate scene. Layers backed by an
+   * empty incoming source stay hidden, because MapLibre has no worker content
+   * event for a clear that can safely gate a visible bank flip. */
+  prepare(bank: SourceBankId, clearedSourceIds?: ReadonlySet<string>): SourceBankFlipMetrics;
   stagingBankId(): SourceBankId | null;
   activate(bank: SourceBankId): SourceBankFlipMetrics;
   finishActivation(bank: SourceBankId): void;
@@ -184,6 +187,7 @@ export interface SourceBankLayerController {
 
 interface BankedLayerRecord {
   readonly id: string;
+  readonly sourceId: string;
   readonly translateProperties: readonly string[];
   readonly translate: Map<string, unknown>;
   readonly translateAnchor: Map<string, unknown>;
@@ -210,11 +214,16 @@ function initialTranslateAnchors(
 class SourceBankLayerControllerImplementation implements SourceBankLayerController {
   private readonly layers: readonly BankedLayerRecord[];
   private readonly layerIds: ReadonlySet<string>;
+  private readonly clearedSourceIds: Record<SourceBankId, ReadonlySet<string>> = {
+    a: new Set(),
+    b: new Set(),
+  };
   private stagingBank: SourceBankId | null = null;
 
   constructor(private readonly options: SourceBankLayerControllerOptions) {
     this.layers = options.logicalSpecs.filter(isBankedRenderLayer).map((spec) => ({
       id: spec.id,
+      sourceId: layerSourceId(spec) ?? '',
       translateProperties: renderLayerTranslateProperties(spec),
       translate: initialTranslate(spec, renderLayerTranslateProperties(spec)),
       translateAnchor: initialTranslateAnchors(spec, renderLayerTranslateProperties(spec)),
@@ -230,8 +239,12 @@ class SourceBankLayerControllerImplementation implements SourceBankLayerControll
     );
   }
 
-  prepare(bank: SourceBankId): SourceBankFlipMetrics {
+  prepare(
+    bank: SourceBankId,
+    clearedSourceIds: ReadonlySet<string> = new Set(),
+  ): SourceBankFlipMetrics {
     this.stagingBank = bank;
+    this.clearedSourceIds[bank] = clearedSourceIds;
     return this.applyPreparedBank(bank);
   }
 
@@ -270,7 +283,10 @@ class SourceBankLayerControllerImplementation implements SourceBankLayerControll
       const physicalLayerId = bankedLayerId(logicalLayerId, bank);
       if (this.options.host.hasLayer(physicalLayerId)) {
         const ownsPaint = bank === activeBank || bank === this.stagingBank;
-        this.options.host.setVisibility(physicalLayerId, ownsPaint ? visibility : 'none');
+        this.options.host.setVisibility(
+          physicalLayerId,
+          ownsPaint && !this.sourceIsCleared(layer, bank) ? visibility : 'none',
+        );
       }
     }
   }
@@ -307,7 +323,10 @@ class SourceBankLayerControllerImplementation implements SourceBankLayerControll
     for (const layer of this.layers) {
       const physicalLayerId = bankedLayerId(layer.id, bank);
       if (!this.options.host.hasLayer(physicalLayerId)) continue;
-      this.options.host.setVisibility(physicalLayerId, layer.visibility);
+      this.options.host.setVisibility(
+        physicalLayerId,
+        this.sourceIsCleared(layer, bank) ? 'none' : layer.visibility,
+      );
       operationCount += 1;
       for (const property of layer.translateProperties) {
         this.options.host.setPaintProperty(physicalLayerId, property, OFFSCREEN_RENDER_TRANSLATE);
@@ -341,7 +360,10 @@ class SourceBankLayerControllerImplementation implements SourceBankLayerControll
     const physicalLayerId = bankedLayerId(layer.id, candidateBank);
     if (!this.options.host.hasLayer(physicalLayerId)) return 0;
     const active = candidateBank === activeBank;
-    this.options.host.setVisibility(physicalLayerId, layer.visibility);
+    this.options.host.setVisibility(
+      physicalLayerId,
+      this.sourceIsCleared(layer, candidateBank) ? 'none' : layer.visibility,
+    );
     for (const property of layer.translateProperties) {
       this.options.host.setPaintProperty(
         physicalLayerId,
@@ -364,6 +386,10 @@ class SourceBankLayerControllerImplementation implements SourceBankLayerControll
         this.options.host.setVisibility(physicalLayerId, 'none');
       }
     }
+  }
+
+  private sourceIsCleared(layer: BankedLayerRecord, bank: SourceBankId): boolean {
+    return this.clearedSourceIds[bank].has(layer.sourceId);
   }
 }
 

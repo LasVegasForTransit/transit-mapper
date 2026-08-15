@@ -76,6 +76,10 @@ export interface RenderSceneSourceUpdatePlan {
   readonly strategy: 'none' | 'full' | 'patch';
   /** Exact MapLibre source targets mutated by this transaction. */
   readonly sourceIds: readonly string[];
+  /** Targets whose next revision contains no geometry. A banked renderer keeps
+   * their incoming layers absent at activation, so no stale geometry can leak
+   * while MapLibre has no content event to acknowledge for an empty update. */
+  readonly clearedSourceIds?: readonly string[];
   readonly units: readonly RenderSceneSourceMutationUnit[];
   /** Exact resumable CPU work required by a later full source mutation. These
    * units never call MapLibre and may therefore participate in batch retry. */

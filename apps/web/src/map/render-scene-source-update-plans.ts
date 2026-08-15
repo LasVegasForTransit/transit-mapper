@@ -15,6 +15,7 @@ export interface ResolvedFullUpload {
   source: GeoJsonSourceTarget;
   collection: FeatureCollection;
   materialization: RenderFeatureCollectionMaterialization | null;
+  clearsTarget: boolean;
 }
 
 export interface ResolvedPatchUpload extends ResolvedFullUpload {
@@ -279,6 +280,7 @@ export function createFullUpdatePlan({
   return {
     strategy: 'full',
     sourceIds: uploads.map((upload) => upload.id),
+    clearedSourceIds: uploads.filter((upload) => upload.clearsTarget).map((upload) => upload.id),
     preparationUnits: preparation.sequence,
     units,
     stage() {
@@ -374,6 +376,9 @@ export function createPatchUpdatePlan({
   return {
     strategy: resolved.uploads.length === 0 ? 'none' : 'patch',
     sourceIds: resolved.uploads.map((upload) => upload.id),
+    clearedSourceIds: resolved.uploads
+      .filter((upload) => upload.clearsTarget)
+      .map((upload) => upload.id),
     preparationUnits: EMPTY_PREPARATION_UNITS,
     units,
     stage() {

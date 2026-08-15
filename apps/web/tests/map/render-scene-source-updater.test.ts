@@ -78,6 +78,28 @@ describe('render scene source updater', () => {
     expect(result.sourceUploadCount).toBe(1);
   });
 
+  it('marks cleared visual and hit sources as absent from the incoming revision', () => {
+    const ways = systemFeatureSourceId('ways');
+    const way = pointFeature(renderFeatureId(ways, 'overview', ['way-a']), 1);
+    const hit = pointFeature(renderFeatureId(ways, 'hit', ['way-a']), 1);
+    const fixture = sourceFixture([ways]);
+    const hitSource = new RecordingSource();
+    const updater = createRenderSceneSourceUpdater({
+      resolveSource: fixture.source,
+      resolveHitSource: () => hitSource,
+      hitSourceId: 'tm-hit-features',
+    });
+    const first = scene('revision-1', [{ sourceId: ways, features: [way] }], [hit]);
+    const next = scene('revision-2', [{ sourceId: ways, features: [] }]);
+
+    updater.apply(first);
+    const plan = updater.prepare(next, { intent: 'reset' });
+
+    expect(plan.sourceIds).toEqual([String(ways), 'tm-hit-features']);
+    expect(plan.clearedSourceIds).toEqual([String(ways), 'tm-hit-features']);
+    plan.abort();
+  });
+
   it('uploads only changed sources through a stable-ID patch', () => {
     const ways = systemFeatureSourceId('ways');
     const stations = systemFeatureSourceId('stations');

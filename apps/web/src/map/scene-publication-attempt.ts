@@ -69,6 +69,7 @@ export function sourcePublicationContext<Update>(
 ): ScenePublicationContext {
   return {
     sourceIds: sourceCommit.sourceIds,
+    clearedSourceIds: sourceCommit.clearedSourceIds ?? [],
     ...(sourceCommit.mode ? { mode: sourceCommit.mode } : {}),
     ...(sourceCommit.bank !== undefined ? { bank: sourceCommit.bank } : {}),
     ...(sourceCommit.targetsForDomainIdentity

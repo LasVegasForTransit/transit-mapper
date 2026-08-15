@@ -1,7 +1,8 @@
 import type { RenderSceneSourceUpdatePlan } from './render-scene-source-updater';
 import type { AcceptedSceneStore } from './accepted-scene-store';
+import { SRC_HIT_FEATURES } from './layers/constants';
 import type { SourceBankId } from './source-bank';
-import type { SourceBankLayerController } from './source-bank-layers';
+import { logicalRenderSourceId, type SourceBankLayerController } from './source-bank-layers';
 
 export interface SourceBankSettlementHost {
   isSourceLoaded(sourceId: string): boolean;
@@ -41,6 +42,17 @@ export interface SourceBankSeedHandle {
 }
 
 const DEFAULT_SETTLEMENT_TIMEOUT_MS = 2_000;
+
+function sourceIdsRequiringLoad(plan: RenderSceneSourceUpdatePlan): string[] {
+  const cleared = new Set(plan.clearedSourceIds);
+  return plan.sourceIds.filter(
+    (sourceId) => !cleared.has(sourceId) || logicalRenderSourceId(sourceId) === SRC_HIT_FEATURES,
+  );
+}
+
+function clearedLogicalSourceIds(plan: RenderSceneSourceUpdatePlan): ReadonlySet<string> {
+  return new Set((plan.clearedSourceIds ?? []).map(logicalRenderSourceId));
+}
 
 function settlementPromise(
   subscribe: (settle: () => void) => () => void,
@@ -307,7 +319,7 @@ class BackgroundBankPreparation implements SourceBankBackgroundPreparation {
     const plan = this.options.scenes.prepareInactiveBankSeed();
     if (!plan) return;
     if (!plan.bank) throw new Error('An inactive renderer seed must target a source bank.');
-    this.options.layers.prepare(plan.bank);
+    this.options.layers.prepare(plan.bank, clearedLogicalSourceIds(plan));
     this.bank = plan.bank;
     const abort = new AbortController();
     this.abort = abort;
@@ -319,9 +331,11 @@ class BackgroundBankPreparation implements SourceBankBackgroundPreparation {
       beforeSourceMutation: () =>
         waitForSourceBankPaint({ host: this.options.host, signal: abort.signal }),
       onSourceMutationStart: (prepared) => {
+        const awaitedSourceIds = sourceIdsRequiringLoad(prepared);
+        if (awaitedSourceIds.length === 0) return;
         sourceLoad = waitForSourceBankLoad({
           host: this.options.host,
-          sourceIds: prepared.sourceIds,
+          sourceIds: awaitedSourceIds,
           signal: abort.signal,
         });
         // Cancellation can happen while the background seed is still between
@@ -329,12 +343,15 @@ class BackgroundBankPreparation implements SourceBankBackgroundPreparation {
         void sourceLoad.catch(() => {});
       },
       beforePublish: async (prepared) => {
-        await (sourceLoad ??
-          waitForSourceBankLoad({
+        const awaitedSourceIds = sourceIdsRequiringLoad(prepared);
+        if (sourceLoad) await sourceLoad;
+        else if (awaitedSourceIds.length > 0) {
+          await waitForSourceBankLoad({
             host: this.options.host,
-            sourceIds: prepared.sourceIds,
+            sourceIds: awaitedSourceIds,
             signal: abort.signal,
-          }));
+          });
+        }
         await waitForSourceBankPaint({ host: this.options.host, signal: abort.signal });
       },
     });
