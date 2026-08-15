@@ -44,7 +44,7 @@ import {
   type DiagramLayoutResolver,
   type DocumentProjectionRequest,
 } from './document-projection';
-import type { FeatureProjectionWorkerClient } from './feature-projection-worker';
+import type { FeatureProjectionClient } from './feature-projection-worker';
 import {
   createSourceFeatureProjectionAccounting,
   type SourceFeatureProjectionAccounting,
@@ -103,7 +103,7 @@ export interface LiveMapRendererOptions {
   readonly instrumentationEnabled?: boolean;
   /** Geographic feature construction is worker-owned. The renderer still
    * owns MapLibre source and bank publication on this thread. */
-  readonly featureProjectionWorker: FeatureProjectionWorkerClient;
+  readonly featureProjectionWorker: FeatureProjectionClient;
   readonly layoutDiagram?: DiagramLayoutResolver;
   readonly requeueProjection?: (
     sourceIds: readonly MapSystemFeatureSourceId[],

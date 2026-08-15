@@ -34,7 +34,7 @@ import {
   mergeSourceFeatureProjectionCounts,
   type SourceFeatureProjectionCounts,
 } from './feature-projection-counts';
-import type { FeatureProjectionWorkerClient } from './feature-projection-worker';
+import type { FeatureProjectionClient } from './feature-projection-worker';
 import { submitWorkerFeatureProjection } from './worker-feature-projection-submission';
 import type { SourceUploadTransition } from './sourceUploadPlan';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
@@ -118,7 +118,7 @@ export interface SubmitPreparedCommittedFeatureProjectionOptions {
   /** Geographic feature construction is pure CPU work and the live renderer
    * always delegates it to this persistent worker. Browser-free scheduler
    * coverage lives under `tests/support`, outside the production graph. */
-  readonly featureProjectionWorker: FeatureProjectionWorkerClient;
+  readonly featureProjectionWorker: FeatureProjectionClient;
   /** The Diagram solver is independent from geographic preparation. When it
    * is supplied, its immutable schematic snapshot is fed to the same feature
    * worker rather than reconstructing render geometry on the editor thread. */

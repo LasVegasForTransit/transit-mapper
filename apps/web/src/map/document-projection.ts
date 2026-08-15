@@ -24,7 +24,7 @@ import type { PlanResumableGeographicFeatureProjectionOptions } from './resumabl
 import type { ScenePublicationSubmission } from './scene-publication';
 import type { SourceUploadTransition } from './sourceUploadPlan';
 import type { MapSystemFeatureSourceId } from './system-feature-sources';
-import type { FeatureProjectionWorkerClient } from './feature-projection-worker';
+import type { FeatureProjectionClient } from './feature-projection-worker';
 
 export type DiagramLayoutResolver = (
   system: TransitSystem,
@@ -64,7 +64,7 @@ export interface DocumentProjectorOptions {
   readonly instrumentationEnabled: boolean;
   /** Persistent CPU owner for geographic feature construction. Browser-free
    * tests supply a fake; production never falls back to synchronous drawing. */
-  readonly featureProjectionWorker: FeatureProjectionWorkerClient;
+  readonly featureProjectionWorker: FeatureProjectionClient;
   layoutDiagram?: DiagramLayoutResolver;
   now(): number;
   publish(
