@@ -1,4 +1,4 @@
-import type { Feature } from 'geojson';
+import type { Feature, Position } from 'geojson';
 import { describe, expect, it } from 'vitest';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '../../src/model/catalog';
 import { profileWidthM } from '../../src/model/profile';
@@ -60,6 +60,22 @@ function paintedServiceFeatures(features: SystemFeatures): Feature[] {
   return features.services.features.filter(
     (feature) => featureProperty(feature, 'hitTarget') !== true,
   );
+}
+
+function lineEndpoints(feature: Feature): readonly Position[] {
+  if (feature.geometry.type !== 'LineString') return [];
+  const { coordinates } = feature.geometry;
+  if (coordinates.length < 2) return [];
+  return [coordinates[0], coordinates[coordinates.length - 1]];
+}
+
+function sameCoordinate(left: Position, right: Position): boolean {
+  // Lane paths and their connector are resolved through separate trim calls.
+  // They meet visually, but IEEE rounding leaves a sub-micrometre difference
+  // in the resulting longitude. The test concerns a visible gap, not a bitwise
+  // coincidence between equivalent geographic calculations.
+  const tolerance = 1e-8;
+  return Math.abs(left[0] - right[0]) <= tolerance && Math.abs(left[1] - right[1]) <= tolerance;
 }
 
 const SYSTEM_FEATURE_NAMES: readonly (keyof SystemFeatures)[] = [
@@ -154,15 +170,28 @@ describe('screen-space corridor projection contracts', () => {
         }
         expect(streetPaint.length).toBeGreaterThan(0);
         expect(streetHits.length).toBeGreaterThan(0);
-        expect(
-          [...streetPaint, ...streetHits].every(
-            (feature) =>
-              feature.geometry.type === 'LineString' &&
-              feature.geometry.coordinates.some(
-                (coordinate) => coordinate[0] === nodeCoord[0] && coordinate[1] === nodeCoord[1],
+        for (const collection of [streetPaint, streetHits]) {
+          const connectors = collection.filter(
+            (feature) => featureProperty(feature, 'pathRole') === 'junction:junction',
+          );
+          const lanePaths = collection.filter(
+            (feature) => featureProperty(feature, 'pathRole') !== 'junction:junction',
+          );
+
+          expect(connectors.length).toBeGreaterThan(0);
+          expect(lanePaths.length).toBeGreaterThan(0);
+          expect(
+            connectors.every((connector) =>
+              lineEndpoints(connector).every((endpoint) =>
+                lanePaths.some((lanePath) =>
+                  lineEndpoints(lanePath).some((laneEndpoint) =>
+                    sameCoordinate(endpoint, laneEndpoint),
+                  ),
+                ),
               ),
-          ),
-        ).toBe(true);
+            ),
+          ).toBe(true);
+        }
       }
     },
   );
