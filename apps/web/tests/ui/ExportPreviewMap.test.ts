@@ -14,13 +14,24 @@ interface FakePreviewMap {
   sourceIds: () => string[];
 }
 
-const previewHarness = vi.hoisted(() => ({
-  container: { dataset: {}, clientWidth: 390, clientHeight: 260 },
-  effects: [] as EffectCallback[],
-  maps: [] as FakePreviewMap[],
-  featureViews: [] as ViewOptions[],
-  refCalls: 0,
-}));
+const previewHarness = vi.hoisted(() => {
+  const container: {
+    dataset: { renderSettled?: string };
+    clientWidth: number;
+    clientHeight: number;
+  } = {
+    dataset: {},
+    clientWidth: 390,
+    clientHeight: 260,
+  };
+  return {
+    container,
+    effects: [] as EffectCallback[],
+    maps: [] as FakePreviewMap[],
+    featureViews: [] as ViewOptions[],
+    refCalls: 0,
+  };
+});
 
 interface ProjectionRequest {
   readonly view: ViewOptions;

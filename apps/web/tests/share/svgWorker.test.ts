@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
-import type { ViewOptions } from '../../src/map/layers';
+import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import { svgViewForViewport } from '../../src/share/svg-render-view';
 import type { SvgWorkerEvent, SvgWorkerRequest } from '../../src/share/svgWorkerProtocol';
 import { renderSvgInWorker, type SvgRenderWorker } from '../../src/share/svgWorker';
