@@ -90,9 +90,13 @@
         font-size: 12px;
         font-weight: 600;
         color: var(--md-sys-color-on-surface);
+      }
+      #embed-credit a {
+        color: inherit;
         text-decoration: none;
       }
-      #embed-credit:hover {
+      #embed-credit a:hover,
+      #embed-credit a:focus-visible {
         text-decoration: underline;
       }
       #embed-status {
@@ -114,7 +118,11 @@
   <body>
     <div id="map"></div>
     <p id="embed-status">Loading map…</p>
-    <a id="embed-credit" href="/" target="_blank" rel="noopener">Open in TransitMapper</a>
+    <nav id="embed-credit" aria-label="TransitMapper links">
+      <a id="embed-open" href="/" target="_blank" rel="noopener">Open in TransitMapper</a>
+      <span aria-hidden="true"> · </span>
+      <a href="/privacy" target="_blank" rel="noopener">Privacy</a>
+    </nav>
     <script type="module" src="/src/embed/main.ts"></script>
   </body>
 </html>

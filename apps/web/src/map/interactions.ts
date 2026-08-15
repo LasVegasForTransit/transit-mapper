@@ -124,7 +124,7 @@ function rafThrottle<A extends unknown[]>(fn: (...args: A) => void) {
   return {
     call(...args: A) {
       pending = args;
-      if (frame === null) frame = requestAnimationFrame(flushNow);
+      frame ??= requestAnimationFrame(flushNow);
     },
     // Applies the latest pending call immediately and cancels the scheduled
     // frame — call on mouseup so the drag doesn't end a frame short of the
@@ -230,6 +230,9 @@ export interface AttachInteractionsOptions {
    * dispatch uses. Keeping it outside this imperative controller lets React
    * render the badge without the map owning a second cursor vocabulary. */
   onPointerIntent?: (intent: PointerIntent | null, x: number, y: number) => void;
+  /** Starts the selection-only UI import at the press boundary, before the
+   * release commits a selection. Drawing and camera gestures do not pay it. */
+  onSelectionIntent?: () => void;
   /** Presentation must remain silent while the map's action menu owns focus;
    * otherwise stationary key events can revive a stale hover beneath it. */
   isContextMenuOpen?: () => boolean;
@@ -2273,6 +2276,9 @@ export function attachInteractions(
       return;
     }
     if (oe.button !== 0) return;
+    if (st.readOnly || st.tool === 'select' || st.tool === 'lines') {
+      opts.onSelectionIntent?.();
+    }
 
     const endpoint = featureAt(e, [LYR_WAY_ENDPOINTS]);
     const handle = endpoint ?? featureAt(e, [LYR_HANDLES]);

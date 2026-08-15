@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
-import { basename, posix } from 'node:path';
+import { basename } from 'node:path';
 import { brotliCompressSync, gzipSync } from 'node:zlib';
 import type { BundleBudgetViolation, BundleEntrySize } from '../../src/perf/bundleBudget';
 import type { PerformanceChunkSize, PerformanceChunkViolation } from '../../src/perf/chunkPolicy';
+import { emittedSource, moduleReferences, resolvedOutputReference } from './bundle-output';
+import { workerOutput } from './worker-output';
 
 export interface ViteManifestEntry {
   file: string;
@@ -165,82 +167,6 @@ function graphReport(
   };
 }
 
-function emittedSource(path: string, files: Readonly<Partial<Record<string, Uint8Array>>>): string {
-  const contents = files[path];
-  if (!contents) throw new Error(`Build output "${path}" does not exist.`);
-  return Buffer.from(contents).toString('utf8');
-}
-
-function resolvedOutputReference(
-  reference: string,
-  ownerPath: string,
-  files: Readonly<Partial<Record<string, Uint8Array>>>,
-): string {
-  const withoutQuery = reference.split(/[?#]/, 1)[0];
-  const path = withoutQuery.startsWith('/')
-    ? withoutQuery.replace(/^\/+/, '')
-    : posix.normalize(posix.join(posix.dirname(ownerPath), withoutQuery));
-  if (files[path]) return path;
-  const withExtension = `${path}.js`;
-  if (!posix.extname(path) && files[withExtension]) return withExtension;
-  throw new Error(`Build output "${ownerPath}" references missing file "${reference}".`);
-}
-
-function dedicatedWorkerReferences(source: string): string[] {
-  return [
-    ...source.matchAll(
-      /new\s+Worker\s*\(\s*new\s+URL\s*\(\s*(["'`])([^"'`]+\.m?js(?:[?#][^"'`]*)?)\1\s*,\s*import\.meta\.url\s*\)/g,
-    ),
-  ].map((match) => match[2]);
-}
-
-function moduleReferences(source: string): string[] {
-  const references = [
-    ...source.matchAll(
-      /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s*)(["'`])([^"'`]+\.m?js(?:[?#][^"'`]*)?)\1/g,
-    ),
-  ].map((match) => match[2]);
-  return [...new Set(references)];
-}
-
-interface WorkerOutput {
-  files: Set<string>;
-  entries: Set<string>;
-}
-
-function workerOutput(
-  editorFiles: Set<string>,
-  manifestFiles: Set<string>,
-  files: Readonly<Partial<Record<string, Uint8Array>>>,
-): WorkerOutput {
-  const workers = new Set<string>();
-  const entries = new Set(
-    [...editorFiles]
-      .filter((path) => /\.m?js$/.test(path))
-      .flatMap((path) =>
-        dedicatedWorkerReferences(emittedSource(path, files)).map((reference) =>
-          resolvedOutputReference(reference, path, files),
-        ),
-      ),
-  );
-  const pending = [...entries];
-
-  while (pending.length > 0) {
-    const path = pending.pop();
-    if (!path || workers.has(path) || manifestFiles.has(path)) continue;
-    workers.add(path);
-    const source = emittedSource(path, files);
-    for (const reference of [...dedicatedWorkerReferences(source), ...moduleReferences(source)]) {
-      const referencedPath = resolvedOutputReference(reference, path, files);
-      if (!workers.has(referencedPath) && !manifestFiles.has(referencedPath)) {
-        pending.push(referencedPath);
-      }
-    }
-  }
-
-  return { files: workers, entries };
-}
-
 function outputMatchesBoundary(path: string, boundary: ExpectedWorkerBoundary): boolean {
   const name = basename(path);
   return (
@@ -357,6 +283,53 @@ function precacheFiles(serviceWorker: string): Set<string> {
   );
 }
 
+function linkedInstallAssetFiles(
+  source: string,
+  files: Readonly<Partial<Record<string, Uint8Array>>>,
+): Set<string> {
+  const installAssets = new Set<string>();
+  for (const match of source.matchAll(/<link\b[^>]*>/gi)) {
+    const tag = match[0];
+    const rel = /\brel\s*=\s*(["'])([^"']+)\1/i.exec(tag)?.[2] ?? '';
+    if (
+      !rel.split(/\s+/).some((value) => ['icon', 'apple-touch-icon', 'manifest'].includes(value))
+    ) {
+      continue;
+    }
+    const href = /\bhref\s*=\s*(["'])([^"']+)\1/i.exec(tag)?.[2];
+    if (href) installAssets.add(resolvedOutputReference(href, 'index.html', files));
+  }
+  return installAssets;
+}
+
+function manifestIconFiles(
+  manifestPath: string,
+  files: Readonly<Partial<Record<string, Uint8Array>>>,
+): string[] {
+  const value = JSON.parse(emittedSource(manifestPath, files)) as { icons?: unknown };
+  if (!Array.isArray(value.icons)) return [];
+  const icons: unknown[] = value.icons;
+  return icons.map((icon) => {
+    if (!icon || typeof icon !== 'object') {
+      throw new Error(`Build output "${manifestPath}" has an invalid install icon.`);
+    }
+    const { src } = icon as Record<string, unknown>;
+    if (typeof src !== 'string') {
+      throw new Error(`Build output "${manifestPath}" has an invalid install icon.`);
+    }
+    return resolvedOutputReference(src, manifestPath, files);
+  });
+}
+
+function installAssetFiles(files: Readonly<Partial<Record<string, Uint8Array>>>): Set<string> {
+  const assets = linkedInstallAssetFiles(emittedSource('index.html', files), files);
+  for (const path of [...assets]) {
+    if (basename(path) !== 'manifest.json') continue;
+    for (const icon of manifestIconFiles(path, files)) assets.add(icon);
+  }
+  return assets;
+}
+
 export function createDeliveryGraphs(options: CreateDeliveryGraphsOptions): DeliveryGraphs {
   const manifestEntries = Object.entries(options.manifest).filter(
     (entry): entry is [string, ViteManifestEntry] => entry[1]?.isEntry === true,
@@ -395,8 +368,7 @@ export function createDeliveryGraphs(options: CreateDeliveryGraphsOptions): Deli
   const serviceWorkerPath = options.serviceWorkerPath ?? 'sw.js';
   const serviceWorker = serviceWorkerFiles(serviceWorkerPath, options.files);
   const precache = precacheFiles(emittedSource(serviceWorkerPath, options.files));
-  const countedInstallFiles = new Set([...editorCompleteFiles, ...worker.files, ...serviceWorker]);
-  const installAssets = new Set([...precache].filter((path) => !countedInstallFiles.has(path)));
+  const installAssets = installAssetFiles(options.files);
   return {
     entries,
     workers: { ...graphReport(worker.files, options.files), boundaries: workerBoundaries },
@@ -405,11 +377,3 @@ export function createDeliveryGraphs(options: CreateDeliveryGraphsOptions): Deli
     precache: graphReport(precache, options.files),
   };
 }
-
-export { compareBundleReports } from './bundle-report-comparison';
-export type {
-  BundleFileChange,
-  BundleGraphComparison,
-  BundleMembershipTransition,
-  BundleReportComparison,
-} from './bundle-report-comparison';

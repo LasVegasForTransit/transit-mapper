@@ -10,6 +10,7 @@ dev-dist/
 *.tsbuildinfo
 .turbo/
 apps/web/artifacts/
+apps/web/.perf-harness-dist/
 
 # Agent configuration. settings.json is committed team policy;
 # settings.local.json is personal and must never be. Both of these were

@@ -198,8 +198,8 @@ input[type='range'] {
   background-color: var(--md-sys-color-outline);
 }
 
-/* Visually hidden but still announced — Radix's Dialog.Description (see
-   Modal.tsx) and any other screen-reader-only context use this. */
+/* Visually hidden but still announced — native dialog descriptions (see
+   Modal.tsx) and other screen-reader-only context use this. */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -234,6 +234,25 @@ input[type='range'] {
      blanket-disabling touch gestures at this level would freeze them. It goes
      on the map container alone (see MapCanvas). */
   overscroll-behavior: none;
+}
+
+/* The editor commits this static surface before the MapLibre module evaluates.
+   It holds the exact map footprint and gives people an immediate, truthful
+   status rather than a blank panel while the real canvas becomes available. */
+.map-loading-shell {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--tm-map-background);
+  color: var(--md-sys-color-on-surface-variant);
+}
+.map-loading-shell p {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--md-sys-color-surface) 88%, transparent);
+  font-size: 0.875rem;
 }
 
 /* ---- Zen mode ("Hide UI"): App.tsx sets one data-zen attribute on .app
@@ -966,7 +985,7 @@ input[type='range'] {
 .sim-clock-overridden {
   color: var(--md-sys-color-outline);
 }
-/* Popover's Radix Content carries no surface of its own — every consumer
+/* The shared popover carries no visual surface of its own — every consumer
    styles its own card (see .lp-popover, .issues-popover, .cf-popover, which
    are the same recipe). Without this the panel renders as bare text floating
    over the map. */
@@ -1714,11 +1733,59 @@ input[type='range'] {
   background: var(--md-sys-color-surface-container);
 }
 
-/* ---- dropdown menu (Radix DropdownMenu, see DropdownMenu.tsx) — one shared
-   look for every trigger-driven action menu (File menu, Export's quick-export
-   caret). Radix's own Popper positions/anchors the portal-rendered Content
-   itself (with real collision detection, unlike the static top/left/right
-   offsets this used to need per-trigger), so only the visual shell is here. */
+/* ---- native top-layer floating surfaces ----
+   Popover API supplies light dismissal/Escape/top-layer behavior. Anchor
+   positioning is used when the engine supports it; floating-position.ts
+   supplies the collision-aware fixed-position fallback for the remaining
+   browser in the supported current/previous matrix. */
+.tm-anchored-surface {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+}
+@supports (anchor-name: --tm-anchor) and (position-anchor: --tm-anchor) {
+  .tm-anchored-surface {
+    position-try-fallbacks: flip-block, flip-inline;
+  }
+  .tm-anchored-surface[data-side='bottom'] {
+    top: anchor(bottom);
+    margin-top: var(--tm-floating-gap);
+  }
+  .tm-anchored-surface[data-side='top'] {
+    bottom: anchor(top);
+    margin-bottom: var(--tm-floating-gap);
+  }
+  .tm-anchored-surface[data-side='left'] {
+    right: anchor(left);
+    margin-right: var(--tm-floating-gap);
+  }
+  .tm-anchored-surface[data-side='right'] {
+    left: anchor(right);
+    margin-left: var(--tm-floating-gap);
+  }
+  .tm-anchored-surface:is([data-side='bottom'], [data-side='top'])[data-align='start'] {
+    left: anchor(left);
+  }
+  .tm-anchored-surface:is([data-side='bottom'], [data-side='top'])[data-align='end'] {
+    right: anchor(right);
+  }
+  .tm-anchored-surface:is([data-side='bottom'], [data-side='top'])[data-align='center'] {
+    left: anchor(center);
+    translate: -50% 0;
+  }
+  .tm-anchored-surface:is([data-side='left'], [data-side='right'])[data-align='start'] {
+    top: anchor(top);
+  }
+  .tm-anchored-surface:is([data-side='left'], [data-side='right'])[data-align='end'] {
+    bottom: anchor(bottom);
+  }
+  .tm-anchored-surface:is([data-side='left'], [data-side='right'])[data-align='center'] {
+    top: anchor(center);
+    translate: 0 -50%;
+  }
+}
+
+/* One shared visual shell for every trigger-driven action menu. */
 .dropdown-menu-content {
   z-index: 30;
   min-width: 180px;
@@ -2021,8 +2088,7 @@ input[type='range'] {
   flex: none;
 }
 
-/* ---- layers / filters popover — positioning is Radix Popover's own Popper
-   now (see Popover.tsx), collision-aware instead of a static offset ---- */
+/* ---- layers / filters popover — native anchors with collision fallback ---- */
 .lp-popover {
   z-index: 30;
   width: 340px;
@@ -2921,16 +2987,29 @@ input[type='range'] {
 .modal-backdrop[data-state='closed'] {
   animation: fade-out 140ms ease;
 }
-/* Radix renders Overlay and Content as siblings inside its portal (not
-   parent/child), so — unlike the old hand-rolled version — .modal can't rely
-   on .modal-backdrop's flexbox to center it; it centers itself. */
+/* Native modal dialogs enter the top layer, so no portal or application-level
+   z-index can clip them. The separate .modal-backdrop rules remain for the
+   truthful loading placeholder shown before a lazy dialog module resolves. */
+.modal::backdrop {
+  background: color-mix(in srgb, var(--md-sys-color-scrim) 32%, transparent);
+}
+.modal[data-state='open']::backdrop {
+  animation: fade-in 140ms ease;
+}
+.modal[data-state='closed']::backdrop {
+  animation: fade-out 140ms ease;
+}
 .modal {
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  margin: 0;
   z-index: 21;
   background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  border: 0;
   border-radius: 16px;
   box-shadow: var(--md-sys-elevation-level2);
   width: 440px;
@@ -3496,7 +3575,7 @@ button.chip-removable-label:hover {
  * how a tap on the tool rail during a collapse landed on `.insp-section`
  * instead: the panel was gone to look at and still there to hit.
  *
- * Radix writes `data-state` on both a floating surface and its trigger. The
+ * The floating primitive writes `data-state` on its surface and trigger. The
  * selectors therefore name the actual surfaces explicitly: a bare
  * `[data-state='closed']` also matches every closed menu/popover trigger and
  * makes the controls impossible to open. Inspector owns a separate state

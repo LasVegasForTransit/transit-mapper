@@ -16,6 +16,11 @@ const reactHooksPlugin = reactHooks as unknown as ESLint.Plugin;
 
 export default defineTypeAwareConfig(
   import.meta.dirname,
+  {
+    // The performance runner creates this private alternate Vite artifact for
+    // browser-only seams. It is generated code, never application source.
+    ignores: ['apps/web/.perf-harness-dist/**'],
+  },
   // The two classic hook rules only, listed explicitly rather than spreading
   // one of the plugin's presets. As of eslint-plugin-react-hooks 7, every
   // preset — `recommended` included — carries the React Compiler rule set

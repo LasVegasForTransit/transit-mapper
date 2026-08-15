@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   FIRST_SYSTEM_MAP_PAINT_MARK,
-  mapPaintInstrumentationEnabled,
+  systemInteractiveReady,
   markFirstSystemMapPaint,
   systemPaintReady,
 } from '../../src/perf/mapPaintMark';
@@ -12,16 +12,8 @@ afterEach(() => {
 });
 
 describe('first system map paint mark', () => {
-  it('is disabled for ordinary production and enabled only for development or a perf run', () => {
-    expect(mapPaintInstrumentationEnabled({ development: false, automatedPerfRun: false })).toBe(
-      false,
-    );
-    expect(mapPaintInstrumentationEnabled({ development: true, automatedPerfRun: false })).toBe(
-      true,
-    );
-    expect(mapPaintInstrumentationEnabled({ development: false, automatedPerfRun: true })).toBe(
-      true,
-    );
+  it('uses the canonical production first-system-paint milestone', () => {
+    expect(FIRST_SYSTEM_MAP_PAINT_MARK).toBe('tm:first-system-paint');
   });
 
   it('records the first proven system paint only once', () => {
@@ -37,24 +29,60 @@ describe('first system map paint mark', () => {
   it('requires uploaded system data and one completed representative source', () => {
     expect(
       systemPaintReady({
-        systemDataUploaded: false,
+        documentReady: false,
+        systemDataUploaded: true,
+        systemDataMatchesDocument: true,
         representativeSourceExists: true,
         representativeSourceLoaded: true,
       }),
     ).toBe(false);
     expect(
       systemPaintReady({
+        documentReady: true,
+        systemDataUploaded: false,
+        systemDataMatchesDocument: false,
+        representativeSourceExists: true,
+        representativeSourceLoaded: true,
+      }),
+    ).toBe(false);
+    expect(
+      systemPaintReady({
+        documentReady: true,
         systemDataUploaded: true,
+        systemDataMatchesDocument: false,
+        representativeSourceExists: true,
+        representativeSourceLoaded: true,
+      }),
+    ).toBe(false);
+    expect(
+      systemPaintReady({
+        documentReady: true,
+        systemDataUploaded: true,
+        systemDataMatchesDocument: true,
         representativeSourceExists: true,
         representativeSourceLoaded: false,
       }),
     ).toBe(false);
     expect(
       systemPaintReady({
+        documentReady: true,
         systemDataUploaded: true,
+        systemDataMatchesDocument: true,
         representativeSourceExists: true,
         representativeSourceLoaded: true,
       }),
     ).toBe(true);
+  });
+
+  it('requires both a committed document and attached interactions', () => {
+    expect(systemInteractiveReady({ documentCommitted: false, interactionsAttached: true })).toBe(
+      false,
+    );
+    expect(systemInteractiveReady({ documentCommitted: true, interactionsAttached: false })).toBe(
+      false,
+    );
+    expect(systemInteractiveReady({ documentCommitted: true, interactionsAttached: true })).toBe(
+      true,
+    );
   });
 });

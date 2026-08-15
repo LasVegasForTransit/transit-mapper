@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { mediaQuery } from './media-query-store';
 
 /**
  * The one way this app reads a media query.
@@ -9,47 +10,7 @@ import { useSyncExternalStore } from 'react';
  * a `useSyncExternalStore` hook — and only one of them carried the fallback for
  * browsers without `addEventListener` on a MediaQueryList.
  */
-export interface MediaQueryStore {
-  subscribe: (listener: () => void) => () => void;
-  snapshot: () => boolean;
-}
-
-/**
- * Cached per query string.
- *
- * `useSyncExternalStore` compares `subscribe` by identity and resubscribes
- * whenever it changes, so minting a fresh closure per call would tear down and
- * rebuild the listener on every commit.
- */
-const stores = new Map<string, MediaQueryStore>();
-
-export function mediaQuery(query: string): MediaQueryStore {
-  const existing = stores.get(query);
-  if (existing) return existing;
-
-  const store: MediaQueryStore = {
-    subscribe(listener) {
-      if (typeof window === 'undefined' || !window.matchMedia) return () => {};
-      const list = window.matchMedia(query);
-      const onChange = () => listener();
-      if (list.addEventListener) {
-        list.addEventListener('change', onChange);
-        return () => list.removeEventListener('change', onChange);
-      }
-      // Safari before 14. The app does not target it deliberately, but this
-      // costs nothing and makes the subscription safe in older embedded
-      // browsers.
-      list.addListener(onChange);
-      return () => list.removeListener(onChange);
-    },
-    snapshot() {
-      if (typeof window === 'undefined' || !window.matchMedia) return false;
-      return window.matchMedia(query).matches;
-    },
-  };
-  stores.set(query, store);
-  return store;
-}
+export { mediaQuery } from './media-query-store';
 
 /**
  * Read one media query as React state.

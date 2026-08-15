@@ -1,14 +1,14 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import { resolve } from 'node:path';
+import { resolveBuildOutputDirectory } from '../build-output';
 
 export const APP_ROOT = resolve(import.meta.dirname, '../..');
-export const PREVIEW_PORT = 4_173;
-export const PREVIEW_URL = `http://127.0.0.1:${PREVIEW_PORT}`;
-const BUILD_REPORT_DIRECTORY = resolve(APP_ROOT, 'dist/performance');
-const BUILD_REPORT_PATHS = ['bundle-report.json', 'pwa-report.json'].map((filename) =>
-  resolve(BUILD_REPORT_DIRECTORY, filename),
-);
+export const PERFORMANCE_PUBLIC_OUTPUT_DIRECTORY = resolveBuildOutputDirectory(APP_ROOT, false);
+export const PERFORMANCE_HARNESS_OUTPUT_DIRECTORY = resolveBuildOutputDirectory(APP_ROOT, true);
+
+export type PerformancePreviewArtifact = 'public' | 'instrumented';
 
 export interface RunningPreview {
   child: ChildProcess;
@@ -33,11 +33,11 @@ async function runCommand(
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let output = '';
-    child.stdout?.on('data', (chunk: Buffer) => {
+    child.stdout.on('data', (chunk: Buffer) => {
       output += chunk.toString();
       process.stdout.write(chunk);
     });
-    child.stderr?.on('data', (chunk: Buffer) => {
+    child.stderr.on('data', (chunk: Buffer) => {
       output += chunk.toString();
       process.stderr.write(chunk);
     });
@@ -49,27 +49,83 @@ async function runCommand(
   });
 }
 
-export async function buildPerformanceApp(): Promise<void> {
-  // Gate and capture the graph that actually ships before adding the private
-  // browser instrumentation. Otherwise the harness grades its own code as
-  // production payload and can fail a delivery budget before Chrome starts.
-  await runCommand('pnpm', ['run', 'build'], process.env);
-  const productionReports = new Map(
-    await Promise.all(
-      BUILD_REPORT_PATHS.map(async (path) => [path, await readFile(path)] as const),
-    ),
-  );
+export function previewUrl(port: number): string {
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error('Performance preview requires a valid TCP port.');
+  }
+  return `http://127.0.0.1:${port}`;
+}
 
-  await runCommand('pnpm', ['exec', 'vite', 'build'], {
-    ...process.env,
-    VITE_PERF_BUILD: '1',
+export function performancePreviewArguments(
+  artifact: PerformancePreviewArtifact,
+  port: number,
+): string[] {
+  const outputDirectory =
+    artifact === 'public'
+      ? PERFORMANCE_PUBLIC_OUTPUT_DIRECTORY
+      : PERFORMANCE_HARNESS_OUTPUT_DIRECTORY;
+  return [
+    'exec',
+    'vite',
+    'preview',
+    '--host',
+    '127.0.0.1',
+    '--port',
+    String(port),
+    '--strictPort',
+    '--outDir',
+    outputDirectory,
+  ];
+}
+
+async function allocatePreviewPort(): Promise<number> {
+  return new Promise<number>((resolvePromise, reject) => {
+    const server = createServer();
+    server.once('error', reject);
+    server.listen({ host: '127.0.0.1', port: 0, exclusive: true }, () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : null;
+      server.close((error) => {
+        if (error) reject(error);
+        else if (port === null) reject(new Error('Could not allocate a performance preview port.'));
+        else resolvePromise(port);
+      });
+    });
   });
+}
 
-  // Vite empties dist/ for the instrumented build. Restore the production
-  // delivery evidence so reports and --skip-build continue to describe the
-  // public artifact while preview serves the instrumented one.
-  await mkdir(BUILD_REPORT_DIRECTORY, { recursive: true });
-  await Promise.all([...productionReports].map(([path, contents]) => writeFile(path, contents)));
+export async function buildPerformanceApp(): Promise<void> {
+  // First-session bytes must come from the public artifact. Keep the private
+  // browser seams in a separate output directory so offline/interaction
+  // proofs cannot change the files the network ledger measures.
+  const publicBuildEnvironment = { ...process.env };
+  delete publicBuildEnvironment.VITE_PERF_BUILD;
+  await runCommand('pnpm', ['run', 'build'], publicBuildEnvironment);
+  await runCommand(
+    'pnpm',
+    ['exec', 'vite', 'build', '--outDir', PERFORMANCE_HARNESS_OUTPUT_DIRECTORY],
+    {
+      ...process.env,
+      VITE_PERF_BUILD: '1',
+    },
+  );
+}
+
+export async function assertPerformanceArtifactOutputs(): Promise<void> {
+  const required = [
+    ['public', PERFORMANCE_PUBLIC_OUTPUT_DIRECTORY],
+    ['instrumented', PERFORMANCE_HARNESS_OUTPUT_DIRECTORY],
+  ] as const;
+  for (const [artifact, outputDirectory] of required) {
+    try {
+      await access(resolve(outputDirectory, 'index.html'));
+    } catch {
+      throw new Error(
+        `--skip-build requires the ${artifact} performance artifact at ${outputDirectory}. ` +
+          'Run the performance command without --skip-build first.',
+      );
+    }
+  }
 }
 
 async function waitForPreview(preview: RunningPreview): Promise<void> {
@@ -89,38 +145,28 @@ async function waitForPreview(preview: RunningPreview): Promise<void> {
   throw new Error(`vite preview did not answer at ${preview.url} within 15 seconds.`);
 }
 
-export async function startPreview(): Promise<RunningPreview> {
-  const child = spawn(
-    'pnpm',
-    [
-      'exec',
-      'vite',
-      'preview',
-      '--host',
-      '127.0.0.1',
-      '--port',
-      String(PREVIEW_PORT),
-      '--strictPort',
-    ],
-    {
-      cwd: APP_ROOT,
-      env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
-  const preview: RunningPreview = { child, url: PREVIEW_URL, logs: [] };
-  child.stdout?.on('data', (chunk: Buffer) => preview.logs.push(chunk.toString()));
-  child.stderr?.on('data', (chunk: Buffer) => preview.logs.push(chunk.toString()));
+export async function startPreview(artifact: PerformancePreviewArtifact): Promise<RunningPreview> {
+  const port = await allocatePreviewPort();
+  const child = spawn('pnpm', performancePreviewArguments(artifact, port), {
+    cwd: APP_ROOT,
+    env: process.env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const preview: RunningPreview = { child, url: previewUrl(port), logs: [] };
+  child.stdout.on('data', (chunk: Buffer) => preview.logs.push(chunk.toString()));
+  child.stderr.on('data', (chunk: Buffer) => preview.logs.push(chunk.toString()));
   await waitForPreview(preview);
   return preview;
 }
 
 export async function stopPreview(preview: RunningPreview | undefined): Promise<void> {
-  if (!preview || preview.child.exitCode !== null) return;
+  if (preview?.child.exitCode !== null) return;
   preview.child.kill('SIGTERM');
-  await Promise.race([
-    new Promise<void>((resolvePromise) => preview.child.once('exit', () => resolvePromise())),
-    new Promise<void>((resolvePromise) => setTimeout(resolvePromise, 2_000)),
+  const exited = await Promise.race([
+    new Promise<boolean>((resolvePromise) =>
+      preview.child.once('exit', () => resolvePromise(true)),
+    ),
+    new Promise<boolean>((resolvePromise) => setTimeout(() => resolvePromise(false), 2_000)),
   ]);
-  if (preview.child.exitCode === null) preview.child.kill('SIGKILL');
+  if (!exited) preview.child.kill('SIGKILL');
 }

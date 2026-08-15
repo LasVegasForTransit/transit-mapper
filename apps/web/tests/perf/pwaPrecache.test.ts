@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  editorAdaptiveFiles,
   editorPrecacheFiles,
   embedOnlyFiles,
   manifestInstallIconFiles,
@@ -76,25 +77,30 @@ describe('PWA precache output', () => {
     ]);
   });
 
-  it('walks static and lazy editor imports into the offline graph', () => {
+  it('precaches only the static editor shell on first install', () => {
     expect(editorPrecacheFiles(manifest, installIcons)).toEqual([
-      'apple-touch-icon.png',
-      'assets/dialog-icon.svg',
-      'assets/dialog.js',
       'assets/main.css',
       'assets/main.js',
       'assets/shared.css',
       'assets/shared.js',
+      'favicon.svg',
+      'index.html',
+      'manifest.json',
+    ]);
+  });
+
+  it('classifies lazy features and install artwork as adaptive assets', () => {
+    expect(editorAdaptiveFiles(manifest, installIcons)).toEqual([
+      'apple-touch-icon.png',
+      'assets/dialog-icon.svg',
+      'assets/dialog.js',
       'favicon-16x16.png',
       'favicon-32x32.png',
       'favicon-dark-16x16.png',
       'favicon-dark-32x32.png',
-      'favicon.svg',
       'icons/app-icon-a1b2c3d4e5f6-192.png',
       'icons/app-icon-a1b2c3d4e5f6.svg',
       'icons/app-icon-maskable-a1b2c3d4e5f6-512.png',
-      'index.html',
-      'manifest.json',
     ]);
   });
 
@@ -102,14 +108,15 @@ describe('PWA precache output', () => {
     expect(embedOnlyFiles(manifest, installIcons)).toEqual(['assets/embed.js', 'embed.html']);
   });
 
-  it('reports missing manifest icons and accidentally cached embed assets', () => {
+  it('reports a missing shell asset and any eager adaptive or embed asset', () => {
     const expected = editorPrecacheFiles(manifest, installIcons);
     const precached = expected
-      .filter((file) => file !== 'icons/app-icon-a1b2c3d4e5f6.svg')
-      .concat('assets/embed.js');
+      .filter((file) => file !== 'assets/main.js')
+      .concat('assets/dialog.js', 'assets/embed.js');
 
     expect(verifyPrecacheOutput({ manifest, installIcons, precached })).toEqual([
-      'editor asset is not precached: icons/app-icon-a1b2c3d4e5f6.svg',
+      'essential editor asset is not precached: assets/main.js',
+      'adaptive editor asset is precached during first install: assets/dialog.js',
       'embed-only asset is precached: assets/embed.js',
     ]);
   });

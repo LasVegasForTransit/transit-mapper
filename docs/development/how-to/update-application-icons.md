@@ -85,5 +85,6 @@ pnpm --filter @transitmapper/web exec tsx scripts/perf/verify-pwa-output.ts
 ```
 
 Inspect the built manifest to confirm that all six install URLs carry the same
-revision, every referenced asset exists, and the service worker precaches
-those URLs.
+revision and every referenced asset exists. The PWA report should list those
+URLs as adaptive assets and prove they are absent from first-install precache;
+the browser and runtime CacheFirst route retain artwork only when it is used.

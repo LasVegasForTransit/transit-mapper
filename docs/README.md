@@ -28,6 +28,8 @@ deepens.
 - [Import streets from OpenStreetMap](product/how-to/import-osm.md).
 - [Share and export](product/how-to/share-and-export.md) — read-only links, forking,
   PNG export.
+- [Privacy policy](https://map.lasvegasfortransit.org/privacy) — the public,
+  no-JavaScript disclosure for shared-map hosting and anonymous performance samples.
 - [Run TransitMapper in production](operations/how-to/operations.md) — deploy, roll
   back, apply a migration, restore the database, and what to do when the
   Worker breaks.

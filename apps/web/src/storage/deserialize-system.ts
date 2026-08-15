@@ -4,6 +4,7 @@ import type {
   StorageDeserializerEvent,
   StorageDeserializerRequest,
 } from './storage-deserializer-protocol';
+import { DESERIALIZE_END_MARK, DESERIALIZE_START_MARK, markOnce } from '../perf/startup-marks';
 
 const DESERIALIZATION_TIMEOUT_MS = 20_000;
 
@@ -31,31 +32,41 @@ export function deserializeSystemOffThread(
   serialized: string,
   options: DeserializeSystemOptions = {},
 ): Promise<TransitSystem> {
+  markOnce(DESERIALIZE_START_MARK);
   let worker: StorageDeserializerWorker;
   try {
     worker = (options.workerFactory ?? createWorker)();
   } catch {
-    return Promise.resolve(parseSystem(JSON.parse(serialized)));
+    try {
+      return Promise.resolve(parseSystem(JSON.parse(serialized)));
+    } finally {
+      markOnce(DESERIALIZE_END_MARK);
+    }
   }
   return new Promise<TransitSystem>((resolve, reject) => {
     let settled = false;
-    const finish = (result: { system: TransitSystem } | { error: Error }) => {
-      if (settled) return;
+    const complete = () => {
+      if (settled) return false;
       settled = true;
       clearTimeout(timer);
       worker.terminate();
+      markOnce(DESERIALIZE_END_MARK);
+      return true;
+    };
+    const finish = (result: { system: TransitSystem } | { error: Error }) => {
+      if (!complete()) return;
       if ('system' in result) resolve(result.system);
       else reject(result.error);
     };
     const fallback = () => {
       if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      worker.terminate();
       try {
-        resolve(parseSystem(JSON.parse(serialized)));
+        const system = parseSystem(JSON.parse(serialized));
+        if (complete()) resolve(system);
       } catch (error) {
-        reject(error instanceof Error ? error : new Error('Stored document is invalid.'));
+        if (complete()) {
+          reject(error instanceof Error ? error : new Error('Stored document is invalid.'));
+        }
       }
     };
     const timer = setTimeout(fallback, options.timeoutMs ?? DESERIALIZATION_TIMEOUT_MS);

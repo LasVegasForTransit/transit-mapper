@@ -5,6 +5,7 @@ import { APP_ROOT } from './process';
 
 export interface PerfCliOptions {
   record: boolean;
+  freezeBaseline: boolean;
   outputDirectory: string;
   baselinePath?: string;
   requireBaseline: boolean;
@@ -24,7 +25,7 @@ export function perfUsage(): string {
     'Options:',
     '  --output <directory>   JSON/trace artifact directory',
     '  --baseline <report>    Compare medians with another report',
-    '  --require-baseline     Fail when --baseline is absent or unavailable',
+    '  --require-baseline     Require a baseline even in an otherwise exempt mode',
     '  --profile <name>        desktop (default) or mobile',
     '  --scenario <id>         Run one scenario for local diagnosis',
     '  --smoke                 Run one functional sample without numeric timing gates',
@@ -32,6 +33,7 @@ export function perfUsage(): string {
     '  --soak-duration <ms>    Shorter local soak smoke (default 600000)',
     '  --skip-build           Reuse the current dist/ output',
     '  --record               Retain one Chrome trace per measured run',
+    '  --freeze-baseline      Create the immutable checked baseline explicitly',
     '  --help                 Show this help',
   ].join('\n');
 }
@@ -42,75 +44,111 @@ function optionValue(args: string[], index: number, option: string): string {
   return value;
 }
 
+interface MutablePerfCliOptions {
+  record: boolean;
+  freezeBaseline: boolean;
+  output?: string;
+  baseline?: string;
+  requireBaseline: boolean;
+  skipBuild: boolean;
+  smoke: boolean;
+  profile: PerfProfileId;
+  scenarioId?: PerfScenario['id'];
+  soak: boolean;
+  soakDurationMs: number;
+  help: boolean;
+}
+
+type FlagHandler = (options: MutablePerfCliOptions) => void;
+
+const FLAG_HANDLERS: Readonly<Partial<Record<string, FlagHandler>>> = {
+  '--record': (options) => (options.record = true),
+  '--freeze-baseline': (options) => (options.freezeBaseline = true),
+  '--require-baseline': (options) => (options.requireBaseline = true),
+  '--skip-build': (options) => (options.skipBuild = true),
+  '--smoke': (options) => (options.smoke = true),
+  '--soak': (options) => (options.soak = true),
+  '--help': (options) => (options.help = true),
+};
+
+function applyFlag(options: MutablePerfCliOptions, argument: string): boolean {
+  if (argument === '--') return true;
+  const handler = FLAG_HANDLERS[argument];
+  if (!handler) return false;
+  handler(options);
+  return true;
+}
+
+function applyValueOption(options: MutablePerfCliOptions, args: string[], index: number): number {
+  const argument = args[index];
+  if (argument === '--soak-duration') {
+    const value = Number(optionValue(args, index, argument));
+    if (!Number.isInteger(value) || value < 1_000) {
+      throw new Error('--soak-duration must be an integer of at least 1000 ms.');
+    }
+    options.soakDurationMs = value;
+  } else if (argument === '--profile') {
+    const value = optionValue(args, index, argument);
+    if (value !== 'desktop' && value !== 'mobile') {
+      throw new Error(`--profile must be desktop or mobile, not "${value}".`);
+    }
+    options.profile = value;
+  } else if (argument === '--scenario') {
+    const value = optionValue(args, index, argument);
+    const scenario = PERF_SCENARIO_LIST.find((candidate) => candidate.id === value);
+    if (!scenario) throw new Error(`Unknown performance scenario: "${value}".`);
+    options.scenarioId = scenario.id;
+  } else if (argument === '--output') {
+    options.output = optionValue(args, index, argument);
+  } else if (argument === '--baseline') {
+    options.baseline = optionValue(args, index, argument);
+  } else {
+    throw new Error(`Unknown performance option: ${argument}`);
+  }
+  return index + 1;
+}
+
+function initialOptions(): MutablePerfCliOptions {
+  return {
+    record: false,
+    freezeBaseline: false,
+    requireBaseline: false,
+    skipBuild: false,
+    smoke: false,
+    profile: 'desktop',
+    soak: false,
+    soakDurationMs: 10 * 60 * 1_000,
+    help: false,
+  };
+}
+
 export function parsePerfCliOptions(args: string[]): PerfCliOptions {
-  let record = false;
-  let output: string | undefined;
-  let baseline: string | undefined;
-  let requireBaseline = false;
-  let skipBuild = false;
-  let smoke = false;
-  let profile: PerfProfileId = 'desktop';
-  let scenarioId: PerfScenario['id'] | undefined;
-  let soak = false;
-  let soakDurationMs = 10 * 60 * 1_000;
-  let help = false;
+  const options = initialOptions();
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
-    if (argument === '--') continue;
-    if (argument === '--record') record = true;
-    else if (argument === '--smoke') smoke = true;
-    else if (argument === '--soak') soak = true;
-    else if (argument === '--soak-duration') {
-      const value = Number(optionValue(args, index, argument));
-      if (!Number.isInteger(value) || value < 1_000) {
-        throw new Error('--soak-duration must be an integer of at least 1000 ms.');
-      }
-      soakDurationMs = value;
-      index += 1;
-    } else if (argument === '--require-baseline') requireBaseline = true;
-    else if (argument === '--skip-build') skipBuild = true;
-    else if (argument === '--profile') {
-      const value = optionValue(args, index, argument);
-      if (value !== 'desktop' && value !== 'mobile') {
-        throw new Error(`--profile must be desktop or mobile, not "${value}".`);
-      }
-      profile = value;
-      index += 1;
-    } else if (argument === '--scenario') {
-      const value = optionValue(args, index, argument);
-      const scenario = PERF_SCENARIO_LIST.find((candidate) => candidate.id === value);
-      if (!scenario) throw new Error(`Unknown performance scenario: "${value}".`);
-      scenarioId = scenario.id;
-      index += 1;
-    } else if (argument === '--help') help = true;
-    else if (argument === '--output') {
-      output = optionValue(args, index, argument);
-      index += 1;
-    } else if (argument === '--baseline') {
-      baseline = optionValue(args, index, argument);
-      index += 1;
-    } else {
-      throw new Error(`Unknown performance option: ${argument}`);
-    }
+    if (applyFlag(options, argument)) continue;
+    index = applyValueOption(options, args, index);
   }
 
   const timestamp = new Date().toISOString().replaceAll(':', '-');
-  const defaultOutput = record
-    ? resolve(APP_ROOT, PERF_DEFAULT_ARTIFACT_DIRECTORY, 'recorded', profile, timestamp)
-    : resolve(APP_ROOT, PERF_DEFAULT_ARTIFACT_DIRECTORY, 'current', profile);
+  const defaultOutput = options.record
+    ? resolve(APP_ROOT, PERF_DEFAULT_ARTIFACT_DIRECTORY, 'recorded', options.profile, timestamp)
+    : resolve(APP_ROOT, PERF_DEFAULT_ARTIFACT_DIRECTORY, 'current', options.profile);
 
   return {
-    record,
-    outputDirectory: resolve(APP_ROOT, output ?? defaultOutput),
-    baselinePath: baseline ? resolve(APP_ROOT, baseline) : undefined,
-    requireBaseline,
-    skipBuild,
-    smoke,
-    profile,
-    scenarioId,
-    soak,
-    soakDurationMs,
-    help,
+    record: options.record,
+    freezeBaseline: options.freezeBaseline,
+    outputDirectory: resolve(APP_ROOT, options.output ?? defaultOutput),
+    baselinePath: options.baseline ? resolve(APP_ROOT, options.baseline) : undefined,
+    requireBaseline:
+      options.requireBaseline || (!options.freezeBaseline && !options.smoke && !options.soak),
+    skipBuild: options.skipBuild,
+    smoke: options.smoke,
+    profile: options.profile,
+    scenarioId: options.scenarioId,
+    soak: options.soak,
+    soakDurationMs: options.soakDurationMs,
+    help: options.help,
   };
 }
