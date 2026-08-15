@@ -1,4 +1,5 @@
 import type { TransitSystem } from '@transitmapper/core/model/system';
+import { STORAGE_READ_END_MARK, STORAGE_READ_START_MARK, markOnce } from '../perf/startup-marks';
 import type { LibraryListResult, LibraryLoadResult } from './libraryStore';
 
 export interface BootstrapLibrary {
@@ -29,51 +30,56 @@ export type LibraryBootstrapResult =
 export async function resolveLibraryBootstrap(
   options: ResolveLibraryBootstrapOptions,
 ): Promise<LibraryBootstrapResult> {
-  let encounteredCorruption = false;
-  if (options.activeId) {
-    const active = await options.library.load(options.activeId);
-    if (active.status === 'unavailable') return { status: 'unavailable' };
-    if (active.status === 'ok') {
-      return {
-        status: 'ready',
-        system: active.system,
-        isBrandNew: false,
-        encounteredCorruption: false,
-      };
+  markOnce(STORAGE_READ_START_MARK);
+  try {
+    let encounteredCorruption = false;
+    if (options.activeId) {
+      const active = await options.library.load(options.activeId);
+      if (active.status === 'unavailable') return { status: 'unavailable' };
+      if (active.status === 'ok') {
+        return {
+          status: 'ready',
+          system: active.system,
+          isBrandNew: false,
+          encounteredCorruption: false,
+        };
+      }
+      encounteredCorruption = active.status === 'corrupt';
     }
-    encounteredCorruption = active.status === 'corrupt';
-  }
 
-  const migrated = await options.library.migrateLegacySingleSlot();
-  if (migrated) {
-    return {
-      status: 'ready',
-      system: migrated,
-      isBrandNew: false,
-      encounteredCorruption,
-    };
-  }
-
-  const listing = await options.library.list();
-  if (listing.status === 'unavailable') return listing;
-  for (const entry of listing.entries) {
-    const loaded = await options.library.load(entry.id);
-    if (loaded.status === 'unavailable') return loaded;
-    if (loaded.status === 'ok') {
+    const migrated = await options.library.migrateLegacySingleSlot();
+    if (migrated) {
       return {
         status: 'ready',
-        system: loaded.system,
+        system: migrated,
         isBrandNew: false,
         encounteredCorruption,
       };
     }
-    encounteredCorruption ||= loaded.status === 'corrupt';
-  }
 
-  return {
-    status: 'ready',
-    system: options.createSystem(),
-    isBrandNew: true,
-    encounteredCorruption,
-  };
+    const listing = await options.library.list();
+    if (listing.status === 'unavailable') return listing;
+    for (const entry of listing.entries) {
+      const loaded = await options.library.load(entry.id);
+      if (loaded.status === 'unavailable') return loaded;
+      if (loaded.status === 'ok') {
+        return {
+          status: 'ready',
+          system: loaded.system,
+          isBrandNew: false,
+          encounteredCorruption,
+        };
+      }
+      encounteredCorruption ||= loaded.status === 'corrupt';
+    }
+
+    return {
+      status: 'ready',
+      system: options.createSystem(),
+      isBrandNew: true,
+      encounteredCorruption,
+    };
+  } finally {
+    markOnce(STORAGE_READ_END_MARK);
+  }
 }

@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  getSystemColorScheme,
-  subscribeSystemColorScheme,
-} from '../../src/theme/systemColorScheme';
+import { getSystemColorScheme, subscribeSystemColorScheme } from '../../src/theme/color-scheme';
 
 interface MatchMediaHarness {
   media: MediaQueryList;

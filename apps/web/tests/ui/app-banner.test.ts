@@ -9,6 +9,7 @@ const calm: AppBannerInputs = {
   bootstrap: { kind: 'ok' },
   updateWaiting: false,
   offlineReady: false,
+  offlineReadiness: 'deferred',
   notice: null,
   documentSlowToLoad: false,
   online: true,
@@ -80,6 +81,7 @@ describe('which message wins', () => {
       bootstrap: { kind: 'storage-unavailable' },
       updateWaiting: true,
       offlineReady: true,
+      offlineReadiness: 'essential',
       notice: 'corrupt-system',
       documentSlowToLoad: true,
       online: false,
@@ -123,9 +125,26 @@ describe('which message wins', () => {
   });
 
   it('puts the offline-ready note above a notice', () => {
-    const inputs: AppBannerInputs = { ...calm, offlineReady: true, notice: 'dialog-failed' };
+    const inputs: AppBannerInputs = {
+      ...calm,
+      offlineReady: true,
+      offlineReadiness: 'essential',
+      notice: 'dialog-failed',
+    };
 
-    expect(resolveAppBanner(inputs)?.message).toContain('available offline');
+    expect(resolveAppBanner(inputs)?.message).toContain('reopen offline');
+  });
+
+  it('never describes the background map as available offline', () => {
+    for (const offlineReadiness of [
+      'essential',
+      'adaptive-pending',
+      'complete',
+      'deferred',
+    ] as const) {
+      const message = resolveAppBanner({ ...calm, offlineReady: true, offlineReadiness })?.message;
+      expect(message).toContain('background map still needs a connection');
+    }
   });
 });
 

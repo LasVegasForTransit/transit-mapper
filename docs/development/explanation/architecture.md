@@ -403,9 +403,17 @@ repository records enough provenance to reject a stale manual export. The
 [application icon how-to](../how-to/update-application-icons.md) owns the
 generation, native export, installed-update, and verification procedures.
 The production PWA verifier derives install assets from the manifest and
-proves that the editor precaches them. Settings also offers an explicit
-request for persistent browser storage; that is a best-effort
+proves that first install does not precache this optional artwork. A browser
+caches an icon when installation actually needs it. Settings also offers an
+explicit request for persistent browser storage; that is a best-effort
 eviction-resistance request, not a claim that storage can never be cleared.
+
+First install caches only the static editor closure. Lazy tools, Workers,
+telemetry, and install artwork enter a bounded CacheFirst store after use. A
+returning or installed session may add 64 KiB after Save-Data, 2G, and storage
+checks; first visits skip the manifest. `OfflineReadiness` distinguishes essential, pending, complete, and
+deferred coverage. Complete excludes OpenFreeMap, so the blank-map fallback
+remains truthful offline.
 
 ## 6. Runtime View
 

@@ -6,6 +6,12 @@ export interface BundleFileChange {
   after: BundleFileReport;
 }
 
+export interface BundleByteTotals {
+  rawBytes: number;
+  gzipBytes: number;
+  brotliBytes: number;
+}
+
 interface BundleFileDelta {
   added: BundleFileReport[];
   removed: BundleFileReport[];
@@ -26,6 +32,7 @@ export interface BundleMembershipTransition {
 }
 
 export interface BundleReportComparison extends BundleFileDelta {
+  updateBytes: BundleByteTotals;
   graphs: BundleGraphComparison[];
   membershipTransitions: BundleMembershipTransition[];
 }
@@ -174,6 +181,15 @@ function uniqueGraph(files: Map<string, BundleFileReport>): BundleGraphReport {
   };
 }
 
+function updateBytes(delta: BundleFileDelta): BundleByteTotals {
+  const files = [...delta.added, ...delta.changed.map((change) => change.after)];
+  return {
+    rawBytes: files.reduce((total, file) => total + file.rawBytes, 0),
+    gzipBytes: files.reduce((total, file) => total + file.gzipBytes, 0),
+    brotliBytes: files.reduce((total, file) => total + file.brotliBytes, 0),
+  };
+}
+
 export function compareBundleReports(
   before: BundleReport,
   after: BundleReport,
@@ -182,8 +198,15 @@ export function compareBundleReports(
   const afterGraphs = namedGraphs(after);
   const beforeFiles = reportFiles(beforeGraphs);
   const afterFiles = reportFiles(afterGraphs);
+  const delta = compareFiles(
+    beforeFiles,
+    afterFiles,
+    uniqueGraph(beforeFiles),
+    uniqueGraph(afterFiles),
+  );
   return {
-    ...compareFiles(beforeFiles, afterFiles, uniqueGraph(beforeFiles), uniqueGraph(afterFiles)),
+    ...delta,
+    updateBytes: updateBytes(delta),
     graphs: graphComparisons(beforeGraphs, afterGraphs),
     membershipTransitions: membershipTransitions(beforeGraphs, afterGraphs),
   };

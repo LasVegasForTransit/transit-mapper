@@ -19,7 +19,7 @@ pnpm perf
 ```
 
 The command first builds and gates the production app, then builds a private
-instrumented variant, starts Vite preview on `127.0.0.1:4173`, and measures the
+instrumented variant, starts Vite preview on an isolated loopback port, and measures the
 complete desktop matrix. Bundle and PWA reports always describe the public
 production graph; the measurement-only harness is not counted as shipped
 payload. To diagnose one surface without replacing a baseline:
@@ -128,19 +128,28 @@ It includes:
   after Chrome's HTTP cache was cleared, populated a system overlay on its
   local blank map, and committed a real station edit.
 
-`perf:record` also writes one Chrome trace per measured run and refreshes the
-checked baseline at a stable path:
+`perf:record` writes one Chrome trace per measured run. It does not create or
+replace a checked baseline. Freeze a comparison point only with the explicit
+flag:
 
 ```bash
-pnpm perf:record
+pnpm perf:record -- --freeze-baseline
 # apps/web/perf/baseline.json
+# apps/web/perf/baseline.json.sha256
 
-pnpm perf:record -- --profile mobile
+pnpm perf:record -- --profile mobile --freeze-baseline
 # apps/web/perf/baseline-mobile.json
+# apps/web/perf/baseline-mobile.json.sha256
 ```
 
-Review baseline diffs as measurement evidence. Do not update one simply to
-make a regression disappear.
+The freeze is write-once and validates the complete cold editor/share/embed
+matrix, the fixed protocol, the 60-second window, required milestones,
+settlement, and CDP request totals before publication. The checksum companion
+makes an in-place edit fail closed. To replace a baseline, delete both files in
+an explicit reviewed change, run the same base and candidate artifacts on the
+same runner, and freeze the chosen report again. Review the complete baseline
+diff as measurement evidence; never replace it merely to make a regression
+disappear.
 
 `sourceUploadCount` means application-issued GeoJSON source mutations during
 the measured action. Both complete `setData` replacements and differential
@@ -194,6 +203,46 @@ expanding the Worker graph.
 
 Missing Chrome produces an `unavailable` report and a non-zero exit. The
 harness never writes placeholder timings.
+
+## Read anonymous field evidence
+
+The fixed harness remains the release gate. Production field samples answer a
+different question: how released builds behave on the coarse mix of devices,
+networks, cache states, and browser capabilities that people actually use.
+Only a release-tagged production build on the configured live origin is
+eligible. Sampling is 5% for the first 24 hours after the build, then 1%. One
+random decision is kept as `0` or `1` in `sessionStorage` under the public
+build id; blocked storage falls back to module memory. No random value or
+visitor id is retained or sent.
+
+Global Privacy Control and Do Not Track are checked before observers or
+sampling are installed and again by the Worker. A selected page sends at most
+one allowlisted, self-counted body on its first hidden or pagehide boundary.
+The body is refused above 8 KiB. See the public
+[Privacy policy](https://map.lasvegasfortransit.org/privacy) for the fields,
+purpose, retention, processor, and never-collected list.
+
+The browser client uses native `PerformanceObserver`, User Timing, Navigation
+Timing, and Resource Timing rather than adding a vitals dependency. LCP keeps
+the last reported candidate. CLS uses the standard maximum session window
+(less than one second between shifts and at most five seconds total) and
+excludes shifts after recent input. INP groups Event Timing durations by
+interaction id and uses the p98 rank approximation, but the observer's 40 ms
+threshold means a page with only faster interactions may report INP as null.
+Unsupported or unavailable APIs remain null. Field Resource Timing cannot
+prove a network quiet window, so `networkIdleMs` is also null; the controlled
+harness owns that measurement. Opaque cross-origin byte categories are null,
+never guessed.
+Page Resource Timing cannot observe service-worker install and precache
+requests, so `serviceWorkerBytes` remains null rather than reporting a
+misleading zero or partial script count.
+
+The synchronous entry code contains only the privacy, live-release/origin, and
+stable-sampling gates. It dynamically imports the observer and payload client
+only for a selected visit. First service-worker install precaches only the
+static editor closure, so this conditional client remains outside both an
+unsampled navigation and its install download. If selected or later fetched,
+the ordinary adaptive CacheFirst route retains it for subsequent use.
 
 ## Large-system persistence boundary
 
@@ -256,16 +305,21 @@ inside Xvfb instead of taking over a local desktop. A shorter diagnostic result
 cannot satisfy the leak gate; omit the override for ten-minute acceptance
 evidence. The baseline warms both PNG and SVG export paths before its first
 forced-GC snapshot so one-time initialization is not mistaken for retained
-growth. Before the final snapshot, a non-primary map click
-consumes Radix Menu's one-shot pointer-modality listeners. Keyboard actions
-legitimately arm one pair per mounted menu until the next pointer input; taking
-the snapshot before that input would count a transient state as retained
 growth.
 
 ## What “offline” means
 
-The service worker keeps the editor HTML, eager and lazy editor chunks, local
-icons, and install metadata. The browser check writes a fixture once through
+The service worker initially keeps the editor HTML, eager chunks and CSS, local
+font, favicon, and install metadata. Lazy tools, dedicated Workers, telemetry,
+and install artwork are cached when used. A returning or installed session may
+add at most 64 KiB of declared uncompressed payload during one idle period,
+after Save-Data, 2G-hint, and quota checks. The exposed readiness values mean:
+`essential` for a reopenable shell, `adaptive-pending` while optional assets
+remain, `complete` when the current first-party optional graph is present, and
+`deferred` when policy or a failure prevented background work. None includes
+the third-party basemap.
+
+The browser check writes a fixture once through
 the real legacy `localStorage` keys, loads the editor, and proves the
 application migrated both the complete document and library row into
 IndexedDB and removed the legacy document. It then installs the worker, clears

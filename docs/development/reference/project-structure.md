@@ -109,13 +109,17 @@ Worker, along with pure ownership and claim decisions. It does not perform
 HTTP requests or database writes. See
 [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 
+#### Performance sample contract
+
+`packages/core/src/performance/contract.ts` owns the allowlist, bounds, and
+eight capability bits. It rejects unknown fields and browser identity.
+
 #### Account groundwork
 
 `packages/core/src/auth` contains pure OAuth, PKCE, token, cookie, and
-return-path primitives. Account claiming and ownership policy also live in the
-sharing module. This groundwork is tested but is not connected to Worker
-routes, account tables, or the current editor; every live share remains
-anonymous and expiring.
+return-path primitives. Claiming and ownership policy live in the sharing
+module. This tested groundwork is not connected to routes, tables, or the
+editor; live shares remain anonymous and expiring.
 
 ### PWA updater
 
@@ -136,11 +140,10 @@ The organization-wide issue forms and pull request template live in
 copy, because any local issue-template directory would shadow the complete
 organization default.
 
-The pinned `lvbt-contributions` plugin under `plugins/` supplies one portable
-Agent Skill, a small creation helper, and harness-specific action guards.
-`.lvbt/repository-tooling.json` records the release and checksum;
-`check:repository-tooling` refuses local drift. This is repository tooling,
-not an application package, and no production code imports it.
+The pinned `lvbt-contributions` plugin supplies the portable contribution
+skill, creation helper, and action guards. `.lvbt/repository-tooling.json`
+records its release and checksum; `check:repository-tooling` rejects drift.
+Production code does not import this tooling.
 
 ### ESLint baseline
 
@@ -349,8 +352,18 @@ dialog reports that its revision is unavailable instead of inventing one.
 
 `apps/web/src/perf` owns measurable performance policy, fixtures, reports, and
 precache validation that can run without browser automation. Browser traces
-and production-output checks consume that policy but do not redefine its
-budgets.
+and production-output checks consume, but do not redefine, it.
+
+`apps/web/src/pwa/adaptive-cache-contract.ts` owns the optional-asset manifest
+and offline-readiness vocabulary. The lazy client applies network, quota, and
+64 KiB limits while filling the service worker's CacheFirst store. The build
+emits hashed URLs and sizes; verification keeps its graphs disjoint.
+
+`field-sampling.ts` gates privacy, release, origin, and sampling before loading
+the URL-free observation client.
+
+Vite builds editor, embed, and no-script privacy. It appears in the sitemap,
+not editor precache or JavaScript.
 
 ### Worker
 
@@ -361,17 +374,27 @@ and validation but never imports browser or editor modules.
 #### HTTP delivery
 
 The Worker routes resource-oriented API requests, share pages, embeds,
-oEmbed responses, static assets, and scheduled expiry work. Stored text enters
-HTML through `HTMLRewriter`; routing code does not concatenate untrusted values
-into markup.
+oEmbed responses, static assets, anonymous performance samples, and scheduled
+maintenance. Stored text enters HTML through `HTMLRewriter`; routing code does
+not concatenate untrusted values into markup.
+
+`POST /api/performance-samples` accepts at most 8 KiB of same-origin JSON,
+honors GPC/DNT, validates the contract, and stores allowlisted columns.
+Cloudflare rate-limits addresses without storing them; production fails closed
+without that binding.
 
 #### Persistence
 
-D1 stores shared systems and preview metadata. Migrations in
-`apps/worker/src/migrations` are append-only external contracts applied by
-Wrangler in filename order. Anonymous shares expire; null expiry is reserved
-for future account ownership and is not an unset value. See
+D1 stores shared systems, preview metadata, and short-lived performance
+measurements. Migrations in `apps/worker/src/migrations` are append-only and
+applied by Wrangler in filename order. Anonymous shares expire; null expiry is
+reserved for future account ownership. See
 [Operations](../../operations/how-to/operations.md).
+
+`performance-samples.ts` owns ingestion; `performance-maintenance.ts` owns
+daily summaries and retention. Markers and ephemeral owners make overlapping
+retries safe. Raw rows expire after seven days, aggregates after 90;
+performance and share maintenance fail independently.
 
 ## Repository support
 

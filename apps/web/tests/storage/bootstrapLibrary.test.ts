@@ -1,12 +1,19 @@
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveLibraryBootstrap, type BootstrapLibrary } from '../../src/storage/bootstrapLibrary';
+
+beforeEach(() => performance.clearMarks());
+afterEach(() => performance.clearMarks());
+
+function startupMarkNames(): string[] {
+  return performance.getEntriesByType('mark').map((entry) => entry.name);
+}
 
 describe('local library bootstrap', () => {
   it('does not create a replacement when an active IndexedDB-only document is unavailable', async () => {
     const createSystem = vi.fn(createEmptySystem);
     const library: BootstrapLibrary = {
-      load: vi.fn(async () => ({ status: 'unavailable' as const })),
+      load: vi.fn(() => Promise.resolve({ status: 'unavailable' as const })),
       list: vi.fn(async () => ({ status: 'unavailable' as const })),
       migrateLegacySingleSlot: vi.fn(async () => null),
     };
@@ -22,6 +29,22 @@ describe('local library bootstrap', () => {
     expect(library.list).not.toHaveBeenCalled();
     expect(library.migrateLegacySingleSlot).not.toHaveBeenCalled();
     expect(createSystem).not.toHaveBeenCalled();
+    expect(startupMarkNames()).toEqual(['tm:storage-read-start', 'tm:storage-read-end']);
+  });
+
+  it('closes the storage-read milestone when bootstrap throws', async () => {
+    const library: BootstrapLibrary = {
+      load: vi.fn(),
+      list: vi.fn(),
+      migrateLegacySingleSlot: vi.fn(() =>
+        Promise.reject(new Error('Storage failed unexpectedly.')),
+      ),
+    };
+
+    await expect(
+      resolveLibraryBootstrap({ activeId: null, library, createSystem: createEmptySystem }),
+    ).rejects.toThrow('Storage failed unexpectedly.');
+    expect(startupMarkNames()).toEqual(['tm:storage-read-start', 'tm:storage-read-end']);
   });
 
   it('does not create a document when listing a known IndexedDB library is unavailable', async () => {

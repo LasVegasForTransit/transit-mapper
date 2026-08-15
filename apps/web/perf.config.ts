@@ -1,9 +1,27 @@
 import type { BundleBudget } from './src/perf/bundleBudget';
+import type { PerfFirstSessionByteBudget } from './src/perf/types';
 import { createPerfProtocol, PERF_PROTOCOL, PERF_SCENARIO_LIST } from './src/perf/scenarios';
 
 export { createPerfProtocol, PERF_PROTOCOL, PERF_SCENARIO_LIST };
 
 export const PERF_MAX_REGRESSION_RATIO = 0.1;
+export const PERF_FIRST_SESSION_BYTE_BUDGETS: readonly PerfFirstSessionByteBudget[] = [
+  {
+    journey: 'new-user-editor',
+    cacheState: 'cold',
+    minimumReductionRatio: 0.3,
+  },
+  {
+    journey: 'public-share',
+    cacheState: 'cold',
+    maximumRegressionRatio: 0,
+  },
+  {
+    journey: 'cross-site-embed',
+    cacheState: 'cold',
+    maximumRegressionRatio: 0,
+  },
+];
 export const PERF_DEFAULT_ARTIFACT_DIRECTORY = 'artifacts/performance';
 export const PERF_BASELINE_DIRECTORY = 'perf';
 

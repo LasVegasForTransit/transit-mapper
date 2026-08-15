@@ -8,7 +8,13 @@ import { SimProvider } from './ui/SimProvider';
 import { UiProvider } from './ui/UiProvider';
 import { ViewProvider } from './ui/ViewProvider';
 import { InstallProvider } from './pwa/InstallProvider';
+import { BOOTSTRAP_START_MARK, markOnce } from './perf/startup-marks';
+import { startFieldSampling } from './perf/field-sampling';
+import { performanceSurfaceForPath } from './perf/field-sampling-policy';
 import './theme/font.css';
+
+markOnce(BOOTSTRAP_START_MARK);
+startFieldSampling(performanceSurfaceForPath(window.location.pathname));
 
 // Outermost boundary: the last thing between a render error anywhere in the
 // editor and a white page. It cannot save the unsaved work — by the time it
@@ -16,7 +22,9 @@ import './theme/font.css';
 // of leaving someone staring at nothing, wondering whether to reload and lose
 // more. The per-dialog boundaries in App.tsx catch the common case before it
 // ever reaches this one.
-createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root');
+if (!rootElement) throw new Error('Editor root element is missing');
+createRoot(rootElement).render(
   <StrictMode>
     <ErrorBoundary label="editor">
       <EditorProvider>

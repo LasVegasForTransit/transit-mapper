@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ErrorBoundary } from './ui/ErrorBoundary';
-import { MapCanvas } from './map/MapCanvas';
 import { getMap } from './map/mapRef';
+import { StagedMapCanvas } from './map/staged-map';
 import { useEditor, useEditorCommands, useEditorStore } from './editor/EditorProvider';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { fetchShare } from './share/api';
@@ -44,7 +44,7 @@ import { Workbench } from './ui/Workbench';
 import { InstallBanner } from './ui/InstallBanner';
 import { useInstall } from './pwa/InstallProvider';
 import { shouldShowInstallBanner } from './pwa/install';
-import { useAppUpdate } from '@transitmapper/pwa-updater/useAppUpdate';
+import { useStartupLifecycle } from './perf/startup-lifecycle';
 import './ui/app.css';
 
 // Lazy-loaded: pulls in fflate + the GTFS parsing pipeline (packages/core's
@@ -185,8 +185,10 @@ export function App() {
       const id = path.slice(SHARE_PREFIX.length).replace(/\/$/, '');
       fetchShare(id, { signal: controller.signal })
         .then((system) => setSystem(system, { readOnly: true }))
-        .catch((e: Error) => {
-          if (e.name !== 'AbortError') setBootstrap({ kind: 'share-failed' });
+        .catch((error: unknown) => {
+          if (!(error instanceof Error) || error.name !== 'AbortError') {
+            setBootstrap({ kind: 'share-failed' });
+          }
         });
       // No "finished" flag to set either way. A share that loads calls
       // setSystem, which is what ends the wait; a share that doesn't leaves the
@@ -321,8 +323,8 @@ export function App() {
 
   // Service worker registration + update lifecycle — never wired into
   // embed's own entry point (see vite.config.ts).
-  const { needRefresh, offlineReady, dismissOfflineReady, reload } =
-    useAppUpdate(flushBeforeReload);
+  const { needRefresh, offlineReady, offlineReadiness, dismissOfflineReady, reload } =
+    useStartupLifecycle(documentStatus === 'ready', flushBeforeReload);
 
   // Dev-only: expose the map for debugging (the store is exposed by EditorProvider).
   useEffect(() => {
@@ -360,6 +362,7 @@ export function App() {
     bootstrap,
     updateWaiting: needRefresh,
     offlineReady,
+    offlineReadiness,
     notice,
     documentSlowToLoad: slowToLoad,
     online,
@@ -422,7 +425,7 @@ export function App() {
           alongside the storage read instead of queueing behind it. The camera
           starts on the placeholder's viewport and jumps to the real one when
           the document's id changes — see MapCanvas's system subscription. */}
-      <MapCanvas onBasemapUnavailable={() => setNotice('basemap-unavailable')} />
+      <StagedMapCanvas onBasemapUnavailable={() => setNotice('basemap-unavailable')} />
       {/* Outside the chrome, like the banner above: right-clicking still has
           to offer its actions when the UI is hidden, since hiding the panels
           is exactly when the menu is the only way to reach them. */}

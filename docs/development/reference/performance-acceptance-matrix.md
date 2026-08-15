@@ -40,6 +40,42 @@ fixed automated fixture union. Record it with the manual startup-and-recovery
 row until the dedicated zero-entity scenario described in the measurement
 guide lands; a green `pnpm perf` result alone does not satisfy that row.
 
+## Shipping startup milestones
+
+The editor publishes the following User Timing marks in production. Each name
+is recorded at most once, carries no document or user data, and is optional
+observability: an unavailable or restricted User Timing implementation cannot
+interrupt startup.
+
+| Mark                      | Boundary                                                                                        |
+| ------------------------- | ----------------------------------------------------------------------------------------------- |
+| `tm:bootstrap-start`      | The editor entry is about to ask React to render.                                               |
+| `tm:shell-mounted`        | React committed the always-available editor shell.                                              |
+| `tm:storage-read-start`   | Local library bootstrap started.                                                                |
+| `tm:storage-read-end`     | Local library bootstrap returned or failed, including unavailable storage.                      |
+| `tm:deserialize-start`    | The first stored document began Worker or compatibility-path deserialization.                   |
+| `tm:deserialize-end`      | That deserialization settled through success, timeout, fallback, or parse failure.              |
+| `tm:system-committed`     | Startup installed the requested local or shared document, never the temporary placeholder.      |
+| `tm:map-style-ready`      | MapLibre produced its first usable remote or local blank style.                                 |
+| `tm:first-system-paint`   | A render completed after the real document's representative overlay source loaded.              |
+| `tm:interactive`          | The real document is committed and map interactions are attached.                               |
+| `tm:service-worker-ready` | Workbox completed the essential editor-shell install. Public shares and embeds do not register. |
+
+The public share route has no local-storage milestones and deliberately has no
+service-worker milestone. The standalone embed uses its own entry point and
+does not register the editor service worker.
+
+## Anonymous field-sampling release check
+
+Before releasing a change to field sampling, verify the editor, full share,
+and embed all expose a keyboard-accessible Privacy link and that `/privacy`
+works without JavaScript. Confirm the page is in the sitemap but absent from
+the editor's eager import graph and service-worker precache. In a release-tagged
+build, GPC and each DNT signal must prevent observer construction; local,
+untagged, disabled, wrong-origin, and unsampled builds must not construct an
+observer either. Exercise accepted beacon, rejected beacon, thrown beacon, and
+failed keepalive paths without allowing an error to reach the page.
+
 ## Manual critical journeys
 
 Record browser version, operating system, fixture, whether simulation was

@@ -1,4 +1,5 @@
 import type { SaveOutcome } from '../storage/localStore';
+import type { OfflineReadiness } from '../pwa/adaptive-cache-contract';
 
 /**
  * One place that decides which single message the app is showing and what it
@@ -77,8 +78,11 @@ export interface AppBannerInputs {
   /** A newer service worker is waiting to take over. */
   updateWaiting: boolean;
   /** The precache finished — the editor now opens without a network. This is
-   *  Workbox's signal about caching, not a claim about connectivity. */
+   *  a one-time notice, not a claim that every optional resource is present. */
   offlineReady: boolean;
+  /** Exact first-party cache state. Even `complete` excludes the third-party
+   *  basemap, which remains a truthful blank-map fallback when offline. */
+  offlineReadiness: OfflineReadiness;
   notice: NoticeCause | null;
   /** The saved document is taking long enough that the silence needs
    *  explaining. Deliberately not "is loading": the editor is on screen and
@@ -205,7 +209,10 @@ export function resolveAppBanner(inputs: AppBannerInputs): AppBannerDescriptor |
     return {
       tone: 'update',
       layout: 'inline',
-      message: 'TransitMapper is now available offline.',
+      message:
+        inputs.offlineReadiness === 'complete'
+          ? 'The editor and its optional tools are ready offline. The background map still needs a connection.'
+          : 'TransitMapper can now reopen offline. Optional tools are saved after you use them, and the background map still needs a connection.',
       actions: [],
       dismiss: { kind: 'dismiss-offline-ready', label: 'Dismiss' },
       live: 'status',

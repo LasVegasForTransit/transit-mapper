@@ -5,7 +5,10 @@ import type {
   PerfBundleEntry,
   PerfBudgetEvaluation,
   PerfBudgetViolation,
+  PerfFirstSessionByteBudget,
+  PerfFirstSessionSample,
   PerfMetricName,
+  PerfProtocol,
   PerfReport,
 } from './types';
 
@@ -24,7 +27,7 @@ function scenarioGateMetric(
   metric: PerfMetricName,
 ): number | undefined {
   const summary = report.scenarios.find((scenario) => scenario.scenarioId === scenarioId);
-  return summary?.gateValues?.[metric] ?? summary?.metrics[metric].p95;
+  return summary?.gateValues[metric] ?? summary?.metrics[metric].p95;
 }
 
 function absoluteLimit(budgets: PerfAbsoluteBudgets, metric: PerfMetricName): number | undefined {
@@ -88,7 +91,7 @@ function normalizeForCalibration(
 }
 
 function regressionViolations(options: EvaluatePerfBudgetsOptions): PerfBudgetViolation[] {
-  if (!options.baseline || options.baseline.status !== 'ok') return [];
+  if (options.baseline?.status !== 'ok') return [];
   const violations: PerfBudgetViolation[] = [];
 
   for (const scenario of options.scenarios) {
@@ -164,6 +167,132 @@ function bundleRegressionViolations(
   return violations;
 }
 
+function firstSessionSettlementViolations(report: PerfReport): PerfBudgetViolation[] {
+  return report.firstSessions
+    .filter((sample) => !sample.network.settled)
+    .map((sample) => ({
+      kind: 'first-session-unsettled',
+      firstSessionJourney: sample.journey,
+      actual: sample.network.unsettledNonMapRequestCount,
+      limit: 0,
+      message:
+        `${sample.journey} still had ${sample.network.unsettledNonMapRequestCount} ` +
+        'automatic non-map request(s) at or after the 60-second boundary.',
+    }));
+}
+
+function matchingFirstSession(
+  report: PerfReport,
+  budget: PerfFirstSessionByteBudget,
+): PerfFirstSessionSample | undefined {
+  return report.firstSessions.find(
+    (sample) => sample.journey === budget.journey && sample.cacheState === budget.cacheState,
+  );
+}
+
+function firstSessionLimit(value: number, ratio: number, direction: 'reduce' | 'grow'): number {
+  const multiplier = direction === 'reduce' ? 1 - ratio : 1 + ratio;
+  return Number((value * multiplier).toPrecision(12));
+}
+
+function missingFirstSessionViolation(
+  budget: PerfFirstSessionByteBudget,
+  missing: 'candidate' | 'baseline',
+): PerfBudgetViolation {
+  return {
+    kind: 'first-session-sample-missing',
+    firstSessionJourney: budget.journey,
+    firstSessionCacheState: budget.cacheState,
+    message:
+      `The ${missing} report has no ${budget.cacheState} ${budget.journey} ` +
+      'automatic-byte sample required by policy.',
+  };
+}
+
+function firstSessionByteViolations(
+  report: PerfReport,
+  baseline: PerfReport,
+  budgets: readonly PerfFirstSessionByteBudget[],
+): PerfBudgetViolation[] {
+  const violations: PerfBudgetViolation[] = [];
+  for (const budget of budgets) {
+    const sample = matchingFirstSession(report, budget);
+    const baselineSample = matchingFirstSession(baseline, budget);
+    if (!sample) {
+      violations.push(missingFirstSessionViolation(budget, 'candidate'));
+      continue;
+    }
+    if (!baselineSample) {
+      violations.push(missingFirstSessionViolation(budget, 'baseline'));
+      continue;
+    }
+
+    const actual = sample.network.total.total.encodedBytes;
+    const baselineBytes = baselineSample.network.total.total.encodedBytes;
+    if (budget.minimumReductionRatio !== undefined) {
+      const limit = firstSessionLimit(baselineBytes, budget.minimumReductionRatio, 'reduce');
+      if (actual > limit) {
+        violations.push({
+          kind: 'first-session-byte-target',
+          firstSessionJourney: budget.journey,
+          firstSessionCacheState: budget.cacheState,
+          actual,
+          baseline: baselineBytes,
+          limit,
+          message:
+            `${budget.journey} delivered ${actual} automatic encoded bytes; the required ` +
+            `${budget.minimumReductionRatio * 100}% reduction from ${baselineBytes} permits ` +
+            `at most ${limit} bytes.`,
+        });
+      }
+    }
+    if (budget.maximumRegressionRatio !== undefined) {
+      const limit = firstSessionLimit(baselineBytes, budget.maximumRegressionRatio, 'grow');
+      if (actual > limit) {
+        violations.push({
+          kind: 'first-session-byte-regression',
+          firstSessionJourney: budget.journey,
+          firstSessionCacheState: budget.cacheState,
+          actual,
+          baseline: baselineBytes,
+          limit,
+          message:
+            `${budget.journey} delivered ${actual} automatic encoded bytes, above the ` +
+            `${budget.maximumRegressionRatio * 100}% regression limit of ${limit} bytes ` +
+            `from the ${baselineBytes}-byte baseline.`,
+        });
+      }
+    }
+  }
+  return violations;
+}
+
+function protocolValues(protocol: PerfProtocol): unknown[] {
+  return [
+    protocol.profile,
+    protocol.browser,
+    protocol.browserChannel,
+    protocol.headed,
+    protocol.cpuThrottlingRate,
+    protocol.cache,
+    protocol.viewport.width,
+    protocol.viewport.height,
+    protocol.viewport.deviceScaleFactor,
+    protocol.network.name,
+    protocol.network.downloadThroughputBytesPerSecond,
+    protocol.network.uploadThroughputBytesPerSecond,
+    protocol.network.latencyMs,
+    protocol.warmupRuns,
+    protocol.measuredRuns,
+    protocol.warmReloadsPerMeasuredRun,
+  ];
+}
+
+function protocolsMatch(report: PerfReport, baseline: PerfReport): boolean {
+  const frozen = protocolValues(baseline.protocol);
+  return protocolValues(report.protocol).every((value, index) => value === frozen[index]);
+}
+
 export function evaluatePerfBudgets(options: EvaluatePerfBudgetsOptions): PerfBudgetEvaluation {
   if (options.report.status === 'unavailable') {
     return {
@@ -173,19 +302,20 @@ export function evaluatePerfBudgets(options: EvaluatePerfBudgetsOptions): PerfBu
     };
   }
 
+  const firstSessionViolations = firstSessionSettlementViolations(options.report);
   if (options.enforceNumericBudgets === false) {
     return {
-      status: 'pass',
-      violations: [],
+      status: firstSessionViolations.length === 0 ? 'pass' : 'fail',
+      violations: firstSessionViolations,
       notices: [
         'Smoke mode proves the production build and browser journey; numeric budgets require a full audit.',
       ],
     };
   }
 
-  const violations = absoluteViolations(options);
+  const violations = [...firstSessionViolations, ...absoluteViolations(options)];
   const notices: string[] = [];
-  if (!options.baseline || options.baseline.status !== 'ok') {
+  if (options.baseline?.status !== 'ok') {
     if (options.requireBaseline) {
       violations.push({
         kind: 'baseline-missing',
@@ -194,7 +324,21 @@ export function evaluatePerfBudgets(options: EvaluatePerfBudgetsOptions): PerfBu
     } else {
       notices.push('No baseline report was provided; only absolute budgets were evaluated.');
     }
+  } else if (!protocolsMatch(options.report, options.baseline)) {
+    violations.push({
+      kind: 'baseline-incompatible',
+      message:
+        `The candidate ${options.report.protocol.profile} protocol does not match the frozen ` +
+        `${options.baseline.protocol.profile} protocol; unlike evidence cannot be compared.`,
+    });
   } else {
+    violations.push(
+      ...firstSessionByteViolations(
+        options.report,
+        options.baseline,
+        options.firstSessionBudgets ?? [],
+      ),
+    );
     violations.push(...regressionViolations(options));
     violations.push(
       ...bundleRegressionViolations(options.report, options.baseline, options.maxRegressionRatio),

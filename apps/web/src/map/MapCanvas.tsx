@@ -7,7 +7,7 @@ import maplibregl, {
   type PaddingOptions,
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useEditorStore } from '../editor/EditorProvider';
+import { useEditor, useEditorStore } from '../editor/EditorProvider';
 import type { SimCommands } from '../editor/keymap';
 import { useSim, useSimClock } from '../ui/SimProvider';
 import { useContextMenu, useUi } from '../ui/UiProvider';
@@ -104,7 +104,12 @@ import {
 } from './initialStyleFallback';
 import { initLiveCamera, setLiveCamera } from '../camera/liveCamera';
 import { attachPerfHarness } from '../perf';
-import { markFirstSystemMapPaint, systemPaintReady } from '../perf/mapPaintMark';
+import {
+  markFirstSystemMapPaint,
+  systemInteractiveReady,
+  systemPaintReady,
+} from '../perf/mapPaintMark';
+import { INTERACTIVE_MARK, MAP_STYLE_READY_MARK, markOnce } from '../perf/startup-marks';
 import { servicesByWay } from '@transitmapper/core/render/featureMemo';
 import { attachSimDevHandle } from '../sim/devHandle';
 import { attachVehicleAnimation } from '../sim/vehicles';
@@ -112,6 +117,7 @@ import { clearArmedTerminusForViewChange } from './viewEditorState';
 import { basemapStyleForScheme, layerSpecsForScheme } from './mapTheme';
 import { createStyleSwitchController, type StyleSwitchController } from './styleSwitchController';
 import { recoverMapStyleState } from './styleRecovery';
+import { preloadSelectionInspectorContent } from '../ui/inspector/selection-content-loader';
 const OWN_LAYER_IDS = new Set(LAYER_SPECS.map((l) => l.id));
 const PERF_HARNESS_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
 
@@ -129,7 +135,7 @@ function localBlankLayerSpecs(scheme: 'light' | 'dark'): LayerSpecification[] {
  *  isn't one of ours (leaving its background/land color as a plain backdrop)
  *  rather than tearing down and reloading the whole map style. */
 function setBasemapVisible(map: MLMap, visible: boolean): void {
-  const layers = map.getStyle()?.layers ?? [];
+  const layers = map.getStyle().layers;
   for (const layer of layers) {
     if (OWN_LAYER_IDS.has(layer.id)) continue;
     map.setLayoutProperty(layer.id, 'visibility', visible ? 'visible' : 'none');
@@ -225,6 +231,13 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   const [terminusConnectionChoice, setTerminusConnectionChoice] =
     useState<TerminusConnectionChoice | null>(null);
   const store = useEditorStore();
+  const documentCommitted = useEditor((state) => state.documentStatus === 'ready');
+  const [interactionsAttached, setInteractionsAttached] = useState(false);
+  useEffect(() => {
+    if (systemInteractiveReady({ documentCommitted, interactionsAttached })) {
+      markOnce(INTERACTIVE_MARK);
+    }
+  }, [documentCommitted, interactionsAttached]);
   const { openShortcuts, toggleUi } = useUi();
   const { contextMenuAt, openContextMenu, closeContextMenu } = useContextMenu();
   const contextMenuOpenRef = useRef(false);
@@ -463,7 +476,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     let detachPerf: (() => void) | null = null;
     let detachSimDev: (() => void) | null = null;
     let initialPaintListener: (() => void) | null = null;
-    let initialSystemDataUploaded = false;
+    let stationUploadSystem: typeof initial | null = null;
     let lastSystemId = initial.id;
     const emptyFC = { type: 'FeatureCollection' as const, features: [] };
 
@@ -879,9 +892,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         const source = geoJsonSource(map, sourceId);
         if (!source) continue;
         source.setData(sourceData[sourceId]);
+        if (sourceId === SRC_STATIONS) stationUploadSystem = system;
         sourceUploads++;
       }
-      if (sourceIds.includes(SRC_STATIONS)) initialSystemDataUploaded = true;
       recordFullProjection(projectionCounts, sourceUploads);
       // setData above cleared feature-state — re-apply the current selection.
       applySelectionState();
@@ -1230,6 +1243,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         repaint: () => map.triggerRepaint(),
       });
     const onStyleLoad = () => {
+      markOnce(MAP_STYLE_READY_MARK);
       if (initialMapLoaded) recoverMapStyle();
     };
     map.on('style.load', onStyleLoad);
@@ -1277,23 +1291,24 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         ?.classList.remove('maplibregl-compact-show');
       registerMapIcons(map, activeMapScheme);
       ensureOverlay();
-      if (PERF_HARNESS_BUILD) {
-        initialPaintListener = () => {
-          if (
-            !systemPaintReady({
-              systemDataUploaded: initialSystemDataUploaded,
-              representativeSourceExists: Boolean(map.getSource(SRC_STATIONS)),
-              representativeSourceLoaded: map.isSourceLoaded(SRC_STATIONS),
-            })
-          ) {
-            return;
-          }
-          map.off('render', initialPaintListener!);
-          initialPaintListener = null;
-          markFirstSystemMapPaint();
-        };
-        map.on('render', initialPaintListener);
-      }
+      initialPaintListener = () => {
+        const currentSystem = store.getState().system;
+        if (
+          !systemPaintReady({
+            documentReady: store.getState().documentStatus === 'ready',
+            systemDataUploaded: stationUploadSystem !== null,
+            systemDataMatchesDocument: stationUploadSystem === currentSystem,
+            representativeSourceExists: Boolean(map.getSource(SRC_STATIONS)),
+            representativeSourceLoaded: map.isSourceLoaded(SRC_STATIONS),
+          })
+        ) {
+          return;
+        }
+        map.off('render', initialPaintListener!);
+        initialPaintListener = null;
+        markFirstSystemMapPaint();
+      };
+      map.on('render', initialPaintListener);
       pushData(ALL_SYSTEM_FEATURE_SOURCES);
       initialMapLoaded = true;
       map.triggerRepaint();
@@ -1328,6 +1343,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         onEditGestureStart: beginGestureProjection,
         onEditGestureEnd: endGestureProjection,
         onPointerIntent: (intent, x, y) => setPointerBadge({ intent, x, y }),
+        onSelectionIntent: preloadSelectionInspectorContent,
         isContextMenuOpen: () => contextMenuOpenRef.current,
         registerPointerIntentRefresh: (refresh) => {
           refreshPointerIntentRef.current = refresh;
@@ -1364,6 +1380,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           );
         },
       });
+      setInteractionsAttached(true);
       detachVehicles = attachVehicleAnimation(map, store, simClock, {
         isVisible: (service) => viewRef.current.visibleModes.has(service.modeId),
         viewMode: () => viewRef.current.viewMode,
