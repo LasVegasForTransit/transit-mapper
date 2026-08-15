@@ -5942,8 +5942,14 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     diagA.points.some((p) => p[0] === bJunctionCoord[0] && p[1] === bJunctionCoord[1]),
   );
   check(
-    'a node-bearing way keeps an interior vertex (start, junction, end)',
-    diagA.points.length === 3,
+    'a node-bearing way keeps its shared junction between its endpoints',
+    diagA.points.some(
+      (point, index) =>
+        index > 0 &&
+        index < diagA.points.length - 1 &&
+        point[0] === bJunctionCoord[0] &&
+        point[1] === bJunctionCoord[1],
+    ),
   );
 
   const diagStop = diagram.stops.find((s) => s.id === dwStopId)!;
