@@ -49,6 +49,18 @@ namespace_id = "1001"
   limit = 20
   period = 60
 
+# Anonymous RUM is intentionally low-volume (one or five percent of sessions)
+# and every accepted body still becomes a D1 write. Ten samples per address
+# per minute leaves room for reloads and multiple tabs without offering an
+# unbounded public write primitive.
+[[ratelimits]]
+name = "PERFORMANCE_SAMPLE_LIMITER"
+namespace_id = "1005"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
 # Nominatim permits at most one request per second and forbids client-side
 # autocomplete. Search is explicit in the UI, cached for seven days, and this
 # separate per-client ceiling prevents one browser from consuming the beta's

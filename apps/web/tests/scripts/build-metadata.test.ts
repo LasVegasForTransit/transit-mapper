@@ -78,6 +78,12 @@ describe('build metadata', () => {
       releaseTag: null,
       releaseUrl: null,
       attestationsUrl: 'https://github.com/LasVegasForTransit/transit-mapper/attestations',
+      performanceSampling: {
+        enabled: true,
+        ordinaryBasisPoints: 100,
+        releaseBasisPoints: 500,
+        boostUntil: null,
+      },
     });
   });
 
@@ -107,6 +113,12 @@ describe('build metadata', () => {
     expect(info.releaseUrl).toBe(
       'https://github.com/LasVegasForTransit/transit-mapper/releases/tag/v2.3.0',
     );
+    expect(info.performanceSampling).toEqual({
+      enabled: true,
+      ordinaryBasisPoints: 100,
+      releaseBasisPoints: 500,
+      boostUntil: '2026-08-02T19:20:21.000Z',
+    });
   });
 
   it('uses GitHub Actions commit identity without requiring a custom variable', () => {
@@ -173,5 +185,42 @@ describe('build metadata', () => {
         now: new Date('2026-08-01T19:20:21.000Z'),
       }),
     ).toThrow('release tag v2.0.0 does not match package version 1.0.0');
+  });
+
+  it('provides a build-time kill switch and validates sampling basis points', () => {
+    const root = repository(
+      {
+        version: '1.0.0',
+        repository: 'https://github.com/LasVegasForTransit/transit-mapper',
+      },
+      'MIT License\n\nCopyright (c) 2026 Las Vegans for Better Transit\n',
+    );
+    const base = {
+      repositoryRoot: root,
+      git: null,
+      now: new Date('2026-08-01T19:20:21.000Z'),
+    };
+
+    expect(
+      loadBuildInfo({
+        ...base,
+        environment: {
+          TRANSITMAPPER_PERFORMANCE_SAMPLING_ENABLED: '0',
+          TRANSITMAPPER_PERFORMANCE_ORDINARY_BASIS_POINTS: '250',
+          TRANSITMAPPER_PERFORMANCE_RELEASE_BASIS_POINTS: '750',
+        },
+      }).performanceSampling,
+    ).toEqual({
+      enabled: false,
+      ordinaryBasisPoints: 250,
+      releaseBasisPoints: 750,
+      boostUntil: null,
+    });
+    expect(() =>
+      loadBuildInfo({
+        ...base,
+        environment: { TRANSITMAPPER_PERFORMANCE_RELEASE_BASIS_POINTS: '10001' },
+      }),
+    ).toThrow('TRANSITMAPPER_PERFORMANCE_RELEASE_BASIS_POINTS must be an integer from 0 to 10000');
   });
 });
