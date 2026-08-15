@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ViewOptions } from '../../src/map/layers';
+import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
 import { svgViewForFittedMap, svgViewForViewport } from '../../src/share/svg-render-view';
 
 const view: ViewOptions = {

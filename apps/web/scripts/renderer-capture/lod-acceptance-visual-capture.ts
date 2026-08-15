@@ -24,11 +24,18 @@ import type {
 } from './lod-acceptance-types';
 import { rendererCaptureDigest } from './lifecycle';
 
+interface RendererLodAcceptanceSurfaceSeam {
+  renderStatic(request: { camera: unknown; viewMode: 'infrastructure' }): Promise<void>;
+  renderSvg(request: { camera: unknown; viewMode: 'infrastructure' }): Promise<void>;
+  clear(): void;
+}
+
 /** Browser seams used only by the deterministic renderer acceptance appendix.
  * Keeping them here prevents the manifest runner from depending on page-global
  * details while preserving an explicit contract for capture failures. */
 interface AcceptanceWindowAdditions {
   __rendererLodAcceptancePanPending?: boolean;
+  __rendererLodAcceptanceSurface?: RendererLodAcceptanceSurfaceSeam;
   __editor?: {
     getState(): {
       system: TransitSystem;
