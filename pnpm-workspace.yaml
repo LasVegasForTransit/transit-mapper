@@ -63,7 +63,7 @@ minimumReleaseAgeExclude:
   - brace-expansion@1.1.17 || 2.1.3 || 5.0.9
   - fast-uri@3.1.5
   - undici@7.29.0
-  - nanoid@3.3.17
+  - nanoid@3.3.18
 
 overrides:
   brace-expansion@<1.1.17: ^1.1.17
@@ -80,5 +80,5 @@ overrides:
   # Reached only through postcss (vite/vitest/@tailwindcss/vite's build-time
   # use), which never calls nanoid with a caller-controlled size of zero —
   # but the audit gate doesn't know that, and 3.x isn't getting the fix
-  # backported below 3.3.17.
-  nanoid@<3.3.17: ^3.3.17
+  # backported below 3.3.18.
+  nanoid@<3.3.18: ^3.3.18
