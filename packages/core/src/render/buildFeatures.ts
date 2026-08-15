@@ -1580,6 +1580,98 @@ interface JunctionPaintMetadata {
   tierOpacity: number;
 }
 
+interface AppendJunctionPaintFeaturesOptions {
+  /** The authored junction and its resolved Street-tier surface. */
+  node: TransitSystem['nodes'][number];
+  geometry: JunctionGeometry;
+  /** Shared visibility and tier data, derived once for every feature at this node. */
+  metadata: JunctionPaintMetadata;
+  selectedNodeId: string | null;
+  /** A scoped update can retain trim geometry without owning this node's paint. */
+  includeJunction: boolean;
+  approachControls: TransitSystem['approachControls'];
+  junctionFeatures: Feature<Polygon | Point>[];
+}
+
+/**
+ * Emits the visible Street-tier records for one resolved junction.
+ *
+ * Trim and marking work needs every adjacent junction geometry, whereas a
+ * scoped render request may own paint for only some nodes. An omitted surface
+ * is therefore not an omitted junction: it still shapes nearby lanes.
+ */
+function appendJunctionPaintFeatures({
+  node,
+  geometry,
+  metadata,
+  selectedNodeId,
+  includeJunction,
+  approachControls,
+  junctionFeatures,
+}: AppendJunctionPaintFeaturesOptions): void {
+  if (!includeJunction) return;
+
+  if (geometry.polygon.length >= 3) {
+    junctionFeatures.push({
+      type: 'Feature',
+      id: stableFeatureId('junctions', 'surface', node.id),
+      properties: {
+        nodeId: node.id,
+        typeIds: metadata.typeIds,
+        selected: selectedNodeId === node.id,
+        renderTier: 'street',
+        corridorW14: metadata.corridorW14,
+        tierOpacity: metadata.tierOpacity,
+      },
+      geometry: { type: 'Polygon', coordinates: [closeRing(geometry.polygon)] },
+    });
+  }
+
+  if (node.control && node.control !== 'uncontrolled') {
+    junctionFeatures.push({
+      type: 'Feature',
+      id: stableFeatureId('junctions', 'control', node.id),
+      properties: {
+        nodeId: node.id,
+        control: node.control,
+        typeIds: metadata.typeIds,
+        renderTier: 'street',
+        corridorW14: metadata.corridorW14,
+        tierOpacity: metadata.tierOpacity,
+      },
+      geometry: { type: 'Point', coordinates: node.coord },
+    });
+  }
+
+  for (const approach of junctionControlledApproaches(node, geometry, approachControls)) {
+    // A whole-node control already has one central marker. A per-arm override
+    // is a separate authored instruction and must remain visible at its
+    // approach instead of looking like a global signal.
+    if (!approach.explicit) continue;
+    junctionFeatures.push({
+      type: 'Feature',
+      id: stableFeatureId(
+        'junctions',
+        'approach-control',
+        node.id,
+        approach.arm.wayId,
+        approach.arm.end,
+      ),
+      properties: {
+        nodeId: node.id,
+        wayId: approach.arm.wayId,
+        end: approach.arm.end,
+        control: approach.control,
+        typeIds: metadata.typeIds,
+        renderTier: 'street',
+        corridorW14: metadata.corridorW14,
+        tierOpacity: metadata.tierOpacity,
+      },
+      geometry: { type: 'Point', coordinates: approach.coord },
+    });
+  }
+}
+
 /**
  * The presentation chosen for one service run at one lane endpoint.
  *
@@ -2342,77 +2434,17 @@ function projectTopologyFeatures({
     for (const { node, g } of laneNodes) {
       const metadata = junctionPaintMetadata(node);
       appendControlledApproachMarkings(node, g, metadata);
-      if (
-        projection.junctions.polygons &&
-        (!junctionOutputNodeIds || junctionOutputNodeIds.has(node.id)) &&
-        g.polygon.length >= 3
-      ) {
-        junctionFeatures.push({
-          type: 'Feature',
-          id: stableFeatureId('junctions', 'surface', node.id),
-          properties: {
-            nodeId: node.id,
-            typeIds: metadata.typeIds,
-            selected: selection?.kind === 'node' && selId === node.id,
-            renderTier: 'street',
-            corridorW14: metadata.corridorW14,
-            tierOpacity: metadata.tierOpacity,
-          },
-          geometry: { type: 'Polygon', coordinates: [closeRing(g.polygon)] },
-        });
-      }
-      if (
-        projection.junctions.polygons &&
-        (!junctionOutputNodeIds || junctionOutputNodeIds.has(node.id)) &&
-        node.control &&
-        node.control !== 'uncontrolled'
-      ) {
-        junctionFeatures.push({
-          type: 'Feature',
-          id: stableFeatureId('junctions', 'control', node.id),
-          properties: {
-            nodeId: node.id,
-            control: node.control,
-            typeIds: metadata.typeIds,
-            renderTier: 'street',
-            corridorW14: metadata.corridorW14,
-            tierOpacity: metadata.tierOpacity,
-          },
-          geometry: { type: 'Point', coordinates: node.coord },
-        });
-      }
-      if (
-        projection.junctions.polygons &&
-        (!junctionOutputNodeIds || junctionOutputNodeIds.has(node.id))
-      ) {
-        for (const approach of junctionControlledApproaches(node, g, system.approachControls)) {
-          // A whole-node control already has one central marker. A per-arm
-          // override is a separate authored instruction and must remain
-          // visible at its approach instead of looking like a global signal.
-          if (!approach.explicit) continue;
-          junctionFeatures.push({
-            type: 'Feature',
-            id: stableFeatureId(
-              'junctions',
-              'approach-control',
-              node.id,
-              approach.arm.wayId,
-              approach.arm.end,
-            ),
-            properties: {
-              nodeId: node.id,
-              wayId: approach.arm.wayId,
-              end: approach.arm.end,
-              control: approach.control,
-              typeIds: metadata.typeIds,
-              renderTier: 'street',
-              corridorW14: metadata.corridorW14,
-              tierOpacity: metadata.tierOpacity,
-            },
-            geometry: { type: 'Point', coordinates: approach.coord },
-          });
-        }
-      }
+      appendJunctionPaintFeatures({
+        node,
+        geometry: g,
+        metadata,
+        selectedNodeId: selection?.kind === 'node' ? selId : null,
+        includeJunction:
+          projection.junctions.polygons &&
+          (!junctionOutputNodeIds || junctionOutputNodeIds.has(node.id)),
+        approachControls: system.approachControls,
+        junctionFeatures,
+      });
       // Selection-owned lane movement guides live exclusively in the web
       // editor's transient junction-guide source. Settled scenes remain
       // selection-independent, so changing selection never rebuilds or leaves
