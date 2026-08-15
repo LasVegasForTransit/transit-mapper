@@ -39,7 +39,11 @@ interface AcceptanceWindowAdditions {
   __editor?: {
     getState(): {
       system: TransitSystem;
-      select(selection: { kind: 'way'; id: string } | null): void;
+    };
+    commands: {
+      selection: {
+        select(selection: { kind: 'way'; id: string } | null): void;
+      };
     };
     setState(next: Partial<{ system: TransitSystem }>): void;
   };
@@ -101,9 +105,9 @@ export async function waitForRendererSettlement(page: Page): Promise<void> {
 
 export async function selectAcceptanceWay(page: Page, wayId: string): Promise<void> {
   await page.evaluate((id) => {
-    const state = (window as AcceptanceWindow).__editor?.getState();
-    if (!state) throw new Error('Renderer acceptance fixture store is unavailable.');
-    state.select({ kind: 'way', id });
+    const editor = (window as AcceptanceWindow).__editor;
+    if (!editor) throw new Error('Renderer acceptance fixture store is unavailable.');
+    editor.commands.selection.select({ kind: 'way', id });
   }, wayId);
   await waitForRendererSettlement(page);
 }
