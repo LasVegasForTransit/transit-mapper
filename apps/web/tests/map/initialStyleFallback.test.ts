@@ -4,13 +4,15 @@ import {
   attachInitialStyleFallback,
   INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
 } from '../../src/map/initialStyleFallback';
-import { localBlankStyleForScheme } from '../../src/map/mapTheme';
+import { basemapStyleForScheme, localBlankStyleForScheme } from '../../src/map/mapTheme';
 
 type StyleEvent = 'error' | 'load' | 'style.load';
 
 class FakeStyleMap {
   readonly listeners = new Map<StyleEvent, Set<() => void>>();
-  readonly setStyle = vi.fn((_style: StyleSpecification, _options?: { diff: false }) => this);
+  readonly setStyle = vi.fn(
+    (_style: StyleSpecification | string, _options?: { diff: false }) => this,
+  );
 
   on(event: StyleEvent, listener: () => void): this {
     const listeners = this.listeners.get(event) ?? new Set();
@@ -73,18 +75,50 @@ describe('initial map style fallback', () => {
     expect(map.setStyle).toHaveBeenCalledWith(localBlankStyleForScheme('light'), { diff: false });
   });
 
-  it('falls back on timeout but cancels the timer after the initial map loads', () => {
+  it('reports a failure only when the basemap is genuinely unreachable', async () => {
+    vi.useFakeTimers();
+    const map = new FakeStyleMap();
+    const fallback = vi.fn();
+    const adopted = vi.fn();
+    attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'light',
+      timeoutMs: 250,
+      onFallback: fallback,
+      onAdopted: adopted,
+      probeBasemap: () => Promise.resolve(false),
+    });
+
+    vi.advanceTimersByTime(250);
+
+    await vi.waitFor(() => expect(fallback).toHaveBeenCalledTimes(1));
+    expect(adopted).not.toHaveBeenCalled();
+    expect(map.setStyle).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the grid on timeout without reporting a failure', async () => {
     vi.useFakeTimers();
     const timedOut = new FakeStyleMap();
     const fallback = vi.fn();
+    const adopted = vi.fn();
     attachInitialStyleFallback(timedOut as unknown as MLMap, {
       scheme: 'light',
       timeoutMs: 250,
       onFallback: fallback,
+      onAdopted: adopted,
+      probeBasemap: () => Promise.resolve(true),
     });
 
     vi.advanceTimersByTime(250);
-    expect(fallback).toHaveBeenCalledTimes(1);
+    // The grid arrives immediately so the editor is usable...
+    expect(timedOut.setStyle).toHaveBeenCalledWith(localBlankStyleForScheme('light'), {
+      diff: false,
+    });
+    // ...but a slow basemap is not a broken one, so nobody is told it failed.
+    await vi.waitFor(() => expect(adopted).toHaveBeenCalledTimes(1));
+    expect(fallback).not.toHaveBeenCalled();
+    expect(timedOut.setStyle).toHaveBeenLastCalledWith(basemapStyleForScheme('light'), {
+      diff: false,
+    });
 
     const loaded = new FakeStyleMap();
     const shouldNotFallback = vi.fn();
