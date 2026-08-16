@@ -105,9 +105,10 @@ export function waitForSourceBankLoad({
   const expected = new Set(exactSourceIds);
   const observedData = new Set<string>();
   let mutationsFinished = mutationsComplete === undefined;
-  const loaded = () =>
-    mutationsFinished &&
-    exactSourceIds.every((sourceId) => observedData.has(sourceId) || host.isSourceLoaded(sourceId));
+  const requiresFreshSourceEvent = mutationsComplete !== undefined;
+  const sourceIsReady = (sourceId: string) =>
+    observedData.has(sourceId) || (!requiresFreshSourceEvent && host.isSourceLoaded(sourceId));
+  const loaded = () => mutationsFinished && exactSourceIds.every(sourceIsReady);
   if (exactSourceIds.length === 0) return Promise.resolve();
   return settlementPromise(
     (settle) => {
@@ -115,10 +116,11 @@ export function waitForSourceBankLoad({
         if (expected.has(sourceId)) observedData.add(sourceId);
         if (loaded()) settle();
       });
-      // A worker acknowledgement is enough for a hidden source. Its source
-      // cache can remain "not loaded" while offscreen, but the data event is
-      // still the exact revision MapLibre will use when the bank becomes
-      // visible. A later render remains a fallback for sources already ready.
+      // A worker acknowledgement is enough for a hidden source. When this
+      // wait owns mutations, a resident source may still report loaded while
+      // MapLibre replaces its worker data. Require the fresh source event in
+      // that case. A later render remains a fallback only for a source that
+      // was already ready before this waiter began.
       const stopRender = host.onRender(() => {
         if (loaded()) settle();
       });
@@ -150,9 +152,7 @@ export function waitForSourceBankLoad({
     },
     { host, ...(signal ? { signal } : {}), ...(timeoutMs ? { timeoutMs } : {}) },
     () => {
-      const missing = exactSourceIds.filter(
-        (sourceId) => !observedData.has(sourceId) && !host.isSourceLoaded(sourceId),
-      );
+      const missing = exactSourceIds.filter((sourceId) => !sourceIsReady(sourceId));
       return `Hidden renderer sources did not load in time: ${missing.join(', ')}.`;
     },
   );
