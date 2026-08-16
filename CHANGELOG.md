@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.6.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.5.1...v0.6.0) (2026-08-16)
+
+
+### Features
+
+* Add privacy-safe field telemetry ([0f05fc3](https://github.com/LasVegasForTransit/transit-mapper/commit/0f05fc39aac68b097cc6930acc77fd65ae9bcd38))
+* **core:** Center shared service bundles ([d2545ea](https://github.com/LasVegasForTransit/transit-mapper/commit/d2545eaf6f409e79921b52ebf22005ab8b04a23a))
+* **core:** draw physical rail hardware ([9692c13](https://github.com/LasVegasForTransit/transit-mapper/commit/9692c13fb779226e59c2b1f693891184b4ba0a3d))
+* **core:** keep city-scale maps responsive ([64bb799](https://github.com/LasVegasForTransit/transit-mapper/commit/64bb799412cdcfb1a4ac7b720459290b31781431))
+* **core:** match curve detail to the final display ([9e58df5](https://github.com/LasVegasForTransit/transit-mapper/commit/9e58df56ad65f7505f2033e4c6f89304838f1e95))
+* **core:** render District carriageways as physical footprints ([c4e8dab](https://github.com/LasVegasForTransit/transit-mapper/commit/c4e8dab2d70fd18bebc615c13b774fe59de32588))
+* **core:** render lanes as physical surfaces ([1b0029a](https://github.com/LasVegasForTransit/transit-mapper/commit/1b0029a823c14d1af609a1cca0ad4d6d9931bf08))
+* **core:** resolve curved corridors in physical meters ([f8fdaa8](https://github.com/LasVegasForTransit/transit-mapper/commit/f8fdaa857d4508820b1c838269afa1caba3badff))
+* **core:** Round physical junction curb returns ([99114db](https://github.com/LasVegasForTransit/transit-mapper/commit/99114dbdd50947a91a3ef3077fd79b0b7b5e6614))
+* **core:** Show permitted lane movements through intersections ([14dfc83](https://github.com/LasVegasForTransit/transit-mapper/commit/14dfc83513bb503392790e676d154d1a67a08ed1))
+* **core:** show streets and junctions at physical detail ([eca514a](https://github.com/LasVegasForTransit/transit-mapper/commit/eca514ad1ec9d33af7aecf9d7c849a3aca094380))
+* **web:** add screen-space scene pipeline ([0ef1836](https://github.com/LasVegasForTransit/transit-mapper/commit/0ef18368dd4dd9d9f2b3009ccedcde0ada3bb652))
+* **web:** keep exported maps consistent with the editor ([4bd80c2](https://github.com/LasVegasForTransit/transit-mapper/commit/4bd80c209f669aa2ece2f60d1dfe1621083b1da0))
+* **web:** keep map edits visually continuous ([d4d61ce](https://github.com/LasVegasForTransit/transit-mapper/commit/d4d61ce749076f8e154d6deb6463898cc392e122))
+* **web:** redesign onboarding around a real transit proposal ([#97](https://github.com/LasVegasForTransit/transit-mapper/issues/97)) ([0afe298](https://github.com/LasVegasForTransit/transit-mapper/commit/0afe298d825f656561f84170ea417178bde4e067))
+* **web:** Reduce clutter in dense map views ([5d36191](https://github.com/LasVegasForTransit/transit-mapper/commit/5d3619131eb6a7b2b5a1f9452d75a5ee957877ec))
+
+
+### Bug Fixes
+
+* **ci:** keep repository tooling validation lint-safe ([c5b6e23](https://github.com/LasVegasForTransit/transit-mapper/commit/c5b6e23ddbe6aa84293b8d9a4b5a0199ec838fb1))
+* **ci:** Measure first-load delivery ([e6f62c3](https://github.com/LasVegasForTransit/transit-mapper/commit/e6f62c3e2f06d3f1db7a60a32ff252f79e9a6a00))
+* **ci:** Track renderer worker bundles ([f61b7d9](https://github.com/LasVegasForTransit/transit-mapper/commit/f61b7d926b7e5df12d9715612a1d41a985901d19))
+* **core:** render services through public Lines ([cd927c7](https://github.com/LasVegasForTransit/transit-mapper/commit/cd927c72403aef79ffb7027b36341960bd15593b))
+* **dx:** attribute Codex-authored commits ([c54437d](https://github.com/LasVegasForTransit/transit-mapper/commit/c54437d5b3b15bb0a69a7598c282abab3e22d3d3))
+* **pwa:** Let saved maps stay editable offline ([61b7e37](https://github.com/LasVegasForTransit/transit-mapper/commit/61b7e3789a9b83ffda6fc716b97c017b2d9f8f11))
+* **web:** Expose fixtures to renderer acceptance captures ([a1b21f1](https://github.com/LasVegasForTransit/transit-mapper/commit/a1b21f1b99cdf0c5d57c8507b0a5c201953fb64f))
+* **web:** join lane services through Street junctions ([6cb32fd](https://github.com/LasVegasForTransit/transit-mapper/commit/6cb32fd2dbeb00d39368b0337a3018131ecb160d))
+* **web:** Keep cold maps from dropping their first renderer scene ([cfd9fa8](https://github.com/LasVegasForTransit/transit-mapper/commit/cfd9fa809ffe130362d51ce0afddede184434106))
+* **web:** Keep cold maps interactive during startup ([1ea8246](https://github.com/LasVegasForTransit/transit-mapper/commit/1ea8246cd6aef4403b38947a74ae79c72b41b832))
+* **web:** keep editor overlays behind accepted map revisions ([17cc3ab](https://github.com/LasVegasForTransit/transit-mapper/commit/17cc3abab65b7a456246b09c6535066d992b89cb))
+* **web:** Keep edits from showing outdated map geometry ([3bb7a35](https://github.com/LasVegasForTransit/transit-mapper/commit/3bb7a351c56239e54c7cd7e1a5de15a0f05b934c))
+* **web:** Keep empty renderer sources from blocking bank changes ([162d4af](https://github.com/LasVegasForTransit/transit-mapper/commit/162d4af00223a59093e1e5c1cce366073a779bb7))
+* **web:** Keep incoming renderer banks coherent ([ddaa049](https://github.com/LasVegasForTransit/transit-mapper/commit/ddaa04907c71732dce3b740e13962819f71a5166))
+* **web:** Keep LOD captures on the editor command boundary ([11f3266](https://github.com/LasVegasForTransit/transit-mapper/commit/11f3266819c9c9a20413e5898f9a6f446e7c8c4d))
+* **web:** Keep renderer contracts independent of density ([20fa346](https://github.com/LasVegasForTransit/transit-mapper/commit/20fa346c6dc7c2b20edc36ea3bee9313bb4ddc08))
+* **web:** Keep resumed projections visually equivalent ([6a35766](https://github.com/LasVegasForTransit/transit-mapper/commit/6a357661e496569442f513c2084081c5b0ccae9c))
+* **web:** Keep stops available in embeds and inspectors ([3fe82a9](https://github.com/LasVegasForTransit/transit-mapper/commit/3fe82a97bc80db1826d619216382e2e13a387fc2))
+* **web:** Let a saved system publish its first scene ([#104](https://github.com/LasVegasForTransit/transit-mapper/issues/104)) ([342ea11](https://github.com/LasVegasForTransit/transit-mapper/commit/342ea11ff8eb83fcad368812b179b9a83ec1d3a2))
+* **web:** name canceled CDP requests in byte audits ([308a1cd](https://github.com/LasVegasForTransit/transit-mapper/commit/308a1cd66fb55cd1297590c42168e6db9b39ecc9))
+* **web:** Preserve delivery graph transitions ([a27c698](https://github.com/LasVegasForTransit/transit-mapper/commit/a27c69833b1330acc467246ce93280bc95793670))
+* **web:** preserve incremental rendering for local edits ([76f6fc3](https://github.com/LasVegasForTransit/transit-mapper/commit/76f6fc3d584cde1ab57a7d76d9561b946bdcc276))
+* **web:** Preserve renderer behavior after delivery rebase ([0b66146](https://github.com/LasVegasForTransit/transit-mapper/commit/0b6614671161440c945634555e298df4ef9d76ef))
+* **web:** restore the editor delivery budget ([7525559](https://github.com/LasVegasForTransit/transit-mapper/commit/7525559fa83c113d58c431323a8e5b2446080778))
+* **web:** retire stale renderer source metadata ([d514050](https://github.com/LasVegasForTransit/transit-mapper/commit/d5140507ea4b6f1b3b43ea6033fc8077af1e6e2a))
+
+
+### Performance Improvements
+
+* **web:** defer SVG exporter until requested ([0405b22](https://github.com/LasVegasForTransit/transit-mapper/commit/0405b2229a18286a03da9802ca732d4bdd2a4ac8))
+
 ## [0.5.1](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.5.0...v0.5.1) (2026-08-13)
 
 
