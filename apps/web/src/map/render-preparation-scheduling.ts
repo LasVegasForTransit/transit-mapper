@@ -38,6 +38,7 @@ export interface RenderPreparationPipelineHandle extends RenderPipelineContinuat
 interface PreparationAttempt {
   readonly entityChunkSize: number;
   readonly tolerateBudgetOverrun: boolean;
+  readonly overBudgetYieldUnitIds: ReadonlySet<string>;
   plan: RenderPreparationPlan | null;
   commitResult: RenderPreparationCommitResult | null;
   totalDurationMs: number;
@@ -162,6 +163,10 @@ function retryable(
   );
 }
 
+function isPlanConstructionUnit(unitId: string): boolean {
+  return unitId.startsWith('prepare:plan:');
+}
+
 function resolveSnapshot(
   attempt: PreparationAttempt,
   settlement: CooperativeRenderJobSettlement,
@@ -204,11 +209,16 @@ class RenderPreparationPipeline {
     return latestPipelineByScheduler.get(this.options.scheduler) === this.ownership;
   }
 
-  private scheduleAttempt(entityChunkSize: number, tolerateBudgetOverrun = false): void {
+  private scheduleAttempt(
+    entityChunkSize: number,
+    tolerateBudgetOverrun = false,
+    overBudgetYieldUnitIds: ReadonlySet<string> = new Set(),
+  ): void {
     if (!this.ownsGeneration()) return;
     const attempt: PreparationAttempt = {
       entityChunkSize,
       tolerateBudgetOverrun,
+      overBudgetYieldUnitIds,
       plan: null,
       commitResult: null,
       totalDurationMs: 0,
@@ -216,7 +226,12 @@ class RenderPreparationPipeline {
     };
     const scheduled = this.options.scheduler.submit({
       units: preparationUnits(this.options, attempt),
-      ...(tolerateBudgetOverrun ? { overBudgetUnitPolicy: 'yield' as const } : {}),
+      ...(tolerateBudgetOverrun || overBudgetYieldUnitIds.size > 0
+        ? {
+            overBudgetUnitPolicy: 'yield' as const,
+            ...(overBudgetYieldUnitIds.size > 0 ? { overBudgetYieldUnitIds } : {}),
+          }
+        : {}),
       retainResults: false,
       commit: () => this.commitAttempt(attempt),
     });
@@ -240,6 +255,18 @@ class RenderPreparationPipeline {
     recordAttempt(this.options, attempt, stats);
     if (!this.ownsGeneration()) {
       this.finish();
+      return;
+    }
+    if (
+      settlement.status === 'failed' &&
+      settlement.error instanceof CooperativeRenderUnitBudgetError &&
+      isPlanConstructionUnit(settlement.error.unitId) &&
+      !attempt.overBudgetYieldUnitIds.has(settlement.error.unitId)
+    ) {
+      // Planning creates the lazy work sequence. It does not process an
+      // entity, so shrinking every later entity batch after a cold JIT or GC
+      // pause turns one missed frame into thousands of needless frames.
+      this.scheduleAttempt(attempt.entityChunkSize, false, new Set([settlement.error.unitId]));
       return;
     }
     if (retryable(attempt, settlement) && attempt.entityChunkSize > 1) {

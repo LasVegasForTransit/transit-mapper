@@ -12,6 +12,7 @@ import {
 } from './browserContract';
 import { waitForLoadedDocument } from './journeys';
 import { networkEditStopCandidates } from './offline-edit-target';
+import { renderedNetworkStopId } from './rendered-network-stop';
 
 const PWA_RUNTIME_REPORT_FILENAME = 'pwa-runtime-report.json';
 
@@ -24,19 +25,6 @@ interface OfflineEditProof {
   stopId: string;
   before: OfflineStopSnapshot;
   after: OfflineStopSnapshot;
-}
-
-interface RenderedStopCandidate {
-  readonly id: string;
-  readonly coord: LngLat;
-}
-
-interface RenderedStopTarget {
-  readonly id: string | null;
-  readonly inspected: readonly {
-    readonly id: string;
-    readonly layerIds: readonly string[];
-  }[];
 }
 
 interface OfflineRuntimeReport {
@@ -195,34 +183,6 @@ async function verifyOfflineStopEdit(
   };
 }
 
-/** The source can contain a density-selected subset of served stops. This
- * confirms the point that the browser will drag, instead of assuming the
- * nearest model stop survived the current presentation's density policy. */
-async function renderedNetworkStopId(
-  page: import('playwright-core').Page,
-  candidates: readonly RenderedStopCandidate[],
-): Promise<string> {
-  const target = await page.evaluate((candidateStops): RenderedStopTarget => {
-    const renderedFeaturesAt = (window as PerfPageWindow).__perfRenderedFeaturesAt;
-    if (!renderedFeaturesAt) throw new Error('The offline rendered-feature seam is unavailable.');
-    const inspected = candidateStops.map((stop) => ({
-      id: stop.id,
-      layerIds: renderedFeaturesAt(stop.coord)
-        .filter((feature) => feature.properties.id === stop.id)
-        .map((feature) => feature.layerId),
-    }));
-    const visible = inspected.find((stop) =>
-      stop.layerIds.some((layerId) => layerId.startsWith('tm-stations--bank-')),
-    );
-    return { id: visible?.id ?? null, inspected };
-  }, candidates);
-  if (target.id) return target.id;
-  throw new Error(
-    `The cache-evicted offline renderer did not expose a served Stop for editing: ` +
-      JSON.stringify(target.inspected),
-  );
-}
-
 export async function verifyCacheEvictedOfflineReload(
   browser: Browser,
   protocol: PerfProtocol,
@@ -321,10 +281,17 @@ export async function verifyCacheEvictedOfflineReload(
       if (!snapshot) throw new Error('The offline overlay proof seam is unavailable.');
       return snapshot;
     });
-    const stopId = await renderedNetworkStopId(
+    const renderedStop = await renderedNetworkStopId(
       page,
       networkEditStopCandidates(fixture).map((stop) => ({ id: stop.id, coord: stop.coord })),
     );
+    if (!renderedStop.id) {
+      throw new Error(
+        `The cache-evicted offline renderer did not expose a served Stop for editing: ` +
+          JSON.stringify(renderedStop.inspected),
+      );
+    }
+    const stopId = renderedStop.id;
     const edit = await verifyOfflineStopEdit(page, stopId);
 
     const report: OfflineRuntimeReport = {
