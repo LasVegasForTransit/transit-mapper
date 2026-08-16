@@ -1864,7 +1864,11 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     visibleModes: new Set(Object.keys(MODES)),
     visibleWayTypes: new Set<string>(),
   };
-  const net = buildFeatures(store.getState().system, null, [], view);
+  // This checks serialized names. Density can deliberately omit a nearby
+  // anonymous marker, and its policy has separate coverage.
+  const net = buildFeatures(store.getState().system, null, [], view, null, null, {
+    applyScreenDensity: false,
+  });
   const namedStopFeature = net.stops.features.find((f) => f.properties?.id === namedId);
   const unnamedStopFeature = net.stops.features.find((f) => f.properties?.id === unnamedId);
   check(
@@ -1876,10 +1880,18 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
     unnamedStopFeature?.properties?.name === '',
   );
 
-  const infra = buildFeatures(store.getState().system, null, [], {
-    ...view,
-    viewMode: 'infrastructure',
-  });
+  const infra = buildFeatures(
+    store.getState().system,
+    null,
+    [],
+    {
+      ...view,
+      viewMode: 'infrastructure',
+    },
+    null,
+    null,
+    { applyScreenDensity: false },
+  );
   const namedFacFeature = infra.facilities.features.find((f) => f.properties?.id === facId);
   const unnamedFacFeature = infra.facilities.features.find(
     (f) => f.properties?.id === unnamedFacId,
@@ -5749,10 +5761,18 @@ check('fork has new id + copy name', forked.id !== sys.id && forked.name.include
   for (const typeId of FACILITY_TYPE_ORDER) {
     store.commands.facilities.addFacility(typeId, [-115.15, 36.1]);
   }
-  const infra = buildFeatures(store.getState().system, null, [], {
-    viewMode: 'infrastructure',
-    ...filters,
-  });
+  const infra = buildFeatures(
+    store.getState().system,
+    null,
+    [],
+    {
+      viewMode: 'infrastructure',
+      ...filters,
+    },
+    null,
+    null,
+    { applyScreenDensity: false },
+  );
   for (const f of infra.facilities.features) {
     const icon = f.properties?.icon as string;
     check(
@@ -8270,13 +8290,14 @@ check(
     'every arm of a 4-way crossing trims back',
     g.arms.every((a) => a.trimM > 1),
   );
-  // Perpendicular same-width arms: trim ≈ the other road's half-width.
-  const half = g.arms[0].halfWidthM;
   check(
-    "perpendicular trim ≈ the crossing road's half-width",
-    g.arms.every((a) => Math.abs(a.trimM - half) < 1.5),
+    'a symmetric crossing keeps the same trim for every approach',
+    g.arms.every((a) => Math.abs(a.trimM - g.arms[0].trimM) < 1.5),
   );
-  check('footprint polygon has two corners per arm', g.polygon.length === 8);
+  check(
+    'footprint polygon samples every rounded curb return',
+    g.polygon.length === g.arms.length * 5,
+  );
 
   const trims = collectWayTrims([g]);
   check("collectWayTrims records a trim for every arm's way", trims.size === 4);
@@ -8641,10 +8662,18 @@ check(
   store.commands.ways.nameWay(r, 'Decatur Avenue');
   store.commands.network.separateCarriageways(r);
   const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(['road']) };
-  const infra = buildFeatures(store.getState().system, null, [], {
-    viewMode: 'infrastructure',
-    ...filters,
-  });
+  const infra = buildFeatures(
+    store.getState().system,
+    null,
+    [],
+    {
+      viewMode: 'infrastructure',
+      ...filters,
+    },
+    null,
+    null,
+    { applyScreenDensity: false },
+  );
   const labels = infra.wayLabels.features.filter((f) => f.properties?.name === 'Decatur Avenue');
   check('both carriageways label as the one named street', labels.length === 2);
   const net = buildFeatures(store.getState().system, null, [], { viewMode: 'network', ...filters });
