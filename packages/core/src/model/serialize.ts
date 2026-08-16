@@ -9,6 +9,7 @@ import type { ComponentMap } from './components';
 import {
   DEFAULT_VIEWPORT,
   type ApproachControl,
+  type CurveControl,
   type CrossSection,
   type DrivingSide,
   type LaneConnector,
@@ -175,7 +176,14 @@ export function parseSystem(input: unknown): TransitSystem {
 }
 
 const LANE_DIRECTIONS = new Set(['forward', 'backward', 'both', 'none']);
-const NODE_CONTROLS = new Set(['uncontrolled', 'signal', 'stop', 'roundabout', 'levelCrossing']);
+const NODE_CONTROLS = new Set([
+  'uncontrolled',
+  'signal',
+  'stop',
+  'yield',
+  'roundabout',
+  'levelCrossing',
+]);
 
 /** Parse a stored cross-section (v6+); null when absent/invalid so the
  *  caller can fall back to a capacity-derived default profile. Unknown lane
@@ -203,6 +211,36 @@ function parseProfile(raw: unknown): CrossSection | null {
     });
   }
   return lanes.length > 0 ? { lanes } : null;
+}
+
+/** Controls are persisted authoring intent, so invalid entries are repaired at
+ * load time instead of forcing geometry code to handle impossible endpoints,
+ * negative radii, or competing instructions for one corner. */
+function parseCurveControls(raw: unknown, pointCount: number): CurveControl[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const controls: CurveControl[] = [];
+  const occupiedPointIndexes = new Set<number>();
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const control = item as Record<string, unknown>;
+    const pointIndex = control.pointIndex;
+    const radiusM = control.radiusM;
+    if (
+      typeof pointIndex !== 'number' ||
+      !Number.isInteger(pointIndex) ||
+      pointIndex <= 0 ||
+      pointIndex >= pointCount - 1 ||
+      typeof radiusM !== 'number' ||
+      !Number.isFinite(radiusM) ||
+      radiusM <= 0 ||
+      occupiedPointIndexes.has(pointIndex)
+    ) {
+      continue;
+    }
+    occupiedPointIndexes.add(pointIndex);
+    controls.push({ pointIndex, radiusM });
+  }
+  return controls.length > 0 ? controls : undefined;
 }
 
 // Coordinates are compared to this many decimal places (~0.11m at the
@@ -528,7 +566,7 @@ function parseSkippedStops(raw: unknown): Partial<Record<RunDirection, string[]>
 function parseSections(raw: unknown[]): PatternSection[] {
   const out: PatternSection[] = [];
   for (const entry of raw) {
-    const r = entry as Record<string, unknown>;
+    const r = entry as Record<string, unknown> | null;
     if (!r) continue;
     if (r.kind === 'split') {
       const outbound = parseLegs(r.outbound).filter(isResolvedLeg);
@@ -617,7 +655,7 @@ function parsePatterns(raw: unknown, legacyWayIds: unknown): DraftPattern[] {
 }
 
 function parseLine(raw: unknown): Line | null {
-  const r = raw as Record<string, unknown>;
+  const r = raw as Record<string, unknown> | null;
   if (!r || typeof r.id !== 'string') return null;
   return {
     id: r.id,
@@ -628,7 +666,7 @@ function parseLine(raw: unknown): Line | null {
 }
 
 function parseCurrentService(raw: unknown): DraftService {
-  const r = raw as Record<string, unknown>;
+  const r = raw as Record<string, unknown> | null;
   if (!r || typeof r.id !== 'string') throw new Error('Bad service');
   const path = r.path as Record<string, unknown> | undefined;
   return {
@@ -827,11 +865,14 @@ function parseV3(o: Record<string, unknown>): TransitSystem {
     const profile =
       parseProfile(r.profile) ??
       defaultProfileFor(typeId, typeof r.capacity === 'number' ? r.capacity : undefined);
+    const points = coords(r.points);
+    const curveControls = parseCurveControls(r.curveControls, points.length);
     return {
       id: r.id,
       typeId,
-      points: coords(r.points),
+      points,
       geometry: geometryOf(r.geometry),
+      ...(curveControls ? { curveControls } : {}),
       grade: gradeOf(r.grade),
       profile,
       classId: typeof r.classId === 'string' ? r.classId : undefined,

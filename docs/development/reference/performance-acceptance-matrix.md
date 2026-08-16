@@ -13,15 +13,15 @@ capability is disabled.
 
 ## Automated Chrome gate
 
-| Surface  | Scale                    | Journey                                             | Required evidence                                                                                            |
-| -------- | ------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Editor   | Small, dense, RTC-shaped | Cold load, warm reload, meaningful system paint     | LCP, CLS, transfer, long tasks, heap, and network counters                                                   |
-| Editor   | Small, dense, RTC-shaped | Station drag, camera drag, line draw                | Trusted input-to-paint, action-scoped MapLibre frames, model revision, projection phases, and source uploads |
-| Editor   | RTC-shaped               | Ten-minute pan, edit/undo, and export-dialog cycle  | Heap, DOM nodes, listeners, workers, and WebGL contexts return within 10% of the warmed baseline             |
-| Share    | Large publishable        | Cold/warm load and camera drag                      | LCP, CLS, transfer, meaningful system paint, input-to-paint, and MapLibre frames                             |
-| Embed    | Large publishable        | Cold/warm load and camera drag                      | LCP, CLS, transfer, meaningful system paint, and input-to-paint                                              |
-| PWA      | Small                    | Install, clear HTTP cache, disconnect, reload, edit | Cached editor graph, local blank-map fallback, populated system overlay, and a committed model edit          |
-| Delivery | All entries              | Production build                                    | Complete dynamic import graph, raw-size reporting, gzip/Brotli budgets, and PWA graph verification           |
+| Surface  | Scale                    | Journey                                             | Required evidence                                                                                                                     |
+| -------- | ------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Editor   | Small, dense, RTC-shaped | Cold load, warm reload, meaningful system paint     | LCP, CLS, transfer, long tasks, heap, and network counters                                                                            |
+| Editor   | Small, dense, RTC-shaped | Station drag, camera drag, line draw                | Trusted input-to-paint, action-scoped MapLibre frames, model revision, projection phases, and source uploads                          |
+| Editor   | RTC-shaped               | Ten-minute pan, edit/undo, and export-dialog cycle  | Heap, DOM nodes, listeners, workers, and WebGL contexts return within 10% of the warmed baseline                                      |
+| Share    | Large publishable        | Cold/warm load and camera drag                      | LCP, CLS, transfer, meaningful system paint, input-to-paint, and MapLibre frames                                                      |
+| Embed    | Large publishable        | Cold/warm load and camera drag                      | LCP, CLS, transfer, meaningful system paint, and input-to-paint                                                                       |
+| PWA      | Small                    | Install, clear HTTP cache, disconnect, reload, edit | Cached editor graph, local blank-map fallback, populated system overlay, and a committed model edit                                   |
+| Delivery | All entries              | Production build                                    | Disjoint eager/lazy entry graphs, eager first-load budgets, lazy chunk ceilings, Worker/install/precache graphs, and PWA verification |
 
 Chrome Stable runs headed at 1440 × 900, device-pixel ratio 1, four-times CPU
 slowdown, and Fast 4G for cold loads. Mobile uses 390 × 844 at device-pixel
@@ -39,6 +39,42 @@ Empty editor startup remains a required release row but is not yet in the
 fixed automated fixture union. Record it with the manual startup-and-recovery
 row until the dedicated zero-entity scenario described in the measurement
 guide lands; a green `pnpm perf` result alone does not satisfy that row.
+
+## Shipping startup milestones
+
+The editor publishes the following User Timing marks in production. Each name
+is recorded at most once, carries no document or user data, and is optional
+observability: an unavailable or restricted User Timing implementation cannot
+interrupt startup.
+
+| Mark                      | Boundary                                                                                        |
+| ------------------------- | ----------------------------------------------------------------------------------------------- |
+| `tm:bootstrap-start`      | The editor entry is about to ask React to render.                                               |
+| `tm:shell-mounted`        | React committed the always-available editor shell.                                              |
+| `tm:storage-read-start`   | Local library bootstrap started.                                                                |
+| `tm:storage-read-end`     | Local library bootstrap returned or failed, including unavailable storage.                      |
+| `tm:deserialize-start`    | The first stored document began Worker or compatibility-path deserialization.                   |
+| `tm:deserialize-end`      | That deserialization settled through success, timeout, fallback, or parse failure.              |
+| `tm:system-committed`     | Startup installed the requested local or shared document, never the temporary placeholder.      |
+| `tm:map-style-ready`      | MapLibre produced its first usable remote or local blank style.                                 |
+| `tm:first-system-paint`   | A render completed after the real document's representative overlay source loaded.              |
+| `tm:interactive`          | The real document is committed and map interactions are attached.                               |
+| `tm:service-worker-ready` | Workbox completed the essential editor-shell install. Public shares and embeds do not register. |
+
+The public share route has no local-storage milestones and deliberately has no
+service-worker milestone. The standalone embed uses its own entry point and
+does not register the editor service worker.
+
+## Anonymous field-sampling release check
+
+Before releasing a change to field sampling, verify the editor, full share,
+and embed all expose a keyboard-accessible Privacy link and that `/privacy`
+works without JavaScript. Confirm the page is in the sitemap but absent from
+the editor's eager import graph and service-worker precache. In a release-tagged
+build, GPC and each DNT signal must prevent observer construction; local,
+untagged, disabled, wrong-origin, and unsampled builds must not construct an
+observer either. Exercise accepted beacon, rejected beacon, thrown beacon, and
+failed keepalive paths without allowing an error to reach the page.
 
 ## Manual critical journeys
 

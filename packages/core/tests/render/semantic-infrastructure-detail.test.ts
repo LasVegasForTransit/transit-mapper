@@ -6,20 +6,30 @@ import type { TransitSystem, Way } from '../../src/model/system';
 import {
   buildFeatures,
   createFeatureBuildOperationCounts,
-  type ViewOptions,
+  type RenderViewOptions,
 } from '../../src/render/buildFeatures';
+import { renderPresentationForViewport } from '../../src/render/render-presentation';
 import { aService } from '../support/fixtures.test';
 
-const view = (zoom: number): ViewOptions => ({
-  viewMode: 'infrastructure',
-  visibleModes: new Set(),
-  visibleWayTypes: new Set(['road', 'bike', 'heavyRail', 'lightRail']),
-  zoom,
-  laneDetail: zoom >= 15,
-  bounds: [
+const view = (
+  zoom: number,
+  bounds: [[number, number], [number, number]] = [
     [-115.2, 36],
     [-115, 36.2],
   ],
+): RenderViewOptions => ({
+  viewMode: 'infrastructure',
+  visibleModes: new Set(),
+  visibleWayTypes: new Set(['road', 'bike', 'heavyRail', 'lightRail']),
+  presentation: {
+    ...renderPresentationForViewport({
+      center: [(bounds[0][0] + bounds[1][0]) / 2, (bounds[0][1] + bounds[1][1]) / 2],
+      zoom,
+      width: 1_440,
+      height: 900,
+    }),
+    bounds: { southwest: bounds[0], northeast: bounds[1] },
+  },
 });
 
 function fixture() {
@@ -88,7 +98,7 @@ function requiredWay(system: TransitSystem, source: string): Way {
   return way;
 }
 
-function featureId(properties: unknown): string | undefined {
+function renderedWayId(properties: unknown): string | undefined {
   if (!properties || typeof properties !== 'object' || !('id' in properties)) return undefined;
   return typeof properties.id === 'string' ? properties.id : undefined;
 }
@@ -99,12 +109,12 @@ function renderedIds(
   selection: { kind: string; id: string } | null = null,
 ) {
   return buildFeatures(system, selection, [], view(zoom)).ways.features.map((feature) =>
-    featureId(feature.properties),
+    renderedWayId(feature.properties),
   );
 }
 
 describe('semantic infrastructure detail', () => {
-  it('shows only imported arterials below zoom 11 while retaining hand-drawn and selected ways', () => {
+  it('uses viewport visibility rather than source provenance to choose overview corridors', () => {
     const system = fixture();
     const selectedLocal = requiredWay(system, 'osm:4');
     const ids = buildFeatures(
@@ -112,16 +122,16 @@ describe('semantic infrastructure detail', () => {
       { kind: 'way', id: selectedLocal.id },
       [],
       view(10),
-    ).ways.features.map((feature) => featureId(feature.properties));
+    ).ways.features.map((feature) => renderedWayId(feature.properties));
 
     expect(ids).toContain(requiredWay(system, 'osm:1').id);
-    expect(ids).toContain('hand-drawn');
-    expect(ids).toContain(selectedLocal.id);
-    expect(ids).not.toContain(requiredWay(system, 'osm:2').id);
-    expect(ids).not.toContain(requiredWay(system, 'osm:3').id);
+    expect(ids).toContain(requiredWay(system, 'osm:2').id);
+    expect(ids).toContain(requiredWay(system, 'osm:3').id);
+    expect(ids).not.toContain('hand-drawn');
+    expect(ids).not.toContain(selectedLocal.id);
   });
 
-  it('adds collectors at zoom 11 and in-bounds local streets as one centerline at zoom 13', () => {
+  it('keeps corridor identities stable while displayed scale changes', () => {
     const system = fixture();
     const collector = requiredWay(system, 'osm:2');
     const local = requiredWay(system, 'osm:3');
@@ -132,7 +142,7 @@ describe('semantic infrastructure detail', () => {
     expect(zoom13).not.toContain(requiredWay(system, 'osm:4').id);
   });
 
-  it('does not apply OpenStreetMap detail filtering or viewport culling to GTFS ways', () => {
+  it('culls remote GTFS geometry by the same viewport rule as every corridor', () => {
     const system = fixture();
     const gtfsWay: Way = {
       ...requiredWay(system, 'osm:4'),
@@ -142,10 +152,10 @@ describe('semantic infrastructure detail', () => {
     };
     system.ways.push(gtfsWay);
 
-    expect(renderedIds(system, 10)).toContain(gtfsWay.id);
+    expect(renderedIds(system, 10)).not.toContain(gtfsWay.id);
   });
 
-  it('keeps a transit service visible when low zoom hides its imported local street', () => {
+  it('keeps a transit service visible alongside its source-neutral corridor', () => {
     const system = fixture();
     const local = requiredWay(system, 'osm:3');
     const service = aService('local-bus', [
@@ -157,7 +167,7 @@ describe('semantic infrastructure detail', () => {
 
     const features = buildFeatures(system, null, [], metroView);
 
-    expect(features.ways.features.map((feature) => featureId(feature.properties))).not.toContain(
+    expect(features.ways.features.map((feature) => renderedWayId(feature.properties))).toContain(
       local.id,
     );
     expect(
@@ -167,6 +177,9 @@ describe('semantic infrastructure detail', () => {
     ).toBe(true);
   });
 
+  // This creates an import-scale document on purpose. The assertions below
+  // measure bounded candidate traversal; the test timeout only gives a
+  // parallel CI machine enough room to allocate that fixture.
   it('creates regional GeoJSON only for ways inside padded bounds at Las Vegas import scale', () => {
     const system = createEmptySystem();
     const [template] = osmElementsToWays([
@@ -203,21 +216,21 @@ describe('semantic infrastructure detail', () => {
       control: 'uncontrolled',
     }));
     const counts = createFeatureBuildOperationCounts();
-    const regional = view(13);
-    regional.bounds = [
+    const regional = view(13, [
       [-115.2, 36],
       [-115, 36.2],
-    ];
+    ]);
 
     const features = buildFeatures(system, null, [], regional, null, null, { counts });
 
-    // The 0.1-degree spatial buckets conservatively include their edge cells;
-    // fewer than 300 candidates is the hand-checked ceiling for this fixture.
-    expect(counts.featureTopologyWayVisitCount).toBeLessThan(300);
-    expect(features.ways.features).toHaveLength(121);
+    // The presentation envelope includes the renderer's edge guard, so the
+    // index admits adjacent 0.1-degree cells before exact culling. It must
+    // still avoid traversing the regional document.
+    expect(counts.featureTopologyWayVisitCount).toBeLessThan(500);
+    expect(features.ways.features).toHaveLength(counts.featureTopologyWayVisitCount);
 
     const detailCounts = createFeatureBuildOperationCounts();
     buildFeatures(system, null, [], view(15), null, null, { counts: detailCounts });
     expect(detailCounts.featureJunctionNodeVisitCount).toBeLessThan(300);
-  });
+  }, 15_000);
 });

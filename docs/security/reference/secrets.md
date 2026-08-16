@@ -15,8 +15,38 @@ is accurate as of today either way.
 | `CLOUDFLARE_ACCOUNT_ID` | GitHub repository variable      | Not a secret. An identifier, useless without a token                 |
 
 **There are no application secrets in production.** The Worker reads
-`SITE_URL` (a plain var) and the `ASSETS` and `SHARE_CREATE_LIMITER`
-bindings. Nothing else.
+`SITE_URL` (a plain var) plus platform bindings for assets, D1, rate limits,
+and the place-search coordinator. Rate-limit namespace ids are configuration,
+not credentials.
+
+## Anonymous performance data boundary
+
+`POST /api/performance-samples` accepts sampled loading timings, Core Web
+Vitals, encoded byte categories, coarse cache/service-worker/device/network
+states, the release build id, editor/share/embed surface, and a fixed
+capability bitset. It never accepts or stores share or document ids and names,
+URLs, origins, coordinates, content, input, IP addresses, or user-agent
+strings. D1 has no column that can hold those values and the Worker never
+stores the submitted JSON object.
+
+The browser constructs that allowlist only in release-tagged production builds
+on the configured live origin. A build-scoped session-storage value is only
+`0` or `1`; blocked storage uses page memory, and the random word is never
+persisted or sent. GPC and both browser DNT properties are evaluated before a
+`PerformanceObserver` exists. The public no-JavaScript privacy policy states
+the sampling rates, purpose, processor, seven-day raw and 90-day aggregate
+retention, recovery caveat, and exact never-collected categories.
+
+Cloudflare supplies `CF-Connecting-IP` to the Worker. That address is used
+transiently as the platform rate limiter's key (ten samples per minute) and is
+not copied into D1 or logs. Global Privacy Control (`Sec-GPC: 1`) and Do Not
+Track (`DNT: 1`) make the endpoint return before reading or storing the body.
+Storage errors are logged as operational failures but telemetry cannot fail a
+page-close request.
+
+Cloudflare necessarily handles request metadata to deliver and protect the
+site. That processor boundary is distinct from the application performance
+tables: the tables do not copy request IPs, headers, URLs, or raw user agents.
 
 Accounts will add exactly one, `GOOGLE_CLIENT_SECRET`, as a Wrangler
 secret. That design deliberately owns no signing key of its own — it uses

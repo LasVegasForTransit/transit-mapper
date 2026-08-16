@@ -1,9 +1,6 @@
 # Project structure
 
-TransitMapper is a pnpm workspace with a shared domain package, a browser
-editor, and an optional Cloudflare Worker. The project map follows those
-ownership boundaries. Paths are locators within a module, not the organizing
-principle of this reference.
+TransitMapper has a domain package, browser editor, and Cloudflare Worker.
 
 ## Workspace
 
@@ -57,43 +54,39 @@ globals in both the browser and workerd.
 
 `packages/core/src/model` defines saved systems, catalogs, service paths,
 validation, serialization, imports, routing, schematic layout, costs, and
-units. Its pure Way and Service transforms also reconcile imports for the GTFS
-Worker without pulling in Zustand. Web commands compose them into undoable
-edits. `gtfs-archive.ts` decodes and batches ZIP feeds before that transform.
+units. Pure transforms reconcile imports and preserve no-op identity; web
+commands compose them into undoable edits without importing Zustand.
 
-Focused transformation modules name the invariant they maintain. For example,
-`routing-edits.ts` owns routed Service insertion, return-path application, and
-infrastructure adoption; `way-endpoint-metadata.ts` remaps controls and turn
-restrictions when Ways split or merge; and `stop-reanchoring.ts` is the one
-boarding-point anchor-replacement and reprojection implementation shared by
-those workflows.
-
-`packages/core/src/model/line-service.ts` is the ownership boundary between
-public Lines and technical Services. It resolves Line membership, display
-labels, and mode summaries, and validates the one-way Line-to-Service relation
-when a document enters the model.
-
-Passenger places use two saved records and one derived relationship.
-`system/stop.ts` defines boarding points and their Way anchors;
-`system/station.ts` defines optional named places with boundaries and platforms;
-`Stop.stationId` owns containment. Service calls are derived from paths reaching
-Stops. Schema v16 and the old Station-record migration live in `serialize.ts`;
-`gtfsImport.ts` maps the GTFS parent-station hierarchy into the same model.
+Focused modules name the invariant they maintain: routing edits, endpoint
+metadata, and stop reanchoring each have one owner. Lines are public identities
+over technical Services. Stops are anchored boarding points; Stations are
+optional physical places containing Stops. Diagram layout is a pure facade
+returning one `DiagramLayoutResult`, with no MapLibre or editor dependency.
 
 #### Geometry
 
 `packages/core/src/geometry` derives lane centerlines, junction footprints,
-connector curves, and other street geometry from the domain model. These
-results are memoized but never persisted. See
+connector curves, and other street geometry from the domain model.
+`metric-plane.ts` and `metric-curves.ts` resolve a curved Way's local-meter
+centerline from optional per-point radius controls; the render presentation
+turns its final CSS-pixel error budget into the tessellation bound. The
+document stores the authored radius, never a sampled mesh. These results are
+memoized but never persisted. See
 [Geometry and routing](../../product/explanation/geometry-and-routing.md).
 
 #### Rendering
 
 `packages/core/src/render` projects a system into styled geographic features
-and portable SVG output. `packages/core/src/style` supplies catalog appearance
-and LVBT brand tokens without mixing presentation fields into the domain
-catalogs. The editor map, embed, exports, and social previews share this
-projection boundary so their representations remain consistent.
+and SVG. It owns displayed-size LOD, dependency and viewport indexes, stable
+identities, scene validation, and diffs. `RenderScene` separates visual and hit
+geometry and fixes paint order; the static resolver emits SVG paint directly.
+
+`SystemFeatures.stops` are boarding markers; physical Stations produce
+footprints, platforms, and handles. The historical `tm-stations` source name
+is translated only by `apps/web/src/map/system-feature-sources.ts`.
+`service-lane-assignments.ts` resolves a directional service run once, so its
+line, connector, and vehicle path agree. `packages/core/src/style` supplies
+appearance without mixing it into the domain catalog.
 
 #### Simulation
 
@@ -109,13 +102,16 @@ Worker, along with pure ownership and claim decisions. It does not perform
 HTTP requests or database writes. See
 [Sharing surfaces](../../product/explanation/sharing-surfaces.md).
 
+#### Performance sample contract
+
+`packages/core/src/performance/contract.ts` validates the sampled browser-to-Worker payload.
+
 #### Account groundwork
 
 `packages/core/src/auth` contains pure OAuth, PKCE, token, cookie, and
-return-path primitives. Account claiming and ownership policy also live in the
-sharing module. This groundwork is tested but is not connected to Worker
-routes, account tables, or the current editor; every live share remains
-anonymous and expiring.
+return-path primitives. Claiming and ownership policy live in the sharing
+module. This tested groundwork is not connected to routes, tables, or the
+editor; live shares remain anonymous and expiring.
 
 ### PWA updater
 
@@ -136,11 +132,10 @@ The organization-wide issue forms and pull request template live in
 copy, because any local issue-template directory would shadow the complete
 organization default.
 
-The pinned `lvbt-contributions` plugin under `plugins/` supplies one portable
-Agent Skill, a small creation helper, and harness-specific action guards.
-`.lvbt/repository-tooling.json` records the release and checksum;
-`check:repository-tooling` refuses local drift. This is repository tooling,
-not an application package, and no production code imports it.
+The pinned `lvbt-contributions` plugin supplies the portable contribution
+skill, creation helper, and action guards. `.lvbt/repository-tooling.json`
+records its release and checksum; `check:repository-tooling` rejects drift.
+Production code does not import this tooling.
 
 ### ESLint baseline
 
@@ -191,36 +186,15 @@ updater for activation state.
 `apps/web/src/editor` owns the Zustand store, undo history, grouped editor
 commands, selection, keyboard routing, and gesture transactions.
 
-`apps/web/src/editor/store.ts` is a thin public barrel. `create-editor-store.ts`
-creates one vanilla Zustand store and its command groups. `EditorStore` exposes
-only reads, subscription, and stable `commands`—not raw `setState`. Its
-`EditorState` snapshot is data-only, so command access creates no reactive
-dependency.
-
-`apps/web/src/editor/EditorProvider.tsx` supplies that store to React.
-`useEditor(selector)` subscribes to data, `useEditorCommands()` reads commands,
-and `useEditorStore()` supports orchestration that needs fresh event-boundary
-reads or subscriptions. The provider accepts an injected real store for tests
-and embedded editors; there is no singleton or mock-only state path.
-
-`apps/web/src/editor/store` owns contracts, composition, runtime, history,
-internal operations, and commands. Only the runtime writes Zustand. Each atomic
-content commit applies loading/read-only guards, prunes invalid lane and
-transient references, stamps once, and records history in the same write.
-Viewport persistence bypasses timestamps and history; undo and redo preserve
-the current viewport. Read-only documents still allow transient tools and
-selection. Commands use the runtime, never sibling groups; dependency-cruiser
-enforces that direction and their import allowlist.
-
-Installing a document resets its predecessor's selection, focus, drawing,
-routing, group, Service-addition, and Stop-name workflows. Preferences for
-future Ways, Services, and Facilities remain with the editor instance.
-
-Application-independent domain calculations live in core. Pure transforms
-preserve no-op identity and leave timestamps and history to the runtime.
-Workers return core-built candidates for editor commands to accept or reject.
-Shared editor workflows live under `store/internal-operations`, avoiding
-command-to-command calls.
+`apps/web/src/editor/store.ts` is a public barrel over one vanilla Zustand
+store and stable command groups. Its reactive snapshot is data only; consumers
+read state, subscribe, or invoke commands, never raw `setState`. The runtime
+is the only writer. An atomic commit applies guards, prunes invalid transient
+references, stamps once, and records history in the same write. Viewport
+persistence bypasses history, while read-only documents still permit tools and
+selection. Commands use core transforms and internal operations, never sibling
+command groups. Installing a document clears its transient editor state but
+retains preferences for future drafts.
 
 `apps/web/src/editor/pointerIntent.ts` resolves a press into an operation from
 its target and modifier channels alone, without browser or map state, so
@@ -230,21 +204,42 @@ tolerances for each pointer precision. `apps/web/src/camera` holds the live map
 camera outside the saved system. Domain mutations pass through grouped editor
 commands; map and UI modules do not modify records directly.
 
-`apps/web/src/ui/sidebarOutline.ts` is the pure outline projection boundary.
-It derives public Line → technical Service → Service-call rows and separately
-projects saved Stops, Stations, grouped named infrastructure, and Facilities.
-`SidebarPanel.tsx` owns per-view search, expansion, bounded rendering, roving
-keyboard focus, and section-level failure recovery. Stop and Station editing
-are separate command and inspector surfaces: Stop commands manage boarding
-points and Station membership; Station commands manage passenger-place
-boundaries, platforms, and contained Stops.
+`apps/web/src/ui/sidebarOutline.ts` is the pure outline projection boundary;
+`SidebarPanel.tsx` owns search, expansion, bounded rendering, keyboard focus,
+and recovery. Stop editing manages boarding points and membership; Station
+editing manages physical passenger-place geometry.
 
 #### Map rendering
 
 `apps/web/src/map` adapts core rendering output to MapLibre sources, layers,
-pointer interaction, and canvas-backed exports. It may hold transient previews
-for continuous gestures, but committed geometry continues to come from the
-store and core projectors.
+pointer interaction, and exports. `MapCanvas.tsx` translates browser/editor
+events into calls on one `LiveMapRenderer`; committed geometry still comes from
+the store and core projectors.
+
+| Modules                                                                                                                          | Responsibility                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `render-presentation.ts`, `camera-render-preload.ts`                                                                             | Describe display scale and reusable camera coverage.                                                                                                                                                                                                                  |
+| `live-map-renderer.ts`                                                                                                           | Own accepted projection, scene publication, physical banks, and recovery. Start lifecycle changes here.                                                                                                                                                               |
+| `document-projection.ts`, `committed-feature-projection.ts`, `feature-projection-worker*.ts`, `resumable-feature-projection*.ts` | Prepare dependency-scoped requests, build detached features in the persistent Worker, and cancel superseded generations.                                                                                                                                              |
+| `scene-draft*.ts`, `accepted-scene-state.ts`, `scene-source-state.ts`, `persistent-render-source-state.ts`                       | Normalize stable IDs and compute source-local changes without publishing partial work.                                                                                                                                                                                |
+| `scene-publication*.ts`, `renderer-source-publication.ts`, `accepted-scene-store.ts`, `render-scene-source-updater.ts`           | Build a private scene, then own MapLibre source mutation, load observation, bank activation, and accepted CPU publication as one lifecycle.                                                                                                                           |
+| `source-bank*.ts`, `accepted-scene-recovery.ts`                                                                                  | Prewarm two physical banks, switch visual/hit ownership, and roll back failures.                                                                                                                                                                                      |
+| `diagram-layout-worker*.ts`                                                                                                      | Run and retain revision-keyed `DiagramLayoutResult` values outside the UI thread. The result carries the renderable schematic system together with node, stop, station, and named-corridor label anchors, so later Diagram consumers do not need to reconstruct them. |
+| `editor-feature-state.ts`                                                                                                        | Own paint-only selection, hover, halos, and route focus.                                                                                                                                                                                                              |
+| `editor-overlays.ts`, `render-visibility.ts`                                                                                     | Own small editor geometry and mode/type filters outside committed projection.                                                                                                                                                                                         |
+
+`feature-projection-worker.ts` is the browser client and
+`feature-projection-worker-entry.ts` the worker-only CPU endpoint. Their
+protocol contains serializable document and presentation facts, never MapLibre
+objects or a store. `worker-feature-projection-submission.ts` cancels stale
+replies before source-bank publication. Fitted read-only maps use the same
+worker and presentation facts as SVG.
+
+Scoped scenes retain a stable source base and small deltas. Static map, embed,
+export, and SVG share scene normalization. Handles, termini, and movement
+guides remain unbanked editor sources; camera changes inside the accepted
+envelope reuse the committed scene. Junction surfaces, traffic controls,
+markings, and lane-continuous services derive from the same resolved geometry.
 
 #### UI
 
@@ -272,15 +267,9 @@ detents, and the four properties that tell the map what the chrome covers.
 
 #### Device
 
-`apps/web/src/device` reads what the browser reports about the machine it is
-running on. `media-query.ts` is the single `matchMedia` primitive; `capabilities.ts`
-exposes viewport size, pointer precision, and hover as independent answers, so
-layout and input tolerance each adapt on their own evidence. Size, not width:
-the layout condition asks about height too, because a phone held sideways is
-wide and short. It depends on
-nothing else in the application, and the user interface, map, theme, and
-installation modules all read it. A difference that is only visual belongs in a
-CSS media query instead, beside the rules it coordinates with.
+`apps/web/src/device` exposes viewport size, pointer precision, and hover as
+independent browser facts. Layout and input tolerance use the relevant fact;
+purely visual differences stay in nearby CSS media queries.
 
 #### Storage
 
@@ -291,24 +280,16 @@ storage engine.
 
 #### Imports and networking
 
-`apps/web/src/import` coordinates external data and progress.
-`import-osm-network.ts` owns the main-thread Promise and cancellation,
-`osm-import-protocol.ts` the structured-clone boundary, and
-`osm-import-worker.ts` runs core's OpenStreetMap work. Every outcome terminates the
-short-lived Worker. GTFS follows the same direction: Workers return core-built
-candidates; commands verify the target document and commit atomically.
-
-`apps/web/src/network` owns browser request scheduling and failure behavior,
-including `useOnlineStatus`, which subscribes to the browser's own connectivity
-signal so a failure can name the network as its cause. Classification and model
-construction remain in core; the web import modules own browser capabilities,
-cancellation, and interaction continuity.
+`apps/web/src/import` owns browser requests, progress, cancellation, and the
+structured-clone boundary; short-lived Workers return core-built candidates for
+commands to accept atomically. `apps/web/src/network` owns browser request
+scheduling and connectivity state. Classification and model construction stay
+in core.
 
 #### Simulation host
 
-`apps/web/src/sim` supplies the animation clock, lifecycle, and MapLibre
-updates for vehicle positions calculated by the core simulation kernel. It
-does not own timetable or motion policy.
+`apps/web/src/sim` hosts the animation clock and MapLibre updates for positions
+calculated by core; it owns neither timetable nor motion policy.
 
 #### Sharing and embedding
 
@@ -319,35 +300,33 @@ contracts so the editor, external exports, and embed agree on the same system.
 
 #### Platform integration
 
-`apps/web/src/pwa` owns install prompting, storage protection, display-mode
-detection, and editor-only service-worker integration. Application identity
-is generated from shared icon geometry into browser metadata, stable favicon
-and Apple surfaces, and content-versioned manifest assets. The generation and
-platform export procedure is documented in
-[Update application icons](../how-to/update-application-icons.md).
+`apps/web/src/pwa` owns installation and editor-only service-worker behavior.
+Application identity is generated into browser metadata and manifest assets;
+see [Update application icons](../how-to/update-application-icons.md).
 
 #### Build identity
 
-The About dialog reads one immutable build-information object injected by
-Vite. Its version and repository come from the root manifest, its copyright
-comes from the license, and its revision comes from the release environment or
-Git. Contributor roles and platform credits remain in one curated web module
-because neither the manifest nor Git history can express them reliably.
-
-The root build launcher resolves the revision and dirty-tree state before
-Turborepo starts, then includes those values in the web build's cache key. Vite
-records the time only when it creates an artifact: a cache hit reuses that
-artifact and its original timestamp rather than relabelling old output as a
-new build. Release builds also validate that the release tag agrees with the
-manifest version. A source archive without Git remains buildable, but the
-dialog reports that its revision is unavailable instead of inventing one.
+The About dialog reads one immutable Vite-injected build record. The launcher
+includes revision and dirty state in the build cache key; a source archive
+without Git reports that its revision is unavailable rather than inventing one.
 
 #### Performance
 
-`apps/web/src/perf` owns measurable performance policy, fixtures, reports, and
-precache validation that can run without browser automation. Browser traces
-and production-output checks consume that policy but do not redefine its
-budgets.
+`apps/web/src/perf` owns performance policy, fixtures, reports, precache
+validation, and measurement-only renderer counters. Browser traces consume
+that policy without redefining its budgets. `apps/web/scripts/renderer-capture`
+owns the Playwright driver, deterministic basemap, and contact sheets. Its
+camera seam waits for projection and final MapLibre paint, but never enters the
+public application graph. Additive acceptance suites carry their own IDs,
+provenance, hashes, and assertions without changing the fixed baseline corpus.
+
+`apps/web/src/pwa/adaptive-cache-contract.ts` owns optional assets and offline
+readiness. The client obeys network, quota, and 64 KiB limits.
+
+`field-sampling.ts` checks privacy, release, origin, and sampling before
+loading the URL-free client.
+
+Vite builds the editor, embed, and no-script privacy page.
 
 ### Worker
 
@@ -357,18 +336,21 @@ and validation but never imports browser or editor modules.
 
 #### HTTP delivery
 
-The Worker routes resource-oriented API requests, share pages, embeds,
-oEmbed responses, static assets, and scheduled expiry work. Stored text enters
-HTML through `HTMLRewriter`; routing code does not concatenate untrusted values
-into markup.
+The Worker routes API requests, shares, embeds, static assets, sampled reports,
+and maintenance. Stored text enters HTML through `HTMLRewriter`.
+
+`POST /api/performance-samples` accepts 8 KiB of same-origin JSON, honors
+GPC/DNT, validates it, and stores allowlisted columns.
 
 #### Persistence
 
-D1 stores shared systems and preview metadata. Migrations in
-`apps/worker/src/migrations` are append-only external contracts applied by
-Wrangler in filename order. Anonymous shares expire; null expiry is reserved
-for future account ownership and is not an unset value. See
+D1 stores shared systems, preview metadata, and short-lived sampled data.
+Migrations are append-only and Wrangler applies them in filename order. See
 [Operations](../../operations/how-to/operations.md).
+
+`performance-samples.ts` owns ingestion; `performance-maintenance.ts` owns
+daily summaries and retention. Raw rows expire after seven days and aggregates
+after 90.
 
 ## Repository support
 
@@ -419,4 +401,10 @@ release and confirm that the public site serves its fingerprinted entry chunk.
 The web application's browser scenarios, committed baselines, and production
 verification tools live beside that application. Repository commands
 coordinate them with builds and checks, while the policy they enforce remains
-owned by the web performance module.
+owned by the web performance module. Renderer evidence is generated under the
+ignored `apps/web/artifacts/renderer/` tree so exploratory phases do not add
+binary weight to the repository. The capture manifest and contact sheet are
+the review boundary. Successful post-baseline phases require current source
+and deterministic-basemap provenance; `01-lod` also requires its complete
+current-only acceptance appendix. Approved final images may later be promoted
+explicitly to tracked visual-regression fixtures.

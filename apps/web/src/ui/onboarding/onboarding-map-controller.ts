@@ -1,6 +1,10 @@
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
-import type { SystemFeatures, ViewOptions } from '@transitmapper/core/render/buildFeatures';
+import type {
+  RenderViewOptions,
+  SystemFeatures,
+  ViewOptions,
+} from '@transitmapper/core/render/buildFeatures';
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap } from 'maplibre-gl';
 import {
   attachInitialStyleFallback,
@@ -8,7 +12,6 @@ import {
 } from '../../map/initialStyleFallback';
 import { setExportFeatureData } from '../../map/export/exportLayerSetup';
 import {
-  buildFeatures,
   registerMapIcons,
   SRC_PREVIEW,
   SRC_SERVICES,
@@ -16,6 +19,8 @@ import {
   SRC_VEHICLES,
   SRC_WAYS,
 } from '../../map/layers';
+import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
+import { renderPresentationForFittedMap } from '../../map/fitted-map-presentation';
 import { basemapStyleForScheme, layerSpecsForScheme } from '../../map/mapTheme';
 import type { ColorScheme } from '../../theme/systemColorScheme';
 import {
@@ -312,8 +317,16 @@ function initializeScene(
   }
   addProductionLayers(map, options.colorScheme);
 
-  const baseFeatures = buildFeatures(systems.baseSystem, null, [], systems.resolvedView);
-  const completeFeatures = buildFeatures(systems.completeSystem, null, [], systems.resolvedView);
+  // Fit before projecting. The render presentation is derived from the
+  // camera, so building against an unfitted viewport resolves the scene at a
+  // detail tier for an extent nobody is looking at.
+  fitScene(map);
+  const renderView: RenderViewOptions = {
+    ...systems.resolvedView,
+    presentation: renderPresentationForFittedMap(map),
+  };
+  const baseFeatures = buildFeatures(systems.baseSystem, null, [], renderView);
+  const completeFeatures = buildFeatures(systems.completeSystem, null, [], renderView);
   setExportFeatureData(map, baseFeatures);
   const presentation = onboardingScenePresentation(options.scene);
   if (presentation.selectedWayId) {
@@ -322,7 +335,6 @@ function initializeScene(
   const markers = usingLocalContext ? addPlaceMarkers(map) : [];
   const drawCursor = options.scene === 'draw' ? addDrawCursor(map) : undefined;
   if (drawCursor) markers.push(drawCursor);
-  fitScene(map);
   const stopAnimation = startSceneAnimation({
     map,
     scene: options.scene,

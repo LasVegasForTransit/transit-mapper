@@ -32,6 +32,10 @@ export function attachInitialStyleFallback(
   const fallback = () => {
     if (settled || fallbackRequested) return;
     fallbackRequested = true;
+    // A fired browser timeout can have its numeric handle reused before the
+    // local style emits style.load. Clear our reference now so that later
+    // cleanup cannot cancel an unrelated renderer task with the same handle.
+    clearTimer();
     options.onFallback();
     map.setStyle(localBlankStyleForScheme(options.scheme), { diff: false });
   };

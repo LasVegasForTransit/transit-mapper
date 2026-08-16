@@ -1,0 +1,12 @@
+# These conventional commit types are shared across LVBT repositories.
+build
+chore
+ci
+docs
+feat
+fix
+perf
+refactor
+revert
+style
+test

@@ -4,26 +4,38 @@ import { wholeLeg } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import {
   createFeatureBuildOperationCounts,
-  type ViewOptions,
+  type RenderViewOptions,
 } from '@transitmapper/core/render/buildFeatures';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
+import { planRenderProjectionScope } from '@transitmapper/core/render/render-projection-scope';
+import { aPattern, aRoad, aService, aSystem } from '@transitmapper/core/testing/fixtures';
 import {
   SRC_FACILITIES,
   SRC_FOOTPRINTS,
   SRC_PHYSICAL_HANDLES,
   SRC_PLATFORMS,
   SRC_SERVICE_TERMINI,
+  SRC_SERVICES,
   SRC_STATIONS,
 } from '../../src/map/layers';
 import { buildFeaturesForSources } from '../../src/map/sourceFeatureProjection';
 import { ALL_SYSTEM_FEATURE_SOURCES } from '../../src/map/sourceUploadPlan';
 
-const diagramView: ViewOptions = {
+const presentation = renderPresentationForViewport({
+  center: [-115.16, 36.14],
+  zoom: 8,
+  width: 1_440,
+  height: 900,
+});
+
+const diagramView: RenderViewOptions = {
   viewMode: 'diagram',
   visibleModes: new Set(['bus']),
   visibleWayTypes: new Set(['road']),
+  presentation,
 };
 
-const networkView: ViewOptions = {
+const networkView: RenderViewOptions = {
   ...diagramView,
   viewMode: 'network',
 };
@@ -80,10 +92,42 @@ function operationCounts() {
     diagramTopologyCacheHitCount: 0,
     diagramStopBuildCount: 0,
     diagramStopCacheHitCount: 0,
+    rendererCandidateFeatureCount: 0,
+    rendererGeneratedFeatureCount: 0,
+    rendererGeneratedVertexCount: 0,
   };
 }
 
 describe('MapLibre source feature projection', () => {
+  it('records source-scoped candidates and output dimensions inside projection', () => {
+    const counts = operationCounts();
+    const system = fixture();
+    system.services = [
+      {
+        id: 'line',
+        name: 'Line',
+        modeId: 'bus',
+        path: { id: 'line', sections: [{ kind: 'shared', legs: [wholeLeg('way')] }] },
+      },
+    ];
+    system.lines = [{ id: 'line', name: 'Line', color: '#e4572e', serviceIds: ['line'] }];
+
+    buildFeaturesForSources({
+      system,
+      selection: null,
+      handleWayIds: [],
+      view: networkView,
+      sourceIds: [SRC_STATIONS],
+      counts,
+    });
+
+    expect(counts).toMatchObject({
+      rendererCandidateFeatureCount: 1,
+      rendererGeneratedFeatureCount: 1,
+      rendererGeneratedVertexCount: 1,
+    });
+  });
+
   it('does not compute schematic topology for Diagram sources that are always hidden', () => {
     const counts = operationCounts();
 
@@ -240,5 +284,65 @@ describe('MapLibre source feature projection', () => {
     expect(counts.featureFacilityPassCount).toBe(1);
     expect(counts.featureWayLabelPassCount).toBe(1);
     expect(counts.diagramTopologyBuildCount + counts.diagramTopologyCacheHitCount).toBe(1);
+  });
+
+  it('forwards an entity scope without counting unrelated service corridors', () => {
+    const west = aRoad('west', [
+      [-115.2, 36.14],
+      [-115.18, 36.14],
+    ]);
+    const east = aRoad('east', [
+      [-115.18, 36.14],
+      [-115.16, 36.14],
+    ]);
+    const unrelated = aRoad('unrelated', [
+      [-115.2, 36.18],
+      [-115.16, 36.18],
+    ]);
+    const previous = aSystem({
+      ways: [west, east, unrelated],
+      services: [
+        aService('main', [aPattern('main-pattern', [west, east], [west.id, east.id])]),
+        aService('unrelated', [aPattern('unrelated-pattern', [unrelated], [unrelated.id])]),
+      ],
+      nodes: [
+        {
+          id: 'junction',
+          coord: west.points[1],
+          refs: [
+            { wayId: west.id, pointIndex: 1 },
+            { wayId: east.id, pointIndex: 0 },
+          ],
+        },
+      ],
+    });
+    const next = {
+      ...previous,
+      ways: previous.ways.map((way) =>
+        way.id === west.id
+          ? { ...way, points: [[-115.201, 36.141], way.points[1]] as typeof way.points }
+          : way,
+      ),
+    };
+    const projection = planRenderProjectionScope(previous, next);
+    expect(projection.kind).toBe('scoped');
+    if (projection.kind !== 'scoped') throw new Error('expected scoped projection');
+    const counts = operationCounts();
+
+    buildFeaturesForSources({
+      system: next,
+      selection: null,
+      handleWayIds: [],
+      view: networkView,
+      sourceIds: [SRC_SERVICES],
+      projectionScope: projection.scope,
+      counts,
+    });
+
+    expect(counts).toMatchObject({
+      featureTopologyWayVisitCount: 2,
+      featureServiceWayVisitCount: 2,
+      rendererCandidateFeatureCount: 4,
+    });
   });
 });

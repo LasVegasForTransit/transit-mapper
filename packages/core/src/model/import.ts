@@ -777,6 +777,7 @@ const CONTROL_RANK: Record<NodeControl, number> = {
   levelCrossing: 4,
   signal: 3,
   stop: 2,
+  yield: 1.5,
   roundabout: 1,
   uncontrolled: 0,
 };
@@ -883,7 +884,7 @@ function turnRestrictionsFrom(
     const from = el.members.find((m) => m.role === 'from' && m.type === 'way');
     const to = el.members.find((m) => m.role === 'to' && m.type === 'way');
     const via = el.members.find((m) => m.role === 'via');
-    if (!from || !to || !via || via.type !== 'node') continue;
+    if (!from || !to || via?.type !== 'node') continue;
 
     const fromWay = wayByOsmId.get(from.ref);
     const toWay = wayByOsmId.get(to.ref);
@@ -967,7 +968,7 @@ export function osmElementsToNetwork(
     // el.geometry[i], which became way.points[i]. A response where those
     // lengths disagree can't be aligned, so it contributes geometry but no
     // refs rather than mismatched ones.
-    if (!el.nodes || el.nodes.length !== points.length) continue;
+    if (el.nodes?.length !== points.length) continue;
     osmNodesByWayId.set(way.id, { way, osmNodes: el.nodes });
     // A roundabout is a way in OSM, not a node, so its junctions inherit the
     // control from the circulatory way they sit on.

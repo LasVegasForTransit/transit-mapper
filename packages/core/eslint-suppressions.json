@@ -1,22 +1,16 @@
 {
   "src/geometry/junctions.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 3
+      "count": 2
     },
     "complexity": {
-      "count": 2
+      "count": 1
     },
     "sonarjs/cognitive-complexity": {
       "count": 3
     }
   },
   "src/geometry/streets.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-params": {
-      "count": 1
-    },
     "sonarjs/cognitive-complexity": {
       "count": 2
     }
@@ -28,17 +22,6 @@
   },
   "src/model/components.ts": {
     "@typescript-eslint/no-dynamic-delete": {
-      "count": 1
-    }
-  },
-  "src/model/diagramLayout.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
-    },
-    "complexity": {
-      "count": 1
-    },
-    "sonarjs/cognitive-complexity": {
       "count": 1
     }
   },
@@ -103,11 +86,6 @@
       "count": 2
     }
   },
-  "src/model/geo/wayPath.ts": {
-    "max-params": {
-      "count": 1
-    }
-  },
   "src/model/gtfsImport.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
@@ -148,9 +126,6 @@
     },
     "@typescript-eslint/prefer-nullish-coalescing": {
       "count": 1
-    },
-    "@typescript-eslint/prefer-optional-chain": {
-      "count": 2
     },
     "complexity": {
       "count": 4
@@ -220,7 +195,7 @@
   },
   "src/model/serialize.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 5
+      "count": 2
     },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 1
@@ -287,14 +262,8 @@
     }
   },
   "src/render/buildFeatures.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "complexity": {
-      "count": 6
-    },
-    "max-depth": {
-      "count": 6
+      "count": 1
     },
     "max-lines": {
       "count": 1
@@ -303,18 +272,13 @@
       "count": 1
     },
     "max-params": {
-      "count": 7
+      "count": 1
     },
-    "sonarjs/cognitive-complexity": {
-      "count": 4
-    }
-  },
-  "src/render/featureMemo.ts": {
     "sonarjs/cognitive-complexity": {
       "count": 1
     }
   },
-  "src/render/mergeServiceLines.ts": {
+  "src/render/featureMemo.ts": {
     "sonarjs/cognitive-complexity": {
       "count": 1
     }

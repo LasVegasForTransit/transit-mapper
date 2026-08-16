@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy · TransitMapper</title>
+    <meta
+      name="description"
+      content="How TransitMapper handles anonymous performance measurements and shared maps."
+    />
+    <link rel="canonical" href="%VITE_SITE_URL%/privacy" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: 'Public Sans', system-ui, sans-serif;
+        line-height: 1.55;
+        color: #202124;
+        background: #f7f4ec;
+      }
+      body {
+        margin: 0;
+      }
+      main {
+        box-sizing: border-box;
+        width: min(100% - 2rem, 46rem);
+        margin: 0 auto;
+        padding: 3rem 0 5rem;
+      }
+      h1,
+      h2 {
+        line-height: 1.2;
+      }
+      h1 {
+        margin-bottom: 0.25rem;
+      }
+      h2 {
+        margin-top: 2.25rem;
+      }
+      a {
+        color: #9e2d0d;
+        text-underline-offset: 0.15em;
+      }
+      .effective {
+        margin-top: 0;
+        color: #555851;
+      }
+      footer {
+        margin-top: 3rem;
+        border-top: 1px solid #a4a59e;
+        padding-top: 1rem;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          color: #e6e6df;
+          background: #111310;
+        }
+        a {
+          color: #ffb59f;
+        }
+        .effective {
+          color: #c6c7c0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p><a href="/">TransitMapper</a></p>
+        <h1>Privacy</h1>
+        <p class="effective">Effective <time datetime="2026-08-13">August 13, 2026</time></p>
+      </header>
+
+      <p>
+        TransitMapper is operated by
+        <a href="https://lasvegasfortransit.org/">Las Vegans for Better Transit (LVBT)</a>. This
+        page explains the limited data used to run shared maps and to learn whether the app is fast
+        and reliable.
+      </p>
+
+      <h2>Anonymous performance samples</h2>
+      <p>
+        TransitMapper samples 1% of ordinary visits. For the first 24 hours after a release, it
+        samples 5% so problems in a new version can be found quickly. The choice is stable only for
+        that browser tab and build. It uses no visitor or device identifier.
+      </p>
+      <p>A sampled report may contain only:</p>
+      <ul>
+        <li>
+          the public release build and whether the visit used the editor, a shared map, or an embed;
+        </li>
+        <li>coarse loading phase timings and LCP, CLS, and INP performance measurements;</li>
+        <li>categorized byte totals, without resource URLs;</li>
+        <li>cache and service-worker state;</li>
+        <li>coarse device and network tiers; and</li>
+        <li>eight yes-or-no browser capability checks packed into one number.</li>
+      </ul>
+      <p>
+        INP contains the interaction duration only. It does not contain what someone typed, clicked,
+        touched, or selected. These reports are used only to improve TransitMapper's speed and
+        reliability. They are not used for advertising, sold, shared for cross-site tracking, or
+        used to build profiles.
+      </p>
+
+      <h2>What performance reports never contain</h2>
+      <p>
+        We never collect document or share IDs, document or system names, routes, stations,
+        coordinates, geometry, resource or page URLs, map content, typed content, clicks or other
+        inputs, account IDs, a raw user-agent string, a raw IP address, or a persistent identifier.
+      </p>
+
+      <h2>Your privacy signals</h2>
+      <p>
+        Global Privacy Control (GPC) or Do Not Track (DNT) set to <code>1</code> opts the visit out
+        before performance observers or sampling begin. The server checks the corresponding request
+        signals again before reading a report.
+      </p>
+
+      <h2>Hosting, storage, and retention</h2>
+      <p>
+        Cloudflare hosts TransitMapper, provides security and rate limiting, and processes the D1
+        database as LVBT's service provider. Cloudflare necessarily processes request metadata, such
+        as an IP address, to deliver and protect a request. TransitMapper's performance tables do
+        not copy that metadata. Read
+        <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's privacy policy</a> for
+        Cloudflare's own practices.
+      </p>
+      <p>
+        Raw performance rows are kept for seven days after a successful daily rollup. Daily
+        aggregates are kept for 90 days. Cloudflare D1 Time Travel may retain restorable database
+        history beyond an ordinary deletion. If LVBT restores an older database during recovery, the
+        normal retention job runs again to clean up restored performance rows that have expired.
+      </p>
+      <p>
+        Shared-map data is stored in D1 to provide a link someone explicitly creates. A working copy
+        remains in that person's browser. Performance sampling never copies the shared map or its
+        identity into a performance report.
+      </p>
+
+      <h2>Questions and source</h2>
+      <p>
+        Contact LVBT through the <a href="https://lasvegasfortransit.org/">LVBT home page</a> with
+        privacy questions. TransitMapper is open source; the
+        <a href="https://github.com/LasVegasForTransit/transit-mapper">source code</a> shows the
+        report contract and server handling.
+      </p>
+
+      <footer><a href="/">Return to TransitMapper</a></footer>
+    </main>
+  </body>
+</html>

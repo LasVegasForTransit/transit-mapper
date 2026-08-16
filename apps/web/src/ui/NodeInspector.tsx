@@ -34,8 +34,17 @@ const CONTROL_OPTIONS: [NodeControl, string][] = [
   ['uncontrolled', 'None'],
   ['signal', 'Signal'],
   ['stop', 'Stop'],
+  ['yield', 'Yield'],
   ['roundabout', 'Roundabout'],
+  ['levelCrossing', 'Level crossing'],
 ];
+
+// A whole-node control describes the junction itself. An approach override
+// describes only what a driver encounters, so roundabouts and rail crossings
+// remain node-level concepts instead of becoming nonsensical per-arm choices.
+const APPROACH_CONTROL_OPTIONS = CONTROL_OPTIONS.filter(
+  ([value]) => value !== 'roundabout' && value !== 'levelCrossing',
+);
 
 const TURN_GLYPH: Record<Exclude<TurnClass, 'uturn'>, string> = {
   left: '←',
@@ -105,6 +114,14 @@ function targetLane(
   if (turn === 'right') return outbound[outbound.length - 1];
   const fromRight = inboundCount - 1 - inboundIndex;
   return outbound[Math.max(0, outbound.length - 1 - fromRight)];
+}
+
+interface TurnToggle {
+  inArm: JunctionArm;
+  lane: LaneSpec;
+  laneIndex: number;
+  inboundCount: number;
+  turn: Exclude<TurnClass, 'uturn'>;
 }
 
 export function NodeInspector({ id }: NodeInspectorProps) {
@@ -193,13 +210,7 @@ export function NodeInspector({ id }: NodeInspectorProps) {
       : byAngle;
   };
 
-  const toggleTurn = (
-    inArm: JunctionArm,
-    lane: LaneSpec,
-    laneIndex: number,
-    inboundCount: number,
-    turn: Exclude<TurnClass, 'uturn'>,
-  ) => {
+  const toggleTurn = ({ inArm, lane, laneIndex, inboundCount, turn }: TurnToggle) => {
     const targets = turnTargets(inArm, lane, turn);
     if (targets.length === 0) return;
     const targetWayIds = new Set(targets.map((a) => a.wayId));
@@ -295,7 +306,15 @@ export function NodeInspector({ id }: NodeInspectorProps) {
                                 ? `${turn} turn restricted`
                                 : `${turn} turn`
                             }
-                            onClick={() => toggleTurn(arm, lane, i, inbound.length, turn)}
+                            onClick={() =>
+                              toggleTurn({
+                                inArm: arm,
+                                lane,
+                                laneIndex: i,
+                                inboundCount: inbound.length,
+                                turn,
+                              })
+                            }
                           >
                             {TURN_GLYPH[turn]}
                           </button>
@@ -391,7 +410,7 @@ export function NodeInspector({ id }: NodeInspectorProps) {
                       role="group"
                       aria-label={`${wayLabel(way)} traffic control`}
                     >
-                      {CONTROL_OPTIONS.map(([value, label]) => (
+                      {APPROACH_CONTROL_OPTIONS.map(([value, label]) => (
                         <button
                           key={value}
                           className={`chip ${effective === value ? 'active' : ''}`}

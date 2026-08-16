@@ -1,95 +1,154 @@
-// Regression test for a line that reads as one continuous route but rendered
-// as one disconnected offset copy per way at a bend — see mergeServiceLines.ts
-// for the mechanism (line-offset is mitered per-feature, not across a way
-// boundary).
+// Service paint remains corridor-owned so an incremental projection can
+// replace one way without erasing an adjacent way's unchanged fragment.
+
+import type { Feature } from 'geojson';
 import { describe, expect, it } from 'vitest';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '../../src/model/catalog';
 import { wholeLeg, wholeLegs, oneSection } from '../../src/model/geo';
 import { wayById } from '../../src/model/geo/wayPath';
-import { aRoad, aService, aStation, aStop, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
 import type { Pattern, Service } from '../../src/model/system';
-import { buildFeatures, type ViewOptions } from '../../src/render/buildFeatures';
+import { buildFeatures, type RenderViewOptions } from '../../src/render/buildFeatures';
+import {
+  OVERVIEW_TEST_PRESENTATION,
+  STREET_TEST_PRESENTATION,
+} from '../support/render-presentation.test';
 
-const NETWORK_VIEW: ViewOptions = {
+const NETWORK_VIEW: RenderViewOptions = {
   viewMode: 'network',
   visibleModes: new Set(MODE_ORDER),
   visibleWayTypes: new Set(WAY_TYPE_ORDER),
+  presentation: OVERVIEW_TEST_PRESENTATION,
 };
 
-const INFRASTRUCTURE_VIEW: ViewOptions = {
-  ...NETWORK_VIEW,
-  viewMode: 'infrastructure',
-};
-
-describe('buildFeatures passenger places', () => {
-  it('renders Stop markers separately from Station infrastructure', () => {
-    const stop = aStop('platform', [-115.17, 36.12], undefined, { stationId: 'central' });
-    const station = aStation('central', [-115.17, 36.12], {
-      name: 'Central Station',
-      footprint: [
-        [-115.171, 36.119],
-        [-115.169, 36.119],
-        [-115.169, 36.121],
-      ],
-    });
-    const features = buildFeatures(
-      aSystem({ stops: [stop], stations: [station] }),
-      null,
-      [],
-      INFRASTRUCTURE_VIEW,
-    );
-
-    expect(
-      features.stops.features.map((feature) => {
-        const id: unknown = feature.properties?.id;
-        return typeof id === 'string' ? id : undefined;
-      }),
-    ).toEqual(['platform']);
-    expect(features.footprints.features).toEqual([
-      expect.objectContaining({ properties: { stationId: 'central' } }),
-    ]);
-  });
-});
+function featureProperty(feature: Feature, name: string): unknown {
+  if (!feature.properties)
+    throw new Error(`Expected rendered feature ${feature.id} to have properties.`);
+  return feature.properties[name];
+}
 
 describe('buildFeatures service lines', () => {
-  it('treats sibling Services as one public Line for offsets and interchanges', () => {
-    const way = aRoad('shared', [
+  it('centers a Network bundle without letting input order swap its services', () => {
+    const road = aRoad('trunk', [
       [-115.2, 36.14],
       [-115.16, 36.14],
     ]);
-    const services = [
-      aService('local', [{ id: 'local', sections: oneSection([wholeLeg(way.id)]) }]),
-      aService('express', [{ id: 'express', sections: oneSection([wholeLeg(way.id)]) }]),
-    ];
-    const system = aSystem({
-      ways: [way],
-      services,
-      lines: [
-        {
-          id: 'red',
-          name: 'Red Line',
-          color: '#e5252a',
-          serviceIds: services.map((service) => service.id),
-        },
-      ],
-      stops: [
-        aStop('shared-stop', [-115.18, 36.14], { wayId: way.id, t: 0.5 }, { name: 'Central' }),
-      ],
+    const red = aService('red', [aPattern('red-pattern', [road], [road.id])]);
+    const blue = aService('blue', [aPattern('blue-pattern', [road], [road.id])], {
+      color: '#2e86e4',
     });
+    const features = buildFeatures(
+      aSystem({ ways: [road], services: [red, blue] }),
+      null,
+      [],
+      NETWORK_VIEW,
+    );
+    const offsets = new Map(
+      features.services.features
+        .filter((feature) => featureProperty(feature, 'hitTarget') !== true)
+        .map((feature) => [
+          String(featureProperty(feature, 'serviceId')),
+          featureProperty(feature, 'offset'),
+        ]),
+    );
 
-    const features = buildFeatures(system, null, [], NETWORK_VIEW);
-    const offsets = features.services.features
-      .filter((feature) => !feature.properties?.hitTarget)
-      .map((feature) => {
-        const offset: unknown = feature.properties?.offset;
-        return typeof offset === 'number' ? offset : undefined;
-      });
-
-    expect(new Set(offsets)).toEqual(new Set([0]));
-    expect(features.stops.features[0].properties?.interchange).toBe(false);
+    expect(offsets).toEqual(
+      new Map([
+        ['red', -2.5],
+        ['blue', 2.5],
+      ]),
+    );
   });
 
-  it('draws a bundled service on a bent corridor as one line, not one per way', () => {
+  it('contracts a shared Network bundle into centered branch services', () => {
+    const trunk = aRoad('trunk', [
+      [-115.2, 36.14],
+      [-115.16, 36.14],
+    ]);
+    const redBranch = aRoad('red-branch', [
+      [-115.16, 36.14],
+      [-115.14, 36.16],
+    ]);
+    const blueBranch = aRoad('blue-branch', [
+      [-115.16, 36.14],
+      [-115.14, 36.12],
+    ]);
+    const ways = [trunk, redBranch, blueBranch];
+    const red = aService('red', [aPattern('red-pattern', ways, [trunk.id, redBranch.id])]);
+    const blue = aService('blue', [aPattern('blue-pattern', ways, [trunk.id, blueBranch.id])], {
+      color: '#2e86e4',
+    });
+    const features = buildFeatures(
+      aSystem({ ways, services: [red, blue] }),
+      null,
+      [],
+      NETWORK_VIEW,
+    );
+    const offsetsFor = (serviceId: string, wayId: string): unknown[] =>
+      features.services.features
+        .filter(
+          (candidate) =>
+            featureProperty(candidate, 'hitTarget') !== true &&
+            featureProperty(candidate, 'serviceId') === serviceId &&
+            featureProperty(candidate, 'wayId') === wayId,
+        )
+        .map((feature) => featureProperty(feature, 'offset'));
+
+    expect(offsetsFor('red', trunk.id)).toContain(-2.5);
+    expect(offsetsFor('blue', trunk.id)).toContain(2.5);
+    expect(offsetsFor('red', redBranch.id)).toContain(0);
+    expect(offsetsFor('blue', blueBranch.id)).toContain(0);
+  });
+
+  it('meets a branch at one shared bundle offset before it contracts', () => {
+    const trunk = aRoad('trunk', [
+      [-115.2, 36.14],
+      [-115.16, 36.14],
+    ]);
+    const branch = aRoad('branch', [
+      [-115.16, 36.14],
+      [-115.14, 36.16],
+    ]);
+    const ways = [trunk, branch];
+    const red = aService('red', [aPattern('red-pattern', ways, [trunk.id, branch.id])]);
+    const blue = aService('blue', [aPattern('blue-pattern', ways, [trunk.id])], {
+      color: '#2e86e4',
+    });
+    const features = buildFeatures(
+      aSystem({ ways, services: [red, blue] }),
+      null,
+      [],
+      NETWORK_VIEW,
+    );
+    const branchPoint = trunk.points[trunk.points.length - 1];
+    const atBranchPoint = (wayId: string) =>
+      features.services.features.filter((feature) => {
+        if (
+          featureProperty(feature, 'hitTarget') === true ||
+          featureProperty(feature, 'serviceId') !== 'red' ||
+          featureProperty(feature, 'wayId') !== wayId
+        ) {
+          return false;
+        }
+        const coordinates = feature.geometry.coordinates;
+        return (
+          JSON.stringify(coordinates[0]) === JSON.stringify(branchPoint) ||
+          JSON.stringify(coordinates[coordinates.length - 1]) === JSON.stringify(branchPoint)
+        );
+      });
+
+    const trunkOffsets = atBranchPoint(trunk.id).map((feature) =>
+      featureProperty(feature, 'offset'),
+    );
+    const branchOffsets = atBranchPoint(branch.id).map((feature) =>
+      featureProperty(feature, 'offset'),
+    );
+
+    expect(trunkOffsets).toEqual([-1.25]);
+    expect(branchOffsets).toEqual([-1.25]);
+  });
+
+  it('keeps a bundled service split into stable corridor-owned paint fragments', () => {
     // A right-angle bend — a north-south way meeting an east-west one — with
     // TWO services riding both, so the bundle offset is non-zero (a lone
     // service sits at offset 0, where the bug is invisible: offset is what
@@ -113,21 +172,33 @@ describe('buildFeatures service lines', () => {
 
     const fc = buildFeatures(system, null, [], NETWORK_VIEW);
     const svc1Features = fc.services.features.filter(
-      (f) => f.properties?.serviceId === 'svc1' && !f.properties.hitTarget,
+      (feature) =>
+        featureProperty(feature, 'serviceId') === 'svc1' &&
+        featureProperty(feature, 'hitTarget') !== true,
+    );
+    const svc2Features = fc.services.features.filter(
+      (feature) =>
+        featureProperty(feature, 'serviceId') === 'svc2' &&
+        featureProperty(feature, 'hitTarget') !== true,
     );
 
-    // One continuous feature for svc1's whole route, not one per way.
-    expect(svc1Features).toHaveLength(1);
-    const coords = svc1Features[0].geometry.coordinates as [number, number][];
-    // Both ways' full extent present, in order, with the junction appearing
-    // exactly once — proof the two fragments were stitched, not just placed
-    // next to each other.
-    expect(coords[0]).toEqual([-115.2, 36.14]);
-    expect(coords[coords.length - 1]).toEqual([-115.16, 36.18]);
-    expect(coords.filter(([lng, lat]) => lng === -115.16 && lat === 36.14)).toHaveLength(1);
+    expect(svc1Features).toHaveLength(2);
+    expect(svc1Features.map((feature) => featureProperty(feature, 'wayId'))).toEqual([
+      'wayA',
+      'wayB',
+    ]);
+    expect(new Set(svc1Features.map((feature) => feature.id)).size).toBe(2);
+    expect(svc1Features[0].geometry.coordinates).toEqual(wayA.points);
+    expect(svc1Features[1].geometry.coordinates).toEqual(wayB.points);
+    // The fixture helper maps its test-only colour shorthand into public Lines.
+    // Rendering must read that public ownership, never stale Service metadata.
+    expect(svc2Features.map((feature) => featureProperty(feature, 'color'))).toEqual([
+      '#2e86e4',
+      '#2e86e4',
+    ]);
   });
 
-  it('keeps repeated-way hit metadata without breaking the painted bend', () => {
+  it('keeps repeated-way hit metadata with one paint fragment per corridor', () => {
     const loop = aRoad('loop', [
       [-115.2, 36.14],
       [-115.16, 36.14],
@@ -156,23 +227,27 @@ describe('buildFeatures service lines', () => {
 
     const features = buildFeatures(system, null, [], NETWORK_VIEW).services.features;
     const painted = features.filter(
-      (feature) => feature.properties?.serviceId === 'svc' && !feature.properties.hitTarget,
+      (feature) =>
+        featureProperty(feature, 'serviceId') === 'svc' &&
+        featureProperty(feature, 'hitTarget') !== true,
     );
     const hits = features.filter(
-      (feature) => feature.properties?.serviceId === 'svc' && feature.properties.hitTarget,
+      (feature) =>
+        featureProperty(feature, 'serviceId') === 'svc' &&
+        featureProperty(feature, 'hitTarget') === true,
     );
 
-    expect(painted).toHaveLength(1);
-    expect(painted[0].geometry.coordinates).toHaveLength(3);
-    expect(painted[0].properties?.offset).not.toBe(0);
-    const legIndexes = hits.map((feature) => {
-      const legIndex: unknown = feature.properties?.legIndex;
-      return typeof legIndex === 'number' ? legIndex : undefined;
-    });
-    expect(legIndexes.sort()).toEqual([0, 0, 1, 1, 2, 2]);
-    expect(hits.every((feature) => feature.properties?.patternId === 'svc')).toBe(true);
+    expect(painted).toHaveLength(2);
+    expect(painted.map((feature) => featureProperty(feature, 'wayId'))).toEqual(['loop', 'bend']);
+    expect(painted.every((feature) => featureProperty(feature, 'offset') !== 0)).toBe(true);
+    expect(hits.map((feature) => featureProperty(feature, 'legIndex')).sort()).toEqual([
+      0, 0, 1, 1, 2, 2,
+    ]);
+    expect(hits.every((feature) => featureProperty(feature, 'patternId') === 'svc')).toBe(true);
     expect(
-      hits.every((feature) => feature.properties?.offset === painted[0].properties?.offset),
+      hits.every(
+        (feature) => featureProperty(feature, 'offset') === featureProperty(painted[0], 'offset'),
+      ),
     ).toBe(true);
   });
 
@@ -217,35 +292,18 @@ describe('service editing affordances', () => {
     [-115.19, 36.1],
     [-115.18, 36.09],
   ]);
-  const northService = aService('north-service', [
+  const service = aService('line', [
     {
-      id: 'north-service',
+      id: 'line',
       sections: oneSection([wholeLeg('trunk'), wholeLeg('north')]),
     },
   ]);
-  const southService = aService('south-service', [
-    {
-      id: 'south-service',
-      sections: oneSection([wholeLeg('trunk'), wholeLeg('south')]),
-    },
-  ]);
-  const system = aSystem({
-    ways: [trunk, north, south],
-    services: [northService, southService],
-    lines: [
-      {
-        id: 'line',
-        name: 'Line',
-        color: '#e4572e',
-        serviceIds: [northService.id, southService.id],
-      },
-    ],
-  });
+  const system = aSystem({ ways: [trunk, north, south], services: [service] });
 
   it('Network service selection produces no corridor control-point handles', () => {
     const features = buildFeatures(
       system,
-      { kind: 'service', id: northService.id },
+      { kind: 'service', id: service.id },
       ['trunk', 'north', 'south'],
       NETWORK_VIEW,
     );
@@ -253,15 +311,15 @@ describe('service editing affordances', () => {
     expect(features.handles.features).toEqual([]);
   });
 
-  it('service termini identify the singular path and focused interaction', () => {
+  it('service termini identify both ends of the selected path', () => {
     const features = buildFeatures(
       system,
-      { kind: 'service', id: northService.id },
+      { kind: 'service', id: service.id },
       [],
       NETWORK_VIEW,
       null,
       null,
-      { activePatternId: 'north-service' },
+      { activePatternId: 'line' },
     );
     const termini = (
       features as typeof features & {
@@ -287,16 +345,16 @@ describe('service editing affordances', () => {
       })),
     ).toEqual([
       {
-        serviceId: 'north-service',
-        patternId: 'north-service',
+        serviceId: 'line',
+        patternId: 'line',
         side: 'start',
         modeId: 'bus',
         interactive: true,
         at: [-115.2, 36.1],
       },
       {
-        serviceId: 'north-service',
-        patternId: 'north-service',
+        serviceId: 'line',
+        patternId: 'line',
         side: 'end',
         modeId: 'bus',
         interactive: true,
@@ -308,16 +366,16 @@ describe('service editing affordances', () => {
   it('marks only the exact armed terminus as the one-way return origin', () => {
     const features = buildFeatures(
       system,
-      { kind: 'service', id: southService.id },
+      { kind: 'service', id: service.id },
       [],
       NETWORK_VIEW,
       null,
       null,
       {
-        activePatternId: 'south-service',
+        activePatternId: 'line',
         armedTerminus: {
-          serviceId: 'south-service',
-          patternId: 'south-service',
+          serviceId: 'line',
+          patternId: 'line',
           side: 'end',
         },
       },
@@ -329,8 +387,8 @@ describe('service editing affordances', () => {
         .map((feature) => feature.properties),
     ).toMatchObject([
       {
-        serviceId: 'south-service',
-        patternId: 'south-service',
+        serviceId: 'line',
+        patternId: 'line',
         side: 'end',
         armedReturn: true,
       },
@@ -338,7 +396,7 @@ describe('service editing affordances', () => {
   });
 
   it('does not project service termini into Diagram', () => {
-    const features = buildFeatures(system, { kind: 'service', id: northService.id }, [], {
+    const features = buildFeatures(system, { kind: 'service', id: service.id }, [], {
       ...NETWORK_VIEW,
       viewMode: 'diagram',
     });
@@ -349,11 +407,27 @@ describe('service editing affordances', () => {
   it('Infrastructure service selection retains corridor control points', () => {
     const features = buildFeatures(
       system,
-      { kind: 'service', id: northService.id },
+      { kind: 'service', id: service.id },
       ['trunk', 'north', 'south'],
       { ...NETWORK_VIEW, viewMode: 'infrastructure' },
     );
 
     expect(features.handles.features).toHaveLength(6);
+  });
+
+  it('keeps an interchange while nearby ordinary stops share one screen cell', () => {
+    const ordinary = aStop('ordinary', [-115.15, 36.14]);
+    const interchange = aStop('interchange', [-115.150001, 36.140001], undefined, {
+      majorStop: true,
+    });
+
+    const features = buildFeatures(aSystem({ stops: [ordinary, interchange] }), null, [], {
+      ...NETWORK_VIEW,
+      presentation: STREET_TEST_PRESENTATION,
+    });
+
+    expect(features.stops.features.map((feature) => String(feature.properties?.id))).toEqual([
+      'interchange',
+    ]);
   });
 });

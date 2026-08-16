@@ -14,6 +14,7 @@ import {
   pathPrefix,
   vehicleFeaturesAt,
 } from '../../../src/ui/onboarding/scene-geometry';
+import { ONBOARDING_TEST_PRESENTATION } from '../../support/onboarding-presentation.test';
 
 describe('onboarding scene geometry', () => {
   it('reveals a route along its real path and settles on the exact geometry', () => {
@@ -32,12 +33,10 @@ describe('onboarding scene geometry', () => {
   });
 
   it('renders the growing route with the production service feature', () => {
-    const completeFeatures = buildFeatures(
-      ONBOARDING_DRAW_SYSTEM,
-      null,
-      [],
-      onboardingViewOptions('network'),
-    );
+    const completeFeatures = buildFeatures(ONBOARDING_DRAW_SYSTEM, null, [], {
+      ...onboardingViewOptions('network'),
+      presentation: ONBOARDING_TEST_PRESENTATION,
+    });
     const path = pathPrefix(ONBOARDING_DRAW_PATH, 0.5);
     const drawn = onboardingDrawnServiceFeatures(completeFeatures, path);
 

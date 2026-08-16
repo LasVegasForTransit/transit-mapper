@@ -203,12 +203,14 @@ export function createPerfReport(options: CreatePerfReportOptions): PerfReport {
   });
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: options.generatedAt,
     status: 'ok',
     protocol: options.protocol,
     calibration: options.calibration,
+    provenance: options.provenance,
     bundles: options.bundles ?? [],
+    firstSessions: options.firstSessions ?? [],
     samples,
     scenarios: options.scenarios.map((scenario) => summarizeScenario(scenario, samples)),
   };
@@ -218,13 +220,14 @@ export function createUnavailablePerfReport(
   options: CreateUnavailablePerfReportOptions,
 ): PerfReport {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: options.generatedAt,
     status: 'unavailable',
     unavailableReason: options.reason,
     protocol: options.protocol,
     calibration: options.calibration,
     bundles: options.bundles ?? [],
+    firstSessions: [],
     samples: [],
     scenarios: [],
   };

@@ -1,9 +1,12 @@
 import type { LngLat, TransitSystem } from '../model/system';
-import { buildFeatures, type ViewOptions } from './buildFeatures';
+import { buildFeatures, type RenderViewOptions } from './buildFeatures';
 import type { LegendEntry } from './legend';
 import type { ScaleBarSpec } from './scaleBar';
 import type { ScreenPoint } from './project';
+import { resolveStaticVisualScene } from './static-visual-scene';
+import { staticVisualSvgMarkup } from './static-visual-svg';
 import { LVBT, LVBT_FONT_STACK } from '../style/lvbtBrand';
+
 // The vector composition of a finished map: system geometry, plus the
 // furniture (title, legend, north arrow, scale bar) that makes an exported
 // image read as a map on its own rather than an extracted line drawing.
@@ -61,6 +64,9 @@ export interface SvgRenderOptions {
    * Omit to leave the framed area on the same ground as everything else.
    */
   insetBackground?: string;
+  /** Optional surface-owned casing ink. The live/editor export palette is the
+   * default; public share cards use the organization's brand ink. */
+  cartographyCasingColor?: string;
   /**
    * Draws an edge around the surface. Matters whenever the image is shown
    * inside something we don't control: a chat unfurl sits on whatever colour
@@ -118,14 +124,14 @@ export interface SvgRenderOptions {
 const DEFAULT_FONT_FAMILY = LVBT_FONT_STACK;
 
 // Below roughly this many displayed pixels, text stops being read and starts
-// being visual noise — the reader sees grey mush where a stop name was.
+// being visual noise — the reader sees grey mush where a station name was.
 // Anything that can't clear it is better left out than drawn illegibly.
 const MIN_LEGIBLE_PX = 10;
 
 // Label placement with collision avoidance.
 //
 // MapLibre resolves overlapping labels on the live map; this composition never
-// had an equivalent, so a dense system printed stop names straight through
+// had an equivalent, so a dense system printed station names straight through
 // each other — "North Las Vegas" crossing "South Strip" — which reads as a
 // rendering fault rather than a busy map. Cartographers solve this the same
 // way: try a label in a few positions around its anchor, and if none of them
@@ -311,13 +317,19 @@ function northArrowMarkup(bearing: number, width: number, fontFamily: string): s
  */
 export function systemSvg(
   system: TransitSystem,
-  view: ViewOptions,
+  view: RenderViewOptions,
   project: (lngLat: LngLat) => ScreenPoint,
   opts: SvgRenderOptions,
 ): string {
   const { width, height } = opts;
   const fontFamily = opts.fontFamily ?? DEFAULT_FONT_FAMILY;
-  const fc = buildFeatures(system, null, [], view);
+  const resolved = resolveStaticVisualScene({
+    revision: `svg:${system.id}`,
+    features: buildFeatures(system, null, [], view),
+    presentation: view.presentation,
+    ...(opts.cartographyCasingColor ? { routeCasingColor: opts.cartographyCasingColor } : {}),
+  });
+  const fc = resolved.features;
 
   // One rule, one consequence: text that won't be readable at the size this
   // drawing gets seen isn't drawn. No element is exempt and none is scaled up
@@ -332,31 +344,8 @@ export function systemSvg(
   const borderInset = opts.borderInset ?? 0;
   const parts: string[] = [];
 
-  const pathD = (coords: LngLat[]) =>
-    coords
-      .map((c, i) => {
-        const p = project(c);
-        return `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`;
-      })
-      .join(' ');
-
-  for (const f of fc.ways.features) {
-    const p = f.properties as { color: string; width: number; dashed?: boolean };
-    parts.push(
-      `<path d="${pathD(f.geometry.coordinates as LngLat[])}" fill="none" stroke="${p.color}" stroke-width="${p.width}" stroke-linecap="round" stroke-linejoin="round"${p.dashed ? ' stroke-dasharray="4,4"' : ''} opacity="0.85"/>`,
-    );
-  }
-  for (const f of fc.services.features) {
-    const p = f.properties as {
-      color: string;
-      width: number;
-      underground?: boolean;
-      hitTarget?: boolean;
-    };
-    if (p.hitTarget) continue;
-    parts.push(
-      `<path d="${pathD(f.geometry.coordinates as LngLat[])}" fill="none" stroke="${p.color}" stroke-width="${p.width}" stroke-linecap="round" stroke-linejoin="round"${p.underground ? ' stroke-dasharray="5,4"' : ''}/>`,
-    );
+  for (const visual of resolved.visuals) {
+    parts.push(staticVisualSvgMarkup(visual, project));
   }
   // Markers are drawn as they're encountered, but their labels are collected
   // and placed afterwards, together, so collision avoidance can consider all

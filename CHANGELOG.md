@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.5.0...v0.5.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* **ci:** document generated Worker artifact contract ([bcba843](https://github.com/LasVegasForTransit/transit-mapper/commit/bcba8431fdb3198d112e430bf77e7c021a2c953f))
+
 ## [0.5.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.4.0...v0.5.0) (2026-08-13)
 
 

@@ -122,7 +122,11 @@ export default {
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
-    exclude: { path: '\\.turbo|\\.wrangler|/dist/|worker-configuration\\.d\\.ts' },
+    exclude: {
+      // Browser-harness artifacts are an alternate Vite output, not source
+      // modules. Cruising them creates artificial cycles between Rollup chunks.
+      path: '\\.turbo|\\.wrangler|/dist/|/\\.perf-harness-dist/|worker-configuration\\.d\\.ts',
+    },
     tsConfig: { fileName: 'tsconfig.json' },
     tsPreCompilationDeps: true,
     enhancedResolveOptions: {

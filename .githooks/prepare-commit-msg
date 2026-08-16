@@ -24,10 +24,13 @@ case "$COMMIT_SOURCE" in
   merge | squash) exit 0 ;;
 esac
 
-# Which agent, if any. AI_AGENT is the cross-vendor spelling and carries a
-# version; CLAUDECODE is Claude Code's own boolean. Neither says which model,
-# which is why the footer below names the tool.
-if [ -n "${AI_AGENT:-}" ]; then
+# Which agent, if any. CODEX_SESSION_ID is present in every Codex desktop
+# session; AI_AGENT is the cross-vendor spelling and CLAUDECODE is Claude
+# Code's own boolean. None says which model, which is why the fallback footer
+# names the tool rather than inventing a model attribution.
+if [ -n "${CODEX_SESSION_ID:-}" ]; then
+  AUTHOR='Codex <noreply@openai.com>'
+elif [ -n "${AI_AGENT:-}" ]; then
   AUTHOR='Claude Code <noreply@anthropic.com>'
 elif [ "${CLAUDECODE:-}" = "1" ]; then
   AUTHOR='Claude Code <noreply@anthropic.com>'

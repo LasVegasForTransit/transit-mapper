@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import {
   deserializeSystemOffThread,
@@ -20,6 +20,16 @@ class FakeWorker implements StorageDeserializerWorker {
   }
 }
 
+beforeEach(() => performance.clearMarks());
+afterEach(() => {
+  performance.clearMarks();
+  vi.useRealTimers();
+});
+
+function startupMarkNames(): string[] {
+  return performance.getEntriesByType('mark').map((entry) => entry.name);
+}
+
 describe('deserializeSystemOffThread', () => {
   it('sends stored JSON to a Worker and resolves the reconstructed model', async () => {
     const worker = new FakeWorker();
@@ -32,6 +42,7 @@ describe('deserializeSystemOffThread', () => {
 
     await expect(pending).resolves.toBe(system);
     expect(worker.terminated).toBe(true);
+    expect(startupMarkNames()).toEqual(['tm:deserialize-start', 'tm:deserialize-end']);
   });
 
   it('falls back to main-thread reconstruction when the Worker runtime fails', async () => {
@@ -45,5 +56,31 @@ describe('deserializeSystemOffThread', () => {
 
     await expect(pending).resolves.toMatchObject({ id: system.id });
     expect(worker.terminated).toBe(true);
+    expect(startupMarkNames()).toEqual(['tm:deserialize-start', 'tm:deserialize-end']);
+  });
+
+  it('closes the milestone when Worker fallback cannot parse the stored document', async () => {
+    const worker = new FakeWorker();
+    const pending = deserializeSystemOffThread('{not-json', { workerFactory: () => worker });
+
+    worker.onerror?.({ message: 'Worker script failed.' } as ErrorEvent);
+
+    await expect(pending).rejects.toBeDefined();
+    expect(startupMarkNames()).toEqual(['tm:deserialize-start', 'tm:deserialize-end']);
+  });
+
+  it('closes the milestone after a timed-out Worker falls back', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const worker = new FakeWorker();
+    const system = createEmptySystem();
+    const pending = deserializeSystemOffThread(JSON.stringify(system), {
+      timeoutMs: 10,
+      workerFactory: () => worker,
+    });
+
+    await vi.advanceTimersByTimeAsync(10);
+
+    await expect(pending).resolves.toMatchObject({ id: system.id });
+    expect(startupMarkNames()).toEqual(['tm:deserialize-start', 'tm:deserialize-end']);
   });
 });

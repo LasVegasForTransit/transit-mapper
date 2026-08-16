@@ -10,6 +10,7 @@ import {
   MAP_THEMES,
   type MapTheme,
   basemapStyleForScheme,
+  initialEditorStyleForScheme,
   layerSpecsForScheme,
   localBlankStyleForScheme,
 } from '../../src/map/mapTheme';
@@ -35,6 +36,29 @@ describe('map themes', () => {
       id: 'transitmapper-local-background',
       paint: { 'background-color': MAP_THEMES.dark.background },
     });
+  });
+
+  it('starts on the local drafting style when the editor opens offline', () => {
+    expect(initialEditorStyleForScheme('dark', false)).toEqual(localBlankStyleForScheme('dark'));
+  });
+
+  it('leaves the local canvas transparent so the editor drafting surface remains visible', () => {
+    for (const scheme of ['light', 'dark'] as const) {
+      const background = localBlankStyleForScheme(scheme).layers[0];
+      expect(background).toMatchObject({
+        id: 'transitmapper-local-background',
+        paint: { 'background-opacity': 0 },
+      });
+    }
+  });
+
+  it('gives the deterministic local canvas a same-origin glyph endpoint for text layers', () => {
+    const style = localBlankStyleForScheme('light');
+
+    expect(style.glyphs).toMatch(/^https?:\/\/[^/]+\/glyphs\/noto-sans-v1\//);
+    expect(style.glyphs).toContain('{fontstack}');
+    expect(style.glyphs).toContain('{range}');
+    expect(layerSpecsForScheme('light').some((layer) => layer.type === 'symbol')).toBe(true);
   });
 
   it('keeps layer identity, source, filter, and order stable between schemes', () => {

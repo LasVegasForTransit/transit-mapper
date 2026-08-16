@@ -27,6 +27,11 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
+# Font glyph ranges are versioned by directory and fetched on demand by
+# MapLibre. They deliberately stay out of the service-worker precache.
+/glyphs/noto-sans-v1/*
+  Cache-Control: public, max-age=31536000, immutable
+
 # The service worker script itself — fixed filename, so it must always be
 # revalidated. Browsers already re-check a SW at most every 24h regardless of
 # headers, but there's no reason to let an edge cache add its own staleness on

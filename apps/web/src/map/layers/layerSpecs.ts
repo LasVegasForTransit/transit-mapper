@@ -1,4 +1,4 @@
-import type { ExpressionSpecification, LayerSpecification } from 'maplibre-gl';
+import type { LayerSpecification } from 'maplibre-gl';
 import {
   FOOTPRINT_FILL_OPACITY,
   PLATFORM_FILL_OPACITY,
@@ -6,13 +6,18 @@ import {
 } from '@transitmapper/core/style/catalogStyle';
 import { MAP_THEMES, type MapTheme } from '../mapThemePalette';
 import {
-  LANE_WIDTH_EXPR,
+  CORRIDOR_CASING_WIDTH_EXPR,
+  CORRIDOR_SELECT_HALO_WIDTH_EXPR,
+  CORRIDOR_WIDTH_EXPR,
   SERVICE_CASING_WIDTH_EXPR,
   SERVICE_WIDTH_EXPR,
   SELECT_HALO_WIDTH_EXPR,
+  RENDER_TIER_SORT_KEY_EXPR,
   SERVICE_ELEVATED_WIDTH_EXPR,
   LYR_CENTER_LINES,
+  LYR_CARRIAGEWAYS,
   LYR_CONNECTORS,
+  LYR_CROSSWALKS,
   LYR_EDGE_LINES,
   LYR_ENDPOINT_HINT,
   LYR_FACILITIES,
@@ -26,6 +31,8 @@ import {
   LYR_GESTURE_STROKE,
   LYR_HANDLES,
   LYR_JUNCTIONS,
+  LYR_JUNCTION_CONTROLS,
+  LYR_JUNCTION_GUIDES,
   LYR_JUNCTION_SELECTED,
   LYR_LANDMARKS,
   LYR_LANDMARK_LABELS,
@@ -34,6 +41,7 @@ import {
   LYR_LANE_LINES,
   LYR_LANE_SURFACES,
   LYR_LANE_TRACKS,
+  LYR_RAIL_TIES,
   LYR_MARQUEE_FILL,
   LYR_MARQUEE_STROKE,
   LYR_PHYSICAL_HANDLES,
@@ -53,6 +61,7 @@ import {
   LYR_STATION_LABELS,
   LYR_STATION_LABELS_MAJOR,
   LYR_STATION_SELECTED,
+  LYR_STOP_BARS,
   LYR_VEHICLES,
   LYR_VEHICLES_INFRA_FILL,
   LYR_VEHICLES_INFRA_STROKE,
@@ -72,9 +81,11 @@ import {
   SRC_FOOTPRINTS,
   SRC_GESTURE,
   SRC_HANDLES,
+  SRC_HIT_FEATURES,
   SRC_SERVICE_TERMINI,
   SRC_ACTION_ANCHOR,
   SRC_JUNCTIONS,
+  SRC_JUNCTION_GUIDES,
   SRC_LANDMARKS,
   SRC_LANES,
   SRC_LANE_ARROWS,
@@ -91,15 +102,19 @@ import {
   SRC_VEHICLES_INFRA,
   SRC_WAYS,
   SRC_WAY_LABELS,
+  TIER_OPACITY_EXPR,
+  tierOpacityExpr,
 } from './constants';
-const HOVERED_FEATURE: ExpressionSpecification = [
-  'any',
-  ['boolean', ['feature-state', 'hover'], false],
-  ['boolean', ['feature-state', 'outlineHover'], false],
-];
 
-export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
+function contextLayerSpecs(theme: MapTheme): LayerSpecification[] {
   return [
+    // Paint order, bottom-up: reference landmarks first (fixed context, not
+    // system data — must sit under everything the user actually draws), then
+    // the lane-detail STREET SURFACE (junction fills + lane asphalt +
+    // markings — it's the ground), then station/complex footprints and
+    // platforms ON TOP of it (a station area overlays the road it straddles —
+    // painting streets later buried footprints, the "station boundaries are
+    // invisible" bug), then ways/services/stations above those.
     {
       // Hand-placed reference points (the Strip, UNLV, downtown, the airport,
       // …) — static context, not user data (see map/landmarks.ts). Muted and
@@ -135,39 +150,126 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       id: LYR_JUNCTIONS,
       type: 'fill',
       source: SRC_JUNCTIONS,
-      paint: { 'fill-color': theme.roadSurface, 'fill-opacity': 0.9 },
-    },
-    {
-      id: LYR_JUNCTION_SELECTED,
-      type: 'line',
-      source: SRC_JUNCTIONS,
-      filter: ['get', 'selected'],
-      paint: { 'line-color': theme.selection, 'line-width': 2.5, 'line-opacity': 0.7 },
-    },
-    {
-      // Lane surfaces: each lane's centerline drawn at its true metric width
-      // (w14 × exponential zoom scaling), so a 5-lane arterial reads as real
-      // asphalt at high zoom. Only populated at lane-detail zooms.
-      id: LYR_LANE_SURFACES,
-      type: 'line',
-      source: SRC_LANES,
-      layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
-        'line-color': ['get', 'color'],
-        'line-width': LANE_WIDTH_EXPR as never,
-        'line-opacity': 0.9,
+        'fill-color': theme.roadSurface,
+        'fill-opacity': tierOpacityExpr(0.9) as never,
       },
     },
     {
+      // Controls live at the semantic Node, above the shared asphalt but below
+      // lane guidance. The same source keeps a node edit one scene update.
+      id: LYR_JUNCTION_CONTROLS,
+      type: 'circle',
+      source: SRC_JUNCTIONS,
+      filter: ['has', 'control'],
+      paint: {
+        'circle-radius': [
+          'match',
+          ['get', 'control'],
+          'roundabout',
+          5.5,
+          'signal',
+          4.5,
+          'stop',
+          4.5,
+          'yield',
+          3.5,
+          'levelCrossing',
+          4,
+          4,
+        ],
+        'circle-color': [
+          'match',
+          ['get', 'control'],
+          'signal',
+          theme.danger,
+          'stop',
+          theme.paper,
+          'yield',
+          theme.centerLine,
+          'roundabout',
+          theme.centerLine,
+          'levelCrossing',
+          theme.ink,
+          theme.ink,
+        ],
+        'circle-stroke-color': theme.ink,
+        'circle-stroke-width': 1.2,
+        'circle-opacity': tierOpacityExpr(1) as never,
+      },
+    },
+  ];
+}
+
+/** Metric lane surfaces are the Street-tier base. Markings deliberately live
+ * in the following pass so their visual order is obvious at the call site. */
+function laneSurfaceLayerSpecs(): LayerSpecification[] {
+  return [
+    {
+      // Lane surfaces are true metric polygons, built from the same shared
+      // cross-section boundaries as static SVG. That keeps adjacent lanes
+      // flush at curves instead of relying on screen-space line inflation.
+      id: LYR_LANE_SURFACES,
+      type: 'fill',
+      source: SRC_LANES,
+      paint: {
+        'fill-color': ['get', 'color'],
+        'fill-opacity': tierOpacityExpr(0.9) as never,
+      },
+    },
+  ];
+}
+
+/** Track ties paint below the rails they join. Keeping them as their own
+ * pass makes the paired rail order explicit below. */
+function railTieLayerSpecs(): LayerSpecification[] {
+  return [
+    {
+      // One feature carries a track's ties as a MultiLineString, below the
+      // two rails it joins. This is physical detail, not a repeated icon.
+      id: LYR_RAIL_TIES,
+      type: 'line',
+      source: SRC_LANE_MARKINGS,
+      filter: ['==', ['get', 'kind'], 'railTie'],
+      layout: { 'line-cap': 'butt', 'line-join': 'miter' },
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': 0.7,
+        'line-opacity': tierOpacityExpr(0.78) as never,
+      },
+    },
+  ];
+}
+
+/** Rail centerlines follow the ties immediately. A rail is two physical lines,
+ * not a generic widened lane surface. */
+function railTrackLayerSpecs(): LayerSpecification[] {
+  return [
+    {
       // Thin-line lanes (rail tracks embedded in or beside a street) — a track
-      // is a pair of rails, not a slab, so it draws as a fixed thin line.
+      // is two physical rails, not a slab. Monorail/channel centerlines retain
+      // the legacy thinLane classification.
       id: LYR_LANE_TRACKS,
       type: 'line',
       source: SRC_LANE_MARKINGS,
-      filter: ['==', ['get', 'kind'], 'thinLane'],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': ['get', 'color'], 'line-width': 2.5 },
+      filter: ['in', ['get', 'kind'], ['literal', ['thinLane', 'rail']]],
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+      },
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': 1.3,
+        'line-opacity': TIER_OPACITY_EXPR as never,
+      },
     },
+  ];
+}
+
+/** Directional roadway boundaries, crosswalks, and stop bars are the surface
+ * markings that sit above lanes and below junction movement guidance. */
+function surfaceMarkingLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
       // Dashed white separator between same-direction lanes.
       id: LYR_LANE_LINES,
@@ -178,7 +280,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'line-color': theme.laneMarking,
         'line-width': 1.2,
         'line-dasharray': [3, 3],
-        'line-opacity': 0.9,
+        'line-opacity': tierOpacityExpr(0.9) as never,
       },
     },
     {
@@ -187,7 +289,11 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       type: 'line',
       source: SRC_LANE_MARKINGS,
       filter: ['==', ['get', 'kind'], 'edgeLine'],
-      paint: { 'line-color': theme.laneMarking, 'line-width': 1.2, 'line-opacity': 0.75 },
+      paint: {
+        'line-color': theme.laneMarking,
+        'line-width': 1.2,
+        'line-opacity': tierOpacityExpr(0.75) as never,
+      },
     },
     {
       // The center line where directions oppose — solid yellow.
@@ -195,8 +301,58 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       type: 'line',
       source: SRC_LANE_MARKINGS,
       filter: ['==', ['get', 'kind'], 'centerLine'],
-      paint: { 'line-color': theme.centerLine, 'line-width': 1.8, 'line-opacity': 0.95 },
+      paint: {
+        'line-color': theme.centerLine,
+        'line-width': 1.8,
+        'line-opacity': tierOpacityExpr(0.95) as never,
+      },
     },
+    {
+      // Approach crosswalks derive from the same resolved junction arms as
+      // the carriageway trim, so stripes stay perpendicular through a curve
+      // or cross-section edit. They paint over lane boundaries but below turn
+      // guidance, which keeps both pedestrian and movement information legible.
+      id: LYR_CROSSWALKS,
+      type: 'line',
+      source: SRC_LANE_MARKINGS,
+      filter: ['==', ['get', 'kind'], 'crosswalk'],
+      layout: { 'line-cap': 'butt' },
+      paint: {
+        'line-color': theme.laneMarking,
+        'line-width': 1.8,
+        'line-opacity': tierOpacityExpr(0.9) as never,
+      },
+    },
+    {
+      // The solid bar is intentionally beyond the zebra stripes in the
+      // approach direction. It reads as the driver boundary without obscuring
+      // the pedestrian crossing or the turn guidance above it.
+      id: LYR_STOP_BARS,
+      type: 'line',
+      source: SRC_LANE_MARKINGS,
+      filter: ['==', ['get', 'kind'], 'stopBar'],
+      layout: { 'line-cap': 'butt' },
+      paint: {
+        'line-color': theme.laneMarking,
+        'line-width': 2.5,
+        'line-opacity': tierOpacityExpr(0.95) as never,
+      },
+    },
+  ];
+}
+
+/** Road markings sit over the metric lane polygons. The order reflects the
+ * physical drawing order rather than forcing a reader through one long list. */
+function laneMarkingLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [...railTieLayerSpecs(), ...railTrackLayerSpecs(), ...surfaceMarkingLayerSpecs(theme)];
+}
+
+function streetDetailLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [...laneSurfaceLayerSpecs(), ...laneMarkingLayerSpecs(theme)];
+}
+
+function streetGuidanceLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
       // Per-lane turn guides through a junction (from the lane-connectivity
       // graph — stored connectors or the derived defaults). Faint dashes, so
@@ -209,7 +365,22 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'line-color': theme.laneMarking,
         'line-width': 1.2,
         'line-dasharray': [1.5, 2],
-        'line-opacity': 0.55,
+        'line-opacity': tierOpacityExpr(0.55) as never,
+      },
+    },
+    {
+      // A selected junction's editor-only lane movement guides. Keeping this
+      // above the settled connector layer preserves immediate feedback while
+      // leaving the renderer-owned source untouched and patchable by ID.
+      id: LYR_JUNCTION_GUIDES,
+      type: 'line',
+      source: SRC_JUNCTION_GUIDES,
+      layout: { 'line-cap': 'round' },
+      paint: {
+        'line-color': theme.laneMarking,
+        'line-width': 1.2,
+        'line-dasharray': [1.5, 2],
+        'line-opacity': tierOpacityExpr(0.55) as never,
       },
     },
     {
@@ -218,10 +389,9 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       id: LYR_LANE_ARROWS,
       type: 'symbol',
       source: SRC_LANE_ARROWS,
-      // Direction detail belongs to closer zooms — without this, one-way ways
-      // (now including every GTFS-imported route) would strew ▶ chevrons across
-      // the whole-network overview.
-      minzoom: 13,
+      // Street-tier feature generation and opacity decide when this direction
+      // detail exists. A fixed zoom cannot account for corridor width or the
+      // size at which an export/embed is actually displayed.
       layout: {
         'symbol-placement': 'line',
         'symbol-spacing': 90,
@@ -235,14 +405,22 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
         // draws. Every other text layer here names the stack for the same reason.
         'text-font': ['literal', ['Noto Sans Regular']],
       },
-      paint: { 'text-color': theme.laneMarking, 'text-opacity': 0.9 },
+      paint: {
+        'text-color': theme.laneMarking,
+        'text-opacity': tierOpacityExpr(0.9) as never,
+      },
     },
+  ];
+}
+
+function physicalPlaceLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
       id: LYR_FOOTPRINTS_FILL,
       type: 'fill',
       source: SRC_FOOTPRINTS,
       // A facility complex with its own color reads more clearly with a
-      // slightly stronger fill than the shared monochrome default — a Station
+      // slightly stronger fill than the shared monochrome default — a station
       // footprint (no color property) keeps the original subtle tint.
       paint: {
         'fill-color': ['coalesce', ['get', 'color'], theme.footprint],
@@ -271,6 +449,33 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       source: SRC_PLATFORMS,
       paint: { 'line-color': theme.platformStroke, 'line-width': 1.5 },
     },
+  ];
+}
+
+function corridorLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
+    {
+      id: LYR_JUNCTION_SELECTED,
+      type: 'line',
+      source: SRC_JUNCTIONS,
+      paint: {
+        'line-color': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          theme.selection,
+          theme.hover,
+        ],
+        'line-width': 2.5,
+        'line-opacity': tierOpacityExpr([
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          0.7,
+          ['boolean', ['feature-state', 'hover'], false],
+          0.35,
+          0,
+        ]) as never,
+      },
+    },
     {
       // A selected bare/infra way gets the same soft dark halo a selected
       // service does (LYR_SERVICE_SELECTED below) — without this, selecting a
@@ -280,11 +485,14 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       id: LYR_WAY_SELECTED,
       type: 'line',
       source: SRC_WAYS,
-      // Driven by feature-state (set on selection in MapCanvas), not a `selected`
-      // property — so selecting a way flips one setFeatureState call instead of
-      // re-uploading the whole (RTC-scale ~121k-waypoint) source. Invisible until
-      // its way is selected.
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      // Driven by EditorFeatureState, not a `selected` property. Selection
+      // therefore changes MapLibre paint state instead of re-uploading the
+      // RTC-scale source, and the state follows the accepted physical bank.
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
       paint: {
         'line-color': [
           'case',
@@ -292,31 +500,106 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
           theme.selection,
           theme.hover,
         ],
-        'line-width': SELECT_HALO_WIDTH_EXPR as never,
-        'line-opacity': [
+        'line-width': CORRIDOR_SELECT_HALO_WIDTH_EXPR as never,
+        'line-opacity': tierOpacityExpr([
           'case',
           ['boolean', ['feature-state', 'selected'], false],
           0.18,
-          HOVERED_FEATURE,
+          ['boolean', ['feature-state', 'hover'], false],
           0.1,
           0,
-        ],
+        ]) as never,
+        'line-offset': ['get', 'offset'],
+      },
+    },
+  ];
+}
+
+function districtCarriagewayLayerSpec(theme: MapTheme): LayerSpecification {
+  // District is a real metric corridor footprint. Overview stays a line; the
+  // selection line layer reads this polygon as its perimeter halo.
+  return {
+    id: LYR_CARRIAGEWAYS,
+    type: 'fill',
+    source: SRC_WAYS,
+    filter: ['==', ['get', 'renderTier'], 'district'],
+    paint: {
+      'fill-color': ['get', 'color'],
+      // A footprint still needs a readable edge before individual Street lanes
+      // take over. This is MapLibre's one-pixel fill outline, not an
+      // artificially widened centerline casing.
+      'fill-outline-color': theme.routeCasing,
+      'fill-opacity': tierOpacityExpr(0.9) as never,
+    },
+  };
+}
+
+function dashedCorridorLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
+    {
+      id: LYR_WAYS_DASHED_CASING,
+      type: 'line',
+      source: SRC_WAYS,
+      filter: ['get', 'dashed'],
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
+      paint: {
+        'line-color': theme.routeCasing,
+        'line-width': CORRIDOR_CASING_WIDTH_EXPR as never,
+        'line-dasharray': [2, 2],
+        'line-opacity': tierOpacityExpr(0.62) as never,
         'line-offset': ['get', 'offset'],
       },
     },
     {
-      // A way with capacity > 1 fans out into several offset lane/track
-      // features (see emitCrossSection) — line-offset is what actually spaces
-      // them apart on screen into a real physical cross-section.
+      id: LYR_WAYS_DASHED,
+      type: 'line',
+      source: SRC_WAYS,
+      filter: ['get', 'dashed'],
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': CORRIDOR_WIDTH_EXPR as never,
+        'line-dasharray': [2, 2],
+        'line-opacity': tierOpacityExpr(0.9) as never,
+        'line-offset': ['get', 'offset'],
+      },
+    },
+  ];
+}
+
+function corridorPaintLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
+    districtCarriagewayLayerSpec(theme),
+    {
+      // Overview and District are one centered corridor silhouette. Street
+      // replaces this source with physical lane surfaces; `line-offset`
+      // remains for schematic service/corridor compatibility only.
       id: LYR_WAYS_SOLID_CASING,
       type: 'line',
       source: SRC_WAYS,
-      filter: ['all', ['!', ['get', 'dashed']], ['!', ['to-boolean', ['get', 'haloOnly']]]],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      filter: [
+        'all',
+        ['==', ['geometry-type'], 'LineString'],
+        ['!', ['get', 'dashed']],
+        ['!', ['to-boolean', ['get', 'haloOnly']]],
+      ],
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
       paint: {
         'line-color': theme.routeCasing,
-        'line-width': ['+', ['get', 'width'], 2],
-        'line-opacity': 0.62,
+        'line-width': CORRIDOR_CASING_WIDTH_EXPR as never,
+        'line-opacity': tierOpacityExpr(0.62) as never,
         'line-offset': ['get', 'offset'],
       },
     },
@@ -326,54 +609,48 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       source: SRC_WAYS,
       // haloOnly features exist purely for LYR_WAY_SELECTED (a lane-rendered
       // way's selection glow) — they must never paint as a solid line.
-      filter: ['all', ['!', ['get', 'dashed']], ['!', ['to-boolean', ['get', 'haloOnly']]]],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      filter: [
+        'all',
+        ['==', ['geometry-type'], 'LineString'],
+        ['!', ['get', 'dashed']],
+        ['!', ['to-boolean', ['get', 'haloOnly']]],
+      ],
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
       paint: {
         'line-color': ['get', 'color'],
-        'line-width': ['get', 'width'],
-        'line-opacity': 0.85,
+        'line-width': CORRIDOR_WIDTH_EXPR as never,
+        // Match the Street lane-surface alpha so the order-aware tier
+        // expression preserves one constant corridor silhouette through the
+        // District/Street blend.
+        'line-opacity': tierOpacityExpr(0.9) as never,
         'line-offset': ['get', 'offset'],
       },
     },
-    {
-      id: LYR_WAYS_DASHED_CASING,
-      type: 'line',
-      source: SRC_WAYS,
-      filter: ['get', 'dashed'],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: {
-        'line-color': theme.routeCasing,
-        'line-width': ['+', ['get', 'width'], 2],
-        'line-dasharray': [2, 2],
-        'line-opacity': 0.62,
-        'line-offset': ['get', 'offset'],
-      },
-    },
-    {
-      id: LYR_WAYS_DASHED,
-      type: 'line',
-      source: SRC_WAYS,
-      filter: ['get', 'dashed'],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: {
-        'line-color': ['get', 'color'],
-        'line-width': ['get', 'width'],
-        'line-dasharray': [2, 2],
-        'line-opacity': 0.85,
-        'line-offset': ['get', 'offset'],
-      },
-    },
+    ...dashedCorridorLayerSpecs(theme),
+  ];
+}
+
+function serviceLineLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
       // Elevated ways get a dark casing beneath — reads as a viaduct.
       id: LYR_SERVICES_ELEVATED,
       type: 'line',
       source: SRC_SERVICES,
       filter: ['all', ['!', ['get', 'hitTarget']], ['get', 'elevated']],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
       paint: {
         'line-color': theme.routeCasing,
         'line-width': SERVICE_ELEVATED_WIDTH_EXPR as never,
-        'line-opacity': 0.32,
+        'line-opacity': tierOpacityExpr(0.32) as never,
         'line-offset': ['get', 'offset'],
       },
     },
@@ -384,7 +661,11 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       filter: ['!', ['get', 'hitTarget']],
       // feature-state driven (see LYR_WAY_SELECTED). Selecting a way also lights
       // its rider services here — MapCanvas sets state on their serviceIds.
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
       paint: {
         'line-color': [
           'case',
@@ -393,27 +674,36 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
           theme.hover,
         ],
         'line-width': SELECT_HALO_WIDTH_EXPR as never,
-        'line-opacity': [
+        'line-opacity': tierOpacityExpr([
           'case',
           ['boolean', ['feature-state', 'selected'], false],
           0.18,
-          HOVERED_FEATURE,
+          ['boolean', ['feature-state', 'hover'], false],
           0.1,
           0,
-        ],
+        ]) as never,
         'line-offset': ['get', 'offset'],
       },
     },
+  ];
+}
+
+function servicePaintLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
       id: LYR_SERVICES_SOLID_CASING,
       type: 'line',
       source: SRC_SERVICES,
       filter: ['all', ['!', ['get', 'hitTarget']], ['!', ['get', 'underground']]],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
       paint: {
         'line-color': theme.routeCasing,
         'line-width': SERVICE_CASING_WIDTH_EXPR as never,
-        'line-opacity': 0.72,
+        'line-opacity': tierOpacityExpr(0.72) as never,
         'line-offset': ['get', 'offset'],
       },
     },
@@ -422,10 +712,15 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       type: 'line',
       source: SRC_SERVICES,
       filter: ['all', ['!', ['get', 'hitTarget']], ['!', ['get', 'underground']]],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
       paint: {
         'line-color': ['get', 'color'],
         'line-width': SERVICE_WIDTH_EXPR as never,
+        'line-opacity': TIER_OPACITY_EXPR as never,
         'line-offset': ['get', 'offset'],
       },
     },
@@ -435,12 +730,16 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       type: 'line',
       source: SRC_SERVICES,
       filter: ['all', ['!', ['get', 'hitTarget']], ['get', 'underground']],
-      layout: { 'line-cap': 'butt', 'line-join': 'round' },
+      layout: {
+        'line-cap': 'butt',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
       paint: {
         'line-color': theme.routeCasing,
         'line-width': SERVICE_CASING_WIDTH_EXPR as never,
         'line-dasharray': [2.5, 2],
-        'line-opacity': 0.72,
+        'line-opacity': tierOpacityExpr(0.72) as never,
         'line-offset': ['get', 'offset'],
       },
     },
@@ -449,20 +748,30 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       type: 'line',
       source: SRC_SERVICES,
       filter: ['all', ['!', ['get', 'hitTarget']], ['get', 'underground']],
-      layout: { 'line-cap': 'butt', 'line-join': 'round' },
+      layout: {
+        'line-cap': 'butt',
+        'line-join': 'round',
+        'line-sort-key': RENDER_TIER_SORT_KEY_EXPR as never,
+      },
       paint: {
         'line-color': ['get', 'color'],
         'line-width': SERVICE_WIDTH_EXPR as never,
         'line-dasharray': [2.5, 2],
+        'line-opacity': TIER_OPACITY_EXPR as never,
         'line-offset': ['get', 'offset'],
       },
     },
+  ];
+}
+
+function serviceHitLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
       // Kept at zero opacity but queryable. It carries pattern/run/leg identity
       // where a service rides the same physical way more than once.
       id: LYR_SERVICES_HIT,
       type: 'line',
-      source: SRC_SERVICES,
+      source: SRC_HIT_FEATURES,
       filter: ['get', 'hitTarget'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
@@ -474,6 +783,11 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'line-offset': ['get', 'offset'],
       },
     },
+  ];
+}
+
+function serviceControlLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
       // Route ends sit above the occurrence hit surface so a coincident branch
       // resolves to the branch the inspector or map most recently focused.
@@ -515,6 +829,11 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'circle-stroke-color': theme.ink,
       },
     },
+  ];
+}
+
+function stationLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
       id: LYR_STATION_SELECTED,
       type: 'circle',
@@ -532,7 +851,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
           'case',
           ['boolean', ['feature-state', 'selected'], false],
           0.18,
-          HOVERED_FEATURE,
+          ['boolean', ['feature-state', 'hover'], false],
           0.1,
           0,
         ],
@@ -591,6 +910,11 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'circle-stroke-color': ['case', ['get', 'interchange'], theme.ink, ['get', 'color']],
       },
     },
+  ];
+}
+
+function vehicleLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
       // One dot per service, driven by sim/vehicles.ts's own rAF loop directly
       // pushing to SRC_VEHICLES — bypasses the store entirely (ambient motion,
@@ -609,7 +933,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       // Infrastructure-view vehicles: a real rotated-rectangle polygon per
       // vehicle, true-to-scale and riding its actual physical lane (see
       // sim/vehicles.ts + geometry/vehicleLane.ts) — the same class of
-      // feature as a Station footprint/platform (LYR_FOOTPRINTS_FILL/
+      // feature as a station footprint/platform (LYR_FOOTPRINTS_FILL/
       // LYR_PLATFORMS_FILL above), not a raster icon. Filled with the
       // vehicle's own route color, unlike the monochrome footprint fill,
       // since a vehicle belongs to one service.
@@ -624,9 +948,14 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       source: SRC_VEHICLES_INFRA,
       paint: { 'line-color': theme.vehicleStroke, 'line-width': 1 },
     },
+  ];
+}
+
+function labelLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
-      // MAJOR stop labels — interchanges (derived) and hand-flagged major
-      // stops (Stop.majorStop) — shown from a lower zoom than ordinary stops.
+      // MAJOR station labels — interchanges (derived) and hand-flagged major
+      // stops (Station.majorStop) — shown from a lower zoom than ordinary stops.
       // Placed BEFORE the ordinary-stop layer so its labels win MapLibre's
       // collision placement. minzoom skips its placement work entirely below the
       // threshold; at the post-import whole-valley framing that removes ~all of
@@ -661,10 +990,10 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       },
     },
     {
-      // Ordinary stop labels — every OTHER named stop (empty-name ones stay
+      // Ordinary station labels — every OTHER named stop (empty-name ones stay
       // unlabeled). Only from z14+, where a neighborhood's worth of stops is on
       // screen instead of the whole valley's worth colliding into unreadable
-      // soup. Anchor varies so collision can slide a label around its stop.
+      // soup. Anchor varies so collision can slide a label around its station.
       id: LYR_STATION_LABELS,
       type: 'symbol',
       source: SRC_STATIONS,
@@ -707,6 +1036,11 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'text-halo-width': 1.4,
       },
     },
+  ];
+}
+
+function drawingPreviewLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
       // "This is what you are about to join." A finished line is rebound onto
       // the infrastructure it runs along, and without showing that beforehand
@@ -767,6 +1101,11 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'text-halo-width': 1.4,
       },
     },
+  ];
+}
+
+function editorPointLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
       // Way tool, not yet drawing, hovering near an existing way's open end:
       // a big soft ring signals "clicking here resumes/extends this way"
@@ -792,7 +1131,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
     {
       // Interior control points: reshape only (drag repositions the point). A
       // solid square, not a circle — the standard vector-editor "control
-      // point" shape, so it can never be mistaken for a stop or facility
+      // point" shape, so it can never be mistaken for a station or facility
       // (both of which stay circular/pictogram markers).
       id: LYR_HANDLES,
       type: 'symbol',
@@ -808,7 +1147,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
     {
       // A way's open ends: drag to EXTEND (adds a new point), not reshape —
       // deliberately inverted (ink fill / light ring) so it never reads as a
-      // regular handle or, worse, a stop stop.
+      // regular handle or, worse, a station stop.
       id: LYR_WAY_ENDPOINTS,
       type: 'circle',
       source: SRC_HANDLES,
@@ -837,12 +1176,17 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
           'case',
           ['boolean', ['feature-state', 'selected'], false],
           0.18,
-          HOVERED_FEATURE,
+          ['boolean', ['feature-state', 'hover'], false],
           0.1,
           0,
         ],
       },
     },
+  ];
+}
+
+function facilityLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
       // Catalog-typed point facilities (entrances, bike docks, depots, …) —
       // each type gets its own pictogram (map/icons.ts, rasterized from the
@@ -885,7 +1229,7 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
       },
     },
     {
-      // Footprint/platform vertices of the stop currently being edited —
+      // Footprint/platform vertices of the station currently being edited —
       // same reshape affordance/style as way handles (same verb, same look).
       id: LYR_PHYSICAL_HANDLES,
       type: 'symbol',
@@ -897,6 +1241,11 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'icon-ignore-placement': true,
       },
     },
+  ];
+}
+
+function gestureLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
     {
       // During direct manipulation, the last settled projection remains stable
       // while this tiny source carries live geometry under the pointer. It is
@@ -964,6 +1313,32 @@ export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
         'line-dasharray': [2, 2],
       },
     },
+  ];
+}
+
+export function createLayerSpecs(theme: MapTheme): LayerSpecification[] {
+  return [
+    ...contextLayerSpecs(theme),
+    // The lower-detail corridor is the underlay during a District/Street
+    // cross-fade. Street surfaces paint above it, then selection halos paint
+    // above both so neither the physical fill nor the fading silhouette can
+    // bury interaction feedback.
+    ...corridorPaintLayerSpecs(theme),
+    ...streetDetailLayerSpecs(theme),
+    ...streetGuidanceLayerSpecs(theme),
+    ...physicalPlaceLayerSpecs(theme),
+    ...corridorLayerSpecs(theme),
+    ...serviceLineLayerSpecs(theme),
+    ...servicePaintLayerSpecs(theme),
+    ...serviceHitLayerSpecs(theme),
+    ...serviceControlLayerSpecs(theme),
+    ...stationLayerSpecs(theme),
+    ...vehicleLayerSpecs(theme),
+    ...labelLayerSpecs(theme),
+    ...drawingPreviewLayerSpecs(theme),
+    ...editorPointLayerSpecs(theme),
+    ...facilityLayerSpecs(theme),
+    ...gestureLayerSpecs(theme),
   ];
 }
 

@@ -15,6 +15,11 @@ import {
 // receive the same instance by injection — no module-level singleton.
 const EditorStoreContext = createContext<EditorStore | null>(null);
 
+// Deterministic renderer captures seed and manipulate fixtures through this
+// store. A performance build is still a local harness, not a production
+// release, so it needs the same seam that development uses.
+const EXPOSE_EDITOR_STORE = import.meta.env.DEV || import.meta.env.VITE_PERF_BUILD === '1';
+
 // The action registry is bound to that one store, so it travels the same way
 // rather than being rebuilt per consumer.
 const SelectionActionsContext = createContext<SelectionActionRegistry | null>(null);
@@ -36,7 +41,7 @@ export function EditorProvider({ children, store: providedStore }: EditorProvide
   actionsRef.current ??= createSelectionActions(storeRef.current);
 
   useEffect(() => {
-    if (import.meta.env.DEV) {
+    if (EXPOSE_EDITOR_STORE) {
       (window as unknown as { __editor?: unknown }).__editor = storeRef.current;
     }
   }, []);

@@ -18,6 +18,7 @@ import {
   SRC_WAYS,
   SRC_WAY_LABELS,
 } from './layers';
+
 export interface GestureFilterExclusion {
   property: string;
   ids: string[];
@@ -48,6 +49,10 @@ export interface GestureLayerMaskController {
   restore: () => void;
 }
 
+export interface GestureLayerMaskControllerOptions {
+  resolveLayerIds?: (logicalLayerId: string) => readonly string[];
+}
+
 export function buildGestureLayerMaskPlan(affected: GestureAffectedEntities): GestureLayerMaskPlan {
   const exclusionsBySource = new Map<string, GestureFilterExclusion[]>();
   const add = (sourceId: string, property: string, ids: string[]) => {
@@ -63,11 +68,13 @@ export function buildGestureLayerMaskPlan(affected: GestureAffectedEntities): Ge
   add(SRC_LANE_ARROWS, 'id', affected.wayIds);
   add(SRC_SERVICE_ARROWS, 'id', affected.wayIds);
   add(SRC_HANDLES, 'wayId', affected.wayIds);
+  // `tm-stations` is the legacy external source name for anchored Stops.
+  // Physical Stations own footprint/platform sources below.
   add(SRC_STATIONS, 'id', affected.stopIds);
-  add(SRC_FOOTPRINTS, 'stopId', affected.stopIds);
+  add(SRC_FOOTPRINTS, 'stationId', affected.stationIds);
   add(SRC_FOOTPRINTS, 'groupId', affected.groupIds);
-  add(SRC_PLATFORMS, 'stopId', affected.stopIds);
-  add(SRC_PHYSICAL_HANDLES, 'stopId', affected.stopIds);
+  add(SRC_PLATFORMS, 'stationId', affected.stationIds);
+  add(SRC_PHYSICAL_HANDLES, 'stationId', affected.stationIds);
   add(SRC_PHYSICAL_HANDLES, 'groupId', affected.groupIds);
   add(SRC_FACILITIES, 'id', affected.facilityIds);
   add(SRC_JUNCTIONS, 'nodeId', affected.nodeIds);
@@ -93,6 +100,17 @@ export function buildGestureLayerMaskPlan(affected: GestureAffectedEntities): Ge
   return { filterRules, hiddenLayerIds };
 }
 
+function gestureMaskIdentity(affected: GestureAffectedEntities): string {
+  return JSON.stringify([
+    affected.wayIds,
+    affected.stopIds,
+    affected.stationIds,
+    affected.facilityIds,
+    affected.groupIds,
+    affected.nodeIds,
+  ]);
+}
+
 /**
  * Masks settled features beneath the live gesture preview without asking
  * MapLibre to recalculate the same style filters on every pointer frame.
@@ -102,25 +120,26 @@ export function buildGestureLayerMaskPlan(affected: GestureAffectedEntities): Ge
  */
 export function createGestureLayerMaskController(
   map: GestureLayerMaskMap,
+  options: GestureLayerMaskControllerOptions = {},
 ): GestureLayerMaskController {
   const filterRestores = new Map<string, FilterSpecification | undefined>();
   const appliedFilterKeys = new Map<string, string>();
   const visibilityRestores = new Map<string, unknown>();
   let appliedKey: string | null = null;
+  const resolveLayerIds = (logicalLayerId: string) =>
+    options.resolveLayerIds?.(logicalLayerId) ?? [logicalLayerId];
 
   return {
     apply(affected) {
-      const key = JSON.stringify([
-        affected.wayIds,
-        affected.stopIds,
-        affected.facilityIds,
-        affected.groupIds,
-        affected.nodeIds,
-      ]);
+      const key = gestureMaskIdentity(affected);
       if (key === appliedKey) return;
 
       const plan = buildGestureLayerMaskPlan(affected);
-      const nextFilteredLayers = new Set(plan.filterRules.map((rule) => rule.layerId));
+      const filterRules = plan.filterRules.flatMap((rule) =>
+        resolveLayerIds(rule.layerId).map((layerId) => ({ ...rule, layerId })),
+      );
+      const hiddenLayerIds = plan.hiddenLayerIds.flatMap(resolveLayerIds);
+      const nextFilteredLayers = new Set(filterRules.map((rule) => rule.layerId));
       for (const [layerId, filter] of filterRestores) {
         const layerExists = Boolean(map.getLayer(layerId));
         if (layerExists && nextFilteredLayers.has(layerId)) continue;
@@ -128,7 +147,7 @@ export function createGestureLayerMaskController(
         filterRestores.delete(layerId);
         appliedFilterKeys.delete(layerId);
       }
-      const nextHiddenLayers = new Set(plan.hiddenLayerIds);
+      const nextHiddenLayers = new Set(hiddenLayerIds);
       for (const [layerId, visibility] of visibilityRestores) {
         const layerExists = Boolean(map.getLayer(layerId));
         if (layerExists && nextHiddenLayers.has(layerId)) continue;
@@ -136,10 +155,10 @@ export function createGestureLayerMaskController(
         visibilityRestores.delete(layerId);
       }
 
-      for (const rule of plan.filterRules) {
+      for (const rule of filterRules) {
         if (!map.getLayer(rule.layerId)) continue;
         if (!filterRestores.has(rule.layerId))
-          filterRestores.set(rule.layerId, map.getFilter(rule.layerId) || undefined);
+          filterRestores.set(rule.layerId, map.getFilter(rule.layerId) ?? undefined);
         const filterKey = JSON.stringify(rule.exclusions);
         if (appliedFilterKeys.get(rule.layerId) === filterKey) continue;
         map.setFilter(
@@ -148,7 +167,7 @@ export function createGestureLayerMaskController(
         );
         appliedFilterKeys.set(rule.layerId, filterKey);
       }
-      for (const layerId of plan.hiddenLayerIds) {
+      for (const layerId of hiddenLayerIds) {
         if (!map.getLayer(layerId)) continue;
         if (visibilityRestores.has(layerId)) continue;
         visibilityRestores.set(layerId, map.getLayoutProperty(layerId, 'visibility'));

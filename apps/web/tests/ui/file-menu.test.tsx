@@ -31,11 +31,7 @@ function renderWithEditor(children: ReactNode): void {
 function openMenu(): void {
   const trigger = container.querySelector('button');
   if (!(trigger instanceof HTMLButtonElement)) throw new Error('Expected menu trigger');
-  act(() => {
-    trigger.dispatchEvent(
-      new MouseEvent('pointerdown', { bubbles: true, button: 0, ctrlKey: false }),
-    );
-  });
+  act(() => trigger.click());
 }
 
 beforeEach(() => {
@@ -58,7 +54,7 @@ afterEach(() => {
 });
 
 describe('File menu', () => {
-  it('keeps file actions and adds About while editing', () => {
+  it('keeps file actions and adds About and Privacy while editing', () => {
     renderWithEditor(<FileMenu />);
     openMenu();
 
@@ -67,14 +63,16 @@ describe('File menu', () => {
     expect(document.body.textContent).toContain('Import streets…');
     expect(document.body.textContent).toContain('Export system data (.json)');
     expect(document.body.textContent).toContain('About TransitMapper…');
+    expect(document.querySelector('a[href="/privacy"]')?.textContent).toContain('Privacy');
   });
 
-  it('offers only About on a shared read-only system', () => {
+  it('offers About and Privacy on a shared read-only system', () => {
     store.commands.document.setSystem(store.getState().system, { readOnly: true });
     renderWithEditor(<FileMenu />);
     openMenu();
 
     expect(document.body.textContent).toContain('About TransitMapper…');
+    expect(document.querySelector('a[href="/privacy"]')?.textContent).toContain('Privacy');
     expect(document.body.textContent).not.toContain('New system');
     expect(document.body.textContent).not.toContain('My systems…');
     expect(document.body.textContent).not.toContain('Import streets…');

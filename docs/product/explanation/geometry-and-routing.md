@@ -7,12 +7,21 @@ derived at render or query time; none of it is saved.
 ## From centerline to lanes
 
 A way stores only a centerline and a cross-section (an ordered lane list
-with widths). `src/geometry/streets.ts` derives the rest: each lane's
-polyline is the centerline offset sideways by the running sum of lane widths
-(miter-joined, clamped at sharp angles), which yields lane surfaces,
-divider lines between them (dashed between same-direction lanes, the yellow
-center line between opposing ones, edge lines at the border), and direction
-arrows along travel lanes.
+with widths). `src/geometry/streets.ts` derives the rest in two forms: a
+lane centerline for routing, vehicles, and arrows, and a closed `LaneSurface`
+polygon for rendering. It resolves each cross-section boundary once, then
+shares that boundary with its two neighbouring surfaces. This avoids tiny
+gaps on curves and gives MapLibre and SVG the same physical asphalt or
+guideway. Divider lines come from those same boundaries (dashed between
+same-direction lanes, yellow between opposing lanes, edge lines at the
+border).
+
+A rail track uses its lane centerline differently: it resolves to a standard
+gauge pair of running rails and a regular set of ties. The ties travel as one
+multi-line feature rather than thousands of unrelated map features; SVG
+expands that same geometry when it writes the drawing. At lower detail the
+corridor remains the clean guideway line, so rail hardware appears only when
+it can read as physical structure rather than texture.
 
 The lane-list convention follows osm2streets: left-to-right as seen facing
 the way's forward direction. Adopting an existing convention meant lane
@@ -24,15 +33,40 @@ intersecting the viewport, and it's memoized per way, so a drag invalidates
 one way rather than the world. Below the threshold, ways render as the cheap
 lines the Network view always uses.
 
+At the intermediate District detail, the renderer uses the same offsetting
+rule to fill one closed carriageway footprint. That is deliberately separate
+from both the Overview centerline and Street's individual lane surfaces: each
+view reveals the amount of physical structure it can actually support.
+
+## Network service bundles
+
+The Network view groups Services that share a corridor. The ordering policy
+does not draw geometry. It receives each corridor's Service ids and the
+document's Service order, then returns a centered slot for each local member.
+`buildFeatures.ts`, prepared live snapshots, and static rendering use that
+same result. A Service can therefore move from a two-line trunk at `-2.5px`
+or `+2.5px` to the `0px` center of its own branch without letting the two
+colours trade places on the shared corridor.
+
+The boundary matters because service ordering is cartography, while line
+offsetting is a rendering detail. `service-bundle-ordering.ts` owns the first
+decision. MapLibre and SVG consume the resulting numeric offset. A future
+smooth join transition belongs at a junction, where one corridor ends and the
+next begins; the ordering module must not grow geometry code to fake it.
+
 ## Junction footprints
 
 Where ways meet at a node, drawing every way at full width would overlap
 messily. `src/geometry/junctions.ts` computes, per arm, how far to trim the
 way back: sort the arms around the junction, intersect each arm's edge line
 with its neighbor's, and trim to the farthest intersection (capped so a
-tiny side street can't consume a long block). The trimmed arm ends are then
-connected into the junction's surface polygon. Two collinear arms (a
-segment boundary, not a real junction) get no polygon at all.
+tiny side street can't consume a long block). Each corner then pulls both
+edge ends back and samples a tangential curve through that intersection. The
+result is a rounded curb return instead of a diagonal cut across the corner.
+If another corner needs a longer trim on the same arm, the renderer keeps the
+join straight rather than folding the road surface back over itself. Two
+collinear arms (a segment boundary, not a real junction) get no polygon at
+all.
 
 Trim distances feed back into lane derivation, so lanes visibly stop at the
 junction edge. This trim-back approach follows the intersection algorithm

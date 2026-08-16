@@ -64,8 +64,8 @@ describe('way split and merge integrity', () => {
     keepPoints: LngLat[];
     otherPoints: LngLat[];
     reversedOther: boolean;
-    startControl: 'stop' | 'signal' | 'roundabout' | 'levelCrossing';
-    endControl: 'stop' | 'signal' | 'roundabout' | 'levelCrossing';
+    startControl: 'stop' | 'signal' | 'yield' | 'roundabout' | 'levelCrossing';
+    endControl: 'stop' | 'signal' | 'yield' | 'roundabout' | 'levelCrossing';
     restrictionsFrom: 'outside-keep-start' | 'outside-keep-end';
   }[] = [
     {

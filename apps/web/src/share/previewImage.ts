@@ -1,4 +1,4 @@
-import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from '@transitmapper/core/render/preview';
+import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from '@transitmapper/core/render/preview-size';
 import { renderPreviewMarkup, type RenderPreviewMarkupOptions } from './previewWorker';
 
 // Rasterizing the share card, in the browser, at share time.
@@ -53,7 +53,9 @@ function decodeSvg(markup: string, signal?: AbortSignal): Promise<HTMLImageEleme
       if ('image' in outcome) resolve(outcome.image);
       else reject(outcome.error);
     };
-    const onAbort = () => finish({ error: abortError(signal!) });
+    const onAbort = () => {
+      if (signal) finish({ error: abortError(signal) });
+    };
     const timer = setTimeout(() => {
       finish({ error: new Error('Timed out rasterizing the preview image') });
     }, DECODE_TIMEOUT_MS);
@@ -82,7 +84,9 @@ export function canvasToPngBlob(
       if ('blob' in outcome) resolve(outcome.blob);
       else reject(outcome.error);
     };
-    const onAbort = () => finish({ error: abortError(options.signal!) });
+    const onAbort = () => {
+      if (options.signal) finish({ error: abortError(options.signal) });
+    };
     const timer = setTimeout(
       () => finish({ error: new Error('Timed out encoding the preview image') }),
       options.timeoutMs ?? PNG_ENCODE_TIMEOUT_MS,

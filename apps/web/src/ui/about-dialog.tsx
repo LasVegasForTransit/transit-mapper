@@ -27,6 +27,46 @@ function formatBuildTime(value: string): string {
   }).format(new Date(value));
 }
 
+interface AboutFooterProps {
+  buildInfo: BuildInfo;
+  licenseRef: string;
+}
+
+function AboutFooter({ buildInfo, licenseRef }: AboutFooterProps) {
+  return (
+    <footer className="about-foot">
+      <p>
+        Map rendering by{' '}
+        <ExternalLink href={PROJECT_PROVENANCE.platformCredits[0].url}>
+          {PROJECT_PROVENANCE.platformCredits[0].label}
+        </ExternalLink>
+        , basemap by{' '}
+        <ExternalLink href={PROJECT_PROVENANCE.platformCredits[1].url}>
+          {PROJECT_PROVENANCE.platformCredits[1].label}
+        </ExternalLink>
+        , map data ©{' '}
+        <ExternalLink href={PROJECT_PROVENANCE.platformCredits[2].url}>
+          {PROJECT_PROVENANCE.platformCredits[2].label}
+        </ExternalLink>
+        , and typography set in{' '}
+        <ExternalLink href={PROJECT_PROVENANCE.platformCredits[3].url}>
+          {PROJECT_PROVENANCE.platformCredits[3].label}
+        </ExternalLink>
+        .
+      </p>
+      <p>
+        <a href="/privacy">Privacy</a>
+        <span aria-hidden="true"> · </span>
+        <ExternalLink href={`${buildInfo.repositoryUrl}/blob/${licenseRef}/LICENSE`}>
+          MIT License
+        </ExternalLink>
+        <span aria-hidden="true"> · </span>
+        {buildInfo.copyrightNotice}
+      </p>
+    </footer>
+  );
+}
+
 export function AboutDialog({ onClose, buildInfo = currentBuildInfo() }: AboutDialogProps) {
   const licenseRef = buildInfo.commitSha ?? 'main';
 
@@ -87,34 +127,7 @@ export function AboutDialog({ onClose, buildInfo = currentBuildInfo() }: AboutDi
           )}
         </section>
 
-        <footer className="about-foot">
-          <p>
-            Map rendering by{' '}
-            <ExternalLink href={PROJECT_PROVENANCE.platformCredits[0].url}>
-              {PROJECT_PROVENANCE.platformCredits[0].label}
-            </ExternalLink>
-            , basemap by{' '}
-            <ExternalLink href={PROJECT_PROVENANCE.platformCredits[1].url}>
-              {PROJECT_PROVENANCE.platformCredits[1].label}
-            </ExternalLink>
-            , map data ©{' '}
-            <ExternalLink href={PROJECT_PROVENANCE.platformCredits[2].url}>
-              {PROJECT_PROVENANCE.platformCredits[2].label}
-            </ExternalLink>
-            , and typography set in{' '}
-            <ExternalLink href={PROJECT_PROVENANCE.platformCredits[3].url}>
-              {PROJECT_PROVENANCE.platformCredits[3].label}
-            </ExternalLink>
-            .
-          </p>
-          <p>
-            <ExternalLink href={`${buildInfo.repositoryUrl}/blob/${licenseRef}/LICENSE`}>
-              MIT License
-            </ExternalLink>
-            <span aria-hidden="true"> · </span>
-            {buildInfo.copyrightNotice}
-          </p>
-        </footer>
+        <AboutFooter buildInfo={buildInfo} licenseRef={licenseRef} />
       </div>
     </Modal>
   );

@@ -25,6 +25,11 @@ import type { WayCommands } from '../contracts/way-network-commands';
 import { createDraftWay, createOneWayBranch } from '../internal-operations/way-creation';
 import { finishActiveWay } from '../internal-operations/way-finishing';
 import type { EditorRuntime } from '../runtime';
+import {
+  renderMutationForWay,
+  renderMutationForWayGeometry,
+  renderMutationForWayJoin,
+} from '../internal-operations/render-mutations';
 
 interface WayCommandOptions {
   readonly createId?: () => string;
@@ -92,42 +97,49 @@ function createPointCommands(runtime: EditorRuntime, createId: () => string): Po
     addWayPoint(wayId, coord) {
       runtime.commitContent(undefined, ({ system }) => ({
         system: appendPointInSystem(system, wayId, coord),
+        renderMutation: renderMutationForWayGeometry(wayId),
         result: undefined,
       }));
     },
     insertWayPoint(wayId, index, coord) {
       runtime.commitContent(undefined, ({ system }) => ({
         system: insertPointInSystem(system, wayId, index, coord),
+        renderMutation: renderMutationForWayGeometry(wayId),
         result: undefined,
       }));
     },
     moveWayPoint(wayId, index, coord) {
       runtime.commitContent(undefined, ({ system }) => ({
         system: movePointInSystem(system, wayId, index, coord),
+        renderMutation: renderMutationForWayGeometry(wayId),
         result: undefined,
       }));
     },
     deleteWayPoint(wayId, index) {
       runtime.commitContent(undefined, ({ system }) => ({
         system: deletePointInSystem(system, wayId, index),
+        renderMutation: renderMutationForWayGeometry(wayId),
         result: undefined,
       }));
     },
     joinWayPointToWay(wayId, index, targetWayId, coord) {
       runtime.commitContent(undefined, ({ system }) => ({
         system: joinPointInSystem(system, { wayId, index, targetWayId, coord }, createId),
+        renderMutation: renderMutationForWayJoin(wayId, targetWayId),
         result: undefined,
       }));
     },
     closeWayLoop(wayId) {
       runtime.commitContent(undefined, ({ system }) => ({
         system: closeLoopInSystem(system, wayId, createId),
+        renderMutation: renderMutationForWayGeometry(wayId),
         result: undefined,
       }));
     },
     straightenWay(wayId) {
       runtime.commitContent(undefined, ({ system }) => ({
         system: straightenWayInSystem(system, wayId),
+        renderMutation: renderMutationForWayGeometry(wayId),
         result: undefined,
       }));
     },
@@ -168,30 +180,35 @@ function createAttributeCommands(
     setWayGeometry(id, geometry) {
       runtime.commitContent(undefined, ({ system }) => ({
         system: withWayGeometry(system, id, geometry),
+        renderMutation: renderMutationForWayGeometry(id),
         result: undefined,
       }));
     },
     setWayGrade(id, grade) {
       runtime.commitContent(undefined, ({ system }) => ({
         system: withWayGrade(system, id, grade),
+        renderMutation: renderMutationForWay(id),
         result: undefined,
       }));
     },
     setWayClassId(id, classId) {
       runtime.commitContent(undefined, ({ system }) => ({
         system: withWayClass(system, id, classId),
+        renderMutation: renderMutationForWay(id),
         result: undefined,
       }));
     },
     setWayCapacity(id, capacity) {
       runtime.commitContent(undefined, ({ system }) => ({
         system: withWayCapacity(system, id, capacity, system.drivingSide),
+        renderMutation: renderMutationForWayGeometry(id),
         result: undefined,
       }));
     },
     setWayProfile(id, profile) {
       runtime.commitContent(undefined, ({ system }) => ({
         system: withWayProfile(system, id, profile),
+        renderMutation: renderMutationForWayGeometry(id),
         result: undefined,
       }));
     },
@@ -202,6 +219,7 @@ function createAttributeCommands(
         if (!system.ways.some((way) => way.id === id)) return { system, result: undefined };
         return {
           system: withWayProfile(system, id, buildProfile(preset.lanes), preset.classId),
+          renderMutation: renderMutationForWayGeometry(id),
           result: undefined,
         };
       });

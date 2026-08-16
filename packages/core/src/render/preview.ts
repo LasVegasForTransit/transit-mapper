@@ -1,22 +1,21 @@
 import { MODE_ORDER, WAY_TYPE_ORDER } from '../model/catalog';
 import { systemBounds } from '../model/geo';
 import type { LngLat, TransitSystem } from '../model/system';
-import type { ViewOptions } from './buildFeatures';
+import { LVBT, LVBT_FONT_FAMILY } from '../style/lvbtBrand';
+import type { RenderViewOptions, ViewOptions } from './buildFeatures';
 import { legendEntriesFor } from './legend';
 import { fitBounds, metersPerPixel, projector } from './project';
+import { renderPresentationForViewport } from './render-presentation';
 import { scaleBarFor } from './scaleBar';
 import { systemSvg } from './svg';
-import { LVBT, LVBT_FONT_FAMILY } from '../style/lvbtBrand';
+import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from './preview-size';
+
+export { PREVIEW_HEIGHT, PREVIEW_WIDTH } from './preview-size';
 
 // What a shared system looks like when something outside the app has to show
 // it: a link unfurl in Slack, an oEmbed thumbnail, the no-script fallback of
 // an embedded map. Pure — the Worker adds fonts and rasterizes, but the
 // picture itself is decided here, so it can be exercised without a Worker.
-
-/** Open Graph's standard card size — the pixel dimensions of the PNG we
- *  serve, and what the meta tags advertise. */
-export const PREVIEW_WIDTH = 1200;
-export const PREVIEW_HEIGHT = 630;
 
 /**
  * The card is *composed* at half the size it's *rasterized* at, and resvg
@@ -128,20 +127,29 @@ export function previewSvg(system: TransitSystem, opts: PreviewSvgOptions = {}):
   const viewport = bounds
     ? fitBounds(bounds, { width, height, padding: PREVIEW_PADDING })
     : { center: EMPTY_SYSTEM_CENTER, zoom: EMPTY_SYSTEM_ZOOM, width, height };
+  const displayWidth = opts.displayWidth ?? TYPICAL_UNFURL_WIDTH;
+  const view: RenderViewOptions = {
+    ...PREVIEW_VIEW,
+    presentation: renderPresentationForViewport(viewport, {
+      displayedWidthPx: displayWidth,
+      displayedHeightPx: height * (displayWidth / width),
+    }),
+  };
 
-  return systemSvg(system, PREVIEW_VIEW, projector(viewport), {
+  return systemSvg(system, view, projector(viewport), {
     title: system.name || 'Transit system',
     legend: legendEntriesFor(system, PREVIEW_VIEW),
     width,
     height,
     fontFamily: PREVIEW_FONT_FAMILY,
-    displayWidth: opts.displayWidth ?? TYPICAL_UNFURL_WIDTH,
+    displayWidth,
     captionedExternally: opts.captionedExternally ?? true,
     background: opts.background ?? CARD_BACKGROUND,
     borderColor: opts.borderColor ?? CARD_BORDER_COLOR,
     borderWidth: opts.borderWidth ?? CARD_BORDER_WIDTH,
     borderInset: opts.borderInset ?? CARD_BORDER_INSET,
     insetBackground: opts.insetBackground ?? CARD_INSET_BACKGROUND,
+    cartographyCasingColor: LVBT.light.onSurface,
     scaleBar: scaleBarFor(metersPerPixel(viewport), Math.min(140, width * 0.3)),
   });
 }

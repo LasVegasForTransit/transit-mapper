@@ -10,6 +10,83 @@ hiding visible feedback, disabling a capability, weakening accessibility, or
 making settled output less accurate. Progressive detail must remain continuous
 and converge to the same correct result after the gesture.
 
+## Capture renderer evidence
+
+Renderer changes carry deterministic visual evidence alongside timing data:
+
+```bash
+pnpm renderer:capture -- --phase 00-baseline
+pnpm renderer:capture -- --phase 01-lod
+```
+
+The phase is a kebab-case artifact label. A complete run builds the same
+private instrumented application used by the performance protocol, replaces
+remote basemap styles with bundled source-free styles, and writes a browsable
+contact sheet under `apps/web/artifacts/renderer/<phase>/index.html`. It
+captures fixed desktop/mobile viewports, light/dark themes, all three views,
+five detail cameras, fractional-zoom filmstrips, the editor/onboarding/embed/
+export contexts, and dedicated Port Mason, density, scale, curve, junction,
+grade, rail, service-bundle, and Diagram fixtures.
+
+That regression corpus is fixed at 116 images: 60 editor-matrix frames, 30
+fractional filmstrip frames, 10 reference fixtures, and 16 context frames.
+Phase-specific proof never changes that count. `01-lod` adds a current-only
+`acceptance/` appendix with 21 frames for selected LOD blending, the tunnel
+boundary, served 3/4/5-arm junctions, moving-pan preload, production bank
+promotion, and live/static/SVG parity. Its separate manifest carries exact
+case IDs, file hashes, fixture and camera provenance, renderer counters, and
+machine assertions. The contact sheet renders this appendix after the stable
+baseline/current/difference comparisons.
+
+Filmstrip cameras are calibrated in screen space against the default Port
+Mason reference road, using that profile's physical width and the fixture's
+latitude. The Overview/District strip targets 1.75, 2, 3, 4, and 4.5 CSS px;
+the District/Street strip targets 8, 9, 10.5, 12, and 13 CSS px. The harness
+derives camera zoom from each target instead of embedding zoom guesses. A
+profile-width or reference-latitude change therefore moves the zooms
+automatically while keeping the evidence centered on the intended LOD
+boundaries. Each matrix and filmstrip manifest entry records both
+`targetCorridorWidthPx` and the derived zoom so the calibration remains
+auditable.
+
+A rerun clears only that exact phase directory. Earlier phases remain beside
+it so the sheet can show baseline, previous, current, and pixel-difference
+images. Generated captures are ignored build artifacts until a reviewed final
+set is deliberately promoted to visual-regression goldens.
+
+Canonical history accepts the legacy `00-baseline` manifest, including its
+`local-blank-v1` basemap. Every later phase must name a 40-character source
+revision, its dirty state, the 64-character exact source-content digest, and
+`local-blank-v2`; every declared image hash must match its bytes. `01-lod` is
+incomplete unless its exact acceptance appendix also validates. Diagnostic,
+partial, extra, duplicate, aliased, escaping, or assertion-failing evidence
+cannot become the previous successful phase.
+
+Every camera capture crosses the renderer's real settlement boundary. The
+driver waits for fonts, moves the camera and waits for its first MapLibre idle,
+waits for the latest cooperative presentation generation and its trailing
+refresh, forces one final repaint, waits for the resulting source/layout idle,
+and then waits two animation frames. This order matters: camera idle can occur
+before a newly projected GeoJSON patch has reached MapLibre's Worker. A plain
+canvas screenshot after `jumpTo` is not valid renderer evidence.
+
+The bare evidence frame suppresses editor chrome and the local drafting grid,
+then rejects an image containing only the deterministic backdrop. A capture
+with counters but no painted corridor, service, station, or other scene content
+is a failed capture, not a visual result.
+
+Use `--skip-build` only when `apps/web/dist` is still the current instrumented
+build from a successful capture or performance run. `--profile desktop|mobile`
+and `--theme light|dark` produce a faster diagnostic subset; they intentionally
+omit the cross-surface, fixture, and filmstrip evidence that belongs to a
+complete phase boundary.
+
+Capture before renderer behavior changes, after every renderer phase, and
+after a later change to geometry, LOD thresholds, styling, labels, or layer
+ordering. A timing improvement is rejected when the contact sheet shows
+missing detail, popping, label instability, altered topology, reduced
+contrast, or an incorrect settled frame.
+
 ## Run the fixed protocol
 
 Install stable Google Chrome, then run:
@@ -87,6 +164,9 @@ does not satisfy the startup gate.
 
 Each editor sample resolves a known fixture station from both its GeoJSON
 source and painted hit-test layer, then drags it with trusted pointer input.
+The offline proof selects the served station nearest the fixture camera; an
+unserved stop is intentionally absent from Network view and is not a valid
+pointer-edit target.
 An isolated Network-view station release replaces only the changed promoted-ID
 feature. The exact gesture preview remains visible and hit-testable until the
 station source reports loaded and a later map render occurs, so the reduced
@@ -145,6 +225,42 @@ the measured action. Both complete `setData` replacements and differential
 deterministic projection tests separately prove how many features a targeted
 mutation derives.
 
+Renderer diagnostics separate accepted projection CPU from settlement latency.
+`projectionDurationMs` sums only measured main-thread scheduler slices and the
+small synchronous planning seams for an accepted logical generation; time
+waiting for later animation frames is not CPU. `projectionSettlementLatencyMs`
+is the wall time until that generation's complete scene commits. The separate
+scheduled-duration total includes canceled and adaptively refined drafts, so
+cancellation thrash cannot look free. Editor-only handle and guide projection
+has its own counts and durations rather than contaminating committed geometry.
+Ordinary selection therefore means zero **committed** projection, full-upload,
+and source-upload deltas. It may still project and upload lightweight
+editor-owned handles, termini, or guides; the Phase 2 appendix records those
+editor counters separately instead of claiming selection is wholly
+feature-state-only.
+
+The same snapshot reports candidate and visible feature counts, generated
+visual and hit features, generated vertices, cache hits and misses, tier
+transitions, patch sizes, and complete-versus-differential uploads. Cooperative
+scheduling adds slice, unit, yield, canceled, and failed counts plus the longest
+slice, unit, and scene commit. Read these together: a faster projection
+accompanied by fewer visible features is a fidelity regression, while a high
+candidate-to-visible ratio points to culling rather than geometry as the next
+problem.
+
+Same-scale camera movement inside the accepted candidate envelope must report
+zero projection. A later projection is expected only when scale changes detail
+or the camera leaves that coverage. Wide/full source revisions load the hidden
+committed bank before one visibility flip; inspect physical source IDs and bank
+diagnostics rather than interpreting those calls as a mixed visible update.
+
+The scheduler normally rejects an over-budget unit and refines its batch. One
+final structurally minimal batch-one attempt may retain completed private work,
+yield, and commit so GC/JIT attribution cannot leave an initial city blank.
+That policy preserves visual continuity only: `maxProjectionUnitMs` and
+`maxProjectionSliceMs` still report the overrun, and either value above its
+budget fails performance review.
+
 Absolute startup gates use the five-run p95. Direct-manipulation gates combine
 the raw samples across all five runs, so one bad run cannot hide behind a
 median:
@@ -164,20 +280,32 @@ deterministic four-times-throttled CPU calibration; absolute user-facing gates
 are never normalized. Calibration also records 60 consecutive rAF intervals,
 their median, and the inferred display refresh rate so the headed environment
 is auditable. Display cadence is diagnostic only and never changes a budget or
-normalizes a regression. Gzip and Brotli delivery bytes get the same 10%
-regression check during a full audit. Raw graph size remains in the report for
+normalizes a regression. Gzip and Brotli bytes that a browser automatically
+transfers get the same 10% regression check during a full audit. Raw graph
+size remains in the report for
 diagnosis, but it is not an absolute or regression gate; browser measurements
 own parse and responsiveness costs. The compressed absolute limits are round
 delivery guardrails, not snapshots of the current build plus a few kilobytes,
 so ordinary feature work does not require ritual budget churn.
 
-The production build keeps MapLibre and React in stable cache chunks so an
-editor release does not make a returning browser download those runtimes
-again. MapLibre 4 is itself one prebundled module, so an output named
-`map-engine` whose source map contains only MapLibre modules has a narrow
-810 kB raw limit. Every other JavaScript output, including service-worker and
-nested outputs, is limited to 500 kB. These are enforced in
-`bundle-report.json`; Vite's generic warning threshold is not the only guard.
+The production build keeps MapLibre, React, and the cooperative renderer in
+stable cache chunks so an editor release does not make a returning browser
+download those runtimes again. The renderer boundary contains only explicitly
+assigned editor modules; shared cartography stays shared with the embed. It has
+no size exception. MapLibre 4 is itself one prebundled module, so an output
+named `map-engine` whose source map contains only MapLibre modules has a narrow
+810 kB raw limit. Every other JavaScript output, including `renderer-runtime`,
+service-worker, and nested outputs, is limited to 500 kB.
+
+The absolute main-editor ceiling in `apps/web/perf.config.ts` protects the
+static editor graph that a first load transfers before a person can act. The
+report still records the full lazy graph, and the browser protocol measures
+the bytes each journey actually fetches. This separates a real startup
+regression from code behind an unused export or dialog. Every emitted lazy
+chunk remains subject to the 500 kB limit unless it is MapLibre. The full
+protocol also rejects a checked or base-revision compressed transfer median
+regression above 10%. These rules are enforced in `bundle-report.json`; Vite's
+generic warning threshold is not the only guard.
 
 Missing Chrome produces an `unavailable` report and a non-zero exit. The
 harness never writes placeholder timings.
@@ -251,8 +379,9 @@ growth.
 
 ## What “offline” means
 
-The service worker keeps the editor HTML, eager and lazy editor chunks, local
-icons, and install metadata. The browser check writes a fixture once through
+The service worker keeps the editor HTML, eager and lazy editor chunks, the
+three Workers that deserialize storage, lay out diagrams, and project map
+features, local icons, and install metadata. The browser check writes a fixture once through
 the real legacy `localStorage` keys, loads the editor, and proves the
 application migrated both the complete document and library row into
 IndexedDB and removed the legacy document. It then installs the worker, clears
@@ -267,3 +396,6 @@ hosted remotely. If the initial style errors or does not load within 1.5
 seconds, the editor switches to a bundled blank style. Geographic system
 geometry and editing affordances remain usable; remote basemap detail and
 text-symbol layers are unavailable until a connected reload.
+Profile or theme subsets are diagnostic captures. They are written to a
+`diagnostic-<phase>-<profile>-<theme>` sibling so they cannot replace the
+complete numbered phase used by contact-sheet history.

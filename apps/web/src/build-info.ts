@@ -9,6 +9,14 @@ export interface BuildInfo {
   releaseTag: string | null;
   releaseUrl: string | null;
   attestationsUrl: string;
+  performanceSampling: {
+    /** Emergency build-time kill switch. Runtime privacy and origin gates
+     * still apply when this is enabled. */
+    enabled: boolean;
+    ordinaryBasisPoints: number;
+    releaseBasisPoints: number;
+    boostUntil: string | null;
+  };
 }
 
 declare const __TRANSITMAPPER_BUILD_INFO__: BuildInfo;

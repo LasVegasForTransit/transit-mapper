@@ -9,6 +9,7 @@ const calm: AppBannerInputs = {
   bootstrap: { kind: 'ok' },
   updateWaiting: false,
   offlineReady: false,
+  offlineReadiness: 'deferred',
   notice: null,
   documentSlowToLoad: false,
   online: true,
@@ -80,6 +81,7 @@ describe('which message wins', () => {
       bootstrap: { kind: 'storage-unavailable' },
       updateWaiting: true,
       offlineReady: true,
+      offlineReadiness: 'essential',
       notice: 'corrupt-system',
       documentSlowToLoad: true,
       online: false,
@@ -123,9 +125,26 @@ describe('which message wins', () => {
   });
 
   it('puts the offline-ready note above a notice', () => {
-    const inputs: AppBannerInputs = { ...calm, offlineReady: true, notice: 'dialog-failed' };
+    const inputs: AppBannerInputs = {
+      ...calm,
+      offlineReady: true,
+      offlineReadiness: 'essential',
+      notice: 'dialog-failed',
+    };
 
-    expect(resolveAppBanner(inputs)?.message).toContain('available offline');
+    expect(resolveAppBanner(inputs)?.message).toContain('reopen offline');
+  });
+
+  it('never describes the background map as available offline', () => {
+    for (const offlineReadiness of [
+      'essential',
+      'adaptive-pending',
+      'complete',
+      'deferred',
+    ] as const) {
+      const message = resolveAppBanner({ ...calm, offlineReady: true, offlineReadiness })?.message;
+      expect(message).toContain('background map still needs a connection');
+    }
   });
 });
 
@@ -147,6 +166,17 @@ describe('naming the network as the reason', () => {
     for (const inputs of remoteFailures) {
       expect(resolveAppBanner({ ...inputs, online: true })?.message).not.toContain('offline');
     }
+  });
+
+  it('describes the usable drafting surface instead of a broken-looking blank map', () => {
+    const message = resolveAppBanner({
+      ...calm,
+      notice: 'basemap-unavailable',
+      online: true,
+    })?.message;
+
+    expect(message).toContain('drafting grid');
+    expect(message).not.toContain('blank');
   });
 
   // The message is derived from the cause each render rather than frozen when

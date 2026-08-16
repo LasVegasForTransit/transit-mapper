@@ -1,10 +1,18 @@
 import { useEffect, useRef } from 'react';
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
-import { buildFeatures, registerMapIcons, SRC_STATIONS, type ViewOptions } from '../map/layers';
+import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
+import { registerMapIcons, SRC_STATIONS } from '../map/layers';
 import { addExportSourcesAndLayers, setExportFeatureData } from '../map/export/exportLayerSetup';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { basemapStyleForScheme } from '../map/mapTheme';
+import { createRenderSettlementMarker } from '../map/render-settlement-marker';
+import { projectFeaturesForFittedMap } from '../map/static-render-features';
+import {
+  createFeatureProjectionWorker,
+  type FeatureProjectionWorkerClient,
+} from '../map/feature-projection-worker';
+
 /**
  * A second, read-only MapLibre instance for the export dialog — deliberately
  * separate from the app's main map (map/MapCanvas.tsx) so panning/zooming it
@@ -18,28 +26,38 @@ interface ExportPreviewMapProps {
   onReady: (map: MLMap) => void;
 }
 
+function createExportPreviewMap(container: HTMLDivElement, system: TransitSystem): MLMap {
+  return new maplibregl.Map({
+    container,
+    style: basemapStyleForScheme('light'),
+    center: system.viewport.center,
+    zoom: system.viewport.zoom,
+    preserveDrawingBuffer: true, // needed to read the canvas back out for PNG export
+    attributionControl: false,
+    // The export UI promises pan and zoom, not a second 3D camera. Keeping it
+    // flat and north-up lets SVG projection run exactly off-thread.
+    dragRotate: false,
+    touchPitch: false,
+    pitchWithRotate: false,
+  });
+}
+
 export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
+  const featureProjectionRef = useRef<FeatureProjectionWorkerClient | null>(null);
+  const projectionAbortRef = useRef<AbortController | null>(null);
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: basemapStyleForScheme('light'),
-      center: system.viewport.center,
-      zoom: system.viewport.zoom,
-      preserveDrawingBuffer: true, // needed to read the canvas back out for PNG export
-      attributionControl: false,
-      // The export UI promises pan and zoom, not a second 3D camera. Keeping it
-      // flat and north-up lets SVG projection run exactly off-thread.
-      dragRotate: false,
-      touchPitch: false,
-      pitchWithRotate: false,
-    });
+    const settlement = createRenderSettlementMarker(containerRef.current);
+    const featureProjection = createFeatureProjectionWorker();
+    featureProjectionRef.current = featureProjection;
+    const map = createExportPreviewMap(containerRef.current, system);
     mapRef.current = map;
+    const onCameraSettled = () => pushDataRef.current();
 
     map.on('load', () => {
       registerMapIcons(map, 'light');
@@ -56,6 +74,8 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
 
       pushDataRef.current();
       onReadyRef.current(map);
+      map.on('moveend', onCameraSettled);
+      map.on('resize', onCameraSettled);
     });
 
     const ro = new ResizeObserver(() => map.resize());
@@ -63,7 +83,14 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
 
     return () => {
       ro.disconnect();
+      settlement.clear();
+      projectionAbortRef.current?.abort();
+      projectionAbortRef.current = null;
+      featureProjection.dispose();
+      featureProjectionRef.current = null;
       mapRef.current = null;
+      map.off('moveend', onCameraSettled);
+      map.off('resize', onCameraSettled);
       map.remove();
     };
     // Mounts once; the preview map's own life (bounds fit, sources) starts
@@ -74,9 +101,30 @@ export function ExportPreviewMap({ system, view, onReady }: ExportPreviewMapProp
 
   const pushData = () => {
     const map = mapRef.current;
-    if (!map?.getSource(SRC_STATIONS)) return;
-    const fc = buildFeatures(system, null, [], view);
-    setExportFeatureData(map, fc);
+    const featureProjection = featureProjectionRef.current;
+    if (!map?.getSource(SRC_STATIONS) || !featureProjection) return;
+    if (containerRef.current) delete containerRef.current.dataset.renderSettled;
+    projectionAbortRef.current?.abort();
+    const abort = new AbortController();
+    projectionAbortRef.current = abort;
+    void projectFeaturesForFittedMap({
+      worker: featureProjection,
+      system,
+      view,
+      map,
+      signal: abort.signal,
+    })
+      .then((features) => {
+        if (abort.signal.aborted || mapRef.current !== map) return;
+        setExportFeatureData(map, features);
+        map.once('idle', () => {
+          if (containerRef.current) containerRef.current.dataset.renderSettled = 'true';
+        });
+      })
+      .catch((error: unknown) => {
+        if (!abort.signal.aborted)
+          console.error('[export preview] feature projection failed.', error);
+      });
   };
   const pushDataRef = useRef(pushData);
   pushDataRef.current = pushData;

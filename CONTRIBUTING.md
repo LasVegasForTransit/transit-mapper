@@ -31,21 +31,30 @@ formats are not a stable compatibility promise.
 Pull requests land by rebase merge, so your commits reach `main` exactly
 as you wrote them — see [the enforcement
 model](docs/development/explanation/enforcement-model.md#merge-method)
-for why. Write commit messages you'd want to read in `main`'s history.
+for why. A `feat` commit is reserved for a capability a person can use or
+observe; use `refactor`, `perf`, `test`, or `chore` for internal preparation.
+See [commit messages](docs/development/reference/commit-messages.md) for the
+reasoning and examples.
 
-The description template uses invisible comments to ask for a summary, the
-reason for the change, and how it was verified. Write direct prose where each
-prompt appears; the rendered pull request has no ornamental section headings.
-Follow-ups are optional. CI runs `pnpm check`, so there is no checklist for
-anything a command already verifies. See [Contribution
-metadata](docs/development/reference/contribution-metadata.md) for the exact
-contract and noninteractive tooling.
+Scope is optional. TransitMapper's durable boundaries are declared in
+[`.lvbt/commit-scopes.txt`](.lvbt/commit-scopes.txt); omit it for
+cross-boundary work rather than inventing a scope from a feature, file, task,
+or contributor role.
 
-Leave out the list of files you changed, a walk through the diff, adjectives
-with no number behind them such as "much faster", emoji headings, and
-checkboxes for things CI already proves. Each follow-up checklist item is
-written as an issue title that says what needs doing to someone who has not
-read the pull request.
+The organization template asks for a TL;DR, an overview, and optional
+follow-ups. Fill those sections with complete, direct prose: lead with the
+outcome for a person using TransitMapper, then explain the important constraint
+or trade-off a reviewer needs to understand. Do not turn the description into
+a file inventory, a walk through the diff, or a list of implementation
+abstractions.
+
+Follow-ups are optional and must be objectives, not chores. A useful item says
+what unfinished user, reliability, or product outcome remains, such as
+"Render metric curves and watertight street corridors." Rebase, formatting,
+running a command, resolving conflicts, and closing a generic gate belong in
+the work of this pull request, not its follow-up list. CI already runs `pnpm
+check`, so the description does not need checkboxes for anything a command
+proves.
 
 If an AI agent wrote the changes or the description, co-author its commits
 with a `Co-authored-by:` trailer. A reviewer reads agent-written code

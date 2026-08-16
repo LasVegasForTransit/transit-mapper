@@ -1,6 +1,11 @@
 import { useEditor, useEditorStore } from '../editor/EditorProvider';
 import { exportSystemJson } from '../share/jsonExport';
-import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from './DropdownMenu';
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuLink,
+  DropdownMenuSeparator,
+} from './DropdownMenu';
 import { Icon } from './Icon';
 import { useUi } from './UiProvider';
 
@@ -69,6 +74,9 @@ export function FileMenu() {
       <DropdownMenuItem onSelect={() => openDialog('about')}>
         <span className="dropdown-menu-icon-spacer" aria-hidden="true" /> About TransitMapper…
       </DropdownMenuItem>
+      <DropdownMenuLink href="/privacy">
+        <span className="dropdown-menu-icon-spacer" aria-hidden="true" /> Privacy
+      </DropdownMenuLink>
     </DropdownMenu>
   );
 }

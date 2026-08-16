@@ -1,7 +1,11 @@
 import { haversineMeters, nearestInsertionPoint } from './geo';
 import { shortId } from './ids';
 import { reanchorStopsOnWay } from './stop-reanchoring';
-import type { LngLat, Node, TransitSystem } from './system';
+import {
+  curveControlsAfterPointDeletion,
+  curveControlsAfterPointInsertion,
+} from './curve-controls';
+import type { CurveControl, LngLat, Node, TransitSystem } from './system';
 
 export type CreateWayPointEditId = () => string;
 
@@ -16,14 +20,33 @@ function sameCoord(left: LngLat, right: LngLat): boolean {
   return left[0] === right[0] && left[1] === right[1];
 }
 
-function withWayPoints(system: TransitSystem, wayId: string, points: LngLat[]): TransitSystem {
+function withWayPoints(
+  system: TransitSystem,
+  wayId: string,
+  points: LngLat[],
+  curveControls?: CurveControl[],
+): TransitSystem {
   const index = system.ways.findIndex((way) => way.id === wayId);
   if (index < 0 || points === system.ways[index].points) return system;
   const ways = [...system.ways];
-  ways[index] = { ...ways[index], points };
+  ways[index] =
+    curveControls === undefined
+      ? { ...ways[index], points }
+      : { ...ways[index], points, curveControls };
   const next = { ...system, ways };
   const stops = reanchorStopsOnWay(next, wayId);
   return { ...next, stops };
+}
+
+function withInsertedPoint(way: TransitSystem['ways'][number], index: number, coord: LngLat) {
+  const curveControls = way.curveControls
+    ? curveControlsAfterPointInsertion(way.curveControls, index)
+    : undefined;
+  return {
+    ...way,
+    points: [...way.points.slice(0, index), coord, ...way.points.slice(index)],
+    ...(curveControls ? { curveControls } : {}),
+  };
 }
 
 function shiftRefsForInsert(nodes: Node[], wayId: string, index: number): Node[] {
@@ -67,11 +90,8 @@ export function insertWayPoint(
 ): TransitSystem {
   const way = system.ways.find((candidate) => candidate.id === wayId);
   if (!way || index < 0 || index > way.points.length) return system;
-  const next = withWayPoints(system, wayId, [
-    ...way.points.slice(0, index),
-    coord,
-    ...way.points.slice(index),
-  ]);
+  const inserted = withInsertedPoint(way, index, coord);
+  const next = withWayPoints(system, wayId, inserted.points, inserted.curveControls);
   return { ...next, nodes: shiftRefsForInsert(next.nodes, wayId, index) };
 }
 
@@ -125,6 +145,7 @@ export function deleteWayPoint(system: TransitSystem, wayId: string, index: numb
     system,
     wayId,
     way.points.filter((_, candidateIndex) => candidateIndex !== index),
+    way.curveControls ? curveControlsAfterPointDeletion(way.curveControls, index) : undefined,
   );
   return { ...next, nodes: shiftRefsForDelete(next.nodes, wayId, index) };
 }
@@ -152,14 +173,7 @@ export function joinWayPointToWay(
     exactCoord = insertion.coord;
     ways = ways.map((candidate) =>
       candidate.id === targetWayId
-        ? {
-            ...candidate,
-            points: [
-              ...candidate.points.slice(0, targetIndex),
-              exactCoord,
-              ...candidate.points.slice(targetIndex),
-            ],
-          }
+        ? withInsertedPoint(candidate, targetIndex, exactCoord)
         : candidate,
     );
     nodes = shiftRefsForInsert(nodes, targetWayId, targetIndex);

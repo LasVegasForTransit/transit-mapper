@@ -43,6 +43,10 @@ interface ClaudeSettings {
   enabledPlugins?: Record<string, boolean>;
 }
 
+interface CommitSubjectValidator {
+  commitSubjectError(subject: string): string | undefined;
+}
+
 async function jsonFile<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(resolve(ROOT, path), 'utf8')) as T;
 }
@@ -95,6 +99,16 @@ if (codex.version !== lock.version || claude.version !== lock.version) {
   fail('the harness manifests do not match the pinned version');
 }
 
+const commitSubjectValidator = (await import(
+  resolve(PLUGIN_ROOT, 'scripts/validate-commit-subject.mjs')
+)) as CommitSubjectValidator;
+const scopePolicyError = commitSubjectValidator.commitSubjectError(
+  'chore: validate repository tooling policy',
+);
+if (scopePolicyError) {
+  fail(scopePolicyError);
+}
+
 const marketplace = await jsonFile<Marketplace>('.agents/plugins/marketplace.json');
 const listed = marketplace.plugins.find(({ name }) => name === lock.plugin);
 if (
@@ -127,6 +141,23 @@ if (
 const agents = await readFile(resolve(ROOT, 'AGENTS.md'), 'utf8');
 if (!agents.includes('github-contribution') || !agents.includes('github-create.mjs')) {
   fail('AGENTS.md does not require the shared creation workflow');
+}
+
+const commitMessageHook = await readFile(resolve(ROOT, '.githooks/commit-msg'), 'utf8');
+if (!commitMessageHook.includes('validate-commit-subject.mjs')) {
+  fail('the commit-msg hook does not use the pinned subject validator');
+}
+
+const prepareCommitMessageHook = await readFile(
+  resolve(ROOT, '.githooks/prepare-commit-msg'),
+  'utf8',
+);
+if (
+  !prepareCommitMessageHook.includes('CODEX_SESSION_ID') ||
+  !prepareCommitMessageHook.includes('Codex <noreply@openai.com>') ||
+  !commitMessageHook.includes('CODEX_SESSION_ID')
+) {
+  fail('the commit hooks do not require Codex attribution');
 }
 
 const issueTemplates = await readdir(resolve(ROOT, '.github/ISSUE_TEMPLATE')).catch(

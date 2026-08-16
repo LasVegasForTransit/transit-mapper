@@ -1,41 +1,22 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import { useEditor, useEditorCommands } from '../editor/EditorProvider';
-import { useSelectionActions } from '../editor/useSelectionActions';
-import type { MultiSelectItem, Selection, Tool } from '../editor/store';
-import { Icon } from './Icon';
-import { NodeInspector } from './NodeInspector';
+import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
+import { useEditor } from '../editor/EditorProvider';
+import type { Selection, Tool } from '../editor/store';
 import { Panel } from './Panel';
 import { useDelayedUnmount } from './useDelayedUnmount';
 import { useView, type ViewMode } from './ViewProvider';
 import { ToolDraftInspector } from './inspector/drafts';
-import { ServiceInspector } from './inspector/ServiceInspector';
-import { WayInspector } from './inspector/WayInspector';
-import { StopInspector } from './inspector/StopInspector';
-import { StationInspector } from './inspector/StationInspector';
-import { FacilityInspector } from './inspector/FacilityInspector';
-import { GroupInspector } from './inspector/GroupInspector';
-import { LineInspector } from './inspector/LineInspector';
+import { loadSelectionInspectorContent } from './inspector/selection-content-loader';
 
-function renderInspectorContent(
-  selection: Selection,
-  multiSelection: MultiSelectItem[],
-): ReactNode {
-  if (multiSelection.length > 0) return <MultiInspector items={multiSelection} />;
-  if (!selection) return null;
-  if (selection.kind === 'line') return <LineInspector key={selection.id} id={selection.id} />;
-  // key={id}: switching selection to a DIFFERENT service must remount, not
-  // reuse this instance — its "Custom" frequency/span disclosure is local
-  // state derived once at mount from that service's own values (see
-  // ServiceInspector), and would otherwise stay stuck open/closed from
-  // whichever service was selected previously.
-  if (selection.kind === 'service')
-    return <ServiceInspector key={selection.id} id={selection.id} />;
-  if (selection.kind === 'way') return <WayInspector id={selection.id} />;
-  if (selection.kind === 'facility') return <FacilityInspector id={selection.id} />;
-  if (selection.kind === 'group') return <GroupInspector id={selection.id} />;
-  if (selection.kind === 'node') return <NodeInspector id={selection.id} />;
-  if (selection.kind === 'station') return <StationInspector id={selection.id} />;
-  return <StopInspector id={selection.id} />;
+const SelectionInspectorContent = lazy(loadSelectionInspectorContent);
+
+function SelectionLoading() {
+  return (
+    <Panel slot="right" aria-label="Selection details">
+      <p className="insp-sub" role="status" aria-live="polite">
+        Opening selection details…
+      </p>
+    </Panel>
+  );
 }
 
 // Slides in once there's something to say — either a selection, or (an
@@ -130,7 +111,7 @@ export function Inspector() {
 
   // A panel scrolled halfway down keeps that offset when a different object
   // is put into it, because the scroll lives on a container that never
-  // unmounts. Measured: selecting a line after scrolling a stop's panel
+  // unmounts. Measured: selecting a line after scrolling a station's panel
   // opened at scrollTop 134 — the first thing showing was "MODE", with the
   // line's own name and its tabs above the fold. You pick a line and get an
   // anonymous form.
@@ -150,9 +131,11 @@ export function Inspector() {
   const current =
     content.kind === 'tool-draft' ? (
       <ToolDraftInspector tool={content.tool} />
-    ) : (
-      renderInspectorContent(selection, multiSelection)
-    );
+    ) : content.kind === 'selection' ? (
+      <Suspense fallback={<SelectionLoading />}>
+        <SelectionInspectorContent selection={selection} multiSelection={multiSelection} />
+      </Suspense>
+    ) : null;
   const lastContent = useRef<ReactNode>(current);
   if (current !== null) lastContent.current = current;
 
@@ -161,98 +144,5 @@ export function Inspector() {
     <div ref={rootRef} data-inspector-state={closing ? 'closed' : 'open'}>
       {current ?? lastContent.current}
     </div>
-  );
-}
-
-const MULTI_KIND_LABEL: Record<MultiSelectItem['kind'], string> = {
-  way: 'way',
-  stop: 'stop',
-  station: 'station',
-  facility: 'facility',
-  line: 'line',
-  service: 'service',
-};
-
-interface MultiInspectorProps {
-  items: MultiSelectItem[];
-}
-
-// Bulk actions only — moving/deleting several objects at once as one group,
-// not editing shared properties across mixed kinds (a way and a stop have
-// nothing in common to show one merged form for).
-//
-// Which actions exist is not decided here: the registry answers that from the
-// selection, and this renders whatever came back. The same list is what the
-// map's right-click menu shows, so an action can never appear in one surface
-// and not the other.
-function MultiInspector({ items }: MultiInspectorProps) {
-  const readOnly = useEditor((s) => s.readOnly);
-  const { clearMultiSelection } = useEditorCommands().selection;
-  const { actions, note } = useSelectionActions();
-
-  const counts = new Map<MultiSelectItem['kind'], number>();
-  for (const item of items) counts.set(item.kind, (counts.get(item.kind) ?? 0) + 1);
-  const summary = [...counts.entries()]
-    .map(([kind, n]) => `${n} ${MULTI_KIND_LABEL[kind]}${n === 1 ? '' : 's'}`)
-    .join(', ');
-
-  return (
-    <Panel slot="right" aria-label="Selection details">
-      <div className="insp-head">
-        <span className="dot ring" />
-        <span className="insp-name static">{items.length} selected</span>
-      </div>
-      <div className="insp-kind">{summary}</div>
-
-      {!readOnly && (
-        <p className="insp-sub">
-          Drag any selected way, stop, or facility to move the whole group · Shift-click to add or
-          remove one
-        </p>
-      )}
-
-      {note && (
-        <p className="insp-sub" style={{ marginBottom: 12 }}>
-          {note}
-        </p>
-      )}
-
-      {actions
-        .filter((action) => action.group !== 'destructive')
-        .map((action) => (
-          <div key={action.id}>
-            <button
-              type="button"
-              className="ghost-btn"
-              style={{ width: '100%', justifyContent: 'center', marginBottom: 4 }}
-              onClick={action.run}
-            >
-              {action.label}
-            </button>
-            {action.hint && (
-              <p className="insp-sub" style={{ marginBottom: 12 }}>
-                {action.hint}
-              </p>
-            )}
-          </div>
-        ))}
-
-      <button
-        type="button"
-        className="ghost-btn"
-        style={{ width: '100%', justifyContent: 'center', marginBottom: 8 }}
-        onClick={clearMultiSelection}
-      >
-        Clear selection
-      </button>
-      {!readOnly &&
-        actions
-          .filter((action) => action.group === 'destructive')
-          .map((action) => (
-            <button key={action.id} type="button" className="danger-btn" onClick={action.run}>
-              <Icon name="trash" size={18} /> {action.label}
-            </button>
-          ))}
-    </Panel>
   );
 }

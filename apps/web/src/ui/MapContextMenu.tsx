@@ -1,22 +1,18 @@
-import * as RdxMenu from '@radix-ui/react-dropdown-menu';
-import { useEffect, useRef } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import { useSelectionActions } from '../editor/useSelectionActions';
 import { useEditor } from '../editor/EditorProvider';
 import { useContextMenu } from './UiProvider';
 import { useView } from './ViewProvider';
+import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from './DropdownMenu';
 import { shouldCloseMapContextMenu } from './mapContextMenuLifecycle';
 
 /**
  * The map's right-click menu: the actions available for what is selected,
  * rendered where the cursor is.
  *
- * Built on Radix's DropdownMenu rather than its ContextMenu because the
- * gesture that opens this is not a plain DOM contextmenu event — the map's
- * pointer code has to tell a right-DRAG (which pans) from a right-CLICK, and
- * only the latter opens a menu. So the trigger is a zero-size element parked
- * at the cursor and the open state is controlled from outside. Positioning,
- * collision handling, focus, and arrow-key navigation still come from Radix,
- * the same as DropdownMenu.tsx.
+ * The map's pointer code has to tell a right-drag (which pans) from a
+ * right-click, so the native popover is anchored to a zero-size element at
+ * the accepted click coordinate instead of relying on contextmenu defaults.
  *
  * Only actions that apply are here, because the registry only returns those.
  * The one-line explanation of a near-miss merge belongs to the inspector; a
@@ -76,45 +72,46 @@ export function MapContextMenu() {
 
   let lastGroup = actions[0].group;
   return (
-    <RdxMenu.Root
+    <DropdownMenu
       open
       onOpenChange={(open) => {
         if (!open) closeContextMenu();
       }}
+      align="start"
+      sideOffset={0}
+      trigger={
+        <button
+          type="button"
+          aria-hidden="true"
+          tabIndex={-1}
+          style={{
+            position: 'fixed',
+            left: contextMenuAt.x,
+            top: contextMenuAt.y,
+            width: 0,
+            height: 0,
+            pointerEvents: 'none',
+          }}
+        />
+      }
     >
-      <RdxMenu.Trigger
-        aria-hidden
-        style={{
-          position: 'fixed',
-          left: contextMenuAt.x,
-          top: contextMenuAt.y,
-          width: 0,
-          height: 0,
-          pointerEvents: 'none',
-        }}
-      />
-      <RdxMenu.Portal>
-        <RdxMenu.Content className="dropdown-menu-content" align="start" sideOffset={0}>
-          {actions.map((action) => {
-            const separated = action.group !== lastGroup;
-            lastGroup = action.group;
-            return (
-              <div key={action.id}>
-                {separated && <RdxMenu.Separator className="dropdown-menu-separator" />}
-                <RdxMenu.Item
-                  className="dropdown-menu-item"
-                  onSelect={() => {
-                    action.run();
-                    closeContextMenu();
-                  }}
-                >
-                  {action.label}
-                </RdxMenu.Item>
-              </div>
-            );
-          })}
-        </RdxMenu.Content>
-      </RdxMenu.Portal>
-    </RdxMenu.Root>
+      {actions.map((action) => {
+        const separated = action.group !== lastGroup;
+        lastGroup = action.group;
+        return (
+          <Fragment key={action.id}>
+            {separated && <DropdownMenuSeparator />}
+            <DropdownMenuItem
+              onSelect={() => {
+                action.run();
+                closeContextMenu();
+              }}
+            >
+              {action.label}
+            </DropdownMenuItem>
+          </Fragment>
+        );
+      })}
+    </DropdownMenu>
   );
 }

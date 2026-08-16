@@ -14,8 +14,10 @@ import { laneKind } from '../model/catalog';
 import {
   cumulativeLengths,
   offsetPolyline,
+  pointAtDistance,
   patternSegments,
   resolveWayPath,
+  resolveWayPathAtError,
   serviceLaneOnWay,
   patternLegs,
   stitchPaths,
@@ -35,12 +37,75 @@ export interface LanePath {
   path: LngLat[];
 }
 
+/** A physical strip of the cross-section. The two boundary arrays are shared
+ * with the neighbouring strip, so the renderer never invents a hairline gap
+ * between adjacent lanes by offsetting the same edge twice. `LanePath` stays
+ * separate because vehicles and route lines travel along a centerline; this
+ * describes the asphalt or guideway they occupy. */
+export interface LaneSurface {
+  laneId: string;
+  kindId: string;
+  widthM: number;
+  leftBoundary: LngLat[];
+  rightBoundary: LngLat[];
+  /** Closed exterior ring, ordered from the left boundary to the right. */
+  ring: LngLat[];
+}
+
+/** The closed physical area occupied by a centered corridor. District uses
+ * this before Street has enough pixels to reveal its individual lanes. */
+export function corridorSurfaceRing(centerline: LngLat[], widthM: number): LngLat[] {
+  if (centerline.length < 2 || widthM <= 0) return [];
+  const leftBoundary = offsetPolyline(centerline, -widthM / 2);
+  const rightBoundary = offsetPolyline(centerline, widthM / 2);
+  return [...leftBoundary, ...rightBoundary.slice().reverse(), leftBoundary[0]];
+}
+
+/** The standard-gauge separation between the two running rails. Track
+ * profiles describe their occupied corridor width; this is the physical
+ * detail inside that corridor. */
+export const STANDARD_RAIL_GAUGE_M = 1.435;
+export const STANDARD_RAIL_TIE_SPACING_M = 0.65;
+
+export interface RailTrackGeometry {
+  rails: [LngLat[], LngLat[]];
+  ties: LngLat[][];
+}
+
+/** Derive the visible rail hardware inside a track's centerline. The caller
+ * can increase `tieSpacingM` when the final display cannot resolve sleepers;
+ * it never changes the rail gauge. */
+export function railTrackGeometry(
+  track: LanePath,
+  tieSpacingM = STANDARD_RAIL_TIE_SPACING_M,
+): RailTrackGeometry {
+  if (track.path.length < 2 || tieSpacingM <= 0) return { rails: [[], []], ties: [] };
+  const rails: [LngLat[], LngLat[]] = [
+    offsetPolyline(track.path, -STANDARD_RAIL_GAUGE_M / 2),
+    offsetPolyline(track.path, STANDARD_RAIL_GAUGE_M / 2),
+  ];
+  const lengths = rails.map(cumulativeLengths) as [Float64Array, Float64Array];
+  const lengthM = Math.min(lengths[0][lengths[0].length - 1], lengths[1][lengths[1].length - 1]);
+  const ties: LngLat[][] = [];
+  for (let distanceM = tieSpacingM / 2; distanceM < lengthM; distanceM += tieSpacingM) {
+    ties.push([
+      pointAtDistance(rails[0], lengths[0], distanceM),
+      pointAtDistance(rails[1], lengths[1], distanceM),
+    ]);
+  }
+  return { rails, ties };
+}
+
 /** A painted line between/beside lanes. */
 export interface DividerPath {
   /** laneLine = dashed separator between same-direction lanes;
    *  centerLine = opposing-directions separator (the double yellow);
    *  edgeLine = solid edge of the directional roadway. */
   kind: 'laneLine' | 'centerLine' | 'edgeLine';
+  /** Stable semantic boundary identity; geometry and array position can change
+   * while these adjacent model-owned lane IDs remain the same. */
+  beforeLaneId: string;
+  afterLaneId: string;
   path: LngLat[];
 }
 
@@ -49,6 +114,7 @@ export interface WayLaneGeometry {
   wayId: string;
   totalWidthM: number;
   lanes: LanePath[];
+  laneSurfaces: LaneSurface[];
   dividers: DividerPath[];
   /** Directional lanes' paths oriented ALONG their travel direction —
    *  backward lanes come pre-reversed, so a symbol layer placing arrows
@@ -110,84 +176,135 @@ const MAX_TRIMS_PER_WAY = 2;
 
 /** Derive (memoized) the full lane-level geometry for one way, with its
  *  ends optionally trimmed back where they meet junction footprints. */
-export function wayLaneGeometry(way: Way, trimStartM = 0, trimEndM = 0): WayLaneGeometry {
+export interface ResolvedWayLaneGeometry {
+  geometry: WayLaneGeometry;
+  cacheHit: boolean;
+}
+
+function trimmedWayCenterline(
+  way: Way,
+  trimStartM: number,
+  trimEndM: number,
+  curveErrorM: number | undefined,
+): LngLat[] {
+  const path =
+    curveErrorM === undefined ? resolveWayPath(way) : resolveWayPathAtError(way, curveErrorM);
+  return trimPath(path, trimStartM, trimEndM);
+}
+
+/** Resolve the cross-section from an already-trimmed centerline. This is kept
+ * separate from the cache wrapper so geometry and cache lifecycles remain
+ * understandable on their own. */
+function deriveLaneCrossSection(center: LngLat[], way: Way): Omit<WayLaneGeometry, 'wayId'> {
+  const lanes: LanePath[] = [];
+  const laneSurfaces: LaneSurface[] = [];
+  const dividers: DividerPath[] = [];
+  const arrows: LanePath[] = [];
+  const totalWidthM = profileWidthM(way.profile);
+  if (center.length < 2 || way.profile.lanes.length === 0) {
+    return { totalWidthM, lanes, laneSurfaces, dividers, arrows };
+  }
+
+  // Resolve each physical boundary once. Neighbours retain the same array,
+  // which prevents a gap caused by separately offsetting their shared edge.
+  const boundaries: LngLat[][] = [offsetPolyline(center, -totalWidthM / 2)];
+  let cumulativeWidthM = 0;
+  for (const lane of way.profile.lanes) {
+    const leftBoundary = boundaries[boundaries.length - 1];
+    const offsetM = cumulativeWidthM + lane.widthM / 2 - totalWidthM / 2;
+    cumulativeWidthM += lane.widthM;
+    const rightBoundary = offsetPolyline(center, cumulativeWidthM - totalWidthM / 2);
+    boundaries.push(rightBoundary);
+    const path = offsetPolyline(center, offsetM);
+    const lanePath: LanePath = {
+      laneId: lane.id,
+      kindId: lane.kindId,
+      direction: lane.direction,
+      widthM: lane.widthM,
+      offsetM,
+      path,
+    };
+    lanes.push(lanePath);
+    laneSurfaces.push({
+      laneId: lane.id,
+      kindId: lane.kindId,
+      widthM: lane.widthM,
+      leftBoundary,
+      rightBoundary,
+      ring: [...leftBoundary, ...rightBoundary.slice().reverse(), leftBoundary[0]],
+    });
+  }
+
+  for (let index = 1; index < way.profile.lanes.length; index++) {
+    const before = way.profile.lanes[index - 1];
+    const after = way.profile.lanes[index];
+    const beforeDirectional = laneKind(before.kindId).directional;
+    const afterDirectional = laneKind(after.kindId).directional;
+    if (beforeDirectional !== afterDirectional) {
+      dividers.push({
+        kind: 'edgeLine',
+        beforeLaneId: before.id,
+        afterLaneId: after.id,
+        path: boundaries[index],
+      });
+    } else if (beforeDirectional) {
+      const opposing =
+        (before.direction === 'forward' && after.direction === 'backward') ||
+        (before.direction === 'backward' && after.direction === 'forward');
+      dividers.push({
+        kind: opposing ? 'centerLine' : 'laneLine',
+        beforeLaneId: before.id,
+        afterLaneId: after.id,
+        path: boundaries[index],
+      });
+    }
+  }
+
+  for (const lane of lanes) {
+    if (!laneKind(lane.kindId).directional) continue;
+    if (lane.direction === 'forward') arrows.push(lane);
+    else if (lane.direction === 'backward')
+      arrows.push({ ...lane, path: [...lane.path].reverse() });
+  }
+  return { totalWidthM, lanes, laneSurfaces, dividers, arrows };
+}
+
+/** Same geometry contract with truthful cache attribution for the renderer's
+ * performance counters. Callers that do not instrument projection keep using
+ * `wayLaneGeometry` below. */
+export function resolveWayLaneGeometry(
+  way: Way,
+  trimStartM = 0,
+  trimEndM = 0,
+  curveErrorM?: number,
+): ResolvedWayLaneGeometry {
   let byTrim = cache.get(way);
   if (!byTrim) {
     byTrim = new Map();
     cache.set(way, byTrim);
   }
-  const key = `${trimStartM.toFixed(2)}:${trimEndM.toFixed(2)}`;
+  const key = `${trimStartM.toFixed(2)}:${trimEndM.toFixed(2)}:${curveErrorM?.toPrecision(6) ?? 'model'}`;
   const cached = byTrim.get(key);
-  if (cached) return cached;
+  if (cached) return { geometry: cached, cacheHit: true };
   while (byTrim.size >= MAX_TRIMS_PER_WAY) {
     const oldest = byTrim.keys().next();
     if (oldest.done) break;
     byTrim.delete(oldest.value);
   }
 
-  const center = trimPath(resolveWayPath(way), trimStartM, trimEndM);
-  const lanes: LanePath[] = [];
-  const dividers: DividerPath[] = [];
-  const arrows: LanePath[] = [];
-  const totalWidthM = profileWidthM(way.profile);
-
-  if (center.length >= 2 && way.profile.lanes.length > 0) {
-    // Lane centers: cumulative width from the left edge, re-centered on the
-    // way centerline.
-    let cum = 0;
-    for (const lane of way.profile.lanes) {
-      const offsetM = cum + lane.widthM / 2 - totalWidthM / 2;
-      const path = offsetPolyline(center, offsetM);
-      lanes.push({
-        laneId: lane.id,
-        kindId: lane.kindId,
-        direction: lane.direction,
-        widthM: lane.widthM,
-        offsetM,
-        path,
-      });
-      cum += lane.widthM;
-    }
-
-    // Painted lines at boundaries between adjacent DIRECTIONAL lanes (the
-    // markings that make a roadway read as lanes): dashed white between
-    // same-direction lanes, the "double yellow" where directions oppose.
-    // Solid edge lines bound the directional block on each side.
-    const specs = way.profile.lanes;
-    for (let i = 1; i < specs.length; i++) {
-      const prev = specs[i - 1];
-      const cur = specs[i];
-      {
-        const b = specs.slice(0, i).reduce((s, l) => s + l.widthM, 0) - totalWidthM / 2;
-        const prevDir = laneKind(prev.kindId).directional;
-        const curDir = laneKind(cur.kindId).directional;
-        if (prevDir && curDir) {
-          const opposing =
-            (prev.direction === 'forward' && cur.direction === 'backward') ||
-            (prev.direction === 'backward' && cur.direction === 'forward');
-          dividers.push({
-            kind: opposing ? 'centerLine' : 'laneLine',
-            path: offsetPolyline(center, b),
-          });
-        } else if (prevDir !== curDir) {
-          dividers.push({ kind: 'edgeLine', path: offsetPolyline(center, b) });
-        }
-      }
-    }
-
-    // Direction arrows: one path per one-directional lane, oriented along
-    // its travel so line-placed symbols point the right way.
-    for (const lane of lanes) {
-      if (!laneKind(lane.kindId).directional) continue;
-      if (lane.direction === 'forward') arrows.push(lane);
-      else if (lane.direction === 'backward')
-        arrows.push({ ...lane, path: [...lane.path].reverse() });
-    }
-  }
-
-  const result: WayLaneGeometry = { wayId: way.id, totalWidthM, lanes, dividers, arrows };
+  const center = trimmedWayCenterline(way, trimStartM, trimEndM, curveErrorM);
+  const result: WayLaneGeometry = { wayId: way.id, ...deriveLaneCrossSection(center, way) };
   byTrim.set(key, result);
-  return result;
+  return { geometry: result, cacheHit: false };
+}
+
+export function wayLaneGeometry(
+  way: Way,
+  trimStartM = 0,
+  trimEndM = 0,
+  curveErrorM?: number,
+): WayLaneGeometry {
+  return resolveWayLaneGeometry(way, trimStartM, trimEndM, curveErrorM).geometry;
 }
 
 /**
@@ -247,30 +364,30 @@ export function wayIntersectsBounds(way: Way, bounds: [LngLat, LngLat], padDeg =
     // long road/track whose vertices are far apart culled its own lane detail
     // when you zoomed into its middle, even though it plainly crossed the view.
     if (lng >= minX && lng <= maxX && lat >= minY && lat <= maxY) return true;
-    if (i > 0 && segmentIntersectsBox(pts[i - 1], pts[i], minX, minY, maxX, maxY)) return true;
+    if (i > 0 && segmentIntersectsBox(pts[i - 1], pts[i], { minX, minY, maxX, maxY })) return true;
   }
   return false;
 }
 
 /** Liang–Barsky segment ∩ axis-aligned box — true when a→b crosses the box,
  *  including the case where both endpoints lie outside it. */
-function segmentIntersectsBox(
-  a: LngLat,
-  b: LngLat,
-  minX: number,
-  minY: number,
-  maxX: number,
-  maxY: number,
-): boolean {
+interface StreetBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+function segmentIntersectsBox(a: LngLat, b: LngLat, bounds: StreetBounds): boolean {
   const dx = b[0] - a[0],
     dy = b[1] - a[1];
   let t0 = 0,
     t1 = 1;
   const edges: [number, number][] = [
-    [-dx, a[0] - minX],
-    [dx, maxX - a[0]],
-    [-dy, a[1] - minY],
-    [dy, maxY - a[1]],
+    [-dx, a[0] - bounds.minX],
+    [dx, bounds.maxX - a[0]],
+    [-dy, a[1] - bounds.minY],
+    [dy, bounds.maxY - a[1]],
   ];
   for (const [p, q] of edges) {
     if (p === 0) {

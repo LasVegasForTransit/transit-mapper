@@ -5,7 +5,29 @@ import {
   createUnavailablePerfReport,
   summarizeMetric,
 } from '../../src/perf/report';
+import type { PerfNetworkByteReport } from '../../src/perf/network-byte-types';
 import type { PerfMetricValues, PerfSample } from '../../src/perf/types';
+
+function automaticNetwork(): PerfNetworkByteReport {
+  const totals = { encodedBytes: 0, decodedBytes: 0, requestCount: 0 };
+  return {
+    authority: 'cdp-network-encoded-data-length',
+    automaticBoundaryMs: 60_000,
+    settled: true,
+    unsettledNonMapRequestCount: 0,
+    requests: [],
+    phases: {},
+    total: {
+      firstPartyApplication: { ...totals },
+      externalMap: { ...totals },
+      documentData: { ...totals },
+      serviceWorker: { ...totals },
+      telemetry: { ...totals },
+      other: { ...totals },
+      total: { ...totals },
+    },
+  };
+}
 
 function metrics(loadMs: number): PerfMetricValues {
   return {
@@ -68,6 +90,8 @@ function sample(run: number, loadMs: number): PerfSample {
     warmNetwork: network,
     memory,
     warmMemory: memory,
+    rendererStats: null,
+    warmRendererStats: null,
     persistence: {
       serializedBytes: 0,
       parseMs: 0,
@@ -104,9 +128,32 @@ describe('performance reports', () => {
       protocol: PERF_PROTOCOL,
       scenarios: [PERF_SCENARIOS.small],
       samples: [sample(1, 50), sample(2, 10), sample(3, 40), sample(4, 20), sample(5, 30)],
+      firstSessions: [
+        {
+          journey: 'new-user-editor',
+          surface: 'editor',
+          cacheState: 'cold',
+          milestones: {
+            documentResponseEndMs: 20,
+            bootstrapStartMs: 5,
+            shellMountedMs: 30,
+            storageReadStartMs: null,
+            storageReadEndMs: null,
+            deserializeStartMs: null,
+            deserializeEndMs: null,
+            systemCommittedMs: 40,
+            mapStyleReadyMs: 50,
+            firstSystemPaintMs: null,
+            interactiveMs: 60,
+            networkIdleMs: 100,
+            serviceWorkerReadyMs: null,
+          },
+          network: automaticNetwork(),
+        },
+      ],
     });
 
-    expect(report.schemaVersion).toBe(2);
+    expect(report.schemaVersion).toBe(3);
     expect(report.status).toBe('ok');
     expect(report.generatedAt).toBe('2026-07-28T12:00:00.000Z');
     expect(report.scenarios[0].metrics.loadMs.median).toBe(30);
@@ -120,6 +167,13 @@ describe('performance reports', () => {
       projectedEntityCount: 4,
     });
     expect(report.samples.map((value) => value.run)).toEqual([1, 2, 3, 4, 5]);
+    expect(report.firstSessions[0]).toEqual(
+      expect.objectContaining({
+        journey: 'new-user-editor',
+        surface: 'editor',
+        cacheState: 'cold',
+      }),
+    );
   });
 
   it('gates painted frames and unexpected long tasks across cold and warm gestures', () => {

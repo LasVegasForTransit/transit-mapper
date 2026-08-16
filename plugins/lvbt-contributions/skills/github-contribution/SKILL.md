@@ -14,7 +14,17 @@ or call a GitHub creation command directly.
 1. Confirm that the user authorized creating the issue or pull request.
 2. Search the repository for an issue or open pull request covering the work.
 3. Choose the bug, feature, or pull request template from this skill's `assets/`.
-4. Write concise repository-specific prose and remove every bracketed prompt.
+4. Write complete, concise repository-specific prose. The TL;DR names the
+   outcome a person can use or observe; the overview explains the important
+   behavior, constraint, or trade-off without becoming a file inventory.
+   Follow-ups are optional and name unfinished product or reliability
+   objectives, never chores such as rebasing, formatting, or running checks.
+   Use `feat` in a pull-request title only for a capability someone can use or
+   observe; groundwork belongs under a more precise conventional type.
+   Commit scopes are optional. Read the current repository's
+   `.lvbt/commit-scopes.txt` before using one; the shared helper validates that
+   repository-owned list. Omit the scope rather than inventing one for a
+   feature, file, task, or role.
 5. For a pull request, confirm the branch is pushed and run the repository's
    required validation command.
 6. Run the helper with `--dry-run` and inspect the complete title and body.

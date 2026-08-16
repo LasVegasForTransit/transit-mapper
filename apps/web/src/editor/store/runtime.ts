@@ -2,8 +2,10 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import { prunedToLiveLanes } from '@transitmapper/core/model/components';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type { TransitSystem, Viewport } from '@transitmapper/core/model/system';
+import { recordRenderPreparationPatch } from '@transitmapper/core/render/render-preparation-journal';
 import type { CreateEditorStoreOptions } from './contracts';
 import type { SetSystemOptions } from './contracts/document-commands';
+import type { EditorRenderMutation } from './contracts/render-mutation';
 import {
   createHistoryController,
   type HistoryCommandsPort,
@@ -22,6 +24,7 @@ type TransientPatch = Partial<TransientState>;
 interface ContentChange<Result> {
   system: TransitSystem;
   transient?: TransientPatch;
+  renderMutation?: EditorRenderMutation;
   result: Result;
 }
 
@@ -121,6 +124,13 @@ function createContentCommitter(
           ? transientCandidate
           : undefined;
       if (system !== current.system || transient) {
+        if (system !== current.system && change.renderMutation) {
+          recordRenderPreparationPatch(
+            current.system,
+            system,
+            change.renderMutation(current.system, system),
+          );
+        }
         const availability = history.record(current.system, system);
         store.setState({ ...transient, system, ...availability });
       }

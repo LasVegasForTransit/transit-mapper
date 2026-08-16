@@ -1,10 +1,11 @@
 # Commit messages
 
-The `.githooks/commit-msg` hook enforces the rules a machine can check without
-judgement: the subject is a conventional commit, it is at most 72 characters,
-and any attribution footer is shaped so git can read it. `prepare-commit-msg`
-adds that footer when an agent is running git. Everything else here is
-convention, held up by review.
+The `.githooks/commit-msg` hook delegates conventional subjects to the pinned
+LVBT contribution plugin. It enforces the known types, the optional closed
+scope list, and the 72-character limit; the same validator checks pull-request
+titles. The hook also checks that any attribution footer is shaped so git can
+read it. `prepare-commit-msg` adds that footer when an agent is running git.
+Everything else here is convention, held up by review.
 
 ## Subject
 
@@ -18,7 +19,7 @@ not `fixed the label bug`.
 
 | Type       | Use for                                         |
 | ---------- | ----------------------------------------------- |
-| `feat`     | new capability someone can use                  |
+| `feat`     | a new capability a person can use or observe    |
 | `fix`      | corrected behaviour                             |
 | `docs`     | documentation only                              |
 | `style`    | formatting with no behaviour change             |
@@ -27,16 +28,28 @@ not `fixed the label bug`.
 | `test`     | tests only                                      |
 | `ci`       | workflows, actions, deployment pipeline         |
 | `chore`    | tooling and maintenance that fits nothing above |
+| `build`    | build system or packaging changes               |
+| `revert`   | a deliberate reversal of a prior change         |
 
-Scope is optional and rarely needed in a repository this size. Use it when
-a change is confined to one clearly named area.
+Scope is optional. Use one only when the change is confined to a durable
+boundary declared in [`.lvbt/commit-scopes.txt`](../../../.lvbt/commit-scopes.txt).
+Omit it for cross-boundary work. Never turn a feature, file, task, role, or
+temporary implementation detail into a scope.
+
+`feat` is a promise about product behavior, not a label for groundwork. A
+helper, cache, test harness, measurement seam, internal rendering primitive,
+or model refactor that enables a later capability belongs under `refactor`,
+`perf`, `test`, or `chore` until it independently changes what someone can do
+or see. "Needed for a future feature" is not itself a feature.
 
 ## Body
 
 **Required for `feat` and `fix`.** Optional elsewhere, and usually worth
 writing anyway.
 
-Wrap at 72 columns. Explain **why**, not what — the diff already says what.
+Wrap a **commit-message body** at 72 columns. PR Markdown uses ordinary
+paragraphs, not forced line breaks. Explain **why**, not what — the diff
+already says what.
 The reader is a maintainer six months from now who has none of the context
 that produced the change, and who is trying to work out whether they can
 safely change the thing you touched.
@@ -90,8 +103,9 @@ model touched this" years later.
 helped; silence says one did not, and that is the common case for a human at a
 keyboard. Nothing asks a person for a footer.
 
-**An agent cannot skip it.** Both hooks read the same signal — `AI_AGENT` or
-`CLAUDECODE` in the environment, neither of which a person has set:
+**An agent cannot skip it.** Both hooks read the same signal —
+`CODEX_SESSION_ID`, `AI_AGENT`, or `CLAUDECODE` in the environment, none of
+which a person has set:
 
 - `prepare-commit-msg` writes a footer, so nobody has to remember.
 - `commit-msg` refuses the commit if there is none, so removing it fails
@@ -128,11 +142,11 @@ else. A body that restates the diff, a `feat` with no body, and a wrong type
 all pass and get caught in review.
 
 Attribution is split across both hooks, and the gap that remains is the
-environment itself. Both halves read `AI_AGENT` and `CLAUDECODE`, so an agent
-committing somewhere those are unset — a container that does not forward them,
-or a tool that does not set them — is indistinguishable from a person and
-passes. Widening the signal is how that gap closes; there is no way to see it
-in the diff afterwards.
+environment itself. Both halves read `CODEX_SESSION_ID`, `AI_AGENT`, and
+`CLAUDECODE`, so an agent committing somewhere none of those are forwarded —
+a container that drops them, or a tool that does not set one — is
+indistinguishable from a person and passes. Widening the signal is how that
+gap closes; there is no way to see it in the diff afterwards.
 
 The hooks exist to stop the mechanical mistakes, not to replace reading the
 message.

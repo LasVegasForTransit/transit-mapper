@@ -12,15 +12,14 @@
     "preview": "vite preview",
     "perf": "tsx scripts/perf/run.ts",
     "perf:record": "tsx scripts/perf/run.ts --record",
+    "perf:freeze-497a549": "tsx scripts/perf/freeze-497a549-baseline.ts",
     "perf:soak": "tsx scripts/perf/run.ts --soak",
+    "renderer:capture": "tsx scripts/renderer-capture/run.ts",
     "typecheck": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
     "verify": "tsx tests/verify.test.ts && vitest run",
     "lint": "eslint ."
   },
   "dependencies": {
-    "@radix-ui/react-dialog": "catalog:",
-    "@radix-ui/react-dropdown-menu": "catalog:",
-    "@radix-ui/react-popover": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@transitmapper/core": "workspace:*",
     "@transitmapper/pwa-updater": "workspace:*",
@@ -44,7 +43,6 @@
     "tsx": "catalog:",
     "vite": "catalog:",
     "vite-plugin-pwa": "catalog:",
-    "vitest": "catalog:",
-    "workbox-window": "catalog:"
+    "vitest": "catalog:"
   }
 }

@@ -1,6 +1,9 @@
+import type { PerfNetworkByteReport } from './network-byte-types';
+import type { RendererStatsSnapshot } from './renderer-stats';
+
 export type PerfFixtureId = 'small' | 'dense' | 'published' | 'rtc';
 export type PerfScenarioId = 'small' | 'dense' | 'rtc' | 'share' | 'embed';
-type PerfSurface = 'editor' | 'share' | 'embed';
+export type PerfSurface = 'editor' | 'share' | 'embed';
 export type PerfProfileId = 'desktop' | 'mobile';
 export type PerfRunMode = 'audit' | 'smoke';
 
@@ -197,6 +200,10 @@ export interface PerfSample {
   warmNetwork: PerfNetworkSnapshot;
   memory: PerfMemorySnapshot;
   warmMemory: PerfMemorySnapshot;
+  /** Cumulative renderer work for the cold document load and measured journey. */
+  rendererStats: RendererStatsSnapshot | null;
+  /** The equivalent snapshot after the warm reload and paused journey. */
+  warmRendererStats: RendererStatsSnapshot | null;
   persistence: PerfPersistenceProbe;
   traceArtifact?: string;
 }
@@ -250,14 +257,54 @@ export interface PerfCalibration {
   estimatedDisplayRefreshHz: number;
 }
 
+export type PerfFirstSessionJourney =
+  'new-user-editor' | 'public-share' | 'cross-site-embed' | 'n-minus-one-update';
+export type PerfCacheState = 'cold' | 'http-warm' | 'service-worker-warm' | 'n-minus-one';
+
+export interface PerfFirstSessionMilestones {
+  documentResponseEndMs: number;
+  bootstrapStartMs: number | null;
+  shellMountedMs: number | null;
+  storageReadStartMs: number | null;
+  storageReadEndMs: number | null;
+  deserializeStartMs: number | null;
+  deserializeEndMs: number | null;
+  systemCommittedMs: number | null;
+  mapStyleReadyMs: number | null;
+  firstSystemPaintMs: number | null;
+  interactiveMs: number | null;
+  networkIdleMs: number | null;
+  serviceWorkerReadyMs: number | null;
+}
+
+export interface PerfFirstSessionSample {
+  journey: PerfFirstSessionJourney;
+  surface: PerfSurface;
+  cacheState: PerfCacheState;
+  milestones: PerfFirstSessionMilestones;
+  network: PerfNetworkByteReport;
+}
+
+/**
+ * Records how a report's User Timing milestones were obtained. Network bytes
+ * always come from CDP; this only makes a historic mark-compatibility shim
+ * auditable instead of making it look like a shipping instrumentation run.
+ */
+export interface PerfReportProvenance {
+  artifactRevision: string;
+  milestoneMarkSource: 'shipping' | 'legacy-497a549-observer-v1';
+}
+
 export interface PerfReport {
-  schemaVersion: 2;
+  schemaVersion: 3;
   generatedAt: string;
   status: PerfReportStatus;
   unavailableReason?: string;
   protocol: PerfProtocol;
   calibration?: PerfCalibration;
+  provenance?: PerfReportProvenance;
   bundles: PerfBundleEntry[];
+  firstSessions: PerfFirstSessionSample[];
   samples: PerfSample[];
   scenarios: PerfScenarioSummary[];
   /** Filled by the executable runner after report construction. */
@@ -271,6 +318,8 @@ export interface CreatePerfReportOptions {
   samples: PerfSample[];
   bundles?: PerfBundleEntry[];
   calibration?: PerfCalibration;
+  provenance?: PerfReportProvenance;
+  firstSessions?: PerfFirstSessionSample[];
 }
 
 export interface CreateUnavailablePerfReportOptions {
@@ -282,7 +331,16 @@ export interface CreateUnavailablePerfReportOptions {
   calibration?: PerfCalibration;
 }
 
-type PerfBudgetViolationKind = 'absolute' | 'regression' | 'bundle-regression' | 'baseline-missing';
+type PerfBudgetViolationKind =
+  | 'absolute'
+  | 'regression'
+  | 'bundle-regression'
+  | 'baseline-missing'
+  | 'baseline-incompatible'
+  | 'first-session-unsettled'
+  | 'first-session-byte-target'
+  | 'first-session-byte-regression'
+  | 'first-session-sample-missing';
 
 export interface PerfBudgetViolation {
   kind: PerfBudgetViolationKind;
@@ -294,6 +352,8 @@ export interface PerfBudgetViolation {
   limit?: number;
   bundleEntry?: string;
   bundleEncoding?: 'raw' | 'gzip' | 'brotli';
+  firstSessionJourney?: PerfFirstSessionJourney;
+  firstSessionCacheState?: PerfCacheState;
   message: string;
 }
 
@@ -305,11 +365,21 @@ export interface PerfBudgetEvaluation {
   notices: string[];
 }
 
+export interface PerfFirstSessionByteBudget {
+  journey: PerfFirstSessionJourney;
+  cacheState: PerfCacheState;
+  /** Required fractional reduction from the frozen baseline, such as 0.3. */
+  minimumReductionRatio?: number;
+  /** Largest permitted fractional growth from the frozen baseline. */
+  maximumRegressionRatio?: number;
+}
+
 export interface EvaluatePerfBudgetsOptions {
   report: PerfReport;
   baseline?: PerfReport;
   scenarios: PerfScenario[];
   maxRegressionRatio: number;
+  firstSessionBudgets?: readonly PerfFirstSessionByteBudget[];
   requireBaseline?: boolean;
   /** A smoke proves that the production build and browser journey complete.
    * One sample is deliberately not treated as statistical timing evidence. */

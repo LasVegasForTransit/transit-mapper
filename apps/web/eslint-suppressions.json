@@ -4,14 +4,6 @@
       "count": 1
     }
   },
-  "scripts/build-metadata.ts": {
-    "@typescript-eslint/prefer-nullish-coalescing": {
-      "count": 2
-    },
-    "complexity": {
-      "count": 1
-    }
-  },
   "scripts/generate-app-icons.ts": {
     "complexity": {
       "count": 1
@@ -40,20 +32,12 @@
       "count": 2
     }
   },
-  "scripts/perf/cli.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "sonarjs/cognitive-complexity": {
-      "count": 1
-    }
-  },
   "scripts/perf/journeys.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
     },
     "@typescript-eslint/prefer-optional-chain": {
-      "count": 2
+      "count": 1
     },
     "@typescript-eslint/prefer-promise-reject-errors": {
       "count": 2
@@ -72,38 +56,11 @@
     }
   },
   "scripts/perf/offline.ts": {
-    "@typescript-eslint/prefer-promise-reject-errors": {
-      "count": 3
-    },
     "max-lines-per-function": {
       "count": 1
-    }
-  },
-  "scripts/perf/orchestrator.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "scripts/perf/process.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 5
-    },
-    "@typescript-eslint/prefer-optional-chain": {
-      "count": 1
-    }
-  },
-  "scripts/perf/report-bundle.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
     }
   },
   "scripts/perf/scenarioRuns.ts": {
-    "complexity": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     }
@@ -126,19 +83,8 @@
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 2
     },
-    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
-    }
-  },
-  "src/device/media-query.ts": {
-    "@typescript-eslint/no-deprecated": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 3
     }
   },
   "src/editor/pointerIntent.ts": {
@@ -177,29 +123,9 @@
       "count": 1
     }
   },
-  "src/main.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    }
-  },
   "src/map/MapCanvas.tsx": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
-    "@typescript-eslint/prefer-nullish-coalescing": {
-      "count": 1
-    },
-    "@typescript-eslint/prefer-optional-chain": {
-      "count": 1
-    },
     "complexity": {
-      "count": 3
+      "count": 2
     },
     "max-lines": {
       "count": 1
@@ -208,7 +134,7 @@
       "count": 4
     },
     "sonarjs/cognitive-complexity": {
-      "count": 3
+      "count": 2
     }
   },
   "src/map/export/exportLayerSetup.ts": {
@@ -216,16 +142,8 @@
       "count": 1
     }
   },
-  "src/map/export/exportRenderer.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/map/gestureLayerMask.ts": {
     "@typescript-eslint/no-invalid-void-type": {
-      "count": 1
-    },
-    "@typescript-eslint/prefer-nullish-coalescing": {
       "count": 1
     },
     "complexity": {
@@ -267,9 +185,6 @@
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 7
     },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-argument": {
       "count": 2
     },
@@ -277,7 +192,7 @@
       "count": 5
     },
     "@typescript-eslint/prefer-nullish-coalescing": {
-      "count": 4
+      "count": 3
     },
     "@typescript-eslint/prefer-optional-chain": {
       "count": 2
@@ -300,9 +215,6 @@
   },
   "src/map/layers/layerSpecs.ts": {
     "max-lines": {
-      "count": 1
-    },
-    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -349,26 +261,8 @@
       "count": 1
     }
   },
-  "src/perf/budget.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "@typescript-eslint/prefer-optional-chain": {
-      "count": 2
-    }
-  },
-  "src/perf/index.ts": {
-    "@typescript-eslint/unbound-method": {
-      "count": 2
-    }
-  },
   "src/perf/panBench.ts": {
     "sonarjs/no-identical-functions": {
-      "count": 1
-    }
-  },
-  "src/perf/pwaPrecache.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
     }
   },
@@ -397,16 +291,6 @@
       "count": 1
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    }
-  },
-  "src/share/previewImage.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
-    }
-  },
-  "src/share/svgExport.ts": {
-    "max-params": {
       "count": 1
     }
   },
@@ -497,9 +381,6 @@
     }
   },
   "src/ui/ExportDialog.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     }
@@ -523,11 +404,6 @@
       "count": 1
     }
   },
-  "src/ui/Modal.tsx": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    }
-  },
   "src/ui/NodeInspector.tsx": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
@@ -542,9 +418,6 @@
       "count": 1
     },
     "max-nested-callbacks": {
-      "count": 1
-    },
-    "max-params": {
       "count": 1
     }
   },
@@ -630,11 +503,6 @@
       "count": 1
     }
   },
-  "src/ui/about-dialog.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/ui/inspector/FacilityInspector.tsx": {
     "@typescript-eslint/prefer-nullish-coalescing": {
       "count": 1
@@ -712,7 +580,7 @@
   },
   "tests/editor/networkGestureStore.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 7
+      "count": 6
     },
     "max-lines": {
       "count": 1
@@ -728,21 +596,13 @@
       "count": 1
     },
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 15
+      "count": 14
     },
     "max-lines": {
       "count": 1
     },
     "max-params": {
       "count": 3
-    }
-  },
-  "tests/map/layers/layerSpecs.test.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "@typescript-eslint/prefer-optional-chain": {
-      "count": 1
     }
   },
   "tests/map/sourceMutationSettlement.test.ts": {
@@ -755,10 +615,7 @@
       "count": 1
     },
     "@typescript-eslint/require-await": {
-      "count": 5
-    },
-    "@typescript-eslint/unbound-method": {
-      "count": 10
+      "count": 4
     }
   },
   "tests/network/cancelableFlight.test.ts": {
@@ -774,19 +631,9 @@
       "count": 1
     }
   },
-  "tests/perf/index.test.ts": {
-    "@typescript-eslint/unbound-method": {
-      "count": 4
-    }
-  },
   "tests/perf/listenerInventory.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
-    }
-  },
-  "tests/perf/soakSettlement.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 1
     }
   },
   "tests/pwa/install.test.ts": {
@@ -811,7 +658,7 @@
   },
   "tests/storage/bootstrapLibrary.test.ts": {
     "@typescript-eslint/require-await": {
-      "count": 8
+      "count": 7
     },
     "@typescript-eslint/unbound-method": {
       "count": 2
@@ -843,16 +690,6 @@
       "count": 4
     }
   },
-  "tests/ui/ExportPreviewMap.test.ts": {
-    "@typescript-eslint/no-invalid-void-type": {
-      "count": 2
-    }
-  },
-  "tests/ui/about-dialog.test.tsx": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    }
-  },
   "tests/ui/onboarding/fixtureProjection.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
@@ -878,7 +715,7 @@
       "count": 5
     },
     "@typescript-eslint/no-unsafe-return": {
-      "count": 2
+      "count": 1
     },
     "max-lines": {
       "count": 1

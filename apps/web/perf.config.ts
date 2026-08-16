@@ -1,17 +1,35 @@
 import type { BundleBudget } from './src/perf/bundleBudget';
+import type { PerfFirstSessionByteBudget } from './src/perf/types';
 import { createPerfProtocol, PERF_PROTOCOL, PERF_SCENARIO_LIST } from './src/perf/scenarios';
 
 export { createPerfProtocol, PERF_PROTOCOL, PERF_SCENARIO_LIST };
 
 export const PERF_MAX_REGRESSION_RATIO = 0.1;
+export const PERF_FIRST_SESSION_BYTE_BUDGETS: readonly PerfFirstSessionByteBudget[] = [
+  {
+    journey: 'new-user-editor',
+    cacheState: 'cold',
+    minimumReductionRatio: 0.3,
+  },
+  {
+    journey: 'public-share',
+    cacheState: 'cold',
+    maximumRegressionRatio: 0,
+  },
+  {
+    journey: 'cross-site-embed',
+    cacheState: 'cold',
+    maximumRegressionRatio: 0,
+  },
+];
 export const PERF_DEFAULT_ARTIFACT_DIRECTORY = 'artifacts/performance';
 export const PERF_BASELINE_DIRECTORY = 'perf';
 
 /**
- * Entry budgets include the HTML document, CSS, entry chunk, and the full
- * static and dynamic import graph. Raw bytes remain visible in the report,
- * but only compressed delivery size is an absolute gate. Browser audits own
- * parse and responsiveness costs; raw module size is not a product ceiling.
+ * Entry budgets cover the HTML document, CSS, and static module closure that
+ * a first load transfers before a person can act. Lazy features have their
+ * own chunk ceilings and browser transfer audits. Counting their entire
+ * graph here would reject code that the first load never fetches.
  */
 export const BUNDLE_BUDGETS: BundleBudget[] = [
   {

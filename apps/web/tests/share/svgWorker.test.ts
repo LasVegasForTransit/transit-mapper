@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
+import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
+import { svgViewForViewport } from '../../src/share/svg-render-view';
 import type { SvgWorkerEvent, SvgWorkerRequest } from '../../src/share/svgWorkerProtocol';
 import { renderSvgInWorker, type SvgRenderWorker } from '../../src/share/svgWorker';
 
@@ -22,19 +24,21 @@ class FakeWorker implements SvgRenderWorker {
   }
 }
 
-const request = {
+const viewport = {
+  center: [-115.17, 36.17] as [number, number],
+  zoom: 10,
+  width: 800,
+  height: 500,
+};
+const view: ViewOptions = {
+  viewMode: 'network',
+  visibleModes: new Set<string>(),
+  visibleWayTypes: new Set<string>(),
+};
+const request: SvgWorkerRequest = {
   system: createEmptySystem(),
-  view: {
-    viewMode: 'network' as const,
-    visibleModes: new Set<string>(),
-    visibleWayTypes: new Set<string>(),
-  },
-  viewport: {
-    center: [-115.17, 36.17] as [number, number],
-    zoom: 10,
-    width: 800,
-    height: 500,
-  },
+  view: svgViewForViewport(view, viewport),
+  viewport,
   options: {
     title: 'Test',
     legend: [],

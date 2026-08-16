@@ -99,4 +99,21 @@ describe('initial map style fallback', () => {
     expect(shouldNotFallback).not.toHaveBeenCalled();
     expect(loaded.setStyle).not.toHaveBeenCalled();
   });
+
+  it('forgets an expired fallback timer before the replacement style loads', () => {
+    vi.useFakeTimers();
+    const map = new FakeStyleMap();
+    const clearTimer = vi.spyOn(globalThis, 'clearTimeout');
+    attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'light',
+      timeoutMs: 250,
+      onFallback: vi.fn(),
+    });
+
+    vi.advanceTimersByTime(250);
+    clearTimer.mockClear();
+    map.emit('style.load');
+
+    expect(clearTimer).not.toHaveBeenCalled();
+  });
 });

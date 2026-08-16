@@ -1,17 +1,8 @@
-import { mediaQuery, useMediaQuery } from '../device/media-query';
+import { useMediaQuery } from '../device/media-query';
+import type { ColorScheme } from './color-scheme';
 
-export type ColorScheme = 'light' | 'dark';
-
-const DARK_SCHEME_QUERY = '(prefers-color-scheme: dark)';
-
-export function getSystemColorScheme(): ColorScheme {
-  return mediaQuery(DARK_SCHEME_QUERY).snapshot() ? 'dark' : 'light';
-}
-
-export function subscribeSystemColorScheme(listener: () => void): () => void {
-  return mediaQuery(DARK_SCHEME_QUERY).subscribe(listener);
-}
+export type { ColorScheme } from './color-scheme';
 
 export function useSystemColorScheme(): ColorScheme {
-  return useMediaQuery(DARK_SCHEME_QUERY) ? 'dark' : 'light';
+  return useMediaQuery('(prefers-color-scheme: dark)') ? 'dark' : 'light';
 }

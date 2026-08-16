@@ -9,6 +9,7 @@ import {
 } from '../../../src/ui/onboarding/onboarding-map-controller';
 import { basemapStyleForScheme, localBlankStyleForScheme } from '../../../src/map/mapTheme';
 import { LYR_VEHICLES } from '../../../src/map/layers';
+import { ONBOARDING_TEST_PRESENTATION } from '../../support/onboarding-presentation.test';
 
 interface MapOptions {
   style: unknown;
@@ -27,8 +28,40 @@ class FakeMap {
   readonly setFeatureState = vi.fn();
   readonly resize = vi.fn();
   readonly fitBounds = vi.fn();
+  /** Camera reads that happened before `fitBounds`, so a test can prove the
+   *  presentation is derived from the fitted extent rather than the default. */
+  readonly cameraReadsBeforeFit: string[] = [];
 
   constructor(readonly options: MapOptions) {}
+
+  private recordCameraRead(name: string): void {
+    if (this.fitBounds.mock.calls.length === 0) this.cameraReadsBeforeFit.push(name);
+  }
+
+  getBounds() {
+    this.recordCameraRead('getBounds');
+    return {
+      getSouthWest: () => ({ lng: -115.16, lat: 36.15 }),
+      getNorthEast: () => ({ lng: -115.13, lat: 36.18 }),
+    };
+  }
+
+  getZoom(): number {
+    this.recordCameraRead('getZoom');
+    return 14;
+  }
+
+  getPixelRatio(): number {
+    return 1;
+  }
+
+  getCanvas(): { clientWidth: number; clientHeight: number } {
+    return { clientWidth: 640, clientHeight: 360 };
+  }
+
+  getContainer(): { clientWidth: number; clientHeight: number } {
+    return { clientWidth: 640, clientHeight: 360 };
+  }
 
   on(event: MapEvent, listener: (event?: { error?: Error }) => void): this {
     const listeners = this.listeners.get(event) ?? new Set();
@@ -113,10 +146,28 @@ afterEach(() => {
 });
 
 describe('onboarding map controller', () => {
+  it('frames the scene before it reads the camera the projection resolves against', () => {
+    const cleanup = mountOnboardingMap({
+      container: document.createElement('div'),
+      colorScheme: 'light',
+      scene: 'welcome',
+      reducedMotion: true,
+      onFailure: vi.fn(),
+    });
+    const map = mapHarness.maps[0];
+    map.emit('load');
+
+    expect(map.fitBounds).toHaveBeenCalled();
+    expect(map.cameraReadsBeforeFit).toEqual([]);
+
+    cleanup();
+  });
+
   it('adds stops only after the drawn service is complete', () => {
     const systems = resolveOnboardingSceneSystems('draw');
-    const initial = buildFeatures(systems.baseSystem, null, [], systems.resolvedView);
-    const complete = buildFeatures(systems.completeSystem, null, [], systems.resolvedView);
+    const view = { ...systems.resolvedView, presentation: ONBOARDING_TEST_PRESENTATION };
+    const initial = buildFeatures(systems.baseSystem, null, [], view);
+    const complete = buildFeatures(systems.completeSystem, null, [], view);
 
     expect(initial.services.features).toHaveLength(0);
     expect(initial.stops.features).toHaveLength(0);

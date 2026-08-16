@@ -1,43 +1,55 @@
 import type { LngLat, Node, Way } from '../system';
+import { resolveMetricCenterline, tessellateMetricCenterline } from '../../geometry/metric-curves';
 
-const CORNER_SAMPLES = 10; // interpolated points per rounded corner.
-// Each corner is cut back this fraction of its shorter adjacent segment before
-// rounding — keeps a corner's cut point from ever reaching its neighbor's.
-const CORNER_FRACTION = 0.25;
+// This is deliberately a model-quality default, not a screen-space policy.
+// Renderers that know their final presentation can ask for a coarser or finer
+// path through `resolveWayPathAtError`; editing, snapping, and routing need a
+// stable physical path even when no camera exists.
+const DEFAULT_CURVE_SAGITTA_M = 0.25;
 // Core transforms preserve unchanged Way references, so this reference-keyed
 // cache needs no invalidation. This matters:
 // buildFeatures() calls resolveWayPath for every way (and, per stop, for
 // every way again via servedWayIds) on every rebuild — during a drag that's
 // once per animation frame, and without this cache it was once per raw
 // mousemove event, recomputing curve geometry for the entire system each time.
-const wayPathCache = new WeakMap<Way, LngLat[]>();
+const wayPathCache = new WeakMap<Way, Map<number, LngLat[]>>();
 
 /**
- * The rendered polyline for a way, from its control points and geometry.
- * curved → straight segments with each interior vertex rounded into a corner
- * fillet; straight & freeform → the points as-is (freeform simply has many,
- * hand-drawn).
+ * The stable physical path used by model operations that have no camera.
+ * Curved ways use tangent-continuous metric arcs; straight and freeform ways
+ * retain their authored control-point references.
  */
 export function resolveWayPath(way: Way): LngLat[] {
-  const cached = wayPathCache.get(way);
+  return resolveWayPathAtError(way, DEFAULT_CURVE_SAGITTA_M);
+}
+
+/** Resolves a physical path with no chord deviating more than `maxSagittaM`
+ * from a curved way's metric centerline. */
+export function resolveWayPathAtError(way: Way, maxSagittaM: number): LngLat[] {
+  if (way.geometry !== 'curved' || way.points.length < 3) return way.points;
+  let pathsByError = wayPathCache.get(way);
+  if (!pathsByError) {
+    pathsByError = new Map();
+    wayPathCache.set(way, pathsByError);
+  }
+  const cached = pathsByError.get(maxSagittaM);
   if (cached) return cached;
-  const pts = way.points;
-  const path =
-    way.geometry === 'curved' && pts.length >= 3
-      ? roundedCorners(pts, CORNER_FRACTION, CORNER_SAMPLES)
-      : pts;
-  wayPathCache.set(way, path);
+  const path = tessellateMetricCenterline(
+    resolveMetricCenterline(way.points, { curveControls: way.curveControls }),
+    maxSagittaM,
+  );
+  pathsByError.set(maxSagittaM, path);
   return path;
 }
 
 /**
- * Straight segments between control points, with each interior vertex rounded
- * off by a short quadratic-Bezier fillet computed ONLY from that vertex and
- * its immediate neighbors. Unlike a tangent-continuous spline (e.g. Catmull-
- * Rom), this has strictly bounded, local support: moving control point i can
- * only change the fillets at i-1, i, i+1 and the straight runs between them —
- * it never reshapes anything further down the line. No tangents are computed
- * or propagated between non-adjacent points.
+ * Round an arbitrary coordinate polyline with local quadratic corners.
+ *
+ * This remains a small, coordinate-space helper for callers that do not have
+ * a physical Way. Way rendering deliberately does not use it: curved Ways
+ * resolve metric, tangent-continuous arcs above. Keeping the two names makes
+ * that distinction visible instead of silently applying a degree-space curve
+ * to real infrastructure.
  */
 export function roundedCorners(
   points: LngLat[],
@@ -45,46 +57,36 @@ export function roundedCorners(
   samples: number,
 ): LngLat[] {
   if (points.length < 3) return points;
-  const out: LngLat[] = [points[0]];
-  for (let i = 1; i < points.length - 1; i++) {
-    const prev = points[i - 1];
-    const cur = points[i];
-    const next = points[i + 1];
-    const dPrev = Math.hypot(cur[0] - prev[0], cur[1] - prev[1]);
-    const dNext = Math.hypot(next[0] - cur[0], next[1] - cur[1]);
-    const r = Math.min(dPrev, dNext) * cornerFraction;
-    if (r < 1e-12) {
-      out.push(cur);
+  const path: LngLat[] = [points[0]];
+  for (let index = 1; index < points.length - 1; index++) {
+    const previous = points[index - 1];
+    const corner = points[index];
+    const next = points[index + 1];
+    const previousDistance = Math.hypot(corner[0] - previous[0], corner[1] - previous[1]);
+    const nextDistance = Math.hypot(next[0] - corner[0], next[1] - corner[1]);
+    const radius = Math.min(previousDistance, nextDistance) * cornerFraction;
+    if (radius < 1e-12) {
+      path.push(corner);
       continue;
     }
-    const cutIn: LngLat = lerpAt(cur, prev, r / dPrev);
-    const cutOut: LngLat = lerpAt(cur, next, r / dNext);
-    out.push(cutIn);
-    appendQuadraticBezier(cutIn, cur, cutOut, samples, out);
+    const entering = interpolate(corner, previous, radius / previousDistance);
+    const leaving = interpolate(corner, next, radius / nextDistance);
+    path.push(entering);
+    for (let step = 1; step <= samples; step++) {
+      const t = step / samples;
+      const inverse = 1 - t;
+      path.push([
+        inverse * inverse * entering[0] + 2 * inverse * t * corner[0] + t * t * leaving[0],
+        inverse * inverse * entering[1] + 2 * inverse * t * corner[1] + t * t * leaving[1],
+      ]);
+    }
   }
-  out.push(points[points.length - 1]);
-  return out;
+  path.push(points[points.length - 1]);
+  return path;
 }
 
-/** Point a fraction `f` of the way from `a` toward `b`. */
-function lerpAt(a: LngLat, b: LngLat, f: number): LngLat {
-  return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
-}
-
-function appendQuadraticBezier(
-  p0: LngLat,
-  control: LngLat,
-  p2: LngLat,
-  samples: number,
-  out: LngLat[],
-): void {
-  for (let s = 1; s <= samples; s++) {
-    const t = s / samples;
-    const u = 1 - t;
-    const x = u * u * p0[0] + 2 * u * t * control[0] + t * t * p2[0];
-    const y = u * u * p0[1] + 2 * u * t * control[1] + t * t * p2[1];
-    out.push([x, y]);
-  }
+function interpolate(from: LngLat, to: LngLat, fraction: number): LngLat {
+  return [from[0] + (to[0] - from[0]) * fraction, from[1] + (to[1] - from[1]) * fraction];
 }
 
 // Cached by the ways array's own reference (immutable-replacement

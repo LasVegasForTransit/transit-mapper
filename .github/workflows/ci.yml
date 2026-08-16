@@ -28,7 +28,10 @@ jobs:
   validate:
     name: Validate
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Two full validate graphs run here, and both are bounded to four
+    # concurrent tasks so the suites stop starving each other. That trades
+    # wall-clock for reliability, so the cap has to leave room for it.
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

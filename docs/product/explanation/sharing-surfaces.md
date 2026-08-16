@@ -14,22 +14,34 @@ could only ever serve one static image for every system.
 
 `packages/core/src/render/` removes that dependency:
 
-- `buildFeatures.ts` turns a system into styled GeoJSON. Pure, and shared —
-  the editor map, the embed, image exports and the share card all call it,
-  so none of them can drift from the others.
+- `render-presentation.ts` describes the camera and the CSS size at which its
+  result will be seen. Live maps read it from their final camera; pure previews
+  derive it from the viewport they fit.
+- `buildFeatures.ts` turns a system and that presentation into styled GeoJSON.
+  The editor map, embed, image exports, and share card all call it.
+- `system-render-scene.ts` validates stable feature IDs, separates invisible
+  hit targets from paint geometry, and gives every consumer the same
+  deterministic source and tier order.
+- `static-visual-scene.ts` resolves geographic widths, offsets, dashes,
+  opacity, and tier composition into explicit vector values.
 - `project.ts` is Web Mercator with the map taken out: the same 512px-tile,
   log2-zoom conventions MapLibre uses, plus a `fitBounds` that solves for a
   camera without one. North-up and unpitched only; a card never tilts.
-- `svg.ts` composes the finished drawing. It takes a `project` callback rather
-  than a map, which is the whole point: an export passes MapLibre's own bound
-  `project()` so it matches what the user framed on screen, while a share card
-  passes the pure projector and needs no map at all.
+- `svg.ts` serializes that resolved scene and composes the finished drawing.
+  It takes a `project` callback rather than a map. A framed export samples four
+  ground-plane points from MapLibre's live camera and reconstructs that exact
+  projective transform in its short-lived SVG Worker, preserving bearing and
+  pitch without shipping a second renderer on the editor thread. A share card
+  passes the pure north-up projector and needs no map or DOM.
 - `preview.ts` is a preset over `svg.ts` for share cards. It picks the framing
   and states how the result will be presented; it does not draw anything
   itself.
 
 The web app's export modules are now thin adapters that supply what only a
-live map knows — viewport size, projection, bearing, ground resolution.
+live map knows — viewport size, projection, bearing, and ground resolution.
+SVG does not recreate a visual approximation from MapLibre paint expressions;
+MapLibre and SVG start from the normalized scene, and SVG consumes already
+resolved line and polygon paint.
 
 ## Theme boundary
 
@@ -54,21 +66,29 @@ An exported image is looked at close to full size. A link unfurl is composed
 at card size and then rendered by a chat client into a column a third as wide.
 Type sized for the first is illegible mush in the second.
 
-Rather than a flag per element, `systemSvg` takes one number — how wide the
-drawing will actually be _seen_ — and every optional element derives from it.
-Anything that would land under about ten displayed pixels isn't drawn, on the
-grounds that unreadable text is worse than absent text. That single rule is
-why a share card carries no station labels, scale bar or north arrow while a
-full-size export keeps all of them, and it's the same idea as the
-Infrastructure view deriving lane detail from zoom.
+Geographic detail uses the complete `RenderPresentation`: fitted bounds and
+zoom, authored viewport size, displayed size, and pixel ratio. A corridor's
+width is projected into displayed CSS pixels. Below 2 px it is one Overview
+silhouette; Overview and District blend from 2–4 px; District and Street blend
+from 9–12 px. Static output applies those weights deterministically, without
+the camera-history hysteresis a live map uses. Device pixel ratio sharpens a
+raster but cannot make the drawing choose more detail.
+
+Map furniture has a related, smaller contract. `systemSvg` takes the width at
+which the drawing will actually be _seen_, and optional labels, title, legend,
+scale bar, and north arrow derive from it. Anything that would land under
+about ten displayed pixels is not drawn, because unreadable text is worse than
+absent text. That rule is why a share card carries less furniture while a
+full-size export keeps it.
 
 A second presentation fact, `captionedExternally`, says whether the surface
 showing the image already prints the system's name beside it. Chat clients do,
 so the card omits its own title and legend instead of saying it twice in worse
 type. A downloaded file has nothing captioning it and keeps them.
 
-Neither input names an element to remove. Adding a "card mode" branch would
-be the thing to avoid here.
+Neither presentation contract names individual elements to remove. Adding a
+separate geographic renderer or a "card mode" drawing branch would let live
+and portable output drift apart.
 
 ## Preview images, and why the browser draws them
 

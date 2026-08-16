@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  editorAdaptiveFiles,
+  editorOfflinePrecacheFiles,
   editorPrecacheFiles,
   embedOnlyFiles,
   manifestInstallIconFiles,
+  OFFLINE_GLYPH_RANGE_FILES,
   referencedBuildAssetFiles,
   verifyPrecacheOutput,
   type BuildManifest,
@@ -58,6 +61,11 @@ const webAppManifest: WebAppManifest = {
 };
 
 const installIcons = manifestInstallIconFiles(webAppManifest);
+const offlineRuntimeFiles = [
+  'assets/diagram-layout-worker-entry-a1b2c3.js',
+  'assets/feature-projection-worker-entry-a1b2c3.js',
+  'assets/storage-deserializer-worker-a1b2c3.js',
+];
 
 describe('PWA precache output', () => {
   it('keeps the complete extension for referenced WOFF2 assets', () => {
@@ -76,25 +84,46 @@ describe('PWA precache output', () => {
     ]);
   });
 
-  it('walks static and lazy editor imports into the offline graph', () => {
-    expect(editorPrecacheFiles(manifest, installIcons)).toEqual([
+  it('precaches the editor shell and the three text ranges that render transit labels', () => {
+    expect(OFFLINE_GLYPH_RANGE_FILES).toEqual([
+      'glyphs/noto-sans-v1/Noto Sans Bold/0-255.pbf',
+      'glyphs/noto-sans-v1/Noto Sans Regular/0-255.pbf',
+      'glyphs/noto-sans-v1/Noto Sans Regular/9472-9727.pbf',
+    ]);
+    expect(editorPrecacheFiles(manifest, installIcons)).toEqual(
+      [
+        'assets/main.css',
+        'assets/main.js',
+        'assets/shared.css',
+        'assets/shared.js',
+        'favicon.svg',
+        'index.html',
+        'manifest.json',
+        ...OFFLINE_GLYPH_RANGE_FILES,
+      ].sort(),
+    );
+  });
+
+  it('installs the workers that reconstruct a saved map offline', () => {
+    const precached = editorOfflinePrecacheFiles(manifest, installIcons, offlineRuntimeFiles);
+    const adaptive = editorAdaptiveFiles(manifest, installIcons, offlineRuntimeFiles);
+
+    expect(offlineRuntimeFiles.every((file) => precached.includes(file))).toBe(true);
+    expect(offlineRuntimeFiles.some((file) => adaptive.includes(file))).toBe(false);
+  });
+
+  it('classifies lazy features and install artwork as adaptive assets', () => {
+    expect(editorAdaptiveFiles(manifest, installIcons)).toEqual([
       'apple-touch-icon.png',
       'assets/dialog-icon.svg',
       'assets/dialog.js',
-      'assets/main.css',
-      'assets/main.js',
-      'assets/shared.css',
-      'assets/shared.js',
       'favicon-16x16.png',
       'favicon-32x32.png',
       'favicon-dark-16x16.png',
       'favicon-dark-32x32.png',
-      'favicon.svg',
       'icons/app-icon-a1b2c3d4e5f6-192.png',
       'icons/app-icon-a1b2c3d4e5f6.svg',
       'icons/app-icon-maskable-a1b2c3d4e5f6-512.png',
-      'index.html',
-      'manifest.json',
     ]);
   });
 
@@ -102,15 +131,35 @@ describe('PWA precache output', () => {
     expect(embedOnlyFiles(manifest, installIcons)).toEqual(['assets/embed.js', 'embed.html']);
   });
 
-  it('reports missing manifest icons and accidentally cached embed assets', () => {
+  it('reports a missing shell asset and any eager adaptive or embed asset', () => {
     const expected = editorPrecacheFiles(manifest, installIcons);
     const precached = expected
-      .filter((file) => file !== 'icons/app-icon-a1b2c3d4e5f6.svg')
-      .concat('assets/embed.js');
+      .filter((file) => file !== 'assets/main.js')
+      .concat('assets/dialog.js', 'assets/embed.js');
 
     expect(verifyPrecacheOutput({ manifest, installIcons, precached })).toEqual([
-      'editor asset is not precached: icons/app-icon-a1b2c3d4e5f6.svg',
+      'essential editor asset is not precached: assets/main.js',
+      'adaptive editor asset is precached during first install: assets/dialog.js',
       'embed-only asset is precached: assets/embed.js',
+    ]);
+  });
+
+  it('reports a missing startup worker required by an offline reload', () => {
+    const precached = editorOfflinePrecacheFiles(
+      manifest,
+      installIcons,
+      offlineRuntimeFiles,
+    ).filter((file) => file !== offlineRuntimeFiles[0]);
+
+    expect(
+      verifyPrecacheOutput({
+        manifest,
+        installIcons,
+        precached,
+        offlineRuntimeFiles,
+      }),
+    ).toEqual([
+      'essential editor asset is not precached: assets/diagram-layout-worker-entry-a1b2c3.js',
     ]);
   });
 });

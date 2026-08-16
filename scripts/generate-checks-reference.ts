@@ -163,7 +163,7 @@ const ELSEWHERE: Check[] = [
   },
   {
     command: 'commit-msg hook',
-    fails: 'the subject is not a conventional commit, or exceeds 72 characters',
+    fails: 'the subject has an unknown type or scope, is malformed, or exceeds 72 characters',
     fix: 'reword the commit',
   },
   {

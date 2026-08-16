@@ -400,6 +400,7 @@ interface AttachOptions {
   gesture?: GestureLifecycleProbe;
   directManipulation?: DirectManipulationLifecycleProbe;
   onPointerIntent?: (intent: PointerIntent | null) => void;
+  onSelectionIntent?: () => void;
   /** Defaults to the Network view, which most cases exercise. */
   networkMode?: boolean;
   isContextMenuOpen?: () => boolean;
@@ -425,6 +426,7 @@ function attach(
     gesture,
     directManipulation,
     onPointerIntent,
+    onSelectionIntent,
     networkMode = true,
     isContextMenuOpen,
     contextMenu,
@@ -447,6 +449,7 @@ function attach(
     onDirectManipulationStart: directManipulation?.onStart,
     onDirectManipulationEnd: directManipulation?.onEnd,
     onPointerIntent: onPointerIntent ? (intent) => onPointerIntent(intent) : undefined,
+    onSelectionIntent,
     isContextMenuOpen,
     registerPointerIntentRefresh: onPointerRefresh
       ? (refresh) => {
@@ -482,6 +485,22 @@ afterEach(() => {
 });
 
 describe('pointer work coalescing', () => {
+  it('preloads selection details on a Select-tool press, not an unrelated drawing press', () => {
+    installBrowserGlobals();
+    const store = createEditorStore();
+    const map = createMap(stopFeature('stop'));
+    const onSelectionIntent = vi.fn();
+    const detach = attach(map, store, { onSelectionIntent });
+
+    store.commands.tools.setTool('select');
+    map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
+    store.commands.tools.setTool('stop');
+    map.fire('mousedown', mouseEvent(map, { x: 100, y: 100 }));
+
+    expect(onSelectionIntent).toHaveBeenCalledOnce();
+    detach();
+  });
+
   it('queries the rendered hit stack once for one pointer event', () => {
     installBrowserGlobals();
     const store = createEditorStore();
@@ -935,7 +954,8 @@ describe('pointer work coalescing', () => {
     expect(store.getState().system).toBe(system);
     expect(store.getState().canUndo).toBe(false);
 
-    chooser!.connectPaths();
+    if (!chooser) throw new Error('Expected terminus connection chooser');
+    chooser.connectPaths();
     expect(store.getState().system.services).toHaveLength(2);
     expect(store.getState().system.nodes).toHaveLength(1);
     store.commands.history.undo();
