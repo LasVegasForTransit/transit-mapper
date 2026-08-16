@@ -448,7 +448,8 @@ async function performDrawAndPersistenceProof(
       const database = await new Promise<IDBDatabase>((resolvePromise, reject) => {
         const request = indexedDB.open(storage.databaseName, storage.databaseVersion);
         request.onsuccess = () => resolvePromise(request.result);
-        request.onerror = () => reject(request.error);
+        request.onerror = () =>
+          reject(new Error('IndexedDB open failed', { cause: request.error }));
       });
       const record = await new Promise<{ serialized?: string } | undefined>(
         (resolvePromise, reject) => {
@@ -456,7 +457,8 @@ async function performDrawAndPersistenceProof(
           const request = transaction.objectStore(storage.documentStore).get(expected.systemId);
           request.onsuccess = () =>
             resolvePromise(request.result as { serialized?: string } | undefined);
-          request.onerror = () => reject(request.error);
+          request.onerror = () =>
+            reject(new Error('IndexedDB document read failed', { cause: request.error }));
         },
       );
       database.close();
@@ -660,6 +662,18 @@ export async function waitForScenarioReady(
         marks: performance.getEntriesByName(markName, 'mark').map((entry) => entry.startTime),
         overlay: (window as PerfPageWindow).__perfOverlaySnapshot?.() ?? null,
         projectionCounts: (window as PerfPageWindow).__mapProjectionCounts?.() ?? null,
+        // Counters alone cannot distinguish "the renderer never ran" from
+        // "it ran and never committed". This failure was misread as a
+        // scale problem twice for exactly that reason: the bank diagnostics
+        // name the difference, because an aborted transaction leaves
+        // `activeBank` null with a non-zero abort count.
+        renderSourceBank: (() => {
+          try {
+            return (window as PerfPageWindow).__perfRenderSourceBankSnapshot?.() ?? null;
+          } catch (snapshotError) {
+            return { unavailable: String(snapshotError) };
+          }
+        })(),
       }),
       FIRST_SYSTEM_MAP_PAINT_MARK,
     );
