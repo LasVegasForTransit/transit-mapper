@@ -55,6 +55,9 @@ describe('Export split button', () => {
       menuTrigger.dispatchEvent(
         new MouseEvent('pointerdown', { bubbles: true, button: 0, ctrlKey: false }),
       );
+      // Pointer intent starts the deferred export preload. Native popover
+      // activation still follows the button's click, as it does for a person.
+      menuTrigger.click();
     });
     const svgOption = [...document.querySelectorAll('[role="menuitem"]')].find(
       (item) => item.textContent === 'Export SVG',
