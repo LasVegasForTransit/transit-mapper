@@ -16,9 +16,18 @@ import {
  * every time: the bank transaction aborted, the map retried, and no system of
  * any size ever published a first scene.
  */
+function deferred(): { promise: Promise<void>; resolve(): void } {
+  let resolve = () => {};
+  const promise = new Promise<void>((accept) => {
+    resolve = accept;
+  });
+  return { promise, resolve };
+}
+
 describe('scene publication source preparation', () => {
   it('publishes even when preparation runs over the cooperative budget', async () => {
     const clock = new ScenePublicationFrameClock();
+    const preparation = deferred();
     const scheduler = createCooperativeRenderJobScheduler({
       now: clock.now,
       scheduleFrame: clock.scheduleFrame,
@@ -46,12 +55,23 @@ describe('scene publication source preparation', () => {
         publishDraftSynchronously: vi.fn(),
       },
       input,
-      // The overrun the scheduler cannot avoid: one indivisible call that
-      // costs nearly twice the slice budget.
+      // Production preparation is asynchronous, so the overrun is only half
+      // the shape: the call itself costs nearly twice the slice budget, and
+      // the work it starts settles later, which is what makes the scheduler
+      // poll. Resolving synchronously would skip that polling entirely.
       beforeSourceMutation: () => {
         clock.nowMs += 7;
+        return preparation.promise;
       },
     });
+
+    // Frames that elapse while preparation is still pending. These are the
+    // polling units, and the shape the production failure actually took.
+    for (let frame = 0; frame < 3; frame += 1) {
+      await Promise.resolve();
+      if (clock.frames.size > 0) clock.flush();
+    }
+    preparation.resolve();
 
     await flushScenePublication(clock, handle.settled);
 
