@@ -46,6 +46,8 @@ const fixtureWorkers = [
 ] as const;
 
 const productionWorkerIdentities = [
+  'diagram-layout-worker-entry',
+  'feature-projection-worker-entry',
   'gtfsWorker',
   'gtfsReconcileWorker',
   'osm-import-worker',
@@ -308,11 +310,11 @@ describe('bundle report delivery graphs', () => {
 
   it('requires the complete production Worker roster unless a fixture roster is explicit', () => {
     expect(() => createDeliveryGraphs({ manifest, files: fixtureFiles() })).toThrow(
-      'missing gtfsWorker',
+      'missing diagram-layout-worker-entry',
     );
   });
 
-  it('reports the seven production Worker boundaries by source-output identity', () => {
+  it('reports the nine production Worker boundaries by source-output identity', () => {
     const workerReferences = productionWorkerIdentities.map(
       (identity) =>
         `new Worker(new URL("/assets/${identity}-abcdefgh.js",import.meta.url),` +
@@ -330,7 +332,7 @@ describe('bundle report delivery graphs', () => {
     expect(graphs.workers.boundaries.map((boundary) => boundary.identity).sort()).toEqual(
       [...productionWorkerIdentities].sort(),
     );
-    expect(graphs.workers.boundaries).toHaveLength(7);
+    expect(graphs.workers.boundaries).toHaveLength(9);
   });
 
   it('fails explicitly when a production Worker uses unsupported equivalent syntax', () => {
