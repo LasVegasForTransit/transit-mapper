@@ -6,23 +6,40 @@ import { wayCrossings } from '@transitmapper/core/model/validate';
 import { effectiveConnectors } from '@transitmapper/core/geometry/junctions';
 import { parseSystem } from '@transitmapper/core/model/serialize';
 
+/** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
+ *  a silent `undefined`/`null` into a clear failure at the point of use
+ *  instead of a confusing crash further down the assertion. */
+function mustFind<T>(v: T | null | undefined, what: string): T {
+  if (v === null || v === undefined) throw new Error(`expected ${what}`);
+  return v;
+}
+
+// Shared setup for scenarios that only care about the junction once it
+// already exists (semantics, connectors, deletion) rather than about the
+// crossing-resolution mechanics themselves: two straight roads crossing in a
+// plus shape, already resolved into a single junction node.
+function createStoreWithCrossingRoads(): ReturnType<typeof createEditorStore> {
+  const store = createEditorStore();
+  const ew = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ew, [-115.2, 36.1]);
+  store.getState().addWayPoint(ew, [-115.1, 36.1]);
+  store.getState().finishWay();
+  const ns = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ns, [-115.15, 36.05]);
+  store.getState().addWayPoint(ns, [-115.15, 36.15]);
+  store.getState().finishWay();
+  // finishWay auto-formed the junction already; an explicit re-run is a
+  // no-op.
+  store.getState().formCrossingJunctions(ns);
+  return store;
+}
+
 describe('store: auto-junctions where ways cross (the SimCity moment)', () => {
   describe('two roads crossing at grade', () => {
     let store: ReturnType<typeof createEditorStore>;
 
     beforeEach(() => {
-      store = createEditorStore();
-      const ew = store.getState().beginWay('road', 'straight');
-      store.getState().addWayPoint(ew, [-115.2, 36.1]);
-      store.getState().addWayPoint(ew, [-115.1, 36.1]);
-      store.getState().finishWay();
-      const ns = store.getState().beginWay('road', 'straight');
-      store.getState().addWayPoint(ns, [-115.15, 36.05]);
-      store.getState().addWayPoint(ns, [-115.15, 36.15]);
-      store.getState().finishWay();
-      // finishWay auto-formed the junction already; an explicit re-run is a
-      // no-op.
-      store.getState().formCrossingJunctions(ns);
+      store = createStoreWithCrossingRoads();
     });
 
     it('crossing forms exactly one junction node', () => {
@@ -107,7 +124,10 @@ describe('store: auto-elevate a guideway crossing a major road', () => {
   });
 
   it('the crossed road is completely untouched', () => {
-    const crossedRoad = store.getState().system.ways.find((w) => w.id === road)!;
+    const crossedRoad = mustFind(
+      store.getState().system.ways.find((w) => w.id === road),
+      'crossed road',
+    );
     expect(crossedRoad.points.length).toBe(2);
     expect(crossedRoad.grade).toBe('atGrade');
   });
@@ -250,22 +270,17 @@ describe('store: junction semantics (control, connectors)', () => {
   let armBLaneId: string;
 
   beforeEach(() => {
-    store = createEditorStore();
-    const ew = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(ew, [-115.2, 36.1]);
-    store.getState().addWayPoint(ew, [-115.1, 36.1]);
-    store.getState().finishWay();
-    const ns = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(ns, [-115.15, 36.05]);
-    store.getState().addWayPoint(ns, [-115.15, 36.15]);
-    store.getState().finishWay();
-    store.getState().formCrossingJunctions(ns);
+    store = createStoreWithCrossingRoads();
     const sys = store.getState().system;
     nodeId = sys.nodes[0].id;
-    const armA = sys.ways.find((w) => sys.nodes[0].refs.some((r) => r.wayId === w.id))!;
-    const armB = sys.ways.find(
-      (w) => w.id !== armA.id && sys.nodes[0].refs.some((r) => r.wayId === w.id),
-    )!;
+    const armA = mustFind(
+      sys.ways.find((w) => sys.nodes[0].refs.some((r) => r.wayId === w.id)),
+      'arm A',
+    );
+    const armB = mustFind(
+      sys.ways.find((w) => w.id !== armA.id && sys.nodes[0].refs.some((r) => r.wayId === w.id)),
+      'arm B',
+    );
     armAId = armA.id;
     armBId = armB.id;
     armALaneId = armA.profile.lanes[1].id;
@@ -293,7 +308,10 @@ describe('store: junction semantics (control, connectors)', () => {
       .setNodeConnectors(nodeId, [
         { from: { wayId: armAId, laneId: armALaneId }, to: { wayId: armBId, laneId: armBLaneId } },
       ]);
-    const armA = store.getState().system.ways.find((w) => w.id === armAId)!;
+    const armA = mustFind(
+      store.getState().system.ways.find((w) => w.id === armAId),
+      'arm A',
+    );
     store.getState().setWayProfile(armAId, {
       lanes: armA.profile.lanes.filter((l) => l.id !== armALaneId),
     });
@@ -316,16 +334,7 @@ describe('store: deleting a way cleans identity + connectors', () => {
   let firstArmId: string;
 
   beforeEach(() => {
-    store = createEditorStore();
-    const a = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(a, [-115.2, 36.1]);
-    store.getState().addWayPoint(a, [-115.1, 36.1]);
-    store.getState().finishWay();
-    const b = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(b, [-115.15, 36.05]);
-    store.getState().addWayPoint(b, [-115.15, 36.15]);
-    store.getState().finishWay();
-    store.getState().formCrossingJunctions(b);
+    store = createStoreWithCrossingRoads();
     const arms = store.getState().system.ways;
     const nodeId = store.getState().system.nodes[0].id;
     store.getState().setNodeConnectors(nodeId, [

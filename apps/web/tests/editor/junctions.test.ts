@@ -25,6 +25,44 @@ function wayOf(id: string, typeId: string, points: [number, number][]) {
   };
 }
 
+// Every setup below draws a straight 2-point way through the same
+// beginWay/addWayPoint/addWayPoint/finishWay sequence; factored out so each
+// beforeEach reads as the story it's telling, not the mechanics of drawing.
+function drawWay(
+  store: ReturnType<typeof createEditorStore>,
+  typeId: string,
+  p1: [number, number],
+  p2: [number, number],
+) {
+  const id = store.getState().beginWay(typeId, 'straight');
+  store.getState().addWayPoint(id, p1);
+  store.getState().addWayPoint(id, p2);
+  store.getState().finishWay();
+  return id;
+}
+
+/** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
+ *  a silent `undefined`/`null` into a clear failure at the point of use
+ *  instead of a confusing crash further down the assertion. */
+function mustFind<T>(v: T | null | undefined, what: string): T {
+  if (v === null || v === undefined) throw new Error(`expected ${what}`);
+  return v;
+}
+
+// Both helpers below wrap the "find by id, else throw" pattern used
+// throughout this file's junction assertions — a plain `.find()!` would trip
+// no-non-null-assertion, and inlining mustFind() at every call site is what
+// pushed this file over the line-count cap the first time around.
+function wayById(system: TransitSystem, id: string) {
+  const way = system.ways.find((w) => w.id === id);
+  return mustFind(way, 'way');
+}
+
+function refByWayId(node: TransitSystem['nodes'][number], wayId: string) {
+  const ref = node.refs.find((r) => r.wayId === wayId);
+  return mustFind(ref, 'node ref');
+}
+
 describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate node, and every way-editing action keeps its refs in sync', () => {
   describe('joining two ways at a shared coordinate', () => {
     // Way A: a straight line the junction will land on mid-segment.
@@ -36,24 +74,18 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
 
     beforeEach(() => {
       store = createEditorStore();
-      wA = store.getState().beginWay('lightRail', 'straight');
-      store.getState().addWayPoint(wA, [-115.2, 36.1]);
-      store.getState().addWayPoint(wA, [-115.1, 36.1]);
-      store.getState().finishWay();
-      wB = store.getState().beginWay('lightRail', 'straight');
-      store.getState().addWayPoint(wB, [-115.15, 36.2]);
-      store.getState().addWayPoint(wB, [-115.15, 36.1]);
-      store.getState().finishWay();
+      wA = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
+      wB = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
       store.getState().joinWayPointToWay(wB, 1, wA, [-115.15, 36.1]);
       s = store.getState().system;
     });
 
     it('joinWayPointToWay inserts a real control point into the target way', () => {
-      expect(s.ways.find((w) => w.id === wA)!.points.length).toBe(3);
+      expect(wayById(s, wA).points.length).toBe(3);
     });
 
     it('the inserted point lands at the join coordinate', () => {
-      expect(s.ways.find((w) => w.id === wA)!.points[1][0]).toBe(-115.15);
+      expect(wayById(s, wA).points[1][0]).toBe(-115.15);
     });
 
     it('exactly one node was created', () => {
@@ -78,8 +110,8 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
       });
 
       it('moving the shared point on one way also moves it on the other (no desync)', () => {
-        expect(s2.ways.find((w) => w.id === wA)!.points[1][0]).toBe(-115.16);
-        expect(s2.ways.find((w) => w.id === wB)!.points[1][0]).toBe(-115.16);
+        expect(wayById(s2, wA).points[1][0]).toBe(-115.16);
+        expect(wayById(s2, wB).points[1][0]).toBe(-115.16);
       });
 
       it("the node's own coord tracks the cascaded move too", () => {
@@ -95,7 +127,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
         beforeEach(() => {
           store.getState().insertWayPoint(wA, 0, [-115.22, 36.09]);
           s3 = store.getState().system;
-          wARef = s3.nodes[0].refs.find((r) => r.wayId === wA)!;
+          wARef = refByWayId(s3.nodes[0], wA);
         });
 
         it("insertWayPoint shifts the node's ref index on that way", () => {
@@ -103,7 +135,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
         });
 
         it('the ref still points at the actual junction point after the shift', () => {
-          expect(s3.ways.find((w) => w.id === wA)!.points[wARef.pointIndex][0]).toBe(-115.16);
+          expect(wayById(s3, wA).points[wARef.pointIndex][0]).toBe(-115.16);
         });
 
         // Deleting the OTHER end of way A (not the junction point) must not
@@ -115,7 +147,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
           beforeEach(() => {
             store.getState().deleteWayPoint(wA, 0);
             s4 = store.getState().system;
-            wARef2 = s4.nodes[0].refs.find((r) => r.wayId === wA)!;
+            wARef2 = refByWayId(s4.nodes[0], wA);
           });
 
           it("deleteWayPoint before the node's index shifts it back down", () => {
@@ -135,7 +167,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
           it('deleting the shared point on one way drops the node (no longer a real junction)', () => {
             store.getState().insertWayPoint(wB, 0, [-115.15, 36.25]);
             const s5 = store.getState().system;
-            const wBRefIndex = s5.nodes[0].refs.find((r) => r.wayId === wB)!.pointIndex;
+            const wBRefIndex = refByWayId(s5.nodes[0], wB).pointIndex;
             store.getState().deleteWayPoint(wB, wBRefIndex);
             expect(store.getState().system.nodes.length).toBe(0);
           });
@@ -153,14 +185,8 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
 
     beforeEach(() => {
       store = createEditorStore();
-      const armA = store.getState().beginWay('lightRail', 'straight');
-      store.getState().addWayPoint(armA, [-115.2, 36.1]);
-      store.getState().addWayPoint(armA, [-115.1, 36.1]);
-      store.getState().finishWay();
-      armB = store.getState().beginWay('lightRail', 'straight');
-      store.getState().addWayPoint(armB, [-115.15, 36.2]);
-      store.getState().addWayPoint(armB, [-115.15, 36.1]);
-      store.getState().finishWay();
+      const armA = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
+      armB = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
       store.getState().joinWayPointToWay(armB, 1, armA, [-115.15, 36.1]);
     });
 
@@ -172,7 +198,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
       store.getState().deleteWayPoint(armB, 1);
       const s = store.getState().system;
       expect(s.nodes.length).toBe(1);
-      expect(s.ways.find((w) => w.id === armB)!.points.length).toBe(2);
+      expect(wayById(s, armB).points.length).toBe(2);
     });
   });
 
@@ -183,14 +209,8 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
 
     beforeEach(() => {
       store = createEditorStore();
-      wC = store.getState().beginWay('lightRail', 'straight');
-      store.getState().addWayPoint(wC, [-115.2, 36.1]);
-      store.getState().addWayPoint(wC, [-115.1, 36.1]);
-      store.getState().finishWay();
-      const wD = store.getState().beginWay('lightRail', 'straight');
-      store.getState().addWayPoint(wD, [-115.15, 36.2]);
-      store.getState().addWayPoint(wD, [-115.15, 36.1]);
-      store.getState().finishWay();
+      wC = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
+      const wD = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
       store.getState().joinWayPointToWay(wD, 1, wC, [-115.15, 36.1]);
     });
 
@@ -246,14 +266,8 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
   // A system round-tripped through JSON keeps its explicit v4 nodes intact.
   it('v4 round-trip preserves the explicit node', () => {
     const store = createEditorStore();
-    const wE = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(wE, [-115.2, 36.1]);
-    store.getState().addWayPoint(wE, [-115.1, 36.1]);
-    store.getState().finishWay();
-    const wF = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(wF, [-115.15, 36.2]);
-    store.getState().addWayPoint(wF, [-115.15, 36.1]);
-    store.getState().finishWay();
+    const wE = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
+    const wF = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
     store.getState().joinWayPointToWay(wF, 1, wE, [-115.15, 36.1]);
     const v4Round = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
     expect(v4Round.nodes.length).toBe(1);
@@ -272,21 +286,13 @@ describe('Disconnecting a junction: disconnectNodeWay takes one way out and leav
 
     beforeEach(() => {
       store = createEditorStore();
-      through = store.getState().beginWay('lightRail', 'straight');
-      store.getState().addWayPoint(through, [-115.2, 36.1]);
-      store.getState().addWayPoint(through, [-115.1, 36.1]);
-      store.getState().finishWay();
-      spur = store.getState().beginWay('lightRail', 'straight');
-      store.getState().addWayPoint(spur, [-115.15, 36.2]);
-      store.getState().addWayPoint(spur, [-115.15, 36.1]);
-      store.getState().finishWay();
+      through = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
+      spur = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
       store.getState().joinWayPointToWay(spur, 1, through, [-115.15, 36.1]);
 
       const junctionId = store.getState().system.nodes[0].id;
-      stayingPoint = store
-        .getState()
-        .system.ways.find((w) => w.id === through)!
-        .points[1].slice() as [number, number];
+      const throughWay = wayById(store.getState().system, through);
+      stayingPoint = throughWay.points[1].slice() as [number, number];
       store.getState().select({ kind: 'node', id: junctionId });
       store.getState().disconnectNodeWay(junctionId, spur);
       s = store.getState().system;
@@ -297,12 +303,12 @@ describe('Disconnecting a junction: disconnectNodeWay takes one way out and leav
     });
 
     it('the disconnected way stops sharing the coordinate', () => {
-      const movedEnd = s.ways.find((w) => w.id === spur)!.points[1];
+      const movedEnd = wayById(s, spur).points[1];
       expect(haversineMeters(movedEnd, stayingPoint)).toBeGreaterThan(10);
     });
 
     it("the arm that stayed didn't move", () => {
-      const throughPoint = s.ways.find((w) => w.id === through)!.points[1];
+      const throughPoint = wayById(s, through).points[1];
       expect(throughPoint[0]).toBe(stayingPoint[0]);
       expect(throughPoint[1]).toBe(stayingPoint[1]);
     });
@@ -325,18 +331,9 @@ describe('Disconnecting a junction: disconnectNodeWay takes one way out and leav
 
     beforeEach(() => {
       store = createEditorStore();
-      main = store.getState().beginWay('lightRail', 'straight');
-      store.getState().addWayPoint(main, [-115.2, 36.1]);
-      store.getState().addWayPoint(main, [-115.1, 36.1]);
-      store.getState().finishWay();
-      north = store.getState().beginWay('lightRail', 'straight');
-      store.getState().addWayPoint(north, [-115.15, 36.2]);
-      store.getState().addWayPoint(north, [-115.15, 36.1]);
-      store.getState().finishWay();
-      south = store.getState().beginWay('lightRail', 'straight');
-      store.getState().addWayPoint(south, [-115.15, 36.0]);
-      store.getState().addWayPoint(south, [-115.15, 36.1]);
-      store.getState().finishWay();
+      main = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
+      north = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
+      south = drawWay(store, 'lightRail', [-115.15, 36.0], [-115.15, 36.1]);
       store.getState().joinWayPointToWay(north, 1, main, [-115.15, 36.1]);
       store.getState().joinWayPointToWay(south, 1, main, [-115.15, 36.1]);
 
@@ -352,7 +349,7 @@ describe('Disconnecting a junction: disconnectNodeWay takes one way out and leav
       let s2: TransitSystem;
 
       beforeEach(() => {
-        const laneOf = (wayId: string) => s.ways.find((w) => w.id === wayId)!.profile.lanes[0].id;
+        const laneOf = (wayId: string) => wayById(s, wayId).profile.lanes[0].id;
         store.getState().setNodeConnectors(threeArm.id, [
           {
             from: { wayId: south, laneId: laneOf(south) },
@@ -378,13 +375,12 @@ describe('Disconnecting a junction: disconnectNodeWay takes one way out and leav
 
       it('connectors naming the disconnected way are pruned', () => {
         expect((s2.nodes[0].connectors ?? []).length).toBe(1);
-        expect(s2.nodes[0].connectors![0].from.wayId).toBe(north);
+        expect(mustFind(s2.nodes[0].connectors, 'connectors')[0].from.wayId).toBe(north);
       });
 
       it('the shed arm is nudged clear of the junction that stayed', () => {
-        expect(
-          haversineMeters(s2.ways.find((w) => w.id === south)!.points[1], s2.nodes[0].coord),
-        ).toBeGreaterThan(10);
+        const shedEnd = wayById(s2, south).points[1];
+        expect(haversineMeters(shedEnd, s2.nodes[0].coord)).toBeGreaterThan(10);
       });
     });
   });
@@ -393,14 +389,8 @@ describe('Disconnecting a junction: disconnectNodeWay takes one way out and leav
   // longer wires them into one junction on commit.
   it('a road drawn across a rail line forms no junction', () => {
     const store = createEditorStore();
-    const rail = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(rail, [-115.2, 36.1]);
-    store.getState().addWayPoint(rail, [-115.1, 36.1]);
-    store.getState().finishWay();
-    const road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, [-115.15, 36.05]);
-    store.getState().addWayPoint(road, [-115.15, 36.15]);
-    store.getState().finishWay();
+    drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
+    drawWay(store, 'road', [-115.15, 36.05], [-115.15, 36.15]);
     expect(store.getState().system.nodes.length).toBe(0);
   });
 
@@ -455,9 +445,7 @@ describe('Disconnecting a junction: disconnectNodeWay takes one way out and leav
     });
 
     it('and the rail line is left where it was, crossing without joining', () => {
-      expect(store.getState().system.ways.find((w) => w.id === 'mixed-rail')!.points[1][1]).toBe(
-        36.1,
-      );
+      expect(wayById(store.getState().system, 'mixed-rail').points[1][1]).toBe(36.1);
     });
   });
 

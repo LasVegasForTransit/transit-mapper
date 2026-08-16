@@ -7,6 +7,19 @@ import { wayCapacity } from '@transitmapper/core/model/profile';
 import { createEditorStore } from '../../src/editor/store';
 import { buildFeatures } from '../../src/map/layers';
 
+/** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
+ *  a silent `undefined`/`null` into a clear failure at the point of use
+ *  instead of a confusing crash further down the assertion. */
+function mustFind<T>(v: T | null | undefined, what: string): T {
+  if (v === null || v === undefined) throw new Error(`expected ${what}`);
+  return v;
+}
+
+/** The `offset` GeoJSON feature property is always a number for a fanned
+ *  lane feature; narrow it once here instead of at every call site. */
+const offsetOf = (f: { properties?: Record<string, unknown> | null }): number | undefined =>
+  f.properties?.offset as number | undefined;
+
 describe('modes + grade (infrastructure vertical alignment)', () => {
   let store: ReturnType<typeof createEditorStore>;
   let gc: string;
@@ -19,10 +32,17 @@ describe('modes + grade (infrastructure vertical alignment)', () => {
     store.getState().finishWay();
   });
 
-  const way = () => store.getState().system.ways.find((w) => w.id === gc)!;
+  const way = () =>
+    mustFind(
+      store.getState().system.ways.find((w) => w.id === gc),
+      'way',
+    );
 
   it('subway is a valid mode', () => {
-    const svc = store.getState().system.services.find((s) => serviceWayIds(s).includes(gc))!;
+    const svc = mustFind(
+      store.getState().system.services.find((s) => serviceWayIds(s).includes(gc)),
+      'service',
+    );
     expect(
       svc.modeId === 'subway' || modesForWayType('heavyRail').some((m) => m.id === svc.modeId),
     ).toBe(true);
@@ -43,8 +63,12 @@ describe('modes + grade (infrastructure vertical alignment)', () => {
     expect(round.ways[0].grade).toBe('underground');
   });
 
-  it('parse defaults missing grade to at grade', () => {
-    const noGrade = parseSystem({
+  // Shared by the two "parse fills in a missing field" cases below: a
+  // minimal serialized system whose one way omits everything but the
+  // fields required to identify it, so parseSystem's defaulting is what's
+  // under test rather than any of the values we bothered to fill in.
+  const parseWayMissingOptionalFields = () =>
+    parseSystem({
       version: 3,
       id: 'x',
       name: 'x',
@@ -67,33 +91,14 @@ describe('modes + grade (infrastructure vertical alignment)', () => {
       facilities: [],
       groups: [],
     });
+
+  it('parse defaults missing grade to at grade', () => {
+    const noGrade = parseWayMissingOptionalFields();
     expect(noGrade.ways[0].grade).toBe('atGrade');
   });
 
   it("parse defaults missing capacity from the way type's catalog default", () => {
-    const noGrade = parseSystem({
-      version: 3,
-      id: 'x',
-      name: 'x',
-      viewport: { center: [-115, 36], zoom: 10 },
-      createdAt: 1,
-      updatedAt: 1,
-      ways: [
-        {
-          id: 'w',
-          typeId: 'lightRail',
-          points: [
-            [-115.2, 36.1],
-            [-115.1, 36.1],
-          ],
-          geometry: 'straight',
-        },
-      ],
-      services: [],
-      stations: [],
-      facilities: [],
-      groups: [],
-    });
+    const noGrade = parseWayMissingOptionalFields();
     expect(wayCapacity(noGrade.ways[0])).toBe(wayType('lightRail').defaultCapacity);
   });
 });
@@ -113,13 +118,19 @@ describe('P2: physical cross-sections — capacity fans a way into that many par
 
   const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(['road']) };
 
+  const roadWay = () =>
+    mustFind(
+      store.getState().system.ways.find((w) => w.id === road),
+      'way',
+    );
+
   it('setWayCapacity updates the way', () => {
-    expect(wayCapacity(store.getState().system.ways.find((w) => w.id === road)!)).toBe(4);
+    expect(wayCapacity(roadWay())).toBe(4);
   });
 
   it('setWayCapacity clamps to a minimum of 1', () => {
     store.getState().setWayCapacity(road, 0);
-    expect(wayCapacity(store.getState().system.ways.find((w) => w.id === road)!)).toBe(1);
+    expect(wayCapacity(roadWay())).toBe(1);
   });
 
   it('infrastructure view fans a 4-lane road into 4 offset features', () => {
@@ -137,7 +148,7 @@ describe('P2: physical cross-sections — capacity fans a way into that many par
       ...filters,
     });
     const roadFeatures = infra.ways.features.filter((f) => f.properties?.id === road);
-    const offsets = new Set(roadFeatures.map((f) => f.properties?.offset));
+    const offsets = new Set(roadFeatures.map((f) => offsetOf(f)));
     expect(offsets.size).toBe(4);
   });
 
@@ -162,7 +173,7 @@ describe('P2: physical cross-sections — capacity fans a way into that many par
   });
 
   it('network view renders the service itself regardless of capacity', () => {
-    const svc = store.getState().addServiceToWay(road)!;
+    const svc = mustFind(store.getState().addServiceToWay(road), 'service');
     const netServed = buildFeatures(store.getState().system, null, [], {
       viewMode: 'network',
       ...filters,
@@ -180,7 +191,11 @@ describe('P3: station footprints & platforms', () => {
     stId = store.getState().addStation([-115.15, 36.1]);
   });
 
-  const withFootprint = () => store.getState().system.stations.find((s) => s.id === stId)!;
+  const withFootprint = () =>
+    mustFind(
+      store.getState().system.stations.find((s) => s.id === stId),
+      'station',
+    );
 
   it('station starts with no footprint', () => {
     expect(store.getState().system.stations[0].footprint).toBeUndefined();
@@ -199,21 +214,21 @@ describe('P3: station footprints & platforms', () => {
   it('moveFootprintPoint edits one corner', () => {
     store.getState().addStationFootprint(stId);
     store.getState().moveFootprintPoint(stId, 0, [-115.1501, 36.1001]);
-    expect(withFootprint().footprint![0][0]).toBe(-115.1501);
+    expect(mustFind(withFootprint().footprint, 'footprint')[0][0]).toBe(-115.1501);
   });
 
   it('addPlatform adds a platform to the station', () => {
     store.getState().addStationFootprint(stId);
     const platformId = store.getState().addPlatform(stId);
     expect(withFootprint().platforms?.length).toBe(1);
-    expect(withFootprint().platforms![0].id).toBe(platformId);
+    expect(mustFind(withFootprint().platforms, 'platforms')[0].id).toBe(platformId);
   });
 
   it('movePlatformPoint edits one platform corner', () => {
     store.getState().addStationFootprint(stId);
     const platformId = store.getState().addPlatform(stId);
     store.getState().movePlatformPoint(stId, platformId, 1, [-115.14, 36.09]);
-    expect(withFootprint().platforms![0].points[1][0]).toBe(-115.14);
+    expect(mustFind(withFootprint().platforms, 'platforms')[0].points[1][0]).toBe(-115.14);
   });
 
   it('deletePlatform removes it', () => {

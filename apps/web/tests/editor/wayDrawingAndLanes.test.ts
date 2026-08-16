@@ -285,7 +285,14 @@ describe('Pattern.lanes round-trips through serialize/parse', () => {
   // v9 kept lane pins in a wayId-keyed map on the pattern; they migrate onto
   // the leg for the way they named, and a pin naming a way the pattern doesn't
   // run over has nowhere to land and is dropped.
-  it("a v9 pattern's lane map migrates onto the leg for that way", () => {
+  // Shared by both v9-migration cases below: builds the v9-shaped pattern
+  // (lane map keyed by wayId, including a way the pattern doesn't run over)
+  // and round-trips it through parseSystem.
+  function migrateV9LaneMap(
+    store: ReturnType<typeof createEditorStore>,
+    w: string,
+    laneId: string,
+  ) {
     const svc = store.getState().system.services[0];
     const v9Shape = {
       ...store.getState().system,
@@ -301,27 +308,16 @@ describe('Pattern.lanes round-trips through serialize/parse', () => {
         },
       ],
     };
-    const fromV9 = parseSystem(JSON.parse(JSON.stringify(v9Shape)));
+    return parseSystem(JSON.parse(JSON.stringify(v9Shape)));
+  }
+
+  it("a v9 pattern's lane map migrates onto the leg for that way", () => {
+    const fromV9 = migrateV9LaneMap(store, w, laneId);
     expect(legPinnedLane(patternLegs(fromV9.services[0].patterns[0])[0])).toBe(laneId);
   });
 
   it('a v9 lane pin naming a way the pattern never runs over is dropped', () => {
-    const svc = store.getState().system.services[0];
-    const v9Shape = {
-      ...store.getState().system,
-      version: 9,
-      services: [
-        {
-          ...svc,
-          patterns: svc.patterns.map((p) => ({
-            id: p.id,
-            wayIds: patternLegs(p).map((l) => l.wayId),
-            lanes: { [w]: laneId, 'ghost-way': laneId },
-          })),
-        },
-      ],
-    };
-    const fromV9 = parseSystem(JSON.parse(JSON.stringify(v9Shape)));
+    const fromV9 = migrateV9LaneMap(store, w, laneId);
     expect(patternLegs(fromV9.services[0].patterns[0]).every((l) => l.wayId !== 'ghost-way')).toBe(
       true,
     );
@@ -340,7 +336,10 @@ describe('drawing a service along an existing way SHARES that infrastructure', (
     store.getState().setDraftMode('bus');
   });
 
-  it('route-draft extends along the existing way', () => {
+  // Shared by all three cases below: draws a road and resolves the pair of
+  // interior anchors (mid-corridor, as a real click would land) so the route
+  // genuinely traverses the existing way rather than a degenerate end sliver.
+  function drawRoadWithAnchors(store: ReturnType<typeof createEditorStore>) {
     const road = store.getState().beginWay('road', 'straight');
     store.getState().addWayPoint(road, [-115.3, 36.1]);
     store.getState().addWayPoint(road, [-115.2, 36.1]);
@@ -350,27 +349,20 @@ describe('drawing a service along an existing way SHARES that infrastructure', (
       store.getState().system.ways.find((x) => x.id === road),
       'way',
     );
-    // Interior anchors (mid-corridor, as a real click would land) so the route
-    // genuinely traverses the existing way rather than a degenerate end sliver.
     const from = mustFind(anchorOnWay(w, [-115.28, 36.1]), 'anchor');
     const to = mustFind(anchorOnWay(w, [-115.12, 36.1]), 'anchor');
+    return { road, w, from, to };
+  }
+
+  it('route-draft extends along the existing way', () => {
+    const { from, to } = drawRoadWithAnchors(store);
     store.getState().startRouteDraft(from);
     const extended = store.getState().extendRouteDraft(to);
     expect(extended).toBe(true);
   });
 
   it('committing a routed draft adds a second service', () => {
-    const road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, [-115.3, 36.1]);
-    store.getState().addWayPoint(road, [-115.2, 36.1]);
-    store.getState().addWayPoint(road, [-115.1, 36.1]);
-    store.getState().finishWay();
-    const w = mustFind(
-      store.getState().system.ways.find((x) => x.id === road),
-      'way',
-    );
-    const from = mustFind(anchorOnWay(w, [-115.28, 36.1]), 'anchor');
-    const to = mustFind(anchorOnWay(w, [-115.12, 36.1]), 'anchor');
+    const { from, to } = drawRoadWithAnchors(store);
     store.getState().startRouteDraft(from);
     store.getState().extendRouteDraft(to);
     const newId = store.getState().commitRouteDraft();
@@ -379,18 +371,8 @@ describe('drawing a service along an existing way SHARES that infrastructure', (
   });
 
   it('a service drawn along an existing corridor SHARES its infrastructure', () => {
-    const road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, [-115.3, 36.1]);
-    store.getState().addWayPoint(road, [-115.2, 36.1]);
-    store.getState().addWayPoint(road, [-115.1, 36.1]);
-    store.getState().finishWay();
+    const { from, to } = drawRoadWithAnchors(store);
     const s1Id = store.getState().system.services[0].id;
-    const w = mustFind(
-      store.getState().system.ways.find((x) => x.id === road),
-      'way',
-    );
-    const from = mustFind(anchorOnWay(w, [-115.28, 36.1]), 'anchor');
-    const to = mustFind(anchorOnWay(w, [-115.12, 36.1]), 'anchor');
     store.getState().startRouteDraft(from);
     store.getState().extendRouteDraft(to);
     const newId = store.getState().commitRouteDraft();

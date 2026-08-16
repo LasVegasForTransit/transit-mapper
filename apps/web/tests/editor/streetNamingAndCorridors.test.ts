@@ -17,6 +17,35 @@ import type { LngLat, PatternLeg, TransitSystem, Way } from '@transitmapper/core
 const legFrom = (l: PatternLeg): number => legRange(l)[0];
 const legTo = (l: PatternLeg): number => legRange(l)[1];
 
+function mustFind<T>(v: T | null | undefined, what: string): T {
+  if (v === null || v === undefined) throw new Error(`expected ${what}`);
+  return v;
+}
+
+/**
+ * Draws the two roads shared by the cross-street auto-naming scenarios below:
+ * an east-west 'Home St' and a north-south 'Cross Ave' crossing it at
+ * [-115.15, 36.1]. Callers differ only in whether they need to force the
+ * crossing junction explicitly, so this returns both way ids and leaves that
+ * decision to them.
+ */
+const drawHomeStAndCrossAve = (
+  store: ReturnType<typeof createEditorStore>,
+): { ewId: string; nsId: string } => {
+  store.getState().setDraftServiceEnabled(false);
+  const ewId = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(ewId, [-115.2, 36.1]);
+  store.getState().addWayPoint(ewId, [-115.1, 36.1]);
+  store.getState().finishWay();
+  store.getState().nameWay(ewId, 'Home St');
+  const nsId = store.getState().beginWay('road', 'straight');
+  store.getState().addWayPoint(nsId, [-115.15, 36.05]);
+  store.getState().addWayPoint(nsId, [-115.15, 36.15]);
+  store.getState().finishWay();
+  store.getState().nameWay(nsId, 'Cross Ave');
+  return { ewId, nsId };
+};
+
 describe('cross-street auto-naming: pre-filled on placement, never touched again', () => {
   let store: ReturnType<typeof createEditorStore>;
   let stationId: string;
@@ -25,22 +54,15 @@ describe('cross-street auto-naming: pre-filled on placement, never touched again
     store = createEditorStore();
     // Infrastructure only, no service — that's the fact this section (and
     // the naming choice below) depends on.
-    store.getState().setDraftServiceEnabled(false);
-    const ew = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(ew, [-115.2, 36.1]);
-    store.getState().addWayPoint(ew, [-115.1, 36.1]);
-    store.getState().finishWay();
-    store.getState().nameWay(ew, 'Home St');
-    const ns = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(ns, [-115.15, 36.05]);
-    store.getState().addWayPoint(ns, [-115.15, 36.15]);
-    store.getState().finishWay();
-    store.getState().nameWay(ns, 'Cross Ave');
-    store.getState().formCrossingJunctions(ns);
+    const { nsId } = drawHomeStAndCrossAve(store);
+    store.getState().formCrossingJunctions(nsId);
 
-    const ewAfterSplit = store
-      .getState()
-      .system.ways.find((w) => w.points.some((p) => p[0] === -115.15 && p[1] === 36.1))!;
+    const ewAfterSplit = mustFind(
+      store
+        .getState()
+        .system.ways.find((w) => w.points.some((p) => p[0] === -115.15 && p[1] === 36.1)),
+      'east-west way after split',
+    );
     // No service rides either road yet, so the unserved/road-anchored default
     // applies — 'alongStreet' style ('@'), not the rail-style '&'; see the
     // dedicated crossStreetNaming.test.ts suite for that rule on its own.
@@ -48,13 +70,19 @@ describe('cross-street auto-naming: pre-filled on placement, never touched again
   });
 
   it('placing a station on a named way pre-fills its name from the nearest cross street', () => {
-    const placed = store.getState().system.stations.find((s) => s.id === stationId)!;
+    const placed = mustFind(
+      store.getState().system.stations.find((s) => s.id === stationId),
+      'placed station',
+    );
     expect(placed.name).toBe('Home St @ Cross Ave');
   });
 
   it("moving a station leaves its auto-filled name untouched, even though it's no longer accurate", () => {
     store.getState().moveStation(stationId, [-115.12, 36.1]);
-    const moved = store.getState().system.stations.find((s) => s.id === stationId)!;
+    const moved = mustFind(
+      store.getState().system.stations.find((s) => s.id === stationId),
+      'moved station',
+    );
     expect(moved.name).toBe('Home St @ Cross Ave');
   });
 });
@@ -68,27 +96,23 @@ describe('cross-street auto-naming: resyncs once a later service proves the unse
     store = createEditorStore();
     // Infrastructure only, no service — this section's first check depends
     // on the station starting out genuinely unserved.
-    store.getState().setDraftServiceEnabled(false);
-    const ew = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(ew, [-115.2, 36.1]);
-    store.getState().addWayPoint(ew, [-115.1, 36.1]);
-    store.getState().finishWay();
-    store.getState().nameWay(ew, 'Home St');
-    const ns = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(ns, [-115.15, 36.05]);
-    store.getState().addWayPoint(ns, [-115.15, 36.15]);
-    store.getState().finishWay();
-    store.getState().nameWay(ns, 'Cross Ave');
+    drawHomeStAndCrossAve(store);
     // finishWay already forms the crossing junction, splitting 'ew' at it.
 
-    ewAfterSplit = store
-      .getState()
-      .system.ways.find((w) => w.points.some((p) => p[0] === -115.15 && p[1] === 36.1))!;
+    ewAfterSplit = mustFind(
+      store
+        .getState()
+        .system.ways.find((w) => w.points.some((p) => p[0] === -115.15 && p[1] === 36.1)),
+      'east-west way after split',
+    );
     stationId = store.getState().addStation([-115.15, 36.1], { wayId: ewAfterSplit.id, t: 1 });
   });
 
   it('an unserved road-anchored station is auto-named along-street and marked autoNamed', () => {
-    const placed = store.getState().system.stations.find((s) => s.id === stationId)!;
+    const placed = mustFind(
+      store.getState().system.stations.find((s) => s.id === stationId),
+      'placed station',
+    );
     expect(placed).toMatchObject({ name: 'Home St @ Cross Ave', autoNamed: true });
   });
 
@@ -96,13 +120,25 @@ describe('cross-street auto-naming: resyncs once a later service proves the unse
     // Draw a tram line over the whole of the station's own way — tram is
     // street-running, so a 'road'-typed way is a legal alignment for it.
     const sys = store.getState().system;
-    const homeWay = sys.ways.find((w) => w.id === ewAfterSplit.id)!;
-    const from = anchorOnWay(homeWay, homeWay.points[0])!;
-    const to = anchorOnWay(homeWay, homeWay.points[homeWay.points.length - 1])!;
-    const routed = routeBetween(sys, from, to, { allowedTypeIds: new Set(['road']) })!;
+    const homeWay = mustFind(
+      sys.ways.find((w) => w.id === ewAfterSplit.id),
+      'home way',
+    );
+    const from = mustFind(anchorOnWay(homeWay, homeWay.points[0]), 'anchor at start of home way');
+    const to = mustFind(
+      anchorOnWay(homeWay, homeWay.points[homeWay.points.length - 1]),
+      'anchor at end of home way',
+    );
+    const routed = mustFind(
+      routeBetween(sys, from, to, { allowedTypeIds: new Set(['road']) }),
+      'route between the ends of home way',
+    );
     store.getState().createRoutedService(routed.spans, 'tram');
 
-    const resynced = store.getState().system.stations.find((s) => s.id === stationId)!;
+    const resynced = mustFind(
+      store.getState().system.stations.find((s) => s.id === stationId),
+      'resynced station',
+    );
     expect(resynced).toMatchObject({ name: 'Home St & Cross Ave', autoNamed: true });
   });
 });

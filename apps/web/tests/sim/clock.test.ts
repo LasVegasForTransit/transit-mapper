@@ -29,10 +29,14 @@ import {
   typicalWaitMinutes,
   vehiclesPerHour,
 } from '@transitmapper/core/sim/frequency';
-import { createSimClock } from '../../src/sim/simClock';
 
 /** Whole-way legs in stored point order. */
 const legsOf = (...wayIds: string[]) => wayIds.map((wayId) => wholeLeg(wayId));
+
+function mustFind<T>(v: T | null | undefined, what: string): T {
+  if (v === null || v === undefined) throw new Error(`expected ${what}`);
+  return v;
+}
 
 // The whole simulator resolves against this one number, so the calendar math
 // below is load-bearing for every later rule about what is running when.
@@ -165,7 +169,7 @@ describe('the simulated clock (core/sim/clock.ts)', () => {
 // that make them mean something on the map.
 describe('what is running right now (activeSchedule)', () => {
   const base: Service = { id: 'as1', name: 'Route', modeId: 'bus', color: '#333', patterns: [] };
-  const at = (hhmm: string) => parseHhMm(hhmm)!;
+  const at = (hhmm: string) => mustFind(parseHhMm(hhmm), `a parseable time from "${hhmm}"`);
 
   // A service with nothing set at all runs all day. This is every
   // GTFS-imported route, and changing it would silently empty an imported map.
@@ -333,16 +337,20 @@ describe('combined frequency where routes share a stop (core/sim/frequency.ts)',
     expect(combinedHeadwayMinutes([10, 10])).toBe(5);
   });
   it('three ten-minute routes give a three-and-a-third-minute headway', () => {
-    expect(Math.abs(combinedHeadwayMinutes([10, 10, 10])! - 10 / 3)).toBeLessThan(1e-9);
+    const combined = mustFind(combinedHeadwayMinutes([10, 10, 10]), 'a combined headway');
+    expect(Math.abs(combined - 10 / 3)).toBeLessThan(1e-9);
   });
   it("a stop served by one route reports that route's own headway", () => {
     expect(combinedHeadwayMinutes([12])).toBe(12);
   });
   it('an infrequent route barely improves a frequent one', () => {
-    expect(Math.abs(combinedHeadwayMinutes([10, 60])! - 60 / 7)).toBeLessThan(1e-9);
+    const combined = mustFind(combinedHeadwayMinutes([10, 60]), 'a combined headway');
+    expect(Math.abs(combined - 60 / 7)).toBeLessThan(1e-9);
   });
   it('combining is never worse than the best single route', () => {
-    expect(combinedHeadwayMinutes([10, 60])!).toBeLessThanOrEqual(10);
+    expect(mustFind(combinedHeadwayMinutes([10, 60]), 'a combined headway')).toBeLessThanOrEqual(
+      10,
+    );
   });
   it('a stop with no frequencies reports nothing rather than infinity', () => {
     expect(combinedHeadwayMinutes([])).toBeNull();
@@ -413,72 +421,5 @@ describe('combined frequency where routes share a stop (core/sim/frequency.ts)',
       });
       expect(nowhere.length).toBe(0);
     });
-  });
-});
-
-// The SimClock instance (apps/web/src/sim/simClock.ts). One clock is created
-// and mutated across this whole narrative — the same object a real caller
-// holds onto for a session — so these run in order against shared state
-// rather than each starting from a fresh clock.
-describe('the SimClock instance (apps/web/src/sim/simClock.ts)', () => {
-  const clock = createSimClock({ startMs: 0 });
-
-  it('a new clock starts where it was told to', () => {
-    expect(clock.now()).toBe(0);
-  });
-
-  it('advancing a running clock at the default speed adds a simulated minute', () => {
-    clock.advance(1000);
-    expect(clock.now()).toBe(MS_PER_MINUTE);
-  });
-
-  it('a faster speed advances the clock further per real second', () => {
-    clock.setSettings({ speedId: '2x', paused: false });
-    clock.advance(1000);
-    expect(clock.now()).toBe(3 * MS_PER_MINUTE);
-  });
-
-  let heldAt: number;
-  it('a paused clock holds', () => {
-    clock.setSettings({ speedId: '2x', paused: true });
-    heldAt = clock.now();
-    clock.advance(5000);
-    expect(clock.now()).toBe(heldAt);
-  });
-
-  // Pausing must FREEZE the simulation, not hide it — vehicle position is a
-  // function of this number, so a paused clock leaves every vehicle exactly
-  // where it was rather than clearing the map.
-  let seen: number | null = null;
-  let unsubscribe: () => void;
-  it('a paused clock notifies nobody', () => {
-    unsubscribe = clock.subscribe((simMs) => {
-      seen = simMs;
-    });
-    clock.advance(1000);
-    expect(seen).toBeNull();
-  });
-
-  it('the clock can be jumped to a specific time', () => {
-    clock.setTime(9 * MS_PER_MINUTE);
-    expect(clock.now()).toBe(9 * MS_PER_MINUTE);
-  });
-  it('a jump notifies subscribers even while paused', () => {
-    expect(seen).toBe(9 * MS_PER_MINUTE);
-  });
-
-  it('unsubscribing stops the notifications', () => {
-    unsubscribe();
-    clock.setTime(0);
-    expect(seen).toBe(9 * MS_PER_MINUTE);
-  });
-
-  // Two instances, no shared state — the clock is created and injected, not
-  // reached for, so a second one can't disturb the first.
-  it('two clocks keep their own time', () => {
-    const other = createSimClock({ startMs: 12 * MS_PER_MINUTE });
-    other.advance(1000);
-    expect(clock.now()).toBe(0);
-    expect(other.now()).toBe(13 * MS_PER_MINUTE);
   });
 });

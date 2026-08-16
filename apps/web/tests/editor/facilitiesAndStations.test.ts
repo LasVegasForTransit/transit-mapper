@@ -11,6 +11,14 @@ import type { LngLat, Way } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
 import { buildFeatures, LAYER_SPECS } from '../../src/map/layers';
 
+/** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
+ *  a silent `undefined`/`null` into a clear failure at the point of use
+ *  instead of a confusing crash further down the assertion. */
+function mustFind<T>(v: T | null | undefined, what: string): T {
+  if (v === null || v === undefined) throw new Error(`expected ${what}`);
+  return v;
+}
+
 describe('facility tool: place-on-click semantics (complex is a variant, not a hidden default)', () => {
   it('facility tool starts in PLACE mode, not complex mode', () => {
     const store = createEditorStore();
@@ -33,7 +41,10 @@ describe('facility tool: place-on-click semantics (complex is a variant, not a h
   it('an area facility placed by click gets a real polygon', () => {
     const store = createEditorStore();
     const fid = store.getState().addFacility('depot', squareFootprint([-115.15, 36.1], 15));
-    const fac = store.getState().system.facilities.find((f) => f.id === fid)!;
+    const fac = mustFind(
+      store.getState().system.facilities.find((f) => f.id === fid),
+      'facility',
+    );
     expect(Array.isArray(fac.geometry[0])).toBe(true);
     expect((fac.geometry as LngLat[]).length).toBe(4);
   });
@@ -82,9 +93,12 @@ describe('one-way affordances: draft toggle, endpoint branch, network chevrons',
       way = store.getState().system.ways[0];
       store.getState().setDraftOneWay(false);
       store.getState().nameWay(r, 'Main Street');
-      branchId = store.getState().beginOneWayBranch(r, 'end')!;
+      branchId = mustFind(store.getState().beginOneWayBranch(r, 'end'), 'branch way id');
       const sys = store.getState().system;
-      branch = sys.ways.find((w) => w.id === branchId)!;
+      branch = mustFind(
+        sys.ways.find((w) => w.id === branchId),
+        'branch way',
+      );
     });
 
     it("branch starts AT the source way's endpoint", () => {
@@ -158,7 +172,10 @@ describe('one-way affordances: draft toggle, endpoint branch, network chevrons',
         ...filters,
       });
       const ow = store.getState().system.ways[0].id;
-      const wref = store.getState().system.ways.find((w) => w.id === ow)!;
+      const wref = mustFind(
+        store.getState().system.ways.find((w) => w.id === ow),
+        'way',
+      );
       store.getState().setWayProfile(ow, flipProfile(wref.profile));
       const net2 = buildFeatures(store.getState().system, null, [], {
         viewMode: 'network',
@@ -198,21 +215,30 @@ describe('station DRAWING: a dragged footprint is a real station', () => {
   it('drawn station carries its footprint', () => {
     const fp = squareFootprint([-115.15, 36.1], 25);
     const sid = store.getState().addDrawnStation(fp);
-    const st1 = store.getState().system.stations.find((x) => x.id === sid)!;
+    const st1 = mustFind(
+      store.getState().system.stations.find((x) => x.id === sid),
+      'station',
+    );
     expect(st1.footprint).toBe(fp);
   });
 
   it('drawn station anchors onto the way it straddles', () => {
     const fp = squareFootprint([-115.15, 36.1], 25);
     const sid = store.getState().addDrawnStation(fp);
-    const st1 = store.getState().system.stations.find((x) => x.id === sid)!;
+    const st1 = mustFind(
+      store.getState().system.stations.find((x) => x.id === sid),
+      'station',
+    );
     expect(primaryAnchor(st1)?.wayId).toBe(r);
   });
 
   it("drawn station's coord sits on the way", () => {
     const fp = squareFootprint([-115.15, 36.1], 25);
     const sid = store.getState().addDrawnStation(fp);
-    const st1 = store.getState().system.stations.find((x) => x.id === sid)!;
+    const st1 = mustFind(
+      store.getState().system.stations.find((x) => x.id === sid),
+      'station',
+    );
     expect(Math.abs(st1.coord[1] - 36.1)).toBeLessThan(1e-6);
   });
 
@@ -230,7 +256,10 @@ describe('station DRAWING: a dragged footprint is a real station', () => {
   it('a footprint away from any way makes a free station', () => {
     const fp2 = squareFootprint([-115.4, 36.3], 25);
     const sid2 = store.getState().addDrawnStation(fp2);
-    const st2 = store.getState().system.stations.find((x) => x.id === sid2)!;
+    const st2 = mustFind(
+      store.getState().system.stations.find((x) => x.id === sid2),
+      'station',
+    );
     expect(st2.anchors.length).toBe(0);
     expect(st2.footprint).toBe(fp2);
   });
@@ -252,7 +281,10 @@ describe('station land + structures: the border IS the station; structures on it
       .getState()
       .addFacility('building', squareFootprint([-115.1502, 36.1002], 12));
     const sys = store.getState().system;
-    const bf = sys.facilities.find((f) => f.id === bldg)!;
+    const bf = mustFind(
+      sys.facilities.find((f) => f.id === bldg),
+      'facility',
+    );
     expect(Array.isArray(bf.geometry[0])).toBe(true);
   });
 
@@ -263,14 +295,14 @@ describe('station land + structures: the border IS the station; structures on it
     const sys = store.getState().system;
     const complex = sys.groups.find((g) => g.memberIds.includes(sid));
     expect(complex).toBeDefined();
-    expect(complex!.memberIds).toContain(bldg);
+    expect(mustFind(complex, 'complex').memberIds).toContain(bldg);
   });
 
   it('the complex is named after the station', () => {
     store.getState().addFacility('building', squareFootprint([-115.1502, 36.1002], 12));
     const sys = store.getState().system;
     const complex = sys.groups.find((g) => g.memberIds.includes(sid));
-    expect(complex!.name).toBe('Bonneville Transit Center complex');
+    expect(mustFind(complex, 'complex').name).toBe('Bonneville Transit Center complex');
   });
 
   it('further structures join the same complex (no duplicates)', () => {

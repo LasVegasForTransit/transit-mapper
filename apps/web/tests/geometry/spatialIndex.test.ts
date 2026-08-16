@@ -25,12 +25,13 @@ describe('bearingDegrees / formatBearing', () => {
   });
 });
 
-describe('servedWayIds: spatial-grid index stays correct across cell/segment boundaries', () => {
-  // A long way (many points, spanning several of the index's ~300m grid
-  // cells) — a station near its FAR end must still be found. A naive index
-  // that only registered a segment in the cell of its first point would
-  // miss this (the exact bug shape a per-way bounding box or a
-  // single-cell-per-segment index could hide).
+// Builds a long way (many points, spanning several of the index's ~300m
+// grid cells) alongside a way many degrees away, plus a coordinate near the
+// long way's far end. Shared by the servedWayIds and snap boundary-crossing
+// tests below, which both exercise the same grid against the same shape: a
+// naive index that only registered a segment in the cell of its first point
+// would miss a station near the long way's FAR end.
+function makeLongAndFarWays(): { longWay: Way; farWay: Way; nearFarEnd: LngLat } {
   const longWay: Way = {
     id: 'long',
     typeId: 'road',
@@ -51,6 +52,11 @@ describe('servedWayIds: spatial-grid index stays correct across cell/segment bou
     profile: defaultProfileFor('road'),
   };
   const nearFarEnd: LngLat = [longWay.points[39][0], 36.1];
+  return { longWay, farWay, nearFarEnd };
+}
+
+describe('servedWayIds: spatial-grid index stays correct across cell/segment boundaries', () => {
+  const { longWay, farWay, nearFarEnd } = makeLongAndFarWays();
   const served = servedWayIds(nearFarEnd, [longWay, farWay], 50);
 
   it("a station near a long way's far end is still found", () => {
@@ -126,26 +132,7 @@ describe("determinism: index answers don't depend on bucket iteration order", ()
 });
 
 describe("snap: shares servedWayIds' spatial grid — same boundary-correctness requirement, since a naive per-way-bbox or single-cell index would miss a coordinate near a long way's far end", () => {
-  const longWay: Way = {
-    id: 'long',
-    typeId: 'road',
-    points: Array.from({ length: 40 }, (_, i) => [-115.2 + i * 0.002, 36.1] as LngLat),
-    geometry: 'straight',
-    grade: 'atGrade',
-    profile: defaultProfileFor('road'),
-  };
-  const farWay: Way = {
-    id: 'far',
-    typeId: 'road',
-    points: [
-      [-114.0, 37.0],
-      [-114.0, 37.01],
-    ],
-    geometry: 'straight',
-    grade: 'atGrade',
-    profile: defaultProfileFor('road'),
-  };
-  const nearFarEnd: LngLat = [longWay.points[39][0], 36.1];
+  const { longWay, farWay, nearFarEnd } = makeLongAndFarWays();
   const hit = snap([longWay, farWay], nearFarEnd, 50);
 
   it('snap finds the long way from a coordinate near its far end', () => {

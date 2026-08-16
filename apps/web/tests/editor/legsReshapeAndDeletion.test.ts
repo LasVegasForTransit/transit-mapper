@@ -307,23 +307,10 @@ describe('lane-detail rendering follows the resolved curb lane, not the centerli
 });
 
 describe('patternLanePath: the polyline a vehicle rides in Infrastructure view', () => {
-  it('serviceLanePath resolves a path for a single-way bus pattern', () => {
-    const store = createEditorStore();
-    store.getState().setDraftMode('bus');
-    const w = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(w, [-115.2, 36.1]);
-    store.getState().addWayPoint(w, [-115.15, 36.1]);
-    store.getState().addWayPoint(w, [-115.1, 36.1]);
-    store.getState().finishWay();
-    const sys = store.getState().system;
-    const waysById2 = wayById(sys.ways);
-    const pattern = sys.services[0].patterns[0];
-    const lanePath = serviceLanePath(pattern, waysById2, 'bus');
-    expect(lanePath).not.toBeNull();
-    expect(lanePath?.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("serviceLanePath matches the resolved curb lane's own path", () => {
+  // The single-way tests below all ride the same 3-point straight road and
+  // differ only in what they assert about the resolved lane path, so the
+  // fixture is built once and shared rather than repeated per test.
+  const singleWayBusPattern = () => {
     const store = createEditorStore();
     store.getState().setDraftMode('bus');
     const w = store.getState().beginWay('road', 'straight');
@@ -336,6 +323,17 @@ describe('patternLanePath: the polyline a vehicle rides in Infrastructure view',
     const way = sys.ways[0];
     const pattern = sys.services[0].patterns[0];
     const lanePath = serviceLanePath(pattern, waysById2, 'bus');
+    return { waysById2, way, pattern, lanePath };
+  };
+
+  it('serviceLanePath resolves a path for a single-way bus pattern', () => {
+    const { lanePath } = singleWayBusPattern();
+    expect(lanePath).not.toBeNull();
+    expect(lanePath?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("serviceLanePath matches the resolved curb lane's own path", () => {
+    const { waysById2, way, pattern, lanePath } = singleWayBusPattern();
     const expectedLaneId = mustFind(serviceLaneOnWay(pattern, 0, waysById2, 'bus'), 'lane id');
     const expectedLane = mustFind(
       wayLaneGeometry(way).lanes.find((l) => l.laneId === expectedLaneId),
@@ -345,32 +343,12 @@ describe('patternLanePath: the polyline a vehicle rides in Infrastructure view',
   });
 
   it('serviceLanePath is NOT the way centerline', () => {
-    const store = createEditorStore();
-    store.getState().setDraftMode('bus');
-    const w = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(w, [-115.2, 36.1]);
-    store.getState().addWayPoint(w, [-115.15, 36.1]);
-    store.getState().addWayPoint(w, [-115.1, 36.1]);
-    store.getState().finishWay();
-    const sys = store.getState().system;
-    const waysById2 = wayById(sys.ways);
-    const way = sys.ways[0];
-    const pattern = sys.services[0].patterns[0];
-    const lanePath = serviceLanePath(pattern, waysById2, 'bus');
+    const { way, lanePath } = singleWayBusPattern();
     expect(JSON.stringify(lanePath)).not.toBe(JSON.stringify(resolveWayPath(way)));
   });
 
   it('serviceLanePath returns null for a lane-less profile', () => {
-    const store = createEditorStore();
-    store.getState().setDraftMode('bus');
-    const w = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(w, [-115.2, 36.1]);
-    store.getState().addWayPoint(w, [-115.15, 36.1]);
-    store.getState().addWayPoint(w, [-115.1, 36.1]);
-    store.getState().finishWay();
-    const sys = store.getState().system;
-    const way = sys.ways[0];
-    const pattern = sys.services[0].patterns[0];
+    const { way, pattern } = singleWayBusPattern();
     // A lane-less profile (no lanes at all) can't resolve — null, not a throw.
     const laneless = { ...way, profile: { lanes: [] } };
     const nullPath = serviceLanePath(pattern, new Map([[way.id, laneless]]), 'bus');
