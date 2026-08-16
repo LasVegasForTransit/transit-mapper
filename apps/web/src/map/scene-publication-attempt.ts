@@ -103,9 +103,19 @@ function sourcePreparationUnit<Update>(
 ): RenderSceneSourceMutationUnit | null {
   const sourceCommit = attempt.sourceCommit;
   if (!sourceCommit || !options.beforeSourceMutation) return null;
+  // Preparation hands control to the renderer's own source machinery, so its
+  // duration is not this scheduler's to divide or predict: it measured 7 ms
+  // against a 4 ms budget on an ordinary cold start. Without this the unit
+  // failed the publication every time, the bank transaction aborted, and no
+  // system of any size ever published a first scene. It belongs to the same
+  // external boundary as the mutation units below, which register here too.
+  const yieldable = (unit: RenderSceneSourceMutationUnit): RenderSceneSourceMutationUnit => {
+    attempt.overBudgetYieldUnitIds.add(unit.id);
+    return unit;
+  };
   if (!attempt.sourcePreparationStarted) {
     attempt.sourcePreparationStarted = true;
-    return {
+    return yieldable({
       id: `scene-publication:source-preparation:${sourceCommit.mode ?? 'legacy'}:${sourceCommit.bank ?? 'none'}`,
       sliceExclusive: true,
       run: () => {
@@ -127,23 +137,23 @@ function sourcePreparationUnit<Update>(
           reportSourcePreparationFailure(options, attempt, toPublicationError(thrown));
         }
       },
-    };
+    });
   }
   if (attempt.sourcePreparationError) {
     const error = attempt.sourcePreparationError;
-    return {
+    return yieldable({
       id: 'scene-publication:source-preparation:failed',
       sliceExclusive: true,
       run: () => reportSourcePreparationFailure(options, attempt, error),
-    };
+    });
   }
   if (attempt.sourcePreparationReady) return null;
   const waitIndex = attempt.sourcePreparationWaitIndex++;
-  return {
+  return yieldable({
     id: `scene-publication:source-preparation:wait:${waitIndex}`,
     sliceExclusive: true,
     run() {},
-  };
+  });
 }
 
 /** Private draft work is only allowed to yield on the final minimal retry. */
