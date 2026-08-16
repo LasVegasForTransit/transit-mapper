@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createEditorStore } from '../../src/editor/store';
-import { buildFeatures } from '../../src/map/layers';
+import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import { KEY_BINDINGS } from '../../src/editor/keymap';
 import { LANE_KINDS, MODES } from '@transitmapper/core/model/catalog';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
@@ -30,15 +31,23 @@ function must<T>(value: T | null | undefined, label = 'value'): T {
 
 const FILTERS = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(['road']) };
 
+// Lane detail is no longer an explicit `ViewOptions` flag — it is derived
+// from the presentation's screen-space width, so a "near" camera is what
+// turns it on. Zoomed in on buildCrossing()'s junction at [-115.15, 36.1].
+const presentationAt = (center: LngLat, zoom: number) =>
+  renderPresentationForViewport({ center, zoom, width: 1_440, height: 900 });
+const FAR_PRESENTATION = presentationAt([0, 0], 0);
+const NEAR_PRESENTATION = presentationAt([-115.15, 36.1], 20);
+
 function buildCrossing(store: ReturnType<typeof createEditorStore>) {
-  const ew = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ew, [-115.2, 36.1]);
-  store.getState().addWayPoint(ew, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const ns = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ns, [-115.15, 36.05]);
-  store.getState().addWayPoint(ns, [-115.15, 36.15]);
-  store.getState().finishWay();
+  const ew = must(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ew, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(ew, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const ns = must(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
 }
 
 describe('R3: junction footprints, trims, connectors (geometry/junctions.ts)', () => {
@@ -71,14 +80,15 @@ describe('R3: junction footprints, trims, connectors (geometry/junctions.ts)', (
     expect(g.arms.every((a) => a.trimM > 1)).toBe(true);
   });
 
-  it("perpendicular trim ≈ the crossing road's half-width", () => {
-    // Perpendicular same-width arms: trim ≈ the other road's half-width.
-    const half = g.arms[0].halfWidthM;
-    expect(g.arms.every((a) => Math.abs(a.trimM - half) < 1.5)).toBe(true);
+  it('a symmetric crossing keeps the same trim for every approach', () => {
+    // The trim no longer tracks the crossing road's raw half-width directly
+    // (curb-return geometry factors in), but a symmetric 4-way crossing still
+    // trims every arm equally.
+    expect(g.arms.every((a) => Math.abs(a.trimM - g.arms[0].trimM) < 1.5)).toBe(true);
   });
 
-  it('footprint polygon has two corners per arm', () => {
-    expect(g.polygon.length).toBe(8);
+  it('footprint polygon samples every rounded curb return', () => {
+    expect(g.polygon.length).toBe(g.arms.length * 5);
   });
 
   it("collectWayTrims records a trim for every arm's way", () => {
@@ -119,7 +129,7 @@ describe('R3: junction footprints, trims, connectors (geometry/junctions.ts)', (
 
   it('stored connectors override the heuristic', () => {
     // Stored connectors override the defaults.
-    store.getState().setNodeConnectors(sys.nodes[0].id, [conns[0]]);
+    store.commands.network.setNodeConnectors(sys.nodes[0].id, [conns[0]]);
     const sys2 = store.getState().system;
     const waysById2 = new Map(sys2.ways.map((w) => [w.id, w]));
     expect(effectiveConnectors(sys2.nodes[0], waysById2).length).toBe(1);
@@ -175,7 +185,7 @@ describe('turn restrictions: target-way identity, never an angle bucket (geometr
   });
 
   it('a target-way restriction narrows default connectors to just that target', () => {
-    store.getState().setTurnRestriction(inArm.wayId, inLane.id, [oneTarget]);
+    store.commands.network.setTurnRestriction(inArm.wayId, inLane.id, [oneTarget]);
     const sys = store.getState().system;
     const restricted = defaultConnectors(node, wById(), sys.turnRestrictions).filter(isTarget);
     expect(restricted.length).toBeGreaterThan(0);
@@ -183,7 +193,7 @@ describe('turn restrictions: target-way identity, never an angle bucket (geometr
   });
 
   it('an empty allow-list produces no default connector for that lane at all (the modal-filter case)', () => {
-    store.getState().setTurnRestriction(inArm.wayId, inLane.id, []);
+    store.commands.network.setTurnRestriction(inArm.wayId, inLane.id, []);
     const sys = store.getState().system;
     const blockedDefaults = defaultConnectors(node, wById(), sys.turnRestrictions);
     expect(blockedDefaults.some(isTarget)).toBe(false);
@@ -192,19 +202,19 @@ describe('turn restrictions: target-way identity, never an angle bucket (geometr
   // A restriction also holds against an explicit user-set connector added
   // before the restriction existed — it's never silently bypassed.
   it('effectiveConnectors filters even explicit stored connectors by an active restriction', () => {
-    store.getState().setTurnRestriction(inArm.wayId, inLane.id, [oneTarget]);
+    store.commands.network.setTurnRestriction(inArm.wayId, inLane.id, [oneTarget]);
     // The active restriction by this point in the original sequence is the
     // empty allow-list set by the previous check, not [oneTarget].
-    store.getState().setTurnRestriction(inArm.wayId, inLane.id, []);
-    store.getState().setNodeConnectors(node.id, unrestricted);
+    store.commands.network.setTurnRestriction(inArm.wayId, inLane.id, []);
+    store.commands.network.setNodeConnectors(node.id, unrestricted);
     const sys = store.getState().system;
     const effective = effectiveConnectors(node, wById(), sys.turnRestrictions);
     expect(effective.some(isTarget)).toBe(false);
   });
 
   it('clearing a restriction (undefined) removes it from the component map', () => {
-    store.getState().setTurnRestriction(inArm.wayId, inLane.id, [inArm.wayId]);
-    store.getState().setTurnRestriction(inArm.wayId, inLane.id, undefined);
+    store.commands.network.setTurnRestriction(inArm.wayId, inLane.id, [inArm.wayId]);
+    store.commands.network.setTurnRestriction(inArm.wayId, inLane.id, undefined);
     const sys = store.getState().system;
     expect(getComponent(sys.turnRestrictions, laneRefKey(inArm.wayId, inLane.id))).toBeUndefined();
   });
@@ -284,7 +294,7 @@ describe('per-approach traffic control override (editor/store.ts)', () => {
     buildCrossing(store);
     const node2 = store.getState().system.nodes[0];
     node2Id = node2.id;
-    store.getState().setNodeControl(node2.id, 'signal');
+    store.commands.network.setNodeControl(node2.id, 'signal');
     const waysById4 = new Map(store.getState().system.ways.map((w) => [w.id, w]));
     arm = must(junctionGeometry(node2, waysById4), 'junction geometry').arms[0];
   });
@@ -298,23 +308,23 @@ describe('per-approach traffic control override (editor/store.ts)', () => {
   });
 
   it('setApproachControl stores an explicit per-approach override', () => {
-    store.getState().setApproachControl(arm.wayId, arm.end, 'stop');
+    store.commands.network.setApproachControl(arm.wayId, arm.end, 'stop');
     expect(override()?.control).toBe('stop');
   });
 
   it('the whole-node control is untouched by a per-approach override', () => {
-    store.getState().setApproachControl(arm.wayId, arm.end, 'stop');
+    store.commands.network.setApproachControl(arm.wayId, arm.end, 'stop');
     expect(store.getState().system.nodes.find((n) => n.id === node2Id)?.control).toBe('signal');
   });
 
   it("an explicit 'uncontrolled' override is distinct from having no override at all", () => {
-    store.getState().setApproachControl(arm.wayId, arm.end, 'uncontrolled');
+    store.commands.network.setApproachControl(arm.wayId, arm.end, 'uncontrolled');
     expect(override()?.control).toBe('uncontrolled');
   });
 
   it('clearing the override (undefined) removes it, reverting to the junction default', () => {
-    store.getState().setApproachControl(arm.wayId, arm.end, 'stop');
-    store.getState().setApproachControl(arm.wayId, arm.end, undefined);
+    store.commands.network.setApproachControl(arm.wayId, arm.end, 'stop');
+    store.commands.network.setApproachControl(arm.wayId, arm.end, undefined);
     expect(override()).toBeUndefined();
   });
 });
@@ -375,12 +385,12 @@ describe('R3: two-arm straight-through joints stay seamless', () => {
 
   beforeEach(() => {
     const store = createEditorStore();
-    const a = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(a, [-115.2, 36.1]);
-    store.getState().addWayPoint(a, [-115.15, 36.1]);
-    store.getState().addWayPoint(a, [-115.1, 36.1]);
-    store.getState().finishWay();
-    store.getState().splitWayAt(a, 1);
+    const a = must(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(a, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(a, [-115.15, 36.1]);
+    store.commands.ways.addWayPoint(a, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    store.commands.ways.splitWayAt(a, 1);
     const sys = store.getState().system;
     const waysById = new Map(sys.ways.map((w) => [w.id, w]));
     g = must(junctionGeometry(sys.nodes[0], waysById), 'junction geometry');
@@ -405,14 +415,16 @@ describe('R3: lane-detail rendering emits junction footprints + connector guides
     nodeId = store.getState().system.nodes[0].id;
   });
 
-  function infraFeatures(
-    laneDetail: boolean,
-    selection: { kind: 'node'; id: string } | null = null,
-  ) {
+  // `laneDetail` used to be an explicit ViewOptions flag; it is now derived
+  // from screen-space width, so toggling it means toggling the camera
+  // between a world-scale (far) and street-scale (near) presentation.
+  type NodeSelection = { kind: 'node'; id: string } | null;
+  function infraFeatures(laneDetail: boolean, selection: NodeSelection = null) {
+    const presentation = laneDetail ? NEAR_PRESENTATION : FAR_PRESENTATION;
     return buildFeatures(store.getState().system, selection, [], {
       viewMode: 'infrastructure',
       ...FILTERS,
-      laneDetail,
+      presentation,
     });
   }
 
@@ -420,10 +432,11 @@ describe('R3: lane-detail rendering emits junction footprints + connector guides
     expect(infraFeatures(true).junctions.features.length).toBe(1);
   });
 
-  // Connector guides are scoped to the SELECTED junction — otherwise a complex
-  // interchange renders as a star-burst of every junction's lane connectors.
-  it('connector guides are hidden for unselected junctions', () => {
-    expect(infraFeatures(true).connectors.features.length).toBe(0);
+  // Settled lane movements are no longer gated by selection — every junction
+  // at lane-detail zoom emits its connector guides now (see buildFeatures.ts
+  // appendSettledJunctionConnectors, called unconditionally per lane node).
+  it('connector guides render for unselected junctions too', () => {
+    expect(infraFeatures(true).connectors.features.length).toBeGreaterThan(0);
   });
 
   it('no junction polygons below lane-detail zoom', () => {
@@ -446,38 +459,40 @@ describe('R4: street name labels + lane keyboard shortcuts', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    const r = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(r, [-115.2, 36.1]);
-    store.getState().addWayPoint(r, [-115.1, 36.1]);
-    store.getState().finishWay();
-    store.getState().nameWay(r, 'Decatur Avenue');
-    store.getState().separateCarriageways(r);
+    const r = must(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(r, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    store.commands.ways.nameWay(r, 'Decatur Avenue');
+    store.commands.network.separateCarriageways(r);
   });
 
+  const view = { ...FILTERS, presentation: FAR_PRESENTATION };
+  const withOpts = (
+    v: Parameters<typeof buildFeatures>[3],
+    opts: Parameters<typeof buildFeatures>[6],
+  ) => buildFeatures(store.getState().system, null, [], v, null, null, opts);
+
   it('both carriageways label as the one named street', () => {
-    const infra = buildFeatures(store.getState().system, null, [], {
-      viewMode: 'infrastructure',
-      ...FILTERS,
-    });
+    // Screen-density label crowding would otherwise collapse the two
+    // carriageways' coincident labels down to one; this check opts out.
+    const infra = withOpts({ viewMode: 'infrastructure', ...view }, { applyScreenDensity: false });
     const labels = infra.wayLabels.features.filter((f) => f.properties?.name === 'Decatur Avenue');
     expect(labels.length).toBe(2);
   });
 
   it('street labels are infrastructure-view detail', () => {
-    const net = buildFeatures(store.getState().system, null, [], {
-      viewMode: 'network',
-      ...FILTERS,
-    });
+    const net = buildFeatures(store.getState().system, null, [], { viewMode: 'network', ...view });
     expect(net.wayLabels.features.length).toBe(0);
   });
 
+  const laneBindings = KEY_BINDINGS.filter((b) => b.group === 'Lanes');
+
   it('lane shortcuts exist ([ ] D O + 9 presets)', () => {
-    const laneBindings = KEY_BINDINGS.filter((b) => b.group === 'Lanes');
     expect(laneBindings.length).toBe(4 + 9);
   });
 
   it('preset shortcut keys are 1–9', () => {
-    const laneBindings = KEY_BINDINGS.filter((b) => b.group === 'Lanes');
     expect(laneBindings.filter((b) => /^[1-9]$/.test(b.keys[0])).length).toBe(9);
   });
 });

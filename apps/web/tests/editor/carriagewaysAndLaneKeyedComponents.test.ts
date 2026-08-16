@@ -8,6 +8,7 @@ import { getComponent, laneRefKey } from '@transitmapper/core/model/components';
 import { directionalLanes, isOneWay } from '@transitmapper/core/model/profile';
 import { primaryAnchor } from '@transitmapper/core/model/geo';
 import { osmElementsToNetwork, type OsmWayElement } from '@transitmapper/core/model/import';
+import { required } from '../support/required.test';
 
 /** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
  *  a silent `undefined`/`null` into a clear failure at the point of use
@@ -29,11 +30,11 @@ function beginStraightWayWithPreset(
   store: ReturnType<typeof createEditorStore>,
   presetId: string,
 ): string {
-  const wayId = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(wayId, [-115.2, 36.1]);
-  store.getState().addWayPoint(wayId, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().applyProfilePreset(wayId, presetId);
+  const wayId = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(wayId, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(wayId, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.applyProfilePreset(wayId, presetId);
   return wayId;
 }
 
@@ -47,13 +48,13 @@ describe('store: separate/combine carriageways', () => {
   });
 
   it('separateCarriageways returns the new carriageway', () => {
-    const newId = store.getState().separateCarriageways(r);
+    const newId = store.commands.network.separateCarriageways(r);
     expect(newId).toBeTruthy();
     expect(store.getState().system.ways.length).toBe(2);
   });
 
   it('original way becomes the one-way forward carriageway', () => {
-    store.getState().separateCarriageways(r);
+    store.commands.network.separateCarriageways(r);
     const fwd = mustFind(
       store.getState().system.ways.find((w) => w.id === r),
       'forward carriageway',
@@ -63,7 +64,7 @@ describe('store: separate/combine carriageways', () => {
   });
 
   it('new way is the one-way backward carriageway', () => {
-    const newId = mustFind(store.getState().separateCarriageways(r), 'new carriageway id');
+    const newId = mustFind(store.commands.network.separateCarriageways(r), 'new carriageway id');
     const back = mustFind(
       store.getState().system.ways.find((w) => w.id === newId),
       'backward carriageway',
@@ -72,7 +73,7 @@ describe('store: separate/combine carriageways', () => {
   });
 
   it('the carriageways are physically offset', () => {
-    const newId = mustFind(store.getState().separateCarriageways(r), 'new carriageway id');
+    const newId = mustFind(store.commands.network.separateCarriageways(r), 'new carriageway id');
     const fwd = mustFind(
       store.getState().system.ways.find((w) => w.id === r),
       'forward carriageway',
@@ -85,19 +86,19 @@ describe('store: separate/combine carriageways', () => {
   });
 
   it('both carriageways share one identity', () => {
-    const newId = mustFind(store.getState().separateCarriageways(r), 'new carriageway id');
+    const newId = mustFind(store.commands.network.separateCarriageways(r), 'new carriageway id');
     const nw = store.getState().system.namedWays.find((n) => n.wayIds.includes(r));
     expect(nw).toBeDefined();
     expect(mustFind(nw, 'named way').wayIds.includes(newId)).toBe(true);
   });
 
   it('a one-way way refuses to separate', () => {
-    store.getState().separateCarriageways(r);
-    expect(store.getState().separateCarriageways(r)).toBeNull();
+    store.commands.network.separateCarriageways(r);
+    expect(store.commands.network.separateCarriageways(r)).toBeNull();
   });
 
   it('separateCarriageways captures a Median component keyed by the NamedWay', () => {
-    store.getState().separateCarriageways(r);
+    store.commands.network.separateCarriageways(r);
     const nw = mustFind(
       store.getState().system.namedWays.find((n) => n.wayIds.includes(r)),
       'named way',
@@ -108,57 +109,57 @@ describe('store: separate/combine carriageways', () => {
   });
 
   it('setMedianWidth overrides the captured width', () => {
-    store.getState().separateCarriageways(r);
+    store.commands.network.separateCarriageways(r);
     const nw = mustFind(
       store.getState().system.namedWays.find((n) => n.wayIds.includes(r)),
       'named way',
     );
-    store.getState().setMedianWidth(nw.id, 6);
+    store.commands.network.setMedianWidth(nw.id, 6);
     expect(getComponent(store.getState().system.medians, nw.id)?.widthM).toBe(6);
   });
 
   it('combineCarriageways restores a single way', () => {
-    store.getState().separateCarriageways(r);
+    store.commands.network.separateCarriageways(r);
     const nw = mustFind(
       store.getState().system.namedWays.find((n) => n.wayIds.includes(r)),
       'named way',
     );
-    store.getState().combineCarriageways(nw.id);
+    store.commands.network.combineCarriageways(nw.id);
     const combined = store.getState().system;
     expect(combined.ways.length).toBe(1);
     expect(combined.ways[0].id).toBe(r);
   });
 
   it('combined way is two-way again', () => {
-    store.getState().separateCarriageways(r);
+    store.commands.network.separateCarriageways(r);
     const nw = mustFind(
       store.getState().system.namedWays.find((n) => n.wayIds.includes(r)),
       'named way',
     );
-    store.getState().combineCarriageways(nw.id);
+    store.commands.network.combineCarriageways(nw.id);
     expect(isOneWay(store.getState().system.ways[0].profile)).toBe(false);
   });
 
   it('combined profile gained a median between carriageways', () => {
-    store.getState().separateCarriageways(r);
+    store.commands.network.separateCarriageways(r);
     const nw = mustFind(
       store.getState().system.namedWays.find((n) => n.wayIds.includes(r)),
       'named way',
     );
-    store.getState().combineCarriageways(nw.id);
+    store.commands.network.combineCarriageways(nw.id);
     expect(store.getState().system.ways[0].profile.lanes.some((l) => l.kindId === 'median')).toBe(
       true,
     );
   });
 
   it('combining restores the edited median width, not a generic default', () => {
-    store.getState().separateCarriageways(r);
+    store.commands.network.separateCarriageways(r);
     const nw = mustFind(
       store.getState().system.namedWays.find((n) => n.wayIds.includes(r)),
       'named way',
     );
-    store.getState().setMedianWidth(nw.id, 6);
-    store.getState().combineCarriageways(nw.id);
+    store.commands.network.setMedianWidth(nw.id, 6);
+    store.commands.network.combineCarriageways(nw.id);
     expect(
       store.getState().system.ways[0].profile.lanes.find((l) => l.kindId === 'median')?.widthM,
     ).toBe(6);
@@ -209,7 +210,7 @@ describe("combining carriageways carries the discarded half's anchors across", (
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().importWays(osmElementsToNetwork(divided));
+    store.commands.imports.importWays(osmElementsToNetwork(divided));
   });
 
   it('the divided street imports as one identity of two carriageways', () => {
@@ -259,8 +260,10 @@ describe("combining carriageways carries the discarded half's anchors across", (
         'discarded carriageway',
       );
       discardedId = discarded.id;
-      stId = store.getState().addStation(discarded.points[0], { wayId: discarded.id, t: 0 });
-      store.getState().combineCarriageways(nw.id);
+      stId = required(
+        store.commands.stops.addStop(discarded.points[0], { wayId: discarded.id, t: 0 }),
+      );
+      store.commands.network.combineCarriageways(nw.id);
       survivorId = mustFind(
         store.getState().system.ways.find((w) => w.id !== crossId),
         'surviving carriageway',
@@ -272,17 +275,17 @@ describe("combining carriageways carries the discarded half's anchors across", (
       expect(after.ways.filter((w) => w.id !== crossId).length).toBe(1);
     });
 
-    it('combining keeps a station anchored to the discarded carriageway', () => {
-      expect(store.getState().system.stations.length).toBe(1);
+    it('combining keeps a stop anchored to the discarded carriageway', () => {
+      expect(store.getState().system.stops.length).toBe(1);
     });
 
     it('and re-anchors it onto the surviving centerline', () => {
       const after = store.getState().system;
-      const station = mustFind(
-        after.stations.find((st) => st.id === stId),
-        'station',
+      const stop = mustFind(
+        after.stops.find((st) => st.id === stId),
+        'stop',
       );
-      expect(primaryAnchor(station)?.wayId).toBe(survivorId);
+      expect(primaryAnchor(stop)?.wayId).toBe(survivorId);
     });
 
     it('combining keeps the junction the cross street made', () => {
@@ -317,10 +320,10 @@ describe("lane-keyed components don't outlive their lanes", () => {
 
     beforeEach(() => {
       store = createEditorStore();
-      w = store.getState().beginWay('road', 'straight');
-      store.getState().addWayPoint(w, [-115.2, 36.1]);
-      store.getState().addWayPoint(w, [-115.1, 36.1]);
-      store.getState().finishWay();
+      w = required(store.commands.ways.beginWay('road', 'straight'));
+      store.commands.ways.addWayPoint(w, [-115.2, 36.1]);
+      store.commands.ways.addWayPoint(w, [-115.1, 36.1]);
+      store.commands.ways.finishWay();
       const way = mustFind(
         store.getState().system.ways.find((x) => x.id === w),
         'way',
@@ -329,7 +332,7 @@ describe("lane-keyed components don't outlive their lanes", () => {
         way.profile.lanes.find((l) => l.kindId === 'drive'),
         'drive lane',
       ).id;
-      store.getState().setTurnRestriction(w, laneId, []);
+      store.commands.network.setTurnRestriction(w, laneId, []);
     });
 
     it('a turn restriction is stored against the lane', () => {
@@ -337,7 +340,7 @@ describe("lane-keyed components don't outlive their lanes", () => {
     });
 
     it('deleting the way drops its turn restrictions', () => {
-      store.getState().deleteWay(w);
+      store.commands.ways.deleteWay(w);
       expect(Object.keys(store.getState().system.turnRestrictions).length).toBe(0);
     });
   });
@@ -349,10 +352,10 @@ describe("lane-keyed components don't outlive their lanes", () => {
 
     beforeEach(() => {
       store = createEditorStore();
-      v = store.getState().beginWay('road', 'straight');
-      store.getState().addWayPoint(v, [-115.2, 36.1]);
-      store.getState().addWayPoint(v, [-115.1, 36.1]);
-      store.getState().finishWay();
+      v = required(store.commands.ways.beginWay('road', 'straight'));
+      store.commands.ways.addWayPoint(v, [-115.2, 36.1]);
+      store.commands.ways.addWayPoint(v, [-115.1, 36.1]);
+      store.commands.ways.finishWay();
       const way = mustFind(
         store.getState().system.ways.find((x) => x.id === v),
         'way',
@@ -361,11 +364,11 @@ describe("lane-keyed components don't outlive their lanes", () => {
         way.profile.lanes.find((l) => l.kindId === 'drive'),
         'drive lane',
       ).id;
-      store.getState().setTurnRestriction(v, vLane, []);
+      store.commands.network.setTurnRestriction(v, vLane, []);
     });
 
     it('applying a preset drops restrictions on the lanes it replaced', () => {
-      store.getState().applyProfilePreset(v, 'roadArterial4');
+      store.commands.ways.applyProfilePreset(v, 'roadArterial4');
       expect(Object.keys(store.getState().system.turnRestrictions)).not.toContain(
         laneRefKey(v, vLane),
       );
@@ -373,7 +376,7 @@ describe("lane-keyed components don't outlive their lanes", () => {
 
     // A live restriction is left alone.
     it('an unrelated edit leaves a live restriction alone', () => {
-      store.getState().applyProfilePreset(v, 'roadArterial4');
+      store.commands.ways.applyProfilePreset(v, 'roadArterial4');
       const liveWay = mustFind(
         store.getState().system.ways.find((x) => x.id === v),
         'way',
@@ -382,8 +385,8 @@ describe("lane-keyed components don't outlive their lanes", () => {
         liveWay.profile.lanes.find((l) => l.kindId === 'drive'),
         'drive lane',
       ).id;
-      store.getState().setTurnRestriction(v, liveLane, []);
-      store.getState().setWayGrade(v, 'elevated');
+      store.commands.network.setTurnRestriction(v, liveLane, []);
+      store.commands.ways.setWayGrade(v, 'elevated');
       expect(Object.keys(store.getState().system.turnRestrictions).length).toBe(1);
     });
   });
@@ -400,13 +403,13 @@ describe('the carriageway affordances survive an ordinary edit', () => {
 
     beforeEach(() => {
       store = createEditorStore();
-      const r = store.getState().beginWay('road', 'straight');
-      store.getState().addWayPoint(r, [-115.2, 36.1]);
-      store.getState().addWayPoint(r, [-115.15, 36.1]);
-      store.getState().addWayPoint(r, [-115.1, 36.1]);
-      store.getState().finishWay();
-      store.getState().applyProfilePreset(r, 'roadArterial4');
-      other = mustFind(store.getState().separateCarriageways(r), 'new carriageway id');
+      const r = required(store.commands.ways.beginWay('road', 'straight'));
+      store.commands.ways.addWayPoint(r, [-115.2, 36.1]);
+      store.commands.ways.addWayPoint(r, [-115.15, 36.1]);
+      store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+      store.commands.ways.finishWay();
+      store.commands.ways.applyProfilePreset(r, 'roadArterial4');
+      other = mustFind(store.commands.network.separateCarriageways(r), 'new carriageway id');
       nwId = mustFind(
         store.getState().system.namedWays.find((n) => n.wayIds.includes(r)),
         'named way',
@@ -418,7 +421,7 @@ describe('the carriageway affordances survive an ordinary edit', () => {
     });
 
     it('a split takes the identity past two members', () => {
-      store.getState().splitWayAt(other, 1);
+      store.commands.ways.splitWayAt(other, 1);
       expect(
         mustFind(
           store.getState().system.namedWays.find((n) => n.id === nwId),
@@ -428,13 +431,13 @@ describe('the carriageway affordances survive an ordinary edit', () => {
     });
 
     it('but the captured median is still there to edit', () => {
-      store.getState().splitWayAt(other, 1);
+      store.commands.ways.splitWayAt(other, 1);
       expect(getComponent(store.getState().system.medians, nwId)).not.toBeUndefined();
     });
 
     it('and it is still editable', () => {
-      store.getState().splitWayAt(other, 1);
-      store.getState().setMedianWidth(nwId, 7);
+      store.commands.ways.splitWayAt(other, 1);
+      store.commands.network.setMedianWidth(nwId, 7);
       expect(getComponent(store.getState().system.medians, nwId)?.widthM).toBe(7);
     });
   });
@@ -443,22 +446,22 @@ describe('the carriageway affordances survive an ordinary edit', () => {
   // UI's disabled state and the action agree.
   it('combining refuses two two-way ways sharing an identity', () => {
     const store = createEditorStore();
-    const a = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(a, [-115.2, 36.1]);
-    store.getState().addWayPoint(a, [-115.1, 36.1]);
-    store.getState().finishWay();
-    const b = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(b, [-115.2, 36.11]);
-    store.getState().addWayPoint(b, [-115.1, 36.11]);
-    store.getState().finishWay();
-    store.getState().nameWay(a, 'Twin Street');
-    store.getState().nameWay(b, 'Twin Street');
+    const a = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(a, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(a, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    const b = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(b, [-115.2, 36.11]);
+    store.commands.ways.addWayPoint(b, [-115.1, 36.11]);
+    store.commands.ways.finishWay();
+    store.commands.ways.nameWay(a, 'Twin Street');
+    store.commands.ways.nameWay(b, 'Twin Street');
     const twin = mustFind(
       store.getState().system.namedWays.find((n) => n.name === 'Twin Street'),
       'named way',
     );
     const waysBefore = store.getState().system.ways.length;
-    store.getState().combineCarriageways(twin.id);
+    store.commands.network.combineCarriageways(twin.id);
     expect(store.getState().system.ways.length).toBe(waysBefore);
   });
 });

@@ -22,10 +22,10 @@ describe('resuming a way from its open endpoint (turnkey continuation)', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    rw = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(rw, [-115.2, 36.1]);
-    store.getState().addWayPoint(rw, [-115.1, 36.1]);
-    store.getState().finishWay();
+    rw = mustFind(store.commands.ways.beginWay('road', 'straight'), 'way id');
+    store.commands.ways.addWayPoint(rw, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(rw, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
   });
 
   it("nearestOpenEndpoint finds the way's end", () => {
@@ -67,15 +67,15 @@ describe('resuming a way from its open endpoint (turnkey continuation)', () => {
 
   // Resuming appends at the end and prepends at the start — same way, no new service.
   it('resumeWay makes it the active way without creating a new one', () => {
-    store.getState().resumeWay(rw);
+    store.commands.ways.resumeWay(rw);
     expect(store.getState().activeWayId).toBe(rw);
     expect(store.getState().system.ways.length).toBe(1);
   });
 
   it('extending at the end appends', () => {
-    store.getState().resumeWay(rw);
-    store.getState().addWayPoint(rw, [-115.0, 36.1]);
-    store.getState().insertWayPoint(rw, 0, [-115.3, 36.1]);
+    store.commands.ways.resumeWay(rw);
+    store.commands.ways.addWayPoint(rw, [-115.0, 36.1]);
+    store.commands.ways.insertWayPoint(rw, 0, [-115.3, 36.1]);
     const extended = mustFind(
       store.getState().system.ways.find((w) => w.id === rw),
       'way',
@@ -84,9 +84,9 @@ describe('resuming a way from its open endpoint (turnkey continuation)', () => {
   });
 
   it('extending at the start prepends', () => {
-    store.getState().resumeWay(rw);
-    store.getState().addWayPoint(rw, [-115.0, 36.1]);
-    store.getState().insertWayPoint(rw, 0, [-115.3, 36.1]);
+    store.commands.ways.resumeWay(rw);
+    store.commands.ways.addWayPoint(rw, [-115.0, 36.1]);
+    store.commands.ways.insertWayPoint(rw, 0, [-115.3, 36.1]);
     const extended = mustFind(
       store.getState().system.ways.find((w) => w.id === rw),
       'way',
@@ -95,9 +95,9 @@ describe('resuming a way from its open endpoint (turnkey continuation)', () => {
   });
 
   it('resuming a way never creates a second service', () => {
-    store.getState().resumeWay(rw);
-    store.getState().addWayPoint(rw, [-115.0, 36.1]);
-    store.getState().insertWayPoint(rw, 0, [-115.3, 36.1]);
+    store.commands.ways.resumeWay(rw);
+    store.commands.ways.addWayPoint(rw, [-115.0, 36.1]);
+    store.commands.ways.insertWayPoint(rw, 0, [-115.3, 36.1]);
     const servicesOnWay = store
       .getState()
       .system.services.filter((s) => serviceWayIds(s).includes(rw));
@@ -108,14 +108,14 @@ describe('resuming a way from its open endpoint (turnkey continuation)', () => {
 describe("interchange emerges where a station sits on two ways' services", () => {
   it('a station at a crossing is served by two services', () => {
     const store = createEditorStore();
-    const la = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(la, [-115.2, 36.1]);
-    store.getState().addWayPoint(la, [-115.0, 36.1]);
-    store.getState().finishWay();
-    const lb = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(lb, [-115.1, 36.0]);
-    store.getState().addWayPoint(lb, [-115.1, 36.2]);
-    store.getState().finishWay();
+    const la = mustFind(store.commands.ways.beginWay('lightRail', 'straight'), 'way id');
+    store.commands.ways.addWayPoint(la, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(la, [-115.0, 36.1]);
+    store.commands.ways.finishWay();
+    const lb = mustFind(store.commands.ways.beginWay('road', 'straight'), 'way id');
+    store.commands.ways.addWayPoint(lb, [-115.1, 36.0]);
+    store.commands.ways.addWayPoint(lb, [-115.1, 36.2]);
+    store.commands.ways.finishWay();
     const near = new Set(
       servedWayIds([-115.1, 36.1], store.getState().system.ways, INTERCHANGE_METERS),
     );
@@ -132,12 +132,12 @@ describe('deleting a way removes its services and stations', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    dc = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(dc, [-115.2, 36.1]);
-    store.getState().addWayPoint(dc, [-115.0, 36.1]);
-    store.getState().finishWay();
-    store.getState().addStation([-115.1, 36.1], { wayId: dc, t: 0.5 });
-    store.getState().deleteWay(dc);
+    dc = mustFind(store.commands.ways.beginWay('road', 'straight'), 'way id');
+    store.commands.ways.addWayPoint(dc, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(dc, [-115.0, 36.1]);
+    store.commands.ways.finishWay();
+    store.commands.stops.addStop([-115.1, 36.1], { wayId: dc, t: 0.5 });
+    store.commands.ways.deleteWay(dc);
   });
 
   it('deleting a way removes its service', () => {
@@ -145,7 +145,7 @@ describe('deleting a way removes its services and stations', () => {
   });
 
   it('deleting a way removes its stations', () => {
-    expect(store.getState().system.stations.length).toBe(0);
+    expect(store.getState().system.stops.length).toBe(0);
   });
 });
 
@@ -155,12 +155,12 @@ describe('deleting one service leaves the way and other services', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    kc = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(kc, [-115.2, 36.1]);
-    store.getState().addWayPoint(kc, [-115.0, 36.1]);
-    store.getState().finishWay();
-    const extra = store.getState().addServiceToWay(kc);
-    store.getState().deleteService(mustFind(extra, 'extra service id'));
+    kc = mustFind(store.commands.ways.beginWay('lightRail', 'straight'), 'way id');
+    store.commands.ways.addWayPoint(kc, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(kc, [-115.0, 36.1]);
+    store.commands.ways.finishWay();
+    const extra = store.commands.services.addServiceToWay(kc);
+    store.commands.services.deleteService(mustFind(extra, 'extra service id'));
   });
 
   it('deleting a service keeps the way', () => {
@@ -182,7 +182,7 @@ describe('removing part of a way (the eraser deletes control points)', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    ec = store.getState().beginWay('road', 'straight');
+    ec = mustFind(store.commands.ways.beginWay('road', 'straight'), 'way id');
     (
       [
         [-115.3, 36.1],
@@ -190,13 +190,13 @@ describe('removing part of a way (the eraser deletes control points)', () => {
         [-115.1, 36.1],
         [-115.0, 36.1],
       ] as LngLat[]
-    ).forEach((p) => store.getState().addWayPoint(ec, p));
-    store.getState().finishWay();
+    ).forEach((p) => store.commands.ways.addWayPoint(ec, p));
+    store.commands.ways.finishWay();
     before = mustFind(
       store.getState().system.ways.find((w) => w.id === ec),
       'way',
     ).points.length;
-    store.getState().deleteWayPoint(ec, 1);
+    store.commands.ways.deleteWayPoint(ec, 1);
   });
 
   it('deleteWayPoint removes one control point', () => {

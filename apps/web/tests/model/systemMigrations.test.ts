@@ -50,7 +50,7 @@ describe('v6 migration: capacity+class → profile; round-trips', () => {
       },
     ],
     services: [],
-    stations: [],
+    stops: [],
     facilities: [],
     groups: [],
   });
@@ -141,7 +141,7 @@ describe('vehicle catalogs: serialize migration', () => {
     updatedAt: 1,
     ways: [],
     services: [],
-    stations: [],
+    stops: [],
     facilities: [],
     groups: [],
     nodes: [],
@@ -225,7 +225,7 @@ describe('v9 → v10: a bare way list becomes legs with directions', () => {
         patterns: [{ id: 'p1', wayIds: ['wA', 'wB'] }],
       },
     ],
-    stations: [],
+    stops: [],
     facilities: [],
     groups: [],
     nodes: [],
@@ -236,7 +236,7 @@ describe('v9 → v10: a bare way list becomes legs with directions', () => {
     medians: {},
     approachControls: {},
   });
-  const v9Legs = patternLegs(v9.services[0].patterns[0]);
+  const v9Legs = patternLegs(v9.services[0].path);
 
   it('a v9 document parses to the current version', () => {
     expect(v9.version).toBe(createEmptySystem().version);
@@ -258,7 +258,7 @@ describe('v9 → v10: a bare way list becomes legs with directions', () => {
   it("the migrated line's shape is the one v9 drew, end to end and unbroken", () => {
     expect(
       Math.abs(
-        pathLengthMeters(patternPath(v9.ways, v9.services[0].patterns[0])) -
+        pathLengthMeters(patternPath(v9.ways, v9.services[0].path)) -
           (haversineMeters(A, B) + haversineMeters(B, C)),
       ),
     ).toBeLessThan(1e-6);
@@ -267,7 +267,7 @@ describe('v9 → v10: a bare way list becomes legs with directions', () => {
   // And it stays put: re-parsing a v10 document must not re-derive anything.
   it('a v10 document keeps the directions it already stores', () => {
     const reparsed = parseSystem(JSON.parse(JSON.stringify(v9)));
-    expect(patternLegs(reparsed.services[0].patterns[0]).map((l) => l.direction)).toEqual(
+    expect(patternLegs(reparsed.services[0].path).map((l) => l.direction)).toEqual(
       v9Legs.map((l) => l.direction),
     );
   });

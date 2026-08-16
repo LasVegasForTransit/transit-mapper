@@ -5,7 +5,10 @@ import { modesForWayType, MODES, wayType } from '@transitmapper/core/model/catal
 import { serviceWayIds, squareFootprint } from '@transitmapper/core/model/geo';
 import { wayCapacity } from '@transitmapper/core/model/profile';
 import { createEditorStore } from '../../src/editor/store';
-import { buildFeatures } from '../../src/map/layers';
+import {
+  buildFeatures,
+  renderPresentationForViewport,
+} from '../support/testRenderPresentation.test';
 
 /** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
  *  a silent `undefined`/`null` into a clear failure at the point of use
@@ -15,21 +18,16 @@ function mustFind<T>(v: T | null | undefined, what: string): T {
   return v;
 }
 
-/** The `offset` GeoJSON feature property is always a number for a fanned
- *  lane feature; narrow it once here instead of at every call site. */
-const offsetOf = (f: { properties?: Record<string, unknown> | null }): number | undefined =>
-  f.properties?.offset as number | undefined;
-
 describe('modes + grade (infrastructure vertical alignment)', () => {
   let store: ReturnType<typeof createEditorStore>;
   let gc: string;
 
   beforeEach(() => {
     store = createEditorStore();
-    gc = store.getState().beginWay('heavyRail', 'straight');
-    store.getState().addWayPoint(gc, [-115.2, 36.1]);
-    store.getState().addWayPoint(gc, [-115.0, 36.1]);
-    store.getState().finishWay();
+    gc = mustFind(store.commands.ways.beginWay('heavyRail', 'straight'), 'way id');
+    store.commands.ways.addWayPoint(gc, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(gc, [-115.0, 36.1]);
+    store.commands.ways.finishWay();
   });
 
   const way = () =>
@@ -53,12 +51,12 @@ describe('modes + grade (infrastructure vertical alignment)', () => {
   });
 
   it('setWayGrade sets the grade', () => {
-    store.getState().setWayGrade(gc, 'underground');
+    store.commands.ways.setWayGrade(gc, 'underground');
     expect(way().grade).toBe('underground');
   });
 
   it('parse round-trips way grade', () => {
-    store.getState().setWayGrade(gc, 'underground');
+    store.commands.ways.setWayGrade(gc, 'underground');
     const round = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
     expect(round.ways[0].grade).toBe('underground');
   });
@@ -87,7 +85,7 @@ describe('modes + grade (infrastructure vertical alignment)', () => {
         },
       ],
       services: [],
-      stations: [],
+      stops: [],
       facilities: [],
       groups: [],
     });
@@ -109,14 +107,26 @@ describe('P2: physical cross-sections — capacity fans a way into that many par
 
   beforeEach(() => {
     store = createEditorStore();
-    road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, [-115.2, 36.1]);
-    store.getState().addWayPoint(road, [-115.1, 36.1]);
-    store.getState().finishWay();
-    store.getState().setWayCapacity(road, 4);
+    road = mustFind(store.commands.ways.beginWay('road', 'straight'), 'way id');
+    store.commands.ways.addWayPoint(road, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    store.commands.ways.setWayCapacity(road, 4);
   });
 
   const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(['road']) };
+
+  // Lane fan-out is street-tier-only geometry (see buildFeatures's LOD
+  // collapse to one overview silhouette per corridor at a distant camera);
+  // the default world-scale test presentation resolves to overview tier and
+  // would report one feature regardless of capacity, so these two checks
+  // supply a close camera over the road itself.
+  const streetPresentation = renderPresentationForViewport({
+    center: [-115.15, 36.1],
+    zoom: 20,
+    width: 1_440,
+    height: 900,
+  });
 
   const roadWay = () =>
     mustFind(
@@ -129,27 +139,48 @@ describe('P2: physical cross-sections — capacity fans a way into that many par
   });
 
   it('setWayCapacity clamps to a minimum of 1', () => {
-    store.getState().setWayCapacity(road, 0);
+    store.commands.ways.setWayCapacity(road, 0);
     expect(wayCapacity(roadWay())).toBe(1);
   });
 
+  // Street tier replaced the screen-space "offset fan" that used to live in
+  // `ways` (one LineString per lane, distinguished by an `offset` property)
+  // with real per-lane polygon geometry in the separate `lanes` collection —
+  // `ways` now carries only a single selection-halo feature per way at this
+  // tier. These two checks follow that relocation: they count/position the
+  // capacity-counted ('drive') lane surfaces instead.
   it('infrastructure view fans a 4-lane road into 4 offset features', () => {
     const infra = buildFeatures(store.getState().system, null, [], {
       viewMode: 'infrastructure',
       ...filters,
+      presentation: streetPresentation,
     });
-    const roadFeatures = infra.ways.features.filter((f) => f.properties?.id === road);
-    expect(roadFeatures.length).toBe(4);
+    const driveLanes = infra.lanes.features.filter(
+      (f) => f.properties?.wayId === road && f.properties.kindId === 'drive',
+    );
+    expect(driveLanes.length).toBe(4);
   });
 
   it('each lane gets a distinct offset', () => {
     const infra = buildFeatures(store.getState().system, null, [], {
       viewMode: 'infrastructure',
       ...filters,
+      presentation: streetPresentation,
     });
-    const roadFeatures = infra.ways.features.filter((f) => f.properties?.id === road);
-    const offsets = new Set(roadFeatures.map((f) => offsetOf(f)));
-    expect(offsets.size).toBe(4);
+    const driveLanes = infra.lanes.features.filter(
+      (f) => f.properties?.wayId === road && f.properties.kindId === 'drive',
+    );
+    // No `offset` property exists on real lane geometry; distinct lateral
+    // position (perpendicular to this east-west road, i.e. distinct latitude)
+    // is the surviving equivalent of "each lane rendered somewhere different".
+    const lateralPositions = new Set(
+      driveLanes.map((f) => {
+        const ring = (f.geometry as { coordinates: number[][][] }).coordinates[0];
+        const centroidLat = ring.reduce((sum, p) => sum + p[1], 0) / ring.length;
+        return Math.round(centroidLat * 1e6);
+      }),
+    );
+    expect(lateralPositions.size).toBe(4);
   });
 
   // Network view is service-focused — a bare road's infra line (unserved) is
@@ -164,7 +195,7 @@ describe('P2: physical cross-sections — capacity fans a way into that many par
   });
 
   it("network view keeps a served way's infra line hidden too", () => {
-    store.getState().addServiceToWay(road);
+    store.commands.services.addServiceToWay(road);
     const netServed = buildFeatures(store.getState().system, null, [], {
       viewMode: 'network',
       ...filters,
@@ -173,7 +204,7 @@ describe('P2: physical cross-sections — capacity fans a way into that many par
   });
 
   it('network view renders the service itself regardless of capacity', () => {
-    const svc = mustFind(store.getState().addServiceToWay(road), 'service');
+    const svc = mustFind(store.commands.services.addServiceToWay(road), 'service');
     const netServed = buildFeatures(store.getState().system, null, [], {
       viewMode: 'network',
       ...filters,
@@ -188,7 +219,14 @@ describe('P3: station footprints & platforms', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    stId = store.getState().addStation([-115.15, 36.1]);
+    // The new physical Station has no "create empty" command — addDrawnStation
+    // always seeds a footprint — so an empty station is reached the same way
+    // the post-rename reference does: draw one, then delete its footprint.
+    stId = mustFind(
+      store.commands.stations.addDrawnStation(squareFootprint([-115.15, 36.1], 30)),
+      'station id',
+    );
+    store.commands.stations.deleteStationFootprint(stId);
   });
 
   const withFootprint = () =>
@@ -202,7 +240,7 @@ describe('P3: station footprints & platforms', () => {
   });
 
   it('addStationFootprint gives it a 4-corner default square', () => {
-    store.getState().addStationFootprint(stId);
+    store.commands.stations.addStationFootprint(stId);
     expect(withFootprint().footprint?.length).toBe(4);
   });
 
@@ -212,36 +250,36 @@ describe('P3: station footprints & platforms', () => {
   });
 
   it('moveFootprintPoint edits one corner', () => {
-    store.getState().addStationFootprint(stId);
-    store.getState().moveFootprintPoint(stId, 0, [-115.1501, 36.1001]);
+    store.commands.stations.addStationFootprint(stId);
+    store.commands.stations.moveFootprintPoint(stId, 0, [-115.1501, 36.1001]);
     expect(mustFind(withFootprint().footprint, 'footprint')[0][0]).toBe(-115.1501);
   });
 
   it('addPlatform adds a platform to the station', () => {
-    store.getState().addStationFootprint(stId);
-    const platformId = store.getState().addPlatform(stId);
+    store.commands.stations.addStationFootprint(stId);
+    const platformId = store.commands.stations.addPlatform(stId);
     expect(withFootprint().platforms?.length).toBe(1);
     expect(mustFind(withFootprint().platforms, 'platforms')[0].id).toBe(platformId);
   });
 
   it('movePlatformPoint edits one platform corner', () => {
-    store.getState().addStationFootprint(stId);
-    const platformId = store.getState().addPlatform(stId);
-    store.getState().movePlatformPoint(stId, platformId, 1, [-115.14, 36.09]);
+    store.commands.stations.addStationFootprint(stId);
+    const platformId = mustFind(store.commands.stations.addPlatform(stId), 'platform id');
+    store.commands.stations.movePlatformPoint(stId, platformId, 1, [-115.14, 36.09]);
     expect(mustFind(withFootprint().platforms, 'platforms')[0].points[1][0]).toBe(-115.14);
   });
 
   it('deletePlatform removes it', () => {
-    store.getState().addStationFootprint(stId);
-    const platformId = store.getState().addPlatform(stId);
-    store.getState().deletePlatform(stId, platformId);
+    store.commands.stations.addStationFootprint(stId);
+    const platformId = mustFind(store.commands.stations.addPlatform(stId), 'platform id');
+    store.commands.stations.deletePlatform(stId, platformId);
     expect(withFootprint().platforms?.length).toBe(0);
   });
 
   it('deleteStationFootprint clears the footprint (and any platforms)', () => {
-    store.getState().addStationFootprint(stId);
-    store.getState().addPlatform(stId);
-    store.getState().deleteStationFootprint(stId);
+    store.commands.stations.addStationFootprint(stId);
+    store.commands.stations.addPlatform(stId);
+    store.commands.stations.deleteStationFootprint(stId);
     expect(withFootprint().footprint).toBeUndefined();
   });
 });
@@ -252,7 +290,10 @@ describe('P3: catalog-typed facilities', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    facId = store.getState().addFacility('bikeDock', [-115.16, 36.12]);
+    facId = mustFind(
+      store.commands.facilities.addFacility('bikeDock', [-115.16, 36.12]),
+      'facility id',
+    );
   });
 
   it('addFacility creates it and selects it', () => {
@@ -265,23 +306,23 @@ describe('P3: catalog-typed facilities', () => {
   });
 
   it('moveFacility updates its geometry', () => {
-    store.getState().moveFacility(facId, [-115.161, 36.121]);
+    store.commands.facilities.moveFacility(facId, [-115.161, 36.121]);
     expect((store.getState().system.facilities[0].geometry as [number, number])[0]).toBe(-115.161);
   });
 
   it('setFacilityName renames it', () => {
-    store.getState().setFacilityName(facId, 'Main entrance dock');
+    store.commands.facilities.setFacilityName(facId, 'Main entrance dock');
     expect(store.getState().system.facilities[0].name).toBe('Main entrance dock');
   });
 
   it('deleteFacility removes it and clears the selection', () => {
-    store.getState().deleteFacility(facId);
+    store.commands.facilities.deleteFacility(facId);
     expect(store.getState().system.facilities.length).toBe(0);
     expect(store.getState().selection).toBeNull();
   });
 });
 
-describe('P3: grouping (station complexes / line families)', () => {
+describe('P3: grouping (stop complexes / line families)', () => {
   let store: ReturnType<typeof createEditorStore>;
   let a: string;
   let b: string;
@@ -290,10 +331,10 @@ describe('P3: grouping (station complexes / line families)', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    a = store.getState().addStation([-115.2, 36.1]);
-    b = store.getState().addStation([-115.2001, 36.1001]);
-    c = store.getState().addStation([-115.2002, 36.1002]);
-    groupId = store.getState().createGroup([a, b], 'Downtown complex');
+    a = mustFind(store.commands.stops.addStop([-115.2, 36.1]), 'stop id');
+    b = mustFind(store.commands.stops.addStop([-115.2001, 36.1001]), 'stop id');
+    c = mustFind(store.commands.stops.addStop([-115.2002, 36.1002]), 'stop id');
+    groupId = mustFind(store.commands.groups.createGroup([a, b], 'Downtown complex'), 'group id');
   });
 
   it('createGroup bundles the given members', () => {
@@ -301,29 +342,29 @@ describe('P3: grouping (station complexes / line families)', () => {
   });
 
   it('addGroupMember adds a third member', () => {
-    store.getState().addGroupMember(groupId, c);
+    store.commands.groups.addGroupMember(groupId, c);
     expect(store.getState().system.groups[0].memberIds).toContain(c);
   });
 
   it('addGroupMember is idempotent (no duplicate)', () => {
-    store.getState().addGroupMember(groupId, c);
-    store.getState().addGroupMember(groupId, c);
+    store.commands.groups.addGroupMember(groupId, c);
+    store.commands.groups.addGroupMember(groupId, c);
     expect(store.getState().system.groups[0].memberIds.filter((m) => m === c).length).toBe(1);
   });
 
   it('removeGroupMember removes just that member', () => {
-    store.getState().removeGroupMember(groupId, b);
+    store.commands.groups.removeGroupMember(groupId, b);
     expect(store.getState().system.groups[0].memberIds).not.toContain(b);
     expect(store.getState().system.groups[0].memberIds).toContain(a);
   });
 
   it('renameGroup renames it', () => {
-    store.getState().renameGroup(groupId, 'Renamed complex');
+    store.commands.groups.renameGroup(groupId, 'Renamed complex');
     expect(store.getState().system.groups[0].name).toBe('Renamed complex');
   });
 
   it('deleteGroup removes it', () => {
-    store.getState().deleteGroup(groupId);
+    store.commands.groups.deleteGroup(groupId);
     expect(store.getState().system.groups.length).toBe(0);
   });
 });

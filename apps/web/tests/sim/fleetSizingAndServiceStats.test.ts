@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { oneSection, wholeLeg } from '@transitmapper/core/model/geo';
-import type { Service, Station, VehicleKind, Way } from '@transitmapper/core/model/system';
+import type { Service, Stop, VehicleKind, Way } from '@transitmapper/core/model/system';
 import {
   buildTimetable,
   DEFAULT_MOTION_PROFILE,
@@ -241,20 +241,19 @@ describe('what a line amounts to (core/sim/serviceStats.ts)', () => {
     id: 'ss-1',
     name: 'Green',
     modeId: 'lightRail',
-    color: '#0a0',
-    patterns: [{ id: 'ss-p', sections: oneSection(legsOf('ss-w')) }],
+    path: { id: 'ss-p', sections: oneSection(legsOf('ss-w')) },
     frequencyMinutes: 10,
   };
 
   const bare = mustFind(serviceStats(ways, [], [], svc, 10), 'service stats');
   it("a service's round trip is out and back", () => {
-    expect(Math.abs(bare.longestRoundTripMs - 2 * bare.patterns[0].oneWayMs)).toBeLessThan(1e-9);
+    expect(Math.abs(bare.roundTripMs - 2 * bare.path.oneWayMs)).toBeLessThan(1e-9);
   });
   it('a stopless line spends no time dwelling', () => {
-    expect(bare.patterns[0].dwellMs).toBe(0);
+    expect(bare.path.dwellMs).toBe(0);
   });
   it('a line reports the fleet its headway needs', () => {
-    expect(bare.fleet).toBe(mustFind(bare.patterns[0].plan, 'plan').fleet);
+    expect(bare.fleet).toBe(mustFind(bare.path.plan, 'plan').fleet);
   });
   it('a line reports recovery time at its terminals', () => {
     expect(bare.layoverMs).toBeGreaterThan(0);
@@ -262,32 +261,32 @@ describe('what a line amounts to (core/sim/serviceStats.ts)', () => {
 
   // Stops lengthen the round trip. That is the coupling the dwell field
   // claims and the inspector now shows.
-  const stations: Station[] = [
+  const stops: Stop[] = [
     { id: 'ss-a', coord: [-115.27, 36.2], anchors: [{ wayId: 'ss-w', t: 0.1 }] },
     { id: 'ss-b', coord: [-115.25, 36.2], anchors: [{ wayId: 'ss-w', t: 0.5 }] },
   ];
-  const stopped = mustFind(serviceStats(ways, stations, [], svc, 10), 'service stats');
-  it('stations on a line become stops', () => {
-    expect(stopped.patterns[0].stops.length).toBe(2);
+  const stopped = mustFind(serviceStats(ways, stops, [], svc, 10), 'service stats');
+  it('stops on a line become stops', () => {
+    expect(stopped.path.stops.length).toBe(2);
   });
   it('stops make the round trip longer', () => {
-    expect(stopped.longestRoundTripMs).toBeGreaterThan(bare.longestRoundTripMs);
+    expect(stopped.roundTripMs).toBeGreaterThan(bare.roundTripMs);
   });
   it('a longer dwell makes it longer still', () => {
     const longerDwell = mustFind(
       serviceStats(
         ways,
-        stations.map((s) => ({ ...s, dwellSeconds: 300 })),
+        stops.map((s) => ({ ...s, dwellSeconds: 300 })),
         [],
         svc,
         10,
       ),
       'service stats',
     );
-    expect(longerDwell.longestRoundTripMs).toBeGreaterThan(stopped.longestRoundTripMs);
+    expect(longerDwell.roundTripMs).toBeGreaterThan(stopped.roundTripMs);
   });
   it('dwell time is counted as time standing still, not travelling', () => {
-    expect(stopped.patterns[0].dwellMs).toBe(2 * DEFAULT_DWELL_SECONDS * 1000);
+    expect(stopped.path.dwellMs).toBe(2 * DEFAULT_DWELL_SECONDS * 1000);
   });
 
   // A faster vehicle shortens it, and can therefore need fewer vehicles.
@@ -302,40 +301,37 @@ describe('what a line amounts to (core/sim/serviceStats.ts)', () => {
     },
   ];
   const fast = mustFind(
-    serviceStats(ways, stations, kinds, { ...svc, vehicleKindId: 'ss-fast' }, 10),
+    serviceStats(ways, stops, kinds, { ...svc, vehicleKindId: 'ss-fast' }, 10),
     'service stats',
   );
   it('a faster vehicle kind shortens the round trip', () => {
-    expect(fast.longestRoundTripMs).toBeLessThan(stopped.longestRoundTripMs);
+    expect(fast.roundTripMs).toBeLessThan(stopped.roundTripMs);
   });
   it('a shorter round trip never needs more vehicles', () => {
     expect(fast.fleet).toBeLessThanOrEqual(stopped.fleet);
   });
 
   // Headway is the other input to fleet size.
-  const frequent = mustFind(serviceStats(ways, stations, [], svc, 5), 'service stats');
+  const frequent = mustFind(serviceStats(ways, stops, [], svc, 5), 'service stats');
   it('halving the headway at least doubles the fleet', () => {
     expect(frequent.fleet).toBeGreaterThanOrEqual(2 * stopped.fleet - 1);
     expect(frequent.fleet).toBeGreaterThan(stopped.fleet);
   });
   it('a service with no headway set runs one vehicle', () => {
-    expect(mustFind(serviceStats(ways, stations, [], svc, undefined), 'service stats').fleet).toBe(
-      1,
-    );
+    expect(mustFind(serviceStats(ways, stops, [], svc, undefined), 'service stats').fleet).toBe(1);
   });
 
-  // A branch runs its own vehicles on top of the trunk's.
+  // A branch runs its own vehicles on top of the trunk's — now a sibling
+  // Service under the same Line rather than a second pattern on one Service.
   const branched: Service = {
     ...svc,
-    patterns: [
-      { id: 'ss-p', sections: oneSection(legsOf('ss-w')) },
-      { id: 'ss-p2', sections: oneSection(legsOf('ss-w')) },
-    ],
+    id: 'ss-2',
+    path: { id: 'ss-p2', sections: oneSection(legsOf('ss-w')) },
   };
   it('each branch runs its own fleet', () => {
-    expect(mustFind(serviceStats(ways, stations, [], branched, 10), 'service stats').fleet).toBe(
-      2 * stopped.fleet,
-    );
+    expect(
+      stopped.fleet + mustFind(serviceStats(ways, stops, [], branched, 10), 'service stats').fleet,
+    ).toBe(2 * stopped.fleet);
   });
 
   it('a line whose ways resolve to no path reports nothing rather than zeroes', () => {
@@ -346,10 +342,10 @@ describe('what a line amounts to (core/sim/serviceStats.ts)', () => {
   // timetable, same plan.
   it('per-pattern and per-service measurements agree', () => {
     const viaPattern = mustFind(
-      patternStats(ways, stations, svc.patterns[0], DEFAULT_MOTION_PROFILE, 10),
+      patternStats(ways, stops, svc.path, DEFAULT_MOTION_PROFILE, 10),
       'pattern stats',
     );
-    expect(viaPattern.roundTripMs).toBe(stopped.longestRoundTripMs);
+    expect(viaPattern.roundTripMs).toBe(stopped.roundTripMs);
     expect(mustFind(viaPattern.plan, 'plan').fleet).toBe(stopped.fleet);
   });
 });

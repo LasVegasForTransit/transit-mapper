@@ -6,6 +6,7 @@ import type { LngLat } from '@transitmapper/core/model/system';
 import type { SelectionAction } from '@transitmapper/core/model/selectionActions';
 import { createEditorStore, type MultiSelectItem } from '../../src/editor/store';
 import { createSelectionActions } from '../../src/editor/actions';
+import { required } from '../support/required.test';
 
 type Store = ReturnType<typeof createEditorStore>;
 
@@ -22,10 +23,10 @@ describe('cutting where you CLICKED: point-anchored actions that make a stretch 
 
     beforeEach(() => {
       store = createEditorStore();
-      const way = store.getState().beginWay('lightRail', 'straight');
-      store.getState().addWayPoint(way, [-115.2, 36.1]);
-      store.getState().addWayPoint(way, [-115.1, 36.1]);
-      store.getState().finishWay();
+      const way = required(store.commands.ways.beginWay('lightRail', 'straight'));
+      store.commands.ways.addWayPoint(way, [-115.2, 36.1]);
+      store.commands.ways.addWayPoint(way, [-115.1, 36.1]);
+      store.commands.ways.finishWay();
       line = store.getState().system.services[0].id;
       registry = createSelectionActions(store);
       refs = [{ kind: 'service', id: line }];
@@ -33,7 +34,7 @@ describe('cutting where you CLICKED: point-anchored actions that make a stretch 
 
     const at = (coord: LngLat, t?: number) => {
       const current = store.getState().system;
-      const pattern = must(current.services.find((service) => service.id === line)).patterns[0];
+      const pattern = must(current.services.find((service) => service.id === line)).path;
       const serviceHit =
         t === undefined
           ? undefined
@@ -69,7 +70,7 @@ describe('cutting where you CLICKED: point-anchored actions that make a stretch 
       });
 
       it('ending the line at the clicked point shortens it there', () => {
-        const trimmed = store.getState().system.services[0].patterns[0];
+        const trimmed = store.getState().system.services[0].path;
         const section = trimmed.sections[0];
         const legs = section.kind === 'split' ? section.outbound : section.legs;
         const extent = legs[0].extent;
@@ -90,15 +91,16 @@ describe('cutting where you CLICKED: point-anchored actions that make a stretch 
     // Cut at a point, and the far half becomes its own line — how a stretch in
     // the middle comes out: cut at both ends, delete the middle.
     const store = createEditorStore();
-    const way2 = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(way2, [-115.2, 36.1]);
-    store.getState().addWayPoint(way2, [-115.1, 36.1]);
-    store.getState().finishWay();
+    const way2 = required(store.commands.ways.beginWay('lightRail', 'straight'));
+    store.commands.ways.addWayPoint(way2, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(way2, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     const line2 = store.getState().system.services[0].id;
     const refs2: MultiSelectItem[] = [{ kind: 'service', id: line2 }];
     const registry = createSelectionActions(store);
-    const pattern2 = must(store.getState().system.services.find((service) => service.id === line2))
-      .patterns[0];
+    const pattern2 = must(
+      store.getState().system.services.find((service) => service.id === line2),
+    ).path;
     const serviceHit = {
       serviceId: line2,
       patternId: pattern2.id,
@@ -126,10 +128,10 @@ describe('cutting where you CLICKED: point-anchored actions that make a stretch 
 
     beforeEach(() => {
       store = createEditorStore();
-      way3 = store.getState().beginWay('road', 'straight');
-      store.getState().addWayPoint(way3, [-115.2, 36.1]);
-      store.getState().addWayPoint(way3, [-115.1, 36.1]);
-      store.getState().finishWay();
+      way3 = required(store.commands.ways.beginWay('road', 'straight'));
+      store.commands.ways.addWayPoint(way3, [-115.2, 36.1]);
+      store.commands.ways.addWayPoint(way3, [-115.1, 36.1]);
+      store.commands.ways.finishWay();
       const refs3: MultiSelectItem[] = [{ kind: 'way', id: way3 }];
       const registry = createSelectionActions(store);
       divide = registry
@@ -164,38 +166,38 @@ describe('selecting LINES: services join the multi-select group, the action regi
   beforeEach(() => {
     store = createEditorStore();
     // Two lines meeting nose to tail at [-115.15, 36.1].
-    const wayW = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(wayW, [-115.2, 36.1]);
-    store.getState().addWayPoint(wayW, [-115.15, 36.1]);
-    store.getState().finishWay();
-    const wayE = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(wayE, [-115.15, 36.1]);
-    store.getState().addWayPoint(wayE, [-115.1, 36.1]);
-    store.getState().finishWay();
+    const wayW = required(store.commands.ways.beginWay('lightRail', 'straight'));
+    store.commands.ways.addWayPoint(wayW, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(wayW, [-115.15, 36.1]);
+    store.commands.ways.finishWay();
+    const wayE = required(store.commands.ways.beginWay('lightRail', 'straight'));
+    store.commands.ways.addWayPoint(wayE, [-115.15, 36.1]);
+    store.commands.ways.addWayPoint(wayE, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     [lineW, lineE] = store.getState().system.services.map((sv) => sv.id);
   });
 
   it('a service can be part of a multi-selection', () => {
-    store.getState().toggleMultiSelect({ kind: 'service', id: lineW });
-    store.getState().toggleMultiSelect({ kind: 'service', id: lineE });
+    store.commands.selection.toggleMultiSelect({ kind: 'service', id: lineW });
+    store.commands.selection.toggleMultiSelect({ kind: 'service', id: lineE });
     expect(store.getState().multiSelection).toHaveLength(2);
   });
 
   it('extending a single selection groups both, not just the second', () => {
-    store.getState().select({ kind: 'service', id: lineW });
-    store.getState().extendSelection({ kind: 'service', id: lineE });
+    store.commands.selection.select({ kind: 'service', id: lineW });
+    store.commands.selection.extendSelection({ kind: 'service', id: lineE });
     expect(store.getState().multiSelection).toHaveLength(2);
   });
 
   it('…and extending onto the one thing already selected groups it once', () => {
-    store.getState().select({ kind: 'service', id: lineW });
-    store.getState().extendSelection({ kind: 'service', id: lineW });
+    store.commands.selection.select({ kind: 'service', id: lineW });
+    store.commands.selection.extendSelection({ kind: 'service', id: lineW });
     expect(store.getState().multiSelection).toHaveLength(1);
   });
 
   it('a plain toggle still builds the group from scratch', () => {
-    store.getState().select({ kind: 'service', id: lineW });
-    store.getState().toggleMultiSelect({ kind: 'service', id: lineE });
+    store.commands.selection.select({ kind: 'service', id: lineW });
+    store.commands.selection.toggleMultiSelect({ kind: 'service', id: lineE });
     expect(store.getState().multiSelection).toHaveLength(1);
   });
 
@@ -204,8 +206,8 @@ describe('selecting LINES: services join the multi-select group, the action regi
     let actionIds: string[];
 
     beforeEach(() => {
-      store.getState().toggleMultiSelect({ kind: 'service', id: lineW });
-      store.getState().toggleMultiSelect({ kind: 'service', id: lineE });
+      store.commands.selection.toggleMultiSelect({ kind: 'service', id: lineW });
+      store.commands.selection.toggleMultiSelect({ kind: 'service', id: lineE });
       registry = createSelectionActions(store);
       refs = store.getState().multiSelection;
       actionIds = registry.actionsFor({ system: store.getState().system, refs }).map((a) => a.id);
@@ -261,7 +263,7 @@ describe('selecting LINES: services join the multi-select group, the action regi
       });
 
       it('the joined line runs both ways end to end', () => {
-        expect(patternLegs(store.getState().system.services[0].patterns[0])).toHaveLength(2);
+        expect(patternLegs(store.getState().system.services[0].path)).toHaveLength(2);
       });
 
       it('the joined line has no gap for the validator to report', () => {
@@ -281,18 +283,18 @@ describe('selecting LINES: services join the multi-select group, the action regi
       // A fresh store here, not the outer describe's wayW/wayE fixture,
       // matching the original's fresh() reset at this point.
       store = createEditorStore();
-      road = store.getState().beginWay('lightRail', 'straight');
-      store.getState().addWayPoint(road, [-115.2, 36.2]);
-      store.getState().addWayPoint(road, [-115.1, 36.2]);
-      store.getState().finishWay();
+      road = required(store.commands.ways.beginWay('lightRail', 'straight'));
+      store.commands.ways.addWayPoint(road, [-115.2, 36.2]);
+      store.commands.ways.addWayPoint(road, [-115.1, 36.2]);
+      store.commands.ways.finishWay();
       line = must(
         store.getState().system.services.find((sv) => serviceWayIds(sv).includes(road)),
       ).id;
-      store.getState().toggleMultiSelect({ kind: 'service', id: line });
+      store.commands.selection.toggleMultiSelect({ kind: 'service', id: line });
       pointsBefore = JSON.stringify(
         must(store.getState().system.ways.find((w) => w.id === road)).points,
       );
-      store.getState().nudgeMultiSelection(0.01, 0.01);
+      store.commands.selection.nudgeMultiSelection(0.01, 0.01);
     });
 
     it('nudging a selected line moves no infrastructure', () => {
@@ -302,7 +304,7 @@ describe('selecting LINES: services join the multi-select group, the action regi
 
     describe('deleting the group', () => {
       beforeEach(() => {
-        store.getState().deleteMultiSelection();
+        store.commands.selection.deleteMultiSelection();
       });
 
       it('deleting a selected line removes the service', () => {

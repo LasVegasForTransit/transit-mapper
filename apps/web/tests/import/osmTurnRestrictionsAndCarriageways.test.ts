@@ -213,15 +213,15 @@ describe('OSM import reads turn-restriction relations', () => {
   // End to end through the store.
   it('the store records the imported turn restrictions', () => {
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().importWays(osmElementsToNetwork(junction('no_left_turn')));
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.imports.importWays(osmElementsToNetwork(junction('no_left_turn')));
     expect(Object.keys(store.getState().system.turnRestrictions).length).toBeGreaterThan(0);
   });
 
   it('each stored key names a lane that exists', () => {
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().importWays(osmElementsToNetwork(junction('no_left_turn')));
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.imports.importWays(osmElementsToNetwork(junction('no_left_turn')));
     const storedFrom = mustFind(
       store.getState().system.ways.find((w) => w.source === 'osm:1'),
       'stored way osm:1',
@@ -236,13 +236,13 @@ describe('OSM import reads turn-restriction relations', () => {
   // And deleting the approach takes them with it, via touch()'s pruning.
   it('deleting the approach drops its imported restrictions', () => {
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().importWays(osmElementsToNetwork(junction('no_left_turn')));
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.imports.importWays(osmElementsToNetwork(junction('no_left_turn')));
     const storedFrom = mustFind(
       store.getState().system.ways.find((w) => w.source === 'osm:1'),
       'stored way osm:1',
     );
-    store.getState().deleteWay(storedFrom.id);
+    store.commands.ways.deleteWay(storedFrom.id);
     expect(Object.keys(store.getState().system.turnRestrictions)).toHaveLength(0);
   });
 });
@@ -404,8 +404,8 @@ describe('OSM import pairs the carriageways of a divided street', () => {
 
     beforeEach(() => {
       store = createEditorStore();
-      store.getState().setSystem(createEmptySystem());
-      store.getState().importWays(osmElementsToNetwork(divided));
+      store.commands.document.setSystem(createEmptySystem());
+      store.commands.imports.importWays(osmElementsToNetwork(divided));
       nw = store.getState().system.namedWays[0];
     });
 
@@ -418,12 +418,12 @@ describe('OSM import pairs the carriageways of a divided street', () => {
     });
 
     it('so the divided street combines into one two-way street', () => {
-      store.getState().combineCarriageways(nw.id);
+      store.commands.network.combineCarriageways(nw.id);
       expect(store.getState().system.ways).toHaveLength(1);
     });
 
     it('carrying a median lane from the captured gap', () => {
-      store.getState().combineCarriageways(nw.id);
+      store.commands.network.combineCarriageways(nw.id);
       expect(store.getState().system.ways[0].profile.lanes.some((l) => l.kindId === 'median')).toBe(
         true,
       );

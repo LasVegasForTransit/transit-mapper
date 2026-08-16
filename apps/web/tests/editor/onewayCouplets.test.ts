@@ -81,7 +81,7 @@ describe('one-way couplets: a line whose two directions run different streets', 
     // Built as a document rather than drawn, because parseSystem derives a
     // junction wherever control points coincide and the headless draw flow has
     // no snapping to form them with.
-    store.getState().setSystem(
+    store.commands.document.setSystem(
       parseSystem({
         version: 3,
         ways: [
@@ -94,27 +94,26 @@ describe('one-way couplets: a line whose two directions run different streets', 
         stations: [],
       }),
     );
-    store.getState().setDraftMode('bus');
-    svc = must(store.getState().addServiceToWay('up'));
-    const outPattern = must(store.getState().system.services.find((sv) => sv.id === svc))
-      .patterns[0];
+    store.commands.tools.setDraftMode('bus');
+    svc = must(store.commands.services.addServiceToWay('up'));
+    const outPattern = must(store.getState().system.services.find((sv) => sv.id === svc)).path;
     outPatternHasSplit = patternHasSplit(outPattern);
 
-    startReturnOk = store.getState().startReturnPathDraft(svc, outPattern.id);
+    startReturnOk = store.commands.routing.startReturnPathDraft(svc, outPattern.id);
 
     const anchorAt = (wayId: string, coord: LngLat) =>
       must(anchorOnWay(must(store.getState().system.ways.find((x) => x.id === wayId)), coord));
     const midOf = (a: LngLat, b: LngLat): LngLat => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
     traceOk =
-      store.getState().extendRouteDraft(anchorAt('north', midOf(NWc, NEc))) &&
-      store.getState().extendRouteDraft(anchorAt('down', midOf(NEc, SEc))) &&
-      store.getState().extendRouteDraft(anchorAt('south', midOf(SEc, SWc)));
+      store.commands.routing.extendRouteDraft(anchorAt('north', midOf(NWc, NEc))) &&
+      store.commands.routing.extendRouteDraft(anchorAt('down', midOf(NEc, SEc))) &&
+      store.commands.routing.extendRouteDraft(anchorAt('south', midOf(SEc, SWc)));
 
-    commitEqualsSvc = store.getState().commitRouteDraft() === svc;
+    commitEqualsSvc = store.commands.routing.commitRouteDraft() === svc;
     serviceCountAfterCommit = store.getState().system.services.length;
 
     coupled = must(store.getState().system.services.find((sv) => sv.id === svc));
-    cp = coupled.patterns[0];
+    cp = coupled.path;
     coupledHasSplit = patternHasSplit(cp);
 
     outWays = patternRunLegs(cp, 'outbound').map((r) => r.leg.wayId);
@@ -126,7 +125,7 @@ describe('one-way couplets: a line whose two directions run different streets', 
     // to read the flat leg list, so a saved couplet reloaded as nothing.
     {
       const reloaded = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
-      const rp = must(reloaded.services.find((sv) => sv.id === svc)).patterns[0];
+      const rp = must(reloaded.services.find((sv) => sv.id === svc)).path;
       rpHasSplit = patternHasSplit(rp);
       reloadedWayIdsLength = serviceWayIds(
         must(reloaded.services.find((sv) => sv.id === svc)),
@@ -143,8 +142,8 @@ describe('one-way couplets: a line whose two directions run different streets', 
     // The whole point of the sim change: the cycle is the two directions added
     // together, and this couplet's return is genuinely longer than its outward.
     const ps = must(
-      serviceStats(store.getState().system.ways, store.getState().system.stations, [], coupled),
-    ).patterns[0];
+      serviceStats(store.getState().system.ways, store.getState().system.stops, [], coupled),
+    ).path;
     roundTripSumDiffMs = Math.abs(
       ps.roundTripMs - (ps.timetables.outbound.oneWayMs + ps.timetables.inbound.oneWayMs),
     );
@@ -160,15 +159,15 @@ describe('one-way couplets: a line whose two directions run different streets', 
 
     // Adoption would replace the whole path with one routed line, silently
     // discarding the direction it was drawn with.
-    adoptRefused = store.getState().adoptExistingInfrastructure(svc) === 0;
+    adoptRefused = store.commands.routing.adoptExistingInfrastructure(svc) === 0;
 
     // Trimming cuts BOTH directions — the return's matching point is found on
     // its own street rather than assumed to be the same leg.
     const outBefore = pathLengthMeters(
       patternRunPath(store.getState().system.ways, cp, 'outbound'),
     );
-    store.getState().trimPatternTo(svc, cp.id, 'up', 0.5, 'end');
-    trimmedCp = must(store.getState().system.services.find((sv) => sv.id === svc)).patterns[0];
+    store.commands.services.trimPatternTo(svc, cp.id, 'up', 0.5, 'end');
+    trimmedCp = must(store.getState().system.services.find((sv) => sv.id === svc)).path;
     trimmedHasSplit = patternHasSplit(trimmedCp);
     trimmedShorterThanBefore =
       pathLengthMeters(patternRunPath(store.getState().system.ways, trimmedCp, 'outbound')) <
@@ -185,9 +184,9 @@ describe('one-way couplets: a line whose two directions run different streets', 
         { wayId: faraway, fromPoint: 0, toPoint: 1, fromCoord: [-114.5, 35.5] as LngLat },
       ];
       const sectionsOf = () =>
-        must(store.getState().system.services.find((sv) => sv.id === svc)).patterns[0].sections;
+        must(store.getState().system.services.find((sv) => sv.id === svc)).path.sections;
       sectionsBeforeFarAwayAttempt = sectionsOf();
-      farAwayRefused = !store.getState().attachReturnPath(svc, trimmedCp.id, spansFarAway);
+      farAwayRefused = !store.commands.routing.attachReturnPath(svc, trimmedCp.id, spansFarAway);
       sectionsAfterFarAwayAttempt = sectionsOf();
     }
 
@@ -198,30 +197,30 @@ describe('one-way couplets: a line whose two directions run different streets', 
       const beforeCount = store.getState().system.services.length;
       // 0.25, not 0.5: the trim above already cut `up` back to [0, 0.5], so 0.5
       // is now this line's terminus and cutting there is correctly refused.
-      const spawnedId = store.getState().splitServiceAt(svc, trimmedCp.id, 'up', 0.25);
+      const spawnedId = store.commands.services.splitServiceAt(svc, trimmedCp.id, 'up', 0.25);
       const after = store.getState().system;
       cutProducesSecond = !!spawnedId;
       cutAddsExactlyOne = after.services.length === beforeCount + 1;
       const halves = after.services.filter((sv) => sv.id === svc || sv.id === spawnedId);
       halvesCount = halves.length;
-      halvesAllCouplets = halves.every((sv) => patternHasSplit(sv.patterns[0]));
+      halvesAllCouplets = halves.every((sv) => patternHasSplit(sv.path));
       halvesRunOutwardOnUp = halves.every((sv) =>
-        patternRunLegs(sv.patterns[0], 'outbound')
+        patternRunLegs(sv.path, 'outbound')
           .map((r) => r.leg.wayId)
           .includes('up'),
       );
       halvesHaveOwnReturn = halves.every((sv) => {
-        const back = patternRunLegs(sv.patterns[0], 'inbound').map((r) => r.leg.wayId);
+        const back = patternRunLegs(sv.path, 'inbound').map((r) => r.leg.wayId);
         return back.length > 0 && !back.includes('up');
       });
       noneHalfBroken = !validateSystem(after).some((i) => i.id.startsWith('broken-pattern-'));
       // Put the spawned half back so the checks below still see one line.
-      store.getState().deleteService(must(spawnedId));
+      store.commands.services.deleteService(must(spawnedId));
     }
 
     // And it can be undone.
-    store.getState().makePatternTwoWay(svc, trimmedCp.id);
-    flat = must(store.getState().system.services.find((sv) => sv.id === svc)).patterns[0];
+    store.commands.services.makePatternTwoWay(svc, trimmedCp.id);
+    flat = must(store.getState().system.services.find((sv) => sv.id === svc)).path;
     flatNotSplit = !patternHasSplit(flat);
     flatKeepsUp = patternRunLegs(flat, 'outbound')
       .map((r) => r.leg.wayId)
@@ -363,14 +362,14 @@ describe('deleting a stretch of road from under a line that runs its whole lengt
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftMode('bus');
-    const road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, [-115.3, 36.1]);
-    store.getState().addWayPoint(road, [-115.1, 36.1]);
-    store.getState().finishWay();
+    store.commands.tools.setDraftMode('bus');
+    const road = must(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(road, [-115.3, 36.1]);
+    store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     svcId = store.getState().system.services[0].id;
 
-    affected = store.getState().deleteWayStretch(road, 0.4, 0.6);
+    affected = store.commands.network.deleteWayStretch(road, 0.4, 0.6);
     after = store.getState().system;
   });
 
@@ -383,14 +382,14 @@ describe('deleting a stretch of road from under a line that runs its whole lengt
   });
 
   it('the line survives as two pieces rather than losing half of itself', () => {
-    expect(after.services.find((sv) => sv.id === svcId)?.patterns).toHaveLength(2);
+    expect(after.lines.find((line) => line.serviceIds.includes(svcId))?.serviceIds).toHaveLength(2);
   });
 
   it('no surviving piece names a way that was deleted', () => {
     expect(
-      after.services
-        .flatMap((sv) => sv.patterns)
-        .every((p) => patternLegs(p).every((l) => after.ways.some((w) => w.id === l.wayId))),
+      after.services.every((service) =>
+        patternLegs(service.path).every((leg) => after.ways.some((way) => way.id === leg.wayId)),
+      ),
     ).toBe(true);
   });
 
@@ -408,11 +407,11 @@ describe('a stretch spanning the whole way removes it entirely', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, [-115.3, 36.1]);
-    store.getState().addWayPoint(road, [-115.1, 36.1]);
-    store.getState().finishWay();
-    store.getState().deleteWayStretch(road, 0, 1);
+    road = must(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(road, [-115.3, 36.1]);
+    store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    store.commands.network.deleteWayStretch(road, 0, 1);
   });
 
   it('a stretch spanning the whole way removes it entirely', () => {
@@ -430,17 +429,17 @@ describe('a demolished OSM-imported way keeps its provenance', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    const road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, [-115.3, 36.1]);
-    store.getState().addWayPoint(road, [-115.1, 36.1]);
-    store.getState().finishWay();
-    store.getState().setSystem({
+    const road = must(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(road, [-115.3, 36.1]);
+    store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    store.commands.document.setSystem({
       ...store.getState().system,
       ways: store
         .getState()
         .system.ways.map((w) => (w.id === road ? { ...w, source: 'osm:1' } : w)),
     });
-    store.getState().deleteWayStretch(road, 0.4, 0.6);
+    store.commands.network.deleteWayStretch(road, 0.4, 0.6);
     survivors = store.getState().system.ways;
   });
 

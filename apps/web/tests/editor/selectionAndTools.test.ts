@@ -4,6 +4,7 @@ import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
 import type { SelectionAction } from '@transitmapper/core/model/selectionActions';
 import { createEditorStore } from '../../src/editor/store';
 import { createSelectionActions } from '../../src/editor/actions';
+import { required } from '../support/required.test';
 
 type Store = ReturnType<typeof createEditorStore>;
 
@@ -17,17 +18,17 @@ describe('multi-way group-drag: nudging 2+ selected ways in one batch reanchors 
 
   beforeEach(() => {
     store = createEditorStore();
-    wayA = store.getState().beginWay('lightRail', 'straight'); // E-W
-    store.getState().addWayPoint(wayA, [-115.2, 36.1]);
-    store.getState().addWayPoint(wayA, [-115.1, 36.1]);
-    store.getState().finishWay();
-    wayB = store.getState().beginWay('lightRail', 'straight'); // N-S: shaped
-    store.getState().addWayPoint(wayB, [-115.3, 36.3]); // differently than wayA so a
-    store.getState().addWayPoint(wayB, [-115.3, 36.0]); // wrong-way reanchor is obvious.
-    store.getState().finishWay();
-    stOnA = store.getState().addStation([-115.15, 36.1], { wayId: wayA, t: 0.5 });
-    store.getState().toggleMultiSelect({ kind: 'way', id: wayA });
-    store.getState().toggleMultiSelect({ kind: 'way', id: wayB });
+    wayA = required(store.commands.ways.beginWay('lightRail', 'straight')); // E-W
+    store.commands.ways.addWayPoint(wayA, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(wayA, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    wayB = required(store.commands.ways.beginWay('lightRail', 'straight')); // N-S: shaped
+    store.commands.ways.addWayPoint(wayB, [-115.3, 36.3]); // differently than wayA so a
+    store.commands.ways.addWayPoint(wayB, [-115.3, 36.0]); // wrong-way reanchor is obvious.
+    store.commands.ways.finishWay();
+    stOnA = required(store.commands.stops.addStop([-115.15, 36.1], { wayId: wayA, t: 0.5 }));
+    store.commands.selection.toggleMultiSelect({ kind: 'way', id: wayA });
+    store.commands.selection.toggleMultiSelect({ kind: 'way', id: wayB });
   });
 
   it('both ways are in the group', () => {
@@ -39,7 +40,7 @@ describe('multi-way group-drag: nudging 2+ selected ways in one batch reanchors 
 
     beforeEach(() => {
       before = store.getState().system;
-      store.getState().nudgeMultiSelection(0.02, -0.03);
+      store.commands.selection.nudgeMultiSelection(0.02, -0.03);
     });
 
     it('wayA moved by the nudge delta', () => {
@@ -59,7 +60,7 @@ describe('multi-way group-drag: nudging 2+ selected ways in one batch reanchors 
     it("a station anchored to one way in a multi-way batch follows THAT way's new path", () => {
       const s = store.getState().system;
       const expectedOnA = pointAtT(resolveWayPath(must(s.ways.find((w) => w.id === wayA))), 0.5);
-      const actual = must(s.stations.find((st) => st.id === stOnA)).coord;
+      const actual = must(s.stops.find((st) => st.id === stOnA)).coord;
       expect(Math.abs(actual[0] - expectedOnA[0])).toBeLessThan(1e-9);
       expect(Math.abs(actual[1] - expectedOnA[1])).toBeLessThan(1e-9);
     });
@@ -67,7 +68,7 @@ describe('multi-way group-drag: nudging 2+ selected ways in one batch reanchors 
     it("…not the other selected way's path (they're shaped differently enough to tell apart)", () => {
       const s = store.getState().system;
       const wrongOnB = pointAtT(resolveWayPath(must(s.ways.find((w) => w.id === wayB))), 0.5);
-      const actual = must(s.stations.find((st) => st.id === stOnA)).coord;
+      const actual = must(s.stops.find((st) => st.id === stOnA)).coord;
       expect(
         Math.abs(actual[0] - wrongOnB[0]) > 1e-6 || Math.abs(actual[1] - wrongOnB[1]) > 1e-6,
       ).toBe(true);
@@ -80,37 +81,37 @@ describe("extending a way's endpoint must not move stations anchored earlier on 
 
   beforeEach(() => {
     store = createEditorStore();
-    w = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(w, [-115.2, 36.1]);
-    store.getState().addWayPoint(w, [-115.1, 36.1]);
-    store.getState().finishWay();
-    midStation = store.getState().addStation([-115.15, 36.1], { wayId: w, t: 0.5 });
-    before = must(store.getState().system.stations.find((s) => s.id === midStation)).coord;
+    w = required(store.commands.ways.beginWay('lightRail', 'straight'));
+    store.commands.ways.addWayPoint(w, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(w, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    midStation = required(store.commands.stops.addStop([-115.15, 36.1], { wayId: w, t: 0.5 }));
+    before = must(store.getState().system.stops.find((s) => s.id === midStation)).coord;
   });
 
   describe('extending the far endpoint once', () => {
     beforeEach(() => {
-      store.getState().addWayPoint(w, [-115.0, 36.1]);
+      store.commands.ways.addWayPoint(w, [-115.0, 36.1]);
     });
 
     it("extending a way's endpoint does not move a station anchored earlier on the way", () => {
-      const after = must(store.getState().system.stations.find((s) => s.id === midStation));
+      const after = must(store.getState().system.stops.find((s) => s.id === midStation));
       expect(Math.abs(after.coord[0] - before[0])).toBeLessThan(1e-9);
       expect(Math.abs(after.coord[1] - before[1])).toBeLessThan(1e-9);
     });
 
     it("extending a way's endpoint updates the station's stored t, not just its coord", () => {
-      const after = must(store.getState().system.stations.find((s) => s.id === midStation));
+      const after = must(store.getState().system.stops.find((s) => s.id === midStation));
       expect(must(after.anchors.find((a) => a.wayId === w)).t).toBeLessThan(0.5);
     });
 
     describe('extending again', () => {
       beforeEach(() => {
-        store.getState().addWayPoint(w, [-114.9, 36.1]);
+        store.commands.ways.addWayPoint(w, [-114.9, 36.1]);
       });
 
       it("a second endpoint extension still preserves the station's absolute position", () => {
-        const after = must(store.getState().system.stations.find((s) => s.id === midStation)).coord;
+        const after = must(store.getState().system.stops.find((s) => s.id === midStation)).coord;
         expect(Math.abs(after[0] - before[0])).toBeLessThan(1e-9);
         expect(Math.abs(after[1] - before[1])).toBeLessThan(1e-9);
       });
@@ -123,18 +124,18 @@ describe('a duplicate street offers its own way out', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftServiceEnabled(false);
-    road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, [-115.2, 36.1]);
-    store.getState().addWayPoint(road, [-115.1, 36.1]);
-    store.getState().finishWay();
+    store.commands.tools.setDraftServiceEnabled(false);
+    road = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(road, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     // A second street laid alongside it, carrying a line — what a stroke drawn
     // just outside snapping range leaves behind.
-    store.getState().setDraftServiceEnabled(true);
-    const beside = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(beside, [-115.19, 36.10028]);
-    store.getState().addWayPoint(beside, [-115.11, 36.10028]);
-    store.getState().finishWay();
+    store.commands.tools.setDraftServiceEnabled(true);
+    const beside = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(beside, [-115.19, 36.10028]);
+    store.commands.ways.addWayPoint(beside, [-115.11, 36.10028]);
+    store.commands.ways.finishWay();
   });
 
   it('the duplicate survived drawing', () => {
@@ -173,14 +174,14 @@ describe('picking up the Lines tool drops an infrastructure selection', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    const w = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(w, [-115.2, 36.1]);
-    store.getState().addWayPoint(w, [-115.1, 36.1]);
-    store.getState().finishWay();
-    const svc = store.getState().system.services[0].id;
-    store.getState().setTool('select');
-    store.getState().toggleMultiSelect({ kind: 'way', id: w });
-    store.getState().toggleMultiSelect({ kind: 'service', id: svc });
+    const w = required(store.commands.ways.beginWay('lightRail', 'straight'));
+    store.commands.ways.addWayPoint(w, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(w, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    const line = store.getState().system.lines[0].id;
+    store.commands.tools.setTool('select');
+    store.commands.selection.toggleMultiSelect({ kind: 'way', id: w });
+    store.commands.selection.toggleMultiSelect({ kind: 'line', id: line });
   });
 
   it('the group holds both kinds first', () => {
@@ -189,12 +190,12 @@ describe('picking up the Lines tool drops an infrastructure selection', () => {
 
   describe('switching to the Lines tool', () => {
     beforeEach(() => {
-      store.getState().setTool('lines');
+      store.commands.tools.setTool('lines');
     });
 
     it('the Lines tool keeps only the lines, so its marquee cannot build a group nothing applies to', () => {
       expect(store.getState().multiSelection).toHaveLength(1);
-      expect(store.getState().multiSelection[0].kind).toBe('service');
+      expect(store.getState().multiSelection[0].kind).toBe('line');
     });
   });
 });
@@ -204,10 +205,10 @@ describe('connect at crossing: two streets drawn across each other with nothing 
 
   beforeEach(() => {
     store = createEditorStore();
-    ns = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(ns, [-115.2, 36.0]);
-    store.getState().addWayPoint(ns, [-115.2, 36.2]);
-    store.getState().finishWay();
+    ns = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(ns, [-115.2, 36.0]);
+    store.commands.ways.addWayPoint(ns, [-115.2, 36.2]);
+    store.commands.ways.finishWay();
   });
 
   it('one selected way alone offers no merge', () => {

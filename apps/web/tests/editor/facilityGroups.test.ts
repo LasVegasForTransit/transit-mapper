@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { LngLat } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
+import { required } from '../support/required.test';
 
 /** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
  *  a silent `undefined`/`null` into a clear failure at the point of use
@@ -25,7 +26,7 @@ describe('Facility complexes: draw-a-boundary-first editor (task 22)', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    groupId = store.getState().createFacilityComplex(drawnRing);
+    groupId = required(store.commands.groups.createFacilityComplex(drawnRing));
   });
 
   it('createFacilityComplex creates a footprint-having group and selects it', () => {
@@ -47,76 +48,80 @@ describe('Facility complexes: draw-a-boundary-first editor (task 22)', () => {
   });
 
   it('moveGroupFootprintPoint edits one corner', () => {
-    store.getState().moveGroupFootprintPoint(groupId, 0, [-115.1801, 36.1301]);
+    store.commands.groups.moveGroupFootprintPoint(groupId, 0, [-115.1801, 36.1301]);
     expect(mustFind(store.getState().system.groups[0].footprint, 'group footprint')[0][0]).toBe(
       -115.1801,
     );
   });
 
   it('startPlacingFacility arms placement and switches to the facility tool', () => {
-    store.getState().startPlacingFacility(groupId);
+    store.commands.groups.startPlacingFacility(groupId);
     expect(store.getState().placingFacilityForGroupId).toBe(groupId);
     expect(store.getState().tool).toBe('facility');
   });
 
   it('placeFacilityInGroup creates the facility', () => {
-    store.getState().startPlacingFacility(groupId);
-    const facId = store.getState().placeFacilityInGroup(groupId, 'busBay', [-115.179, 36.129]);
+    store.commands.groups.startPlacingFacility(groupId);
+    const facId = required(
+      store.commands.groups.placeFacilityInGroup(groupId, 'busBay', [-115.179, 36.129]),
+    );
     expect(
       store.getState().system.facilities.some((f) => f.id === facId && f.typeId === 'busBay'),
     ).toBe(true);
   });
 
   it('placeFacilityInGroup joins it to the complex', () => {
-    store.getState().startPlacingFacility(groupId);
-    const facId = store.getState().placeFacilityInGroup(groupId, 'busBay', [-115.179, 36.129]);
+    store.commands.groups.startPlacingFacility(groupId);
+    const facId = required(
+      store.commands.groups.placeFacilityInGroup(groupId, 'busBay', [-115.179, 36.129]),
+    );
     expect(store.getState().system.groups[0].memberIds).toContain(facId);
   });
 
   it('placeFacilityInGroup disarms placement and returns to select', () => {
-    store.getState().startPlacingFacility(groupId);
-    store.getState().placeFacilityInGroup(groupId, 'busBay', [-115.179, 36.129]);
+    store.commands.groups.startPlacingFacility(groupId);
+    store.commands.groups.placeFacilityInGroup(groupId, 'busBay', [-115.179, 36.129]);
     expect(store.getState().placingFacilityForGroupId).toBeNull();
     expect(store.getState().tool).toBe('select');
   });
 
   it('placeFacilityInGroup keeps the complex selected (not the new facility)', () => {
-    store.getState().startPlacingFacility(groupId);
-    store.getState().placeFacilityInGroup(groupId, 'busBay', [-115.179, 36.129]);
+    store.commands.groups.startPlacingFacility(groupId);
+    store.commands.groups.placeFacilityInGroup(groupId, 'busBay', [-115.179, 36.129]);
     expect(store.getState().selection?.kind).toBe('group');
     expect(store.getState().selection?.id).toBe(groupId);
   });
 
   it('startPickingMember arms picking', () => {
-    store.getState().startPickingMember(groupId);
+    store.commands.groups.startPickingMember(groupId);
     expect(store.getState().pickingMemberForGroupId).toBe(groupId);
   });
 
   it('picking flow (addGroupMember + cancel) adds the existing station and disarms', () => {
-    const looseStation = store.getState().addStation([-115.181, 36.131]);
-    store.getState().startPickingMember(groupId);
-    store.getState().addGroupMember(groupId, looseStation);
-    store.getState().cancelPickingMember();
+    const looseStation = required(store.commands.stops.addStop([-115.181, 36.131]));
+    store.commands.groups.startPickingMember(groupId);
+    store.commands.groups.addGroupMember(groupId, looseStation);
+    store.commands.groups.cancelPickingMember();
     expect(store.getState().system.groups[0].memberIds).toContain(looseStation);
     expect(store.getState().pickingMemberForGroupId).toBeNull();
   });
 
   it('deleteGroupFootprint clears the footprint but keeps members', () => {
-    store.getState().startPlacingFacility(groupId);
-    store.getState().placeFacilityInGroup(groupId, 'busBay', [-115.179, 36.129]);
-    const looseStation = store.getState().addStation([-115.181, 36.131]);
-    store.getState().startPickingMember(groupId);
-    store.getState().addGroupMember(groupId, looseStation);
-    store.getState().cancelPickingMember();
+    store.commands.groups.startPlacingFacility(groupId);
+    store.commands.groups.placeFacilityInGroup(groupId, 'busBay', [-115.179, 36.129]);
+    const looseStation = required(store.commands.stops.addStop([-115.181, 36.131]));
+    store.commands.groups.startPickingMember(groupId);
+    store.commands.groups.addGroupMember(groupId, looseStation);
+    store.commands.groups.cancelPickingMember();
 
-    store.getState().deleteGroupFootprint(groupId);
+    store.commands.groups.deleteGroupFootprint(groupId);
     expect(store.getState().system.groups[0].footprint).toBeUndefined();
     expect(store.getState().system.groups[0].memberIds.length).toBe(2);
   });
 
   it('addGroupFootprint re-adds a default footprint', () => {
-    store.getState().deleteGroupFootprint(groupId);
-    store.getState().addGroupFootprint(groupId);
+    store.commands.groups.deleteGroupFootprint(groupId);
+    store.commands.groups.addGroupFootprint(groupId);
     expect(store.getState().system.groups[0].footprint?.length).toBe(4);
   });
 });
@@ -124,9 +129,9 @@ describe('Facility complexes: draw-a-boundary-first editor (task 22)', () => {
 describe('Plain (footprint-less) groups still work — a facility complex is an opt-in specialization, not a required shape for every group', () => {
   it('a plain group has no footprint', () => {
     const store = createEditorStore();
-    const a = store.getState().addStation([-115.2, 36.1]);
-    const b = store.getState().addStation([-115.2001, 36.1001]);
-    store.getState().createGroup([a, b], 'Transfer complex');
+    const a = required(store.commands.stops.addStop([-115.2, 36.1]));
+    const b = required(store.commands.stops.addStop([-115.2001, 36.1001]));
+    store.commands.groups.createGroup([a, b], 'Transfer complex');
     expect(store.getState().system.groups[0].footprint).toBeUndefined();
   });
 });

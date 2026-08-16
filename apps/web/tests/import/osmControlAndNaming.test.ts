@@ -338,8 +338,8 @@ describe('OSM import gives imported streets their real names', () => {
 
   it("importWays appends the import's street identities", () => {
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
-    store.getState().importWays(osmElementsToNetwork(named));
+    store.commands.document.setSystem(createEmptySystem());
+    store.commands.imports.importWays(osmElementsToNetwork(named));
     expect(store.getState().system.namedWays).toHaveLength(1);
   });
 });

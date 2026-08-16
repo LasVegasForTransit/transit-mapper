@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createEditorStore } from '../../src/editor/store';
-import { buildFeatures } from '../../src/map/layers';
+import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import {
   MODE_ORDER,
   MODES,
@@ -22,6 +23,17 @@ import {
 import { wayLaneGeometry } from '@transitmapper/core/geometry/streets';
 import { patternLanePath } from '@transitmapper/core/geometry/vehicleLane';
 import type { LngLat, Way } from '@transitmapper/core/model/system';
+import { required } from '../support/required.test';
+
+// Lane detail is no longer an explicit `ViewOptions` flag — it is derived
+// from the presentation's screen-space width. A near camera over the drawn
+// road (running -115.2,36.1 to -115.1,36.1) turns lane detail on.
+const presentationAt = (center: LngLat, zoom: number) =>
+  renderPresentationForViewport({ center, zoom, width: 1_440, height: 900 });
+const FAR_PRESENTATION = presentationAt([0, 0], 0);
+const NEAR_PRESENTATION = presentationAt([-115.15, 36.1], 19);
+// Far from the drawn road entirely, for viewport-scoping checks.
+const OFFSCREEN_PRESENTATION = presentationAt([-114.45, 36.55], 19);
 
 describe('R2: per-lane street geometry (geometry/streets.ts)', () => {
   const road: Way = {
@@ -341,20 +353,24 @@ describe('R2: lane-detail rendering emission (LOD + viewport scoping)', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    roadId = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(roadId, [-115.2, 36.1]);
-    store.getState().addWayPoint(roadId, [-115.1, 36.1]);
-    store.getState().finishWay();
+    roadId = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(roadId, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(roadId, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
   });
 
   const filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(['road']) };
 
-  function nearFeatures(bounds?: [LngLat, LngLat]) {
+  // `laneDetail` and `bounds` used to be explicit ViewOptions flags; lane
+  // detail is now purely a function of the presentation's screen-space width,
+  // and viewport scoping falls out of the presentation's own camera bounds —
+  // so "near" is just a street-scale camera over the drawn road, and there is
+  // no separate bounds override.
+  function nearFeatures() {
     return buildFeatures(store.getState().system, null, [], {
       viewMode: 'infrastructure',
       ...filters,
-      laneDetail: true,
-      bounds,
+      presentation: NEAR_PRESENTATION,
     });
   }
 
@@ -362,6 +378,7 @@ describe('R2: lane-detail rendering emission (LOD + viewport scoping)', () => {
     const infraFar = buildFeatures(store.getState().system, null, [], {
       viewMode: 'infrastructure',
       ...filters,
+      presentation: FAR_PRESENTATION,
     });
     expect(infraFar.lanes.features.length).toBe(0);
     expect(infraFar.ways.features.length).toBeGreaterThan(0);
@@ -389,34 +406,41 @@ describe('R2: lane-detail rendering emission (LOD + viewport scoping)', () => {
     expect(nearFeatures().laneArrows.features.length).toBeGreaterThan(0);
   });
 
+  // Property renamed from `w14` to `corridorW14` (see buildFeatures.ts:
+  // corridorW14 keeps a lane surface's LOD fade aligned with the corridor
+  // silhouette it replaces).
   it('lane features carry a metric z14 pixel width', () => {
     expect(
       nearFeatures().lanes.features.every(
-        (f) => typeof f.properties?.w14 === 'number' && f.properties.w14 > 0,
+        (f) => typeof f.properties?.corridorW14 === 'number' && f.properties.corridorW14 > 0,
       ),
     ).toBe(true);
   });
 
-  it('viewport scoping: offscreen ways keep the cheap fan', () => {
-    const offscreen = nearFeatures([
-      [-114.5, 36.5],
-      [-114.4, 36.6],
-    ]);
+  // Viewport scoping now excludes a fully offscreen way from every tier, not
+  // just lane detail — there is no more "cheap fan" fallback outside the
+  // viewport (see buildFeatures.ts candidate-way viewport indexing).
+  it('viewport scoping: offscreen ways generate no visual tier', () => {
+    const offscreen = buildFeatures(store.getState().system, null, [], {
+      viewMode: 'infrastructure',
+      ...filters,
+      presentation: OFFSCREEN_PRESENTATION,
+    });
     expect(offscreen.lanes.features.length).toBe(0);
-    expect(offscreen.ways.features.length).toBeGreaterThan(0);
+    expect(offscreen.ways.features.length).toBe(0);
   });
 
   it('network view never lane-renders', () => {
     const net = buildFeatures(store.getState().system, null, [], {
       viewMode: 'network',
       ...filters,
-      laneDetail: true,
+      presentation: NEAR_PRESENTATION,
     });
     expect(net.lanes.features.length).toBe(0);
   });
 
   it('underground ways keep the dashed fan (no asphalt in a tunnel)', () => {
-    store.getState().setWayGrade(roadId, 'underground');
+    store.commands.ways.setWayGrade(roadId, 'underground');
     expect(nearFeatures().lanes.features.length).toBe(0);
   });
 });
@@ -429,31 +453,31 @@ describe('R2: draft preset shapes newly drawn ways', () => {
   });
 
   it("armed draft preset shapes the new way's profile", () => {
-    store.getState().setDraftWayType('road');
-    store.getState().setDraftPreset('roadBoulevard');
-    const r = store.getState().beginWay();
-    store.getState().addWayPoint(r, [-115.2, 36.1]);
-    store.getState().addWayPoint(r, [-115.1, 36.1]);
-    store.getState().finishWay();
+    store.commands.tools.setDraftWayType('road');
+    store.commands.tools.setDraftPreset('roadBoulevard');
+    const r = required(store.commands.ways.beginWay());
+    store.commands.ways.addWayPoint(r, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     const way = store.getState().system.ways[0];
     expect(way.profile.lanes.some((l) => l.kindId === 'median')).toBe(true);
   });
 
   it('armed draft preset sets the class too', () => {
-    store.getState().setDraftWayType('road');
-    store.getState().setDraftPreset('roadBoulevard');
-    const r = store.getState().beginWay();
-    store.getState().addWayPoint(r, [-115.2, 36.1]);
-    store.getState().addWayPoint(r, [-115.1, 36.1]);
-    store.getState().finishWay();
+    store.commands.tools.setDraftWayType('road');
+    store.commands.tools.setDraftPreset('roadBoulevard');
+    const r = required(store.commands.ways.beginWay());
+    store.commands.ways.addWayPoint(r, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     const way = store.getState().system.ways[0];
     expect(way.classId).toBe('arterial');
   });
 
   it('changing way type clears the armed preset', () => {
-    store.getState().setDraftWayType('road');
-    store.getState().setDraftPreset('roadBoulevard');
-    store.getState().setDraftWayType('heavyRail');
+    store.commands.tools.setDraftWayType('road');
+    store.commands.tools.setDraftPreset('roadBoulevard');
+    store.commands.tools.setDraftWayType('heavyRail');
     expect(store.getState().draftPresetId).toBeNull();
   });
 });

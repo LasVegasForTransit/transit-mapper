@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { forkSystem, parseSystem } from '@transitmapper/core/model/serialize';
 import { patternWayIds, primaryAnchor } from '@transitmapper/core/model/geo';
-import { aPattern, aRoad, aService, aStation, aSystem } from '@transitmapper/core/testing/fixtures';
+import { aPattern, aRoad, aService, aStop, aSystem } from '@transitmapper/core/testing/fixtures';
 import type { LngLat } from '@transitmapper/core/model/system';
 
 describe('fork', () => {
@@ -17,10 +17,10 @@ describe('fork', () => {
   });
 });
 
-describe('parse: v3 round-trips ways/services/station anchor', () => {
+describe('parse: v3 round-trips ways/services/stop anchor', () => {
   // parseSystem is pure and these assertions only concern its output shape,
   // so the input document is built directly via the fixture builders —
-  // one way carrying two services, plus a station anchored to it — rather
+  // one way carrying two services, plus a stop anchored to it — rather
   // than driving beginWay/addServiceToWay through the store.
   const wayId = 'w1';
   const points: LngLat[] = [
@@ -34,7 +34,7 @@ describe('parse: v3 round-trips ways/services/station anchor', () => {
       aService('sv1', [aPattern('p1', [way], [wayId])]),
       aService('sv2', [aPattern('p2', [way], [wayId])]),
     ],
-    stations: [aStation('st1', [-115.15, 36.12], { wayId, t: 0.4 })],
+    stops: [aStop('st1', [-115.15, 36.12], { wayId, t: 0.4 })],
   });
   const round = parseSystem(JSON.parse(JSON.stringify(before)));
 
@@ -46,8 +46,8 @@ describe('parse: v3 round-trips ways/services/station anchor', () => {
     expect(round.services.length).toBe(2);
   });
 
-  it('parse round-trips station anchor (wayId)', () => {
-    expect(primaryAnchor(round.stations[0])?.wayId).toBe(wayId);
+  it('parse round-trips stop anchor (wayId)', () => {
+    expect(primaryAnchor(round.stops[0])?.wayId).toBe(wayId);
   });
 });
 
@@ -60,7 +60,7 @@ describe('migration: v2 corridors infer heavyRail/lightRail/monorail/road from t
     viewport: { center: [-115.17, 36.13], zoom: 10 },
     createdAt: 1,
     updatedAt: 1,
-    stations: [],
+    stops: [],
     corridors: [
       {
         id: 'c-subway',
@@ -140,7 +140,7 @@ describe('parse: legacy v1 (lines) migrates to a typed way + service', () => {
     viewport: { center: [-115.17, 36.13], zoom: 10 },
     createdAt: 1,
     updatedAt: 1,
-    stations: [{ id: 's1', coord: [-115.15, 36.12], anchor: { lineId: 'l1', t: 0.5 } }],
+    stops: [{ id: 's1', coord: [-115.15, 36.12], anchor: { lineId: 'l1', t: 0.5 } }],
     lines: [
       {
         id: 'l1',
@@ -169,15 +169,16 @@ describe('parse: legacy v1 (lines) migrates to a typed way + service', () => {
 
   it('legacy line → one service on that way', () => {
     expect(m.services.length).toBe(1);
-    expect(patternWayIds(m.services[0].patterns[0])[0]).toBe('l1');
+    expect(patternWayIds(m.services[0].path)[0]).toBe('l1');
   });
 
+  // color/name moved from Service to the containing Line in the restructure.
   it('legacy service keeps color/name', () => {
-    expect(m.services[0].color).toBe('#e4572e');
-    expect(m.services[0].name).toBe('Old Line');
+    expect(m.lines[0].color).toBe('#e4572e');
+    expect(m.lines[0].name).toBe('Old Line');
   });
 
-  it('legacy station anchor migrated lineId → wayId', () => {
-    expect(primaryAnchor(m.stations[0])?.wayId).toBe('l1');
+  it('legacy stop anchor migrated lineId → wayId', () => {
+    expect(primaryAnchor(m.stops[0])?.wayId).toBe('l1');
   });
 });

@@ -9,6 +9,7 @@ import {
   patternWayIds,
 } from '@transitmapper/core/model/geo';
 import type { LngLat, Service, TransitSystem, Way } from '@transitmapper/core/model/system';
+import { required } from '../support/required.test';
 
 /** Narrows an optional lookup result without a non-null assertion: every call
  * site here knows from the fixture it just built that the value exists. */
@@ -116,24 +117,22 @@ describe('reconcileImportedServices', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftMode('bus');
+    store.commands.tools.setDraftMode('bus');
 
     // Both lines are laid as DELIBERATELY separate infrastructure, which is the
     // state a GTFS import arrives in — importGtfs mints one way per shape and
     // never goes through finishWay, so nothing conflates them on the way in.
     // Drawing them by hand would now share them at commit, which is the whole
     // point of this test: reconcile is what fixes the mess an import leaves.
-    store.getState().setDraftSeparate(true);
+    store.commands.tools.setDraftSeparate(true);
 
     // Trunk: a long solo-way pattern, as a freshly-imported GTFS shape would be.
-    trunk = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(trunk, offsetMeters(origin, 0, 0));
-    store.getState().addWayPoint(trunk, offsetMeters(origin, 400, 0));
-    store.getState().finishWay();
+    trunk = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(trunk, offsetMeters(origin, 0, 0));
+    store.commands.ways.addWayPoint(trunk, offsetMeters(origin, 400, 0));
+    store.commands.ways.finishWay();
     trunkSvcId = must(
-      store
-        .getState()
-        .system.services.find((sv) => sv.patterns.some((p) => patternWayIds(p).includes(trunk))),
+      store.getState().system.services.find((sv) => patternWayIds(sv.path).includes(trunk)),
       'trunk service',
     ).id;
 
@@ -141,15 +140,13 @@ describe('reconcileImportedServices', () => {
     // (offset 3m, spanning only the middle 200m) — diverges at both ends by
     // simply not covering the trunk's outer stretches, the exact "shares a
     // trunk, doesn't share termini" shape this feature targets.
-    store.getState().setDraftSeparate(true);
-    shuttle = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(shuttle, offsetMeters(origin, 100, 3));
-    store.getState().addWayPoint(shuttle, offsetMeters(origin, 300, 3));
-    store.getState().finishWay();
+    store.commands.tools.setDraftSeparate(true);
+    shuttle = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(shuttle, offsetMeters(origin, 100, 3));
+    store.commands.ways.addWayPoint(shuttle, offsetMeters(origin, 300, 3));
+    store.commands.ways.finishWay();
     shuttleSvcId = must(
-      store
-        .getState()
-        .system.services.find((sv) => sv.patterns.some((p) => patternWayIds(p).includes(shuttle))),
+      store.getState().system.services.find((sv) => patternWayIds(sv.path).includes(shuttle)),
       'shuttle service',
     ).id;
   });
@@ -161,13 +158,13 @@ describe('reconcileImportedServices', () => {
   });
 
   it('exactly one pattern (the shuttle) needed reconciling', () => {
-    const reconciled = store.getState().reconcileImportedServices([trunkSvcId, shuttleSvcId]);
+    const reconciled = store.commands.imports.reconcileImportedServices([trunkSvcId, shuttleSvcId]);
     expect(reconciled).toBe(1);
   });
 
   it('no whole duplicate alignment was created — at most 2 net new ways from splitting the trunk', () => {
     const waysBefore = store.getState().system.ways.length;
-    store.getState().reconcileImportedServices([trunkSvcId, shuttleSvcId]);
+    store.commands.imports.reconcileImportedServices([trunkSvcId, shuttleSvcId]);
     expect(store.getState().system.ways.length).toBeLessThanOrEqual(waysBefore + 2);
   });
 
@@ -177,7 +174,7 @@ describe('reconcileImportedServices', () => {
     let shuttleAfter: Service;
 
     beforeEach(() => {
-      store.getState().reconcileImportedServices([trunkSvcId, shuttleSvcId]);
+      store.commands.imports.reconcileImportedServices([trunkSvcId, shuttleSvcId]);
       after = store.getState().system;
       trunkAfter = must(
         after.services.find((sv) => sv.id === trunkSvcId),
@@ -196,16 +193,16 @@ describe('reconcileImportedServices', () => {
     // array. The original trunk wayId survives as (at least) the front piece,
     // and the trunk's full route still spans its original ~400m end to end.
     it("the trunk's original way id survives as (part of) its route", () => {
-      expect(patternWayIds(trunkAfter.patterns[0])).toContain(trunk);
+      expect(patternWayIds(trunkAfter.path)).toContain(trunk);
     });
 
     it("the trunk's route is still continuous end-to-end (splitting didn't drop any of it)", () => {
-      const trunkLength = pathLengthMeters(patternPath(after.ways, trunkAfter.patterns[0]));
+      const trunkLength = pathLengthMeters(patternPath(after.ways, trunkAfter.path));
       expect(Math.abs(trunkLength - 400)).toBeLessThan(1);
     });
 
     it('the shuttle no longer rides its own original solo way', () => {
-      expect(patternWayIds(shuttleAfter.patterns[0])).not.toContain(shuttle);
+      expect(patternWayIds(shuttleAfter.path)).not.toContain(shuttle);
     });
 
     it("the shuttle's original solo way was removed, not left as a duplicate", () => {
@@ -220,7 +217,7 @@ describe('reconcileImportedServices', () => {
         );
         return way.points.every((p) => Math.abs(metersFromOrigin(origin, p)[1]) < 1);
       };
-      expect(patternWayIds(shuttleAfter.patterns[0]).every(onTrunkAlignment)).toBe(true);
+      expect(patternWayIds(shuttleAfter.path).every(onTrunkAlignment)).toBe(true);
     });
   });
 });

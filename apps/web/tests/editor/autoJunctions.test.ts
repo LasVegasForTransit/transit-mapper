@@ -5,6 +5,7 @@ import { patternLegs } from '@transitmapper/core/model/geo';
 import { wayCrossings } from '@transitmapper/core/model/validate';
 import { effectiveConnectors } from '@transitmapper/core/geometry/junctions';
 import { parseSystem } from '@transitmapper/core/model/serialize';
+import { required } from '../support/required.test';
 
 /** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
  *  a silent `undefined`/`null` into a clear failure at the point of use
@@ -20,17 +21,17 @@ function mustFind<T>(v: T | null | undefined, what: string): T {
 // plus shape, already resolved into a single junction node.
 function createStoreWithCrossingRoads(): ReturnType<typeof createEditorStore> {
   const store = createEditorStore();
-  const ew = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ew, [-115.2, 36.1]);
-  store.getState().addWayPoint(ew, [-115.1, 36.1]);
-  store.getState().finishWay();
-  const ns = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ns, [-115.15, 36.05]);
-  store.getState().addWayPoint(ns, [-115.15, 36.15]);
-  store.getState().finishWay();
+  const ew = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ew, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(ew, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  const ns = required(store.commands.ways.beginWay('road', 'straight'));
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(ns, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
   // finishWay auto-formed the junction already; an explicit re-run is a
   // no-op.
-  store.getState().formCrossingJunctions(ns);
+  store.commands.network.formCrossingJunctions(ns);
   return store;
 }
 
@@ -65,9 +66,7 @@ describe('store: auto-junctions where ways cross (the SimCity moment)', () => {
 
     it('services still ride their (now split) ways', () => {
       const after = store.getState().system;
-      expect(
-        after.services.every((sv) => sv.patterns.every((p) => patternLegs(p).length === 2)),
-      ).toBe(true);
+      expect(after.services.every((service) => patternLegs(service.path).length === 2)).toBe(true);
     });
   });
 
@@ -75,17 +74,17 @@ describe('store: auto-junctions where ways cross (the SimCity moment)', () => {
   // overpass, never an intersection.
   it('different grades never auto-join (overpass, not intersection)', () => {
     const store = createEditorStore();
-    const surface = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(surface, [-115.2, 36.1]);
-    store.getState().addWayPoint(surface, [-115.1, 36.1]);
-    store.getState().finishWay();
-    store.getState().setDraftGrade('elevated');
-    const freeway = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(freeway, [-115.15, 36.05]);
-    store.getState().addWayPoint(freeway, [-115.15, 36.15]);
-    store.getState().finishWay();
-    store.getState().setDraftGrade('atGrade');
-    store.getState().formCrossingJunctions(freeway);
+    const surface = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(surface, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(surface, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    store.commands.tools.setDraftGrade('elevated');
+    const freeway = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(freeway, [-115.15, 36.05]);
+    store.commands.ways.addWayPoint(freeway, [-115.15, 36.15]);
+    store.commands.ways.finishWay();
+    store.commands.tools.setDraftGrade('atGrade');
+    store.commands.network.formCrossingJunctions(freeway);
     expect(store.getState().system.nodes.length).toBe(0);
     expect(store.getState().system.ways.length).toBe(2);
   });
@@ -97,15 +96,15 @@ describe('store: auto-elevate a guideway crossing a major road', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, [-115.15, 36.05]);
-    store.getState().addWayPoint(road, [-115.15, 36.15]);
-    store.getState().finishWay();
-    store.getState().setWayClassId(road, 'arterial'); // major
-    const rail = store.getState().beginWay('heavyRail', 'straight');
-    store.getState().addWayPoint(rail, [-115.2, 36.1]);
-    store.getState().addWayPoint(rail, [-115.1, 36.1]);
-    store.getState().finishWay();
+    road = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(road, [-115.15, 36.05]);
+    store.commands.ways.addWayPoint(road, [-115.15, 36.15]);
+    store.commands.ways.finishWay();
+    store.commands.ways.setWayClassId(road, 'arterial'); // major
+    const rail = required(store.commands.ways.beginWay('heavyRail', 'straight'));
+    store.commands.ways.addWayPoint(rail, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(rail, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
   });
 
   it('the rail line is auto-split into three pieces', () => {
@@ -153,14 +152,14 @@ describe('store: a guideway crossing a NON-major road forms a level crossing, no
 
   beforeEach(() => {
     store = createEditorStore();
-    const road = store.getState().beginWay('road', 'straight'); // defaults to collector, not major
-    store.getState().addWayPoint(road, [-115.15, 36.05]);
-    store.getState().addWayPoint(road, [-115.15, 36.15]);
-    store.getState().finishWay();
-    const rail = store.getState().beginWay('heavyRail', 'straight');
-    store.getState().addWayPoint(rail, [-115.2, 36.1]);
-    store.getState().addWayPoint(rail, [-115.1, 36.1]);
-    store.getState().finishWay();
+    const road = required(store.commands.ways.beginWay('road', 'straight')); // defaults to collector, not major
+    store.commands.ways.addWayPoint(road, [-115.15, 36.05]);
+    store.commands.ways.addWayPoint(road, [-115.15, 36.15]);
+    store.commands.ways.finishWay();
+    const rail = required(store.commands.ways.beginWay('heavyRail', 'straight'));
+    store.commands.ways.addWayPoint(rail, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(rail, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
   });
 
   it('nothing is elevated over a minor road', () => {
@@ -207,17 +206,17 @@ describe('store: a guideway crossing a NON-major road forms a level crossing, no
 describe('store: road crossing a major road still forms an ordinary junction', () => {
   it('two major roads crossing still form an ordinary junction, not a viaduct', () => {
     const store = createEditorStore();
-    const ew = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(ew, [-115.2, 36.1]);
-    store.getState().addWayPoint(ew, [-115.1, 36.1]);
-    store.getState().finishWay();
-    store.getState().setWayClassId(ew, 'arterial');
-    const ns = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(ns, [-115.15, 36.05]);
-    store.getState().addWayPoint(ns, [-115.15, 36.15]);
-    store.getState().finishWay();
-    store.getState().setWayClassId(ns, 'arterial');
-    store.getState().formCrossingJunctions(ns);
+    const ew = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(ew, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(ew, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    store.commands.ways.setWayClassId(ew, 'arterial');
+    const ns = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(ns, [-115.15, 36.05]);
+    store.commands.ways.addWayPoint(ns, [-115.15, 36.15]);
+    store.commands.ways.finishWay();
+    store.commands.ways.setWayClassId(ns, 'arterial');
+    store.commands.network.formCrossingJunctions(ns);
     const after = store.getState().system;
     expect(after.nodes.length).toBe(1);
     expect(after.ways.length).toBe(4);
@@ -230,20 +229,20 @@ describe('store: a guideway crossing two major roads elevates over both', () => 
 
   beforeEach(() => {
     store = createEditorStore();
-    const roadA = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(roadA, [-115.18, 36.05]);
-    store.getState().addWayPoint(roadA, [-115.18, 36.15]);
-    store.getState().finishWay();
-    store.getState().setWayClassId(roadA, 'arterial');
-    const roadB = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(roadB, [-115.12, 36.05]);
-    store.getState().addWayPoint(roadB, [-115.12, 36.15]);
-    store.getState().finishWay();
-    store.getState().setWayClassId(roadB, 'arterial');
-    const rail = store.getState().beginWay('heavyRail', 'straight');
-    store.getState().addWayPoint(rail, [-115.2, 36.1]);
-    store.getState().addWayPoint(rail, [-115.1, 36.1]);
-    store.getState().finishWay();
+    const roadA = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(roadA, [-115.18, 36.05]);
+    store.commands.ways.addWayPoint(roadA, [-115.18, 36.15]);
+    store.commands.ways.finishWay();
+    store.commands.ways.setWayClassId(roadA, 'arterial');
+    const roadB = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(roadB, [-115.12, 36.05]);
+    store.commands.ways.addWayPoint(roadB, [-115.12, 36.15]);
+    store.commands.ways.finishWay();
+    store.commands.ways.setWayClassId(roadB, 'arterial');
+    const rail = required(store.commands.ways.beginWay('heavyRail', 'straight'));
+    store.commands.ways.addWayPoint(rail, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(rail, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
   });
 
   it('crossing two major roads produces five rail pieces', () => {
@@ -288,43 +287,37 @@ describe('store: junction semantics (control, connectors)', () => {
   });
 
   it('setNodeControl stores the control', () => {
-    store.getState().setNodeControl(nodeId, 'signal');
+    store.commands.network.setNodeControl(nodeId, 'signal');
     expect(store.getState().system.nodes[0].control).toBe('signal');
   });
 
   it('setNodeConnectors stores the lane graph', () => {
-    store
-      .getState()
-      .setNodeConnectors(nodeId, [
-        { from: { wayId: armAId, laneId: armALaneId }, to: { wayId: armBId, laneId: armBLaneId } },
-      ]);
+    store.commands.network.setNodeConnectors(nodeId, [
+      { from: { wayId: armAId, laneId: armALaneId }, to: { wayId: armBId, laneId: armBLaneId } },
+    ]);
     expect(store.getState().system.nodes[0].connectors?.length).toBe(1);
   });
 
   // Deleting a referenced lane prunes its connectors.
   it('removing a lane prunes connectors that referenced it', () => {
-    store
-      .getState()
-      .setNodeConnectors(nodeId, [
-        { from: { wayId: armAId, laneId: armALaneId }, to: { wayId: armBId, laneId: armBLaneId } },
-      ]);
+    store.commands.network.setNodeConnectors(nodeId, [
+      { from: { wayId: armAId, laneId: armALaneId }, to: { wayId: armBId, laneId: armBLaneId } },
+    ]);
     const armA = mustFind(
       store.getState().system.ways.find((w) => w.id === armAId),
       'arm A',
     );
-    store.getState().setWayProfile(armAId, {
+    store.commands.ways.setWayProfile(armAId, {
       lanes: armA.profile.lanes.filter((l) => l.id !== armALaneId),
     });
     expect(store.getState().system.nodes[0].connectors).toBeFalsy();
   });
 
   it('setNodeConnectors(undefined) reverts to heuristic', () => {
-    store
-      .getState()
-      .setNodeConnectors(nodeId, [
-        { from: { wayId: armAId, laneId: armALaneId }, to: { wayId: armBId, laneId: armBLaneId } },
-      ]);
-    store.getState().setNodeConnectors(nodeId, undefined);
+    store.commands.network.setNodeConnectors(nodeId, [
+      { from: { wayId: armAId, laneId: armALaneId }, to: { wayId: armBId, laneId: armBLaneId } },
+    ]);
+    store.commands.network.setNodeConnectors(nodeId, undefined);
     expect(store.getState().system.nodes[0].connectors).toBeUndefined();
   });
 });
@@ -337,15 +330,15 @@ describe('store: deleting a way cleans identity + connectors', () => {
     store = createStoreWithCrossingRoads();
     const arms = store.getState().system.ways;
     const nodeId = store.getState().system.nodes[0].id;
-    store.getState().setNodeConnectors(nodeId, [
+    store.commands.network.setNodeConnectors(nodeId, [
       {
         from: { wayId: arms[0].id, laneId: arms[0].profile.lanes[1].id },
         to: { wayId: arms[1].id, laneId: arms[1].profile.lanes[1].id },
       },
     ]);
-    store.getState().nameWay(arms[0].id, 'Sahara Ave');
+    store.commands.ways.nameWay(arms[0].id, 'Sahara Ave');
     firstArmId = arms[0].id;
-    store.getState().deleteWay(arms[0].id);
+    store.commands.ways.deleteWay(arms[0].id);
   });
 
   it('deleting a way drops its identity membership', () => {

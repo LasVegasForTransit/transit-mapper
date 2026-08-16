@@ -11,6 +11,7 @@ import {
 } from '@transitmapper/core/model/geo';
 import type { LngLat, Way } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
+import { required } from '../support/required.test';
 
 /** The store's own ways list should always contain a way it just finished
  *  drawing; a miss here means the fixture setup above is broken. */
@@ -23,11 +24,11 @@ function mustFindWay(ways: Way[], id: string): Way {
 describe('geometry: straight vs curved on a way', () => {
   it('curved way path is densified', () => {
     const store = createEditorStore();
-    const g = store.getState().beginWay('lightRail', 'curved');
-    store.getState().addWayPoint(g, [-115.2, 36.1]);
-    store.getState().addWayPoint(g, [-115.16, 36.16]);
-    store.getState().addWayPoint(g, [-115.1, 36.1]);
-    store.getState().finishWay();
+    const g = required(store.commands.ways.beginWay('lightRail', 'curved'));
+    store.commands.ways.addWayPoint(g, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(g, [-115.16, 36.16]);
+    store.commands.ways.addWayPoint(g, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     const way = mustFindWay(store.getState().system.ways, g);
     const straight = resolveWayPath({ ...way, geometry: 'straight' });
     const curved = resolveWayPath({ ...way, geometry: 'curved' });
@@ -36,11 +37,11 @@ describe('geometry: straight vs curved on a way', () => {
 
   it('way length > 0', () => {
     const store = createEditorStore();
-    const g = store.getState().beginWay('lightRail', 'curved');
-    store.getState().addWayPoint(g, [-115.2, 36.1]);
-    store.getState().addWayPoint(g, [-115.16, 36.16]);
-    store.getState().addWayPoint(g, [-115.1, 36.1]);
-    store.getState().finishWay();
+    const g = required(store.commands.ways.beginWay('lightRail', 'curved'));
+    store.commands.ways.addWayPoint(g, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(g, [-115.16, 36.16]);
+    store.commands.ways.addWayPoint(g, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     const way = mustFindWay(store.getState().system.ways, g);
     expect(wayLengthMeters(way)).toBeGreaterThan(1000);
   });

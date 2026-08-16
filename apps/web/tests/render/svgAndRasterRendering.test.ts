@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fitBounds, metersPerPixel, projector } from '@transitmapper/core/render/project';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import { systemSvg } from '@transitmapper/core/render/svg';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
 import {
   checkPreviewPng,
@@ -9,7 +10,7 @@ import {
   pngDimensions,
 } from '@transitmapper/core/render/pngBytes';
 import { PREVIEW_HEIGHT, PREVIEW_WIDTH } from '@transitmapper/core/render/preview';
-import { aRoad, aStation, aSystem } from '@transitmapper/core/testing/fixtures';
+import { aRoad, aStop, aSystem } from '@transitmapper/core/testing/fixtures';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
 
@@ -75,19 +76,24 @@ describe('render/svg: station labels must not print through each other', () => {
     // them (it used to print "North Las Vegas" straight through "South Strip").
     const ids = Array.from({ length: 14 }, (_, i) => `station-${i}`);
     const ways = ids.map((_, i) => laneWay(`way-${i}`, i));
-    const stations = ids.map((id, i) =>
-      aStation(id, [-115.2 + i * 0.004, 36.11 + (i % 3) * 0.002], undefined, {
+    const stops = ids.map((id, i) =>
+      aStop(id, [-115.2 + i * 0.004, 36.11 + (i % 3) * 0.002], undefined, {
         name: `Really Quite Long Station Name ${i}`,
       }),
     );
-    const crowded = aSystem({ name: 'Crowded', ways, stations });
+    const crowded = aSystem({ name: 'Crowded', ways, stops });
     const vp = fitBounds(mustBounds(crowded), { width: 1200, height: 630, padding: 56 });
-    const dense = systemSvg(crowded, view, projector(vp), {
-      title: crowded.name,
-      legend: [],
-      width: 1200,
-      height: 630,
-    });
+    const dense = systemSvg(
+      crowded,
+      { ...view, presentation: renderPresentationForViewport(vp) },
+      projector(vp),
+      {
+        title: crowded.name,
+        legend: [],
+        width: 1200,
+        height: 630,
+      },
+    );
     const boxes = labelBoxes(dense);
 
     it('a crowded map still draws some station labels', () => {
@@ -117,17 +123,22 @@ describe('render/svg: station labels must not print through each other', () => {
         { typeId: 'lightRail', profile: defaultProfileFor('lightRail') },
       ),
     );
-    const stations = ids.map((id, i) =>
-      aStation(id, [-115.4 + i * 0.3, 36.2], undefined, { name: `Stop ${i}` }),
+    const stops = ids.map((id, i) =>
+      aStop(id, [-115.4 + i * 0.3, 36.2], undefined, { name: `Stop ${i}` }),
     );
-    const spaced = aSystem({ ways, stations });
+    const spaced = aSystem({ ways, stops });
     const vp2 = fitBounds(mustBounds(spaced), { width: 1200, height: 630, padding: 56 });
-    const roomySvg = systemSvg(spaced, view, projector(vp2), {
-      title: '',
-      legend: [],
-      width: 1200,
-      height: 630,
-    });
+    const roomySvg = systemSvg(
+      spaced,
+      { ...view, presentation: renderPresentationForViewport(vp2) },
+      projector(vp2),
+      {
+        title: '',
+        legend: [],
+        width: 1200,
+        height: 630,
+      },
+    );
 
     it('a sparse map keeps every station label', () => {
       expect(ids.every((_, i) => roomySvg.includes(`Stop ${i}`))).toBe(true);

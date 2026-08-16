@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createEditorStore } from '../../src/editor/store';
 import { FINE_POINTER_TUNING } from '../../src/editor/input-tuning';
 import { KEY_BINDINGS, matchesKey, resolveBinding, type KeyContext } from '../../src/editor/keymap';
+import { required } from '../support/required.test';
 
 function evt(o: Partial<KeyboardEvent>): KeyboardEvent {
   return o as KeyboardEvent;
@@ -33,10 +34,10 @@ describe('keyboard: matcher, resolver, command execution, gating', () => {
   });
 
   it('Escape command stops the current way draw', () => {
-    store.getState().setTool('way');
-    const wayId = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(wayId, [-115.2, 36.1]);
-    store.getState().addWayPoint(wayId, [-115.1, 36.1]);
+    store.commands.tools.setTool('way');
+    const wayId = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(wayId, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(wayId, [-115.1, 36.1]);
 
     resolveBinding(KEY_BINDINGS, evt({ key: 'Escape' }), ctx)?.run(ctx);
 
@@ -50,7 +51,7 @@ describe('keyboard: matcher, resolver, command execution, gating', () => {
   });
 
   it('way-tool binding gated in read-only', () => {
-    store.getState().setSystem(store.getState().system, { readOnly: true });
+    store.commands.document.setSystem(store.getState().system, { readOnly: true });
 
     expect(resolveBinding(KEY_BINDINGS, evt({ key: 'l' }), ctx)).toBeNull();
   });
@@ -69,80 +70,80 @@ describe('undo/redo: basic push/pop, redo invalidation, readOnly/empty guards', 
   });
 
   it('adding a station is undoable', () => {
-    store.getState().addStation([-115.2, 36.1]);
+    store.commands.stops.addStop([-115.2, 36.1]);
 
     expect(store.getState().canUndo).toBe(true);
   });
 
   it('undo removes the station', () => {
-    const stationId = store.getState().addStation([-115.2, 36.1]);
+    const stationId = required(store.commands.stops.addStop([-115.2, 36.1]));
 
-    store.getState().undo();
+    store.commands.history.undo();
 
-    expect(store.getState().system.stations.some((s) => s.id === stationId)).toBe(false);
+    expect(store.getState().system.stops.some((s) => s.id === stationId)).toBe(false);
   });
 
   it('undo clears selection (avoids pointing at a gone/stale object)', () => {
-    store.getState().addStation([-115.2, 36.1]);
+    store.commands.stops.addStop([-115.2, 36.1]);
 
-    store.getState().undo();
+    store.commands.history.undo();
 
     expect(store.getState().selection).toBeNull();
   });
 
   it('undoing the only step leaves nothing left to undo', () => {
-    store.getState().addStation([-115.2, 36.1]);
+    store.commands.stops.addStop([-115.2, 36.1]);
 
-    store.getState().undo();
+    store.commands.history.undo();
 
     expect(store.getState().canUndo).toBe(false);
   });
 
   it('undo makes a redo available', () => {
-    store.getState().addStation([-115.2, 36.1]);
+    store.commands.stops.addStop([-115.2, 36.1]);
 
-    store.getState().undo();
+    store.commands.history.undo();
 
     expect(store.getState().canRedo).toBe(true);
   });
 
   it('redo restores the station', () => {
-    const stationId = store.getState().addStation([-115.2, 36.1]);
-    store.getState().undo();
+    const stationId = required(store.commands.stops.addStop([-115.2, 36.1]));
+    store.commands.history.undo();
 
-    store.getState().redo();
+    store.commands.history.redo();
 
-    expect(store.getState().system.stations.some((s) => s.id === stationId)).toBe(true);
+    expect(store.getState().system.stops.some((s) => s.id === stationId)).toBe(true);
   });
 
   it('redoing the only step leaves nothing left to redo', () => {
-    store.getState().addStation([-115.2, 36.1]);
-    store.getState().undo();
+    store.commands.stops.addStop([-115.2, 36.1]);
+    store.commands.history.undo();
 
-    store.getState().redo();
+    store.commands.history.redo();
 
     expect(store.getState().canRedo).toBe(false);
   });
 
   it('a new action after undo clears the redo stack', () => {
-    store.getState().addStation([-115.2, 36.1]);
-    store.getState().undo();
+    store.commands.stops.addStop([-115.2, 36.1]);
+    store.commands.history.undo();
 
-    store.getState().addStation([-115.3, 36.2]); // a fresh action after undo invalidates redo
+    store.commands.stops.addStop([-115.3, 36.2]); // a fresh action after undo invalidates redo
 
     expect(store.getState().canRedo).toBe(false);
   });
 
   it('undo on an empty stack is a no-op, not a crash', () => {
-    store.getState().undo();
+    store.commands.history.undo();
 
     expect(store.getState().canUndo).toBe(false);
   });
 
   it('loading a system (even the same one) resets history', () => {
-    store.getState().addStation([-115.2, 36.1]);
+    store.commands.stops.addStop([-115.2, 36.1]);
 
-    store.getState().setSystem(store.getState().system, { readOnly: true });
+    store.commands.document.setSystem(store.getState().system, { readOnly: true });
 
     expect(store.getState().canUndo).toBe(false);
     expect(store.getState().canRedo).toBe(false);
@@ -156,26 +157,26 @@ describe('undo/redo: basic push/pop, redo invalidation, readOnly/empty guards', 
   });
 
   it('setViewport does not create an undo step', () => {
-    store.getState().setViewport({ center: [-115.5, 36.5], zoom: 12 });
+    store.commands.document.setViewport({ center: [-115.5, 36.5], zoom: 12 });
 
     expect(store.getState().canUndo).toBe(false);
   });
 
   it('a real edit after panning is still undoable', () => {
-    store.getState().setViewport({ center: [-115.5, 36.5], zoom: 12 });
+    store.commands.document.setViewport({ center: [-115.5, 36.5], zoom: 12 });
 
-    store.getState().addStation([-115.2, 36.1]);
+    store.commands.stops.addStop([-115.2, 36.1]);
 
     expect(store.getState().canUndo).toBe(true);
   });
 
   it("panning after a real edit doesn't add a second (viewport) undo step", () => {
-    store.getState().addStation([-115.2, 36.1]);
-    store.getState().setViewport({ center: [-115.6, 36.6], zoom: 13 });
+    store.commands.stops.addStop([-115.2, 36.1]);
+    store.commands.document.setViewport({ center: [-115.6, 36.6], zoom: 13 });
 
     let steps = 0;
     while (store.getState().canUndo) {
-      store.getState().undo();
+      store.commands.history.undo();
       steps++;
     }
 
@@ -189,9 +190,9 @@ describe('undo/redo must not exit draw mode: activeWayId only clears once the wa
 
   beforeEach(() => {
     store = createEditorStore();
-    w = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(w, [-115.2, 36.1]);
-    store.getState().addWayPoint(w, [-115.15, 36.1]);
+    w = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(w, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(w, [-115.15, 36.1]);
   });
 
   it('drawing sets activeWayId to the way being drawn', () => {
@@ -199,22 +200,22 @@ describe('undo/redo must not exit draw mode: activeWayId only clears once the wa
   });
 
   it('undoing one point of an in-progress way keeps activeWayId set', () => {
-    store.getState().undo();
+    store.commands.history.undo();
 
     expect(store.getState().activeWayId).toBe(w);
   });
 
   it('undo removed only the last point', () => {
-    store.getState().undo();
+    store.commands.history.undo();
 
     const way = store.getState().system.ways.find((x) => x.id === w);
     expect(way?.points).toHaveLength(1);
   });
 
   it('redo mirrors undo: activeWayId survives while the way still exists', () => {
-    store.getState().undo();
+    store.commands.history.undo();
 
-    store.getState().redo();
+    store.commands.history.redo();
 
     const way = store.getState().system.ways.find((x) => x.id === w);
     expect(store.getState().activeWayId).toBe(w);
@@ -222,22 +223,22 @@ describe('undo/redo must not exit draw mode: activeWayId only clears once the wa
   });
 
   it('a way undone back to zero points still counts as existing', () => {
-    store.getState().undo();
-    store.getState().redo();
+    store.commands.history.undo();
+    store.commands.history.redo();
 
-    store.getState().undo(); // back to 1 point
-    store.getState().undo(); // back to the way existing with 0 points (still "exists")
+    store.commands.history.undo(); // back to 1 point
+    store.commands.history.undo(); // back to the way existing with 0 points (still "exists")
 
     expect(store.getState().activeWayId).toBe(w);
   });
 
   it("undoing past a way's own creation clears activeWayId", () => {
-    store.getState().undo();
-    store.getState().redo();
-    store.getState().undo();
-    store.getState().undo();
+    store.commands.history.undo();
+    store.commands.history.redo();
+    store.commands.history.undo();
+    store.commands.history.undo();
 
-    store.getState().undo(); // back to before beginWay: the way is gone entirely
+    store.commands.history.undo(); // back to before beginWay: the way is gone entirely
 
     expect(store.getState().activeWayId).toBeNull();
   });
@@ -247,27 +248,27 @@ describe('undo/redo: gesture checkpoints coalesce into one step, discard no-ops'
   function countUndoSteps(store: ReturnType<typeof createEditorStore>): number {
     let n = 0;
     while (store.getState().canUndo) {
-      store.getState().undo();
+      store.commands.history.undo();
       n++;
     }
-    for (let i = 0; i < n; i++) store.getState().redo();
+    for (let i = 0; i < n; i++) store.commands.history.redo();
     return n;
   }
 
   function setup() {
     const store = createEditorStore();
-    const wayId = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(wayId, [-115.2, 36.1]);
-    store.getState().addWayPoint(wayId, [-115.1, 36.1]);
+    const wayId = required(store.commands.ways.beginWay('lightRail', 'straight'));
+    store.commands.ways.addWayPoint(wayId, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(wayId, [-115.1, 36.1]);
     return { store, wayId };
   }
 
   function drag(store: ReturnType<typeof createEditorStore>, wayId: string) {
-    store.getState().beginHistoryCheckpoint();
-    store.getState().moveWayPoint(wayId, 1, [-115.05, 36.1]);
-    store.getState().moveWayPoint(wayId, 1, [-115.02, 36.15]);
-    store.getState().moveWayPoint(wayId, 1, [-115.0, 36.2]);
-    store.getState().commitHistoryCheckpoint();
+    store.commands.history.beginHistoryCheckpoint();
+    store.commands.ways.moveWayPoint(wayId, 1, [-115.05, 36.1]);
+    store.commands.ways.moveWayPoint(wayId, 1, [-115.02, 36.15]);
+    store.commands.ways.moveWayPoint(wayId, 1, [-115.0, 36.2]);
+    store.commands.history.commitHistoryCheckpoint();
   }
 
   it('a whole drag (many moves) coalesces into exactly one undo step', () => {
@@ -285,7 +286,7 @@ describe('undo/redo: gesture checkpoints coalesce into one step, discard no-ops'
 
     const wayBeforeUndo = store.getState().system.ways.find((w) => w.id === wayId);
     const movedPoint = wayBeforeUndo?.points[1];
-    store.getState().undo();
+    store.commands.history.undo();
     const wayAfterUndo = store.getState().system.ways.find((w) => w.id === wayId);
     const revertedPoint = wayAfterUndo?.points[1];
 
@@ -301,9 +302,9 @@ describe('undo/redo: gesture checkpoints coalesce into one step, discard no-ops'
     const stepsBeforeNoOpDrag = countUndoSteps(store);
     const beforeCancelledDrag = store.getState().system;
 
-    store.getState().beginHistoryCheckpoint();
-    store.getState().moveWayPoint(wayId, 1, [-114.9, 36.3]);
-    store.getState().cancelHistoryCheckpoint();
+    store.commands.history.beginHistoryCheckpoint();
+    store.commands.ways.moveWayPoint(wayId, 1, [-114.9, 36.3]);
+    store.commands.history.cancelHistoryCheckpoint();
 
     expect(store.getState().system).toBe(beforeCancelledDrag);
     expect(countUndoSteps(store)).toBe(stepsBeforeNoOpDrag);
@@ -311,6 +312,13 @@ describe('undo/redo: gesture checkpoints coalesce into one step, discard no-ops'
 });
 
 describe('keyboard: mod (Ctrl/Cmd) bindings for undo/redo do not collide with plain ones', () => {
+  // Shadows the file-level `evt`: matchesKey compares e.shiftKey with strict
+  // `!==`, so an event that never mentions shiftKey (undefined) fails the
+  // shift:false checks below unless every modifier defaults to false here.
+  function evt(o: Partial<KeyboardEvent>): KeyboardEvent {
+    return { metaKey: false, ctrlKey: false, shiftKey: false, ...o } as KeyboardEvent;
+  }
+
   it("plain 'z' still matches the non-mod zoom-in binding", () => {
     expect(matchesKey(evt({ key: 'z' }), 'z')).toBe(true);
   });
@@ -353,7 +361,7 @@ describe('keyboard: mod (Ctrl/Cmd) bindings for undo/redo do not collide with pl
     });
 
     it("Ctrl+Z resolves to the Undo binding once there's something to undo", () => {
-      store.getState().addStation([-115.2, 36.1]);
+      store.commands.stops.addStop([-115.2, 36.1]);
 
       const undone = resolveBinding(KEY_BINDINGS, evt({ key: 'z', ctrlKey: true }), ctx);
 
@@ -361,16 +369,16 @@ describe('keyboard: mod (Ctrl/Cmd) bindings for undo/redo do not collide with pl
     });
 
     it('running the resolved Undo binding actually undoes', () => {
-      store.getState().addStation([-115.2, 36.1]);
+      store.commands.stops.addStop([-115.2, 36.1]);
       const undone = resolveBinding(KEY_BINDINGS, evt({ key: 'z', ctrlKey: true }), ctx);
 
       undone?.run(ctx);
 
-      expect(store.getState().system.stations).toHaveLength(0);
+      expect(store.getState().system.stops).toHaveLength(0);
     });
 
     it('Ctrl+Shift+Z resolves to the Redo binding', () => {
-      store.getState().addStation([-115.2, 36.1]);
+      store.commands.stops.addStop([-115.2, 36.1]);
       resolveBinding(KEY_BINDINGS, evt({ key: 'z', ctrlKey: true }), ctx)?.run(ctx);
 
       const redone = resolveBinding(
@@ -383,7 +391,7 @@ describe('keyboard: mod (Ctrl/Cmd) bindings for undo/redo do not collide with pl
     });
 
     it('running the resolved Redo binding actually redoes', () => {
-      store.getState().addStation([-115.2, 36.1]);
+      store.commands.stops.addStop([-115.2, 36.1]);
       resolveBinding(KEY_BINDINGS, evt({ key: 'z', ctrlKey: true }), ctx)?.run(ctx);
       const redone = resolveBinding(
         KEY_BINDINGS,
@@ -393,7 +401,7 @@ describe('keyboard: mod (Ctrl/Cmd) bindings for undo/redo do not collide with pl
 
       redone?.run(ctx);
 
-      expect(store.getState().system.stations).toHaveLength(1);
+      expect(store.getState().system.stops).toHaveLength(1);
     });
   });
 });

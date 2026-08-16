@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { validateSystem } from '@transitmapper/core/model/validate';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { estimateWayCapitalCost, formatUsdCompact } from '@transitmapper/core/model/cost';
-import { systemBounds, wayLengthMeters } from '@transitmapper/core/model/geo';
+import { squareFootprint, systemBounds, wayLengthMeters } from '@transitmapper/core/model/geo';
 import { MODES } from '@transitmapper/core/model/catalog';
 import { createEditorStore } from '../../src/editor/store';
 import { legendEntriesFor } from '../../src/share/exportLegend';
@@ -27,7 +27,7 @@ describe('validateSystem: ghost records + crossing-without-joining', () => {
     // trusts an incoming way's points as given.
     const store = createEditorStore();
     const ghostWay = 'ghost';
-    store.getState().importWays({
+    store.commands.imports.importWays({
       ways: [
         {
           id: ghostWay,
@@ -50,9 +50,11 @@ describe('validateSystem: ghost records + crossing-without-joining', () => {
   it('flags a station anchored to a missing way', () => {
     // An orphaned station: anchor points at a way id that doesn't exist.
     const store = createEditorStore();
-    const stId = store.getState().addStation([-115.15, 36.1], { wayId: 'nonexistent', t: 0.5 });
+    const stId = must(
+      store.commands.stops.addStop([-115.15, 36.1], { wayId: 'nonexistent', t: 0.5 }),
+    );
     const issues = validateSystem(store.getState().system);
-    expect(issues.some((i) => i.id === `orphan-station-${stId}`)).toBe(true);
+    expect(issues.some((i) => i.id === `orphan-stop-${stId}`)).toBe(true);
   });
 
   describe('importing two same-type crossing ways', () => {
@@ -64,7 +66,7 @@ describe('validateSystem: ghost records + crossing-without-joining', () => {
 
     beforeEach(() => {
       store = createEditorStore();
-      store.getState().importWays({
+      store.commands.imports.importWays({
         ways: [
           {
             id: 'vx',
@@ -116,7 +118,7 @@ describe('validateSystem: ghost records + crossing-without-joining', () => {
 
     beforeEach(() => {
       store = createEditorStore();
-      store.getState().importWays({
+      store.commands.imports.importWays({
         ways: [
           {
             id: 'vroad',
@@ -204,11 +206,11 @@ describe('Capital cost-per-mile: a labeled range, not a fake-precise figure', ()
 
     beforeEach(() => {
       const store = createEditorStore();
-      const heavy = store.getState().beginWay('heavyRail', 'straight');
-      store.getState().addWayPoint(heavy, [-115.2, 36.1]);
-      store.getState().addWayPoint(heavy, [-115.1, 36.1]); // ~9.2km ≈ 5.7mi at this latitude
-      store.getState().finishWay();
-      store.getState().setWayGrade(heavy, 'underground');
+      const heavy = must(store.commands.ways.beginWay('heavyRail', 'straight'));
+      store.commands.ways.addWayPoint(heavy, [-115.2, 36.1]);
+      store.commands.ways.addWayPoint(heavy, [-115.1, 36.1]); // ~9.2km ≈ 5.7mi at this latitude
+      store.commands.ways.finishWay();
+      store.commands.ways.setWayGrade(heavy, 'underground');
       const heavyWay = must(store.getState().system.ways.find((w) => w.id === heavy));
       heavyCost = estimateWayCapitalCost(heavyWay);
       wayLengthMi = wayLengthMeters(heavyWay) / 1609.344;
@@ -231,10 +233,10 @@ describe('Capital cost-per-mile: a labeled range, not a fake-precise figure', ()
 
   it('a ferry route (no linear right-of-way cost concept) gets no estimate, not a misleading number', () => {
     const store = createEditorStore();
-    const ferry = store.getState().beginWay('water', 'straight');
-    store.getState().addWayPoint(ferry, [-115.2, 36.1]);
-    store.getState().addWayPoint(ferry, [-115.1, 36.1]);
-    store.getState().finishWay();
+    const ferry = must(store.commands.ways.beginWay('water', 'straight'));
+    store.commands.ways.addWayPoint(ferry, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(ferry, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     const ferryWay = must(store.getState().system.ways.find((w) => w.id === ferry));
     expect(estimateWayCapitalCost(ferryWay)).toBeNull();
   });
@@ -253,13 +255,15 @@ describe('Export: systemBounds + legend entries (the "full-system export" fix)',
 
     beforeEach(() => {
       store = createEditorStore();
-      const wayId = store.getState().beginWay('heavyRail', 'straight');
-      store.getState().addWayPoint(wayId, [-115.2, 36.1]);
-      store.getState().addWayPoint(wayId, [-115.1, 36.2]);
-      store.getState().finishWay();
-      const stId = store.getState().addStation([-115.25, 36.05]);
-      store.getState().addStationFootprint(stId); // extends the bbox further southwest
-      facId = store.getState().addFacility('depot', [-115.05, 36.25]); // extends northeast
+      const wayId = must(store.commands.ways.beginWay('heavyRail', 'straight'));
+      store.commands.ways.addWayPoint(wayId, [-115.2, 36.1]);
+      store.commands.ways.addWayPoint(wayId, [-115.1, 36.2]);
+      store.commands.ways.finishWay();
+      // A Stop and a physical Station are unrelated records now, so a
+      // footprint-bearing Station is drawn directly rather than attached to
+      // a boarding stop by id.
+      must(store.commands.stations.addDrawnStation(squareFootprint([-115.25, 36.05], 30))); // extends the bbox further southwest
+      facId = must(store.commands.facilities.addFacility('depot', [-115.05, 36.25])); // extends northeast
 
       bounds = systemBounds(store.getState().system);
     });
@@ -282,7 +286,7 @@ describe('Export: systemBounds + legend entries (the "full-system export" fix)',
 
     describe('after removing the facility', () => {
       beforeEach(() => {
-        store.getState().deleteFacility(facId);
+        store.commands.facilities.deleteFacility(facId);
       });
 
       it('legendEntriesFor lists one entry per visible service', () => {
@@ -291,7 +295,8 @@ describe('Export: systemBounds + legend entries (the "full-system export" fix)',
           visibleModes: new Set(Object.keys(MODES)),
           visibleWayTypes: new Set(['heavyRail']),
         };
-        const expectedName = store.getState().system.services[0]?.name;
+        // A legend entry is per-Line now (Line owns name/color), not per-Service.
+        const expectedName = store.getState().system.lines[0]?.name;
         const legend = legendEntriesFor(store.getState().system, view);
         expect(legend).toHaveLength(1);
         expect(legend[0].label).toBe(expectedName);

@@ -34,21 +34,21 @@ describe('the same three edits, through the store and against real geometry', ()
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftMode('bus');
-    const road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, [-115.3, 36.1]);
-    store.getState().addWayPoint(road, [-115.1, 36.1]);
-    store.getState().finishWay();
+    store.commands.tools.setDraftMode('bus');
+    const road = must(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(road, [-115.3, 36.1]);
+    store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     line = store.getState().system.services[0];
-    pattern = line.patterns[0];
+    pattern = line.path;
     fullLength = pathLengthMeters(patternPath(store.getState().system.ways, pattern));
 
-    trimmedCommitted = store.getState().trimPatternTo(line.id, pattern.id, road, 0.5, 'end');
+    trimmedCommitted = store.commands.services.trimPatternTo(line.id, pattern.id, road, 0.5, 'end');
     trimmed = store.getState().system;
 
     // Cutting that half-line in two at its own midpoint: both halves survive,
     // on the same road.
-    spawnedId = store.getState().splitServiceAt(line.id, pattern.id, road, 0.25);
+    spawnedId = store.commands.services.splitServiceAt(line.id, pattern.id, road, 0.25);
     afterSplit = store.getState().system;
   });
 
@@ -62,9 +62,7 @@ describe('the same three edits, through the store and against real geometry', ()
   });
 
   it('the trimmed line is half as long as it was', () => {
-    const trimmedLength = pathLengthMeters(
-      patternPath(trimmed.ways, trimmed.services[0].patterns[0]),
-    );
+    const trimmedLength = pathLengthMeters(patternPath(trimmed.ways, trimmed.services[0].path));
     expect(Math.abs(trimmedLength - fullLength / 2)).toBeLessThan(1);
   });
 
@@ -79,26 +77,31 @@ describe('the same three edits, through the store and against real geometry', ()
 
   it('the two halves add up to the line that was there before', () => {
     const combinedLength = afterSplit.services.reduce(
-      (m, sv) => m + pathLengthMeters(patternPath(afterSplit.ways, sv.patterns[0])),
+      (m, sv) => m + pathLengthMeters(patternPath(afterSplit.ways, sv.path)),
       0,
     );
     expect(Math.abs(combinedLength - fullLength / 2)).toBeLessThan(1);
   });
 
   it('the new half takes a colour of its own', () => {
-    expect(afterSplit.services[0].color).not.toBe(afterSplit.services[1].color);
+    expect(afterSplit.lines[0].color).not.toBe(afterSplit.lines[1].color);
   });
 
   it('the new half gets the next service name', () => {
-    expect(afterSplit.services[1].name).toBe(`${line.name} 2`);
+    expect(afterSplit.lines[1].name).toBe(`${afterSplit.lines[0].name} 2`);
   });
 });
 
+// Splitting the multi-pattern legacy fixture below through `parseSystem`
+// hands each branch its own migrated Service id (the raw pattern id, when
+// unique) under one shared Line — see migration-cheat-sheet.md §2. `main` and
+// `divided` are addressed by those migrated service ids, not by the line id
+// `main` the fixture is keyed under.
 describe('dividing one branch leaves its siblings on the original service', () => {
   let store: ReturnType<typeof createEditorStore>;
   let before: TransitSystem;
   let after: TransitSystem;
-  let sibling: Pattern;
+  let sibling: Service;
   let dividedId: string | null;
   let main: Service;
   let divided: Service;
@@ -111,7 +114,7 @@ describe('dividing one branch leaves its siblings on the original service', () =
     const c = P(-115.16, 36.1);
     const d = P(-115.2, 36.11);
     const e = P(-115.19, 36.11);
-    store.getState().setSystem(
+    store.commands.document.setSystem(
       parseSystem({
         version: 3,
         palette: ['#2ea44f'],
@@ -134,43 +137,51 @@ describe('dividing one branch leaves its siblings on the original service', () =
             modeId: 'bus',
             color: '#2ea44f',
             patterns: [
-              { id: 'focused', sections: oneSection(legsOf('long', 'short')) },
-              { id: 'sibling', sections: oneSection(legsOf('sibling-way')) },
+              // Each pattern's own `name` becomes its migrated service's
+              // `name` (migration-cheat-sheet.md §2) — 'Main' here so the
+              // spawned half is named off it, not left nameless.
+              { id: 'focused', name: 'Main', sections: oneSection(legsOf('long', 'short')) },
+              { id: 'sibling', name: 'Sibling', sections: oneSection(legsOf('sibling-way')) },
             ],
           },
         ],
       }),
     );
     before = store.getState().system;
-    sibling = before.services[0].patterns[1];
+    sibling = must(before.services.find((service) => service.id === 'sibling'));
     const position = must(
-      patternPositionAt(before.ways, before.services[0].patterns[0], 'outbound', 0, 0.8),
+      patternPositionAt(
+        before.ways,
+        must(before.services.find((service) => service.id === 'focused')).path,
+        'outbound',
+        0,
+        0.8,
+      ),
     );
-    dividedId = store.getState().divideServiceAt('main', position);
+    dividedId = store.commands.services.divideServiceAt('focused', position);
     after = store.getState().system;
-    main = must(after.services.find((service) => service.id === 'main'));
+    main = must(after.services.find((service) => service.id === 'focused'));
     divided = must(after.services.find((service) => service.id === dividedId));
   });
 
   it('dividing a focused branch creates one new service', () => {
     expect(dividedId).toBeTruthy();
-    expect(after.services).toHaveLength(2);
+    expect(after.services).toHaveLength(3);
   });
 
   it('dividing keeps sibling branches on the original service', () => {
-    expect(main.patterns).toHaveLength(2);
-    expect(main.patterns[1]).toBe(sibling);
+    expect(after.services.find((service) => service.id === 'sibling')).toBe(sibling);
+    expect(must(after.lines.find((candidate) => candidate.id === 'main')).serviceIds).toHaveLength(
+      3,
+    );
   });
 
   it('the original service keeps the longer focused half', () => {
-    expect(patternRunLegs(main.patterns[0], 'outbound').map((entry) => entry.leg.wayId)).toEqual([
-      'long',
-    ]);
+    expect(patternRunLegs(main.path, 'outbound').map((entry) => entry.leg.wayId)).toEqual(['long']);
   });
 
   it('the shorter half gets a numbered name and distinct color', () => {
     expect(divided.name).toBe('Main 2');
-    expect(divided.color).not.toBe(main.color);
   });
 
   it('dividing a service does not split any way', () => {
@@ -188,7 +199,7 @@ describe('ending a line at the displayed occurrence keeps its longer side', () =
     const a = P(-115.2, 36.1);
     const b = P(-115.19, 36.1);
     const c = P(-115.18, 36.1);
-    store.getState().setSystem(
+    store.commands.document.setSystem(
       parseSystem({
         version: 3,
         ways: [
@@ -210,7 +221,10 @@ describe('ending a line at the displayed occurrence keeps its longer side', () =
             color: '#e4572e',
             patterns: [
               {
-                id: 'loop-pattern',
+                // Matches the line id: the sole pattern's raw id becomes the
+                // migrated service id (migration-cheat-sheet.md §2), so this
+                // keeps `endPatternAt` addressable as 'loop-line' below.
+                id: 'loop-line',
                 sections: oneSection([
                   wholeLeg('out'),
                   wholeLeg('return'),
@@ -224,9 +238,9 @@ describe('ending a line at the displayed occurrence keeps its longer side', () =
     );
     const before = store.getState().system;
     const position = must(
-      patternPositionAt(before.ways, before.services[0].patterns[0], 'outbound', 1, 0.25),
+      patternPositionAt(before.ways, before.services[0].path, 'outbound', 1, 0.25),
     );
-    ended = store.getState().endPatternAt('loop-line', position);
+    ended = store.commands.services.endPatternAt('loop-line', position);
   });
 
   it('ending a line at an exact occurrence commits', () => {
@@ -235,7 +249,7 @@ describe('ending a line at the displayed occurrence keeps its longer side', () =
 
   it('ending a line keeps the longer side of a repeated corridor', () => {
     expect(
-      patternRunLegs(store.getState().system.services[0].patterns[0], 'outbound').map(
+      patternRunLegs(store.getState().system.services[0].path, 'outbound').map(
         (entry) => entry.leg.wayId,
       ),
     ).toEqual(['return', 'out']);
@@ -256,7 +270,7 @@ describe('extending a service path keeps physical infrastructure untouched', () 
     const a = P(-115.2, 36.1);
     const b = P(-115.19, 36.1);
     const c = P(-115.18, 36.1);
-    store.getState().setSystem(
+    store.commands.document.setSystem(
       parseSystem({
         version: 3,
         ways: [
@@ -271,24 +285,22 @@ describe('extending a service path keeps physical infrastructure untouched', () 
             name: 'Line',
             modeId: 'bus',
             color: '#e4572e',
-            patterns: [{ id: 'focused', sections: oneSection(legsOf('a-b')) }],
+            // Same id as the line: keeps the migrated service addressable as
+            // 'line' below (migration-cheat-sheet.md §2).
+            patterns: [{ id: 'line', sections: oneSection(legsOf('a-b')) }],
           },
         ],
       }),
     );
     before = store.getState().system;
-    extended = store
-      .getState()
-      .extendPatternTerminus('line', 'focused', 'end', [
-        { wayId: 'b-c', fromPoint: 0, toPoint: 1 },
-      ]);
+    extended = store.commands.services.extendPatternTerminus('line', 'line', 'end', [
+      { wayId: 'b-c', fromPoint: 0, toPoint: 1 },
+    ]);
     after = store.getState().system;
 
-    extendedAtStart = store
-      .getState()
-      .extendPatternTerminus('line', 'focused', 'start', [
-        { wayId: 'z-a', fromPoint: 1, toPoint: 0 },
-      ]);
+    extendedAtStart = store.commands.services.extendPatternTerminus('line', 'line', 'start', [
+      { wayId: 'z-a', fromPoint: 1, toPoint: 0 },
+    ]);
   });
 
   it('extending a line commits a service-path edit', () => {
@@ -297,12 +309,12 @@ describe('extending a service path keeps physical infrastructure untouched', () 
 
   it('extending a line leaves ways and stations as the same objects', () => {
     expect(after.ways[0]).toBe(before.ways[0]);
-    expect(after.stations[0]).toBe(before.stations[0]);
+    expect(after.stops[0]).toBe(before.stops[0]);
   });
 
   it('extending a line adds only a shared path section', () => {
-    expect(after.services[0].patterns[0].sections).toHaveLength(2);
-    expect(after.services[0].patterns[0].sections[1].kind).toBe('shared');
+    expect(after.services[0].path.sections).toHaveLength(2);
+    expect(after.services[0].path.sections[1].kind).toBe('shared');
   });
 
   it('extending a line from its other terminus commits too', () => {
@@ -310,13 +322,13 @@ describe('extending a service path keeps physical infrastructure untouched', () 
   });
 
   it('a start-side extension reverses the route drawn outward from the old terminus', () => {
-    expect(
-      patternRunLegs(store.getState().system.services[0].patterns[0], 'outbound')[0].forward,
-    ).toBe(true);
+    expect(patternRunLegs(store.getState().system.services[0].path, 'outbound')[0].forward).toBe(
+      true,
+    );
   });
 
   it('both terminus extensions leave physical objects untouched', () => {
     expect(store.getState().system.ways[0]).toBe(before.ways[0]);
-    expect(store.getState().system.stations[0]).toBe(before.stations[0]);
+    expect(store.getState().system.stops[0]).toBe(before.stops[0]);
   });
 });

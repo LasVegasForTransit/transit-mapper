@@ -5,7 +5,10 @@ import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { resolveWayPath, wayById } from '@transitmapper/core/model/geo';
 import { FEATURE_INPUT_ROLE } from '@transitmapper/core/render/featureInputs';
 import { createEditorStore } from '../../src/editor/store';
-import { buildFeatures, buildHandles, HANDLE_ICON } from '../../src/map/layers';
+import { HANDLE_ICON } from '../../src/map/layers';
+import { buildHandles } from '@transitmapper/core/render/buildFeatures';
+import { required } from '../support/required.test';
+import { buildFeatures } from '../support/testRenderPresentation.test';
 
 describe('marker differentiation: handles and every facility type each get a distinct icon, so nothing on the map collapses to an interchangeable dot', () => {
   let store: ReturnType<typeof createEditorStore>;
@@ -14,10 +17,10 @@ describe('marker differentiation: handles and every facility type each get a dis
 
   beforeEach(() => {
     store = createEditorStore();
-    road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, [-115.2, 36.1]);
-    store.getState().addWayPoint(road, [-115.1, 36.1]);
-    store.getState().finishWay();
+    road = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(road, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     filters = { visibleModes: new Set(Object.keys(MODES)), visibleWayTypes: new Set(['road']) };
   });
 
@@ -61,12 +64,23 @@ describe('marker differentiation: handles and every facility type each get a dis
 
     beforeEach(() => {
       for (const typeId of FACILITY_TYPE_ORDER) {
-        store.getState().addFacility(typeId, [-115.15, 36.1]);
+        store.commands.facilities.addFacility(typeId, [-115.15, 36.1]);
       }
-      const infra = buildFeatures(store.getState().system, null, [], {
-        viewMode: 'infrastructure',
-        ...filters,
-      });
+      const infra = buildFeatures(
+        store.getState().system,
+        null,
+        [],
+        {
+          viewMode: 'infrastructure',
+          ...filters,
+        },
+        null,
+        null,
+        // These facilities all sit on the same coordinate, so screen-density
+        // culling (which merges nearby markers) would otherwise collapse
+        // them to one — defeating the point of this check.
+        { applyScreenDensity: false },
+      );
       icons = new Map();
       for (const f of infra.facilities.features) {
         icons.set(f.properties?.typeId as string, f.properties?.icon as string);
@@ -136,19 +150,19 @@ describe('performance: only the fields buildFeatures reads force a map rebuild',
 
   beforeEach(() => {
     const store = createEditorStore();
-    roadId = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(roadId, [-115.2, 36.1]);
-    store.getState().addWayPoint(roadId, [-115.1, 36.1]);
-    store.getState().finishWay();
-    const crossId = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(crossId, [-115.15, 36.05]);
-    store.getState().addWayPoint(crossId, [-115.15, 36.15]);
-    store.getState().finishWay();
-    store.getState().formCrossingJunctions(crossId);
-    store.getState().addStation([-115.15, 36.1]);
-    store.getState().addFacility(FACILITY_TYPE_ORDER[0], [-115.14, 36.11]);
-    store.getState().addServiceToWay(roadId);
-    store.getState().nameWay(roadId, 'Decatur Avenue');
+    roadId = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(roadId, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(roadId, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    const crossId = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(crossId, [-115.15, 36.05]);
+    store.commands.ways.addWayPoint(crossId, [-115.15, 36.15]);
+    store.commands.ways.finishWay();
+    store.commands.network.formCrossingJunctions(crossId);
+    store.commands.stops.addStop([-115.15, 36.1]);
+    store.commands.facilities.addFacility(FACILITY_TYPE_ORDER[0], [-115.14, 36.11]);
+    store.commands.services.addServiceToWay(roadId);
+    store.commands.ways.nameWay(roadId, 'Decatur Avenue');
 
     const view = {
       viewMode: 'infrastructure' as const,

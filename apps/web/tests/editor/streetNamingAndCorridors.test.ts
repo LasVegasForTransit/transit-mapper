@@ -10,7 +10,8 @@ import {
 } from '@transitmapper/core/model/geo';
 import { MODES } from '@transitmapper/core/model/catalog';
 import { validateSystem } from '@transitmapper/core/model/validate';
-import { buildFeatures } from '../../src/map/layers';
+import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import type { LngLat, PatternLeg, TransitSystem, Way } from '@transitmapper/core/model/system';
 
 /** A leg's covered stretch, for assertions that used to read fromT/toT. */
@@ -32,17 +33,17 @@ function mustFind<T>(v: T | null | undefined, what: string): T {
 const drawHomeStAndCrossAve = (
   store: ReturnType<typeof createEditorStore>,
 ): { ewId: string; nsId: string } => {
-  store.getState().setDraftServiceEnabled(false);
-  const ewId = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(ewId, [-115.2, 36.1]);
-  store.getState().addWayPoint(ewId, [-115.1, 36.1]);
-  store.getState().finishWay();
-  store.getState().nameWay(ewId, 'Home St');
-  const nsId = store.getState().beginWay('road', 'straight');
-  store.getState().addWayPoint(nsId, [-115.15, 36.05]);
-  store.getState().addWayPoint(nsId, [-115.15, 36.15]);
-  store.getState().finishWay();
-  store.getState().nameWay(nsId, 'Cross Ave');
+  store.commands.tools.setDraftServiceEnabled(false);
+  const ewId = mustFind(store.commands.ways.beginWay('road', 'straight'), 'east-west way id');
+  store.commands.ways.addWayPoint(ewId, [-115.2, 36.1]);
+  store.commands.ways.addWayPoint(ewId, [-115.1, 36.1]);
+  store.commands.ways.finishWay();
+  store.commands.ways.nameWay(ewId, 'Home St');
+  const nsId = mustFind(store.commands.ways.beginWay('road', 'straight'), 'north-south way id');
+  store.commands.ways.addWayPoint(nsId, [-115.15, 36.05]);
+  store.commands.ways.addWayPoint(nsId, [-115.15, 36.15]);
+  store.commands.ways.finishWay();
+  store.commands.ways.nameWay(nsId, 'Cross Ave');
   return { ewId, nsId };
 };
 
@@ -55,7 +56,7 @@ describe('cross-street auto-naming: pre-filled on placement, never touched again
     // Infrastructure only, no service — that's the fact this section (and
     // the naming choice below) depends on.
     const { nsId } = drawHomeStAndCrossAve(store);
-    store.getState().formCrossingJunctions(nsId);
+    store.commands.network.formCrossingJunctions(nsId);
 
     const ewAfterSplit = mustFind(
       store
@@ -66,22 +67,25 @@ describe('cross-street auto-naming: pre-filled on placement, never touched again
     // No service rides either road yet, so the unserved/road-anchored default
     // applies — 'alongStreet' style ('@'), not the rail-style '&'; see the
     // dedicated crossStreetNaming.test.ts suite for that rule on its own.
-    stationId = store.getState().addStation([-115.15, 36.1], { wayId: ewAfterSplit.id, t: 1 });
+    stationId = mustFind(
+      store.commands.stops.addStop([-115.15, 36.1], { wayId: ewAfterSplit.id, t: 1 }),
+      'stop id',
+    );
   });
 
   it('placing a station on a named way pre-fills its name from the nearest cross street', () => {
     const placed = mustFind(
-      store.getState().system.stations.find((s) => s.id === stationId),
-      'placed station',
+      store.getState().system.stops.find((s) => s.id === stationId),
+      'placed stop',
     );
     expect(placed.name).toBe('Home St @ Cross Ave');
   });
 
   it("moving a station leaves its auto-filled name untouched, even though it's no longer accurate", () => {
-    store.getState().moveStation(stationId, [-115.12, 36.1]);
+    store.commands.stops.moveStop(stationId, [-115.12, 36.1]);
     const moved = mustFind(
-      store.getState().system.stations.find((s) => s.id === stationId),
-      'moved station',
+      store.getState().system.stops.find((s) => s.id === stationId),
+      'moved stop',
     );
     expect(moved.name).toBe('Home St @ Cross Ave');
   });
@@ -105,13 +109,16 @@ describe('cross-street auto-naming: resyncs once a later service proves the unse
         .system.ways.find((w) => w.points.some((p) => p[0] === -115.15 && p[1] === 36.1)),
       'east-west way after split',
     );
-    stationId = store.getState().addStation([-115.15, 36.1], { wayId: ewAfterSplit.id, t: 1 });
+    stationId = mustFind(
+      store.commands.stops.addStop([-115.15, 36.1], { wayId: ewAfterSplit.id, t: 1 }),
+      'stop id',
+    );
   });
 
   it('an unserved road-anchored station is auto-named along-street and marked autoNamed', () => {
     const placed = mustFind(
-      store.getState().system.stations.find((s) => s.id === stationId),
-      'placed station',
+      store.getState().system.stops.find((s) => s.id === stationId),
+      'placed stop',
     );
     expect(placed).toMatchObject({ name: 'Home St @ Cross Ave', autoNamed: true });
   });
@@ -133,11 +140,11 @@ describe('cross-street auto-naming: resyncs once a later service proves the unse
       routeBetween(sys, from, to, { allowedTypeIds: new Set(['road']) }),
       'route between the ends of home way',
     );
-    store.getState().createRoutedService(routed.spans, 'tram');
+    store.commands.routing.createRoutedService(routed.spans, 'tram');
 
     const resynced = mustFind(
-      store.getState().system.stations.find((s) => s.id === stationId),
-      'resynced station',
+      store.getState().system.stops.find((s) => s.id === stationId),
+      'resynced stop',
     );
     expect(resynced).toMatchObject({ name: 'Home St & Cross Ave', autoNamed: true });
   });
@@ -221,11 +228,11 @@ describe('a line drawn along an existing one SHARES it', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftMode('bus');
-    first = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(first, offsetMeters(origin, 0, 0));
-    store.getState().addWayPoint(first, offsetMeters(origin, 600, 0));
-    store.getState().finishWay();
+    store.commands.tools.setDraftMode('bus');
+    first = mustFind(store.commands.ways.beginWay('road', 'straight'), 'first way id');
+    store.commands.ways.addWayPoint(first, offsetMeters(origin, 0, 0));
+    store.commands.ways.addWayPoint(first, offsetMeters(origin, 600, 0));
+    store.commands.ways.finishWay();
   });
 
   it('the first line lays its own road', () => {
@@ -235,10 +242,10 @@ describe('a line drawn along an existing one SHARES it', () => {
   describe('a second line down the same street, started in empty space a few metres off the first', () => {
     beforeEach(() => {
       // Started off the first — which is what a mouse actually produces.
-      const second = store.getState().beginWay('road', 'straight');
-      store.getState().addWayPoint(second, offsetMeters(origin, 100, 4));
-      store.getState().addWayPoint(second, offsetMeters(origin, 500, 4));
-      store.getState().finishWay();
+      const second = mustFind(store.commands.ways.beginWay('road', 'straight'), 'second way id');
+      store.commands.ways.addWayPoint(second, offsetMeters(origin, 100, 4));
+      store.commands.ways.addWayPoint(second, offsetMeters(origin, 500, 4));
+      store.commands.ways.finishWay();
     });
 
     it('a second line down the same street lays no second road', () => {
@@ -252,19 +259,15 @@ describe('a line drawn along an existing one SHARES it', () => {
     it('the second line rides the road the first one laid', () => {
       const after = store.getState().system;
       expect(
-        after.services.every((sv) =>
-          sv.patterns.every((p) => patternLegs(p).every((l) => l.wayId === first)),
-        ),
+        after.services.every((sv) => patternLegs(sv.path).every((l) => l.wayId === first)),
       ).toBe(true);
     });
 
     it('it rides only the stretch it was drawn over, not the whole road', () => {
       const after = store.getState().system;
-      expect(
-        after.services
-          .flatMap((sv) => sv.patterns)
-          .some((p) => patternLegs(p).some((l) => legFrom(l) > 0)),
-      ).toBe(true);
+      expect(after.services.some((sv) => patternLegs(sv.path).some((l) => legFrom(l) > 0))).toBe(
+        true,
+      );
     });
 
     it('the shared road is drawn once, with both lines fanned across it', () => {
@@ -274,6 +277,15 @@ describe('a line drawn along an existing one SHARES it', () => {
           viewMode: 'network',
           visibleModes: new Set(Object.keys(MODES)),
           visibleWayTypes: new Set(['road']),
+          // buildFeatures now requires a resolved `presentation` (the renderer
+          // boundary crosses into real screen-space facts). This check only
+          // cares about service/lane topology, not camera-dependent LOD.
+          presentation: renderPresentationForViewport({
+            center: [0, 0],
+            zoom: 0,
+            width: 1_440,
+            height: 900,
+          }),
         }).services.features.filter((feature) => !feature.properties?.hitTarget).length,
       ).toBe(2);
     });
@@ -286,17 +298,17 @@ describe('Alt is the way out: deliberately separate infrastructure', () => {
   beforeEach(() => {
     store = createEditorStore();
     const origin: LngLat = [-115.2, 36.1];
-    store.getState().setDraftMode('bus');
-    const road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, offsetMeters(origin, 0, 0));
-    store.getState().addWayPoint(road, offsetMeters(origin, 600, 0));
-    store.getState().finishWay();
+    store.commands.tools.setDraftMode('bus');
+    const road = mustFind(store.commands.ways.beginWay('road', 'straight'), 'road way id');
+    store.commands.ways.addWayPoint(road, offsetMeters(origin, 0, 0));
+    store.commands.ways.addWayPoint(road, offsetMeters(origin, 600, 0));
+    store.commands.ways.finishWay();
 
-    store.getState().setDraftSeparate(true);
-    const busway = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(busway, offsetMeters(origin, 100, 4));
-    store.getState().addWayPoint(busway, offsetMeters(origin, 500, 4));
-    store.getState().finishWay();
+    store.commands.tools.setDraftSeparate(true);
+    const busway = mustFind(store.commands.ways.beginWay('road', 'straight'), 'busway id');
+    store.commands.ways.addWayPoint(busway, offsetMeters(origin, 100, 4));
+    store.commands.ways.addWayPoint(busway, offsetMeters(origin, 500, 4));
+    store.commands.ways.finishWay();
   });
 
   it('Alt lays a second, independent road beside the first', () => {
@@ -315,15 +327,15 @@ describe('how close counts as "along" is a fact about the mode', () => {
   const origin: LngLat = [-115.2, 36.1];
   const drawPair = (modeId: string, wayTypeId: string, offsetM: number): number => {
     const store = createEditorStore();
-    store.getState().setDraftMode(modeId);
-    const a = store.getState().beginWay(wayTypeId, 'straight');
-    store.getState().addWayPoint(a, offsetMeters(origin, 0, 0));
-    store.getState().addWayPoint(a, offsetMeters(origin, 600, 0));
-    store.getState().finishWay();
-    const b = store.getState().beginWay(wayTypeId, 'straight');
-    store.getState().addWayPoint(b, offsetMeters(origin, 100, offsetM));
-    store.getState().addWayPoint(b, offsetMeters(origin, 500, offsetM));
-    store.getState().finishWay();
+    store.commands.tools.setDraftMode(modeId);
+    const a = mustFind(store.commands.ways.beginWay(wayTypeId, 'straight'), 'way a id');
+    store.commands.ways.addWayPoint(a, offsetMeters(origin, 0, 0));
+    store.commands.ways.addWayPoint(a, offsetMeters(origin, 600, 0));
+    store.commands.ways.finishWay();
+    const b = mustFind(store.commands.ways.beginWay(wayTypeId, 'straight'), 'way b id');
+    store.commands.ways.addWayPoint(b, offsetMeters(origin, 100, offsetM));
+    store.commands.ways.addWayPoint(b, offsetMeters(origin, 500, offsetM));
+    store.commands.ways.finishWay();
     return store.getState().system.ways.length;
   };
 
@@ -359,17 +371,17 @@ describe('fusing corridors that were already drawn separately', () => {
     secondTo: number,
   ): { store: ReturnType<typeof createEditorStore>; ids: string[] } => {
     const store = createEditorStore();
-    store.getState().setDraftMode('bus');
+    store.commands.tools.setDraftMode('bus');
     const ids: string[] = [];
     for (const [from, to, off] of [
       [0, 600, 0],
       [secondFrom, secondTo, offsetM],
     ] as [number, number, number][]) {
-      store.getState().setDraftSeparate(true); // as a map drawn before sharing
-      const w = store.getState().beginWay('road', 'straight');
-      store.getState().addWayPoint(w, offsetMeters(origin, from, off));
-      store.getState().addWayPoint(w, offsetMeters(origin, to, off));
-      store.getState().finishWay();
+      store.commands.tools.setDraftSeparate(true); // as a map drawn before sharing
+      const w = mustFind(store.commands.ways.beginWay('road', 'straight'), 'way id');
+      store.commands.ways.addWayPoint(w, offsetMeters(origin, from, off));
+      store.commands.ways.addWayPoint(w, offsetMeters(origin, to, off));
+      store.commands.ways.finishWay();
       ids.push(w);
     }
     return { store, ids };
@@ -394,7 +406,7 @@ describe('fusing corridors that were already drawn separately', () => {
       let after: TransitSystem;
 
       beforeEach(() => {
-        absorbed = store.getState().mergeWaysIntoCorridor(doubled);
+        absorbed = store.commands.network.mergeWaysIntoCorridor(doubled);
         after = store.getState().system;
       });
 
@@ -413,16 +425,16 @@ describe('fusing corridors that were already drawn separately', () => {
       it('both lines now ride the one remaining road', () => {
         expect(
           after.services.every((sv) =>
-            sv.patterns.every((p) => patternLegs(p).every((l) => l.wayId === after.ways[0].id)),
+            patternLegs(sv.path).every((l) => l.wayId === after.ways[0].id),
           ),
         ).toBe(true);
       });
 
       it('the shorter line rides only the stretch of it that it covered', () => {
         expect(
-          after.services
-            .flatMap((sv) => sv.patterns)
-            .some((pt) => patternLegs(pt).some((l) => legFrom(l) > 0 && legTo(l) < 1)),
+          after.services.some((sv) =>
+            patternLegs(sv.path).some((l) => legFrom(l) > 0 && legTo(l) < 1),
+          ),
         ).toBe(true);
       });
     });
@@ -440,14 +452,14 @@ describe('fusing corridors that were already drawn separately', () => {
     });
 
     it('an overhanging line still counts as absorbed', () => {
-      expect(store.getState().mergeWaysIntoCorridor(overhanging)).toBe(1);
+      expect(store.commands.network.mergeWaysIntoCorridor(overhanging)).toBe(1);
     });
 
     describe('after merging', () => {
       let partial: TransitSystem;
 
       beforeEach(() => {
-        store.getState().mergeWaysIntoCorridor(overhanging);
+        store.commands.network.mergeWaysIntoCorridor(overhanging);
         partial = store.getState().system;
       });
 
@@ -458,13 +470,11 @@ describe('fusing corridors that were already drawn separately', () => {
 
       it('the overhanging line rides both the shared corridor and its own tail', () => {
         expect(
-          partial.services
-            .flatMap((sv) => sv.patterns)
-            .some(
-              (pt) =>
-                patternLegs(pt).length === 2 &&
-                patternLegs(pt).some((l) => l.wayId === overhanging[0]),
-            ),
+          partial.services.some(
+            (sv) =>
+              patternLegs(sv.path).length === 2 &&
+              patternLegs(sv.path).some((l) => l.wayId === overhanging[0]),
+          ),
         ).toBe(true);
       });
 
@@ -489,13 +499,13 @@ describe('fusing corridors that were already drawn separately', () => {
     });
 
     it('ways that are nowhere near each other are left alone', () => {
-      const merged = store.getState().mergeWaysIntoCorridor(apart);
+      const merged = store.commands.network.mergeWaysIntoCorridor(apart);
       expect(merged).toBe(0);
       expect(store.getState().system.ways).toHaveLength(2);
     });
 
     it('merging needs at least two ways', () => {
-      expect(store.getState().mergeWaysIntoCorridor([apart[0]])).toBe(0);
+      expect(store.commands.network.mergeWaysIntoCorridor([apart[0]])).toBe(0);
     });
   });
 });

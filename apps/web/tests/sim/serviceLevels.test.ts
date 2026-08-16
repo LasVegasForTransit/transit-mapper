@@ -126,7 +126,7 @@ describe('service levels recovered from a GTFS feed (core/model/gtfsSchedule.ts)
   it('a stated schedule still runs at its own times', () => {
     expect(
       activeSchedule(
-        { id: 'x', name: 'x', modeId: 'bus', color: '#000', patterns: [], ...stated },
+        { id: 'x', name: 'x', modeId: 'bus', path: { id: 'x', sections: [] }, ...stated },
         7 * 60,
         'weekday',
       )?.headwayMinutes,

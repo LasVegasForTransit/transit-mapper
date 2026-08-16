@@ -18,6 +18,7 @@ import {
 } from '@transitmapper/core/model/profile';
 import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
 import { createEditorStore } from '../../src/editor/store';
+import { required } from '../support/required.test';
 
 /** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
  *  a silent `undefined`/`null` into a clear failure at the point of use
@@ -33,11 +34,11 @@ describe('drawing a way creates a way + one service', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    a = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(a, [-115.24, 36.1]);
-    store.getState().addWayPoint(a, [-115.17, 36.16]);
-    store.getState().addWayPoint(a, [-115.1, 36.1]);
-    store.getState().finishWay();
+    a = required(store.commands.ways.beginWay('lightRail', 'straight'));
+    store.commands.ways.addWayPoint(a, [-115.24, 36.1]);
+    store.commands.ways.addWayPoint(a, [-115.17, 36.16]);
+    store.commands.ways.addWayPoint(a, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
   });
 
   it('way defined by 3 control points', () => {
@@ -56,7 +57,7 @@ describe('drawing a way creates a way + one service', () => {
 
   it('the service runs over that way', () => {
     const sys = store.getState().system;
-    expect(patternWayIds(sys.services[0].patterns[0])[0]).toBe(a);
+    expect(patternWayIds(sys.services[0].path)[0]).toBe(a);
   });
 
   describe('multiple services share one way (the service/infra split)', () => {
@@ -64,12 +65,12 @@ describe('drawing a way creates a way + one service', () => {
       store.getState().system.services.filter((s) => serviceWayIds(s).includes(wid));
 
     it('a way can carry multiple services', () => {
-      store.getState().addServiceToWay(a);
+      store.commands.services.addServiceToWay(a);
       expect(servicesOnWay(store, a).length).toBe(2);
     });
 
     it('added service is distinct', () => {
-      const svc2 = store.getState().addServiceToWay(a);
+      const svc2 = store.commands.services.addServiceToWay(a);
       expect(svc2).not.toBe(store.getState().system.services[0].id);
     });
   });
@@ -87,19 +88,19 @@ describe('bare infrastructure: bike ways carry no service (catalog-driven, no de
   });
 
   it('drawing a bike way creates no service', () => {
-    const bikeWay = store.getState().beginWay('bike', 'straight');
-    store.getState().addWayPoint(bikeWay, [-115.2, 36.1]);
-    store.getState().addWayPoint(bikeWay, [-115.1, 36.1]);
-    store.getState().finishWay();
+    const bikeWay = required(store.commands.ways.beginWay('bike', 'straight'));
+    store.commands.ways.addWayPoint(bikeWay, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(bikeWay, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     expect(store.getState().system.services.length).toBe(0);
   });
 
   it('addServiceToWay on a bike way returns null', () => {
-    const bikeWay = store.getState().beginWay('bike', 'straight');
-    store.getState().addWayPoint(bikeWay, [-115.2, 36.1]);
-    store.getState().addWayPoint(bikeWay, [-115.1, 36.1]);
-    store.getState().finishWay();
-    expect(store.getState().addServiceToWay(bikeWay)).toBeNull();
+    const bikeWay = required(store.commands.ways.beginWay('bike', 'straight'));
+    store.commands.ways.addWayPoint(bikeWay, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(bikeWay, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    expect(store.commands.services.addServiceToWay(bikeWay)).toBeNull();
   });
 });
 
@@ -109,10 +110,10 @@ describe('roads draw exactly like every other way (this is the fix: roads used t
 
   beforeEach(() => {
     store = createEditorStore();
-    road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, [-115.2, 36.1]);
-    store.getState().addWayPoint(road, [-115.1, 36.2]);
-    store.getState().finishWay();
+    road = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(road, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(road, [-115.1, 36.2]);
+    store.commands.ways.finishWay();
   });
 
   it('road way created with 2 points via the same beginWay/addWayPoint path', () => {
@@ -249,10 +250,10 @@ describe('Pattern.lanes round-trips through serialize/parse', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    w = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(w, [-115.2, 36.12]);
-    store.getState().addWayPoint(w, [-115.1, 36.12]);
-    store.getState().finishWay();
+    w = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(w, [-115.2, 36.12]);
+    store.commands.ways.addWayPoint(w, [-115.1, 36.12]);
+    store.commands.ways.finishWay();
     laneId = mustFind(
       defaultLaneFor(store.getState().system.ways[0].profile, 'forward'),
       'lane id',
@@ -267,19 +268,19 @@ describe('Pattern.lanes round-trips through serialize/parse', () => {
       services: [
         {
           ...svc,
-          patterns: svc.patterns.map((p) => ({
-            ...p,
-            sections: mapSectionLegs(p.sections, (legs) =>
+          path: {
+            ...svc.path,
+            sections: mapSectionLegs(svc.path.sections, (legs) =>
               legs.map((l) =>
                 l.wayId === w ? { ...l, lane: { kind: 'pinned' as const, laneId } } : l,
               ),
             ),
-          })),
+          },
         },
       ],
     };
     const reparsed = parseSystem(JSON.parse(JSON.stringify(withLanes)));
-    expect(legPinnedLane(patternLegs(reparsed.services[0].patterns[0])[0])).toBe(laneId);
+    expect(legPinnedLane(patternLegs(reparsed.services[0].path)[0])).toBe(laneId);
   });
 
   // v9 kept lane pins in a wayId-keyed map on the pattern; they migrate onto
@@ -300,11 +301,13 @@ describe('Pattern.lanes round-trips through serialize/parse', () => {
       services: [
         {
           ...svc,
-          patterns: svc.patterns.map((p) => ({
-            id: p.id,
-            wayIds: patternLegs(p).map((l) => l.wayId),
-            lanes: { [w]: laneId, 'ghost-way': laneId },
-          })),
+          patterns: [
+            {
+              id: svc.id,
+              wayIds: patternLegs(svc.path).map((l) => l.wayId),
+              lanes: { [w]: laneId, 'ghost-way': laneId },
+            },
+          ],
         },
       ],
     };
@@ -313,14 +316,12 @@ describe('Pattern.lanes round-trips through serialize/parse', () => {
 
   it("a v9 pattern's lane map migrates onto the leg for that way", () => {
     const fromV9 = migrateV9LaneMap(store, w, laneId);
-    expect(legPinnedLane(patternLegs(fromV9.services[0].patterns[0])[0])).toBe(laneId);
+    expect(legPinnedLane(patternLegs(fromV9.services[0].path)[0])).toBe(laneId);
   });
 
   it('a v9 lane pin naming a way the pattern never runs over is dropped', () => {
     const fromV9 = migrateV9LaneMap(store, w, laneId);
-    expect(patternLegs(fromV9.services[0].patterns[0]).every((l) => l.wayId !== 'ghost-way')).toBe(
-      true,
-    );
+    expect(patternLegs(fromV9.services[0].path).every((l) => l.wayId !== 'ghost-way')).toBe(true);
   });
 });
 
@@ -333,18 +334,18 @@ describe('drawing a service along an existing way SHARES that infrastructure', (
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftMode('bus');
+    store.commands.tools.setDraftMode('bus');
   });
 
   // Shared by all three cases below: draws a road and resolves the pair of
   // interior anchors (mid-corridor, as a real click would land) so the route
   // genuinely traverses the existing way rather than a degenerate end sliver.
   function drawRoadWithAnchors(store: ReturnType<typeof createEditorStore>) {
-    const road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, [-115.3, 36.1]);
-    store.getState().addWayPoint(road, [-115.2, 36.1]);
-    store.getState().addWayPoint(road, [-115.1, 36.1]);
-    store.getState().finishWay();
+    const road = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(road, [-115.3, 36.1]);
+    store.commands.ways.addWayPoint(road, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(road, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     const w = mustFind(
       store.getState().system.ways.find((x) => x.id === road),
       'way',
@@ -356,16 +357,16 @@ describe('drawing a service along an existing way SHARES that infrastructure', (
 
   it('route-draft extends along the existing way', () => {
     const { from, to } = drawRoadWithAnchors(store);
-    store.getState().startRouteDraft(from);
-    const extended = store.getState().extendRouteDraft(to);
+    store.commands.routing.startRouteDraft(from);
+    const extended = store.commands.routing.extendRouteDraft(to);
     expect(extended).toBe(true);
   });
 
   it('committing a routed draft adds a second service', () => {
     const { from, to } = drawRoadWithAnchors(store);
-    store.getState().startRouteDraft(from);
-    store.getState().extendRouteDraft(to);
-    const newId = store.getState().commitRouteDraft();
+    store.commands.routing.startRouteDraft(from);
+    store.commands.routing.extendRouteDraft(to);
+    const newId = store.commands.routing.commitRouteDraft();
     expect(newId).not.toBeNull();
     expect(store.getState().system.services.length).toBe(2);
   });
@@ -373,9 +374,9 @@ describe('drawing a service along an existing way SHARES that infrastructure', (
   it('a service drawn along an existing corridor SHARES its infrastructure', () => {
     const { from, to } = drawRoadWithAnchors(store);
     const s1Id = store.getState().system.services[0].id;
-    store.getState().startRouteDraft(from);
-    store.getState().extendRouteDraft(to);
-    const newId = store.getState().commitRouteDraft();
+    store.commands.routing.startRouteDraft(from);
+    store.commands.routing.extendRouteDraft(to);
+    const newId = store.commands.routing.commitRouteDraft();
     // Re-fetch BOTH services from the post-commit store — materialization may
     // have split the shared road and rebound the original service's way ids.
     const s1 = mustFind(

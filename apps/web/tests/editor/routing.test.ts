@@ -17,6 +17,7 @@ import {
 } from '@transitmapper/core/model/geo';
 import { primaryAnchor } from '@transitmapper/core/model/geo';
 import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
+import { required } from '../support/required.test';
 
 /** Narrows an optional lookup result without a non-null assertion: every call
  * site here knows from the fixture it just built that the value exists. */
@@ -30,12 +31,12 @@ describe('bare infrastructure toggle: draw roads WITHOUT auto-creating a line', 
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftWayType('road');
-    store.getState().setDraftServiceEnabled(false);
-    const r = store.getState().beginWay();
-    store.getState().addWayPoint(r, [-115.2, 36.1]);
-    store.getState().addWayPoint(r, [-115.1, 36.1]);
-    store.getState().finishWay();
+    store.commands.tools.setDraftWayType('road');
+    store.commands.tools.setDraftServiceEnabled(false);
+    const r = required(store.commands.ways.beginWay());
+    store.commands.ways.addWayPoint(r, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
   });
 
   it('service toggle off: drawing a road creates NO service', () => {
@@ -48,16 +49,16 @@ describe('bare infrastructure toggle: draw roads WITHOUT auto-creating a line', 
 
   // Picking a mode is an explicit "draw a line" — it re-enables services.
   it('choosing a mode re-enables service creation', () => {
-    store.getState().setDraftMode('bus');
+    store.commands.tools.setDraftMode('bus');
     expect(store.getState().draftServiceEnabled).toBe(true);
   });
 
   it('after re-enabling, drawing creates the service again', () => {
-    store.getState().setDraftMode('bus');
-    const r2 = store.getState().beginWay();
-    store.getState().addWayPoint(r2, [-115.2, 36.2]);
-    store.getState().addWayPoint(r2, [-115.1, 36.2]);
-    store.getState().finishWay();
+    store.commands.tools.setDraftMode('bus');
+    const r2 = required(store.commands.ways.beginWay());
+    store.commands.ways.addWayPoint(r2, [-115.2, 36.2]);
+    store.commands.ways.addWayPoint(r2, [-115.1, 36.2]);
+    store.commands.ways.finishWay();
     expect(store.getState().system.services.length).toBe(1);
   });
 });
@@ -73,12 +74,12 @@ describe('bare infrastructure toggle: draw roads WITHOUT auto-creating a line', 
 // store via beforeEach.
 function buildGrid(store: ReturnType<typeof createEditorStore>) {
   const draw = (pts: LngLat[]) => {
-    const w = store.getState().beginWay('road', 'straight');
-    for (const p of pts) store.getState().addWayPoint(w, p);
-    store.getState().finishWay();
+    const w = required(store.commands.ways.beginWay('road', 'straight'));
+    for (const p of pts) store.commands.ways.addWayPoint(w, p);
+    store.commands.ways.finishWay();
     return w;
   };
-  store.getState().setDraftServiceEnabled(false); // bare streets
+  store.commands.tools.setDraftServiceEnabled(false); // bare streets
   draw([
     [-115.3, 36.2],
     [-115.1, 36.2],
@@ -91,7 +92,7 @@ function buildGrid(store: ReturnType<typeof createEditorStore>) {
     [-115.2, 36.05],
     [-115.2, 36.25],
   ]); // NS, crossing both
-  store.getState().setDraftServiceEnabled(true);
+  store.commands.tools.setDraftServiceEnabled(true);
 }
 
 describe('routeBetween: shortest path through junctions, mid-way anchors', () => {
@@ -171,7 +172,7 @@ describe('createRoutedService: materializes splits, service rides existing ways'
 
   it('createRoutedService creates the service', () => {
     const res = route();
-    const svcId = store.getState().createRoutedService(res.spans, 'bus');
+    const svcId = store.commands.routing.createRoutedService(res.spans, 'bus');
     const after = store.getState().system;
     expect(!!svcId).toBe(true);
     expect(after.services.length).toBe(1);
@@ -179,26 +180,25 @@ describe('createRoutedService: materializes splits, service rides existing ways'
 
   it('the routed service rides one pattern of existing ways', () => {
     const res = route();
-    store.getState().createRoutedService(res.spans, 'bus');
+    store.commands.routing.createRoutedService(res.spans, 'bus');
     const svc = store.getState().system.services[0];
-    expect(svc.patterns.length).toBe(1);
-    expect(patternLegs(svc.patterns[0]).length).toBe(res.spans.length);
+    expect(patternLegs(svc.path).length).toBe(res.spans.length);
   });
 
   it('routing over existing streets adds no infrastructure at all', () => {
     const res = route();
     const waysBefore = store.getState().system.ways.length;
-    store.getState().createRoutedService(res.spans, 'bus');
+    store.commands.routing.createRoutedService(res.spans, 'bus');
     expect(store.getState().system.ways.length).toBe(waysBefore);
   });
 
   it('no new parallel geometry was drawn (every ridden way pre-existed)', () => {
     const res = route();
-    store.getState().createRoutedService(res.spans, 'bus');
+    store.commands.routing.createRoutedService(res.spans, 'bus');
     const after = store.getState().system;
     const svc = after.services[0];
     expect(
-      patternWayIds(svc.patterns[0]).every((wid) =>
+      patternWayIds(svc.path).every((wid) =>
         after.ways.some((w) => w.id === wid && w.typeId === 'road'),
       ),
     ).toBe(true);
@@ -206,20 +206,20 @@ describe('createRoutedService: materializes splits, service rides existing ways'
 
   it('the mid-way anchors became leg extents rather than splits', () => {
     const res = route();
-    store.getState().createRoutedService(res.spans, 'bus');
+    store.commands.routing.createRoutedService(res.spans, 'bus');
     const svc = store.getState().system.services[0];
-    expect(patternLegs(svc.patterns[0]).some((l) => !legIsWhole(l))).toBe(true);
+    expect(patternLegs(svc.path).some((l) => !legIsWhole(l))).toBe(true);
   });
 
   // The route length is now measured off what the legs actually cover, not by
   // summing whole ways — which is the point: the ways are longer than the ride.
   it('the drawn line covers the route length', () => {
     const res = route();
-    store.getState().createRoutedService(res.spans, 'bus');
+    store.commands.routing.createRoutedService(res.spans, 'bus');
     const after = store.getState().system;
     const svc = after.services[0];
     expect(
-      Math.abs(pathLengthMeters(patternPath(after.ways, svc.patterns[0])) - res.lengthM),
+      Math.abs(pathLengthMeters(patternPath(after.ways, svc.path)) - res.lengthM),
     ).toBeLessThan(500);
   });
 });
@@ -240,29 +240,29 @@ describe("route draft state machine (the drawing gesture's backend)", () => {
   });
 
   it('startRouteDraft opens an empty draft', () => {
-    store.getState().startRouteDraft(from);
+    store.commands.routing.startRouteDraft(from);
     expect(store.getState().routeDraft?.spans.length).toBe(0);
   });
 
   it('extendRouteDraft appends routed spans', () => {
-    store.getState().startRouteDraft(from);
-    const ok = store.getState().extendRouteDraft(to);
+    store.commands.routing.startRouteDraft(from);
+    const ok = store.commands.routing.extendRouteDraft(to);
     expect(ok).toBe(true);
     expect(must(store.getState().routeDraft, 'route draft').spans.length).toBe(3);
   });
 
   it('commitRouteDraft creates the service and clears the draft', () => {
-    store.getState().startRouteDraft(from);
-    store.getState().extendRouteDraft(to);
-    const svcId = store.getState().commitRouteDraft();
+    store.commands.routing.startRouteDraft(from);
+    store.commands.routing.extendRouteDraft(to);
+    const svcId = store.commands.routing.commitRouteDraft();
     expect(!!svcId).toBe(true);
     expect(store.getState().routeDraft).toBeNull();
     expect(store.getState().system.services.length).toBe(1);
   });
 
   it('cancelRouteDraft clears without creating anything', () => {
-    store.getState().startRouteDraft(from);
-    store.getState().cancelRouteDraft();
+    store.commands.routing.startRouteDraft(from);
+    store.commands.routing.cancelRouteDraft();
     expect(store.getState().routeDraft).toBeNull();
     expect(store.getState().system.services.length).toBe(0);
   });
@@ -275,12 +275,12 @@ describe('routing along a SINGLE way (the first-gesture case that hit the degene
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftServiceEnabled(false);
-    const r = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(r, [-115.3, 36.1]);
-    store.getState().addWayPoint(r, [-115.1, 36.1]);
-    store.getState().finishWay();
-    store.getState().setDraftServiceEnabled(true);
+    store.commands.tools.setDraftServiceEnabled(false);
+    const r = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(r, [-115.3, 36.1]);
+    store.commands.ways.addWayPoint(r, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    store.commands.tools.setDraftServiceEnabled(true);
     const way = store.getState().system.ways[0];
     from = must(anchorOnWay(way, [-115.27, 36.1]));
     to = must(anchorOnWay(way, [-115.14, 36.1]));
@@ -313,44 +313,44 @@ describe('routing along a SINGLE way (the first-gesture case that hit the degene
   });
 
   it('extend along the same way succeeds', () => {
-    store.getState().startRouteDraft(from);
-    expect(store.getState().extendRouteDraft(to)).toBe(true);
+    store.commands.routing.startRouteDraft(from);
+    expect(store.commands.routing.extendRouteDraft(to)).toBe(true);
   });
 
   it('committing a same-way route creates the service', () => {
-    store.getState().startRouteDraft(from);
-    store.getState().extendRouteDraft(to);
-    const svcId = store.getState().commitRouteDraft();
+    store.commands.routing.startRouteDraft(from);
+    store.commands.routing.extendRouteDraft(to);
+    const svcId = store.commands.routing.commitRouteDraft();
     const sys = store.getState().system;
     expect(!!svcId).toBe(true);
     expect(sys.services.length).toBe(1);
   });
 
   it('the road stays one way', () => {
-    store.getState().startRouteDraft(from);
-    store.getState().extendRouteDraft(to);
-    store.getState().commitRouteDraft();
+    store.commands.routing.startRouteDraft(from);
+    store.commands.routing.extendRouteDraft(to);
+    store.commands.routing.commitRouteDraft();
     expect(store.getState().system.ways.length).toBe(1);
   });
 
   it('the line rides a stretch of it', () => {
     const way = store.getState().system.ways[0];
-    store.getState().startRouteDraft(from);
-    store.getState().extendRouteDraft(to);
-    store.getState().commitRouteDraft();
+    store.commands.routing.startRouteDraft(from);
+    store.commands.routing.extendRouteDraft(to);
+    store.commands.routing.commitRouteDraft();
     const sys = store.getState().system;
-    const ridden = patternWayIds(sys.services[0].patterns[0]);
+    const ridden = patternWayIds(sys.services[0].path);
     expect(ridden.length).toBe(1);
     expect(ridden[0]).toBe(way.id);
   });
 
   // The clicks were at -115.27 and -115.14 on a road running -115.3 to -115.1.
   it('the drawn line spans exactly the clicked stretch', () => {
-    store.getState().startRouteDraft(from);
-    store.getState().extendRouteDraft(to);
-    store.getState().commitRouteDraft();
+    store.commands.routing.startRouteDraft(from);
+    store.commands.routing.extendRouteDraft(to);
+    store.commands.routing.commitRouteDraft();
     const sys = store.getState().system;
-    const drawn = patternPath(sys.ways, sys.services[0].patterns[0]);
+    const drawn = patternPath(sys.ways, sys.services[0].path);
     expect(Math.abs(drawn[0][0] - -115.27)).toBeLessThan(1e-6);
     expect(Math.abs(drawn[drawn.length - 1][0] - -115.14)).toBeLessThan(1e-6);
   });
@@ -367,10 +367,10 @@ describe('adoptExistingInfrastructure: sketched line re-binds onto the grid', ()
   // Sketch a bus line roughly along the top road, offset ~200m north — the
   // Network-view sketch flow (service enabled) creating parallel geometry.
   function sketchLine() {
-    const sketch = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(sketch, [-115.28, 36.202]);
-    store.getState().addWayPoint(sketch, [-115.12, 36.202]);
-    store.getState().finishWay();
+    const sketch = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(sketch, [-115.28, 36.202]);
+    store.commands.ways.addWayPoint(sketch, [-115.12, 36.202]);
+    store.commands.ways.finishWay();
     return store.getState().system.services[0];
   }
 
@@ -383,27 +383,27 @@ describe('adoptExistingInfrastructure: sketched line re-binds onto the grid', ()
 
   it('adoptExistingInfrastructure rebinds the pattern', () => {
     const svc = sketchLine();
-    const rebound = store.getState().adoptExistingInfrastructure(svc.id);
+    const rebound = store.commands.routing.adoptExistingInfrastructure(svc.id);
     expect(rebound).toBe(1);
   });
 
   it('the adopted pattern rides real grid ways (top road arms)', () => {
     const svc = sketchLine();
-    store.getState().adoptExistingInfrastructure(svc.id);
+    store.commands.routing.adoptExistingInfrastructure(svc.id);
     const after = store.getState().system;
     const adopted = must(
       after.services.find((sv) => sv.id === svc.id),
       'adopted service',
     );
-    expect(patternLegs(adopted.patterns[0]).length).toBeGreaterThanOrEqual(1);
-    expect(
-      patternWayIds(adopted.patterns[0]).every((wid) => after.ways.some((w) => w.id === wid)),
-    ).toBe(true);
+    expect(patternLegs(adopted.path).length).toBeGreaterThanOrEqual(1);
+    expect(patternWayIds(adopted.path).every((wid) => after.ways.some((w) => w.id === wid))).toBe(
+      true,
+    );
   });
 
   it('adopted ways lie on the grid, not the sketch offset', () => {
     const svc = sketchLine();
-    store.getState().adoptExistingInfrastructure(svc.id);
+    store.commands.routing.adoptExistingInfrastructure(svc.id);
     const after = store.getState().system;
     const adopted = must(
       after.services.find((sv) => sv.id === svc.id),
@@ -416,34 +416,37 @@ describe('adoptExistingInfrastructure: sketched line re-binds onto the grid', ()
       );
       return w.points.every((p) => Math.abs(p[1] - 36.2) < 0.0005);
     };
-    expect(patternWayIds(adopted.patterns[0]).every(onGrid)).toBe(true);
+    expect(patternWayIds(adopted.path).every(onGrid)).toBe(true);
   });
 
   it('orphaned sketch geometry was removed', () => {
     const svc = sketchLine();
-    const sketchWayIds = new Set(patternWayIds(svc.patterns[0]));
-    store.getState().adoptExistingInfrastructure(svc.id);
+    const sketchWayIds = new Set(patternWayIds(svc.path));
+    store.commands.routing.adoptExistingInfrastructure(svc.id);
     const after = store.getState().system;
     expect(after.ways.every((w) => !sketchWayIds.has(w.id))).toBe(true);
   });
 
   it('the station followed onto an adopted way', () => {
     const svc = sketchLine();
-    // A station riding the sketch, to prove it follows the adoption.
-    const st1 = store
-      .getState()
-      .addStation([-115.25, 36.202], { wayId: patternWayIds(svc.patterns[0])[0], t: 0.2 });
-    store.getState().adoptExistingInfrastructure(svc.id);
+    // A stop riding the sketch, to prove it follows the adoption.
+    const st1 = required(
+      store.commands.stops.addStop([-115.25, 36.202], {
+        wayId: patternWayIds(svc.path)[0],
+        t: 0.2,
+      }),
+    );
+    store.commands.routing.adoptExistingInfrastructure(svc.id);
     const after = store.getState().system;
     const adopted = must(
       after.services.find((sv) => sv.id === svc.id),
       'adopted service',
     );
     const station = must(
-      after.stations.find((s2) => s2.id === st1),
+      after.stops.find((s2) => s2.id === st1),
       'station',
     );
     const anchor = must(primaryAnchor(station), 'station anchor');
-    expect(patternWayIds(adopted.patterns[0])).toContain(anchor.wayId);
+    expect(patternWayIds(adopted.path)).toContain(anchor.wayId);
   });
 });

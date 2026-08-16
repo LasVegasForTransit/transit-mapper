@@ -37,7 +37,7 @@ describe('a loop at the terminus', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftMode('bus');
+    store.commands.tools.setDraftMode('bus');
     const P = (lng: number, lat: number): LngLat => [lng, lat];
     const road = (id: string, pts: LngLat[]) => ({
       id,
@@ -50,7 +50,7 @@ describe('a loop at the terminus', () => {
     const N = P(-115.2, 36.13);
     const NE = P(-115.1988, 36.13);
     const SE = P(-115.1988, 36.128);
-    store.getState().setSystem(
+    store.commands.document.setSystem(
       parseSystem({
         version: 3,
         ways: [
@@ -63,16 +63,16 @@ describe('a loop at the terminus', () => {
         stations: [],
       }),
     );
-    tSvc = must(store.getState().addServiceToWay('spine'));
-    const tPat = must(store.getState().system.services.find((sv) => sv.id === tSvc)).patterns[0];
+    tSvc = must(store.commands.services.addServiceToWay('spine'));
+    const tPat = must(store.getState().system.services.find((sv) => sv.id === tSvc)).path;
     // The loop starts and ends at the spine's far terminus.
-    looped = store.getState().attachReturnPath(tSvc, tPat.id, [
+    looped = store.commands.routing.attachReturnPath(tSvc, tPat.id, [
       { wayId: 'top', fromPoint: 0, toPoint: 1 },
       { wayId: 'side', fromPoint: 0, toPoint: 1 },
       { wayId: 'back', fromPoint: 0, toPoint: 1 },
     ]);
 
-    lp = must(store.getState().system.services.find((sv) => sv.id === tSvc)).patterns[0];
+    lp = must(store.getState().system.services.find((sv) => sv.id === tSvc)).path;
     outWays = patternRunLegs(lp, 'outbound').map((r) => r.leg.wayId);
     backWays = patternRunLegs(lp, 'inbound').map((r) => r.leg.wayId);
   });
@@ -105,14 +105,14 @@ describe('a loop at the terminus', () => {
   it('a turnaround survives a save and a reload', () => {
     const reloaded = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
     expect(
-      must(reloaded.services.find((sv) => sv.id === tSvc)).patterns[0].sections.some(
+      must(reloaded.services.find((sv) => sv.id === tSvc)).path.sections.some(
         (x) => x.kind === 'turnaround',
       ),
     ).toBe(true);
   });
 });
 
-// A transit centre both halves of a couplet pull into is ONE station riding
+// A transit centre both halves of a couplet pull into is ONE stop riding
 // TWO ways. With a single anchor it bound to whichever was nearest when it was
 // placed, and every line on the other drove past a stop it plainly calls at.
 describe('a platform on more than one way', () => {
@@ -121,12 +121,12 @@ describe('a platform on more than one way', () => {
   let callsAtNorth: boolean;
   let callsAtSouth: boolean;
   let reloaded: TransitSystem;
-  let afterStation: TransitSystem['stations'][number] | undefined;
+  let afterStop: TransitSystem['stops'][number] | undefined;
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftMode('bus');
-    store.getState().setSystem(
+    store.commands.tools.setDraftMode('bus');
+    store.commands.document.setSystem(
       parseSystem({
         version: 3,
         ways: [
@@ -155,27 +155,27 @@ describe('a platform on more than one way', () => {
         stations: [],
       }),
     );
-    centreId = must(store.getState().addStation([-115.2, 36.12], { wayId: 'northbound', t: 0.5 }));
+    centreId = must(store.commands.stops.addStop([-115.2, 36.12], { wayId: 'northbound', t: 0.5 }));
     // The same platform is reached from the other carriageway too.
-    store.getState().setSystem({
+    store.commands.document.setSystem({
       ...store.getState().system,
-      stations: store
+      stops: store
         .getState()
-        .system.stations.map((st) =>
+        .system.stops.map((st) =>
           st.id !== centreId
             ? st
             : { ...st, anchors: [...st.anchors, { wayId: 'southbound', t: 0.5 }] },
         ),
     });
-    const northSvc = must(store.getState().addServiceToWay('northbound'));
-    const southSvc = must(store.getState().addServiceToWay('southbound'));
+    const northSvc = must(store.commands.services.addServiceToWay('northbound'));
+    const southSvc = must(store.commands.services.addServiceToWay('southbound'));
 
     const callsAt = (svcId: string) => {
       const sys = store.getState().system;
-      const pt = must(sys.services.find((sv) => sv.id === svcId)).patterns[0];
+      const pt = must(sys.services.find((sv) => sv.id === svcId)).path;
       const path = patternRunPath(sys.ways, pt, 'outbound');
-      return patternStops(sys.stations, pt, path, pathLengthMeters(path), 'outbound').some(
-        (x) => x.station.id === centreId,
+      return patternStops(sys.stops, pt, path, pathLengthMeters(path), 'outbound').some(
+        (x) => x.stop.id === centreId,
       );
     };
     callsAtNorth = callsAt(northSvc);
@@ -184,8 +184,8 @@ describe('a platform on more than one way', () => {
     reloaded = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
 
     // Deleting one carriageway must not delete a platform the other still serves.
-    store.getState().deleteWay('southbound');
-    afterStation = store.getState().system.stations.find((st) => st.id === centreId);
+    store.commands.ways.deleteWay('southbound');
+    afterStop = store.getState().system.stops.find((st) => st.id === centreId);
   });
 
   it('a line on the first way calls at the shared platform', () => {
@@ -197,17 +197,17 @@ describe('a platform on more than one way', () => {
   });
 
   it('both anchors survive a save and a reload', () => {
-    expect(must(reloaded.stations.find((st) => st.id === centreId)).anchors).toHaveLength(2);
+    expect(must(reloaded.stops.find((st) => st.id === centreId)).anchors).toHaveLength(2);
   });
 
   it('deleting one of its ways keeps the station', () => {
-    expect(afterStation).toBeDefined();
+    expect(afterStop).toBeDefined();
   });
 
   it('and drops only the anchor that named the deleted way', () => {
-    const station = must(afterStation);
-    expect(station.anchors).toHaveLength(1);
-    expect(station.anchors[0].wayId).toBe('northbound');
+    const stop = must(afterStop);
+    expect(stop.anchors).toHaveLength(1);
+    expect(stop.anchors[0].wayId).toBe('northbound');
   });
 });
 
@@ -226,8 +226,8 @@ describe('skipping a stop in one direction', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftMode('bus');
-    store.getState().setSystem(
+    store.commands.tools.setDraftMode('bus');
+    store.commands.document.setSystem(
       parseSystem({
         version: 3,
         ways: [
@@ -246,40 +246,38 @@ describe('skipping a stop in one direction', () => {
         stations: [],
       }),
     );
-    const sSvc = must(store.getState().addServiceToWay('street'));
-    const sPat = must(store.getState().system.services.find((sv) => sv.id === sSvc)).patterns[0];
-    // Anchored explicitly: addStation places a station where it is told and does
-    // not go looking for a way to bind it to, and an unanchored station is not a
+    const sSvc = must(store.commands.services.addServiceToWay('street'));
+    const sPat = must(store.getState().system.services.find((sv) => sv.id === sSvc)).path;
+    // Anchored explicitly: addStop places a stop where it is told and does
+    // not go looking for a way to bind it to, and an unanchored stop is not a
     // stop on anything.
-    northId = must(store.getState().addStation([-115.2, 36.13], { wayId: 'street', t: 0.75 }));
-    store.getState().addStation([-115.2, 36.11], { wayId: 'street', t: 0.25 });
+    northId = must(store.commands.stops.addStop([-115.2, 36.13], { wayId: 'street', t: 0.75 }));
+    store.commands.stops.addStop([-115.2, 36.11], { wayId: 'street', t: 0.25 });
 
     const idsOn = (run: 'outbound' | 'inbound') => {
       const sys = store.getState().system;
-      const pt = must(sys.services.find((sv) => sv.id === sSvc)).patterns[0];
+      const pt = must(sys.services.find((sv) => sv.id === sSvc)).path;
       const path = patternRunPath(sys.ways, pt, run);
-      return patternStops(sys.stations, pt, path, pathLengthMeters(path), run).map(
-        (x) => x.station.id,
-      );
+      return patternStops(sys.stops, pt, path, pathLengthMeters(path), run).map((x) => x.stop.id);
     };
 
     idsOnInboundBefore = idsOn('inbound');
 
-    store.getState().setStopSkipped(sSvc, sPat.id, 'inbound', northId, true);
+    store.commands.services.setStopSkipped(sSvc, sPat.id, 'inbound', northId, true);
     idsOnInboundAfterSkip = idsOn('inbound');
     idsOnOutboundAfterSkip = idsOn('outbound');
 
     // Serialization is where this vanishes silently if it is not carried.
     const reloaded = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
-    rp = must(reloaded.services.find((sv) => sv.id === sSvc)).patterns[0];
+    rp = must(reloaded.services.find((sv) => sv.id === sSvc)).path;
 
-    // A skip names a station, and a station can be deleted after the fact.
-    store.getState().deleteStation(northId);
+    // A skip names a stop, and a stop can be deleted after the fact.
+    store.commands.stops.deleteStop(northId);
     const afterDelete = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
-    dp = must(afterDelete.services.find((sv) => sv.id === sSvc)).patterns[0];
+    dp = must(afterDelete.services.find((sv) => sv.id === sSvc)).path;
 
-    store.getState().setStopSkipped(sSvc, sPat.id, 'inbound', northId, false);
-    cleared = must(store.getState().system.services.find((sv) => sv.id === sSvc)).patterns[0];
+    store.commands.services.setStopSkipped(sSvc, sPat.id, 'inbound', northId, false);
+    cleared = must(store.getState().system.services.find((sv) => sv.id === sSvc)).path;
   });
 
   it('both directions call at both stops to begin with', () => {
@@ -320,8 +318,8 @@ describe('a couplet meeting itself: two one-way paths brought back together', ()
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftMode('bus');
-    store.getState().setSystem(
+    store.commands.tools.setDraftMode('bus');
+    store.commands.document.setSystem(
       parseSystem({
         version: 3,
         ways: [
@@ -340,17 +338,17 @@ describe('a couplet meeting itself: two one-way paths brought back together', ()
         stations: [],
       }),
     );
-    const backId = must(store.getState().separateCarriageways('blvd'));
-    const cSvc = must(store.getState().addServiceToWay('blvd'));
-    const cPat = must(store.getState().system.services.find((sv) => sv.id === cSvc)).patterns[0];
-    attachedOk = store
-      .getState()
-      .attachReturnPath(cSvc, cPat.id, [{ wayId: backId, fromPoint: 1, toPoint: 0 }]);
-    split = must(store.getState().system.services.find((sv) => sv.id === cSvc)).patterns[0];
+    const backId = must(store.commands.network.separateCarriageways('blvd'));
+    const cSvc = must(store.commands.services.addServiceToWay('blvd'));
+    const cPat = must(store.getState().system.services.find((sv) => sv.id === cSvc)).path;
+    attachedOk = store.commands.routing.attachReturnPath(cSvc, cPat.id, [
+      { wayId: backId, fromPoint: 1, toPoint: 0 },
+    ]);
+    split = must(store.getState().system.services.find((sv) => sv.id === cSvc)).path;
 
-    store.getState().combineCarriageways(store.getState().system.namedWays[0].id);
+    store.commands.network.combineCarriageways(store.getState().system.namedWays[0].id);
     combined = store.getState().system.services.find((sv) => sv.id === cSvc);
-    cp2 = must(combined).patterns[0];
+    cp2 = must(combined).path;
     // removeWay PRUNES legs naming the way it drops, so before the rescue this
     // silently deleted whichever direction rode the discarded carriageway — on a
     // couplet, the whole return trip.

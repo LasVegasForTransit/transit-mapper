@@ -4,8 +4,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import { MODES } from '@transitmapper/core/model/catalog';
+import { squareFootprint } from '@transitmapper/core/model/geo';
 import { createEditorStore } from '../../src/editor/store';
-import { buildFeatures, buildPhysicalHandles } from '../../src/map/layers';
+import { buildPhysicalHandles } from '@transitmapper/core/render/buildFeatures';
+import { required } from '../support/required.test';
+import { buildFeatures } from '../support/testRenderPresentation.test';
 
 /** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
  *  a silent `undefined`/`null` into a clear failure at the point of use
@@ -24,12 +27,12 @@ describe('On-map labels: name flows into station/facility feature properties', (
 
   beforeEach(() => {
     store = createEditorStore();
-    namedId = store.getState().addStation([-115.16, 36.12]);
-    store.getState().setStationName(namedId, 'Downtown');
-    unnamedId = store.getState().addStation([-115.17, 36.13]);
-    facId = store.getState().addFacility('depot', [-115.18, 36.14]);
-    store.getState().setFacilityName(facId, 'Maintenance Yard');
-    unnamedFacId = store.getState().addFacility('entrance', [-115.19, 36.15]);
+    namedId = required(store.commands.stops.addStop([-115.16, 36.12]));
+    store.commands.stops.setStopName(namedId, 'Downtown');
+    unnamedId = required(store.commands.stops.addStop([-115.17, 36.13]));
+    facId = required(store.commands.facilities.addFacility('depot', [-115.18, 36.14]));
+    store.commands.facilities.setFacilityName(facId, 'Maintenance Yard');
+    unnamedFacId = required(store.commands.facilities.addFacility('entrance', [-115.19, 36.15]));
   });
 
   const view = {
@@ -37,33 +40,47 @@ describe('On-map labels: name flows into station/facility feature properties', (
     visibleModes: new Set(Object.keys(MODES)),
     visibleWayTypes: new Set<string>(),
   };
+  const infraView = { ...view, viewMode: 'infrastructure' as const };
+  // Density can deliberately omit a nearby anonymous marker (covered
+  // separately); these checks are about serialized names, not density.
+  const noDensity = { applyScreenDensity: false };
 
   it("a named station's feature carries its name (network view too)", () => {
-    const net = buildFeatures(store.getState().system, null, [], view);
-    const namedStationFeature = net.stations.features.find((f) => f.properties?.id === namedId);
+    const net = buildFeatures(store.getState().system, null, [], view, null, null, noDensity);
+    const namedStationFeature = net.stops.features.find((f) => f.properties?.id === namedId);
     expect(namedStationFeature?.properties?.name).toBe('Downtown');
   });
 
   it("an unnamed station's feature has an empty-string name, not undefined", () => {
-    const net = buildFeatures(store.getState().system, null, [], view);
-    const unnamedStationFeature = net.stations.features.find((f) => f.properties?.id === unnamedId);
+    const net = buildFeatures(store.getState().system, null, [], view, null, null, noDensity);
+    const unnamedStationFeature = net.stops.features.find((f) => f.properties?.id === unnamedId);
     expect(unnamedStationFeature?.properties?.name).toBe('');
   });
 
   it("a named facility's feature carries its name", () => {
-    const infra = buildFeatures(store.getState().system, null, [], {
-      ...view,
-      viewMode: 'infrastructure',
-    });
+    const infra = buildFeatures(
+      store.getState().system,
+      null,
+      [],
+      infraView,
+      null,
+      null,
+      noDensity,
+    );
     const namedFacFeature = infra.facilities.features.find((f) => f.properties?.id === facId);
     expect(namedFacFeature?.properties?.name).toBe('Maintenance Yard');
   });
 
   it("an unnamed facility's feature has an empty-string name, not undefined", () => {
-    const infra = buildFeatures(store.getState().system, null, [], {
-      ...view,
-      viewMode: 'infrastructure',
-    });
+    const infra = buildFeatures(
+      store.getState().system,
+      null,
+      [],
+      infraView,
+      null,
+      null,
+      noDensity,
+    );
     const unnamedFacFeature = infra.facilities.features.find(
       (f) => f.properties?.id === unnamedFacId,
     );
@@ -80,115 +97,70 @@ describe('P3: footprints/platforms/facilities render in Infrastructure view only
     visibleModes: new Set(Object.keys(MODES)),
     visibleWayTypes: new Set<string>(),
   };
+  const infraView = { viewMode: 'infrastructure' as const, ...emptyView };
+  const netView = { viewMode: 'network' as const, ...emptyView };
 
   beforeEach(() => {
     store = createEditorStore();
-    stId = store.getState().addStation([-115.15, 36.1]);
-    store.getState().addStationFootprint(stId);
-    store.getState().addPlatform(stId);
-    store.getState().addFacility('entrance', [-115.151, 36.101]);
+    stId = required(store.commands.stations.addDrawnStation(squareFootprint([-115.15, 36.1], 30)));
+    store.commands.stations.addPlatform(stId);
+    store.commands.facilities.addFacility('entrance', [-115.151, 36.101]);
   });
 
   it('infrastructure view renders the footprint polygon', () => {
-    const infra = buildFeatures(
-      store.getState().system,
-      null,
-      [],
-      { viewMode: 'infrastructure', ...emptyView },
-      stId,
-    );
+    const infra = buildFeatures(store.getState().system, null, [], infraView, stId);
     expect(infra.footprints.features.length).toBe(1);
   });
 
   it('infrastructure view renders the platform polygon', () => {
-    const infra = buildFeatures(
-      store.getState().system,
-      null,
-      [],
-      { viewMode: 'infrastructure', ...emptyView },
-      stId,
-    );
+    const infra = buildFeatures(store.getState().system, null, [], infraView, stId);
     expect(infra.platforms.features.length).toBe(1);
   });
 
   it('infrastructure view renders the facility point', () => {
-    const infra = buildFeatures(
-      store.getState().system,
-      null,
-      [],
-      { viewMode: 'infrastructure', ...emptyView },
-      stId,
-    );
+    const infra = buildFeatures(store.getState().system, null, [], infraView, stId);
     expect(infra.facilities.features.length).toBe(1);
   });
 
   it("physicalHandleStationId renders that station's footprint+platform vertices", () => {
-    const infra = buildFeatures(
-      store.getState().system,
-      null,
-      [],
-      { viewMode: 'infrastructure', ...emptyView },
-      stId,
-    );
+    const infra = buildFeatures(store.getState().system, null, [], infraView, stId);
     expect(infra.physicalHandles.features.length).toBe(4 + 4);
   });
 
   it('network view hides footprints', () => {
-    const net = buildFeatures(
-      store.getState().system,
-      null,
-      [],
-      { viewMode: 'network', ...emptyView },
-      stId,
-    );
+    const net = buildFeatures(store.getState().system, null, [], netView, stId);
     expect(net.footprints.features.length).toBe(0);
   });
 
   it('network view hides platforms', () => {
-    const net = buildFeatures(
-      store.getState().system,
-      null,
-      [],
-      { viewMode: 'network', ...emptyView },
-      stId,
-    );
+    const net = buildFeatures(store.getState().system, null, [], netView, stId);
     expect(net.platforms.features.length).toBe(0);
   });
 
   it('network view hides facilities', () => {
-    const net = buildFeatures(
-      store.getState().system,
-      null,
-      [],
-      { viewMode: 'network', ...emptyView },
-      stId,
-    );
+    const net = buildFeatures(store.getState().system, null, [], netView, stId);
     expect(net.facilities.features.length).toBe(0);
   });
 
   it('network view hides physical handles too', () => {
-    const net = buildFeatures(
-      store.getState().system,
-      null,
-      [],
-      { viewMode: 'network', ...emptyView },
-      stId,
-    );
+    const net = buildFeatures(store.getState().system, null, [], netView, stId);
     expect(net.physicalHandles.features.length).toBe(0);
   });
 
   it("infrastructure view renders a group's footprint polygon too", () => {
-    const groupId = store.getState().createFacilityComplex([
-      [-115.2, 36.13],
-      [-115.18, 36.13],
-      [-115.18, 36.15],
-      [-115.2, 36.15],
-    ]);
+    const groupId = required(
+      store.commands.groups.createFacilityComplex([
+        [-115.2, 36.13],
+        [-115.18, 36.13],
+        [-115.18, 36.15],
+        [-115.2, 36.15],
+      ]),
+    );
     const infraWithGroup = buildFeatures(
       store.getState().system,
       null,
       [],
-      { viewMode: 'infrastructure', ...emptyView },
+      infraView,
       null,
       groupId,
     );
@@ -197,17 +169,19 @@ describe('P3: footprints/platforms/facilities render in Infrastructure view only
   });
 
   it("physicalHandleGroupId renders that group's footprint vertices", () => {
-    const groupId = store.getState().createFacilityComplex([
-      [-115.2, 36.13],
-      [-115.18, 36.13],
-      [-115.18, 36.15],
-      [-115.2, 36.15],
-    ]);
+    const groupId = required(
+      store.commands.groups.createFacilityComplex([
+        [-115.2, 36.13],
+        [-115.18, 36.13],
+        [-115.18, 36.15],
+        [-115.2, 36.15],
+      ]),
+    );
     const infraWithGroup = buildFeatures(
       store.getState().system,
       null,
       [],
-      { viewMode: 'infrastructure', ...emptyView },
+      infraView,
       null,
       groupId,
     );
@@ -215,7 +189,7 @@ describe('P3: footprints/platforms/facilities render in Infrastructure view only
   });
 
   it("a group's footprint still renders when it isn't the active handle owner", () => {
-    store.getState().createFacilityComplex([
+    store.commands.groups.createFacilityComplex([
       [-115.2, 36.13],
       [-115.18, 36.13],
       [-115.18, 36.15],
@@ -225,7 +199,7 @@ describe('P3: footprints/platforms/facilities render in Infrastructure view only
       store.getState().system,
       null,
       [],
-      { viewMode: 'infrastructure', ...emptyView },
+      infraView,
       null,
       null,
     );
@@ -233,7 +207,7 @@ describe('P3: footprints/platforms/facilities render in Infrastructure view only
   });
 
   it("but its handles don't, without physicalHandleGroupId", () => {
-    store.getState().createFacilityComplex([
+    store.commands.groups.createFacilityComplex([
       [-115.2, 36.13],
       [-115.18, 36.13],
       [-115.18, 36.15],
@@ -243,7 +217,7 @@ describe('P3: footprints/platforms/facilities render in Infrastructure view only
       store.getState().system,
       null,
       [],
-      { viewMode: 'infrastructure', ...emptyView },
+      infraView,
       null,
       null,
     );
@@ -256,13 +230,7 @@ describe('P3: footprints/platforms/facilities render in Infrastructure view only
   // re-upload even when it renders identically.
   describe('buildPhysicalHandles agrees with the full build', () => {
     it('buildPhysicalHandles alone emits exactly what the full build emits for a station', () => {
-      const infra = buildFeatures(
-        store.getState().system,
-        null,
-        [],
-        { viewMode: 'infrastructure', ...emptyView },
-        stId,
-      );
+      const infra = buildFeatures(store.getState().system, null, [], infraView, stId);
       const sysP = store.getState().system;
       expect(
         JSON.stringify(
@@ -275,17 +243,19 @@ describe('P3: footprints/platforms/facilities render in Infrastructure view only
     });
 
     it('buildPhysicalHandles alone emits exactly what the full build emits for a group', () => {
-      const groupId = store.getState().createFacilityComplex([
-        [-115.2, 36.13],
-        [-115.18, 36.13],
-        [-115.18, 36.15],
-        [-115.2, 36.15],
-      ]);
+      const groupId = required(
+        store.commands.groups.createFacilityComplex([
+          [-115.2, 36.13],
+          [-115.18, 36.13],
+          [-115.18, 36.15],
+          [-115.2, 36.15],
+        ]),
+      );
       const infraWithGroup = buildFeatures(
         store.getState().system,
         null,
         [],
-        { viewMode: 'infrastructure', ...emptyView },
+        infraView,
         null,
         groupId,
       );
@@ -312,12 +282,11 @@ describe('P3: v3 serialize round-trips footprints, platforms, facilities, groups
 
   beforeEach(() => {
     store = createEditorStore();
-    stId = store.getState().addStation([-115.15, 36.1]);
-    store.getState().addStationFootprint(stId);
-    store.getState().addPlatform(stId);
-    store.getState().addFacility('depot', [-115.16, 36.11]);
-    const other = store.getState().addStation([-115.17, 36.12]);
-    store.getState().createGroup([stId, other], 'Complex');
+    stId = required(store.commands.stations.addDrawnStation(squareFootprint([-115.15, 36.1], 30)));
+    store.commands.stations.addPlatform(stId);
+    store.commands.facilities.addFacility('depot', [-115.16, 36.11]);
+    const other = required(store.commands.stops.addStop([-115.17, 36.12]));
+    store.commands.groups.createGroup([stId, other], 'Complex');
   });
 
   it('parse round-trips a station footprint', () => {
@@ -345,12 +314,14 @@ describe('P3: v3 serialize round-trips footprints, platforms, facilities, groups
   // A facility complex's footprint + color used to be silently dropped by
   // parseSystem (never read at all) — real data loss on save/reload.
   it("parse round-trips a facility complex's footprint", () => {
-    const complexId = store.getState().createFacilityComplex([
-      [-115.2, 36.13],
-      [-115.18, 36.13],
-      [-115.18, 36.15],
-      [-115.2, 36.15],
-    ]);
+    const complexId = required(
+      store.commands.groups.createFacilityComplex([
+        [-115.2, 36.13],
+        [-115.18, 36.13],
+        [-115.18, 36.15],
+        [-115.2, 36.15],
+      ]),
+    );
     const roundComplex = parseSystem(
       JSON.parse(JSON.stringify(store.getState().system)),
     ).groups.find((g) => g.id === complexId);
@@ -358,12 +329,14 @@ describe('P3: v3 serialize round-trips footprints, platforms, facilities, groups
   });
 
   it("parse round-trips a facility complex's color", () => {
-    const complexId = store.getState().createFacilityComplex([
-      [-115.2, 36.13],
-      [-115.18, 36.13],
-      [-115.18, 36.15],
-      [-115.2, 36.15],
-    ]);
+    const complexId = required(
+      store.commands.groups.createFacilityComplex([
+        [-115.2, 36.13],
+        [-115.18, 36.13],
+        [-115.18, 36.15],
+        [-115.2, 36.15],
+      ]),
+    );
     const roundComplex = parseSystem(
       JSON.parse(JSON.stringify(store.getState().system)),
     ).groups.find((g) => g.id === complexId);

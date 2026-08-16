@@ -7,10 +7,11 @@ import {
 } from '@transitmapper/core/render/preview';
 import { systemSvg } from '@transitmapper/core/render/svg';
 import { fitBounds, projector } from '@transitmapper/core/render/project';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import { systemBounds } from '@transitmapper/core/model/geo';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '@transitmapper/core/model/catalog';
 import { LVBT } from '@transitmapper/core/style/lvbtBrand';
-import { aPattern, aRoad, aService, aStation, aSystem } from '@transitmapper/core/testing/fixtures';
+import { aPattern, aRoad, aService, aStop, aSystem } from '@transitmapper/core/testing/fixtures';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
 
@@ -34,12 +35,12 @@ describe('render/preview: the card the Worker rasterizes for link unfurls', () =
   );
   const pattern = aPattern('pattern', [line], ['line']);
   const service = aService('svc', [pattern], { name: 'Resort Corridor', modeId: 'lightRail' });
-  const station = aStation('station', [-115.14, 36.16], undefined, { name: 'Downtown' });
+  const stop = aStop('station', [-115.14, 36.16], undefined, { name: 'Downtown' });
   const system = aSystem({
     name: 'Valley Rapid Transit',
     ways: [line],
     services: [service],
-    stations: [station],
+    stops: [stop],
   });
 
   const svg = previewSvg(system);
@@ -126,20 +127,20 @@ describe('render/preview: the card the Worker rasterizes for link unfurls', () =
       label: `Line ${i + 1}`,
     }));
     const cardHeight = PREVIEW_HEIGHT / 2;
+    const crowdedViewport = fitBounds(mustBounds(system), {
+      width: PREVIEW_WIDTH / 2,
+      height: cardHeight,
+      padding: 28,
+    });
     const crowded = systemSvg(
       system,
       {
         viewMode: 'network',
         visibleModes: new Set(MODE_ORDER),
         visibleWayTypes: new Set(WAY_TYPE_ORDER),
+        presentation: renderPresentationForViewport(crowdedViewport),
       },
-      projector(
-        fitBounds(mustBounds(system), {
-          width: PREVIEW_WIDTH / 2,
-          height: cardHeight,
-          padding: 28,
-        }),
-      ),
+      projector(crowdedViewport),
       {
         title: system.name,
         legend: manyLines,
@@ -178,6 +179,7 @@ describe('render/preview: the card the Worker rasterizes for link unfurls', () =
         viewMode: 'network',
         visibleModes: new Set(MODE_ORDER),
         visibleWayTypes: new Set(WAY_TYPE_ORDER),
+        presentation: renderPresentationForViewport(exportViewport),
       },
       projector(exportViewport),
       {

@@ -197,10 +197,10 @@ describe("re-importing an area doesn't duplicate what's already there", () => {
 
     beforeEach(() => {
       store = createEditorStore();
-      store.getState().setSystem(createEmptySystem());
-      store.getState().importWays(osmElementsToNetwork(area));
+      store.commands.document.setSystem(createEmptySystem());
+      store.commands.imports.importWays(osmElementsToNetwork(area));
       beforeNodes = store.getState().system.nodes.length;
-      store.getState().importWays(osmElementsToNetwork(withBike));
+      store.commands.imports.importWays(osmElementsToNetwork(withBike));
       shared = store
         .getState()
         .system.nodes.filter((n) => n.coord[0] === -115.15 && n.coord[1] === 36.1);
@@ -365,9 +365,9 @@ describe("re-importing an area doesn't duplicate what's already there", () => {
 
     beforeEach(() => {
       store = createEditorStore();
-      store.getState().setSystem(createEmptySystem());
-      store.getState().importWays(osmElementsToNetwork(namedArea));
-      store.getState().importWays(osmElementsToNetwork(namedNeighbour));
+      store.commands.document.setSystem(createEmptySystem());
+      store.commands.imports.importWays(osmElementsToNetwork(namedArea));
+      store.commands.imports.importWays(osmElementsToNetwork(namedNeighbour));
     });
 
     it('leaves every way in at most one identity', () => {
@@ -405,17 +405,17 @@ describe("re-importing an area doesn't duplicate what's already there", () => {
     // And the store enforces it, whatever the caller passes.
     it('the store skips duplicates rather than trusting the caller', () => {
       const store = createEditorStore();
-      store.getState().setSystem(createEmptySystem());
-      store.getState().importWays(osmElementsToNetwork(area));
-      store.getState().importWays(osmElementsToNetwork(area));
+      store.commands.document.setSystem(createEmptySystem());
+      store.commands.imports.importWays(osmElementsToNetwork(area));
+      store.commands.imports.importWays(osmElementsToNetwork(area));
       expect(store.getState().system.ways).toHaveLength(2);
     });
 
     it('the store reports added/skipped', () => {
       const store = createEditorStore();
-      store.getState().setSystem(createEmptySystem());
-      store.getState().importWays(osmElementsToNetwork(area));
-      const second = store.getState().importWays(osmElementsToNetwork(area));
+      store.commands.document.setSystem(createEmptySystem());
+      store.commands.imports.importWays(osmElementsToNetwork(area));
+      const second = store.commands.imports.importWays(osmElementsToNetwork(area));
       expect(second.added).toBe(0);
       expect(second.skipped).toBe(2);
     });

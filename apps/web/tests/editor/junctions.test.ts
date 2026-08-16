@@ -13,6 +13,7 @@ import { findMismatchedTypeJunctions } from '@transitmapper/core/model/validate'
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
+import { required } from '../support/required.test';
 
 function wayOf(id: string, typeId: string, points: [number, number][]) {
   return {
@@ -25,6 +26,14 @@ function wayOf(id: string, typeId: string, points: [number, number][]) {
   };
 }
 
+/** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
+ *  a silent `undefined`/`null` into a clear failure at the point of use
+ *  instead of a confusing crash further down the assertion. */
+function mustFind<T>(v: T | null | undefined, what: string): T {
+  if (v === null || v === undefined) throw new Error(`expected ${what}`);
+  return v;
+}
+
 // Every setup below draws a straight 2-point way through the same
 // beginWay/addWayPoint/addWayPoint/finishWay sequence; factored out so each
 // beforeEach reads as the story it's telling, not the mechanics of drawing.
@@ -34,19 +43,11 @@ function drawWay(
   p1: [number, number],
   p2: [number, number],
 ) {
-  const id = store.getState().beginWay(typeId, 'straight');
-  store.getState().addWayPoint(id, p1);
-  store.getState().addWayPoint(id, p2);
-  store.getState().finishWay();
+  const id = required(store.commands.ways.beginWay(typeId, 'straight'));
+  store.commands.ways.addWayPoint(id, p1);
+  store.commands.ways.addWayPoint(id, p2);
+  store.commands.ways.finishWay();
   return id;
-}
-
-/** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
- *  a silent `undefined`/`null` into a clear failure at the point of use
- *  instead of a confusing crash further down the assertion. */
-function mustFind<T>(v: T | null | undefined, what: string): T {
-  if (v === null || v === undefined) throw new Error(`expected ${what}`);
-  return v;
 }
 
 // Both helpers below wrap the "find by id, else throw" pattern used
@@ -76,7 +77,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
       store = createEditorStore();
       wA = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
       wB = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
-      store.getState().joinWayPointToWay(wB, 1, wA, [-115.15, 36.1]);
+      store.commands.ways.joinWayPointToWay(wB, 1, wA, [-115.15, 36.1]);
       s = store.getState().system;
     });
 
@@ -105,7 +106,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
       let s2: TransitSystem;
 
       beforeEach(() => {
-        store.getState().moveWayPoint(wB, 1, [-115.16, 36.05]);
+        store.commands.ways.moveWayPoint(wB, 1, [-115.16, 36.05]);
         s2 = store.getState().system;
       });
 
@@ -125,7 +126,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
         let wARef: TransitSystem['nodes'][number]['refs'][number];
 
         beforeEach(() => {
-          store.getState().insertWayPoint(wA, 0, [-115.22, 36.09]);
+          store.commands.ways.insertWayPoint(wA, 0, [-115.22, 36.09]);
           s3 = store.getState().system;
           wARef = refByWayId(s3.nodes[0], wA);
         });
@@ -145,7 +146,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
           let wARef2: TransitSystem['nodes'][number]['refs'][number];
 
           beforeEach(() => {
-            store.getState().deleteWayPoint(wA, 0);
+            store.commands.ways.deleteWayPoint(wA, 0);
             s4 = store.getState().system;
             wARef2 = refByWayId(s4.nodes[0], wA);
           });
@@ -165,10 +166,10 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
           // deleteWayPoint refuses that (see store.ts), so way B is extended
           // before deleting its junction point.
           it('deleting the shared point on one way drops the node (no longer a real junction)', () => {
-            store.getState().insertWayPoint(wB, 0, [-115.15, 36.25]);
+            store.commands.ways.insertWayPoint(wB, 0, [-115.15, 36.25]);
             const s5 = store.getState().system;
             const wBRefIndex = refByWayId(s5.nodes[0], wB).pointIndex;
-            store.getState().deleteWayPoint(wB, wBRefIndex);
+            store.commands.ways.deleteWayPoint(wB, wBRefIndex);
             expect(store.getState().system.nodes.length).toBe(0);
           });
         });
@@ -187,7 +188,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
       store = createEditorStore();
       const armA = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
       armB = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
-      store.getState().joinWayPointToWay(armB, 1, armA, [-115.15, 36.1]);
+      store.commands.ways.joinWayPointToWay(armB, 1, armA, [-115.15, 36.1]);
     });
 
     it('setup: a fresh junction with a 2-point arm exists', () => {
@@ -195,7 +196,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
     });
 
     it("deleting a junction arm's own point is refused when the arm has only 2", () => {
-      store.getState().deleteWayPoint(armB, 1);
+      store.commands.ways.deleteWayPoint(armB, 1);
       const s = store.getState().system;
       expect(s.nodes.length).toBe(1);
       expect(wayById(s, armB).points.length).toBe(2);
@@ -211,7 +212,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
       store = createEditorStore();
       wC = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
       const wD = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
-      store.getState().joinWayPointToWay(wD, 1, wC, [-115.15, 36.1]);
+      store.commands.ways.joinWayPointToWay(wD, 1, wC, [-115.15, 36.1]);
     });
 
     it('setup: node exists before delete', () => {
@@ -219,7 +220,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
     });
 
     it('deleteWay removes the node once its junction partner is gone', () => {
-      store.getState().deleteWay(wC);
+      store.commands.ways.deleteWay(wC);
       expect(store.getState().system.nodes.length).toBe(0);
     });
   });
@@ -268,7 +269,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
     const store = createEditorStore();
     const wE = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
     const wF = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
-    store.getState().joinWayPointToWay(wF, 1, wE, [-115.15, 36.1]);
+    store.commands.ways.joinWayPointToWay(wF, 1, wE, [-115.15, 36.1]);
     const v4Round = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
     expect(v4Round.nodes.length).toBe(1);
     expect(v4Round.nodes[0].refs.length).toBe(2);
@@ -288,13 +289,13 @@ describe('Disconnecting a junction: disconnectNodeWay takes one way out and leav
       store = createEditorStore();
       through = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
       spur = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
-      store.getState().joinWayPointToWay(spur, 1, through, [-115.15, 36.1]);
+      store.commands.ways.joinWayPointToWay(spur, 1, through, [-115.15, 36.1]);
 
       const junctionId = store.getState().system.nodes[0].id;
       const throughWay = wayById(store.getState().system, through);
       stayingPoint = throughWay.points[1].slice() as [number, number];
-      store.getState().select({ kind: 'node', id: junctionId });
-      store.getState().disconnectNodeWay(junctionId, spur);
+      store.commands.selection.select({ kind: 'node', id: junctionId });
+      store.commands.network.disconnectNodeWay(junctionId, spur);
       s = store.getState().system;
     });
 
@@ -334,8 +335,8 @@ describe('Disconnecting a junction: disconnectNodeWay takes one way out and leav
       main = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
       north = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
       south = drawWay(store, 'lightRail', [-115.15, 36.0], [-115.15, 36.1]);
-      store.getState().joinWayPointToWay(north, 1, main, [-115.15, 36.1]);
-      store.getState().joinWayPointToWay(south, 1, main, [-115.15, 36.1]);
+      store.commands.ways.joinWayPointToWay(north, 1, main, [-115.15, 36.1]);
+      store.commands.ways.joinWayPointToWay(south, 1, main, [-115.15, 36.1]);
 
       s = store.getState().system;
       threeArm = s.nodes[0];
@@ -350,7 +351,7 @@ describe('Disconnecting a junction: disconnectNodeWay takes one way out and leav
 
       beforeEach(() => {
         const laneOf = (wayId: string) => wayById(s, wayId).profile.lanes[0].id;
-        store.getState().setNodeConnectors(threeArm.id, [
+        store.commands.network.setNodeConnectors(threeArm.id, [
           {
             from: { wayId: south, laneId: laneOf(south) },
             to: { wayId: north, laneId: laneOf(north) },
@@ -360,7 +361,7 @@ describe('Disconnecting a junction: disconnectNodeWay takes one way out and leav
             to: { wayId: main, laneId: laneOf(main) },
           },
         ]);
-        store.getState().disconnectNodeWay(threeArm.id, south);
+        store.commands.network.disconnectNodeWay(threeArm.id, south);
         s2 = store.getState().system;
       });
 
@@ -402,7 +403,7 @@ describe('Disconnecting a junction: disconnectNodeWay takes one way out and leav
 
     beforeEach(() => {
       store = createEditorStore();
-      store.getState().importWays({
+      store.commands.imports.importWays({
         ways: [
           wayOf('mixed-road-west', 'road', [
             [-115.2, 36.1],
@@ -453,7 +454,7 @@ describe('Disconnecting a junction: disconnectNodeWay takes one way out and leav
   // in the street junction group, and a cyclist really does turn there.
   it('a bike path keeps the junction where it meets a street', () => {
     const store = createEditorStore();
-    store.getState().importWays({
+    store.commands.imports.importWays({
       ways: [
         wayOf('bike-street-west', 'road', [
           [-115.2, 36.1],

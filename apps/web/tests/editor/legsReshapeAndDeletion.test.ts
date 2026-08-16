@@ -19,7 +19,8 @@ import { serviceLanePath, wayLaneGeometry } from '@transitmapper/core/geometry/s
 import { MODES } from '@transitmapper/core/model/catalog';
 import type { LngLat, PatternLeg, Way } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
-import { buildFeatures } from '../../src/map/layers';
+import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 
 /** A leg's covered stretch, for assertions that used to read fromT/toT. */
 const legFrom = (l: PatternLeg): number => legRange(l)[0];
@@ -36,6 +37,18 @@ function mustFind<T>(v: T | null | undefined, what: string): T {
   if (v === null || v === undefined) throw new Error(`expected ${what}`);
   return v;
 }
+
+// buildFeatures now requires a resolved `presentation` (the renderer boundary
+// crosses into real screen-space facts). A close street-level camera also
+// makes lane-detail eligible — that used to be an explicit `laneDetail`
+// view flag, which no longer exists; it's now derived from the presentation
+// itself (see `wantsLaneDetail` in buildFeatures.ts).
+const STREET_SERVICE_TEST_RENDER_PRESENTATION = renderPresentationForViewport({
+  center: [-115.15, 36.12],
+  zoom: 20,
+  width: 1_440,
+  height: 900,
+});
 
 // A leg names a stretch of a way as a fraction of that way's length, so
 // splitting or merging the way changes what the fraction means. Getting this
@@ -236,12 +249,12 @@ describe('lane-detail rendering follows the resolved curb lane, not the centerli
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftMode('bus');
-    const road = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(road, [-115.2, 36.12]);
-    store.getState().addWayPoint(road, [-115.1, 36.12]);
-    store.getState().finishWay();
-    store.getState().setWayCapacity(road, 2);
+    store.commands.tools.setDraftMode('bus');
+    const road = mustFind(store.commands.ways.beginWay('road', 'straight'), 'way id');
+    store.commands.ways.addWayPoint(road, [-115.2, 36.12]);
+    store.commands.ways.addWayPoint(road, [-115.1, 36.12]);
+    store.commands.ways.finishWay();
+    store.commands.ways.setWayCapacity(road, 2);
     const sys = store.getState().system;
     svcId = sys.services[0].id;
     const center = resolveWayPath(
@@ -260,7 +273,7 @@ describe('lane-detail rendering follows the resolved curb lane, not the centerli
     const sys = store.getState().system;
     const infra = buildFeatures(sys, null, [], {
       viewMode: 'infrastructure',
-      laneDetail: true,
+      presentation: STREET_SERVICE_TEST_RENDER_PRESENTATION,
       ...filters,
     });
     const infraFeats = infra.services.features.filter(
@@ -273,7 +286,7 @@ describe('lane-detail rendering follows the resolved curb lane, not the centerli
     const sys = store.getState().system;
     const infra = buildFeatures(sys, null, [], {
       viewMode: 'infrastructure',
-      laneDetail: true,
+      presentation: STREET_SERVICE_TEST_RENDER_PRESENTATION,
       ...filters,
     });
     const infraFeats = infra.services.features.filter(
@@ -286,7 +299,7 @@ describe('lane-detail rendering follows the resolved curb lane, not the centerli
     const sys = store.getState().system;
     const infra = buildFeatures(sys, null, [], {
       viewMode: 'infrastructure',
-      laneDetail: true,
+      presentation: STREET_SERVICE_TEST_RENDER_PRESENTATION,
       ...filters,
     });
     const infraFeats = infra.services.features.filter(
@@ -297,7 +310,11 @@ describe('lane-detail rendering follows the resolved curb lane, not the centerli
 
   it('network view: the service stays on the way centerline (schematic)', () => {
     const sys = store.getState().system;
-    const net = buildFeatures(sys, null, [], { viewMode: 'network', ...filters });
+    const net = buildFeatures(sys, null, [], {
+      viewMode: 'network',
+      presentation: STREET_SERVICE_TEST_RENDER_PRESENTATION,
+      ...filters,
+    });
     const netFeats = net.services.features.filter(
       (f) => f.properties?.serviceId === svcId && !f.properties.hitTarget,
     );
@@ -312,16 +329,16 @@ describe('patternLanePath: the polyline a vehicle rides in Infrastructure view',
   // fixture is built once and shared rather than repeated per test.
   const singleWayBusPattern = () => {
     const store = createEditorStore();
-    store.getState().setDraftMode('bus');
-    const w = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(w, [-115.2, 36.1]);
-    store.getState().addWayPoint(w, [-115.15, 36.1]);
-    store.getState().addWayPoint(w, [-115.1, 36.1]);
-    store.getState().finishWay();
+    store.commands.tools.setDraftMode('bus');
+    const w = mustFind(store.commands.ways.beginWay('road', 'straight'), 'way id');
+    store.commands.ways.addWayPoint(w, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(w, [-115.15, 36.1]);
+    store.commands.ways.addWayPoint(w, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     const sys = store.getState().system;
     const waysById2 = wayById(sys.ways);
     const way = sys.ways[0];
-    const pattern = sys.services[0].patterns[0];
+    const pattern = sys.services[0].path;
     const lanePath = serviceLanePath(pattern, waysById2, 'bus');
     return { waysById2, way, pattern, lanePath };
   };
@@ -360,15 +377,15 @@ describe('patternLanePath: the polyline a vehicle rides in Infrastructure view',
     // continuous path (no duplicated junction point, matching patternPath's own
     // stitching convention).
     const store = createEditorStore();
-    store.getState().setDraftMode('bus');
-    const a = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(a, [-115.3, 36.2]);
-    store.getState().addWayPoint(a, [-115.2, 36.2]);
-    store.getState().finishWay();
-    const b = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(b, [-115.2, 36.2]);
-    store.getState().addWayPoint(b, [-115.1, 36.2]);
-    store.getState().finishWay();
+    store.commands.tools.setDraftMode('bus');
+    const a = mustFind(store.commands.ways.beginWay('road', 'straight'), 'way id');
+    store.commands.ways.addWayPoint(a, [-115.3, 36.2]);
+    store.commands.ways.addWayPoint(a, [-115.2, 36.2]);
+    store.commands.ways.finishWay();
+    const b = mustFind(store.commands.ways.beginWay('road', 'straight'), 'way id');
+    store.commands.ways.addWayPoint(b, [-115.2, 36.2]);
+    store.commands.ways.addWayPoint(b, [-115.1, 36.2]);
+    store.commands.ways.finishWay();
     const multiWaysById = wayById(store.getState().system.ways);
     const multiPattern = { id: 'mp', sections: oneSection(wholeLegs(multiWaysById, [a, b])) };
     const multiPath = serviceLanePath(multiPattern, multiWaysById, 'bus');
@@ -383,10 +400,10 @@ describe('a station snaps onto a way and follows it when reshaped', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    h = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(h, [-115.24, 36.1]);
-    store.getState().addWayPoint(h, [-115.1, 36.1]);
-    store.getState().finishWay();
+    h = mustFind(store.commands.ways.beginWay('road', 'straight'), 'way id');
+    store.commands.ways.addWayPoint(h, [-115.24, 36.1]);
+    store.commands.ways.addWayPoint(h, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
   });
 
   it('snap finds the nearby way', () => {
@@ -397,16 +414,16 @@ describe('a station snaps onto a way and follows it when reshaped', () => {
 
   it('station follows its way when reshaped', () => {
     const s1 = mustFind(snap(store.getState().system.ways, [-115.17, 36.104], 5000), 'snap');
-    const stId = store.getState().addStation(s1.coord, { wayId: h, t: s1.t });
+    const stId = mustFind(store.commands.stops.addStop(s1.coord, { wayId: h, t: s1.t }), 'stop id');
     const beforeLat = mustFind(
-      store.getState().system.stations.find((s) => s.id === stId),
-      'station',
+      store.getState().system.stops.find((s) => s.id === stId),
+      'stop',
     ).coord[1];
-    store.getState().moveWayPoint(h, 0, [-115.24, 36.16]);
-    store.getState().moveWayPoint(h, 1, [-115.1, 36.16]);
+    store.commands.ways.moveWayPoint(h, 0, [-115.24, 36.16]);
+    store.commands.ways.moveWayPoint(h, 1, [-115.1, 36.16]);
     const afterLat = mustFind(
-      store.getState().system.stations.find((s) => s.id === stId),
-      'station',
+      store.getState().system.stops.find((s) => s.id === stId),
+      'stop',
     ).coord[1];
     expect(afterLat).toBeGreaterThan(beforeLat + 0.02);
   });
@@ -415,14 +432,14 @@ describe('a station snaps onto a way and follows it when reshaped', () => {
 describe('snap picks the NEAREST of several candidate ways', () => {
   it('snap picks the nearer of two candidate ways', () => {
     const store = createEditorStore();
-    const near = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(near, [-115.101, 36.1]);
-    store.getState().addWayPoint(near, [-115.101, 36.2]);
-    store.getState().finishWay();
-    const far = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(far, [-115.15, 36.1]);
-    store.getState().addWayPoint(far, [-115.15, 36.2]);
-    store.getState().finishWay();
+    const near = mustFind(store.commands.ways.beginWay('lightRail', 'straight'), 'way id');
+    store.commands.ways.addWayPoint(near, [-115.101, 36.1]);
+    store.commands.ways.addWayPoint(near, [-115.101, 36.2]);
+    store.commands.ways.finishWay();
+    const far = mustFind(store.commands.ways.beginWay('lightRail', 'straight'), 'way id');
+    store.commands.ways.addWayPoint(far, [-115.15, 36.1]);
+    store.commands.ways.addWayPoint(far, [-115.15, 36.2]);
+    store.commands.ways.finishWay();
     const best = snap(store.getState().system.ways, [-115.1, 36.15], 50000);
     expect(best?.wayId).toBe(near);
   });

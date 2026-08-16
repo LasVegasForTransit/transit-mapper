@@ -7,6 +7,7 @@ import {
 } from '../../src/editor/input-tuning';
 import { resolvePointerIntent } from '../../src/editor/pointerIntent';
 import type { NamedWay } from '@transitmapper/core/model/system';
+import { required } from '../support/required.test';
 
 // A fingertip contact patch is 9-11mm, ~24 CSS px on a phone. Every tolerance
 // the map hit-tests with has to grow with it, or a finger is asked to land
@@ -114,19 +115,19 @@ describe('the Select variant is editor state, not history', () => {
   });
 
   it('picking a variant arms it', () => {
-    store.getState().setSelectVariant('erase');
+    store.commands.tools.setSelectVariant('erase');
     expect(store.getState().selectVariant).toBe('erase');
   });
 
   it('picking a variant creates no undo step', () => {
     const before = store.getState().canUndo;
-    store.getState().setSelectVariant('erase');
+    store.commands.tools.setSelectVariant('erase');
     expect(store.getState().canUndo).toBe(before);
   });
 
   it('a variant switches back off', () => {
-    store.getState().setSelectVariant('erase');
-    store.getState().setSelectVariant('select');
+    store.commands.tools.setSelectVariant('erase');
+    store.commands.tools.setSelectVariant('select');
     expect(store.getState().selectVariant).toBe('select');
   });
 });
@@ -140,12 +141,12 @@ describe('an identity with no name contributes no name', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftMode('bus');
-    const w = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(w, [-115.3, 36.1]);
-    store.getState().addWayPoint(w, [-115.1, 36.1]);
-    store.getState().finishWay();
-    store.getState().separateCarriageways(w);
+    store.commands.tools.setDraftMode('bus');
+    const w = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(w, [-115.3, 36.1]);
+    store.commands.ways.addWayPoint(w, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    store.commands.network.separateCarriageways(w);
     unnamed = store.getState().system.namedWays.find((n) => !n.name);
   });
 
@@ -161,7 +162,7 @@ describe('an identity with no name contributes no name', () => {
     if (!unnamed) throw new Error('setup should have minted an unnamed identity');
     const unnamedId = unnamed.id;
     const unnamedWayIds = unnamed.wayIds;
-    store.getState().renameNamedWay(unnamedId, 'Decatur Avenue');
+    store.commands.ways.renameNamedWay(unnamedId, 'Decatur Avenue');
     const named = store.getState().system.namedWays.find((n) => n.id === unnamedId);
     expect(named).toMatchObject({ name: 'Decatur Avenue', wayIds: unnamedWayIds });
   });

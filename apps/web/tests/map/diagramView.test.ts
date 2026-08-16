@@ -25,6 +25,7 @@ import {
   press,
   type FakePoint,
 } from '../support/fakeMap.test';
+import { required } from '../support/required.test';
 
 function angleSnapErrorRad(
   p1: [number, number] | number[],
@@ -46,18 +47,18 @@ describe('Diagram view: computeDiagramSystem snaps the graph to a schematic octo
 
   beforeEach(() => {
     store = createEditorStore();
-    wayA = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(wayA, [-115.2, 36.1]);
-    store.getState().addWayPoint(wayA, [-115.1, 36.1]);
-    store.getState().finishWay();
-    wayB = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(wayB, [-115.15, 36.2]);
-    store.getState().addWayPoint(wayB, [-115.15, 36.1]);
-    store.getState().finishWay();
+    wayA = required(store.commands.ways.beginWay('lightRail', 'straight'));
+    store.commands.ways.addWayPoint(wayA, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(wayA, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    wayB = required(store.commands.ways.beginWay('lightRail', 'straight'));
+    store.commands.ways.addWayPoint(wayB, [-115.15, 36.2]);
+    store.commands.ways.addWayPoint(wayB, [-115.15, 36.1]);
+    store.commands.ways.finishWay();
     // Joins B onto A's midpoint — A gets a genuine interior node, not just an
     // endpoint junction, exercising the harder case (see joinWayPointToWay).
-    store.getState().joinWayPointToWay(wayB, 1, wayA, [-115.15, 36.1]);
-    stationId = store.getState().addStation([-115.15, 36.15], { wayId: wayB, t: 0.5 });
+    store.commands.ways.joinWayPointToWay(wayB, 1, wayA, [-115.15, 36.1]);
+    stationId = required(store.commands.stops.addStop([-115.15, 36.15], { wayId: wayB, t: 0.5 }));
 
     real = store.getState().system;
     diagram = computeDiagramSystem(real);
@@ -67,8 +68,8 @@ describe('Diagram view: computeDiagramSystem snaps the graph to a schematic octo
     expect(diagram.ways).toHaveLength(real.ways.length);
   });
 
-  it('diagram preserves the station count', () => {
-    expect(diagram.stations).toHaveLength(real.stations.length);
+  it('diagram preserves the stop count', () => {
+    expect(diagram.stops).toHaveLength(real.stops.length);
   });
 
   it('every diagram way is straight geometry', () => {
@@ -85,15 +86,25 @@ describe('Diagram view: computeDiagramSystem snaps the graph to a schematic octo
     );
   });
 
-  it('a node-bearing way keeps an interior vertex (start, junction, end)', () => {
+  it('a node-bearing way keeps its shared junction between its endpoints', () => {
     const diagAPoints = diagram.ways.find((w) => w.id === wayA)?.points ?? [];
+    const diagBPoints = diagram.ways.find((w) => w.id === wayB)?.points ?? [];
+    const bJunctionCoord = diagBPoints[diagBPoints.length - 1];
 
-    expect(diagAPoints).toHaveLength(3);
+    expect(
+      diagAPoints.some(
+        (point, index) =>
+          index > 0 &&
+          index < diagAPoints.length - 1 &&
+          point[0] === bJunctionCoord[0] &&
+          point[1] === bJunctionCoord[1],
+      ),
+    ).toBe(true);
   });
 
-  it("an anchored station still sits on its way's new schematic path", () => {
+  it("an anchored stop still sits on its way's new schematic path", () => {
     const diagBPoints = diagram.ways.find((w) => w.id === wayB)?.points ?? [];
-    const diagStationCoord = diagram.stations.find((s) => s.id === stationId)?.coord;
+    const diagStationCoord = diagram.stops.find((s) => s.id === stationId)?.coord;
 
     const onPath = diagStationCoord ? nearestOnPath(diagBPoints, diagStationCoord) : null;
 
@@ -126,10 +137,10 @@ describe('Diagram view: computeDiagramSystem snaps the graph to a schematic octo
     // A separate, plain store rather than the two-way fixture built above —
     // this case is specifically about a way with no joins at all.
     const soloStore = createEditorStore();
-    const soloWay = soloStore.getState().beginWay('road', 'straight');
-    soloStore.getState().addWayPoint(soloWay, [-115.2, 36.1]);
-    soloStore.getState().addWayPoint(soloWay, [-115.19, 36.1003]);
-    soloStore.getState().finishWay();
+    const soloWay = required(soloStore.commands.ways.beginWay('road', 'straight'));
+    soloStore.commands.ways.addWayPoint(soloWay, [-115.2, 36.1]);
+    soloStore.commands.ways.addWayPoint(soloWay, [-115.19, 36.1003]);
+    soloStore.commands.ways.finishWay();
 
     const soloDiagram = computeDiagramSystem(soloStore.getState().system);
 
@@ -284,16 +295,16 @@ describe('A press that moves does not eat the NEXT click', () => {
 
   function run(presses: [number, number][]): number[] {
     const s = createEditorStore();
-    s.getState().setSystem(createEmptySystem());
-    s.getState().setTool('station');
+    s.commands.document.setSystem(createEmptySystem());
+    s.commands.tools.setTool('stop');
     const map = createFakeMap();
     const detach = attachInteractions(map as never, s, attachOpts(true));
     const added: number[] = [];
     let x = 400;
     for (const [dx, dy] of presses) {
-      const before = s.getState().system.stations.length;
+      const before = s.getState().system.stops.length;
       press(map, { x, y: 300 }, dx, dy);
-      added.push(s.getState().system.stations.length - before);
+      added.push(s.getState().system.stops.length - before);
       x += 40; // never place two stations on the same spot
     }
     detach();
@@ -348,17 +359,17 @@ describe('A press that moves does not eat the NEXT click', () => {
   describe('resuming a compatible open endpoint in Network view', () => {
     function setupOpenEndWay() {
       const s = createEditorStore();
-      s.getState().setSystem(createEmptySystem());
+      s.commands.document.setSystem(createEmptySystem());
       const map = createFakeMap();
       const roadStart = map.unproject({ x: 400, y: 300 });
       const roadEnd = map.unproject({ x: 600, y: 300 });
-      const roadId = s.getState().beginWay('road', 'straight');
-      s.getState().addWayPoint(roadId, [roadStart.lng, roadStart.lat]);
-      s.getState().addWayPoint(roadId, [roadEnd.lng, roadEnd.lat]);
-      s.getState().finishWay();
-      s.getState().setDraftWayType('lightRail');
-      s.getState().setDraftMode('tram');
-      s.getState().setTool('way');
+      const roadId = required(s.commands.ways.beginWay('road', 'straight'));
+      s.commands.ways.addWayPoint(roadId, [roadStart.lng, roadStart.lat]);
+      s.commands.ways.addWayPoint(roadId, [roadEnd.lng, roadEnd.lat]);
+      s.commands.ways.finishWay();
+      s.commands.tools.setDraftWayType('lightRail');
+      s.commands.tools.setDraftMode('tram');
+      s.commands.tools.setTool('way');
 
       const detach = attachInteractions(map as never, s, attachOpts(true));
       return { s, map, roadId, detach };
@@ -396,8 +407,8 @@ describe('A press that moves does not eat the NEXT click', () => {
    */
   function setupWayDraw() {
     const s = createEditorStore();
-    s.getState().setSystem(createEmptySystem());
-    s.getState().setTool('way');
+    s.commands.document.setSystem(createEmptySystem());
+    s.commands.tools.setTool('way');
     const map = createFakeMap();
     const detach = attachInteractions(map as never, s, attachOpts(false));
     // Two presses lay a way running due east, which gives it a heading for

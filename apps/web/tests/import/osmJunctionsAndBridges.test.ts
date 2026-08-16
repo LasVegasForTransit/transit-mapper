@@ -229,7 +229,7 @@ describe('importWays store action appends bare infrastructure, no auto-service',
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
+    store.commands.document.setSystem(createEmptySystem());
     const imported: Way[] = [
       {
         id: 'osm-a',
@@ -258,7 +258,7 @@ describe('importWays store action appends bare infrastructure, no auto-service',
         source: 'osm:124',
       },
     ];
-    store.getState().importWays({
+    store.commands.imports.importWays({
       ways: imported,
       nodes: [
         {
@@ -310,7 +310,7 @@ describe('crossings at different grades are bridges, not missing junctions', () 
   // 'elevated' it's a bridge overhead, at 'atGrade' it's the same junction.
   const importCrossing = (bridgeGrade: Way['grade']) => {
     const store = createEditorStore();
-    store.getState().setSystem(createEmptySystem());
+    store.commands.document.setSystem(createEmptySystem());
     const overpass: Way[] = [
       {
         id: 'surface',
@@ -335,9 +335,13 @@ describe('crossings at different grades are bridges, not missing junctions', () 
         profile: defaultProfileFor('road'),
       },
     ];
-    store
-      .getState()
-      .importWays({ ways: overpass, nodes: [], namedWays: [], medians: [], turnRestrictions: [] });
+    store.commands.imports.importWays({
+      ways: overpass,
+      nodes: [],
+      namedWays: [],
+      medians: [],
+      turnRestrictions: [],
+    });
     return store;
   };
 

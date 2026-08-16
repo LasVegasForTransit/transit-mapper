@@ -126,8 +126,7 @@ describe('vehicle catalogs: effectiveVehicleKind resolution', () => {
     id: 'evk-bus',
     name: 'Bus',
     modeId: 'bus',
-    color: '#2ea44f',
-    patterns: [],
+    path: { id: 'evk-bus', sections: [] },
   };
   const sysNoKinds: TransitSystem = { ...createEmptySystem(), vehicleKinds: [] };
 
@@ -211,7 +210,7 @@ describe("dwellStopsForPattern: only stations anchored to the pattern's OWN ways
     [-115.17, 36.1],
   ];
   const sys = createEmptySystem();
-  sys.stations = [
+  sys.stops = [
     { id: 'near-end', coord: [-115.19, 36.1], anchors: [{ wayId: 'w1', t: 0.7 }] },
     { id: 'near-start', coord: [-115.22, 36.1], anchors: [{ wayId: 'w1', t: 0.2 }] },
     {
@@ -225,7 +224,7 @@ describe("dwellStopsForPattern: only stations anchored to the pattern's OWN ways
   ];
   const pathMeters = haversineMeters(path[0], path[1]);
   const pattern = { id: 'p1', sections: oneSection(legsOf('w1')) };
-  const stops = dwellStopsForPattern(sys.stations, pattern, path, pathMeters);
+  const stops = dwellStopsForPattern(sys.stops, pattern, path, pathMeters);
 
   it("only stations anchored to the pattern's ways become stops", () => {
     expect(stops.length).toBe(3);
@@ -236,7 +235,7 @@ describe("dwellStopsForPattern: only stations anchored to the pattern's OWN ways
     // t=0.7. Left unfiltered that stop projects onto the nearest end of the
     // trimmed path and stacks a phantom dwell on the terminus.
     const trimmedStops = dwellStopsForPattern(
-      sys.stations,
+      sys.stops,
       { id: 'p2', sections: oneSection([stretchLeg(wholeLeg('w1'), 0, 0.6)]) },
       path,
       pathMeters,

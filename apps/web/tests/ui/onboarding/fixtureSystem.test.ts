@@ -18,7 +18,7 @@ describe('onboarding fixture (ui/onboarding/fixtureSystem.ts)', () => {
   });
   it('the onboarding fixture presents a small network rather than a single line', () => {
     expect(ONBOARDING_FIXTURE_SYSTEM.services.length).toBeGreaterThanOrEqual(2);
-    expect(ONBOARDING_FIXTURE_SYSTEM.stations.length).toBeGreaterThanOrEqual(4);
+    expect(ONBOARDING_FIXTURE_SYSTEM.stops.length).toBeGreaterThanOrEqual(4);
   });
   it('the onboarding fixture includes both streets and rail', () => {
     expect(ONBOARDING_FIXTURE_SYSTEM.ways.some((way) => way.typeId === 'road')).toBe(true);

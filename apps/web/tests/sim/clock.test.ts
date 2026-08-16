@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import { oneSection, wholeLeg } from '@transitmapper/core/model/geo';
-import type { LngLat, Service, Station, Way } from '@transitmapper/core/model/system';
+import type { LngLat, Service, Stop, Way } from '@transitmapper/core/model/system';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import {
   activeSchedule,
@@ -25,7 +25,7 @@ import {
 } from '@transitmapper/core/sim/clock';
 import {
   combinedHeadwayMinutes,
-  servicesAtStation,
+  servicesAtStop,
   typicalWaitMinutes,
   vehiclesPerHour,
 } from '@transitmapper/core/sim/frequency';
@@ -168,7 +168,12 @@ describe('the simulated clock (core/sim/clock.ts)', () => {
 // round-tripped through serialize.ts, and read by nothing. These are the rules
 // that make them mean something on the map.
 describe('what is running right now (activeSchedule)', () => {
-  const base: Service = { id: 'as1', name: 'Route', modeId: 'bus', color: '#333', patterns: [] };
+  const base: Service = {
+    id: 'as1',
+    name: 'Route',
+    modeId: 'bus',
+    path: { id: 'as1', sections: [] },
+  };
   const at = (hhmm: string) => mustFind(parseHhMm(hhmm), `a parseable time from "${hhmm}"`);
 
   // A service with nothing set at all runs all day. This is every
@@ -369,9 +374,9 @@ describe('combined frequency where routes share a stop (core/sim/frequency.ts)',
     expect(typicalWaitMinutes(10)).toBe(5);
   });
 
-  // servicesAtStation: the same proximity rule the inspector's "Served by"
+  // servicesAtStop: the same proximity rule the inspector's "Served by"
   // list uses, moved into core so it's testable and stated once.
-  describe('servicesAtStation', () => {
+  describe('servicesAtStop', () => {
     const road = (id: string, pts: LngLat[]): Way => ({
       id,
       typeId: 'road',
@@ -395,26 +400,24 @@ describe('combined frequency where routes share a stop (core/sim/frequency.ts)',
         id: 'sv-on',
         name: 'On it',
         modeId: 'bus',
-        color: '#111',
-        patterns: [{ id: 'pa', sections: oneSection(legsOf(way.id)) }],
+        path: { id: 'pa', sections: oneSection(legsOf(way.id)) },
       },
       {
         id: 'sv-off',
         name: 'Miles away',
         modeId: 'bus',
-        color: '#222',
-        patterns: [{ id: 'pb', sections: oneSection(legsOf(otherWay.id)) }],
+        path: { id: 'pb', sections: oneSection(legsOf(otherWay.id)) },
       },
     ];
 
     it('a service running past a stop serves it', () => {
-      const stop: Station = { id: 'st-here', coord: [-115.2, 36.1], anchors: [] };
-      const here = servicesAtStation(sys.ways, sys.services, stop);
+      const stop: Stop = { id: 'st-here', coord: [-115.2, 36.1], anchors: [] };
+      const here = servicesAtStop(sys.ways, sys.services, stop);
       expect(here.length).toBe(1);
       expect(here[0].id).toBe('sv-on');
     });
     it('a stop nowhere near any line is served by nothing', () => {
-      const nowhere = servicesAtStation(sys.ways, sys.services, {
+      const nowhere = servicesAtStop(sys.ways, sys.services, {
         id: 'st-far',
         coord: [-115.2, 36.3],
         anchors: [],

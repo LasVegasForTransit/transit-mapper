@@ -71,37 +71,38 @@ describe('gtfsFilesToSystemPieces: a minimal fixture feed end to end', () => {
     expect(laneCapacity(pieces.ways[0].profile)).toBe(2);
   });
 
-  it('one route becomes one service', () => {
+  it('one route becomes one public line and one service', () => {
+    expect(pieces.lines).toHaveLength(1);
     expect(pieces.services).toHaveLength(1);
   });
 
-  it('the service takes its short name and mode', () => {
-    expect(pieces.services[0]).toMatchObject({ name: '101', modeId: 'bus' });
+  it('the line takes the public short name while the service keeps the technical mode', () => {
+    expect(pieces.lines[0].name).toBe('101');
+    expect(pieces.services[0].modeId).toBe('bus');
   });
 
-  it("the service has one pattern riding the shape's way", () => {
-    expect(pieces.services[0].patterns).toHaveLength(1);
-    expect(patternWayIds(pieces.services[0].patterns[0])[0]).toBe(pieces.ways[0].id);
+  it("the service has one path riding the shape's way", () => {
+    expect(patternWayIds(pieces.services[0].path)[0]).toBe(pieces.ways[0].id);
   });
 
-  it('the route color round-trips as a hex color', () => {
-    expect(pieces.services[0].color).toBe('#E4572E');
+  it('the route color round-trips as a line hex color', () => {
+    expect(pieces.lines[0].color).toBe('#E4572E');
   });
 
-  it("both stops become stations, anchored onto the shape's way", () => {
-    expect(pieces.stations).toHaveLength(2);
-    expect(pieces.stations.map((s) => primaryAnchor(s)?.wayId)).toEqual([
+  it("both stops become stops, anchored onto the shape's way", () => {
+    expect(pieces.stops).toHaveLength(2);
+    expect(pieces.stops.map((s) => primaryAnchor(s)?.wayId)).toEqual([
       pieces.ways[0].id,
       pieces.ways[0].id,
     ]);
   });
 
-  it('stations keep their GTFS stop names', () => {
-    expect(pieces.stations.map((s) => s.name).sort()).toEqual(['Downtown', 'Midtown']);
+  it('stops keep their GTFS stop names', () => {
+    expect(pieces.stops.map((s) => s.name).sort()).toEqual(['Downtown', 'Midtown']);
   });
 
-  // A stop shared by two routes/shapes stays exactly one station.
-  it('a stop reachable from two shapes still becomes one station', () => {
+  // A stop shared by two routes/shapes stays exactly one stop.
+  it('a stop reachable from two shapes still becomes one stop', () => {
     const trips2 = 'route_id,trip_id,shape_id\nR1,T1,S1\nR1,T2,S2\n';
     const shapes2 = shapes + 'S2,36.11,-115.20,1\nS2,36.11,-115.17,2\n';
     const stopTimes2 = stopTimes + 'T2,ST1,1\n';
@@ -112,10 +113,13 @@ describe('gtfsFilesToSystemPieces: a minimal fixture feed end to end', () => {
       stops,
       stopTimes: stopTimes2,
     });
-    expect(shared.stations.filter((s) => s.name === 'Downtown')).toHaveLength(1);
+    expect(shared.stops.filter((s) => s.name === 'Downtown')).toHaveLength(1);
   });
 
-  it('two shapes on the same route become two patterns', () => {
+  // Post-rename, a "branch" (second shape on one route) is a second, sibling
+  // Service under the same Line — not a second pattern on one Service, since
+  // Service.path is now singular.
+  it('two shapes on the same route become two services under one line', () => {
     const trips2 = 'route_id,trip_id,shape_id\nR1,T1,S1\nR1,T2,S2\n';
     const shapes2 = shapes + 'S2,36.11,-115.20,1\nS2,36.11,-115.17,2\n';
     const stopTimes2 = stopTimes + 'T2,ST1,1\n';
@@ -126,7 +130,8 @@ describe('gtfsFilesToSystemPieces: a minimal fixture feed end to end', () => {
       stops,
       stopTimes: stopTimes2,
     });
-    expect(shared.services[0].patterns).toHaveLength(2);
+    expect(shared.services).toHaveLength(2);
+    expect(shared.lines[0].serviceIds).toHaveLength(2);
   });
 
   // Import brings in no timing at all, which is what keeps an agency-scale
@@ -179,7 +184,7 @@ describe('gtfsFilesToBatchedPieces: batching sums to the same result, even a sto
   const batchedTotal = {
     ways: batches.flatMap((b) => b.ways),
     services: batches.flatMap((b) => b.services),
-    stations: batches.flatMap((b) => b.stations),
+    stops: batches.flatMap((b) => b.stops),
   };
   const unbatched = gtfsFilesToSystemPieces(files);
 
@@ -203,12 +208,12 @@ describe('gtfsFilesToBatchedPieces: batching sums to the same result, even a sto
     expect(batchedTotal.services.length).toBe(unbatched.services.length);
   });
 
-  it('a stop shared across two different batches still becomes exactly one station, not two', () => {
-    expect(batchedTotal.stations.filter((s) => s.name === 'Shared Stop')).toHaveLength(1);
-    expect(unbatched.stations.filter((s) => s.name === 'Shared Stop')).toHaveLength(1);
+  it('a stop shared across two different batches still becomes exactly one stop, not two', () => {
+    expect(batchedTotal.stops.filter((s) => s.name === 'Shared Stop')).toHaveLength(1);
+    expect(unbatched.stops.filter((s) => s.name === 'Shared Stop')).toHaveLength(1);
   });
 
-  it('batched stations total matches the unbatched pass', () => {
-    expect(batchedTotal.stations.length).toBe(unbatched.stations.length);
+  it('batched stops total matches the unbatched pass', () => {
+    expect(batchedTotal.stops.length).toBe(unbatched.stops.length);
   });
 });

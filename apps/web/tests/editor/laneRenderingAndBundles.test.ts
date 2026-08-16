@@ -16,7 +16,8 @@ import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
 import { MODES } from '@transitmapper/core/model/catalog';
 import type { LngLat, PatternLeg, Way } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
-import { buildFeatures } from '../../src/map/layers';
+import { required } from '../support/required.test';
+import { buildFeatures } from '../support/testRenderPresentation.test';
 
 /** A leg's covered stretch, for assertions that used to read fromT/toT. */
 const legFrom = (l: PatternLeg): number => legRange(l)[0];
@@ -46,12 +47,12 @@ describe('continuity-aware bundle offsets', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    store.getState().setDraftMode('lightRail');
-    A = store.getState().beginWay('lightRail', 'straight');
-    store.getState().addWayPoint(A, [-115.3, 36.1]);
-    store.getState().addWayPoint(A, [-115.2, 36.1]);
-    store.getState().addWayPoint(A, [-115.1, 36.1]);
-    store.getState().finishWay();
+    store.commands.tools.setDraftMode('lightRail');
+    A = required(store.commands.ways.beginWay('lightRail', 'straight'));
+    store.commands.ways.addWayPoint(A, [-115.3, 36.1]);
+    store.commands.ways.addWayPoint(A, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(A, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
     aId = store.getState().system.services[0].id;
     // Route a second service along A's MIDDLE. The way is left alone — the new
     // service's leg just names the stretch it uses — so the through-line still
@@ -61,9 +62,9 @@ describe('continuity-aware bundle offsets', () => {
       store.getState().system.ways.find((x) => x.id === A),
       'way',
     );
-    store.getState().startRouteDraft(mustFind(anchorOnWay(w, [-115.27, 36.1]), 'anchor'));
-    store.getState().extendRouteDraft(mustFind(anchorOnWay(w, [-115.13, 36.1]), 'anchor'));
-    bId = mustFind(store.getState().commitRouteDraft(), 'bId');
+    store.commands.routing.startRouteDraft(mustFind(anchorOnWay(w, [-115.27, 36.1]), 'anchor'));
+    store.commands.routing.extendRouteDraft(mustFind(anchorOnWay(w, [-115.13, 36.1]), 'anchor'));
+    bId = mustFind(store.commands.routing.commitRouteDraft(), 'bId');
   });
 
   it('a service terminating mid-way leaves the way whole — no split, no fragment', () => {
@@ -75,8 +76,8 @@ describe('continuity-aware bundle offsets', () => {
       store.getState().system.services.find((sv) => sv.id === bId),
       'service',
     );
-    const bLeg = patternLegs(bSvc.patterns[0])[0];
-    expect(patternLegs(bSvc.patterns[0]).length).toBe(1);
+    const bLeg = patternLegs(bSvc.path)[0];
+    expect(patternLegs(bSvc.path).length).toBe(1);
     expect(bLeg.wayId).toBe(A);
     expect(legIsWhole(bLeg)).toBe(false);
     expect(legFrom(bLeg)).toBeGreaterThan(0);
@@ -150,29 +151,29 @@ describe('continuity-aware bundle offsets', () => {
     // serve this stop" has to ask where the line actually goes — otherwise the
     // stop wrongly reads as an interchange.
     it('a stop past where a line terminates is not counted as served by it', () => {
-      store.getState().addStation([-115.295, 36.1]);
+      store.commands.stops.addStop([-115.295, 36.1]);
       const withStop = buildFeatures(store.getState().system, null, [], {
         viewMode: 'network',
         ...filters,
       });
-      const endStop = withStop.stations.features[0];
+      const endStop = withStop.stops.features[0];
       expect(endStop.properties?.interchange).toBe(false);
     });
 
     // …and one inside the shared stretch still is.
     it('a stop inside the shared stretch is served by both lines', () => {
-      store.getState().addStation([-115.295, 36.1]);
+      store.commands.stops.addStop([-115.295, 36.1]);
       const withStop = buildFeatures(store.getState().system, null, [], {
         viewMode: 'network',
         ...filters,
       });
-      const endStop = withStop.stations.features[0];
-      store.getState().addStation([-115.2, 36.1]);
+      const endStop = withStop.stops.features[0];
+      store.commands.stops.addStop([-115.2, 36.1]);
       const shared = mustFind(
         buildFeatures(store.getState().system, null, [], {
           viewMode: 'network',
           ...filters,
-        }).stations.features.find((f) => f.properties?.id !== endStop.properties?.id),
+        }).stops.features.find((f) => f.properties?.id !== endStop.properties?.id),
         'station feature',
       );
       expect(shared.properties?.interchange).toBe(true);
@@ -188,10 +189,10 @@ describe('wayIntersectsBounds is segment-aware', () => {
 
   beforeEach(() => {
     store = createEditorStore();
-    const w = store.getState().beginWay('road', 'straight');
-    store.getState().addWayPoint(w, [-115.3, 36.1]);
-    store.getState().addWayPoint(w, [-115.0, 36.1]);
-    store.getState().finishWay();
+    const w = required(store.commands.ways.beginWay('road', 'straight'));
+    store.commands.ways.addWayPoint(w, [-115.3, 36.1]);
+    store.commands.ways.addWayPoint(w, [-115.0, 36.1]);
+    store.commands.ways.finishWay();
     way = mustFind(
       store.getState().system.ways.find((x) => x.id === w),
       'way',
