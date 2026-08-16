@@ -78,6 +78,14 @@ export interface CreateDeliveryGraphsOptions {
 }
 
 export const PRODUCTION_WORKER_BOUNDARIES = [
+  {
+    identity: 'diagram-layout-worker-entry',
+    outputFilePrefix: 'diagram-layout-worker-entry',
+  },
+  {
+    identity: 'feature-projection-worker-entry',
+    outputFilePrefix: 'feature-projection-worker-entry',
+  },
   { identity: 'gtfsWorker', outputFilePrefix: 'gtfsWorker' },
   { identity: 'gtfsReconcileWorker', outputFilePrefix: 'gtfsReconcileWorker' },
   { identity: 'osm-import-worker', outputFilePrefix: 'osm-import-worker' },
