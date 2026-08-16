@@ -13,7 +13,6 @@
     "**/dist/**",
     "**/.turbo/**",
     "**/.wrangler/**",
-    "**/worker-configuration.d.ts",
-    "apps/web/tests/verify.test.ts"
+    "**/worker-configuration.d.ts"
   ]
 }

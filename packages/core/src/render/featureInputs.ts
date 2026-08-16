@@ -17,10 +17,10 @@ import type { TransitSystem } from '../model/system';
 //   1. The Record<keyof TransitSystem, …> below is EXHAUSTIVE by type. Adding a
 //      field to TransitSystem is a compile error until it is classified here.
 //      A new renderable field cannot be forgotten into staleness.
-//   2. apps/web/tests/verify.test.ts asserts the classification by experiment:
-//      for every "meta" field it mutates the field and checks that all 14
-//      collections come out byte-identical. That catches the residual hole —
-//      a field classified correctly today whose USE changes tomorrow.
+//   2. A test asserts the classification by experiment: for every "meta"
+//      field it mutates the field and checks that all 14 collections come
+//      out byte-identical. That catches the residual hole — a field
+//      classified correctly today whose USE changes tomorrow.
 //
 // The "render" set is exactly the eight fields read inside buildFeatures.ts.
 // The non-obvious "meta" entries, because a reader will reasonably doubt them:

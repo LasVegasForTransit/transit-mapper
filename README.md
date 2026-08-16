@@ -47,7 +47,7 @@ pnpm dev        # editor at http://localhost:5173
 Other commands:
 
 ```sh
-pnpm verify     # run the test suites (including apps/web/tests/verify.test.ts)
+pnpm verify     # run the test suites
 pnpm typecheck  # TypeScript, app + worker
 pnpm build      # production build
 ```

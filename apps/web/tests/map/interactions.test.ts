@@ -29,6 +29,7 @@ import {
 } from '../../src/editor/input-tuning';
 import type { PointerIntent } from '../../src/editor/pointerIntent';
 import type { EditGestureTargets } from '../../src/map/gestureProjection';
+import { required } from '../support/required.test';
 
 interface Point {
   x: number;
@@ -39,11 +40,6 @@ interface FrameScheduler {
   pending: () => number;
   pump: () => void;
   fireKey: (type: 'keydown' | 'keyup', event: Partial<KeyboardEvent>) => void;
-}
-
-function required<Value>(value: Value | null): Value {
-  if (value === null) throw new Error('Expected the fixture command to return a value');
-  return value;
 }
 
 function installBrowserGlobals(): FrameScheduler {

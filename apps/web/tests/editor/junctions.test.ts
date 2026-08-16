@@ -1,0 +1,472 @@
+// Both describes below narrate a sequence of mutations where later checks
+// build on the state left by earlier ones: each nested describe's beforeEach
+// performs the next mutation in the story, and sibling its() only assert
+// facts about the state as of their own nesting level.
+import { beforeEach, describe, expect, it } from 'vitest';
+import { parseSystem } from '@transitmapper/core/model/serialize';
+import { haversineMeters } from '@transitmapper/core/model/geo';
+import { findMismatchedTypeJunctions } from '@transitmapper/core/model/validate';
+import { defaultProfileFor } from '@transitmapper/core/model/profile';
+import type { TransitSystem } from '@transitmapper/core/model/system';
+import { createEditorStore } from '../../src/editor/store';
+import { mustFind, required } from '../support/required.test';
+
+function wayOf(id: string, typeId: string, points: [number, number][]) {
+  return {
+    id,
+    typeId,
+    points,
+    geometry: 'straight' as const,
+    grade: 'atGrade' as const,
+    profile: defaultProfileFor(typeId),
+  };
+}
+
+// Every setup below draws a straight 2-point way through the same
+// beginWay/addWayPoint/addWayPoint/finishWay sequence; factored out so each
+// beforeEach reads as the story it's telling, not the mechanics of drawing.
+function drawWay(
+  store: ReturnType<typeof createEditorStore>,
+  typeId: string,
+  p1: [number, number],
+  p2: [number, number],
+) {
+  const id = required(store.commands.ways.beginWay(typeId, 'straight'));
+  store.commands.ways.addWayPoint(id, p1);
+  store.commands.ways.addWayPoint(id, p2);
+  store.commands.ways.finishWay();
+  return id;
+}
+
+// Both helpers below wrap the "find by id, else throw" pattern used
+// throughout this file's junction assertions — a plain `.find()!` would trip
+// no-non-null-assertion, and inlining mustFind() at every call site would
+// bury each assertion in lookup boilerplate.
+function wayById(system: TransitSystem, id: string) {
+  const way = system.ways.find((w) => w.id === id);
+  return mustFind(way, 'way');
+}
+
+function refByWayId(node: TransitSystem['nodes'][number], wayId: string) {
+  const ref = node.refs.find((r) => r.wayId === wayId);
+  return mustFind(ref, 'node ref');
+}
+
+describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate node, and every way-editing action keeps its refs in sync', () => {
+  describe('joining two ways at a shared coordinate', () => {
+    // Way A: a straight line the junction will land on mid-segment.
+    // Way B ends exactly where A's midpoint is — join them.
+    let store: ReturnType<typeof createEditorStore>;
+    let wA: string;
+    let wB: string;
+    let s: TransitSystem;
+
+    beforeEach(() => {
+      store = createEditorStore();
+      wA = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
+      wB = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
+      store.commands.ways.joinWayPointToWay(wB, 1, wA, [-115.15, 36.1]);
+      s = store.getState().system;
+    });
+
+    it('joinWayPointToWay inserts a real control point into the target way', () => {
+      expect(wayById(s, wA).points.length).toBe(3);
+    });
+
+    it('the inserted point lands at the join coordinate', () => {
+      expect(wayById(s, wA).points[1][0]).toBe(-115.15);
+    });
+
+    it('exactly one node was created', () => {
+      expect(s.nodes.length).toBe(1);
+    });
+
+    it("the node links both ways' points", () => {
+      const node = s.nodes[0];
+      expect(node.refs.length).toBe(2);
+      expect(node.refs.some((r) => r.wayId === wA)).toBe(true);
+      expect(node.refs.some((r) => r.wayId === wB)).toBe(true);
+    });
+
+    // Moving the junction (on EITHER way) must cascade to the other — the exact
+    // bug this guards against ("junctions silently desync when you edit them").
+    describe('moving the shared point on way B', () => {
+      let s2: TransitSystem;
+
+      beforeEach(() => {
+        store.commands.ways.moveWayPoint(wB, 1, [-115.16, 36.05]);
+        s2 = store.getState().system;
+      });
+
+      it('moving the shared point on one way also moves it on the other (no desync)', () => {
+        expect(wayById(s2, wA).points[1][0]).toBe(-115.16);
+        expect(wayById(s2, wB).points[1][0]).toBe(-115.16);
+      });
+
+      it("the node's own coord tracks the cascaded move too", () => {
+        expect(s2.nodes[0].coord[0]).toBe(-115.16);
+      });
+
+      // Inserting a point earlier in way A must shift the node's ref index, not
+      // leave it pointing at the wrong (now-shifted) point.
+      describe('inserting a point earlier in way A', () => {
+        let s3: TransitSystem;
+        let wARef: TransitSystem['nodes'][number]['refs'][number];
+
+        beforeEach(() => {
+          store.commands.ways.insertWayPoint(wA, 0, [-115.22, 36.09]);
+          s3 = store.getState().system;
+          wARef = refByWayId(s3.nodes[0], wA);
+        });
+
+        it("insertWayPoint shifts the node's ref index on that way", () => {
+          expect(wARef.pointIndex).toBe(2);
+        });
+
+        it('the ref still points at the actual junction point after the shift', () => {
+          expect(wayById(s3, wA).points[wARef.pointIndex][0]).toBe(-115.16);
+        });
+
+        // Deleting the OTHER end of way A (not the junction point) must not
+        // disturb the node's ref into way A, only reindex it.
+        describe('deleting the other end of way A', () => {
+          let s4: TransitSystem;
+          let wARef2: TransitSystem['nodes'][number]['refs'][number];
+
+          beforeEach(() => {
+            store.commands.ways.deleteWayPoint(wA, 0);
+            s4 = store.getState().system;
+            wARef2 = refByWayId(s4.nodes[0], wA);
+          });
+
+          it("deleteWayPoint before the node's index shifts it back down", () => {
+            expect(wARef2.pointIndex).toBe(1);
+          });
+
+          it('node survives an unrelated point deletion', () => {
+            expect(s4.nodes.length).toBe(1);
+          });
+
+          // Deleting the junction's OWN point on one way should drop that way's
+          // ref and, since only one ref remains, the node stops being a
+          // junction at all. Way B needs a third point first: it's sitting at
+          // exactly 2 right now, and deleting its junction end would ghost it —
+          // deleteWayPoint refuses that (see store.ts), so way B is extended
+          // before deleting its junction point.
+          it('deleting the shared point on one way drops the node (no longer a real junction)', () => {
+            store.commands.ways.insertWayPoint(wB, 0, [-115.15, 36.25]);
+            const s5 = store.getState().system;
+            const wBRefIndex = refByWayId(s5.nodes[0], wB).pointIndex;
+            store.commands.ways.deleteWayPoint(wB, wBRefIndex);
+            expect(store.getState().system.nodes.length).toBe(0);
+          });
+        });
+      });
+    });
+  });
+
+  // The same guard also protects a junction arm still at exactly 2 points:
+  // deleting its only remaining non-junction point would ghost the way AND,
+  // as a side effect, desync the junction — refused outright instead.
+  describe('a junction arm with exactly 2 points', () => {
+    let store: ReturnType<typeof createEditorStore>;
+    let armB: string;
+
+    beforeEach(() => {
+      store = createEditorStore();
+      const armA = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
+      armB = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
+      store.commands.ways.joinWayPointToWay(armB, 1, armA, [-115.15, 36.1]);
+    });
+
+    it('the two joined ways start out sharing one junction node', () => {
+      expect(store.getState().system.nodes.length).toBe(1);
+    });
+
+    it("deleting a junction arm's own point is refused when the arm has only 2", () => {
+      store.commands.ways.deleteWayPoint(armB, 1);
+      const s = store.getState().system;
+      expect(s.nodes.length).toBe(1);
+      expect(wayById(s, armB).points.length).toBe(2);
+    });
+  });
+
+  // deleteWay must strip any surviving refs to the removed way.
+  describe('deleteWay on a way with a junction', () => {
+    let store: ReturnType<typeof createEditorStore>;
+    let wC: string;
+
+    beforeEach(() => {
+      store = createEditorStore();
+      wC = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
+      const wD = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
+      store.commands.ways.joinWayPointToWay(wD, 1, wC, [-115.15, 36.1]);
+    });
+
+    it('the junction node exists before deleteWay runs', () => {
+      expect(store.getState().system.nodes.length).toBe(1);
+    });
+
+    it('deleteWay removes the node once its junction partner is gone', () => {
+      store.commands.ways.deleteWay(wC);
+      expect(store.getState().system.nodes.length).toBe(0);
+    });
+  });
+
+  // v3→v4 migration derives nodes from raw coordinate coincidence when a
+  // loaded system has no explicit nodes field.
+  it('migrated v3 data derives a node from coincident way endpoints', () => {
+    const legacyRound = parseSystem({
+      version: 3,
+      id: 'x',
+      name: 'x',
+      viewport: { center: [-115, 36], zoom: 10 },
+      createdAt: 1,
+      updatedAt: 1,
+      ways: [
+        {
+          id: 'p',
+          typeId: 'lightRail',
+          points: [
+            [-115.2, 36.1],
+            [-115.1, 36.1],
+          ],
+          geometry: 'straight',
+        },
+        {
+          id: 'q',
+          typeId: 'lightRail',
+          points: [
+            [-115.1, 36.1],
+            [-115.1, 36.2],
+          ],
+          geometry: 'straight',
+        },
+      ],
+      services: [],
+      stations: [],
+      facilities: [],
+      groups: [],
+    });
+    expect(legacyRound.nodes.length).toBe(1);
+    expect(legacyRound.nodes[0].refs.length).toBe(2);
+  });
+
+  // A system round-tripped through JSON keeps its explicit v4 nodes intact.
+  it('v4 round-trip preserves the explicit node', () => {
+    const store = createEditorStore();
+    const wE = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
+    const wF = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
+    store.commands.ways.joinWayPointToWay(wF, 1, wE, [-115.15, 36.1]);
+    const v4Round = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
+    expect(v4Round.nodes.length).toBe(1);
+    expect(v4Round.nodes[0].refs.length).toBe(2);
+  });
+});
+
+describe('Disconnecting a junction: disconnectNodeWay takes one way out and leaves nothing sharing the coordinate', () => {
+  // A 2-arm junction: the crossing corridor's end joined onto a through way.
+  describe('a 2-arm junction', () => {
+    let store: ReturnType<typeof createEditorStore>;
+    let through: string;
+    let spur: string;
+    let stayingPoint: [number, number];
+    let s: TransitSystem;
+
+    beforeEach(() => {
+      store = createEditorStore();
+      through = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
+      spur = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
+      store.commands.ways.joinWayPointToWay(spur, 1, through, [-115.15, 36.1]);
+
+      const junctionId = store.getState().system.nodes[0].id;
+      const throughWay = wayById(store.getState().system, through);
+      stayingPoint = throughWay.points[1].slice() as [number, number];
+      store.commands.selection.select({ kind: 'node', id: junctionId });
+      store.commands.network.disconnectNodeWay(junctionId, spur);
+      s = store.getState().system;
+    });
+
+    it('disconnecting one of two arms deletes the junction outright', () => {
+      expect(s.nodes.length).toBe(0);
+    });
+
+    it('the disconnected way stops sharing the coordinate', () => {
+      const movedEnd = wayById(s, spur).points[1];
+      expect(haversineMeters(movedEnd, stayingPoint)).toBeGreaterThan(10);
+    });
+
+    it("the arm that stayed didn't move", () => {
+      const throughPoint = wayById(s, through).points[1];
+      expect(throughPoint[0]).toBe(stayingPoint[0]);
+      expect(throughPoint[1]).toBe(stayingPoint[1]);
+    });
+
+    it('the selection clears with the junction it pointed at', () => {
+      expect(store.getState().selection).toBeNull();
+    });
+  });
+
+  // A 3-arm junction sheds one arm and keeps standing, taking that arm's
+  // lane connectors with it — a connector naming a way that no longer meets
+  // here would break junctionGeometry.
+  describe('a 3-arm junction', () => {
+    let store: ReturnType<typeof createEditorStore>;
+    let main: string;
+    let north: string;
+    let south: string;
+    let s: TransitSystem;
+    let threeArm: TransitSystem['nodes'][number];
+
+    beforeEach(() => {
+      store = createEditorStore();
+      main = drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
+      north = drawWay(store, 'lightRail', [-115.15, 36.2], [-115.15, 36.1]);
+      south = drawWay(store, 'lightRail', [-115.15, 36.0], [-115.15, 36.1]);
+      store.commands.ways.joinWayPointToWay(north, 1, main, [-115.15, 36.1]);
+      store.commands.ways.joinWayPointToWay(south, 1, main, [-115.15, 36.1]);
+
+      s = store.getState().system;
+      threeArm = s.nodes[0];
+    });
+
+    it('all three ways meet at one junction', () => {
+      expect(threeArm.refs.length).toBe(3);
+    });
+
+    describe('shedding the south arm', () => {
+      let s2: TransitSystem;
+
+      beforeEach(() => {
+        const laneOf = (wayId: string) => wayById(s, wayId).profile.lanes[0].id;
+        store.commands.network.setNodeConnectors(threeArm.id, [
+          {
+            from: { wayId: south, laneId: laneOf(south) },
+            to: { wayId: north, laneId: laneOf(north) },
+          },
+          {
+            from: { wayId: north, laneId: laneOf(north) },
+            to: { wayId: main, laneId: laneOf(main) },
+          },
+        ]);
+        store.commands.network.disconnectNodeWay(threeArm.id, south);
+        s2 = store.getState().system;
+      });
+
+      it('a 3-arm junction survives shedding one arm', () => {
+        expect(s2.nodes.length).toBe(1);
+      });
+
+      it('the remaining arms keep their refs', () => {
+        expect(s2.nodes[0].refs.length).toBe(2);
+        expect(s2.nodes[0].refs.some((r) => r.wayId === south)).toBe(false);
+      });
+
+      it('connectors naming the disconnected way are pruned', () => {
+        expect((s2.nodes[0].connectors ?? []).length).toBe(1);
+        expect(mustFind(s2.nodes[0].connectors, 'connectors')[0].from.wayId).toBe(north);
+      });
+
+      it('the shed arm is nudged clear of the junction that stayed', () => {
+        const shedEnd = wayById(s2, south).points[1];
+        expect(haversineMeters(shedEnd, s2.nodes[0].coord)).toBeGreaterThan(10);
+      });
+    });
+  });
+
+  // The bug this primitive exists for: drawing a road across a rail line no
+  // longer wires them into one junction on commit.
+  it('a road drawn across a rail line forms no junction', () => {
+    const store = createEditorStore();
+    drawWay(store, 'lightRail', [-115.2, 36.1], [-115.1, 36.1]);
+    drawWay(store, 'road', [-115.15, 36.05], [-115.15, 36.15]);
+    expect(store.getState().system.nodes.length).toBe(0);
+  });
+
+  // An import that claims a junction between a road and a rail line does not
+  // get one: nothing repairs it later, because it never lands. What survives
+  // is the pair of same-kind arms, if there are two of them.
+  describe('an import claiming a road/rail junction', () => {
+    let store: ReturnType<typeof createEditorStore>;
+
+    beforeEach(() => {
+      store = createEditorStore();
+      store.commands.imports.importWays({
+        ways: [
+          wayOf('mixed-road-west', 'road', [
+            [-115.2, 36.1],
+            [-115.15, 36.1],
+          ]),
+          wayOf('mixed-road-east', 'road', [
+            [-115.15, 36.1],
+            [-115.1, 36.1],
+          ]),
+          wayOf('mixed-rail', 'lightRail', [
+            [-115.15, 36.05],
+            [-115.15, 36.1],
+          ]),
+        ],
+        nodes: [
+          {
+            id: 'mixed-junction',
+            coord: [-115.15, 36.1],
+            refs: [
+              { wayId: 'mixed-road-west', pointIndex: 1 },
+              { wayId: 'mixed-road-east', pointIndex: 0 },
+              { wayId: 'mixed-rail', pointIndex: 1 },
+            ],
+          },
+        ],
+        namedWays: [],
+        medians: [],
+        turnRestrictions: [],
+      });
+    });
+
+    it('importing a road-and-rail junction leaves no mismatched junction behind', () => {
+      expect(findMismatchedTypeJunctions(store.getState().system).length).toBe(0);
+    });
+
+    it('the two road arms keep their junction', () => {
+      const s = store.getState().system;
+      expect(s.nodes.length).toBe(1);
+      expect(s.nodes[0].refs.every((r) => r.wayId.startsWith('mixed-road'))).toBe(true);
+    });
+
+    it('and the rail line is left where it was, crossing without joining', () => {
+      expect(wayById(store.getState().system, 'mixed-rail').points[1][1]).toBe(36.1);
+    });
+  });
+
+  // The same rule keeps a bike path joined to the street it meets: both are
+  // in the street junction group, and a cyclist really does turn there.
+  it('a bike path keeps the junction where it meets a street', () => {
+    const store = createEditorStore();
+    store.commands.imports.importWays({
+      ways: [
+        wayOf('bike-street-west', 'road', [
+          [-115.2, 36.1],
+          [-115.15, 36.1],
+        ]),
+        wayOf('bike-path', 'bike', [
+          [-115.15, 36.05],
+          [-115.15, 36.1],
+        ]),
+      ],
+      nodes: [
+        {
+          id: 'bike-junction',
+          coord: [-115.15, 36.1],
+          refs: [
+            { wayId: 'bike-street-west', pointIndex: 1 },
+            { wayId: 'bike-path', pointIndex: 1 },
+          ],
+        },
+      ],
+      namedWays: [],
+      medians: [],
+      turnRestrictions: [],
+    });
+    expect(store.getState().system.nodes.length).toBe(1);
+  });
+});

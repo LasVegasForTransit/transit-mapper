@@ -8,11 +8,7 @@ import {
 } from '../../../src/editor/actions/pointActions';
 import { createEditorStore } from '../../../src/editor/store';
 import { patternPositionAt } from '@transitmapper/core/model/serviceEdits';
-
-function required<Value>(value: Value | null): Value {
-  if (value === null) throw new Error('Expected the fixture command to return a value');
-  return value;
-}
+import { required } from '../../support/required.test';
 
 describe('service point actions', () => {
   it('requires the interaction-resolved occurrence position', () => {

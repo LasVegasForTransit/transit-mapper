@@ -16,7 +16,7 @@
     "perf:soak": "tsx scripts/perf/run.ts --soak",
     "renderer:capture": "tsx scripts/renderer-capture/run.ts",
     "typecheck": "tsc -b tsconfig.build.json --noEmit && tsc -b tsconfig.json --noEmit",
-    "verify": "tsx tests/verify.test.ts && vitest run",
+    "verify": "vitest run",
     "lint": "eslint ."
   },
   "dependencies": {
