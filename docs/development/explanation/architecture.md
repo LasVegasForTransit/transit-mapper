@@ -366,6 +366,11 @@ geometry. `editor-overlays` owns the separate unbanked handles, service
 termini, and junction guides; those may run a small editor-only projection.
 Mode/type visibility remains a layer filter.
 
+Stops, facilities, arrows, and way labels compete in world-aligned cells that
+use final display CSS pixels. A pan therefore keeps the accepted marker set
+stable, while a smaller preview emits less clutter. Selected termini remain
+outside that rule because both endpoints are direct editing controls.
+
 The pipeline changes presentation and delivery, never the authored network.
 It resolves curves from final display error, then derives District footprints
 and Street lanes from that centreline. Diagram layout is separate, revision

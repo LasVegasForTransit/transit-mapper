@@ -6,10 +6,13 @@ import { describe, expect, it } from 'vitest';
 import { MODE_ORDER, WAY_TYPE_ORDER } from '../../src/model/catalog';
 import { wholeLeg, wholeLegs, oneSection } from '../../src/model/geo';
 import { wayById } from '../../src/model/geo/wayPath';
-import { aPattern, aRoad, aService, aSystem } from '../support/fixtures.test';
+import { aPattern, aRoad, aService, aStop, aSystem } from '../support/fixtures.test';
 import type { Pattern, Service } from '../../src/model/system';
 import { buildFeatures, type RenderViewOptions } from '../../src/render/buildFeatures';
-import { OVERVIEW_TEST_PRESENTATION } from '../support/render-presentation.test';
+import {
+  OVERVIEW_TEST_PRESENTATION,
+  STREET_TEST_PRESENTATION,
+} from '../support/render-presentation.test';
 
 const NETWORK_VIEW: RenderViewOptions = {
   viewMode: 'network',
@@ -410,5 +413,21 @@ describe('service editing affordances', () => {
     );
 
     expect(features.handles.features).toHaveLength(6);
+  });
+
+  it('keeps an interchange while nearby ordinary stops share one screen cell', () => {
+    const ordinary = aStop('ordinary', [-115.15, 36.14]);
+    const interchange = aStop('interchange', [-115.150001, 36.140001], undefined, {
+      majorStop: true,
+    });
+
+    const features = buildFeatures(aSystem({ stops: [ordinary, interchange] }), null, [], {
+      ...NETWORK_VIEW,
+      presentation: STREET_TEST_PRESENTATION,
+    });
+
+    expect(features.stops.features.map((feature) => String(feature.properties?.id))).toEqual([
+      'interchange',
+    ]);
   });
 });

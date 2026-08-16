@@ -104,6 +104,7 @@ export function planResumableGeographicFeatureProjection(
   return {
     kind: 'ready',
     sourceIds: context.sourceIds,
+    presentation: options.view.presentation,
     units: context.units,
     aggregate: (parts) => aggregateProjectionParts(context.units, parts),
     refineAfterUnitBudgetExceeded: (unitId) => {

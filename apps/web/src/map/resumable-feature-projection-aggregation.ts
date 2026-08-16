@@ -1,5 +1,12 @@
 import type { Feature } from 'geojson';
-import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
+import type { SystemFeatureName, SystemFeatures } from '@transitmapper/core/render/buildFeatures';
+import type { RenderPresentation } from '@transitmapper/core/render/render-presentation';
+import {
+  createScreenDensitySelector,
+  screenDensityPolicy,
+  type ScreenDensityPolicy,
+  type ScreenDensitySelector,
+} from '@transitmapper/core/render/screen-density';
 import type {
   CooperativeRenderJobUnit,
   CooperativeRenderJobUnitSequence,
@@ -30,6 +37,9 @@ export interface PlanProjectionAggregationOptions {
   readonly units: readonly GeographicFeatureProjectionUnit[];
   readonly parts: readonly SystemFeatures[];
   readonly batchSize?: number;
+  /** Omitted only by compatibility callers that already supplied complete
+   * source collections. Live fragment aggregation provides it. */
+  readonly presentation?: RenderPresentation;
 }
 
 interface DeferredServiceHits {
@@ -44,6 +54,13 @@ interface AggregationSourceContext {
   readonly sourceFeatures: readonly Feature[];
   readonly target: Feature[];
   readonly ids: Set<string>;
+}
+
+interface DensitySourceContext {
+  readonly sourceId: MapSystemFeatureSourceId;
+  readonly sourceName: SystemFeatureName;
+  readonly policy: ScreenDensityPolicy;
+  readonly features: Feature[];
 }
 
 function featureTarget(features: SystemFeatures, sourceId: MapSystemFeatureSourceId): Feature[] {
@@ -65,6 +82,12 @@ class ProjectionAggregationBuilder implements ProjectionAggregationUnitSequence 
   private serviceHitIndex = 0;
   private lastIndex = -1;
   private lastUnit: ProjectionAggregationWorkUnit | undefined;
+  private densitySources: readonly DensitySourceContext[] | null = null;
+  private densitySourceIndex = 0;
+  private densityOffset = 0;
+  private densityCompacting = false;
+  private densitySelector: ScreenDensitySelector | null = null;
+  private densityFeatures: Feature[] = [];
 
   constructor(
     private readonly options: PlanProjectionAggregationOptions,
@@ -97,7 +120,7 @@ class ProjectionAggregationBuilder implements ProjectionAggregationUnitSequence 
     this.currentSource = null;
     if (this.partIndex < this.options.units.length) return this.sourceDescriptorUnit();
     if (this.serviceHitIndex < this.deferredServiceHits.length) return this.serviceHitUnit();
-    return undefined;
+    return this.densityUnit();
   }
 
   private sourceDescriptorUnit(): ProjectionAggregationWorkUnit {
@@ -187,6 +210,79 @@ class ProjectionAggregationBuilder implements ProjectionAggregationUnitSequence 
       services.push(...hits.features);
       this.serviceHitIndex += 1;
     });
+  }
+
+  private densityUnit(): ProjectionAggregationWorkUnit | undefined {
+    const sources = this.densitySourcesForAggregation();
+    while (this.densitySourceIndex < sources.length) {
+      const source = sources[this.densitySourceIndex];
+      if (!this.densityCompacting && this.densityOffset < source.features.length) {
+        return this.densityScanUnit(source);
+      }
+      if (!this.densityCompacting) {
+        this.densityCompacting = true;
+        this.densityOffset = 0;
+        continue;
+      }
+      if (this.densityOffset < source.features.length) return this.densityCompactUnit(source);
+      this.replaceDensitySource(source);
+      this.densitySourceIndex += 1;
+      this.densityOffset = 0;
+      this.densityCompacting = false;
+      this.densitySelector = null;
+      this.densityFeatures = [];
+    }
+    return undefined;
+  }
+
+  private densitySourcesForAggregation(): readonly DensitySourceContext[] {
+    if (this.densitySources) return this.densitySources;
+    const presentation = this.options.presentation;
+    if (!presentation) return (this.densitySources = []);
+    this.densitySources = [...this.idsBySource.keys()].flatMap((sourceId) => {
+      const sourceName = SYSTEM_FEATURE_NAME_BY_SOURCE[sourceId];
+      const policy = screenDensityPolicy(sourceName);
+      if (!policy) return [];
+      return [{ sourceId, sourceName, policy, features: featureTarget(this.aggregated, sourceId) }];
+    });
+    return this.densitySources;
+  }
+
+  private densityScanUnit(source: DensitySourceContext): ProjectionAggregationWorkUnit {
+    const presentation = this.options.presentation;
+    if (!presentation) throw new Error('Density aggregation requires a presentation.');
+    const start = this.densityOffset;
+    const end = Math.min(start + this.batchSize, source.features.length);
+    return this.work(`density:scan:${source.sourceId}:${start}`, end - start, () => {
+      this.densitySelector ??= createScreenDensitySelector(presentation, source.policy.cellSizePx);
+      for (let index = start; index < end; index++) {
+        const candidate = source.policy.candidate(source.features[index]);
+        if (candidate) this.densitySelector.consider(candidate);
+      }
+      this.densityOffset = end;
+    });
+  }
+
+  private densityCompactUnit(source: DensitySourceContext): ProjectionAggregationWorkUnit {
+    const start = this.densityOffset;
+    const end = Math.min(start + this.batchSize, source.features.length);
+    return this.work(`density:compact:${source.sourceId}:${start}`, end - start, () => {
+      const selector = this.densitySelector;
+      if (!selector) throw new Error('Density aggregation cannot compact before scanning.');
+      for (let index = start; index < end; index++) {
+        const feature = source.features[index];
+        const candidate = source.policy.candidate(feature);
+        if (!candidate || selector.keeps(candidate.id)) this.densityFeatures.push(feature);
+      }
+      this.densityOffset = end;
+    });
+  }
+
+  private replaceDensitySource(source: DensitySourceContext): void {
+    // Replacing the collection after all scan and compact units avoids one
+    // terminal filter pass and means an interrupted draft cannot leak a half-
+    // culled source through result().
+    this.aggregated[source.sourceName].features = this.densityFeatures as never;
   }
 
   private work(id: string, featureCount: number, run: () => void): ProjectionAggregationWorkUnit {

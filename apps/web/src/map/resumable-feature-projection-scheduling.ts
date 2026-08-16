@@ -178,6 +178,7 @@ class ResumableProjectionPipeline {
       units: attempt.plan.units,
       parts: attempt.parts,
       batchSize: attempt.batchSize,
+      presentation: attempt.plan.presentation,
     });
     this.acceptedCounts = attempt.counts;
     const scheduled = this.options.scheduler.submit({
