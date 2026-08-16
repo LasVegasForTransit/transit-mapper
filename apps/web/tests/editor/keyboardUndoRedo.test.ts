@@ -19,7 +19,7 @@ function buildCtx(store: ReturnType<typeof createEditorStore>): KeyContext {
   } as unknown as KeyContext;
 }
 
-describe('keyboard: matcher, resolver, command execution, gating', () => {
+describe('a key press resolves to the command it is bound to, honoring read-only mode', () => {
   let store: ReturnType<typeof createEditorStore>;
   let ctx: KeyContext;
 
@@ -50,14 +50,14 @@ describe('keyboard: matcher, resolver, command execution, gating', () => {
     expect(store.getState().tool).toBe('way');
   });
 
-  it('way-tool binding gated in read-only', () => {
+  it('the way-tool binding is refused in read-only mode', () => {
     store.commands.document.setSystem(store.getState().system, { readOnly: true });
 
     expect(resolveBinding(KEY_BINDINGS, evt({ key: 'l' }), ctx)).toBeNull();
   });
 });
 
-describe('undo/redo: basic push/pop, redo invalidation, readOnly/empty guards', () => {
+describe('undo and redo walk the edit history, and only genuine edits enter it', () => {
   let store: ReturnType<typeof createEditorStore>;
 
   beforeEach(() => {
@@ -244,7 +244,7 @@ describe('undo/redo must not exit draw mode: activeWayId only clears once the wa
   });
 });
 
-describe('undo/redo: gesture checkpoints coalesce into one step, discard no-ops', () => {
+describe('a whole gesture becomes a single undo step, or none if it changed nothing', () => {
   function countUndoSteps(store: ReturnType<typeof createEditorStore>): number {
     let n = 0;
     while (store.getState().canUndo) {
@@ -406,7 +406,7 @@ describe('keyboard: mod (Ctrl/Cmd) bindings for undo/redo do not collide with pl
   });
 });
 
-describe('keyboard: UI-hide toggle', () => {
+describe('the backslash key toggles whether the UI is shown', () => {
   function buildToggleCtx(onToggle: () => void): KeyContext {
     return {
       map: { panBy() {}, zoomTo() {}, getZoom: () => 10 },

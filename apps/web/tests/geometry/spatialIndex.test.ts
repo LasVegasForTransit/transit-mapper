@@ -3,7 +3,7 @@ import { bearingDegrees, formatBearing, servedWayIds, snap } from '@transitmappe
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import type { LngLat, Way } from '@transitmapper/core/model/system';
 
-describe('bearingDegrees / formatBearing', () => {
+describe('compass bearing between two points, formatted as a labeled direction', () => {
   it('due east is 90°', () => {
     expect(Math.abs(bearingDegrees([-115.2, 36.1], [-115.1, 36.1]) - 90)).toBeLessThan(0.5);
   });
@@ -55,11 +55,11 @@ function makeLongAndFarWays(): { longWay: Way; farWay: Way; nearFarEnd: LngLat }
   return { longWay, farWay, nearFarEnd };
 }
 
-describe('servedWayIds: spatial-grid index stays correct across cell/segment boundaries', () => {
+describe('the spatial-grid index behind servedWayIds stays correct across cell and segment boundaries', () => {
   const { longWay, farWay, nearFarEnd } = makeLongAndFarWays();
   const served = servedWayIds(nearFarEnd, [longWay, farWay], 50);
 
-  it("a station near a long way's far end is still found", () => {
+  it("a stop near a long way's far end is still found", () => {
     expect(served).toContain('long');
   });
 
@@ -72,7 +72,7 @@ describe('servedWayIds: spatial-grid index stays correct across cell/segment bou
   });
 });
 
-describe("determinism: index answers don't depend on bucket iteration order", () => {
+describe("the spatial-grid index's answers don't depend on the order ways were inserted", () => {
   // Both of these read the segment grid by walking cell buckets, so their
   // answers used to depend on the order segments happened to be inserted.
   // That is observable today (servedWayIds' first entry colors the station
@@ -114,7 +114,7 @@ describe("determinism: index answers don't depend on bucket iteration order", ()
     );
   });
 
-  it("servedWayIds lists the nearest way first, so it decides a station's color", () => {
+  it("servedWayIds lists the nearest way first, so it decides a stop's color", () => {
     // Named so that sorting by id alone would put the FAR way first — this
     // only passes if the ordering is genuinely by distance.
     const nearWay = detRoad('z-near', [
@@ -131,7 +131,10 @@ describe("determinism: index answers don't depend on bucket iteration order", ()
   });
 });
 
-describe("snap: shares servedWayIds' spatial grid — same boundary-correctness requirement, since a naive per-way-bbox or single-cell index would miss a coordinate near a long way's far end", () => {
+// snap shares servedWayIds' spatial grid, so it carries the same boundary
+// correctness requirement: a naive per-way-bbox or single-cell index would
+// miss a coordinate near a long way's far end.
+describe('snap also stays correct near the far end of a long way', () => {
   const { longWay, farWay, nearFarEnd } = makeLongAndFarWays();
   const hit = snap([longWay, farWay], nearFarEnd, 50);
 

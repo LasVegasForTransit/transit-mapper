@@ -15,7 +15,7 @@ function must<T>(value: T | undefined | null): T {
   return value;
 }
 
-describe('cutting where you CLICKED: point-anchored actions that make a stretch of a line removable without a station at each end', () => {
+describe('actions anchored to the point you clicked: cutting or ending a line, dividing a way', () => {
   describe('a line drawn on one straight way', () => {
     let store: Store, line: string, registry: ReturnType<typeof createSelectionActions>;
     let refs: MultiSelectItem[];
@@ -160,7 +160,7 @@ describe('cutting where you CLICKED: point-anchored actions that make a stretch 
   });
 });
 
-describe('selecting LINES: services join the multi-select group, the action registry offers what the geometry supports, and each action runs', () => {
+describe('selecting one or more lines offers whatever actions their combination of geometry supports', () => {
   let store: Store, lineW: string, lineE: string;
 
   beforeEach(() => {
@@ -177,7 +177,7 @@ describe('selecting LINES: services join the multi-select group, the action regi
     [lineW, lineE] = store.getState().system.services.map((sv) => sv.id);
   });
 
-  it('a service can be part of a multi-selection', () => {
+  it('a line can be part of a multi-selection', () => {
     store.commands.selection.toggleMultiSelect({ kind: 'service', id: lineW });
     store.commands.selection.toggleMultiSelect({ kind: 'service', id: lineE });
     expect(store.getState().multiSelection).toHaveLength(2);
@@ -217,7 +217,7 @@ describe('selecting LINES: services join the multi-select group, the action regi
       expect(actionIds).toContain('service.throughRoute');
     });
 
-    it('an action that applies to no selection is absent', () => {
+    it('a way-only action does not show up for a selection made only of lines', () => {
       expect(actionIds).not.toContain('way.mergeCorridor');
     });
 
@@ -280,8 +280,8 @@ describe('selecting LINES: services join the multi-select group, the action regi
     let road: string, line: string, pointsBefore: string;
 
     beforeEach(() => {
-      // A fresh store here, not the outer describe's wayW/wayE fixture,
-      // matching the original's fresh() reset at this point.
+      // A fresh store here, not the outer describe's wayW/wayE fixture —
+      // this scenario only needs one line on one way.
       store = createEditorStore();
       road = required(store.commands.ways.beginWay('lightRail', 'straight'));
       store.commands.ways.addWayPoint(road, [-115.2, 36.2]);

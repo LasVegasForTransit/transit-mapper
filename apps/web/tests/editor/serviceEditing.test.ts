@@ -5,6 +5,13 @@ import { patternWayIds, primaryAnchor, serviceWayIds } from '@transitmapper/core
 import { createEditorStore } from '../../src/editor/store';
 import { buildFeatures } from '../support/testRenderPresentation.test';
 
+// beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
+// service using the store's default draftModeId ('lightRail', which is
+// compatible with the 'road' way type) — see
+// src/editor/store/internal-operations/way-creation.ts's compatibleModeId.
+// Cases below that don't set the mode explicitly are implicitly exercising
+// lightRail, not a specific documented choice.
+
 function must<T>(value: T | undefined | null): T {
   if (value == null) throw new Error('expected a defined value');
   return value;
@@ -116,7 +123,7 @@ describe('splitWayAt: splits infrastructure, keeps riding services whole, re-sna
   });
 });
 
-describe('Service frequency + span: additive fields, round-trip through parse', () => {
+describe('a service carries an optional frequency and span that round-trip through parse', () => {
   let store: ReturnType<typeof createEditorStore>;
   let svcId: string;
 
@@ -146,13 +153,13 @@ describe('Service frequency + span: additive fields, round-trip through parse', 
       expect(svc.frequencyMinutes).toBe(8);
     });
 
-    it('setServiceSpan sets start/end', () => {
+    it("setServiceSpan sets the service's start and end", () => {
       const svc = must(store.getState().system.services.find((s) => s.id === svcId));
       expect(svc.spanStart).toBe('05:00');
       expect(svc.spanEnd).toBe('01:00');
     });
 
-    it('frequency/span round-trip through parse', () => {
+    it('frequency and span survive a round trip through parse', () => {
       const round = parseSystem(JSON.parse(JSON.stringify(store.getState().system)));
       const svc = must(round.services.find((s) => s.id === svcId));
       expect(svc.frequencyMinutes).toBe(8);
@@ -173,14 +180,12 @@ describe('Service frequency + span: additive fields, round-trip through parse', 
   });
 });
 
-// A branch used to be a second Pattern living inside one Service. Now Line
-// owns identity/color and a branch is a second, sibling Service under the
-// same Line (see migration cheat sheet §2) — startAddingPattern/
-// addingPatternForServiceId/cancelAddingPattern/deletePattern don't exist
-// anymore; their replacements are startAddingServiceToLine/
-// addingServiceDraft/cancelAddingService/deleteService, scoped to a Line's
-// serviceIds rather than a Service's patterns.
-describe('service branches: a Line can carry 2+ sibling Services sharing a trunk, drawn via startAddingServiceToLine/finishWay, rendered as one shared line on a common trunk and separate lines past the branch point', () => {
+// A branch is a second, sibling Service under the same Line — Line owns
+// identity/color, and each Service has exactly one path. Adding one is
+// startAddingServiceToLine/addingServiceDraft/cancelAddingService/
+// deleteService, scoped to a Line's serviceIds rather than a Service's own
+// patterns.
+describe('a Line can carry sibling Services that branch off a shared trunk', () => {
   describe('a trunk way with its default service', () => {
     let store: ReturnType<typeof createEditorStore>;
     let lineId: string;

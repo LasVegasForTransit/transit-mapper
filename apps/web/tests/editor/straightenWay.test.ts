@@ -3,7 +3,14 @@ import { createEditorStore } from '../../src/editor/store';
 import type { Way } from '@transitmapper/core/model/system';
 import { required } from '../support/required.test';
 
-describe('store: straightenWay', () => {
+// beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
+// service using the store's default draftModeId ('lightRail', which is
+// compatible with the 'road' way type) — see
+// src/editor/store/internal-operations/way-creation.ts's compatibleModeId.
+// Cases below that don't set the mode explicitly are implicitly exercising
+// lightRail, not a specific documented choice.
+
+describe('straightenWay drops accidental waypoints while preserving real junctions', () => {
   let store: ReturnType<typeof createEditorStore>;
 
   beforeEach(() => {

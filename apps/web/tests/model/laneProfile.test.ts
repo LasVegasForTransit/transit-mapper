@@ -1,8 +1,3 @@
-// Converted from apps/web/tests/verify.test.ts lines 6494-7010 (8 sections).
-// Split from profileMigrationsAndComponents.test.ts to stay under the
-// max-lines cap; this half covers profile ops, carriageway
-// separation/combination, the ECS-shaped component registry, driving side,
-// and offsetPolyline. Migration coverage lives in systemMigrations.test.ts.
 import { describe, expect, it } from 'vitest';
 import {
   buildProfile,
@@ -31,7 +26,7 @@ import { offsetPolyline } from '@transitmapper/core/model/geo';
 import type { CrossSection, LngLat } from '@transitmapper/core/model/system';
 import { mustFind } from '../support/required.test';
 
-describe('profile ops', () => {
+describe("a profile's lanes stay consistent through resizing, flipping, and one-way conversion", () => {
   const road = defaultProfileFor('road', 4);
 
   it('defaultProfileFor(road, 4) carries 4 counted lanes', () => {
@@ -150,7 +145,7 @@ describe('profile ops', () => {
   });
 });
 
-describe('carriageway separation / combination (profile level)', () => {
+describe('a divided profile can be split into carriageways and recombined without losing lanes', () => {
   const boulevard = buildProfile(PROFILE_PRESETS.roadBoulevard.lanes);
   const sep = mustFind(separateProfiles(boulevard), 'separateProfiles(boulevard)');
 
@@ -202,7 +197,7 @@ describe('carriageway separation / combination (profile level)', () => {
   });
 });
 
-describe('ECS-shaped component registry (model/components.ts)', () => {
+describe('the component registry adds, reads, and removes keyed data without mutating what it started from', () => {
   const empty: Record<string, { n: number }> = {};
   const withA = withComponent(empty, 'a', { n: 1 });
 
@@ -237,11 +232,10 @@ describe('ECS-shaped component registry (model/components.ts)', () => {
   });
 });
 
-// driving side (model/profile.ts) — target-way/kind identity, never an angle
-// bucket, is what makes turn restrictions robust; drivingSide is the one
-// place actual left/right geometry matters, and it's isolated to these three
-// functions.
-describe('driving side (model/profile.ts)', () => {
+// Target-way/kind identity, never an angle bucket, is what makes turn
+// restrictions robust; driving side is the one place actual left/right
+// geometry matters, and it's isolated to these three functions.
+describe('driving side determines which side of the lane array is which carriageway or direction', () => {
   // separateProfiles: which array-half becomes which carriageway flips.
   const customProfile: CrossSection = {
     lanes: [
@@ -312,7 +306,7 @@ describe('driving side (model/profile.ts)', () => {
   });
 });
 
-describe('offsetPolyline (the carriageway/lane offset primitive)', () => {
+describe('offsetPolyline shifts a line sideways and stays well-behaved on tight curves', () => {
   const line: LngLat[] = [
     [-115.2, 36.1],
     [-115.1, 36.1],

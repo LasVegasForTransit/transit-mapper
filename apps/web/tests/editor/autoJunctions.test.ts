@@ -1,4 +1,3 @@
-// Converted from apps/web/tests/verify.test.ts lines 7461-7729 (7 sections).
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createEditorStore } from '../../src/editor/store';
 import { patternLegs } from '@transitmapper/core/model/geo';
@@ -6,6 +5,13 @@ import { wayCrossings } from '@transitmapper/core/model/validate';
 import { effectiveConnectors } from '@transitmapper/core/geometry/junctions';
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import { mustFind, required } from '../support/required.test';
+
+// beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
+// service using the store's default draftModeId ('lightRail', which is
+// compatible with the 'road' way type) — see
+// src/editor/store/internal-operations/way-creation.ts's compatibleModeId.
+// Cases below that don't set the mode explicitly are implicitly exercising
+// lightRail, not a specific documented choice.
 
 // Shared setup for scenarios that only care about the junction once it
 // already exists (semantics, connectors, deletion) rather than about the
@@ -27,7 +33,7 @@ function createStoreWithCrossingRoads(): ReturnType<typeof createEditorStore> {
   return store;
 }
 
-describe('store: auto-junctions where ways cross (the SimCity moment)', () => {
+describe('store: crossing ways only auto-join when they are at the same grade', () => {
   describe('two roads crossing at grade', () => {
     let store: ReturnType<typeof createEditorStore>;
 
@@ -252,7 +258,7 @@ describe('store: a guideway crossing two major roads elevates over both', () => 
   });
 });
 
-describe('store: junction semantics (control, connectors)', () => {
+describe('store: a junction carries a control type and an editable connector graph', () => {
   let store: ReturnType<typeof createEditorStore>;
   let nodeId: string;
   let armAId: string;
@@ -314,7 +320,7 @@ describe('store: junction semantics (control, connectors)', () => {
   });
 });
 
-describe('store: deleting a way cleans identity + connectors', () => {
+describe('store: deleting a way cleans up the named-way identity and connectors that referenced it', () => {
   let store: ReturnType<typeof createEditorStore>;
   let firstArmId: string;
 

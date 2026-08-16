@@ -372,7 +372,7 @@ describe('combined frequency where routes share a stop (core/sim/frequency.ts)',
 
   // servicesAtStop: the same proximity rule the inspector's "Served by"
   // list uses, moved into core so it's testable and stated once.
-  describe('servicesAtStop', () => {
+  describe('servicesAtStop: proximity decides which services serve a stop', () => {
     const road = (id: string, pts: LngLat[]): Way => ({
       id,
       typeId: 'road',

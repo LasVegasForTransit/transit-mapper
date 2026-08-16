@@ -1,12 +1,9 @@
-// Converted from apps/web/tests/verify.test.ts lines 1660-1958 (5 sections).
-// Split from this file's rendering/serialization sections in
-// facilityRenderingAndSerialization.test.ts to stay under max-lines.
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { LngLat } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
 import { mustFind, required } from '../support/required.test';
 
-describe('Facility complexes: draw-a-boundary-first editor (task 22)', () => {
+describe('facility complexes: drawing a boundary first, then filling it with members', () => {
   let store: ReturnType<typeof createEditorStore>;
   let groupId: string;
   const drawnRing: LngLat[] = [
@@ -89,7 +86,7 @@ describe('Facility complexes: draw-a-boundary-first editor (task 22)', () => {
     expect(store.getState().pickingMemberForGroupId).toBe(groupId);
   });
 
-  it('picking flow (addGroupMember + cancel) adds the existing station and disarms', () => {
+  it('picking an existing stop as a member joins it to the complex and turns off picking mode', () => {
     const looseStation = required(store.commands.stops.addStop([-115.181, 36.131]));
     store.commands.groups.startPickingMember(groupId);
     store.commands.groups.addGroupMember(groupId, looseStation);
@@ -118,7 +115,7 @@ describe('Facility complexes: draw-a-boundary-first editor (task 22)', () => {
   });
 });
 
-describe('Plain (footprint-less) groups still work — a facility complex is an opt-in specialization, not a required shape for every group', () => {
+describe('plain groups have no footprint: a facility complex is an opt-in specialization, not the default shape', () => {
   it('a plain group has no footprint', () => {
     const store = createEditorStore();
     const a = required(store.commands.stops.addStop([-115.2, 36.1]));

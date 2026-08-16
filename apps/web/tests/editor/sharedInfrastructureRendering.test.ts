@@ -30,7 +30,7 @@ const offsetOf = (f: { properties?: Record<string, unknown> | null }): number | 
 
 // A through-line keeps ONE offset across a shared stretch (no sideways jog
 // where the shared segment begins/ends).
-describe('continuity-aware bundle offsets', () => {
+describe('a through-line keeps one continuous offset where another service joins it', () => {
   let store: ReturnType<typeof createEditorStore>;
   let A: string;
   let aId: string;
@@ -175,7 +175,7 @@ describe('continuity-aware bundle offsets', () => {
 
 // wayIntersectsBounds is segment-aware, so lane detail isn't culled when you
 // zoom into the MIDDLE of a long way (both its vertices off-screen).
-describe('wayIntersectsBounds is segment-aware', () => {
+describe('a way stays visible when the viewport only crosses its middle', () => {
   let store: ReturnType<typeof createEditorStore>;
   let way: Way;
 
@@ -225,7 +225,7 @@ describe('wayIntersectsBounds is segment-aware', () => {
 // materialization). serviceLaneOnWay then resolves the curb/track lane, and
 // buildFeatures draws the service on that lane in lane detail, on the
 // centerline in Network.
-describe('lane-accurate service rendering (Infrastructure view)', () => {
+describe('a service is rendered on the correct lane and direction (Infrastructure view)', () => {
   const P0: LngLat = [-115.2, 36.1];
   const P1: LngLat = [-115.15, 36.1];
   const P2: LngLat = [-115.1, 36.1];
@@ -238,7 +238,7 @@ describe('lane-accurate service rendering (Infrastructure view)', () => {
     profile: { lanes: [] },
   });
 
-  it("deriveLegDirections: exit at the way's last point → forward", () => {
+  it('exiting a way at its last point orients the leg forward', () => {
     // wayA [P0,P1] exits into wayB [P1,P2] at wayA's LAST point → forward.
     const fwd = new Map<string, Way>([
       ['a', mkWay('a', [P0, P1])],
@@ -247,7 +247,7 @@ describe('lane-accurate service rendering (Infrastructure view)', () => {
     expect(deriveLegDirections(fwd, ['a', 'b'])[0]).toBe(true);
   });
 
-  it("deriveLegDirections: exit at the way's first point → backward", () => {
+  it('exiting a way at its first point orients the leg backward', () => {
     // wayA points [P1,P0] → it exits into wayB at wayA's FIRST point → backward.
     const bwd = new Map<string, Way>([
       ['a', mkWay('a', [P1, P0])],
@@ -256,7 +256,7 @@ describe('lane-accurate service rendering (Infrastructure view)', () => {
     expect(deriveLegDirections(bwd, ['a', 'b'])[0]).toBe(false);
   });
 
-  it('deriveLegDirections: a single way has no continuity to read and stays forward', () => {
+  it('a lone leg has no continuity to read, so it defaults to forward', () => {
     const fwd = new Map<string, Way>([
       ['a', mkWay('a', [P0, P1])],
       ['b', mkWay('b', [P1, P2])],
@@ -287,7 +287,7 @@ describe('lane-accurate service rendering (Infrastructure view)', () => {
       expect(lastToLast[1].forward).toBe(false);
     });
 
-    it('patternPath: ways meeting last-to-last stitch without a teleport', () => {
+    it('ways meeting last-to-last stitch into one path without a teleport', () => {
       const lastToLastPath = patternPath([...meetAtLast.values()], lastToLastPattern);
       expect(
         Math.abs(
@@ -296,7 +296,7 @@ describe('lane-accurate service rendering (Infrastructure view)', () => {
       ).toBeLessThan(1e-6);
     });
 
-    it('patternPath: the stitched path ends at the far end of the last way', () => {
+    it('the stitched path ends at the far end of the last way', () => {
       const lastToLastPath = patternPath([...meetAtLast.values()], lastToLastPattern);
       expect(lastToLastPath[lastToLastPath.length - 1][0]).toBe(P2[0]);
     });
@@ -306,7 +306,7 @@ describe('lane-accurate service rendering (Infrastructure view)', () => {
   // from stored order alone (the old geometry/vehicleLane.ts rule) got this
   // one backward and picked the opposite lane from serviceLane.ts for the
   // same service.
-  it('deriveLegDirections: the first way is oriented by where the second one meets it', () => {
+  it("the first way's direction is set by where the second way meets it", () => {
     const enterAtLast = new Map<string, Way>([
       ['a', mkWay('a', [P1, P0])],
       ['b', mkWay('b', [P1, P2])],

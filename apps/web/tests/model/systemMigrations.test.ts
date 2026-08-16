@@ -1,8 +1,3 @@
-// Converted from apps/web/tests/verify.test.ts lines 6494-7010 (8 sections).
-// Split from profileMigrationsAndComponents.test.ts to stay under the
-// max-lines cap; this half covers the v6, vehicle-catalog, and v9→v10
-// serialize migrations. Profile/component-registry coverage lives in
-// profileAndComponents.test.ts.
 import { describe, expect, it } from 'vitest';
 import { wayCapacity } from '@transitmapper/core/model/profile';
 import {
@@ -16,7 +11,7 @@ import {
 import { createEmptySystem, parseSystem } from '@transitmapper/core/model/serialize';
 import type { LngLat, TransitSystem, Way } from '@transitmapper/core/model/system';
 
-describe('v6 migration: capacity+class → profile; round-trips', () => {
+describe("a document's old capacity-and-class fields become a full lane profile when migrated forward", () => {
   const v5ish = parseSystem({
     version: 5,
     id: 'm',
@@ -131,7 +126,7 @@ describe('v6 migration: capacity+class → profile; round-trips', () => {
   });
 });
 
-describe('vehicle catalogs: serialize migration', () => {
+describe('vehicle kinds default to empty on old documents and round-trip cleanly on new ones', () => {
   const legacy = parseSystem({
     version: 8,
     id: 'v8sys',

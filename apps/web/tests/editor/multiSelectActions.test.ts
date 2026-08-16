@@ -11,7 +11,7 @@ function must<T>(value: T | undefined | null): T {
   return value;
 }
 
-describe('multi-select: toggle, bulk move (nudge), bulk delete', () => {
+describe('a multi-select group can mix different kinds of items, and moving or deleting it acts on the whole group', () => {
   let store: Store, wayA: string, stId: string, facId: string;
 
   beforeEach(() => {
@@ -30,7 +30,7 @@ describe('multi-select: toggle, bulk move (nudge), bulk delete', () => {
       store.commands.selection.toggleMultiSelect({ kind: 'stop', id: stId });
     });
 
-    it('toggleMultiSelect builds up the group', () => {
+    it('toggling items one at a time builds up the group', () => {
       expect(store.getState().multiSelection).toHaveLength(2);
     });
 
@@ -53,7 +53,7 @@ describe('multi-select: toggle, bulk move (nudge), bulk delete', () => {
           store.commands.selection.toggleMultiSelect({ kind: 'facility', id: facId });
         });
 
-        it('group now has all 3 kinds', () => {
+        it('the group now holds all three kinds of item', () => {
           expect(store.getState().multiSelection).toHaveLength(3);
         });
 
@@ -120,11 +120,11 @@ describe('multi-select: toggle, bulk move (nudge), bulk delete', () => {
               );
             });
 
-            it('group still has 4 members before bulk delete', () => {
+            it('the group still has four members before the bulk delete', () => {
               expect(store.getState().multiSelection).toHaveLength(4);
             });
 
-            describe('after deleteMultiSelection', () => {
+            describe('after the group is deleted', () => {
               beforeEach(() => {
                 store.commands.selection.deleteMultiSelection();
               });

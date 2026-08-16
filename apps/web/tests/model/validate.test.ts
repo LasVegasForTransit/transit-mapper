@@ -13,7 +13,7 @@ function must<T>(value: T | undefined | null): T {
   return value;
 }
 
-describe('validateSystem: ghost records + crossing-without-joining', () => {
+describe('validateSystem flags broken records but never a crossing, since import already joins them', () => {
   it('a clean fresh system has no issues', () => {
     const store = createEditorStore();
     expect(validateSystem(store.getState().system)).toHaveLength(0);
@@ -47,7 +47,7 @@ describe('validateSystem: ghost records + crossing-without-joining', () => {
     expect(issues.some((i) => i.id === `ghost-way-${ghostWay}`)).toBe(true);
   });
 
-  it('flags a station anchored to a missing way', () => {
+  it('flags a stop anchored to a missing way', () => {
     // An orphaned station: anchor points at a way id that doesn't exist.
     const store = createEditorStore();
     const stId = must(
@@ -183,7 +183,7 @@ describe('validateSystem: ghost records + crossing-without-joining', () => {
   });
 });
 
-describe('Capital cost-per-mile: a labeled range, not a fake-precise figure', () => {
+describe('capital cost is shown as a labeled range, not a falsely precise number', () => {
   it('formatUsdCompact renders billions', () => {
     expect(formatUsdCompact(1_250_000_000)).toBe('$1.3B');
   });
@@ -242,7 +242,7 @@ describe('Capital cost-per-mile: a labeled range, not a fake-precise figure', ()
   });
 });
 
-describe('Export: systemBounds + legend entries (the "full-system export" fix)', () => {
+describe('systemBounds covers every way, station, and facility, and the legend lists only what is visible', () => {
   it('systemBounds is null for an empty system', () => {
     const store = createEditorStore();
     expect(systemBounds(store.getState().system)).toBeNull();

@@ -1,8 +1,6 @@
-// Converted from apps/web/tests/verify.test.ts lines 7011-7460 (part 1 of 2:
-// vehicle-catalog store actions, profile presets, NamedWay identity through
-// split/merge, and the junction-preserving behavior of separating
-// carriageways). See carriagewaysAndLaneKeyedComponents.test.ts for the
-// other half.
+// How a NamedWay identity tracks its member ways through naming, splitting,
+// merging, and carriageway separation — plus the vehicle-catalog and
+// profile-preset store actions a way carries alongside it.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createEditorStore } from '../../src/editor/store';
 import { patternLegs } from '@transitmapper/core/model/geo';
@@ -10,11 +8,10 @@ import { mustFind, required } from '../support/required.test';
 
 /**
  * Draws a straight two-point way and applies a cross-section preset to it,
- * returning the way's id. Shared by the profile-preset suite below and the
- * separate/combine-carriageway suite in the sibling file, which both need a
- * way already under a named preset before their own beforeEach steps take
- * over. Duplicated in that file since the two suites no longer share a
- * module.
+ * returning the way's id. Shared by the profile-preset suite below and,
+ * as a separate copy, the separate/combine-carriageway suite in
+ * carriageways.test.ts — both need a way already under a named preset
+ * before their own beforeEach steps take over.
  */
 function beginStraightWayWithPreset(
   store: ReturnType<typeof createEditorStore>,
@@ -72,7 +69,7 @@ describe('vehicle catalogs: store actions', () => {
   });
 });
 
-describe('store: profile editing, presets', () => {
+describe("store: a way's cross-section can be replaced directly or via a named preset", () => {
   let store: ReturnType<typeof createEditorStore>;
   let r: string;
 
@@ -116,7 +113,7 @@ describe('store: profile editing, presets', () => {
   });
 });
 
-describe('store: shared identity (NamedWay)', () => {
+describe('store: naming a way creates a shared identity that tracks its members as they change', () => {
   let store: ReturnType<typeof createEditorStore>;
   let a: string;
   let b: string;
@@ -193,7 +190,7 @@ describe('store: identity survives splitting (a street cut by an intersection)',
   });
 });
 
-describe('store: mergeWays (inverse of split)', () => {
+describe('store: mergeWays undoes a split by rejoining two ways at their shared endpoint', () => {
   describe('merging two split halves', () => {
     let store: ReturnType<typeof createEditorStore>;
     let a: string;

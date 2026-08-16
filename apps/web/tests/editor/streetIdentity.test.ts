@@ -69,7 +69,7 @@ describe('cross-street auto-naming: pre-filled on placement, never touched again
     );
   });
 
-  it('placing a station on a named way pre-fills its name from the nearest cross street', () => {
+  it('placing a stop on a named way pre-fills its name from the nearest cross street', () => {
     const placed = mustFind(
       store.getState().system.stops.find((s) => s.id === stationId),
       'placed stop',
@@ -77,7 +77,7 @@ describe('cross-street auto-naming: pre-filled on placement, never touched again
     expect(placed.name).toBe('Home St @ Cross Ave');
   });
 
-  it("moving a station leaves its auto-filled name untouched, even though it's no longer accurate", () => {
+  it("moving a stop leaves its auto-filled name untouched, even though it's no longer accurate", () => {
     store.commands.stops.moveStop(stationId, [-115.12, 36.1]);
     const moved = mustFind(
       store.getState().system.stops.find((s) => s.id === stationId),
@@ -111,7 +111,7 @@ describe('cross-street auto-naming: resyncs once a later service proves the unse
     );
   });
 
-  it('an unserved road-anchored station is auto-named along-street and marked autoNamed', () => {
+  it('an unserved road-anchored stop is auto-named along-street and marked autoNamed', () => {
     const placed = mustFind(
       store.getState().system.stops.find((s) => s.id === stationId),
       'placed stop',
@@ -119,7 +119,7 @@ describe('cross-street auto-naming: resyncs once a later service proves the unse
     expect(placed).toMatchObject({ name: 'Home St @ Cross Ave', autoNamed: true });
   });
 
-  it('the tram line resyncs the still-autoNamed station to intersection style', () => {
+  it('the tram line resyncs the still-autoNamed stop to intersection style', () => {
     // Draw a tram line over the whole of the station's own way — tram is
     // street-running, so a 'road'-typed way is a legal alignment for it.
     const sys = store.getState().system;
@@ -217,7 +217,7 @@ describe('the crossing scan only looks at ways that could actually cross', () =>
 // corridor only when the very first press landed on it; every stroke after
 // that laid parallel geometry no matter how exactly it tracked what was
 // already there.
-describe('a line drawn along an existing one SHARES it', () => {
+describe('a line drawn along an existing one shares it, rather than laying a parallel road', () => {
   let store: ReturnType<typeof createEditorStore>;
   const origin: LngLat = [-115.2, 36.1];
   let first: string;
@@ -248,7 +248,7 @@ describe('a line drawn along an existing one SHARES it', () => {
       expect(store.getState().system.ways).toHaveLength(1);
     });
 
-    it('both lines exist as lines', () => {
+    it('each line keeps its own service, even though they share a road', () => {
       expect(store.getState().system.services).toHaveLength(2);
     });
 
@@ -288,7 +288,7 @@ describe('a line drawn along an existing one SHARES it', () => {
   });
 });
 
-describe('Alt is the way out: deliberately separate infrastructure', () => {
+describe('holding Alt while drawing lays deliberately separate infrastructure', () => {
   let store: ReturnType<typeof createEditorStore>;
 
   beforeEach(() => {
@@ -339,7 +339,7 @@ describe('how close counts as "along" is a fact about the mode', () => {
     expect(drawPair('bus', 'road', 4)).toBe(1);
   });
 
-  it('a rail line 10m off an existing track is a SECOND track, not the same one', () => {
+  it('a rail line 10m off an existing track becomes a second track, not the same one', () => {
     expect(drawPair('subway', 'heavyRail', 10)).toBe(2);
   });
 

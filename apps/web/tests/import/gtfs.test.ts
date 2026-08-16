@@ -10,7 +10,7 @@ import { patternWayIds, primaryAnchor } from '@transitmapper/core/model/geo';
 import { activeSchedule } from '@transitmapper/core/sim/clock';
 import { planService } from '@transitmapper/core/sim/fleet';
 
-describe('parseGtfsCsv: comma-separated + quoted-field GTFS text', () => {
+describe('parsing GTFS CSV text keeps a comma inside quotes as one field', () => {
   const rows = parseGtfsCsv('a,b,c\n1,"hello, world",3\n4,5,6\n');
 
   it('reads the header as keys', () => {
@@ -27,7 +27,7 @@ describe('parseGtfsCsv: comma-separated + quoted-field GTFS text', () => {
   });
 });
 
-describe('classifyGtfsRouteType: GTFS route_type → catalog mode/way type', () => {
+describe('classifying a GTFS route_type picks the right mode and way type', () => {
   it('route_type 3 (bus) maps to bus/road', () => {
     expect(classifyGtfsRouteType(3)).toMatchObject({ modeId: 'bus', wayTypeId: 'road' });
   });
@@ -41,7 +41,7 @@ describe('classifyGtfsRouteType: GTFS route_type → catalog mode/way type', () 
   });
 });
 
-describe('gtfsFilesToSystemPieces: a minimal fixture feed end to end', () => {
+describe('importing a minimal GTFS feed produces a complete system end to end', () => {
   const routes = 'route_id,route_short_name,route_type,route_color\nR1,101,3,E4572E\n';
   const trips = 'route_id,trip_id,shape_id\nR1,T1,S1\n';
   const shapes =
@@ -116,9 +116,9 @@ describe('gtfsFilesToSystemPieces: a minimal fixture feed end to end', () => {
     expect(shared.stops.filter((s) => s.name === 'Downtown')).toHaveLength(1);
   });
 
-  // Post-rename, a "branch" (second shape on one route) is a second, sibling
-  // Service under the same Line — not a second pattern on one Service, since
-  // Service.path is now singular.
+  // A "branch" (second shape on one route) is a second, sibling Service
+  // under the same Line — not a second pattern on one Service, since each
+  // Service has exactly one path.
   it('two shapes on the same route become two services under one line', () => {
     const trips2 = 'route_id,trip_id,shape_id\nR1,T1,S1\nR1,T2,S2\n';
     const shapes2 = shapes + 'S2,36.11,-115.20,1\nS2,36.11,-115.17,2\n';
@@ -164,7 +164,7 @@ describe('gtfsFilesToSystemPieces: a minimal fixture feed end to end', () => {
   });
 });
 
-describe('gtfsFilesToBatchedPieces: batching sums to the same result, even a stop shared across batches', () => {
+describe('batching a GTFS import produces the same system as importing it all at once', () => {
   const routes =
     'route_id,route_short_name,route_type,route_color\nR1,101,3,E4572E\nR2,102,3,00AEEF\nR3,103,3,2ECC71\n';
   const trips = 'route_id,trip_id,shape_id\nR1,T1,S1\nR2,T2,S2\nR3,T3,S3\n';

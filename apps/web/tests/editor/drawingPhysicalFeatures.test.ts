@@ -13,7 +13,7 @@ import { LAYER_SPECS } from '../../src/map/layers';
 import { mustFind, required } from '../support/required.test';
 import { buildFeatures } from '../support/testRenderPresentation.test';
 
-describe('facility tool: place-on-click semantics (complex is a variant, not a hidden default)', () => {
+describe('placing a facility: a single click drops a point, and a complex boundary is opt-in', () => {
   it('facility tool starts in PLACE mode, not complex mode', () => {
     const store = createEditorStore();
     expect(store.getState().draftFacilityComplexMode).toBe(false);
@@ -46,8 +46,8 @@ describe('facility tool: place-on-click semantics (complex is a variant, not a h
   });
 });
 
-describe('one-way affordances: draft toggle, endpoint branch, network chevrons', () => {
-  it('draft one-way: drawn road is one-way', () => {
+describe('drawing a one-way road: the draw direction is the travel direction, and endpoints can keep going', () => {
+  it('a one-way draft produces a one-way road', () => {
     const store = createEditorStore();
     store.commands.tools.setDraftServiceEnabled(false);
     store.commands.tools.setDraftOneWay(true);
@@ -59,7 +59,7 @@ describe('one-way affordances: draft toggle, endpoint branch, network chevrons',
     expect(isOneWay(way.profile)).toBe(true);
   });
 
-  it('draft one-way: travel runs the draw direction (forward)', () => {
+  it('a one-way draft runs traffic in the direction it was drawn', () => {
     const store = createEditorStore();
     store.commands.tools.setDraftServiceEnabled(false);
     store.commands.tools.setDraftOneWay(true);
@@ -97,7 +97,7 @@ describe('one-way affordances: draft toggle, endpoint branch, network chevrons',
       );
     });
 
-    it("branch starts AT the source way's endpoint", () => {
+    it("a branch starts at the source way's endpoint", () => {
       expect(branch.points.length).toBeGreaterThanOrEqual(1);
       expect(branch.points[0][0]).toBe(-115.1);
     });
@@ -194,7 +194,7 @@ describe('one-way affordances: draft toggle, endpoint branch, network chevrons',
   });
 });
 
-describe('station DRAWING: a dragged footprint is a real station', () => {
+describe('drawing a station: a dragged footprint becomes a real station', () => {
   let store: ReturnType<typeof createEditorStore>;
   let r: string;
 
@@ -240,7 +240,7 @@ describe('station DRAWING: a dragged footprint is a real station', () => {
   });
 });
 
-describe('station land + structures: the border IS the station; structures on its land belong to it and are real shapes', () => {
+describe("a station's footprint is its land: structures drawn on it join the station as real shapes", () => {
   let store: ReturnType<typeof createEditorStore>;
   let sid: string;
 
@@ -290,7 +290,7 @@ describe('station land + structures: the border IS the station; structures on it
     expect(sys.groups[0].memberIds).toContain(bay);
   });
 
-  it('a point access on the land joins the station', () => {
+  it('an entrance placed on the land joins the station', () => {
     store.commands.facilities.addFacility('building', squareFootprint([-115.1502, 36.1002], 12));
     const door = required(store.commands.facilities.addFacility('entrance', [-115.1501, 36.1001]));
     const sys = store.getState().system;
@@ -305,12 +305,12 @@ describe('station land + structures: the border IS the station; structures on it
     expect(sys.groups.length).toBe(1);
   });
 
-  it('Building is a real area facility type', () => {
+  it("the building facility type is an area, matching how it's drawn", () => {
     expect(FACILITY_TYPES.building.geometryKind).toBe('area');
   });
 });
 
-describe('paint-order invariants: the street surface is the GROUND', () => {
+describe('paint order: the street surface stays the ground, so drawn footprints render above it', () => {
   // Station/complex footprints must paint ABOVE lane asphalt and junction
   // fills, or a footprint straddling a lane-rendered street is invisible
   // (the "station boundaries only show while dragging corners" bug).

@@ -18,7 +18,7 @@ function must<T>(value: T | null | undefined, label = 'value'): T {
   return value;
 }
 
-describe('detectShapeRuns: import-time corridor conflation interior-stretch matcher', () => {
+describe('detectShapeRuns matches an imported shape against existing ways corridor by corridor', () => {
   const origin: LngLat = [-115.2, 36.1];
   const mkWay = (id: string, pts: LngLat[]): Way => ({
     id,
@@ -41,7 +41,7 @@ describe('detectShapeRuns: import-time corridor conflation interior-stretch matc
     ];
     const runs = detectShapeRuns(path, [W]);
 
-    it('exactly 2 runs', () => {
+    it('the shared stretch and the diverging tail become two separate runs', () => {
       expect(runs.length).toBe(2);
     });
 
@@ -86,15 +86,15 @@ describe('detectShapeRuns: import-time corridor conflation interior-stretch matc
     ];
     const runs = detectShapeRuns(path, [A, B]);
 
-    it('exactly 3 runs', () => {
+    it('the split infrastructure produces three runs, one per way plus the fresh tail', () => {
       expect(runs.length).toBe(3);
     });
 
-    it('first run on way A', () => {
+    it('the first run lands on way A', () => {
       expect(runs[0]).toMatchObject({ onWayId: 'A' });
     });
 
-    it('second run on way B', () => {
+    it('the second run lands on way B', () => {
       expect(runs[1]).toMatchObject({ onWayId: 'B' });
     });
 
@@ -104,10 +104,10 @@ describe('detectShapeRuns: import-time corridor conflation interior-stretch matc
   });
 });
 
-// reconcileImportedServices: a shorter shuttle conflates onto a longer
-// trunk's already-imported way instead of keeping duplicate overlapping
-// geometry (the store-level orchestrator over detectShapeRuns).
-describe('reconcileImportedServices', () => {
+// reconcileImportedServices is the store-level orchestrator over
+// detectShapeRuns: a shorter shuttle conflates onto a longer trunk's
+// already-imported way instead of keeping duplicate overlapping geometry.
+describe('reconciling imported services conflates a shuttle onto the trunk way it overlaps', () => {
   let store: ReturnType<typeof createEditorStore>;
   const origin: LngLat = [-115.2, 36.1];
   let trunk: string;

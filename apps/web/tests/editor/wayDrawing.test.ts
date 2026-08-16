@@ -20,7 +20,7 @@ import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
 import { createEditorStore } from '../../src/editor/store';
 import { mustFind, required } from '../support/required.test';
 
-describe('drawing a way creates a way + one service', () => {
+describe('drawing a way creates that way and a service to run on it', () => {
   let store: ReturnType<typeof createEditorStore>;
   let a: string;
 
@@ -33,7 +33,7 @@ describe('drawing a way creates a way + one service', () => {
     store.commands.ways.finishWay();
   });
 
-  it('way defined by 3 control points', () => {
+  it('the way keeps all 3 drawn control points', () => {
     const sys = store.getState().system;
     expect(
       mustFind(
@@ -68,7 +68,7 @@ describe('drawing a way creates a way + one service', () => {
   });
 });
 
-describe('bare infrastructure: bike ways carry no service (catalog-driven, no default mode)', () => {
+describe('a bike way has no compatible mode, so it stays bare infrastructure', () => {
   let store: ReturnType<typeof createEditorStore>;
 
   beforeEach(() => {
@@ -96,7 +96,9 @@ describe('bare infrastructure: bike ways carry no service (catalog-driven, no de
   });
 });
 
-describe('roads draw exactly like every other way (this is the fix: roads used to not drag)', () => {
+// Pinned regression: roads once did not respond to the same drag gesture as
+// every other way type.
+describe('roads draw the same way every other way type does', () => {
   let store: ReturnType<typeof createEditorStore>;
   let road: string;
 
@@ -108,7 +110,7 @@ describe('roads draw exactly like every other way (this is the fix: roads used t
     store.commands.ways.finishWay();
   });
 
-  it('road way created with 2 points via the same beginWay/addWayPoint path', () => {
+  it('a road keeps both drawn points', () => {
     expect(store.getState().system.ways[0].points.length).toBe(2);
   });
 
@@ -164,7 +166,7 @@ describe('a tram can street-run on a road way or use dedicated light-rail track'
 });
 
 describe("defaultLaneFor: a service's default lane on a way (curb / bus lane / track)", () => {
-  it('defaultLaneFor forward = rightmost (last) forward directional lane', () => {
+  it('forward resolves to the rightmost (last) forward-or-both lane', () => {
     const twoWay = defaultProfileFor('road', 2);
     const dir = directionalLanes(twoWay);
     const lastFwd = [...dir]
@@ -174,7 +176,7 @@ describe("defaultLaneFor: a service's default lane on a way (curb / bus lane / t
     expect(fwd).toBe(lastFwd?.id);
   });
 
-  it('defaultLaneFor backward = rightmost (first) backward directional lane', () => {
+  it('backward resolves to the rightmost (first) backward-or-both lane', () => {
     const twoWay = defaultProfileFor('road', 2);
     const dir = directionalLanes(twoWay);
     const firstBwd = dir.find((l) => l.direction === 'backward' || l.direction === 'both');

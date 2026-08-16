@@ -22,7 +22,7 @@ function mustBounds(system: TransitSystem) {
   return bounds;
 }
 
-describe('render/svg: station labels must not print through each other', () => {
+describe('render/svg: stop labels must not print through each other', () => {
   const view = {
     viewMode: 'network' as const,
     visibleModes: new Set(MODE_ORDER),
@@ -96,7 +96,7 @@ describe('render/svg: station labels must not print through each other', () => {
     );
     const boxes = labelBoxes(dense);
 
-    it('a crowded map still draws some station labels', () => {
+    it('a crowded map still draws some stop labels', () => {
       expect(boxes.length).toBeGreaterThan(0);
     });
     it('no two drawn labels overlap', () => {
@@ -140,7 +140,7 @@ describe('render/svg: station labels must not print through each other', () => {
       },
     );
 
-    it('a sparse map keeps every station label', () => {
+    it('a sparse map keeps every stop label', () => {
       expect(ids.every((_, i) => roomySvg.includes(`Stop ${i}`))).toBe(true);
     });
 

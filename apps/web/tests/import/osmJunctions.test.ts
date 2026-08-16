@@ -224,7 +224,7 @@ describe('OSM import derives junctions from node identity, not coordinates', () 
   });
 });
 
-describe('importWays store action appends bare infrastructure, no auto-service', () => {
+describe('importWays appends bare infrastructure without creating a service', () => {
   let store: ReturnType<typeof createEditorStore>;
 
   beforeEach(() => {

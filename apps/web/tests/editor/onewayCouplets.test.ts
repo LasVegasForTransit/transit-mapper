@@ -23,7 +23,7 @@ function must<T>(value: T | null | undefined): T {
 // The gesture is: draw a line, then draw its return path round the block. What
 // comes back has to be ONE line with two directions, not two lines, because it
 // shares a name, a headway and a fleet.
-describe('one-way couplets: a line whose two directions run different streets', () => {
+describe("a couplet's two directions run different streets", () => {
   let store: ReturnType<typeof createEditorStore>;
   let svc: string;
   let outPatternHasSplit: boolean;

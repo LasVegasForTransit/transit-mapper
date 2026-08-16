@@ -15,7 +15,10 @@ import { dwellStopsForPattern, effectiveVehicleKind } from '@transitmapper/core/
  *  when direction and extent aren't what it's testing. */
 const legsOf = (...wayIds: string[]): PatternLeg[] => wayIds.map((wayId) => wholeLeg(wayId));
 
-describe('dwell-time and kinematic timetable math (vehicles.ts) — the vehicle animation walks this instead of a plain distance/speed triangle wave, so a vehicle actually pauses at each station instead of gliding through it, and ramps up/down at the ends of each leg instead of snapping straight to top speed', () => {
+// This is the timing apps/web/src/sim/vehicles.ts animates a vehicle along:
+// it pauses at each stop instead of gliding through it, and ramps up and
+// down at the ends of each leg instead of snapping straight to top speed.
+describe('dwell-time and kinematic timetable math (core/sim/timetable.ts)', () => {
   // Round numbers chosen so accel/cruise/decel boundaries fall on clean
   // times and distances: top speed 10 m/s, 2 m/s² accelerating (5000ms/25m
   // to reach it), 5 m/s² braking (2000ms/10m to shed it).
@@ -121,7 +124,7 @@ describe('dwell-time and kinematic timetable math (vehicles.ts) — the vehicle 
   });
 });
 
-describe('vehicle catalogs: effectiveVehicleKind resolution', () => {
+describe('resolving a vehicle kind always lands on something usable', () => {
   const busService: Service = {
     id: 'evk-bus',
     name: 'Bus',
@@ -204,7 +207,7 @@ describe('vehicle catalogs: effectiveVehicleKind resolution', () => {
   });
 });
 
-describe("dwellStopsForPattern: only stations anchored to the pattern's OWN ways count, ordered by arc-length along the resolved path (not by way index or station-array order)", () => {
+describe("dwellStopsForPattern: only stops anchored to the pattern's own ways count, ordered by distance along it", () => {
   const path: LngLat[] = [
     [-115.24, 36.1],
     [-115.17, 36.1],
@@ -226,7 +229,7 @@ describe("dwellStopsForPattern: only stations anchored to the pattern's OWN ways
   const pattern = { id: 'p1', sections: oneSection(legsOf('w1')) };
   const stops = dwellStopsForPattern(sys.stops, pattern, path, pathMeters);
 
-  it("only stations anchored to the pattern's ways become stops", () => {
+  it("only stops anchored to the pattern's ways become stops", () => {
     expect(stops.length).toBe(3);
   });
 
@@ -253,7 +256,7 @@ describe("dwellStopsForPattern: only stations anchored to the pattern's OWN ways
     expect(stops[2].dwellMs).toBe(20000);
   });
 
-  it("a station's own dwellSeconds overrides the default", () => {
+  it("a stop's own dwellSeconds overrides the default", () => {
     expect(stops[1].dwellMs).toBe(5000);
   });
 });

@@ -1,11 +1,10 @@
-// Converted from apps/web/tests/verify.test.ts lines 1313-1452 (4 sections).
 import { describe, expect, it } from 'vitest';
 import { forkSystem, parseSystem } from '@transitmapper/core/model/serialize';
 import { patternWayIds, primaryAnchor } from '@transitmapper/core/model/geo';
 import { aPattern, aRoad, aService, aStop, aSystem } from '@transitmapper/core/testing/fixtures';
 import type { LngLat } from '@transitmapper/core/model/system';
 
-describe('fork', () => {
+describe('forking a system gives it a new id and a distinguishable copy name', () => {
   it('fork has new id + copy name', () => {
     // forkSystem is pure and only cares about id/name — no need for a
     // store-built system, just a well-formed one.
@@ -17,7 +16,7 @@ describe('fork', () => {
   });
 });
 
-describe('parse: v3 round-trips ways/services/stop anchor', () => {
+describe('parsing a v3 document round-trips its ways, services, and stop anchor unchanged', () => {
   // parseSystem is pure and these assertions only concern its output shape,
   // so the input document is built directly via the fixture builders —
   // one way carrying two services, plus a stop anchored to it — rather
@@ -51,7 +50,7 @@ describe('parse: v3 round-trips ways/services/stop anchor', () => {
   });
 });
 
-describe('migration: v2 corridors infer heavyRail/lightRail/monorail/road from the service mode', () => {
+describe("a v2 document's corridors get typed from their service's mode, and its roads become road ways", () => {
   // Pure parseSystem input — no store needed.
   const v2 = {
     version: 2,
@@ -131,7 +130,7 @@ describe('migration: v2 corridors infer heavyRail/lightRail/monorail/road from t
   });
 });
 
-describe('parse: legacy v1 (lines) migrates to a typed way + service', () => {
+describe("a legacy v1 document's lines become a typed way with its own service", () => {
   // Pure parseSystem input — no store needed.
   const legacy = {
     version: 1,

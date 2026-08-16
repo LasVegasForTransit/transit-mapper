@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ANONYMOUS_SHARE_TTL_MS, newShareOwnership } from '@transitmapper/core/share/ownership';
 import { claimOutcome, retainedShares } from '@transitmapper/core/share/claim';
 
-describe('share ownership and claim reducer', () => {
+describe('claiming a share', () => {
   const now = 1_700_000_000_000;
 
   describe('newShareOwnership', () => {
@@ -72,7 +72,7 @@ describe('share ownership and claim reducer', () => {
     it('a share with no result at all is kept', () => {
       expect(kept.some((s) => s.id === 'd')).toBe(true);
     });
-    it('retainedShares keeps exactly the two it should', () => {
+    it('retainedShares keeps only the shares that were not resolved', () => {
       expect(kept.length).toBe(2);
     });
     it('retainedShares does not mutate its input', () => {

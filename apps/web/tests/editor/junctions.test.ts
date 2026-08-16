@@ -1,11 +1,7 @@
-// Converted from apps/web/tests/verify.test.ts lines 1959-2323 (2 sections).
-//
-// Both sections narrate a sequence of mutations where later checks build on
-// the state left by earlier ones (no fresh()/createEditorStore() between
-// them) — that's the original structure, not an artifact of the split. The
-// nesting below mirrors that: each describe's beforeEach performs the next
-// mutation in the story, and sibling its() only assert facts about the state
-// as of their own nesting level.
+// Both describes below narrate a sequence of mutations where later checks
+// build on the state left by earlier ones: each nested describe's beforeEach
+// performs the next mutation in the story, and sibling its() only assert
+// facts about the state as of their own nesting level.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import { haversineMeters } from '@transitmapper/core/model/geo';
@@ -44,8 +40,8 @@ function drawWay(
 
 // Both helpers below wrap the "find by id, else throw" pattern used
 // throughout this file's junction assertions — a plain `.find()!` would trip
-// no-non-null-assertion, and inlining mustFind() at every call site is what
-// pushed this file over the line-count cap the first time around.
+// no-non-null-assertion, and inlining mustFind() at every call site would
+// bury each assertion in lookup boilerplate.
 function wayById(system: TransitSystem, id: string) {
   const way = system.ways.find((w) => w.id === id);
   return mustFind(way, 'way');
@@ -93,7 +89,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
     });
 
     // Moving the junction (on EITHER way) must cascade to the other — the exact
-    // bug the plan doc calls out ("junctions silently desync when you edit them").
+    // bug this guards against ("junctions silently desync when you edit them").
     describe('moving the shared point on way B', () => {
       let s2: TransitSystem;
 
@@ -183,7 +179,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
       store.commands.ways.joinWayPointToWay(armB, 1, armA, [-115.15, 36.1]);
     });
 
-    it('setup: a fresh junction with a 2-point arm exists', () => {
+    it('the two joined ways start out sharing one junction node', () => {
       expect(store.getState().system.nodes.length).toBe(1);
     });
 
@@ -207,7 +203,7 @@ describe('Junction primitive: joinWayPointToWay forms a real shared-coordinate n
       store.commands.ways.joinWayPointToWay(wD, 1, wC, [-115.15, 36.1]);
     });
 
-    it('setup: node exists before delete', () => {
+    it('the junction node exists before deleteWay runs', () => {
       expect(store.getState().system.nodes.length).toBe(1);
     });
 
@@ -334,7 +330,7 @@ describe('Disconnecting a junction: disconnectNodeWay takes one way out and leav
       threeArm = s.nodes[0];
     });
 
-    it('setup: all three ways meet at one junction', () => {
+    it('all three ways meet at one junction', () => {
       expect(threeArm.refs.length).toBe(3);
     });
 

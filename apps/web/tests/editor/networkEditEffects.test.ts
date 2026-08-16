@@ -1,9 +1,6 @@
-// Split out of lineEditingViaStore.test.ts: the two files together cover
-// source lines 11658-12181 of the old verify.test.ts (8 sections). Kept as
-// one file, this content pushed the effective line count to 589 against the
-// repository's 400-line cap (`max-lines`, `packages/config-eslint`), so the
-// four sections here — all about a service's response to a network-level
-// edit rather than a direct pattern trim/split — moved to their own file.
+// How a service responds to a network-level edit — dividing a route around a
+// loop, sharing a platform across ways, skipping a stop, combining a couplet
+// — as opposed to a direct pattern trim or split (see servicePathEditing.test.ts).
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   patternHasCouplet,
@@ -27,7 +24,7 @@ function must<T>(value: T | null | undefined): T {
 // A bus running out along a street, round a block at the far end, and back the
 // way it came. Not a couplet: the line is shared end to end and the loop is
 // ridden ONCE per cycle. Drawing one used to be refused outright.
-describe('a loop at the terminus', () => {
+describe('a loop drawn at a terminus is a turnaround, not a couplet', () => {
   let store: ReturnType<typeof createEditorStore>;
   let tSvc: string;
   let looped: boolean;
@@ -115,7 +112,7 @@ describe('a loop at the terminus', () => {
 // A transit centre both halves of a couplet pull into is ONE stop riding
 // TWO ways. With a single anchor it bound to whichever was nearest when it was
 // placed, and every line on the other drove past a stop it plainly calls at.
-describe('a platform on more than one way', () => {
+describe('a stop can be reached from more than one way', () => {
   let store: ReturnType<typeof createEditorStore>;
   let centreId: string;
   let callsAtNorth: boolean;
@@ -200,7 +197,7 @@ describe('a platform on more than one way', () => {
     expect(must(reloaded.stops.find((st) => st.id === centreId)).anchors).toHaveLength(2);
   });
 
-  it('deleting one of its ways keeps the station', () => {
+  it('deleting one of its ways keeps the stop', () => {
     expect(afterStop).toBeDefined();
   });
 
@@ -214,7 +211,7 @@ describe('a platform on more than one way', () => {
 // One street ridden both ways, with a stop the return trip runs past. Nothing
 // about sections can express this: the stretch is shared, so the omission has
 // nowhere to live but an explicit record.
-describe('skipping a stop in one direction', () => {
+describe('skipping a stop in one direction leaves the other direction unaffected', () => {
   let store: ReturnType<typeof createEditorStore>;
   let northId: string;
   let idsOnInboundBefore: string[];
@@ -296,7 +293,7 @@ describe('skipping a stop in one direction', () => {
     expect(rp.skippedStops?.inbound ?? []).toContain(northId);
   });
 
-  it('a skip naming a station that no longer exists is dropped on load', () => {
+  it('a skip naming a stop that no longer exists is dropped on load', () => {
     expect(dp.skippedStops).toBeUndefined();
   });
 
@@ -308,7 +305,7 @@ describe('skipping a stop in one direction', () => {
 // Dragging the two halves of a couplet into one street is a real edit, and the
 // question is what becomes of the line. Combining a boulevard's carriageways
 // is the sharp version: one of the two ways it rides stops existing.
-describe('a couplet meeting itself: two one-way paths brought back together', () => {
+describe("combining a couplet's carriageways keeps its line running as one", () => {
   let store: ReturnType<typeof createEditorStore>;
   let attachedOk: boolean;
   let split: Pattern;

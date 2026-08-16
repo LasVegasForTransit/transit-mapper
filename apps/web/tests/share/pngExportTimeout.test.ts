@@ -26,10 +26,9 @@ class FakeVisibility implements VisibilitySource {
 // timeout used to fire for that dead time even though the export would have
 // completed fine — this is the regression the bug fixed.
 //
-// Fake timers replace the original's real-timer/generous-margin polling: the
-// countdown here is deterministic wall-clock time under armVisibilityAwareTimeout's
-// own setTimeout, so vi.advanceTimersByTime can drive it exactly rather than
-// waiting on the real clock.
+// Fake timers make the countdown deterministic: armVisibilityAwareTimeout's own
+// setTimeout advances exactly as far as vi.advanceTimersByTime says, so a test
+// can assert on wall-clock behavior without waiting on the real clock.
 describe("PNG export's render timeout pauses while the tab is hidden", () => {
   // Fresh fake timers per test (not once for the whole suite): a timer armed
   // by one test but never advanced to completion would otherwise sit in a

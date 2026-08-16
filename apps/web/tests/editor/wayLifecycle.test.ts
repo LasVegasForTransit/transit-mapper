@@ -9,6 +9,13 @@ import type { LngLat } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
 import { mustFind } from '../support/required.test';
 
+// beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
+// service using the store's default draftModeId ('lightRail', which is
+// compatible with the 'road' way type) — see
+// src/editor/store/internal-operations/way-creation.ts's compatibleModeId.
+// Cases below that don't set the mode explicitly are implicitly exercising
+// lightRail, not a specific documented choice.
+
 describe('resuming a way from its open endpoint (turnkey continuation)', () => {
   let store: ReturnType<typeof createEditorStore>;
   let rw: string;
@@ -98,8 +105,8 @@ describe('resuming a way from its open endpoint (turnkey continuation)', () => {
   });
 });
 
-describe("interchange emerges where a station sits on two ways' services", () => {
-  it('a station at a crossing is served by two services', () => {
+describe("interchange emerges where a stop sits on two ways' services", () => {
+  it('a stop at a crossing is served by two services', () => {
     const store = createEditorStore();
     const la = mustFind(store.commands.ways.beginWay('lightRail', 'straight'), 'way id');
     store.commands.ways.addWayPoint(la, [-115.2, 36.1]);
@@ -119,7 +126,7 @@ describe("interchange emerges where a station sits on two ways' services", () =>
   });
 });
 
-describe('deleting a way removes its services and stations', () => {
+describe('deleting a way removes its services and stops', () => {
   let store: ReturnType<typeof createEditorStore>;
   let dc: string;
 
@@ -137,7 +144,7 @@ describe('deleting a way removes its services and stations', () => {
     expect(store.getState().system.services.length).toBe(0);
   });
 
-  it('deleting a way removes its stations', () => {
+  it('deleting a way removes its stops', () => {
     expect(store.getState().system.stops.length).toBe(0);
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { formatScaleMeters, niceScaleMeters } from '../../src/share/exportScale';
 
-describe('exportScale: niceScaleMeters / formatScaleMeters', () => {
+describe('export scale bar labeling', () => {
   it('rounds down to the nearest 1/2/5 step', () => {
     expect(niceScaleMeters(347)).toBe(200);
   });

@@ -23,7 +23,7 @@ import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import { mustFind } from '../support/required.test';
 
-/** A leg's covered stretch, for assertions that used to read fromT/toT. */
+/** A leg's covered stretch, as [from, to] fractions along its way. */
 const legFrom = (l: PatternLeg): number => legRange(l)[0];
 const legTo = (l: PatternLeg): number => legRange(l)[1];
 
@@ -150,7 +150,7 @@ describe("a leg's extent survives the way underneath it being reshaped", () => {
   });
 });
 
-describe('serviceLaneOnWay', () => {
+describe('serviceLaneOnWay resolves which lane a service travels on a way', () => {
   it('serviceLaneOnWay: a bus resolves the forward-curb travel lane', () => {
     const road = defaultProfileFor('road', 2);
     const roadMap = new Map<string, Way>([
@@ -387,7 +387,7 @@ describe('patternLanePath: the polyline a vehicle rides in Infrastructure view',
   });
 });
 
-describe('a station snaps onto a way and follows it when reshaped', () => {
+describe('a stop snaps onto a way and follows it when reshaped', () => {
   let store: ReturnType<typeof createEditorStore>;
   let h: string;
 
@@ -405,7 +405,7 @@ describe('a station snaps onto a way and follows it when reshaped', () => {
     expect(s1?.wayId).toBe(h);
   });
 
-  it('station follows its way when reshaped', () => {
+  it('stop follows its way when reshaped', () => {
     const s1 = mustFind(snap(store.getState().system.ways, [-115.17, 36.104], 5000), 'snap');
     const stId = mustFind(store.commands.stops.addStop(s1.coord, { wayId: h, t: s1.t }), 'stop id');
     const beforeLat = mustFind(

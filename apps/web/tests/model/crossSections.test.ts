@@ -1,4 +1,3 @@
-// Converted from apps/web/tests/verify.test.ts lines 1453-1659 (5 sections).
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import { modesForWayType, MODES, wayType } from '@transitmapper/core/model/catalog';
@@ -11,7 +10,7 @@ import {
 } from '../support/testRenderPresentation.test';
 import { mustFind } from '../support/required.test';
 
-describe('modes + grade (infrastructure vertical alignment)', () => {
+describe('grade tracks how a way sits relative to the ground, and defaults sensibly when absent', () => {
   let store: ReturnType<typeof createEditorStore>;
   let gc: string;
 
@@ -94,7 +93,7 @@ describe('modes + grade (infrastructure vertical alignment)', () => {
   });
 });
 
-describe('P2: physical cross-sections — capacity fans a way into that many parallel lane/track features, Infrastructure-view only', () => {
+describe('capacity fans a way out into that many parallel lane features, but only in infrastructure view', () => {
   let store: ReturnType<typeof createEditorStore>;
   let road: string;
 
@@ -206,15 +205,15 @@ describe('P2: physical cross-sections — capacity fans a way into that many par
   });
 });
 
-describe('P3: station footprints & platforms', () => {
+describe('a station footprint can be added, reshaped, and given platforms', () => {
   let store: ReturnType<typeof createEditorStore>;
   let stId: string;
 
   beforeEach(() => {
     store = createEditorStore();
-    // The new physical Station has no "create empty" command — addDrawnStation
-    // always seeds a footprint — so an empty station is reached the same way
-    // the post-rename reference does: draw one, then delete its footprint.
+    // A Station has no "create empty" command — addDrawnStation always seeds
+    // a footprint — so an empty station here is reached by drawing one and
+    // then deleting its footprint.
     stId = mustFind(
       store.commands.stations.addDrawnStation(squareFootprint([-115.15, 36.1], 30)),
       'station id',
@@ -277,7 +276,7 @@ describe('P3: station footprints & platforms', () => {
   });
 });
 
-describe('P3: catalog-typed facilities', () => {
+describe('facilities are placed, moved, renamed, and removed as catalog-typed points', () => {
   let store: ReturnType<typeof createEditorStore>;
   let facId: string;
 
@@ -315,7 +314,7 @@ describe('P3: catalog-typed facilities', () => {
   });
 });
 
-describe('P3: grouping (stop complexes / line families)', () => {
+describe('grouping bundles stops into complexes and keeps membership consistent as it changes', () => {
   let store: ReturnType<typeof createEditorStore>;
   let a: string;
   let b: string;

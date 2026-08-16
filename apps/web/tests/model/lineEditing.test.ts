@@ -18,7 +18,7 @@ describe('editing a line in pieces', () => {
       const leg = wholeLeg(wayId, forward ? 'withPoints' : 'againstPoints');
       return fromT !== undefined && toT !== undefined ? stretchLeg(leg, fromT, toT) : leg;
     });
-  /** A leg's covered stretch, for assertions that used to read fromT/toT. */
+  /** A leg's covered stretch of its way, as a [from, to] fraction pair. */
   const legFrom = (l: PatternLeg): number => legRange(l)[0];
   const legTo = (l: PatternLeg): number => legRange(l)[1];
 

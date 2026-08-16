@@ -13,6 +13,13 @@ import type { LngLat, Way } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
 import { required } from '../support/required.test';
 
+// beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
+// service using the store's default draftModeId ('lightRail', which is
+// compatible with the 'road' way type) — see
+// src/editor/store/internal-operations/way-creation.ts's compatibleModeId.
+// Cases below that don't set the mode explicitly are implicitly exercising
+// lightRail, not a specific documented choice.
+
 /** The store's own ways list should always contain a way it just finished
  *  drawing; a miss here means the fixture setup above is broken. */
 function mustFindWay(ways: Way[], id: string): Way {
@@ -47,7 +54,7 @@ describe('geometry: straight vs curved on a way', () => {
   });
 });
 
-describe('rounded-corner curve: local support, no overshoot, exact endpoints', () => {
+describe("roundedCorners fillets a path without moving its endpoints or overshooting, and nearestOnPath finds a path's closest point", () => {
   const zig: LngLat[] = [
     [0, 0],
     [1, 1],

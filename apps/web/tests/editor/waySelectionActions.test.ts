@@ -13,7 +13,7 @@ function must<T>(value: T | undefined | null): T {
   return value;
 }
 
-describe('multi-way group-drag: nudging 2+ selected ways in one batch reanchors each station against its OWN anchor way (updateWayPointsBatch)', () => {
+describe('nudging two or more selected ways at once reanchors each stop against its own anchor way', () => {
   let store: Store, wayA: string, wayB: string, stOnA: string;
 
   beforeEach(() => {
@@ -57,7 +57,7 @@ describe('multi-way group-drag: nudging 2+ selected ways in one batch reanchors 
       );
     });
 
-    it("a station anchored to one way in a multi-way batch follows THAT way's new path", () => {
+    it("a stop anchored to one of the two ways follows that way's new path", () => {
       const s = store.getState().system;
       const expectedOnA = pointAtT(resolveWayPath(must(s.ways.find((w) => w.id === wayA))), 0.5);
       const actual = must(s.stops.find((st) => st.id === stOnA)).coord;
@@ -76,7 +76,7 @@ describe('multi-way group-drag: nudging 2+ selected ways in one batch reanchors 
   });
 });
 
-describe("extending a way's endpoint must not move stations anchored earlier on it (t is a fraction of TOTAL length)", () => {
+describe("extending a way's endpoint does not move stops anchored earlier on it, because their position is stored as a fraction of the way's total length", () => {
   let store: Store, w: string, midStation: string, before: LngLat;
 
   beforeEach(() => {
@@ -94,13 +94,13 @@ describe("extending a way's endpoint must not move stations anchored earlier on 
       store.commands.ways.addWayPoint(w, [-115.0, 36.1]);
     });
 
-    it("extending a way's endpoint does not move a station anchored earlier on the way", () => {
+    it("extending a way's endpoint does not move a stop anchored earlier on the way", () => {
       const after = must(store.getState().system.stops.find((s) => s.id === midStation));
       expect(Math.abs(after.coord[0] - before[0])).toBeLessThan(1e-9);
       expect(Math.abs(after.coord[1] - before[1])).toBeLessThan(1e-9);
     });
 
-    it("extending a way's endpoint updates the station's stored t, not just its coord", () => {
+    it("extending a way's endpoint updates the stop's stored t, not just its coord", () => {
       const after = must(store.getState().system.stops.find((s) => s.id === midStation));
       expect(must(after.anchors.find((a) => a.wayId === w)).t).toBeLessThan(0.5);
     });
@@ -110,7 +110,7 @@ describe("extending a way's endpoint must not move stations anchored earlier on 
         store.commands.ways.addWayPoint(w, [-114.9, 36.1]);
       });
 
-      it("a second endpoint extension still preserves the station's absolute position", () => {
+      it("a second endpoint extension still preserves the stop's absolute position", () => {
         const after = must(store.getState().system.stops.find((s) => s.id === midStation)).coord;
         expect(Math.abs(after[0] - before[0])).toBeLessThan(1e-9);
         expect(Math.abs(after[1] - before[1])).toBeLessThan(1e-9);
@@ -119,7 +119,7 @@ describe("extending a way's endpoint must not move stations anchored earlier on 
   });
 });
 
-describe('a duplicate street offers its own way out', () => {
+describe('a duplicate street drawn alongside another offers to merge into it', () => {
   let store: Store, road: string;
 
   beforeEach(() => {
@@ -162,14 +162,14 @@ describe('a duplicate street offers its own way out', () => {
         must(merge).run();
       });
 
-      it('and merging leaves a single street', () => {
+      it('merging leaves a single street', () => {
         expect(store.getState().system.ways).toHaveLength(1);
       });
     });
   });
 });
 
-describe('picking up the Lines tool drops an infrastructure selection', () => {
+describe('switching to the Lines tool keeps only lines in the selection', () => {
   let store: Store;
 
   beforeEach(() => {
@@ -193,14 +193,14 @@ describe('picking up the Lines tool drops an infrastructure selection', () => {
       store.commands.tools.setTool('lines');
     });
 
-    it('the Lines tool keeps only the lines, so its marquee cannot build a group nothing applies to', () => {
+    it("the way drops out of the selection, since the Lines tool's marquee only ever selects lines", () => {
       expect(store.getState().multiSelection).toHaveLength(1);
       expect(store.getState().multiSelection[0].kind).toBe('line');
     });
   });
 });
 
-describe('connect at crossing: two streets drawn across each other with nothing joining them get a real junction, and only with the way that was picked', () => {
+describe('way-level actions need more context than a single way, or no selection at all', () => {
   let store: Store, ns: string;
 
   beforeEach(() => {
@@ -211,7 +211,7 @@ describe('connect at crossing: two streets drawn across each other with nothing 
     store.commands.ways.finishWay();
   });
 
-  it('one selected way alone offers no merge', () => {
+  it('a single selected way offers no way-level action at all', () => {
     const registry = createSelectionActions(store);
     expect(
       registry

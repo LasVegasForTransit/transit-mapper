@@ -1,6 +1,3 @@
-// Converted from apps/web/tests/verify.test.ts lines 1660-1958 (5 sections).
-// Split from facilityGroups.test.ts's complex/group-editing sections to stay
-// under max-lines.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import { MODES } from '@transitmapper/core/model/catalog';
@@ -10,7 +7,7 @@ import { buildPhysicalHandles } from '@transitmapper/core/render/buildFeatures';
 import { mustFind, required } from '../support/required.test';
 import { buildFeatures } from '../support/testRenderPresentation.test';
 
-describe('On-map labels: name flows into station/facility feature properties', () => {
+describe('stop and facility names flow into their map feature properties', () => {
   let store: ReturnType<typeof createEditorStore>;
   let namedId: string;
   let unnamedId: string;
@@ -37,13 +34,13 @@ describe('On-map labels: name flows into station/facility feature properties', (
   // separately); these checks are about serialized names, not density.
   const noDensity = { applyScreenDensity: false };
 
-  it("a named station's feature carries its name (network view too)", () => {
+  it("a named stop's feature carries its name (network view too)", () => {
     const net = buildFeatures(store.getState().system, null, [], view, null, null, noDensity);
     const namedStationFeature = net.stops.features.find((f) => f.properties?.id === namedId);
     expect(namedStationFeature?.properties?.name).toBe('Downtown');
   });
 
-  it("an unnamed station's feature has an empty-string name, not undefined", () => {
+  it("an unnamed stop's feature has an empty-string name, not undefined", () => {
     const net = buildFeatures(store.getState().system, null, [], view, null, null, noDensity);
     const unnamedStationFeature = net.stops.features.find((f) => f.properties?.id === unnamedId);
     expect(unnamedStationFeature?.properties?.name).toBe('');
@@ -80,7 +77,7 @@ describe('On-map labels: name flows into station/facility feature properties', (
   });
 });
 
-describe('P3: footprints/platforms/facilities render in Infrastructure view only', () => {
+describe('footprints, platforms, and facilities render only in the infrastructure view', () => {
   let store: ReturnType<typeof createEditorStore>;
   let stId: string;
   // Empty way-type filter on purpose — footprints/platforms/facilities render
@@ -114,7 +111,7 @@ describe('P3: footprints/platforms/facilities render in Infrastructure view only
     expect(infra.facilities.features.length).toBe(1);
   });
 
-  it("physicalHandleStationId renders that station's footprint+platform vertices", () => {
+  it("physicalHandleStationId renders both the station's footprint and platform vertices", () => {
     const infra = buildFeatures(store.getState().system, null, [], infraView, stId);
     expect(infra.physicalHandles.features.length).toBe(4 + 4);
   });
@@ -268,7 +265,7 @@ describe('P3: footprints/platforms/facilities render in Infrastructure view only
   });
 });
 
-describe('P3: v3 serialize round-trips footprints, platforms, facilities, groups', () => {
+describe('parseSystem round-trips footprints, platforms, facilities, and groups without losing data', () => {
   let store: ReturnType<typeof createEditorStore>;
   let stId: string;
 

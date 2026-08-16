@@ -57,7 +57,7 @@ describe('render/preview: the card the Worker rasterizes for link unfurls', () =
   it("preview draws the system's lines", () => {
     expect(svg).toContain('<path');
   });
-  it('preview draws stations', () => {
+  it('preview draws stops', () => {
     expect(svg).toContain('<circle');
   });
 
@@ -75,7 +75,7 @@ describe('render/preview: the card the Worker rasterizes for link unfurls', () =
   it("a social card doesn't repeat the line names", () => {
     expect(svg).not.toContain('Resort Corridor');
   });
-  it('a social card drops illegible station labels', () => {
+  it('a social card drops illegible stop labels', () => {
     expect(svg).not.toContain('Downtown');
   });
   it('a social card drops the scale bar and north arrow', () => {
@@ -87,7 +87,7 @@ describe('render/preview: the card the Worker rasterizes for link unfurls', () =
   // nothing else is captioning it: the detail comes back. This is what makes
   // it one renderer rather than two.
   const bigSvg = previewSvg(system, { displayWidth: 1200, captionedExternally: false });
-  it('a large uncaptioned preview keeps station labels', () => {
+  it('a large uncaptioned preview keeps stop labels', () => {
     expect(bigSvg).toContain('Downtown');
   });
   it('a large uncaptioned preview keeps its title', () => {
@@ -191,7 +191,7 @@ describe('render/preview: the card the Worker rasterizes for link unfurls', () =
       },
     );
 
-    it('an export keeps station labels when no display size is given', () => {
+    it('an export keeps stop labels when no display size is given', () => {
       expect(exportSvg).toContain('Downtown');
     });
     it('an export keeps its scale bar and north arrow', () => {

@@ -37,7 +37,7 @@ function angleSnapErrorRad(
   return Math.abs(angle - Math.round(angle / step) * step);
 }
 
-describe('Diagram view: computeDiagramSystem snaps the graph to a schematic octolinear layout without losing topology or crashing on edge cases', () => {
+describe('computeDiagramSystem snaps the graph to a schematic octolinear layout without losing topology or crashing on edge cases', () => {
   let store: ReturnType<typeof createEditorStore>;
   let wayA: string;
   let wayB: string;

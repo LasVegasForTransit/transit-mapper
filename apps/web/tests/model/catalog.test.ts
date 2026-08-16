@@ -13,7 +13,6 @@ import {
 } from '@transitmapper/core/model/catalog';
 import { buildProfile, laneCapacity } from '@transitmapper/core/model/profile';
 
-// moved from verify.test.ts:5895
 // These invariants are what let placing/importing code read a value straight
 // off the catalog instead of carrying its own fallback for a missing one.
 describe('the catalog, not the code around it, decides catalog-level facts', () => {
@@ -66,7 +65,7 @@ describe('the catalog, not the code around it, decides catalog-level facts', () 
   });
 });
 
-describe('catalog: every way type carries lane data; no hardcoded kinds', () => {
+describe('every way type and preset stays internally consistent with what the catalog declares', () => {
   for (const type of Object.values(WAY_TYPES)) {
     it(`way type "${type.id}" has a default profile`, () => {
       expect(type.defaultProfile.length).toBeGreaterThan(0);

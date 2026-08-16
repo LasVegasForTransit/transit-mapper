@@ -43,7 +43,7 @@ describe('bare infrastructure toggle: draw roads WITHOUT auto-creating a line', 
     expect(store.getState().system.services.length).toBe(0);
   });
 
-  it('the bare road itself exists and is selected-style bare infra', () => {
+  it('the bare road itself still exists as infrastructure', () => {
     expect(store.getState().system.ways.length).toBe(1);
   });
 
@@ -68,10 +68,8 @@ describe('bare infrastructure toggle: draw roads WITHOUT auto-creating a line', 
 // ===========================================================================
 
 // Builds a small street grid: two east-west roads crossed by one north-south
-// road → auto-junctions split everything into arms. Reimplemented locally
-// (source: verify.test.ts:8571-8593) parameterized on the test's own store —
-// its internal fresh() call is dropped since each test already gets a fresh
-// store via beforeEach.
+// road → auto-junctions split everything into arms. Parameterized on the
+// test's own store, so each call starts from that test's own fresh state.
 function buildGrid(store: ReturnType<typeof createEditorStore>) {
   const draw = (pts: LngLat[]) => {
     const w = required(store.commands.ways.beginWay('road', 'straight'));
@@ -95,7 +93,7 @@ function buildGrid(store: ReturnType<typeof createEditorStore>) {
   store.commands.tools.setDraftServiceEnabled(true);
 }
 
-describe('routeBetween: shortest path through junctions, mid-way anchors', () => {
+describe('routeBetween finds the shortest path through junctions, from mid-way anchors', () => {
   let store: ReturnType<typeof createEditorStore>;
   let sys: TransitSystem;
   let from: RouteAnchor;
@@ -120,7 +118,7 @@ describe('routeBetween: shortest path through junctions, mid-way anchors', () =>
     return must(routeBetween(sys, from, to, { allowedTypeIds: new Set(['road']) }), 'route');
   }
 
-  it('grid built bare (no services) with junction-split arms', () => {
+  it('the grid is built bare, with junctions already splitting it into arms', () => {
     expect(sys.services.length).toBe(0);
     expect(sys.ways.length).toBe(7);
     expect(sys.nodes.length).toBe(2);
@@ -224,7 +222,7 @@ describe('createRoutedService: materializes splits, service rides existing ways'
   });
 });
 
-describe("route draft state machine (the drawing gesture's backend)", () => {
+describe('the route draft: start, extend, commit, or cancel', () => {
   let store: ReturnType<typeof createEditorStore>;
   let from: RouteAnchor;
   let to: RouteAnchor;
@@ -268,7 +266,7 @@ describe("route draft state machine (the drawing gesture's backend)", () => {
   });
 });
 
-describe('routing along a SINGLE way (the first-gesture case that hit the degenerate same-segment path in the browser)', () => {
+describe('routing along a SINGLE way (the degenerate same-segment case)', () => {
   let store: ReturnType<typeof createEditorStore>;
   let from: RouteAnchor;
   let to: RouteAnchor;

@@ -1,9 +1,8 @@
 // Excluded from the test run by vitest.config.ts (`tests/support/**`).
-// buildFeatures() now requires a resolved `presentation` (the renderer
-// boundary crosses into real screen-space facts). Most tests don't exercise
+// buildFeatures() requires a resolved `presentation` (the renderer boundary
+// crosses into real screen-space facts). Most tests don't exercise
 // camera-dependent LOD/culling, so this wrapper defaults one deterministic
-// presentation for every call that doesn't supply its own — see
-// `.superpowers/sdd/rename-ref/migration-cheat-sheet.md` §5. A test
+// presentation for every call that doesn't supply its own. A test
 // specifically about viewport-dependent rendering should pass an explicit
 // `presentation: renderPresentationForViewport(vp)` instead of relying on
 // the default here.

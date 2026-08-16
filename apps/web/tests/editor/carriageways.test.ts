@@ -1,7 +1,5 @@
-// Converted from apps/web/tests/verify.test.ts lines 7011-7460 (part 2 of 2:
-// carriageway separation/combination, lane-keyed components, and the
-// affordances that must survive an ordinary edit). See
-// vehicleCatalogAndNamedWayIdentity.test.ts for the other half.
+// Splitting a two-way road into carriageways, combining them back, and the
+// lane-keyed data (medians, turn restrictions) that has to survive both.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createEditorStore } from '../../src/editor/store';
 import { getComponent, laneRefKey } from '@transitmapper/core/model/components';
@@ -10,13 +8,19 @@ import { primaryAnchor } from '@transitmapper/core/model/geo';
 import { osmElementsToNetwork, type OsmWayElement } from '@transitmapper/core/model/import';
 import { mustFind, required } from '../support/required.test';
 
+// beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
+// service using the store's default draftModeId ('lightRail', which is
+// compatible with the 'road' way type) — see
+// src/editor/store/internal-operations/way-creation.ts's compatibleModeId.
+// Cases below that don't set the mode explicitly are implicitly exercising
+// lightRail, not a specific documented choice.
+
 /**
  * Draws a straight two-point way and applies a cross-section preset to it,
- * returning the way's id. Duplicated from the sibling file
- * (vehicleCatalogAndNamedWayIdentity.test.ts), which needs it for its own
- * profile-preset suite — this file's separate/combine-carriageway suite
- * needs a way already under a named preset before its own beforeEach steps
- * take over.
+ * returning the way's id. Also defined in namedWayIdentity.test.ts, which
+ * needs the same setup for its own profile-preset suite; this file's
+ * separate/combine-carriageway suite needs a way already under a named
+ * preset before its own beforeEach steps take over.
  */
 function beginStraightWayWithPreset(
   store: ReturnType<typeof createEditorStore>,
@@ -30,7 +34,7 @@ function beginStraightWayWithPreset(
   return wayId;
 }
 
-describe('store: separate/combine carriageways', () => {
+describe('store: separating a road into carriageways, and combining them back', () => {
   let store: ReturnType<typeof createEditorStore>;
   let r: string;
 

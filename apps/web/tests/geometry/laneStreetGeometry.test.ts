@@ -25,6 +25,13 @@ import { patternLanePath } from '@transitmapper/core/geometry/vehicleLane';
 import type { LngLat, Way } from '@transitmapper/core/model/system';
 import { required } from '../support/required.test';
 
+// beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
+// service using the store's default draftModeId ('lightRail', which is
+// compatible with the 'road' way type) — see
+// src/editor/store/internal-operations/way-creation.ts's compatibleModeId.
+// Cases below that don't set the mode explicitly are implicitly exercising
+// lightRail, not a specific documented choice.
+
 // Lane detail is no longer an explicit `ViewOptions` flag — it is derived
 // from the presentation's screen-space width. A near camera over the drawn
 // road (running -115.2,36.1 to -115.1,36.1) turns lane detail on.
@@ -35,7 +42,7 @@ const NEAR_PRESENTATION = presentationAt([-115.15, 36.1], 19);
 // Far from the drawn road entirely, for viewport-scoping checks.
 const OFFSCREEN_PRESENTATION = presentationAt([-114.45, 36.55], 19);
 
-describe('R2: per-lane street geometry (geometry/streets.ts)', () => {
+describe("a street's profile expands into one offset geometry path per lane", () => {
   const road: Way = {
     id: 'lg',
     typeId: 'road',
@@ -106,7 +113,7 @@ describe('R2: per-lane street geometry (geometry/streets.ts)', () => {
   });
 });
 
-describe('Vehicles in Infrastructure view: direction detection, lane selection, lane-aware pattern path (geometry/vehicleLane.ts)', () => {
+describe("a vehicle pattern detects each leg's direction of travel and picks a lane to follow it in", () => {
   // Two ways end-to-start, end-to-start — the natural "keep going forward"
   // case: way B's stored points already run the direction of travel.
   const wayA: Way = {
@@ -280,7 +287,7 @@ describe('Vehicles in Infrastructure view: direction detection, lane selection, 
   });
 });
 
-describe('Vehicles in Infrastructure view: bearing + rotated-rectangle footprint', () => {
+describe('a vehicle draws with the correct bearing and a footprint sized to its mode', () => {
   const dueNorth: LngLat[] = [
     [-115.2, 36.1],
     [-115.2, 36.11],
@@ -347,7 +354,7 @@ describe('Vehicles in Infrastructure view: bearing + rotated-rectangle footprint
   });
 });
 
-describe('R2: lane-detail rendering emission (LOD + viewport scoping)', () => {
+describe('lane-detail rendering turns on at street scale and stays scoped to the viewport', () => {
   let store: ReturnType<typeof createEditorStore>;
   let roadId: string;
 
@@ -445,7 +452,7 @@ describe('R2: lane-detail rendering emission (LOD + viewport scoping)', () => {
   });
 });
 
-describe('R2: draft preset shapes newly drawn ways', () => {
+describe('a draft preset shapes newly drawn ways', () => {
   let store: ReturnType<typeof createEditorStore>;
 
   beforeEach(() => {

@@ -21,6 +21,13 @@ import {
 import { armRefKey, getComponent, laneRefKey } from '@transitmapper/core/model/components';
 import type { LngLat, Node, TransitSystem, Way } from '@transitmapper/core/model/system';
 
+// beginWay(typeId, ...) without an explicit setDraftMode(...) call attaches a
+// service using the store's default draftModeId ('lightRail', which is
+// compatible with the 'road' way type) — see
+// src/editor/store/internal-operations/way-creation.ts's compatibleModeId.
+// Cases below that don't set the mode explicitly are implicitly exercising
+// lightRail, not a specific documented choice.
+
 /** Narrows an optional lookup result without a non-null assertion: the
  * codebase's usual `!` shortcut is off-limits, and every call site here knows
  * from the fixture it just built that the value exists. */
@@ -50,7 +57,7 @@ function buildCrossing(store: ReturnType<typeof createEditorStore>) {
   store.commands.ways.finishWay();
 }
 
-describe('R3: junction footprints, trims, connectors (geometry/junctions.ts)', () => {
+describe('a junction computes its footprint, trims back every arm, and defaults its connectors', () => {
   let store: ReturnType<typeof createEditorStore>;
   let sys: TransitSystem;
   let waysById: Map<string, Way>;
@@ -148,7 +155,7 @@ describe('R3: junction footprints, trims, connectors (geometry/junctions.ts)', (
   });
 });
 
-describe('turn restrictions: target-way identity, never an angle bucket (geometry/junctions.ts + editor/store.ts)', () => {
+describe('a turn restriction targets a specific way, never an angle bucket', () => {
   let store: ReturnType<typeof createEditorStore>;
   let node: Node;
   let inArm: JunctionArm;
@@ -203,8 +210,8 @@ describe('turn restrictions: target-way identity, never an angle bucket (geometr
   // before the restriction existed — it's never silently bypassed.
   it('effectiveConnectors filters even explicit stored connectors by an active restriction', () => {
     store.commands.network.setTurnRestriction(inArm.wayId, inLane.id, [oneTarget]);
-    // The active restriction by this point in the original sequence is the
-    // empty allow-list set by the previous check, not [oneTarget].
+    // Overwrite it with an empty allow-list, so the restriction actually in
+    // effect below is "no allowed targets," not [oneTarget].
     store.commands.network.setTurnRestriction(inArm.wayId, inLane.id, []);
     store.commands.network.setNodeConnectors(node.id, unrestricted);
     const sys = store.getState().system;
@@ -224,7 +231,7 @@ describe('turn restrictions: target-way identity, never an angle bucket (geometr
 // that changes position across a profile change (e.g. a bus lane moving
 // from center-running to curbside) should still default-connect to the
 // same-kind lane on the far side, not whatever shares its numeric index.
-describe('kind-aware straight-through pairing (geometry/junctions.ts)', () => {
+describe('a straight-through connector pairs lanes of the same kind, not the same array position', () => {
   const wA: Way = {
     id: 'wA',
     typeId: 'road',
@@ -284,7 +291,7 @@ describe('kind-aware straight-through pairing (geometry/junctions.ts)', () => {
   });
 });
 
-describe('per-approach traffic control override (editor/store.ts)', () => {
+describe('an approach can override its junction traffic control', () => {
   let store: ReturnType<typeof createEditorStore>;
   let node2Id: string;
   let arm: JunctionArm;
@@ -329,7 +336,7 @@ describe('per-approach traffic control override (editor/store.ts)', () => {
   });
 });
 
-describe('R3: trims flow into stage-1 lane geometry; trimPath behaves', () => {
+describe('trimPath crops lane geometry to the trims a junction computes', () => {
   const line: LngLat[] = [
     [-115.2, 36.1],
     [-115.1, 36.1],
@@ -380,7 +387,7 @@ describe('R3: trims flow into stage-1 lane geometry; trimPath behaves', () => {
   });
 });
 
-describe('R3: two-arm straight-through joints stay seamless', () => {
+describe('a two-arm straight-through joint stays seamless', () => {
   let g: JunctionGeometry;
 
   beforeEach(() => {
@@ -405,7 +412,7 @@ describe('R3: two-arm straight-through joints stay seamless', () => {
   });
 });
 
-describe('R3: lane-detail rendering emits junction footprints + connector guides', () => {
+describe('lane-detail rendering emits junction footprints and connector guides', () => {
   let store: ReturnType<typeof createEditorStore>;
   let nodeId: string;
 
@@ -454,7 +461,7 @@ describe('R3: lane-detail rendering emits junction footprints + connector guides
   });
 });
 
-describe('R4: street name labels + lane keyboard shortcuts', () => {
+describe('street name labels render per carriageway, and lane keyboard shortcuts are registered', () => {
   let store: ReturnType<typeof createEditorStore>;
 
   beforeEach(() => {

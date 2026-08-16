@@ -19,10 +19,10 @@ function must<T>(value: T | null | undefined): T {
   return value;
 }
 
-// The same three edits as the pure-function tests in
+// Trimming and splitting a pattern, mirrored from the pure-function tests in
 // `tests/model/lineEditing.test.ts`, but through the store and against real
 // geometry.
-describe('the same three edits, through the store and against real geometry', () => {
+describe('trimming and splitting a pattern preserve the road and its measured length', () => {
   let store: ReturnType<typeof createEditorStore>;
   let line: Service;
   let pattern: Pattern;
@@ -93,10 +93,9 @@ describe('the same three edits, through the store and against real geometry', ()
 });
 
 // Splitting the multi-pattern legacy fixture below through `parseSystem`
-// hands each branch its own migrated Service id (the raw pattern id, when
-// unique) under one shared Line — see migration-cheat-sheet.md §2. `main` and
-// `divided` are addressed by those migrated service ids, not by the line id
-// `main` the fixture is keyed under.
+// hands each branch its own Service id (the raw pattern id, when unique)
+// under one shared Line. `main` and `divided` are addressed by those service
+// ids, not by the line id `main` the fixture is keyed under.
 describe('dividing one branch leaves its siblings on the original service', () => {
   let store: ReturnType<typeof createEditorStore>;
   let before: TransitSystem;
@@ -137,9 +136,9 @@ describe('dividing one branch leaves its siblings on the original service', () =
             modeId: 'bus',
             color: '#2ea44f',
             patterns: [
-              // Each pattern's own `name` becomes its migrated service's
-              // `name` (migration-cheat-sheet.md §2) — 'Main' here so the
-              // spawned half is named off it, not left nameless.
+              // Each pattern's own `name` becomes its service's `name` —
+              // 'Main' here so the spawned half is named off it, not left
+              // nameless.
               { id: 'focused', name: 'Main', sections: oneSection(legsOf('long', 'short')) },
               { id: 'sibling', name: 'Sibling', sections: oneSection(legsOf('sibling-way')) },
             ],
@@ -222,8 +221,8 @@ describe('ending a line at the displayed occurrence keeps its longer side', () =
             patterns: [
               {
                 // Matches the line id: the sole pattern's raw id becomes the
-                // migrated service id (migration-cheat-sheet.md §2), so this
-                // keeps `endPatternAt` addressable as 'loop-line' below.
+                // service id, so this keeps `endPatternAt` addressable as
+                // 'loop-line' below.
                 id: 'loop-line',
                 sections: oneSection([
                   wholeLeg('out'),
@@ -285,8 +284,8 @@ describe('extending a service path keeps physical infrastructure untouched', () 
             name: 'Line',
             modeId: 'bus',
             color: '#e4572e',
-            // Same id as the line: keeps the migrated service addressable as
-            // 'line' below (migration-cheat-sheet.md §2).
+            // Same id as the line: keeps the service addressable as 'line'
+            // below.
             patterns: [{ id: 'line', sections: oneSection(legsOf('a-b')) }],
           },
         ],
@@ -307,7 +306,7 @@ describe('extending a service path keeps physical infrastructure untouched', () 
     expect(extended).toBe(true);
   });
 
-  it('extending a line leaves ways and stations as the same objects', () => {
+  it('extending a line leaves ways and stops as the same objects', () => {
     expect(after.ways[0]).toBe(before.ways[0]);
     expect(after.stops[0]).toBe(before.stops[0]);
   });

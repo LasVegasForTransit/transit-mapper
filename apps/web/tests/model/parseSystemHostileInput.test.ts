@@ -24,7 +24,7 @@ import {
 // These documents are the shapes an attacker or a corrupted file produces, not
 // the shapes the editor produces. If one of these ever hangs the suite rather
 // than failing it, that is the bug reappearing.
-describe('hostile input: parseSystem must survive values a person never types', () => {
+describe('parseSystem survives values a person never types by hand', () => {
   const base = {
     version: 5,
     id: 'h',
@@ -110,7 +110,7 @@ describe('hostile input: parseSystem must survive values a person never types', 
   // Coordinates. Longitude wraps rather than being dropped: MapLibre hands
   // back unwrapped values when the user pans into an adjacent world copy, and
   // dropping an interior point silently changes the shape of a way.
-  describe('coordinates', () => {
+  describe('an out-of-range coordinate is wrapped or dropped, never left to corrupt the way', () => {
     for (const [label, lng, expected] of [
       ['just past the antimeridian', 181, -179],
       ['far past the antimeridian', 1e6, wrapExpected(1e6)],
