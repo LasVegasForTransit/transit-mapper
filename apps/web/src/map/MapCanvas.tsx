@@ -610,37 +610,45 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     // beforeId anchoring so a healed layer returns to its correct place in
     // the paint order instead of landing on top.
     const ensureOverlay = (): boolean => {
-      const layerSpecs = activePhysicalLayerSpecs();
-      for (const src of ALL_SOURCES) {
-        if (map.getSource(src)) continue;
-        // The two heavy static line sources (imported GTFS geometry — ~121k
-        // waypoints at RTC scale) get an explicit geojson-vt simplification
-        // tolerance so edge tiles emit fewer vertices as they build. Tolerance
-        // is in per-tile units, so it's ~lossless at high zoom (tiles cover
-        // little ground → almost nothing drops) — max-zoom fidelity and the
-        // exact source `Way.points` are untouched. Kept modest; revisit if any
-        // mid-zoom kinking shows.
-        const logicalSourceId = logicalRenderSourceId(src);
-        const heavy = logicalSourceId === SRC_WAYS || logicalSourceId === SRC_SERVICES;
-        map.addSource(src, {
-          type: 'geojson',
-          data: emptyFC,
-          ...(heavy ? { tolerance: 1 } : {}),
-        });
+      try {
+        const layerSpecs = activePhysicalLayerSpecs();
+        for (const src of ALL_SOURCES) {
+          if (map.getSource(src)) continue;
+          // The two heavy static line sources (imported GTFS geometry — ~121k
+          // waypoints at RTC scale) get an explicit geojson-vt simplification
+          // tolerance so edge tiles emit fewer vertices as they build. Tolerance
+          // is in per-tile units, so it's ~lossless at high zoom (tiles cover
+          // little ground → almost nothing drops) — max-zoom fidelity and the
+          // exact source `Way.points` are untouched. Kept modest; revisit if any
+          // mid-zoom kinking shows.
+          const logicalSourceId = logicalRenderSourceId(src);
+          const heavy = logicalSourceId === SRC_WAYS || logicalSourceId === SRC_SERVICES;
+          map.addSource(src, {
+            type: 'geojson',
+            data: emptyFC,
+            ...(heavy ? { tolerance: 1 } : {}),
+          });
+        }
+        // Static context, not system-derived — set once here rather than on
+        // every pushData() like the sources above.
+        if (!map.getSource(SRC_LANDMARKS))
+          map.addSource(SRC_LANDMARKS, { type: 'geojson', data: landmarksFeatureCollection() });
+        for (let i = 0; i < layerSpecs.length; i++) {
+          const spec = layerSpecs[i];
+          if (map.getLayer(spec.id)) continue;
+          const anchor = layerSpecs.slice(i + 1).find((later) => map.getLayer(later.id));
+          map.addLayer(spec, anchor?.id);
+        }
+        applyRendererVisibility();
+        liveRenderer?.restoreActiveLayers();
+        return true;
+      } catch (error) {
+        // A stale style event can arrive after MapLibre begins replacing the
+        // remote basemap with the local fallback. The later style.load will
+        // retry this exact idempotent setup against the current style.
+        if (error instanceof Error && error.message === 'Style is not done loading.') return false;
+        throw error;
       }
-      // Static context, not system-derived — set once here rather than on
-      // every pushData() like the sources above.
-      if (!map.getSource(SRC_LANDMARKS))
-        map.addSource(SRC_LANDMARKS, { type: 'geojson', data: landmarksFeatureCollection() });
-      for (let i = 0; i < layerSpecs.length; i++) {
-        const spec = layerSpecs[i];
-        if (map.getLayer(spec.id)) continue;
-        const anchor = layerSpecs.slice(i + 1).find((later) => map.getLayer(later.id));
-        map.addLayer(spec, anchor?.id);
-      }
-      applyRendererVisibility();
-      liveRenderer?.restoreActiveLayers();
-      return true;
     };
 
     const requiredGeoJsonSource = (sourceId: string): GeoJSONSource => {
@@ -1122,7 +1130,11 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       stopSettlement.invalidate();
       gestureSettlement.invalidate();
       gesturePreview.clear();
-      schedulePushData('all');
+      // EditorProvider mounts an empty loading shell before it restores the
+      // persisted document. Rendering that shell creates a generation which
+      // the real document must cancel a moment later. Wait for the ready
+      // snapshot so first publication has one owner and one revision.
+      if (store.getState().documentStatus === 'ready') schedulePushData('all');
       scheduleSelectionUpdate();
     };
 
@@ -1816,6 +1828,10 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       // produces an empty plan; topology edits conservatively include every
       // derived collection they can influence.
       const documentChanged = prev.system.id !== s.system.id;
+      const initialDocumentReady =
+        prev.documentStatus !== 'ready' &&
+        s.documentStatus === 'ready' &&
+        lastRenderedSystemId === null;
       const selectionUpdate = planSelectionRenderUpdate(prev, s);
       if (documentChanged && !gestureActive) {
         stopSettlement.invalidate();
@@ -1827,7 +1843,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       });
       const editorSystemRefresh = editorSourcesNeedSystemRefresh(changedSources, documentChanged);
       const systemTransition = { previous: prev.system, next: s.system };
-      if (changedSources.length > 0 || (gestureActive && documentChanged)) {
+      if (initialDocumentReady || changedSources.length > 0 || (gestureActive && documentChanged)) {
         if (gestureActive) {
           // A document switch must abort the baseline-bound gesture even in
           // the degenerate case where the new document reuses the same arrays.
@@ -1851,7 +1867,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
               mutate: () => schedulePushData(changedSources, systemTransition),
             });
           } else {
-            schedulePushData(changedSources, systemTransition);
+            schedulePushData(initialDocumentReady ? 'all' : changedSources, systemTransition);
           }
         }
       }

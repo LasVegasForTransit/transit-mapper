@@ -189,4 +189,30 @@ describe('render source bank settlement', () => {
 
     await expect(loaded).rejects.toThrow('stations--bank-b');
   });
+
+  it('keeps a cold hidden bank eligible to finish beyond the two-second retry window', async () => {
+    vi.useFakeTimers();
+    try {
+      const host = new SettlementHost();
+      const loaded = waitForSourceBankLoad({
+        host,
+        sourceIds: ['stations--bank-b'],
+      });
+      let outcome: 'pending' | 'loaded' | 'failed' = 'pending';
+      void loaded.then(
+        () => {
+          outcome = 'loaded';
+        },
+        () => {
+          outcome = 'failed';
+        },
+      );
+
+      await vi.advanceTimersByTimeAsync(2_001);
+
+      expect(outcome).toBe('pending');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

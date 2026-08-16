@@ -6,9 +6,14 @@ type StyleEvent = 'style.load';
 class FakeMap {
   private readonly listeners = new Map<StyleEvent, Set<() => void>>();
   private styleLoaded = false;
+  private styleKnown = false;
 
   isStyleLoaded(): boolean {
     return this.styleLoaded;
+  }
+
+  getStyle(): object | undefined {
+    return this.styleKnown ? {} : undefined;
   }
 
   once(event: StyleEvent, listener: () => void): this {
@@ -20,12 +25,18 @@ class FakeMap {
 
   emit(event: StyleEvent): void {
     this.styleLoaded = true;
+    this.styleKnown = true;
     for (const listener of this.listeners.get(event) ?? []) listener();
     this.listeners.delete(event);
   }
 
   setStyleLoaded(): void {
     this.styleLoaded = true;
+    this.styleKnown = true;
+  }
+
+  setStyleKnown(): void {
+    this.styleKnown = true;
   }
 }
 
@@ -46,6 +57,20 @@ describe('initial map readiness', () => {
     map.setStyleLoaded();
 
     attachInitialMapReady(map, startEditor);
+
+    expect(startEditor).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for MapLibre to finish loading before mutating a parsed style', () => {
+    const map = new FakeMap();
+    const startEditor = vi.fn();
+    map.setStyleKnown();
+
+    attachInitialMapReady(map, startEditor);
+
+    expect(startEditor).not.toHaveBeenCalled();
+
+    map.emit('style.load');
 
     expect(startEditor).toHaveBeenCalledTimes(1);
   });

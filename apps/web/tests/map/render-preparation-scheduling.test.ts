@@ -55,7 +55,7 @@ function plan(generation: number, run: () => void): RenderPreparationPlan {
 }
 
 describe('render preparation scheduling', () => {
-  it('keeps the projection batch when only plan construction exceeds the slice reserve', async () => {
+  it('continues the original projection batch after a plan-only overrun', async () => {
     const clock = new FrameClock();
     const scheduler = createCooperativeRenderJobScheduler({
       now: clock.now,
@@ -95,7 +95,7 @@ describe('render preparation scheduling', () => {
     clock.flush();
 
     await expect(handle.settled).resolves.toBeUndefined();
-    expect(chunkSizes).toEqual([4, 4]);
+    expect(chunkSizes).toEqual([4]);
     expect(unitRuns).toHaveBeenCalledOnce();
     expect(coordinator.record).toHaveBeenCalledOnce();
     expect(coordinator.commit).toHaveBeenCalledOnce();
