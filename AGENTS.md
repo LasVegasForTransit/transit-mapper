@@ -88,11 +88,16 @@ Then, in the same change:
 Tests run on Vitest and on a `check()`-based suite that predates it.
 `pnpm verify` runs both.
 
-- `apps/web/tests/verify.test.ts` and `apps/worker/tests/verify.test.ts` are
-  sequential scripts: one store is built at module scope and mutated in
-  order, so each section depends on what the sections above it left behind.
-  Add to them in that style, beside related cases. Do not split them up
-  piecemeal.
+- `apps/worker/tests/verify.test.ts` is a sequential script: one store is
+  built at module scope and mutated in order, so each section depends on
+  what the sections above it left behind. Add to it in that style, beside
+  related cases. Do not split it up piecemeal.
+- `apps/web/tests/verify.test.ts` no longer exists — its cases were split
+  into independent Vitest files under `apps/web/tests/`, mirroring the area
+  of `src/` (or, for logic in `@transitmapper/core`, the area of
+  `packages/core/src/`) each case covers. Add new web-side cases as
+  ordinary `describe`/`it` blocks in the relevant file, or a new file if
+  none exists yet — never as an appended sequential check.
 - New isolated Vitest files go under `<module>/tests/`, mirroring the area in
   `src/` they cover. `apps/worker/tests/shares.test.ts` runs in real workerd
   against a real D1 with the production migrations applied.
