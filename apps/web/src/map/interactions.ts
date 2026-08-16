@@ -1234,7 +1234,7 @@ export function attachInteractions(
    * to say what the commit will do.
    */
   const setSharingPreview = (runs: LngLat[][], color: string) => {
-    (map.getSource(SRC_SHARING) as GeoJSONSource | undefined)?.setData({
+    map.getSource<GeoJSONSource>(SRC_SHARING)?.setData({
       type: 'FeatureCollection',
       features: runs
         .filter((coords) => coords.length >= 2)
@@ -1281,7 +1281,7 @@ export function attachInteractions(
   }
 
   const setPreview = (coords: LngLat[] | null, properties: PreviewProperties = {}) => {
-    (map.getSource(SRC_PREVIEW) as GeoJSONSource | undefined)?.setData({
+    map.getSource<GeoJSONSource>(SRC_PREVIEW)?.setData({
       type: 'FeatureCollection',
       features: coords
         ? [
@@ -1298,7 +1298,7 @@ export function attachInteractions(
   // See onHoverMove: the "clicking here resumes/extends this way" ring,
   // shown at an open endpoint the Way tool is currently hovering near.
   const setEndpointHint = (coord: LngLat | null) => {
-    (map.getSource(SRC_ENDPOINT_HINT) as GeoJSONSource | undefined)?.setData({
+    map.getSource<GeoJSONSource>(SRC_ENDPOINT_HINT)?.setData({
       type: 'FeatureCollection',
       features: coord
         ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: coord } }]
@@ -1316,7 +1316,7 @@ export function attachInteractions(
       const ll = map.unproject(p as [number, number]);
       return [ll.lng, ll.lat];
     });
-    (map.getSource(SRC_MARQUEE) as GeoJSONSource | undefined)?.setData({
+    map.getSource<GeoJSONSource>(SRC_MARQUEE)?.setData({
       type: 'FeatureCollection',
       features: [
         {
@@ -1328,7 +1328,7 @@ export function attachInteractions(
     });
   };
   const clearMarquee = () => {
-    (map.getSource(SRC_MARQUEE) as GeoJSONSource | undefined)?.setData({
+    map.getSource<GeoJSONSource>(SRC_MARQUEE)?.setData({
       type: 'FeatureCollection',
       features: [],
     });
@@ -3157,7 +3157,7 @@ export function attachInteractions(
   // new vertex lands on the segment of the control polygon nearest the cursor.
   function insertIndexOnPolygon(points: LngLat[], pt: ScreenPoint): number {
     if (points.length < 2) return points.length;
-    const px = points.map((p) => map.project(p as [number, number]));
+    const px = points.map((p) => map.project(p));
     let best = points.length;
     let bestD = Infinity;
     for (let i = 0; i < px.length - 1; i++) {

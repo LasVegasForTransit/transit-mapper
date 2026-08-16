@@ -2405,6 +2405,40 @@ function projectTopologyFeatures({
     return resolved.geometry;
   };
 
+  interface LaneArrowEmission {
+    way: TransitSystem['ways'][number];
+    arrows: ReturnType<typeof attributedLaneGeometry>['arrows'];
+    corridorW14: number;
+    tierOpacity: number;
+    availability: ReturnType<typeof tierAvailabilityProperties>;
+  }
+
+  const emitLaneArrows = ({
+    way,
+    arrows,
+    corridorW14,
+    tierOpacity,
+    availability,
+  }: LaneArrowEmission) => {
+    for (const a of arrows) {
+      laneArrows.push({
+        type: 'Feature',
+        id: stableFeatureId('laneArrows', 'lane-direction', way.id, a.laneId),
+        properties: {
+          id: way.id,
+          wayId: way.id,
+          typeId: way.typeId,
+          laneId: a.laneId,
+          corridorW14,
+          renderTier: 'street',
+          tierOpacity,
+          ...availability,
+        },
+        geometry: { type: 'LineString', coordinates: a.path },
+      });
+    }
+  };
+
   // True-scale per-lane rendering for one way: lane surfaces carry their real
   // metric geometry, while corridorW14 keeps their LOD fade aligned with the
   // corridor they replace. It also emits dividers, thin-line lanes (tracks),
@@ -2455,23 +2489,13 @@ function projectTopologyFeatures({
       });
     }
     if (projection.topology.laneArrows) {
-      for (const a of g.arrows) {
-        laneArrows.push({
-          type: 'Feature',
-          id: stableFeatureId('laneArrows', 'lane-direction', way.id, a.laneId),
-          properties: {
-            id: way.id,
-            wayId: way.id,
-            typeId: way.typeId,
-            laneId: a.laneId,
-            corridorW14,
-            renderTier: 'street',
-            tierOpacity: presentation.blend.weights.street,
-            ...availability,
-          },
-          geometry: { type: 'LineString', coordinates: a.path },
-        });
-      }
+      emitLaneArrows({
+        way,
+        arrows: g.arrows,
+        corridorW14,
+        tierOpacity: presentation.blend.weights.street,
+        availability,
+      });
     }
     // A lane-rendered way has no corridor silhouette to carry its selection
     // halo, so emit one centerline stand-in per Street-tier way. It's invisible unless

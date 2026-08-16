@@ -54,9 +54,23 @@ export function mergeAdjacentServiceLines(features: Feature<LineString>[]): Feat
   return out;
 }
 
-function mergeGroup(frags: Feature<LineString>[]): Feature<LineString>[] {
-  if (frags.length <= 1) return frags;
+interface End {
+  frag: Feature<LineString>;
+  end: 'start' | 'end';
+}
 
+interface RunAssembly {
+  byEndpoint: Map<string, End[]>;
+  used: Set<Feature<LineString>>;
+  constituents: Feature<LineString>[];
+  // A closed loop (a terminus loop) would revisit fragments forever once
+  // every one is already used, so every walk is bounded by the group size.
+  maxSteps: number;
+}
+
+// Only a degree-2 joint is unambiguous: this fragment's end plus exactly
+// one other fragment's end, nothing more.
+function indexUnambiguousEnds(frags: Feature<LineString>[]): Map<string, End[]> {
   const degree = new Map<string, number>();
   const bump = (k: string) => degree.set(k, (degree.get(k) ?? 0) + 1);
   for (const f of frags) {
@@ -65,12 +79,6 @@ function mergeGroup(frags: Feature<LineString>[]): Feature<LineString>[] {
     bump(pointKey(c[c.length - 1]));
   }
 
-  // Only a degree-2 joint is unambiguous: this fragment's end plus exactly
-  // one other fragment's end, nothing more.
-  interface End {
-    frag: Feature<LineString>;
-    end: 'start' | 'end';
-  }
   const byEndpoint = new Map<string, End[]>();
   const addEnd = (key: string, e: End) => {
     if (degree.get(key) !== 2) return;
@@ -83,42 +91,56 @@ function mergeGroup(frags: Feature<LineString>[]): Feature<LineString>[] {
     addEnd(pointKey(c[0]), { frag: f, end: 'start' });
     addEnd(pointKey(c[c.length - 1]), { frag: f, end: 'end' });
   }
+  return byEndpoint;
+}
 
+/** Claims the single unused fragment meeting `at`, or nothing when the joint
+ *  is ambiguous or already consumed. */
+function takeNeighbour(run: RunAssembly, at: LngLat): End | null {
+  const candidates = (run.byEndpoint.get(pointKey(at)) ?? []).filter((c) => !run.used.has(c.frag));
+  if (candidates.length !== 1) return null;
+  const chosen = candidates[0];
+  run.used.add(chosen.frag);
+  run.constituents.push(chosen.frag);
+  return chosen;
+}
+
+function extendForward(run: RunAssembly, coords: LngLat[]): void {
+  for (let step = run.maxSteps; step > 0; step -= 1) {
+    const next = takeNeighbour(run, coords[coords.length - 1]);
+    if (!next) return;
+    const points = next.frag.geometry.coordinates as LngLat[];
+    coords.push(...(next.end === 'start' ? points : [...points].reverse()).slice(1));
+  }
+}
+
+function extendBackward(run: RunAssembly, coords: LngLat[]): LngLat[] {
+  let result = coords;
+  for (let step = run.maxSteps; step > 0; step -= 1) {
+    const prev = takeNeighbour(run, result[0]);
+    if (!prev) return result;
+    const points = prev.frag.geometry.coordinates as LngLat[];
+    result = [...(prev.end === 'end' ? points : [...points].reverse()).slice(0, -1), ...result];
+  }
+  return result;
+}
+
+function mergeGroup(frags: Feature<LineString>[]): Feature<LineString>[] {
+  if (frags.length <= 1) return frags;
+
+  const byEndpoint = indexUnambiguousEnds(frags);
   const used = new Set<Feature<LineString>>();
   const out: Feature<LineString>[] = [];
   for (const seed of frags) {
     if (used.has(seed)) continue;
     used.add(seed);
     const constituents = [seed];
-    let coords = [...(seed.geometry.coordinates as LngLat[])];
+    const run: RunAssembly = { byEndpoint, used, constituents, maxSteps: frags.length };
+    const coords = [...(seed.geometry.coordinates as LngLat[])];
 
-    // Extend toward the end, then toward the start. Bounded by the group
-    // size — a closed loop (a terminus loop) would otherwise spin forever
-    // once every fragment is already used.
-    for (let guard = 0; guard < frags.length; guard++) {
-      const candidates = (byEndpoint.get(pointKey(coords[coords.length - 1])) ?? []).filter(
-        (c) => !used.has(c.frag),
-      );
-      if (candidates.length !== 1) break;
-      const { frag, end } = candidates[0];
-      used.add(frag);
-      constituents.push(frag);
-      const next = frag.geometry.coordinates as LngLat[];
-      coords.push(...(end === 'start' ? next : [...next].reverse()).slice(1));
-    }
-    for (let guard = 0; guard < frags.length; guard++) {
-      const candidates = (byEndpoint.get(pointKey(coords[0])) ?? []).filter(
-        (c) => !used.has(c.frag),
-      );
-      if (candidates.length !== 1) break;
-      const { frag, end } = candidates[0];
-      used.add(frag);
-      constituents.push(frag);
-      const prev = frag.geometry.coordinates as LngLat[];
-      coords = [...(end === 'end' ? prev : [...prev].reverse()).slice(0, -1), ...coords];
-    }
-
-    out.push(mergedFeature(seed, constituents, coords));
+    // Extend toward the end, then toward the start.
+    extendForward(run, coords);
+    out.push(mergedFeature(seed, constituents, extendBackward(run, coords)));
   }
   return out;
 }

@@ -87,7 +87,8 @@ async function verifyLegacyMigration(page: import('playwright-core').Page, id: s
       const database = await new Promise<IDBDatabase>((resolvePromise, reject) => {
         const request = indexedDB.open(storage.databaseName, storage.databaseVersion);
         request.onsuccess = () => resolvePromise(request.result);
-        request.onerror = () => reject(request.error);
+        request.onerror = () =>
+          reject(new Error('IndexedDB open failed', { cause: request.error }));
       });
       const transaction = database.transaction(
         [storage.documentStore, storage.libraryStore],
@@ -101,12 +102,14 @@ async function verifyLegacyMigration(page: import('playwright-core').Page, id: s
             resolvePromise(
               documentRequest.result as { id?: string; serialized?: string } | undefined,
             );
-          documentRequest.onerror = () => reject(documentRequest.error);
+          documentRequest.onerror = () =>
+            reject(new Error('IndexedDB document read failed', { cause: documentRequest.error }));
         }),
         new Promise<{ id?: string } | undefined>((resolvePromise, reject) => {
           libraryRequest.onsuccess = () =>
             resolvePromise(libraryRequest.result as { id?: string } | undefined);
-          libraryRequest.onerror = () => reject(libraryRequest.error);
+          libraryRequest.onerror = () =>
+            reject(new Error('IndexedDB library read failed', { cause: libraryRequest.error }));
         }),
       ]);
       database.close();
