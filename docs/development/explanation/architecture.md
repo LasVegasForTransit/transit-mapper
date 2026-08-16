@@ -421,8 +421,8 @@ tool. Apple Icon Composer is the one platform-specific export boundary. The
 generation and verification. Settings can request persistent storage, but
 the browser may still clear it.
 
-First install caches only the static editor closure. Lazy tools, Workers,
-telemetry, and install artwork enter a bounded CacheFirst store after use. A
+First install caches the static editor closure and the Workers that reopen and
+edit a saved map. Lazy tools, telemetry, and install artwork enter a bounded CacheFirst store after use. A
 returning or installed session may add 64 KiB after Save-Data, 2G, and storage
 checks; first visits skip the manifest. `OfflineReadiness` distinguishes essential, pending, complete, and
 deferred coverage. Complete excludes OpenFreeMap, so the blank-map fallback

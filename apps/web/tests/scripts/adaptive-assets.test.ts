@@ -35,6 +35,11 @@ describe('adaptive offline build assets', () => {
   it('filters Workbox input to the exact static editor shell', () => {
     const entries = [
       { url: 'assets/dialog.js', size: 40, revision: 'dialog' },
+      {
+        url: 'assets/feature-projection-worker-entry-a1b2c3.js',
+        size: 100,
+        revision: 'projection-worker',
+      },
       { url: 'assets/main.js', size: 100, revision: 'main' },
       { url: 'assets/shared.js', size: 50, revision: 'shared' },
       { url: 'favicon.svg', size: 10, revision: 'favicon' },

@@ -12,6 +12,7 @@ import type {
 } from '../../src/map/feature-projection-worker-protocol';
 import { emptySystemFeatures } from '../../src/map/system-feature-sources';
 import { SRC_WAYS } from '../../src/map/layers';
+import type { RenderPreparedSnapshot } from '@transitmapper/core/render/render-preparation';
 
 class RecordingFeatureProjectionWorker implements FeatureProjectionWorker {
   onmessage: ((event: MessageEvent<FeatureProjectionWorkerEvent>) => void) | null = null;
@@ -74,6 +75,20 @@ describe('Feature projection worker', () => {
     worker.respond({ kind: 'done', requestId: 1, features, counts: null });
 
     await expect(projected).resolves.toEqual({ features, counts: null });
+  });
+
+  it('keeps main-thread preparation indexes out of the worker message', async () => {
+    const worker = new RecordingFeatureProjectionWorker();
+    const client = createFeatureProjectionWorker({ workerFactory: () => worker });
+    const preparedSnapshot = {
+      servicesByWay: { get: () => [] },
+    } as unknown as RenderPreparedSnapshot;
+
+    const projected = client.project({ ...requestInput(), preparedSnapshot });
+
+    expect(worker.requests[0]?.input).not.toHaveProperty('preparedSnapshot');
+    client.dispose();
+    await expect(projected).rejects.toThrow('Feature projection Worker is disposed.');
   });
 
   it('rejects an aborted request and ignores its late worker response', async () => {

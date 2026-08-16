@@ -80,6 +80,10 @@ declare global {
     __perfStopPaintedFrameCapture?: () => number[];
     __rendererStats?: () => RendererStatsSnapshot;
     __perfRenderSourceBankSnapshot?: () => PerfRenderSourceBankSnapshot;
+    __perfRenderedFeaturesAt?: (
+      coordinate: [number, number],
+    ) => readonly RendererPerfRenderedFeature[];
+    __perfRendererLayerVisibility?: () => readonly RendererPerfLayerVisibility[];
     __TRANSITMAPPER_PERF_RUN__?: boolean;
   }
 }
@@ -105,9 +109,23 @@ export interface RendererPerfFeatureState {
   readonly selected: boolean;
 }
 
+/** A serializable rendered feature used to diagnose browser interaction
+ * failures without exposing the MapLibre instance to the performance runner. */
+export interface RendererPerfRenderedFeature {
+  readonly sourceId: string;
+  readonly layerId: string;
+  readonly featureId: string | null;
+  readonly properties: Readonly<Record<string, unknown>>;
+}
+
 export interface RendererPerfLayerFilter {
   readonly layerId: string;
   readonly filter: unknown;
+}
+
+export interface RendererPerfLayerVisibility {
+  readonly layerId: string;
+  readonly visibility: 'visible' | 'none';
 }
 
 function booleanFeatureState(state: unknown, key: string): boolean {
@@ -157,6 +175,45 @@ export function rendererPerfFeatureStatesAt(
     (left, right) =>
       left.sourceId.localeCompare(right.sourceId) || left.featureId.localeCompare(right.featureId),
   );
+}
+
+/** Captures the active-bank features MapLibre returns at a point. This reads
+ * the same physical layers that the editor uses for a pointer gesture. */
+export function rendererPerfFeaturesAt(
+  map: MLMap,
+  bank: PerfRenderSourceBankSnapshot,
+  coordinate: [number, number],
+): RendererPerfRenderedFeature[] {
+  const layers = [...new Set([...bank.activeVisualLayerIds, ...bank.activeHitLayerIds])].filter(
+    (layerId) => map.getLayer(layerId) !== undefined,
+  );
+  if (layers.length === 0) return [];
+  const point = map.project(coordinate);
+  return map.queryRenderedFeatures(point, { layers }).map((feature) => ({
+    sourceId: typeof feature.source === 'string' ? feature.source : '',
+    layerId: feature.layer.id,
+    featureId: feature.id === undefined ? null : String(feature.id),
+    properties: { ...feature.properties },
+  }));
+}
+
+/** Captures active-bank layer visibility so a missing interaction target can
+ * distinguish absent data from an intentionally hidden layer. */
+export function rendererPerfLayerVisibility(
+  map: MLMap,
+  bank: PerfRenderSourceBankSnapshot,
+): RendererPerfLayerVisibility[] {
+  return [...new Set([...bank.activeVisualLayerIds, ...bank.activeHitLayerIds])]
+    .sort()
+    .flatMap((layerId) => {
+      if (!map.getLayer(layerId)) return [];
+      const getLayoutProperty = map.getLayoutProperty.bind(map) as unknown as (
+        layer: string,
+        property: string,
+      ) => unknown;
+      const visibility = getLayoutProperty(layerId, 'visibility');
+      return [{ layerId, visibility: visibility === 'none' ? 'none' : 'visible' }];
+    });
 }
 
 /** Serializes the filters applied to every active renderer layer for evidence. */
@@ -298,8 +355,13 @@ export function attachPerfHarness(map: MLMap, options: PerfHarnessOptions = {}):
   if (options.stopSnapshot) window.__perfStopSnapshot = options.stopSnapshot;
   if (options.overlaySnapshot) window.__perfOverlaySnapshot = options.overlaySnapshot;
   if (options.rendererStats) window.__rendererStats = options.rendererStats;
-  if (options.renderSourceBankSnapshot) {
-    window.__perfRenderSourceBankSnapshot = options.renderSourceBankSnapshot;
+  const renderSourceBankSnapshot = options.renderSourceBankSnapshot;
+  if (renderSourceBankSnapshot) {
+    window.__perfRenderSourceBankSnapshot = renderSourceBankSnapshot;
+    window.__perfRenderedFeaturesAt = (coordinate) =>
+      rendererPerfFeaturesAt(map, renderSourceBankSnapshot(), coordinate);
+    window.__perfRendererLayerVisibility = () =>
+      rendererPerfLayerVisibility(map, renderSourceBankSnapshot());
   }
   window.__perfStartPaintedFrameCapture = paintedFrames.start;
   window.__perfStopPaintedFrameCapture = paintedFrames.stop;
@@ -324,6 +386,8 @@ export function attachPerfHarness(map: MLMap, options: PerfHarnessOptions = {}):
     delete window.__perfOverlaySnapshot;
     delete window.__rendererStats;
     delete window.__perfRenderSourceBankSnapshot;
+    delete window.__perfRenderedFeaturesAt;
+    delete window.__perfRendererLayerVisibility;
     delete window.__perfStartPaintedFrameCapture;
     delete window.__perfStopPaintedFrameCapture;
   };

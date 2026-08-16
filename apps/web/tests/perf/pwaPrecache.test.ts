@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   editorAdaptiveFiles,
+  editorOfflinePrecacheFiles,
   editorPrecacheFiles,
   embedOnlyFiles,
   manifestInstallIconFiles,
@@ -60,6 +61,11 @@ const webAppManifest: WebAppManifest = {
 };
 
 const installIcons = manifestInstallIconFiles(webAppManifest);
+const offlineRuntimeFiles = [
+  'assets/diagram-layout-worker-entry-a1b2c3.js',
+  'assets/feature-projection-worker-entry-a1b2c3.js',
+  'assets/storage-deserializer-worker-a1b2c3.js',
+];
 
 describe('PWA precache output', () => {
   it('keeps the complete extension for referenced WOFF2 assets', () => {
@@ -98,6 +104,14 @@ describe('PWA precache output', () => {
     );
   });
 
+  it('installs the workers that reconstruct a saved map offline', () => {
+    const precached = editorOfflinePrecacheFiles(manifest, installIcons, offlineRuntimeFiles);
+    const adaptive = editorAdaptiveFiles(manifest, installIcons, offlineRuntimeFiles);
+
+    expect(offlineRuntimeFiles.every((file) => precached.includes(file))).toBe(true);
+    expect(offlineRuntimeFiles.some((file) => adaptive.includes(file))).toBe(false);
+  });
+
   it('classifies lazy features and install artwork as adaptive assets', () => {
     expect(editorAdaptiveFiles(manifest, installIcons)).toEqual([
       'apple-touch-icon.png',
@@ -127,6 +141,25 @@ describe('PWA precache output', () => {
       'essential editor asset is not precached: assets/main.js',
       'adaptive editor asset is precached during first install: assets/dialog.js',
       'embed-only asset is precached: assets/embed.js',
+    ]);
+  });
+
+  it('reports a missing startup worker required by an offline reload', () => {
+    const precached = editorOfflinePrecacheFiles(
+      manifest,
+      installIcons,
+      offlineRuntimeFiles,
+    ).filter((file) => file !== offlineRuntimeFiles[0]);
+
+    expect(
+      verifyPrecacheOutput({
+        manifest,
+        installIcons,
+        precached,
+        offlineRuntimeFiles,
+      }),
+    ).toEqual([
+      'essential editor asset is not precached: assets/diagram-layout-worker-entry-a1b2c3.js',
     ]);
   });
 });

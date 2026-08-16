@@ -72,7 +72,11 @@ function workerView(view: RenderViewOptions): WorkerRenderView {
 }
 
 function workerInput(input: FeatureProjectionClientInput): FeatureProjectionWorkerInput {
-  return { ...input, view: workerView(input.view) };
+  // Prepared snapshots hold main-thread map adapters. Their `get` methods are
+  // not structured-clone data, so the worker must keep its own projection
+  // indexes until a serializable prepared-snapshot format exists.
+  const { preparedSnapshot: _preparedSnapshot, view, ...workerSafeInput } = input;
+  return { ...workerSafeInput, view: workerView(view) };
 }
 
 /**
