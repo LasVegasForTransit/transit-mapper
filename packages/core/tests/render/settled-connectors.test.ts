@@ -1,28 +1,36 @@
+import type { Feature } from 'geojson';
 import { describe, expect, it } from 'vitest';
 import { buildFeatures } from '../../src/render/buildFeatures';
 import { aRoad, aSystem } from '../support/fixtures.test';
 
+function featureProperty(feature: Feature, name: string): unknown {
+  return feature.properties?.[name];
+}
+
 describe('settled connector rendering', () => {
-  it('does not change committed connector geometry when junction selection changes', () => {
-    const eastWest = aRoad('east-west', [
-      [-0.01, 0],
+  it('renders permitted lane movements without requiring junction selection', () => {
+    const east = aRoad('east', [
       [0, 0],
       [0.01, 0],
     ]);
-    const northSouth = aRoad('north-south', [
-      [0, -0.01],
+    const west = aRoad('west', [
+      [0, 0],
+      [-0.01, 0],
+    ]);
+    const north = aRoad('north', [
       [0, 0],
       [0, 0.01],
     ]);
     const system = aSystem({
-      ways: [eastWest, northSouth],
+      ways: [east, west, north],
       nodes: [
         {
           id: 'junction',
           coord: [0, 0],
           refs: [
-            { wayId: eastWest.id, pointIndex: 1 },
-            { wayId: northSouth.id, pointIndex: 1 },
+            { wayId: east.id, pointIndex: 0 },
+            { wayId: west.id, pointIndex: 0 },
+            { wayId: north.id, pointIndex: 0 },
           ],
         },
       ],
@@ -45,10 +53,18 @@ describe('settled connector rendering', () => {
       },
     };
 
-    const unselected = buildFeatures(system, null, [], view).connectors;
+    const unselectedFeatures = buildFeatures(system, null, [], view);
     const selected = buildFeatures(system, { kind: 'node', id: 'junction' }, [], view).connectors;
+    const unselected = unselectedFeatures.connectors;
 
-    expect(unselected.features).toEqual([]);
+    expect(unselected.features).not.toEqual([]);
+    expect(
+      unselected.features.some(
+        (feature) =>
+          featureProperty(feature, 'nodeId') === 'junction' &&
+          featureProperty(feature, 'renderTier') === 'street',
+      ),
+    ).toBe(true);
     expect(selected).toEqual(unselected);
   });
 });

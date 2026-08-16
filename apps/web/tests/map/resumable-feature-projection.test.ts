@@ -289,7 +289,7 @@ describe('resumable geographic feature projection', () => {
     expect(plan.units.some((unit) => unit.primary.kind === 'group')).toBe(false);
   });
 
-  it('keeps selection-owned connector geometry out of the settled live source', () => {
+  it('keeps settled lane movements independent of junction selection', () => {
     const options = {
       system: portMasonLikeFixture(),
       selection: { kind: 'node' as const, id: 'downtown-junction' },
@@ -300,9 +300,11 @@ describe('resumable geographic feature projection', () => {
     };
 
     const full = buildFeaturesForSources(options);
+    const unselected = buildFeaturesForSources({ ...options, selection: null });
     const plan = readyPlan(planResumableGeographicFeatureProjection(options));
 
-    expect(full.connectors.features).toEqual([]);
+    expect(full.connectors.features).not.toEqual([]);
+    expect(full.connectors).toEqual(unselected.connectors);
     expect(plan.aggregate(plan.units.map((unit) => unit.run()))).toEqual(full);
   });
 
