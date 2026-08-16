@@ -105,8 +105,17 @@ function sourcePreparationUnit<Update>(
   if (!sourceCommit || !options.beforeSourceMutation) return null;
   if (!attempt.sourcePreparationStarted) {
     attempt.sourcePreparationStarted = true;
+    // Only this unit needs the registration. It hands control to the
+    // renderer's own source machinery, so its duration is not this
+    // scheduler's to divide or predict: it measured 7 ms against a 4 ms
+    // budget on an ordinary cold start. Without yielding it failed the
+    // publication every time, the bank transaction aborted, and no system of
+    // any size ever published a first scene. The polling and failure units
+    // below do no work, so they can never reach the budget check.
+    const id = `scene-publication:source-preparation:${sourceCommit.mode ?? 'legacy'}:${sourceCommit.bank ?? 'none'}`;
+    attempt.overBudgetYieldUnitIds.add(id);
     return {
-      id: `scene-publication:source-preparation:${sourceCommit.mode ?? 'legacy'}:${sourceCommit.bank ?? 'none'}`,
+      id,
       sliceExclusive: true,
       run: () => {
         try {

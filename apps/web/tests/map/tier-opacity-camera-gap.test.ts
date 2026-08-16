@@ -369,6 +369,14 @@ describe('tier opacity during camera and source-patch gaps', () => {
     expect(evaluateTierOpacity({ ...options, featureState: { selected: true } })).toBe(1);
   });
 
+  // Validating every layer against the full MapLibre style schema costs about
+  // six seconds on its own, so it overran Vitest's five-second default
+  // whenever the suite ran alongside anything else. The cost is the test, not
+  // a regression in it: state the budget rather than lose the coverage to a
+  // failure that only appears under load. Fifteen seconds clears that jitter
+  // while staying a real ceiling — a change that made validation several
+  // times more expensive should still fail here rather than quietly slow
+  // every run.
   it('passes full MapLibre 4.7 style validation', () => {
     const layers = createLayerSpecs(MAP_THEMES.light);
     const sourceIds = new Set<string>();
@@ -389,5 +397,5 @@ describe('tier opacity during camera and source-patch gaps', () => {
         layers,
       }),
     ).toEqual([]);
-  });
+  }, 15_000);
 });
