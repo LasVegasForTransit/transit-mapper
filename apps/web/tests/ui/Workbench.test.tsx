@@ -142,7 +142,7 @@ describe('Workbench responsive mounting', () => {
     const markup = renderWorkbench(false);
     const brandRow = markup.slice(markup.indexOf('class="panel-brand-row"'));
 
-    expect(brandRow.indexOf('aria-label="Hide outline"')).toBeGreaterThan(-1);
+    expect(brandRow.indexOf('aria-label="Hide interface"')).toBeGreaterThan(-1);
     expect(markup).not.toContain('class="panel-head"');
     expect(markup).not.toContain('>Network outline<');
   });
