@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.1](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.6.0...v0.6.1) (2026-08-16)
+
+
+### Bug Fixes
+
+* **web:** Move hide-interface control off the app menu ([ebe4749](https://github.com/LasVegasForTransit/transit-mapper/commit/ebe47499bcc3c3a75dc945cff4ee71c702e1efb7))
+* **web:** Stop calling a slow basemap a broken one ([#108](https://github.com/LasVegasForTransit/transit-mapper/issues/108)) ([f7f2631](https://github.com/LasVegasForTransit/transit-mapper/commit/f7f26316d74da452229dcf2b6ddf8f608a6ffa36))
+
 ## [0.6.0](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.5.1...v0.6.0) (2026-08-16)
 
 
