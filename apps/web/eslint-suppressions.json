@@ -56,9 +56,6 @@
     }
   },
   "scripts/perf/offline.ts": {
-    "@typescript-eslint/prefer-promise-reject-errors": {
-      "count": 3
-    },
     "max-lines-per-function": {
       "count": 1
     }
@@ -187,9 +184,6 @@
   "src/map/interactions.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 7
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 6
     },
     "@typescript-eslint/no-unsafe-argument": {
       "count": 2
@@ -424,9 +418,6 @@
       "count": 1
     },
     "max-nested-callbacks": {
-      "count": 1
-    },
-    "max-params": {
       "count": 1
     }
   },

@@ -319,7 +319,7 @@ describe('service editing affordances', () => {
       NETWORK_VIEW,
       null,
       null,
-      { activePatternId: 'line' } as never,
+      { activePatternId: 'line' },
     );
     const termini = (
       features as typeof features & {

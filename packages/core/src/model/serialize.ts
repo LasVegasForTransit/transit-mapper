@@ -566,7 +566,7 @@ function parseSkippedStops(raw: unknown): Partial<Record<RunDirection, string[]>
 function parseSections(raw: unknown[]): PatternSection[] {
   const out: PatternSection[] = [];
   for (const entry of raw) {
-    const r = entry as Record<string, unknown>;
+    const r = entry as Record<string, unknown> | null;
     if (!r) continue;
     if (r.kind === 'split') {
       const outbound = parseLegs(r.outbound).filter(isResolvedLeg);
@@ -655,7 +655,7 @@ function parsePatterns(raw: unknown, legacyWayIds: unknown): DraftPattern[] {
 }
 
 function parseLine(raw: unknown): Line | null {
-  const r = raw as Record<string, unknown>;
+  const r = raw as Record<string, unknown> | null;
   if (!r || typeof r.id !== 'string') return null;
   return {
     id: r.id,
@@ -666,7 +666,7 @@ function parseLine(raw: unknown): Line | null {
 }
 
 function parseCurrentService(raw: unknown): DraftService {
-  const r = raw as Record<string, unknown>;
+  const r = raw as Record<string, unknown> | null;
   if (!r || typeof r.id !== 'string') throw new Error('Bad service');
   const path = r.path as Record<string, unknown> | undefined;
   return {

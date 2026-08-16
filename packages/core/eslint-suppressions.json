@@ -127,9 +127,6 @@
     "@typescript-eslint/prefer-nullish-coalescing": {
       "count": 1
     },
-    "@typescript-eslint/prefer-optional-chain": {
-      "count": 2
-    },
     "complexity": {
       "count": 4
     },
@@ -198,7 +195,7 @@
   },
   "src/model/serialize.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 5
+      "count": 2
     },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 1
@@ -272,7 +269,7 @@
       "count": 1
     },
     "max-lines-per-function": {
-      "count": 2
+      "count": 1
     },
     "max-params": {
       "count": 1
@@ -282,14 +279,6 @@
     }
   },
   "src/render/featureMemo.ts": {
-    "sonarjs/cognitive-complexity": {
-      "count": 1
-    }
-  },
-  "src/render/mergeServiceLines.ts": {
-    "@typescript-eslint/prefer-for-of": {
-      "count": 2
-    },
     "sonarjs/cognitive-complexity": {
       "count": 1
     }
@@ -375,11 +364,6 @@
   "tests/model/validate.test.ts": {
     "@typescript-eslint/require-await": {
       "count": 2
-    }
-  },
-  "tests/render/buildFeatures.test.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
     }
   }
 }

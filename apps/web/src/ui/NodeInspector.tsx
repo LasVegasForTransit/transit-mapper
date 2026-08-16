@@ -116,6 +116,14 @@ function targetLane(
   return outbound[Math.max(0, outbound.length - 1 - fromRight)];
 }
 
+interface TurnToggle {
+  inArm: JunctionArm;
+  lane: LaneSpec;
+  laneIndex: number;
+  inboundCount: number;
+  turn: Exclude<TurnClass, 'uturn'>;
+}
+
 export function NodeInspector({ id }: NodeInspectorProps) {
   const node = useEditor((s) => s.system.nodes.find((n) => n.id === id));
   const ways = useEditor((s) => s.system.ways);
@@ -202,13 +210,7 @@ export function NodeInspector({ id }: NodeInspectorProps) {
       : byAngle;
   };
 
-  const toggleTurn = (
-    inArm: JunctionArm,
-    lane: LaneSpec,
-    laneIndex: number,
-    inboundCount: number,
-    turn: Exclude<TurnClass, 'uturn'>,
-  ) => {
+  const toggleTurn = ({ inArm, lane, laneIndex, inboundCount, turn }: TurnToggle) => {
     const targets = turnTargets(inArm, lane, turn);
     if (targets.length === 0) return;
     const targetWayIds = new Set(targets.map((a) => a.wayId));
@@ -304,7 +306,15 @@ export function NodeInspector({ id }: NodeInspectorProps) {
                                 ? `${turn} turn restricted`
                                 : `${turn} turn`
                             }
-                            onClick={() => toggleTurn(arm, lane, i, inbound.length, turn)}
+                            onClick={() =>
+                              toggleTurn({
+                                inArm: arm,
+                                lane,
+                                laneIndex: i,
+                                inboundCount: inbound.length,
+                                turn,
+                              })
+                            }
                           >
                             {TURN_GLYPH[turn]}
                           </button>
