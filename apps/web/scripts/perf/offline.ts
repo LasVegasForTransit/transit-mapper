@@ -11,7 +11,7 @@ import {
   PERF_STORAGE_CONTRACT,
 } from './browserContract';
 import { waitForLoadedDocument } from './journeys';
-import { networkEditStopId } from './offline-edit-target';
+import { networkEditStopCandidates } from './offline-edit-target';
 
 const PWA_RUNTIME_REPORT_FILENAME = 'pwa-runtime-report.json';
 
@@ -24,6 +24,19 @@ interface OfflineEditProof {
   stopId: string;
   before: OfflineStopSnapshot;
   after: OfflineStopSnapshot;
+}
+
+interface RenderedStopCandidate {
+  readonly id: string;
+  readonly coord: LngLat;
+}
+
+interface RenderedStopTarget {
+  readonly id: string | null;
+  readonly inspected: readonly {
+    readonly id: string;
+    readonly layerIds: readonly string[];
+  }[];
 }
 
 interface OfflineRuntimeReport {
@@ -40,6 +53,44 @@ interface OfflineRuntimeReport {
   };
   overlay: BrowserOverlaySnapshot;
   edit: OfflineEditProof;
+}
+
+async function waitForOfflineRenderer(
+  page: import('playwright-core').Page,
+  offlineFailures: readonly string[],
+): Promise<void> {
+  try {
+    await page.waitForFunction(
+      () => {
+        const overlay = (window as PerfPageWindow).__perfOverlaySnapshot?.();
+        return (
+          overlay !== undefined &&
+          overlay.sourceExists &&
+          overlay.layerExists &&
+          overlay.symbolLayerExists &&
+          overlay.overlayHealthy &&
+          overlay.sourceLoaded &&
+          overlay.featureCount > 0
+        );
+      },
+      undefined,
+      { timeout: 30_000 },
+    );
+  } catch (error) {
+    const renderer = await page.evaluate(() => ({
+      overlay: (window as PerfPageWindow).__perfOverlaySnapshot?.() ?? null,
+      banks: (window as PerfPageWindow).__perfRenderSourceBankSnapshot?.() ?? null,
+      projections: (window as PerfPageWindow).__mapProjectionCounts?.() ?? null,
+      rendererStats: (window as PerfPageWindow).__rendererStats?.() ?? null,
+    }));
+    throw new Error(
+      `The offline renderer did not publish a scene: ${JSON.stringify({
+        renderer,
+        offlineFailures,
+      })}.`,
+      { cause: error },
+    );
+  }
 }
 
 async function verifyLegacyMigration(page: import('playwright-core').Page, id: string) {
@@ -94,7 +145,12 @@ async function verifyOfflineStopEdit(
     const snapshot = (window as PerfPageWindow).__perfStopSnapshot?.(targetId);
     const project = (window as PerfPageWindow).__perfProjectLngLat;
     if (!snapshot || !project) throw new Error('The offline editor seams are unavailable.');
-    return { snapshot, point: project(snapshot.coord) };
+    return {
+      snapshot,
+      point: project(snapshot.coord),
+      renderedFeatures: (window as PerfPageWindow).__perfRenderedFeaturesAt?.(snapshot.coord) ?? [],
+      layerVisibility: (window as PerfPageWindow).__perfRendererLayerVisibility?.() ?? [],
+    };
   }, stopId);
   const canvas = await page.locator('.maplibregl-canvas').first().boundingBox();
   if (
@@ -125,13 +181,46 @@ async function verifyOfflineStopEdit(
     after.revision === before.snapshot.revision ||
     (after.coord[0] === before.snapshot.coord[0] && after.coord[1] === before.snapshot.coord[1])
   ) {
-    throw new Error('The cache-evicted offline editor did not commit the Stop edit.');
+    throw new Error(
+      `The cache-evicted offline editor did not commit the Stop edit: ${JSON.stringify({
+        before,
+        after,
+      })}.`,
+    );
   }
   return {
     stopId,
     before: before.snapshot,
     after,
   };
+}
+
+/** The source can contain a density-selected subset of served stops. This
+ * confirms the point that the browser will drag, instead of assuming the
+ * nearest model stop survived the current presentation's density policy. */
+async function renderedNetworkStopId(
+  page: import('playwright-core').Page,
+  candidates: readonly RenderedStopCandidate[],
+): Promise<string> {
+  const target = await page.evaluate((candidateStops): RenderedStopTarget => {
+    const renderedFeaturesAt = (window as PerfPageWindow).__perfRenderedFeaturesAt;
+    if (!renderedFeaturesAt) throw new Error('The offline rendered-feature seam is unavailable.');
+    const inspected = candidateStops.map((stop) => ({
+      id: stop.id,
+      layerIds: renderedFeaturesAt(stop.coord)
+        .filter((feature) => feature.properties.id === stop.id)
+        .map((feature) => feature.layerId),
+    }));
+    const visible = inspected.find((stop) =>
+      stop.layerIds.some((layerId) => layerId.startsWith('tm-stations--bank-')),
+    );
+    return { id: visible?.id ?? null, inspected };
+  }, candidates);
+  if (target.id) return target.id;
+  throw new Error(
+    `The cache-evicted offline renderer did not expose a served Stop for editing: ` +
+      JSON.stringify(target.inspected),
+  );
 }
 
 export async function verifyCacheEvictedOfflineReload(
@@ -151,6 +240,16 @@ export async function verifyCacheEvictedOfflineReload(
   const page = await context.newPage();
   const session = await context.newCDPSession(page);
   const fixture = generatePerfFixture('small');
+  const failedOfflineRequests: string[] = [];
+  const offlinePageErrors: string[] = [];
+  const offlineConsoleErrors: string[] = [];
+  const recordFailedOfflineRequest = (request: import('playwright-core').Request) => {
+    failedOfflineRequests.push(request.url());
+  };
+  const recordOfflinePageError = (error: Error) => offlinePageErrors.push(error.message);
+  const recordOfflineConsoleError = (message: import('playwright-core').ConsoleMessage) => {
+    if (message.type() === 'error') offlineConsoleErrors.push(message.text());
+  };
   try {
     await page.goto(`${previewUrl}/favicon.svg`, { waitUntil: 'load', timeout: 60_000 });
     await seedLegacyFixture(page, JSON.stringify(fixture), fixture.id);
@@ -199,6 +298,9 @@ export async function verifyCacheEvictedOfflineReload(
 
     // Every local byte for this reload must come from Workbox, not HTTP cache.
     await session.send('Network.clearBrowserCache');
+    page.on('requestfailed', recordFailedOfflineRequest);
+    page.on('pageerror', recordOfflinePageError);
+    page.on('console', recordOfflineConsoleError);
     await context.setOffline(true);
     await page.reload({ waitUntil: 'load', timeout: 60_000 });
     await waitForLoadedDocument(page);
@@ -209,29 +311,20 @@ export async function verifyCacheEvictedOfflineReload(
           `"${fixture.name}".`,
       );
     }
-    await page.waitForFunction(
-      () => {
-        const overlay = (window as PerfPageWindow).__perfOverlaySnapshot?.();
-        return (
-          overlay !== undefined &&
-          overlay.sourceExists &&
-          overlay.layerExists &&
-          overlay.symbolLayerExists &&
-          overlay.overlayHealthy &&
-          overlay.sourceLoaded &&
-          overlay.featureCount > 0
-        );
-      },
-      undefined,
-      { timeout: 30_000 },
-    );
+    await waitForOfflineRenderer(page, [
+      ...failedOfflineRequests,
+      ...offlinePageErrors,
+      ...offlineConsoleErrors,
+    ]);
     const overlay = await page.evaluate(() => {
       const snapshot = (window as PerfPageWindow).__perfOverlaySnapshot?.();
       if (!snapshot) throw new Error('The offline overlay proof seam is unavailable.');
       return snapshot;
     });
-    const stopId = networkEditStopId(fixture);
-    if (!stopId) throw new Error('The offline fixture has no visible Stop edit target.');
+    const stopId = await renderedNetworkStopId(
+      page,
+      networkEditStopCandidates(fixture).map((stop) => ({ id: stop.id, coord: stop.coord })),
+    );
     const edit = await verifyOfflineStopEdit(page, stopId);
 
     const report: OfflineRuntimeReport = {
@@ -256,6 +349,9 @@ export async function verifyCacheEvictedOfflineReload(
     );
     console.log('PWA runtime: cache-evicted offline editor reload passed.');
   } finally {
+    page.off('requestfailed', recordFailedOfflineRequest);
+    page.off('pageerror', recordOfflinePageError);
+    page.off('console', recordOfflineConsoleError);
     await context.setOffline(false).catch(() => undefined);
     await closeContext(context);
   }

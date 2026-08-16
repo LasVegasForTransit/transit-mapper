@@ -108,6 +108,7 @@ import {
   attachInitialStyleFallback,
   INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
 } from './initialStyleFallback';
+import { attachInitialMapReady } from './initial-map-ready';
 import { initLiveCamera, setLiveCamera } from '../camera/liveCamera';
 import { attachPerfHarness } from '../perf';
 import { markFirstSystemMapPaint, systemPaintReady } from '../perf/mapPaintMark';
@@ -115,7 +116,7 @@ import { createRendererStatsCollector } from '../perf/renderer-stats';
 import { attachSimDevHandle } from '../sim/devHandle';
 import { attachVehicleAnimation } from '../sim/vehicles';
 import { clearArmedTerminusForViewChange } from './viewEditorState';
-import { basemapStyleForScheme, layerSpecsForScheme } from './mapTheme';
+import { initialEditorStyleForScheme, layerSpecsForScheme } from './mapTheme';
 import { createStyleSwitchController, type StyleSwitchController } from './styleSwitchController';
 import { createMapStyleFeatureDataRecovery, recoverMapStyleState } from './styleRecovery';
 import {
@@ -427,7 +428,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: basemapStyleForScheme(initialColorScheme),
+      style: initialEditorStyleForScheme(initialColorScheme),
       center: initial.viewport.center,
       zoom: initial.viewport.zoom,
       // No preserveDrawingBuffer: PNG export renders on a dedicated offscreen
@@ -1602,7 +1603,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       onUnavailable: () => basemapFailureRef.current?.(),
     });
 
-    map.on('load', () => {
+    attachInitialMapReady(map, () => {
       // MapLibre's compact attribution starts expanded once (its own default
       // "first impression" behavior, applied asynchronously as style/source
       // data loads — too late to undo right after addControl) and only
@@ -1834,10 +1835,12 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
           if (!gestureProjectionAborted && gestureProjection)
             applyGestureProjectionResult(gestureProjection.project(s.system));
           else fullAfterGesture = true;
-        } else if (map.getSource(activeRenderSourceId(SRC_SERVICES))) {
-          // Build and upload only dependencies whose GeoJSON may differ.
-          // Unrequested feature phases never traverse or allocate their
-          // RTC-scale collections.
+        } else {
+          // The first document can arrive after MapLibre created the empty
+          // editor shell but before either bank has published. Do not wait for
+          // an active source in that case: the renderer owns first-bank
+          // creation, and skipping this request leaves the warm reload on the
+          // shell's empty scene forever.
           if (changedSources.includes(SRC_STATIONS) && stopSettlement.ownsPreview()) {
             // Undo, delete, and Inspector edits can supersede an in-flight
             // station diff. Keep the newest geometry truthful in the scratch

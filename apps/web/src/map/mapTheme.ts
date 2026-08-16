@@ -9,6 +9,18 @@ export function basemapStyleForScheme(scheme: ColorScheme): string {
   return MAP_THEMES[scheme].basemapStyle;
 }
 
+/**
+ * A remote style failure can leave MapLibre's first style transition unable to
+ * initialize the editor overlay. When the browser already knows it is
+ * offline, begin with the local drafting style instead of making that request.
+ */
+export function initialEditorStyleForScheme(
+  scheme: ColorScheme,
+  online: boolean = navigator.onLine,
+): string | StyleSpecification {
+  return online ? basemapStyleForScheme(scheme) : localBlankStyleForScheme(scheme);
+}
+
 export function layerSpecsForScheme(scheme: ColorScheme) {
   return createLayerSpecs(MAP_THEMES[scheme]);
 }

@@ -10,6 +10,7 @@ import {
   MAP_THEMES,
   type MapTheme,
   basemapStyleForScheme,
+  initialEditorStyleForScheme,
   layerSpecsForScheme,
   localBlankStyleForScheme,
 } from '../../src/map/mapTheme';
@@ -35,6 +36,10 @@ describe('map themes', () => {
       id: 'transitmapper-local-background',
       paint: { 'background-color': MAP_THEMES.dark.background },
     });
+  });
+
+  it('starts on the local drafting style when the editor opens offline', () => {
+    expect(initialEditorStyleForScheme('dark', false)).toEqual(localBlankStyleForScheme('dark'));
   });
 
   it('leaves the local canvas transparent so the editor drafting surface remains visible', () => {

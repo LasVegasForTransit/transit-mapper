@@ -379,8 +379,9 @@ growth.
 
 ## What “offline” means
 
-The service worker keeps the editor HTML, eager and lazy editor chunks, local
-icons, and install metadata. The browser check writes a fixture once through
+The service worker keeps the editor HTML, eager and lazy editor chunks, the
+three Workers that deserialize storage, lay out diagrams, and project map
+features, local icons, and install metadata. The browser check writes a fixture once through
 the real legacy `localStorage` keys, loads the editor, and proves the
 application migrated both the complete document and library row into
 IndexedDB and removed the legacy document. It then installs the worker, clears

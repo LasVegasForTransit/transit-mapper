@@ -26,6 +26,7 @@ export interface VerifyPrecacheOutputOptions {
   manifest: BuildManifest;
   installIcons: readonly string[];
   precached: string[];
+  offlineRuntimeFiles?: readonly string[];
 }
 
 /**
@@ -61,6 +62,15 @@ const EDITOR_ADAPTIVE_PUBLIC_ASSETS = [
   'favicon-32x32.png',
   'favicon-dark-16x16.png',
   'favicon-dark-32x32.png',
+] as const;
+
+/** Vite emits these workers as asset URLs rather than manifest imports. The
+ * editor needs them to read a saved system, lay it out, and project map
+ * features after the network disappears. */
+const OFFLINE_EDITOR_WORKER_PREFIXES = [
+  'assets/diagram-layout-worker-entry-',
+  'assets/feature-projection-worker-entry-',
+  'assets/storage-deserializer-worker-',
 ] as const;
 
 function entryKey(manifest: BuildManifest, name: 'main' | 'embed'): string {
@@ -125,11 +135,41 @@ export function editorPrecacheFiles(
   return [...entryGraph(manifest, 'main', false), ...EDITOR_ESSENTIAL_PUBLIC_ASSETS].sort();
 }
 
+function offlineEditorWorkerFiles(files: readonly string[]): string[] {
+  return files
+    .map((file) => file.replace(/^\/+/, ''))
+    .filter(
+      (file) =>
+        file.endsWith('.js') &&
+        OFFLINE_EDITOR_WORKER_PREFIXES.some((prefix) => file.startsWith(prefix)),
+    )
+    .sort();
+}
+
+/** The editor shell and the workers that load a saved document into an
+ * editable map. Import, export, and preview workers remain adaptive because
+ * offline map startup never invokes them. */
+export function editorOfflinePrecacheFiles(
+  manifest: BuildManifest,
+  installIcons: readonly string[],
+  outputFiles: readonly string[],
+): string[] {
+  return [
+    ...new Set([
+      ...editorPrecacheFiles(manifest, installIcons),
+      ...offlineEditorWorkerFiles(outputFiles),
+    ]),
+  ].sort();
+}
+
 export function editorAdaptiveFiles(
   manifest: BuildManifest,
   installIcons: readonly string[],
+  offlineRuntimeFiles: readonly string[] = [],
 ): string[] {
-  const essential = new Set(editorPrecacheFiles(manifest, installIcons));
+  const essential = new Set(
+    editorOfflinePrecacheFiles(manifest, installIcons, offlineRuntimeFiles),
+  );
   return [...entryGraph(manifest, 'main', true), ...EDITOR_ADAPTIVE_PUBLIC_ASSETS, ...installIcons]
     .filter((file) => !essential.has(file))
     .sort();
@@ -145,12 +185,17 @@ export function embedOnlyFiles(manifest: BuildManifest, installIcons: readonly s
 
 export function verifyPrecacheOutput(options: VerifyPrecacheOutputOptions): string[] {
   const precached = new Set(options.precached);
-  const failures = editorPrecacheFiles(options.manifest, options.installIcons)
+  const offlineRuntimeFiles = options.offlineRuntimeFiles ?? [];
+  const failures = editorOfflinePrecacheFiles(
+    options.manifest,
+    options.installIcons,
+    offlineRuntimeFiles,
+  )
     .filter((file) => !precached.has(file))
     .map((file) => `essential editor asset is not precached: ${file}`);
 
   failures.push(
-    ...editorAdaptiveFiles(options.manifest, options.installIcons)
+    ...editorAdaptiveFiles(options.manifest, options.installIcons, offlineRuntimeFiles)
       .filter((file) => precached.has(file))
       .map((file) => `adaptive editor asset is precached during first install: ${file}`),
   );

@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GeoJSONSource, Map as MLMap } from 'maplibre-gl';
 import {
   attachSourceUploadMeter,
+  rendererPerfFeaturesAt,
   rendererPerfFeatureStatesAt,
   rendererPerfFilterSnapshot,
+  rendererPerfLayerVisibility,
   rendererPerfMapScheme,
   type PerfRenderSourceBankSnapshot,
 } from '../../src/perf';
@@ -111,7 +113,11 @@ describe('renderer acceptance observations', () => {
     stagingBank: null,
     activeRevision: 'accepted',
     activeVisualSourceIds: ['tm-ways--bank-a', 'tm-services--bank-a'],
-    activeVisualLayerIds: ['tm-ways-solid--bank-a', 'tm-services-solid--bank-a'],
+    activeVisualLayerIds: [
+      'tm-ways-solid--bank-a',
+      'tm-services-solid--bank-a',
+      'tm-stations--bank-a',
+    ],
     activeVisualSourceId: 'tm-ways--bank-a',
     activeHitSourceId: 'tm-hit-features--bank-a',
     activeHitLayerIds: ['tm-services-hit--bank-a'],
@@ -162,6 +168,30 @@ describe('renderer acceptance observations', () => {
     ]);
   });
 
+  it('reports the active-bank feature that a pointer can target', () => {
+    const map = {
+      project: () => ({ x: 120, y: 240 }),
+      getLayer: () => ({}),
+      queryRenderedFeatures: () => [
+        {
+          source: 'tm-stations--bank-a',
+          id: 'stop:port-mason-central',
+          layer: { id: 'tm-stations--bank-a' },
+          properties: { id: 'port-mason-central', name: 'Central' },
+        },
+      ],
+    } as unknown as MLMap;
+
+    expect(rendererPerfFeaturesAt(map, bankSnapshot, [-122.456, 37.758])).toEqual([
+      {
+        sourceId: 'tm-stations--bank-a',
+        layerId: 'tm-stations--bank-a',
+        featureId: 'stop:port-mason-central',
+        properties: { id: 'port-mason-central', name: 'Central' },
+      },
+    ]);
+  });
+
   it('serializes the applied filters for every active bank layer', () => {
     const map = {
       getLayer: () => ({}),
@@ -178,9 +208,26 @@ describe('renderer acceptance observations', () => {
         filter: ['==', ['get', 'layer'], 'tm-services-solid--bank-a'],
       },
       {
+        layerId: 'tm-stations--bank-a',
+        filter: ['==', ['get', 'layer'], 'tm-stations--bank-a'],
+      },
+      {
         layerId: 'tm-ways-solid--bank-a',
         filter: ['==', ['get', 'layer'], 'tm-ways-solid--bank-a'],
       },
     ]);
+  });
+
+  it('reports whether each active-bank layer can contribute to a hit test', () => {
+    const map = {
+      getLayer: () => ({}),
+      getLayoutProperty: (layerId: string, property: string) =>
+        property === 'visibility' && layerId === 'tm-stations--bank-a' ? 'none' : 'visible',
+    } as unknown as MLMap;
+
+    expect(rendererPerfLayerVisibility(map, bankSnapshot)).toContainEqual({
+      layerId: 'tm-stations--bank-a',
+      visibility: 'none',
+    });
   });
 });

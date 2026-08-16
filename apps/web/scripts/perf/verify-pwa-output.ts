@@ -4,6 +4,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import {
   editorAdaptiveFiles,
+  editorOfflinePrecacheFiles,
   editorPrecacheFiles,
   embedOnlyFiles,
   manifestInstallIconFiles,
@@ -111,10 +112,19 @@ async function main(): Promise<void> {
   ) as WebAppManifest;
   const installIcons = manifestInstallIconFiles(webAppManifest);
   const serviceWorker = await readFile(SERVICE_WORKER_PATH, 'utf8');
-  const expectedEssentialAssets = editorPrecacheFiles(manifest, installIcons);
+  const eagerEditorAssets = editorPrecacheFiles(manifest, installIcons);
+  const candidateEditorAssets = await referencedBuildAssets([
+    ...eagerEditorAssets,
+    ...editorAdaptiveFiles(manifest, installIcons),
+  ]);
+  const expectedEssentialAssets = editorOfflinePrecacheFiles(
+    manifest,
+    installIcons,
+    candidateEditorAssets,
+  );
   const completeEditorAssets = await referencedBuildAssets([
     ...expectedEssentialAssets,
-    ...editorAdaptiveFiles(manifest, installIcons),
+    ...editorAdaptiveFiles(manifest, installIcons, candidateEditorAssets),
   ]);
   const essentialSet = new Set(expectedEssentialAssets);
   const expectedAdaptiveAssets = completeEditorAssets.filter((file) => !essentialSet.has(file));
@@ -127,6 +137,7 @@ async function main(): Promise<void> {
     manifest,
     installIcons,
     precached: precachedAssets,
+    offlineRuntimeFiles: candidateEditorAssets,
   });
 
   failures.push(

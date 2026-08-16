@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import type { Plugin } from 'vite';
 import {
   editorAdaptiveFiles,
+  editorOfflinePrecacheFiles,
   editorPrecacheFiles,
   manifestInstallIconFiles,
   referencedBuildAssetFiles,
@@ -41,7 +42,13 @@ export function filterEssentialPrecacheEntries<T extends PrecacheEntry>(
   entries: readonly T[],
   manifest: BuildManifest,
 ): T[] {
-  const essential = new Set(editorPrecacheFiles(manifest, []));
+  const essential = new Set(
+    editorOfflinePrecacheFiles(
+      manifest,
+      [],
+      entries.map((entry) => entry.url),
+    ),
+  );
   return entries.filter((entry) => essential.has(entry.url.replace(/^\/+/, '')));
 }
 
@@ -107,8 +114,16 @@ async function writeAdaptiveAssetManifest({
     await readFile(resolve(distDirectory, 'manifest.json'), 'utf8'),
   ) as WebAppManifest;
   const installIcons = manifestInstallIconFiles(webAppManifest);
-  const essential = new Set(editorPrecacheFiles(viteManifest, installIcons));
-  const editorFiles = [...essential, ...editorAdaptiveFiles(viteManifest, installIcons)];
+  const eager = editorPrecacheFiles(viteManifest, installIcons);
+  const candidates = await discoverReferencedBuildAssets(
+    [...eager, ...editorAdaptiveFiles(viteManifest, installIcons)],
+    (file) => readFile(resolve(distDirectory, file), 'utf8'),
+  );
+  const essential = new Set(editorOfflinePrecacheFiles(viteManifest, installIcons, candidates));
+  const editorFiles = [
+    ...essential,
+    ...editorAdaptiveFiles(viteManifest, installIcons, candidates),
+  ];
   const reachable = await discoverReferencedBuildAssets(editorFiles, (file) =>
     readFile(resolve(distDirectory, file), 'utf8'),
   );
