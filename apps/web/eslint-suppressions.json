@@ -39,9 +39,6 @@
     "@typescript-eslint/prefer-optional-chain": {
       "count": 1
     },
-    "@typescript-eslint/prefer-promise-reject-errors": {
-      "count": 2
-    },
     "complexity": {
       "count": 1
     },

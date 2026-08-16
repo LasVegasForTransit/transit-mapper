@@ -232,7 +232,12 @@ class RenderPreparationPipeline {
       ...(tolerateBudgetOverrun || overBudgetYieldUnitIds.size > 0
         ? {
             overBudgetUnitPolicy: 'yield' as const,
-            ...(overBudgetYieldUnitIds.size > 0 ? { overBudgetYieldUnitIds } : {}),
+            // A tolerant attempt yields for every unit, so naming ids here
+            // would narrow it rather than widen it. The accumulated set only
+            // applies while the attempt is still selective.
+            ...(!tolerateBudgetOverrun && overBudgetYieldUnitIds.size > 0
+              ? { overBudgetYieldUnitIds }
+              : {}),
           }
         : {}),
       retainResults: false,
@@ -260,6 +265,12 @@ class RenderPreparationPipeline {
       this.finish();
       return;
     }
+    // Every retry below must be strictly weaker than the attempt it replaces:
+    // the batch only shrinks, the yield set only grows, and tolerance only
+    // turns on. Dropping either of the latter two let a plan overrun clear
+    // the tolerance an entity overrun had just earned, so the two traded the
+    // relaxation back and forth and the pipeline never converged on a
+    // document that overran both.
     if (
       settlement.status === 'failed' &&
       settlement.error instanceof CooperativeRenderUnitBudgetError &&
@@ -269,15 +280,23 @@ class RenderPreparationPipeline {
       // Planning creates the lazy work sequence. It does not process an
       // entity, so shrinking every later entity batch after a cold JIT or GC
       // pause turns one missed frame into thousands of needless frames.
-      this.scheduleAttempt(attempt.entityChunkSize, false, new Set([settlement.error.unitId]));
+      this.scheduleAttempt(
+        attempt.entityChunkSize,
+        attempt.tolerateBudgetOverrun,
+        new Set([...attempt.overBudgetYieldUnitIds, settlement.error.unitId]),
+      );
       return;
     }
     if (retryable(attempt, settlement) && attempt.entityChunkSize > 1) {
-      this.scheduleAttempt(Math.max(1, Math.floor(attempt.entityChunkSize / 2)));
+      this.scheduleAttempt(
+        Math.max(1, Math.floor(attempt.entityChunkSize / 2)),
+        attempt.tolerateBudgetOverrun,
+        attempt.overBudgetYieldUnitIds,
+      );
       return;
     }
     if (retryable(attempt, settlement) && !attempt.tolerateBudgetOverrun) {
-      this.scheduleAttempt(1, true);
+      this.scheduleAttempt(1, true, attempt.overBudgetYieldUnitIds);
       return;
     }
     const resolution = resolveSnapshot(attempt, settlement);
