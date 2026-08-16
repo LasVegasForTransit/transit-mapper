@@ -4,14 +4,6 @@
       "count": 1
     }
   },
-  "scripts/build-metadata.ts": {
-    "@typescript-eslint/prefer-nullish-coalescing": {
-      "count": 2
-    },
-    "complexity": {
-      "count": 1
-    }
-  },
   "scripts/generate-app-icons.ts": {
     "complexity": {
       "count": 1
@@ -38,14 +30,6 @@
     },
     "max-lines-per-function": {
       "count": 2
-    }
-  },
-  "scripts/perf/cli.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "sonarjs/cognitive-complexity": {
-      "count": 1
     }
   },
   "scripts/perf/journeys.ts": {
@@ -79,27 +63,6 @@
       "count": 1
     }
   },
-  "scripts/perf/orchestrator.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "scripts/perf/process.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 5
-    },
-    "@typescript-eslint/prefer-optional-chain": {
-      "count": 1
-    }
-  },
-  "scripts/perf/report-bundle.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
-    }
-  },
   "scripts/perf/scenarioRuns.ts": {
     "max-lines-per-function": {
       "count": 1
@@ -123,19 +86,8 @@
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 2
     },
-    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
-    }
-  },
-  "src/device/media-query.ts": {
-    "@typescript-eslint/no-deprecated": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 3
     }
   },
   "src/editor/pointerIntent.ts": {
@@ -170,11 +122,6 @@
     }
   },
   "src/import/waitForQuiet.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    }
-  },
-  "src/main.tsx": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
@@ -282,14 +229,6 @@
       "count": 3
     }
   },
-  "src/map/stationGestureSettlement.ts": {
-    "@typescript-eslint/unbound-method": {
-      "count": 5
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/map/styleSwitchController.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 3
@@ -326,14 +265,6 @@
   "src/network/fetchWithTimeout.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
-    }
-  },
-  "src/perf/budget.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "@typescript-eslint/prefer-optional-chain": {
-      "count": 2
     }
   },
   "src/perf/panBench.ts": {
@@ -479,11 +410,6 @@
       "count": 1
     }
   },
-  "src/ui/Modal.tsx": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    }
-  },
   "src/ui/NodeInspector.tsx": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
@@ -582,11 +508,6 @@
     "max-lines": {
       "count": 1
     },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/ui/about-dialog.tsx": {
     "max-lines-per-function": {
       "count": 1
     }
@@ -735,11 +656,6 @@
       "count": 3
     }
   },
-  "tests/perf/soakSettlement.test.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
   "tests/pwa/install.test.ts": {
     "@typescript-eslint/require-await": {
       "count": 1
@@ -762,7 +678,7 @@
   },
   "tests/storage/bootstrapLibrary.test.ts": {
     "@typescript-eslint/require-await": {
-      "count": 8
+      "count": 7
     },
     "@typescript-eslint/unbound-method": {
       "count": 2
@@ -792,11 +708,6 @@
   "tests/storage/persistenceCoordinator.test.ts": {
     "@typescript-eslint/require-await": {
       "count": 4
-    }
-  },
-  "tests/ui/about-dialog.test.tsx": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
     }
   },
   "tests/ui/onboarding/fixtureProjection.test.ts": {
