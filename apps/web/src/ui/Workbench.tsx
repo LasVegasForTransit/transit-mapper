@@ -573,8 +573,7 @@ interface MenuCardProps {
  *  its content (not stretched full-height) so collapsing the workspace actually
  *  shrinks the card instead of leaving a tall empty rectangle below it. */
 function MenuCard({ brand, children }: MenuCardProps) {
-  const [collapsed, setCollapsed] = useState(false);
-  const { uiHidden } = useUi();
+  const { uiHidden, toggleUi } = useUi();
   const { viewMode } = useView();
   const cardRef = useRef<HTMLElement | null>(null);
   const openWidthRef = useRef(0);
@@ -658,14 +657,14 @@ function MenuCard({ brand, children }: MenuCardProps) {
         <div className="panel-brand-row">
           {brand}
           <IconButton
-            icon={collapsed ? 'panelOpen' : 'sidebar'}
+            icon={uiHidden ? 'panelOpen' : 'sidebar'}
             size={16}
-            label={collapsed ? 'Show outline' : 'Hide outline'}
-            onClick={() => setCollapsed((current) => !current)}
+            label={uiHidden ? 'Show interface' : 'Hide interface'}
+            onClick={toggleUi}
           />
         </div>
       </div>
-      <div className={`collapsible ${collapsed ? 'collapsed' : ''}`}>
+      <div className="collapsible">
         <div className="collapsible-inner">{children}</div>
       </div>
     </Panel>

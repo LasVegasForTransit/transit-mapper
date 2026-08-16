@@ -25,7 +25,7 @@ export function FileMenu() {
   // value anyway). Read it imperatively instead.
   const store = useEditorStore();
   const readOnly = useEditor((s) => s.readOnly);
-  const { openDialog, openNewSystemLocation, toggleUi, uiHidden } = useUi();
+  const { openDialog, openNewSystemLocation } = useUi();
 
   return (
     <DropdownMenu
@@ -66,11 +66,6 @@ export function FileMenu() {
           <DropdownMenuSeparator />
         </>
       )}
-      <DropdownMenuItem onSelect={toggleUi}>
-        <Icon name={uiHidden ? 'panelOpen' : 'sidebar'} size={17} />
-        {uiHidden ? 'Show interface' : 'Hide interface'}
-      </DropdownMenuItem>
-      <DropdownMenuSeparator />
       <DropdownMenuItem onSelect={() => openDialog('about')}>
         <span className="dropdown-menu-icon-spacer" aria-hidden="true" /> About TransitMapper…
       </DropdownMenuItem>
