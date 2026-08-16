@@ -1249,9 +1249,6 @@ input[type='range'] {
   overflow: hidden;
   transition: max-height 220ms var(--motion-chrome-curve);
 }
-.collapsible.collapsed {
-  max-height: 0;
-}
 /* The workspace list's own long hint text has to lose its natural width too,
    not just its height,
    or the "auto"-width card stays exactly as wide as it was before. */
