@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   compareBundleReports,
   createDeliveryGraphs,
+  initialDeliverySizes,
   parseBundleReportArguments,
   writeBundleReportArtifacts,
   type BundleGraphReport,
@@ -177,6 +178,22 @@ function report(
 }
 
 describe('bundle report delivery graphs', () => {
+  it('budgets only the eager editor graph that a first load transfers', () => {
+    const graphs = deliveryGraphs();
+    const main = required(
+      graphs.entries.find((entry) => entry.entry === 'main'),
+      'main entry',
+    );
+
+    expect(initialDeliverySizes(graphs.entries)).toContainEqual({
+      entry: 'main',
+      rawBytes: main.eager.rawBytes,
+      gzipBytes: main.eager.gzipBytes,
+      brotliBytes: main.eager.brotliBytes,
+    });
+    expect(main.complete.gzipBytes).toBeGreaterThan(main.eager.gzipBytes);
+  });
+
   it('separates each entry static closure from files reached only through dynamic imports', () => {
     const graphs = deliveryGraphs();
     const main = required(

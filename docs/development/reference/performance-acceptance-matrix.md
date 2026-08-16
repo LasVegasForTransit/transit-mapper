@@ -13,15 +13,15 @@ capability is disabled.
 
 ## Automated Chrome gate
 
-| Surface  | Scale                    | Journey                                             | Required evidence                                                                                              |
-| -------- | ------------------------ | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Editor   | Small, dense, RTC-shaped | Cold load, warm reload, meaningful system paint     | LCP, CLS, transfer, long tasks, heap, and network counters                                                     |
-| Editor   | Small, dense, RTC-shaped | Station drag, camera drag, line draw                | Trusted input-to-paint, action-scoped MapLibre frames, model revision, projection phases, and source uploads   |
-| Editor   | RTC-shaped               | Ten-minute pan, edit/undo, and export-dialog cycle  | Heap, DOM nodes, listeners, workers, and WebGL contexts return within 10% of the warmed baseline               |
-| Share    | Large publishable        | Cold/warm load and camera drag                      | LCP, CLS, transfer, meaningful system paint, input-to-paint, and MapLibre frames                               |
-| Embed    | Large publishable        | Cold/warm load and camera drag                      | LCP, CLS, transfer, meaningful system paint, and input-to-paint                                                |
-| PWA      | Small                    | Install, clear HTTP cache, disconnect, reload, edit | Cached editor graph, local blank-map fallback, populated system overlay, and a committed model edit            |
-| Delivery | All entries              | Production build                                    | Disjoint eager/lazy entry graphs, complete-graph budgets, Worker/install/precache graphs, and PWA verification |
+| Surface  | Scale                    | Journey                                             | Required evidence                                                                                                                     |
+| -------- | ------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Editor   | Small, dense, RTC-shaped | Cold load, warm reload, meaningful system paint     | LCP, CLS, transfer, long tasks, heap, and network counters                                                                            |
+| Editor   | Small, dense, RTC-shaped | Station drag, camera drag, line draw                | Trusted input-to-paint, action-scoped MapLibre frames, model revision, projection phases, and source uploads                          |
+| Editor   | RTC-shaped               | Ten-minute pan, edit/undo, and export-dialog cycle  | Heap, DOM nodes, listeners, workers, and WebGL contexts return within 10% of the warmed baseline                                      |
+| Share    | Large publishable        | Cold/warm load and camera drag                      | LCP, CLS, transfer, meaningful system paint, input-to-paint, and MapLibre frames                                                      |
+| Embed    | Large publishable        | Cold/warm load and camera drag                      | LCP, CLS, transfer, meaningful system paint, and input-to-paint                                                                       |
+| PWA      | Small                    | Install, clear HTTP cache, disconnect, reload, edit | Cached editor graph, local blank-map fallback, populated system overlay, and a committed model edit                                   |
+| Delivery | All entries              | Production build                                    | Disjoint eager/lazy entry graphs, eager first-load budgets, lazy chunk ceilings, Worker/install/precache graphs, and PWA verification |
 
 Chrome Stable runs headed at 1440 × 900, device-pixel ratio 1, four-times CPU
 slowdown, and Fast 4G for cold loads. Mobile uses 390 × 844 at device-pixel

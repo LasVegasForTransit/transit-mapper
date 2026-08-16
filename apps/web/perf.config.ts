@@ -26,10 +26,10 @@ export const PERF_DEFAULT_ARTIFACT_DIRECTORY = 'artifacts/performance';
 export const PERF_BASELINE_DIRECTORY = 'perf';
 
 /**
- * Entry budgets include the HTML document, CSS, entry chunk, and the full
- * static and dynamic import graph. Raw bytes remain visible in the report,
- * but only compressed delivery size is an absolute gate. Browser audits own
- * parse and responsiveness costs; raw module size is not a product ceiling.
+ * Entry budgets cover the HTML document, CSS, and static module closure that
+ * a first load transfers before a person can act. Lazy features have their
+ * own chunk ceilings and browser transfer audits. Counting their entire
+ * graph here would reject code that the first load never fetches.
  */
 export const BUNDLE_BUDGETS: BundleBudget[] = [
   {

@@ -280,8 +280,9 @@ deterministic four-times-throttled CPU calibration; absolute user-facing gates
 are never normalized. Calibration also records 60 consecutive rAF intervals,
 their median, and the inferred display refresh rate so the headed environment
 is auditable. Display cadence is diagnostic only and never changes a budget or
-normalizes a regression. Gzip and Brotli delivery bytes get the same 10%
-regression check during a full audit. Raw graph size remains in the report for
+normalizes a regression. Gzip and Brotli bytes that a browser automatically
+transfers get the same 10% regression check during a full audit. Raw graph
+size remains in the report for
 diagnosis, but it is not an absolute or regression gate; browser measurements
 own parse and responsiveness costs. The compressed absolute limits are round
 delivery guardrails, not snapshots of the current build plus a few kilobytes,
@@ -297,11 +298,12 @@ named `map-engine` whose source map contains only MapLibre modules has a narrow
 service-worker, and nested outputs, is limited to 500 kB.
 
 The absolute main-editor ceiling in `apps/web/perf.config.ts` protects the
-complete install and offline-update payload. It is deliberately independent of
-one renderer phase: a renderer change does not earn more delivery budget merely
-because it moves work off the main thread. Any change to that ceiling needs a
-reviewed delivery study alongside current cold and warm browser measurements.
-The full protocol also rejects a checked or base-revision compressed median
+static editor graph that a first load transfers before a person can act. The
+report still records the full lazy graph, and the browser protocol measures
+the bytes each journey actually fetches. This separates a real startup
+regression from code behind an unused export or dialog. Every emitted lazy
+chunk remains subject to the 500 kB limit unless it is MapLibre. The full
+protocol also rejects a checked or base-revision compressed transfer median
 regression above 10%. These rules are enforced in `bundle-report.json`; Vite's
 generic warning threshold is not the only guard.
 
