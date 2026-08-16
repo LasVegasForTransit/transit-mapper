@@ -12,7 +12,7 @@
  * only thing declared here is what it cannot infer: which files are entry
  * points because something outside the import graph runs them. Everything
  * under `scripts/` is invoked by a package script, `turbo/generators` is loaded
- * by `turbo gen`, and the two `tests/verify.test.ts` files are run directly by
+ * by `turbo gen`, and `apps/worker/tests/verify.test.ts` is run directly by
  * `tsx` rather than by Vitest.
  *
  * It also reports catalog entries no workspace references, which extends the
