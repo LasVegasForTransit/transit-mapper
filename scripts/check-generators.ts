@@ -11,7 +11,7 @@
  * then removes what it made, which is rude to do underneath someone's
  * uncommitted work. CI runs it, where the tree is disposable.
  */
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import {
   rmSync,
   existsSync,
@@ -60,12 +60,35 @@ const SCENARIOS: Scenario[] = [
 ];
 
 function run(command: string, args: string[]): void {
-  execFileSync(command, args, { cwd: ROOT, stdio: 'pipe' });
+  // Captured rather than inherited so a passing run stays quiet, then attached
+  // to the error so a failing one is diagnosable. Reporting only the exit
+  // status left CI saying "Command failed: pnpm check" and nothing else, which
+  // is unactionable for whoever has to fix it.
+  const result = spawnSync(command, args, { cwd: ROOT, encoding: 'utf8' });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(
+      `${command} ${args.join(' ')} exited ${result.status}\n${result.stdout}${result.stderr}`,
+    );
+  }
 }
 
 function cleanUp(paths: string[], originals: Map<string, string>): void {
   for (const p of paths) rmSync(resolve(ROOT, p), { recursive: true, force: true });
   for (const [p, contents] of originals) writeFileSync(resolve(ROOT, p), contents, 'utf8');
+}
+
+function restoreTree(created: string[], originals: Map<string, string>): void {
+  // Reported rather than thrown: a failure here would replace the diagnosis
+  // that sent us into the failure path with an unrelated one.
+  try {
+    cleanUp(created, originals);
+    run('pnpm', ['install', '--no-frozen-lockfile']);
+  } catch (restoreError) {
+    if (restoreError instanceof Error) {
+      console.error(`\ngenerators: restoring the tree also failed.\n${restoreError.message}`);
+    }
+  }
 }
 
 interface ContractResult {
@@ -299,8 +322,7 @@ function main(): void {
         '\n        template in turbo/generators/templates/\n',
     );
     if (err instanceof Error) console.error(err.message);
-    cleanUp(created, originals);
-    run('pnpm', ['install', '--no-frozen-lockfile']);
+    restoreTree(created, originals);
     process.exit(1);
   }
 

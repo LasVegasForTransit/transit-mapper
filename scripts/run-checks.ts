@@ -22,4 +22,10 @@ if (fix) {
   run('pnpm', ['lint:fix']);
 }
 
-run('pnpm', ['exec', 'turbo', 'run', 'validate']);
+// Turbo runs 10 tasks at once by default. Six of the tasks in this graph are
+// Vitest suites that each fork a worker per core, and one of them boots
+// workerd, so the default fans out to dozens of processes. On CI's four-core
+// runner that starved whichever suite lost the race, which surfaced as
+// `@transitmapper/web#verify` or `@transitmapper/worker#verify` failing at
+// random rather than as an out-of-memory message.
+run('pnpm', ['exec', 'turbo', 'run', 'validate', '--concurrency=4']);
