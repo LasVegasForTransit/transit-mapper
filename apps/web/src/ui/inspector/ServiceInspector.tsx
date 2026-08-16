@@ -11,14 +11,7 @@ import {
   primaryAnchor,
 } from '@transitmapper/core/model/geo';
 import { formatDistance } from '@transitmapper/core/model/units';
-import type {
-  RunDirection,
-  Pattern,
-  ScheduleDayScope,
-  Service,
-  Stop,
-  Way,
-} from '@transitmapper/core/model/system';
+import type { RunDirection, Pattern, Service, Stop, Way } from '@transitmapper/core/model/system';
 import {
   activeSchedule,
   dayScopeAt,
@@ -42,6 +35,10 @@ import {
   ServicesOnWay,
   Stat,
 } from './shared';
+import { ServiceLoadPresentation } from './service-load-presentation';
+import { ServiceInspectorHeading } from './service-inspector-heading';
+import { ServiceScheduleFields } from './service-schedule-fields';
+
 // Opened only via the "Edit full schedule" link, never on initial render —
 // same lazy-loading rationale as the app-level dialogs in App.tsx.
 const ScheduleDialog = lazy(() =>
@@ -50,31 +47,6 @@ const ScheduleDialog = lazy(() =>
 const VehicleKindsDialog = lazy(() =>
   import('../VehicleKindsDialog').then((m) => ({ default: m.VehicleKindsDialog })),
 );
-
-// Turnkey presets so setting up a working schedule is a click, not typing —
-// matches internal-operations/service-creation.ts's defaults (a fresh
-// Service's frequency/span always lands on one of these chips, never in the
-// "Custom" fallback). "Custom" reveals the raw number/time inputs this
-// section used to be, for anything a preset can't express.
-const FREQUENCY_PRESETS = [5, 10, 15, 20, 30, 60];
-
-interface SpanPreset {
-  label: string;
-  start: string;
-  end: string;
-}
-
-const SPAN_PRESETS: SpanPreset[] = [
-  { label: 'Daytime', start: '06:00', end: '23:00' },
-  { label: 'Early–late', start: '05:00', end: '01:00' },
-  { label: '24/7', start: '00:00', end: '23:59' },
-];
-
-const DAY_SCOPE_LABEL: Record<ScheduleDayScope, string> = {
-  daily: 'Every day',
-  weekday: 'Weekdays',
-  weekend: 'Weekends',
-};
 
 /** User-facing route vocabulary is normative in
  * docs/product/reference/editor-interactions.md. Keep these strings together
@@ -94,10 +66,6 @@ export const ROUTE_INSPECTOR_COPY = {
 
 export function segmentCountLabel(count: number): string {
   return `${count} segment${count === 1 ? '' : 's'}`;
-}
-
-function formatSpan(start: string, end: string): string {
-  return `${start}–${end}`;
 }
 
 /** One direction's stops, in the order a rider on that trip reaches them.
@@ -152,21 +120,6 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [vehicleKindsOpen, setVehicleKindsOpen] = useState(false);
   const [tab, setTab] = useState<string>('line');
-  // Derived once at mount (this component remounts on service switch — see
-  // its key={id} call site) from whether the CURRENT value already matches
-  // a preset chip: an imported/hand-set value that doesn't hit one still
-  // needs to be visible and editable, not silently unrepresented by any chip.
-  const [freqCustomOpen, setFreqCustomOpen] = useState(
-    () =>
-      service?.frequencyMinutes !== undefined &&
-      !FREQUENCY_PRESETS.includes(service.frequencyMinutes),
-  );
-  const [spanCustomOpen, setSpanCustomOpen] = useState(
-    () =>
-      (service?.spanStart !== undefined || service?.spanEnd !== undefined) &&
-      !SPAN_PRESETS.some((p) => p.start === service.spanStart && p.end === service.spanEnd),
-  );
-
   if (!service) return <EmptyInspector />;
   const singlePattern = servicePattern(service);
   const line = lines.find((candidate) => candidate.serviceIds.includes(service.id));
@@ -177,7 +130,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
       ? line.name
       : `Service ${Math.max(1, (line?.serviceIds.indexOf(service.id) ?? 0) + 1)}`);
   const singleWay =
-    singlePattern && patternLegs(singlePattern).length === 1
+    patternLegs(singlePattern).length === 1
       ? ways.find((w) => w.id === patternLegs(singlePattern)[0].wayId)
       : undefined;
   // Measured along what the line actually rides, not by summing whole way
@@ -202,7 +155,6 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
     skippedInbound: new Set(p.skippedStops?.inbound ?? []),
   }));
   const totalStops = new Set(patternStops.flatMap(({ stops }) => stops.map((st) => st.id))).size;
-  const hasFullSchedule = !!service.schedule && service.schedule.length > 0;
   // A mode may span several way types (e.g. tram: dedicated track or street-running
   // road) — offer every mode compatible with the way this service currently rides.
   const modeOptions = singleWay
@@ -217,25 +169,19 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
 
   return (
     <Panel slot="right" aria-label="Selection details">
-      <div className="insp-head">
-        <span className="dot" style={{ background: line?.color }} />
-        <input
-          className="insp-name"
-          aria-label="Service name"
-          placeholder={line?.serviceIds.length === 1 ? line.name : 'Service name'}
-          value={service.name ?? ''}
-          disabled={readOnly}
-          onChange={(e) => setServiceName(id, e.target.value)}
-          onKeyDown={blurOnEnter}
-        />
-      </div>
-      <div className="insp-kind">
-        {line?.name ? `${line.name} · ` : ''}
-        {MODES[service.modeId]?.label ?? 'Service'} · {formatDistance(length, unitSystem)} ·{' '}
-        {totalStops} stop
-        {totalStops === 1 ? '' : 's'}
-        {selectedStop ? ` · Call at ${selectedStop.name || 'Unnamed stop'}` : ''}
-      </div>
+      <ServiceInspectorHeading
+        color={line?.color}
+        name={service.name}
+        lineName={line?.name}
+        namePlaceholder={line?.serviceIds.length === 1 ? line.name : 'Service name'}
+        selectedStopName={selectedStop ? selectedStop.name || 'Unnamed stop' : undefined}
+        modeLabel={MODES[service.modeId].label}
+        distanceLabel={formatDistance(length, unitSystem)}
+        totalStops={totalStops}
+        readOnly={readOnly}
+        onNameChange={(name) => setServiceName(id, name)}
+        onNameKeyDown={blurOnEnter}
+      />
 
       <InspectorTabs tabs={tabs} active={tab} onChange={setTab} />
 
@@ -267,7 +213,7 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
             value={service.vehicleKindId ?? ''}
             onChange={(e) => setServiceVehicleKind(id, e.target.value || undefined)}
           >
-            <option value="">Default {MODES[service.modeId]?.label ?? 'vehicle'}</option>
+            <option value="">Default {MODES[service.modeId].label}</option>
             {vehicleKinds
               .filter((k) => k.modeId === service.modeId)
               .map((k) => (
@@ -353,159 +299,17 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
     return (
       <>
         <ServiceLoad service={service} />
-        {renderScheduleFields()}
-      </>
-    );
-  }
-
-  function renderScheduleFields() {
-    if (!service) return null;
-    return hasFullSchedule ? (
-      <>
-        <label className="field-label">Schedule</label>
-        <ul className="pattern-list">
-          {service.schedule!.map((p) => (
-            <li key={p.id} className="pattern-row">
-              <button type="button" className="pattern-open" onClick={() => setScheduleOpen(true)}>
-                <span className="dot ring" />
-                <span className="pattern-name">{p.label}</span>
-                <span className="pattern-meta">
-                  {DAY_SCOPE_LABEL[p.days]} · every {p.frequencyMinutes} min ·{' '}
-                  {formatSpan(p.spanStart, p.spanEnd)}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <button
-          type="button"
-          className="ghost-btn"
-          style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}
-          onClick={() => setScheduleOpen(true)}
-        >
-          <Icon name="clock" size={17} /> {readOnly ? 'View full schedule' : 'Edit full schedule'}
-        </button>
-      </>
-    ) : (
-      <>
-        <label className="field-label" id="freq-chips-label">
-          Peak headway
-        </label>
-        <div className="chip-row" role="group" aria-labelledby="freq-chips-label">
-          {FREQUENCY_PRESETS.map((m) => (
-            <button
-              key={m}
-              type="button"
-              className={`chip ${!freqCustomOpen && service.frequencyMinutes === m ? 'active' : ''}`}
-              aria-pressed={!freqCustomOpen && service.frequencyMinutes === m}
-              disabled={readOnly}
-              onClick={() => {
-                setFreqCustomOpen(false);
-                setServiceFrequency(id, m);
-              }}
-            >
-              {m} min
-            </button>
-          ))}
-          <button
-            type="button"
-            className={`chip ${freqCustomOpen ? 'active' : ''}`}
-            aria-pressed={freqCustomOpen}
-            disabled={readOnly}
-            onClick={() => setFreqCustomOpen(true)}
-          >
-            Custom
-          </button>
-        </div>
-        {freqCustomOpen && (
-          <div className="freq-row">
-            <input
-              type="number"
-              min={1}
-              className="freq-input"
-              aria-label="Custom peak headway in minutes"
-              value={service.frequencyMinutes ?? ''}
-              disabled={readOnly}
-              placeholder="Not set"
-              onChange={(e) =>
-                setServiceFrequency(
-                  id,
-                  e.target.value === ''
-                    ? undefined
-                    : Math.max(1, Math.round(Number(e.target.value))),
-                )
-              }
-              onKeyDown={blurOnEnter}
-            />
-            <span className="freq-suffix">min between vehicles, peak</span>
-          </div>
-        )}
-
-        <label className="field-label" id="span-chips-label">
-          Span of service
-        </label>
-        <div className="chip-row" role="group" aria-labelledby="span-chips-label">
-          {SPAN_PRESETS.map((p) => {
-            const active =
-              !spanCustomOpen && service.spanStart === p.start && service.spanEnd === p.end;
-            return (
-              <button
-                key={p.label}
-                type="button"
-                className={`chip ${active ? 'active' : ''}`}
-                aria-pressed={active}
-                disabled={readOnly}
-                onClick={() => {
-                  setSpanCustomOpen(false);
-                  setServiceSpan(id, p.start, p.end);
-                }}
-              >
-                {p.label}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            className={`chip ${spanCustomOpen ? 'active' : ''}`}
-            aria-pressed={spanCustomOpen}
-            disabled={readOnly}
-            onClick={() => setSpanCustomOpen(true)}
-          >
-            Custom
-          </button>
-        </div>
-        {spanCustomOpen && (
-          <div className="freq-row">
-            <input
-              type="time"
-              className="freq-input freq-time"
-              aria-label="First departure"
-              value={service.spanStart ?? ''}
-              disabled={readOnly}
-              onChange={(e) => setServiceSpan(id, e.target.value || undefined, service.spanEnd)}
-            />
-            <span className="freq-suffix">to</span>
-            <input
-              type="time"
-              className="freq-input freq-time"
-              aria-label="Last departure"
-              value={service.spanEnd ?? ''}
-              disabled={readOnly}
-              onChange={(e) => setServiceSpan(id, service.spanStart, e.target.value || undefined)}
-            />
-          </div>
-        )}
-
-        {!readOnly && line && (
-          <button
-            type="button"
-            className="link-btn"
-            style={{ display: 'block', marginBottom: 12 }}
-            onClick={() => setScheduleOpen(true)}
-          >
-            Use a full schedule instead
-          </button>
-        )}
+        <ServiceScheduleFields
+          idPrefix={`service-${id}-schedule`}
+          frequencyMinutes={service.frequencyMinutes}
+          spanStart={service.spanStart}
+          spanEnd={service.spanEnd}
+          schedule={service.schedule}
+          readOnly={readOnly}
+          onFrequencyChange={(frequencyMinutes) => setServiceFrequency(id, frequencyMinutes)}
+          onSpanChange={(spanStart, spanEnd) => setServiceSpan(id, spanStart, spanEnd)}
+          onOpenFullSchedule={() => setScheduleOpen(true)}
+        />
       </>
     );
   }
@@ -590,23 +394,22 @@ export function ServiceInspector({ id }: ServiceInspectorProps) {
         </ul>
         {!readOnly && (
           <>
-            {singlePattern &&
-              (patternHasCouplet(singlePattern) ? (
-                <>
-                  <p className="insp-sub">
-                    This Service runs two one-way paths. Its outward and return trips use different
-                    streets.
-                  </p>
-                  <button
-                    type="button"
-                    className="ghost-btn"
-                    style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}
-                    onClick={() => makePatternTwoWay(id, singlePattern.id)}
-                  >
-                    Make it run both ways on one street
-                  </button>
-                </>
-              ) : null)}
+            {patternHasCouplet(singlePattern) ? (
+              <>
+                <p className="insp-sub">
+                  This Service runs two one-way paths. Its outward and return trips use different
+                  streets.
+                </p>
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}
+                  onClick={() => makePatternTwoWay(id, singlePattern.id)}
+                >
+                  Make it run both ways on one street
+                </button>
+              </>
+            ) : null}
             {moveTargets.length > 0 && (
               <>
                 <label className="field-label" htmlFor="move-to-line-select">
@@ -823,25 +626,15 @@ function ServiceLoad({ service }: ServiceLoadProps) {
   const dwell = stats.path.dwellMs / 60_000;
 
   return (
-    <>
-      {/* Two numbers, not three: a 280px panel gives each stat cell about
-          85px, and a third one wrapped both its label and its value onto two
-          lines. Round trip and fleet are the headline figures; layover is
-          detail, so it goes in the sentence. */}
-      <div className="stats">
-        <Stat label="Round trip" value={roundTrip} />
-        {active && <Stat label="Vehicles" value={String(stats.fleet)} />}
-      </div>
-      <p className="panel-hint">
-        {!active
-          ? `Not running at ${when}. A round trip takes ${roundTrip}.`
-          : active.headwayMinutes === undefined
-            ? `Running at ${when} with no frequency set, so it runs a single vehicle around a ${roundTrip} round trip.`
-            : `At ${when} it runs every ${active.headwayMinutes} min${!pinnedPeriod && active.label ? ` (${active.label})` : ''}. ` +
-              `${stopCount === 0 ? 'With no stops' : `${stopCount} stop${stopCount === 1 ? '' : 's'} and ${formatMinutes(dwell)} of dwell`}, a round trip takes ` +
-              `${roundTrip}, so holding that headway needs ${stats.fleet} vehicle${stats.fleet === 1 ? '' : 's'}, ` +
-              `each waiting ${formatMinutes(stats.layoverMs / 60_000)} at either end.`}
-      </p>
-    </>
+    <ServiceLoadPresentation
+      active={active}
+      roundTrip={roundTrip}
+      fleet={stats.fleet}
+      when={when}
+      showPeriodLabel={!pinnedPeriod}
+      stops={stopCount}
+      dwellMinutes={dwell}
+      layoverMinutes={stats.layoverMs / 60_000}
+    />
   );
 }

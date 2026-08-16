@@ -512,9 +512,6 @@
   },
   "src/ui/inspector/ServiceInspector.tsx": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
       "count": 6
     },
     "@typescript-eslint/prefer-nullish-coalescing": {
@@ -527,10 +524,7 @@
       "count": 1
     },
     "max-lines-per-function": {
-      "count": 5
-    },
-    "sonarjs/cognitive-complexity": {
-      "count": 1
+      "count": 4
     }
   },
   "src/ui/inspector/StationInspector.tsx": {
@@ -561,11 +555,6 @@
     }
   },
   "src/ui/newSystem/NewSystemLocationDialog.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/ui/onboarding/OnboardingDialog.tsx": {
     "max-lines-per-function": {
       "count": 1
     }
@@ -700,7 +689,7 @@
   },
   "tests/ui/onboarding/fixtureProjection.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 2
+      "count": 1
     }
   }
 }

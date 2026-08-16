@@ -245,10 +245,7 @@ markings, and lane-continuous services derive from the same resolved geometry.
 
 `apps/web/src/ui` owns React presentation, workbench layout, inspector
 controls, dialogs, onboarding, and accessibility semantics.
-`apps/web/src/ui/sidebarOutline.ts` derives view-specific outline rows from the
-domain model without React state. `SidebarPanel.tsx` owns the per-view query,
-expansion, list limits, scroll position, selection wiring, and local recovery
-boundaries that present that projection.
+Onboarding projects one valid Las Vegas system through shared production UI.
 `apps/web/src/ui/useKeyboardInset.ts` reports how much of the viewport an
 on-screen keyboard covers, which no layout-viewport measurement exposes.
 `apps/web/src/ui/app-banner.ts` decides which single application-level message

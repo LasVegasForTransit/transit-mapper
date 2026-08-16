@@ -12,12 +12,7 @@ import {
   saveToLibrary,
   type SaveOutcome,
 } from './storage/browserLibrary';
-import {
-  getActiveId,
-  hasSeenOnboarding,
-  markOnboardingSeen,
-  setActiveId,
-} from './storage/localStore';
+import { getActiveId, hasSeenOnboarding, setActiveId } from './storage/localStore';
 import {
   attachPersistenceCoordinator,
   type PersistenceCoordinator,
@@ -76,12 +71,9 @@ const SystemsDialog = lazy(() =>
 const SettingsDialog = lazy(() =>
   import('./ui/SettingsDialog').then((m) => ({ default: m.SettingsDialog })),
 );
-const OnboardingDialog = lazy(() =>
-  import('./ui/onboarding/OnboardingDialog').then((m) => ({ default: m.OnboardingDialog })),
-);
-const NewSystemLocationDialog = lazy(() =>
-  import('./ui/newSystem/NewSystemLocationDialog').then((m) => ({
-    default: m.NewSystemLocationDialog,
+const FirstRunDialogs = lazy(() =>
+  import('./ui/onboarding/first-run-dialogs').then((module) => ({
+    default: module.FirstRunDialogs,
   })),
 );
 const AboutDialog = lazy(() =>
@@ -142,7 +134,7 @@ export function App() {
   const store = useEditorStore();
   const {
     document: { newSystem, setSystem },
-    tools: { setTool },
+    tools: { setDraftMode, setTool },
   } = useEditorCommands();
   const {
     shortcutsOpen,
@@ -521,30 +513,14 @@ export function App() {
           <SettingsDialog onClose={closeDialog} />
         </LazyDialog>
       )}
-      {activeDialog === 'onboarding' && (
+      {(activeDialog === 'onboarding' || activeDialog === 'newSystemLocation') && (
         <LazyDialog onFailure={dialogFailed}>
-          <OnboardingDialog
-            onClose={closeDialog}
-            onComplete={() => {
-              markOnboardingSeen();
-              closeDialog();
-            }}
-          />
-        </LazyDialog>
-      )}
-      {activeDialog === 'newSystemLocation' && (
-        <LazyDialog onFailure={dialogFailed}>
-          <NewSystemLocationDialog
-            onClose={() => {
-              closeDialog();
-              // Only the bootstrap trigger (mode: 'importIntoActive') should
-              // chain into onboarding — the explicit File-menu/Systems-dialog
-              // "New system" action (mode: 'create') closes plain.
-              if (newSystemLocationMode === 'importIntoActive' && !hasSeenOnboarding()) {
-                openDialog('onboarding');
-              }
-            }}
-            mode={newSystemLocationMode}
+          <FirstRunDialogs
+            activeDialog={activeDialog}
+            actions={{ setDraftMode, setTool }}
+            closeDialog={closeDialog}
+            newSystemLocationMode={newSystemLocationMode}
+            openDialog={openDialog}
           />
         </LazyDialog>
       )}

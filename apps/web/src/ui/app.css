@@ -3236,6 +3236,7 @@ kbd {
 }
 .onboarding-modal .modal-head {
   flex: 0 0 auto;
+  align-items: flex-start;
   margin-bottom: 12px;
 }
 .onboarding-modal .modal-head h2 {
@@ -3261,104 +3262,8 @@ kbd {
   line-height: 1.6;
   margin: 0;
 }
-.onboarding-note {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: fit-content;
-  max-width: 100%;
-  margin: -6px 0 0;
-  padding: 6px 10px 6px 7px;
-  border-radius: 999px;
-  background: var(--md-sys-color-surface-container);
-  color: var(--md-sys-color-on-surface-variant);
-  font-size: var(--md-sys-typescale-body-small-size);
-  line-height: 1.45;
-}
-.onboarding-note-label {
-  flex: 0 0 auto;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: var(--md-sys-color-primary-container);
-  color: var(--md-sys-color-on-primary-container);
-  font-size: var(--md-sys-typescale-label-small-size);
-  font-weight: var(--md-sys-typescale-label-small-weight);
-  letter-spacing: var(--md-sys-typescale-label-small-tracking);
-}
-.onboarding-single-preview {
-  width: 100%;
-  height: clamp(220px, 34vh, 320px);
-  flex: 1 1 auto;
-  min-height: 220px;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid var(--md-sys-color-surface-container-highest);
-  background: var(--md-sys-color-surface-container);
-  position: relative;
-}
-.onboarding-tri-preview {
-  display: flex;
-  gap: 8px;
-  width: 100%;
-  flex: 1 1 auto;
-  min-height: 140px;
-}
-.onboarding-tri-preview-item {
-  flex: 1;
-  min-height: 140px;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid var(--md-sys-color-surface-container-highest);
-  background: var(--md-sys-color-surface-container);
-}
 .onboarding-preview-map {
   width: 100%;
-}
-.onboarding-single-preview-map {
-  height: 100%;
-}
-.onboarding-preview-label {
-  flex: 0 0 auto;
-  padding: 10px 12px 0;
-  color: var(--md-sys-color-on-surface-variant);
-  font-size: var(--md-sys-typescale-label-medium-size);
-  font-weight: 500;
-}
-.onboarding-tri-preview-map {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-.onboarding-preview-key {
-  position: absolute;
-  z-index: 1;
-  top: 12px;
-  left: 12px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 7px 10px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--md-sys-color-surface) 90%, transparent);
-  box-shadow: var(--md-sys-elevation-level1);
-  color: var(--md-sys-color-on-surface);
-  font-size: var(--md-sys-typescale-label-medium-size);
-}
-.onboarding-preview-key span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.onboarding-preview-frequency {
-  color: var(--md-sys-color-on-surface-variant);
-}
-.onboarding-service-swatch {
-  width: 18px;
-  height: 4px;
-  border-radius: 999px;
-  background: #e4572e;
 }
 .onboarding-foot {
   display: grid;
@@ -3417,20 +3322,6 @@ kbd {
   .onboarding-copy {
     font-size: var(--md-sys-typescale-body-medium-size);
   }
-  .onboarding-note {
-    align-items: flex-start;
-    border-radius: 12px;
-  }
-  .onboarding-single-preview {
-    height: clamp(180px, 35vh, 260px);
-    min-height: 180px;
-  }
-  .onboarding-tri-preview {
-    flex-direction: column;
-  }
-  .onboarding-tri-preview-item {
-    min-height: 120px;
-  }
   .onboarding-foot {
     grid-template-columns: 1fr auto;
     gap: 12px;
@@ -3446,6 +3337,227 @@ kbd {
   .onboarding-next {
     grid-column: 2;
     grid-row: 2;
+  }
+}
+
+/* One evolving proposal replaces the old thumbnail comparison. Product-looking
+   controls appear only in the shared Service inspector preview. */
+.onboarding-modal {
+  width: 860px;
+  height: min(720px, calc(100dvh - 32px));
+}
+.onboarding-modal .modal-head {
+  margin-bottom: 10px;
+}
+.onboarding-modal .modal-head h2 {
+  max-width: 26ch;
+  font-size: clamp(22px, 3vw, 30px);
+  line-height: 1.14;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.onboarding-body {
+  gap: 16px;
+}
+.onboarding-explanation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  flex: 0 0 auto;
+}
+.onboarding-copy {
+  max-width: 72ch;
+  line-height: 1.52;
+}
+.onboarding-scene {
+  width: 100%;
+  height: clamp(330px, 48vh, 430px);
+  min-height: 330px;
+  flex: 1 1 auto;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 16px;
+  background: var(--md-sys-color-surface-container);
+  box-shadow: inset 0 1px color-mix(in srgb, var(--md-sys-color-surface) 70%, transparent);
+}
+.onboarding-map-frame,
+.onboarding-preview-map {
+  width: 100%;
+  height: 100%;
+}
+.onboarding-scene-operations {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+.onboarding-service-inspector-preview {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  min-width: 0;
+  min-height: 0;
+}
+.onboarding-preview-fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-content: center;
+  padding: 28px;
+  text-align: center;
+  background:
+    radial-gradient(
+      circle at 50% 20%,
+      var(--md-sys-color-surface-container-high) 0,
+      transparent 48%
+    ),
+    var(--md-sys-color-surface-container);
+  margin: 0;
+  color: var(--md-sys-color-on-surface-variant);
+  line-height: 1.55;
+}
+.onboarding-place-label {
+  display: block;
+  white-space: nowrap;
+  color: var(--md-sys-color-on-surface);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  text-shadow:
+    -1px -1px 0 var(--md-sys-color-surface),
+    1px -1px 0 var(--md-sys-color-surface),
+    -1px 1px 0 var(--md-sys-color-surface),
+    1px 1px 0 var(--md-sys-color-surface);
+  pointer-events: none;
+}
+.onboarding-place-label-secondary {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 10px;
+  font-weight: 550;
+}
+.onboarding-draw-crosshair {
+  width: 22px;
+  height: 22px;
+  position: absolute;
+  filter: drop-shadow(0 1px 1px var(--md-sys-color-surface));
+  pointer-events: none;
+}
+.onboarding-draw-crosshair::before,
+.onboarding-draw-crosshair::after {
+  content: '';
+  position: absolute;
+  background: var(--md-sys-color-on-surface);
+}
+.onboarding-draw-crosshair::before {
+  width: 1px;
+  height: 22px;
+  left: 10px;
+}
+.onboarding-draw-crosshair::after {
+  width: 22px;
+  height: 1px;
+  top: 10px;
+}
+.onboarding-sim-controls {
+  position: absolute;
+  z-index: 2;
+  right: 12px;
+  bottom: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--md-sys-color-surface-container-highest);
+  border-radius: 12px;
+  background: var(--md-sys-color-surface);
+  box-shadow: var(--md-sys-elevation-level2);
+  pointer-events: none;
+}
+.onboarding-foot {
+  margin-top: 16px;
+}
+.onboarding-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  justify-self: center;
+}
+.onboarding-step-count {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: var(--md-sys-typescale-label-small-size);
+  font-variant-numeric: tabular-nums;
+}
+.onboarding-dots {
+  justify-self: auto;
+}
+.onboarding-next {
+  white-space: nowrap;
+}
+.onboarding-dot::before {
+  transition:
+    width 140ms var(--motion-chrome-curve),
+    border-radius 140ms var(--motion-chrome-curve),
+    background-color 140ms var(--motion-chrome-curve);
+}
+.onboarding-dot.active::before {
+  width: 20px;
+  border-radius: 999px;
+}
+
+@media (max-width: 620px) {
+  .onboarding-modal {
+    padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .onboarding-modal .modal-head h2 {
+    max-width: calc(100% - 44px);
+    font-size: 22px;
+  }
+  .onboarding-body {
+    gap: 14px;
+  }
+  .onboarding-copy {
+    line-height: 1.48;
+  }
+  .onboarding-scene {
+    height: auto;
+    min-height: 0;
+    flex: 0 0 auto;
+  }
+  .onboarding-scene:not(.onboarding-scene-operations) {
+    min-height: 240px;
+    flex: 1 1 300px;
+  }
+  .onboarding-map-frame {
+    height: clamp(210px, 34vh, 275px);
+  }
+  .onboarding-scene:not(.onboarding-scene-operations) .onboarding-map-frame {
+    height: 100%;
+  }
+  .onboarding-place-label-secondary {
+    display: none;
+  }
+  .onboarding-scene-operations {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .onboarding-service-inspector-preview {
+    height: auto;
+    max-height: none;
+    overflow-y: visible;
+  }
+  .onboarding-foot {
+    gap: 8px 12px;
+    margin-top: 12px;
+  }
+  .onboarding-progress {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-dot::before {
+    transition: none;
   }
 }
 
@@ -4171,6 +4283,20 @@ button.chip-removable-label:hover {
     max-width: none;
     height: auto;
     max-height: 92dvh;
+  }
+  /* Onboarding has a persistent navigation footer. Give the complete sheet a
+     definite height so only its body scrolls and Back/Next never disappear
+     below the viewport. */
+  .modal.onboarding-modal {
+    height: 92dvh;
+    max-height: 92dvh;
+  }
+  .modal.onboarding-modal .onboarding-body {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .modal.onboarding-modal .onboarding-foot {
+    flex: 0 0 auto;
   }
   .export-body,
   .shortcuts-grid {

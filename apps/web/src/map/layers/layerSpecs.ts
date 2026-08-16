@@ -1067,17 +1067,16 @@ function drawingPreviewLayerSpecs(theme: MapTheme): LayerSpecification[] {
         // A stretch the route had to run against traffic (wrongWay) or that
         // the Demolish tool is about to remove (demolish) is drawn in the
         // warning colour, heavier and at full opacity — the rest of the
-        // draft is a faint dashed hint, and something destructive about it
-        // has to out-read that.
+        // draft is a faint dashed hint, which destructive states must out-read.
         'line-color': [
           'case',
           ['any', ['get', 'wrongWay'], ['get', 'demolish']],
           theme.danger,
           theme.gesturePreview,
         ],
-        'line-width': ['case', ['any', ['get', 'wrongWay'], ['get', 'demolish']], 3.5, 2],
+        'line-width': ['case', ['any', ['get', 'wrongWay'], ['get', 'demolish']], 3.5, 3],
         'line-dasharray': [1.5, 1.5],
-        'line-opacity': ['case', ['any', ['get', 'wrongWay'], ['get', 'demolish']], 1, 0.5],
+        'line-opacity': ['case', ['any', ['get', 'wrongWay'], ['get', 'demolish']], 1, 0.75],
       },
     },
     {

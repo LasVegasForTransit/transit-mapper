@@ -1,192 +1,347 @@
-import { createEmptySystem } from '@transitmapper/core/model/serialize';
-import { defaultProfileFor } from '@transitmapper/core/model/profile';
-import { cumulativeLengths, oneSection, pointAtT, wholeLeg } from '@transitmapper/core/model/geo';
 import { LINE_COLORS } from '@transitmapper/core/model/catalog';
-import { effectiveVehicleKind, serviceStats } from '@transitmapper/core/sim/serviceStats';
-import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
+import { cumulativeLengths, oneSection, pointAtT, wholeLeg } from '@transitmapper/core/model/geo';
+import { defaultProfileFor } from '@transitmapper/core/model/profile';
+import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type {
+  Line,
+  LngLat,
   Node,
   Pattern,
   Service,
+  Station,
   Stop,
   TransitSystem,
   Way,
 } from '@transitmapper/core/model/system';
+import type { ViewOptions } from '@transitmapper/core/render/buildFeatures';
+import {
+  effectiveVehicleKind,
+  serviceStats,
+  type PatternStats,
+} from '@transitmapper/core/sim/serviceStats';
+import type { VehicleMotionProfile } from '@transitmapper/core/sim/timetable';
 
-// A tiny, hand-built system for the onboarding dialog's live previews — never
-// saved, never shown to buildFeatures' callers as anything but a picture.
-// Built from plain object literals plus real model helpers (defaultProfileFor,
-// oneSection/wholeLeg), not @transitmapper/core/testing/fixtures builders:
-// those exist for tests, and importing a testing module into a shipped
-// feature would be a layering violation the rest of the codebase doesn't have.
+// One early proposal develops across all five screens. Its bus services follow
+// actual Charleston Boulevard and Las Vegas Boulevard geometry. Its light rail
+// reuses the real freight corridor, then adds one clearly authored connection
+// to the Downtown transfer.
 
-const CROSSING: [number, number] = [-115.176, 36.13];
+const CHARLESTON_INTERSECTION: LngLat = [-115.1474526, 36.1589978];
+const DOWNTOWN_TRANSFER: LngLat = [-115.1396365, 36.1709318];
+const CHARLESTON_WEST_POINTS: LngLat[] = [
+  [-115.1660028, 36.1589423],
+  [-115.1634932, 36.1589545],
+  [-115.161816, 36.1591451],
+  [-115.1599869, 36.159164],
+  [-115.1592675, 36.1591449],
+  [-115.1575461, 36.1589594],
+  [-115.1564973, 36.1589139],
+  [-115.1504363, 36.1588931],
+  CHARLESTON_INTERSECTION,
+];
+const CHARLESTON_EAST_POINTS: LngLat[] = [
+  CHARLESTON_INTERSECTION,
+  [-115.145, 36.15894],
+  [-115.135454, 36.1589452],
+  [-115.1353641, 36.1588756],
+  [-115.1334334, 36.1588821],
+  [-115.1333087, 36.1589502],
+  [-115.1321443, 36.1589431],
+  [-115.1319792, 36.1588768],
+  [-115.1295157, 36.1588793],
+  [-115.1293979, 36.1588334],
+  [-115.1283189, 36.158828],
+  [-115.1256681, 36.1589356],
+];
+const LAS_VEGAS_BOULEVARD_POINTS: LngLat[] = [
+  CHARLESTON_INTERSECTION,
+  [-115.146699, 36.1598929],
+  [-115.145949, 36.1610722],
+  [-115.1444226, 36.1634093],
+  [-115.142128, 36.1668921],
+  [-115.1406182, 36.1692162],
+  DOWNTOWN_TRANSFER,
+];
 
-// Two roads crossing at CROSSING, sharing that exact coordinate as a control
-// point on both — the same shape the editor's own junction-splitting leaves
-// behind, so the Infrastructure preview shows a real junction, not two lines
-// that happen to overlap.
-const roadA: Way = {
-  id: 'onboarding-road-a',
-  typeId: 'road',
-  points: [[-115.1815, 36.1287], CROSSING, [-115.1705, 36.1318]],
-  geometry: 'straight',
-  grade: 'atGrade',
-  profile: defaultProfileFor('road'),
-};
+const RAIL_JUNCTION: LngLat = [-115.1512128, 36.1667266];
+const RAIL_SOUTH_POINTS: LngLat[] = [
+  [-115.157491, 36.1566503],
+  [-115.1566931, 36.158173],
+  [-115.1564724, 36.1586752],
+  [-115.1562319, 36.1590499],
+  [-115.1515332, 36.1662415],
+  RAIL_JUNCTION,
+];
+const RAIL_NORTH_POINTS: LngLat[] = [
+  RAIL_JUNCTION,
+  [-115.149723, 36.169035],
+  [-115.147211, 36.172885],
+  [-115.1444387, 36.177],
+];
+const DOWNTOWN_CONNECTOR_POINTS: LngLat[] = [
+  RAIL_JUNCTION,
+  [-115.149047, 36.167779],
+  [-115.145006, 36.169021],
+  DOWNTOWN_TRANSFER,
+];
 
-const roadB: Way = {
-  id: 'onboarding-road-b',
-  typeId: 'road',
-  points: [[-115.1776, 36.1255], CROSSING, [-115.1744, 36.1345]],
-  geometry: 'straight',
-  grade: 'atGrade',
-  profile: defaultProfileFor('road'),
-};
+function importedWay(id: string, typeId: 'road' | 'lightRail', points: LngLat[]): Way {
+  return {
+    id,
+    typeId,
+    points,
+    geometry: 'freeform',
+    // The Union Pacific corridor is grade-separated through this frame. That
+    // preserves real road/rail crossings without inventing transit junctions.
+    grade: typeId === 'lightRail' ? 'elevated' : 'atGrade',
+    profile: defaultProfileFor(typeId),
+    source: 'osm',
+  };
+}
 
-// A light-rail spine crosses the bus route at Central. Its geographic bends
-// are deliberate: Network follows the actual corridor while Diagram snaps it
-// into a schematic, so the final comparison teaches a visible difference.
-const railSpine: Way = {
-  id: 'onboarding-rail-spine',
+const charlestonWest = importedWay('las-vegas-charleston-west', 'road', CHARLESTON_WEST_POINTS);
+const charlestonEast = importedWay('las-vegas-charleston-east', 'road', CHARLESTON_EAST_POINTS);
+const lasVegasBoulevard = importedWay(
+  'las-vegas-boulevard-north',
+  'road',
+  LAS_VEGAS_BOULEVARD_POINTS,
+);
+const railSouth = importedWay('las-vegas-rail-south', 'lightRail', RAIL_SOUTH_POINTS);
+const railNorth = importedWay('las-vegas-rail-north', 'lightRail', RAIL_NORTH_POINTS);
+
+export const ONBOARDING_AUTHORED_CONNECTOR_ID = 'las-vegas-downtown-connector';
+const downtownConnector: Way = {
+  id: ONBOARDING_AUTHORED_CONNECTOR_ID,
   typeId: 'lightRail',
-  points: [[-115.1752, 36.1245], CROSSING, [-115.1718, 36.1355]],
-  geometry: 'straight',
-  grade: 'atGrade',
+  points: DOWNTOWN_CONNECTOR_POINTS,
+  geometry: 'freeform',
+  grade: 'elevated',
   profile: defaultProfileFor('lightRail'),
 };
 
-// Only the two ROADS share the junction. The rail spine runs through the same
-// coordinate without joining it: a junction is a lane graph, and a road and a
-// light-rail line have no lanes that feed each other, so the app refuses to
-// form one (see validate.ts's findMismatchedTypeJunctions). What the two of
-// them meeting really needs is a level crossing, which the model has no
-// primitive for yet.
-const junctionNode: Node = {
-  id: 'onboarding-junction',
-  coord: CROSSING,
+const roadWays = [charlestonWest, charlestonEast, lasVegasBoulevard];
+const railWays = [railSouth, railNorth, downtownConnector];
+
+const roadJunction: Node = {
+  id: 'las-vegas-charleston-boulevard-node',
+  coord: CHARLESTON_INTERSECTION,
   refs: [
-    { wayId: roadA.id, pointIndex: 1 },
-    { wayId: roadB.id, pointIndex: 1 },
+    { wayId: charlestonWest.id, pointIndex: charlestonWest.points.length - 1 },
+    { wayId: charlestonEast.id, pointIndex: 0 },
+    { wayId: lasVegasBoulevard.id, pointIndex: 0 },
+  ],
+};
+const railJunction: Node = {
+  id: 'las-vegas-rail-junction-node',
+  coord: RAIL_JUNCTION,
+  refs: [
+    { wayId: railSouth.id, pointIndex: railSouth.points.length - 1 },
+    { wayId: railNorth.id, pointIndex: 0 },
+    { wayId: downtownConnector.id, pointIndex: 0 },
   ],
 };
 
-function crossingT(way: Way): number {
-  const lengths = cumulativeLengths(way.points);
-  return lengths[1] / lengths[lengths.length - 1];
+interface StopOnWayOptions {
+  t: number;
+  majorStop?: boolean;
 }
 
-function stopOnWay(id: string, name: string, way: Way, t: number): Stop {
+function stopOnWay(
+  id: string,
+  name: string,
+  way: Way,
+  { t, majorStop = false }: StopOnWayOptions,
+): Stop {
   return {
     id,
     name,
     coord: pointAtT(way.points, t),
     anchors: [{ wayId: way.id, t }],
+    ...(majorStop ? { majorStop: true } : {}),
   };
 }
 
-// Every stop is anchored to its corridor so Diagram carries it onto the
-// schematic geometry instead of leaving geographic stop dots floating beside
-// the straightened lines.
+const downtownPattern: Pattern = {
+  id: 'las-vegas-charleston-downtown',
+  sections: oneSection([wholeLeg(charlestonWest.id), wholeLeg(lasVegasBoulevard.id)]),
+};
+const huntridgePattern: Pattern = {
+  id: 'las-vegas-charleston-huntridge',
+  sections: oneSection([wholeLeg(charlestonWest.id), wholeLeg(charlestonEast.id)]),
+};
+
+export const ONBOARDING_DOWNTOWN_SERVICE_ID = downtownPattern.id;
+const charlestonDowntownService: Service = {
+  id: ONBOARDING_DOWNTOWN_SERVICE_ID,
+  name: 'Downtown',
+  modeId: 'bus',
+  path: downtownPattern,
+  frequencyMinutes: 10,
+  spanStart: '06:00',
+  spanEnd: '23:00',
+};
+const charlestonHuntridgeService: Service = {
+  id: huntridgePattern.id,
+  name: 'Huntridge',
+  modeId: 'bus',
+  path: huntridgePattern,
+  frequencyMinutes: 10,
+  spanStart: '06:00',
+  spanEnd: '23:00',
+};
+export const ONBOARDING_CROSSTOWN_LINE_ID = 'las-vegas-charleston-crosstown';
+const charlestonCrosstownLine: Line = {
+  id: ONBOARDING_CROSSTOWN_LINE_ID,
+  name: 'Charleston Crosstown',
+  color: LINE_COLORS[0],
+  serviceIds: [charlestonDowntownService.id, charlestonHuntridgeService.id],
+};
+
+const connectorPattern: Pattern = {
+  id: 'las-vegas-downtown-connector-service',
+  sections: oneSection([wholeLeg(railSouth.id), wholeLeg(downtownConnector.id)]),
+};
+const connectorService: Service = {
+  id: 'las-vegas-downtown-connector-service',
+  name: 'Downtown Connector',
+  modeId: 'lightRail',
+  path: connectorPattern,
+  frequencyMinutes: 12,
+  spanStart: '06:00',
+  spanEnd: '23:00',
+};
+const downtownConnectorLine: Line = {
+  id: 'las-vegas-downtown-connector',
+  name: 'Downtown Connector',
+  color: LINE_COLORS[1],
+  serviceIds: [connectorService.id],
+};
+
+const downtownStation: Station = {
+  id: 'las-vegas-downtown-station',
+  name: 'Downtown Transfer',
+  coord: DOWNTOWN_TRANSFER,
+};
+const downtownTransfer: Stop = {
+  id: 'las-vegas-downtown-transfer',
+  name: 'Downtown Transfer',
+  stationId: downtownStation.id,
+  coord: DOWNTOWN_TRANSFER,
+  majorStop: true,
+  anchors: [
+    { wayId: lasVegasBoulevard.id, t: 1 },
+    { wayId: downtownConnector.id, t: 1 },
+  ],
+};
+
 const stops: Stop[] = [
-  stopOnWay('onboarding-stop-west', 'Westside', roadA, 0.18),
-  // Central sits where the train crosses the bus route, but it rides the BUS
-  // corridor only. Diagram keeps a stop on each corridor it is anchored to by
-  // straightening that corridor around it, and it can only hold two corridors
-  // together where they share a junction vertex — which a road and a rail
-  // line never do. Anchoring Central to both would leave the schematic
-  // drawing the train some 200 m away from its own stop.
-  {
-    id: 'onboarding-stop-transfer',
-    name: 'Central',
-    coord: CROSSING,
-    anchors: [{ wayId: roadA.id, t: crossingT(roadA) }],
-  },
-  stopOnWay('onboarding-stop-east', 'Eastside', roadA, 0.82),
-  stopOnWay('onboarding-stop-north', 'North', railSpine, 0.82),
-  stopOnWay('onboarding-stop-south', 'South', railSpine, 0.18),
+  stopOnWay('las-vegas-stop-medical-district', 'Medical District', charlestonWest, {
+    t: 0,
+    majorStop: true,
+  }),
+  stopOnWay('las-vegas-stop-rancho', 'Rancho Drive', charlestonWest, { t: 0.28 }),
+  stopOnWay('las-vegas-stop-arts-district', 'Arts District', charlestonWest, { t: 0.58 }),
+  stopOnWay('las-vegas-stop-charleston-las-vegas', 'Charleston & Las Vegas', charlestonWest, {
+    t: 1,
+  }),
+  stopOnWay('las-vegas-stop-fremont', 'Fremont Street', lasVegasBoulevard, { t: 0.72 }),
+  downtownTransfer,
+  stopOnWay('las-vegas-stop-maryland', 'Maryland Parkway', charlestonEast, { t: 0.55 }),
+  stopOnWay('las-vegas-stop-huntridge', 'Huntridge', charlestonEast, {
+    t: 1,
+    majorStop: true,
+  }),
+  stopOnWay('las-vegas-stop-rail-arts', 'Arts District Rail', railSouth, {
+    t: 0,
+    majorStop: true,
+  }),
+  stopOnWay('las-vegas-stop-symphony-park', 'Symphony Park', railSouth, { t: 0.86 }),
 ];
 
-const busPattern: Pattern = {
-  id: 'onboarding-bus-pattern',
-  sections: oneSection([wholeLeg(roadA.id)]),
-};
-
-const busService: Service = {
-  id: 'onboarding-bus-service',
-  modeId: 'bus',
-  path: { id: 'service-bus', sections: busPattern.sections },
-  frequencyMinutes: 10,
-};
-
-const railPattern: Pattern = {
-  id: 'onboarding-rail-pattern',
-  sections: oneSection([wholeLeg(railSpine.id)]),
-};
-
-const railService: Service = {
-  id: 'onboarding-rail-service',
-  modeId: 'lightRail',
-  path: { id: 'service-rail', sections: railPattern.sections },
-  frequencyMinutes: 12,
-};
-
-/** The one fixture system every onboarding slide's preview map renders —
- *  same data, different `viewMode` per slide. */
+/** The one valid domain system every onboarding screen projects. */
 export const ONBOARDING_FIXTURE_SYSTEM: TransitSystem = {
   ...createEmptySystem(0),
-  id: 'onboarding-fixture',
-  name: 'Community network',
-  ways: [roadA, roadB, railSpine],
+  id: 'central-las-vegas-onboarding-fixture',
+  name: 'Central Las Vegas proposal',
+  viewport: { center: [-115.146, 36.164], zoom: 13 },
+  ways: [...roadWays, ...railWays],
+  lines: [charlestonCrosstownLine, downtownConnectorLine],
+  services: [charlestonDowntownService, charlestonHuntridgeService, connectorService],
   stops,
-  lines: [
-    {
-      id: 'onboarding-bus-line',
-      name: 'Crosstown',
-      color: LINE_COLORS[0],
-      serviceIds: [busService.id],
-    },
-    {
-      id: 'onboarding-rail-line',
-      name: 'Valley Line',
-      color: LINE_COLORS[1],
-      serviceIds: [railService.id],
-    },
-  ],
-  services: [busService, railService],
-  nodes: [junctionNode],
+  stations: [downtownStation],
+  nodes: [roadJunction, railJunction],
 };
 
-// The Crosstown bus is the one animated service. Select it explicitly instead
-// of relying on array position: this fixture deliberately contains multiple
-// services, and adding another should never silently change which one moves.
-const stats = serviceStats(
-  [roadA, roadB, railSpine],
-  stops,
-  [],
-  busService,
-  busService.frequencyMinutes,
-);
-const animatedPattern = stats?.path;
-if (!animatedPattern?.plan) {
-  throw new Error('Onboarding fixture pattern failed to measure — check fixtureSystem.ts');
+/** Drawing settles on the Downtown Service before later screens introduce its
+ * Huntridge sibling and the rail proposal. */
+export const ONBOARDING_DRAW_SYSTEM: TransitSystem = {
+  ...ONBOARDING_FIXTURE_SYSTEM,
+  ways: roadWays,
+  nodes: [roadJunction],
+  lines: [{ ...charlestonCrosstownLine, serviceIds: [charlestonDowntownService.id] }],
+  services: [charlestonDowntownService],
+  stops: stops.filter((stop) =>
+    [
+      'las-vegas-stop-medical-district',
+      'las-vegas-stop-rancho',
+      'las-vegas-stop-arts-district',
+      'las-vegas-stop-charleston-las-vegas',
+      'las-vegas-stop-fremont',
+      'las-vegas-downtown-transfer',
+    ].includes(stop.id),
+  ),
+  stations: [downtownStation],
+};
+
+function requiredServiceStats(service: Service) {
+  const stats = serviceStats(
+    ONBOARDING_FIXTURE_SYSTEM.ways,
+    ONBOARDING_FIXTURE_SYSTEM.stops,
+    ONBOARDING_FIXTURE_SYSTEM.vehicleKinds,
+    service,
+    service.frequencyMinutes,
+  );
+  if (!stats?.path.plan) {
+    throw new Error(`Las Vegas ${service.name} failed to produce a simulation plan`);
+  }
+  return stats;
 }
 
-/** What slide 3's animation loop needs each frame: `runStateAt(simMs, ...)`
- *  for a vehicle position, then `pointAtDistance(path, cumLengths, distMeters)`
- *  for where to draw it. `runStateAt` reports which direction ("run") the
- *  vehicle is on; outbound and inbound are different geometry in general (a
- *  couplet's two directions ride different streets), so the caller needs
- *  both paths' arc lengths, not just the outbound one `PatternStats` already
- *  carries. */
-export const ONBOARDING_PATTERN_STATS = animatedPattern;
-export const ONBOARDING_INBOUND_CUM_LENGTHS = cumulativeLengths(animatedPattern.inboundPath);
-export const ONBOARDING_VEHICLE_PROFILE = effectiveVehicleKind([], busService).profile;
-export const ONBOARDING_SERVICE_COLOR = LINE_COLORS[0];
+const downtownStats = requiredServiceStats(charlestonDowntownService);
+const huntridgeStats = requiredServiceStats(charlestonHuntridgeService);
+const connectorStats = requiredServiceStats(connectorService);
+export const ONBOARDING_SERVICE_STATS = downtownStats;
 
-/** The preview keeps one system connected across the sequence. Infrastructure
- *  hides its service overlay so the roads, tracks, and junction are legible
- *  rather than looking like a recolored copy of Network. */
+export interface OnboardingVehicleRun {
+  id: string;
+  color: string;
+  stats: PatternStats;
+  inboundCumLengths: Float64Array;
+  profile: VehicleMotionProfile;
+}
+
+function vehicleRunFor(service: Service, color: string, stats: PatternStats): OnboardingVehicleRun {
+  const profile = effectiveVehicleKind(ONBOARDING_FIXTURE_SYSTEM.vehicleKinds, service).profile;
+  return {
+    id: stats.pattern.id,
+    color,
+    stats,
+    inboundCumLengths: cumulativeLengths(stats.inboundPath),
+    profile,
+  };
+}
+
+export const ONBOARDING_VEHICLE_RUNS = [
+  vehicleRunFor(charlestonDowntownService, charlestonCrosstownLine.color, downtownStats.path),
+  vehicleRunFor(charlestonHuntridgeService, charlestonCrosstownLine.color, huntridgeStats.path),
+  vehicleRunFor(connectorService, downtownConnectorLine.color, connectorStats.path),
+];
+
+export const ONBOARDING_PATTERN_STATS = downtownStats.path;
+export const ONBOARDING_DRAW_PATH = ONBOARDING_PATTERN_STATS.path;
+
+/** Infrastructure hides service overlays so the physical corridors carry the
+ * story. Every other scene keeps both proposed modes visible. */
 export function onboardingViewOptions(viewMode: ViewOptions['viewMode']): ViewOptions {
   return {
     viewMode,

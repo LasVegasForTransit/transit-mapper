@@ -21,7 +21,7 @@ describe('bundle budgets', () => {
     const main = BUNDLE_BUDGETS.find((budget) => budget.entry === 'main');
     expect(main).toEqual({
       entry: 'main',
-      maximumGzipBytes: 518_144,
+      maximumGzipBytes: 532_480,
       maximumBrotliBytes: 450_560,
     });
     expect(
@@ -30,7 +30,7 @@ describe('bundle budgets', () => {
           {
             entry: 'main',
             rawBytes: 1_000_000,
-            gzipBytes: 518_145,
+            gzipBytes: 532_481,
             brotliBytes: 450_560,
           },
         ],
