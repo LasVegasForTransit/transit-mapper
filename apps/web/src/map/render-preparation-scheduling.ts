@@ -197,7 +197,10 @@ class RenderPreparationPipeline {
   }
 
   start(): RenderPreparationPipelineHandle {
-    this.scheduleAttempt(4);
+    // Planning only creates a lazy work description. A cold JIT or GC pause
+    // here must yield but must not discard the whole first map or shrink every
+    // later entity batch.
+    this.scheduleAttempt(4, false, new Set(['prepare:plan:4']));
     return {
       generation: this.logicalGeneration,
       settled: this.settled,

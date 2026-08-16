@@ -41,7 +41,11 @@ export interface SourceBankSeedHandle {
   cancel(): void;
 }
 
-const DEFAULT_SETTLEMENT_TIMEOUT_MS = 2_000;
+// MapLibre needs more than two seconds to index the RTC fixture's station
+// source under the four-times CPU throttle used by the production smoke run.
+// The active bank remains visible while an update waits, so this protects a
+// cold start without freezing a map that already has an accepted revision.
+const DEFAULT_SETTLEMENT_TIMEOUT_MS = 10_000;
 
 function sourceIdsRequiringLoad(plan: RenderSceneSourceUpdatePlan): string[] {
   const cleared = new Set(plan.clearedSourceIds);
