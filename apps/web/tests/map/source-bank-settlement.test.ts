@@ -131,6 +131,29 @@ describe('render source bank settlement', () => {
     await expect(loaded).resolves.toBeUndefined();
   });
 
+  it('does not mistake a resident source for the mutation that replaces it', async () => {
+    const host = new SettlementHost();
+    host.loaded.add('ways--bank-b');
+    const mutations = deferred();
+    const loaded = waitForSourceBankLoad({
+      host,
+      sourceIds: ['ways--bank-b'],
+      mutationsComplete: mutations.promise,
+    });
+    let finished = false;
+    void loaded.then(() => {
+      finished = true;
+    });
+
+    mutations.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(finished).toBe(false);
+
+    host.sourceData('ways--bank-b');
+    await expect(loaded).resolves.toBeUndefined();
+  });
+
   it('settles the activated revision on the next render despite unrelated animation', async () => {
     const host = new SettlementHost();
     const painted = waitForSourceBankPaint({ host });
