@@ -1,4 +1,6 @@
 import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
+import { applyScreenDensity } from '@transitmapper/core/render/screen-density';
+import type { RenderPresentation } from '@transitmapper/core/render/render-presentation';
 import { createProjectionPlanningContext } from './resumable-feature-projection-planning';
 import type {
   GeographicFeatureProjectionBatchSizes,
@@ -43,9 +45,38 @@ function batchSizeForPrimaryKind(
   }
 }
 
+function applyAggregatedScreenDensity(
+  features: SystemFeatures,
+  presentation: RenderPresentation | undefined,
+): void {
+  if (!presentation) return;
+  features.stops.features = applyScreenDensity('stops', features.stops.features, presentation);
+  features.facilities.features = applyScreenDensity(
+    'facilities',
+    features.facilities.features,
+    presentation,
+  );
+  features.laneArrows.features = applyScreenDensity(
+    'laneArrows',
+    features.laneArrows.features,
+    presentation,
+  );
+  features.serviceArrows.features = applyScreenDensity(
+    'serviceArrows',
+    features.serviceArrows.features,
+    presentation,
+  );
+  features.wayLabels.features = applyScreenDensity(
+    'wayLabels',
+    features.wayLabels.features,
+    presentation,
+  );
+}
+
 function aggregateProjectionParts(
   units: readonly GeographicFeatureProjectionUnit[],
   parts: readonly SystemFeatures[],
+  presentation: RenderPresentation | undefined,
 ): SystemFeatures {
   if (parts.length !== units.length) {
     throw new RangeError(
@@ -87,6 +118,7 @@ function aggregateProjectionParts(
     ...aggregated.services.features.filter((feature) => feature.properties?.hitTarget !== true),
     ...aggregated.services.features.filter((feature) => feature.properties?.hitTarget === true),
   ];
+  applyAggregatedScreenDensity(aggregated, presentation);
   return aggregated;
 }
 
@@ -106,7 +138,8 @@ export function planResumableGeographicFeatureProjection(
     sourceIds: context.sourceIds,
     presentation: options.view.presentation,
     units: context.units,
-    aggregate: (parts) => aggregateProjectionParts(context.units, parts),
+    aggregate: (parts) =>
+      aggregateProjectionParts(context.units, parts, context.options.view.presentation),
     refineAfterUnitBudgetExceeded: (unitId) => {
       const unit = context.units.find((candidate) => candidate.id === unitId);
       if (!unit) return null;
