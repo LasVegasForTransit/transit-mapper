@@ -8,14 +8,7 @@ import { getComponent, laneRefKey } from '@transitmapper/core/model/components';
 import { createEditorStore } from '../../src/editor/store';
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import type { NamedWay } from '@transitmapper/core/model/system';
-
-/** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
- *  a silent `undefined`/`null` into a clear failure at the point of use
- *  instead of a confusing crash further down the assertion. */
-function mustFind<T>(v: T | null | undefined, what: string): T {
-  if (v === null || v === undefined) throw new Error(`expected ${what}`);
-  return v;
-}
+import { mustFind } from '../support/required.test';
 
 // Two primary-road ways meeting at a shared node, id 500. This is the base
 // crossroads fixture reused (and extended) across several import specs below.

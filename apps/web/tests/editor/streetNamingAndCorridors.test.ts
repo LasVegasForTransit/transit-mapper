@@ -13,15 +13,11 @@ import { validateSystem } from '@transitmapper/core/model/validate';
 import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import type { LngLat, PatternLeg, TransitSystem, Way } from '@transitmapper/core/model/system';
+import { mustFind } from '../support/required.test';
 
 /** A leg's covered stretch, for assertions that used to read fromT/toT. */
 const legFrom = (l: PatternLeg): number => legRange(l)[0];
 const legTo = (l: PatternLeg): number => legRange(l)[1];
-
-function mustFind<T>(v: T | null | undefined, what: string): T {
-  if (v === null || v === undefined) throw new Error(`expected ${what}`);
-  return v;
-}
 
 /**
  * Draws the two roads shared by the cross-street auto-naming scenarios below:

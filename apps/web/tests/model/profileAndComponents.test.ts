@@ -29,11 +29,7 @@ import {
 } from '@transitmapper/core/model/components';
 import { offsetPolyline } from '@transitmapper/core/model/geo';
 import type { CrossSection, LngLat } from '@transitmapper/core/model/system';
-
-function mustFind<T>(v: T | null | undefined, what: string): T {
-  if (v === null || v === undefined) throw new Error(`expected ${what}`);
-  return v;
-}
+import { mustFind } from '../support/required.test';
 
 describe('profile ops', () => {
   const road = defaultProfileFor('road', 4);

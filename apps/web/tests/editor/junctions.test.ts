@@ -13,7 +13,7 @@ import { findMismatchedTypeJunctions } from '@transitmapper/core/model/validate'
 import { defaultProfileFor } from '@transitmapper/core/model/profile';
 import type { TransitSystem } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
-import { required } from '../support/required.test';
+import { mustFind, required } from '../support/required.test';
 
 function wayOf(id: string, typeId: string, points: [number, number][]) {
   return {
@@ -24,14 +24,6 @@ function wayOf(id: string, typeId: string, points: [number, number][]) {
     grade: 'atGrade' as const,
     profile: defaultProfileFor(typeId),
   };
-}
-
-/** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
- *  a silent `undefined`/`null` into a clear failure at the point of use
- *  instead of a confusing crash further down the assertion. */
-function mustFind<T>(v: T | null | undefined, what: string): T {
-  if (v === null || v === undefined) throw new Error(`expected ${what}`);
-  return v;
 }
 
 // Every setup below draws a straight 2-point way through the same

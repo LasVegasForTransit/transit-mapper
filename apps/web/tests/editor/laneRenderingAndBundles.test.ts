@@ -16,20 +16,12 @@ import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
 import { MODES } from '@transitmapper/core/model/catalog';
 import type { LngLat, PatternLeg, Way } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
-import { required } from '../support/required.test';
+import { mustFind, required } from '../support/required.test';
 import { buildFeatures } from '../support/testRenderPresentation.test';
 
 /** A leg's covered stretch, for assertions that used to read fromT/toT. */
 const legFrom = (l: PatternLeg): number => legRange(l)[0];
 const legTo = (l: PatternLeg): number => legRange(l)[1];
-
-/** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
- *  a silent `undefined`/`null` into a clear failure at the point of use
- *  instead of a confusing crash further down the assertion. */
-function mustFind<T>(v: T | null | undefined, what: string): T {
-  if (v === null || v === undefined) throw new Error(`expected ${what}`);
-  return v;
-}
 
 /** The `offset` GeoJSON feature property is always a number for a service
  *  line feature; narrow it once here instead of at every call site. */

@@ -7,16 +7,8 @@ import { MODES } from '@transitmapper/core/model/catalog';
 import { squareFootprint } from '@transitmapper/core/model/geo';
 import { createEditorStore } from '../../src/editor/store';
 import { buildPhysicalHandles } from '@transitmapper/core/render/buildFeatures';
-import { required } from '../support/required.test';
+import { mustFind, required } from '../support/required.test';
 import { buildFeatures } from '../support/testRenderPresentation.test';
-
-/** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
- *  a silent `undefined`/`null` into a clear failure at the point of use
- *  instead of a confusing crash further down the assertion. */
-function mustFind<T>(v: T | null | undefined, what: string): T {
-  if (v === null || v === undefined) throw new Error(`expected ${what}`);
-  return v;
-}
 
 describe('On-map labels: name flows into station/facility feature properties', () => {
   let store: ReturnType<typeof createEditorStore>;

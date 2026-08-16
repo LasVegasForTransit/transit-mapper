@@ -9,14 +9,7 @@ import {
   buildFeatures,
   renderPresentationForViewport,
 } from '../support/testRenderPresentation.test';
-
-/** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
- *  a silent `undefined`/`null` into a clear failure at the point of use
- *  instead of a confusing crash further down the assertion. */
-function mustFind<T>(v: T | null | undefined, what: string): T {
-  if (v === null || v === undefined) throw new Error(`expected ${what}`);
-  return v;
-}
+import { mustFind } from '../support/required.test';
 
 describe('modes + grade (infrastructure vertical alignment)', () => {
   let store: ReturnType<typeof createEditorStore>;

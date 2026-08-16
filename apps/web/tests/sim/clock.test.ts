@@ -29,14 +29,10 @@ import {
   typicalWaitMinutes,
   vehiclesPerHour,
 } from '@transitmapper/core/sim/frequency';
+import { mustFind } from '../support/required.test';
 
 /** Whole-way legs in stored point order. */
 const legsOf = (...wayIds: string[]) => wayIds.map((wayId) => wholeLeg(wayId));
-
-function mustFind<T>(v: T | null | undefined, what: string): T {
-  if (v === null || v === undefined) throw new Error(`expected ${what}`);
-  return v;
-}
 
 // The whole simulator resolves against this one number, so the calendar math
 // below is load-bearing for every later rule about what is running when.

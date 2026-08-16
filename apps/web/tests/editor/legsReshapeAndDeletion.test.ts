@@ -21,6 +21,7 @@ import type { LngLat, PatternLeg, Way } from '@transitmapper/core/model/system';
 import { createEditorStore } from '../../src/editor/store';
 import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
 import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
+import { mustFind } from '../support/required.test';
 
 /** A leg's covered stretch, for assertions that used to read fromT/toT. */
 const legFrom = (l: PatternLeg): number => legRange(l)[0];
@@ -29,14 +30,6 @@ const legTo = (l: PatternLeg): number => legRange(l)[1];
 /** Whole-way legs in stored point order — the shape a hand-built fixture wants
  *  when direction and extent aren't what it's testing. */
 const legsOf = (...wayIds: string[]): PatternLeg[] => wayIds.map((wayId) => wholeLeg(wayId));
-
-/** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
- *  a silent `undefined`/`null` into a clear failure at the point of use
- *  instead of a confusing crash further down the assertion. */
-function mustFind<T>(v: T | null | undefined, what: string): T {
-  if (v === null || v === undefined) throw new Error(`expected ${what}`);
-  return v;
-}
 
 // buildFeatures now requires a resolved `presentation` (the renderer boundary
 // crosses into real screen-space facts). A close street-level camera also

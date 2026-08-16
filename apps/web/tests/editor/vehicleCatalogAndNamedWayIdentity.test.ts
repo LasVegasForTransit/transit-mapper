@@ -6,15 +6,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createEditorStore } from '../../src/editor/store';
 import { patternLegs } from '@transitmapper/core/model/geo';
-import { required } from '../support/required.test';
-
-/** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
- *  a silent `undefined`/`null` into a clear failure at the point of use
- *  instead of a confusing crash further down the assertion. */
-function mustFind<T>(v: T | null | undefined, what: string): T {
-  if (v === null || v === undefined) throw new Error(`expected ${what}`);
-  return v;
-}
+import { mustFind, required } from '../support/required.test';
 
 /**
  * Draws a straight two-point way and applies a cross-section preset to it,

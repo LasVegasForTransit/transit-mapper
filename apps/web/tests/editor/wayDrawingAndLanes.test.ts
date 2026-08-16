@@ -18,15 +18,7 @@ import {
 } from '@transitmapper/core/model/profile';
 import { anchorOnWay } from '@transitmapper/core/model/routeGraph';
 import { createEditorStore } from '../../src/editor/store';
-import { required } from '../support/required.test';
-
-/** Throw-guard for a lookup this test's own setup guarantees succeeds — turns
- *  a silent `undefined`/`null` into a clear failure at the point of use
- *  instead of a confusing crash further down the assertion. */
-function mustFind<T>(v: T | null | undefined, what: string): T {
-  if (v === null || v === undefined) throw new Error(`expected ${what}`);
-  return v;
-}
+import { mustFind, required } from '../support/required.test';
 
 describe('drawing a way creates a way + one service', () => {
   let store: ReturnType<typeof createEditorStore>;

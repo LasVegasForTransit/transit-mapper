@@ -8,3 +8,11 @@ export function required<T>(value: T | null, what = 'a non-null result'): T {
   if (value === null) throw new Error(`expected ${what}`);
   return value;
 }
+
+// Same throw-guard as `required`, but for lookups (`Array#find`, `Map#get`,
+// optional-chained property access, …) that legitimately return `undefined`
+// rather than `null` on a miss.
+export function mustFind<T>(v: T | null | undefined, what: string): T {
+  if (v === null || v === undefined) throw new Error(`expected ${what}`);
+  return v;
+}
