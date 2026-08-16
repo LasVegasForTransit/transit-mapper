@@ -5,7 +5,7 @@ import { mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 
 import { basename, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BUNDLE_BUDGETS } from '../../perf.config';
-import { evaluateBundleBudgets } from '../../src/perf/bundleBudget';
+import { evaluateBundleBudgets, type BundleEntrySize } from '../../src/perf/bundleBudget';
 import {
   evaluateChunkSizes,
   isMapEngineChunkName,
@@ -14,6 +14,7 @@ import {
 } from '../../src/perf/chunkPolicy';
 import {
   createDeliveryGraphs,
+  type BundleEntryReport,
   type BundleGraphReport,
   type BundleReport,
   type ViteManifest,
@@ -253,12 +254,25 @@ function logGraph(label: string, graph: BundleGraphReport): void {
   );
 }
 
+/**
+ * A first load pays the entry's static closure. A dynamic import has its own
+ * delivery and chunk contracts, but does not belong in startup byte limits.
+ */
+export function initialDeliverySizes(entries: readonly BundleEntryReport[]): BundleEntrySize[] {
+  return entries.map(({ entry, eager }) => ({
+    entry,
+    rawBytes: eager.rawBytes,
+    gzipBytes: eager.gzipBytes,
+    brotliBytes: eager.brotliBytes,
+  }));
+}
+
 async function main(arguments_: readonly string[]): Promise<void> {
   const command = parseBundleReportArguments(arguments_);
   const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8')) as ViteManifest;
   const graphs = createDeliveryGraphs({ manifest, files: await outputFiles() });
   const chunks = await reportChunks();
-  const violations = evaluateBundleBudgets(graphs.entries, BUNDLE_BUDGETS);
+  const violations = evaluateBundleBudgets(initialDeliverySizes(graphs.entries), BUNDLE_BUDGETS);
   const chunkViolations = evaluateChunkSizes(chunks);
   const report: BundleReport = {
     schemaVersion: 3,
