@@ -167,18 +167,29 @@ describe('SVG screen-space LOD parity', () => {
     expect(svg).toMatch(/data-render-tier="street"[^>]+opacity="0\.4500"/);
   });
 
-  it('keeps selection-owned junction guides out of the settled SVG scene', () => {
+  it('draws settled lane movements in the SVG scene without making them selection-owned', () => {
     const { system, referenceWay } = junctionFixture();
     const view = viewAtWidth(referenceWay, 10.5);
-    const resolved = resolveStaticVisualScene({
+    const selected = resolveStaticVisualScene({
       revision: 'selected-junction',
       features: buildFeatures(system, { kind: 'node', id: 'junction' }, [], view),
       presentation: view.presentation,
     });
-    const sources = resolved.visuals.map((visual) => visual.source);
+    const unselected = resolveStaticVisualScene({
+      revision: 'unselected-junction',
+      features: buildFeatures(system, null, [], view),
+      presentation: view.presentation,
+    });
+    const selectedConnectors = selected.visuals.filter((visual) => visual.source === 'connectors');
+    const unselectedConnectors = unselected.visuals.filter(
+      (visual) => visual.source === 'connectors',
+    );
 
-    expect(sources).not.toContain('connectors');
-    expect(sources.indexOf('ways')).toBeLessThan(sources.indexOf('lane-markings'));
+    expect(selectedConnectors).not.toEqual([]);
+    expect(selectedConnectors).toEqual(unselectedConnectors);
+    expect(selected.visuals.findIndex((visual) => visual.source === 'ways')).toBeLessThan(
+      selected.visuals.findIndex((visual) => visual.source === 'lane-markings'),
+    );
   });
 
   it('holds a District-only tunnel at full opacity beyond the Street threshold', () => {

@@ -54,6 +54,7 @@ import {
 } from '../geometry/streets';
 import {
   collectWayTrims,
+  connectorCurves,
   junctionGeometry,
   type JunctionGeometry,
   type WayTrims,
@@ -1724,6 +1725,57 @@ interface AppendJunctionPaintFeaturesOptions {
   junctionFeatures: Feature<Polygon | Point>[];
 }
 
+interface AppendSettledJunctionConnectorsOptions {
+  node: TransitSystem['nodes'][number];
+  metadata: JunctionPaintMetadata;
+  waysById: Map<string, Way>;
+  wayTrims: WayTrims;
+  turnRestrictions: TransitSystem['turnRestrictions'];
+  connectorFeatures: Feature<LineString>[];
+}
+
+/**
+ * Add the lane movements that make a Street-tier junction legible without
+ * opening its editor. These are part of the physical road graph, so they
+ * belong to the settled scene. The editor draws the same curves above this
+ * layer only to make the active junction easier to work on.
+ */
+function appendSettledJunctionConnectors({
+  node,
+  metadata,
+  waysById,
+  wayTrims,
+  turnRestrictions,
+  connectorFeatures,
+}: AppendSettledJunctionConnectorsOptions): void {
+  for (const connector of connectorCurves(node, waysById, wayTrims, turnRestrictions)) {
+    connectorFeatures.push({
+      type: 'Feature',
+      id: stableFeatureId(
+        'connectors',
+        'lane-movement',
+        node.id,
+        connector.from.wayId,
+        connector.from.laneId,
+        connector.to.wayId,
+        connector.to.laneId,
+      ),
+      properties: {
+        nodeId: node.id,
+        fromWayId: connector.from.wayId,
+        fromLaneId: connector.from.laneId,
+        toWayId: connector.to.wayId,
+        toLaneId: connector.to.laneId,
+        typeIds: metadata.typeIds,
+        corridorW14: metadata.corridorW14,
+        renderTier: 'street',
+        tierOpacity: metadata.tierOpacity,
+      },
+      geometry: { type: 'LineString', coordinates: connector.path },
+    });
+  }
+}
+
 /**
  * Emits the visible Street-tier records for one resolved junction.
  *
@@ -2244,6 +2296,7 @@ function projectTopologyFeatures({
   serviceWayIds,
   affectedServiceIds,
   junctionOutputNodeIds,
+  connectorOutputNodeIds,
 }: ProjectTopologyFeaturesOptions): TopologyProjectionResult {
   const selId = selection?.id ?? null;
   const { waysById, servicesByWay: byWay, serviceSlots: slots } = indexes;
@@ -2576,10 +2629,19 @@ function projectTopologyFeatures({
         approachControls: system.approachControls,
         junctionFeatures,
       });
-      // Selection-owned lane movement guides live exclusively in the web
-      // editor's transient junction-guide source. Settled scenes remain
-      // selection-independent, so changing selection never rebuilds or leaves
-      // stale connector geometry in committed sources.
+      if (
+        projection.junctions.connectors &&
+        (!connectorOutputNodeIds || connectorOutputNodeIds.has(node.id))
+      ) {
+        appendSettledJunctionConnectors({
+          node,
+          metadata,
+          waysById,
+          wayTrims,
+          turnRestrictions: system.turnRestrictions,
+          connectorFeatures,
+        });
+      }
     }
   }
 

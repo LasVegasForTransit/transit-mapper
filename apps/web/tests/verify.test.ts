@@ -8607,7 +8607,7 @@ check(
   );
 }
 
-// --- R3: lane-detail rendering emits junction footprints + connector guides ---
+// --- R3: lane-detail rendering emits junction footprints + settled lane movements ---
 {
   fresh();
   const ew = required(store.commands.ways.beginWay('road', 'straight'));
@@ -8625,11 +8625,9 @@ check(
     presentation: STREET_TEST_RENDER_PRESENTATION,
   });
   check('lane detail emits the junction footprint', fc.junctions.features.length === 1);
-  // Connector guides are scoped to the SELECTED junction — otherwise a complex
-  // interchange renders as a star-burst of every junction's lane connectors.
   check(
-    'connector guides are hidden for unselected junctions',
-    fc.connectors.features.length === 0,
+    'permitted lane movements render for unselected junctions',
+    fc.connectors.features.length > 0,
   );
   const far = buildFeatures(store.getState().system, null, [], {
     viewMode: 'infrastructure',
@@ -8647,8 +8645,9 @@ check(
     sel.junctions.features.some((f) => f.properties?.selected === true),
   );
   check(
-    'selected junction guides stay out of the settled connector source',
-    sel.connectors.features.length === 0,
+    'selection does not change settled lane movements',
+    sel.connectors.features.map((feature) => feature.id).join(',') ===
+      fc.connectors.features.map((feature) => feature.id).join(','),
   );
 }
 
