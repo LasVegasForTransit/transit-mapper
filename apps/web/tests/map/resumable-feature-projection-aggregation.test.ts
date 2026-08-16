@@ -1,6 +1,7 @@
-import type { Feature, LineString } from 'geojson';
+import type { Feature, LineString, Point } from 'geojson';
 import { describe, expect, it } from 'vitest';
 import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
+import { renderPresentationForViewport } from '@transitmapper/core/render/render-presentation';
 import {
   planResumableFeatureProjectionAggregation,
   type ProjectionAggregationWorkUnit,
@@ -34,6 +35,30 @@ function unit(id: string): GeographicFeatureProjectionUnit {
     id,
     primary: { kind: 'corridor', ids: [id] },
     sourceIds: ['tm-services'],
+    run: () => emptySystemFeatures(),
+  };
+}
+
+function stop(id: string, coordinate: [number, number], major = false): Feature<Point> {
+  return {
+    type: 'Feature',
+    id,
+    properties: { id, major, interchange: major },
+    geometry: { type: 'Point', coordinates: coordinate },
+  };
+}
+
+function stopPart(stops: Feature<Point>[]): SystemFeatures {
+  const features = emptySystemFeatures();
+  features.stops.features.push(...stops);
+  return features;
+}
+
+function stopUnit(id: string): GeographicFeatureProjectionUnit {
+  return {
+    id,
+    primary: { kind: 'stop', ids: [id] },
+    sourceIds: ['tm-stations'],
     run: () => emptySystemFeatures(),
   };
 }
@@ -81,5 +106,30 @@ describe('resumable feature projection aggregation', () => {
       }
     }).toThrow('duplicate tm-services ID same');
     expect(() => plan.result()).toThrow('Aggregation is incomplete');
+  });
+
+  it('chooses one stop per screen cell after every projection fragment arrives', () => {
+    const plan = planResumableFeatureProjectionAggregation({
+      units: [stopUnit('ordinary'), stopUnit('interchange')],
+      parts: [
+        stopPart([stop('ordinary', [-115.15, 36.14])]),
+        stopPart([stop('interchange', [-115.150001, 36.140001], true)]),
+      ],
+      batchSize: 1,
+      presentation: renderPresentationForViewport({
+        center: [-115.15, 36.14],
+        zoom: 20,
+        width: 800,
+        height: 600,
+      }),
+    });
+
+    for (let index = 0; ; index++) {
+      const work = plan.units.unitAt(index);
+      if (!work) break;
+      work.run();
+    }
+
+    expect(plan.result().stops.features.map((feature) => feature.id)).toEqual(['interchange']);
   });
 });

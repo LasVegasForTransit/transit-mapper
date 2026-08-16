@@ -1,5 +1,6 @@
 import type { RenderFeatureProjectionUnitScope } from '@transitmapper/core/render/render-feature-projection-unit';
 import type { SystemFeatures } from '@transitmapper/core/render/buildFeatures';
+import type { RenderPresentation } from '@transitmapper/core/render/render-presentation';
 import type { RenderProjectionScope } from '@transitmapper/core/render/render-projection-scope';
 import { renderNodesById } from '@transitmapper/core/render/render-domain-indexes';
 import {
@@ -80,6 +81,9 @@ export interface GeographicFeatureProjectionUnit {
 interface ReadyResumableGeographicFeatureProjectionPlan {
   readonly kind: 'ready';
   readonly sourceIds: readonly MapSystemFeatureSourceId[];
+  /** Every projection fragment shares this final-display contract. The
+   * aggregation stage uses it only after it has every candidate. */
+  readonly presentation?: RenderPresentation;
   readonly units: readonly GeographicFeatureProjectionUnit[];
   aggregate(parts: readonly SystemFeatures[]): SystemFeatures;
   refineAfterUnitBudgetExceeded?(

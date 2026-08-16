@@ -146,6 +146,11 @@ export function buildFeaturesForSources({
       precomputedViewportCandidates,
       preparedSnapshot,
       selectionOwnedConnectors,
+      // A resumable projection owns only one fragment. Applying density here
+      // would make the surviving marker depend on arbitrary batch boundaries.
+      // The aggregation stage applies the same core policy after every source
+      // candidate is present.
+      applyScreenDensity: unitScope === undefined,
       counts,
       activePatternId,
       armedTerminus,

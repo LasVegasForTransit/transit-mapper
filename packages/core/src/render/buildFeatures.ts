@@ -85,6 +85,7 @@ import {
   type RenderTierResolution,
   type RenderTierStateResolver,
 } from './render-presentation';
+import { applyScreenDensity } from './screen-density';
 import { type RenderViewportCategory } from './viewport-index';
 import {
   renderViewportCandidateSets,
@@ -752,6 +753,9 @@ export interface BuildFeaturesOptions {
   /** Live editors may own selected-junction movement guides in a transient
    * source. Static surfaces omit this and retain selected connector output. */
   selectionOwnedConnectors?: boolean;
+  /** Resumable live projection defers density until every source fragment has
+   * been aggregated. Direct callers already own a complete collection. */
+  applyScreenDensity?: boolean;
   counts?: FeatureBuildOperationCounts;
   /** The branch that alone receives interaction at coincident termini. */
   activePatternId?: string | null;
@@ -1107,34 +1111,60 @@ function buildSharedProjectionIndexes(
   };
 }
 
-function projectStops(
-  system: TransitSystem,
-  stops: TransitSystem['stops'],
-  indexes: SharedProjectionIndexes,
-  counts: FeatureBuildOperationCounts | undefined,
-): Feature<Point>[] {
+interface ProjectStopsOptions {
+  system: TransitSystem;
+  stops: TransitSystem['stops'];
+  indexes: SharedProjectionIndexes;
+  counts: FeatureBuildOperationCounts | undefined;
+  presentation: RenderPresentation;
+  applyScreenDensity: boolean;
+}
+
+interface StopWayCoverage {
+  readonly nearbyProjectedWayIds: readonly string[][];
+  readonly nearbyWayIds: readonly string[][];
+}
+
+function stopWayCoverage({
+  system,
+  stops,
+  indexes,
+}: Pick<ProjectStopsOptions, 'system' | 'stops' | 'indexes'>): StopWayCoverage {
+  const preparedWayIds = indexes.wayIdsByStop;
+  if (preparedWayIds) {
+    return {
+      nearbyProjectedWayIds: stops.map((stop) =>
+        (preparedWayIds.get(stop.id) ?? []).filter((wayId) => {
+          const way = indexes.waysById.get(wayId);
+          return way ? indexes.projectedWayTypeIds.has(way.typeId) : false;
+        }),
+      ),
+      nearbyWayIds: stops.map((stop) => [...(preparedWayIds.get(stop.id) ?? [])]),
+    };
+  }
+  const visibleWays = visibleWaysFor(system.ways, indexes.projectedWayTypeIds);
+  const nearbyProjectedWayIds = nearWaysForStops(stops, visibleWays);
+  const everyWay = visibleWaysFor(system.ways, allWayTypeIds(system.ways));
+  return {
+    nearbyProjectedWayIds,
+    nearbyWayIds:
+      everyWay === visibleWays ? nearbyProjectedWayIds : nearWaysForStops(stops, everyWay),
+  };
+}
+
+function projectStops({
+  system,
+  stops,
+  indexes,
+  counts,
+  presentation,
+  applyScreenDensity: shouldApplyScreenDensity,
+}: ProjectStopsOptions): Feature<Point>[] {
   if (counts) counts.featureStopPassCount++;
   // The interchange scan (servedWayIds per stop) is the single most expensive
   // part of this function at RTC scale — memoized on (stops, visibleWays) so a
   // selection/viewport rebuild reuses it instead of re-scanning every boarding point.
-  const preparedWayIds = indexes.wayIdsByStop;
-  let nearWaysByStop: string[][];
-  let allNearWaysByStop: string[][];
-  if (preparedWayIds) {
-    nearWaysByStop = stops.map((stop) =>
-      (preparedWayIds.get(stop.id) ?? []).filter((wayId) => {
-        const way = indexes.waysById.get(wayId);
-        return way ? indexes.projectedWayTypeIds.has(way.typeId) : false;
-      }),
-    );
-    allNearWaysByStop = stops.map((stop) => [...(preparedWayIds.get(stop.id) ?? [])]);
-  } else {
-    const visibleWays = visibleWaysFor(system.ways, indexes.projectedWayTypeIds);
-    nearWaysByStop = nearWaysForStops(stops, visibleWays);
-    const everyWay = visibleWaysFor(system.ways, allWayTypeIds(system.ways));
-    allNearWaysByStop =
-      everyWay === visibleWays ? nearWaysByStop : nearWaysForStops(stops, everyWay);
-  }
+  const { nearbyProjectedWayIds, nearbyWayIds } = stopWayCoverage({ system, stops, indexes });
   // `servicesByWay` reports every service that touches a way, which over-reports
   // once a service can cover only part of one. Test only services encountered
   // by this station batch; scanning the complete document in every resumable
@@ -1147,10 +1177,10 @@ function projectStops(
     return near ? serviceCoversWayAt(service, wayId, near.t) : true;
   };
 
-  return stops.map((stop, stopIndex) => {
+  const features: Feature<Point>[] = stops.map((stop, stopIndex) => {
     if (counts) counts.featureStopVisitCount++;
     const servingServiceSet = new Set<Service>();
-    for (const wayId of nearWaysByStop[stopIndex]) {
+    for (const wayId of nearbyProjectedWayIds[stopIndex]) {
       for (const service of indexes.servicesByWay.get(wayId) ?? []) {
         if (reaches(service, wayId, stop.coord)) servingServiceSet.add(service);
       }
@@ -1167,7 +1197,7 @@ function projectStops(
       : [];
     const servedModeIds = servedModeIdsForStop({
       stop,
-      nearbyWayIds: allNearWaysByStop[stopIndex],
+      nearbyWayIds: nearbyWayIds[stopIndex],
       servicesByWay: indexes.allServicesByWay,
       reaches,
     });
@@ -1192,6 +1222,7 @@ function projectStops(
       geometry: { type: 'Point', coordinates: stop.coord },
     };
   });
+  return shouldApplyScreenDensity ? applyScreenDensity('stops', features, presentation) : features;
 }
 
 function projectSelectionHandles(
@@ -1618,6 +1649,8 @@ interface ProjectFacilitiesOptions {
   indexes: SharedProjectionIndexes;
   network: boolean;
   counts: FeatureBuildOperationCounts | undefined;
+  presentation: RenderPresentation;
+  applyScreenDensity: boolean;
   candidateFacilityIds?: readonly string[];
 }
 
@@ -1626,30 +1659,37 @@ function projectFacilities({
   indexes,
   network,
   counts,
+  presentation,
+  applyScreenDensity: shouldApplyScreenDensity,
   candidateFacilityIds,
 }: ProjectFacilitiesOptions): Feature<Point>[] {
   if (counts) counts.featureFacilityPassCount++;
   if (network) return [];
 
-  return orderedIndexedValues(system.facilities, indexes.facilitiesById, candidateFacilityIds).map(
-    (facility) => {
-      if (counts) counts.featureFacilityVisitCount++;
-      const render = facilityRender(facility.typeId);
-      return {
-        type: 'Feature',
-        id: stableFeatureId('facilities', 'facility', facility.id),
-        properties: {
-          id: facility.id,
-          typeId: facility.typeId,
-          color: render.color,
-          radius: render.radius,
-          icon: iconName(render.icon, render.color),
-          name: facility.name ?? '',
-        },
-        geometry: { type: 'Point', coordinates: facilityRenderCoordinate(facility) },
-      };
-    },
-  );
+  const features: Feature<Point>[] = orderedIndexedValues(
+    system.facilities,
+    indexes.facilitiesById,
+    candidateFacilityIds,
+  ).map((facility) => {
+    if (counts) counts.featureFacilityVisitCount++;
+    const render = facilityRender(facility.typeId);
+    return {
+      type: 'Feature',
+      id: stableFeatureId('facilities', 'facility', facility.id),
+      properties: {
+        id: facility.id,
+        typeId: facility.typeId,
+        color: render.color,
+        radius: render.radius,
+        icon: iconName(render.icon, render.color),
+        name: facility.name ?? '',
+      },
+      geometry: { type: 'Point', coordinates: facilityRenderCoordinate(facility) },
+    };
+  });
+  return shouldApplyScreenDensity
+    ? applyScreenDensity('facilities', features, presentation)
+    : features;
 }
 
 interface TopologyProjectionResult {
@@ -3277,7 +3317,16 @@ function projectIndependentFeatures(
   const { system, selection, handleWayIds, projection, indexes, network, counts } = options;
   const candidateStops = independentCandidateStops(options);
   const candidateStations = independentCandidateStations(options);
-  const stops = projection.stops ? projectStops(system, candidateStops, indexes, counts) : [];
+  const stops = projection.stops
+    ? projectStops({
+        system,
+        stops: candidateStops,
+        indexes,
+        counts,
+        presentation: options.view.presentation,
+        applyScreenDensity: options.buildOptions.applyScreenDensity ?? true,
+      })
+    : [];
   const handles =
     projection.selectionHandles && !(network && selection?.kind === 'service')
       ? projectSelectionHandles(
@@ -3299,6 +3348,8 @@ function projectIndependentFeatures(
         indexes,
         network,
         counts,
+        presentation: options.view.presentation,
+        applyScreenDensity: options.buildOptions.applyScreenDensity ?? true,
         candidateFacilityIds: intersectOptionalOrderedIds(
           options.viewport.facilityIds ?? [],
           options.buildOptions.unitScope?.facilityIds,
@@ -3311,6 +3362,8 @@ function projectIndependentFeatures(
 function assembleSystemFeatures(
   topology: TopologyProjectionResult,
   independent: IndependentProjectionResult,
+  presentation: RenderPresentation,
+  shouldApplyScreenDensity: boolean,
 ): SystemFeatures {
   return {
     ways: { type: 'FeatureCollection', features: topology.ways },
@@ -3324,11 +3377,26 @@ function assembleSystemFeatures(
     serviceTermini: { type: 'FeatureCollection', features: independent.serviceTermini },
     lanes: { type: 'FeatureCollection', features: topology.lanes },
     laneMarkings: { type: 'FeatureCollection', features: topology.laneMarkings },
-    laneArrows: { type: 'FeatureCollection', features: topology.laneArrows },
-    serviceArrows: { type: 'FeatureCollection', features: topology.serviceArrows },
+    laneArrows: {
+      type: 'FeatureCollection',
+      features: shouldApplyScreenDensity
+        ? applyScreenDensity('laneArrows', topology.laneArrows, presentation)
+        : topology.laneArrows,
+    },
+    serviceArrows: {
+      type: 'FeatureCollection',
+      features: shouldApplyScreenDensity
+        ? applyScreenDensity('serviceArrows', topology.serviceArrows, presentation)
+        : topology.serviceArrows,
+    },
     junctions: { type: 'FeatureCollection', features: topology.junctions },
     connectors: { type: 'FeatureCollection', features: topology.connectors },
-    wayLabels: { type: 'FeatureCollection', features: independent.wayLabels },
+    wayLabels: {
+      type: 'FeatureCollection',
+      features: shouldApplyScreenDensity
+        ? applyScreenDensity('wayLabels', independent.wayLabels, presentation)
+        : independent.wayLabels,
+    },
   };
 }
 
@@ -3508,5 +3576,10 @@ export function buildFeatures(
     viewport,
     projectionScope,
   });
-  return assembleSystemFeatures(topology, independent);
+  return assembleSystemFeatures(
+    topology,
+    independent,
+    view.presentation,
+    options.applyScreenDensity ?? true,
+  );
 }
