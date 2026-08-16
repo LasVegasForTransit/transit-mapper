@@ -705,34 +705,5 @@
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
-  },
-  "tests/verify.test.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 256
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 32
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
-    "max-lines": {
-      "count": 1
-    },
-    "sonarjs/no-identical-functions": {
-      "count": 2
-    }
   }
 }

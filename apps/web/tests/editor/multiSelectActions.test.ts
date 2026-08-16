@@ -1,0 +1,154 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { pointAtT, resolveWayPath } from '@transitmapper/core/model/geo';
+import type { LngLat, TransitSystem } from '@transitmapper/core/model/system';
+import { createEditorStore } from '../../src/editor/store';
+import { required } from '../support/required.test';
+
+type Store = ReturnType<typeof createEditorStore>;
+
+function must<T>(value: T | undefined | null): T {
+  if (value == null) throw new Error('expected a defined value');
+  return value;
+}
+
+describe('a multi-select group can mix different kinds of items, and moving or deleting it acts on the whole group', () => {
+  let store: Store, wayA: string, stId: string, facId: string;
+
+  beforeEach(() => {
+    store = createEditorStore();
+    wayA = required(store.commands.ways.beginWay('lightRail', 'straight'));
+    store.commands.ways.addWayPoint(wayA, [-115.2, 36.1]);
+    store.commands.ways.addWayPoint(wayA, [-115.1, 36.1]);
+    store.commands.ways.finishWay();
+    stId = required(store.commands.stops.addStop([-115.25, 36.05])); // free-floating, not anchored to wayA
+    facId = required(store.commands.facilities.addFacility('entrance', [-115.15, 36.2]));
+  });
+
+  describe('wayA and the station selected', () => {
+    beforeEach(() => {
+      store.commands.selection.toggleMultiSelect({ kind: 'way', id: wayA });
+      store.commands.selection.toggleMultiSelect({ kind: 'stop', id: stId });
+    });
+
+    it('toggling items one at a time builds up the group', () => {
+      expect(store.getState().multiSelection).toHaveLength(2);
+    });
+
+    it('multi-select clears the single Inspector selection', () => {
+      expect(store.getState().selection).toBeNull();
+    });
+
+    describe('toggling the already-selected station off, then back on with the facility', () => {
+      beforeEach(() => {
+        store.commands.selection.toggleMultiSelect({ kind: 'stop', id: stId }); // removes it
+      });
+
+      it('toggling an already-selected item removes it', () => {
+        expect(store.getState().multiSelection).toHaveLength(1);
+      });
+
+      describe('re-adding the station, then the facility', () => {
+        beforeEach(() => {
+          store.commands.selection.toggleMultiSelect({ kind: 'stop', id: stId });
+          store.commands.selection.toggleMultiSelect({ kind: 'facility', id: facId });
+        });
+
+        it('the group now holds all three kinds of item', () => {
+          expect(store.getState().multiSelection).toHaveLength(3);
+        });
+
+        describe('nudging the group', () => {
+          let before: TransitSystem;
+
+          beforeEach(() => {
+            before = store.getState().system;
+            store.commands.selection.nudgeMultiSelection(0.01, 0.02);
+          });
+
+          it('nudge moves every point of a selected way', () => {
+            const s = store.getState().system;
+            expect(must(s.ways.find((w) => w.id === wayA)).points[0][0]).toBe(
+              must(before.ways.find((w) => w.id === wayA)).points[0][0] + 0.01,
+            );
+          });
+
+          it('nudge moves a selected free-floating station', () => {
+            const s = store.getState().system;
+            expect(must(s.stops.find((st) => st.id === stId)).coord[0]).toBe(
+              must(before.stops.find((st) => st.id === stId)).coord[0] + 0.01,
+            );
+          });
+
+          it("nudge moves a selected facility's point geometry", () => {
+            const s = store.getState().system;
+            const now = must(s.facilities.find((f) => f.id === facId)).geometry as [number, number];
+            const was = must(before.facilities.find((f) => f.id === facId)).geometry as [
+              number,
+              number,
+            ];
+            expect(now[1]).toBe(was[1] + 0.02);
+          });
+
+          describe('a station anchored to a co-selected way', () => {
+            // A station anchored to a way that's ALSO in the group must not be
+            // double-moved — it already follows via the way's own reanchor.
+            let anchoredSt: string, wayPointBefore: LngLat;
+
+            beforeEach(() => {
+              anchoredSt = required(
+                store.commands.stops.addStop([-115.15, 36.1], { wayId: wayA, t: 0.5 }),
+              );
+              store.commands.selection.toggleMultiSelect({ kind: 'stop', id: anchoredSt });
+              wayPointBefore = must(store.getState().system.ways.find((w) => w.id === wayA))
+                .points[0];
+              store.commands.selection.nudgeMultiSelection(0.005, 0.005);
+            });
+
+            it("a station anchored to a co-selected way follows the way's own reanchor, not a second direct nudge", () => {
+              const s = store.getState().system;
+              const way = must(s.ways.find((w) => w.id === wayA));
+              const expected = pointAtT(resolveWayPath(way), 0.5);
+              const actual = must(s.stops.find((st) => st.id === anchoredSt)).coord;
+              expect(Math.abs(actual[0] - expected[0])).toBeLessThan(1e-9);
+              expect(Math.abs(actual[1] - expected[1])).toBeLessThan(1e-9);
+            });
+
+            it('the way itself did move', () => {
+              const s = store.getState().system;
+              expect(must(s.ways.find((w) => w.id === wayA)).points[0][0]).not.toBe(
+                wayPointBefore[0],
+              );
+            });
+
+            it('the group still has four members before the bulk delete', () => {
+              expect(store.getState().multiSelection).toHaveLength(4);
+            });
+
+            describe('after the group is deleted', () => {
+              beforeEach(() => {
+                store.commands.selection.deleteMultiSelection();
+              });
+
+              it('bulk delete removes the way', () => {
+                expect(store.getState().system.ways.some((w) => w.id === wayA)).toBe(false);
+              });
+
+              it('bulk delete removes both stations', () => {
+                const s = store.getState().system;
+                expect(s.stops.some((st) => st.id === stId || st.id === anchoredSt)).toBe(false);
+              });
+
+              it('bulk delete removes the facility', () => {
+                expect(store.getState().system.facilities.some((f) => f.id === facId)).toBe(false);
+              });
+
+              it('bulk delete clears the group', () => {
+                expect(store.getState().multiSelection).toHaveLength(0);
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+});

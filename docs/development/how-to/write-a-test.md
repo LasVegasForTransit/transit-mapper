@@ -5,9 +5,9 @@ interchangeable.
 
 ## Adding to an existing suite
 
-`apps/web/tests/verify.test.ts` and `apps/worker/tests/verify.test.ts` are
-sequential scripts. One store is built at module scope and mutated in order,
-so each section depends on the state the sections above it left behind.
+`apps/worker/tests/verify.test.ts` is a sequential script. One store is
+built at module scope and mutated in order, so each section depends on
+the state the sections above it left behind.
 
 Add beside related cases, in the same style:
 
@@ -18,9 +18,16 @@ check('deleting a way removes its service', servicesOnWay(wayId).length === 0);
 The name is the entire failure message, so write it as the rule it enforces
 — not "test delete" but "deleting a way removes its service".
 
-**Do not split these files up piecemeal.** The shared sequential state means
+**Do not split this file up piecemeal.** The shared sequential state means
 a section moved to another file silently tests something different. Splitting
-them is a rewrite, not a refactor.
+it is a rewrite, not a refactor.
+
+`apps/web/tests/verify.test.ts` no longer exists — its cases were split into
+independent Vitest files under `apps/web/tests/`, mirroring the area of
+`src/` (or, for logic in `@transitmapper/core`, the area of
+`packages/core/src/`) each case covers. Add new web-side cases as ordinary
+`describe`/`it` blocks in the relevant file below, or a new file if none
+exists yet — never as an appended sequential check.
 
 ## Adding a new test file
 
@@ -58,11 +65,12 @@ describe('claimOutcome', () => {
 });
 ```
 
-Every Vitest config discovers `tests/**/*.test.{ts,tsx}`. The configs
-explicitly exclude the sequential verifiers and `tests/support/`, which are
-executed directly or imported by tests. Keeping all test material under this
-one boundary makes the runner configuration and the repository check agree
-about what must run. These Vitest globs deliberately exclude end-to-end specs.
+Every Vitest config discovers `tests/**/*.test.{ts,tsx}`. Configs exclude
+`tests/support/`, which is imported by tests rather than run directly; the
+worker's config also excludes its sequential verifier, which is executed
+directly instead. Keeping all test material under this one boundary makes
+the runner configuration and the repository check agree about what must
+run. These Vitest globs deliberately exclude end-to-end specs.
 
 ## Testing the Worker
 
