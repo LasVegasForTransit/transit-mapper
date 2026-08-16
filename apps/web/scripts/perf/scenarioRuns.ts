@@ -20,7 +20,9 @@ import {
   stopTrace,
 } from './browser';
 import { runMeasuredJourney, waitForScenarioReady } from './journeys';
+import { networkEditStopCandidates } from './offline-edit-target';
 import { combineProductionPersistence } from './production-persistence';
+import { renderedNetworkStopId } from './rendered-network-stop';
 
 interface RunSampleOptions {
   browser: Browser;
@@ -86,9 +88,22 @@ async function runSample(options: RunSampleOptions): Promise<PerfSample | undefi
       });
     }
     const startup = await collectStartupMetrics(page);
-    // Source order makes the edge Stop deterministic when low-zoom hit circles overlap.
-    const target = fixture.stops.at(-1);
-    const entity = target?.name ? { id: target.id, name: target.name } : undefined;
+    const resolveEditorEntity = async () => {
+      if (options.scenario.surface !== 'editor') return undefined;
+      const renderedStop = await renderedNetworkStopId(
+        page,
+        networkEditStopCandidates(fixture).map((stop) => ({ id: stop.id, coord: stop.coord })),
+      );
+      if (!renderedStop.id) {
+        throw new Error(
+          `${options.scenario.id} did not render a served Stop for the editor journey: ` +
+            JSON.stringify(renderedStop.inspected),
+        );
+      }
+      const target = fixture.stops.find((stop) => stop.id === renderedStop.id);
+      return target?.name ? { id: target.id, name: target.name } : undefined;
+    };
+    let entity = await resolveEditorEntity();
     const gesture = await runMeasuredJourney(
       page,
       options.scenario,
@@ -109,6 +124,7 @@ async function runSample(options: RunSampleOptions): Promise<PerfSample | undefi
       });
     }
     const warmStartup = await collectStartupMetrics(page);
+    entity = await resolveEditorEntity();
     const warmGesture = await runMeasuredJourney(
       page,
       options.scenario,
