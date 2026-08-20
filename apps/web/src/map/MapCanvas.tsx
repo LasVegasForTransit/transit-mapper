@@ -214,6 +214,8 @@ export interface MapCanvasProps {
    *  rather than that a third-party tile host is down. */
   onBasemapUnavailable?: () => void;
   onStartupStyleSettled?: () => void;
+  /** Stops editor vehicle source writes while onboarding owns the visible map. */
+  vehiclePaintingSuspended?: boolean;
 }
 
 interface MapErrorLike {
@@ -272,7 +274,11 @@ function framePadding(el: HTMLElement, margin: number): PaddingOptions {
   };
 }
 
-export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCanvasProps) {
+export function MapCanvas({
+  onBasemapUnavailable,
+  onStartupStyleSettled,
+  vehiclePaintingSuspended = false,
+}: MapCanvasProps) {
   const colorScheme = useSystemColorScheme();
   const initialColorSchemeRef = useRef(colorScheme);
   const styleSwitchControllerRef = useRef<StyleSwitchController | null>(null);
@@ -361,6 +367,8 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
   // Read live by the animation loop each tick, for the same reason.
   const pinnedPeriodRef = useRef<string | undefined>(pinnedPeriod);
   pinnedPeriodRef.current = pinnedPeriod;
+  const vehiclePaintingSuspendedRef = useRef(vehiclePaintingSuspended);
+  vehiclePaintingSuspendedRef.current = vehiclePaintingSuspended;
   const vehicleGateListenersRef = useRef(new Set<() => void>());
 
   useEffect(() => {
@@ -369,6 +377,10 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
     // explicitly; an inactive host has no polling timer to discover it later.
     for (const listener of vehicleGateListenersRef.current) listener();
   }, [pinnedPeriod]);
+
+  useEffect(() => {
+    for (const listener of vehicleGateListenersRef.current) listener();
+  }, [vehiclePaintingSuspended]);
 
   const coarsePointer = useCoarsePointer();
   const viewRef = useRef<ViewOptions>({ viewMode, visibleModes, visibleWayTypes });
@@ -1728,6 +1740,7 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
         viewMode: () => viewRef.current.viewMode,
         pinnedPeriod: () => pinnedPeriodRef.current,
         isDirectManipulationActive: () => directManipulationActive,
+        isPaintingSuspended: () => vehiclePaintingSuspendedRef.current,
         subscribe: (listener) => {
           vehicleGateListenersRef.current.add(listener);
           return () => {

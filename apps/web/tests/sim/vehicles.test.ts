@@ -138,12 +138,14 @@ function createGate(
     viewMode?: 'network' | 'infrastructure' | 'diagram';
     pinnedPeriod?: string;
     directManipulationActive?: boolean;
+    paintingSuspended?: boolean;
   } = {},
 ) {
   let visible = options.visible ?? true;
   let viewMode = options.viewMode ?? 'network';
   let pinnedPeriod = options.pinnedPeriod;
   let directManipulationActive = options.directManipulationActive ?? false;
+  let paintingSuspended = options.paintingSuspended ?? false;
   const listeners = new Set<() => void>();
   const invalidate = () => {
     for (const listener of listeners) listener();
@@ -153,6 +155,7 @@ function createGate(
     viewMode: () => viewMode,
     pinnedPeriod: () => pinnedPeriod,
     isDirectManipulationActive: () => directManipulationActive,
+    isPaintingSuspended: () => paintingSuspended,
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => {
@@ -173,6 +176,10 @@ function createGate(
     },
     setDirectManipulationActive(next: boolean) {
       directManipulationActive = next;
+      invalidate();
+    },
+    setPaintingSuspended(next: boolean) {
+      paintingSuspended = next;
       invalidate();
     },
   };
@@ -360,6 +367,28 @@ describe('vehicle animation scheduling', () => {
     gate.setVisible(true);
     expect(scheduled.raf.size).toBe(1);
     scheduled.pumpFrame(40);
+    expect(network.updates).toHaveLength(1);
+
+    detach();
+  });
+
+  it('a covered editor does not receive vehicle source updates', () => {
+    const scheduled = installScheduler();
+    const store = createEditorStore();
+    store.commands.document.setSystem(runningSystem());
+    const { map, network } = createMap();
+    const gate = createGate({ paintingSuspended: true });
+
+    const detach = attachVehicleAnimation(map, store, createSimClock(), gate);
+    scheduled.pumpFrame(0);
+    scheduled.pumpFrame(40);
+
+    expect(network.updates).toHaveLength(0);
+    expect(scheduled.raf.size).toBe(0);
+
+    gate.setPaintingSuspended(false);
+    expect(scheduled.raf.size).toBe(1);
+    scheduled.pumpFrame(80);
     expect(network.updates).toHaveLength(1);
 
     detach();

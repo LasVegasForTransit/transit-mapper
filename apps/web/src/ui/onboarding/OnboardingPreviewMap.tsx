@@ -18,23 +18,32 @@ export function OnboardingPreviewMap({
   className = '',
 }: OnboardingPreviewMapProps) {
   const colorScheme = useSystemColorScheme();
+  const initialColorSchemeRef = useRef(colorScheme);
   const containerRef = useRef<HTMLDivElement>(null);
+  const controllerRef = useRef<ReturnType<typeof mountOnboardingMap> | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current) return;
     setFailed(false);
-    return mountOnboardingMap({
+    const controller = mountOnboardingMap({
       container: containerRef.current,
-      colorScheme,
-      scene,
-      reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      colorScheme: initialColorSchemeRef.current,
       onFailure: (error) => {
         console.error('[onboarding preview]', error);
         setFailed(true);
       },
     });
-  }, [colorScheme, scene]);
+    controllerRef.current = controller;
+    return () => {
+      controllerRef.current = null;
+      controller.dispose();
+    };
+  }, []);
+
+  useEffect(() => {
+    controllerRef.current?.setScene(scene);
+  }, [scene]);
 
   return (
     <div
