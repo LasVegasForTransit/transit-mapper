@@ -6,7 +6,6 @@ import type {
   RenderPreparedSnapshot,
 } from '@transitmapper/core/render/render-preparation';
 import {
-  CooperativeRenderUnitBudgetError,
   type CooperativeRenderJobHandle,
   type CooperativeRenderJobScheduler,
   type CooperativeRenderJobSchedulerStats,
@@ -37,8 +36,6 @@ export interface RenderPreparationPipelineHandle extends RenderPipelineContinuat
 
 interface PreparationAttempt {
   readonly entityChunkSize: number;
-  readonly tolerateBudgetOverrun: boolean;
-  readonly overBudgetYieldUnitIds: ReadonlySet<string>;
   plan: RenderPreparationPlan | null;
   commitResult: RenderPreparationCommitResult | null;
   totalDurationMs: number;
@@ -117,11 +114,9 @@ function preparationUnits(
           attempt.totalDurationMs += durationMs;
           attempt.maxDurationMs = Math.max(attempt.maxDurationMs, durationMs);
           const measurement = { unitId: unit.id, result, durationMs };
-          if (attempt.tolerateBudgetOverrun) {
-            options.coordinator.record(plan, measurement, { tolerateBudgetOverrun: true });
-          } else {
-            options.coordinator.record(plan, measurement);
-          }
+          // Elapsed time is scheduling evidence, not a correctness condition.
+          // The scheduler yields after this completed unit if it ran long.
+          options.coordinator.record(plan, measurement, { tolerateBudgetOverrun: true });
           return result;
         },
       };
@@ -150,21 +145,6 @@ function recordAttempt(
   } catch {
     // Diagnostics must not strand an otherwise complete renderer generation.
   }
-}
-
-function retryable(
-  attempt: PreparationAttempt,
-  settlement: CooperativeRenderJobSettlement,
-): boolean {
-  return (
-    (settlement.status === 'failed' &&
-      settlement.error instanceof CooperativeRenderUnitBudgetError) ||
-    attempt.commitResult?.kind === 'budget-exceeded'
-  );
-}
-
-function isPlanConstructionUnit(unitId: string): boolean {
-  return unitId.startsWith('prepare:plan:');
 }
 
 function resolveSnapshot(
@@ -197,10 +177,7 @@ class RenderPreparationPipeline {
   }
 
   start(): RenderPreparationPipelineHandle {
-    // Planning only creates a lazy work description. A cold JIT or GC pause
-    // here must yield but must not discard the whole first map or shrink every
-    // later entity batch.
-    this.scheduleAttempt(4, false, new Set(['prepare:plan:4']));
+    this.scheduleAttempt();
     return {
       generation: this.logicalGeneration,
       settled: this.settled,
@@ -212,16 +189,10 @@ class RenderPreparationPipeline {
     return latestPipelineByScheduler.get(this.options.scheduler) === this.ownership;
   }
 
-  private scheduleAttempt(
-    entityChunkSize: number,
-    tolerateBudgetOverrun = false,
-    overBudgetYieldUnitIds: ReadonlySet<string> = new Set(),
-  ): void {
+  private scheduleAttempt(): void {
     if (!this.ownsGeneration()) return;
     const attempt: PreparationAttempt = {
-      entityChunkSize,
-      tolerateBudgetOverrun,
-      overBudgetYieldUnitIds,
+      entityChunkSize: 4,
       plan: null,
       commitResult: null,
       totalDurationMs: 0,
@@ -229,17 +200,9 @@ class RenderPreparationPipeline {
     };
     const scheduled = this.options.scheduler.submit({
       units: preparationUnits(this.options, attempt),
-      ...(tolerateBudgetOverrun || overBudgetYieldUnitIds.size > 0
-        ? {
-            overBudgetUnitPolicy: 'yield' as const,
-            // A tolerant attempt yields for every unit, so naming ids here
-            // would narrow it rather than widen it. The accumulated set only
-            // applies while the attempt is still selective.
-            ...(!tolerateBudgetOverrun && overBudgetYieldUnitIds.size > 0
-              ? { overBudgetYieldUnitIds }
-              : {}),
-          }
-        : {}),
+      // Preparation units are deterministic and private. A completed overrun
+      // remains valid work. Record it and yield before the next unit.
+      overBudgetUnitPolicy: 'yield',
       retainResults: false,
       commit: () => this.commitAttempt(attempt),
     });
@@ -263,40 +226,6 @@ class RenderPreparationPipeline {
     recordAttempt(this.options, attempt, stats);
     if (!this.ownsGeneration()) {
       this.finish();
-      return;
-    }
-    // Every retry below must be strictly weaker than the attempt it replaces:
-    // the batch only shrinks, the yield set only grows, and tolerance only
-    // turns on. Dropping either of the latter two let a plan overrun clear
-    // the tolerance an entity overrun had just earned, so the two traded the
-    // relaxation back and forth and the pipeline never converged on a
-    // document that overran both.
-    if (
-      settlement.status === 'failed' &&
-      settlement.error instanceof CooperativeRenderUnitBudgetError &&
-      isPlanConstructionUnit(settlement.error.unitId) &&
-      !attempt.overBudgetYieldUnitIds.has(settlement.error.unitId)
-    ) {
-      // Planning creates the lazy work sequence. It does not process an
-      // entity, so shrinking every later entity batch after a cold JIT or GC
-      // pause turns one missed frame into thousands of needless frames.
-      this.scheduleAttempt(
-        attempt.entityChunkSize,
-        attempt.tolerateBudgetOverrun,
-        new Set([...attempt.overBudgetYieldUnitIds, settlement.error.unitId]),
-      );
-      return;
-    }
-    if (retryable(attempt, settlement) && attempt.entityChunkSize > 1) {
-      this.scheduleAttempt(
-        Math.max(1, Math.floor(attempt.entityChunkSize / 2)),
-        attempt.tolerateBudgetOverrun,
-        attempt.overBudgetYieldUnitIds,
-      );
-      return;
-    }
-    if (retryable(attempt, settlement) && !attempt.tolerateBudgetOverrun) {
-      this.scheduleAttempt(1, true, attempt.overBudgetYieldUnitIds);
       return;
     }
     const resolution = resolveSnapshot(attempt, settlement);
@@ -344,8 +273,8 @@ class RenderPreparationPipeline {
 }
 
 /** Runs core's transactionally prepared indexes inside the same generation
- * ownership as projection. Every plan retry is fresh; rejected drafts never
- * become visible to downstream geometry or the live scene. */
+ * ownership as projection. Preparation uses one four-entity attempt. Rejected
+ * drafts never become visible to downstream geometry or the live scene. */
 export function submitRenderPreparationPipeline(
   options: SubmitRenderPreparationPipelineOptions,
 ): RenderPreparationPipelineHandle {
