@@ -105,14 +105,14 @@ runs the same command. See [the enforcement model](enforcement-model.md).
 Authors describe a network. Viewers read it. Two external sources supply
 data, both optional and both read-only.
 
-| Partner             | Input                      | Output                                     |
-| ------------------- | -------------------------- | ------------------------------------------ |
-| Author              | Draws and edits a system   | A stored document, optionally a share link |
-| Viewer              | Opens a share link         | A read-only rendering of a snapshot        |
-| Third-party page    | Embeds a link              | An iframe rendering of a snapshot          |
-| Link unfurler       | Requests a share URL       | Title, description, and a preview image    |
-| OpenStreetMap       | Street geometry on request | Imported ways                              |
-| Transit agency GTFS | A published feed           | An imported comparison network             |
+| Partner           | Input                      | Output                                     |
+| ----------------- | -------------------------- | ------------------------------------------ |
+| Author            | Draws and edits a system   | A stored document, optionally a share link |
+| Viewer            | Opens a share link         | A read-only rendering of a snapshot        |
+| Third-party page  | Embeds a link              | An iframe rendering of a snapshot          |
+| Link unfurler     | Requests a share URL       | Title, description, and a preview image    |
+| OpenStreetMap     | Street geometry on request | Imported ways                              |
+| Transit publisher | A published GTFS feed      | A managed comparison-network archive       |
 
 ```mermaid
 flowchart LR
@@ -121,11 +121,10 @@ flowchart LR
   page([Third-party page]) --> tm
   unfurler([Link unfurler]) --> tm
   tm --> osm[(OpenStreetMap)]
-  tm --> gtfs[(Agency GTFS)]
+  gtfs[(Transit publisher)] --> tm
 ```
 
-A link unfurler is a crawler: it needs title and preview in the first HTML
-response, which is why a Worker serves share pages.
+A Worker puts title and preview in the first HTML response for link unfurlers.
 
 ### Technical context
 
@@ -135,13 +134,15 @@ response, which is why a Worker serves share pages.
 | Viewer to publishing service | HTTPS, HTML     | Application shell with metadata injected |
 | Service to database          | D1 binding      | Snapshot rows                            |
 | Editor to OpenStreetMap      | HTTPS, Overpass | Way geometry and tags                    |
-| Editor to GTFS feed          | HTTPS, zip      | Agency route and stop tables             |
+| Refresh job to GTFS source   | HTTPS, zip      | Published route and stop tables          |
+| Refresh job to object store  | R2 binding      | Validated last-good archives             |
+| Editor to GTFS API           | HTTPS, zip      | One managed archive selected by slug     |
 
 ### Out of scope
 
 Ridership modelling, schedule optimisation, cost estimation beyond rough
-capital figures, and hosting agency data. Collaboration and account-owned
-documents are on the roadmap and absent today.
+capital figures, and long-term archival of publisher history. Collaboration
+and account-owned documents are on the roadmap and absent today.
 
 ## 4. Solution Strategy
 
@@ -286,14 +287,27 @@ flowchart LR
 ```
 
 OpenStreetMap fetch, retry, parsing, classification, and model construction run
-in a dedicated browser Worker. The main thread sends only the bounding box,
-category list, and driving side, then receives an `ImportedNetwork` built by
-the same core transform used in tests. Cancellation terminates the Worker, so
-no live `AbortSignal`, store, or browser callback crosses the structured-clone
-boundary. The main thread remains responsible for accepting the result into
-the intended document through one guarded editor command. GTFS follows the
-same ownership rule: its Workers import core directly and return data rather
-than mutating editor state.
+in a browser Worker. The main thread sends import inputs and receives an
+`ImportedNetwork` built by core. Cancellation terminates the Worker. One
+guarded command accepts the result into its intended document. GTFS uses the
+same ownership rule.
+
+#### Managed GTFS flow
+
+```mermaid
+flowchart LR
+  publisher["Transit publisher"] --> refresh["Scheduled refresh job"]
+  refresh --> archive[("R2 last-good archive")]
+  dialog["Published-feed dialog"] --> api["Worker feed API"]
+  api --> archive
+  dialog --> browserWorker["Dedicated browser Worker"]
+  browserWorker --> command["Guarded editor commands"]
+```
+
+The catalog owns slugs, labels, and source URLs. The browser never receives a
+URL. Refresh validates importer-required files before replacing
+`gtfs/<slug>/current.zip`. A failed source preserves that object while later
+feeds continue.
 
 ### Geographic rendering
 

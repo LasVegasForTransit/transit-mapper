@@ -18,14 +18,15 @@ export interface BackgroundImportStore {
 export function backgroundImportBlockMessage(
   store: BackgroundImportStore,
   targetSystemId: string,
+  feedName: string,
 ): string | null {
   const state = store.getState();
   if (state.system.id !== targetSystemId) {
-    return 'RTC import stopped because a different system was opened.';
+    return `${feedName} import stopped because a different system was opened.`;
   }
-  if (state.readOnly) return 'RTC import stopped because this system is read-only.';
+  if (state.readOnly) return `${feedName} import stopped because this system is read-only.`;
   if (state.documentStatus === 'loading') {
-    return 'RTC import stopped because the system is still loading.';
+    return `${feedName} import stopped because the system is still loading.`;
   }
   return null;
 }

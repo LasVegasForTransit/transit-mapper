@@ -101,20 +101,6 @@
       "count": 1
     }
   },
-  "src/import/streamRtcGtfs.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "@typescript-eslint/only-throw-error": {
-      "count": 1
-    },
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/import/waitForQuiet.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
@@ -379,17 +365,6 @@
   },
   "src/ui/ExportDialog.tsx": {
     "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "src/ui/GtfsImportDialog.tsx": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 2
-    },
-    "sonarjs/cognitive-complexity": {
       "count": 1
     }
   },

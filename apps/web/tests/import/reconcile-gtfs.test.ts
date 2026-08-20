@@ -1,6 +1,6 @@
 import { createEmptySystem } from '@transitmapper/core/model/serialize';
 import { describe, expect, it } from 'vitest';
-import { reconcileRtcGtfs } from '../../src/import/reconcileRtcGtfs';
+import { reconcileGtfs } from '../../src/import/reconcile-gtfs';
 import type {
   GtfsReconcileEvent,
   GtfsReconcileRequest,
@@ -29,7 +29,7 @@ describe('GTFS reconciliation Worker', () => {
     const worker = new FakeReconcileWorker();
     const system = createEmptySystem();
 
-    const result = await reconcileRtcGtfs(system, ['service'], {
+    const result = await reconcileGtfs(system, ['service'], {
       workerFactory: () => worker,
     });
 
@@ -41,7 +41,7 @@ describe('GTFS reconciliation Worker', () => {
     const worker = new FakeReconcileWorker();
     worker.postMessage = () => {};
     const controller = new AbortController();
-    const pending = reconcileRtcGtfs(createEmptySystem(), [], {
+    const pending = reconcileGtfs(createEmptySystem(), [], {
       signal: controller.signal,
       workerFactory: () => worker,
     });

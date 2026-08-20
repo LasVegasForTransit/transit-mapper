@@ -41,15 +41,3 @@ export function gtfsArchiveToBatches(
     routesTotal,
   }));
 }
-
-/** Fetch the RTC feed and yield its pure archive transform in small batches. */
-export async function* streamRtcGtfsBatches(batchSize = 2): AsyncGenerator<GtfsImportBatch> {
-  const response = await fetch('/api/gtfs/rtc');
-  if (!response.ok) throw new Error(`GTFS import failed (${response.status}).`);
-  const batches = gtfsArchiveToBatches(new Uint8Array(await response.arrayBuffer()), batchSize);
-  for (const batch of batches) {
-    yield batch;
-    // Timers keep an import moving in background tabs where animation frames pause.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-}

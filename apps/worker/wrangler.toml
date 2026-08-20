@@ -112,6 +112,10 @@ database_name = "transitmapper"
 database_id = "5516498a-4473-468e-a1c9-a9dee4762960"
 migrations_dir = "src/migrations"
 
+[[r2_buckets]]
+binding = "GTFS_ARCHIVES"
+bucket_name = "transitmapper-data"
+
 [triggers]
 crons = ["0 0 * * *"]
 

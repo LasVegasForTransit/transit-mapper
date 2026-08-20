@@ -102,7 +102,8 @@ Check which step failed before anything else; they fail for unrelated reasons.
 - **Apply D1 migrations** or **Deploy** with
   `Authentication error [code: 10000]` — the `CLOUDFLARE_API_TOKEN` secret in
   the repository's `production` environment lacks a permission. It needs
-  `Account · Workers Scripts · Edit`, `Account · D1 · Edit`, and
+  `Account · Workers Scripts · Edit`, `Account · D1 · Edit`,
+  `Account · Workers R2 Storage · Edit`, and
   `Zone · Workers Routes · Edit`. (That environment also needs a
   `CLOUDFLARE_ACCOUNT_ID` **variable** — not a secret — which is easy to miss
   when recreating it, because nothing complains until a deploy runs.) This
@@ -112,6 +113,37 @@ Check which step failed before anything else; they fail for unrelated reasons.
 - **Smoke test production** — the deploy uploaded something, but the live
   site isn't serving the routes this build defines. Do not retry blindly; see
   "Roll back" and read what the failing assertion actually checked.
+
+## Managed GTFS archives
+
+Production uses the `transitmapper-data` R2 bucket. The refresh workflow checks
+for it and creates it through the Cloudflare API before it downloads a feed.
+The `production` environment token needs `Account · Workers R2 Storage · Edit`.
+Do not put that token on a command line; dispatch the workflow instead.
+
+The daily `Refresh GTFS feeds` workflow runs at 09:17 UTC. It downloads each
+configured source in sequence, validates the files and columns TransitMapper
+imports, and writes `gtfs/<slug>/current.zip` only after validation succeeds.
+A failure leaves that feed's previous object untouched. Run one feed manually
+from an authenticated checkout with:
+
+```bash
+GTFS_FEED_SLUG=rtc pnpm refresh:gtfs
+```
+
+Adding another feed requires one entry in `apps/worker/src/gtfs-feeds.ts`.
+Choose a stable lowercase kebab-case slug. Use an HTTPS source URL. Run the
+refresh tests, dispatch the workflow for that slug, and confirm the list and
+archive routes before announcing it:
+
+```bash
+curl -fsS https://map.lasvegasfortransit.org/api/v1/gtfs
+curl -fsS -o /dev/null -D - https://map.lasvegasfortransit.org/api/v1/gtfs/<slug>
+```
+
+Do not upload an unvalidated archive by hand. The fixed object key is the
+last-good boundary, so replacing it bypasses the protection the refresh script
+provides.
 
 ## Roll back
 

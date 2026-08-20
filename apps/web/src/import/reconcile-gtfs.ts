@@ -27,7 +27,7 @@ function defaultWorkerFactory(): ReconcileWorker {
 /** Reconcile imported corridors away from the main thread. The caller retains
  * the input object and must reject the returned snapshot if an edit replaced
  * it while the Worker was running. */
-export function reconcileRtcGtfs(
+export function reconcileGtfs(
   system: TransitSystem,
   serviceIds: string[],
   options: ReconcileRtcGtfsOptions = {},
