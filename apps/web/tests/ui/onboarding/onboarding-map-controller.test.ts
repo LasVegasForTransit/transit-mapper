@@ -7,7 +7,7 @@ import {
   onboardingProductionLayerSpecs,
   resolveOnboardingSceneSystems,
 } from '../../../src/ui/onboarding/onboarding-map-controller';
-import { basemapStyleForScheme, localBlankStyleForScheme } from '../../../src/map/mapTheme';
+import { localBlankStyleForScheme } from '../../../src/map/mapTheme';
 import { LYR_VEHICLES } from '../../../src/map/layers';
 import { ONBOARDING_TEST_PRESENTATION } from '../../support/onboarding-presentation.test';
 
@@ -184,8 +184,7 @@ describe('onboarding map controller', () => {
     expect(vehicleLayers[0]?.id).toBe(LYR_VEHICLES);
   });
 
-  it('starts with the same real basemap as the editor', () => {
-    vi.useFakeTimers();
+  it('starts with the committed local context instead of a remote basemap', () => {
     const cleanup = mountOnboardingMap({
       container: document.createElement('div'),
       colorScheme: 'dark',
@@ -195,13 +194,12 @@ describe('onboarding map controller', () => {
     });
 
     expect(mapHarness.maps).toHaveLength(1);
-    expect(mapHarness.maps[0]?.options.style).toBe(basemapStyleForScheme('dark'));
+    expect(mapHarness.maps[0]?.options.style).toEqual(localBlankStyleForScheme('dark'));
 
     cleanup();
   });
 
-  it('keeps the map visible on a basemap failure by switching to local context', () => {
-    vi.useFakeTimers();
+  it('keeps the local context mounted when MapLibre reports an error', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const onFailure = vi.fn();
     const cleanup = mountOnboardingMap({
@@ -216,9 +214,7 @@ describe('onboarding map controller', () => {
     map.emit('style.load');
     map.emit('error', { error: new Error('tiles unavailable') });
 
-    expect(map.setStyle).toHaveBeenCalledWith(localBlankStyleForScheme('light'), {
-      diff: false,
-    });
+    expect(map.setStyle).not.toHaveBeenCalled();
     expect(onFailure).not.toHaveBeenCalled();
 
     map.emit('load');

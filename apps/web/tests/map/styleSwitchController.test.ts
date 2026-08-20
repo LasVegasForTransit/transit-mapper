@@ -190,11 +190,9 @@ describe('style switch controller', () => {
 
     await controller.request('dark');
 
-    expect(map.setStyle).toHaveBeenNthCalledWith(
-      1,
-      style('dark'),
-      expect.objectContaining({ diff: true, transformStyle: expect.any(Function) }),
-    );
+    expect(map.setStyle.mock.calls[0]?.[0]).toEqual(style('dark'));
+    expect(map.setStyle.mock.calls[0]?.[1]?.diff).toBe(true);
+    expect(typeof map.setStyle.mock.calls[0]?.[1]?.transformStyle).toBe('function');
     expect(map.setStyle).toHaveBeenNthCalledWith(2, style('dark'), { diff: false });
     expect(recover).toHaveBeenCalledWith('dark', true);
   });
@@ -213,6 +211,33 @@ describe('style switch controller', () => {
 
     expect(map.setStyle).toHaveBeenCalledOnce();
     expect(map.setStyle.mock.calls[0]?.[0]).toEqual(style('dark'));
+    expect(map.setStyle.mock.calls[0]?.[1]?.diff).toBe(true);
+    expect(typeof map.setStyle.mock.calls[0]?.[1]?.transformStyle).toBe('function');
+    expect(recover).toHaveBeenCalledWith('dark', false);
+  });
+
+  it('keeps later theme changes local after the initial basemap fallback', async () => {
+    const map = createMap();
+    const fetchStyle = vi.fn(() => Promise.resolve(style('remote-dark')));
+    const recover = vi.fn();
+    const controller = createStyleSwitchController({
+      map,
+      initialScheme: 'light',
+      fetchStyle,
+      isInteractionActive: () => false,
+      recover,
+    });
+
+    controller.lockToLocal('light');
+    await controller.request('dark');
+
+    expect(fetchStyle).not.toHaveBeenCalled();
+    expect(map.setStyle).toHaveBeenCalledOnce();
+    const nextStyle = map.setStyle.mock.calls[0]?.[0];
+    expect(typeof nextStyle).not.toBe('string');
+    expect(typeof nextStyle === 'string' ? [] : nextStyle.layers.map((layer) => layer.id)).toEqual([
+      'transitmapper-local-background',
+    ]);
     expect(map.setStyle.mock.calls[0]?.[1]?.diff).toBe(true);
     expect(typeof map.setStyle.mock.calls[0]?.[1]?.transformStyle).toBe('function');
     expect(recover).toHaveBeenCalledWith('dark', false);

@@ -222,7 +222,7 @@
   },
   "src/map/styleSwitchController.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 3
+      "count": 2
     },
     "complexity": {
       "count": 1
@@ -608,9 +608,6 @@
     }
   },
   "tests/map/styleSwitchController.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
     "@typescript-eslint/require-await": {
       "count": 4
     }

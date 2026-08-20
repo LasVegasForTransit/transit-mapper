@@ -1,6 +1,6 @@
 import type { LayerSpecification, StyleSpecification } from 'maplibre-gl';
 import type { ColorScheme } from '../theme/systemColorScheme';
-import { MAP_THEMES, layerSpecsForScheme } from './mapTheme';
+import { layerSpecsForScheme, localBlankStyleForScheme, MAP_THEMES } from './mapTheme';
 
 export interface StyleSwitchMap {
   getStyle(): StyleSpecification;
@@ -29,6 +29,7 @@ export interface StyleSwitchControllerOptions {
 export interface StyleSwitchController {
   request(scheme: ColorScheme): Promise<void>;
   flush(): Promise<void>;
+  lockToLocal(scheme: ColorScheme): void;
   dispose(): void;
 }
 
@@ -53,10 +54,7 @@ export function carryTransitMapperStyle(
   return {
     ...nextStyle,
     sources,
-    layers: [
-      ...(nextStyle.layers ?? []).filter((layer) => !layer.id.startsWith('tm-')),
-      ...themedLayers,
-    ],
+    layers: [...nextStyle.layers.filter((layer) => !layer.id.startsWith('tm-')), ...themedLayers],
   };
 }
 
@@ -68,6 +66,7 @@ export function createStyleSwitchController(
   let activeRequest: AbortController | undefined;
   let pendingScheme: ColorScheme | undefined;
   let appliedScheme = options.initialScheme;
+  let localOnly = false;
   const fetchStyle = options.fetchStyle ?? fetchStyleDocument;
 
   const cancelActiveRequest = () => {
@@ -77,6 +76,30 @@ export function createStyleSwitchController(
     generation += 1;
     activeRequest.abort();
     activeRequest = undefined;
+  };
+
+  const commitStyle = (scheme: ColorScheme, nextStyle: StyleSpecification): void => {
+    const themedLayers = (options.layerSpecs ?? layerSpecsForScheme)(scheme);
+    try {
+      options.map.setStyle(nextStyle, {
+        diff: true,
+        transformStyle: (previousStyle, incomingStyle) =>
+          carryTransitMapperStyle(previousStyle, incomingStyle, themedLayers),
+      });
+      appliedScheme = scheme;
+      options.recover?.(scheme, false);
+    } catch {
+      try {
+        options.map.setStyle(nextStyle, { diff: false });
+        appliedScheme = scheme;
+        options.recover?.(scheme, true);
+      } catch (error) {
+        options.onUnavailable?.(
+          scheme,
+          error instanceof Error ? error : new Error('Basemap style could not be applied'),
+        );
+      }
+    }
   };
 
   const apply = async (scheme: ColorScheme): Promise<void> => {
@@ -95,6 +118,10 @@ export function createStyleSwitchController(
     }
 
     pendingScheme = undefined;
+    if (localOnly) {
+      commitStyle(scheme, localBlankStyleForScheme(scheme));
+      return;
+    }
     const requestGeneration = ++generation;
     activeRequest?.abort();
     const abortController = new AbortController();
@@ -126,33 +153,20 @@ export function createStyleSwitchController(
       return;
     }
 
-    const themedLayers = (options.layerSpecs ?? layerSpecsForScheme)(scheme);
-    try {
-      options.map.setStyle(nextStyle, {
-        diff: true,
-        transformStyle: (previousStyle, incomingStyle) =>
-          carryTransitMapperStyle(previousStyle, incomingStyle, themedLayers),
-      });
-      appliedScheme = scheme;
-      options.recover?.(scheme, false);
-    } catch {
-      try {
-        options.map.setStyle(nextStyle, { diff: false });
-        appliedScheme = scheme;
-        options.recover?.(scheme, true);
-      } catch (error) {
-        options.onUnavailable?.(
-          scheme,
-          error instanceof Error ? error : new Error('Basemap style could not be applied'),
-        );
-      }
-    }
+    commitStyle(scheme, nextStyle);
   };
 
   return {
     request: apply,
     flush: async () => {
       if (pendingScheme && !options.isInteractionActive()) await apply(pendingScheme);
+    },
+    lockToLocal: (scheme) => {
+      if (disposed) return;
+      localOnly = true;
+      cancelActiveRequest();
+      pendingScheme = undefined;
+      appliedScheme = scheme;
     },
     dispose: () => {
       disposed = true;
