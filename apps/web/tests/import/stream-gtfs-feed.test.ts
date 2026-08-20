@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GtfsImportBatch } from '@transitmapper/core/model/gtfsImport';
-import { streamRtcGtfsBatches } from '../../src/import/streamRtcGtfs';
+import type { PublishedGtfsFeed } from '@transitmapper/core/model/gtfs-feed';
+import { loadPublishedGtfsFeeds, streamGtfsFeedBatches } from '../../src/import/stream-gtfs-feed';
 import type { GtfsWorkerEvent, GtfsWorkerRequest } from '../../src/import/gtfsWorkerProtocol';
 
 class FakeGtfsWorker {
@@ -41,18 +42,75 @@ class FakeGtfsWorker {
 const fetchArchive = vi.fn(() =>
   Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 200 })),
 ) as typeof fetch;
+const RTC_FEED: PublishedGtfsFeed = {
+  slug: 'rtc',
+  name: 'RTC Southern Nevada',
+  region: 'Las Vegas Valley, Nevada',
+};
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('RTC GTFS Worker stream', () => {
+describe('published GTFS feed catalog', () => {
+  it('loads the public feed descriptors from the same-origin API', async () => {
+    const fetcher = vi.fn(() =>
+      Promise.resolve(
+        Response.json({
+          feeds: [
+            {
+              slug: 'rtc',
+              name: 'RTC Southern Nevada',
+              region: 'Las Vegas Valley, Nevada',
+            },
+          ],
+        }),
+      ),
+    ) as typeof fetch;
+
+    await expect(loadPublishedGtfsFeeds(fetcher)).resolves.toEqual([RTC_FEED]);
+    expect(fetcher).toHaveBeenCalledWith('/api/v1/gtfs');
+  });
+
+  it('reports that the catalog is unavailable when its request fails', async () => {
+    const fetcher = vi.fn(() =>
+      Promise.resolve(new Response(null, { status: 503 })),
+    ) as typeof fetch;
+
+    await expect(loadPublishedGtfsFeeds(fetcher)).rejects.toThrow(
+      'Published transit feeds are unavailable (503).',
+    );
+  });
+});
+
+describe('GTFS Worker stream', () => {
+  it('downloads the archive for the selected feed slug', async () => {
+    const requests: string[] = [];
+    const fetcher = vi.fn((input: RequestInfo | URL) => {
+      const requestUrl =
+        typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      requests.push(requestUrl);
+      return Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
+    }) as typeof fetch;
+
+    for await (const _batch of streamGtfsFeedBatches({
+      feed: { slug: 'trimet', name: 'TriMet', region: 'Portland, Oregon' },
+      fetcher,
+      workerFactory: () => new FakeGtfsWorker(),
+    })) {
+      // Exhaust the stream so its Worker lifecycle also completes.
+    }
+
+    expect(requests).toEqual(['/api/v1/gtfs/trimet']);
+  });
+
   it('transfers the archive and yields Worker batches with phase feedback', async () => {
     const worker = new FakeGtfsWorker();
     const phases: string[] = [];
     const batches: GtfsImportBatch[] = [];
 
-    for await (const batch of streamRtcGtfsBatches({
+    for await (const batch of streamGtfsFeedBatches({
+      feed: RTC_FEED,
       fetcher: fetchArchive,
       workerFactory: () => worker,
       onPhase: (phase) => phases.push(phase),
@@ -77,7 +135,11 @@ describe('RTC GTFS Worker stream', () => {
     ) as typeof fetch;
 
     await expect(
-      streamRtcGtfsBatches({ fetcher: refused, workerFactory: () => new FakeGtfsWorker() }).next(),
+      streamGtfsFeedBatches({
+        feed: RTC_FEED,
+        fetcher: refused,
+        workerFactory: () => new FakeGtfsWorker(),
+      }).next(),
     ).rejects.toThrow('RTC GTFS feed unavailable (403)');
   });
 
@@ -87,7 +149,11 @@ describe('RTC GTFS Worker stream', () => {
     ) as typeof fetch;
 
     await expect(
-      streamRtcGtfsBatches({ fetcher: empty, workerFactory: () => new FakeGtfsWorker() }).next(),
+      streamGtfsFeedBatches({
+        feed: RTC_FEED,
+        fetcher: empty,
+        workerFactory: () => new FakeGtfsWorker(),
+      }).next(),
     ).rejects.toThrow('GTFS import failed (504).');
   });
 
@@ -99,7 +165,8 @@ describe('RTC GTFS Worker stream', () => {
     });
     worker.postMessage = () => markStarted?.();
     const controller = new AbortController();
-    const iterator = streamRtcGtfsBatches({
+    const iterator = streamGtfsFeedBatches({
+      feed: RTC_FEED,
       fetcher: fetchArchive,
       workerFactory: () => worker,
       signal: controller.signal,
@@ -121,7 +188,8 @@ describe('RTC GTFS Worker stream', () => {
       markStarted = resolve;
     });
     worker.postMessage = () => markStarted?.();
-    const pending = streamRtcGtfsBatches({
+    const pending = streamGtfsFeedBatches({
+      feed: RTC_FEED,
       fetcher: fetchArchive,
       workerFactory: () => worker,
       workerIdleTimeoutMs: 20,
@@ -144,7 +212,8 @@ describe('RTC GTFS Worker stream', () => {
       markStarted = resolve;
     });
     worker.postMessage = () => markStarted?.();
-    const pending = streamRtcGtfsBatches({
+    const pending = streamGtfsFeedBatches({
+      feed: RTC_FEED,
       fetcher: fetchArchive,
       workerFactory: () => worker,
       workerIdleTimeoutMs: 20,
@@ -175,7 +244,8 @@ describe('RTC GTFS Worker stream', () => {
       markStarted = resolve;
     });
     worker.postMessage = () => markStarted?.();
-    const pending = streamRtcGtfsBatches({
+    const pending = streamGtfsFeedBatches({
+      feed: RTC_FEED,
       fetcher: fetchArchive,
       workerFactory: () => worker,
       workerIdleTimeoutMs: 20,

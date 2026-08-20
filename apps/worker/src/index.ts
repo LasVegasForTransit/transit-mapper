@@ -1,4 +1,5 @@
 import { Hono, type Context } from 'hono';
+import { API_V1_PREFIX } from '@transitmapper/core/api/version';
 import { parseSystem } from '@transitmapper/core/model/serialize';
 import { shortId } from '@transitmapper/core/model/ids';
 import type { TransitSystem } from '@transitmapper/core/model/system';
@@ -12,6 +13,7 @@ import { checkPreviewPng, MAX_PREVIEW_BYTES } from '@transitmapper/core/render/p
 import { handleOpenStreetMapWays, handlePlaceSearch } from './osm-gateway';
 import { handlePerformanceSample } from './performance-samples';
 import { runScheduledMaintenance } from './performance-maintenance';
+import { apiV1 } from './api-v1';
 
 type OptionalLocalBinding =
   | 'SHARE_CREATE_LIMITER'
@@ -128,6 +130,8 @@ function withHtmlSecurityHeaders(response: Response, frameAncestors: string): Re
 }
 
 const app = new Hono<{ Bindings: WorkerEnv }>();
+
+app.route(API_V1_PREFIX, apiV1);
 
 // Unhandled failures must not leak internals, and an /api client should get
 // JSON rather than a wall of text it can't parse.
@@ -454,72 +458,6 @@ app.delete('/api/systems/:id', async (c) => {
 
   c.executionCtx.waitUntil(purgePreviewCache(c, id));
   return c.body(null, 204);
-});
-
-// Proxy RTC Southern Nevada's real GTFS feed — its own host doesn't send
-// CORS headers, so the browser can't fetch it directly; this endpoint (same
-// origin as the app) sidesteps that.
-//
-// Cached at the edge for a day. The feed is ~15 MB and an agency publishes a
-// new one every few weeks, so re-fetching per request was pure waste — and
-// worse, it was an amplifier: one request here meant 15 MB pulled from RTC's
-// servers, with nothing stopping a script from doing that in a loop. Now the
-// first request of the day pays for it and the rest are served from cache.
-const GTFS_FEED_URL = 'https://developer.rtcsnv.com/transitData/google_transit.zip';
-const GTFS_CACHE_SECONDS = 86400;
-
-app.get('/api/gtfs/rtc', async (c) => {
-  const cache = caches.default;
-  const cached = await cache.match(c.req.raw);
-  if (cached) return cached;
-
-  const upstream = await fetch(GTFS_FEED_URL, {
-    headers: {
-      // A Worker's fetch sends no User-Agent at all. Identifying ourselves is
-      // the courteous thing regardless — an agency reading its own logs can
-      // see who pulls the feed and how to reach us — but it did not stop
-      // RTC's WAF refusing us, so it is not the remedy it was hoped to be.
-      // No version: the package version is managed by release tooling and is
-      // not bundled here, so a literal would be a number nobody maintains.
-      'user-agent': `TransitMapper (+${c.env.SITE_URL})`,
-      accept: 'application/zip, application/octet-stream;q=0.9, */*;q=0.8',
-    },
-    // No `cf` cache override. There used to be one — `cacheEverything` with a
-    // day-long `cacheTtl` — as belt and braces behind the response cache
-    // above. It is what turned a refusal into an outage: `cacheTtl` applies to
-    // every status, so one 403 from the agency's WAF was pinned at the edge
-    // for a day and re-served to everyone, and each retry refreshed it. A
-    // failure that outlives its own cause is bad on its own; worse, nothing
-    // can tell whether a fix worked while a stale refusal is being replayed,
-    // and that layer cannot be purged from here because the zone is not ours.
-    //
-    // `caches.default` above already stops the amplification this was added
-    // for, and it only ever stores a success, because this handler returns
-    // before `cache.put` on anything else. One cache we control beats two
-    // where the second can hold a failure we cannot clear.
-  });
-  if (!upstream.ok || !upstream.body) {
-    // Carry the agency's own trace id. A 403 here is theirs to explain, and
-    // the first thing they will ask for is the ray that produced it — without
-    // it the report is "your server said no sometimes", which goes nowhere.
-    const ray = upstream.headers.get('cf-ray');
-    return c.json(
-      {
-        error: `RTC GTFS feed unavailable (${upstream.status})`,
-        ...(ray ? { upstreamRay: ray } : {}),
-      },
-      502,
-    );
-  }
-
-  const response = new Response(upstream.body, {
-    headers: {
-      'content-type': 'application/zip',
-      'cache-control': `public, max-age=${GTFS_CACHE_SECONDS}`,
-    },
-  });
-  c.executionCtx.waitUntil(cache.put(c.req.raw, response.clone()));
-  return response;
 });
 
 // Browser clients use same-origin gateways for public OpenStreetMap services.

@@ -1,0 +1,41 @@
+name: Refresh GTFS feeds
+
+on:
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+    inputs:
+      feed_slug:
+        description: Refresh one configured feed slug. Leave blank to refresh every feed.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-gtfs-feeds
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Validate and publish managed archives
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      GTFS_FEED_SLUG: ${{ inputs.feed_slug }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Provision managed archive storage
+        run: pnpm provision:gtfs-storage
+
+      - name: Refresh configured feeds
+        run: pnpm refresh:gtfs

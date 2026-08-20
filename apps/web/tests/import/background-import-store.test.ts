@@ -24,15 +24,19 @@ function importStore(
 
 describe('background import eligibility', () => {
   it('distinguishes stale targets and mutation gates from retryable snapshots', () => {
-    expect(backgroundImportBlockMessage(importStore('target'), 'target')).toBeNull();
-    expect(backgroundImportBlockMessage(importStore('other'), 'target')).toContain(
+    expect(backgroundImportBlockMessage(importStore('target'), 'target', 'TriMet')).toBeNull();
+    expect(backgroundImportBlockMessage(importStore('other'), 'target', 'TriMet')).toContain(
       'different system',
     );
     expect(
-      backgroundImportBlockMessage(importStore('target', { readOnly: true }), 'target'),
-    ).toContain('read-only');
+      backgroundImportBlockMessage(importStore('target', { readOnly: true }), 'target', 'TriMet'),
+    ).toContain('TriMet import stopped because this system is read-only');
     expect(
-      backgroundImportBlockMessage(importStore('target', { documentStatus: 'loading' }), 'target'),
+      backgroundImportBlockMessage(
+        importStore('target', { documentStatus: 'loading' }),
+        'target',
+        'TriMet',
+      ),
     ).toContain('loading');
   });
 });

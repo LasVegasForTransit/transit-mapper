@@ -9,15 +9,15 @@ is accurate as of today either way.
 
 ## Inventory
 
-| Secret                  | Lives in                        | Blast radius if leaked                                               |
-| ----------------------- | ------------------------------- | -------------------------------------------------------------------- |
-| `CLOUDFLARE_API_TOKEN`  | GitHub `production` environment | Deploy arbitrary code to the Worker and read or drop the D1 database |
-| `CLOUDFLARE_ACCOUNT_ID` | GitHub repository variable      | Not a secret. An identifier, useless without a token                 |
+| Secret                  | Lives in                        | Blast radius if leaked                                             |
+| ----------------------- | ------------------------------- | ------------------------------------------------------------------ |
+| `CLOUDFLARE_API_TOKEN`  | GitHub `production` environment | Deploy Worker code, alter D1 data, and replace managed R2 archives |
+| `CLOUDFLARE_ACCOUNT_ID` | GitHub repository variable      | Not a secret. An identifier, useless without a token               |
 
 **There are no application secrets in production.** The Worker reads
-`SITE_URL` (a plain var) plus platform bindings for assets, D1, rate limits,
-and the place-search coordinator. Rate-limit namespace ids are configuration,
-not credentials.
+`SITE_URL` (a plain var) plus platform bindings for assets, D1, R2, rate
+limits, and the place-search coordinator. Rate-limit namespace ids and R2
+bucket names are configuration, not credentials.
 
 ## Anonymous performance data boundary
 

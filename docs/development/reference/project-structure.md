@@ -56,6 +56,8 @@ globals in both the browser and workerd.
 validation, serialization, imports, routing, schematic layout, costs, and
 units. Pure transforms reconcile imports and preserve no-op identity; web
 commands compose them into undoable edits without importing Zustand.
+`packages/core/src/api` owns `/api/v1`; `model/gtfs-feed.ts` publishes feed
+metadata without upstream URLs.
 
 Focused modules name the invariant they maintain: routing edits, endpoint
 metadata, and stop reanchoring each have one owner. Lines are public identities
@@ -339,12 +341,16 @@ and validation but never imports browser or editor modules.
 The Worker routes API requests, shares, embeds, static assets, sampled reports,
 and maintenance. Stored text enters HTML through `HTMLRewriter`.
 
+`api-v1.ts` mounts new resources below `/api/v1`; legacy APIs remain
+unversioned. `gtfs-feeds.ts` owns reviewed metadata and R2 archive lookup.
+
 `POST /api/performance-samples` accepts 8 KiB of same-origin JSON, honors
 GPC/DNT, validates it, and stores allowlisted columns.
 
 #### Persistence
 
-D1 stores shared systems, preview metadata, and short-lived sampled data.
+D1 stores shared systems, preview metadata, and short-lived sampled data. R2
+stores one current last-good GTFS archive per configured slug.
 Migrations are append-only and Wrangler applies them in filename order. See
 [Operations](../../operations/how-to/operations.md).
 
@@ -368,6 +374,9 @@ Repository-wide checks and generated references live under `scripts/`.
 Package, migration, and lint-rule scaffolding lives under `turbo/`. Generators
 must leave their output compliant with the same package, filename,
 documentation, and structure contracts enforced in CI.
+
+`provision-gtfs-storage.ts` ensures the archive bucket exists;
+`refresh-gtfs-feeds.ts` validates and uploads feeds sequentially.
 
 Bootstrap holds the desired GitHub governance state as data and keeps API
 reads and confirmed mutations in its repository-governance phase. Doctor mode
