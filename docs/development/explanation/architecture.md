@@ -358,8 +358,16 @@ flowchart LR
 `LiveMapRenderer` owns one `DocumentProjector`, one accepted scene store, and
 the two physical banks. It alone advances the accepted revision. Dependency
 and viewport indexes restrict work to the affected visible closure; a camera
-still inside the accepted envelope performs no projection. Work stays private
-and side-effect free until publication and yields between bounded units.
+still inside the accepted envelope performs no projection or source upload.
+Work stays private and side-effect free until publication and yields between
+bounded units.
+
+Core render preparation uses one cooperative attempt with four entities per
+unit. A unit that exceeds its frame budget records the overrun and yields
+before the next unit. The coordinator keeps that unit's deterministic result.
+It does not retry the unit. It does not rebuild the plan with smaller chunks.
+Exceptions, cancellation, stale generations, and invalid commits still abort
+the private draft.
 
 Render preparation runs once in four-entity units. Over-budget units keep their
 deterministic results and yield. Exceptions, cancellation, stale generations,
