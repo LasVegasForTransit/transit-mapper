@@ -46,8 +46,8 @@ afterEach(() => {
 });
 
 describe('initial map style fallback', () => {
-  it('gives the remote basemap eight seconds to produce its first usable frame', () => {
-    expect(INITIAL_STYLE_FALLBACK_TIMEOUT_MS).toBe(8_000);
+  it('falls back early enough to leave time inside the first-map budget', () => {
+    expect(INITIAL_STYLE_FALLBACK_TIMEOUT_MS).toBeLessThan(3_500 / 2);
   });
 
   it('switches to the local blank style once when the remote style errors', () => {
@@ -85,7 +85,7 @@ describe('initial map style fallback', () => {
     expect(map.setStyle).toHaveBeenCalledWith(localBlankStyleForScheme('light'), { diff: false });
   });
 
-  it('switches once to the local style when the startup deadline expires', () => {
+  it('reports a failure only when the basemap is genuinely unreachable', async () => {
     vi.useFakeTimers();
     const map = new FakeStyleMap();
     const fallback = vi.fn();
@@ -93,13 +93,36 @@ describe('initial map style fallback', () => {
       scheme: 'light',
       timeoutMs: 250,
       onFallback: fallback,
+      probeBasemap: () => Promise.resolve(false),
     });
 
     vi.advanceTimersByTime(250);
 
-    expect(fallback).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(fallback).toHaveBeenCalledTimes(1));
     expect(map.setStyle).toHaveBeenCalledTimes(1);
     expect(map.setStyle).toHaveBeenCalledWith(localBlankStyleForScheme('light'), {
+      diff: false,
+    });
+  });
+
+  it('keeps the grid after a reachable basemap times out', async () => {
+    vi.useFakeTimers();
+    const timedOut = new FakeStyleMap();
+    const fallback = vi.fn();
+    attachInitialStyleFallback(timedOut as unknown as MLMap, {
+      scheme: 'light',
+      timeoutMs: 250,
+      onFallback: fallback,
+      probeBasemap: () => Promise.resolve(true),
+    });
+
+    vi.advanceTimersByTime(250);
+    expect(timedOut.setStyle).toHaveBeenCalledWith(localBlankStyleForScheme('light'), {
+      diff: false,
+    });
+    await vi.waitFor(() => expect(timedOut.setStyle).toHaveBeenCalledTimes(1));
+    expect(fallback).not.toHaveBeenCalled();
+    expect(timedOut.setStyle).toHaveBeenLastCalledWith(localBlankStyleForScheme('light'), {
       diff: false,
     });
   });
