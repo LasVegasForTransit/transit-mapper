@@ -30,6 +30,22 @@ The preview continues to use production feature projection and simulation.
 OpenStreetMap attribution uses the same compact MapLibre control treatment as
 the editor rather than an onboarding-only badge.
 
+One MapLibre controller owns the preview for the complete dialog lifetime. It
+loads the committed street snapshot over the local style and never starts the
+editor's remote basemap fallback path. A slide change replaces GeoJSON source
+data and feature state on that map. It does not replace the canvas or WebGL
+context.
+
+The controller owns one animation callback at a time. It cancels the previous
+scene before it installs the next one. It also cancels motion while the
+document is hidden or reduced motion is active. Closing the dialog disposes
+the controller and its one map.
+
+While onboarding covers the editor, `App` passes that fact to `MapCanvas`.
+The editor vehicle host then stops scheduling source writes until onboarding
+closes. The editor store does not own dialog state, and the onboarding map does
+not read the active document.
+
 ## The central Las Vegas proposal
 
 The example is a fictional proposal on real geography. It contains:
@@ -110,8 +126,11 @@ proposal legible.
   preview.
 - `scripts/generate-onboarding-las-vegas-context.ts` documents the bounding
   box, selected street classes, OpenStreetMap query, clipping, and output.
-- `onboarding-map-controller.ts` adapts scene frames to production sources,
-  selection state, attribution, and MapLibre lifecycle.
+- `OnboardingPreviewMap.tsx` mounts one controller, forwards slide changes with
+  `setScene`, and disposes it when the dialog closes.
+- `onboarding-map-controller.ts` owns the one local MapLibre map, adapts scene
+  frames to production sources and selection state, and suspends motion under
+  document visibility and reduced-motion policy.
 - `SimControls.tsx` exports a pure production transport presentation used by
   both the live editor and the passive onboarding adapter.
 

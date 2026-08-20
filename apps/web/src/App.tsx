@@ -435,6 +435,7 @@ export function App() {
       <StagedMapCanvas
         onBasemapUnavailable={() => setNotice('basemap-unavailable')}
         onStartupStyleSettled={markMapStartupStyleSettled}
+        vehiclePaintingSuspended={activeDialog === 'onboarding'}
       />
       {/* Outside the chrome, like the banner above: right-clicking still has
           to offer its actions when the UI is hidden, since hiding the panels
