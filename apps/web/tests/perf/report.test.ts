@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PERF_PROTOCOL, PERF_SCENARIOS } from '../../src/perf/scenarios';
 import {
+  createPartialPerfReport,
   createPerfReport,
   createUnavailablePerfReport,
   summarizeMetric,
@@ -240,5 +241,28 @@ describe('performance reports', () => {
     expect(report.unavailableReason).toBe('Google Chrome was not found.');
     expect(report.samples).toEqual([]);
     expect(report.scenarios).toEqual([]);
+  });
+
+  it('retains completed samples when a later phase fails', () => {
+    const completed = sample(1, 50);
+    const report = createPartialPerfReport({
+      generatedAt: '2026-08-20T12:00:00.000Z',
+      protocol: { ...PERF_PROTOCOL, measuredRuns: 1 },
+      scenarios: [PERF_SCENARIOS.small],
+      samples: [completed],
+      reason: 'share did not settle',
+      phases: [
+        { phase: 'instrumented', status: 'passed' },
+        { phase: 'first-session', status: 'failed', reason: 'share did not settle' },
+      ],
+    });
+
+    expect(report.status).toBe('partial');
+    expect(report.samples).toEqual([completed]);
+    expect(report.scenarios).toHaveLength(1);
+    expect(report.phases).toEqual([
+      { phase: 'instrumented', status: 'passed' },
+      { phase: 'first-session', status: 'failed', reason: 'share did not settle' },
+    ]);
   });
 });

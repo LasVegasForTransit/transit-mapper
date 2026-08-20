@@ -99,7 +99,7 @@ The command first builds and gates the production app, then builds a private
 instrumented variant, starts Vite preview on `127.0.0.1:4173`, and measures the
 complete desktop matrix. Bundle and PWA reports always describe the public
 production graph; the measurement-only harness is not counted as shipped
-payload. To diagnose one surface without replacing a baseline:
+payload. To diagnose one instrumented surface without replacing a baseline:
 
 ```bash
 pnpm perf -- --scenario rtc
@@ -107,10 +107,43 @@ pnpm perf -- --scenario share
 pnpm perf -- --scenario embed
 ```
 
-`--scenario` cannot be combined with `perf:record`, because a partial report
-must never replace the complete baseline.
+`--scenario rtc` runs only the instrumented RTC editor journey. It does not
+start the public editor, share, or embed checks. Run those checks as their own
+phase:
 
-A pull request runs one candidate-only RTC smoke:
+```bash
+pnpm perf -- --first-session
+```
+
+Run the onboarding slide-change smoke as a third independent phase:
+
+```bash
+pnpm perf -- --onboarding
+```
+
+The onboarding runner opens the production editor, opens Replay intro through
+the production control, and advances each slide with trusted pointer clicks.
+It reads the production onboarding DOM and browser request stream. Harness-only
+instrumentation counts preview canvases, WebGL contexts, and long tasks. The
+phase fails if the dialog creates more than one preview canvas or WebGL
+context, reconstructs the map, requests an OpenFreeMap style, or records a
+slide-change task longer than 50 ms.
+
+Add `--smoke` to any standalone phase when CI needs functional evidence without
+numeric baseline comparison:
+
+```bash
+pnpm perf -- --smoke --scenario rtc
+pnpm perf -- --smoke --first-session
+pnpm perf -- --smoke --onboarding
+```
+
+`--scenario`, `--first-session`, and `--onboarding` cannot be combined with
+`perf:record`. A partial report must never replace the complete baseline. A
+normal `pnpm perf` still runs the complete instrumented matrix and the public
+first-session phase for checked-baseline comparison.
+
+A pull request can run one candidate-only RTC smoke:
 
 ```bash
 pnpm perf -- --smoke --scenario rtc
@@ -218,6 +251,15 @@ pnpm perf:record -- --profile mobile
 
 Review baseline diffs as measurement evidence. Do not update one simply to
 make a regression disappear.
+
+Every requested phase has a `passed`, `failed`, or `unavailable` entry in
+`report.json`. A later failure writes a `partial` report and returns a nonzero
+status. The report retains samples and results from every phase that already
+passed. For example, a public first-session failure keeps the completed RTC
+samples instead of replacing them with an empty unavailable report. A browser
+launch failure marks every requested phase unavailable and still writes the
+report. Existing checked schema-v3 baselines have no phase list, and the reader
+continues to accept that older shape.
 
 `sourceUploadCount` means application-issued GeoJSON source mutations during
 the measured action. Both complete `setData` replacements and differential

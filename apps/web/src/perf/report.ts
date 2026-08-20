@@ -1,5 +1,6 @@
 import type {
   CreatePerfReportOptions,
+  CreatePartialPerfReportOptions,
   CreateUnavailablePerfReportOptions,
   PerfMetricName,
   PerfMetricSummary,
@@ -213,6 +214,35 @@ export function createPerfReport(options: CreatePerfReportOptions): PerfReport {
     firstSessions: options.firstSessions ?? [],
     samples,
     scenarios: options.scenarios.map((scenario) => summarizeScenario(scenario, samples)),
+    phases: options.phases,
+    onboarding: options.onboarding,
+  };
+}
+
+export function createPartialPerfReport(options: CreatePartialPerfReportOptions): PerfReport {
+  const samples = [...options.samples].sort(
+    (left, right) =>
+      options.scenarios.findIndex((scenario) => scenario.id === left.scenarioId) -
+        options.scenarios.findIndex((scenario) => scenario.id === right.scenarioId) ||
+      left.run - right.run,
+  );
+  const completedScenarios = options.scenarios.filter((scenario) =>
+    samples.some((sample) => sample.scenarioId === scenario.id),
+  );
+  return {
+    schemaVersion: 3,
+    generatedAt: options.generatedAt,
+    status: 'partial',
+    failureReason: options.reason,
+    protocol: options.protocol,
+    calibration: options.calibration,
+    provenance: options.provenance,
+    bundles: options.bundles ?? [],
+    firstSessions: options.firstSessions ?? [],
+    samples,
+    scenarios: completedScenarios.map((scenario) => summarizeScenario(scenario, samples)),
+    phases: options.phases,
+    onboarding: options.onboarding,
   };
 }
 
@@ -230,5 +260,6 @@ export function createUnavailablePerfReport(
     firstSessions: [],
     samples: [],
     scenarios: [],
+    phases: options.phases,
   };
 }

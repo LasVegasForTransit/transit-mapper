@@ -9,6 +9,22 @@ describe('performance CLI', () => {
     expect(options.scenarioId).toBe('rtc');
   });
 
+  it('selects the public first-session phase independently', () => {
+    const options = parsePerfCliOptions(['--first-session']);
+
+    expect(options.firstSession).toBe(true);
+    expect(options.onboarding).toBe(false);
+    expect(options.scenarioId).toBeUndefined();
+  });
+
+  it('selects the onboarding smoke independently', () => {
+    const options = parsePerfCliOptions(['--onboarding']);
+
+    expect(options.onboarding).toBe(true);
+    expect(options.firstSession).toBe(false);
+    expect(options.requireBaseline).toBe(false);
+  });
+
   it('records traces without implicitly refreshing the frozen baseline', () => {
     const options = parsePerfCliOptions(['--record']);
 
