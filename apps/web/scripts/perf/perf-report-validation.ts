@@ -43,6 +43,8 @@ const PHASES = new Set([
   'automaticBoundary',
   'nMinusOneUpdate',
 ]);
+const AUDIT_PHASES = new Set(['instrumented', 'first-session', 'onboarding']);
+const AUDIT_PHASE_STATUSES = new Set(['passed', 'failed', 'unavailable']);
 const MILESTONES = [
   'documentResponseEndMs',
   'bootstrapStartMs',
@@ -390,6 +392,20 @@ export function validateFrozenPerfReport(value: unknown, reportPath: string): Pe
   validateFixedPerfProtocol(report.protocol, reportPath);
   validateProvenance(report.provenance, reportPath);
   validateBundles(report.bundles, reportPath);
+  if (report.phases !== undefined) {
+    const phases = array(report.phases, reportPath, 'phases');
+    const seen = new Set<string>();
+    phases.forEach((candidate, index) => {
+      const context = `phases[${index}]`;
+      const phase = record(candidate, reportPath, context);
+      enumValue(phase.phase, AUDIT_PHASES, reportPath, `${context}.phase`);
+      enumValue(phase.status, AUDIT_PHASE_STATUSES, reportPath, `${context}.status`);
+      const phaseName = String(phase.phase);
+      if (seen.has(phaseName)) invalid(reportPath, `duplicate ${phaseName} phase`);
+      seen.add(phaseName);
+      if (phase.reason !== undefined) stringValue(phase.reason, reportPath, `${context}.reason`);
+    });
+  }
   validateFirstSessions(report.firstSessions, reportPath);
   validateJsonMetrics(array(report.samples, reportPath, 'samples'), reportPath, 'samples');
   validateJsonMetrics(array(report.scenarios, reportPath, 'scenarios'), reportPath, 'scenarios');

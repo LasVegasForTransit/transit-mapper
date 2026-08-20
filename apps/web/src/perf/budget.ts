@@ -301,6 +301,13 @@ export function evaluatePerfBudgets(options: EvaluatePerfBudgetsOptions): PerfBu
       notices: [options.report.unavailableReason ?? 'The performance run is unavailable.'],
     };
   }
+  if (options.report.status === 'partial') {
+    return {
+      status: 'fail',
+      violations: [],
+      notices: [options.report.failureReason ?? 'The performance run is partial.'],
+    };
+  }
 
   const firstSessionViolations = firstSessionSettlementViolations(options.report);
   if (options.enforceNumericBudgets === false) {
