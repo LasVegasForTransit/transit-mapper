@@ -361,11 +361,14 @@ and viewport indexes restrict work to the affected visible closure; a camera
 still inside the accepted envelope performs no projection. Work stays private
 and side-effect free until publication and yields between bounded units.
 
-`FeatureProjectionWorkerClient` accepts only a snapshot, source request, and
-resolved presentation, then returns detached GeoJSON. `MapCanvas` retains
-camera movement, source banks, feature state, and visible-pixel acceptance.
-The same client serves fitted read-only maps. This moves geometry off the
-interaction thread without giving a Worker authority to publish stale pixels.
+Render preparation runs once in four-entity units. Over-budget units keep their
+deterministic results and yield. Exceptions, cancellation, stale generations,
+and invalid commits still abort the draft.
+
+`FeatureProjectionWorkerClient` turns immutable snapshots and source requests
+into detached GeoJSON. `MapCanvas` owns camera movement, source banks, feature
+state, and pixel acceptance. Fitted read-only maps use the same client. Workers
+never publish pixels.
 
 The inactive bank is prepared offscreen, loaded, and painted before one switch
 makes its visual and hit layers authoritative; failure keeps the old bank.
