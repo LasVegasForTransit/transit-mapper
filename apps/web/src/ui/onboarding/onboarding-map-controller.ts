@@ -6,10 +6,6 @@ import type {
   ViewOptions,
 } from '@transitmapper/core/render/buildFeatures';
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap } from 'maplibre-gl';
-import {
-  attachInitialStyleFallback,
-  INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
-} from '../../map/initialStyleFallback';
 import { setExportFeatureData } from '../../map/export/exportLayerSetup';
 import {
   registerMapIcons,
@@ -21,7 +17,7 @@ import {
 } from '../../map/layers';
 import { buildFeatures } from '@transitmapper/core/render/buildFeatures';
 import { renderPresentationForFittedMap } from '../../map/fitted-map-presentation';
-import { basemapStyleForScheme, layerSpecsForScheme } from '../../map/mapTheme';
+import { layerSpecsForScheme, localBlankStyleForScheme } from '../../map/mapTheme';
 import type { ColorScheme } from '../../theme/systemColorScheme';
 import {
   ONBOARDING_DRAW_PATH,
@@ -357,7 +353,7 @@ export function mountOnboardingMap(options: MountOnboardingMapOptions): () => vo
   try {
     map = new maplibregl.Map({
       container: options.container,
-      style: basemapStyleForScheme(options.colorScheme),
+      style: localBlankStyleForScheme(options.colorScheme),
       center: systems.resolvedSystem.viewport.center,
       zoom: systems.resolvedSystem.viewport.zoom,
       interactive: false,
@@ -371,28 +367,19 @@ export function mountOnboardingMap(options: MountOnboardingMapOptions): () => vo
     return () => undefined;
   }
 
-  let usingLocalContext = false;
   let resources: SceneResources | undefined;
-  const detachInitialStyleFallback = attachInitialStyleFallback(map, {
-    scheme: options.colorScheme,
-    timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
-    onFallback: () => {
-      usingLocalContext = true;
-    },
-  });
   map.on('error', (event) => {
     console.error('[onboarding preview]', event.error ?? event);
   });
   map.on('load', () => {
     try {
-      resources = initializeScene(map, options, systems, usingLocalContext);
+      resources = initializeScene(map, options, systems, true);
     } catch (error) {
       options.onFailure(error);
     }
   });
 
   return () => {
-    detachInitialStyleFallback();
     resources?.stopAnimation();
     resources?.resizeObserver?.disconnect();
     for (const marker of resources?.markers ?? []) marker.remove();

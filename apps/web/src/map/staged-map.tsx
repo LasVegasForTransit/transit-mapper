@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react';
+import { lazy, Suspense, useState, type ComponentType } from 'react';
 import type { MapCanvasProps } from './MapCanvas';
 
 interface MapCanvasModule {
@@ -27,21 +27,14 @@ function MapShell() {
 }
 
 /**
- * Commits a useful editor shell before MapLibre parses. A passive effect runs
- * after React has presented that shell, then starts exactly one dynamic import
- * immediately; it is deliberately not an idle-time optimization. The same
- * fallback occupies the map surface until the real canvas takes over, so the
- * editor never flashes an empty or inert-looking page.
+ * Starts the MapLibre chunk during the first Suspense render. The shell stays
+ * in the map surface while that import resolves, so code loading and useful
+ * feedback happen in parallel instead of adding a passive-effect turn to the
+ * cold path.
  */
 export function StagedMapCanvas({ load = loadMapCanvas, ...props }: StagedMapCanvasProps) {
-  const [requested, setRequested] = useState(false);
   const [MapCanvas] = useState(() => lazy(load));
 
-  useEffect(() => {
-    setRequested(true);
-  }, []);
-
-  if (!requested) return <MapShell />;
   return (
     <Suspense fallback={<MapShell />}>
       <MapCanvas {...props} />

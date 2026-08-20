@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe('the staged editor map', () => {
-  it('commits a truthful map shell before it begins loading MapLibre', async () => {
+  it('starts loading MapLibre during the first render while showing the map shell', async () => {
     let resolveMap: ((value: { default: ComponentType }) => void) | undefined;
     const load = vi.fn(
       () =>
@@ -39,11 +39,6 @@ describe('the staged editor map', () => {
 
     expect(container.querySelector('[data-map-shell="loading"]')).not.toBeNull();
     expect(container.querySelector('[role="status"]')?.textContent).toContain('Preparing map');
-    expect(load).not.toHaveBeenCalled();
-
-    await act(async () => {
-      await Promise.resolve();
-    });
     expect(load).toHaveBeenCalledOnce();
 
     await act(async () => {

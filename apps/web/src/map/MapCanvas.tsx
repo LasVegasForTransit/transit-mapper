@@ -465,12 +465,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
     setMap(map);
 
-    // MapLibre reports style/source/tile failures through this event rather
-    // than by throwing, so without a listener they are completely silent —
-    // the same reasoning embed/main.ts already applies, which called silent
-    // half-rendering the worst possible failure mode. It is worse here: the
-    // overlay's self-healing in ensureOverlay() will keep re-adding layers
-    // over a style that never loaded, hiding a persistent failure forever.
+    // MapLibre reports style/source/tile failures through this event. Without
+    // a listener, overlay recovery can mask a basemap that never loaded.
     //
     // OpenFreeMap is a third-party host with no SLA, so
     // "the basemap is down" is a real operating condition, not a hypothetical.
@@ -488,6 +484,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
       scheme: initialColorScheme,
       timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
       onFallback: () => {
+        styleSwitchControllerRef.current?.lockToLocal(initialColorScheme);
         basemapFailureRef.current?.();
       },
     });
