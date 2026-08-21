@@ -408,7 +408,7 @@ export function MapCanvas({
       container: containerRef.current,
     });
     map.triggerRepaint();
-  }, [viewMode, visibleModes, visibleWayTypes, store]);
+  }, [viewMode, visibleModes, visibleWayTypes, store, vehicleGateController]);
 
   // Landmarks are a pure layer-visibility toggle. buildFeatures never reads
   // showLandmarks, so this deliberately does NOT live in the effect above:
@@ -2005,6 +2005,7 @@ export function MapCanvas({
     setViewMode,
     simClock,
     simCommands,
+    vehicleGateController,
   ]);
 
   useEffect(() => {
