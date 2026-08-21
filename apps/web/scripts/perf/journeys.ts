@@ -610,16 +610,48 @@ export async function waitForLoadedDocument(page: Page): Promise<void> {
   });
 }
 
+function scenarioReadyDiagnostics(page: Page, selector: string) {
+  return page.evaluate(
+    (readySelector) => ({
+      documentStatus: document.querySelector('.app')?.getAttribute('data-document-status') ?? null,
+      mapShell: document.querySelector('[data-map-shell]')?.textContent.trim() ?? null,
+      matchingElements: document.querySelectorAll(readySelector).length,
+      bodyText: document.body.innerText.slice(0, 1_000),
+      mapResources: performance
+        .getEntriesByType('resource')
+        .map((entry) => entry.name)
+        .filter((name) => /(?:MapCanvas|map-engine)/u.test(name)),
+    }),
+    selector,
+  );
+}
+
 export async function waitForScenarioReady(
   page: Page,
   scenario: PerfScenario,
   expectedName: string,
   loadPhase: 'cold' | 'warm',
 ): Promise<void> {
-  await page.locator(scenario.readySelector).first().waitFor({
-    state: 'visible',
-    timeout: 60_000,
-  });
+  try {
+    await page
+      .locator(scenario.readySelector)
+      .first()
+      .waitFor({
+        // MapLibre attaches its canvas before its first style and source paint.
+        // The system-paint mark below proves the usable map. Requiring
+        // Playwright's CSS visibility first deadlocked RTC runs on an attached
+        // canvas and never reached that stronger proof.
+        state: scenario.readySelector === '.maplibregl-canvas' ? 'attached' : 'visible',
+        timeout: 60_000,
+      });
+  } catch (error) {
+    const diagnostics = await scenarioReadyDiagnostics(page, scenario.readySelector);
+    throw new Error(
+      `${scenario.id} ${loadPhase} load did not expose ${scenario.readySelector}: ` +
+        JSON.stringify(diagnostics),
+      { cause: error },
+    );
+  }
   if (scenario.surface === 'editor') {
     // Wait for the document, not for the chrome. The editor renders its whole
     // shell before the saved system has been read, so the name field being on
