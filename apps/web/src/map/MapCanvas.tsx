@@ -212,6 +212,8 @@ export interface MapCanvasProps {
    *  the backdrop is blank, and a user who isn't told assumes the app broke
    *  rather than that a third-party tile host is down. */
   onBasemapUnavailable?: () => void;
+  /** Called once after the remote map loads or the local fallback style is usable. */
+  onStartupStyleSettled?: () => void;
 }
 
 interface MapErrorLike {
@@ -270,7 +272,7 @@ function framePadding(el: HTMLElement, margin: number): PaddingOptions {
   };
 }
 
-export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
+export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCanvasProps) {
   const colorScheme = useSystemColorScheme();
   const initialColorSchemeRef = useRef(colorScheme);
   const styleSwitchControllerRef = useRef<StyleSwitchController | null>(null);
@@ -343,6 +345,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
   // the map down and rebuild it every time App re-renders with a fresh arrow.
   const basemapFailureRef = useRef(onBasemapUnavailable);
   basemapFailureRef.current = onBasemapUnavailable;
+  const startupStyleSettledRef = useRef(onStartupStyleSettled);
+  startupStyleSettledRef.current = onStartupStyleSettled;
 
   // Same reasoning as basemapFailureRef: the keymap needs to run these, but
   // naming them in the map effect's deps would tear down and rebuild the
@@ -487,6 +491,7 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         styleSwitchControllerRef.current?.lockToLocal(initialColorScheme);
         basemapFailureRef.current?.();
       },
+      onSettled: () => startupStyleSettledRef.current?.(),
     });
 
     let detachInteractions: (() => void) | null = null;
