@@ -13,9 +13,9 @@ describe('release performance gates', () => {
   it('keeps the required RTC check name aligned with its terminal pull-request job', () => {
     const workflow = repositorySource('.github/workflows/performance.yml');
     const standards = repositorySource('scripts/bootstrap/standards.ts');
-    const check = standards.match(/context: '([^']+)'/);
+    const checks = [...standards.matchAll(/context: '([^']+)'/g)].map((match) => match[1]);
 
-    expect(check?.[1]).toBe('RTC responsiveness (desktop)');
+    expect(checks).toEqual(['Validate', 'RTC responsiveness (desktop)']);
     expect(workflow).toContain('name: RTC responsiveness (desktop)');
     expect(workflow).toContain('pull_request:');
     expect(workflow).not.toMatch(/pull_request:\n(?:.|\n)*?paths:/);

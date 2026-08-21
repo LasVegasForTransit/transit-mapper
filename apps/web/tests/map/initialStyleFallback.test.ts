@@ -217,4 +217,46 @@ describe('initial map style fallback', () => {
       diff: false,
     });
   });
+
+  it('ignores a pending reachability probe after disposal', async () => {
+    vi.useFakeTimers();
+    const map = new FakeStyleMap();
+    const fallback = vi.fn();
+    let resolveProbe!: (reachable: boolean) => void;
+    const probe = new Promise<boolean>((resolve) => {
+      resolveProbe = resolve;
+    });
+    const detach = attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'light',
+      timeoutMs: 250,
+      onFallback: fallback,
+      probeBasemap: () => probe,
+    });
+
+    vi.advanceTimersByTime(250);
+    detach();
+    resolveProbe(false);
+    await Promise.resolve();
+    map.emit('error');
+
+    expect(fallback).not.toHaveBeenCalled();
+    expect(map.setStyle).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets an expired fallback timer before the replacement style loads', () => {
+    vi.useFakeTimers();
+    const map = new FakeStyleMap();
+    const clearTimer = vi.spyOn(globalThis, 'clearTimeout');
+    attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'light',
+      timeoutMs: 250,
+      onFallback: vi.fn(),
+    });
+
+    vi.advanceTimersByTime(250);
+    clearTimer.mockClear();
+    map.emit('style.load');
+
+    expect(clearTimer).not.toHaveBeenCalled();
+  });
 });

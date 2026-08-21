@@ -6,7 +6,10 @@
  * them. Changing the standard means editing this file, not the phase.
  */
 
-export const REQUIRED_STATUS_CHECKS = [{ context: 'RTC responsiveness (desktop)' }] as const;
+export const REQUIRED_STATUS_CHECKS = [
+  { context: 'Validate' },
+  { context: 'RTC responsiveness (desktop)' },
+] as const;
 
 /** Rules on the default branch, as a GitHub repository ruleset. */
 export const BRANCH_RULESET = {
