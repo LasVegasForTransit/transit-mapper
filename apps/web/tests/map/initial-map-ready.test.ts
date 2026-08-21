@@ -4,7 +4,7 @@ import {
   shouldProjectInitialDocument,
 } from '../../src/map/initial-map-ready';
 
-type StyleEvent = 'style.load';
+type StyleEvent = 'style.load' | 'idle';
 
 class FakeMap {
   private readonly listeners = new Map<StyleEvent, Set<() => void>>();
@@ -27,8 +27,10 @@ class FakeMap {
   }
 
   emit(event: StyleEvent): void {
-    this.styleLoaded = true;
-    this.styleKnown = true;
+    if (event === 'style.load') {
+      this.styleLoaded = true;
+      this.styleKnown = true;
+    }
     for (const listener of this.listeners.get(event) ?? []) listener();
     this.listeners.delete(event);
   }
@@ -51,7 +53,7 @@ describe('initial map readiness', () => {
 
   it('starts the editor when the fallback style becomes usable', () => {
     const map = new FakeMap();
-    const startEditor = vi.fn();
+    const startEditor = vi.fn(() => true);
 
     attachInitialMapReady(map, startEditor);
     map.emit('style.load');
@@ -61,7 +63,7 @@ describe('initial map readiness', () => {
 
   it('starts the editor when a cached style loaded before setup finished', () => {
     const map = new FakeMap();
-    const startEditor = vi.fn();
+    const startEditor = vi.fn(() => true);
     map.setStyleLoaded();
 
     attachInitialMapReady(map, startEditor);
@@ -71,7 +73,7 @@ describe('initial map readiness', () => {
 
   it('waits for MapLibre to finish loading before mutating a parsed style', () => {
     const map = new FakeMap();
-    const startEditor = vi.fn();
+    const startEditor = vi.fn(() => true);
     map.setStyleKnown();
 
     attachInitialMapReady(map, startEditor);
@@ -81,5 +83,19 @@ describe('initial map readiness', () => {
     map.emit('style.load');
 
     expect(startEditor).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries initialization after a stale style event rejects overlay mutation', () => {
+    const map = new FakeMap();
+    const startEditor = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+
+    attachInitialMapReady(map, startEditor);
+    map.emit('style.load');
+
+    expect(startEditor).toHaveBeenCalledOnce();
+
+    map.emit('idle');
+
+    expect(startEditor).toHaveBeenCalledTimes(2);
   });
 });
