@@ -1,22 +1,26 @@
 name: Performance
 
 on:
+  # This workflow cannot use a top-level path filter. The RTC job is required
+  # by the ruleset, and GitHub never publishes a check for a skipped workflow.
+  # The job itself records a successful terminal result for unrelated changes.
   pull_request:
     branches: [main]
-    paths:
-      - 'apps/web/**'
-      - 'packages/core/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - '.github/workflows/performance.yml'
+  workflow_call:
+    inputs:
+      scope:
+        description: Reusable callers run the release smoke gates by default
+        required: false
+        type: string
+        default: release
   workflow_dispatch:
     inputs:
       scope:
-        description: Run the complete matrix or only the leak soak
+        description: Run the full audit, release smokes, or only the leak soak
         type: choice
         options:
           - full
+          - release
           - soak
         default: full
       soak_duration_ms:
@@ -32,25 +36,168 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  browser:
-    name: Chrome responsiveness (${{ matrix.profile }})
-    if: github.event_name != 'workflow_dispatch' || inputs.scope == 'full'
+  rtc:
+    # This exact name is the required status context in
+    # scripts/bootstrap/standards.ts. Keep this job terminal for every pull
+    # request even when the Chrome steps are unnecessary.
+    name: RTC responsiveness (desktop)
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'soak'
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 45 }}
-    strategy:
-      fail-fast: false
-      matrix:
-        profile: ${{ fromJSON(github.event_name == 'pull_request' && '["desktop"]' || '["desktop","mobile"]') }}
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 25 }}
     env:
       XVFB_ARGS: -screen 0 1440x900x24 -nolisten tcp -dpi 96
     steps:
-      # runner.temp is unavailable while job-level env is evaluated. Resolve
-      # the runner-provided directory after the job starts instead.
-      - name: Configure artifact paths
+      - name: Checkout candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Decide whether this pull request needs the RTC smoke
+        id: relevance
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          printf '%s\n' \
-            "CURRENT_ARTIFACT=$RUNNER_TEMP/transitmapper-performance-current-${{ matrix.profile }}" \
-            >> "$GITHUB_ENV"
+          if [ "$EVENT_NAME" != 'pull_request' ]; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          elif git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- apps/web packages/core; then
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip the RTC smoke for an unrelated pull request
+        if: steps.relevance.outputs.run != 'true'
+        run: echo 'No apps/web or packages/core changes require Chrome.'
+
+      - name: Setup candidate Node + pnpm
+        if: steps.relevance.outputs.run == 'true'
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Confirm stable Chrome and virtual display
+        if: steps.relevance.outputs.run == 'true'
+        run: |
+          google-chrome --version
+          command -v xvfb-run
+
+      - name: Configure artifact path
+        if: steps.relevance.outputs.run == 'true'
+        run: |
+          echo "CURRENT_ARTIFACT=$RUNNER_TEMP/transitmapper-performance-rtc" >> "$GITHUB_ENV"
+
+      - name: Run the RTC smoke when this pull request changes web or core code
+        if: steps.relevance.outputs.run == 'true'
+        run: >-
+          xvfb-run -a --server-args="$XVFB_ARGS"
+          pnpm perf -- --smoke --profile desktop --scenario rtc
+          --output "$CURRENT_ARTIFACT"
+
+      - name: Upload RTC report
+        if: always() && steps.relevance.outputs.run == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: performance-rtc-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CURRENT_ARTIFACT }}
+          if-no-files-found: warn
+          retention-days: 14
+
+  first-session:
+    name: Public first-session smoke (desktop)
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.scope != 'soak')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      XVFB_ARGS: -screen 0 1440x900x24 -nolisten tcp -dpi 96
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup candidate Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Confirm stable Chrome and virtual display
+        run: |
+          google-chrome --version
+          command -v xvfb-run
+
+      - name: Configure artifact path
+        run: |
+          echo "CURRENT_ARTIFACT=$RUNNER_TEMP/transitmapper-performance-first-session" >> "$GITHUB_ENV"
+
+      - name: Run the public first-session smoke
+        run: >-
+          xvfb-run -a --server-args="$XVFB_ARGS"
+          pnpm perf -- --smoke --profile desktop --first-session
+          --output "$CURRENT_ARTIFACT"
+
+      - name: Upload public first-session report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: performance-first-session-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CURRENT_ARTIFACT }}
+          if-no-files-found: warn
+          retention-days: 14
+
+  onboarding:
+    name: Onboarding smoke (desktop)
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.scope != 'soak')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      XVFB_ARGS: -screen 0 1440x900x24 -nolisten tcp -dpi 96
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup candidate Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Confirm stable Chrome and virtual display
+        run: |
+          google-chrome --version
+          command -v xvfb-run
+
+      - name: Configure artifact path
+        run: |
+          echo "CURRENT_ARTIFACT=$RUNNER_TEMP/transitmapper-performance-onboarding" >> "$GITHUB_ENV"
+
+      - name: Run the onboarding smoke
+        run: >-
+          xvfb-run -a --server-args="$XVFB_ARGS"
+          pnpm perf -- --smoke --profile desktop --onboarding
+          --output "$CURRENT_ARTIFACT"
+
+      - name: Upload onboarding report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: performance-onboarding-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CURRENT_ARTIFACT }}
+          if-no-files-found: warn
+          retention-days: 14
+
+  audit:
+    name: Chrome performance audit (${{ matrix.profile }})
+    if: github.event_name == 'workflow_dispatch' && inputs.scope == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [desktop, mobile]
+    env:
+      XVFB_ARGS: -screen 0 1440x900x24 -nolisten tcp -dpi 96
+    steps:
+      - name: Configure artifact path
+        run: |
+          echo "CURRENT_ARTIFACT=$RUNNER_TEMP/transitmapper-performance-audit-${{ matrix.profile }}" >> "$GITHUB_ENV"
 
       - name: Checkout candidate
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -65,20 +212,7 @@ jobs:
           google-chrome --version
           command -v xvfb-run
 
-      # Pull requests prove the complete cold/warm RTC journey once. One
-      # sample is functional evidence, not enough data for a numeric timing
-      # verdict. Full repeated audits are deliberate workflow dispatches.
-      - name: Exercise candidate RTC smoke
-        if: github.event_name == 'pull_request'
-        run: >-
-          xvfb-run -a --server-args="$XVFB_ARGS" pnpm perf --
-          --smoke
-          --profile "${{ matrix.profile }}"
-          --scenario rtc
-          --output "$CURRENT_ARTIFACT"
-
       - name: Record complete candidate matrix
-        if: github.event_name != 'pull_request'
         run: >-
           xvfb-run -a --server-args="$XVFB_ARGS" pnpm perf:record --
           --profile "${{ matrix.profile }}"
@@ -88,27 +222,23 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: performance-${{ matrix.profile }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ env.CURRENT_ARTIFACT }}
+          name: performance-audit-${{ matrix.profile }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CURRENT_ARTIFACT }}
           if-no-files-found: warn
           retention-days: 14
 
   soak:
     name: RTC leak soak
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && (inputs.scope == 'full' || inputs.scope == 'soak')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
       XVFB_ARGS: -screen 0 1440x900x24 -nolisten tcp -dpi 96
       SOAK_DURATION_MS: ${{ inputs.soak_duration_ms || '600000' }}
     steps:
-      # Keep soak artifacts in the runner-owned temporary directory too.
       - name: Configure artifact path
         run: |
-          printf '%s\n' \
-            "SOAK_ARTIFACT=$RUNNER_TEMP/transitmapper-performance-soak" \
-            >> "$GITHUB_ENV"
+          echo "SOAK_ARTIFACT=$RUNNER_TEMP/transitmapper-performance-soak" >> "$GITHUB_ENV"
 
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
