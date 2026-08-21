@@ -109,10 +109,12 @@ describe('initial map style fallback', () => {
     vi.useFakeTimers();
     const timedOut = new FakeStyleMap();
     const fallback = vi.fn();
+    const onLocalStyleSelected = vi.fn();
     attachInitialStyleFallback(timedOut as unknown as MLMap, {
       scheme: 'light',
       timeoutMs: 250,
       onFallback: fallback,
+      onLocalStyleSelected,
       probeBasemap: () => Promise.resolve(true),
     });
 
@@ -122,6 +124,7 @@ describe('initial map style fallback', () => {
     });
     await vi.waitFor(() => expect(timedOut.setStyle).toHaveBeenCalledTimes(1));
     expect(fallback).not.toHaveBeenCalled();
+    expect(onLocalStyleSelected).toHaveBeenCalledOnce();
     expect(timedOut.setStyle).toHaveBeenLastCalledWith(localBlankStyleForScheme('light'), {
       diff: false,
     });
@@ -191,6 +194,7 @@ describe('initial map style fallback', () => {
 
     vi.advanceTimersByTime(250);
     map.emit('style.load');
+    map.emit('load');
 
     expect(onSettled).not.toHaveBeenCalled();
 

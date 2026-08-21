@@ -143,19 +143,17 @@ pnpm perf -- --smoke --onboarding
 normal `pnpm perf` still runs the complete instrumented matrix and the public
 first-session phase for checked-baseline comparison.
 
-A pull request can run one candidate-only RTC smoke:
+A web- or core-affecting pull request runs the candidate-only RTC audit:
 
 ```bash
-pnpm perf -- --smoke --scenario rtc
+pnpm perf -- --scenario rtc
 ```
 
-The smoke still builds the production graph and completes one cold and warm
-agency-scale journey, including camera movement, station drag, line draw, and
-durable persistence. It fails when the build, Chrome, or any required journey
-proof fails. One sample is not enough evidence for a timing verdict, so smoke
-mode does not enforce numeric timing or regression budgets. It also does not
-build or measure the base revision. Use the full fixed protocol above when a
-change needs statistical performance evidence.
+The required check builds the production graph and completes the fixed warm-up
+plus five measured cold and warm agency-scale journeys. It exercises camera
+movement, station drag, line draw, and durable persistence. The check enforces
+the absolute responsiveness budgets. Add `--smoke` only for a local functional
+diagnosis that deliberately skips those numeric gates.
 
 The protocol is fixed in `apps/web/src/perf/scenarios.ts`:
 
@@ -296,12 +294,11 @@ or the camera leaves that coverage. Wide/full source revisions load the hidden
 committed bank before one visibility flip; inspect physical source IDs and bank
 diagnostics rather than interpreting those calls as a mixed visible update.
 
-The scheduler normally rejects an over-budget unit and refines its batch. One
-final structurally minimal batch-one attempt may retain completed private work,
-yield, and commit so GC/JIT attribution cannot leave an initial city blank.
-That policy preserves visual continuity only: `maxProjectionUnitMs` and
-`maxProjectionSliceMs` still report the overrun, and either value above its
-budget fails performance review.
+The scheduler prepares each scene once with the fixed four-entity chunk size.
+An over-budget unit remains completed private work. The scheduler records the
+overrun and yields before the next unit instead of discarding the scene and
+retrying it. `maxProjectionUnitMs` and `maxProjectionSliceMs` still report the
+overrun, and either value above its budget fails performance review.
 
 Absolute startup gates use the five-run p95. Direct-manipulation gates combine
 the raw samples across all five runs, so one bad run cannot hide behind a

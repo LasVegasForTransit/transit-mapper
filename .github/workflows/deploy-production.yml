@@ -324,6 +324,13 @@ jobs:
           fi
           echo "Smoke test passed."
 
+      - name: Exercise the deployed editor and onboarding
+        env:
+          SITE: https://map.lasvegasfortransit.org
+        run: >-
+          pnpm --filter @transitmapper/web perf:live-production --
+          --site "$SITE"
+
       # The smoke test runs AFTER the upload, so a red job here does not mean
       # "nothing shipped" — it means something shipped and is not serving
       # correctly. That distinction decides whether you roll back or fix

@@ -26,6 +26,7 @@ class FakeMap {
   readonly setStyle = vi.fn();
   readonly remove = vi.fn();
   readonly setFeatureState = vi.fn();
+  readonly setPaintProperty = vi.fn();
   readonly resize = vi.fn();
   readonly fitBounds = vi.fn();
   /** Camera reads that happened before `fitBounds`, so a test can prove the
@@ -205,6 +206,29 @@ describe('onboarding map controller', () => {
     controller.dispose();
     controller.dispose();
     expect(mapHarness.maps[0].remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates layer paint for a new color scheme without reconstructing the map', () => {
+    const controller = mountOnboardingMap({
+      container: document.createElement('div'),
+      colorScheme: 'light',
+      reducedMotion: true,
+      onFailure: vi.fn(),
+    });
+    const map = mapHarness.maps[0];
+    controller.setScene('welcome');
+    map.emit('load');
+    map.setPaintProperty.mockClear();
+
+    controller.setColorScheme('dark');
+
+    expect(mapHarness.maps).toHaveLength(1);
+    expect(map.setPaintProperty).toHaveBeenCalledWith(
+      'onboarding-streets',
+      'line-color',
+      '#555b56',
+    );
+    controller.dispose();
   });
 
   it('keeps the local context mounted when MapLibre reports an error', () => {

@@ -19,8 +19,21 @@ describe('release performance gates', () => {
     expect(workflow).toContain('name: RTC responsiveness (desktop)');
     expect(workflow).toContain('pull_request:');
     expect(workflow).not.toMatch(/pull_request:\n(?:.|\n)*?paths:/);
-    expect(workflow).toContain('Run the RTC smoke when this pull request changes web or core code');
-    expect(workflow).toContain('Skip the RTC smoke for an unrelated pull request');
+    expect(workflow).toContain('Run the repeated RTC audit');
+    expect(workflow).toContain('pnpm perf -- --profile desktop --scenario rtc');
+    expect(workflow).not.toContain('pnpm perf -- --smoke --profile desktop --scenario rtc');
+    expect(workflow).toContain('Skip the RTC audit for an unrelated pull request');
+    for (const relevantPath of [
+      'apps/web',
+      'packages/core',
+      'package.json',
+      'pnpm-lock.yaml',
+      'pnpm-workspace.yaml',
+      '.github/workflows/performance.yml',
+      '.github/actions/setup-node-pnpm',
+    ]) {
+      expect(workflow).toContain(relevantPath);
+    }
   });
 
   it('runs the production smoke phases as separate reusable jobs before Release Please', () => {
@@ -30,7 +43,7 @@ describe('release performance gates', () => {
     expect(performance).toContain('workflow_call:');
     expect(performance).toContain('name: Public first-session smoke (desktop)');
     expect(performance).toContain('name: Onboarding smoke (desktop)');
-    expect(performance).toContain('pnpm perf -- --smoke --profile desktop --scenario rtc');
+    expect(performance).toContain('pnpm perf -- --profile desktop --scenario rtc');
     expect(performance).toContain('pnpm perf -- --smoke --profile desktop --first-session');
     expect(performance).toContain('pnpm perf -- --smoke --profile desktop --onboarding');
     expect(deploy).toContain('uses: ./.github/workflows/performance.yml');
@@ -38,5 +51,7 @@ describe('release performance gates', () => {
     expect(deploy).toContain(
       'gh workflow run performance.yml --repo "$GITHUB_REPOSITORY" --ref "$release_branch"',
     );
+    expect(deploy).toContain('pnpm --filter @transitmapper/web perf:live-production --');
+    expect(deploy).toContain('--site "$SITE"');
   });
 });

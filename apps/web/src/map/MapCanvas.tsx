@@ -482,13 +482,15 @@ export function MapCanvas({
       console.error('[transitmapper]', event.error ?? event);
     };
     map.on('error', onMapError);
+    const initialStyleOwnership = { localOnly: false };
     const detachInitialStyleFallback = attachInitialStyleFallback(map, {
       scheme: initialColorScheme,
       timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
-      onFallback: () => {
+      onLocalStyleSelected: () => {
+        initialStyleOwnership.localOnly = true;
         styleSwitchControllerRef.current?.lockToLocal(initialColorScheme);
-        basemapFailureRef.current?.();
       },
+      onFallback: () => basemapFailureRef.current?.(),
       onSettled: () => startupStyleSettledRef.current?.(),
     });
 
@@ -1612,6 +1614,9 @@ export function MapCanvas({
       },
       onUnavailable: () => basemapFailureRef.current?.(),
     });
+    if (initialStyleOwnership.localOnly) {
+      styleSwitchControllerRef.current.lockToLocal(initialColorScheme);
+    }
 
     attachInitialMapReady(map, () => {
       // MapLibre's compact attribution starts expanded once (its own default

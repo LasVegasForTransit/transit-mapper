@@ -541,12 +541,11 @@ flowchart TD
   cron --> w
 ```
 
-There is one environment. Conventional commits on the default branch update a
-generated release pull request. Merging that pull request runs the checks,
-creates and attests one deployment archive, applies pending database
-migrations from it, deploys its exact Worker and static assets, and smoke-tests
-the result. GitHub records the release and production deployment; the About
-dialog exposes their version, revision, and provenance links to the viewer.
+There is one environment. Default-branch commits update a generated release
+pull request. Merging it runs the checks, attests one archive, applies its
+migrations, deploys its Worker and assets, checks the live fingerprint and
+routes, then runs RTC and onboarding in headless Chrome. GitHub records the
+release and deployment; About shows their version, revision, and provenance.
 
 | Element           | Detail                                                                                |
 | ----------------- | ------------------------------------------------------------------------------------- |
