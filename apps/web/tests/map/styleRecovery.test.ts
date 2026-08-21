@@ -1,9 +1,46 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  attachMapStyleRecovery,
   createMapStyleFeatureDataRecovery,
   recoverMapStyleState,
   type MapStyleRecoverySteps,
 } from '../../src/map/styleRecovery';
+
+type StyleRecoveryEvent = 'style.load' | 'idle';
+
+class FakeStyleRecoveryMap {
+  private readonly listeners = new Map<StyleRecoveryEvent, Set<() => void>>();
+  private readonly onceListeners = new Map<StyleRecoveryEvent, Set<() => void>>();
+
+  on(event: StyleRecoveryEvent, listener: () => void): this {
+    const listeners = this.listeners.get(event) ?? new Set();
+    listeners.add(listener);
+    this.listeners.set(event, listeners);
+    return this;
+  }
+
+  once(event: StyleRecoveryEvent, listener: () => void): this {
+    this.on(event, listener);
+    const listeners = this.onceListeners.get(event) ?? new Set();
+    listeners.add(listener);
+    this.onceListeners.set(event, listeners);
+    return this;
+  }
+
+  off(event: StyleRecoveryEvent, listener: () => void): this {
+    this.listeners.get(event)?.delete(listener);
+    this.onceListeners.get(event)?.delete(listener);
+    return this;
+  }
+
+  emit(event: StyleRecoveryEvent): void {
+    for (const listener of [...(this.listeners.get(event) ?? [])]) {
+      if (this.onceListeners.get(event)?.delete(listener))
+        this.listeners.get(event)?.delete(listener);
+      listener();
+    }
+  }
+}
 
 function recoveryHarness(overlayReady = true, rendererSourcesRetained = true) {
   const calls: string[] = [];
@@ -30,6 +67,32 @@ function recoveryHarness(overlayReady = true, rendererSourcesRetained = true) {
 }
 
 describe('map style recovery', () => {
+  it('retries a rejected style replacement when MapLibre becomes idle', () => {
+    const map = new FakeStyleRecoveryMap();
+    const recover = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const detach = attachMapStyleRecovery(map, () => true, recover);
+
+    map.emit('style.load');
+    expect(recover).toHaveBeenCalledOnce();
+
+    map.emit('idle');
+    expect(recover).toHaveBeenCalledTimes(2);
+
+    detach();
+  });
+
+  it('removes a pending idle retry during cleanup', () => {
+    const map = new FakeStyleRecoveryMap();
+    const recover = vi.fn(() => false);
+    const detach = attachMapStyleRecovery(map, () => true, recover);
+
+    map.emit('style.load');
+    detach();
+    map.emit('idle');
+
+    expect(recover).toHaveBeenCalledOnce();
+  });
+
   it('restores app state without rebuilding retained renderer feature data', () => {
     const { calls, steps } = recoveryHarness();
 

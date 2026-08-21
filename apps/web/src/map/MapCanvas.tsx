@@ -118,7 +118,8 @@ import { attachVehicleAnimation } from '../sim/vehicles';
 import { clearArmedTerminusForViewChange } from './viewEditorState';
 import { initialEditorStyleForScheme, layerSpecsForScheme } from './mapTheme';
 import { createStyleSwitchController, type StyleSwitchController } from './styleSwitchController';
-import { createMapStyleFeatureDataRecovery, recoverMapStyleState } from './styleRecovery';
+import { attachMapStyleRecovery, recoverMapStyleState } from './styleRecovery';
+import { createMapStyleFeatureDataRecovery } from './styleRecovery';
 import {
   canApplyEditorSourceUpdate,
   editorOverlayWorkerInput,
@@ -1571,10 +1572,8 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
         restoreSimulation: notifyVehicleGate,
         repaint: () => map.triggerRepaint(),
       });
-    const onStyleLoad = () => {
-      if (initialMapLoaded) recoverMapStyle();
-    };
-    map.on('style.load', onStyleLoad);
+    const styleReady = () => initialMapLoaded;
+    const detachStyleRecovery = attachMapStyleRecovery(map, styleReady, recoverMapStyle);
     // Which numbers CSS reports depends on media queries — the compact layout
     // covers the top and bottom edges, the docked one covers a column at the
     // left — and every change that flips one of those also resizes this
@@ -1985,7 +1984,7 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
       detachInitialStyleFallback();
       styleSwitchControllerRef.current?.dispose();
       styleSwitchControllerRef.current = null;
-      map.off('style.load', onStyleLoad);
+      detachStyleRecovery();
       map.off('error', onMapError);
       clearGesturePreview();
       gestureMask.restore();
