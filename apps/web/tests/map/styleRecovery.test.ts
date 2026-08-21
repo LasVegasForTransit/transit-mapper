@@ -77,7 +77,11 @@ describe('map style recovery', () => {
 describe('map style feature-data recovery', () => {
   const upload = { sourceUploadCount: 3 };
 
-  function featureDataHarness(retainedScene = true, replayFailure?: Error) {
+  function featureDataHarness(
+    retainedScene = true,
+    replayFailure?: Error,
+    canScheduleFullProjection = true,
+  ) {
     let pending = false;
     const setPending = vi.fn((value: boolean) => {
       pending = value;
@@ -93,6 +97,7 @@ describe('map style feature-data recovery', () => {
     const requestSourceRecovery = vi.fn();
     const recovery = createMapStyleFeatureDataRecovery({
       hasRetainedScene: () => retainedScene,
+      canScheduleFullProjection: () => canScheduleFullProjection,
       setPending,
       invalidateSourceState,
       healCurrentScene,
@@ -133,6 +138,7 @@ describe('map style feature-data recovery', () => {
     const scheduleRetainedSceneHeal = vi.fn();
     const recovery = createMapStyleFeatureDataRecovery({
       hasRetainedScene: () => true,
+      canScheduleFullProjection: () => true,
       setPending: harness.setPending,
       invalidateSourceState: harness.invalidateSourceState,
       healCurrentScene: harness.healCurrentScene,
@@ -161,6 +167,15 @@ describe('map style feature-data recovery', () => {
     expect(harness.scheduleFullProjection).toHaveBeenCalledOnce();
     expect(harness.invalidateSourceState).not.toHaveBeenCalled();
     expect(harness.healCurrentScene).not.toHaveBeenCalled();
+    expect(harness.pending()).toBe(true);
+  });
+
+  it('defers fallback projection while the durable document is still loading', () => {
+    const harness = featureDataHarness(false, undefined, false);
+
+    expect(harness.recovery.restore()).toBe('full-projection-deferred');
+
+    expect(harness.scheduleFullProjection).not.toHaveBeenCalled();
     expect(harness.pending()).toBe(true);
   });
 
