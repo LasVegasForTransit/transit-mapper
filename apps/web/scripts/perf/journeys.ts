@@ -604,10 +604,28 @@ export async function runMeasuredJourney(
  * element instead only proves the interface exists, which it does immediately.
  */
 export async function waitForLoadedDocument(page: Page): Promise<void> {
-  await page.locator('.app[data-document-status="ready"]').first().waitFor({
-    state: 'attached',
-    timeout: 60_000,
-  });
+  try {
+    await page.locator('.app[data-document-status="ready"]').first().waitFor({
+      state: 'attached',
+      timeout: 60_000,
+    });
+  } catch (error) {
+    const diagnostics = await page.evaluate(() => ({
+      documentStatus: document.querySelector('.app')?.getAttribute('data-document-status') ?? null,
+      mapShell: document.querySelector('[data-map-shell]')?.textContent.trim() ?? null,
+      systemName: document.querySelector<HTMLInputElement>('[aria-label="System name"]')?.value,
+      marks: performance
+        .getEntriesByType('mark')
+        .map((entry) => ({ name: entry.name, startTime: entry.startTime })),
+      projectionCounts: (window as PerfPageWindow).__mapProjectionCounts?.() ?? null,
+      renderSourceBank: (window as PerfPageWindow).__perfRenderSourceBankSnapshot?.() ?? null,
+      bodyText: document.body.innerText.slice(0, 1_000),
+    }));
+    throw new Error(
+      `The editor did not commit its restored document: ${JSON.stringify(diagnostics)}.`,
+      { cause: error },
+    );
+  }
 }
 
 function scenarioReadyDiagnostics(page: Page, selector: string) {
