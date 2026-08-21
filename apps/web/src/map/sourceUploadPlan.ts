@@ -47,6 +47,7 @@ export interface SourceUploadPlanOptions {
 
 export interface SourceUploadQueue {
   add: (request: SourceUploadRequest, transition?: SourceUploadTransition) => void;
+  restore: (batch: SourceUploadBatch) => void;
   hasPending: () => boolean;
   take: () => readonly SystemFeatureSourceId[];
   takeBatch: () => SourceUploadBatch;
@@ -212,6 +213,13 @@ export function createSourceUploadQueue(): SourceUploadQueue {
         return;
       }
       transition = { previous: transition.previous, next: nextTransition.next };
+    },
+    restore: (batch) => {
+      if (batch.sourceIds.length === 0) return;
+      if (batch.sourceIds.length === ALL_SYSTEM_FEATURE_SOURCES.length) allPending = true;
+      else for (const sourceId of batch.sourceIds) pending.add(sourceId);
+      transition = batch.transition;
+      transitionEligible = batch.transition !== null;
     },
     hasPending: () => allPending || pending.size > 0,
     take: () => takeBatch().sourceIds,
