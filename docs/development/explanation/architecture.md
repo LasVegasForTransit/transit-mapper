@@ -362,10 +362,6 @@ still inside the accepted envelope performs no projection or source upload.
 Work stays private and side-effect free until publication and yields between
 bounded units.
 
-Preparation makes one four-entity attempt; overruns preserve completed work
-and yield; exceptions, cancellation, stale generations, and invalid commits
-abort.
-
 Render preparation runs once in four-entity units. Over-budget units keep their
 deterministic results and yield. Exceptions, cancellation, stale generations,
 and invalid commits still abort the draft.
