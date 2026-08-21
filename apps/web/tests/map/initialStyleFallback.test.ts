@@ -110,6 +110,41 @@ describe('initial map style fallback', () => {
     expect(loaded.setStyle).not.toHaveBeenCalled();
   });
 
+  it('settles startup when the remote map produces its first usable frame', () => {
+    const map = new FakeStyleMap();
+    const onSettled = vi.fn();
+    attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'light',
+      timeoutMs: 250,
+      onFallback: vi.fn(),
+      onSettled,
+    });
+
+    map.emit('load');
+    map.emit('load');
+
+    expect(onSettled).toHaveBeenCalledOnce();
+  });
+
+  it('settles startup when the local fallback style becomes usable', () => {
+    vi.useFakeTimers();
+    const map = new FakeStyleMap();
+    const onSettled = vi.fn();
+    attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'dark',
+      timeoutMs: 250,
+      onFallback: vi.fn(),
+      onSettled,
+    });
+
+    vi.advanceTimersByTime(250);
+    expect(onSettled).not.toHaveBeenCalled();
+
+    map.emit('style.load');
+
+    expect(onSettled).toHaveBeenCalledOnce();
+  });
+
   it('does not adopt the remote style after the local fallback loads', () => {
     vi.useFakeTimers();
     const map = new FakeStyleMap();

@@ -14,6 +14,8 @@ export interface InitialStyleFallbackOptions {
   timeoutMs: number;
   /** The editor switched to its local drafting context. */
   onFallback: () => void;
+  /** The remote frame or the replacement local style is ready for editor data. */
+  onSettled?: () => void;
 }
 
 /** Replace a failed initial remote style with the local blank canvas. */
@@ -43,9 +45,15 @@ export function attachInitialStyleFallback(
     options.onFallback();
     showLocalContext();
   };
-  const onMapLoad = () => {
+  const settle = () => {
+    if (settled) return;
     settled = true;
     clearTimer();
+    options.onSettled?.();
+  };
+  const onMapLoad = () => settle();
+  const onStyleLoad = () => {
+    if (fallbackRequested) settle();
   };
   const onInitialError = () => fallback();
 
@@ -54,12 +62,14 @@ export function attachInitialStyleFallback(
   // produced a usable frame; failures between the two still need the local
   // fallback, while later individual tile errors remain MapLibre's to retry.
   map.on('load', onMapLoad);
+  map.on('style.load', onStyleLoad);
   map.on('error', onInitialError);
   timer = setTimeout(fallback, options.timeoutMs);
 
   return () => {
     clearTimer();
     map.off('load', onMapLoad);
+    map.off('style.load', onStyleLoad);
     map.off('error', onInitialError);
   };
 }
