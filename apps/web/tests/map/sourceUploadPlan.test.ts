@@ -251,6 +251,18 @@ describe('map source upload planning', () => {
     expect(queue.take()).toEqual([]);
   });
 
+  it('restores a batch that MapLibre refused during style replacement', () => {
+    const before = createEmptySystem();
+    const after = { ...before, stops: [...before.stops] };
+    const queue = createSourceUploadQueue();
+    queue.add([SRC_STATIONS], { previous: before, next: after });
+    const batch = queue.takeBatch();
+
+    queue.restore(batch);
+
+    expect(queue.takeBatch()).toEqual(batch);
+  });
+
   it('retains the first and latest immutable snapshots across coalesced changes', () => {
     const first = createEmptySystem();
     const second = { ...first, stations: [...first.stations] };

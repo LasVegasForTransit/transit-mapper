@@ -882,7 +882,12 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
       const cameraPreload = cameraRenderPreload.prepare(presentation, performance.now());
       const view = renderViewForPresentation(presentation);
       const upload = rendererUploadPlan(requestedSources, system.id);
-      if (!upload || upload.sourceIds.length === 0) return Promise.resolve();
+      if (!upload) {
+        sourceUploadQueue.restore({ sourceIds: requestedSources, transition });
+        map.once('idle', () => schedulePushData([], undefined, true));
+        return Promise.resolve();
+      }
+      if (upload.sourceIds.length === 0) return Promise.resolve();
       return renderer.projectDocument({
         revision: `${system.id}:${++renderSceneRevision}`,
         transition,
@@ -1994,15 +1999,8 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
       setMap(null);
       map.remove();
     };
-    // setViewMode is a useState setter from ViewProvider, and React guarantees
-    // those keep their identity for the life of the component. Naming it here
-    // therefore cannot retrigger this effect — which matters, because this
-    // effect's cleanup calls map.remove(), so a retrigger would tear down and
-    // rebuild the whole MapLibre map. simClock and simCommands are stable for
-    // the same kind of reason: SimProvider holds one clock instance for the
-    // session, and simCommands is a ref-held façade whose identity never
-    // changes (it reads the live handlers through simCommandsRef). All are
-    // listed because the effect genuinely closes over them.
+    // Provider setters and ref-backed simulation facades keep these dependencies stable.
+    // A real identity change must rebuild the MapLibre instance because the effect closes over it.
   }, [
     store,
     openShortcuts,
