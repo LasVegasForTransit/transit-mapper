@@ -212,7 +212,6 @@ export interface MapCanvasProps {
    *  the backdrop is blank, and a user who isn't told assumes the app broke
    *  rather than that a third-party tile host is down. */
   onBasemapUnavailable?: () => void;
-  /** Called once after the remote map loads or the local fallback style is usable. */
   onStartupStyleSettled?: () => void;
 }
 
@@ -469,14 +468,8 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
     setMap(map);
 
-    // MapLibre reports style/source/tile failures through this event. Without
-    // a listener, overlay recovery can mask a basemap that never loaded.
-    //
-    // OpenFreeMap is a third-party host with no SLA, so
-    // "the basemap is down" is a real operating condition, not a hypothetical.
-    // Only a failure *before the style loads* is worth telling the user about:
-    // once it's up, later errors are individual tiles timing out, which
-    // MapLibre retries and which nobody needs a message about.
+    // Report initial OpenFreeMap failures because overlay recovery can mask a style that never loaded.
+    // MapLibre retries later tile errors without presenting them as a persistent outage.
     let activeMapScheme = initialColorScheme;
     let liveRenderer: LiveMapRenderer | null = null;
     const onMapError = (event: MapErrorLike) => {

@@ -1,6 +1,6 @@
 import type { Map as MLMap } from 'maplibre-gl';
 import type { ColorScheme } from '../theme/systemColorScheme';
-import { localBlankStyleForScheme } from './mapTheme';
+import { LOCAL_BACKGROUND_LAYER_ID, localBlankStyleForScheme } from './mapTheme';
 
 /**
  * Eight seconds separates a slow first map from an unusable editor without
@@ -53,7 +53,11 @@ export function attachInitialStyleFallback(
   };
   const onMapLoad = () => settle();
   const onStyleLoad = () => {
-    if (fallbackRequested) settle();
+    // MapLibre can deliver a queued style.load from the abandoned remote
+    // style after setStyle() has requested the fallback. That event does not
+    // make the replacement safe to mutate. Wait until the committed style
+    // contains the local layer that only our fallback defines.
+    if (fallbackRequested && map.getLayer(LOCAL_BACKGROUND_LAYER_ID)) settle();
   };
   const onInitialError = () => fallback();
 

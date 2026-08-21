@@ -26,6 +26,7 @@ export function layerSpecsForScheme(scheme: ColorScheme) {
 }
 
 const BROWSER_FREE_RENDERER_ORIGIN = 'http://127.0.0.1:4173';
+export const LOCAL_BACKGROUND_LAYER_ID = 'transitmapper-local-background';
 
 function localGlyphsUrl(): string {
   const runtime: { readonly location?: { readonly origin?: string } } = globalThis;
@@ -43,7 +44,7 @@ export function localBlankStyleForScheme(scheme: ColorScheme): StyleSpecificatio
     sources: {},
     layers: [
       {
-        id: 'transitmapper-local-background',
+        id: LOCAL_BACKGROUND_LAYER_ID,
         type: 'background',
         // Keep the MapLibre canvas transparent here. The editor container
         // supplies the local drafting surface beneath it, which gives an
