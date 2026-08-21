@@ -468,8 +468,7 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
     setMap(map);
 
-    // Report initial OpenFreeMap failures because overlay recovery can mask a style that never loaded.
-    // MapLibre retries later tile errors without presenting them as a persistent outage.
+    // Report initial OpenFreeMap failures; overlay recovery can mask a style that never loaded.
     let activeMapScheme = initialColorScheme;
     let liveRenderer: LiveMapRenderer | null = null;
     const onMapError = (event: MapErrorLike) => {
@@ -1623,7 +1622,7 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
         .querySelector('.maplibregl-ctrl-attrib')
         ?.classList.remove('maplibregl-compact-show');
       registerMapIcons(map, activeMapScheme);
-      ensureOverlay();
+      if (!ensureOverlay()) return false;
       if (PERF_HARNESS_BUILD) {
         initialPaintListener = () => {
           const stationSourceId = activeRenderSourceId(SRC_STATIONS);
@@ -1812,6 +1811,7 @@ export function MapCanvas({ onBasemapUnavailable, onStartupStyleSettled }: MapCa
       }
       detachSimDev = attachSimDevHandle(simClock); // DEV-only __sim.setTime()/__sim.step() clock driver
       map.resize();
+      return true;
     });
 
     const ro = new ResizeObserver(() => map.resize());

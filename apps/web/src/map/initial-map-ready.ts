@@ -2,7 +2,7 @@ import type { DocumentStatus } from '../editor/store/state';
 
 export interface InitialMapReadyMap {
   isStyleLoaded(): unknown;
-  once(event: 'style.load', listener: () => void): unknown;
+  once(event: 'style.load' | 'idle', listener: () => void): unknown;
 }
 
 /** The loading document is a disposable shell. Projecting it races the first
@@ -16,7 +16,13 @@ export function shouldProjectInitialDocument(documentStatus: DocumentStatus): bo
  * MapLibre fires `load` only for its original style, so editor setup waits
  * for the first `style.load` instead.
  */
-export function attachInitialMapReady(map: InitialMapReadyMap, startEditor: () => void): void {
+export function attachInitialMapReady(map: InitialMapReadyMap, startEditor: () => boolean): void {
+  const startOrRetry = () => {
+    // A queued event from the style being replaced can arrive after setStyle.
+    // MapLibre rejects source mutation in that gap. Its next idle event proves
+    // the replacement style has finished the transition.
+    if (!startEditor()) map.once('idle', startEditor);
+  };
   // A cached style can finish while MapCanvas registers controls and renderer
   // callbacks. In that case `style.load` has already fired, so waiting for a
   // later event leaves the editor without a canvas on its warm reload.
@@ -24,8 +30,8 @@ export function attachInitialMapReady(map: InitialMapReadyMap, startEditor: () =
   // initial scene has no later retry, so starting there can leave a cold map
   // blank forever. style.load is the first event after style mutation is legal.
   if (map.isStyleLoaded() === true) {
-    startEditor();
+    startOrRetry();
     return;
   }
-  map.once('style.load', startEditor);
+  map.once('style.load', startOrRetry);
 }
