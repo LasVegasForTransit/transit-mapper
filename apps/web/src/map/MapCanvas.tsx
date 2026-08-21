@@ -1464,6 +1464,8 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
     };
     const styleFeatureDataRecovery = createMapStyleFeatureDataRecovery({
       hasRetainedScene: () => renderer.hasAcceptedScene(),
+      canScheduleFullProjection: () =>
+        shouldProjectInitialDocument(store.getState().documentStatus),
       setPending: (pending) => {
         pendingStyleHeal = pending;
       },

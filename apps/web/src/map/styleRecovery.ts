@@ -18,10 +18,13 @@ type MapStyleFeatureDataRecoveryResult =
   | 'retained-scene-healed'
   | 'retained-scene-heal-scheduled'
   | 'full-projection-scheduled'
+  | 'full-projection-deferred'
   | 'source-recovery-requested';
 
 export interface MapStyleFeatureDataRecoverySteps<T> {
   hasRetainedScene: () => boolean;
+  /** The loading document is disposable and must never own a renderer scene. */
+  canScheduleFullProjection: () => boolean;
   setPending: (pending: boolean) => void;
   invalidateSourceState: () => void;
   healCurrentScene: () => T;
@@ -55,6 +58,7 @@ export function createMapStyleFeatureDataRecovery<T>(
     restore() {
       steps.setPending(true);
       if (!steps.hasRetainedScene()) {
+        if (!steps.canScheduleFullProjection()) return 'full-projection-deferred';
         steps.scheduleFullProjection();
         return 'full-projection-scheduled';
       }
