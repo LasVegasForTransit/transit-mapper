@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.2](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.6.1...v0.6.2) (2026-08-21)
+
+
+### Bug Fixes
+
+* Serve published GTFS feeds from managed archives ([f69a5f4](https://github.com/LasVegasForTransit/transit-mapper/commit/f69a5f489d4e467c28350c5c4a9ca6c850d806ca))
+* **web:** Defer fallback projection until bootstrap finishes ([a64018f](https://github.com/LasVegasForTransit/transit-mapper/commit/a64018f3aa1119d18121b41374ce6f776743d25a))
+* **web:** Keep the loading document out of the renderer ([b6a38b2](https://github.com/LasVegasForTransit/transit-mapper/commit/b6a38b2d144c9b27fdd387223c1909eb02dc624e))
+* **web:** Mount maps before large document bootstrap ([b9be1d2](https://github.com/LasVegasForTransit/transit-mapper/commit/b9be1d24143d6b47ce9971260c8ed6a8e2212f45))
+* **web:** Retry map setup after style replacement ([e76547b](https://github.com/LasVegasForTransit/transit-mapper/commit/e76547b9c2dcf6cdf6e2080625b7bf22f6d1aa97))
+* **web:** Retry overlay recovery after fallback replacement ([b0252cf](https://github.com/LasVegasForTransit/transit-mapper/commit/b0252cf87e18c925ebd214454420dca6f925887a))
+* **web:** Settle the startup style before document install ([20c8257](https://github.com/LasVegasForTransit/transit-mapper/commit/20c82577f075dd2a32ace52e75223b14eb4db317))
+* **web:** Start stable maps without a style race ([db7b37a](https://github.com/LasVegasForTransit/transit-mapper/commit/db7b37a98615bf59454219edee11c3d018151cb8))
+* **web:** Wait for the committed fallback style ([82ec31a](https://github.com/LasVegasForTransit/transit-mapper/commit/82ec31a8318287b396bd09e016c49bea004eb38c))
+
 ## [0.6.1](https://github.com/LasVegasForTransit/transit-mapper/compare/v0.6.0...v0.6.1) (2026-08-16)
 
 
