@@ -14,6 +14,35 @@ export interface MapStyleRecoverySteps {
   repaint: () => void;
 }
 
+export interface MapStyleRecoveryEvents {
+  on(event: 'style.load', listener: () => void): unknown;
+  once(event: 'idle', listener: () => void): unknown;
+  off(event: 'style.load' | 'idle', listener: () => void): unknown;
+}
+
+/** Retry a style transition that fired before MapLibre accepted source mutation. */
+export function attachMapStyleRecovery(
+  map: MapStyleRecoveryEvents,
+  enabled: () => boolean,
+  recover: () => boolean,
+): () => void {
+  let retryPending = false;
+  const retry = () => {
+    retryPending = false;
+    if (enabled()) recover();
+  };
+  const onStyleLoad = () => {
+    if (!enabled() || recover() || retryPending) return;
+    retryPending = true;
+    map.once('idle', retry);
+  };
+  map.on('style.load', onStyleLoad);
+  return () => {
+    map.off('style.load', onStyleLoad);
+    if (retryPending) map.off('idle', retry);
+  };
+}
+
 type MapStyleFeatureDataRecoveryResult =
   | 'retained-scene-healed'
   | 'retained-scene-heal-scheduled'
