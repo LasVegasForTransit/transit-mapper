@@ -115,6 +115,7 @@ import { markFirstSystemMapPaint, systemPaintReady } from '../perf/mapPaintMark'
 import { createRendererStatsCollector } from '../perf/renderer-stats';
 import { attachSimDevHandle } from '../sim/devHandle';
 import { attachVehicleAnimation } from '../sim/vehicles';
+import { createVehicleAnimationGateController } from '../sim/vehicle-animation-gate';
 import { clearArmedTerminusForViewChange } from './viewEditorState';
 import { initialEditorStyleForScheme, layerSpecsForScheme } from './mapTheme';
 import { createStyleSwitchController, type StyleSwitchController } from './styleSwitchController';
@@ -304,6 +305,7 @@ export function MapCanvas({
     refreshPointerIntentRef.current?.();
   }, [contextMenuAt, terminusConnectionChoice]);
   const { viewMode, setViewMode, visibleModes, visibleWayTypes, showLandmarks } = useView();
+  const viewRef = useRef<ViewOptions>({ viewMode, visibleModes, visibleWayTypes });
   useEffect(() => {
     clearActionAnchor();
     clearArmedTerminusForViewChange(store);
@@ -364,26 +366,17 @@ export function MapCanvas({
     stepSpeed: (direction) => simCommandsRef.current.stepSpeed(direction),
   }).current;
 
-  // Read live by the animation loop each tick, for the same reason.
-  const pinnedPeriodRef = useRef<string | undefined>(pinnedPeriod);
-  pinnedPeriodRef.current = pinnedPeriod;
-  const vehiclePaintingSuspendedRef = useRef(vehiclePaintingSuspended);
-  vehiclePaintingSuspendedRef.current = vehiclePaintingSuspended;
-  const vehicleGateListenersRef = useRef(new Set<() => void>());
+  const vehicleGateController = useRef(
+    createVehicleAnimationGateController(() => viewRef.current),
+  ).current;
+  vehicleGateController.update(pinnedPeriod, vehiclePaintingSuspended);
 
   useEffect(() => {
-    // Pinned periods are React presentation state, so the imperative vehicle
-    // host cannot observe this change through the editor store. Publish it
-    // explicitly; an inactive host has no polling timer to discover it later.
-    for (const listener of vehicleGateListenersRef.current) listener();
-  }, [pinnedPeriod]);
-
-  useEffect(() => {
-    for (const listener of vehicleGateListenersRef.current) listener();
-  }, [vehiclePaintingSuspended]);
+    // The imperative vehicle host does not poll React state while it is idle.
+    vehicleGateController.notify();
+  }, [pinnedPeriod, vehiclePaintingSuspended, vehicleGateController]);
 
   const coarsePointer = useCoarsePointer();
-  const viewRef = useRef<ViewOptions>({ viewMode, visibleModes, visibleWayTypes });
   const showLandmarksRef = useRef(showLandmarks);
   showLandmarksRef.current = showLandmarks;
   // The map layer takes tolerances, not a device: which profile applies is
@@ -402,7 +395,7 @@ export function MapCanvas({
     viewRef.current = next;
     refreshPointerIntentRef.current?.();
     if (update.notifyVehicles) {
-      for (const listener of vehicleGateListenersRef.current) listener();
+      vehicleGateController.notify();
     }
     if (update.reproject) schedulePushDataRef.current?.();
     const map = getMap();
@@ -829,9 +822,7 @@ export function MapCanvas({
       renderer,
       readSelection: () => store.getState().selection,
     });
-    const notifyVehicleGate = () => {
-      for (const listener of vehicleGateListenersRef.current) listener();
-    };
+    const notifyVehicleGate = () => vehicleGateController.notify();
     const beginDirectManipulation = () => {
       if (directManipulationActive) return;
       directManipulationActive = true;
@@ -1735,19 +1726,8 @@ export function MapCanvas({
           );
         },
       });
-      detachVehicles = attachVehicleAnimation(map, store, simClock, {
-        isVisible: (service) => viewRef.current.visibleModes.has(service.modeId),
-        viewMode: () => viewRef.current.viewMode,
-        pinnedPeriod: () => pinnedPeriodRef.current,
-        isDirectManipulationActive: () => directManipulationActive,
-        isPaintingSuspended: () => vehiclePaintingSuspendedRef.current,
-        subscribe: (listener) => {
-          vehicleGateListenersRef.current.add(listener);
-          return () => {
-            vehicleGateListenersRef.current.delete(listener);
-          };
-        },
-      });
+      const vehicleGate = vehicleGateController.createGate(() => directManipulationActive);
+      detachVehicles = attachVehicleAnimation(map, store, simClock, vehicleGate);
       if (PERF_HARNESS_BUILD) {
         detachPerf = attachPerfHarness(map, {
           stopSnapshot: (stopId) => {
