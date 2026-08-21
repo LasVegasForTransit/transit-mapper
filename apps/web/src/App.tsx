@@ -156,6 +156,8 @@ export function App() {
   // the other, which is what the pair of booleans this replaced could do.
   const [bootstrap, setBootstrap] = useState<BootstrapOutcome>({ kind: 'ok' });
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
+  const [mapModuleReady, setMapModuleReady] = useState(false);
+  const markMapModuleReady = useCallback(() => setMapModuleReady(true), []);
   // Something that already happened and is worth reading once: a stored system
   // that wouldn't parse, a dialog that failed to load. Held as a cause rather
   // than as the sentence for it, so the wording stays a render-time decision.
@@ -171,6 +173,11 @@ export function App() {
 
   // Bootstrap: shared link → read-only load; otherwise local autosave or fresh.
   useEffect(() => {
+    // An agency-scale document can occupy the main thread while it parses and
+    // renders. Let the first map import settle before starting that work, so
+    // React mounts MapLibre instead of leaving its completed chunk suspended
+    // behind the document bootstrap.
+    if (!mapModuleReady) return;
     const path = window.location.pathname;
     if (path.startsWith(SHARE_PREFIX)) {
       const controller = new AbortController();
@@ -256,7 +263,16 @@ export function App() {
     return () => {
       disposed = true;
     };
-  }, [store, report, openDialog, openNewSystemLocation, bootstrapAttempt, setSystem, setTool]);
+  }, [
+    store,
+    report,
+    openDialog,
+    openNewSystemLocation,
+    bootstrapAttempt,
+    mapModuleReady,
+    setSystem,
+    setTool,
+  ]);
 
   // A wait nobody noticed does not need announcing, and a message that flashes
   // for 40ms on every single load is worse than silence. Only a wait somebody
@@ -417,7 +433,10 @@ export function App() {
           alongside the storage read instead of queueing behind it. The camera
           starts on the placeholder's viewport and jumps to the real one when
           the document's id changes — see MapCanvas's system subscription. */}
-      <StagedMapCanvas onBasemapUnavailable={() => setNotice('basemap-unavailable')} />
+      <StagedMapCanvas
+        onBasemapUnavailable={() => setNotice('basemap-unavailable')}
+        onModuleReady={markMapModuleReady}
+      />
       {/* Outside the chrome, like the banner above: right-clicking still has
           to offer its actions when the UI is hidden, since hiding the panels
           is exactly when the menu is the only way to reach them. */}

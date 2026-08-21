@@ -34,8 +34,9 @@ describe('the staged editor map', () => {
           resolveMap = resolvePromise;
         }),
     );
+    const onModuleReady = vi.fn();
 
-    flushSync(() => root.render(<StagedMapCanvas load={load} />));
+    flushSync(() => root.render(<StagedMapCanvas load={load} onModuleReady={onModuleReady} />));
 
     expect(container.querySelector('[data-map-shell="loading"]')).not.toBeNull();
     expect(container.querySelector('[role="status"]')?.textContent).toContain('Preparing map');
@@ -46,5 +47,6 @@ describe('the staged editor map', () => {
       await Promise.resolve();
     });
     expect(container.querySelector('[data-map-shell="ready"]')).not.toBeNull();
+    expect(onModuleReady).toHaveBeenCalledOnce();
   });
 });
