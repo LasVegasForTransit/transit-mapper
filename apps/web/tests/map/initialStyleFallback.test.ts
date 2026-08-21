@@ -4,15 +4,20 @@ import {
   attachInitialStyleFallback,
   INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
 } from '../../src/map/initialStyleFallback';
-import { localBlankStyleForScheme } from '../../src/map/mapTheme';
+import { LOCAL_BACKGROUND_LAYER_ID, localBlankStyleForScheme } from '../../src/map/mapTheme';
 
 type StyleEvent = 'error' | 'load' | 'style.load';
 
 class FakeStyleMap {
   readonly listeners = new Map<StyleEvent, Set<() => void>>();
+  private localStyleCommitted = false;
   readonly setStyle = vi.fn(
     (_style: StyleSpecification | string, _options?: { diff: false }) => this,
   );
+
+  getLayer(id: string): object | undefined {
+    return id === LOCAL_BACKGROUND_LAYER_ID && this.localStyleCommitted ? {} : undefined;
+  }
 
   on(event: StyleEvent, listener: () => void): this {
     const listeners = this.listeners.get(event) ?? new Set();
@@ -28,6 +33,11 @@ class FakeStyleMap {
 
   emit(event: StyleEvent): void {
     for (const listener of this.listeners.get(event) ?? []) listener();
+  }
+
+  commitLocalStyle(): void {
+    this.localStyleCommitted = true;
+    this.emit('style.load');
   }
 }
 
@@ -140,7 +150,28 @@ describe('initial map style fallback', () => {
     vi.advanceTimersByTime(250);
     expect(onSettled).not.toHaveBeenCalled();
 
+    map.commitLocalStyle();
+
+    expect(onSettled).toHaveBeenCalledOnce();
+  });
+
+  it('does not settle on a late event from the abandoned remote style', () => {
+    vi.useFakeTimers();
+    const map = new FakeStyleMap();
+    const onSettled = vi.fn();
+    attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'dark',
+      timeoutMs: 250,
+      onFallback: vi.fn(),
+      onSettled,
+    });
+
+    vi.advanceTimersByTime(250);
     map.emit('style.load');
+
+    expect(onSettled).not.toHaveBeenCalled();
+
+    map.commitLocalStyle();
 
     expect(onSettled).toHaveBeenCalledOnce();
   });
@@ -155,7 +186,7 @@ describe('initial map style fallback', () => {
     });
 
     vi.advanceTimersByTime(250);
-    map.emit('style.load');
+    map.commitLocalStyle();
     map.emit('load');
 
     expect(map.setStyle).toHaveBeenCalledTimes(1);
