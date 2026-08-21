@@ -6,11 +6,7 @@ import {
   PERF_MAX_REGRESSION_RATIO,
 } from '../../perf.config';
 import { evaluatePerfBudgets } from '../../src/perf/budget';
-import {
-  createPartialPerfReport,
-  createPerfReport,
-  createUnavailablePerfReport,
-} from '../../src/perf/report';
+import { createPerfReport } from '../../src/perf/report';
 import type {
   PerfAuditPhase,
   PerfAuditPhaseResult,
@@ -21,11 +17,9 @@ import type {
   PerfReport,
   PerfSample,
   PerfScenario,
-  PerfOnboardingSample,
 } from '../../src/perf/types';
 import {
   checkedBaselinePath,
-  chromeUnavailableReason,
   copyBuildReports,
   freezeCheckedBaseline,
   readBaseline,
@@ -36,6 +30,13 @@ import {
 import { runCalibration } from './browser';
 import type { PerfCliOptions } from './cli';
 import { selectedAuditScenarios, validateAuditOptions } from './audit-options';
+import {
+  completeMeasuredAudit,
+  prepareAuditOrReportUnavailable,
+  writePartialAudit,
+  writeUnavailableAudit,
+  type AuditJourneyResults,
+} from './audit-reporting';
 import { verifyCacheEvictedOfflineReload } from './offline';
 import { runFirstSessionMatrix } from './first-session-matrix';
 import { createPlaywrightFirstSessionSurfaceRunner } from './playwright-first-session';
@@ -64,13 +65,6 @@ interface InstrumentedJourneyOptions {
 interface InstrumentedJourneyResults {
   calibration: PerfCalibration;
   samples: PerfSample[];
-}
-
-interface AuditJourneyResults {
-  calibration?: PerfCalibration;
-  samples: PerfSample[];
-  firstSessions: PerfFirstSessionSample[];
-  onboarding?: PerfOnboardingSample;
 }
 
 async function runInstrumentedJourneys(
@@ -225,63 +219,31 @@ async function runAuditPhase(options: RunAuditPhasesOptions, phase: PerfAuditPha
   if (violations.length > 0) throw new Error(violations.join(' '));
 }
 
-interface WritePartialAuditOptions {
-  cli: PerfCliOptions;
-  protocol: PerfProtocol;
-  scenarios: PerfScenario[];
-  bundles: PerfBundleEntry[];
-  results: AuditJourneyResults;
-  phases: PerfAuditPhaseResult[];
-  error: unknown;
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return 'The performance phase failed with a non-Error value.';
-}
-
-async function writePartialAudit(options: WritePartialAuditOptions): Promise<void> {
-  const reason = errorMessage(options.error);
-  const report = createPartialPerfReport({
-    generatedAt: new Date().toISOString(),
-    protocol: options.protocol,
-    scenarios: options.scenarios,
-    reason,
-    bundles: options.bundles,
-    calibration: options.results.calibration,
-    firstSessions: options.results.firstSessions,
-    samples: options.results.samples,
-    phases: options.phases,
-    onboarding: options.results.onboarding,
-  });
-  const reportPath = await writeReport(options.cli.outputDirectory, report);
-  console.error(`performance phase failed: ${reason}`);
-  console.error(`performance report: ${reportPath}`);
-  process.exitCode = 1;
-}
-
-interface PreparedAudit {
+interface AuditPlan {
   protocol: PerfProtocol;
   requestedPhases: PerfAuditPhase[];
   scenarios: PerfScenario[];
+}
+
+interface PreparedAuditArtifacts {
   bundles: PerfBundleEntry[];
   baseline: PerfReport | undefined;
 }
 
-async function prepareAudit(options: PerfCliOptions): Promise<PreparedAudit> {
+function createAuditPlan(options: PerfCliOptions): AuditPlan {
   validateAuditOptions(options);
   const protocol = createPerfProtocol(options.profile, options.smoke ? 'smoke' : 'audit');
   const requestedPhases = requestedPerformancePhases(options);
   const scenarios = requestedPhases.includes('instrumented') ? selectedAuditScenarios(options) : [];
+  return { protocol, requestedPhases, scenarios };
+}
+
+async function prepareAuditArtifacts(options: PerfCliOptions): Promise<PreparedAuditArtifacts> {
   await mkdir(options.outputDirectory, { recursive: true });
   if (!options.skipBuild) await buildPerformanceApp();
   else await assertPerformanceArtifactOutputs();
   await copyBuildReports(options.outputDirectory);
   return {
-    protocol,
-    requestedPhases,
-    scenarios,
     bundles: await readBundleEntries(),
     baseline: await readBaseline(options.baselinePath ?? checkedBaselinePath(options.profile)),
   };
@@ -300,16 +262,40 @@ async function launchAuditBrowser(protocol: PerfProtocol): Promise<{
   return { browser, debuggingPort };
 }
 
-export async function runPerformanceAudit(options: PerfCliOptions): Promise<void> {
-  const { protocol, requestedPhases, scenarios, bundles, baseline } = await prepareAudit(options);
+async function launchOrReportUnavailable(
+  options: PerfCliOptions,
+  plan: AuditPlan,
+  bundles: PerfBundleEntry[],
+): Promise<Awaited<ReturnType<typeof launchAuditBrowser>> | undefined> {
+  const { protocol, requestedPhases, scenarios } = plan;
+  try {
+    return await launchAuditBrowser(protocol);
+  } catch (error) {
+    await writeUnavailableAudit({
+      cli: options,
+      protocol,
+      scenarios,
+      requestedPhases,
+      bundles,
+      error,
+    });
+    return undefined;
+  }
+}
 
+async function runLaunchedAudit(
+  options: PerfCliOptions,
+  plan: AuditPlan,
+  prepared: PreparedAuditArtifacts,
+  launched: Awaited<ReturnType<typeof launchAuditBrowser>>,
+): Promise<void> {
+  const { protocol, requestedPhases, scenarios } = plan;
+  const { bundles, baseline } = prepared;
   let preview: RunningPreview | undefined;
-  let browser: Browser | undefined;
+  const browser = launched.browser;
   const previews = new PerformancePreviewSession();
   const results: AuditJourneyResults = { samples: [], firstSessions: [] };
   try {
-    const launched = await launchAuditBrowser(protocol);
-    browser = launched.browser;
     if (options.soak) {
       preview = await startPreview('instrumented');
       const soak = await runSoak(
@@ -346,36 +332,43 @@ export async function runPerformanceAudit(options: PerfCliOptions): Promise<void
       });
       return;
     }
-    await writeMeasuredAudit({
-      cli: options,
-      protocol,
-      scenarios,
-      bundles,
-      baseline,
-      results: {
-        ...results,
+    await completeMeasuredAudit({
+      writeMeasured: () =>
+        writeMeasuredAudit({
+          cli: options,
+          protocol,
+          scenarios,
+          bundles,
+          baseline,
+          results: { ...results },
+          phases: execution.phases,
+          requestedPhases,
+        }),
+      partial: {
+        cli: options,
+        protocol,
+        scenarios,
+        bundles,
+        results,
+        phases: execution.phases,
       },
-      phases: execution.phases,
-      requestedPhases,
     });
-  } catch (error) {
-    const reason = chromeUnavailableReason(error);
-    const report = createUnavailablePerfReport({
-      generatedAt: new Date().toISOString(),
-      protocol,
-      scenarios,
-      reason,
-      bundles,
-      calibration: results.calibration,
-      phases: requestedPhases.map((phase) => ({ phase, status: 'unavailable', reason })),
-    });
-    const reportPath = await writeReport(options.outputDirectory, report);
-    console.error(`performance unavailable: ${reason}`);
-    console.error(`performance report: ${reportPath}`);
-    process.exitCode = 2;
   } finally {
-    await browser?.close();
+    await browser.close();
     await stopPreview(preview);
     await previews.stop();
   }
+}
+
+export async function runPerformanceAudit(options: PerfCliOptions): Promise<void> {
+  const plan = createAuditPlan(options);
+  const prepared = await prepareAuditOrReportUnavailable({
+    cli: options,
+    ...plan,
+    prepare: () => prepareAuditArtifacts(options),
+  });
+  if (!prepared) return;
+  const launched = await launchOrReportUnavailable(options, plan, prepared.bundles);
+  if (!launched) return;
+  await runLaunchedAudit(options, plan, prepared, launched);
 }
