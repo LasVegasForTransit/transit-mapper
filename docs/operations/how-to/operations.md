@@ -13,14 +13,20 @@ samples.
 ## Deploy
 
 Releases and deploys are automatic. Conventional commits merged to `main`
-cause Release Please to create or update one release pull request. That pull
-request contains the calculated version and changelog. Merging it creates the
-matching tag and GitHub release; the same workflow then runs the full CI
-checks, builds and attests a deployment archive, applies pending D1 migrations
-from it, deploys its exact Worker and web files, and smoke-tests the live site.
-Because GitHub suppresses pull-request events created by a workflow token, the
-release job explicitly dispatches the shared `Validate` workflow on the
-generated branch.
+first run `Validate`, then the RTC, public first-session, and onboarding
+production-build smokes. Release Please runs only after all four gates pass.
+It creates or updates one release pull request with the calculated version and
+changelog. Merging that pull request creates the matching tag and GitHub
+release. The same workflow then builds and attests a deployment archive,
+applies pending D1 migrations from it, deploys its exact Worker and web files,
+and smoke-tests the live site. Because GitHub suppresses pull-request events
+created by a workflow token, the release job explicitly dispatches `Validate`
+and the `release` scope of the Performance workflow on the generated branch.
+
+The required pull-request context is `RTC responsiveness (desktop)`. The
+Performance workflow always reports it. It runs Chrome only when `apps/web` or
+`packages/core` changed, so documentation and worker-only pull requests do not
+leave a missing required check behind.
 
 Ordinary feature merges therefore do not deploy immediately. They accumulate
 in the generated release pull request until that pull request is merged. Do
@@ -87,6 +93,10 @@ public site, with no checks — there is no staging environment. Run
 Check which step failed before anything else; they fail for unrelated reasons.
 
 - **Validate** — a real test or type failure. Fix it on a branch.
+- **Release performance gates** — one of the RTC, public first-session, or
+  onboarding production-build smokes failed. Fix the browser journey or build
+  problem before Release Please runs. The check names in the ruleset and
+  `.github/workflows/performance.yml` must remain aligned.
 - **Prepare or publish release** — Release Please could not update its release
   pull request or create the tag and GitHub release. Check the job's repository
   permissions and default-branch rules. Repository Actions settings must allow

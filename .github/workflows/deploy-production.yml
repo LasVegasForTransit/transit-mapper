@@ -23,11 +23,19 @@ jobs:
     name: Validate
     uses: ./.github/workflows/ci.yml
 
+  # Release Please may create the next mergeable branch, so its inputs must
+  # pass the reusable production-build smokes before it writes that branch or
+  # creates a tag. The called workflow owns these jobs; this workflow only
+  # orders them with the release and deploy stages.
+  performance:
+    name: Release performance gates
+    uses: ./.github/workflows/performance.yml
+
   # Conventional commits are the only release input. Release Please maintains
   # the release PR, root version, changelog, tag, and GitHub release together.
   release:
     name: Prepare or publish release
-    needs: validate
+    needs: [validate, performance]
     permissions:
       actions: write
       contents: write
@@ -55,8 +63,10 @@ jobs:
           release_branch=$(jq -er '.headBranchName' <<< "$RELEASE_PR")
           # Pull requests created with GITHUB_TOKEN do not emit another
           # pull_request event. Dispatch the one authoritative repository
-          # check explicitly so the generated branch can satisfy the ruleset.
+          # checks explicitly so the generated branch can satisfy the ruleset.
           gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$release_branch"
+          gh workflow run performance.yml --repo "$GITHUB_REPOSITORY" --ref "$release_branch" \
+            --field scope=release
 
   deploy:
     name: Attest and deploy release to Cloudflare Workers
