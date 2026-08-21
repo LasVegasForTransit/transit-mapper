@@ -15,14 +15,17 @@ const controllerHarness = vi.hoisted(() => ({
     }
     return {
       dispose: controllerHarness.dispose,
+      setColorScheme: controllerHarness.setColorScheme,
       setScene: controllerHarness.setScene,
     };
   }),
+  readColorScheme: vi.fn<() => 'dark' | 'light'>(() => 'dark'),
+  setColorScheme: vi.fn(),
   setScene: vi.fn(),
 }));
 
 vi.mock('../../../src/theme/systemColorScheme', () => ({
-  useSystemColorScheme: () => 'dark',
+  useSystemColorScheme: () => controllerHarness.readColorScheme(),
 }));
 
 vi.mock('../../../src/ui/onboarding/onboarding-map-controller', () => ({
@@ -51,9 +54,11 @@ afterEach(() => {
   container.remove();
   vi.restoreAllMocks();
   controllerHarness.dispose.mockClear();
+  controllerHarness.setColorScheme.mockClear();
   controllerHarness.setScene.mockClear();
   controllerHarness.mountOnboardingMap.mockClear();
   controllerHarness.failNextMount = false;
+  controllerHarness.readColorScheme.mockReturnValue('dark');
 });
 
 describe('OnboardingPreviewMap', () => {
@@ -88,5 +93,18 @@ describe('OnboardingPreviewMap', () => {
     expect(container.querySelector('.onboarding-preview-map')).toBeNull();
     expect(container.textContent).toBe(description);
     expect(container.textContent).not.toContain('Harbor Line');
+  });
+
+  it('updates the stable map when the system color scheme changes', () => {
+    const description = 'A local Las Vegas transit preview.';
+    act(() => root.render(<OnboardingPreviewMap scene="welcome" description={description} />));
+    controllerHarness.setColorScheme.mockClear();
+
+    controllerHarness.readColorScheme.mockReturnValue('light');
+    act(() => root.render(<OnboardingPreviewMap scene="welcome" description={description} />));
+
+    expect(controllerHarness.mountOnboardingMap).toHaveBeenCalledTimes(1);
+    expect(controllerHarness.setColorScheme).toHaveBeenCalledOnce();
+    expect(controllerHarness.setColorScheme).toHaveBeenCalledWith('light');
   });
 });

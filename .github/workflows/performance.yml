@@ -43,7 +43,7 @@ jobs:
     name: RTC responsiveness (desktop)
     if: github.event_name != 'workflow_dispatch' || inputs.scope != 'soak'
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 25 }}
+    timeout-minutes: 45
     env:
       XVFB_ARGS: -screen 0 1440x900x24 -nolisten tcp -dpi 96
     steps:
@@ -53,7 +53,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Decide whether this pull request needs the RTC smoke
+      - name: Decide whether this pull request needs the RTC audit
         id: relevance
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -62,13 +62,20 @@ jobs:
         run: |
           if [ "$EVENT_NAME" != 'pull_request' ]; then
             echo 'run=true' >> "$GITHUB_OUTPUT"
-          elif git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- apps/web packages/core; then
+          elif git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            apps/web \
+            packages/core \
+            package.json \
+            pnpm-lock.yaml \
+            pnpm-workspace.yaml \
+            .github/workflows/performance.yml \
+            .github/actions/setup-node-pnpm; then
             echo 'run=false' >> "$GITHUB_OUTPUT"
           else
             echo 'run=true' >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Skip the RTC smoke for an unrelated pull request
+      - name: Skip the RTC audit for an unrelated pull request
         if: steps.relevance.outputs.run != 'true'
         run: echo 'No apps/web or packages/core changes require Chrome.'
 
@@ -87,11 +94,11 @@ jobs:
         run: |
           echo "CURRENT_ARTIFACT=$RUNNER_TEMP/transitmapper-performance-rtc" >> "$GITHUB_ENV"
 
-      - name: Run the RTC smoke when this pull request changes web or core code
+      - name: Run the repeated RTC audit
         if: steps.relevance.outputs.run == 'true'
         run: >-
           xvfb-run -a --server-args="$XVFB_ARGS"
-          pnpm perf -- --smoke --profile desktop --scenario rtc
+          pnpm perf -- --profile desktop --scenario rtc
           --output "$CURRENT_ARTIFACT"
 
       - name: Upload RTC report

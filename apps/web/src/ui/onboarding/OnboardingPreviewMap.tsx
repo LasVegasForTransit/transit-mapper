@@ -45,6 +45,10 @@ export function OnboardingPreviewMap({
     controllerRef.current?.setScene(scene);
   }, [scene]);
 
+  useEffect(() => {
+    controllerRef.current?.setColorScheme(colorScheme);
+  }, [colorScheme]);
+
   return (
     <div
       className={`onboarding-scene onboarding-scene-${scene} ${className}`.trim()}

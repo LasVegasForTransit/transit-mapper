@@ -22,6 +22,8 @@ export interface InitialStyleFallbackOptions {
   timeoutMs: number;
   /** The basemap is genuinely unreachable, not merely slower than the budget. */
   onFallback: () => void;
+  /** The local style now owns this map session, regardless of reachability. */
+  onLocalStyleSelected?: () => void;
   /** The remote frame or the replacement local style is ready for editor data. */
   onSettled?: () => void;
   /** Overridable so a test can resolve or reject without a network. */
@@ -58,6 +60,7 @@ export function attachInitialStyleFallback(
     // local style emits style.load. Clear our reference now so that later
     // cleanup cannot cancel an unrelated renderer task with the same handle.
     clearTimer();
+    options.onLocalStyleSelected?.();
     map.setStyle(localBlankStyleForScheme(options.scheme), { diff: false });
   };
   const fallback = () => {
@@ -91,7 +94,9 @@ export function attachInitialStyleFallback(
     clearTimer();
     options.onSettled?.();
   };
-  const onMapLoad = () => settle();
+  const onMapLoad = () => {
+    if (!fallbackRequested || map.getLayer(LOCAL_BACKGROUND_LAYER_ID)) settle();
+  };
   const onStyleLoad = () => {
     // MapLibre can deliver a queued style.load from the abandoned remote
     // style after setStyle() has requested the fallback. That event does not

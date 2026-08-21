@@ -36,6 +36,7 @@ export interface MountOnboardingMapOptions {
 }
 
 export interface OnboardingMapController {
+  setColorScheme: (colorScheme: ColorScheme) => void;
   setScene: (scene: OnboardingSceneId) => void;
   dispose: () => void;
 }
@@ -118,6 +119,29 @@ function addContextLayers(map: MapLibreMap, dark: boolean): void {
   });
 }
 
+function updateLayerPaint(
+  map: MapLibreMap,
+  layer: ReturnType<typeof onboardingProductionLayerSpecs>[number],
+): void {
+  if (!map.getLayer(layer.id) || !layer.paint) return;
+  for (const [property, value] of Object.entries(layer.paint)) {
+    map.setPaintProperty(layer.id, property, value);
+  }
+}
+
+function applyOnboardingColorScheme(map: MapLibreMap, colorScheme: ColorScheme): void {
+  const dark = colorScheme === 'dark';
+  map.setPaintProperty('onboarding-street-casing', 'line-color', dark ? '#111310' : '#d8d5cc');
+  map.setPaintProperty('onboarding-streets', 'line-color', dark ? '#555b56' : '#9e9b93');
+  map.setPaintProperty(
+    'onboarding-existing-rail-casing',
+    'line-color',
+    dark ? '#151614' : '#d8d5cc',
+  );
+  map.setPaintProperty('onboarding-existing-rail', 'line-color', dark ? '#8a8e88' : '#75766f');
+  for (const layer of onboardingProductionLayerSpecs(colorScheme)) updateLayerPaint(map, layer);
+}
+
 function productionPromoteId(sourceId: string): string | undefined {
   if (sourceId === SRC_SERVICES) return 'serviceId';
   if (sourceId === SRC_WAYS || sourceId === SRC_STATIONS) return 'id';
@@ -180,6 +204,7 @@ function addCompactAttribution(map: MapLibreMap, container: HTMLElement): void {
 class OnboardingMapHost implements OnboardingMapController {
   private activeScene: OnboardingSceneId | undefined;
   private readonly animation: OnboardingSceneAnimation;
+  private colorScheme: ColorScheme;
   private disposed = false;
   private loaded = false;
   private readonly motionQuery: MediaQueryList | undefined;
@@ -191,6 +216,7 @@ class OnboardingMapHost implements OnboardingMapController {
     private readonly map: MapLibreMap,
     private readonly options: MountOnboardingMapOptions,
   ) {
+    this.colorScheme = options.colorScheme;
     this.motionQuery =
       options.reducedMotion === undefined
         ? window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -209,6 +235,12 @@ class OnboardingMapHost implements OnboardingMapController {
     if (this.disposed || this.activeScene === scene) return;
     this.activeScene = scene;
     if (this.loaded) this.applyScene(scene);
+  }
+
+  setColorScheme(colorScheme: ColorScheme): void {
+    if (this.disposed || this.colorScheme === colorScheme) return;
+    this.colorScheme = colorScheme;
+    if (this.loaded) applyOnboardingColorScheme(this.map, colorScheme);
   }
 
   dispose(): void {
@@ -251,10 +283,10 @@ class OnboardingMapHost implements OnboardingMapController {
   private readonly onLoad = () => {
     if (this.disposed || this.loaded) return;
     try {
-      registerMapIcons(this.map, this.options.colorScheme);
+      registerMapIcons(this.map, this.colorScheme);
       addOnboardingSources(this.map);
-      addContextLayers(this.map, this.options.colorScheme === 'dark');
-      addProductionLayers(this.map, this.options.colorScheme);
+      addContextLayers(this.map, this.colorScheme === 'dark');
+      addProductionLayers(this.map, this.colorScheme);
       // Projection reads the camera, so the map must fit the stable system
       // before any scene produces feature data.
       fitScene(this.map);
@@ -299,6 +331,10 @@ export function mountOnboardingMap(options: MountOnboardingMapOptions): Onboardi
     return new OnboardingMapHost(map, options);
   } catch (error) {
     options.onFailure(error);
-    return { setScene: () => undefined, dispose: () => undefined };
+    return {
+      setColorScheme: () => undefined,
+      setScene: () => undefined,
+      dispose: () => undefined,
+    };
   }
 }
