@@ -1,6 +1,14 @@
+import type { DocumentStatus } from '../editor/store/state';
+
 export interface InitialMapReadyMap {
   isStyleLoaded(): unknown;
   once(event: 'style.load', listener: () => void): unknown;
+}
+
+/** The loading document is a disposable shell. Projecting it races the first
+ * durable document for renderer ownership and can leave the empty bank live. */
+export function shouldProjectInitialDocument(documentStatus: DocumentStatus): boolean {
+  return documentStatus === 'ready';
 }
 
 /**

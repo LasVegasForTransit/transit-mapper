@@ -108,7 +108,7 @@ import {
   attachInitialStyleFallback,
   INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
 } from './initialStyleFallback';
-import { attachInitialMapReady } from './initial-map-ready';
+import { attachInitialMapReady, shouldProjectInitialDocument } from './initial-map-ready';
 import { initLiveCamera, setLiveCamera } from '../camera/liveCamera';
 import { attachPerfHarness } from '../perf';
 import { markFirstSystemMapPaint, systemPaintReady } from '../perf/mapPaintMark';
@@ -1646,7 +1646,9 @@ export function MapCanvas({ onBasemapUnavailable }: MapCanvasProps) {
         };
         map.on('render', initialPaintListener);
       }
-      schedulePushData('all');
+      if (shouldProjectInitialDocument(store.getState().documentStatus)) {
+        schedulePushData('all');
+      }
       scheduleSelectionUpdate();
       initialMapLoaded = true;
       map.triggerRepaint();

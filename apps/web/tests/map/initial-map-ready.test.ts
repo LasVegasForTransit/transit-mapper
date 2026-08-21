@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { attachInitialMapReady } from '../../src/map/initial-map-ready';
+import {
+  attachInitialMapReady,
+  shouldProjectInitialDocument,
+} from '../../src/map/initial-map-ready';
 
 type StyleEvent = 'style.load';
 
@@ -41,6 +44,11 @@ class FakeMap {
 }
 
 describe('initial map readiness', () => {
+  it('does not project the placeholder while document bootstrap is still loading', () => {
+    expect(shouldProjectInitialDocument('loading')).toBe(false);
+    expect(shouldProjectInitialDocument('ready')).toBe(true);
+  });
+
   it('starts the editor when the fallback style becomes usable', () => {
     const map = new FakeMap();
     const startEditor = vi.fn();
