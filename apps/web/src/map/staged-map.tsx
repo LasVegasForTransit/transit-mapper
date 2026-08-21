@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, type ComponentType } from 'react';
+import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react';
 import type { MapCanvasProps } from './MapCanvas';
 
 interface MapCanvasModule {
@@ -10,6 +10,8 @@ export interface StagedMapCanvasProps extends MapCanvasProps {
    * MapCanvas module, but the seam lets the shell-before-import guarantee be
    * proved without evaluating MapLibre under jsdom. */
   load?: () => Promise<MapCanvasModule>;
+  /** Lets document bootstrap yield until React can mount the real map. */
+  onModuleReady?: () => void;
 }
 
 function loadMapCanvas(): Promise<MapCanvasModule> {
@@ -32,8 +34,23 @@ function MapShell() {
  * feedback happen in parallel instead of adding a passive-effect turn to the
  * cold path.
  */
-export function StagedMapCanvas({ load = loadMapCanvas, ...props }: StagedMapCanvasProps) {
-  const [MapCanvas] = useState(() => lazy(load));
+export function StagedMapCanvas({
+  load = loadMapCanvas,
+  onModuleReady,
+  ...props
+}: StagedMapCanvasProps) {
+  const [modulePromise] = useState(load);
+  const [MapCanvas] = useState(() => lazy(() => modulePromise));
+
+  useEffect(() => {
+    let active = true;
+    void modulePromise.then(() => {
+      if (active) onModuleReady?.();
+    });
+    return () => {
+      active = false;
+    };
+  }, [modulePromise, onModuleReady]);
 
   return (
     <Suspense fallback={<MapShell />}>
