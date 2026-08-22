@@ -934,7 +934,9 @@ export function MapCanvas({
       transition?: SourceUploadTransition,
       deferUntilCurrentSettles = false,
     ) => {
-      if (request === 'all') initialScene.queued = true;
+      if (request === 'all' && store.getState().documentStatus === 'ready') {
+        initialScene.queued = true;
+      }
       liveRenderer?.cancelBackgroundPreparation();
       sourceUploadQueue.add(request, transition);
       scheduledPushLease ??= renderWorkSettlement.begin();
