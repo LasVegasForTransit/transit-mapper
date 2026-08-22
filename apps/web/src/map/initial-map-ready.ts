@@ -18,9 +18,8 @@ export function shouldProjectInitialDocument(documentStatus: DocumentStatus): bo
 export function shouldScheduleInitialReadyDocument(
   documentStatus: DocumentStatus,
   hasRenderedSystem: boolean,
-  hasQueuedPublication: boolean,
 ): boolean {
-  return documentStatus === 'ready' && !hasRenderedSystem && !hasQueuedPublication;
+  return documentStatus === 'ready' && !hasRenderedSystem;
 }
 
 /**
