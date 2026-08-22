@@ -11,6 +11,16 @@ export function shouldProjectInitialDocument(documentStatus: DocumentStatus): bo
   return documentStatus === 'ready';
 }
 
+/** Map setup and document bootstrap run independently. When setup installs its
+ * subscription after the ready transition, it must still request the one
+ * initial scene that has not reached a renderer bank. */
+export function shouldScheduleInitialReadyDocument(
+  documentStatus: DocumentStatus,
+  hasRenderedSystem: boolean,
+): boolean {
+  return documentStatus === 'ready' && !hasRenderedSystem;
+}
+
 /**
  * The first usable style may be the remote basemap or the local fallback.
  * MapLibre fires `load` only for its original style, so editor setup waits

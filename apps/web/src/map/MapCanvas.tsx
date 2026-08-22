@@ -108,7 +108,11 @@ import {
   attachInitialStyleFallback,
   INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
 } from './initialStyleFallback';
-import { attachInitialMapReady, shouldProjectInitialDocument } from './initial-map-ready';
+import {
+  attachInitialMapReady,
+  shouldProjectInitialDocument,
+  shouldScheduleInitialReadyDocument,
+} from './initial-map-ready';
 import { initLiveCamera, setLiveCamera } from '../camera/liveCamera';
 import { attachPerfHarness } from '../perf';
 import { markFirstSystemMapPaint, systemPaintReady } from '../perf/mapPaintMark';
@@ -1914,6 +1918,18 @@ export function MapCanvas({
         }
       }
     });
+    // The local style can finish while IndexedDB delivers the saved document.
+    // If that ready transition lands between editor setup and subscription,
+    // the subscription cannot replay it. The queue coalesces this with a
+    // request made during setup, so it preserves one accepted first scene.
+    if (
+      shouldScheduleInitialReadyDocument(
+        store.getState().documentStatus,
+        renderer.hasAcceptedScene(),
+      )
+    ) {
+      schedulePushData('all');
+    }
 
     // A leading refresh prepares adjacent tiers; bounded trailing work commits
     // the exact viewport without projecting on every raw camera event.
