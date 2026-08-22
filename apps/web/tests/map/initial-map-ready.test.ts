@@ -79,18 +79,18 @@ describe('initial map readiness', () => {
     expect(startEditor).toHaveBeenCalledTimes(1);
   });
 
-  it('waits for MapLibre to finish loading before mutating a parsed style', () => {
+  it('retries setup from idle when MapLibre exposes a parsed but mutable-incomplete style', () => {
     const map = new FakeMap();
-    const startEditor = vi.fn(() => true);
+    const startEditor = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
     map.setStyleKnown();
 
     attachInitialMapReady(map, startEditor);
 
-    expect(startEditor).not.toHaveBeenCalled();
+    expect(startEditor).toHaveBeenCalledOnce();
 
-    map.emit('style.load');
+    map.emit('idle');
 
-    expect(startEditor).toHaveBeenCalledTimes(1);
+    expect(startEditor).toHaveBeenCalledTimes(2);
   });
 
   it('retries initialization after a stale style event rejects overlay mutation', () => {

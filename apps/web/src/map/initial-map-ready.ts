@@ -2,6 +2,7 @@ import type { DocumentStatus } from '../editor/store/state';
 
 export interface InitialMapReadyMap {
   isStyleLoaded(): unknown;
+  getStyle(): unknown;
   once(event: 'style.load' | 'idle', listener: () => void): unknown;
 }
 
@@ -41,6 +42,13 @@ export function attachInitialMapReady(map: InitialMapReadyMap, startEditor: () =
   // initial scene has no later retry, so starting there can leave a cold map
   // blank forever. style.load is the first event after style mutation is legal.
   if (map.isStyleLoaded() === true) {
+    startOrRetry();
+    return;
+  }
+  // MapLibre can expose the parsed local style before it updates
+  // isStyleLoaded(). Starting here either installs the overlay immediately or
+  // uses startOrRetry's idle listener once source mutation becomes legal.
+  if (map.getStyle()) {
     startOrRetry();
     return;
   }
