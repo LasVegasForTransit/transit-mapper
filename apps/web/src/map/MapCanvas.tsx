@@ -117,7 +117,7 @@ import { attachSimDevHandle } from '../sim/devHandle';
 import { attachVehicleAnimation } from '../sim/vehicles';
 import { createVehicleAnimationGateController } from '../sim/vehicle-animation-gate';
 import { clearArmedTerminusForViewChange } from './viewEditorState';
-import { initialEditorStyleForScheme, layerSpecsForScheme } from './mapTheme';
+import { layerSpecsForScheme, localBlankStyleForScheme } from './mapTheme';
 import { createStyleSwitchController, type StyleSwitchController } from './styleSwitchController';
 import { attachMapStyleRecovery, recoverMapStyleState } from './styleRecovery';
 import { createMapStyleFeatureDataRecovery } from './styleRecovery';
@@ -214,7 +214,6 @@ export interface MapCanvasProps {
    *  the backdrop is blank, and a user who isn't told assumes the app broke
    *  rather than that a third-party tile host is down. */
   onBasemapUnavailable?: () => void;
-  onStartupStyleSettled?: () => void;
   /** Stops editor vehicle source writes while onboarding owns the visible map. */
   vehiclePaintingSuspended?: boolean;
 }
@@ -277,7 +276,6 @@ function framePadding(el: HTMLElement, margin: number): PaddingOptions {
 
 export function MapCanvas({
   onBasemapUnavailable,
-  onStartupStyleSettled,
   vehiclePaintingSuspended = false,
 }: MapCanvasProps) {
   const colorScheme = useSystemColorScheme();
@@ -353,9 +351,6 @@ export function MapCanvas({
   // the map down and rebuild it every time App re-renders with a fresh arrow.
   const basemapFailureRef = useRef(onBasemapUnavailable);
   basemapFailureRef.current = onBasemapUnavailable;
-  const startupStyleSettledRef = useRef(onStartupStyleSettled);
-  startupStyleSettledRef.current = onStartupStyleSettled;
-
   // Same reasoning as basemapFailureRef: the keymap needs to run these, but
   // naming them in the map effect's deps would tear down and rebuild the
   // entire map if their identity ever changed.
@@ -437,7 +432,7 @@ export function MapCanvas({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: initialEditorStyleForScheme(initialColorScheme),
+      style: localBlankStyleForScheme(initialColorScheme),
       center: initial.viewport.center,
       zoom: initial.viewport.zoom,
       // No preserveDrawingBuffer: PNG export renders on a dedicated offscreen
@@ -486,12 +481,12 @@ export function MapCanvas({
     const detachInitialStyleFallback = attachInitialStyleFallback(map, {
       scheme: initialColorScheme,
       timeoutMs: INITIAL_STYLE_FALLBACK_TIMEOUT_MS,
+      startsWithLocalStyle: true,
       onLocalStyleSelected: () => {
         initialStyleOwnership.localOnly = true;
         styleSwitchControllerRef.current?.lockToLocal(initialColorScheme);
       },
       onFallback: () => basemapFailureRef.current?.(),
-      onSettled: () => startupStyleSettledRef.current?.(),
     });
 
     let detachInteractions: (() => void) | null = null;

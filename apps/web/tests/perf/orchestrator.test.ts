@@ -8,6 +8,7 @@ import {
   writePartialAudit,
   type AuditJourneyResults,
 } from '../../scripts/perf/audit-reporting';
+import { auditBrowserArguments } from '../../scripts/perf/orchestrator';
 import { parsePerfCliOptions } from '../../scripts/perf/cli';
 import { executePerformancePhases } from '../../scripts/perf/phase-execution';
 import { createPerfProtocol, PERF_SCENARIOS } from '../../src/perf/scenarios';
@@ -96,6 +97,17 @@ afterEach(() => {
 });
 
 describe('performance audit reporting', () => {
+  it('keeps the audited tab on the same timer policy as a visible editor', () => {
+    expect(auditBrowserArguments(9222)).toEqual(
+      expect.arrayContaining([
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--remote-debugging-port=9222',
+      ]),
+    );
+  });
+
   it('writes the completed RTC sample when the first-session phase fails', async () => {
     const outputDirectory = await mkdtemp(resolve(tmpdir(), 'tm-perf-phase-failure-'));
     const sample = rtcSample();

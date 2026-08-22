@@ -130,6 +130,28 @@ describe('initial map style fallback', () => {
     });
   });
 
+  it('does not replace the initially local grid when a reachable probe finishes late', async () => {
+    vi.useFakeTimers();
+    const map = new FakeStyleMap();
+    let resolveProbe!: (reachable: boolean) => void;
+    const probe = new Promise<boolean>((resolve) => {
+      resolveProbe = resolve;
+    });
+    attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'light',
+      timeoutMs: 250,
+      startsWithLocalStyle: true,
+      onFallback: vi.fn(),
+      probeBasemap: () => probe,
+    });
+
+    vi.advanceTimersByTime(250);
+    resolveProbe(true);
+    await Promise.resolve();
+
+    expect(map.setStyle).not.toHaveBeenCalled();
+  });
+
   it('does not replace a map that produced its first usable frame', () => {
     vi.useFakeTimers();
     const loaded = new FakeStyleMap();
@@ -162,7 +184,7 @@ describe('initial map style fallback', () => {
     expect(onSettled).toHaveBeenCalledOnce();
   });
 
-  it('settles startup when the local fallback style becomes usable', () => {
+  it('settles startup as soon as it selects the local fallback style', () => {
     vi.useFakeTimers();
     const map = new FakeStyleMap();
     const onSettled = vi.fn();
@@ -174,14 +196,34 @@ describe('initial map style fallback', () => {
     });
 
     vi.advanceTimersByTime(250);
-    expect(onSettled).not.toHaveBeenCalled();
+    expect(onSettled).toHaveBeenCalledOnce();
 
     map.commitLocalStyle();
 
     expect(onSettled).toHaveBeenCalledOnce();
   });
 
-  it('does not settle on a late event from the abandoned remote style', () => {
+  it('releases document startup before MapLibre replaces the stalled style', () => {
+    vi.useFakeTimers();
+    const map = new FakeStyleMap();
+    const onSettled = vi.fn();
+    map.setStyle.mockImplementation(() => {
+      expect(onSettled).toHaveBeenCalledOnce();
+      return map;
+    });
+    attachInitialStyleFallback(map as unknown as MLMap, {
+      scheme: 'dark',
+      timeoutMs: 250,
+      onFallback: vi.fn(),
+      onSettled,
+    });
+
+    vi.advanceTimersByTime(250);
+
+    expect(map.setStyle).toHaveBeenCalledOnce();
+  });
+
+  it('does not settle twice for a late event from the abandoned remote style', () => {
     vi.useFakeTimers();
     const map = new FakeStyleMap();
     const onSettled = vi.fn();
@@ -196,7 +238,7 @@ describe('initial map style fallback', () => {
     map.emit('style.load');
     map.emit('load');
 
-    expect(onSettled).not.toHaveBeenCalled();
+    expect(onSettled).toHaveBeenCalledOnce();
 
     map.commitLocalStyle();
 

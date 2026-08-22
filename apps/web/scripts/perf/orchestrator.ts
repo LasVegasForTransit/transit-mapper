@@ -249,15 +249,30 @@ async function prepareAuditArtifacts(options: PerfCliOptions): Promise<PreparedA
   };
 }
 
-async function launchAuditBrowser(protocol: PerfProtocol): Promise<{
+export function auditBrowserArguments(debuggingPort: number): string[] {
+  return [
+    // The audit drives a visible editor surface. Chromium otherwise applies
+    // its background-tab timer policy to a headless or occluded window and
+    // turns the 1.5-second fallback deadline into a minute-long timeout.
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
+    chromeDebuggingArgument(debuggingPort),
+  ];
+}
+
+async function launchAuditBrowser(
+  protocol: PerfProtocol,
+  headless: boolean,
+): Promise<{
   browser: Browser;
   debuggingPort: number;
 }> {
   const debuggingPort = await allocateChromeDebuggingPort();
   const browser = await chromium.launch({
     channel: protocol.browserChannel,
-    headless: false,
-    args: [chromeDebuggingArgument(debuggingPort)],
+    headless,
+    args: auditBrowserArguments(debuggingPort),
   });
   return { browser, debuggingPort };
 }
@@ -269,7 +284,7 @@ async function launchOrReportUnavailable(
 ): Promise<Awaited<ReturnType<typeof launchAuditBrowser>> | undefined> {
   const { protocol, requestedPhases, scenarios } = plan;
   try {
-    return await launchAuditBrowser(protocol);
+    return await launchAuditBrowser(protocol, options.headless);
   } catch (error) {
     await writeUnavailableAudit({
       cli: options,
